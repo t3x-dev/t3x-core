@@ -657,7 +657,7 @@ export const useCanvasStore = create<CanvasState>((...a) => {
 
     // Conflict detection state
     commitConflicts: {},
-    dismissedConflicts: new Set(),
+    dismissedConflicts: {},
     showConflictPanel: null,
     setCommitConflicts: (commitHash, report) =>
       set((state) => ({
@@ -665,7 +665,7 @@ export const useCanvasStore = create<CanvasState>((...a) => {
       })),
     dismissConflict: (commitHash) =>
       set((state) => ({
-        dismissedConflicts: new Set([...state.dismissedConflicts, commitHash]),
+        dismissedConflicts: { ...state.dismissedConflicts, [commitHash]: true },
       })),
     openConflictPanel: (commitHash) => set({ showConflictPanel: commitHash }),
     closeConflictPanel: () => set({ showConflictPanel: null }),

@@ -50,7 +50,12 @@ export function CommitConflictBanner({
             </Button>
           </div>
         </div>
-        <button type="button" onClick={onDismiss} className="text-amber-400 hover:text-amber-600">
+        <button
+          type="button"
+          onClick={onDismiss}
+          aria-label="Dismiss"
+          className="text-amber-400 hover:text-amber-600"
+        >
           <X className="h-4 w-4" />
         </button>
       </div>

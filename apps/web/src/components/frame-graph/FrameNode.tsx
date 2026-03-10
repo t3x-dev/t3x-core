@@ -282,6 +282,7 @@ function FrameNodeComponent({ data, selected, id }: FrameNodeProps) {
         <div
           className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-amber-500 flex items-center justify-center z-10"
           title={data.gateIssueSummary ?? 'Quality warning'}
+          aria-label={`${data.gateIssueCount ?? 0} quality warnings`}
         >
           <span className="text-[8px] text-white font-bold">{data.gateIssueCount ?? '!'}</span>
         </div>
@@ -290,6 +291,7 @@ function FrameNodeComponent({ data, selected, id }: FrameNodeProps) {
         <div
           className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-red-500 flex items-center justify-center z-10"
           title={data.gateIssueSummary ?? 'Quality error'}
+          aria-label={`${data.gateIssueCount ?? 0} quality errors`}
         >
           <span className="text-[8px] text-white font-bold">{data.gateIssueCount ?? '!'}</span>
         </div>

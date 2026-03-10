@@ -25,6 +25,7 @@ export function CommitConflictPanel({
         <button
           type="button"
           onClick={onClose}
+          aria-label="Close"
           className="text-muted-foreground hover:text-foreground"
         >
           <X className="h-4 w-4" />

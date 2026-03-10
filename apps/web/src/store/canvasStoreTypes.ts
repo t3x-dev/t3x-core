@@ -1,4 +1,5 @@
 import type { Connection, Edge, EdgeChange, Node, NodeChange } from '@xyflow/react';
+import type { ConflictReport } from '@/lib/api/commits';
 import type { CommitV3, MergeState } from '../types/merge';
 import type {
   CanvasNodeData,
@@ -123,13 +124,10 @@ export type CanvasState = MergeSlice &
     // Get direct upstream source nodes for a pending commit
     getUpstreamSourceNodes: (nodeId: string) => Node<CanvasNodeData>[];
     // Conflict detection state
-    commitConflicts: Record<string, import('@/lib/api/commits').ConflictReport | null>;
-    dismissedConflicts: Set<string>;
+    commitConflicts: Record<string, ConflictReport | null>;
+    dismissedConflicts: Record<string, boolean>;
     showConflictPanel: string | null; // commit hash of the conflict panel being shown
-    setCommitConflicts: (
-      commitHash: string,
-      report: import('@/lib/api/commits').ConflictReport | null
-    ) => void;
+    setCommitConflicts: (commitHash: string, report: ConflictReport | null) => void;
     dismissConflict: (commitHash: string) => void;
     openConflictPanel: (commitHash: string) => void;
     closeConflictPanel: () => void;

@@ -259,7 +259,7 @@ function CanvasWorkspaceInner({
   }, [openNodeId, modalNode, hasDownstreamPendingCommits]);
 
   const activeConflictEntry = Object.entries(commitConflicts).find(
-    ([hash, report]) => report && report.conflicts.length > 0 && !dismissedConflicts.has(hash)
+    ([hash, report]) => report && report.conflicts.length > 0 && !dismissedConflicts[hash]
   );
 
   const modalQuickActions = useMemo<NodeQuickAction[] | undefined>(() => {

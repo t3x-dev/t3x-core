@@ -33,7 +33,6 @@ export function GateQualityTab({
 
   const runCheck = useCallback(async () => {
     if (!snapshot) return;
-    setResult(null);
     setLoading(true);
     setError(null);
     try {
@@ -46,7 +45,7 @@ export function GateQualityTab({
     } finally {
       setLoading(false);
     }
-  }, [snapshot, conversationId]);
+  }, [snapshot, conversationId, onGateResult]);
 
   // Empty state: no snapshot
   if (!snapshot) {
