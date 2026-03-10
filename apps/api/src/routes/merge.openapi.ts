@@ -12,8 +12,15 @@
  * DELETE /v1/merge/drafts/:id - Delete a merge draft
  */
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import type { CreateCommitV4Input, MergeSummaryData } from '@t3x-dev/core';
-import { executeMerge, type Merge2WayResult, prepareMerge, suggestMerge } from '@t3x-dev/core';
+import type { CreateCommitV4Input, MergeSummaryData, SlotValue } from '@t3x-dev/core';
+import {
+  executeMerge,
+  type FrameMergeInput,
+  type Merge2WayResult,
+  prepareMerge,
+  suggestFrameMerge,
+  suggestMerge,
+} from '@t3x-dev/core';
 import {
   commitMergeDraft,
   createCommitV4,
@@ -1008,5 +1015,111 @@ mergeRoutes.openapi(suggestRoute, async (c) => {
   }
 
   const result = await suggestMerge(prepared.similarPairs[idx], llm);
+  return c.json({ success: true as const, data: { suggestion: result } }, 200);
+});
+
+// ============================================================================
+// POST /v1/merge/drafts/:id/suggest-frame/:frameId — AI frame merge suggestion
+// ============================================================================
+
+const FrameSlotSchema = z.record(z.string(), z.unknown());
+
+const FrameMergeSuggestionSchema = z.object({
+  slots: FrameSlotSchema,
+  reasoning: z.string(),
+});
+
+const suggestFrameRoute = createRoute({
+  method: 'post',
+  path: '/v1/merge/drafts/{id}/suggest-frame/{frameId}',
+  tags: ['Merge'],
+  summary: 'Get AI suggestion for a conflicting frame',
+  description:
+    'Uses LLM to suggest merged slot values for a specific semantic frame conflict in a merge draft.',
+  request: {
+    params: z.object({
+      id: z.string().openapi({ description: 'Merge draft ID' }),
+      frameId: z.string().openapi({ description: 'Frame ID' }),
+    }),
+    body: {
+      content: {
+        'application/json': {
+          schema: z.object({
+            source_frame: z.object({
+              type: z.string(),
+              slots: FrameSlotSchema,
+            }),
+            target_frame: z.object({
+              type: z.string(),
+              slots: FrameSlotSchema,
+            }),
+            context: z.string().optional(),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Frame merge suggestion',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(
+            z.object({ suggestion: FrameMergeSuggestionSchema.nullable() })
+          ),
+        },
+      },
+    },
+    404: {
+      description: 'Merge draft not found',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    503: {
+      description: 'LLM not configured',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+mergeRoutes.openapi(suggestFrameRoute, async (c) => {
+  const { id } = c.req.valid('param');
+  const body = c.req.valid('json');
+
+  const db = await getDB();
+  const draft = await getMergeDraft(db, id);
+  if (!draft) {
+    return c.json(
+      {
+        success: false as const,
+        error: { code: 'NOT_FOUND', message: `Merge draft not found: ${id}` },
+      },
+      404
+    );
+  }
+
+  const llm = await getLLMProvider();
+  if (!llm) {
+    return c.json(
+      {
+        success: false as const,
+        error: { code: 'LLM_NOT_CONFIGURED', message: 'No LLM provider configured' },
+      },
+      503
+    );
+  }
+
+  const input: FrameMergeInput = {
+    sourceFrame: {
+      type: body.source_frame.type,
+      slots: body.source_frame.slots as Record<string, SlotValue>,
+    },
+    targetFrame: {
+      type: body.target_frame.type,
+      slots: body.target_frame.slots as Record<string, SlotValue>,
+    },
+    context: body.context,
+  };
+
+  const result = await suggestFrameMerge(input, llm);
   return c.json({ success: true as const, data: { suggestion: result } }, 200);
 });

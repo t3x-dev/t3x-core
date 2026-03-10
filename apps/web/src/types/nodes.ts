@@ -114,6 +114,7 @@ export type CommitV4Display = Pick<
   | 'branch'
   | 'source_refs'
   | 'merge_summary'
+  | 'semantic'
 >;
 
 /**

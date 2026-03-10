@@ -32,12 +32,15 @@ import {
   commitsV4Routes,
   conversationRoutes,
   curateRoutes,
+  deltaLogRoutes,
   deployAgentRoutes,
   diffRoutes,
   draftsRoutes,
   exportRoutes,
   extractionFeedbackRoutes,
   extractRoutes,
+  frameExtractRoutes,
+  gateRoutes,
   healthRoutes,
   leavesRoutes,
   pinsRoutes,
@@ -135,6 +138,9 @@ export function createApp(options?: CreateAppOptions): Hono {
   api.route('/', deployAgentRoutes);
   api.route('/', draftsRoutes);
   api.route('/', extractRoutes);
+  api.route('/', frameExtractRoutes); // /v1/extract/frames
+  api.route('/', gateRoutes); // /v1/gate/check
+  api.route('/', deltaLogRoutes); // /v1/conversations/:conversationId/deltas
   api.route('/', runsRoutes);
   api.route('/', leavesRoutes);
   api.route('/', pinsRoutes);
@@ -190,8 +196,10 @@ export function createApp(options?: CreateAppOptions): Hono {
       { name: 'Commits', description: 'Version control commits' },
       { name: 'Branches', description: 'Branch management' },
       { name: 'Drafts', description: 'Draft management' },
+      { name: 'Delta Log', description: 'Semantic delta log (incremental frame changes)' },
       { name: 'Diff', description: 'Semantic diff operations' },
       { name: 'Extract', description: 'LLM-based semantic extraction from conversations' },
+      { name: 'Gate', description: 'Quality gate checks (structure, semantic, business)' },
       { name: 'Merge', description: 'Merge operations' },
       { name: 'Export', description: 'Export operations' },
       { name: 'Chat', description: 'LLM chat operations' },

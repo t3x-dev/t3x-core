@@ -26,6 +26,7 @@ import {
 import { useTerminology } from '@/hooks/useTerminology';
 import type { DraftSentence, DraftV3 } from '@/lib/api';
 import * as api from '@/lib/api';
+import { useCanvasStore } from '@/store/canvasStore';
 
 interface DraftQuickSheetProps {
   open: boolean;
@@ -81,7 +82,23 @@ export function DraftQuickSheet({ open, onClose, draftId, projectId }: DraftQuic
     if (!draft) return;
     setCommitting(true);
     try {
-      await api.commitDraftV3(draftId);
+      const result = await api.commitDraftV3(draftId);
+      const commitHash = result.commit.hash as string;
+
+      // Async conflict detection (non-blocking)
+      if (commitHash) {
+        api
+          .checkConflicts(commitHash)
+          .then((report) => {
+            if (report && report.conflicts.length > 0) {
+              useCanvasStore.getState().setCommitConflicts(commitHash, report);
+            }
+          })
+          .catch(() => {
+            // Conflict check failure is non-critical — don't block commit flow
+          });
+      }
+
       toast.success(t('draft_committed'));
       onClose();
     } catch (err) {

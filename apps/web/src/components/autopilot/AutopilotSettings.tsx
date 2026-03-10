@@ -211,53 +211,136 @@ export function AutopilotSettings({ projectId }: { projectId: string }) {
           <CardTitle className="text-sm">Adaptive Threshold</CardTitle>
         </CardHeader>
         <CardContent>
-          {adaptiveResult?.adaptive ? (
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <span className="text-[var(--text-tertiary)]">Cosine delta:</span>{' '}
-                  <span className="font-mono text-[var(--text-primary)]">
-                    {adaptiveResult.adaptive.cosineThresholdDelta > 0 ? '+' : ''}
-                    {adaptiveResult.adaptive.cosineThresholdDelta.toFixed(3)}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-[var(--text-tertiary)]">Suppressed types:</span>{' '}
-                  <span className="text-[var(--text-primary)]">
-                    {adaptiveResult.adaptive.suppressedTypes.length > 0
-                      ? adaptiveResult.adaptive.suppressedTypes.join(', ')
-                      : 'None'}
-                  </span>
-                </div>
-              </div>
+          {adaptiveResult?.adaptive
+            ? (() => {
+                const stats = adaptiveResult.stats as Record<string, unknown> | undefined;
+                const totalCount = (stats?.total_feedback_count as number) ?? 0;
+                const editRate = (stats?.edit_rate as number) ?? null;
+                const byType = (stats?.by_type as Record<string, { accept_rate?: number }>) ?? {};
+                const { suppressedTypes, confidenceMultipliers, cosineThresholdDelta } =
+                  adaptiveResult.adaptive;
 
-              {Object.keys(adaptiveResult.adaptive.confidenceMultipliers).length > 0 && (
-                <div className="text-sm">
-                  <span className="text-[var(--text-tertiary)]">Confidence multipliers:</span>
-                  <div className="mt-1 flex flex-wrap gap-2">
-                    {Object.entries(adaptiveResult.adaptive.confidenceMultipliers).map(
-                      ([key, val]) => (
-                        <span
-                          key={key}
-                          className="inline-flex items-center rounded bg-[var(--surface-app)] px-2 py-0.5 text-xs font-mono"
-                        >
-                          {key}: {val.toFixed(2)}
+                return (
+                  <div className="space-y-3">
+                    {/* Feedback sample count */}
+                    {totalCount > 0 && (
+                      <p className="text-xs text-[var(--text-tertiary)]">
+                        Based on {totalCount} feedback action{totalCount !== 1 ? 's' : ''}
+                      </p>
+                    )}
+
+                    {/* Cosine delta with reasoning */}
+                    <div className="text-sm">
+                      <span className="text-[var(--text-tertiary)]">Cosine threshold:</span>{' '}
+                      <span className="font-mono text-[var(--text-primary)]">
+                        {cosineThresholdDelta > 0 ? '+' : ''}
+                        {cosineThresholdDelta.toFixed(3)}
+                      </span>
+                      {editRate != null && (
+                        <span className="text-[var(--text-tertiary)]">
+                          {' '}
+                          (edit rate {Math.round(editRate * 100)}%)
                         </span>
-                      )
+                      )}
+                    </div>
+
+                    {/* Suppressed types */}
+                    {suppressedTypes.length > 0 && (
+                      <div className="text-sm">
+                        <span className="text-[var(--text-tertiary)]">Suppressed types:</span>{' '}
+                        <span className="text-[var(--text-primary)]">
+                          {suppressedTypes.join(', ')}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Confidence multipliers with acceptance rate bars */}
+                    {Object.keys(confidenceMultipliers).length > 0 && (
+                      <div className="space-y-1.5">
+                        <span className="text-xs text-[var(--text-tertiary)]">
+                          Confidence multipliers:
+                        </span>
+                        {Object.entries(confidenceMultipliers).map(([key, multiplier]) => {
+                          const isSuppressed = suppressedTypes.includes(key);
+                          const acceptRate = byType[key]?.accept_rate ?? null;
+                          const barColor =
+                            acceptRate == null
+                              ? 'bg-[var(--text-tertiary)]'
+                              : acceptRate >= 0.8
+                                ? 'bg-emerald-500'
+                                : acceptRate >= 0.5
+                                  ? 'bg-amber-500'
+                                  : 'bg-red-500';
+
+                          return (
+                            <div key={key} className="flex items-center gap-2 text-xs">
+                              <span className="w-24 font-mono text-[var(--text-secondary)] truncate">
+                                {key}
+                              </span>
+                              <span className="w-8 font-mono text-right text-[var(--text-primary)]">
+                                {isSuppressed ? 'off' : multiplier.toFixed(1)}
+                              </span>
+                              <div className="flex-1 h-1.5 bg-[var(--surface-app)] rounded-full overflow-hidden">
+                                <div
+                                  className={cn('h-full rounded-full', barColor)}
+                                  style={{
+                                    width: `${acceptRate != null ? Math.round(acceptRate * 100) : 0}%`,
+                                  }}
+                                />
+                              </div>
+                              {acceptRate != null && (
+                                <span className="w-10 text-right text-[var(--text-tertiary)]">
+                                  {Math.round(acceptRate * 100)}%
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    <Button variant="outline" size="sm" onClick={handleApplyAdaptive}>
+                      Apply Suggestions
+                    </Button>
+
+                    {/* Rule explanation */}
+                    <p className="text-xs text-[var(--text-tertiary)] mt-2">
+                      Types with accept rate below 50% and 20+ samples are disabled. Accept rate
+                      50-70% reduces confidence to 0.7.
+                    </p>
+                  </div>
+                );
+              })()
+            : (() => {
+                const count =
+                  ((adaptiveResult?.stats as Record<string, unknown>)
+                    ?.total_feedback_count as number) ?? 0;
+                const threshold = 10;
+
+                return (
+                  <div className="space-y-2">
+                    <p className="text-sm text-[var(--text-tertiary)]">
+                      {adaptiveResult?.message ||
+                        'Need more feedback data to compute adaptive thresholds.'}
+                    </p>
+                    {count > 0 && count < threshold && (
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between text-xs text-[var(--text-tertiary)]">
+                          <span>
+                            {count}/{threshold} feedback actions
+                          </span>
+                        </div>
+                        <div className="h-1.5 bg-[var(--surface-app)] rounded-full overflow-hidden">
+                          <div
+                            className="h-full rounded-full bg-[var(--accent-blue)]"
+                            style={{ width: `${Math.round((count / threshold) * 100)}%` }}
+                          />
+                        </div>
+                      </div>
                     )}
                   </div>
-                </div>
-              )}
-
-              <Button variant="outline" size="sm" onClick={handleApplyAdaptive}>
-                Apply Suggestions
-              </Button>
-            </div>
-          ) : (
-            <p className="text-sm text-[var(--text-tertiary)]">
-              {adaptiveResult?.message || 'Need more feedback data to compute adaptive thresholds.'}
-            </p>
-          )}
+                );
+              })()}
         </CardContent>
       </Card>
     </div>

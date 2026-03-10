@@ -8,6 +8,7 @@
 export * from './auth';
 export * from './autopilot';
 export * from './branches';
+export * from './business-rules';
 export * from './chat';
 export * from './commits';
 export * from './conversations';
@@ -17,6 +18,7 @@ export * from './diff';
 export * from './drafts';
 export * from './export';
 export * from './extraction-feedback';
+export * from './frames';
 export * from './health';
 export * from './knowledge-graph';
 export * from './leaves';

@@ -175,6 +175,35 @@ describe('Turns Routes', () => {
 
       expect(res.status).toBe(400);
     });
+
+    it('skips ring extraction when DISABLE_RING_EXTRACTION=true', async () => {
+      const origEnv = process.env.DISABLE_RING_EXTRACTION;
+      process.env.DISABLE_RING_EXTRACTION = 'true';
+      try {
+        const res = await app.request('/v1/turns', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            project_id: testProjectId,
+            conversation_id: testConversationId,
+            role: 'user',
+            content: 'Ring extraction should be skipped',
+          }),
+        });
+
+        expect(res.status).toBe(201);
+        const data: ApiResponse = await res.json();
+        expect(data.success).toBe(true);
+        // rings should be null since extraction was skipped and no rings were provided
+        expect(data.data.rings).toBeNull();
+      } finally {
+        if (origEnv === undefined) {
+          delete process.env.DISABLE_RING_EXTRACTION;
+        } else {
+          process.env.DISABLE_RING_EXTRACTION = origEnv;
+        }
+      }
+    });
   });
 
   // =========================================================================

@@ -1,6 +1,6 @@
 'use client';
 
-import { Loader2 } from 'lucide-react';
+import { BookOpen, Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import {
   Select,
@@ -16,6 +16,7 @@ import {
   getExtractionFeedbackStats,
   getFeedbackCosineBuckets,
 } from '@/lib/api/extraction-feedback';
+import { listLeavesByProject } from '@/lib/api/leaves';
 import { ConfidenceBucketChart } from './ConfidenceBucketChart';
 import { FeedbackByTypeTable } from './FeedbackByTypeTable';
 import { FeedbackOverview } from './FeedbackOverview';
@@ -121,6 +122,7 @@ export function FeedbackTab() {
           <FeedbackOverview stats={stats.overall} />
           <FeedbackByTypeTable byType={stats.by_inference_type} />
           <ConfidenceBucketChart buckets={buckets} />
+          <LessonsSection projectId={selectedProjectId!} />
         </div>
       )}
 
@@ -137,4 +139,96 @@ export function FeedbackTab() {
       )}
     </div>
   );
+}
+
+function LessonsSection({ projectId }: { projectId: string }) {
+  const [lessons, setLessons] = useState<
+    Array<{ lesson: string; count: number; lastSeen: string }>
+  >([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const leaves = await listLeavesByProject(projectId);
+        const lessonMap = new Map<string, { count: number; lastSeen: string }>();
+        for (const leaf of leaves) {
+          for (const a of leaf.assertions ?? []) {
+            if (!a.passed && a.lesson) {
+              const existing = lessonMap.get(a.lesson);
+              if (existing) {
+                existing.count++;
+                if (leaf.created_at && leaf.created_at > existing.lastSeen) {
+                  existing.lastSeen = leaf.created_at;
+                }
+              } else {
+                lessonMap.set(a.lesson, {
+                  count: 1,
+                  lastSeen: leaf.created_at ?? '',
+                });
+              }
+            }
+          }
+        }
+        if (!cancelled) {
+          setLessons(
+            [...lessonMap.entries()]
+              .map(([lesson, data]) => ({ lesson, ...data }))
+              .sort((a, b) => b.count - a.count)
+              .slice(0, 10)
+          );
+        }
+      } catch {
+        // Silently fail — lessons are supplementary
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
+
+  if (loading) {
+    return <div className="py-4 text-center text-sm text-muted-foreground">Loading lessons...</div>;
+  }
+
+  if (lessons.length === 0) return null;
+
+  return (
+    <div className="space-y-3">
+      <h3 className="text-sm font-medium flex items-center gap-2">
+        <BookOpen className="h-4 w-4" />
+        Lessons Learned
+      </h3>
+      <div className="space-y-2">
+        {lessons.map((l) => (
+          <div key={l.lesson} className="rounded-md border p-2.5 text-sm">
+            <p className="text-foreground">{l.lesson}</p>
+            <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+              <span>{l.count}×</span>
+              {l.lastSeen && <span>{formatTimeAgo(l.lastSeen)}</span>}
+            </div>
+          </div>
+        ))}
+      </div>
+      <p className="text-xs text-muted-foreground">
+        These lessons are automatically injected into future generations to avoid repeating
+        mistakes.
+      </p>
+    </div>
+  );
+}
+
+function formatTimeAgo(dateStr: string): string {
+  const date = new Date(dateStr);
+  const now = Date.now();
+  const diffMs = now - date.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  if (diffDays === 0) return 'today';
+  if (diffDays === 1) return 'yesterday';
+  if (diffDays < 7) return `${diffDays}d ago`;
+  if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
+  return `${Math.floor(diffDays / 30)}mo ago`;
 }

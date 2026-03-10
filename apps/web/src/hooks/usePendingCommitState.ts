@@ -391,6 +391,18 @@ export function usePendingCommitState({
       });
 
       setCommitSuccess({ commitHash, parentHash, diffStats });
+
+      // 8. Async conflict detection (non-blocking)
+      api
+        .checkConflicts(commitHash)
+        .then((report) => {
+          if (report && report.conflicts.length > 0) {
+            useCanvasStore.getState().setCommitConflicts(commitHash, report);
+          }
+        })
+        .catch(() => {
+          // Conflict check failure is non-critical — don't block commit flow
+        });
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       setCommitError(error.message);

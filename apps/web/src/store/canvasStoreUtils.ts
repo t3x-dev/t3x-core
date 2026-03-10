@@ -592,7 +592,9 @@ export const unitToNode = (
             },
             message: originalV4.message ?? undefined,
             branch: originalV4.branch ?? undefined,
+            source_refs: originalV4.source_refs ?? undefined,
             merge_summary: originalV4.merge_summary ?? undefined,
+            semantic: originalV4.semantic ?? undefined,
           }
         : undefined,
     },

@@ -180,6 +180,8 @@ export interface CommitV4 {
     discarded: number;
     total_sentences: number;
   } | null;
+  /** Semantic frame content (frames + relations). Nullable — old commits have undefined. */
+  semantic?: import('@t3x/core').SemanticContent;
   position_x: number | null;
   position_y: number | null;
   created_at: string;
@@ -276,6 +278,8 @@ export async function createCommitV4(
      * New sentences with the same text will override inherited ones.
      */
     inherit_parent_sentences?: boolean;
+    /** Semantic frame content (frames + relations) from the conversation's delta log. */
+    semantic?: import('@t3x/core').SemanticContent;
   }
 ): Promise<CreateCommitV4Result> {
   const res = await fetchWithTimeout(`${API_V1}/commits-v4`, {
@@ -292,6 +296,7 @@ export async function createCommitV4(
       author: options?.author ?? { type: 'human', name: 'User' },
       source_refs: options?.source_refs,
       inherit_parent_sentences: options?.inherit_parent_sentences,
+      semantic: options?.semantic,
     }),
   });
   return handleResponse<CreateCommitV4Result>(res);

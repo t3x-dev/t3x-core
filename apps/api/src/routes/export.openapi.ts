@@ -6,6 +6,8 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
+import { buildDraft } from '@t3x/core';
+import { listDeltaLogByConversation } from '@t3x/storage';
 import {
   findConversationsByProject,
   findProjectById,
@@ -14,6 +16,7 @@ import {
 } from '@t3x-dev/storage/pglite';
 import * as crypto from 'crypto';
 import { getDB } from '../lib/db';
+import { toDeltaLogEntries } from '../lib/delta-log-utils';
 import { zodErrorHook } from '../lib/errors';
 import { ErrorResponseSchema } from '../schemas/common';
 import { ExportQuery } from '../schemas/export-contracts';
@@ -335,7 +338,21 @@ exportRoutes.openapi(exportCfpackRoute, async (c) => {
       evidence_refs: [],
     };
 
-    const cfpack: CfpackResponseType = {
+    // Build semantic snapshots from delta logs (Frame data)
+    const semanticSnapshots: Record<string, unknown> = {};
+    for (const conv of await findConversationsByProject(db, { projectId, limit: 10000 })) {
+      const deltaLogs = await listDeltaLogByConversation(db, conv.conversationId);
+      if (deltaLogs.length > 0) {
+        const snapshot = buildDraft(toDeltaLogEntries(deltaLogs));
+        semanticSnapshots[conv.conversationId] = {
+          frames: snapshot.frames,
+          relations: snapshot.relations,
+          delta_count: deltaLogs.length,
+        };
+      }
+    }
+
+    const cfpack: CfpackResponseType & { semantic_snapshots?: Record<string, unknown> } = {
       version: '1.0.0',
       cfpack_schema_version: '1.0.0',
       project: {
@@ -346,6 +363,10 @@ exportRoutes.openapi(exportCfpackRoute, async (c) => {
       turns,
       findings,
       commits,
+      // Include Frame semantic snapshots if any conversations have Frame data
+      ...(Object.keys(semanticSnapshots).length > 0
+        ? { semantic_snapshots: semanticSnapshots }
+        : {}),
       hash: null,
       meta: {
         exported_at: new Date().toISOString(),
@@ -493,6 +514,23 @@ exportRoutes.openapi(exportLedgerRoute, async (c) => {
           created_at: commit.createdAt,
         })
       );
+    }
+
+    // Semantic snapshots (Frame data)
+    for (const conv of conversations) {
+      const deltaLogs = await listDeltaLogByConversation(db, conv.conversationId);
+      if (deltaLogs.length > 0) {
+        const snapshot = buildDraft(toDeltaLogEntries(deltaLogs));
+        lines.push(
+          JSON.stringify({
+            type: 'semantic_snapshot',
+            conversation_id: conv.conversationId,
+            frames: snapshot.frames,
+            relations: snapshot.relations,
+            delta_count: deltaLogs.length,
+          })
+        );
+      }
     }
 
     const jsonlContent = lines.join('\n') + '\n';

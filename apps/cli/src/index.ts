@@ -8,6 +8,7 @@ import { Command } from 'commander';
 import { registerBranchCommands } from './commands/branches.js';
 import { registerCommitCommands } from './commands/commits.js';
 import { registerExportCommands } from './commands/export.js';
+import { registerGateCommands } from './commands/gate.js';
 import { registerImportCommands } from './commands/import.js';
 import { registerLeafCommands } from './commands/leaves.js';
 import { registerProjectCommands } from './commands/projects.js';
@@ -29,6 +30,7 @@ registerCommitCommands(program);
 registerBranchCommands(program);
 registerLeafCommands(program);
 registerShareCommands(program);
+registerGateCommands(program);
 registerExportCommands(program);
 registerImportCommands(program);
 

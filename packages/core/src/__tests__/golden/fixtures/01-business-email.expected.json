@@ -1,0 +1,7 @@
+{
+  "minFrames": 4,
+  "maxFrames": 10,
+  "requiredFrameTypes": ["proposal", "concern"],
+  "requiredSlotKeys": {},
+  "requiredRelationTypes": ["causes"]
+}

@@ -13,7 +13,7 @@
  */
 
 import { z } from '@hono/zod-openapi';
-import { ALL_LEAF_TYPES, LEAF_TYPES } from '@t3x-dev/core';
+import { ALL_LEAF_TYPES, LEAF_TYPES, SemanticContentSchema } from '@t3x-dev/core';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Common Schemas
@@ -129,6 +129,9 @@ export const CreateCommitV4Request = z
       .describe('References to source conversations or leaves'),
     position_x: z.number().optional().describe('Canvas X position'),
     position_y: z.number().optional().describe('Canvas Y position'),
+    semantic: SemanticContentSchema.nullable()
+      .optional()
+      .describe('Semantic frame content (frames + relations)'),
 
     // Inheritance control
     inherit_parent_sentences: z
@@ -181,6 +184,7 @@ export const CommitV4Response = z.object({
       })
     )
     .nullable(),
+  semantic: SemanticContentSchema.nullable().optional(),
   position_x: z.number().nullable(),
   position_y: z.number().nullable(),
   created_at: z.string(),
