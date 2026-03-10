@@ -14,6 +14,7 @@ export * from './deploy';
 export * from './diff';
 export * from './drafts';
 export * from './export';
+export * from './frames';
 export * from './health';
 export * from './leaves';
 export * from './misc';
