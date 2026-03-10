@@ -1,6 +1,7 @@
 {
   "name": "@t3x/cli",
   "version": "0.1.0",
+  "private": true,
   "description": "T3X Command Line Interface",
   "type": "module",
   "bin": {

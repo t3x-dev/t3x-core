@@ -80,6 +80,6 @@
     "directory": "packages/storage"
   },
   "publishConfig": {
-    "access": "public"
+    "access": "restricted"
   }
 }

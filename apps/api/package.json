@@ -1,11 +1,24 @@
 {
   "name": "@t3x/api",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/app.d.ts",
+      "import": "./dist/app.js"
+    }
+  },
+  "main": "dist/app.js",
+  "types": "dist/app.d.ts",
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "restricted"
+  },
   "scripts": {
     "dev": "dotenv -e ../../.env -- tsx watch src/index.ts",
-    "build": "tsup src/index.ts --format esm --dts --clean",
+    "build": "tsup src/index.ts src/app.ts --format esm --dts --clean",
     "start": "node dist/index.js",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",

@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "description": "T3X Runner - Grey-box agent evaluation, CI/CD, and workflow orchestration",
   "license": "MIT",
+  "publishConfig": {
+    "access": "restricted"
+  },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
