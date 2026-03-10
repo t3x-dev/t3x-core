@@ -244,7 +244,7 @@ function FrameNodeComponent({ data, selected, id }: FrameNodeProps) {
   // State-based container classes
   const stateClasses = cn(
     // Base
-    'rounded-lg border bg-white dark:bg-zinc-900 shadow-sm min-w-[200px] max-w-[320px]',
+    'relative overflow-visible rounded-lg border bg-white dark:bg-zinc-900 shadow-sm min-w-[200px] max-w-[320px]',
     // Normal border
     !state && !selected && 'border-zinc-200 dark:border-zinc-700',
     // Selected
@@ -277,6 +277,23 @@ function FrameNodeComponent({ data, selected, id }: FrameNodeProps) {
 
   return (
     <div className={stateClasses} style={addedGlowStyle}>
+      {/* Gate status badge */}
+      {data.gateStatus === 'warning' && (
+        <div
+          className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-amber-500 flex items-center justify-center z-10"
+          title={data.gateIssueSummary ?? 'Quality warning'}
+        >
+          <span className="text-[8px] text-white font-bold">{data.gateIssueCount ?? '!'}</span>
+        </div>
+      )}
+      {data.gateStatus === 'error' && (
+        <div
+          className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-red-500 flex items-center justify-center z-10"
+          title={data.gateIssueSummary ?? 'Quality error'}
+        >
+          <span className="text-[8px] text-white font-bold">{data.gateIssueCount ?? '!'}</span>
+        </div>
+      )}
       {/* Keyframe for origin pulse glow */}
       {state === 'added' && (
         <style>{`
