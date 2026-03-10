@@ -6,7 +6,9 @@
  * PATCH /v1/agent/drafts/:id - Update draft with feedback
  */
 
-import { createClaudeProvider, LLMProviderError } from '@t3x/core';
+import type { SemanticContent } from '@t3x/core';
+import { buildDraft, createClaudeProvider, LLMProviderError } from '@t3x/core';
+import { listDeltaLogByConversation } from '@t3x/storage';
 import {
   findConversationById,
   findDraftById,
@@ -17,6 +19,7 @@ import {
 } from '@t3x/storage/pglite';
 import { Hono } from 'hono';
 import { getDB } from '../lib/db';
+import { toDeltaLogEntries } from '../lib/delta-log-utils';
 import { getLLMProvider } from '../lib/provider-registry';
 import { jsonError, jsonSuccess } from '../lib/response';
 
@@ -197,9 +200,85 @@ function isValueableKeyword(keyword: string): boolean {
 
 type DBType = Awaited<ReturnType<typeof getDB>>;
 
-async function extractMustHave(db: DBType, conversationId: string): Promise<string[]> {
-  const turns = await findTurnsByConversation(db, { conversationId, limit: 100 });
+// Slot key patterns that indicate polarity/sentiment metadata (not content keywords)
+const POLARITY_KEYS = /^(polarity|sentiment|preference|mood|attitude|valence)$/i;
+const NEGATIVE_VALUES = /^(negative|avoid|exclude|dislike|against|no|must.not|don.t|never)$/i;
+const NEGATIVE_FRAME_TYPES = /\b(dislike|avoid|exclude|negative|reject|ban)\b/i;
+// Slot KEY patterns that imply the value is something negative/unwanted
+// Uses (?:^|_) and (?:_|$) as boundaries since slot keys use snake_case
+const NEGATIVE_SLOT_KEYS =
+  /(?:^|_)(exclude|avoid|not_interested|dislike|reject|ban|allerg(?:en|y|ic)?|dont_want|must_not|negative)(?:_|$)/i;
 
+/**
+ * Extract a flat string value from a SlotValue (skip refs, inline frames, arrays).
+ */
+function slotToString(val: unknown): string | null {
+  if (typeof val === 'string') return val;
+  if (typeof val === 'number') return String(val);
+  return null;
+}
+
+/**
+ * Extract must-have/must-not-have from Frame snapshot.
+ * Traverses ALL slot values (LLM-emergent names) instead of hardcoded slot names.
+ * Detects polarity from slot keys, slot values, and frame type.
+ */
+function extractPreferencesFromFrames(snapshot: SemanticContent): {
+  mustHave: string[];
+  mustNotHave: string[];
+} {
+  const mustHave: string[] = [];
+  const mustNotHave: string[] = [];
+  const seenLower = new Set<string>();
+
+  for (const frame of snapshot.frames) {
+    const slots = frame.slots;
+
+    // Determine frame-level polarity from metadata slots and frame type
+    let isNegative = NEGATIVE_FRAME_TYPES.test(frame.type);
+
+    for (const [key, val] of Object.entries(slots)) {
+      if (!POLARITY_KEYS.test(key)) continue;
+      const str = slotToString(val);
+      if (!str) continue;
+      if (NEGATIVE_VALUES.test(str)) isNegative = true;
+    }
+
+    // Collect and classify keywords from all non-polarity slots
+    for (const [key, val] of Object.entries(slots)) {
+      if (POLARITY_KEYS.test(key)) continue;
+      const str = slotToString(val);
+      if (!str || !isValueableKeyword(str)) continue;
+
+      const kwLower = str.toLowerCase();
+      if (seenLower.has(kwLower)) continue;
+      seenLower.add(kwLower);
+
+      // Per-slot negative: slot key implies unwanted (e.g., exclude="hostels")
+      if (isNegative || NEGATIVE_SLOT_KEYS.test(key)) {
+        mustNotHave.push(str);
+      } else {
+        mustHave.push(str);
+      }
+    }
+  }
+
+  return { mustHave, mustNotHave };
+}
+
+async function extractMustHave(db: DBType, conversationId: string): Promise<string[]> {
+  // Strategy 1: Frame snapshot
+  const deltaLogs = await listDeltaLogByConversation(db, conversationId);
+  if (deltaLogs.length > 0) {
+    const snapshot = buildDraft(toDeltaLogEntries(deltaLogs));
+    const prefs = extractPreferencesFromFrames(snapshot);
+    if (prefs.mustHave.length > 0) {
+      return prefs.mustHave.slice(0, 15);
+    }
+  }
+
+  // Strategy 2: Ring 1 keywords (legacy fallback)
+  const turns = await findTurnsByConversation(db, { conversationId, limit: 100 });
   const keywords: string[] = [];
   const seenLower = new Set<string>();
 
@@ -226,8 +305,18 @@ async function extractMustHave(db: DBType, conversationId: string): Promise<stri
 }
 
 async function extractMustntHave(db: DBType, conversationId: string): Promise<string[]> {
-  const turns = await findTurnsByConversation(db, { conversationId, limit: 100 });
+  // Strategy 1: Frame snapshot
+  const deltaLogs = await listDeltaLogByConversation(db, conversationId);
+  if (deltaLogs.length > 0) {
+    const snapshot = buildDraft(toDeltaLogEntries(deltaLogs));
+    const prefs = extractPreferencesFromFrames(snapshot);
+    if (prefs.mustNotHave.length > 0) {
+      return prefs.mustNotHave.slice(0, 10);
+    }
+  }
 
+  // Strategy 2: Ring 1 preference keywords (legacy fallback)
+  const turns = await findTurnsByConversation(db, { conversationId, limit: 100 });
   const keywords: string[] = [];
   const seenLower = new Set<string>();
 

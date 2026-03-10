@@ -221,6 +221,13 @@ export const commitsV4 = pgTable(
       };
     }>(),
 
+    /**
+     * Semantic content: { frames: Frame[], relations: Relation[] }
+     * Nullable — old commits have null.
+     * Second-class field: does NOT participate in hash calculation.
+     */
+    semantic: jsonb('semantic'),
+
     /** Canvas position */
     positionX: real('position_x'),
     positionY: real('position_y'),
@@ -1003,6 +1010,57 @@ export const notifications = pgTable(
 
 export type NotificationRecord = typeof notifications.$inferSelect;
 export type NotificationInsert = typeof notifications.$inferInsert;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// delta_log: Append-only Semantic Delta Records
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Append-only log of semantic deltas produced during extraction and editing.
+ *
+ * Three sources:
+ * - `llm_extraction`: Deltas from LLM-based semantic extraction (has turn_hash)
+ * - `user_graph_edit`: Deltas from user edits in the graph UI
+ * - `user_yaml_edit`: Deltas from user edits in YAML mode
+ *
+ * @see docs/plans/core-engine/04-delta-protocol.md
+ */
+export const deltaLog = pgTable(
+  'delta_log',
+  {
+    /** Unique ID: "dl_" + nanoid(12) */
+    id: text('id').primaryKey(),
+
+    /** Conversation this delta belongs to */
+    conversationId: text('conversation_id')
+      .notNull()
+      .references(() => conversations.conversationId, { onDelete: 'cascade' }),
+
+    /** Project this delta belongs to */
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.projectId, { onDelete: 'cascade' }),
+
+    /** Delta source: 'llm_extraction' | 'user_graph_edit' | 'user_yaml_edit' */
+    source: text('source').notNull(),
+
+    /** Turn hash (only for llm_extraction source) */
+    turnHash: text('turn_hash'),
+
+    /** The Delta content (JSONB) */
+    delta: jsonb('delta').notNull(),
+
+    /** When this delta was recorded */
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    convIdx: index('idx_delta_log_conv').on(table.conversationId, table.createdAt),
+    projectIdx: index('idx_delta_log_project').on(table.projectId),
+  })
+);
+
+export type DeltaLogRecord = typeof deltaLog.$inferSelect;
+export type DeltaLogInsert = typeof deltaLog.$inferInsert;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Sentence Relations (Ring 4 — Inter-sentence relationships)

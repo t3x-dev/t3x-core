@@ -101,6 +101,9 @@ export {
   buildAdaptiveSection,
   // LLM Extraction
   buildExtractionPrompt,
+  // Frame Extraction (Phase 2)
+  buildFrameExtractionPrompt,
+  // Incremental Extraction (LLM pipeline)
   buildIncrementalPrompt,
   // Ring 4: Relations
   buildRelationPrompt,
@@ -122,6 +125,12 @@ export {
   type ExtractorConfig,
   type Facet,
   type FacetType,
+  type FrameDeltaParseResult,
+  type FrameExtractionInput,
+  type FrameExtractionPromptResult,
+  type FrameExtractionResult,
+  type FrameExtractionTurn,
+  FrameExtractor,
   type FuzzyLocateResult,
   fuzzyLocate,
   type Keyword,
@@ -138,6 +147,7 @@ export {
   type PosTag,
   type PreferenceRelation,
   parseExtractionResponse,
+  parseFrameDelta,
   parseIncrementalResponse,
   parseRelationResponse,
   RelationExtractor,
@@ -342,6 +352,63 @@ export {
   type RoleAssignment,
   type TestConnectionResult,
 } from './providers';
+export type {
+  BusinessGateResult,
+  BusinessRuleConfig,
+  Delta,
+  DeltaLogEntry,
+  DeltaSource,
+  DimensionResult,
+  Frame,
+  FrameChange,
+  FrameDiff,
+  FrameMergeResult,
+  FrameRelationType,
+  GateDimension,
+  GateResult,
+  InlineFrame,
+  MergeResolution,
+  Relation,
+  SemanticContent,
+  SemanticGateResult,
+  SemanticIssue,
+  SlotConflict,
+  SlotDiff,
+  SlotRef,
+  SlotValue,
+  StructureGateResult,
+  ValidationError as SemanticValidationError,
+  ValidationResult as SemanticValidationResult,
+  ValidationWarning as SemanticValidationWarning,
+  WordDiffFn,
+} from './semantic';
+// ═══════════════════════════════════════════════════════════════════════════
+// Semantic Frame Paradigm (Frame + Relation + Delta + Diff + Merge)
+// @see docs/plans/core-engine/00-index.md
+// ═══════════════════════════════════════════════════════════════════════════
+export {
+  applyDelta,
+  BusinessGate,
+  buildDraft,
+  buildSemanticGatePrompt,
+  checkRelationSanity,
+  DeltaSchema,
+  evaluateRule,
+  FRAME_RELATION_TYPES,
+  FrameRelationTypeSchema,
+  FrameSchema,
+  frameDiff,
+  GateRunner,
+  type GateRunnerOptions,
+  parseGatesConfig,
+  parseSemanticGateResponse,
+  prepareFrameMerge,
+  RelationSchema,
+  SemanticContentSchema,
+  SemanticGate,
+  SlotValueSchema,
+  validateIntegrity,
+} from './semantic';
 // Storage (types + pure utils only)
 // For CRUD operations, use @t3x/storage package
 export * from './storage';

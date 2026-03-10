@@ -17,6 +17,7 @@ import type {
   CommitV4,
   CreateCommitV4Input,
   MergeSummaryData,
+  SemanticContent,
   SentenceV4,
 } from '@t3x/core';
 import { buildMerkleTree, computeCommitV4Hash } from '@t3x/core';
@@ -202,6 +203,7 @@ export async function createCommitV4(
       sourceRefs: input.source_refs ?? null,
       merkleRoot,
       mergeSummary: input.merge_summary ?? null,
+      semantic: input.semantic ?? null,
       positionX: input.position_x ?? null,
       positionY: input.position_y ?? null,
     })
@@ -751,6 +753,7 @@ function rowToCommitV4(row: CommitV4Record): CommitV4 {
     source_refs: row.sourceRefs as CommitSourceRef[] | undefined,
     merkle_root: row.merkleRoot ?? undefined,
     merge_summary: (row.mergeSummary as MergeSummaryData) ?? undefined,
+    semantic: (row.semantic as SemanticContent) ?? undefined,
     position_x: row.positionX ?? undefined,
     position_y: row.positionY ?? undefined,
     created_at: row.createdAt.toISOString(),

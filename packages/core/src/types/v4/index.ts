@@ -13,6 +13,8 @@
  * @see docs/specification/memory-pin-system-design.md
  */
 
+import type { SemanticContent } from '../../semantic/types';
+
 // ═══════════════════════════════════════════════════════════════════════════
 // ID Prefixes (for consistent ID generation)
 // ═══════════════════════════════════════════════════════════════════════════
@@ -138,6 +140,13 @@ export interface CommitV4 {
 
   /** Source references (pinned items that contributed to this commit) */
   source_refs?: CommitSourceRef[];
+
+  /**
+   * Semantic frame content (frames + relations).
+   * Nullable — old commits have undefined.
+   * Second-class field: does NOT participate in hash calculation.
+   */
+  semantic?: SemanticContent;
 
   /** Canvas position X */
   position_x?: number;
@@ -588,6 +597,8 @@ export interface CreateCommitV4Input {
   position_x?: number;
   position_y?: number;
   merge_summary?: MergeSummaryData;
+  /** Semantic frame content (frames + relations). Second-class, not in hash. */
+  semantic?: SemanticContent;
 }
 
 /**

@@ -107,6 +107,14 @@ export {
   type UpdateConversationInput,
   updateConversation,
 } from './conversations';
+// Delta Log (Phase 2 — semantic delta tracking)
+export {
+  deleteDeltaLogEntry,
+  getDeltaLogEntry,
+  type InsertDeltaLogInput,
+  insertDeltaLogEntry,
+  listDeltaLogByConversation,
+} from './delta-log';
 // Deploy Agents (for Deploy page, different from agent layer)
 export {
   type CreateDeployAgentInput,

@@ -388,6 +388,7 @@ async function initializeSchema(client: PGlite): Promise<void> {
       source_refs JSONB,
       merkle_root TEXT,
       merge_summary JSONB,
+      semantic JSONB,
       position_x REAL,
       position_y REAL,
 
@@ -400,6 +401,9 @@ async function initializeSchema(client: PGlite): Promise<void> {
 
     -- Migration: Add merge_summary column to existing commits_v4 tables
     ALTER TABLE commits_v4 ADD COLUMN IF NOT EXISTS merge_summary JSONB;
+
+    -- Migration: Add semantic column to existing commits_v4 tables
+    ALTER TABLE commits_v4 ADD COLUMN IF NOT EXISTS semantic JSONB;
 
     -- Migration: Add merkle_root column to existing commits_v4 tables
     ALTER TABLE commits_v4 ADD COLUMN IF NOT EXISTS merkle_root TEXT;
@@ -747,6 +751,19 @@ async function initializeSchema(client: PGlite): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_notifications_project ON notifications(project_id);
     CREATE INDEX IF NOT EXISTS idx_notifications_read ON notifications(read);
     CREATE INDEX IF NOT EXISTS idx_notifications_created ON notifications(created_at);
+
+    -- Delta Log table (Frame Semantic Engine — inter-sentence relation deltas)
+    CREATE TABLE IF NOT EXISTS delta_log (
+      id TEXT PRIMARY KEY,
+      conversation_id TEXT NOT NULL REFERENCES conversations(conversation_id) ON DELETE CASCADE,
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      source TEXT NOT NULL,
+      turn_hash TEXT,
+      delta JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_delta_log_conv ON delta_log(conversation_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_delta_log_project ON delta_log(project_id);
 
     CREATE TABLE IF NOT EXISTS sentence_relations (
       id TEXT PRIMARY KEY,

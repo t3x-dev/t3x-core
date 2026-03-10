@@ -25,6 +25,18 @@ export {
   type ValidationResult,
   validateExtractedSentences,
 } from './extractionValidator';
+export { type ParseResult as FrameDeltaParseResult, parseFrameDelta } from './frameDeltaParser';
+export {
+  buildFrameExtractionPrompt,
+  type FrameExtractionPromptResult,
+} from './frameExtractionPrompt';
+// Frame Extraction (Phase 2)
+export {
+  type FrameExtractionInput,
+  type FrameExtractionResult,
+  type FrameExtractionTurn,
+  FrameExtractor,
+} from './frameExtractor';
 // Incremental Extraction (LLM pipeline)
 export { type FuzzyLocateResult, fuzzyLocate } from './fuzzyLocate';
 export { parseIncrementalResponse } from './incrementalParser';
@@ -47,6 +59,7 @@ export { createRelationExtractor, RelationExtractor } from './relationExtractor'
 export { parseRelationResponse, type RelationItem, RelationParseError } from './relationParser';
 export { buildRelationPrompt } from './relationPrompt';
 // Ring Extractor
+/** @deprecated Use Frame semantic engine instead of Ring extraction. */
 export {
   createRingExtractor,
   type ExtractorConfig,

@@ -180,6 +180,8 @@ export interface CommitV4 {
     discarded: number;
     total_sentences: number;
   } | null;
+  /** Semantic frame content (frames + relations). Nullable — old commits have undefined. */
+  semantic?: import('@t3x/core').SemanticContent;
   position_x: number | null;
   position_y: number | null;
   created_at: string;

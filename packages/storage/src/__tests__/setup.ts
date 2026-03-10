@@ -171,6 +171,7 @@ CREATE TABLE IF NOT EXISTS commits_v4 (
   source_refs JSONB,
   merkle_root TEXT,
   merge_summary JSONB,
+  semantic JSONB,
   position_x REAL,
   position_y REAL,
 
@@ -478,6 +479,19 @@ CREATE TABLE IF NOT EXISTS notifications (
 CREATE INDEX IF NOT EXISTS idx_notifications_project ON notifications(project_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_read ON notifications(read);
 CREATE INDEX IF NOT EXISTS idx_notifications_created ON notifications(created_at);
+
+-- Delta Log (Phase 2 — semantic delta tracking)
+CREATE TABLE IF NOT EXISTS delta_log (
+  id TEXT PRIMARY KEY,
+  conversation_id TEXT NOT NULL REFERENCES conversations(conversation_id) ON DELETE CASCADE,
+  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  source TEXT NOT NULL,
+  turn_hash TEXT,
+  delta JSONB NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_delta_log_conv ON delta_log(conversation_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_delta_log_project ON delta_log(project_id);
 
 -- Sentence Relations (Ring 4 — Inter-sentence relationships)
 CREATE TABLE IF NOT EXISTS sentence_relations (
