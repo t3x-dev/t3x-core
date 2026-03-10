@@ -177,11 +177,11 @@ gateRoutes.openapi(gateCheckRoute, async (c) => {
   const projectId = body.project_id;
 
   try {
+    const db = await getDB();
     let resolvedProjectId = projectId;
 
     // If conversation_id provided and no turns, fetch turns from DB
     if (conversationId && (!turns || turns.length === 0)) {
-      const db = await getDB();
       const conversation = await findConversationById(db, conversationId);
       if (!conversation) {
         return errorResponse(
@@ -211,7 +211,6 @@ gateRoutes.openapi(gateCheckRoute, async (c) => {
 
     // Auto-load business rules from project if none provided
     if ((!business_rules || business_rules.length === 0) && resolvedProjectId) {
-      const db = await getDB();
       const storedRules = await getBusinessRules(db, resolvedProjectId);
       if (storedRules.length > 0) {
         business_rules = storedRules;

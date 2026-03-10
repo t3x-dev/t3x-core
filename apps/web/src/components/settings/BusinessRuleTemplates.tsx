@@ -123,10 +123,7 @@ export function BusinessRuleTemplates({ onAdd, onClose }: BusinessRuleTemplatesP
   const handleAdd = (template: RuleTemplate) => {
     onAdd({
       ...template.config,
-      id: template.name
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '_')
-        .replace(/(^_|_$)/g, ''),
+      id: `rule_${crypto.randomUUID().slice(0, 8)}`,
     });
   };
 

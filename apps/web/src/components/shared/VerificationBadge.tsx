@@ -9,7 +9,7 @@ import {
   ShieldCheck,
   XCircle,
 } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -116,30 +116,33 @@ export function VerificationBadge({ projectId }: VerificationBadgeProps) {
     }
   }, [projectId]);
 
-  const badgeConfig = {
-    idle: {
-      icon: Shield,
-      label: 'Unverified',
-      className: 'bg-muted text-muted-foreground border-border',
-    },
-    loading: {
-      icon: Loader2,
-      label: developerMode ? 'Verifying...' : 'Checking...',
-      className: 'bg-muted text-muted-foreground border-border',
-    },
-    verified: {
-      icon: ShieldCheck,
-      label: 'Verified',
-      className:
-        'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800',
-    },
-    failed: {
-      icon: ShieldAlert,
-      label: developerMode ? 'Failed' : 'Issues Found',
-      className:
-        'bg-red-50 text-red-700 border-red-200 dark:bg-red-950 dark:text-red-300 dark:border-red-800',
-    },
-  };
+  const badgeConfig = useMemo(
+    () => ({
+      idle: {
+        icon: Shield,
+        label: 'Unverified',
+        className: 'bg-muted text-muted-foreground border-border',
+      },
+      loading: {
+        icon: Loader2,
+        label: developerMode ? 'Verifying...' : 'Checking...',
+        className: 'bg-muted text-muted-foreground border-border',
+      },
+      verified: {
+        icon: ShieldCheck,
+        label: 'Verified',
+        className:
+          'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800',
+      },
+      failed: {
+        icon: ShieldAlert,
+        label: developerMode ? 'Failed' : 'Issues Found',
+        className:
+          'bg-red-50 text-red-700 border-red-200 dark:bg-red-950 dark:text-red-300 dark:border-red-800',
+      },
+    }),
+    [developerMode]
+  );
 
   const config = badgeConfig[state];
   const IconComponent = config.icon;

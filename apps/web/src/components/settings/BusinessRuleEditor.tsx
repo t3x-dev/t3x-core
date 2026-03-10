@@ -8,11 +8,17 @@ import { cn } from '@/lib/utils';
 
 interface BusinessRuleEditorProps {
   rule: BusinessRuleConfig;
+  existingIds?: string[];
   onSave: (rule: BusinessRuleConfig) => void;
   onCancel: () => void;
 }
 
-export function BusinessRuleEditor({ rule: initial, onSave, onCancel }: BusinessRuleEditorProps) {
+export function BusinessRuleEditor({
+  rule: initial,
+  existingIds = [],
+  onSave,
+  onCancel,
+}: BusinessRuleEditorProps) {
   const [rule, setRule] = useState<BusinessRuleConfig>({ ...initial });
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ passed: boolean; message?: string } | null>(null);
@@ -91,6 +97,11 @@ export function BusinessRuleEditor({ rule: initial, onSave, onCancel }: Business
               className="w-full rounded-md border bg-background px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring"
               placeholder="my_rule_name"
             />
+            {rule.id !== initial.id && existingIds.includes(rule.id) && (
+              <p className="text-[10px] text-amber-600 mt-1">
+                A rule with this ID already exists and will be overwritten.
+              </p>
+            )}
           </div>
 
           {/* Type selector */}

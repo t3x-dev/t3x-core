@@ -102,7 +102,7 @@ export function BusinessRulesSection({ projectId }: BusinessRulesSectionProps) {
 
   const handleAddFromTemplate = useCallback(
     (rule: BusinessRuleConfig) => {
-      const updated = [...rules, { ...rule, id: `rule_${crypto.randomUUID().slice(0, 8)}` }];
+      const updated = [...rules, rule];
       setRules(updated);
       saveRules(updated);
     },
@@ -226,6 +226,7 @@ export function BusinessRulesSection({ projectId }: BusinessRulesSectionProps) {
       {editingRule && (
         <BusinessRuleEditor
           rule={editingRule}
+          existingIds={rules.map((r) => r.id)}
           onSave={handleSaveRule}
           onCancel={() => setEditingRule(null)}
         />
