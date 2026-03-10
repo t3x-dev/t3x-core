@@ -19,6 +19,7 @@ import {
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { FrameGraphView } from '@/components/frame-graph';
 import { RelationsTab } from '@/components/relations/RelationsTab';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -409,6 +410,16 @@ export function CommittedCommitView({
                         >
                           JSON
                         </TabsTrigger>
+                        {isV4 &&
+                          (commit as CommitV4)?.semantic &&
+                          (commit as CommitV4).semantic!.frames.length > 0 && (
+                            <TabsTrigger
+                              value="frame-graph"
+                              className="rounded-none border-b-2 border-transparent data-[state=active]:border-[var(--accent-commit)] data-[state=active]:text-[var(--text-primary)] data-[state=active]:shadow-none text-[var(--text-tertiary)] text-xs px-3 py-2"
+                            >
+                              Frame Graph
+                            </TabsTrigger>
+                          )}
                         <TabsTrigger
                           value="relations"
                           className="rounded-none border-b-2 border-transparent data-[state=active]:border-[var(--accent-commit)] data-[state=active]:text-[var(--text-primary)] data-[state=active]:shadow-none text-[var(--text-tertiary)] text-xs px-3 py-2"
@@ -456,6 +467,19 @@ export function CommittedCommitView({
                           {JSON.stringify(commit, null, 2)}
                         </pre>
                       </TabsContent>
+
+                      {isV4 &&
+                        (commit as CommitV4)?.semantic &&
+                        (commit as CommitV4).semantic!.frames.length > 0 && (
+                          <TabsContent value="frame-graph">
+                            <div className="h-[400px] border border-[var(--stroke-divider)] rounded-md overflow-hidden">
+                              <FrameGraphView
+                                content={(commit as CommitV4).semantic!}
+                                className="h-full w-full"
+                              />
+                            </div>
+                          </TabsContent>
+                        )}
 
                       <TabsContent value="relations">
                         <RelationsTab

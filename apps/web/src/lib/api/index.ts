@@ -17,6 +17,7 @@ export * from './diff';
 export * from './drafts';
 export * from './export';
 export * from './extraction-feedback';
+export * from './frames';
 export * from './health';
 export * from './knowledge-graph';
 export * from './leaves';
