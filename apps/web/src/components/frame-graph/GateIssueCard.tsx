@@ -1,7 +1,7 @@
 'use client';
 
 import { AlertTriangle, Check, Crosshair, Info, XCircle } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import type { GateIssue } from '@/lib/api/frames';
 import { cn } from '@/lib/utils';
@@ -14,6 +14,11 @@ interface GateIssueCardProps {
 
 export function GateIssueCard({ issue, onLocate, onApply }: GateIssueCardProps) {
   const [applied, setApplied] = useState(false);
+
+  // Reset applied state when issue changes (e.g., after re-check)
+  useEffect(() => {
+    setApplied(false);
+  }, [issue.description, issue.frame_id, issue.dimension]);
 
   const Icon =
     issue.severity === 'error' ? XCircle : issue.severity === 'warning' ? AlertTriangle : Info;

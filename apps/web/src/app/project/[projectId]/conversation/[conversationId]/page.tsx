@@ -355,6 +355,7 @@ function ConversationPageContent() {
                 snapshot={semanticSnapshot}
                 onSwitchToFrames={() => setActiveTab('frames')}
                 onGateResult={setGateResult}
+                // TODO: wire onLocateFrame once FrameGraphView is embedded in this page
               />
             )}
           </div>

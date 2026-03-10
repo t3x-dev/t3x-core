@@ -36,8 +36,9 @@ export function CommitConflictPanel({
       </p>
       <div className="flex-1 overflow-auto px-4 py-2 space-y-3">
         {conflicts.map((c, i) => {
+          const cosine = c.cosine ?? 0;
           const simColor =
-            c.cosine >= 0.8
+            cosine >= 0.8
               ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
               : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300';
           return (
@@ -48,7 +49,7 @@ export function CommitConflictPanel({
               <div className="flex items-center justify-between">
                 <span className="text-xs font-medium text-muted-foreground">Conflict {i + 1}</span>
                 <span className={cn('text-xs px-1.5 py-0.5 rounded', simColor)}>
-                  similarity: {c.cosine.toFixed(2)}
+                  similarity: {cosine.toFixed(2)}
                 </span>
               </div>
               <div>

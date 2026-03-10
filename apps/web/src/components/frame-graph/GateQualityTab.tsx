@@ -114,12 +114,14 @@ export function GateQualityTab({
   const issues = result.semantic?.issues ?? [];
   const businessIssues = result.business?.results?.filter((r) => !r.passed) ?? [];
   const totalIssues = issues.length + businessIssues.length;
-  const lowestDim = result.semantic?.dimensions
-    ? Object.entries(result.semantic.dimensions).reduce(
-        (low, [k, v]) => (!low || v.score < low[1].score ? ([k, v] as const) : low),
-        undefined as readonly [string, { score: number; details: string }] | undefined
-      )
-    : undefined;
+  let lowestDim: [string, { score: number; details: string }] | undefined;
+  if (result.semantic?.dimensions) {
+    for (const [k, v] of Object.entries(result.semantic.dimensions)) {
+      if (!lowestDim || v.score < lowestDim[1].score) {
+        lowestDim = [k, v];
+      }
+    }
+  }
 
   const summaryColor = !semanticScore
     ? 'bg-muted'

@@ -36,7 +36,7 @@ export function CommitConflictBanner({
                 <span>&ldquo;{truncate(c.new_sentence_text, 40)}&rdquo;</span>
                 <span className="mx-1 text-amber-400">&harr;</span>
                 <span>&ldquo;{truncate(c.existing_sentence_text, 40)}&rdquo;</span>
-                <span className="ml-1 text-amber-500">({(c.cosine * 100).toFixed(0)}%)</span>
+                <span className="ml-1 text-amber-500">({((c.cosine ?? 0) * 100).toFixed(0)}%)</span>
               </div>
             ))}
             {remaining > 0 && <p className="text-xs text-amber-500">+{remaining} more</p>}
