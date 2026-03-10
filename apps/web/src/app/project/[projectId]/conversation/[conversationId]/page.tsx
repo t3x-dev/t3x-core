@@ -1,7 +1,7 @@
 'use client';
 
 import type { Delta, SemanticContent } from '@t3x/core';
-import { ArrowLeft, MessageSquare, MessagesSquare, Network } from 'lucide-react';
+import { ArrowLeft, MessageSquare, MessagesSquare, Network, ShieldCheck } from 'lucide-react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { forwardRef, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { ErrorMessage, LoadingSpinner } from '@/components/ApiStatus';
@@ -74,7 +74,7 @@ function ConversationPageContent() {
   const [error, setError] = useState<Error | null>(null);
 
   // Semantic panel state
-  const [activeTab, setActiveTab] = useState<'context' | 'semantic'>('context');
+  const [activeTab, setActiveTab] = useState<'context' | 'frames' | 'quality'>('context');
   const [semanticSnapshot, setSemanticSnapshot] = useState<SemanticContent | null>(null);
   const [deltaState, setDeltaState] = useState<Record<string, 'added' | 'updated' | 'removed'>>({});
   const [updatedSlots, setUpdatedSlots] = useState<Record<string, string[]>>({});
@@ -163,7 +163,7 @@ function ConversationPageContent() {
           setUpdatedSlots({});
         }, 3000);
         if (activeTabRef.current === 'context') {
-          setActiveTab('semantic');
+          setActiveTab('frames');
         }
       } catch (err) {
         if (cancelled) return;
@@ -283,7 +283,7 @@ function ConversationPageContent() {
               type="button"
               onClick={() => setActiveTab('context')}
               className={cn(
-                'flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors',
+                'flex-1 flex items-center justify-center gap-1.5 px-2 py-2 text-xs font-medium transition-colors',
                 activeTab === 'context'
                   ? 'border-b-2 border-primary text-primary'
                   : 'text-muted-foreground hover:text-foreground'
@@ -294,23 +294,37 @@ function ConversationPageContent() {
             </button>
             <button
               type="button"
-              onClick={() => setActiveTab('semantic')}
+              onClick={() => setActiveTab('frames')}
               className={cn(
-                'flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors',
-                activeTab === 'semantic'
+                'flex-1 flex items-center justify-center gap-1.5 px-2 py-2 text-xs font-medium transition-colors',
+                activeTab === 'frames'
                   ? 'border-b-2 border-primary text-primary'
                   : 'text-muted-foreground hover:text-foreground'
               )}
             >
               <Network className="h-3.5 w-3.5" />
-              Semantic
+              Frames
               {extracting && <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />}
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('quality')}
+              className={cn(
+                'flex-1 flex items-center justify-center gap-1.5 px-2 py-2 text-xs font-medium transition-colors',
+                activeTab === 'quality'
+                  ? 'border-b-2 border-primary text-primary'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              <ShieldCheck className="h-3.5 w-3.5" />
+              Quality
             </button>
           </div>
           <div className="flex-1 overflow-auto">
-            {activeTab === 'context' ? (
+            {activeTab === 'context' && (
               <ContextPanelWrapper projectId={projectId} conversationId={conversationId} />
-            ) : (
+            )}
+            {activeTab === 'frames' && (
               <SemanticPanel
                 conversationId={conversationId}
                 snapshot={semanticSnapshot}
@@ -319,6 +333,13 @@ function ConversationPageContent() {
                 extracting={extracting}
                 onSnapshotChange={setSemanticSnapshot}
               />
+            )}
+            {activeTab === 'quality' && (
+              <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+                <ShieldCheck className="h-8 w-8 mb-2 opacity-50" />
+                <p className="text-sm font-medium">Quality Gate</p>
+                <p className="text-xs">Gate check results will appear here</p>
+              </div>
             )}
           </div>
         </aside>
