@@ -9,7 +9,7 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
-import { setSessionKey } from '@/lib/session';
+import { setSessionKey, setSessionUser } from '@/lib/session';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -51,6 +51,11 @@ function LoginForm() {
       }
 
       setSessionKey(json.data.api_key);
+      setSessionUser({
+        id: json.data.id,
+        name: json.data.name ?? null,
+        username: json.data.username ?? null,
+      });
       router.push(callbackUrl);
     } catch {
       setError('Failed to connect to server');

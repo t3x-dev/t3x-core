@@ -718,6 +718,9 @@ export interface User {
   /** Avatar URL */
   avatar_url: string | null;
 
+  /** Username for local auth (null for OAuth-only users) */
+  username: string | null;
+
   /** When the user was created, ISO8601 */
   created_at: string;
 }
