@@ -8,6 +8,7 @@ import { ErrorMessage, LoadingSpinner } from '@/components/ApiStatus';
 import { AddToDraftButton } from '@/components/conversation/AddToDraftButton';
 import { ContextPanelWrapper } from '@/components/conversation/ContextPanelWrapper';
 import { SemanticPanel } from '@/components/conversation/SemanticPanel';
+import { GateQualityTab } from '@/components/frame-graph/GateQualityTab';
 import { Breadcrumb } from '@/components/shared/Breadcrumb';
 import { parseHighlightParam } from '@/components/shared/ViewSourceLink';
 import { Button } from '@/components/ui/button';
@@ -335,11 +336,11 @@ function ConversationPageContent() {
               />
             )}
             {activeTab === 'quality' && (
-              <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-                <ShieldCheck className="h-8 w-8 mb-2 opacity-50" />
-                <p className="text-sm font-medium">Quality Gate</p>
-                <p className="text-xs">Gate check results will appear here</p>
-              </div>
+              <GateQualityTab
+                conversationId={conversationId}
+                snapshot={semanticSnapshot}
+                onSwitchToFrames={() => setActiveTab('frames')}
+              />
             )}
           </div>
         </aside>
