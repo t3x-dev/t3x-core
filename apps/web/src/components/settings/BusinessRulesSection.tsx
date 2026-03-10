@@ -5,6 +5,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { type BusinessRuleConfig, getBusinessRules, putBusinessRules } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { BusinessRuleEditor } from './BusinessRuleEditor';
+import { BusinessRuleTemplates } from './BusinessRuleTemplates';
 
 interface BusinessRulesSectionProps {
   projectId: string;
@@ -91,7 +93,7 @@ export function BusinessRulesSection({ projectId }: BusinessRulesSectionProps) {
     [rules, saveRules]
   );
 
-  const _handleAddFromTemplate = useCallback(
+  const handleAddFromTemplate = useCallback(
     (rule: BusinessRuleConfig) => {
       const updated = [...rules, { ...rule, id: `rule_${Date.now()}` }];
       setRules(updated);
@@ -214,38 +216,21 @@ export function BusinessRulesSection({ projectId }: BusinessRulesSectionProps) {
         </div>
       )}
 
-      {/* BusinessRuleEditor dialog will be rendered here in Task 9 */}
       {editingRule && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center">
-          <div className="bg-background rounded-lg border p-6 w-[500px] max-w-[90vw]">
-            <p className="text-sm text-muted-foreground">Rule editor — coming in next task</p>
-            <div className="flex gap-2 mt-4">
-              <Button variant="outline" size="sm" onClick={() => setEditingRule(null)}>
-                Cancel
-              </Button>
-              <Button size="sm" onClick={() => handleSaveRule(editingRule)}>
-                Save
-              </Button>
-            </div>
-          </div>
-        </div>
+        <BusinessRuleEditor
+          rule={editingRule}
+          onSave={handleSaveRule}
+          onCancel={() => setEditingRule(null)}
+        />
       )}
 
-      {/* BusinessRuleTemplates dialog will be rendered here in Task 10 */}
       {showTemplates && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center">
-          <div className="bg-background rounded-lg border p-6 w-[500px] max-w-[90vw]">
-            <p className="text-sm text-muted-foreground">Template library — coming in next task</p>
-            <Button
-              variant="outline"
-              size="sm"
-              className="mt-4"
-              onClick={() => setShowTemplates(false)}
-            >
-              Close
-            </Button>
-          </div>
-        </div>
+        <BusinessRuleTemplates
+          onAdd={(rule) => {
+            handleAddFromTemplate(rule);
+          }}
+          onClose={() => setShowTemplates(false)}
+        />
       )}
     </div>
   );

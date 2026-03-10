@@ -352,6 +352,7 @@ function ConversationPageContent() {
             {activeTab === 'quality' && (
               <GateQualityTab
                 conversationId={conversationId}
+                projectId={projectId}
                 snapshot={semanticSnapshot}
                 onSwitchToFrames={() => setActiveTab('frames')}
                 onGateResult={setGateResult}

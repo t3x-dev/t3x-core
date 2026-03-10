@@ -1,7 +1,8 @@
 'use client';
 
 import type { SemanticContent } from '@t3x/core';
-import { Loader2, RefreshCw, ShieldCheck } from 'lucide-react';
+import { Loader2, RefreshCw, Settings, ShieldCheck } from 'lucide-react';
+import Link from 'next/link';
 import { useCallback, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import type { GateCheckResult } from '@/lib/api/frames';
@@ -13,6 +14,7 @@ import { GateIssueCard } from './GateIssueCard';
 
 interface GateQualityTabProps {
   conversationId: string;
+  projectId?: string;
   snapshot: SemanticContent | null;
   onLocateFrame?: (frameId: string) => void;
   onSwitchToFrames?: () => void;
@@ -21,6 +23,7 @@ interface GateQualityTabProps {
 
 export function GateQualityTab({
   conversationId,
+  projectId,
   snapshot,
   onLocateFrame,
   onSwitchToFrames,
@@ -219,6 +222,15 @@ export function GateQualityTab({
                 )}
               </div>
             ))}
+            {projectId && (
+              <Link
+                href={`/project/${projectId}/settings#business-rules`}
+                className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mt-1"
+              >
+                <Settings className="h-3 w-3" />
+                Manage Rules
+              </Link>
+            )}
           </div>
         )}
 
