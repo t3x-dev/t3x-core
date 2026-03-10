@@ -52,6 +52,8 @@ export interface GateCheckResult {
   };
 }
 
+export type GateIssue = NonNullable<GateCheckResult['semantic']>['issues'][number];
+
 // ── Frame Extraction ──
 
 export async function extractFrames(

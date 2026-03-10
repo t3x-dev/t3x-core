@@ -3,15 +3,8 @@
 import { AlertTriangle, Check, Crosshair, Info, XCircle } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import type { GateIssue } from '@/lib/api/frames';
 import { cn } from '@/lib/utils';
-
-interface GateIssue {
-  severity: 'error' | 'warning' | 'info';
-  frame_id?: string;
-  dimension: string;
-  description: string;
-  suggestion?: string;
-}
 
 interface GateIssueCardProps {
   issue: GateIssue;

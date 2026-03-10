@@ -31,6 +31,7 @@ export function GateQualityTab({
 
   const runCheck = useCallback(async () => {
     if (!snapshot) return;
+    setResult(null);
     setLoading(true);
     setError(null);
     try {

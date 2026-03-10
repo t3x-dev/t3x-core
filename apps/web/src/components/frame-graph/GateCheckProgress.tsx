@@ -1,6 +1,6 @@
 'use client';
 
-import { CheckCircle2, Circle, Loader2 } from 'lucide-react';
+import { CheckCircle2, Circle, Loader2, XCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface GateStatus {
@@ -22,7 +22,7 @@ export function GateCheckProgress({ gates }: GateCheckProgressProps) {
           {gate.status === 'pending' && <Circle className="h-4 w-4 text-muted-foreground" />}
           {gate.status === 'checking' && <Loader2 className="h-4 w-4 animate-spin text-blue-500" />}
           {gate.status === 'passed' && <CheckCircle2 className="h-4 w-4 text-emerald-500" />}
-          {gate.status === 'failed' && <CheckCircle2 className="h-4 w-4 text-red-500" />}
+          {gate.status === 'failed' && <XCircle className="h-4 w-4 text-red-500" />}
           {gate.status === 'warning' && <CheckCircle2 className="h-4 w-4 text-amber-500" />}
           <span className={cn(gate.status === 'pending' && 'text-muted-foreground')}>
             {gate.name}
