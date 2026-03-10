@@ -2,7 +2,7 @@
  * Frame Semantic Engine API — extraction, delta log, gate check
  */
 
-import type { Delta, DeltaLogEntry, DeltaSource, SemanticContent } from '@t3x/core';
+import type { Delta, DeltaLogEntry, DeltaSource, SemanticContent } from '@t3x-dev/core';
 import { API_V1, fetchWithTimeout, handleResponse } from './core';
 
 // ── Types ──

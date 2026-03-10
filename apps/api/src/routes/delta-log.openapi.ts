@@ -12,14 +12,14 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { buildDraft } from '@t3x/core';
+import { buildDraft } from '@t3x-dev/core';
 import {
   deleteDeltaLogEntry,
   findConversationById,
   getDeltaLogEntry,
   insertDeltaLogEntry,
   listDeltaLogByConversation,
-} from '@t3x/storage';
+} from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { toDeltaLogEntries } from '../lib/delta-log-utils';
 import { errorResponse, zodErrorHook } from '../lib/errors';

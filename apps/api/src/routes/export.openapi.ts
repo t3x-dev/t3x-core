@@ -6,8 +6,8 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { buildDraft } from '@t3x/core';
-import { listDeltaLogByConversation } from '@t3x/storage';
+import { buildDraft } from '@t3x-dev/core';
+import { listDeltaLogByConversation } from '@t3x-dev/storage';
 import {
   findConversationsByProject,
   findProjectById,

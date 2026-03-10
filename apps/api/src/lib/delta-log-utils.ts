@@ -5,7 +5,7 @@
  * The `source` and `delta` fields need type assertions since storage stores them as generic JSON.
  */
 
-import type { DeltaLogEntry } from '@t3x/core';
+import type { DeltaLogEntry } from '@t3x-dev/core';
 
 /** Storage DeltaLogRecord shape (subset of fields we need) */
 interface DeltaLogRecord {
