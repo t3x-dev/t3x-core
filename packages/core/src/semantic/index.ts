@@ -14,7 +14,13 @@ export { applyDelta, buildDraft } from './delta';
 // Diff
 export { frameDiff } from './diff';
 // Gate (Gate 2 — Semantic)
-export { buildSemanticGatePrompt, parseSemanticGateResponse, SemanticGate } from './gate';
+export {
+  buildCoveragePrompt,
+  buildSemanticGatePrompt,
+  parseCoverageResponse,
+  parseSemanticGateResponse,
+  SemanticGate,
+} from './gate';
 // Gate Runner (Orchestrator)
 export { GateRunner, type GateRunnerOptions } from './gateRunner';
 // Merge
@@ -32,6 +38,7 @@ export {
 export type {
   BusinessGateResult,
   BusinessRuleConfig,
+  CoverageResult,
   Delta,
   DeltaLogEntry,
   DeltaSource,

@@ -244,3 +244,12 @@ export interface GateResult {
   semantic?: SemanticGateResult;
   business?: BusinessGateResult;
 }
+
+// ── Coverage ──
+
+export interface CoverageResult {
+  /** Ratio of original text covered by frames (0-1) */
+  coverage_ratio: number;
+  /** Important text segments not covered by any frame */
+  uncovered_segments: string[];
+}

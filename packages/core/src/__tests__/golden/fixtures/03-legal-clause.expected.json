@@ -1,0 +1,7 @@
+{
+  "minFrames": 3,
+  "maxFrames": 8,
+  "requiredFrameTypes": ["failure", "termination"],
+  "requiredSlotKeys": {},
+  "requiredRelationTypes": ["conditions"]
+}

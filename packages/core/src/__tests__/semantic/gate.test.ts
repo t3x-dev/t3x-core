@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { LLMProvider } from '../../llm/types';
 import {
+  buildCoveragePrompt,
   buildSemanticGatePrompt,
+  parseCoverageResponse,
   parseSemanticGateResponse,
   SemanticGate,
 } from '../../semantic/gate';
@@ -243,5 +245,95 @@ describe('SemanticGate', () => {
     expect(result.passed).toBe(false);
     expect(result.score).toBe(0);
     expect(result.issues[0].description).toContain('LLM provider call failed');
+  });
+});
+
+// ── Coverage Fixtures ──
+
+const validCoverageResponse = JSON.stringify({
+  coverage_ratio: 0.85,
+  uncovered_segments: ['Budget is $50k'],
+});
+
+// ── Coverage Tests ──
+
+describe('buildCoveragePrompt', () => {
+  it('returns system and user prompt with turns and frames', () => {
+    const { systemPrompt, userPrompt } = buildCoveragePrompt(sampleTurns, sampleContent);
+
+    expect(systemPrompt).toContain('覆盖度');
+    expect(userPrompt).toContain('[user]: I want to build a mobile app');
+    expect(userPrompt).toContain('f_001');
+    expect(userPrompt).toContain('project_goal');
+  });
+});
+
+describe('parseCoverageResponse', () => {
+  it('parses valid JSON', () => {
+    const result = parseCoverageResponse(validCoverageResponse);
+    expect(result.coverage_ratio).toBe(0.85);
+    expect(result.uncovered_segments).toEqual(['Budget is $50k']);
+  });
+
+  it('parses markdown-wrapped JSON', () => {
+    const wrapped = `\`\`\`json\n${validCoverageResponse}\n\`\`\``;
+    const result = parseCoverageResponse(wrapped);
+    expect(result.coverage_ratio).toBe(0.85);
+  });
+
+  it('returns zero coverage for garbage input', () => {
+    const result = parseCoverageResponse('not json');
+    expect(result.coverage_ratio).toBe(0);
+    expect(result.uncovered_segments).toEqual([]);
+  });
+
+  it('clamps coverage_ratio to 0-1', () => {
+    const high = JSON.stringify({ coverage_ratio: 1.5, uncovered_segments: [] });
+    expect(parseCoverageResponse(high).coverage_ratio).toBe(1);
+
+    const low = JSON.stringify({ coverage_ratio: -0.3, uncovered_segments: [] });
+    expect(parseCoverageResponse(low).coverage_ratio).toBe(0);
+  });
+
+  it('defaults uncovered_segments to [] if missing', () => {
+    const noSegments = JSON.stringify({ coverage_ratio: 0.9 });
+    const result = parseCoverageResponse(noSegments);
+    expect(result.uncovered_segments).toEqual([]);
+  });
+});
+
+describe('SemanticGate.checkCoverage', () => {
+  it('calls provider and returns parsed result', async () => {
+    const mockProvider: LLMProvider = {
+      id: 'mock',
+      generate: vi.fn().mockResolvedValue(validCoverageResponse),
+      resolveConflict: vi.fn(),
+    };
+
+    const gate = new SemanticGate(mockProvider);
+    const result = await gate.checkCoverage(sampleTurns, sampleContent);
+
+    expect(mockProvider.generate).toHaveBeenCalledOnce();
+    const callArgs = vi.mocked(mockProvider.generate).mock.calls[0];
+    expect(callArgs[0]).toContain('覆盖度');
+    expect(callArgs[0]).toContain('f_001');
+    expect(callArgs[1]).toEqual({ temperature: 0.1, maxTokens: 1500 });
+
+    expect(result.coverage_ratio).toBe(0.85);
+    expect(result.uncovered_segments).toEqual(['Budget is $50k']);
+  });
+
+  it('returns zero coverage when provider throws', async () => {
+    const mockProvider: LLMProvider = {
+      id: 'mock',
+      generate: vi.fn().mockRejectedValue(new Error('timeout')),
+      resolveConflict: vi.fn(),
+    };
+
+    const gate = new SemanticGate(mockProvider);
+    const result = await gate.checkCoverage(sampleTurns, sampleContent);
+
+    expect(result.coverage_ratio).toBe(0);
+    expect(result.uncovered_segments).toEqual([]);
   });
 });

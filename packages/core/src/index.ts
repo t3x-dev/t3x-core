@@ -259,17 +259,6 @@ export {
   type LLMProvider,
   LLMProviderError,
 } from './llm';
-// Multimodal content blocks for turns
-export {
-  type AudioBlock,
-  type ContentBlock,
-  type FileBlock,
-  type ImageBlock,
-  isTextOnly,
-  type TextBlock,
-  textFromBlocks,
-  textToBlocks,
-} from './multimodal';
 // Merge (Two-way and three-way merge for combining commits - Issue #71)
 // V4: No constraint handling, prepareMerge accepts DiffableSentence[]
 export {
@@ -286,6 +275,17 @@ export {
   type ThreeWayConflict,
   type ThreeWayMergeResult,
 } from './merge';
+// Multimodal content blocks for turns
+export {
+  type AudioBlock,
+  type ContentBlock,
+  type FileBlock,
+  type ImageBlock,
+  isTextOnly,
+  type TextBlock,
+  textFromBlocks,
+  textToBlocks,
+} from './multimodal';
 // Provider interfaces and implementations
 export {
   AllProvidersFailedError,
@@ -355,6 +355,7 @@ export {
 export type {
   BusinessGateResult,
   BusinessRuleConfig,
+  CoverageResult,
   Delta,
   DeltaLogEntry,
   DeltaSource,
@@ -389,6 +390,7 @@ export type {
 export {
   applyDelta,
   BusinessGate,
+  buildCoveragePrompt,
   buildDraft,
   buildSemanticGatePrompt,
   checkRelationSanity,
@@ -400,6 +402,7 @@ export {
   frameDiff,
   GateRunner,
   type GateRunnerOptions,
+  parseCoverageResponse,
   parseGatesConfig,
   parseSemanticGateResponse,
   prepareFrameMerge,
@@ -429,6 +432,8 @@ export type {
 // @see docs/specification/memory-pin-system-design.md
 // ═══════════════════════════════════════════════════════════════════════════
 export {
+  // User (authentication)
+  type Account,
   ALL_LEAF_TYPES,
   // Leaf (owns constraints)
   type AnyLeafType,
@@ -504,8 +509,6 @@ export {
   type SentenceV5,
   // Share Token
   type ShareToken,
-  // User (authentication)
-  type Account,
   type User,
   type WordDiffSegment as WordDiffSegmentV4,
 } from './types/v4';
