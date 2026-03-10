@@ -36,6 +36,8 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ['@electric-sql/pglite', 'postgres'],
   // Next.js 16: Enable Turbopack (default bundler)
   turbopack: {},
+  // Hide the dev indicator floating ball (N button) in development
+  devIndicators: false,
 };
 
 export default nextConfig;

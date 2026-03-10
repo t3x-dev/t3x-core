@@ -101,6 +101,9 @@ export {
   buildAdaptiveSection,
   // LLM Extraction
   buildExtractionPrompt,
+  // Frame Extraction (Phase 2)
+  buildFrameExtractionPrompt,
+  // Incremental Extraction (LLM pipeline)
   buildIncrementalPrompt,
   // Ring 4: Relations
   buildRelationPrompt,
@@ -122,6 +125,12 @@ export {
   type ExtractorConfig,
   type Facet,
   type FacetType,
+  type FrameDeltaParseResult,
+  type FrameExtractionInput,
+  type FrameExtractionPromptResult,
+  type FrameExtractionResult,
+  type FrameExtractionTurn,
+  FrameExtractor,
   type FuzzyLocateResult,
   fuzzyLocate,
   type Keyword,
@@ -138,6 +147,7 @@ export {
   type PosTag,
   type PreferenceRelation,
   parseExtractionResponse,
+  parseFrameDelta,
   parseIncrementalResponse,
   parseRelationResponse,
   RelationExtractor,
@@ -249,6 +259,25 @@ export {
   type LLMProvider,
   LLMProviderError,
 } from './llm';
+// Merge (Two-way and three-way merge for combining commits - Issue #71)
+// V4: No constraint handling, prepareMerge accepts DiffableSentence[]
+export {
+  executeMerge,
+  executeThreeWayMerge,
+  type FrameMergeInput,
+  type FrameMergeSuggestion,
+  type Merge2WayResult,
+  type MergeCandidate,
+  type MergeSimilarPair,
+  type MergeSuggestion,
+  prepareMerge,
+  prepareMergeWithEmbeddings,
+  prepareThreeWayMerge,
+  suggestFrameMerge,
+  suggestMerge,
+  type ThreeWayConflict,
+  type ThreeWayMergeResult,
+} from './merge';
 // Multimodal content blocks for turns
 export {
   type AudioBlock,
@@ -260,22 +289,6 @@ export {
   textFromBlocks,
   textToBlocks,
 } from './multimodal';
-// Merge (Two-way and three-way merge for combining commits - Issue #71)
-// V4: No constraint handling, prepareMerge accepts DiffableSentence[]
-export {
-  executeMerge,
-  executeThreeWayMerge,
-  type Merge2WayResult,
-  type MergeCandidate,
-  type MergeSimilarPair,
-  type MergeSuggestion,
-  prepareMerge,
-  prepareMergeWithEmbeddings,
-  prepareThreeWayMerge,
-  suggestMerge,
-  type ThreeWayConflict,
-  type ThreeWayMergeResult,
-} from './merge';
 // Provider interfaces and implementations
 export {
   AllProvidersFailedError,
@@ -342,6 +355,66 @@ export {
   type RoleAssignment,
   type TestConnectionResult,
 } from './providers';
+export type {
+  BusinessGateResult,
+  BusinessRuleConfig,
+  CoverageResult,
+  Delta,
+  DeltaLogEntry,
+  DeltaSource,
+  DimensionResult,
+  Frame,
+  FrameChange,
+  FrameDiff,
+  FrameMergeResult,
+  FrameRelationType,
+  GateDimension,
+  GateResult,
+  InlineFrame,
+  MergeResolution,
+  Relation,
+  SemanticContent,
+  SemanticGateResult,
+  SemanticIssue,
+  SlotConflict,
+  SlotDiff,
+  SlotRef,
+  SlotValue,
+  StructureGateResult,
+  ValidationError as SemanticValidationError,
+  ValidationResult as SemanticValidationResult,
+  ValidationWarning as SemanticValidationWarning,
+  WordDiffFn,
+} from './semantic';
+// ═══════════════════════════════════════════════════════════════════════════
+// Semantic Frame Paradigm (Frame + Relation + Delta + Diff + Merge)
+// @see docs/plans/core-engine/00-index.md
+// ═══════════════════════════════════════════════════════════════════════════
+export {
+  applyDelta,
+  BusinessGate,
+  buildCoveragePrompt,
+  buildDraft,
+  buildSemanticGatePrompt,
+  checkRelationSanity,
+  DeltaSchema,
+  evaluateRule,
+  FRAME_RELATION_TYPES,
+  FrameRelationTypeSchema,
+  FrameSchema,
+  frameDiff,
+  GateRunner,
+  type GateRunnerOptions,
+  parseCoverageResponse,
+  parseGatesConfig,
+  parseSemanticGateResponse,
+  prepareFrameMerge,
+  RelationSchema,
+  SemanticContentSchema,
+  SemanticGate,
+  SlotValueSchema,
+  validateIntegrity,
+} from './semantic';
 // Storage (types + pure utils only)
 // For CRUD operations, use @t3x/storage package
 export * from './storage';
@@ -362,6 +435,8 @@ export type {
 // @see docs/specification/memory-pin-system-design.md
 // ═══════════════════════════════════════════════════════════════════════════
 export {
+  // User (authentication)
+  type Account,
   ALL_LEAF_TYPES,
   // Leaf (owns constraints)
   type AnyLeafType,
@@ -437,8 +512,6 @@ export {
   type SentenceV5,
   // Share Token
   type ShareToken,
-  // User (authentication)
-  type Account,
   type User,
   type WordDiffSegment as WordDiffSegmentV4,
 } from './types/v4';

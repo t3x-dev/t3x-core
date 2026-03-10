@@ -59,15 +59,41 @@ export async function createPGLiteStorage(config: PGLiteConfig = {}): Promise<PG
   }
 
   // Create PGLite client (with pgvector if available)
-  client = new PGlite(dataDir, {
-    ...(extensions ? { extensions } : {}),
-  });
+  // If WASM aborts (corrupted data from unclean shutdown), wipe and retry once.
+  try {
+    client = new PGlite(dataDir, {
+      ...(extensions ? { extensions } : {}),
+    });
+    db = drizzle(client, { schema });
+    await initializeSchema(client);
+  } catch (err) {
+    const isWasmAbort =
+      err instanceof Error && (err.message.includes('Aborted()') || err.name === 'RuntimeError');
 
-  // Create Drizzle instance
-  db = drizzle(client, { schema });
+    if (!isWasmAbort || !dataDir) throw err;
 
-  // Run migrations/schema creation
-  await initializeSchema(client);
+    console.warn(
+      '[PGLite] WASM abort detected — database may be corrupted from unclean shutdown. Wiping and recreating...'
+    );
+
+    // Skip client.close() on corrupted instance — calling close() on an
+    // aborted WASM runtime can trigger a second abort that crashes the process.
+    client = null;
+    db = null;
+
+    // Wipe corrupted data directory and recreate
+    fs.rmSync(dataDir, { recursive: true, force: true });
+    fs.mkdirSync(dataDir, { recursive: true });
+
+    // Retry once
+    client = new PGlite(dataDir, {
+      ...(extensions ? { extensions } : {}),
+    });
+    db = drizzle(client, { schema });
+    await initializeSchema(client);
+
+    console.warn('[PGLite] Database recreated successfully. Previous local data was lost.');
+  }
 
   // Seed builtin templates
   await seedBuiltinTemplates(db as unknown as import('../adapters').AnyDB);
@@ -112,6 +138,9 @@ export async function closePGLiteStorage(): Promise<void> {
 async function initializeSchema(client: PGlite): Promise<void> {
   // Create tables if they don't exist
   await client.exec(`
+    -- Ensure plpgsql is available (required for DO $$ blocks in migrations)
+    CREATE EXTENSION IF NOT EXISTS plpgsql;
+
     -- Projects table
     CREATE TABLE IF NOT EXISTS projects (
       project_id TEXT PRIMARY KEY,
@@ -359,6 +388,7 @@ async function initializeSchema(client: PGlite): Promise<void> {
       source_refs JSONB,
       merkle_root TEXT,
       merge_summary JSONB,
+      semantic JSONB,
       position_x REAL,
       position_y REAL,
 
@@ -371,6 +401,9 @@ async function initializeSchema(client: PGlite): Promise<void> {
 
     -- Migration: Add merge_summary column to existing commits_v4 tables
     ALTER TABLE commits_v4 ADD COLUMN IF NOT EXISTS merge_summary JSONB;
+
+    -- Migration: Add semantic column to existing commits_v4 tables
+    ALTER TABLE commits_v4 ADD COLUMN IF NOT EXISTS semantic JSONB;
 
     -- Migration: Add merkle_root column to existing commits_v4 tables
     ALTER TABLE commits_v4 ADD COLUMN IF NOT EXISTS merkle_root TEXT;
@@ -736,6 +769,19 @@ async function initializeSchema(client: PGlite): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_notifications_read ON notifications(read);
     CREATE INDEX IF NOT EXISTS idx_notifications_created ON notifications(created_at);
 
+    -- Delta Log table (Frame Semantic Engine — inter-sentence relation deltas)
+    CREATE TABLE IF NOT EXISTS delta_log (
+      id TEXT PRIMARY KEY,
+      conversation_id TEXT NOT NULL REFERENCES conversations(conversation_id) ON DELETE CASCADE,
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      source TEXT NOT NULL,
+      turn_hash TEXT,
+      delta JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_delta_log_conv ON delta_log(conversation_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_delta_log_project ON delta_log(project_id);
+
     CREATE TABLE IF NOT EXISTS sentence_relations (
       id TEXT PRIMARY KEY,
       project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
@@ -791,6 +837,9 @@ async function initializeSchema(client: PGlite): Promise<void> {
 
     -- Migration: Add autopilot_config column to projects (Knowledge Autopilot)
     ALTER TABLE projects ADD COLUMN IF NOT EXISTS autopilot_config JSONB;
+
+    -- Migration: Add business_rules column to projects (Gate Business Rules)
+    ALTER TABLE projects ADD COLUMN IF NOT EXISTS business_rules JSONB DEFAULT '[]';
 
     -- Migration: Add content_blocks column to turns_v2 (Multimodal turns)
     ALTER TABLE turns_v2 ADD COLUMN IF NOT EXISTS content_blocks JSONB;

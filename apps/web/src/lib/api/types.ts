@@ -214,7 +214,11 @@ export type ApiAnchorType =
   | 'date'
   | 'entity'
   | 'term'
-  | 'phrase';
+  | 'phrase'
+  // CommitV4 / Frame extraction anchor types
+  | 'verbatim'
+  | 'paraphrase'
+  | 'inference';
 
 /** Confirmed anchor (snake_case API format) */
 export interface ApiConfirmedAnchor {

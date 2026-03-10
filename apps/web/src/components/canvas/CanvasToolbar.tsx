@@ -2,6 +2,7 @@
 
 import {
   Brain,
+  Download,
   History,
   Import,
   LayoutGrid,
@@ -12,6 +13,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import type React from 'react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Select,
@@ -25,6 +27,7 @@ import type { PathHighlight } from '@/hooks/usePathHighlight';
 import { useTerminology } from '@/hooks/useTerminology';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
+import { ExportDialog } from './ExportDialog';
 
 interface CanvasToolbarProps {
   projectName: string;
@@ -76,6 +79,7 @@ export function CanvasToolbar({
   nodeCount,
 }: CanvasToolbarProps) {
   const { t } = useTerminology();
+  const [exportOpen, setExportOpen] = useState(false);
 
   return (
     <>
@@ -222,6 +226,19 @@ export function CanvasToolbar({
           >
             <History className="h-4 w-4" />
           </Link>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setExportOpen(true)}
+            title="Export Project"
+            className={cn(
+              'h-9 w-9 rounded-xl transition-all',
+              'text-[var(--text-secondary)] hover:text-foreground',
+              'hover:bg-primary/10 hover:text-primary'
+            )}
+          >
+            <Download className="h-4 w-4" />
+          </Button>
           <Link
             href={`/project/${projectId}/settings`}
             title="Project Settings"
@@ -268,6 +285,14 @@ export function CanvasToolbar({
           </TabsList>
         </Tabs>
       </div>
+      {projectId && (
+        <ExportDialog
+          open={exportOpen}
+          onOpenChange={setExportOpen}
+          projectId={projectId}
+          projectName={projectName}
+        />
+      )}
     </>
   );
 }

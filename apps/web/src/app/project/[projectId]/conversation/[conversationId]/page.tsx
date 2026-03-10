@@ -1,18 +1,22 @@
 'use client';
 
-import { ArrowLeft, MessageSquare } from 'lucide-react';
+import type { Delta, SemanticContent } from '@t3x/core';
+import { ArrowLeft, MessageSquare, MessagesSquare, Network, ShieldCheck } from 'lucide-react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { forwardRef, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { ErrorMessage, LoadingSpinner } from '@/components/ApiStatus';
 import { AddToDraftButton } from '@/components/conversation/AddToDraftButton';
 import { ContextPanelWrapper } from '@/components/conversation/ContextPanelWrapper';
+import { SemanticPanel } from '@/components/conversation/SemanticPanel';
+import { GateQualityTab } from '@/components/frame-graph/GateQualityTab';
 import { Breadcrumb } from '@/components/shared/Breadcrumb';
 import { parseHighlightParam } from '@/components/shared/ViewSourceLink';
 import { Button } from '@/components/ui/button';
 import { PinButton } from '@/components/ui/PinButton';
 import { useTextSelection } from '@/hooks/useTextSelection';
 import type { Conversation, Turn } from '@/lib/api';
-import { getConversation, listTurns } from '@/lib/api';
+import { extractFrames, getConversation, getSemanticDraft, listTurns } from '@/lib/api';
+import type { GateCheckResult } from '@/lib/api/frames';
 import { cn } from '@/lib/utils';
 import { useProjectStore } from '@/store/projectStore';
 
@@ -22,6 +26,25 @@ export default function ConversationPage() {
       <ConversationPageContent />
     </Suspense>
   );
+}
+
+function computeDeltaState(delta: Delta): {
+  deltaState: Record<string, 'added' | 'updated' | 'removed'>;
+  updatedSlots: Record<string, string[]>;
+} {
+  const ds: Record<string, 'added' | 'updated' | 'removed'> = {};
+  const us: Record<string, string[]> = {};
+  for (const change of delta.changes) {
+    if (change.action === 'add') {
+      ds[change.frame.id] = 'added';
+    } else if (change.action === 'update') {
+      ds[change.target] = 'updated';
+      us[change.target] = Object.keys(change.slots);
+    } else if (change.action === 'remove') {
+      ds[change.target] = 'removed';
+    }
+  }
+  return { deltaState: ds, updatedSlots: us };
 }
 
 function ConversationPageContent() {
@@ -51,6 +74,14 @@ function ConversationPageContent() {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+
+  // Semantic panel state
+  const [activeTab, setActiveTab] = useState<'context' | 'frames' | 'quality'>('context');
+  const [semanticSnapshot, setSemanticSnapshot] = useState<SemanticContent | null>(null);
+  const [deltaState, setDeltaState] = useState<Record<string, 'added' | 'updated' | 'removed'>>({});
+  const [updatedSlots, setUpdatedSlots] = useState<Record<string, string[]>>({});
+  const [extracting, setExtracting] = useState(false);
+  const [gateResult, setGateResult] = useState<GateCheckResult | null>(null);
 
   // Load conversation and turns data
   useEffect(() => {
@@ -94,6 +125,65 @@ function ConversationPageContent() {
 
     return () => clearTimeout(timer);
   }, [loading, targetTurnHash, turns]);
+
+  // Auto-extraction: fetch existing draft on load, extract on new turns
+  const prevTurnCountRef = useRef(0);
+  const animTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const activeTabRef = useRef(activeTab);
+  activeTabRef.current = activeTab;
+
+  useEffect(() => {
+    if (turns.length === 0) return;
+    if (prevTurnCountRef.current === 0) {
+      // Initial load — fetch existing draft
+      prevTurnCountRef.current = turns.length;
+      getSemanticDraft(conversationId)
+        .then((draft) => {
+          if (draft && draft.frames.length > 0) {
+            setSemanticSnapshot(draft);
+          }
+        })
+        .catch(() => {});
+      return;
+    }
+    if (turns.length <= prevTurnCountRef.current) return;
+    prevTurnCountRef.current = turns.length;
+
+    // New turn — trigger extraction (stale-request guard for streaming chat)
+    let cancelled = false;
+    const doExtract = async () => {
+      setExtracting(true);
+      try {
+        const result = await extractFrames(conversationId);
+        if (cancelled) return; // Newer extraction superseded this one
+        setSemanticSnapshot(result.snapshot);
+        const anim = computeDeltaState(result.delta);
+        setDeltaState(anim.deltaState);
+        setUpdatedSlots(anim.updatedSlots);
+        clearTimeout(animTimeoutRef.current);
+        animTimeoutRef.current = setTimeout(() => {
+          setDeltaState({});
+          setUpdatedSlots({});
+        }, 3000);
+        if (activeTabRef.current === 'context') {
+          setActiveTab('frames');
+        }
+      } catch (err) {
+        if (cancelled) return;
+        if (process.env.NODE_ENV !== 'production') {
+          console.error('Frame extraction failed:', err);
+        }
+      } finally {
+        if (!cancelled) setExtracting(false);
+      }
+    };
+    doExtract();
+
+    return () => {
+      cancelled = true;
+      clearTimeout(animTimeoutRef.current);
+    };
+  }, [turns.length, conversationId]);
 
   const handleDraftDone = useCallback(() => {
     clearSelection();
@@ -189,9 +279,87 @@ function ConversationPageContent() {
           </div>
         </main>
 
-        {/* Context Panel Sidebar */}
-        <aside className="w-64 border-l bg-muted/30 overflow-auto">
-          <ContextPanelWrapper projectId={projectId} conversationId={conversationId} />
+        {/* Context + Semantic Panel Sidebar */}
+        <aside className="w-80 border-l bg-muted/30 flex flex-col overflow-hidden">
+          <div className="flex border-b shrink-0">
+            <button
+              type="button"
+              onClick={() => setActiveTab('context')}
+              className={cn(
+                'flex-1 flex items-center justify-center gap-1.5 px-2 py-2 text-xs font-medium transition-colors',
+                activeTab === 'context'
+                  ? 'border-b-2 border-primary text-primary'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              <MessagesSquare className="h-3.5 w-3.5" />
+              Context
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('frames')}
+              className={cn(
+                'flex-1 flex items-center justify-center gap-1.5 px-2 py-2 text-xs font-medium transition-colors',
+                activeTab === 'frames'
+                  ? 'border-b-2 border-primary text-primary'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              <Network className="h-3.5 w-3.5" />
+              Frames
+              {extracting && <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />}
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('quality')}
+              className={cn(
+                'flex-1 flex items-center justify-center gap-1.5 px-2 py-2 text-xs font-medium transition-colors',
+                activeTab === 'quality'
+                  ? 'border-b-2 border-primary text-primary'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              <ShieldCheck className="h-3.5 w-3.5" />
+              Quality
+              {gateResult && (
+                <span
+                  className={cn(
+                    'ml-1 h-1.5 w-1.5 rounded-full',
+                    gateResult.passed
+                      ? 'bg-emerald-500'
+                      : gateResult.semantic?.issues?.some((i) => i.severity === 'error')
+                        ? 'bg-red-500'
+                        : 'bg-amber-500'
+                  )}
+                />
+              )}
+            </button>
+          </div>
+          <div className="flex-1 overflow-auto">
+            {activeTab === 'context' && (
+              <ContextPanelWrapper projectId={projectId} conversationId={conversationId} />
+            )}
+            {activeTab === 'frames' && (
+              <SemanticPanel
+                conversationId={conversationId}
+                snapshot={semanticSnapshot}
+                deltaState={deltaState}
+                updatedSlots={updatedSlots}
+                extracting={extracting}
+                onSnapshotChange={setSemanticSnapshot}
+              />
+            )}
+            {activeTab === 'quality' && (
+              <GateQualityTab
+                conversationId={conversationId}
+                projectId={projectId}
+                snapshot={semanticSnapshot}
+                onSwitchToFrames={() => setActiveTab('frames')}
+                onGateResult={setGateResult}
+                // TODO: wire onLocateFrame once FrameGraphView is embedded in this page
+              />
+            )}
+          </div>
         </aside>
       </div>
 

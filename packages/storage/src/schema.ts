@@ -52,6 +52,18 @@ export const projects = pgTable(
       auto_create_leaf: boolean;
       target_branch: string;
     }>(),
+    businessRules: jsonb('business_rules')
+      .$type<
+        Array<{
+          id: string;
+          type: 'rule' | 'llm';
+          rule?: string;
+          prompt?: string;
+          message?: string;
+          severity: 'error' | 'warning';
+        }>
+      >()
+      .default([]),
   },
   (table) => [index('idx_projects_owner').on(table.ownerId)]
 );

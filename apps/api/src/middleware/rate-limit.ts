@@ -88,6 +88,9 @@ function getClientIp(c: Context): string | null {
  * A unique key per request object prevents all unknown-IP requests from sharing one bucket.
  */
 export async function rateLimitL1(c: Context, next: Next) {
+  // Skip rate limiting when auth is disabled (local dev)
+  if (process.env.AUTH_DISABLED === 'true') return next();
+
   const ip = getClientIp(c);
 
   let result: { allowed: boolean; remaining: number; resetAt: number };

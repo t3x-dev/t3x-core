@@ -37,6 +37,7 @@ import type { ComponentType } from 'react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { AutoDraftBadge } from '@/components/canvas/AutoDraftBadge';
 import { SealAnimation } from '@/components/canvas/SealAnimation';
+import { FrameGraphView } from '@/components/frame-graph';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { leafContextMenuHandlerRef } from '@/hooks/useContextMenu';
@@ -356,67 +357,78 @@ const CommitV4Content = memo(function CommitV4Content({
         </span>
       </div>
 
-      {/* Sentences (preview) */}
-      <div>
-        <div className="text-[10px] font-medium text-[var(--text-tertiary)] uppercase tracking-wider">
-          Sentences ({sentences.length})
+      {/* Frame Graph or Sentences (preview) */}
+      {commit.semantic ? (
+        <div>
+          <div className="text-[10px] font-medium text-[var(--text-tertiary)] uppercase tracking-wider mb-1">
+            Frame Graph ({commit.semantic.frames.length} frames)
+          </div>
+          <div className="h-[200px] rounded border border-[var(--stroke-divider)]">
+            <FrameGraphView content={commit.semantic} className="h-full w-full" />
+          </div>
         </div>
-        {sentences.length === 0 ? (
-          <p className="mt-1 text-xs text-[var(--text-tertiary)] italic">No sentences</p>
-        ) : (
-          <>
-            <ul className="mt-1 space-y-0.5">
-              {displaySentences.map((s) => (
-                <li
-                  key={s.id}
-                  className="flex items-start gap-1 text-xs text-[var(--text-secondary)]"
-                >
-                  {s.confidence !== undefined && (
-                    <span
-                      className={cn(
-                        'inline-block w-1.5 h-1.5 rounded-full mt-1 shrink-0',
-                        s.confidence >= 0.8
-                          ? 'bg-[var(--status-success)]'
-                          : s.confidence >= 0.5
-                            ? 'bg-amber-500'
-                            : 'bg-[var(--status-error)]'
-                      )}
-                      title={`${Math.round(s.confidence * 100)}%`}
-                    />
-                  )}
-                  <span className="text-[var(--text-tertiary)] font-mono text-[11px] shrink-0">
-                    {s.id}
+      ) : (
+        <div>
+          <div className="text-[10px] font-medium text-[var(--text-tertiary)] uppercase tracking-wider">
+            Sentences ({sentences.length})
+          </div>
+          {sentences.length === 0 ? (
+            <p className="mt-1 text-xs text-[var(--text-tertiary)] italic">No sentences</p>
+          ) : (
+            <>
+              <ul className="mt-1 space-y-0.5">
+                {displaySentences.map((s) => (
+                  <li
+                    key={s.id}
+                    className="flex items-start gap-1 text-xs text-[var(--text-secondary)]"
+                  >
+                    {s.confidence !== undefined && (
+                      <span
+                        className={cn(
+                          'inline-block w-1.5 h-1.5 rounded-full mt-1 shrink-0',
+                          s.confidence >= 0.8
+                            ? 'bg-[var(--status-success)]'
+                            : s.confidence >= 0.5
+                              ? 'bg-amber-500'
+                              : 'bg-[var(--status-error)]'
+                        )}
+                        title={`${Math.round(s.confidence * 100)}%`}
+                      />
+                    )}
+                    <span className="text-[var(--text-tertiary)] font-mono text-[11px] shrink-0">
+                      {s.id}
+                    </span>
+                    <span className="line-clamp-2">{s.text}</span>
+                  </li>
+                ))}
+              </ul>
+              {/* Footer with +N more and View full */}
+              <div className="flex items-center justify-between mt-1.5 pt-1.5 border-t border-[var(--stroke-divider)]">
+                {remainingSentences > 0 ? (
+                  <span className="text-xs text-[var(--text-tertiary)]">
+                    +{remainingSentences} sentence{remainingSentences !== 1 ? 's' : ''}
                   </span>
-                  <span className="line-clamp-2">{s.text}</span>
-                </li>
-              ))}
-            </ul>
-            {/* Footer with +N more and View full */}
-            <div className="flex items-center justify-between mt-1.5 pt-1.5 border-t border-[var(--stroke-divider)]">
-              {remainingSentences > 0 ? (
-                <span className="text-xs text-[var(--text-tertiary)]">
-                  +{remainingSentences} sentence{remainingSentences !== 1 ? 's' : ''}
-                </span>
-              ) : (
-                <span />
-              )}
-              {onViewFull && (
-                <button
-                  type="button"
-                  onClick={onViewFull}
-                  className={cn(
-                    'inline-flex items-center gap-0.5 text-xs transition-colors hover:brightness-110',
-                    toneAccent.commit.text
-                  )}
-                >
-                  View full
-                  <ChevronRight size={10} />
-                </button>
-              )}
-            </div>
-          </>
-        )}
-      </div>
+                ) : (
+                  <span />
+                )}
+                {onViewFull && (
+                  <button
+                    type="button"
+                    onClick={onViewFull}
+                    className={cn(
+                      'inline-flex items-center gap-0.5 text-xs transition-colors hover:brightness-110',
+                      toneAccent.commit.text
+                    )}
+                  >
+                    View full
+                    <ChevronRight size={10} />
+                  </button>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       {/* V4: Constraints notice */}
       <div className="mt-2 px-2 py-1.5 bg-[var(--hover-bg)] rounded border border-[var(--stroke-divider)]">

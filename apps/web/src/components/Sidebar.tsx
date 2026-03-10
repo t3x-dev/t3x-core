@@ -15,6 +15,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useMemo } from 'react';
 import { ProjectDraftsSection } from '@/components/ProjectDraftsSection';
+import { UserMenu } from '@/components/UserMenu';
 import { Button } from '@/components/ui/button';
 import { Kbd } from '@/components/ui/kbd';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -231,10 +232,15 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           </div>
         )}
 
+        {/* User Menu */}
+        <div className={cn('mt-auto', collapsed ? 'flex justify-center' : '')}>
+          <UserMenu collapsed={collapsed} />
+        </div>
+
         {/* Collapse Toggle */}
         <div
           className={cn(
-            'mt-auto pt-3 border-t border-[var(--stroke-divider)]',
+            'pt-3 border-t border-[var(--stroke-divider)]',
             collapsed ? 'flex justify-center' : ''
           )}
         >

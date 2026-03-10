@@ -17,8 +17,8 @@
 
 import { OpenAPIHono } from '@hono/zod-openapi';
 import { apiReference } from '@scalar/hono-api-reference';
-import { Hono } from 'hono';
 import type { MiddlewareHandler } from 'hono';
+import { Hono } from 'hono';
 import { authMiddleware } from './middleware/auth';
 import { corsMiddleware } from './middleware/cors';
 import { loggerMiddleware, pinoLogger } from './middleware/logger';
@@ -32,12 +32,15 @@ import {
   commitsV4Routes,
   conversationRoutes,
   curateRoutes,
+  deltaLogRoutes,
   deployAgentRoutes,
   diffRoutes,
   draftsRoutes,
   exportRoutes,
-  extractRoutes,
   extractionFeedbackRoutes,
+  extractRoutes,
+  frameExtractRoutes,
+  gateRoutes,
   healthRoutes,
   leavesRoutes,
   pinsRoutes,
@@ -48,13 +51,15 @@ import {
   turnRoutes,
 } from './routes';
 import { apiKeysRoutes } from './routes/api-keys.openapi';
+import { authLocalRoutes } from './routes/auth-local.openapi';
+import { authMeRoutes } from './routes/auth-me.openapi';
 import { autopilotRoutes } from './routes/autopilot.openapi';
 import { comparisonsRoutes } from './routes/comparisons.openapi';
 import { importRoutes } from './routes/import.openapi';
 import { ingestRoutes } from './routes/ingest.openapi';
 import { knowledgeGraphRoutes } from './routes/knowledge-graph.openapi';
-import { notificationsRoutes } from './routes/notifications.openapi';
 import { mergeRoutes } from './routes/merge.openapi';
+import { notificationsRoutes } from './routes/notifications.openapi';
 import { projectRoutes } from './routes/projects.openapi';
 import { providersRoutes } from './routes/providers.openapi';
 import { recipesRoutes } from './routes/recipes.openapi';
@@ -62,7 +67,6 @@ import { searchRoutes } from './routes/search.openapi';
 import { shareRoutes } from './routes/share.openapi';
 import { templatesRoutes } from './routes/templates.openapi';
 import { webhooksRoutes } from './routes/webhooks.openapi';
-import { authLocalRoutes } from './routes/auth-local.openapi';
 
 export interface CreateAppOptions {
   /** Skip built-in local auth (username/password). Set true for SaaS with OAuth. */
@@ -106,7 +110,9 @@ export function createApp(options?: CreateAppOptions): Hono {
             success: false,
             error: {
               code: 'INVALID_REQUEST',
-              message: result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '),
+              message: result.error.issues
+                .map((i) => `${i.path.join('.')}: ${i.message}`)
+                .join('; '),
             },
           },
           400
@@ -132,6 +138,9 @@ export function createApp(options?: CreateAppOptions): Hono {
   api.route('/', deployAgentRoutes);
   api.route('/', draftsRoutes);
   api.route('/', extractRoutes);
+  api.route('/', frameExtractRoutes); // /v1/extract/frames
+  api.route('/', gateRoutes); // /v1/gate/check
+  api.route('/', deltaLogRoutes); // /v1/conversations/:conversationId/deltas
   api.route('/', runsRoutes);
   api.route('/', leavesRoutes);
   api.route('/', pinsRoutes);
@@ -151,6 +160,9 @@ export function createApp(options?: CreateAppOptions): Hono {
   api.route('/', autopilotRoutes);
   api.route('/', relationsRoutes);
   api.route('/', extractionFeedbackRoutes);
+
+  // Auth /me route (always available — works with any auth provider)
+  api.route('/', authMeRoutes);
 
   // Local auth routes (username/password register + login)
   // Skipped when SaaS provides its own OAuth auth
@@ -184,8 +196,10 @@ export function createApp(options?: CreateAppOptions): Hono {
       { name: 'Commits', description: 'Version control commits' },
       { name: 'Branches', description: 'Branch management' },
       { name: 'Drafts', description: 'Draft management' },
+      { name: 'Delta Log', description: 'Semantic delta log (incremental frame changes)' },
       { name: 'Diff', description: 'Semantic diff operations' },
       { name: 'Extract', description: 'LLM-based semantic extraction from conversations' },
+      { name: 'Gate', description: 'Quality gate checks (structure, semantic, business)' },
       { name: 'Merge', description: 'Merge operations' },
       { name: 'Export', description: 'Export operations' },
       { name: 'Chat', description: 'LLM chat operations' },

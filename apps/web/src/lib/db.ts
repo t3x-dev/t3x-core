@@ -15,6 +15,7 @@ let dbInstance: AnyDB | null = null;
 let initPromise: Promise<AnyDB> | null = null;
 let getPGLiteClientFn: (() => PGlite) | null = null;
 let closeDbFn: (() => Promise<void>) | null = null;
+let shutdownRegistered = false;
 
 /**
  * Get the database instance (initializes on first call)
@@ -56,6 +57,19 @@ async function initializeDB(): Promise<AnyDB> {
     getPGLiteClientFn = getPGLiteClient;
     closeDbFn = closePGLiteStorage;
     console.log('[db] PGLite initialized');
+  }
+
+  // Register graceful shutdown so PGLite closes cleanly on SIGINT/SIGTERM.
+  // Without this, killing the Next.js process corrupts the WASM database.
+  if (!shutdownRegistered && typeof process?.on === 'function') {
+    shutdownRegistered = true;
+    const onSignal = async () => {
+      console.log('[db] Shutting down, closing database...');
+      await closeDB();
+      process.exit(0);
+    };
+    process.on('SIGINT', onSignal);
+    process.on('SIGTERM', onSignal);
   }
 
   return dbInstance;

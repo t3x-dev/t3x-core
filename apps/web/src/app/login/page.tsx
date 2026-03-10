@@ -9,7 +9,7 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
-import { setSessionKey } from '@/lib/session';
+import { setSessionKey, setSessionUser } from '@/lib/session';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -32,9 +32,7 @@ function LoginForm() {
 
     const endpoint = mode === 'login' ? '/api/v1/auth/login' : '/api/v1/auth/register';
     const body =
-      mode === 'login'
-        ? { username, password }
-        : { username, password, ...(name ? { name } : {}) };
+      mode === 'login' ? { username, password } : { username, password, ...(name ? { name } : {}) };
 
     try {
       const res = await fetch(`${API_BASE}${endpoint}`, {
@@ -51,6 +49,11 @@ function LoginForm() {
       }
 
       setSessionKey(json.data.api_key);
+      setSessionUser({
+        id: json.data.id,
+        name: json.data.name ?? null,
+        username: json.data.username ?? null,
+      });
       router.push(callbackUrl);
     } catch {
       setError('Failed to connect to server');
@@ -71,7 +74,10 @@ function LoginForm() {
       <div className="flex rounded-md border border-border overflow-hidden">
         <button
           type="button"
-          onClick={() => { setMode('login'); setError(''); }}
+          onClick={() => {
+            setMode('login');
+            setError('');
+          }}
           className={`flex-1 py-2 text-sm font-medium transition-colors ${
             mode === 'login'
               ? 'bg-accent text-accent-foreground'
@@ -82,7 +88,10 @@ function LoginForm() {
         </button>
         <button
           type="button"
-          onClick={() => { setMode('register'); setError(''); }}
+          onClick={() => {
+            setMode('register');
+            setError('');
+          }}
           className={`flex-1 py-2 text-sm font-medium transition-colors ${
             mode === 'register'
               ? 'bg-accent text-accent-foreground'
@@ -149,16 +158,20 @@ function LoginForm() {
           </div>
         )}
 
-        {error && (
-          <p className="text-sm text-destructive">{error}</p>
-        )}
+        {error && <p className="text-sm text-destructive">{error}</p>}
 
         <button
           type="submit"
           disabled={loading}
           className="flex w-full items-center justify-center rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 disabled:pointer-events-none"
         >
-          {loading ? (mode === 'login' ? 'Signing in...' : 'Creating account...') : (mode === 'login' ? 'Sign In' : 'Create Account')}
+          {loading
+            ? mode === 'login'
+              ? 'Signing in...'
+              : 'Creating account...'
+            : mode === 'login'
+              ? 'Sign In'
+              : 'Create Account'}
         </button>
       </form>
     </div>

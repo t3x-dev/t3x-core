@@ -7,6 +7,39 @@
 
 const COOKIE_NAME = 't3x-session';
 const COOKIE_MAX_AGE_DAYS = 30;
+const USER_STORAGE_KEY = 't3x-user';
+
+// ============================================================
+// Session User (localStorage)
+// ============================================================
+
+export interface SessionUser {
+  id: string;
+  name: string | null;
+  username: string | null;
+  avatar_url?: string | null;
+}
+
+/**
+ * Store user profile in localStorage after login/register.
+ */
+export function setSessionUser(user: SessionUser): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+}
+
+/**
+ * Read user profile from localStorage.
+ */
+export function getSessionUser(): SessionUser | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(USER_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as SessionUser) : null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Store API key in session cookie.
@@ -32,5 +65,6 @@ export function getSessionKey(): string | null {
  */
 export function clearSession(): void {
   document.cookie = `${COOKIE_NAME}=; path=/; max-age=0`;
+  localStorage.removeItem(USER_STORAGE_KEY);
   window.location.href = '/login';
 }

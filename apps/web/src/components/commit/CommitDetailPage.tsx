@@ -39,6 +39,7 @@ import {
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { FrameGraphView } from '@/components/frame-graph';
 import { KeyboardHintBar } from '@/components/shared/KeyboardHintBar';
 import { useKeyboardNavigation } from '@/hooks/useKeyboardNavigation';
 import type { CommitV4, DiffResultRaw, Leaf } from '@/lib/api';
@@ -783,9 +784,24 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
           </div>
         </aside>
 
-        {/* CENTER: Sentence Cards */}
+        {/* CENTER: Frame Graph + Sentence Cards */}
         <div className="flex-1 overflow-y-auto p-[var(--space-page)]">
           <div className="mx-auto max-w-3xl space-y-3">
+            {/* Frame Graph (when semantic content exists) */}
+            {commit.semantic && (
+              <div className="rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-panel)] overflow-hidden">
+                <div className="px-4 py-2 border-b border-[var(--stroke-divider)]">
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
+                    Frame Graph ({commit.semantic.frames.length} frames,{' '}
+                    {commit.semantic.relations.length} relations)
+                  </h3>
+                </div>
+                <div className="h-[400px]">
+                  <FrameGraphView content={commit.semantic} className="h-full w-full" />
+                </div>
+              </div>
+            )}
+
             {enrichedSentences.map((s) => (
               <CommitSentenceCard
                 key={s.id}

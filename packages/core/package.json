@@ -21,11 +21,13 @@
   "dependencies": {
     "json-canonicalize": "^2.0.0",
     "nanoid": "^5.1.6",
-    "undici": "^7.2.0"
+    "undici": "^7.2.0",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/node": "^20.12.7",
     "@vitest/coverage-v8": "^2.1.9",
+    "dotenv": "^17.3.1",
     "typescript": "^5.9.3",
     "vitest": "^2.1.9"
   },
