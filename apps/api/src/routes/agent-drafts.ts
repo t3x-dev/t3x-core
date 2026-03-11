@@ -6,9 +6,9 @@
  * PATCH /v1/agent/drafts/:id - Update draft with feedback
  */
 
-import type { SemanticContent } from '@t3x/core';
-import { buildDraft, createClaudeProvider, LLMProviderError } from '@t3x/core';
-import { listDeltaLogByConversation } from '@t3x/storage';
+import type { SemanticContent } from '@t3x-dev/core';
+import { buildDraft, createClaudeProvider, LLMProviderError } from '@t3x-dev/core';
+import { listDeltaLogByConversation } from '@t3x-dev/storage';
 import {
   findConversationById,
   findDraftById,
@@ -16,7 +16,7 @@ import {
   findTurnsByConversation,
   insertDraft,
   updateDraft,
-} from '@t3x/storage/pglite';
+} from '@t3x-dev/storage/pglite';
 import { Hono } from 'hono';
 import { getDB } from '../lib/db';
 import { toDeltaLogEntries } from '../lib/delta-log-utils';

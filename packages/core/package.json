@@ -1,13 +1,12 @@
 {
-  "name": "@t3x/core",
-  "version": "0.1.0",
+  "name": "@t3x-dev/core",
+  "version": "0.0.1",
   "description": "T3X Core - Deterministic semantic extraction, diff, and merge engine",
   "license": "MIT",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
-    "dist",
-    "src"
+    "dist"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -22,7 +21,7 @@
     "json-canonicalize": "^2.0.0",
     "nanoid": "^5.1.6",
     "undici": "^7.2.0",
-    "zod": "^3.25.76"
+    "zod": "^4.2.1"
   },
   "devDependencies": {
     "@types/node": "^20.12.7",
@@ -44,10 +43,10 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/anthropics/t3x.git",
+    "url": "https://github.com/t3x-dev/t3x.git",
     "directory": "packages/core"
   },
   "publishConfig": {
-    "access": "public"
+    "access": "restricted"
   }
 }

@@ -14,7 +14,7 @@ vi.mock('node:fs', () => ({
 
 import * as fs from 'node:fs';
 
-// Mock @t3x/api-client
+// Mock @t3x-dev/api-client
 const mockClient = {
   importUrl: vi.fn(),
   importDocument: vi.fn(),
@@ -23,7 +23,7 @@ const mockClient = {
   createTurn: vi.fn(),
 };
 
-vi.mock('@t3x/api-client', () => ({
+vi.mock('@t3x-dev/api-client', () => ({
   createClient: vi.fn(() => mockClient),
 }));
 

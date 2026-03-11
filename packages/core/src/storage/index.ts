@@ -2,7 +2,7 @@
  * Storage Module (Pure)
  *
  * Provides type definitions and pure utility functions for T3X storage.
- * For actual CRUD operations, use @t3x/storage package.
+ * For actual CRUD operations, use @t3x-dev/storage package.
  */
 
 // V4 Hash computation

@@ -1,6 +1,6 @@
 'use client';
 
-import type { SemanticContent } from '@t3x/core';
+import type { SemanticContent } from '@t3x-dev/core';
 import { useCallback, useState } from 'react';
 import { FrameMergeView } from '@/components/frame-graph';
 import { Badge } from '@/components/ui/badge';

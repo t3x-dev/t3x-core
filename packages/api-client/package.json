@@ -1,6 +1,6 @@
 {
-  "name": "@t3x/api-client",
-  "version": "0.1.0",
+  "name": "@t3x-dev/api-client",
+  "version": "0.0.1",
   "description": "TypeScript client for T3X API",
   "type": "module",
   "main": "dist/index.js",
@@ -38,10 +38,10 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/anthropics/t3x.git",
+    "url": "https://github.com/t3x-dev/t3x.git",
     "directory": "packages/api-client"
   },
   "publishConfig": {
-    "access": "public"
+    "access": "restricted"
   }
 }

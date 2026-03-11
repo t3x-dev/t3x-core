@@ -11,7 +11,7 @@
  * 3. Any n8n workflows are updated
  */
 
-import type { PGLiteDB } from '@t3x/storage/pglite';
+import type { PGLiteDB } from '@t3x-dev/storage/pglite';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDB } from '../setup';

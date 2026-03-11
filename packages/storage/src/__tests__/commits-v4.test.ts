@@ -8,7 +8,7 @@
  */
 
 import type { PGlite } from '@electric-sql/pglite';
-import type { CommitAuthorV4, CommitV4, SentenceV4 } from '@t3x/core';
+import type { CommitAuthorV4, CommitV4, SentenceV4 } from '@t3x-dev/core';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
@@ -1091,7 +1091,7 @@ describe('Commits V4 Storage', () => {
       expect(commit.merkle_root).toMatch(/^sha256:/);
 
       // Verify determinism: same sentences should produce same root
-      const { buildMerkleTree } = await import('@t3x/core');
+      const { buildMerkleTree } = await import('@t3x-dev/core');
       const tree = buildMerkleTree([
         { id: 's_mk1', text: 'First sentence' },
         { id: 's_mk2', text: 'Second sentence' },

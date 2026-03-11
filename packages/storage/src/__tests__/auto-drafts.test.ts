@@ -5,7 +5,7 @@
  */
 
 import type { PGlite } from '@electric-sql/pglite';
-import type { DraftSentence } from '@t3x/core';
+import type { DraftSentence } from '@t3x-dev/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
 import {

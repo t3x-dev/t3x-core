@@ -28,8 +28,8 @@ import {
   type ProviderRegistry,
   type RegistryConfig,
   type TurnInput,
-} from '@t3x/core';
-import { findProjectById, getGlobalSetting, setGlobalSetting } from '@t3x/storage/pglite';
+} from '@t3x-dev/core';
+import { findProjectById, getGlobalSetting, setGlobalSetting } from '@t3x-dev/storage/pglite';
 import { getDB } from './db';
 
 // ═══════════════════════════════════════════════════════════════════════════

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Mock @t3x/core before importing the module under test
-vi.mock('@t3x/core', () => ({
+// Mock @t3x-dev/core before importing the module under test
+vi.mock('@t3x-dev/core', () => ({
   createGoogleAIEmbeddingProvider: vi.fn(() => ({
     id: 'google-ai-text-embedding-004',
     embed: vi.fn(),
@@ -80,7 +80,7 @@ describe('embedder', () => {
       process.env.GOOGLE_AI_STUDIO_KEY = 'test-key-123';
 
       // Make createGoogleAIEmbeddingProvider throw
-      const core = await import('@t3x/core');
+      const core = await import('@t3x-dev/core');
       vi.mocked(core.createGoogleAIEmbeddingProvider).mockImplementationOnce(() => {
         throw new Error('Network error');
       });
@@ -94,7 +94,7 @@ describe('embedder', () => {
     it('caches null result after initialization failure', async () => {
       process.env.GOOGLE_AI_STUDIO_KEY = 'test-key-123';
 
-      const core = await import('@t3x/core');
+      const core = await import('@t3x-dev/core');
       vi.mocked(core.createGoogleAIEmbeddingProvider).mockImplementationOnce(() => {
         throw new Error('Network error');
       });

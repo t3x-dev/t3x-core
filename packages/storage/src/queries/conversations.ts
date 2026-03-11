@@ -4,7 +4,7 @@
  * CRUD operations for conversations using Drizzle ORM.
  */
 
-import { generateConversationId } from '@t3x/core';
+import { generateConversationId } from '@t3x-dev/core';
 import { and, desc, eq, lt, or, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { type Conversation, conversations, type NewConversation, turns } from '../schema';

@@ -1,7 +1,7 @@
 /**
  * Database Singleton
  *
- * Server-side only database connection using @t3x/storage.
+ * Server-side only database connection using @t3x-dev/storage.
  *
  * Environment detection:
  * - DATABASE_URL set → PostgreSQL (Docker/production)
@@ -9,7 +9,7 @@
  */
 
 import type { PGlite } from '@electric-sql/pglite';
-import type { AnyDB } from '@t3x/storage';
+import type { AnyDB } from '@t3x-dev/storage';
 
 let dbInstance: AnyDB | null = null;
 let initPromise: Promise<AnyDB> | null = null;
@@ -42,7 +42,7 @@ async function initializeDB(): Promise<AnyDB> {
   if (databaseUrl) {
     // Docker/production: Use PostgreSQL
     console.log('[db] Using PostgreSQL:', databaseUrl.replace(/:[^:@]+@/, ':****@'));
-    const { createPostgresStorage, closePostgresStorage } = await import('@t3x/storage');
+    const { createPostgresStorage, closePostgresStorage } = await import('@t3x-dev/storage');
     dbInstance = await createPostgresStorage({ connectionString: databaseUrl });
     closeDbFn = closePostgresStorage;
     console.log('[db] PostgreSQL initialized');
@@ -51,7 +51,7 @@ async function initializeDB(): Promise<AnyDB> {
     const dataDir = process.env.T3X_DATA_DIR || '.t3x/database';
     console.log('[db] Using PGLite:', dataDir);
     const { createPGLiteStorage, getPGLiteClient, closePGLiteStorage } = await import(
-      '@t3x/storage/pglite'
+      '@t3x-dev/storage/pglite'
     );
     dbInstance = await createPGLiteStorage({ dataDir });
     getPGLiteClientFn = getPGLiteClient;

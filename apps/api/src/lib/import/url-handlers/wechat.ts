@@ -8,7 +8,7 @@
  * fetch with a mobile User-Agent and extract from known DOM selectors.
  */
 
-import { sha256 } from '@t3x/core';
+import { sha256 } from '@t3x-dev/core';
 import { splitIntoParagraphs } from '../paragraph-splitter';
 import type { ParseResult } from '../types';
 

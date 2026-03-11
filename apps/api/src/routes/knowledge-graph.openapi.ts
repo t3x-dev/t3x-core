@@ -12,7 +12,7 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { buildKnowledgeGraph } from '@t3x/core';
+import { buildKnowledgeGraph } from '@t3x-dev/core';
 import {
   deleteKnowledgeGraphByProject,
   findConflictsByProject,
@@ -26,7 +26,7 @@ import {
   insertKnowledgeNodes,
   insertNodeMembers,
   searchKnowledgeNodes,
-} from '@t3x/storage/pglite';
+} from '@t3x-dev/storage/pglite';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { ErrorResponseSchema } from '../schemas/common';

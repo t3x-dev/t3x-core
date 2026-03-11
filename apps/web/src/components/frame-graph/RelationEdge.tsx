@@ -1,6 +1,6 @@
 'use client';
 
-import type { FrameRelationType } from '@t3x/core';
+import type { FrameRelationType } from '@t3x-dev/core';
 import { BaseEdge, EdgeLabelRenderer, type EdgeProps, getSmoothStepPath } from '@xyflow/react';
 import { useState } from 'react';
 import { RELATION_STYLES, type RelationEdgeData } from './frameGraphUtils';

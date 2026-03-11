@@ -2,7 +2,7 @@
  * Tests for local file import utilities.
  */
 
-import type { T3xClient } from '@t3x/api-client';
+import type { T3xClient } from '@t3x-dev/api-client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock node:fs module

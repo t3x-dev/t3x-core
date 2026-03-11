@@ -4,7 +4,7 @@
  * Creates an isolated PGLite database for each test file.
  */
 
-import { closePGLiteStorage, createPGLiteStorage, type PGLiteDB } from '@t3x/storage/pglite';
+import { closePGLiteStorage, createPGLiteStorage, type PGLiteDB } from '@t3x-dev/storage/pglite';
 import { afterAll, beforeAll, vi } from 'vitest';
 
 // Global test database

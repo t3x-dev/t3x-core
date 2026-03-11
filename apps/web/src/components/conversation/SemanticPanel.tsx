@@ -1,6 +1,6 @@
 'use client';
 
-import type { Delta, DeltaSource, SemanticContent } from '@t3x/core';
+import type { Delta, DeltaSource, SemanticContent } from '@t3x-dev/core';
 import { Loader2, Network } from 'lucide-react';
 import { useCallback } from 'react';
 import { FrameGraphView } from '@/components/frame-graph';

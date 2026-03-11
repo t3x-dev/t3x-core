@@ -1,7 +1,7 @@
 'use client';
 
-import type { SemanticContent, WordDiffFn } from '@t3x/core';
-import { frameDiff } from '@t3x/core';
+import type { SemanticContent, WordDiffFn } from '@t3x-dev/core';
+import { frameDiff } from '@t3x-dev/core';
 import { useEffect, useMemo } from 'react';
 import { wordDiff } from '@/lib/diffUtils';
 import { FrameGraphView } from './FrameGraphView';

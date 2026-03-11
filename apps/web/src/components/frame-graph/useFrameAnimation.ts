@@ -1,6 +1,6 @@
 'use client';
 
-import type { SemanticContent } from '@t3x/core';
+import type { SemanticContent } from '@t3x-dev/core';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 // ── Animation Duration Constants ──

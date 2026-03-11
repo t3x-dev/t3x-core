@@ -91,7 +91,7 @@ export async function authMiddleware(c: Context, next: Next) {
 
   try {
     // Dynamic import to avoid circular dependency
-    const { findApiKeyByValue, touchLastUsed } = await import('@t3x/storage');
+    const { findApiKeyByValue, touchLastUsed } = await import('@t3x-dev/storage');
     const db = await getDB();
     const apiKey = await findApiKeyByValue(db, keyValue);
 

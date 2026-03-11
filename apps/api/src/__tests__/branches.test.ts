@@ -2,8 +2,8 @@
  * Branches Route Tests
  */
 
-import { insertProject } from '@t3x/storage';
-import type { PGLiteDB } from '@t3x/storage/pglite';
+import { insertProject } from '@t3x-dev/storage';
+import type { PGLiteDB } from '@t3x-dev/storage/pglite';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';

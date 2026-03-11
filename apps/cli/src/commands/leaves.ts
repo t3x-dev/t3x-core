@@ -2,7 +2,7 @@
  * Leaf Commands
  */
 
-import { createClient } from '@t3x/api-client';
+import { createClient } from '@t3x-dev/api-client';
 import type { Command } from 'commander';
 import {
   createSpinner,

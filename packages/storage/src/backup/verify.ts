@@ -9,7 +9,7 @@
  * This module implements L2/L3 verification.
  */
 
-import { buildMerkleTree, type CommitV4 } from '@t3x/core';
+import { buildMerkleTree, type CommitV4 } from '@t3x-dev/core';
 import type { AnyDB } from '../adapters';
 import { computeCommitV4Hash, findCommitsV4ByProject } from '../queries';
 

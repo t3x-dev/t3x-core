@@ -10,7 +10,7 @@
  * - Merge Review Dialog before commit
  */
 
-import type { SemanticContent } from '@t3x/core';
+import type { SemanticContent } from '@t3x-dev/core';
 import { motion } from 'framer-motion';
 import { GitMerge } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';

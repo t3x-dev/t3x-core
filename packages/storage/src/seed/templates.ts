@@ -1,11 +1,11 @@
 /**
  * Seed Builtin Templates
  *
- * Imports DEFAULT_TEMPLATES from @t3x/core and seeds them into the database.
+ * Imports DEFAULT_TEMPLATES from @t3x-dev/core and seeds them into the database.
  * Idempotent: uses INSERT ... ON CONFLICT DO NOTHING.
  */
 
-import { getAllDefaultTemplates } from '@t3x/core';
+import { getAllDefaultTemplates } from '@t3x-dev/core';
 import type { AnyDB } from '../adapters';
 import { templates } from '../schema';
 

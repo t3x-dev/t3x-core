@@ -6,14 +6,14 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { buildDraft } from '@t3x/core';
-import { listDeltaLogByConversation } from '@t3x/storage';
+import { buildDraft } from '@t3x-dev/core';
+import { listDeltaLogByConversation } from '@t3x-dev/storage';
 import {
   findConversationsByProject,
   findProjectById,
   findTurnsByProject,
   listCommitsV3,
-} from '@t3x/storage/pglite';
+} from '@t3x-dev/storage/pglite';
 import * as crypto from 'crypto';
 import { getDB } from '../lib/db';
 import { toDeltaLogEntries } from '../lib/delta-log-utils';

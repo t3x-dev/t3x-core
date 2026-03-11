@@ -12,8 +12,8 @@ import {
   deleteProject,
   findProjects,
   insertProject,
-} from '@t3x/storage';
-import type { PGLiteDB } from '@t3x/storage/pglite';
+} from '@t3x-dev/storage';
+import type { PGLiteDB } from '@t3x-dev/storage/pglite';
 import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -88,7 +88,7 @@ describe('Merkle Verification Routes', () => {
       });
 
       // Tamper the stored merkle_root
-      await (mockDB as unknown as import('@t3x/storage').AnyDB)
+      await (mockDB as unknown as import('@t3x-dev/storage').AnyDB)
         .update(commitsV4)
         .set({ merkleRoot: 'sha256:fake_root_value' })
         .where(eq(commitsV4.hash, commit.hash));
@@ -136,7 +136,7 @@ describe('Merkle Verification Routes', () => {
       });
 
       // Remove merkle_root to simulate pre-existing commit
-      await (mockDB as unknown as import('@t3x/storage').AnyDB)
+      await (mockDB as unknown as import('@t3x-dev/storage').AnyDB)
         .update(commitsV4)
         .set({ merkleRoot: null })
         .where(eq(commitsV4.hash, commit.hash));

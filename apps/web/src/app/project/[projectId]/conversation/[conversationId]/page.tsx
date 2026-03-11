@@ -1,6 +1,6 @@
 'use client';
 
-import type { Delta, SemanticContent } from '@t3x/core';
+import type { Delta, SemanticContent } from '@t3x-dev/core';
 import { ArrowLeft, MessageSquare, MessagesSquare, Network, ShieldCheck } from 'lucide-react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { forwardRef, Suspense, useCallback, useEffect, useRef, useState } from 'react';

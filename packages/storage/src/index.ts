@@ -1,5 +1,5 @@
 /**
- * @t3x/storage
+ * @t3x-dev/storage
  *
  * T3X Storage - PostgreSQL persistence layer with Drizzle ORM.
  *
@@ -12,16 +12,16 @@
  *
  * ```typescript
  * // Local development
- * import { createPGLiteStorage, insertProject } from '@t3x/storage';
+ * import { createPGLiteStorage, insertProject } from '@t3x-dev/storage';
  * const db = await createPGLiteStorage({ dataDir: '.t3x/database' });
  * const project = await insertProject(db, { name: 'My Project' });
  *
  * // Docker
- * import { createPostgresStorage } from '@t3x/storage';
+ * import { createPostgresStorage } from '@t3x-dev/storage';
  * const db = await createPostgresStorage({ connectionString: process.env.DATABASE_URL });
  *
  * // Supabase
- * import { createSupabaseStorage } from '@t3x/storage';
+ * import { createSupabaseStorage } from '@t3x-dev/storage';
  * const db = await createSupabaseStorage({ connectionString: process.env.SUPABASE_URL });
  * ```
  */

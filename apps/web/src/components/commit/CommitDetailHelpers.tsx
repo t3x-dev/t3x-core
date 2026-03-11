@@ -226,7 +226,7 @@ export function WordDiffInline({
 }: {
   oldText: string;
   newText: string;
-  segments?: import('@t3x/core').WordDiffSegment[];
+  segments?: import('@t3x-dev/core').WordDiffSegment[];
 }) {
   // When LCS-based segments are available from the diff engine, use them
   // for accurate word-level highlighting. Fall back to naive set comparison.
