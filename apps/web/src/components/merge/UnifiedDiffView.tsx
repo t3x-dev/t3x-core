@@ -12,6 +12,8 @@
 
 import { CheckCircle, ChevronDown, ChevronRight, ListTree, MapPin } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { DiffMode } from '@/components/diff/DiffModeToggle';
+import { DiffModeToggle } from '@/components/diff/DiffModeToggle';
 import { DiffSourceContextModal } from '@/components/diff/DiffSourceContextModal';
 import { Button } from '@/components/ui/button';
 import { EmptyStateInline } from '@/components/ui/empty-state';
@@ -232,6 +234,9 @@ interface UnifiedDiffViewProps {
   targetBranch?: string;
   viewMode?: ViewMode;
   onViewModeChange?: (mode: ViewMode) => void;
+  diffMode?: DiffMode;
+  onDiffModeChange?: (mode: DiffMode) => void;
+  hasSemanticData?: boolean;
 }
 
 export function UnifiedDiffView({
@@ -242,6 +247,9 @@ export function UnifiedDiffView({
   targetBranch = 'B',
   viewMode: controlledViewMode,
   onViewModeChange,
+  diffMode,
+  onDiffModeChange,
+  hasSemanticData,
 }: UnifiedDiffViewProps) {
   const { identical, similarPairs, onlyInSource, onlyInTarget } = prepared;
   const { getUnresolvedCount, contextCache, contextLoadingStates, projectId, sourceHash } =
@@ -484,211 +492,232 @@ export function UnifiedDiffView({
     <div className="max-w-4xl mx-auto">
       {/* Stats Header with View Toggle */}
       <div className="flex items-center justify-between mb-[var(--space-group)] px-2 py-2 bg-[var(--surface-panel)] border border-[var(--stroke-divider)] rounded-lg text-sm">
-        <div className="flex items-center gap-[var(--space-group)]">
-          <span className="text-[var(--text-tertiary)]">
-            {identical.length} {t('identical_sentences').toLowerCase()}
-          </span>
-          {similarPairs.length > 0 && (
-            <span
-              className={
-                unresolvedCount > 0
-                  ? 'text-[var(--diff-modified-line)]'
-                  : 'text-[var(--diff-added-line)]'
-              }
-            >
-              {similarPairs.length} {t('conflicts').toLowerCase()}
-              {unresolvedCount > 0 && ` (${unresolvedCount} ${t('unresolved').toLowerCase()})`}
+        {/* Sentence-level stats — hidden in Frame mode */}
+        {diffMode !== 'frame' && (
+          <div className="flex items-center gap-[var(--space-group)]">
+            <span className="text-[var(--text-tertiary)]">
+              {identical.length} {t('identical_sentences').toLowerCase()}
             </span>
-          )}
-          {onlyInSource.length > 0 && (
-            <span className="text-[var(--accent-commit)]">
-              +{onlyInSource.length} from {t('source').toLowerCase()}
-            </span>
-          )}
-          {onlyInTarget.length > 0 && (
-            <span className="text-[var(--diff-added-line)]">
-              +{onlyInTarget.length} from {t('target').toLowerCase()}
-            </span>
-          )}
-        </div>
+            {similarPairs.length > 0 && (
+              <span
+                className={
+                  unresolvedCount > 0
+                    ? 'text-[var(--diff-modified-line)]'
+                    : 'text-[var(--diff-added-line)]'
+                }
+              >
+                {similarPairs.length} {t('conflicts').toLowerCase()}
+                {unresolvedCount > 0 && ` (${unresolvedCount} ${t('unresolved').toLowerCase()})`}
+              </span>
+            )}
+            {onlyInSource.length > 0 && (
+              <span className="text-[var(--accent-commit)]">
+                +{onlyInSource.length} from {t('source').toLowerCase()}
+              </span>
+            )}
+            {onlyInTarget.length > 0 && (
+              <span className="text-[var(--diff-added-line)]">
+                +{onlyInTarget.length} from {t('target').toLowerCase()}
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Spacer when in frame mode to push toggle to the right */}
+        {diffMode === 'frame' && <div className="flex-1" />}
+
+        {/* Diff mode toggle */}
+        {onDiffModeChange && (
+          <DiffModeToggle
+            mode={diffMode ?? 'sentence'}
+            onChange={onDiffModeChange}
+            hidden={!hasSemanticData}
+          />
+        )}
 
         {/* View Mode Toggle */}
-        <div className="flex items-center gap-1 border border-[var(--stroke-divider)] rounded-md p-0.5">
-          <Button
-            variant={viewMode === 'grouped' ? 'secondary' : 'ghost'}
-            size="sm"
-            className="h-7 px-2 text-xs"
-            onClick={() => setViewMode('grouped')}
-          >
-            <ListTree className="h-3.5 w-3.5 mr-1" />
-            Grouped
-          </Button>
-          <Button
-            variant={viewMode === 'positional' ? 'secondary' : 'ghost'}
-            size="sm"
-            className="h-7 px-2 text-xs"
-            onClick={() => setViewMode('positional')}
-          >
-            <MapPin className="h-3.5 w-3.5 mr-1" />
-            Position
-          </Button>
-        </div>
+        {diffMode !== 'frame' && (
+          <div className="flex items-center gap-1 border border-[var(--stroke-divider)] rounded-md p-0.5">
+            <Button
+              variant={viewMode === 'grouped' ? 'secondary' : 'ghost'}
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={() => setViewMode('grouped')}
+            >
+              <ListTree className="h-3.5 w-3.5 mr-1" />
+              Grouped
+            </Button>
+            <Button
+              variant={viewMode === 'positional' ? 'secondary' : 'ghost'}
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={() => setViewMode('positional')}
+            >
+              <MapPin className="h-3.5 w-3.5 mr-1" />
+              Position
+            </Button>
+          </div>
+        )}
       </div>
 
-      {/* Grouped View (default) */}
-      {viewMode === 'grouped' && (
-        <div className="space-y-[var(--space-section)]">
-          {/* Identical Sentences */}
-          {identical.length > 0 && (
-            <MergeDiffSection
-              title={t('identical_sentences')}
-              subtitle={`${identical.length} sentences (${t('auto_kept').toLowerCase()})`}
-              variant="success"
-              defaultCollapsed
-              navId="identical"
-            >
-              <div className="space-y-1">
-                {identical.map((sentence) => {
-                  const ctx = getContextForSentence(sentence);
-                  return (
-                    <MergeDiffLine
-                      key={`identical-${sentence.id}`}
-                      type="context"
-                      sentence={sentence}
-                      contextData={ctx.data}
-                      contextLoading={ctx.loading}
-                      onJumpToConversation={makeJumpHandler(sentence)}
-                    />
-                  );
-                })}
-              </div>
-            </MergeDiffSection>
-          )}
+      {diffMode !== 'frame' && (
+        <>
+          {/* Grouped View (default) */}
+          {viewMode === 'grouped' && (
+            <div className="space-y-[var(--space-section)]">
+              {/* Identical Sentences */}
+              {identical.length > 0 && (
+                <MergeDiffSection
+                  title={t('identical_sentences')}
+                  subtitle={`${identical.length} sentences (${t('auto_kept').toLowerCase()})`}
+                  variant="success"
+                  defaultCollapsed
+                  navId="identical"
+                >
+                  <div className="space-y-1">
+                    {identical.map((sentence) => {
+                      const ctx = getContextForSentence(sentence);
+                      return (
+                        <MergeDiffLine
+                          key={`identical-${sentence.id}`}
+                          type="context"
+                          sentence={sentence}
+                          contextData={ctx.data}
+                          contextLoading={ctx.loading}
+                          onJumpToConversation={makeJumpHandler(sentence)}
+                        />
+                      );
+                    })}
+                  </div>
+                </MergeDiffSection>
+              )}
 
-          {/* Conflicts */}
-          {similarPairs.length > 0 && (
-            <MergeDiffSection
-              title={t('conflicts')}
-              subtitle={`${unresolvedCount} of ${similarPairs.length} need resolution`}
-              variant={unresolvedCount > 0 ? 'warning' : 'success'}
-              navId="conflicts"
-            >
-              <ul className="space-y-[var(--space-group)] list-none p-0 m-0">
-                {similarPairs.map((pair, idx) => (
-                  <MergeConflictView
-                    key={`conflict-${pair.source.id}-${pair.target.id}`}
-                    pair={pair}
-                    index={idx}
-                    sourceBranch={sourceBranch}
-                    targetBranch={targetBranch}
-                    navId={`conflict-${idx}`}
-                  />
-                ))}
-              </ul>
-            </MergeDiffSection>
-          )}
+              {/* Conflicts */}
+              {similarPairs.length > 0 && (
+                <MergeDiffSection
+                  title={t('conflicts')}
+                  subtitle={`${unresolvedCount} of ${similarPairs.length} need resolution`}
+                  variant={unresolvedCount > 0 ? 'warning' : 'success'}
+                  navId="conflicts"
+                >
+                  <ul className="space-y-[var(--space-group)] list-none p-0 m-0">
+                    {similarPairs.map((pair, idx) => (
+                      <MergeConflictView
+                        key={`conflict-${pair.source.id}-${pair.target.id}`}
+                        pair={pair}
+                        index={idx}
+                        sourceBranch={sourceBranch}
+                        targetBranch={targetBranch}
+                        navId={`conflict-${idx}`}
+                      />
+                    ))}
+                  </ul>
+                </MergeDiffSection>
+              )}
 
-          {/* Source-Only */}
-          {onlyInSource.length > 0 && (
-            <MergeDiffSection
-              title={t('only_in_source')}
-              subtitle={`${onlyInSource.length} sentences from ${t('source').toLowerCase()}`}
-              variant="info"
-              navId="source-only"
-            >
-              <div className="space-y-1">
-                {onlyInSource.map((candidate, idx) => {
-                  const ctx = getContextForSentence(candidate.sentence);
-                  return (
-                    <MergeDiffLine
-                      key={`source-${candidate.sentence.id}`}
-                      type="added"
-                      sentence={candidate.sentence}
-                      isKept={candidate.keep}
-                      onToggleKeep={() => onToggleKeep('source', idx)}
-                      checkable
-                      contextData={ctx.data}
-                      contextLoading={ctx.loading}
-                      onJumpToConversation={makeJumpHandler(candidate.sentence)}
-                      navId={`source-${idx}`}
-                    />
-                  );
-                })}
-              </div>
-            </MergeDiffSection>
-          )}
+              {/* Source-Only */}
+              {onlyInSource.length > 0 && (
+                <MergeDiffSection
+                  title={t('only_in_source')}
+                  subtitle={`${onlyInSource.length} sentences from ${t('source').toLowerCase()}`}
+                  variant="info"
+                  navId="source-only"
+                >
+                  <div className="space-y-1">
+                    {onlyInSource.map((candidate, idx) => {
+                      const ctx = getContextForSentence(candidate.sentence);
+                      return (
+                        <MergeDiffLine
+                          key={`source-${candidate.sentence.id}`}
+                          type="added"
+                          sentence={candidate.sentence}
+                          isKept={candidate.keep}
+                          onToggleKeep={() => onToggleKeep('source', idx)}
+                          checkable
+                          contextData={ctx.data}
+                          contextLoading={ctx.loading}
+                          onJumpToConversation={makeJumpHandler(candidate.sentence)}
+                          navId={`source-${idx}`}
+                        />
+                      );
+                    })}
+                  </div>
+                </MergeDiffSection>
+              )}
 
-          {/* Target-Only */}
-          {onlyInTarget.length > 0 && (
-            <MergeDiffSection
-              title={t('only_in_target')}
-              subtitle={`${onlyInTarget.length} sentences from ${t('target').toLowerCase()}`}
-              variant="info"
-              navId="target-only"
-            >
-              <div className="space-y-1">
-                {onlyInTarget.map((candidate, idx) => {
-                  const ctx = getContextForSentence(candidate.sentence);
-                  return (
-                    <MergeDiffLine
-                      key={`target-${candidate.sentence.id}`}
-                      type="added"
-                      sentence={candidate.sentence}
-                      isKept={candidate.keep}
-                      onToggleKeep={() => onToggleKeep('target', idx)}
-                      checkable
-                      contextData={ctx.data}
-                      contextLoading={ctx.loading}
-                      onJumpToConversation={makeJumpHandler(candidate.sentence)}
-                      navId={`target-${idx}`}
-                    />
-                  );
-                })}
-              </div>
-            </MergeDiffSection>
-          )}
-        </div>
-      )}
-
-      {/* Positional View */}
-      {viewMode === 'positional' && (
-        <div className="space-y-[var(--space-item)] border border-[var(--stroke-divider)] rounded-lg overflow-hidden">
-          {loadingCommit ? (
-            <div className="p-4 text-center text-[var(--text-tertiary)]">
-              Loading document structure...
-            </div>
-          ) : positionalLines.length > 0 ? (
-            positionalLines.map((line, i) => renderPositionalLine(line, i))
-          ) : (
-            <div className="p-4 text-center text-[var(--text-tertiary)]">
-              Position data not available. Using grouped view is recommended.
+              {/* Target-Only */}
+              {onlyInTarget.length > 0 && (
+                <MergeDiffSection
+                  title={t('only_in_target')}
+                  subtitle={`${onlyInTarget.length} sentences from ${t('target').toLowerCase()}`}
+                  variant="info"
+                  navId="target-only"
+                >
+                  <div className="space-y-1">
+                    {onlyInTarget.map((candidate, idx) => {
+                      const ctx = getContextForSentence(candidate.sentence);
+                      return (
+                        <MergeDiffLine
+                          key={`target-${candidate.sentence.id}`}
+                          type="added"
+                          sentence={candidate.sentence}
+                          isKept={candidate.keep}
+                          onToggleKeep={() => onToggleKeep('target', idx)}
+                          checkable
+                          contextData={ctx.data}
+                          contextLoading={ctx.loading}
+                          onJumpToConversation={makeJumpHandler(candidate.sentence)}
+                          navId={`target-${idx}`}
+                        />
+                      );
+                    })}
+                  </div>
+                </MergeDiffSection>
+              )}
             </div>
           )}
-        </div>
-      )}
 
-      {/* Empty State */}
-      {totalChanges === 0 && identical.length === 0 && (
-        <EmptyStateInline
-          icon={CheckCircle}
-          message="Documents are identical -- no differences found between commits."
-          className="py-12"
-        />
-      )}
+          {/* Positional View */}
+          {viewMode === 'positional' && (
+            <div className="space-y-[var(--space-item)] border border-[var(--stroke-divider)] rounded-lg overflow-hidden">
+              {loadingCommit ? (
+                <div className="p-4 text-center text-[var(--text-tertiary)]">
+                  Loading document structure...
+                </div>
+              ) : positionalLines.length > 0 ? (
+                positionalLines.map((line, i) => renderPositionalLine(line, i))
+              ) : (
+                <div className="p-4 text-center text-[var(--text-tertiary)]">
+                  Position data not available. Using grouped view is recommended.
+                </div>
+              )}
+            </div>
+          )}
 
-      {/* Source context modal */}
-      <DiffSourceContextModal
-        open={!!contextModal?.open}
-        sentence={null}
-        data={modalContextData}
-        loading={modalLoading}
-        onClose={closeContextModal}
-        projectId={projectId ?? undefined}
-        conversationId={contextModal?.conversationId}
-        turnHash={contextModal?.turnHash}
-        highlightStart={contextModal?.highlightStart}
-        highlightEnd={contextModal?.highlightEnd}
-      />
+          {/* Empty State */}
+          {totalChanges === 0 && identical.length === 0 && (
+            <EmptyStateInline
+              icon={CheckCircle}
+              message="Documents are identical -- no differences found between commits."
+              className="py-12"
+            />
+          )}
+
+          {/* Source context modal */}
+          <DiffSourceContextModal
+            open={!!contextModal?.open}
+            sentence={null}
+            data={modalContextData}
+            loading={modalLoading}
+            onClose={closeContextModal}
+            projectId={projectId ?? undefined}
+            conversationId={contextModal?.conversationId}
+            turnHash={contextModal?.turnHash}
+            highlightStart={contextModal?.highlightStart}
+            highlightEnd={contextModal?.highlightEnd}
+          />
+        </>
+      )}
     </div>
   );
 }

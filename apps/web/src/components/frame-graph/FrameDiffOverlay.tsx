@@ -1,25 +1,48 @@
 'use client';
 
-import type { SemanticContent } from '@t3x/core';
+import type { SemanticContent, WordDiffFn } from '@t3x/core';
 import { frameDiff } from '@t3x/core';
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
+import { wordDiff } from '@/lib/diffUtils';
 import { FrameGraphView } from './FrameGraphView';
 
 // ── Props ──
+
+export interface FrameDiffStats {
+  identical: number;
+  modified: number;
+  added: number;
+  removed: number;
+  relationsAdded: number;
+  relationsRemoved: number;
+}
 
 interface FrameDiffOverlayProps {
   /** "Before" commit (e.g., parent) */
   source: SemanticContent;
   /** "After" commit (e.g., current) */
   target: SemanticContent;
+  /** Called once after diff computation with summary stats */
+  onStats?: (stats: FrameDiffStats) => void;
   className?: string;
 }
 
+const wordDiffFn: WordDiffFn = (a, b) => wordDiff(a, b);
+
 // ── Component ──
 
-export function FrameDiffOverlay({ source, target, className }: FrameDiffOverlayProps) {
-  const { combinedContent, deltaState, updatedSlots } = useMemo(() => {
-    const diff = frameDiff(source, target);
+export function FrameDiffOverlay({ source, target, onStats, className }: FrameDiffOverlayProps) {
+  const { combinedContent, deltaState, updatedSlots, stats } = useMemo(() => {
+    const diff = frameDiff(source, target, wordDiffFn);
+
+    const stats: FrameDiffStats = {
+      identical: diff.identical.length,
+      modified: diff.modified.length,
+      added: diff.onlyInTarget.length,
+      removed: diff.onlyInSource.length,
+      relationsAdded: diff.relationsAdded.length,
+      relationsRemoved: diff.relationsRemoved.length,
+    };
 
     // Build combined SemanticContent containing all frames from both sides
     const allFrames = [
@@ -64,8 +87,13 @@ export function FrameDiffOverlay({ source, target, className }: FrameDiffOverlay
       }
     }
 
-    return { combinedContent, deltaState, updatedSlots };
+    return { combinedContent, deltaState, updatedSlots, stats };
   }, [source, target]);
+
+  // Report stats to parent via effect (not inside useMemo to avoid render-time setState)
+  useEffect(() => {
+    onStats?.(stats);
+  }, [stats, onStats]);
 
   return (
     <FrameGraphView

@@ -19,10 +19,12 @@ import { diffRaw, getCommitV4 } from '@/lib/api';
 import { shortHash } from '@/lib/formatters';
 import { useProjectStore } from '@/store/projectStore';
 import { DiffHeader } from './DiffHeader';
+import type { DiffMode } from './DiffModeToggle';
 import type { DiffSideBySideHandle } from './DiffSideBySide';
 import { DiffSideBySide } from './DiffSideBySide';
 import { DiffSourceCards } from './DiffSourceCards';
 import { DiffStatsBar } from './DiffStatsBar';
+import { FrameDiffView } from './FrameDiffView';
 
 // ============================================================================
 // Types
@@ -141,6 +143,7 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
   const [viewMode, setViewMode] = useState<'split' | 'unified' | 'document'>('document');
   const [showSourceCards, setShowSourceCards] = useState(true);
   const [showSnippets, setShowSnippets] = useState(false);
+  const [diffMode, setDiffMode] = useState<DiffMode>('sentence');
 
   // Project name for breadcrumb
   const getProject = useProjectStore((s) => s.getProject);
@@ -189,6 +192,20 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
     }
     return map;
   }, [baseCommit, targetCommit]);
+
+  // Check if both commits have semantic data for Frame mode
+  const hasSemanticData = !!(
+    baseCommit?.semantic?.frames?.length && targetCommit?.semantic?.frames?.length
+  );
+
+  // Default to Frame mode when semantic data is available, reset when not
+  useEffect(() => {
+    if (hasSemanticData) {
+      setDiffMode('frame');
+    } else {
+      setDiffMode('sentence');
+    }
+  }, [hasSemanticData]);
 
   // Handlers
   const handleBack = useCallback(() => {
@@ -306,6 +323,9 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
         onViewModeChange={setViewMode}
         showSnippets={showSnippets}
         onToggleSnippets={() => setShowSnippets((v) => !v)}
+        diffMode={diffMode}
+        onDiffModeChange={setDiffMode}
+        hasSemanticData={hasSemanticData}
       />
       <div className="shrink-0 border-b border-[var(--stroke-divider)] bg-[var(--surface-app)] px-6 py-1.5">
         <div className="ml-auto w-fit">
@@ -319,19 +339,25 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
       </div>
 
       {/* Layer 3: Diff Body */}
-      <DiffSideBySide
-        ref={sideBySideRef}
-        segmentDiffs={diffData.segmentDiffs}
-        baseSentences={baseCommit?.content.sentences ?? []}
-        targetSentences={targetCommit?.content.sentences ?? []}
-        projectId={projectId}
-        viewMode={viewMode}
-        showSnippets={showSnippets}
-        groupBySource
-        sourceRefTitles={sourceRefTitles}
-        baseLabel={formatCommitLabel(baseCommit?.branch, baseHash)}
-        targetLabel={formatCommitLabel(targetCommit?.branch, targetHash)}
-      />
+      {diffMode === 'frame' && hasSemanticData && baseCommit?.semantic && targetCommit?.semantic ? (
+        <div className="flex-1 overflow-auto p-[var(--space-page)]">
+          <FrameDiffView source={baseCommit.semantic} target={targetCommit.semantic} />
+        </div>
+      ) : (
+        <DiffSideBySide
+          ref={sideBySideRef}
+          segmentDiffs={diffData.segmentDiffs}
+          baseSentences={baseCommit?.content.sentences ?? []}
+          targetSentences={targetCommit?.content.sentences ?? []}
+          projectId={projectId}
+          viewMode={viewMode}
+          showSnippets={showSnippets}
+          groupBySource
+          sourceRefTitles={sourceRefTitles}
+          baseLabel={formatCommitLabel(baseCommit?.branch, baseHash)}
+          targetLabel={formatCommitLabel(targetCommit?.branch, targetHash)}
+        />
+      )}
     </div>
   );
 }

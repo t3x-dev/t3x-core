@@ -1,3 +1,4 @@
+export type { FrameDiffStats } from './FrameDiffOverlay';
 export { FrameDiffOverlay } from './FrameDiffOverlay';
 export { FrameDiffSplit } from './FrameDiffSplit';
 export { FrameGraphToolbar } from './FrameGraphToolbar';
