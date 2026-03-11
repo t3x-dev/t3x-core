@@ -8,6 +8,55 @@ T3X is "Git for Meaning" — a semantic version control system for AI conversati
 
 **Key philosophy**: The core deterministic layer never depends on LLMs. LLMs are optional plugins for enhancement (SummaryAgent, MergeAgent).
 
+## Open-Core Architecture
+
+T3X uses a dual-repository open-core model:
+
+| Repository | Visibility | Purpose |
+|-----------|------------|---------|
+| `t3x` (this repo) | Public / Open-source | Core engine, full product, self-hosted |
+| `t3x_cloud` (private) | Private | SaaS layer — OAuth, billing, team features |
+
+### npm Packages
+
+Core packages are published to npm as `@t3x-dev/*` via [Changesets](https://github.com/changesets/changesets):
+
+| Package | Source | Description |
+|---------|--------|-------------|
+| `@t3x-dev/core` | `packages/core` | Deterministic semantic engine |
+| `@t3x-dev/storage` | `packages/storage` | PostgreSQL persistence (Drizzle ORM) |
+| `@t3x-dev/api` | `apps/api` | Hono API server with `createApp()` factory |
+
+The private `t3x_cloud` repo consumes these packages from npm, extending the API with OAuth and SaaS features.
+
+### Auth Strategy
+
+- **Public repo (self-hosted)**: Built-in username + password registration/login via `auth-local.openapi.ts`
+- **Private repo (cloud SaaS)**: GitHub & Google OAuth via NextAuth.js; local auth disabled with `skipLocalAuth: true`
+
+### createApp() Factory
+
+`apps/api` exports a `createApp()` factory function that supports extension by the cloud repo:
+
+```typescript
+import { createApp, CreateAppOptions } from '@t3x-dev/api';
+
+// CreateAppOptions:
+//   skipLocalAuth?: boolean     — Disable username/password routes (for SaaS)
+//   middleware?: MiddlewareHandler[]  — Additional middleware (e.g., OAuth)
+//   routes?: (api: OpenAPIHono) => void  — Additional routes (e.g., billing)
+```
+
+### Local Development with t3x_cloud
+
+When developing both repos together, use the link script in `t3x_cloud`:
+
+```bash
+cd ../t3x_cloud
+./scripts/link-local.sh on    # Symlink local @t3x-dev packages
+./scripts/link-local.sh off   # Restore npm versions
+```
+
 ## Repository Structure
 
 This is a pnpm monorepo managed by Turborepo:

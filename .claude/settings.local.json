@@ -217,6 +217,7 @@
       "Bash(pnpm test:api 2>&1 | tail -10)",
       "Bash(pnpm test:api 2>&1 | tail -5)",
       "WebFetch(domain:www.npmjs.com)",
+      "Bash(git show:*)",
       "mcp__plugin_playwright_playwright__browser_navigate",
       "mcp__plugin_playwright_playwright__browser_take_screenshot",
       "mcp__plugin_playwright_playwright__browser_wait_for",
