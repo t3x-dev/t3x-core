@@ -3,7 +3,6 @@
 import { motion } from 'framer-motion';
 import {
   Check,
-  Folder,
   GitBranch,
   GitCommitHorizontal,
   Loader2,
@@ -41,8 +40,15 @@ import { useProjectStore } from '@/store/projectStore';
 export default function SemanticLedgerPage() {
   const router = useRouter();
   const resetCanvas = useCanvasStore((state) => state.resetToSingleConversation);
-  const { projects, loading, error, initialized, fetchProjects, addProject, deleteProject } =
-    useProjectStore();
+  const {
+    projects,
+    loading: _loading,
+    error,
+    initialized,
+    fetchProjects,
+    addProject,
+    deleteProject,
+  } = useProjectStore();
   const prefersReducedMotion = useReducedMotion();
 
   // Multi-select state

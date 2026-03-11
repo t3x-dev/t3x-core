@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import { clearSession, getSessionKey } from '@/lib/session';
 import { cn } from '@/lib/utils';
 
@@ -28,8 +29,11 @@ interface SettingsLayoutProps {
 
 export default function SettingsLayout({ children }: SettingsLayoutProps) {
   const pathname = usePathname();
-  const hasLocalSession = typeof document !== 'undefined' && !!getSessionKey();
-  const isAuthEnabled = hasLocalSession;
+  const [isAuthEnabled, setIsAuthEnabled] = useState(false);
+
+  useEffect(() => {
+    setIsAuthEnabled(!!getSessionKey());
+  }, []);
 
   return (
     <div className="flex h-full">

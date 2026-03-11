@@ -710,39 +710,36 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
                 )}
               </div>
             </div>
-            {leaves.length > 0 && (
-              <>
-                {leaves.map((leaf) => {
-                  const passedCount = leaf.assertions?.filter((a) => a.passed).length ?? 0;
-                  const totalCount = leaf.assertions?.length ?? 0;
-                  return (
-                    <Link
-                      key={leaf.id}
-                      href={`/project/${projectId}/leaf/${leaf.id}`}
-                      className="group/link flex items-center gap-1.5 py-1.5 px-1.5 -mx-1.5 rounded text-[11px] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] active:bg-[var(--active-bg)] transition-colors"
-                    >
-                      <LeafIcon size={10} className="shrink-0 text-[var(--accent-leaf)]" />
-                      <span className="truncate flex-1">{leaf.title || leaf.id}</span>
-                      {totalCount > 0 && (
-                        <span
-                          className={`ml-auto font-mono text-[9px] ${
-                            passedCount === totalCount
-                              ? 'text-[var(--status-success)]'
-                              : 'text-[var(--status-error)]'
-                          }`}
-                        >
-                          {passedCount}/{totalCount}
-                        </span>
-                      )}
-                      <ChevronRight
-                        size={10}
-                        className="shrink-0 text-[var(--text-tertiary)] opacity-0 group-hover/link:opacity-100 transition-opacity"
-                      />
-                    </Link>
-                  );
-                })}
-              </>
-            )}
+            {leaves.length > 0 &&
+              leaves.map((leaf) => {
+                const passedCount = leaf.assertions?.filter((a) => a.passed).length ?? 0;
+                const totalCount = leaf.assertions?.length ?? 0;
+                return (
+                  <Link
+                    key={leaf.id}
+                    href={`/project/${projectId}/leaf/${leaf.id}`}
+                    className="group/link flex items-center gap-1.5 py-1.5 px-1.5 -mx-1.5 rounded text-[11px] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] active:bg-[var(--active-bg)] transition-colors"
+                  >
+                    <LeafIcon size={10} className="shrink-0 text-[var(--accent-leaf)]" />
+                    <span className="truncate flex-1">{leaf.title || leaf.id}</span>
+                    {totalCount > 0 && (
+                      <span
+                        className={`ml-auto font-mono text-[9px] ${
+                          passedCount === totalCount
+                            ? 'text-[var(--status-success)]'
+                            : 'text-[var(--status-error)]'
+                        }`}
+                      >
+                        {passedCount}/{totalCount}
+                      </span>
+                    )}
+                    <ChevronRight
+                      size={10}
+                      className="shrink-0 text-[var(--text-tertiary)] opacity-0 group-hover/link:opacity-100 transition-opacity"
+                    />
+                  </Link>
+                );
+              })}
             {sourceConversations.length > 0 && (
               <>
                 <div className="mb-2 mt-3 text-[10px] font-semibold uppercase tracking-wide text-[var(--text-tertiary)]">

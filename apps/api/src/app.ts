@@ -272,16 +272,14 @@ export function createApp(options?: CreateAppOptions): Hono {
 // ── Re-exports for cloud repo (`import { ... } from '@t3x-dev/api'`) ──
 
 // Database
-export { getDB, closeDB } from './lib/db';
-
-// Logger
-export { pinoLogger } from './middleware/logger';
+export { closeDB, getDB } from './lib/db';
+// Error utilities
+export { createError, errorResponse, zodErrorHook } from './lib/errors';
 
 // Background tasks
 export { startTimeoutChecker, stopTimeoutChecker } from './lib/timeout-checker';
-
-// Error utilities
-export { createError, errorResponse, zodErrorHook } from './lib/errors';
+// Logger
+export { pinoLogger } from './middleware/logger';
 
 // Common OpenAPI schemas
 export { ErrorResponseSchema, SuccessResponseSchema } from './schemas/common';

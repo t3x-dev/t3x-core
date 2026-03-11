@@ -96,7 +96,7 @@ webhooksRoutes.openapi(createWebhookRoute, async (c) => {
     });
 
     return c.json({ success: true as const, data: webhook }, 201);
-  } catch (err) {
+  } catch (_err) {
     return errorResponse(c, 'CREATE_FAILED', 'Failed to create webhook');
   }
 });
@@ -129,7 +129,7 @@ webhooksRoutes.openapi(listWebhooksRoute, async (c) => {
     const db = await getDB();
     const hooks = await listWebhooks(db, { projectId: project_id });
     return c.json({ success: true as const, data: hooks.map(toMaskedWebhook) });
-  } catch (err) {
+  } catch (_err) {
     return errorResponse(c, 'LIST_FAILED', 'Failed to list webhooks');
   }
 });
@@ -171,7 +171,7 @@ webhooksRoutes.openapi(getWebhookRoute, async (c) => {
     }
 
     return c.json({ success: true as const, data: toMaskedWebhook(webhook) });
-  } catch (err) {
+  } catch (_err) {
     return errorResponse(c, 'GET_FAILED', 'Failed to get webhook');
   }
 });
@@ -226,7 +226,7 @@ webhooksRoutes.openapi(updateWebhookRoute, async (c) => {
     }
 
     return c.json({ success: true as const, data: toMaskedWebhook(updated) });
-  } catch (err) {
+  } catch (_err) {
     return errorResponse(c, 'UPDATE_FAILED', 'Failed to update webhook');
   }
 });
@@ -277,7 +277,7 @@ webhooksRoutes.openapi(deleteWebhookRoute, async (c) => {
     }
 
     return c.json({ success: true as const, data: { deleted: true, id } });
-  } catch (err) {
+  } catch (_err) {
     return errorResponse(c, 'DELETE_FAILED', 'Failed to delete webhook');
   }
 });
@@ -354,7 +354,7 @@ webhooksRoutes.openapi(testWebhookRoute, async (c) => {
       success: true as const,
       data: { status: response.status, ok: response.ok },
     });
-  } catch (err) {
+  } catch (_err) {
     const message = err instanceof Error ? err.message : 'Test failed';
     return errorResponse(c, 'INTERNAL_ERROR', message);
   }

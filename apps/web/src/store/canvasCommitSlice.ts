@@ -2,13 +2,13 @@ import type { Edge, Node } from '@xyflow/react';
 import type { StateCreator } from 'zustand';
 import { getTerminology } from '@/hooks/useTerminology';
 import * as api from '@/lib/api';
+import { API_V1, fetchWithTimeout, handleResponse } from '@/lib/api/core';
 import { getMicrocopy } from '@/lib/microcopy';
 import { useSettingsStore } from '@/store/settingsStore';
 import type { BranchType, CanvasNodeData, SourceTextBlock, TurnBoundary } from '../types/nodes';
 import { tokenizeText } from '../utils/tokenizer';
 import type { CanvasState, CommitSlice } from './canvasStoreTypes';
 import {
-  API_V1,
   canCreateStagingUnitFromUnit,
   commitQuickOffset,
   computeAttachedPosition,
@@ -427,7 +427,7 @@ export const createCommitSlice: StateCreator<CanvasState, [], [], CommitSlice> =
 
     // Create merge draft via API (redirects to Merge Workspace)
     try {
-      const response = await fetch(`${API_V1}/merge/drafts`, {
+      const response = await fetchWithTimeout(`${API_V1}/merge/drafts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -439,17 +439,10 @@ export const createCommitSlice: StateCreator<CanvasState, [], [], CommitSlice> =
         }),
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const json = await response.json();
-      if (!json.success) {
-        throw new Error(json.error?.message || 'Failed to create merge draft');
-      }
+      const data = await handleResponse<{ draftId: string }>(response);
 
       // Return the draft ID for navigation
-      return json.data.draftId as string;
+      return data.draftId;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       state.notifyCallback?.(`Failed to create merge: ${errorMessage}`, 'error');

@@ -48,7 +48,6 @@ import {
   RunCreatedResponse,
   RunFiltersResponse,
   RunListResponse,
-  RunResponse,
   UpdateRunRequest,
 } from '../schemas/run-contracts';
 

@@ -120,7 +120,9 @@ export async function* chatStream(
           const event = JSON.parse(dataStr) as ChatStreamEvent;
           yield event;
         } catch {
-          // Ignore parse errors
+          if (process.env.NODE_ENV !== 'production') {
+            console.warn('Failed to parse SSE event:', dataStr.slice(0, 120));
+          }
         }
       }
     }
