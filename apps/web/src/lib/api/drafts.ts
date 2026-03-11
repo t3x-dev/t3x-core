@@ -253,13 +253,16 @@ export async function forkDraftV3(draftId: string): Promise<DraftV3> {
 /**
  * Create an auto-draft by extracting sentences from a conversation via LLM.
  */
-export async function createAutoDraft(input: {
-  project_id: string;
-  conversation_id: string;
-  parent_commit_hash?: string;
-  target_branch?: string;
-  options?: { max_sentences?: number };
-}): Promise<DraftV3> {
+export async function createAutoDraft(
+  input: {
+    project_id: string;
+    conversation_id: string;
+    parent_commit_hash?: string;
+    target_branch?: string;
+    options?: { max_sentences?: number };
+  },
+  signal?: AbortSignal
+): Promise<DraftV3> {
   const res = await fetchWithTimeout(
     `${API_V1}/drafts/auto`,
     {
@@ -267,7 +270,8 @@ export async function createAutoDraft(input: {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(input),
     },
-    60_000
+    60_000,
+    signal
   );
   return handleResponse<DraftV3>(res);
 }

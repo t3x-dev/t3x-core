@@ -8,7 +8,7 @@
 import { isInternalUrlResolved } from './ssrf';
 
 /** Reject path segments that contain traversal or delimiter characters. */
-const SAFE_PATH_SEGMENT = /^[A-Za-z0-9_\-]+$/;
+const SAFE_PATH_SEGMENT = /^[A-Za-z0-9_-]+$/;
 
 function assertSafePathSegment(value: string, label: string): void {
   if (!SAFE_PATH_SEGMENT.test(value)) {
@@ -99,7 +99,7 @@ export async function executeRecipe(
           const runEvalHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
           const internalKey = process.env.INTERNAL_API_KEY || process.env.API_KEY;
           if (internalKey) {
-            runEvalHeaders['Authorization'] = `Bearer ${internalKey}`;
+            runEvalHeaders.Authorization = `Bearer ${internalKey}`;
           }
           const res = await fetch(`${baseUrl}/v1/runs`, {
             method: 'POST',
@@ -143,7 +143,7 @@ export async function executeRecipe(
           const exportHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
           const internalKeyExport = process.env.INTERNAL_API_KEY || process.env.API_KEY;
           if (internalKeyExport) {
-            exportHeaders['Authorization'] = `Bearer ${internalKeyExport}`;
+            exportHeaders.Authorization = `Bearer ${internalKeyExport}`;
           }
           const res = await fetch(`${baseUrl}/v1/runs/${runId}`, { headers: exportHeaders });
           if (!res.ok) {

@@ -17,7 +17,6 @@ import { KeyboardHintBar } from '@/components/shared/KeyboardHintBar';
 import { useKeyboardNavigation } from '@/hooks/useKeyboardNavigation';
 import { useLeafPageData } from '@/hooks/useLeafPageData';
 import type { Constraint, SuggestedConstraint } from '@/lib/api';
-import { getLeaf } from '@/lib/api';
 import { PAGE_ANIMATION_STYLES } from '@/lib/pageAnimations';
 import { cn } from '@/lib/utils';
 import { useProjectStore } from '@/store/projectStore';
@@ -86,9 +85,9 @@ export default function LeafDetailPage() {
     handleExport,
     toggleAssertion,
     handleRetune,
-    setError,
-    setLoading,
-    setLeaf,
+    setError: _setError,
+    setLoading: _setLoading,
+    setLeaf: _setLeaf,
   } = useLeafPageData(projectId, leafId);
 
   const [suggestOpen, setSuggestOpen] = useState(false);

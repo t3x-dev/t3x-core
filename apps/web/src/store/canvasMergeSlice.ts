@@ -2,11 +2,12 @@ import type { MergeSummaryData } from '@t3x-dev/core';
 import type { Edge, Node } from '@xyflow/react';
 import type { StateCreator } from 'zustand';
 import { getTerminology } from '@/hooks/useTerminology';
+import { API_V1, fetchWithTimeout, handleResponse } from '@/lib/api/core';
 import { useSettingsStore } from '@/store/settingsStore';
-import type { CommitV3 } from '../types/merge';
+import type { CommitV3, Merge2WayResult } from '../types/merge';
 import type { CanvasNodeData } from '../types/nodes';
 import type { CanvasState, MergeSlice } from './canvasStoreTypes';
-import { API_V1, edgeStyle, edgeType, snapPosition } from './canvasStoreUtils';
+import { edgeStyle, edgeType, snapPosition } from './canvasStoreUtils';
 
 export const createMergeSlice: StateCreator<CanvasState, [], [], MergeSlice> = (set, get) => ({
   // Initial state
@@ -25,26 +26,19 @@ export const createMergeSlice: StateCreator<CanvasState, [], [], MergeSlice> = (
     set({ mergeLoading: true, mergeError: null });
 
     try {
-      const response = await fetch(`${API_V1}/merge/prepare`, {
+      const response = await fetchWithTimeout(`${API_V1}/merge/prepare`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ source_hash: sourceHash, target_hash: targetHash }),
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const json = await response.json();
-      if (!json.success) {
-        throw new Error(json.error?.message || 'Failed to prepare merge');
-      }
+      const data = await handleResponse<Merge2WayResult>(response);
 
       set({
         mergeState: {
           sourceHash,
           targetHash,
-          prepared: json.data,
+          prepared: data,
         },
         mergeLoading: false,
         mergeError: null,
@@ -137,7 +131,7 @@ export const createMergeSlice: StateCreator<CanvasState, [], [], MergeSlice> = (
       // Determine target branch for the merge commit (default to 'main')
       const targetBranch = mergeState.targetBranch || 'main';
 
-      const response = await fetch(`${API_V1}/merge/execute`, {
+      const response = await fetchWithTimeout(`${API_V1}/merge/execute`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -149,16 +143,9 @@ export const createMergeSlice: StateCreator<CanvasState, [], [], MergeSlice> = (
         }),
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const json = await response.json();
-      if (!json.success) {
-        throw new Error(json.error?.message || 'Failed to execute merge');
-      }
-
-      const mergeCommit = json.data as CommitV3 & { merge_summary?: MergeSummaryData };
+      const mergeCommit = (await handleResponse(response)) as CommitV3 & {
+        merge_summary?: MergeSummaryData;
+      };
 
       // Get current nodes to calculate merge node position
       const { nodes } = get();

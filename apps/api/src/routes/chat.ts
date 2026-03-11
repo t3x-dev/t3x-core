@@ -180,7 +180,7 @@ chatRoutes.post('/v1/chat', async (c) => {
 
   const model = body.model ?? PROVIDER_DEFAULTS[provider]?.model ?? 'claude-sonnet-4-5-20250929';
   const temperature = body.temperature ?? 0.7;
-  const maxTokens = Math.min(Math.max(parseInt(String(body.max_tokens)) || 4096, 1), 16384);
+  const maxTokens = Math.min(Math.max(parseInt(String(body.max_tokens), 10) || 4096, 1), 16384);
 
   try {
     // Currently only Claude is implemented
@@ -239,7 +239,7 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
 
   const model = body.model ?? PROVIDER_DEFAULTS[provider]?.model ?? 'claude-sonnet-4-5-20250929';
   const temperature = body.temperature ?? 0.7;
-  const maxTokens = Math.min(Math.max(parseInt(String(body.max_tokens)) || 4096, 1), 16384);
+  const maxTokens = Math.min(Math.max(parseInt(String(body.max_tokens), 10) || 4096, 1), 16384);
 
   if (provider !== 'claude' && provider !== 'anthropic') {
     return jsonError(c, 'PROVIDER_ERROR', `Provider ${provider} not implemented`, 400);
