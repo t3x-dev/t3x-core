@@ -14,6 +14,8 @@ import {
 import { useCountUp } from '@/hooks/useCountUp';
 import { useTerminology } from '@/hooks/useTerminology';
 import { cn } from '@/lib/utils';
+import type { DiffMode } from './DiffModeToggle';
+import { DiffModeToggle } from './DiffModeToggle';
 
 interface DiffStatsBarProps {
   identical: number;
@@ -28,6 +30,11 @@ interface DiffStatsBarProps {
   /** Context snippets toggle (page mode only) */
   showSnippets?: boolean;
   onToggleSnippets?: () => void;
+  /** Current diff mode (frame vs sentence) */
+  diffMode?: DiffMode;
+  onDiffModeChange?: (mode: DiffMode) => void;
+  /** Whether Frame mode is available (both commits have semantic data) */
+  hasSemanticData?: boolean;
 }
 
 export function DiffStatsBar({
@@ -41,6 +48,9 @@ export function DiffStatsBar({
   onViewModeChange,
   showSnippets,
   onToggleSnippets,
+  diffMode,
+  onDiffModeChange,
+  hasSemanticData,
 }: DiffStatsBarProps) {
   const { t } = useTerminology();
   const aIdentical = useCountUp(identical);
@@ -126,8 +136,17 @@ export function DiffStatsBar({
         </button>
       )}
 
+      {/* Diff mode toggle (Frame/Sentence) */}
+      {onDiffModeChange && (
+        <DiffModeToggle
+          mode={diffMode ?? 'sentence'}
+          onChange={onDiffModeChange}
+          hidden={!hasSemanticData}
+        />
+      )}
+
       {/* View mode toggle */}
-      {onViewModeChange && viewMode && (
+      {onViewModeChange && viewMode && diffMode !== 'frame' && (
         <div className="inline-flex rounded-md border border-[var(--stroke-divider)] overflow-hidden">
           <button
             type="button"

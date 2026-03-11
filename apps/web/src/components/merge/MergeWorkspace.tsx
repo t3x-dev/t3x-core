@@ -10,18 +10,22 @@
  * - Merge Review Dialog before commit
  */
 
+import type { SemanticContent } from '@t3x-dev/core';
 import { motion } from 'framer-motion';
 import { GitMerge } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { DiffMode } from '@/components/diff/DiffModeToggle';
 import { MergeIllustration } from '@/components/illustrations/MergeIllustration';
 import { EmptyState } from '@/components/ui/empty-state';
 import { useMergeNavigation } from '@/hooks/useMergeNavigation';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useTerminology } from '@/hooks/useTerminology';
+import { getCommitV4 } from '@/lib/api';
 import { computeMergeSummary } from '@/lib/mergeSummary';
 import { fullScreenEnter, reducedMotion } from '@/lib/motion';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
 import { buildMergeNavItems } from './buildMergeNavItems';
+import { FrameMergeSection } from './FrameMergeSection';
 import { MergeActionBar } from './MergeActionBar';
 import { MergeNavSidebar } from './MergeNavSidebar';
 import { MergePreview } from './MergePreview';
@@ -42,6 +46,8 @@ export function MergeWorkspace({ projectId, onClose }: MergeWorkspaceProps) {
     saveStatus,
     sourceBranch,
     targetBranch,
+    sourceHash,
+    targetHash,
     saveDraft,
     commitMerge,
     cancelMerge,
@@ -64,7 +70,51 @@ export function MergeWorkspace({ projectId, onClose }: MergeWorkspaceProps) {
   const [showReviewDialog, setShowReviewDialog] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('grouped');
+  const [diffMode, setDiffMode] = useState<DiffMode>('sentence');
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // Semantic data for Frame mode
+  const [semanticData, setSemanticData] = useState<{
+    base?: SemanticContent;
+    source?: SemanticContent;
+    target?: SemanticContent;
+  }>({});
+
+  const hasSemanticData = !!(
+    semanticData.source?.frames?.length && semanticData.target?.frames?.length
+  );
+
+  // Fetch semantic data from commits for Frame mode
+  useEffect(() => {
+    const sh = sourceHash;
+    const th = targetHash;
+    if (!sh || !th) return;
+    let cancelled = false;
+
+    Promise.all([getCommitV4(sh), getCommitV4(th)])
+      .then(([src, tgt]) => {
+        if (cancelled) return;
+        // TODO: fetch actual merge base commit for proper 3-way conflict detection.
+        // With empty base, prepareFrameMerge degrades to 2-way comparison
+        // (all frames appear as "added" from both sides, no true conflict detection).
+        const emptyBase: SemanticContent = { frames: [], relations: [] };
+        setSemanticData({
+          base: emptyBase,
+          source: src?.semantic ?? undefined,
+          target: tgt?.semantic ?? undefined,
+        });
+        if (src?.semantic?.frames?.length && tgt?.semantic?.frames?.length) {
+          setDiffMode('frame');
+        } else {
+          setDiffMode('sentence');
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sourceHash, targetHash]);
 
   // Build nav items from merge data
   const navItems = useMemo(
@@ -236,7 +286,21 @@ export function MergeWorkspace({ projectId, onClose }: MergeWorkspaceProps) {
               targetBranch={targetBranch || 'B'}
               viewMode={viewMode}
               onViewModeChange={setViewMode}
+              diffMode={diffMode}
+              onDiffModeChange={setDiffMode}
+              hasSemanticData={hasSemanticData}
             />
+            {diffMode === 'frame' &&
+              hasSemanticData &&
+              semanticData.base &&
+              semanticData.source &&
+              semanticData.target && (
+                <FrameMergeSection
+                  base={semanticData.base}
+                  source={semanticData.source}
+                  target={semanticData.target}
+                />
+              )}
           </div>
 
           {/* Preview Panel */}

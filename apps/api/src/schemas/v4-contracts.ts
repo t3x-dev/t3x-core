@@ -13,7 +13,73 @@
  */
 
 import { z } from '@hono/zod-openapi';
-import { ALL_LEAF_TYPES, LEAF_TYPES, SemanticContentSchema } from '@t3x-dev/core';
+import { ALL_LEAF_TYPES, LEAF_TYPES } from '@t3x-dev/core';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Local SemanticContent Schema (mirrors @t3x-dev/core SemanticContentSchema)
+//
+// Re-defined here using the local `z` from @hono/zod-openapi to avoid
+// zod v3/v4 incompatibility. The core package uses plain zod (v3), but
+// @hono/zod-openapi re-exports zod v4. Mixing schema instances across
+// versions causes "Invalid element" errors at runtime.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const OapiSlotRefSchema = z.object({ ref: z.string() });
+
+const OapiInlineFrameSchema: z.ZodType<{ type: string; slots: Record<string, unknown> }> = z.lazy(
+  () =>
+    z.object({
+      type: z.string().min(1),
+      slots: z.record(OapiSlotValueSchema),
+    })
+);
+
+const OapiSlotValueSchema: z.ZodType<unknown> = z.lazy(() =>
+  z.union([
+    z.string(),
+    z.number(),
+    OapiSlotRefSchema,
+    OapiInlineFrameSchema,
+    z.array(OapiSlotValueSchema),
+  ])
+);
+
+const OapiFrameSchema = z.object({
+  id: z.string().regex(/^f_\d{3,}$/),
+  type: z
+    .string()
+    .min(1)
+    .regex(/^[a-z][a-z0-9_]*$/),
+  slots: z
+    .record(OapiSlotValueSchema)
+    .refine((s) => Object.keys(s).length >= 1, { message: 'Frame must have at least one slot' })
+    .refine((s) => Object.keys(s).length <= 100, {
+      message: 'Frame cannot have more than 100 slots',
+    }),
+  source: z.string().optional(),
+  confidence: z.number().min(0).max(1).optional(),
+});
+
+const OapiFrameRelationTypeSchema = z.enum([
+  'causes',
+  'conditions',
+  'contrasts',
+  'elaborates',
+  'follows',
+  'depends',
+]);
+
+const OapiRelationSchema = z.object({
+  from: z.string(),
+  to: z.string(),
+  type: OapiFrameRelationTypeSchema,
+  confidence: z.number().min(0).max(1).optional(),
+});
+
+const OapiSemanticContentSchema = z.object({
+  frames: z.array(OapiFrameSchema).min(1).max(1000),
+  relations: z.array(OapiRelationSchema).max(5000),
+});
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Common Schemas
@@ -129,7 +195,7 @@ export const CreateCommitV4Request = z
       .describe('References to source conversations or leaves'),
     position_x: z.number().optional().describe('Canvas X position'),
     position_y: z.number().optional().describe('Canvas Y position'),
-    semantic: SemanticContentSchema.nullable()
+    semantic: OapiSemanticContentSchema.nullable()
       .optional()
       .describe('Semantic frame content (frames + relations)'),
 
@@ -184,7 +250,7 @@ export const CommitV4Response = z.object({
       })
     )
     .nullable(),
-  semantic: SemanticContentSchema.nullable().optional(),
+  semantic: OapiSemanticContentSchema.nullable().optional(),
   position_x: z.number().nullable(),
   position_y: z.number().nullable(),
   created_at: z.string(),
