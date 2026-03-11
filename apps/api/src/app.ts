@@ -22,6 +22,7 @@ import { Hono } from 'hono';
 import { authMiddleware } from './middleware/auth';
 import { corsMiddleware } from './middleware/cors';
 import { loggerMiddleware, pinoLogger } from './middleware/logger';
+import { projectAccessMiddleware } from './middleware/project-access';
 import { rateLimitL1, rateLimitL2 } from './middleware/rate-limit';
 import { requestIdMiddleware } from './middleware/request-id';
 import {
@@ -120,6 +121,9 @@ export function createApp(options?: CreateAppOptions): Hono {
       }
     },
   });
+
+  // Project-level access control: gate all /v1/projects/:projectId/* sub-routes
+  api.use('/v1/projects/:projectId/*', projectAccessMiddleware);
 
   // Mount routes
   api.route('/', statusRoutes);
@@ -272,16 +276,14 @@ export function createApp(options?: CreateAppOptions): Hono {
 // ── Re-exports for cloud repo (`import { ... } from '@t3x-dev/api'`) ──
 
 // Database
-export { getDB, closeDB } from './lib/db';
-
-// Logger
-export { pinoLogger } from './middleware/logger';
+export { closeDB, getDB } from './lib/db';
+// Error utilities
+export { createError, errorResponse, zodErrorHook } from './lib/errors';
 
 // Background tasks
 export { startTimeoutChecker, stopTimeoutChecker } from './lib/timeout-checker';
-
-// Error utilities
-export { createError, errorResponse, zodErrorHook } from './lib/errors';
+// Logger
+export { pinoLogger } from './middleware/logger';
 
 // Common OpenAPI schemas
 export { ErrorResponseSchema, SuccessResponseSchema } from './schemas/common';

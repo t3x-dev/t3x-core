@@ -11,12 +11,12 @@ import {
   findBranchByName,
   findBranchesByProject,
   findCurrentBranch,
-  findProjectById,
   insertBranch,
   switchBranch,
 } from '@t3x-dev/storage/pglite';
 import { Hono } from 'hono';
 import { getDB } from '../lib/db';
+import { assertProjectAccess } from '../lib/project-access';
 import { jsonError, jsonSuccess } from '../lib/response';
 
 export const branchRoutes = new Hono();
@@ -63,6 +63,10 @@ branchRoutes.get('/v1/branches', async (c) => {
 
   try {
     const db = await getDB();
+
+    // Access control check
+    const accessResult = await assertProjectAccess(c, db, projectId);
+    if (accessResult instanceof Response) return accessResult;
 
     // Cursor-based pagination mode
     if (cursor !== undefined) {
@@ -113,11 +117,9 @@ branchRoutes.post('/v1/branches', async (c) => {
   try {
     const db = await getDB();
 
-    // Verify project exists
-    const project = await findProjectById(db, body.project_id);
-    if (!project) {
-      return jsonError(c, 'NOT_FOUND', `Project ${body.project_id} not found`, 404);
-    }
+    // Access control check
+    const accessResult = await assertProjectAccess(c, db, body.project_id);
+    if (accessResult instanceof Response) return accessResult;
 
     // Check if branch already exists
     const existing = await findBranchByName(db, body.project_id, body.name);
@@ -163,6 +165,11 @@ branchRoutes.get('/v1/branches/current', async (c) => {
 
   try {
     const db = await getDB();
+
+    // Access control check
+    const accessResult = await assertProjectAccess(c, db, projectId);
+    if (accessResult instanceof Response) return accessResult;
+
     const branch = await findCurrentBranch(db, projectId);
 
     if (!branch) {
@@ -210,6 +217,10 @@ branchRoutes.post('/v1/branches/switch', async (c) => {
 
   try {
     const db = await getDB();
+
+    // Access control check
+    const accessResult = await assertProjectAccess(c, db, body.project_id);
+    if (accessResult instanceof Response) return accessResult;
 
     // Check if branch exists
     let branch = await findBranchByName(db, body.project_id, body.branch_name);

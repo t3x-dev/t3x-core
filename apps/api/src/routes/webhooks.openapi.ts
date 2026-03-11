@@ -20,6 +20,7 @@ import {
 } from '@t3x-dev/storage/pglite';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { assertProjectAccess } from '../lib/project-access';
 import { isInternalUrlResolved } from '../lib/ssrf';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 import {
@@ -88,6 +89,13 @@ webhooksRoutes.openapi(createWebhookRoute, async (c) => {
 
   try {
     const db = await getDB();
+
+    // Access control check (if project-scoped)
+    if (body.project_id) {
+      const accessResult = await assertProjectAccess(c, db, body.project_id);
+      if (accessResult instanceof Response) return accessResult;
+    }
+
     const webhook = await createWebhook(db, {
       url: body.url,
       events: body.events,
@@ -127,6 +135,13 @@ webhooksRoutes.openapi(listWebhooksRoute, async (c) => {
 
   try {
     const db = await getDB();
+
+    // Access control check (if project-scoped)
+    if (project_id) {
+      const accessResult = await assertProjectAccess(c, db, project_id);
+      if (accessResult instanceof Response) return accessResult;
+    }
+
     const hooks = await listWebhooks(db, { projectId: project_id });
     return c.json({ success: true as const, data: hooks.map(toMaskedWebhook) });
   } catch (err) {

@@ -19,6 +19,7 @@ import {
 } from '@t3x-dev/storage/pglite';
 import { eq, sql } from 'drizzle-orm';
 import { getDB } from '../lib/db';
+import { assertProjectAccess, getUserId } from '../lib/project-access';
 import {
   CursorPageResponseSchema,
   ErrorResponseSchema,
@@ -109,10 +110,11 @@ projectRoutes.openapi(listProjectsRoute, async (c) => {
 
   try {
     const db = await getDB();
+    const userId = getUserId(c);
 
     // Cursor-based pagination mode
     if (cursor !== undefined) {
-      const result = await findProjects(db, { cursor, limit });
+      const result = await findProjects(db, { cursor, limit, owner_id: userId });
       const apiProjects = await Promise.all(result.items.map((p) => enrichProject(db, p)));
       return c.json(
         {
@@ -128,7 +130,7 @@ projectRoutes.openapi(listProjectsRoute, async (c) => {
     }
 
     // Legacy offset/limit mode
-    const projects = await findProjects(db, { limit, offset });
+    const projects = await findProjects(db, { limit, offset, owner_id: userId });
 
     // Enrich each project with counts using COUNT queries (avoid N+1 full-table fetches)
     const apiProjects = await Promise.all(projects.map((p) => enrichProject(db, p)));
@@ -188,9 +190,11 @@ projectRoutes.openapi(createProjectRoute, async (c) => {
 
   try {
     const db = await getDB();
+    const userId = getUserId(c);
     const project = await insertProject(db, {
       name: body.name,
       metadata: body.metadata,
+      ownerId: userId,
     });
 
     const apiProject = {
@@ -249,6 +253,11 @@ projectRoutes.openapi(getProjectRoute, async (c) => {
 
   try {
     const db = await getDB();
+
+    // Access control check
+    const accessResult = await assertProjectAccess(c, db, id);
+    if (accessResult instanceof Response) return accessResult;
+
     const project = await findProjectWithStats(db, id);
 
     if (!project) {
@@ -338,6 +347,11 @@ projectRoutes.openapi(updateProjectRoute, async (c) => {
 
   try {
     const db = await getDB();
+
+    // Access control check
+    const accessResult = await assertProjectAccess(c, db, id);
+    if (accessResult instanceof Response) return accessResult;
+
     const project = await updateProject(db, id, {
       name: body.name,
       metadata: body.metadata,
@@ -418,6 +432,11 @@ projectRoutes.openapi(deleteProjectRoute, async (c) => {
 
   try {
     const db = await getDB();
+
+    // Access control check
+    const accessResult = await assertProjectAccess(c, db, id);
+    if (accessResult instanceof Response) return accessResult;
+
     const deleted = await deleteProject(db, id);
 
     if (!deleted) {
@@ -502,17 +521,9 @@ projectRoutes.openapi(verifyProjectRoute, async (c) => {
   try {
     const db = await getDB();
 
-    // Check project exists
-    const project = await findProjectWithStats(db, id);
-    if (!project) {
-      return c.json(
-        {
-          success: false as const,
-          error: { code: 'NOT_FOUND', message: `Project ${id} not found` },
-        },
-        404
-      );
-    }
+    // Access control check
+    const accessResult = await assertProjectAccess(c, db, id);
+    if (accessResult instanceof Response) return accessResult;
 
     const result = await verifyHashChain(db, id);
 
@@ -577,16 +588,9 @@ projectRoutes.openapi(quickVerifyRoute, async (c) => {
   try {
     const db = await getDB();
 
-    const project = await findProjectWithStats(db, id);
-    if (!project) {
-      return c.json(
-        {
-          success: false as const,
-          error: { code: 'NOT_FOUND', message: `Project ${id} not found` },
-        },
-        404
-      );
-    }
+    // Access control check
+    const accessResult = await assertProjectAccess(c, db, id);
+    if (accessResult instanceof Response) return accessResult;
 
     const result = await verifyMerkleRoots(db, id);
 
@@ -658,16 +662,9 @@ projectRoutes.openapi(backfillMerkleRoute, async (c) => {
   try {
     const db = await getDB();
 
-    const project = await findProjectWithStats(db, id);
-    if (!project) {
-      return c.json(
-        {
-          success: false as const,
-          error: { code: 'NOT_FOUND', message: `Project ${id} not found` },
-        },
-        404
-      );
-    }
+    // Access control check
+    const accessResult = await assertProjectAccess(c, db, id);
+    if (accessResult instanceof Response) return accessResult;
 
     const result = await backfillMerkleRoots(db, id);
 
@@ -725,16 +722,11 @@ projectRoutes.openapi(getBusinessRulesRoute, async (c) => {
   const { id } = c.req.valid('param');
   try {
     const db = await getDB();
-    const project = await findProjectWithStats(db, id);
-    if (!project) {
-      return c.json(
-        {
-          success: false as const,
-          error: { code: 'NOT_FOUND', message: `Project ${id} not found` },
-        },
-        404
-      );
-    }
+
+    // Access control check
+    const accessResult = await assertProjectAccess(c, db, id);
+    if (accessResult instanceof Response) return accessResult;
+
     const rules = await getBusinessRules(db, id);
     return c.json({ success: true as const, data: { rules } }, 200);
   } catch (err) {
@@ -779,16 +771,11 @@ projectRoutes.openapi(putBusinessRulesRoute, async (c) => {
   const { rules } = c.req.valid('json');
   try {
     const db = await getDB();
-    const project = await findProjectWithStats(db, id);
-    if (!project) {
-      return c.json(
-        {
-          success: false as const,
-          error: { code: 'NOT_FOUND', message: `Project ${id} not found` },
-        },
-        404
-      );
-    }
+
+    // Access control check
+    const accessResult = await assertProjectAccess(c, db, id);
+    if (accessResult instanceof Response) return accessResult;
+
     const updated = await putBusinessRules(db, id, rules);
     return c.json({ success: true as const, data: { rules: updated } }, 200);
   } catch (err) {

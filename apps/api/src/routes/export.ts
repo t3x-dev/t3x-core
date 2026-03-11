@@ -9,7 +9,6 @@ import { buildDraft } from '@t3x-dev/core';
 import { listDeltaLogByConversation } from '@t3x-dev/storage';
 import {
   findConversationsByProject,
-  findProjectById,
   findTurnsByProject,
   listCommitsV3,
 } from '@t3x-dev/storage/pglite';
@@ -17,6 +16,7 @@ import * as crypto from 'crypto';
 import { Hono } from 'hono';
 import { getDB } from '../lib/db';
 import { toDeltaLogEntries } from '../lib/delta-log-utils';
+import { assertProjectAccess } from '../lib/project-access';
 import { jsonError } from '../lib/response';
 
 // ============================================================================
@@ -216,11 +216,10 @@ exportRoutes.get('/v1/export/cfpack', async (c) => {
   try {
     const db = await getDB();
 
-    // Get project
-    const project = await findProjectById(db, projectId);
-    if (!project) {
-      return jsonError(c, 'NOT_FOUND', `Project ${projectId} not found`, 404);
-    }
+    // Access control check
+    const accessResult = await assertProjectAccess(c, db, projectId);
+    if (accessResult instanceof Response) return accessResult;
+    const project = accessResult;
 
     // Get all turns
     const turnRows = await findTurnsByProject(db, { projectId, limit: 10000 });
@@ -392,11 +391,10 @@ exportRoutes.get('/v1/export/ledger', async (c) => {
   try {
     const db = await getDB();
 
-    // Check project exists
-    const project = await findProjectById(db, projectId);
-    if (!project) {
-      return jsonError(c, 'NOT_FOUND', `Project ${projectId} not found`, 404);
-    }
+    // Access control check
+    const accessResult = await assertProjectAccess(c, db, projectId);
+    if (accessResult instanceof Response) return accessResult;
+    const project = accessResult;
 
     // Build JSONL content
     const lines: string[] = [];
