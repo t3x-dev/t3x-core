@@ -7,7 +7,7 @@ import {
   type FrameRelationType,
   type SemanticContent,
   type SlotValue,
-} from '@t3x/core';
+} from '@t3x-dev/core';
 import type { Connection, Edge, Node } from '@xyflow/react';
 import {
   Background,

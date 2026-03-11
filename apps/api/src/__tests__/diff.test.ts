@@ -117,7 +117,7 @@ describe('Diff Routes', () => {
     it('falls back to sentence splitting when rings_json is empty (turn hash mode)', async () => {
       const origGoogleKey = process.env.GOOGLE_AI_STUDIO_KEY;
       try {
-        const { findTurnByHash } = await import('@t3x/storage/pglite');
+        const { findTurnByHash } = await import('@t3x-dev/storage/pglite');
 
         (findTurnByHash as ReturnType<typeof vi.fn>)
           .mockResolvedValueOnce({
@@ -134,7 +134,7 @@ describe('Diff Routes', () => {
         // Turn hash mode needs embedding API — mock it
         process.env.GOOGLE_AI_STUDIO_KEY = 'test-key';
         const { createDiffEngine, createGoogleAIEmbeddingProvider, createCachedEmbeddingProvider } =
-          await import('@t3x/core');
+          await import('@t3x-dev/core');
 
         (createGoogleAIEmbeddingProvider as ReturnType<typeof vi.fn>).mockReturnValue({});
         (createCachedEmbeddingProvider as ReturnType<typeof vi.fn>).mockReturnValue({
