@@ -15,8 +15,8 @@ import {
   type SemanticPoint,
   type TurnInput,
   validateExtractedSentences,
-} from '@t3x/core';
-import { findDraftV3ById, findTurnsByConversation, updateDraftV3 } from '@t3x/storage/pglite';
+} from '@t3x-dev/core';
+import { findDraftV3ById, findTurnsByConversation, updateDraftV3 } from '@t3x-dev/storage/pglite';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { getProviderRegistry } from '../lib/provider-registry';

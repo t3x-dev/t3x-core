@@ -14,7 +14,7 @@ import {
   deleteTemplate,
   findTemplateById,
   listTemplates,
-} from '@t3x/storage/pglite';
+} from '@t3x-dev/storage/pglite';
 import { nanoid } from 'nanoid';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';

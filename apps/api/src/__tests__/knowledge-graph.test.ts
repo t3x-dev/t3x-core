@@ -6,8 +6,8 @@
  * All other endpoints work with regular tables.
  */
 
-import type { PGLiteDB } from '@t3x/storage/pglite';
-import { insertProject } from '@t3x/storage/pglite';
+import type { PGLiteDB } from '@t3x-dev/storage/pglite';
+import { insertProject } from '@t3x-dev/storage/pglite';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
@@ -38,7 +38,7 @@ import {
   insertKnowledgeNode,
   insertKnowledgeNodes,
   insertNodeMembers,
-} from '@t3x/storage/pglite';
+} from '@t3x-dev/storage/pglite';
 import { knowledgeGraphRoutes } from '../routes/knowledge-graph.openapi';
 
 describe('Knowledge Graph Routes', () => {

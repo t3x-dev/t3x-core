@@ -13,7 +13,7 @@
  */
 
 import { zValidator } from '@hono/zod-validator';
-import { executeMerge, type Merge2WayResult, prepareMerge } from '@t3x/core';
+import { executeMerge, type Merge2WayResult, prepareMerge } from '@t3x-dev/core';
 import {
   commitMergeDraft,
   createCommitV4,
@@ -24,7 +24,7 @@ import {
   getMergeDraft,
   updateBranchHead,
   updateMergeDraft,
-} from '@t3x/storage';
+} from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { getAuthorFromContext } from '../lib/auth';

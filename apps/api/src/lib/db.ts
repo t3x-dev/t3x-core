@@ -5,7 +5,7 @@
  * - PostgreSQL: When DATABASE_URL is set (Docker/production)
  * - PGLite: Local development fallback
  */
-import type { AnyDB } from '@t3x/storage';
+import type { AnyDB } from '@t3x-dev/storage';
 import { pinoLogger } from '../middleware/logger';
 
 let db: AnyDB | null = null;
@@ -34,7 +34,7 @@ async function initializeDB(): Promise<AnyDB> {
   if (databaseUrl) {
     // Use PostgreSQL for Docker/production
     pinoLogger.info({ url: databaseUrl.replace(/:[^:@]+@/, ':****@') }, 'using PostgreSQL');
-    const { createPostgresStorage, closePostgresStorage } = await import('@t3x/storage');
+    const { createPostgresStorage, closePostgresStorage } = await import('@t3x-dev/storage');
     db = await createPostgresStorage({ connectionString: databaseUrl });
     closeFunction = closePostgresStorage;
   } else {
@@ -44,7 +44,7 @@ async function initializeDB(): Promise<AnyDB> {
     // Use same default path as WebUI for data sharing
     const dataDir = process.env.T3X_DATA_DIR || '.t3x/database';
     pinoLogger.info({ data_dir: dataDir, in_memory: inMemory }, 'using PGLite');
-    const { createPGLiteStorage, closePGLiteStorage } = await import('@t3x/storage');
+    const { createPGLiteStorage, closePGLiteStorage } = await import('@t3x-dev/storage');
     db = await createPGLiteStorage({ dataDir, inMemory });
     closeFunction = closePGLiteStorage;
   }

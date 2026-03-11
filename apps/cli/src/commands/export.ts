@@ -3,7 +3,7 @@
  */
 
 import * as fs from 'node:fs';
-import { createClient } from '@t3x/api-client';
+import { createClient } from '@t3x-dev/api-client';
 import type { Command } from 'commander';
 import { createSpinner, error, getApiUrl, success } from '../utils.js';
 

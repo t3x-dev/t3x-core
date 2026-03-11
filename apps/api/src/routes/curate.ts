@@ -17,8 +17,8 @@ import {
   createGoogleAIEmbeddingProvider,
   EmbeddingProviderError,
   sha256,
-} from '@t3x/core';
-import { findConversationById, findTurnsByConversation } from '@t3x/storage/pglite';
+} from '@t3x-dev/core';
+import { findConversationById, findTurnsByConversation } from '@t3x-dev/storage/pglite';
 import { Hono } from 'hono';
 import { ProxyAgent, fetch as undiciFetch } from 'undici';
 import { getDB } from '../lib/db';
@@ -141,7 +141,7 @@ interface CuratePreviewResponse {
 // ============================================================================
 
 /**
- * Ring3 segment structure from @t3x/core
+ * Ring3 segment structure from @t3x-dev/core
  */
 interface Ring3Segment {
   segmentId?: string;
@@ -154,7 +154,7 @@ interface Ring3Segment {
 }
 
 /**
- * Ring1 anchor candidate structure from @t3x/core v1.1
+ * Ring1 anchor candidate structure from @t3x-dev/core v1.1
  */
 interface Ring1AnchorCandidate {
   text: string;

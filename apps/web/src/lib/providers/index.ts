@@ -1,11 +1,11 @@
 /**
  * Providers
  *
- * Re-exports from @t3x/core for backward compatibility.
+ * Re-exports from @t3x-dev/core for backward compatibility.
  * These are now defined in the core package.
  */
 
-// Re-export from @t3x/core
+// Re-export from @t3x-dev/core
 export {
   type CachedEmbeddingConfig,
   CachedEmbeddingProvider,
@@ -20,4 +20,4 @@ export {
   type GoogleAIEmbeddingConfig,
   // Embedding providers
   GoogleAIEmbeddingProvider,
-} from '@t3x/core';
+} from '@t3x-dev/core';

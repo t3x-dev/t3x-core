@@ -16,7 +16,7 @@ import {
   listNotificationsFromDB,
   markAllNotificationsRead,
   markNotificationRead,
-} from '@t3x/storage';
+} from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { zodErrorHook } from '../lib/errors';
 import { pinoLogger } from '../middleware/logger';

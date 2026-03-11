@@ -12,7 +12,7 @@
  * GET    /v1/conversations/:id/context-export - Export context as JSON/Markdown file
  */
 
-import { buildConversationContext, type ConversationData } from '@t3x/core';
+import { buildConversationContext, type ConversationData } from '@t3x-dev/core';
 import {
   deleteConversation,
   findCommitV4ByHash,
@@ -28,7 +28,7 @@ import {
   insertConversation,
   setConversationContext,
   updateConversation,
-} from '@t3x/storage/pglite';
+} from '@t3x-dev/storage/pglite';
 import { Hono } from 'hono';
 import { formatContextForExport } from '../lib/context-formatter';
 import { getDB } from '../lib/db';

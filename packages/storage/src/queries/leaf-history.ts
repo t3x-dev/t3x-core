@@ -7,8 +7,8 @@
  * @see packages/core/src/types/v4/index.ts for LeafHistory type
  */
 
-import type { CreateLeafHistoryInput, LeafConfig, LeafHistory } from '@t3x/core';
-import { generateLeafHistoryId } from '@t3x/core';
+import type { CreateLeafHistoryInput, LeafConfig, LeafHistory } from '@t3x-dev/core';
+import { generateLeafHistoryId } from '@t3x-dev/core';
 import { asc, count, desc, eq } from 'drizzle-orm';
 
 import type { AnyDB } from '../adapters';
@@ -25,7 +25,7 @@ export interface ListLeafHistoryOptions {
 
 /**
  * Extended input that includes S16 columns (attempt_number, corrective_feedback, prompt_used).
- * The base CreateLeafHistoryInput from @t3x/core is not modified;
+ * The base CreateLeafHistoryInput from @t3x-dev/core is not modified;
  * extra fields are handled at the storage layer only.
  */
 export type CreateLeafHistoryInputExtended = CreateLeafHistoryInput & {

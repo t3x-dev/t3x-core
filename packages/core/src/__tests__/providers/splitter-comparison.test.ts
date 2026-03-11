@@ -565,9 +565,9 @@ const CASES: TestCase[] = [
     id: 'code-03',
     category: 'Code-mixed',
     input:
-      'Import from @t3x/core using ES modules. The main export is createEngine. See README.md for examples.',
+      'Import from @t3x-dev/core using ES modules. The main export is createEngine. See README.md for examples.',
     expected: null,
-    firstContains: '@t3x/core',
+    firstContains: '@t3x-dev/core',
     count: 3,
   },
 

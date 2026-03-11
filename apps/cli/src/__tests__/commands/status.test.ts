@@ -9,7 +9,7 @@ const mockClient = {
   status: vi.fn(),
 };
 
-vi.mock('@t3x/api-client', () => ({
+vi.mock('@t3x-dev/api-client', () => ({
   createClient: vi.fn(() => mockClient),
 }));
 

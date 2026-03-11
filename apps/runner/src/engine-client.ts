@@ -20,7 +20,7 @@ const ENGINE_CALLBACK_URL =
   process.env.ENGINE_CALLBACK_URL || `${T3X_ENGINE_URL}/api/v1/runs/ingest`;
 
 /**
- * Run data from Engine (matches @t3x/storage Run type)
+ * Run data from Engine (matches @t3x-dev/storage Run type)
  */
 export interface EngineRun {
   runId: string;

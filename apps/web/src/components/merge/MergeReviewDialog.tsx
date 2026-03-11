@@ -44,7 +44,7 @@ interface MergeReviewDialogProps {
   /** Navigate back to canvas */
   onBackToCanvas: () => void;
   /** Merge2WayResult for release note generation */
-  prepared?: import('@t3x/core').Merge2WayResult | null;
+  prepared?: import('@t3x-dev/core').Merge2WayResult | null;
   /** Extended resolutions for release note generation */
   extendedResolutions?: Record<
     string,

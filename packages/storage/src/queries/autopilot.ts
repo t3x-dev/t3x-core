@@ -5,7 +5,7 @@
  */
 
 import { eq } from 'drizzle-orm';
-import { DEFAULT_AUTOPILOT_CONFIG, type AutopilotConfig } from '@t3x/core';
+import { DEFAULT_AUTOPILOT_CONFIG, type AutopilotConfig } from '@t3x-dev/core';
 import type { AnyDB } from '../adapters';
 import { projects } from '../schema';
 

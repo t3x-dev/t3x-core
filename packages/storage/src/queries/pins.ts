@@ -11,8 +11,8 @@
  * @see docs/specification/semantic-layer-architecture.md
  */
 
-import type { CreatePinInput, Pin, PinType } from '@t3x/core';
-import { generatePinId } from '@t3x/core';
+import type { CreatePinInput, Pin, PinType } from '@t3x-dev/core';
+import { generatePinId } from '@t3x-dev/core';
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { type PinRecord, pins } from '../schema-v4';

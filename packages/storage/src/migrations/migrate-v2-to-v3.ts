@@ -25,7 +25,7 @@ import {
   type CommitContent,
   computeCommitV3Hash,
   type Sentence,
-} from '@t3x/core';
+} from '@t3x-dev/core';
 import {
   type AnyDB,
   commits as commitsV2Table,

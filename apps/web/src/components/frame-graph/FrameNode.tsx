@@ -1,6 +1,6 @@
 'use client';
 
-import type { SlotValue } from '@t3x/core';
+import type { SlotValue } from '@t3x-dev/core';
 import type { NodeProps } from '@xyflow/react';
 import { Handle, Position } from '@xyflow/react';
 import { Box, Link as LinkIcon, Paperclip, Shield } from 'lucide-react';

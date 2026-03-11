@@ -2,7 +2,7 @@
  * Runner Routes
  *
  * Grey-box agent evaluation endpoints.
- * Uses @t3x/runner for evaluation logic.
+ * Uses @t3x-dev/runner for evaluation logic.
  *
  * Updated for Runner v0.2.0:
  * - Uses RunRecord + EvalRules instead of legacy TestStep format
@@ -21,7 +21,7 @@ import {
   RuleSchema,
   type RunRecord,
   RunRecordSchema,
-} from '@t3x/runner';
+} from '@t3x-dev/runner';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { pinoLogger } from '../middleware/logger';

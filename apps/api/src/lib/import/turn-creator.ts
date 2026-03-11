@@ -1,13 +1,13 @@
 /**
  * Turn Creator
  *
- * Creates turns from imported content using @t3x/storage queries.
+ * Creates turns from imported content using @t3x-dev/storage queries.
  * The storage layer handles hash computation automatically.
  * Records turn_map provenance for traceability (RFC §2.3.1b).
  */
 
-import type { AnyDB } from '@t3x/storage/pglite';
-import { insertConversation, insertTurn, updateConversation } from '@t3x/storage/pglite';
+import type { AnyDB } from '@t3x-dev/storage/pglite';
+import { insertConversation, insertTurn, updateConversation } from '@t3x-dev/storage/pglite';
 import type { ImportMetadata, ParsedParagraph, PlatformMessage, TurnProvenance } from './types';
 
 /** Progress callback for streaming imports */

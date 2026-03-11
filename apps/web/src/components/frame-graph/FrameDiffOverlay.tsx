@@ -1,7 +1,7 @@
 'use client';
 
-import type { SemanticContent } from '@t3x/core';
-import { frameDiff } from '@t3x/core';
+import type { SemanticContent } from '@t3x-dev/core';
+import { frameDiff } from '@t3x-dev/core';
 import { useMemo } from 'react';
 import { FrameGraphView } from './FrameGraphView';
 

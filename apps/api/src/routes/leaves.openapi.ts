@@ -18,8 +18,8 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import type { Leaf, LeafHistory } from '@t3x/core';
-// Generation functions (provided by @t3x/core)
+import type { Leaf, LeafHistory } from '@t3x-dev/core';
+// Generation functions (provided by @t3x-dev/core)
 import {
   AllProvidersFailedError,
   collectLessons,
@@ -32,8 +32,8 @@ import {
   suggestionsToConstraints,
   validateConstraints,
   validateConstraintsExactOnly,
-} from '@t3x/core';
-// Storage functions (provided by @t3x/storage)
+} from '@t3x-dev/core';
+// Storage functions (provided by @t3x-dev/storage)
 import {
   createLeaf,
   createLeafHistory,
@@ -51,7 +51,7 @@ import {
   updateLeaf,
   updateLeafAtomic,
   updateLeafOutput,
-} from '@t3x/storage/pglite';
+} from '@t3x-dev/storage/pglite';
 import { getDB } from '../lib/db';
 import { getEmbedder, isSemanticValidationConfigured } from '../lib/embedder';
 import { errorResponse, zodErrorHook } from '../lib/errors';

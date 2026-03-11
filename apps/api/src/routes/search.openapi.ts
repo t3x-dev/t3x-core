@@ -13,7 +13,7 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { searchByKeyword, searchHybrid, searchSimilarSentences } from '@t3x/storage/pglite';
+import { searchByKeyword, searchHybrid, searchSimilarSentences } from '@t3x-dev/storage/pglite';
 import { getDB } from '../lib/db';
 import { getEmbedder } from '../lib/embedder';
 import { errorResponse, zodErrorHook } from '../lib/errors';

@@ -6,7 +6,7 @@
  * status indefinitely when n8n fails to callback.
  */
 
-import { getTimedOutRuns, markRunAsTimeout } from '@t3x/storage';
+import { getTimedOutRuns, markRunAsTimeout } from '@t3x-dev/storage';
 import { pinoLogger } from '../middleware/logger';
 import { getDB } from './db';
 

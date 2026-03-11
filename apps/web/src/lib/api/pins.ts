@@ -2,7 +2,7 @@
  * Pins + Conversation Context + Memory API
  */
 
-import type { Pin } from '@t3x/core';
+import type { Pin } from '@t3x-dev/core';
 import { API_V1, buildQueryString, fetchWithTimeout, handleResponse } from './core';
 
 // ============================================================================

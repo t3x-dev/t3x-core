@@ -1,4 +1,4 @@
-# @t3x/runner Architecture
+# @t3x-dev/runner Architecture
 
 > Version: v0.2.0
 > Last Updated: 2025-01
@@ -197,7 +197,7 @@ apps/runner/
 **Responsibility**: Capture Agent I/O in SDK proxy mode.
 
 ```typescript
-import { observer } from '@t3x/runner';
+import { observer } from '@t3x-dev/runner';
 
 // Register Agent
 observer.registerAgent({
@@ -229,7 +229,7 @@ const record = observer.completeRun(runId, output, 'completed');
 **Responsibility**: Execute deterministic rule evaluation.
 
 ```typescript
-import { evalEngine, DEFAULT_RULES } from '@t3x/runner';
+import { evalEngine, DEFAULT_RULES } from '@t3x-dev/runner';
 
 // Evaluate RunRecord
 const result = evalEngine.evaluate(runRecord, rules);
@@ -313,7 +313,7 @@ const result = evalEngine.evaluateWithLeaf(runRecord, { rules_ref: 'weather-agen
 - Auto-skips when all evaluations pass (`status: 'skipped'`)
 
 ```typescript
-import { llmAsserter } from '@t3x/runner';
+import { llmAsserter } from '@t3x-dev/runner';
 
 // Check availability
 if (llmAsserter.isAvailable()) {

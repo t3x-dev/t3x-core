@@ -18,13 +18,13 @@
 
 import { createHash } from 'node:crypto';
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import type { Draft, SemanticPoint } from '@t3x/core';
+import type { Draft, SemanticPoint } from '@t3x-dev/core';
 import {
   generateLeafOutput,
   generateSentenceId,
   isGenerationConfigured,
   spToSentence,
-} from '@t3x/core';
+} from '@t3x-dev/core';
 import {
   ConflictError,
   commitDraftV3,
@@ -43,7 +43,7 @@ import {
   updateDraftV3,
   updateDraftV3Preview,
   upsertSentenceVectorsBatch,
-} from '@t3x/storage/pglite';
+} from '@t3x-dev/storage/pglite';
 import { getDB } from '../lib/db';
 import { getEmbedder } from '../lib/embedder';
 import { errorResponse, zodErrorHook } from '../lib/errors';
@@ -1334,7 +1334,7 @@ draftsRoutes.openapi(reviewActionRoute, async (c) => {
 
     // Record sentence modification audit trail — fire-and-forget
     try {
-      const { insertSentenceModification } = await import('@t3x/storage');
+      const { insertSentenceModification } = await import('@t3x-dev/storage');
       await insertSentenceModification(db, {
         draft_id: draftId,
         sp_id: sp_id,

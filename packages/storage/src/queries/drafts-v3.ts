@@ -19,8 +19,8 @@ import type {
   DraftSentence,
   ExtractionCursor,
   SemanticPoint,
-} from '@t3x/core';
-import { generateDraftV3Id } from '@t3x/core';
+} from '@t3x-dev/core';
+import { generateDraftV3Id } from '@t3x-dev/core';
 import { and, desc, eq } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { type DraftV3Record, draftsV3 } from '../schema-v4';

@@ -10,10 +10,10 @@
  * 3. eval_passed — (Optional) Latest evaluation run status per associated Leaf
  */
 
-import type { DiffableSentence, Leaf, Merge2WayResult } from '@t3x/core';
-import { validateConstraintsExactOnly } from '@t3x/core';
-import type { AnyDB } from '@t3x/storage';
-import { findLeavesByCommit, listRuns } from '@t3x/storage';
+import type { DiffableSentence, Leaf, Merge2WayResult } from '@t3x-dev/core';
+import { validateConstraintsExactOnly } from '@t3x-dev/core';
+import type { AnyDB } from '@t3x-dev/storage';
+import { findLeavesByCommit, listRuns } from '@t3x-dev/storage';
 import type { MergeCheckType } from '../schemas/v4-contracts';
 
 // ============================================================

@@ -4,8 +4,8 @@
  * Integration tests for POST /v1/leaves/:id/validate endpoint.
  */
 
-import { createCommitV4, insertProject } from '@t3x/storage';
-import type { PGLiteDB } from '@t3x/storage/pglite';
+import { createCommitV4, insertProject } from '@t3x-dev/storage';
+import type { PGLiteDB } from '@t3x-dev/storage/pglite';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
@@ -21,10 +21,10 @@ vi.mock('../lib/db', () => ({
   closeDB: vi.fn(() => Promise.resolve()),
 }));
 
-// Mock @t3x/core keeping all actual exports (validation functions needed)
+// Mock @t3x-dev/core keeping all actual exports (validation functions needed)
 // This ensures validateConstraintsExactOnly is available when routes are imported
-vi.mock('@t3x/core', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@t3x/core')>();
+vi.mock('@t3x-dev/core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@t3x-dev/core')>();
   return {
     ...actual,
     // Explicitly export validation function to ensure it's available
@@ -107,7 +107,7 @@ describe('POST /v1/leaves/:id/validate', () => {
       });
 
       // Directly update the leaf output in DB for testing
-      const { updateLeafOutput } = await import('@t3x/storage/pglite');
+      const { updateLeafOutput } = await import('@t3x-dev/storage/pglite');
       await updateLeafOutput(mockDB, leafId, options.output);
     }
 

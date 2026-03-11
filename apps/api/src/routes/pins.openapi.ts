@@ -15,8 +15,8 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import type { Pin } from '@t3x/core';
-// Storage functions (provided by @t3x/storage)
+import type { Pin } from '@t3x-dev/core';
+// Storage functions (provided by @t3x-dev/storage)
 import {
   createPin,
   deletePin,
@@ -24,7 +24,7 @@ import {
   findPinsByProject,
   findPinsByType,
   updatePinAssertions,
-} from '@t3x/storage/pglite';
+} from '@t3x-dev/storage/pglite';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { ErrorResponseSchema, IdParamSchema, SuccessResponseSchema } from '../schemas/common';

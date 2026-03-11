@@ -2,7 +2,7 @@
  * Context Formatter Tests
  */
 
-import type { BuiltContext } from '@t3x/core';
+import type { BuiltContext } from '@t3x-dev/core';
 import { describe, expect, it } from 'vitest';
 import {
   formatContextAsJson,

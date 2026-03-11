@@ -17,13 +17,13 @@ import {
   type RingOutput,
   type SegmentDiff,
   type WordDiffSegment,
-} from '@t3x/core';
+} from '@t3x-dev/core';
 import {
   findCommitV4ByHash,
   findSegmentEmbeddingsByTurn,
   findTurnByHash,
   getCommitV3,
-} from '@t3x/storage/pglite';
+} from '@t3x-dev/storage/pglite';
 import { Hono } from 'hono';
 import { getDB } from '../lib/db';
 import { jsonError, jsonSuccess } from '../lib/response';

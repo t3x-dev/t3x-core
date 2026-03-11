@@ -1,6 +1,7 @@
 {
-  "name": "@t3x/cli",
+  "name": "@t3x-dev/cli",
   "version": "0.1.0",
+  "private": true,
   "description": "T3X Command Line Interface",
   "type": "module",
   "bin": {
@@ -16,8 +17,8 @@
     "lint": "biome lint src"
   },
   "dependencies": {
-    "@t3x/api-client": "workspace:*",
-    "@t3x/core": "workspace:*",
+    "@t3x-dev/api-client": "workspace:*",
+    "@t3x-dev/core": "workspace:*",
     "chalk": "^5.4.1",
     "commander": "^13.1.0",
     "ora": "^8.1.1",

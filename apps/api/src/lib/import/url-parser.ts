@@ -5,7 +5,7 @@
  * converts to Markdown, and splits into paragraphs.
  */
 
-import { sha256 } from '@t3x/core';
+import { sha256 } from '@t3x-dev/core';
 import { isInternalUrlResolved } from '../ssrf';
 import { extractArticle } from './html-converter';
 import { splitIntoParagraphs } from './paragraph-splitter';

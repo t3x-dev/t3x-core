@@ -7,7 +7,7 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { T3xClient } from '@t3x/api-client';
+import type { T3xClient } from '@t3x-dev/api-client';
 
 export interface ImportResult {
   conversationId: string;

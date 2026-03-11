@@ -1,4 +1,4 @@
-import type { ApiKey } from '@t3x/core';
+import type { ApiKey } from '@t3x-dev/core';
 
 /**
  * Hono environment type extension.

@@ -2,7 +2,7 @@
  * Tests for computeMergeSummary pure function
  */
 
-import type { DiffableSentence, Merge2WayResult } from '@t3x/core';
+import type { DiffableSentence, Merge2WayResult } from '@t3x-dev/core';
 import { describe, expect, it } from 'vitest';
 import { computeMergeSummary } from '@/lib/mergeSummary';
 import type { ExtendedResolutionData } from '@/store/mergeWorkspaceStore';
