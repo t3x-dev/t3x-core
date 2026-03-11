@@ -49,7 +49,7 @@ export function CommitConflictPanel({
               <div className="flex items-center justify-between">
                 <span className="text-xs font-medium text-muted-foreground">Conflict {i + 1}</span>
                 <span className={cn('text-xs px-1.5 py-0.5 rounded', simColor)}>
-                  similarity: {cosine.toFixed(2)}
+                  similarity: {(cosine * 100).toFixed(0)}%
                 </span>
               </div>
               <div>
