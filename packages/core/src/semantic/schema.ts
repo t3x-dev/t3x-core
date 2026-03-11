@@ -9,7 +9,7 @@ const SlotRefSchema = z.object({ ref: z.string() });
 const InlineFrameSchema: z.ZodType<{ type: string; slots: Record<string, unknown> }> = z.lazy(() =>
   z.object({
     type: z.string().min(1),
-    slots: z.record(SlotValueSchema),
+    slots: z.record(z.string(), SlotValueSchema),
   })
 );
 
@@ -26,7 +26,7 @@ export const FrameSchema = z.object({
     .min(1)
     .regex(/^[a-z][a-z0-9_]*$/),
   slots: z
-    .record(SlotValueSchema)
+    .record(z.string(), SlotValueSchema)
     .refine((s) => Object.keys(s).length >= 1, { message: 'Frame must have at least one slot' })
     .refine((s) => Object.keys(s).length <= 100, {
       message: 'Frame cannot have more than 100 slots',
@@ -75,7 +75,7 @@ const FrameChangeSchema = z.discriminatedUnion('action', [
   z.object({
     action: z.literal('update'),
     target: z.string().regex(/^f_\d{3,}$/),
-    slots: z.record(SlotValueSchema.nullable()),
+    slots: z.record(z.string(), SlotValueSchema.nullable()),
   }),
   z.object({
     action: z.literal('remove'),
