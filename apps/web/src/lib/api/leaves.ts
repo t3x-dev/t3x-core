@@ -166,24 +166,57 @@ export interface GenerateLeafOutputResult {
     failed_count: number;
     attempts: number;
   };
+  /** Multi-round generation details (present when mode is standard or thorough) */
+  rounds?: Array<{
+    name: string;
+    round_number: number;
+    constraints_passed: boolean;
+    failed_constraints: string[];
+  }>;
+  /** Total rounds executed */
+  total_rounds?: number;
+  /** Generation mode used */
+  mode?: 'fast' | 'standard' | 'thorough';
+}
+
+/**
+ * Generate output request options
+ */
+export interface GenerateLeafOutputOptions {
+  /** Generation mode: 'fast' (1 round), 'standard' (2 rounds), 'thorough' (3 rounds) */
+  mode?: 'fast' | 'standard' | 'thorough';
+  /** Style preferences for thorough mode (Round 3) */
+  style_preferences?: {
+    tone?: string;
+    length?: string;
+    formality?: string;
+  };
 }
 
 /**
  * Generate output for a leaf
  *
  * @param leafId - Leaf ID
+ * @param options - Optional generation options (mode, style_preferences)
  * @returns Generated output and timestamp
  * @throws ApiError - GENERATION_NOT_CONFIGURED (API key not set)
  * @throws ApiError - LEAF_NOT_FOUND
  * @throws ApiError - GENERATION_FAILED
  */
-export async function generateLeafOutput(leafId: string): Promise<GenerateLeafOutputResult> {
+export async function generateLeafOutput(
+  leafId: string,
+  options?: GenerateLeafOutputOptions
+): Promise<GenerateLeafOutputResult> {
+  const body: Record<string, unknown> = {};
+  if (options?.mode) body.mode = options.mode;
+  if (options?.style_preferences) body.style_preferences = options.style_preferences;
+
   const res = await fetchWithTimeout(
     `${API_V1}/leaves/${encodeURIComponent(leafId)}/generate`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({}),
+      body: JSON.stringify(body),
     },
     180000 // 180 seconds timeout for LLM generation with auto-retry
   );

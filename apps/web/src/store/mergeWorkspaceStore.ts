@@ -8,6 +8,7 @@
 import { create } from 'zustand';
 import { getTerminology, type TermKey } from '@/hooks/useTerminology';
 import * as api from '@/lib/api';
+import { API_V1, fetchWithTimeout, handleResponse } from '@/lib/api/core';
 import { useSettingsStore } from '@/store/settingsStore';
 import type {
   CommitV3,
@@ -17,7 +18,6 @@ import type {
   TurnContextData,
 } from '@/types/merge';
 import { useCanvasStore } from './canvasStore';
-import { API_V1 } from './canvasStoreUtils';
 
 // ============================================================================
 // Types
@@ -156,21 +156,14 @@ export interface MergeCheck {
 // ============================================================================
 
 async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_V1}${endpoint}`, {
+  const response = await fetchWithTimeout(`${API_V1}${endpoint}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
       ...options?.headers,
     },
   });
-
-  const data = await response.json();
-
-  if (!response.ok || !data.success) {
-    throw new Error(data.error?.message || 'API request failed');
-  }
-
-  return data.data as T;
+  return handleResponse<T>(response);
 }
 
 // ============================================================================
