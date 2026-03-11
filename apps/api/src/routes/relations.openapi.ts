@@ -6,13 +6,13 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { createRelationExtractor } from '@t3x/core';
+import { createRelationExtractor } from '@t3x-dev/core';
 import {
   deleteRelationsByCommit,
   findCommitV4ByHash,
   findRelationsByCommit,
   upsertRelations,
-} from '@t3x/storage/pglite';
+} from '@t3x-dev/storage/pglite';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { getLLMProvider } from '../lib/provider-registry';

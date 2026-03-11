@@ -1,4 +1,4 @@
-import type { Frame, Relation, SemanticContent } from '@t3x/core';
+import type { Frame, Relation, SemanticContent } from '@t3x-dev/core';
 import { describe, expect, it } from 'vitest';
 import {
   filterByZoomLevel,

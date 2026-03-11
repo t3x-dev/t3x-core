@@ -10,7 +10,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import type { Account, User } from '@t3x/core';
+import type { Account, User } from '@t3x-dev/core';
 import { and, eq } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { type AccountRecord, type UserRecord, accounts, users } from '../schema-v4';

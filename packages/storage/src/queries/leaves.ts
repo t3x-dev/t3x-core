@@ -16,8 +16,8 @@ import type {
   Leaf,
   LeafConfig,
   LeafType,
-} from '@t3x/core';
-import { generateAssertionId, generateConstraintId, generateLeafId } from '@t3x/core';
+} from '@t3x-dev/core';
+import { generateAssertionId, generateConstraintId, generateLeafId } from '@t3x-dev/core';
 import { and, desc, eq, inArray, lt, or } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { type LeafRecord, leaves } from '../schema-v4';

@@ -2,8 +2,8 @@
  * Commits V3 Route Tests
  */
 
-import { deleteCommitV3, insertProject, listCommitsV3 } from '@t3x/storage';
-import type { PGLiteDB } from '@t3x/storage/pglite';
+import { deleteCommitV3, insertProject, listCommitsV3 } from '@t3x-dev/storage';
+import type { PGLiteDB } from '@t3x-dev/storage/pglite';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
@@ -433,7 +433,7 @@ describe('Commits V3 Routes', () => {
     it('second-class fields do not affect hash', async () => {
       // Use computeCommitV3Hash directly to verify second-class fields don't affect hash
       // (Can't create two commits with same hash in database due to primary key constraint)
-      const { computeCommitV3Hash } = await import('@t3x/core');
+      const { computeCommitV3Hash } = await import('@t3x-dev/core');
 
       const baseCommit = {
         schema: 'commit/v3' as const,
@@ -472,7 +472,7 @@ describe('Commits V3 Routes', () => {
     });
 
     it('first-class fields do affect hash', async () => {
-      const { computeCommitV3Hash } = await import('@t3x/core');
+      const { computeCommitV3Hash } = await import('@t3x-dev/core');
 
       const baseCommit = {
         schema: 'commit/v3' as const,

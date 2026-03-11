@@ -8,8 +8,8 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { GateRunner, type LLMProvider } from '@t3x/core';
-import { findConversationById, findTurnsByConversation, getBusinessRules } from '@t3x/storage';
+import { GateRunner, type LLMProvider } from '@t3x-dev/core';
+import { findConversationById, findTurnsByConversation, getBusinessRules } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { getLLMProvider } from '../lib/provider-registry';

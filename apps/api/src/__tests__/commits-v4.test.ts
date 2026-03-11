@@ -5,8 +5,8 @@
  * Tests cover all CRUD operations and error handling.
  */
 
-import { findBranchByName, findCurrentBranch, insertProject } from '@t3x/storage';
-import type { PGLiteDB } from '@t3x/storage/pglite';
+import { findBranchByName, findCurrentBranch, insertProject } from '@t3x-dev/storage';
+import type { PGLiteDB } from '@t3x-dev/storage/pglite';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';

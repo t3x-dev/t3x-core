@@ -1,5 +1,5 @@
 /**
- * @t3x/core
+ * @t3x-dev/core
  *
  * T3X Core - Deterministic semantic extraction, diff, and merge engine.
  *
@@ -416,7 +416,7 @@ export {
   validateIntegrity,
 } from './semantic';
 // Storage (types + pure utils only)
-// For CRUD operations, use @t3x/storage package
+// For CRUD operations, use @t3x-dev/storage package
 export * from './storage';
 // CommitV3 types
 export type {

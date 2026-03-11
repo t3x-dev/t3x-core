@@ -1,4 +1,4 @@
-import type { MergeSummaryData } from '@t3x/core';
+import type { MergeSummaryData } from '@t3x-dev/core';
 import type { Edge, Node } from '@xyflow/react';
 import type { StateCreator } from 'zustand';
 import { getTerminology } from '@/hooks/useTerminology';

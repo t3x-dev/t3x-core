@@ -4,10 +4,10 @@
  * Integration tests for POST /v1/drafts/:id/commit when extraction_mode='llm'.
  */
 
-import type { SemanticPoint } from '@t3x/core';
-import { insertProject } from '@t3x/storage';
-import type { PGLiteDB } from '@t3x/storage/pglite';
-import { insertDraftV3, updateDraftV3 } from '@t3x/storage/pglite';
+import type { SemanticPoint } from '@t3x-dev/core';
+import { insertProject } from '@t3x-dev/storage';
+import type { PGLiteDB } from '@t3x-dev/storage/pglite';
+import { insertDraftV3, updateDraftV3 } from '@t3x-dev/storage/pglite';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
@@ -28,8 +28,8 @@ const { mockGenerateLeafOutput, mockIsGenerationConfigured } = vi.hoisted(() => 
   mockIsGenerationConfigured: vi.fn(),
 }));
 
-vi.mock('@t3x/core', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@t3x/core')>();
+vi.mock('@t3x-dev/core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@t3x-dev/core')>();
   return {
     ...actual,
     generateLeafOutput: mockGenerateLeafOutput,

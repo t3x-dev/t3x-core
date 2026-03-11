@@ -17,7 +17,7 @@ import {
   findWebhookById,
   listWebhooks,
   updateWebhook,
-} from '@t3x/storage/pglite';
+} from '@t3x-dev/storage/pglite';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { isInternalUrlResolved } from '../lib/ssrf';

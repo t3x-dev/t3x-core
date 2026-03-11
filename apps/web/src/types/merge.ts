@@ -1,7 +1,7 @@
 /**
  * Merge Type Definitions for WebUI
  *
- * Re-exports merge types from @t3x/core and adds WebUI-specific types.
+ * Re-exports merge types from @t3x-dev/core and adds WebUI-specific types.
  */
 
 // Import types for use in this file
@@ -13,7 +13,7 @@ import type {
   Constraint,
   MergeSuggestion,
   WordDiffSegment,
-} from '@t3x/core';
+} from '@t3x-dev/core';
 
 // Re-export for consumers of this module
 // 重新导出供本模块的使用者使用

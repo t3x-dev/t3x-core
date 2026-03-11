@@ -7,7 +7,7 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { createClient } from '@t3x/api-client';
+import { createClient } from '@t3x-dev/api-client';
 import type { Command } from 'commander';
 import { collectFiles, type FileFormat, type ImportResult, importFile } from '../lib/importFile.js';
 import { createSpinner, error, getApiUrl, info, success } from '../utils.js';

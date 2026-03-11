@@ -4,7 +4,7 @@
  * Computes diff between draft sentences and parent commit sentences
  * with debouncing and caching for real-time performance.
  *
- * Uses the core incrementalDiffCommits algorithm from @t3x/core (via diffUtils)
+ * Uses the core incrementalDiffCommits algorithm from @t3x-dev/core (via diffUtils)
  * which caches unchanged sentence pairs and only re-diffs modified sentences.
  *
  * Performance:

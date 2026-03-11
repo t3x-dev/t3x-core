@@ -18,7 +18,7 @@ import {
   listRuns,
   updateLeafRunnerAssertions,
   updateRun,
-} from '@t3x/storage';
+} from '@t3x-dev/storage';
 import { randomUUID } from 'crypto';
 import { Hono } from 'hono';
 import { z } from 'zod';
@@ -596,7 +596,7 @@ runsRoutes.delete('/v1/runs/:id', async (c) => {
     const db = await getDB();
 
     // Import deleteRun dynamically to avoid circular dependency issues
-    const { deleteRun } = await import('@t3x/storage');
+    const { deleteRun } = await import('@t3x-dev/storage');
     const deleted = await deleteRun(db, runId);
 
     if (!deleted) {

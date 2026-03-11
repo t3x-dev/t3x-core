@@ -19,13 +19,13 @@ vi.mock('../lib/db', () => ({
   closeDB: vi.fn(() => Promise.resolve()),
 }));
 
-// Mock @t3x/storage — the auth middleware dynamically imports this
-vi.mock('@t3x/storage', () => ({
+// Mock @t3x-dev/storage — the auth middleware dynamically imports this
+vi.mock('@t3x-dev/storage', () => ({
   findApiKeyByValue: vi.fn(),
   touchLastUsed: vi.fn(() => Promise.resolve()),
 }));
 
-import { findApiKeyByValue, touchLastUsed } from '@t3x/storage';
+import { findApiKeyByValue, touchLastUsed } from '@t3x-dev/storage';
 import { authMiddleware } from '../middleware/auth';
 
 const mockFindApiKeyByValue = vi.mocked(findApiKeyByValue);

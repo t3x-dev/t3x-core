@@ -1,5 +1,5 @@
 /**
- * @t3x/api-client
+ * @t3x-dev/api-client
  *
  * TypeScript client for the T3X API.
  */

@@ -7,7 +7,7 @@
  * No authentication required for public tweets.
  */
 
-import { sha256 } from '@t3x/core';
+import { sha256 } from '@t3x-dev/core';
 import { splitIntoParagraphs } from '../paragraph-splitter';
 import type { ParseResult } from '../types';
 

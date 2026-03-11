@@ -9,13 +9,13 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { buildDraft, type FrameExtractionTurn, FrameExtractor } from '@t3x/core';
+import { buildDraft, type FrameExtractionTurn, FrameExtractor } from '@t3x-dev/core';
 import {
   findConversationById,
   findTurnsByConversation,
   insertDeltaLogEntry,
   listDeltaLogByConversation,
-} from '@t3x/storage';
+} from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { toDeltaLogEntries } from '../lib/delta-log-utils';
 import { errorResponse, zodErrorHook } from '../lib/errors';

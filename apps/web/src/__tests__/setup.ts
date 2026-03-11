@@ -6,7 +6,7 @@
  */
 
 import { PGlite } from '@electric-sql/pglite';
-import type { AnyDB } from '@t3x/storage';
+import type { AnyDB } from '@t3x-dev/storage';
 // Import schema tables for drizzle
 import {
   branches,
@@ -16,11 +16,11 @@ import {
   projects,
   segmentEmbeddings,
   turns,
-} from '@t3x/storage';
+} from '@t3x-dev/storage';
 import { drizzle } from 'drizzle-orm/pglite';
 import { vi } from 'vitest';
 
-// Import shared SQL from @t3x/storage test utilities
+// Import shared SQL from @t3x-dev/storage test utilities
 import { CREATE_TABLES_SQL } from '../../../../packages/storage/src/__tests__/setup';
 
 const schema = {

@@ -1,4 +1,4 @@
-import type { FrameRelationType, SemanticContent, SlotValue } from '@t3x/core';
+import type { FrameRelationType, SemanticContent, SlotValue } from '@t3x-dev/core';
 import type { Edge, Node } from '@xyflow/react';
 import type { GateCheckResult } from '@/lib/api/frames';
 

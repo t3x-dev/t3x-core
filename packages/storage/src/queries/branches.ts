@@ -4,7 +4,7 @@
  * CRUD operations for branches using Drizzle ORM.
  */
 
-import { generateBranchId } from '@t3x/core';
+import { generateBranchId } from '@t3x-dev/core';
 import { and, desc, eq, lt, or, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { type Branch, branches } from '../schema';

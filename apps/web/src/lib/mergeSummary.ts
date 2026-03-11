@@ -7,7 +7,7 @@
  * Purely deterministic, no side effects, no API calls.
  */
 
-import type { Merge2WayResult } from '@t3x/core';
+import type { Merge2WayResult } from '@t3x-dev/core';
 import type { ExtendedResolutionData } from '@/store/mergeWorkspaceStore';
 
 // ============================================================================

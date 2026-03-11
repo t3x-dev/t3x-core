@@ -6,8 +6,8 @@
  * resulting lessons to generateWithFallback.
  */
 
-import { createCommitV4, createLeaf, insertProject, updateLeaf } from '@t3x/storage';
-import type { PGLiteDB } from '@t3x/storage/pglite';
+import { createCommitV4, createLeaf, insertProject, updateLeaf } from '@t3x-dev/storage';
+import type { PGLiteDB } from '@t3x-dev/storage/pglite';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
@@ -32,9 +32,9 @@ vi.mock('../lib/db', () => ({
   closeDB: vi.fn(() => Promise.resolve()),
 }));
 
-// Mock @t3x/core — replace collectLessons with a spy while keeping everything else
-vi.mock('@t3x/core', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@t3x/core')>();
+// Mock @t3x-dev/core — replace collectLessons with a spy while keeping everything else
+vi.mock('@t3x-dev/core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@t3x-dev/core')>();
   return {
     ...actual,
     generateLeafOutput: mockGenerateLeafOutput,

@@ -1,5 +1,5 @@
 /**
- * @t3x/storage/pglite
+ * @t3x-dev/storage/pglite
  *
  * PGLite-only entry point for local development.
  * This module does NOT import postgres.js or supabase, so it can be
@@ -7,7 +7,7 @@
  *
  * Usage:
  * ```typescript
- * import { createPGLiteStorage, insertProject } from '@t3x/storage/pglite';
+ * import { createPGLiteStorage, insertProject } from '@t3x-dev/storage/pglite';
  * const db = await createPGLiteStorage({ dataDir: '.t3x/database' });
  * const project = await insertProject(db, { name: 'My Project' });
  * ```

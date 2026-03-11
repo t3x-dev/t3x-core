@@ -1,7 +1,7 @@
 'use client';
 
-import type { Delta, DeltaSource, FrameDiff, SemanticContent, SlotValue } from '@t3x/core';
-import { frameDiff } from '@t3x/core';
+import type { Delta, DeltaSource, FrameDiff, SemanticContent, SlotValue } from '@t3x-dev/core';
+import { frameDiff } from '@t3x-dev/core';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 

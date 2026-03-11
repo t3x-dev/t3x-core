@@ -11,7 +11,7 @@ import { z } from '@hono/zod-openapi';
 
 /**
  * Sentence schema
- * Matches @t3x/core Sentence type from commit-v3.ts
+ * Matches @t3x-dev/core Sentence type from commit-v3.ts
  */
 export const SentenceSchema = z.object({
   id: z.string().openapi({
@@ -52,7 +52,7 @@ export const SentenceSchema = z.object({
 
 /**
  * Constraint schema
- * Matches @t3x/core Constraint type (RequireConstraint | ExcludeConstraint)
+ * Matches @t3x-dev/core Constraint type (RequireConstraint | ExcludeConstraint)
  */
 export const ConstraintSchema = z.object({
   id: z.string().openapi({
@@ -87,7 +87,7 @@ export const ConstraintSchema = z.object({
 
 /**
  * Word diff element schema
- * Matches @t3x/core WordDiffSegment type
+ * Matches @t3x-dev/core WordDiffSegment type
  */
 export const WordDiffSchema = z.object({
   type: z.enum(['unchanged', 'removed', 'added']).openapi({

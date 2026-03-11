@@ -5,7 +5,7 @@
  * with human-readable sections (added/updated/removed/conflicts).
  */
 
-import type { Merge2WayResult, MergeSimilarPair } from '@t3x/core';
+import type { Merge2WayResult, MergeSimilarPair } from '@t3x-dev/core';
 import type { MergeSummary } from '@/lib/mergeSummary';
 import type { ExtendedResolutionData } from '@/store/mergeWorkspaceStore';
 

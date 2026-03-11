@@ -4,9 +4,9 @@
  * Detects duplicate imports using content hash or URL matching.
  */
 
-import { sha256 } from '@t3x/core';
-import type { AnyDB } from '@t3x/storage/pglite';
-import { findConversationsByProject } from '@t3x/storage/pglite';
+import { sha256 } from '@t3x-dev/core';
+import type { AnyDB } from '@t3x-dev/storage/pglite';
+import { findConversationsByProject } from '@t3x-dev/storage/pglite';
 
 /**
  * Check if content has already been imported to a project.

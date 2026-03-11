@@ -65,7 +65,7 @@ import { TruncatedCommitView } from './TruncatedCommitView';
 type CanvasNode = Node<CanvasNodeData, 'canvas'>;
 
 // Leaf type definitions with icons and labels
-// Must match @t3x/core LeafType from V4 schema
+// Must match @t3x-dev/core LeafType from V4 schema
 export const LEAF_TYPES: {
   type: LeafType;
   label: string;

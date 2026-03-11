@@ -6,7 +6,7 @@
  * @see Issue I2: implement context export (JSON/Markdown)
  */
 
-import type { BuiltContext, ContextSource } from '@t3x/core';
+import type { BuiltContext, ContextSource } from '@t3x-dev/core';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Types

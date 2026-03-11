@@ -6,15 +6,15 @@
  * GET  /v1/commits-v3/:hash - Get commit v3 by hash
  */
 
-import type { Constraint, Sentence } from '@t3x/core';
-import { computeCommitV3Hash, getLocalAuthor } from '@t3x/core';
+import type { Constraint, Sentence } from '@t3x-dev/core';
+import { computeCommitV3Hash, getLocalAuthor } from '@t3x-dev/core';
 import {
   type CommitV3Output,
   createCommitV3,
   getCommitV3,
   listCommitsV3,
   ParentNotFoundError,
-} from '@t3x/storage/pglite';
+} from '@t3x-dev/storage/pglite';
 import { Hono } from 'hono';
 import { getDB } from '../lib/db';
 import { jsonError, jsonSuccess } from '../lib/response';

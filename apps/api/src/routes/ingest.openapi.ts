@@ -7,13 +7,13 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { type ContentBlock, textFromBlocks } from '@t3x/core';
+import { type ContentBlock, textFromBlocks } from '@t3x-dev/core';
 import {
   findConversationById,
   findProjectById,
   insertConversation,
   insertTurn,
-} from '@t3x/storage/pglite';
+} from '@t3x-dev/storage/pglite';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';

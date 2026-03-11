@@ -7,8 +7,8 @@ import type {
   SemanticContent,
   SlotConflict,
   SlotValue,
-} from '@t3x/core';
-import { prepareFrameMerge } from '@t3x/core';
+} from '@t3x-dev/core';
+import { prepareFrameMerge } from '@t3x-dev/core';
 import {
   AlertTriangle,
   Check,
