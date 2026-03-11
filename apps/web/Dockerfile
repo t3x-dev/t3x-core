@@ -25,8 +25,8 @@ COPY packages/storage/ ./packages/storage/
 COPY apps/web/ ./apps/web/
 
 # Build dependencies first
-RUN pnpm --filter @t3x/core build && \
-    pnpm --filter @t3x/storage build
+RUN pnpm --filter @t3x-dev/core build && \
+    pnpm --filter @t3x-dev/storage build
 
 # Build webui
 # NEXT_PUBLIC_* vars must be set at build time (inlined into JS bundle)
