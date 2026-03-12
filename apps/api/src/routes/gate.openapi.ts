@@ -104,7 +104,7 @@ const SemanticIssueSchema = z.object({
 const SemanticGateResultSchema = z.object({
   passed: z.boolean(),
   score: z.number(),
-  dimensions: z.record(DimensionResultSchema),
+  dimensions: z.record(z.string(), DimensionResultSchema),
   issues: z.array(SemanticIssueSchema),
 });
 

@@ -60,14 +60,18 @@ export async function extractFrames(
   conversationId: string,
   turnHashes?: string[]
 ): Promise<FrameExtractResult> {
-  const res = await fetchWithTimeout(`${API_V1}/extract/frames`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      conversation_id: conversationId,
-      ...(turnHashes && { turn_hashes: turnHashes }),
-    }),
-  });
+  const res = await fetchWithTimeout(
+    `${API_V1}/extract/frames`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        conversation_id: conversationId,
+        ...(turnHashes && { turn_hashes: turnHashes }),
+      }),
+    },
+    60_000
+  );
   return handleResponse<FrameExtractResult>(res);
 }
 
@@ -129,10 +133,14 @@ export async function gateCheck(
     gates?: Array<'structure' | 'semantic' | 'business'>;
   }
 ): Promise<GateCheckResult> {
-  const res = await fetchWithTimeout(`${API_V1}/gate/check`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ content, ...opts }),
-  });
+  const res = await fetchWithTimeout(
+    `${API_V1}/gate/check`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content, ...opts }),
+    },
+    60_000
+  );
   return handleResponse<GateCheckResult>(res);
 }
