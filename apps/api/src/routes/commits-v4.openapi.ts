@@ -39,6 +39,7 @@ import {
   upsertSentenceVectorsBatch,
   validateMainBranchLinearity,
 } from '@t3x-dev/storage/pglite';
+import { getV4AuthorFromContext } from '../lib/auth';
 import { getDB } from '../lib/db';
 import { getEmbedder } from '../lib/embedder';
 import { errorResponse, zodErrorHook } from '../lib/errors';
@@ -542,9 +543,11 @@ commitsV4Routes.openapi(createCommitV4Route, async (c) => {
       finalSentences = [...sanitizedSentences, ...idSafeInherited];
     }
 
+    const author = await getV4AuthorFromContext(c, body.author);
+
     const commit = await createCommitV4(db, {
       parents: body.parents,
-      author: body.author,
+      author,
       sentences: finalSentences,
       project_id: body.project_id,
       message: body.message,
