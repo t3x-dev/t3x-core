@@ -1,5 +1,16 @@
 # @t3x-dev/api
 
+## 0.0.3
+
+### Patch Changes
+
+- add skipBuiltinAuth option to createApp
+
+- Updated dependencies []:
+  - @t3x-dev/core@0.0.3
+  - @t3x-dev/storage@0.0.3
+  - @t3x-dev/runner@0.0.3
+
 ## 0.0.2
 
 ### Patch Changes

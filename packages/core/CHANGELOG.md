@@ -1,5 +1,11 @@
 # @t3x-dev/core
 
+## 0.0.3
+
+### Patch Changes
+
+- add skipBuiltinAuth option to createApp
+
 ## 0.0.2
 
 ### Patch Changes
