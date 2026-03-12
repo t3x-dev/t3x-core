@@ -30,7 +30,7 @@ const OapiInlineFrameSchema: z.ZodType<{ type: string; slots: Record<string, unk
   () =>
     z.object({
       type: z.string().min(1),
-      slots: z.record(OapiSlotValueSchema),
+      slots: z.record(z.string(), OapiSlotValueSchema),
     })
 );
 
