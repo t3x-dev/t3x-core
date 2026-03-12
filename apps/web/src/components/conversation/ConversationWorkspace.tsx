@@ -40,6 +40,8 @@ export interface ConversationWorkspaceProps {
   hasMore: boolean;
   isLoadingMore: boolean;
   loadMore: () => void;
+  // Extraction trigger: incremented each time turns are saved to DB
+  turnsSavedCounter?: number;
   // Optional left sidebar content (metadata for modal, nothing for page)
   leftSidebar?: React.ReactNode;
   className?: string;
@@ -79,6 +81,7 @@ export function ConversationWorkspace({
   hasMore,
   isLoadingMore,
   loadMore,
+  turnsSavedCounter = 0,
   leftSidebar,
   className,
 }: ConversationWorkspaceProps) {
@@ -93,7 +96,6 @@ export function ConversationWorkspace({
   const [gateResult, setGateResult] = useState<GateCheckResult | null>(null);
 
   // ── Refs ──
-  const prevMessageCountRef = useRef(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const deltaClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -103,75 +105,50 @@ export function ConversationWorkspace({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // ── Auto-extraction on new messages ──
+  // ── Initial load: fetch existing draft when conversation opens ──
   useEffect(() => {
     if (!conversationId) return;
+    getSemanticDraft(conversationId)
+      .then((draft) => {
+        if (draft && draft.frames.length > 0) {
+          setSemanticSnapshot(draft);
+        }
+      })
+      .catch(() => {});
+  }, [conversationId]);
 
-    const prevCount = prevMessageCountRef.current;
-    const currentCount = messages.length;
-    prevMessageCountRef.current = currentCount;
+  // ── Extract frames after turns are saved to DB ──
+  const prevTurnsSavedRef = useRef(turnsSavedCounter);
+  useEffect(() => {
+    const prev = prevTurnsSavedRef.current;
+    prevTurnsSavedRef.current = turnsSavedCounter;
 
-    // Initial load: fetch existing draft, or extract if none exists
-    if (prevCount === 0 && currentCount > 0) {
-      getSemanticDraft(conversationId)
-        .then((draft) => {
-          if (draft && draft.frames.length > 0) {
-            setSemanticSnapshot(draft);
-          } else {
-            // No existing draft — run extraction for the first time
-            setExtracting(true);
-            extractFrames(conversationId)
-              .then((result) => {
-                setSemanticSnapshot(result.snapshot);
-              })
-              .catch(() => {
-                // Extraction failed — will retry on next message
-              })
-              .finally(() => {
-                setExtracting(false);
-              });
-          }
-        })
-        .catch(() => {
-          // Draft fetch failed — try extraction directly
-          setExtracting(true);
-          extractFrames(conversationId)
-            .then((result) => {
-              setSemanticSnapshot(result.snapshot);
-            })
-            .catch(() => {})
-            .finally(() => {
-              setExtracting(false);
-            });
-        });
-      return;
-    }
+    // Skip the initial render (counter is 0)
+    if (turnsSavedCounter === 0 || turnsSavedCounter === prev) return;
+    if (!conversationId) return;
 
-    // New messages arrived: run extraction
-    if (currentCount > prevCount && prevCount > 0) {
-      setExtracting(true);
-      extractFrames(conversationId)
-        .then((result) => {
-          setSemanticSnapshot(result.snapshot);
-          // Compute delta state for visual indicators
-          const { deltaState: ds, updatedSlots: us } = computeDeltaState(result.delta);
-          setDeltaState(ds);
-          setUpdatedSlots(us);
-          // Auto-clear delta indicators after 3s
-          if (deltaClearTimerRef.current) clearTimeout(deltaClearTimerRef.current);
-          deltaClearTimerRef.current = setTimeout(() => {
-            setDeltaState({});
-            setUpdatedSlots({});
-          }, 3000);
-        })
-        .catch(() => {
-          // Extraction failed silently
-        })
-        .finally(() => {
-          setExtracting(false);
-        });
-    }
-  }, [conversationId, messages.length]);
+    setExtracting(true);
+    extractFrames(conversationId)
+      .then((result) => {
+        setSemanticSnapshot(result.snapshot);
+        // Compute delta state for visual indicators
+        const { deltaState: ds, updatedSlots: us } = computeDeltaState(result.delta);
+        setDeltaState(ds);
+        setUpdatedSlots(us);
+        // Auto-clear delta indicators after 3s
+        if (deltaClearTimerRef.current) clearTimeout(deltaClearTimerRef.current);
+        deltaClearTimerRef.current = setTimeout(() => {
+          setDeltaState({});
+          setUpdatedSlots({});
+        }, 3000);
+      })
+      .catch(() => {
+        // Extraction failed — will retry on next message
+      })
+      .finally(() => {
+        setExtracting(false);
+      });
+  }, [conversationId, turnsSavedCounter]);
 
   // Cleanup timer on unmount
   useEffect(() => {

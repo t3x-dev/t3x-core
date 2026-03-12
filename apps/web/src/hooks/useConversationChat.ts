@@ -32,6 +32,8 @@ export interface UseConversationChatReturn {
   isLoadingMore: boolean;
   sendMessage: () => void;
   loadMore: () => void;
+  /** Incremented each time turns are persisted to the DB — use to trigger extraction */
+  turnsSavedCounter: number;
 }
 
 export function useConversationChat({
@@ -52,6 +54,7 @@ export function useConversationChat({
   const [streamingContent, setStreamingContent] = useState('');
   const [chatError, setChatError] = useState<string | null>(null);
   const [chatWarning, setChatWarning] = useState<string | null>(null);
+  const [turnsSavedCounter, setTurnsSavedCounter] = useState(0);
   const chatWarningTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ========== Refs ==========
@@ -321,6 +324,7 @@ export function useConversationChat({
             if (fullResponse) {
               await api.createTurn(projectId, currentConversationId, 'assistant', fullResponse);
             }
+            setTurnsSavedCounter((c) => c + 1);
             onTurnsSaved?.();
           } catch (err) {
             if (retriesLeft > 0) {
@@ -365,5 +369,6 @@ export function useConversationChat({
     isLoadingMore,
     sendMessage,
     loadMore,
+    turnsSavedCounter,
   };
 }
