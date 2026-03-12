@@ -101,6 +101,9 @@ export async function authMiddleware(c: Context, next: Next) {
 
     // Store API key info in context for downstream use
     c.set('apiKey', apiKey);
+    if (apiKey.user_id) {
+      c.set('userId', apiKey.user_id);
+    }
 
     // Update last_used_at in background (don't block the request)
     touchLastUsed(db, apiKey.id).catch(() => {});

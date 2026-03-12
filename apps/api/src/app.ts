@@ -71,6 +71,8 @@ import { webhooksRoutes } from './routes/webhooks.openapi';
 export interface CreateAppOptions {
   /** Skip built-in local auth (username/password). Set true for SaaS with OAuth. */
   skipLocalAuth?: boolean;
+  /** Skip built-in API Key auth middleware. Set true when cloud repo provides its own auth. */
+  skipBuiltinAuth?: boolean;
   /** Additional middleware inserted between rateLimitL1 and rateLimitL2 (e.g., auth) */
   middleware?: MiddlewareHandler[];
   /** Additional routes mounted on the OpenAPI router (e.g., auth callback) */
@@ -86,8 +88,11 @@ export function createApp(options?: CreateAppOptions): Hono {
   app.use('*', loggerMiddleware);
   app.use('*', rateLimitL1);
 
-  // Auth middleware: validates Bearer API key (built-in, used by both OSS and SaaS)
-  app.use('*', authMiddleware);
+  // Auth middleware: validates Bearer API key (built-in, used by OSS self-hosted)
+  // Cloud repo skips this and provides its own auth middleware via options.middleware
+  if (!options?.skipBuiltinAuth) {
+    app.use('*', authMiddleware);
+  }
 
   // Extension point: additional middleware (e.g., extra SaaS middleware from cloud repo)
   if (options?.middleware) {
@@ -283,3 +288,5 @@ export { pinoLogger } from './middleware/logger';
 
 // Common OpenAPI schemas
 export { ErrorResponseSchema, SuccessResponseSchema } from './schemas/common';
+// Type definitions
+export type { AppEnv } from './types';
