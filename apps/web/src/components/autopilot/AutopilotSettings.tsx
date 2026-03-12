@@ -214,8 +214,9 @@ export function AutopilotSettings({ projectId }: { projectId: string }) {
           {adaptiveResult?.adaptive
             ? (() => {
                 const stats = adaptiveResult.stats as Record<string, unknown> | undefined;
-                const totalCount = (stats?.total_feedback_count as number) ?? 0;
-                const editRate = (stats?.edit_rate as number) ?? null;
+                const totalCount = (stats?.total as number) ?? 0;
+                const editRate =
+                  totalCount > 0 ? ((stats?.edited as number) ?? 0) / totalCount : null;
                 const byType = (stats?.by_type as Record<string, { accept_rate?: number }>) ?? {};
                 const { suppressedTypes, confidenceMultipliers, cosineThresholdDelta } =
                   adaptiveResult.adaptive;
@@ -313,8 +314,7 @@ export function AutopilotSettings({ projectId }: { projectId: string }) {
               })()
             : (() => {
                 const count =
-                  ((adaptiveResult?.stats as Record<string, unknown>)
-                    ?.total_feedback_count as number) ?? 0;
+                  ((adaptiveResult?.stats as Record<string, unknown>)?.total as number) ?? 0;
                 const threshold = 10;
 
                 return (

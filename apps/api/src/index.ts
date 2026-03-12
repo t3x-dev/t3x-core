@@ -8,10 +8,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { serve } from '@hono/node-server';
+import { createApp } from './app';
 import { closeDB, getDB } from './lib/db';
 import { startTimeoutChecker, stopTimeoutChecker } from './lib/timeout-checker';
 import { pinoLogger } from './middleware/logger';
-import { createApp } from './app';
 
 function loadEnvLocal(): void {
   // Load env from monorepo root (unified config)

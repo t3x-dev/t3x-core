@@ -555,7 +555,9 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
         SELECT 1 FROM information_schema.columns
         WHERE table_name = 'webhooks' AND column_name = 'active' AND data_type = 'text'
       ) THEN
+        ALTER TABLE webhooks ALTER COLUMN active DROP DEFAULT;
         ALTER TABLE webhooks ALTER COLUMN active TYPE INTEGER USING CASE WHEN active = 'true' THEN 1 ELSE 0 END;
+        ALTER TABLE webhooks ALTER COLUMN active SET DEFAULT 1;
       END IF;
     END $$;
 

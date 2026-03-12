@@ -473,7 +473,7 @@ const VerifyChainResultSchema = z.object({
     parent_not_found: z.array(z.string()),
     other: z.array(z.string()),
   }),
-  merkle_roots: z.record(z.string()),
+  merkle_roots: z.record(z.string(), z.string()),
   merkle_mismatches: z.array(z.string()),
   truncated: z.boolean(),
   verified_at: z.string(),

@@ -27,10 +27,10 @@ COPY apps/api/ ./apps/api/
 COPY apps/runner/ ./apps/runner/
 
 # Build all packages
-RUN pnpm --filter @t3x/core build && \
-    pnpm --filter @t3x/storage build && \
-    pnpm --filter @t3x/runner build && \
-    pnpm --filter @t3x/api build
+RUN pnpm --filter @t3x-dev/core build && \
+    pnpm --filter @t3x-dev/storage build && \
+    pnpm --filter @t3x-dev/runner build && \
+    pnpm --filter @t3x-dev/api build
 
 # Production stage
 FROM node:20-slim AS runner

@@ -5,7 +5,11 @@
  * Falls back to local Intl.Segmenter-based provider for development without GCP.
  */
 
-import { createGoogleCloudNLPProvider, createLocalNLPProvider, type NLPProvider } from '@t3x-dev/core';
+import {
+  createGoogleCloudNLPProvider,
+  createLocalNLPProvider,
+  type NLPProvider,
+} from '@t3x-dev/core';
 import { ProxyAgent, fetch as undiciFetch } from 'undici';
 import { pinoLogger } from '../middleware/logger';
 

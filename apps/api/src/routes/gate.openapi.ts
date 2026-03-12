@@ -41,7 +41,7 @@ const BusinessRuleSchema = z.object({
 const FrameSchema = z.object({
   id: z.string().min(1),
   type: z.string().min(1),
-  slots: z.record(z.any()),
+  slots: z.record(z.string(), z.any()),
   source: z.string().optional(),
   confidence: z.number().min(0).max(1).optional(),
 });
@@ -105,7 +105,7 @@ const SemanticIssueSchema = z.object({
 const SemanticGateResultSchema = z.object({
   passed: z.boolean(),
   score: z.number(),
-  dimensions: z.record(DimensionResultSchema),
+  dimensions: z.record(z.string(), DimensionResultSchema),
   issues: z.array(SemanticIssueSchema),
 });
 

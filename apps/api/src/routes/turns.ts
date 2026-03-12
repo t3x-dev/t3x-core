@@ -36,8 +36,12 @@ function validateContentBlocks(blocks: unknown): string | null {
     if (!VALID_BLOCK_TYPES.has(b.type as string)) {
       return `invalid block type: ${String(b.type)}`;
     }
-    if (b.type === 'text' && typeof b.text !== 'string') return 'text block must have a text string';
-    if ((b.type === 'image' || b.type === 'audio' || b.type === 'file') && typeof b.url !== 'string') {
+    if (b.type === 'text' && typeof b.text !== 'string')
+      return 'text block must have a text string';
+    if (
+      (b.type === 'image' || b.type === 'audio' || b.type === 'file') &&
+      typeof b.url !== 'string'
+    ) {
       return `${b.type} block must have a url string`;
     }
     if (b.type === 'file' && typeof b.filename !== 'string') {

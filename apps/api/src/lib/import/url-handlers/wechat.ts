@@ -56,7 +56,7 @@ function stripHtml(html: string): string {
 /**
  * Extract content between a regex start pattern and end pattern.
  */
-function extractBetween(html: string, startPattern: RegExp, endPattern: RegExp): string | null {
+function _extractBetween(html: string, startPattern: RegExp, endPattern: RegExp): string | null {
   const startMatch = startPattern.exec(html);
   if (!startMatch) return null;
 

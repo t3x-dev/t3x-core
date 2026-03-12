@@ -2,6 +2,7 @@
 
 import type { Delta, DeltaSource, FrameDiff, SemanticContent, SlotValue } from '@t3x-dev/core';
 import { frameDiff } from '@t3x-dev/core';
+import yaml from 'js-yaml';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 
@@ -87,19 +88,19 @@ export function FrameYAMLEditor({ content, onDeltaCreated, className }: FrameYAM
   // Sync textarea when content prop changes (external update)
   useEffect(() => {
     contentRef.current = content;
-    setText(JSON.stringify(content, null, 2));
+    setText(yaml.dump(content, { indent: 2, lineWidth: 120, noRefs: true }));
     setError(null);
   }, [content]);
 
   const applyChanges = useCallback(() => {
     setError(null);
 
-    // 1. Parse JSON
+    // 1. Parse YAML
     let parsed: unknown;
     try {
-      parsed = JSON.parse(text);
+      parsed = yaml.load(text);
     } catch (e) {
-      setError(`Invalid JSON: ${(e as Error).message}`);
+      setError(`Invalid YAML: ${(e as Error).message}`);
       return;
     }
 
@@ -156,7 +157,7 @@ export function FrameYAMLEditor({ content, onDeltaCreated, className }: FrameYAM
         onBlur={applyChanges}
         onKeyDown={handleKeyDown}
         spellCheck={false}
-        aria-label="Semantic content JSON editor"
+        aria-label="Semantic content YAML editor"
       />
 
       {/* Error display */}

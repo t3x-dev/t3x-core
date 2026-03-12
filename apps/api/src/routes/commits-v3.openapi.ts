@@ -7,7 +7,7 @@
  */
 
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
-import { computeCommitV3Hash, getLocalAuthor } from '@t3x-dev/core';
+import { computeCommitV3Hash } from '@t3x-dev/core';
 import {
   type CommitV3Output,
   createCommitV3,
@@ -15,6 +15,7 @@ import {
   listCommitsV3,
   ParentNotFoundError,
 } from '@t3x-dev/storage/pglite';
+import { getAuthorFromContext } from '../lib/auth';
 import { getDB } from '../lib/db';
 import {
   CommitV3Schema,
@@ -113,7 +114,7 @@ commitsV3Routes.openapi(createCommitV3Route, async (c) => {
     const db = await getDB();
 
     // Build commit data for hashing
-    const author = getLocalAuthor(); // TODO: from session for web
+    const author = await getAuthorFromContext(c);
     const committedAt = new Date();
     const parents = body.parents ?? [];
 

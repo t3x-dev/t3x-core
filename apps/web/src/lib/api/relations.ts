@@ -57,7 +57,8 @@ export async function extractCommitRelations(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({}),
-    }
+    },
+    60000 // 60s timeout for LLM relation extraction
   );
   return handleResponse<{ relations_found: number; stats: ExtractionStats }>(res);
 }

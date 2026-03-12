@@ -9,8 +9,8 @@ import { getAuthorFromContext } from '../lib/auth';
  */
 function createTestApp() {
   const app = new Hono();
-  app.get('/author', (c) => {
-    const author = getAuthorFromContext(c);
+  app.get('/author', async (c) => {
+    const author = await getAuthorFromContext(c);
     return c.json(author);
   });
   return app;
