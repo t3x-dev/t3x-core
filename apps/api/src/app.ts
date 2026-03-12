@@ -22,6 +22,7 @@ import { Hono } from 'hono';
 import { authMiddleware } from './middleware/auth';
 import { corsMiddleware } from './middleware/cors';
 import { loggerMiddleware, pinoLogger } from './middleware/logger';
+import { projectAccessMiddleware } from './middleware/project-access';
 import { rateLimitL1, rateLimitL2 } from './middleware/rate-limit';
 import { requestIdMiddleware } from './middleware/request-id';
 import {
@@ -125,6 +126,9 @@ export function createApp(options?: CreateAppOptions): Hono {
       }
     },
   });
+
+  // Project-level access control: gate all /v1/projects/:projectId/* sub-routes
+  api.use('/v1/projects/:projectId/*', projectAccessMiddleware);
 
   // Mount routes
   api.route('/', statusRoutes);

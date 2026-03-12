@@ -13,13 +13,13 @@ import {
   findBranchesByProject,
   findCommitsV4ByProject,
   findConversationsByProject,
-  findProjectById,
   findProjects,
   insertProject,
   verifyHashChain,
 } from '@t3x-dev/storage/pglite';
 import { Hono } from 'hono';
 import { getDB } from '../lib/db';
+import { assertProjectAccess, getUserId } from '../lib/project-access';
 import { jsonError, jsonSuccess } from '../lib/response';
 
 export const projectRoutes = new Hono();
@@ -33,7 +33,8 @@ projectRoutes.get('/v1/projects', async (c) => {
 
   try {
     const db = await getDB();
-    const projects = await findProjects(db, { limit, offset });
+    const userId = getUserId(c);
+    const projects = await findProjects(db, { limit, offset, owner_id: userId });
 
     // Fetch counts for each project in parallel
     const enriched = await Promise.all(
@@ -80,9 +81,11 @@ projectRoutes.post('/v1/projects', async (c) => {
 
   try {
     const db = await getDB();
+    const userId = getUserId(c);
     const project = await insertProject(db, {
       name: body.name,
       metadata: body.metadata,
+      ownerId: userId,
     });
 
     const apiProject = {
@@ -107,11 +110,11 @@ projectRoutes.get('/v1/projects/:id', async (c) => {
 
   try {
     const db = await getDB();
-    const project = await findProjectById(db, id);
 
-    if (!project) {
-      return jsonError(c, 'NOT_FOUND', `Project ${id} not found`, 404);
-    }
+    // Access control check
+    const accessResult = await assertProjectAccess(c, db, id);
+    if (accessResult instanceof Response) return accessResult;
+    const project = accessResult;
 
     const apiProject = {
       project_id: project.projectId,
@@ -135,11 +138,12 @@ projectRoutes.delete('/v1/projects/:id', async (c) => {
 
   try {
     const db = await getDB();
-    const deleted = await deleteProject(db, id);
 
-    if (!deleted) {
-      return jsonError(c, 'NOT_FOUND', `Project ${id} not found`, 404);
-    }
+    // Access control check
+    const accessResult = await assertProjectAccess(c, db, id);
+    if (accessResult instanceof Response) return accessResult;
+
+    await deleteProject(db, id);
 
     return jsonSuccess(c, { deleted: true, project_id: id });
   } catch (err) {
@@ -157,11 +161,9 @@ projectRoutes.get('/v1/projects/:id/verify', async (c) => {
   try {
     const db = await getDB();
 
-    // Check project exists
-    const project = await findProjectById(db, id);
-    if (!project) {
-      return jsonError(c, 'NOT_FOUND', `Project ${id} not found`, 404);
-    }
+    // Access control check
+    const accessResult = await assertProjectAccess(c, db, id);
+    if (accessResult instanceof Response) return accessResult;
 
     const result = await verifyHashChain(db, id);
 

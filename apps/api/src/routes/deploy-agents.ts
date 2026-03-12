@@ -14,12 +14,12 @@ import {
   deleteDeployAgent,
   findDeployAgentById,
   findDeployAgents,
-  findProjectById,
   insertDeployAgent,
   updateDeployAgent,
 } from '@t3x-dev/storage/pglite';
 import { Hono } from 'hono';
 import { getDB } from '../lib/db';
+import { assertProjectAccess } from '../lib/project-access';
 import { jsonError, jsonSuccess } from '../lib/response';
 
 /** Mask auth tokens in responses to avoid leaking secrets. */
@@ -81,6 +81,12 @@ deployAgentRoutes.get('/v1/deploy-agents', async (c) => {
   try {
     const db = await getDB();
 
+    // Access control check (if project-scoped)
+    if (projectId) {
+      const accessResult = await assertProjectAccess(c, db, projectId);
+      if (accessResult instanceof Response) return accessResult;
+    }
+
     // Cursor-based pagination mode
     if (cursor !== undefined) {
       const result = await findDeployAgents(db, { projectId, cursor, limit });
@@ -137,12 +143,10 @@ deployAgentRoutes.post('/v1/deploy-agents', async (c) => {
   try {
     const db = await getDB();
 
-    // Validate project_id exists if provided
+    // Access control check (if project-scoped)
     if (body.project_id) {
-      const project = await findProjectById(db, body.project_id);
-      if (!project) {
-        return jsonError(c, 'PROJECT_NOT_FOUND', `Project ${body.project_id} not found`, 400);
-      }
+      const accessResult = await assertProjectAccess(c, db, body.project_id);
+      if (accessResult instanceof Response) return accessResult;
     }
 
     const agent = await insertDeployAgent(db, {

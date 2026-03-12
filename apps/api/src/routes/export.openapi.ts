@@ -10,7 +10,6 @@ import { buildDraft } from '@t3x-dev/core';
 import { listDeltaLogByConversation } from '@t3x-dev/storage';
 import {
   findConversationsByProject,
-  findProjectById,
   findTurnsByProject,
   listCommitsV3,
 } from '@t3x-dev/storage/pglite';
@@ -18,6 +17,7 @@ import * as crypto from 'crypto';
 import { getDB } from '../lib/db';
 import { toDeltaLogEntries } from '../lib/delta-log-utils';
 import { zodErrorHook } from '../lib/errors';
+import { assertProjectAccess } from '../lib/project-access';
 import { ErrorResponseSchema } from '../schemas/common';
 import { ExportQuery } from '../schemas/export-contracts';
 
@@ -246,16 +246,10 @@ exportRoutes.openapi(exportCfpackRoute, async (c) => {
   try {
     const db = await getDB();
 
-    const project = await findProjectById(db, projectId);
-    if (!project) {
-      return c.json(
-        {
-          success: false as const,
-          error: { code: 'NOT_FOUND', message: `Project ${projectId} not found` },
-        },
-        404
-      );
-    }
+    // Access control check
+    const accessResult = await assertProjectAccess(c, db, projectId);
+    if (accessResult instanceof Response) return accessResult;
+    const project = accessResult;
 
     const turnRows = await findTurnsByProject(db, { projectId, limit: 10000 });
 
@@ -435,16 +429,10 @@ exportRoutes.openapi(exportLedgerRoute, async (c) => {
   try {
     const db = await getDB();
 
-    const project = await findProjectById(db, projectId);
-    if (!project) {
-      return c.json(
-        {
-          success: false as const,
-          error: { code: 'NOT_FOUND', message: `Project ${projectId} not found` },
-        },
-        404
-      );
-    }
+    // Access control check
+    const accessResult = await assertProjectAccess(c, db, projectId);
+    if (accessResult instanceof Response) return accessResult;
+    const project = accessResult;
 
     const lines: string[] = [];
 

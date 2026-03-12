@@ -117,9 +117,9 @@ describe('Deploy Agents Routes', () => {
           project_id: 'proj_nonexistent',
         }),
       });
-      expect(res.status).toBe(400);
+      expect(res.status).toBe(404);
       const data: ApiResponse = await res.json();
-      expect((data.error as Record<string, unknown>).code).toBe('PROJECT_NOT_FOUND');
+      expect((data.error as Record<string, unknown>).code).toBe('NOT_FOUND');
     });
   });
 

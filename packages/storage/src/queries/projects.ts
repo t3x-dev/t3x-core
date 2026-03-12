@@ -23,6 +23,8 @@ import { type CursorPage, decodeCursor, toCursorPage } from './pagination';
 export interface CreateProjectInput {
   name: string;
   metadata?: Record<string, unknown>;
+  /** Owner user ID. Omit or undefined → NULL (public/legacy data). */
+  ownerId?: string;
 }
 
 export interface ListProjectsOptions {
@@ -30,6 +32,8 @@ export interface ListProjectsOptions {
   offset?: number;
   /** Opaque cursor for keyset pagination. Empty string = first page in cursor mode. */
   cursor?: string;
+  /** Filter by owner. When set, returns projects owned by this user OR public (owner_id IS NULL). */
+  owner_id?: string;
 }
 
 export interface ProjectStats {
@@ -57,6 +61,7 @@ export async function insertProject(db: AnyDB, input: CreateProjectInput): Promi
     .values({
       projectId,
       name: input.name,
+      ownerId: input.ownerId ?? null,
       createdAt,
       metadataJson,
     })
@@ -95,9 +100,16 @@ export async function findProjects(
 ): Promise<Project[] | CursorPage<Project>> {
   const limit = options.limit ?? 100;
 
+  // Owner filter: show user's own projects + public (owner_id IS NULL)
+  const ownerCondition = options.owner_id
+    ? or(eq(projects.ownerId, options.owner_id), sql`${projects.ownerId} IS NULL`)!
+    : undefined;
+
   if (options.cursor !== undefined) {
     // Cursor pagination mode
     const conditions = [];
+
+    if (ownerCondition) conditions.push(ownerCondition);
 
     if (options.cursor !== '') {
       const { t, k } = decodeCursor(options.cursor);
@@ -126,7 +138,13 @@ export async function findProjects(
 
   // Legacy offset/limit mode
   const offset = options.offset ?? 0;
-  return db.select().from(projects).orderBy(desc(projects.createdAt)).limit(limit).offset(offset);
+  return db
+    .select()
+    .from(projects)
+    .where(ownerCondition)
+    .orderBy(desc(projects.createdAt))
+    .limit(limit)
+    .offset(offset);
 }
 
 /**

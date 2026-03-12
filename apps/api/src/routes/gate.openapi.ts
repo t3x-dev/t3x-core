@@ -12,6 +12,7 @@ import { GateRunner, type LLMProvider } from '@t3x-dev/core';
 import { findConversationById, findTurnsByConversation, getBusinessRules } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { assertProjectAccess } from '../lib/project-access';
 import { getLLMProvider } from '../lib/provider-registry';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
@@ -207,6 +208,12 @@ gateRoutes.openapi(gateCheckRoute, async (c) => {
           content: t.content,
         }));
       }
+    }
+
+    // Access control check (if project_id is known)
+    if (resolvedProjectId) {
+      const accessResult = await assertProjectAccess(c, db, resolvedProjectId);
+      if (accessResult instanceof Response) return accessResult;
     }
 
     // Auto-load business rules from project if none provided
