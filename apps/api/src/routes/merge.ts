@@ -27,7 +27,7 @@ import {
 } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { getAuthorFromContext } from '../lib/auth';
+import { getV4AuthorFromContext } from '../lib/auth';
 import { getDB } from '../lib/db';
 import { jsonError, jsonSuccess } from '../lib/response';
 
@@ -154,9 +154,8 @@ mergeRoutes.post('/v1/merge/execute', zValidator('json', executeSchema), async (
     );
   }
 
-  // Get author from context (convert to V4 format)
-  const authorV3 = getAuthorFromContext(c);
-  const author = { type: 'human' as const, name: authorV3.name, id: authorV3.identity };
+  // Get author from context
+  const author = await getV4AuthorFromContext(c);
   const db = await getDB();
 
   try {
@@ -368,9 +367,8 @@ mergeRoutes.post(
       );
     }
 
-    // Get author from context (convert to V4 format)
-    const authorV3 = getAuthorFromContext(c);
-    const author = { type: 'human' as const, name: authorV3.name, id: authorV3.identity };
+    // Get author from context
+    const author = await getV4AuthorFromContext(c);
 
     try {
       // Execute merge - V4 API requires projectId

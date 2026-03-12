@@ -9,5 +9,7 @@ import type { ApiKey } from '@t3x-dev/core';
 export type AppEnv = {
   Variables: {
     apiKey?: ApiKey;
+    /** Authenticated user ID. Set by auth middleware (JWT or API Key path). Undefined when AUTH_DISABLED=true. */
+    userId?: string;
   };
 };

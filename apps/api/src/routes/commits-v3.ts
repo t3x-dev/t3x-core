@@ -7,7 +7,7 @@
  */
 
 import type { Constraint, Sentence } from '@t3x-dev/core';
-import { computeCommitV3Hash, getLocalAuthor } from '@t3x-dev/core';
+import { computeCommitV3Hash } from '@t3x-dev/core';
 import {
   type CommitV3Output,
   createCommitV3,
@@ -16,6 +16,7 @@ import {
   ParentNotFoundError,
 } from '@t3x-dev/storage/pglite';
 import { Hono } from 'hono';
+import { getAuthorFromContext } from '../lib/auth';
 import { getDB } from '../lib/db';
 import { jsonError, jsonSuccess } from '../lib/response';
 
@@ -281,7 +282,7 @@ commitsV3Routes.post('/v1/commits-v3', async (c) => {
     const db = await getDB();
 
     // Build commit data for hashing
-    const author = getLocalAuthor(); // TODO: from session for web
+    const author = await getAuthorFromContext(c);
     const committedAt = new Date();
 
     const commitData = {

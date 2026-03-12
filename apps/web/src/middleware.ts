@@ -14,7 +14,7 @@ const PUBLIC_PATHS = ['/login', '/api/auth', '/share'];
 export function middleware(request: NextRequest) {
   // Auth is DISABLED by default (safe for local dev without .env).
   // Only enabled when AUTH_DISABLED is explicitly set to 'false'.
-  if (process.env.AUTH_DISABLED !== 'false') {
+  if (process.env.AUTH_DISABLED?.toLowerCase() !== 'false') {
     return NextResponse.next();
   }
 

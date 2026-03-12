@@ -54,8 +54,8 @@ function isPublicPath(path: string, method?: string): boolean {
  * Only disabled when AUTH_DISABLED is explicitly set to 'true'.
  */
 export async function authMiddleware(c: Context, next: Next) {
-  // Skip auth only when explicitly disabled (AUTH_DISABLED=true)
-  if (process.env.AUTH_DISABLED === 'true') {
+  // Skip auth only when explicitly disabled (AUTH_DISABLED=true, case-insensitive)
+  if (process.env.AUTH_DISABLED?.toLowerCase() === 'true') {
     return next();
   }
 
@@ -101,6 +101,9 @@ export async function authMiddleware(c: Context, next: Next) {
 
     // Store API key info in context for downstream use
     c.set('apiKey', apiKey);
+    if (apiKey.user_id) {
+      c.set('userId', apiKey.user_id);
+    }
 
     // Update last_used_at in background (don't block the request)
     touchLastUsed(db, apiKey.id).catch(() => {});
