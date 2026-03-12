@@ -111,16 +111,38 @@ export function ConversationWorkspace({
     const currentCount = messages.length;
     prevMessageCountRef.current = currentCount;
 
-    // Initial load: fetch existing draft
+    // Initial load: fetch existing draft, or extract if none exists
     if (prevCount === 0 && currentCount > 0) {
       getSemanticDraft(conversationId)
         .then((draft) => {
           if (draft && draft.frames.length > 0) {
             setSemanticSnapshot(draft);
+          } else {
+            // No existing draft — run extraction for the first time
+            setExtracting(true);
+            extractFrames(conversationId)
+              .then((result) => {
+                setSemanticSnapshot(result.snapshot);
+              })
+              .catch(() => {
+                // Extraction failed — will retry on next message
+              })
+              .finally(() => {
+                setExtracting(false);
+              });
           }
         })
         .catch(() => {
-          // No existing draft — that's fine
+          // Draft fetch failed — try extraction directly
+          setExtracting(true);
+          extractFrames(conversationId)
+            .then((result) => {
+              setSemanticSnapshot(result.snapshot);
+            })
+            .catch(() => {})
+            .finally(() => {
+              setExtracting(false);
+            });
         });
       return;
     }
