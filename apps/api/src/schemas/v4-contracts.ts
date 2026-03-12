@@ -319,7 +319,7 @@ export const LeafResponse = z.object({
   type: AnyLeafTypeEnum,
   title: z.string().nullable(),
   constraints: z.array(ConstraintSchema),
-  config: z.record(z.unknown()),
+  config: z.record(z.string(), z.unknown()),
   output: z.string().nullable(),
   generated_at: z.string().nullable(),
   assertions: z.array(AssertionSchema).nullable(),
