@@ -54,8 +54,8 @@ function isPublicPath(path: string, method?: string): boolean {
  * Only disabled when AUTH_DISABLED is explicitly set to 'true'.
  */
 export async function authMiddleware(c: Context, next: Next) {
-  // Skip auth only when explicitly disabled (AUTH_DISABLED=true)
-  if (process.env.AUTH_DISABLED === 'true') {
+  // Skip auth only when explicitly disabled (AUTH_DISABLED=true, case-insensitive)
+  if (process.env.AUTH_DISABLED?.toLowerCase() === 'true') {
     return next();
   }
 

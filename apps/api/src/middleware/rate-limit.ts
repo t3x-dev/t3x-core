@@ -89,7 +89,7 @@ function getClientIp(c: Context): string | null {
  */
 export async function rateLimitL1(c: Context, next: Next) {
   // Skip rate limiting when auth is disabled (local dev)
-  if (process.env.AUTH_DISABLED === 'true') return next();
+  if (process.env.AUTH_DISABLED?.toLowerCase() === 'true') return next();
 
   const ip = getClientIp(c);
 
