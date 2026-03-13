@@ -21,6 +21,11 @@
       "import": "./dist/postgres.js",
       "require": "./dist/postgres.js"
     },
+    "./embedded": {
+      "types": "./dist/embedded.d.ts",
+      "import": "./dist/embedded.js",
+      "require": "./dist/embedded.js"
+    },
     "./supabase": {
       "types": "./dist/supabase.d.ts",
       "import": "./dist/supabase.js",
@@ -54,6 +59,7 @@
     "@electric-sql/pglite": "^0.3.14",
     "@t3x-dev/core": "workspace:*",
     "drizzle-orm": "^0.38.3",
+    "embedded-postgres": "^18.3.0-beta.16",
     "postgres": "^3.4.5"
   },
   "devDependencies": {

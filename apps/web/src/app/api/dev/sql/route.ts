@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       rows: result.rows,
       rowCount: result.rows.length,
-      fields: result.fields?.map((f: { name: string; dataTypeID: number }) => ({
+      fields: (result.fields as { name: string; dataTypeID: number }[] | undefined)?.map((f) => ({
         name: f.name,
         dataTypeID: f.dataTypeID,
       })),

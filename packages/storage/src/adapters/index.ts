@@ -2,12 +2,16 @@
  * Database Adapters
  *
  * Unified interface for different PostgreSQL backends:
- * - PGLite: Local development (WASM PostgreSQL)
+ * - PGLite: Local development / in-memory testing (WASM PostgreSQL)
  * - PostgreSQL: Docker/production
  * - Supabase: Cloud deployment
+ *
+ * NOTE: Embedded PostgreSQL adapter is NOT exported here to avoid pulling
+ * platform-specific native binaries into webpack/Turbopack bundles.
+ * Import it directly: import { ... } from '@t3x-dev/storage/embedded'
  */
 
-// PGLite (local)
+// PGLite (local development / testing)
 export {
   closePGLiteStorage,
   createPGLiteStorage,

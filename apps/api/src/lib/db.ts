@@ -1,9 +1,10 @@
 /**
  * Database connection management for standalone API
  *
- * Supports two modes:
- * - PostgreSQL: When DATABASE_URL is set (Docker/production)
- * - PGLite: Local development fallback
+ * Supports three modes (in priority order):
+ * 1. PostgreSQL: When DATABASE_URL is set (Docker/production)
+ * 2. Embedded PostgreSQL: Default for local development (crash-safe)
+ * 3. PGLite: When T3X_USE_PGLITE=true (in-memory testing only)
  */
 import type { AnyDB } from '@t3x-dev/storage';
 import { pinoLogger } from '../middleware/logger';
@@ -37,19 +38,29 @@ async function initializeDB(): Promise<AnyDB> {
     const { createPostgresStorage, closePostgresStorage } = await import('@t3x-dev/storage');
     db = await createPostgresStorage({ connectionString: databaseUrl });
     closeFunction = closePostgresStorage;
-  } else {
-    // Fall back to PGLite for local development
-    // Note: File mode may have issues with Node 23, use Node 20 LTS if problems occur
+  } else if (process.env.T3X_USE_PGLITE === 'true') {
+    // Explicit PGLite mode (for in-memory testing)
     const inMemory = process.env.T3X_IN_MEMORY === 'true';
-    // Use same default path as WebUI for data sharing
     const dataDir = process.env.T3X_DATA_DIR || '.t3x/database';
     pinoLogger.info({ data_dir: dataDir, in_memory: inMemory }, 'using PGLite');
     const { createPGLiteStorage, closePGLiteStorage } = await import('@t3x-dev/storage');
     db = await createPGLiteStorage({ dataDir, inMemory });
     closeFunction = closePGLiteStorage;
+  } else {
+    // Default: Embedded PostgreSQL (crash-safe local development)
+    // Import from dedicated entry point — main @t3x-dev/storage does not export
+    // embedded adapter to avoid pulling platform-specific binaries into bundlers.
+    const dataDir = process.env.T3X_DATA_DIR || '.t3x/pg-data';
+    const port = parseInt(process.env.T3X_PG_PORT || '', 10) || 5445;
+    pinoLogger.info({ data_dir: dataDir, port }, 'using embedded PostgreSQL');
+    const { createEmbeddedStorage, closeEmbeddedStorage } = await import(
+      '@t3x-dev/storage/embedded'
+    );
+    db = await createEmbeddedStorage({ dataDir, port });
+    closeFunction = closeEmbeddedStorage;
   }
 
-  return db;
+  return db!;
 }
 
 /**

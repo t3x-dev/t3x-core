@@ -42,6 +42,14 @@
   "engines": {
     "node": ">=20.9.0"
   },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@embedded-postgres/darwin-arm64",
+      "@embedded-postgres/darwin-x64",
+      "@embedded-postgres/linux-arm64",
+      "@embedded-postgres/linux-x64"
+    ]
+  },
   "devDependencies": {
     "@biomejs/biome": "^2.3.10",
     "@changesets/changelog-github": "^0.6.0",
