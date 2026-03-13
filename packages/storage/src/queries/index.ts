@@ -442,6 +442,7 @@ export {
   findUserByEmail,
   findUserById,
   findUserByUsername,
+  updateUser,
 } from './users';
 // Webhooks (event subscriptions)
 export {

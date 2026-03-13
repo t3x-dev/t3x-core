@@ -260,6 +260,33 @@ export async function findOrCreateUser(db: AnyDB, input: CreateUserInput): Promi
   return newUser;
 }
 
+/**
+ * Update a user's profile fields (name, avatar_url).
+ *
+ * Only mutable fields are accepted. Email is bound to
+ * OAuth provider and cannot be changed here.
+ * Returns null if user not found.
+ */
+export async function updateUser(
+  db: AnyDB,
+  userId: string,
+  data: { name?: string; avatar_url?: string }
+): Promise<User | null> {
+  const updates: Partial<{ name: string; avatarUrl: string }> = {};
+  if (data.name !== undefined) updates.name = data.name;
+  if (data.avatar_url !== undefined) updates.avatarUrl = data.avatar_url;
+
+  if (Object.keys(updates).length === 0) return findUserById(db, userId);
+
+  const result = await db
+    .update(users)
+    .set(updates)
+    .where(eq(users.id, userId))
+    .returning();
+
+  return result[0] ? rowToUser(result[0]) : null;
+}
+
 // ============================================================
 // Local Auth Query Functions
 // ============================================================

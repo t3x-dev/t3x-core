@@ -9,7 +9,7 @@
 
 import { randomBytes } from 'node:crypto';
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { API_KEY_VALUE_PREFIX } from '@t3x-dev/core';
+import { API_KEY_VALUE_PREFIX, type ApiKey } from '@t3x-dev/core';
 import { createApiKey, findApiKeyById, listApiKeys, revokeApiKey } from '@t3x-dev/storage/pglite';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
@@ -24,6 +24,12 @@ import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 /** Strip sensitive fields (key_hash, user_id) from API key records. */
 function toSafeApiKey({ key_hash, user_id, ...safe }: Record<string, unknown>) {
   return safe;
+}
+
+/** Extract userId from API key context (set by auth middleware). */
+function getUserId(c: Parameters<Parameters<typeof apiKeysRoutes.openapi>[1]>[0]): string | null {
+  const apiKey = c.get('apiKey') as ApiKey | undefined;
+  return apiKey?.user_id ?? null;
 }
 
 export const apiKeysRoutes = new OpenAPIHono({
@@ -68,6 +74,7 @@ const createApiKeyRoute = createRoute({
 
 apiKeysRoutes.openapi(createApiKeyRoute, async (c) => {
   const body = c.req.valid('json');
+  const userId = getUserId(c);
 
   try {
     const db = await getDB();
@@ -78,6 +85,7 @@ apiKeysRoutes.openapi(createApiKeyRoute, async (c) => {
     const apiKey = await createApiKey(db, {
       name: body.name,
       projectId: body.project_id,
+      userId: userId ?? undefined,
       keyValue: rawKey,
     });
 
@@ -130,10 +138,11 @@ const listApiKeysRoute = createRoute({
 
 apiKeysRoutes.openapi(listApiKeysRoute, async (c) => {
   const { project_id } = c.req.valid('query');
+  const userId = getUserId(c);
 
   try {
     const db = await getDB();
-    const keys = await listApiKeys(db, { projectId: project_id });
+    const keys = await listApiKeys(db, { projectId: project_id, userId: userId ?? undefined });
 
     return c.json({
       success: true as const,
@@ -178,12 +187,18 @@ const revokeApiKeyRoute = createRoute({
 
 apiKeysRoutes.openapi(revokeApiKeyRoute, async (c) => {
   const { id } = c.req.valid('param');
+  const userId = getUserId(c);
 
   try {
     const db = await getDB();
 
     const existing = await findApiKeyById(db, id);
     if (!existing) {
+      return errorResponse(c, 'API_KEY_NOT_FOUND', `API key not found: ${id}`);
+    }
+
+    // Verify ownership: user can only revoke their own keys
+    if (userId && existing.user_id && existing.user_id !== userId) {
       return errorResponse(c, 'API_KEY_NOT_FOUND', `API key not found: ${id}`);
     }
 

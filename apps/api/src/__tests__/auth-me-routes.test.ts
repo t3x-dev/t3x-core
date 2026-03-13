@@ -1,0 +1,252 @@
+/**
+ * Auth Me Routes Tests
+ *
+ * Integration tests for user profile endpoints.
+ *
+ * Endpoints tested:
+ * - GET   /v1/auth/me  — Get current user + linked accounts
+ * - PATCH /v1/auth/me  — Update profile (name, avatar_url)
+ */
+
+import { createAccount, createUser } from '@t3x-dev/storage';
+import { getPGLiteClient, type PGLiteDB } from '@t3x-dev/storage/pglite';
+import { Hono } from 'hono';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { setupTestDB } from './setup';
+
+/**
+ * SQL to create users & accounts tables (V4 schema).
+ * These are not included in PGLite adapter's default initializeSchema.
+ */
+const CREATE_AUTH_TABLES_SQL = `
+CREATE TABLE IF NOT EXISTS users (
+  id TEXT PRIMARY KEY,
+  email TEXT,
+  email_verified BOOLEAN NOT NULL DEFAULT FALSE,
+  name TEXT,
+  avatar_url TEXT,
+  username TEXT UNIQUE,
+  password_hash TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS accounts (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  provider TEXT NOT NULL,
+  provider_account_id TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_accounts_provider ON accounts(provider, provider_account_id);
+`;
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type ApiResponse = any;
+
+// Mock the database module before importing routes
+let mockDB: PGLiteDB;
+
+vi.mock('../lib/db', () => ({
+  getDB: vi.fn(() => Promise.resolve(mockDB)),
+  closeDB: vi.fn(() => Promise.resolve()),
+}));
+
+// Import routes after mocking
+import { authMeRoutes } from '../routes/auth-me.openapi';
+
+describe('Auth Me Routes', () => {
+  let cleanup: () => Promise<void>;
+  let testUserId: string;
+
+  // App with fake auth middleware that injects apiKey context
+  function createAppWithAuth(userId: string | null) {
+    const app = new Hono();
+    app.use('*', async (c, next) => {
+      if (userId) {
+        c.set('apiKey', { user_id: userId, id: 'ak_test', key_prefix: 'test', key_hash: '', name: 'test', project_id: null, created_at: '', last_used_at: null, revoked_at: null });
+      }
+      await next();
+    });
+    app.route('/', authMeRoutes);
+    return app;
+  }
+
+  beforeAll(async () => {
+    const setup = await setupTestDB();
+    mockDB = setup.db;
+    cleanup = setup.cleanup;
+
+    // Create auth tables
+    const client = getPGLiteClient();
+    await client.exec(CREATE_AUTH_TABLES_SQL);
+
+    // Create a test user
+    const user = await createUser(mockDB, {
+      name: 'Test User',
+      email: 'test@example.com',
+      avatar_url: 'https://example.com/avatar.png',
+    });
+    testUserId = user.id;
+
+    // Link a GitHub account
+    await createAccount(mockDB, {
+      user_id: testUserId,
+      provider: 'github',
+      provider_account_id: '12345',
+    });
+
+    // Link a Google account
+    await createAccount(mockDB, {
+      user_id: testUserId,
+      provider: 'google',
+      provider_account_id: '67890',
+    });
+  });
+
+  afterAll(async () => {
+    await cleanup();
+  });
+
+  // ============================================================
+  // GET /v1/auth/me
+  // ============================================================
+
+  describe('GET /v1/auth/me', () => {
+    it('returns user profile with linked accounts', async () => {
+      const app = createAppWithAuth(testUserId);
+      const res = await app.request('/v1/auth/me');
+
+      expect(res.status).toBe(200);
+
+      const data: ApiResponse = await res.json();
+      expect(data.success).toBe(true);
+      expect(data.data.id).toBe(testUserId);
+      expect(data.data.name).toBe('Test User');
+      expect(data.data.email).toBe('test@example.com');
+      expect(data.data.avatar_url).toBe('https://example.com/avatar.png');
+
+      // Verify linked_accounts
+      expect(Array.isArray(data.data.linked_accounts)).toBe(true);
+      expect(data.data.linked_accounts.length).toBe(2);
+
+      const github = data.data.linked_accounts.find((a: ApiResponse) => a.provider === 'github');
+      expect(github).toBeDefined();
+      expect(github.provider_account_id).toBe('12345');
+      expect(github.created_at).toBeDefined();
+
+      const google = data.data.linked_accounts.find((a: ApiResponse) => a.provider === 'google');
+      expect(google).toBeDefined();
+      expect(google.provider_account_id).toBe('67890');
+    });
+
+    it('returns 401 when not authenticated', async () => {
+      const app = createAppWithAuth(null);
+      const res = await app.request('/v1/auth/me');
+
+      expect(res.status).toBe(401);
+
+      const data: ApiResponse = await res.json();
+      expect(data.success).toBe(false);
+      expect(data.error.code).toBe('UNAUTHORIZED');
+    });
+
+    it('returns 401 for non-existent user', async () => {
+      const app = createAppWithAuth('user_nonexistent');
+      const res = await app.request('/v1/auth/me');
+
+      expect(res.status).toBe(401);
+    });
+  });
+
+  // ============================================================
+  // PATCH /v1/auth/me
+  // ============================================================
+
+  describe('PATCH /v1/auth/me', () => {
+    it('updates name successfully', async () => {
+      const app = createAppWithAuth(testUserId);
+      const res = await app.request('/v1/auth/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'Updated Name' }),
+      });
+
+      expect(res.status).toBe(200);
+
+      const data: ApiResponse = await res.json();
+      expect(data.success).toBe(true);
+      expect(data.data.name).toBe('Updated Name');
+      expect(data.data.id).toBe(testUserId);
+      expect(data.data.email).toBe('test@example.com');
+    });
+
+    it('updates avatar_url successfully', async () => {
+      const app = createAppWithAuth(testUserId);
+      const res = await app.request('/v1/auth/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ avatar_url: 'https://example.com/new-avatar.png' }),
+      });
+
+      expect(res.status).toBe(200);
+
+      const data: ApiResponse = await res.json();
+      expect(data.success).toBe(true);
+      expect(data.data.avatar_url).toBe('https://example.com/new-avatar.png');
+    });
+
+    it('updates both name and avatar_url', async () => {
+      const app = createAppWithAuth(testUserId);
+      const res = await app.request('/v1/auth/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'Both Updated', avatar_url: 'https://example.com/both.png' }),
+      });
+
+      expect(res.status).toBe(200);
+
+      const data: ApiResponse = await res.json();
+      expect(data.success).toBe(true);
+      expect(data.data.name).toBe('Both Updated');
+      expect(data.data.avatar_url).toBe('https://example.com/both.png');
+    });
+
+    it('returns 401 when not authenticated', async () => {
+      const app = createAppWithAuth(null);
+      const res = await app.request('/v1/auth/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'Should Fail' }),
+      });
+
+      expect(res.status).toBe(401);
+
+      const data: ApiResponse = await res.json();
+      expect(data.success).toBe(false);
+      expect(data.error.code).toBe('UNAUTHORIZED');
+    });
+
+    it('returns 400 when no fields provided', async () => {
+      const app = createAppWithAuth(testUserId);
+      const res = await app.request('/v1/auth/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+
+      expect(res.status).toBe(400);
+    });
+
+    it('does not expose linked_accounts in update response', async () => {
+      const app = createAppWithAuth(testUserId);
+      const res = await app.request('/v1/auth/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'Check Response Shape' }),
+      });
+
+      const data: ApiResponse = await res.json();
+      expect(data.data).not.toHaveProperty('linked_accounts');
+    });
+  });
+});

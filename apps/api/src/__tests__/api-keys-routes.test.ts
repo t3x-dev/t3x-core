@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS api_keys (
   key_hash TEXT NOT NULL,
   name TEXT NOT NULL,
   project_id TEXT REFERENCES projects(project_id) ON DELETE CASCADE,
+  user_id TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   last_used_at TIMESTAMPTZ,
   revoked_at TIMESTAMPTZ
