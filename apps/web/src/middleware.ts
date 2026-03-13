@@ -14,6 +14,8 @@ const PUBLIC_PATHS = ['/login', '/api/auth', '/share'];
 export function middleware(request: NextRequest) {
   // Auth is DISABLED by default (safe for local dev without .env).
   // Only enabled when AUTH_DISABLED is explicitly set to 'false'.
+  // This is intentionally different from the API middleware (which defaults to enabled)
+  // because WebUI is local-first and should work out of the box.
   if (process.env.AUTH_DISABLED?.toLowerCase() !== 'false') {
     return NextResponse.next();
   }
