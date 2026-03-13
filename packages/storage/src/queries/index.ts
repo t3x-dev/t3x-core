@@ -418,11 +418,13 @@ export {
 // Token Usage (LLM token metering)
 export {
   estimateCost,
+  getUsageByEndpoint,
   getUsageSummary,
   getUsageTotal,
   type RecordUsageInput,
   recordUsage,
   type TokenUsageOutput,
+  type UsageByEndpointRow,
   type UsageSummaryOptions,
   type UsageSummaryRow,
   type UsageTotal,

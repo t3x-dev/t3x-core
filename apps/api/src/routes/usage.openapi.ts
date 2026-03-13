@@ -8,7 +8,7 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { getUsageSummary, getUsageTotal, recordUsage } from '@t3x-dev/storage';
+import { getUsageByEndpoint, getUsageSummary, getUsageTotal, recordUsage } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { createError, zodErrorHook } from '../lib/errors';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
@@ -38,6 +38,13 @@ const UsageSummaryRowSchema = z.object({
 });
 
 const UsageTotalSchema = z.object({
+  input_tokens: z.number(),
+  output_tokens: z.number(),
+  estimated_cost: z.number(),
+});
+
+const UsageByEndpointRowSchema = z.object({
+  endpoint: z.string(),
   input_tokens: z.number(),
   output_tokens: z.number(),
   estimated_cost: z.number(),
@@ -82,6 +89,7 @@ const getUsageRoute = createRoute({
             z.object({
               summary: z.array(UsageSummaryRowSchema),
               total: UsageTotalSchema,
+              by_endpoint: z.array(UsageByEndpointRowSchema),
             })
           ),
         },
@@ -109,12 +117,13 @@ usageRoutes.openapi(getUsageRoute, async (c) => {
 
   const db = await getDB();
 
-  const [summary, total] = await Promise.all([
+  const [summary, total, by_endpoint] = await Promise.all([
     getUsageSummary(db, { user_id: userId, from, to, group_by }),
     getUsageTotal(db, { user_id: userId, from, to }),
+    getUsageByEndpoint(db, { user_id: userId, from, to }),
   ]);
 
-  return c.json({ success: true as const, data: { summary, total } }, 200);
+  return c.json({ success: true as const, data: { summary, total, by_endpoint } }, 200);
 });
 
 // ============================================================

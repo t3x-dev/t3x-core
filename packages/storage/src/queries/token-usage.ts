@@ -211,6 +211,48 @@ export async function getUsageTotal(db: AnyDB, options: UsageTotalOptions): Prom
   };
 }
 
+export interface UsageByEndpointRow {
+  endpoint: string;
+  input_tokens: number;
+  output_tokens: number;
+  estimated_cost: number;
+}
+
+/**
+ * Get usage aggregated by endpoint for a user within a time range.
+ */
+export async function getUsageByEndpoint(
+  db: AnyDB,
+  options: UsageTotalOptions
+): Promise<UsageByEndpointRow[]> {
+  const { user_id, from, to } = options;
+
+  const results = await db
+    .select({
+      endpoint: tokenUsage.endpoint,
+      inputTokens: sql<number>`coalesce(sum(${tokenUsage.inputTokens}), 0)::int`,
+      outputTokens: sql<number>`coalesce(sum(${tokenUsage.outputTokens}), 0)::int`,
+      estimatedCost: sql<string>`coalesce(sum(${tokenUsage.estimatedCost}), 0)`,
+    })
+    .from(tokenUsage)
+    .where(
+      and(
+        eq(tokenUsage.userId, user_id),
+        gte(tokenUsage.createdAt, from),
+        lte(tokenUsage.createdAt, to)
+      )
+    )
+    .groupBy(tokenUsage.endpoint)
+    .orderBy(sql`coalesce(sum(${tokenUsage.estimatedCost}), 0) desc`);
+
+  return results.map((r) => ({
+    endpoint: r.endpoint,
+    input_tokens: Number(r.inputTokens),
+    output_tokens: Number(r.outputTokens),
+    estimated_cost: Number(r.estimatedCost),
+  }));
+}
+
 /**
  * Estimate cost for a given model and token counts.
  *
