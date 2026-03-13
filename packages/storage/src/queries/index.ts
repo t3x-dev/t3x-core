@@ -415,6 +415,19 @@ export {
   type ListTemplatesOptions,
   listTemplates,
 } from './templates';
+// Token Usage (LLM token metering)
+export {
+  estimateCost,
+  getUsageSummary,
+  getUsageTotal,
+  type RecordUsageInput,
+  recordUsage,
+  type TokenUsageOutput,
+  type UsageSummaryOptions,
+  type UsageSummaryRow,
+  type UsageTotal,
+  type UsageTotalOptions,
+} from './token-usage';
 // Turns
 export {
   type CreateTurnInput,

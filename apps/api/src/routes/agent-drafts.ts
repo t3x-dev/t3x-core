@@ -21,6 +21,7 @@ import { Hono } from 'hono';
 import { getDB } from '../lib/db';
 import { toDeltaLogEntries } from '../lib/delta-log-utils';
 import { getLLMProvider } from '../lib/provider-registry';
+import { getUserId, recordUsageFireAndForget } from '../lib/usage-tracking';
 import { jsonError, jsonSuccess } from '../lib/response';
 
 // ============================================================================
@@ -586,10 +587,23 @@ agentDraftRoutes.post('/v1/agent/drafts', async (c) => {
     }
 
     const fullPrompt = `${systemPrompt}\n\n${userPrompt}`;
-    const generatedText = await llmProviderInstance!.generate(fullPrompt, {
+    const genResult = await llmProviderInstance!.generate(fullPrompt, {
       temperature: llmConfig.temperature,
       maxTokens: llmConfig.max_tokens,
     });
+    const generatedText = genResult.text;
+
+    // Record usage (fire-and-forget)
+    if (genResult.usage.inputTokens || genResult.usage.outputTokens) {
+      recordUsageFireAndForget(db, {
+        user_id: getUserId(c) ?? undefined,
+        project_id: body.project_id,
+        endpoint: 'agent_draft_create',
+        model: llmProviderInstance!.id,
+        input_tokens: genResult.usage.inputTokens,
+        output_tokens: genResult.usage.outputTokens,
+      });
+    }
 
     const validation = validateDraft(generatedText, mustHave, mustntHave);
 
@@ -766,10 +780,23 @@ agentDraftRoutes.patch('/v1/agent/drafts/:id', async (c) => {
     }
 
     const fullPrompt = `${systemPrompt}\n\n${userPrompt}`;
-    const generatedText = await patchProvider.generate(fullPrompt, {
+    const genResult = await patchProvider.generate(fullPrompt, {
       temperature: llmConfig.temperature,
       maxTokens: llmConfig.max_tokens,
     });
+    const generatedText = genResult.text;
+
+    // Record usage (fire-and-forget)
+    if (genResult.usage.inputTokens || genResult.usage.outputTokens) {
+      recordUsageFireAndForget(db, {
+        user_id: getUserId(c) ?? undefined,
+        project_id: draft.projectId,
+        endpoint: 'agent_draft_patch',
+        model: patchProvider.id,
+        input_tokens: genResult.usage.inputTokens,
+        output_tokens: genResult.usage.outputTokens,
+      });
+    }
 
     const validation = validateDraft(generatedText, mustHave, mustntHave);
     const completedAt = new Date();

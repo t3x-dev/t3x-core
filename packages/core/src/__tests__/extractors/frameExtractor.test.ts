@@ -12,7 +12,7 @@ function mockProvider(responses: string[]): LLMProvider {
     generate: vi.fn(async () => {
       const response = responses[callIndex] ?? '';
       callIndex++;
-      return response;
+      return { text: response, usage: { inputTokens: 10, outputTokens: 5 } };
     }),
     resolveConflict: vi.fn(async () => ''),
   };

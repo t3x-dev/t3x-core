@@ -212,7 +212,7 @@ describe('SemanticGate', () => {
   it('review() calls provider and returns parsed result', async () => {
     const mockProvider: LLMProvider = {
       id: 'mock',
-      generate: vi.fn().mockResolvedValue(validLLMResponse),
+      generate: vi.fn().mockResolvedValue({ text: validLLMResponse, usage: { inputTokens: 10, outputTokens: 5 } }),
       resolveConflict: vi.fn(),
     };
 
@@ -306,7 +306,7 @@ describe('SemanticGate.checkCoverage', () => {
   it('calls provider and returns parsed result', async () => {
     const mockProvider: LLMProvider = {
       id: 'mock',
-      generate: vi.fn().mockResolvedValue(validCoverageResponse),
+      generate: vi.fn().mockResolvedValue({ text: validCoverageResponse, usage: { inputTokens: 10, outputTokens: 5 } }),
       resolveConflict: vi.fn(),
     };
 

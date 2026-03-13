@@ -44,6 +44,7 @@ import { getDB } from '../lib/db';
 import { getEmbedder } from '../lib/embedder';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { getLLMProvider } from '../lib/provider-registry';
+import { getUserId, recordUsageFireAndForget, wrapWithUsageTracking } from '../lib/usage-tracking';
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
 import { pinoLogger } from '../middleware/logger';
 import {
@@ -630,7 +631,8 @@ commitsV4Routes.openapi(createCommitV4Route, async (c) => {
       getLLMProvider()
         .then(async (llmProvider) => {
           if (!llmProvider) return;
-          const relExtractor = createRelationExtractor(llmProvider);
+          const { provider: trackedLlm, usage: trackedUsage } = wrapWithUsageTracking(llmProvider);
+          const relExtractor = createRelationExtractor(trackedLlm);
           const relResult = await relExtractor.extract(
             finalSentences.map((s) => ({ id: s.id, text: s.text }))
           );
@@ -652,6 +654,17 @@ commitsV4Routes.openapi(createCommitV4Route, async (c) => {
               { commit_hash: commit.hash, relations: relResult.relations.length },
               'auto relation extraction complete'
             );
+          }
+          // Record usage (fire-and-forget)
+          if (trackedUsage.inputTokens || trackedUsage.outputTokens) {
+            recordUsageFireAndForget(db, {
+              user_id: getUserId(c) ?? undefined,
+              project_id: body.project_id,
+              endpoint: 'commit_auto_relation',
+              model: trackedLlm.id,
+              input_tokens: trackedUsage.inputTokens,
+              output_tokens: trackedUsage.outputTokens,
+            });
           }
         })
         .catch((err) => {

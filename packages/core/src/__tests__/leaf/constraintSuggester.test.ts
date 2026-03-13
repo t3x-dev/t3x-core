@@ -29,8 +29,8 @@ import type { Sentence } from '../../types/v4';
 function createMockProvider(response: string): LLMProvider {
   return {
     id: 'mock-provider',
-    generate: vi.fn().mockResolvedValue(response),
-    resolveConflict: vi.fn().mockResolvedValue('resolved'),
+    generate: vi.fn().mockResolvedValue({ text: response, usage: { inputTokens: 10, outputTokens: 5 } }),
+    resolveConflict: vi.fn().mockResolvedValue({ text: 'resolved', usage: { inputTokens: 0, outputTokens: 0 } }),
   };
 }
 

@@ -56,6 +56,8 @@ export interface MultiRoundResult {
   total_rounds: number;
   /** Generation mode used (only set when using mode-based generation) */
   mode?: GenerationMode;
+  /** Aggregated token usage across all rounds */
+  usage: { inputTokens: number; outputTokens: number };
 }
 
 /** Options for mode-based generation (higher-level API) */
@@ -340,6 +342,7 @@ export async function modeGenerate(options: ModeGenerateOptions): Promise<MultiR
   }>;
 
   const results: RoundResult[] = [];
+  const totalUsage = { inputTokens: 0, outputTokens: 0 };
 
   // ── Round 1: Initial generation ──
   const contextPrefix = `You are generating content for a "${leaf.type}" leaf titled "${leaf.title ?? 'Untitled'}".\n\n`;
@@ -353,16 +356,18 @@ export async function modeGenerate(options: ModeGenerateOptions): Promise<MultiR
         : undefined
     );
 
-  const round1Output = await provider.generate(round1Prompt, {
+  const round1Result = await provider.generate(round1Prompt, {
     temperature,
     maxTokens,
   });
+  totalUsage.inputTokens += round1Result.usage.inputTokens;
+  totalUsage.outputTokens += round1Result.usage.outputTokens;
 
-  const round1Failed = validateConstraintsSimple(round1Output, constraints);
+  const round1Failed = validateConstraintsSimple(round1Result.text, constraints);
 
   results.push({
     name: 'draft',
-    output: round1Output,
+    output: round1Result.text,
     round_number: 1,
     failed_constraints: round1Failed,
     constraints_passed: round1Failed.length === 0,
@@ -371,10 +376,11 @@ export async function modeGenerate(options: ModeGenerateOptions): Promise<MultiR
   // Fast mode: return after Round 1
   if (mode === 'fast') {
     return {
-      output: round1Output,
+      output: round1Result.text,
       rounds: results,
       total_rounds: 1,
       mode,
+      usage: totalUsage,
     };
   }
 
@@ -384,18 +390,20 @@ export async function modeGenerate(options: ModeGenerateOptions): Promise<MultiR
     .filter(Boolean) as Array<{ type: string; value: string }>;
 
   const round2Prompt =
-    contextPrefix + buildRound2Prompt(round1Output, failedConstraintDetails, constraints);
+    contextPrefix + buildRound2Prompt(round1Result.text, failedConstraintDetails, constraints);
 
-  const round2Output = await provider.generate(round2Prompt, {
+  const round2Result = await provider.generate(round2Prompt, {
     temperature,
     maxTokens,
   });
+  totalUsage.inputTokens += round2Result.usage.inputTokens;
+  totalUsage.outputTokens += round2Result.usage.outputTokens;
 
-  const round2Failed = validateConstraintsSimple(round2Output, constraints);
+  const round2Failed = validateConstraintsSimple(round2Result.text, constraints);
 
   results.push({
     name: 'refine',
-    output: round2Output,
+    output: round2Result.text,
     round_number: 2,
     failed_constraints: round2Failed,
     constraints_passed: round2Failed.length === 0,
@@ -404,36 +412,40 @@ export async function modeGenerate(options: ModeGenerateOptions): Promise<MultiR
   // Standard mode: return after Round 2
   if (mode === 'standard') {
     return {
-      output: round2Output,
+      output: round2Result.text,
       rounds: results,
       total_rounds: 2,
       mode,
+      usage: totalUsage,
     };
   }
 
   // ── Round 3: Style polish (thorough mode) ──
-  const round3Prompt = contextPrefix + buildRound3Prompt(round2Output, stylePreferences);
+  const round3Prompt = contextPrefix + buildRound3Prompt(round2Result.text, stylePreferences);
 
-  const round3Output = await provider.generate(round3Prompt, {
+  const round3Result = await provider.generate(round3Prompt, {
     temperature,
     maxTokens,
   });
+  totalUsage.inputTokens += round3Result.usage.inputTokens;
+  totalUsage.outputTokens += round3Result.usage.outputTokens;
 
-  const round3Failed = validateConstraintsSimple(round3Output, constraints);
+  const round3Failed = validateConstraintsSimple(round3Result.text, constraints);
 
   results.push({
     name: 'polish',
-    output: round3Output,
+    output: round3Result.text,
     round_number: 3,
     failed_constraints: round3Failed,
     constraints_passed: round3Failed.length === 0,
   });
 
   return {
-    output: round3Output,
+    output: round3Result.text,
     rounds: results,
     total_rounds: 3,
     mode,
+    usage: totalUsage,
   };
 }
 
@@ -466,33 +478,37 @@ export async function multiRoundGenerate(options: MultiRoundOptions): Promise<Mu
   }>;
 
   const results: RoundResult[] = [];
+  const totalUsage = { inputTokens: 0, outputTokens: 0 };
   let previousOutput = '';
 
   for (let i = 0; i < rounds.length; i++) {
     const round = rounds[i];
     const prompt = buildRoundPrompt(commit, leaf, round, previousOutput, i);
 
-    const output = await provider.generate(prompt, { temperature, maxTokens });
+    const result = await provider.generate(prompt, { temperature, maxTokens });
+    totalUsage.inputTokens += result.usage.inputTokens;
+    totalUsage.outputTokens += result.usage.outputTokens;
 
-    const failedIds = validateConstraintsSimple(output, constraints);
+    const failedIds = validateConstraintsSimple(result.text, constraints);
 
     results.push({
       name: round.name,
-      output,
+      output: result.text,
       round_number: i + 1,
       failed_constraints: failedIds,
       constraints_passed: failedIds.length === 0,
     });
 
-    previousOutput = output;
+    previousOutput = result.text;
 
-    if (earlyExit?.(output)) break;
+    if (earlyExit?.(result.text)) break;
   }
 
   return {
     output: previousOutput,
     rounds: results,
     total_rounds: results.length,
+    usage: totalUsage,
   };
 }
 

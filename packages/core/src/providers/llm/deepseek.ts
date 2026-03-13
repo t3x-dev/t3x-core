@@ -4,7 +4,12 @@
  * Implementation of LLMProvider using DeepSeek's OpenAI-compatible API.
  */
 
-import { type LLMGenerateOptions, type LLMProvider, LLMProviderError } from '../../llm/types';
+import {
+  type LLMGenerateOptions,
+  type LLMGenerateResult,
+  type LLMProvider,
+  LLMProviderError,
+} from '../../llm/types';
 
 /**
  * Get proxy URL from environment variables
@@ -53,7 +58,7 @@ export class DeepSeekProvider implements LLMProvider {
     this.baseUrl = config.baseUrl ?? 'https://api.deepseek.com/v1';
   }
 
-  async generate(prompt: string, options?: LLMGenerateOptions): Promise<string> {
+  async generate(prompt: string, options?: LLMGenerateOptions): Promise<LLMGenerateResult> {
     const temperature = options?.temperature ?? 0.3;
     const maxTokens = options?.maxTokens ?? 2048;
     const url = `${this.baseUrl}/chat/completions`;
@@ -91,13 +96,20 @@ export class DeepSeekProvider implements LLMProvider {
 
       const data = JSON.parse(responseText) as {
         choices: Array<{ message: { content: string } }>;
+        usage?: { prompt_tokens?: number; completion_tokens?: number };
       };
 
       if (!data.choices?.[0]?.message?.content) {
         throw new LLMProviderError(this.id, undefined, 'No content in response');
       }
 
-      return data.choices[0].message.content;
+      return {
+        text: data.choices[0].message.content,
+        usage: {
+          inputTokens: data.usage?.prompt_tokens ?? 0,
+          outputTokens: data.usage?.completion_tokens ?? 0,
+        },
+      };
     } catch (error) {
       clearTimeout(timeoutId);
       if (error instanceof LLMProviderError) throw error;
@@ -117,7 +129,7 @@ export class DeepSeekProvider implements LLMProvider {
     sourceText: string | null,
     targetText: string | null,
     context?: string
-  ): Promise<string> {
+  ): Promise<LLMGenerateResult> {
     const prompt = `You are a merge conflict resolver. Given three versions of text (base, source, and target), produce a merged result that preserves the intent of both changes.
 
 ## Base Version (Common Ancestor)

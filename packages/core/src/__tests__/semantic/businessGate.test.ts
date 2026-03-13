@@ -195,7 +195,7 @@ describe('BusinessGate.evaluate', () => {
   it('evaluates LLM rules when provider is available', async () => {
     const mockProvider: LLMProvider = {
       id: 'mock',
-      generate: vi.fn().mockResolvedValue('yes'),
+      generate: vi.fn().mockResolvedValue({ text: 'yes', usage: { inputTokens: 10, outputTokens: 5 } }),
       resolveConflict: vi.fn(),
     };
     const llmRule: BusinessRuleConfig = {
@@ -214,7 +214,7 @@ describe('BusinessGate.evaluate', () => {
   it('handles LLM "no" response as failure', async () => {
     const mockProvider: LLMProvider = {
       id: 'mock',
-      generate: vi.fn().mockResolvedValue('no, missing destination'),
+      generate: vi.fn().mockResolvedValue({ text: 'no, missing destination', usage: { inputTokens: 10, outputTokens: 5 } }),
       resolveConflict: vi.fn(),
     };
     const llmRule: BusinessRuleConfig = {

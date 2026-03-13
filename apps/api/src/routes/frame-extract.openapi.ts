@@ -20,6 +20,7 @@ import { getDB } from '../lib/db';
 import { toDeltaLogEntries } from '../lib/delta-log-utils';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { getProviderRegistry } from '../lib/provider-registry';
+import { getUserId, recordUsageFireAndForget, wrapWithUsageTracking } from '../lib/usage-tracking';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
 export const frameExtractRoutes = new OpenAPIHono({
@@ -143,19 +144,41 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
       content: t.content,
     }));
 
-    // 5. Call FrameExtractor via provider registry with fallback
+    // 5. Call FrameExtractor via provider registry with fallback (usage tracked)
     const reg = await getProviderRegistry();
+    const trackedUsage = { inputTokens: 0, outputTokens: 0 };
+    let trackedModel = 'unknown';
     const result = await reg.tryWithFallback('generation', (provider) => {
-      const extractor = new FrameExtractor(provider);
+      const { provider: tracked, usage } = wrapWithUsageTracking(provider);
+      trackedUsage.inputTokens = 0;
+      trackedUsage.outputTokens = 0;
+      trackedModel = tracked.id;
+      const extractor = new FrameExtractor(tracked);
       return extractor.extract({
         turns: extractionTurns,
         snapshot: currentSnapshot.frames.length > 0 ? currentSnapshot : undefined,
+      }).then((r) => {
+        trackedUsage.inputTokens = usage.inputTokens;
+        trackedUsage.outputTokens = usage.outputTokens;
+        return r;
       });
     });
 
     // 6. Check extraction result
     if (!result.ok) {
       return errorResponse(c, 'EXTRACTION_FAILED', result.error);
+    }
+
+    // Record usage (fire-and-forget)
+    if (trackedUsage.inputTokens || trackedUsage.outputTokens) {
+      recordUsageFireAndForget(db, {
+        user_id: getUserId(c) ?? undefined,
+        project_id: conversation.projectId,
+        endpoint: 'extract_frames',
+        model: trackedModel,
+        input_tokens: trackedUsage.inputTokens,
+        output_tokens: trackedUsage.outputTokens,
+      });
     }
 
     // 7. Insert delta into delta log

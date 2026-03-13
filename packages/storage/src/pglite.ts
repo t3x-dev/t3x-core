@@ -33,8 +33,8 @@ export {
 export * from './queries';
 // Schema (table definitions and types)
 export * from './schema';
-export * from './schema-v4';
 export * from './schema-sentence-modifications';
+export * from './schema-v4';
 
 // Type alias for PGLite database
 import type { PGLiteDB } from './adapters/pglite';

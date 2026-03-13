@@ -6,8 +6,8 @@ import type { MergeSimilarPair } from '../types';
 function makeMockLLM(response: string): LLMProvider {
   return {
     id: 'mock',
-    generate: vi.fn().mockResolvedValue(response),
-    resolveConflict: vi.fn().mockResolvedValue(response),
+    generate: vi.fn().mockResolvedValue({ text: response, usage: { inputTokens: 10, outputTokens: 5 } }),
+    resolveConflict: vi.fn().mockResolvedValue({ text: response, usage: { inputTokens: 10, outputTokens: 5 } }),
   };
 }
 
@@ -30,40 +30,45 @@ describe('suggestMerge', () => {
       })
     );
 
-    const result = await suggestMerge(pair, llm);
-    expect(result).not.toBeNull();
-    expect(result!.suggestion).toContain('OAuth 2.0');
-    expect(result!.reasoning).toBeTruthy();
+    const { suggestion, usage } = await suggestMerge(pair, llm);
+    expect(suggestion).not.toBeNull();
+    expect(suggestion!.suggestion).toContain('OAuth 2.0');
+    expect(suggestion!.reasoning).toBeTruthy();
+    expect(usage.inputTokens).toBe(10);
+    expect(usage.outputTokens).toBe(5);
     expect(llm.generate).toHaveBeenCalledOnce();
   });
 
-  it('returns null when no LLM provided', async () => {
-    const result = await suggestMerge(pair);
-    expect(result).toBeNull();
+  it('returns null suggestion when no LLM provided', async () => {
+    const { suggestion, usage } = await suggestMerge(pair);
+    expect(suggestion).toBeNull();
+    expect(usage.inputTokens).toBe(0);
+    expect(usage.outputTokens).toBe(0);
   });
 
-  it('returns null on LLM error', async () => {
+  it('returns null suggestion on LLM error', async () => {
     const llm: LLMProvider = {
       id: 'mock',
       generate: vi.fn().mockRejectedValue(new Error('API error')),
       resolveConflict: vi.fn().mockRejectedValue(new Error('API error')),
     };
 
-    const result = await suggestMerge(pair, llm);
-    expect(result).toBeNull();
+    const { suggestion, usage } = await suggestMerge(pair, llm);
+    expect(suggestion).toBeNull();
+    expect(usage.inputTokens).toBe(0);
   });
 
-  it('returns null on invalid JSON from LLM', async () => {
+  it('returns null suggestion on invalid JSON from LLM', async () => {
     const llm = makeMockLLM('This is not JSON');
 
-    const result = await suggestMerge(pair, llm);
-    expect(result).toBeNull();
+    const { suggestion } = await suggestMerge(pair, llm);
+    expect(suggestion).toBeNull();
   });
 
-  it('returns null when suggestion field is missing', async () => {
+  it('returns null suggestion when suggestion field is missing', async () => {
     const llm = makeMockLLM(JSON.stringify({ reasoning: 'no suggestion field' }));
 
-    const result = await suggestMerge(pair, llm);
-    expect(result).toBeNull();
+    const { suggestion } = await suggestMerge(pair, llm);
+    expect(suggestion).toBeNull();
   });
 });

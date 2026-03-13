@@ -174,10 +174,13 @@ export async function generateLeafOutput(options: GenerateOptions): Promise<Gene
     if (useProvider) {
       // Provider path — use LLMProvider.generate()
       try {
-        lastOutput = await provider.generate(providerPrompt, {
+        const result = await provider.generate(providerPrompt, {
           temperature,
           maxTokens,
         });
+        lastOutput = result.text;
+        totalUsage.inputTokens += result.usage.inputTokens;
+        totalUsage.outputTokens += result.usage.outputTokens;
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         throw new GenerationError(

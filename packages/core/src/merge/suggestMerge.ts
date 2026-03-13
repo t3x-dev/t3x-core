@@ -8,17 +8,22 @@
 import type { LLMProvider } from '../llm/types';
 import type { MergeSimilarPair, MergeSuggestion } from './types';
 
+export interface SuggestMergeResult {
+  suggestion: MergeSuggestion | null;
+  usage: { inputTokens: number; outputTokens: number };
+}
+
 export async function suggestMerge(
   pair: MergeSimilarPair,
   llm?: LLMProvider
-): Promise<MergeSuggestion | null> {
-  if (!llm) return null;
+): Promise<SuggestMergeResult> {
+  if (!llm) return { suggestion: null, usage: { inputTokens: 0, outputTokens: 0 } };
 
   const prompt = buildMergePrompt(pair);
 
   try {
-    const response = await llm.generate(prompt, { temperature: 0.3, maxTokens: 500 });
-    return parseSuggestion(response);
+    const result = await llm.generate(prompt, { temperature: 0.3, maxTokens: 500 });
+    return { suggestion: parseSuggestion(result.text), usage: result.usage };
   } catch (error) {
     if (process.env.NODE_ENV !== 'test') {
       console.warn(
@@ -26,7 +31,7 @@ export async function suggestMerge(
         error instanceof Error ? error.message : String(error)
       );
     }
-    return null;
+    return { suggestion: null, usage: { inputTokens: 0, outputTokens: 0 } };
   }
 }
 

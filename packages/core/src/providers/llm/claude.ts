@@ -4,7 +4,12 @@
  * Implementation of LLMProvider using Anthropic's Claude API.
  */
 
-import { type LLMGenerateOptions, type LLMProvider, LLMProviderError } from '../../llm/types';
+import {
+  type LLMGenerateOptions,
+  type LLMGenerateResult,
+  type LLMProvider,
+  LLMProviderError,
+} from '../../llm/types';
 
 /**
  * Get proxy URL from environment variables
@@ -63,7 +68,7 @@ export class ClaudeProvider implements LLMProvider {
     this.baseUrl = config.baseUrl ?? 'https://api.anthropic.com';
   }
 
-  async generate(prompt: string, options?: LLMGenerateOptions): Promise<string> {
+  async generate(prompt: string, options?: LLMGenerateOptions): Promise<LLMGenerateResult> {
     const temperature = options?.temperature ?? 0.3;
     const maxTokens = options?.maxTokens ?? 2048;
 
@@ -108,6 +113,7 @@ export class ClaudeProvider implements LLMProvider {
 
       const data = JSON.parse(responseText) as {
         content: Array<{ type: string; text: string }>;
+        usage?: { input_tokens?: number; output_tokens?: number };
       };
 
       // Extract text from response
@@ -116,7 +122,13 @@ export class ClaudeProvider implements LLMProvider {
         throw new LLMProviderError(this.id, undefined, 'No text content in response');
       }
 
-      return textContent.text;
+      return {
+        text: textContent.text,
+        usage: {
+          inputTokens: data.usage?.input_tokens ?? 0,
+          outputTokens: data.usage?.output_tokens ?? 0,
+        },
+      };
     } catch (error) {
       clearTimeout(timeoutId);
       if (error instanceof LLMProviderError) {
@@ -138,7 +150,7 @@ export class ClaudeProvider implements LLMProvider {
     sourceText: string | null,
     targetText: string | null,
     context?: string
-  ): Promise<string> {
+  ): Promise<LLMGenerateResult> {
     const prompt = `You are a merge conflict resolver. Given three versions of text (base, source, and target), produce a merged result that preserves the intent of both changes.
 
 ## Base Version (Common Ancestor)

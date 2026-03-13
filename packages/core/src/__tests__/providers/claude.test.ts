@@ -47,7 +47,10 @@ function setMockFetch(responseBody: object, status = 200) {
 }
 
 function successResponse(text: string) {
-  return { content: [{ type: 'text', text }] };
+  return {
+    content: [{ type: 'text', text }],
+    usage: { input_tokens: 10, output_tokens: 5 },
+  };
 }
 
 describe('ClaudeProvider', () => {
@@ -63,7 +66,9 @@ describe('ClaudeProvider', () => {
       setMockFetch(successResponse('Hello from Claude'));
       const provider = new ClaudeProvider({ apiKey: 'test-key' });
       const result = await provider.generate('Say hello');
-      expect(result).toBe('Hello from Claude');
+      expect(result.text).toBe('Hello from Claude');
+      expect(result.usage.inputTokens).toBe(10);
+      expect(result.usage.outputTokens).toBe(5);
     });
 
     it('sends correct request body', async () => {
@@ -126,7 +131,7 @@ describe('ClaudeProvider', () => {
       setMockFetch(successResponse('Merged result'));
       const provider = new ClaudeProvider({ apiKey: 'key' });
       const result = await provider.resolveConflict('base', 'source', 'target', 'context');
-      expect(result).toBe('Merged result');
+      expect(result.text).toBe('Merged result');
       const body = JSON.parse(
         (mockFetchFn.mock.calls[0] as [string, RequestInit])[1].body as string
       );

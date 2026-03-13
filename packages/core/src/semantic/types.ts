@@ -216,6 +216,7 @@ export interface SemanticGateResult {
   score: number; // 0-1 overall
   dimensions: Record<GateDimension, DimensionResult>;
   issues: SemanticIssue[];
+  usage: { inputTokens: number; outputTokens: number };
 }
 
 export interface BusinessRuleConfig {
@@ -236,6 +237,7 @@ export interface BusinessGateResult {
     message?: string;
     severity: 'error' | 'warning';
   }[];
+  usage: { inputTokens: number; outputTokens: number };
 }
 
 export interface GateResult {
@@ -252,4 +254,5 @@ export interface CoverageResult {
   coverage_ratio: number;
   /** Important text segments not covered by any frame */
   uncovered_segments: string[];
+  usage: { inputTokens: number; outputTokens: number };
 }

@@ -54,6 +54,7 @@ import {
 import { apiKeysRoutes } from './routes/api-keys.openapi';
 import { authLocalRoutes } from './routes/auth-local.openapi';
 import { authMeRoutes } from './routes/auth-me.openapi';
+import { usageRoutes } from './routes/usage.openapi';
 import { autopilotRoutes } from './routes/autopilot.openapi';
 import { comparisonsRoutes } from './routes/comparisons.openapi';
 import { importRoutes } from './routes/import.openapi';
@@ -172,6 +173,9 @@ export function createApp(options?: CreateAppOptions): Hono {
 
   // Auth /me route (always available — works with any auth provider)
   api.route('/', authMeRoutes);
+
+  // Token usage metering
+  api.route('/', usageRoutes);
 
   // Local auth routes (username/password register + login)
   // Skipped when SaaS provides its own OAuth auth

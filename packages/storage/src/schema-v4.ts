@@ -20,11 +20,12 @@ import {
   index,
   integer,
   jsonb,
+  numeric,
   pgTable,
+  primaryKey,
   real,
   text,
   timestamp,
-  primaryKey,
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
 import { conversations, projects } from './schema';
@@ -1157,14 +1158,15 @@ export const knowledgeEdges = pgTable(
       .references(() => knowledgeNodes.id, { onDelete: 'cascade' }),
     type: text('type').notNull(),
     weight: real('weight').notNull().default(0),
-    evidence: jsonb('evidence').$type<
-      Array<{
-        source_sentence_id: string;
-        target_sentence_id: string;
-        relation_type: string;
-        confidence: number;
-      }>
-    >(),
+    evidence:
+      jsonb('evidence').$type<
+        Array<{
+          source_sentence_id: string;
+          target_sentence_id: string;
+          relation_type: string;
+          confidence: number;
+        }>
+      >(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
@@ -1176,3 +1178,54 @@ export const knowledgeEdges = pgTable(
 
 export type KnowledgeEdgeRecord = typeof knowledgeEdges.$inferSelect;
 export type KnowledgeEdgeInsert = typeof knowledgeEdges.$inferInsert;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// token_usage: LLM Token Consumption Tracking
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Records per-call LLM token consumption for metering and cost estimation.
+ */
+export const tokenUsage = pgTable(
+  'token_usage',
+  {
+    /** Unique ID: "tu_" + nanoid(12) */
+    id: text('id').primaryKey(),
+
+    /** Owner user ID (nullable — null = AUTH_DISABLED / legacy) */
+    userId: text('user_id'),
+
+    /** Project scope */
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.projectId, { onDelete: 'cascade' }),
+
+    /** API endpoint that triggered the LLM call */
+    endpoint: text('endpoint').notNull(),
+
+    /** LLM model identifier */
+    model: text('model').notNull(),
+
+    /** Number of input (prompt) tokens */
+    inputTokens: integer('input_tokens').notNull(),
+
+    /** Number of output (completion) tokens */
+    outputTokens: integer('output_tokens').notNull(),
+
+    /** Estimated cost in USD */
+    estimatedCost: numeric('estimated_cost', { precision: 10, scale: 6 }).default('0'),
+
+    /** When the usage was recorded */
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    userCreatedIdx: index('idx_token_usage_user_created').on(table.userId, table.createdAt),
+    projectCreatedIdx: index('idx_token_usage_project_created').on(
+      table.projectId,
+      table.createdAt
+    ),
+  })
+);
+
+export type TokenUsageRecord = typeof tokenUsage.$inferSelect;
+export type TokenUsageInsert = typeof tokenUsage.$inferInsert;

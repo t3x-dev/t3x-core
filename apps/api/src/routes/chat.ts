@@ -5,9 +5,12 @@
  * GET  /v1/chat/providers - List available providers
  */
 
+import { recordUsage } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { ProxyAgent, fetch as undiciFetch } from 'undici';
+import { getDB } from '../lib/db';
 import { jsonError, jsonSuccess } from '../lib/response';
+import { pinoLogger } from '../middleware/logger';
 
 // Create proxy agent if proxy is configured
 function getProxyFetch() {
@@ -151,6 +154,7 @@ chatRoutes.post('/v1/chat', async (c) => {
     model?: string;
     temperature?: number;
     max_tokens?: number;
+    project_id?: string;
   } | null = null;
 
   try {
@@ -186,6 +190,22 @@ chatRoutes.post('/v1/chat', async (c) => {
     // Currently only Claude is implemented
     if (provider === 'claude' || provider === 'anthropic') {
       const result = await callClaudeNonStreaming(messages, model, apiKey, temperature, maxTokens);
+
+      // Record token usage (fire-and-forget, only if project_id provided)
+      if (body?.project_id && result.usage) {
+        const apiKeyCtx = c.get('apiKey') as { user_id?: string } | undefined;
+        getDB().then((db) =>
+          recordUsage(db, {
+            user_id: apiKeyCtx?.user_id,
+            project_id: body!.project_id!,
+            endpoint: 'chat',
+            model: result.model,
+            input_tokens: result.usage!.input_tokens ?? 0,
+            output_tokens: result.usage!.output_tokens ?? 0,
+          })
+        ).catch((err) => pinoLogger.warn({ err }, 'Failed to record chat usage'));
+      }
+
       return jsonSuccess(c, result);
     } else {
       return jsonError(c, 'PROVIDER_ERROR', `Provider ${provider} not implemented`, 400);
@@ -210,6 +230,7 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
     model?: string;
     temperature?: number;
     max_tokens?: number;
+    project_id?: string;
   } | null = null;
 
   try {
@@ -383,6 +404,20 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
         controller.enqueue(encodeSseEvent(JSON.stringify({ type: 'error', message })));
         controller.enqueue(encodeSseEvent('[DONE]'));
       } finally {
+        // Record token usage (fire-and-forget, only if project_id provided)
+        if (body?.project_id && (usage.input_tokens || usage.output_tokens)) {
+          const apiKeyCtx = c.get('apiKey') as { user_id?: string } | undefined;
+          getDB().then((db) =>
+            recordUsage(db, {
+              user_id: apiKeyCtx?.user_id,
+              project_id: body!.project_id!,
+              endpoint: 'chat',
+              model: resolvedModel,
+              input_tokens: usage.input_tokens ?? 0,
+              output_tokens: usage.output_tokens ?? 0,
+            })
+          ).catch((err) => pinoLogger.warn({ err }, 'Failed to record stream chat usage'));
+        }
         controller.close();
       }
     },

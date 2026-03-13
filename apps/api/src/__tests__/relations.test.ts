@@ -138,8 +138,8 @@ describe('Relations Routes', () => {
     it('triggers extraction and returns stats', async () => {
       // Mock LLM provider that returns valid relation JSON
       const mockProvider = {
-        generate: vi.fn().mockResolvedValue(
-          JSON.stringify([
+        generate: vi.fn().mockResolvedValue({
+          text: JSON.stringify([
             {
               source_id: 's_r1',
               target_id: 's_r2',
@@ -154,8 +154,9 @@ describe('Relations Routes', () => {
               confidence: 0.75,
               reasoning: 'Budget supports the trip plan.',
             },
-          ])
-        ),
+          ]),
+          usage: { inputTokens: 10, outputTokens: 5 },
+        }),
       };
       mockGetLLMProvider.mockResolvedValueOnce(mockProvider);
 
@@ -180,8 +181,8 @@ describe('Relations Routes', () => {
     it('returns persisted relations after extract', async () => {
       // Set up mock LLM provider for extraction
       const mockProvider = {
-        generate: vi.fn().mockResolvedValue(
-          JSON.stringify([
+        generate: vi.fn().mockResolvedValue({
+          text: JSON.stringify([
             {
               source_id: 's_r1',
               target_id: 's_r2',
@@ -189,8 +190,9 @@ describe('Relations Routes', () => {
               confidence: 0.85,
               reasoning: 'Cherry blossoms follow the plan to visit in spring.',
             },
-          ])
-        ),
+          ]),
+          usage: { inputTokens: 10, outputTokens: 5 },
+        }),
       };
       mockGetLLMProvider.mockResolvedValueOnce(mockProvider);
 
@@ -223,8 +225,8 @@ describe('Relations Routes', () => {
     it('re-extraction replaces existing relations', async () => {
       // First extraction
       const mockProvider1 = {
-        generate: vi.fn().mockResolvedValue(
-          JSON.stringify([
+        generate: vi.fn().mockResolvedValue({
+          text: JSON.stringify([
             {
               source_id: 's_r1',
               target_id: 's_r2',
@@ -232,8 +234,9 @@ describe('Relations Routes', () => {
               confidence: 0.7,
               reasoning: 'First extraction result.',
             },
-          ])
-        ),
+          ]),
+          usage: { inputTokens: 10, outputTokens: 5 },
+        }),
       };
       mockGetLLMProvider.mockResolvedValueOnce(mockProvider1);
 
@@ -243,8 +246,8 @@ describe('Relations Routes', () => {
 
       // Second extraction with different result
       const mockProvider2 = {
-        generate: vi.fn().mockResolvedValue(
-          JSON.stringify([
+        generate: vi.fn().mockResolvedValue({
+          text: JSON.stringify([
             {
               source_id: 's_r2',
               target_id: 's_r3',
@@ -252,8 +255,9 @@ describe('Relations Routes', () => {
               confidence: 0.8,
               reasoning: 'Second extraction replaces first.',
             },
-          ])
-        ),
+          ]),
+          usage: { inputTokens: 10, outputTokens: 5 },
+        }),
       };
       mockGetLLMProvider.mockResolvedValueOnce(mockProvider2);
 

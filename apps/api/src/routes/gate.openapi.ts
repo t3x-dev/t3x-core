@@ -14,6 +14,7 @@ import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { assertProjectAccess } from '../lib/project-access';
 import { getLLMProvider } from '../lib/provider-registry';
+import { getUserId, recordUsageFireAndForget, wrapWithUsageTracking } from '../lib/usage-tracking';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
 export const gateRoutes = new OpenAPIHono({
@@ -230,8 +231,14 @@ gateRoutes.openapi(gateCheckRoute, async (c) => {
 
     // Get LLM provider (for Gate 2 and/or Gate 3 LLM rules)
     let provider: LLMProvider | null = null;
+    let trackedUsage: { inputTokens: number; outputTokens: number } | null = null;
     if (!skipSemantic || (!skipBusiness && business_rules?.some((r) => r.type === 'llm'))) {
-      provider = await getLLMProvider();
+      const rawProvider = await getLLMProvider();
+      if (rawProvider) {
+        const tracked = wrapWithUsageTracking(rawProvider);
+        provider = tracked.provider;
+        trackedUsage = tracked.usage;
+      }
     }
 
     // Run gates
@@ -243,6 +250,18 @@ gateRoutes.openapi(gateCheckRoute, async (c) => {
       skipSemantic,
       skipBusiness,
     });
+
+    // Record usage (fire-and-forget)
+    if (trackedUsage && (trackedUsage.inputTokens || trackedUsage.outputTokens) && resolvedProjectId) {
+      recordUsageFireAndForget(db, {
+        user_id: getUserId(c) ?? undefined,
+        project_id: resolvedProjectId,
+        endpoint: 'gate_check',
+        model: provider?.id ?? 'unknown',
+        input_tokens: trackedUsage.inputTokens,
+        output_tokens: trackedUsage.outputTokens,
+      });
+    }
 
     return c.json(
       {
