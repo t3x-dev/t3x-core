@@ -59,6 +59,16 @@ export interface LLMProvider {
     targetText: string | null,
     context?: string
   ): Promise<LLMGenerateResult>;
+
+  /** Generate text from a structured prompt (system + messages). Optional. */
+  generateFromPrompt?(prompt: LLMPrompt, options: LLMGenerateOptionsV2): Promise<LLMResult>;
+
+  /** Generate structured output using provider-native mechanisms. Optional. */
+  generateStructured?<T>(
+    prompt: LLMPrompt,
+    schema: import('zod').ZodType<T>,
+    options: LLMGenerateOptionsV2
+  ): Promise<StructuredResult<T>>;
 }
 
 /**
@@ -71,6 +81,41 @@ function deriveCode(statusCode: number | undefined): string {
   if (statusCode === 401 || statusCode === 403) return 'AUTH_ERROR';
   if (statusCode >= 500) return 'SERVER_ERROR';
   return 'API_ERROR';
+}
+
+// ── Extended Types for Structured Output ──
+
+export type ProviderName = 'anthropic' | 'openai' | 'google';
+export type Capability = 'tool_use' | 'function_calling' | 'structured_output';
+
+export interface ModelInfo {
+  id: string;
+  label: string;
+  provider: ProviderName;
+  capabilities: Capability[];
+  maxOutputTokens: number;
+}
+
+export interface LLMPrompt {
+  system?: string;
+  messages: Array<{ role: 'user' | 'assistant'; content: string }>;
+}
+
+export interface LLMGenerateOptionsV2 {
+  model: string;
+  temperature?: number;
+  maxTokens?: number;
+  stopSequences?: string[];
+}
+
+export interface LLMResult {
+  text: string;
+  usage: { inputTokens: number; outputTokens: number };
+}
+
+export interface StructuredResult<T> {
+  data: T;
+  usage: { inputTokens: number; outputTokens: number };
 }
 
 /**

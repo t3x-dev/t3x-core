@@ -258,6 +258,13 @@ export {
   type LLMGenerateOptions,
   type LLMProvider,
   LLMProviderError,
+  type ProviderName,
+  type Capability,
+  type ModelInfo,
+  type LLMPrompt,
+  type LLMGenerateOptionsV2,
+  type LLMResult,
+  type StructuredResult,
 } from './llm';
 // Merge (Two-way and three-way merge for combining commits - Issue #71)
 // V4: No constraint handling, prepareMerge accepts DiffableSentence[]
