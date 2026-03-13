@@ -4,12 +4,18 @@
  * Implementation of LLMProvider using Anthropic's Claude API.
  */
 
+import type { ZodType } from 'zod';
 import {
   type LLMGenerateOptions,
+  type LLMGenerateOptionsV2,
   type LLMGenerateResult,
+  type LLMPrompt,
   type LLMProvider,
+  type LLMResult,
   LLMProviderError,
+  type StructuredResult,
 } from '../../llm/types';
+import { zodToJsonSchema } from '../../llm/zodToJsonSchema';
 
 /**
  * Get proxy URL from environment variables
@@ -129,6 +135,181 @@ export class ClaudeProvider implements LLMProvider {
           outputTokens: data.usage?.output_tokens ?? 0,
         },
       };
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error instanceof LLMProviderError) {
+        throw error;
+      }
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new LLMProviderError(this.id, undefined, 'Request timeout after 60000ms');
+      }
+      throw new LLMProviderError(
+        this.id,
+        undefined,
+        `Request failed: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+
+  async generateFromPrompt(prompt: LLMPrompt, options: LLMGenerateOptionsV2): Promise<LLMResult> {
+    const temperature = options.temperature ?? 0.3;
+    const maxTokens = options.maxTokens ?? 2048;
+
+    const url = `${this.baseUrl}/v1/messages`;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
+
+    try {
+      const response = await fetchWithProxy(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': this.apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: options.model,
+          max_tokens: maxTokens,
+          temperature,
+          ...(prompt.system && { system: prompt.system }),
+          messages: prompt.messages,
+          ...(options.stopSequences && { stop_sequences: options.stopSequences }),
+        }),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+      const responseText = await response.text();
+
+      if (!response.ok) {
+        throw new LLMProviderError(
+          this.id,
+          response.status,
+          `API request failed: ${response.status} ${responseText}`
+        );
+      }
+
+      const data = JSON.parse(responseText) as {
+        content: Array<{ type: string; text: string }>;
+        usage?: { input_tokens?: number; output_tokens?: number };
+      };
+
+      const textContent = data.content.find((c) => c.type === 'text');
+      if (!textContent) {
+        throw new LLMProviderError(this.id, undefined, 'No text content in response');
+      }
+
+      return {
+        text: textContent.text,
+        usage: {
+          inputTokens: data.usage?.input_tokens ?? 0,
+          outputTokens: data.usage?.output_tokens ?? 0,
+        },
+      };
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error instanceof LLMProviderError) {
+        throw error;
+      }
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new LLMProviderError(this.id, undefined, 'Request timeout after 60000ms');
+      }
+      throw new LLMProviderError(
+        this.id,
+        undefined,
+        `Request failed: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+
+  async generateStructured<T>(
+    prompt: LLMPrompt,
+    schema: ZodType<T>,
+    options: LLMGenerateOptionsV2
+  ): Promise<StructuredResult<T>> {
+    const temperature = options.temperature ?? 0.3;
+    const maxTokens = options.maxTokens ?? 2048;
+    const toolName = 'extract_data';
+    const jsonSchema = zodToJsonSchema(schema);
+
+    const url = `${this.baseUrl}/v1/messages`;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
+
+    try {
+      const response = await fetchWithProxy(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': this.apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: options.model,
+          max_tokens: maxTokens,
+          temperature,
+          ...(prompt.system && { system: prompt.system }),
+          messages: prompt.messages,
+          tools: [
+            {
+              name: toolName,
+              description: 'Extract structured data',
+              input_schema: jsonSchema,
+            },
+          ],
+          tool_choice: { type: 'tool', name: toolName },
+          ...(options.stopSequences && { stop_sequences: options.stopSequences }),
+        }),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+      const responseText = await response.text();
+
+      if (!response.ok) {
+        throw new LLMProviderError(
+          this.id,
+          response.status,
+          `API request failed: ${response.status} ${responseText}`
+        );
+      }
+
+      const data = JSON.parse(responseText) as {
+        content: Array<{ type: string; text?: string; name?: string; input?: unknown }>;
+        usage?: { input_tokens?: number; output_tokens?: number };
+      };
+
+      const usage = {
+        inputTokens: data.usage?.input_tokens ?? 0,
+        outputTokens: data.usage?.output_tokens ?? 0,
+      };
+
+      // Try to find tool_use block first
+      const toolUseBlock = data.content.find((c) => c.type === 'tool_use' && c.name === toolName);
+      if (toolUseBlock?.input !== undefined) {
+        const parsed = schema.parse(toolUseBlock.input);
+        return { data: parsed, usage };
+      }
+
+      // Fallback: try text block with JSON
+      const textBlock = data.content.find((c) => c.type === 'text' && c.text);
+      if (textBlock?.text) {
+        try {
+          const jsonData = JSON.parse(textBlock.text);
+          const parsed = schema.parse(jsonData);
+          return { data: parsed, usage };
+        } catch {
+          // fall through to error
+        }
+      }
+
+      throw new LLMProviderError(
+        this.id,
+        undefined,
+        'No structured data found in response'
+      );
     } catch (error) {
       clearTimeout(timeoutId);
       if (error instanceof LLMProviderError) {
