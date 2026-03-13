@@ -15,3 +15,5 @@ export {
   type LLMResult,
   type StructuredResult,
 } from './types';
+
+export { MODEL_CATALOG, getAllModels, getModelsByProvider, getModelInfo } from './catalog';
