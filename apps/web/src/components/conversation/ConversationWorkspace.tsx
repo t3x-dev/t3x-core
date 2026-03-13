@@ -11,6 +11,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { FrameGraphView } from '@/components/frame-graph';
 import { FrameYAMLEditor } from '@/components/frame-graph/FrameYAMLEditor';
 import { GateQualityTab } from '@/components/frame-graph/GateQualityTab';
@@ -95,6 +96,29 @@ export function ConversationWorkspace({
   const [activeTab, setActiveTab] = useState<RightTab>('graph');
   const [gateResult, setGateResult] = useState<GateCheckResult | null>(null);
 
+  // ── Resizable divider ──
+  const [rightPanelPct, setRightPanelPct] = useState(60); // percentage of container width
+  const containerRef = useRef<HTMLDivElement>(null);
+  const dragging = useRef(false);
+
+  const onDividerPointerDown = useCallback((e: React.PointerEvent) => {
+    e.preventDefault();
+    dragging.current = true;
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }, []);
+
+  const onDividerPointerMove = useCallback((e: React.PointerEvent) => {
+    if (!dragging.current || !containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const pct = ((rect.width - x) / rect.width) * 100;
+    setRightPanelPct(Math.min(75, Math.max(20, pct)));
+  }, []);
+
+  const onDividerPointerUp = useCallback(() => {
+    dragging.current = false;
+  }, []);
+
   // ── Refs ──
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -142,8 +166,9 @@ export function ConversationWorkspace({
           setUpdatedSlots({});
         }, 3000);
       })
-      .catch(() => {
-        // Extraction failed — will retry on next message
+      .catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : 'Unknown error';
+        toast.error('Frame extraction failed', { description: msg });
       })
       .finally(() => {
         setExtracting(false);
@@ -206,7 +231,7 @@ export function ConversationWorkspace({
   const gateDotColor = gateResult ? (gateResult.passed ? 'bg-emerald-500' : 'bg-red-500') : null;
 
   return (
-    <div className={cn('flex h-full w-full overflow-hidden', className)}>
+    <div ref={containerRef} className={cn('flex h-full w-full overflow-hidden', className)}>
       {/* Optional left sidebar (metadata panel for modal usage) */}
       {leftSidebar && (
         <>
@@ -331,11 +356,21 @@ export function ConversationWorkspace({
         </div>
       </div>
 
-      {/* Divider */}
-      <div className="w-px bg-[var(--stroke-divider)] shrink-0" />
+      {/* Draggable Divider */}
+      <div
+        className="w-1.5 shrink-0 cursor-col-resize group relative hover:bg-blue-500/20 active:bg-blue-500/30 transition-colors"
+        onPointerDown={onDividerPointerDown}
+        onPointerMove={onDividerPointerMove}
+        onPointerUp={onDividerPointerUp}
+      >
+        <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-[var(--stroke-divider)] group-hover:bg-blue-500/50 group-active:bg-blue-500 transition-colors" />
+      </div>
 
       {/* Right panel: Tabbed (Graph / YAML / Quality) */}
-      <div className="flex flex-col w-[45%] min-w-[360px] shrink-0 h-full">
+      <div
+        className="flex flex-col shrink-0 min-w-[320px] h-full"
+        style={{ width: `${rightPanelPct}%` }}
+      >
         <Tabs
           value={activeTab}
           onValueChange={(v) => setActiveTab(v as RightTab)}

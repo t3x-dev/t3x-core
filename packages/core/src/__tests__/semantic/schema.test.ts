@@ -70,6 +70,24 @@ describe('FrameSchema', () => {
     expect(result.success).toBe(true);
   });
 
+  it('accepts boolean slot value', () => {
+    const result = FrameSchema.safeParse({
+      id: 'f_001',
+      type: 'travel_plan',
+      slots: { fine_dining: true, budget_friendly: false },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts boolean in nested array slot', () => {
+    const result = FrameSchema.safeParse({
+      id: 'f_001',
+      type: 'preferences',
+      slots: { flags: [true, false, 'maybe'] },
+    });
+    expect(result.success).toBe(true);
+  });
+
   it('accepts optional confidence', () => {
     const result = FrameSchema.safeParse({
       id: 'f_001',

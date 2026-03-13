@@ -177,6 +177,23 @@ describe('parseSemanticGateResponse', () => {
     expect(result.dimensions.accuracy.score).toBe(0);
   });
 
+  it('parses JSON with surrounding Chinese text (no code block)', () => {
+    const withText = `好的，以下是我的评审结果：\n\n${validLLMResponse}\n\n以上是评审结论。`;
+    const result = parseSemanticGateResponse(withText);
+
+    expect(result.passed).toBe(true);
+    expect(result.score).toBeCloseTo(0.88, 1);
+    expect(result.dimensions.completeness.score).toBe(0.9);
+  });
+
+  it('parses JSON with leading text and no code block', () => {
+    const withLeadingText = `Here is my analysis:\n${validLLMResponse}`;
+    const result = parseSemanticGateResponse(withLeadingText);
+
+    expect(result.passed).toBe(true);
+    expect(result.dimensions.accuracy.score).toBe(0.85);
+  });
+
   it('normalizes invalid severity to warning', () => {
     const badSeverity = JSON.stringify({
       dimensions: {

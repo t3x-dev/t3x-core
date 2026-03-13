@@ -164,7 +164,7 @@ export function ConversationView({
     >
       <div
         className={cn(
-          'flex flex-col w-[95vw] max-w-[1800px] h-[90vh] rounded-2xl overflow-hidden',
+          'flex flex-col w-screen h-screen overflow-hidden',
           glass.cardBase,
           glass.highlight
         )}
