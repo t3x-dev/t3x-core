@@ -255,15 +255,20 @@ export {
 } from './leaf';
 // LLM Provider (interface)
 export {
+  type Capability,
+  createProviderForModel,
   type LLMGenerateOptions,
+  type LLMGenerateOptionsV2,
+  type LLMPrompt,
   type LLMProvider,
   LLMProviderError,
-  type ProviderName,
-  type Capability,
-  type ModelInfo,
-  type LLMPrompt,
-  type LLMGenerateOptionsV2,
   type LLMResult,
+  MODEL_CATALOG,
+  getAllModels,
+  getModelInfo,
+  getModelsByProvider,
+  type ModelInfo,
+  type ProviderName,
   type StructuredResult,
 } from './llm';
 // Merge (Two-way and three-way merge for combining commits - Issue #71)
