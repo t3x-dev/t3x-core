@@ -8,6 +8,7 @@
  * 3. Full output when snapshot exists → diff against snapshot, auto-convert to minimal delta
  */
 
+import { normalizeFrameOutput } from '../llm/normalizer';
 import { DeltaSchema, FrameSchema } from '../semantic/schema';
 import type {
   Delta,
@@ -204,6 +205,9 @@ export function parseFrameDelta(raw: string, snapshot?: SemanticContent): ParseR
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
     return { ok: false, error: 'Parsed JSON is not an object' };
   }
+
+  // Normalize before schema validation (coerces plain objects in slot arrays, etc.)
+  parsed = normalizeFrameOutput(parsed);
 
   // Case 1: Delta JSON (has `changes` key)
   if ('changes' in parsed) {

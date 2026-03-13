@@ -263,6 +263,29 @@ describe('parseFrameDelta', () => {
     });
   });
 
+  describe('Normalizer integration', () => {
+    it('handles plain objects in slot arrays via normalizer', () => {
+      const raw = JSON.stringify({
+        frames: [
+          {
+            id: 'f_001',
+            type: 'itinerary',
+            slots: {
+              stops: [
+                { name: 'Tokyo', duration: '3 days' },
+                { name: 'Osaka', duration: '2 days' },
+              ],
+            },
+          },
+        ],
+        relations: [],
+      });
+
+      const result = parseFrameDelta(raw);
+      expect(result.ok).toBe(true);
+    });
+  });
+
   describe('JSON extraction edge cases', () => {
     it('extracts JSON with surrounding text', () => {
       const raw = `Sure! Here's the updated delta:\n\n${JSON.stringify(validDeltaJson)}\n\nLet me know if you need changes.`;
