@@ -156,7 +156,13 @@ export async function findProjects(
 export async function updateProject(
   db: AnyDB,
   projectId: string,
-  updates: { name?: string; metadata?: Record<string, unknown>; providerConfig?: string | null }
+  updates: {
+    name?: string;
+    metadata?: Record<string, unknown>;
+    providerConfig?: string | null;
+    defaultProvider?: string | null;
+    defaultModel?: string | null;
+  }
 ): Promise<Project | null> {
   const updateData: Partial<NewProject> = {};
   if (updates.name !== undefined) {
@@ -167,6 +173,12 @@ export async function updateProject(
   }
   if (updates.providerConfig !== undefined) {
     updateData.providerConfig = updates.providerConfig;
+  }
+  if (updates.defaultProvider !== undefined) {
+    updateData.defaultProvider = updates.defaultProvider;
+  }
+  if (updates.defaultModel !== undefined) {
+    updateData.defaultModel = updates.defaultModel;
   }
 
   const [updated] = await db
