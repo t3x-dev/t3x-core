@@ -48,6 +48,32 @@ function loadEnvLocal(): void {
 
 loadEnvLocal();
 
+// Log environment status early (for debugging env loading issues)
+pinoLogger.info(
+  {
+    node_env: process.env.NODE_ENV || 'not set',
+    auth_disabled: process.env.AUTH_DISABLED || 'not set',
+    database: process.env.DATABASE_URL ? 'PostgreSQL' : 'PGLite (local)',
+    anthropic_key: process.env.ANTHROPIC_API_KEY ? 'configured' : 'not set',
+    google_ai_key: process.env.GOOGLE_AI_STUDIO_KEY ? 'configured' : 'not set',
+    runner_url: process.env.RUNNER_BASE_URL || 'not set',
+  },
+  'Environment loaded'
+);
+
+// Register graceful shutdown BEFORE server start — ensures handlers exist
+// even if the process is killed during initialization.
+// Note: PGLite also registers its own shutdown handlers in the storage layer
+// as a safety net, so database closure is guaranteed even if these don't fire.
+const shutdown = async () => {
+  pinoLogger.info('Shutting down...');
+  stopTimeoutChecker();
+  await closeDB();
+  process.exit(0);
+};
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);
+
 // Open-source: built-in local auth (username/password)
 const app = createApp();
 
@@ -69,26 +95,6 @@ async function start() {
     });
 
     pinoLogger.info({ port, url: `http://localhost:${port}` }, 'T3X API server running');
-    pinoLogger.info(
-      {
-        anthropic_key: process.env.ANTHROPIC_API_KEY ? 'configured' : 'not set',
-        google_ai_key: process.env.GOOGLE_AI_STUDIO_KEY ? 'configured' : 'not set',
-        database: process.env.DATABASE_URL ? 'PostgreSQL' : 'PGLite (local)',
-        runner_url: process.env.RUNNER_BASE_URL || 'not set',
-      },
-      'Configuration'
-    );
-
-    // Graceful shutdown
-    const shutdown = async () => {
-      pinoLogger.info('Shutting down...');
-      stopTimeoutChecker();
-      await closeDB();
-      process.exit(0);
-    };
-
-    process.on('SIGINT', shutdown);
-    process.on('SIGTERM', shutdown);
 
     return server;
   } catch (error) {

@@ -3,9 +3,14 @@
  *
  * Local PostgreSQL via WASM - no server required.
  * File-based persistence like SQLite, but with full Postgres compatibility.
+ *
+ * Shutdown safety: Registers SIGINT/SIGTERM handlers at the storage layer
+ * (not relying on upper layers) to ensure clean database closure even when
+ * signal propagation through the process chain (turbo → tsx → node) is unreliable.
  */
 
 import fs from 'node:fs';
+import path from 'node:path';
 import { PGlite } from '@electric-sql/pglite';
 import { drizzle, type PgliteDatabase } from 'drizzle-orm/pglite';
 import * as schema from '../schema';
@@ -22,6 +27,57 @@ export interface PGLiteConfig {
 
 let client: PGlite | null = null;
 let db: PGLiteDB | null = null;
+let shutdownRegistered = false;
+
+/**
+ * Register SIGINT/SIGTERM handlers at the storage layer.
+ * This is the earliest possible point — ensures PGLite closes cleanly
+ * even if upper-layer handlers (in index.ts) never fire due to
+ * signal propagation failures through turbo → dotenv → tsx → node.
+ *
+ * Uses process.once() to avoid double-close on repeated signals.
+ * Does NOT call process.exit() — upper layers own the process lifecycle.
+ */
+function registerShutdownHandlers(): void {
+  if (shutdownRegistered || typeof process?.on !== 'function') return;
+  shutdownRegistered = true;
+
+  const onSignal = async (signal: string) => {
+    console.log(`[PGLite] Received ${signal}, closing database...`);
+    if (client) {
+      try {
+        await client.close();
+        console.log('[PGLite] Database closed cleanly.');
+      } catch {
+        console.warn('[PGLite] Error closing database (may already be closed).');
+      }
+      client = null;
+      db = null;
+    }
+    // Do NOT call process.exit() here — let upper-layer handlers
+    // (index.ts shutdown, web/db.ts onSignal) run their cleanup first.
+  };
+
+  process.once('SIGINT', () => onSignal('SIGINT'));
+  process.once('SIGTERM', () => onSignal('SIGTERM'));
+}
+
+/**
+ * Backup corrupted database directory before wiping.
+ * Moves to .t3x/database.bak.{timestamp}/ so data can potentially be recovered.
+ */
+function backupCorruptedDatabase(dataDir: string): string | null {
+  try {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const backupDir = dataDir.replace(/\/$/, '') + `.bak.${timestamp}/`;
+    fs.renameSync(dataDir, backupDir);
+    console.warn(`[PGLite] Corrupted database backed up to: ${backupDir}`);
+    return backupDir;
+  } catch {
+    console.warn('[PGLite] Failed to backup corrupted database, will wipe in place.');
+    return null;
+  }
+}
 
 /**
  * Create PGLite storage for local development
@@ -32,20 +88,36 @@ export async function createPGLiteStorage(config: PGLiteConfig = {}): Promise<PG
 
   // For file-based mode, ensure directory exists and path ends with /
   if (dataDir) {
+    // Resolve to absolute path for consistent logging and backup paths
+    if (!path.isAbsolute(dataDir)) {
+      dataDir = path.resolve(process.cwd(), dataDir);
+    }
     // Ensure path ends with / for PGLite NodeFS
     if (!dataDir.endsWith('/')) {
       dataDir = dataDir + '/';
     }
+
+    const isNewDatabase = !fs.existsSync(dataDir);
     // Create directory recursively if it doesn't exist
     fs.mkdirSync(dataDir, { recursive: true });
+
+    console.log(
+      `[PGLite] Data directory: ${dataDir} (${isNewDatabase ? 'new database' : 'existing database'})`
+    );
 
     // Remove stale postmaster.pid if it exists (from previous unclean shutdown)
     const pidFile = dataDir + 'postmaster.pid';
     if (fs.existsSync(pidFile)) {
-      console.log('Removing stale postmaster.pid from previous session');
+      console.log('[PGLite] Removing stale postmaster.pid from previous session');
       fs.unlinkSync(pidFile);
     }
+  } else {
+    console.log('[PGLite] Using in-memory database (data will not persist)');
   }
+
+  // Register shutdown handlers BEFORE creating the client
+  // This is the earliest point to ensure clean shutdown
+  registerShutdownHandlers();
 
   // Try to load pgvector extension (optional - graceful degradation)
   // biome-ignore lint/suspicious/noExplicitAny: PGLite extension types are dynamic
@@ -59,7 +131,7 @@ export async function createPGLiteStorage(config: PGLiteConfig = {}): Promise<PG
   }
 
   // Create PGLite client (with pgvector if available)
-  // If WASM aborts (corrupted data from unclean shutdown), wipe and retry once.
+  // If WASM aborts (corrupted data from unclean shutdown), backup and retry once.
   try {
     client = new PGlite(dataDir, {
       ...(extensions ? { extensions } : {}),
@@ -73,7 +145,7 @@ export async function createPGLiteStorage(config: PGLiteConfig = {}): Promise<PG
     if (!isWasmAbort || !dataDir) throw err;
 
     console.warn(
-      '[PGLite] WASM abort detected — database may be corrupted from unclean shutdown. Wiping and recreating...'
+      '[PGLite] WASM abort detected — database corrupted from unclean shutdown.'
     );
 
     // Skip client.close() on corrupted instance — calling close() on an
@@ -81,18 +153,20 @@ export async function createPGLiteStorage(config: PGLiteConfig = {}): Promise<PG
     client = null;
     db = null;
 
-    // Wipe corrupted data directory and recreate
-    fs.rmSync(dataDir, { recursive: true, force: true });
+    // Backup corrupted data before wiping (so it can potentially be recovered)
+    const backupPath = backupCorruptedDatabase(dataDir);
     fs.mkdirSync(dataDir, { recursive: true });
 
-    // Retry once
+    // Retry once with fresh database
     client = new PGlite(dataDir, {
       ...(extensions ? { extensions } : {}),
     });
     db = drizzle(client, { schema });
     await initializeSchema(client);
 
-    console.warn('[PGLite] Database recreated successfully. Previous local data was lost.');
+    console.warn(
+      `[PGLite] Database recreated successfully. Previous data was ${backupPath ? `backed up to ${backupPath}` : 'lost (backup failed)'}.`
+    );
   }
 
   // Seed builtin templates
