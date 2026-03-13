@@ -16,6 +16,7 @@ import {
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { getLLMProvider } from '../lib/provider-registry';
+import { getUserId, recordUsageFireAndForget, wrapWithUsageTracking } from '../lib/usage-tracking';
 import { pinoLogger } from '../middleware/logger';
 import { ErrorResponseSchema } from '../schemas/common';
 
@@ -156,7 +157,8 @@ relationsRoutes.openapi(extractRelationsRoute, async (c) => {
       );
     }
     const sentences = commit.content.sentences.map((s) => ({ id: s.id, text: s.text }));
-    const extractor = createRelationExtractor(provider);
+    const { provider: trackedProvider, usage: trackedUsage } = wrapWithUsageTracking(provider);
+    const extractor = createRelationExtractor(trackedProvider);
     const result = await extractor.extract(sentences);
 
     // Delete existing relations, then upsert new ones (atomic)
@@ -178,6 +180,19 @@ relationsRoutes.openapi(extractRelationsRoute, async (c) => {
         );
       }
     });
+
+    // Record usage (fire-and-forget)
+    if (trackedUsage.inputTokens || trackedUsage.outputTokens) {
+      recordUsageFireAndForget(db, {
+        user_id: getUserId(c) ?? undefined,
+        project_id: projectId,
+        endpoint: 'relation_extract',
+        model: trackedProvider.id,
+        input_tokens: trackedUsage.inputTokens,
+        output_tokens: trackedUsage.outputTokens,
+      });
+    }
+
     return c.json(
       {
         success: true as const,

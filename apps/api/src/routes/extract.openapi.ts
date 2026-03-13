@@ -20,6 +20,7 @@ import { findDraftV3ById, findTurnsByConversation, updateDraftV3 } from '@t3x-de
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { getProviderRegistry } from '../lib/provider-registry';
+import { getUserId, recordUsageFireAndForget, wrapWithUsageTracking } from '../lib/usage-tracking';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 import {
   DraftSentenceSchema,
@@ -125,6 +126,7 @@ export interface ExtractionOutput {
     with_source_ref: number;
     removed: number;
   };
+  usage?: { inputTokens: number; outputTokens: number };
 }
 
 export async function extractSentencesFromConversation(
@@ -156,13 +158,22 @@ export async function extractSentencesFromConversation(
     content: t.content,
   }));
 
-  // 3. Get LLM provider via registry fallback
+  // 3. Get LLM provider via registry fallback (with usage tracking)
   const reg = await getProviderRegistry();
+  const trackedUsage = { inputTokens: 0, outputTokens: 0 };
   const result = await reg.tryWithFallback('generation', (provider) => {
-    const extractor = createLLMExtractor(provider);
-    return extractor.extract(turnInputs, {
+    const { provider: tracked, usage } = wrapWithUsageTracking(provider);
+    trackedUsage.inputTokens = 0;
+    trackedUsage.outputTokens = 0;
+    const promise = createLLMExtractor(tracked).extract(turnInputs, {
       maxSentences: options?.max_sentences,
       language: options?.language,
+    });
+    // Capture usage after extraction completes
+    return promise.then((r) => {
+      trackedUsage.inputTokens = usage.inputTokens;
+      trackedUsage.outputTokens = usage.outputTokens;
+      return r;
     });
   });
 
@@ -203,6 +214,7 @@ export async function extractSentencesFromConversation(
       with_source_ref: valid.filter((s) => s.source_ref).length,
       removed: removed.length,
     },
+    usage: trackedUsage.inputTokens || trackedUsage.outputTokens ? trackedUsage : undefined,
   };
 }
 
@@ -222,6 +234,19 @@ extractRoutes.openapi(extractSentencesRoute, async (c) => {
         'CONVERSATION_NOT_FOUND',
         `No turns found for conversation: ${body.conversation_id}`
       );
+    }
+
+    // Record usage (fire-and-forget)
+    if (result.usage) {
+      const db = await getDB();
+      recordUsageFireAndForget(db, {
+        user_id: getUserId(c) ?? undefined,
+        project_id: body.project_id,
+        endpoint: 'extract_sentences',
+        model: result.model,
+        input_tokens: result.usage.inputTokens,
+        output_tokens: result.usage.outputTokens,
+      });
     }
 
     return c.json(
@@ -278,10 +303,17 @@ export async function extractSentencesFromLeafOutput(
   ];
 
   const reg = await getProviderRegistry();
+  const trackedUsage = { inputTokens: 0, outputTokens: 0 };
   const result = await reg.tryWithFallback('generation', (provider) => {
-    const extractor = createLLMExtractor(provider);
-    return extractor.extract(turnInputs, {
+    const { provider: tracked, usage } = wrapWithUsageTracking(provider);
+    trackedUsage.inputTokens = 0;
+    trackedUsage.outputTokens = 0;
+    return createLLMExtractor(tracked).extract(turnInputs, {
       maxSentences: options?.max_sentences ?? 20,
+    }).then((r) => {
+      trackedUsage.inputTokens = usage.inputTokens;
+      trackedUsage.outputTokens = usage.outputTokens;
+      return r;
     });
   });
 
@@ -317,6 +349,7 @@ export async function extractSentencesFromLeafOutput(
       with_source_ref: valid.filter((s) => s.source_ref).length,
       removed: removed.length,
     },
+    usage: trackedUsage.inputTokens || trackedUsage.outputTokens ? trackedUsage : undefined,
   };
 }
 
@@ -390,14 +423,36 @@ extractRoutes.openapi(incrementalExtractRoute, async (c) => {
       content: t.content,
     }));
 
-    // 3. Get LLM provider
+    // 3. Get LLM provider (with usage tracking)
     const reg = await getProviderRegistry();
+    const trackedUsage = { inputTokens: 0, outputTokens: 0 };
+    let trackedModel = 'unknown';
     const result = await reg.tryWithFallback('generation', (provider) => {
-      const extractor = createLLMExtractor(provider);
+      const { provider: tracked, usage } = wrapWithUsageTracking(provider);
+      trackedUsage.inputTokens = 0;
+      trackedUsage.outputTokens = 0;
+      trackedModel = tracked.id;
+      const extractor = createLLMExtractor(tracked);
       const existingSPs = (draft.semantic_points ?? []) as SemanticPoint[];
       const cursor = (draft.extraction_cursor ?? { cursors: {} }) as ExtractionCursor;
-      return extractor.extractIncremental(turnInputs, existingSPs, cursor);
+      return extractor.extractIncremental(turnInputs, existingSPs, cursor).then((r) => {
+        trackedUsage.inputTokens = usage.inputTokens;
+        trackedUsage.outputTokens = usage.outputTokens;
+        return r;
+      });
     });
+
+    // Record usage (fire-and-forget)
+    if (trackedUsage.inputTokens || trackedUsage.outputTokens) {
+      recordUsageFireAndForget(db, {
+        user_id: getUserId(c) ?? undefined,
+        project_id,
+        endpoint: 'extract_incremental',
+        model: trackedModel,
+        input_tokens: trackedUsage.inputTokens,
+        output_tokens: trackedUsage.outputTokens,
+      });
+    }
 
     // 4. Merge results into draft
     const existingSPs = (draft.semantic_points ?? []) as SemanticPoint[];

@@ -17,6 +17,16 @@ export interface LLMGenerateOptions {
 }
 
 /**
+ * Result of an LLM generation call, including token usage.
+ */
+export interface LLMGenerateResult {
+  /** Generated text */
+  text: string;
+  /** Token usage from the API response */
+  usage: { inputTokens: number; outputTokens: number };
+}
+
+/**
  * LLM Provider interface
  *
  * Implemented by Claude, OpenAI, etc.
@@ -32,7 +42,7 @@ export interface LLMProvider {
    * @param options - Generation options
    * @returns Generated text
    */
-  generate(prompt: string, options?: LLMGenerateOptions): Promise<string>;
+  generate(prompt: string, options?: LLMGenerateOptions): Promise<LLMGenerateResult>;
 
   /**
    * Resolve a merge conflict using LLM
@@ -41,14 +51,14 @@ export interface LLMProvider {
    * @param sourceText - Source branch text
    * @param targetText - Target branch text
    * @param context - Additional context
-   * @returns Resolved text
+   * @returns Resolved text with token usage
    */
   resolveConflict(
     baseText: string | null,
     sourceText: string | null,
     targetText: string | null,
     context?: string
-  ): Promise<string>;
+  ): Promise<LLMGenerateResult>;
 }
 
 /**

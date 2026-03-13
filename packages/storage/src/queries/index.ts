@@ -415,6 +415,21 @@ export {
   type ListTemplatesOptions,
   listTemplates,
 } from './templates';
+// Token Usage (LLM token metering)
+export {
+  estimateCost,
+  getUsageByEndpoint,
+  getUsageSummary,
+  getUsageTotal,
+  type RecordUsageInput,
+  recordUsage,
+  type TokenUsageOutput,
+  type UsageByEndpointRow,
+  type UsageSummaryOptions,
+  type UsageSummaryRow,
+  type UsageTotal,
+  type UsageTotalOptions,
+} from './token-usage';
 // Turns
 export {
   type CreateTurnInput,
@@ -442,6 +457,7 @@ export {
   findUserByEmail,
   findUserById,
   findUserByUsername,
+  updateUser,
 } from './users';
 // Webhooks (event subscriptions)
 export {

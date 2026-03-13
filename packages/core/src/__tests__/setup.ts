@@ -4,7 +4,7 @@
  * Provides stub providers for testing core algorithms without external dependencies.
  */
 
-import type { LLMGenerateOptions, LLMProvider } from '../llm';
+import type { LLMGenerateOptions, LLMGenerateResult, LLMProvider } from '../llm';
 import type { EmbeddingProvider } from '../providers/embedding';
 import type { NLPAnalysis, NLPEntity, NLPProvider, NLPSentence, NLPToken } from '../providers/nlp';
 
@@ -313,17 +313,23 @@ export class StubNLPProvider implements NLPProvider {
 export class StubLLMProvider implements LLMProvider {
   readonly id = 'stub-llm';
 
-  async generate(prompt: string, _options?: LLMGenerateOptions): Promise<string> {
-    return `LLM response to: ${prompt.slice(0, 50)}...`;
+  async generate(prompt: string, _options?: LLMGenerateOptions): Promise<LLMGenerateResult> {
+    return {
+      text: `LLM response to: ${prompt.slice(0, 50)}...`,
+      usage: { inputTokens: 10, outputTokens: 5 },
+    };
   }
 
   async resolveConflict(
     baseText: string | null,
     sourceText: string | null,
     targetText: string | null
-  ): Promise<string> {
+  ): Promise<LLMGenerateResult> {
     // Simple stub: prefer source, fall back to target
-    return sourceText ?? targetText ?? baseText ?? '';
+    return {
+      text: sourceText ?? targetText ?? baseText ?? '',
+      usage: { inputTokens: 10, outputTokens: 5 },
+    };
   }
 }
 

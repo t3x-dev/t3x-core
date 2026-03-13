@@ -36,6 +36,7 @@ import { getV4AuthorFromContext } from '../lib/auth';
 import { getDB } from '../lib/db';
 import { computeMergeChecks } from '../lib/merge-checks';
 import { getLLMProvider } from '../lib/provider-registry';
+import { getUserId, recordUsageFireAndForget, wrapWithUsageTracking } from '../lib/usage-tracking';
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 import {
@@ -1014,8 +1015,23 @@ mergeRoutes.openapi(suggestRoute, async (c) => {
     );
   }
 
-  const result = await suggestMerge(prepared.similarPairs[idx], llm);
-  return c.json({ success: true as const, data: { suggestion: result } }, 200);
+  const { provider: trackedLlm, usage } = wrapWithUsageTracking(llm);
+  const { suggestion } = await suggestMerge(prepared.similarPairs[idx], trackedLlm);
+
+  // Record usage (fire-and-forget)
+  if (usage.inputTokens || usage.outputTokens) {
+    const db = await getDB();
+    recordUsageFireAndForget(db, {
+      user_id: getUserId(c) ?? undefined,
+      project_id: draft.projectId,
+      endpoint: 'merge_suggest',
+      model: trackedLlm.id,
+      input_tokens: usage.inputTokens,
+      output_tokens: usage.outputTokens,
+    });
+  }
+
+  return c.json({ success: true as const, data: { suggestion } }, 200);
 });
 
 // ============================================================================
@@ -1120,6 +1136,21 @@ mergeRoutes.openapi(suggestFrameRoute, async (c) => {
     context: body.context,
   };
 
-  const result = await suggestFrameMerge(input, llm);
-  return c.json({ success: true as const, data: { suggestion: result } }, 200);
+  const { provider: trackedLlm, usage } = wrapWithUsageTracking(llm);
+  const { suggestion } = await suggestFrameMerge(input, trackedLlm);
+
+  // Record usage (fire-and-forget)
+  if (usage.inputTokens || usage.outputTokens) {
+    const db = await getDB();
+    recordUsageFireAndForget(db, {
+      user_id: getUserId(c) ?? undefined,
+      project_id: draft.projectId,
+      endpoint: 'merge_suggest_frame',
+      model: trackedLlm.id,
+      input_tokens: usage.inputTokens,
+      output_tokens: usage.outputTokens,
+    });
+  }
+
+  return c.json({ success: true as const, data: { suggestion } }, 200);
 });

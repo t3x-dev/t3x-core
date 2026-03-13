@@ -132,7 +132,7 @@ function defaultDimensionResult(): DimensionResult {
  * Parse the LLM response into a SemanticGateResult.
  * If parsing fails, returns a degraded result with score 0.
  */
-export function parseSemanticGateResponse(raw: string): SemanticGateResult {
+export function parseSemanticGateResponse(raw: string): Omit<SemanticGateResult, 'usage'> {
   try {
     // Strategy 1: Extract from markdown code block
     const jsonMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
@@ -213,7 +213,7 @@ export function parseSemanticGateResponse(raw: string): SemanticGateResult {
 /**
  * Build a degraded result when parsing fails.
  */
-function buildDegradedResult(errorMessage: string): SemanticGateResult {
+function buildDegradedResult(errorMessage: string): Omit<SemanticGateResult, 'usage'> {
   const dimensions = {} as Record<GateDimension, DimensionResult>;
   for (const dim of GATE_DIMENSIONS) {
     dimensions[dim] = defaultDimensionResult();
@@ -291,7 +291,7 @@ ${framesText}
  * Parse the LLM response into a CoverageResult.
  * Returns zero coverage if parsing fails.
  */
-export function parseCoverageResponse(raw: string): CoverageResult {
+export function parseCoverageResponse(raw: string): Omit<CoverageResult, 'usage'> {
   try {
     const jsonMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
     let jsonStr = jsonMatch ? jsonMatch[1].trim() : null;
@@ -354,13 +354,14 @@ export class SemanticGate {
     const fullPrompt = `${systemPrompt}\n\n---\n\n${userPrompt}`;
 
     try {
-      const raw = await this.provider.generate(fullPrompt, {
+      const result = await this.provider.generate(fullPrompt, {
         temperature: 0.1,
         maxTokens: 2000,
       });
-      return parseSemanticGateResponse(raw);
+      const parsed = parseSemanticGateResponse(result.text);
+      return { ...parsed, usage: result.usage };
     } catch {
-      return buildDegradedResult('LLM provider call failed');
+      return { ...buildDegradedResult('LLM provider call failed'), usage: { inputTokens: 0, outputTokens: 0 } };
     }
   }
 
@@ -379,13 +380,14 @@ export class SemanticGate {
     const fullPrompt = `${systemPrompt}\n\n---\n\n${userPrompt}`;
 
     try {
-      const raw = await this.provider.generate(fullPrompt, {
+      const result = await this.provider.generate(fullPrompt, {
         temperature: 0.1,
         maxTokens: 1500,
       });
-      return parseCoverageResponse(raw);
+      const parsed = parseCoverageResponse(result.text);
+      return { ...parsed, usage: result.usage };
     } catch {
-      return { coverage_ratio: 0, uncovered_segments: [] };
+      return { coverage_ratio: 0, uncovered_segments: [], usage: { inputTokens: 0, outputTokens: 0 } };
     }
   }
 }

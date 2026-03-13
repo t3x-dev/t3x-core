@@ -138,18 +138,23 @@ export async function findApiKeyById(db: AnyDB, id: string): Promise<ApiKey | nu
 }
 
 /**
- * List all non-revoked API keys, optionally filtered by project.
+ * List all non-revoked API keys, optionally filtered by project and/or user.
  *
  * @param options.projectId - If provided, only return keys scoped to this project
+ * @param options.userId - If provided, only return keys owned by this user
  */
 export async function listApiKeys(
   db: AnyDB,
-  options: { projectId?: string } = {}
+  options: { projectId?: string; userId?: string } = {}
 ): Promise<ApiKey[]> {
   const conditions = [isNull(apiKeys.revokedAt)];
 
   if (options.projectId) {
     conditions.push(eq(apiKeys.projectId, options.projectId));
+  }
+
+  if (options.userId) {
+    conditions.push(eq(apiKeys.userId, options.userId));
   }
 
   const rows = await db

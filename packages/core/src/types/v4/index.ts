@@ -1070,6 +1070,7 @@ export interface IncrementalExtractionResult {
   reviewPoints: SemanticPoint[];
   newCursor: ExtractionCursor;
   stats: ExtractionStats;
+  usage: { inputTokens: number; outputTokens: number };
 }
 
 /**
@@ -1131,4 +1132,5 @@ export interface RelationExtractionResult {
     avg_confidence: number;
     extraction_time_ms: number;
   };
+  usage: { inputTokens: number; outputTokens: number };
 }

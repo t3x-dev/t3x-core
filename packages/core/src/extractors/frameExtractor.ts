@@ -24,8 +24,8 @@ const MAX_TOKENS = 4096;
 // ── Result Type ──
 
 export type FrameExtractionResult =
-  | { ok: true; delta: Delta; snapshot: SemanticContent }
-  | { ok: false; error: string };
+  | { ok: true; delta: Delta; snapshot: SemanticContent; usage: { inputTokens: number; outputTokens: number } }
+  | { ok: false; error: string; usage: { inputTokens: number; outputTokens: number } };
 
 // ── Re-export input types ──
 
@@ -39,6 +39,7 @@ export class FrameExtractor {
   async extract(input: FrameExtractionInput): Promise<FrameExtractionResult> {
     const baseSnapshot: SemanticContent = input.snapshot ?? { frames: [], relations: [] };
     let lastError = '';
+    const totalUsage = { inputTokens: 0, outputTokens: 0 };
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       // 1. Build prompt
@@ -48,10 +49,13 @@ export class FrameExtractor {
       // 2. Call LLM
       let raw: string;
       try {
-        raw = await this.provider.generate(combinedPrompt, {
+        const genResult = await this.provider.generate(combinedPrompt, {
           temperature: TEMPERATURE,
           maxTokens: MAX_TOKENS,
         });
+        raw = genResult.text;
+        totalUsage.inputTokens += genResult.usage.inputTokens;
+        totalUsage.outputTokens += genResult.usage.outputTokens;
       } catch (err) {
         lastError = `LLM provider error: ${err instanceof Error ? err.message : String(err)}`;
         continue;
@@ -81,9 +85,9 @@ export class FrameExtractor {
         continue;
       }
 
-      return { ok: true, delta: parseResult.delta, snapshot };
+      return { ok: true, delta: parseResult.delta, snapshot, usage: totalUsage };
     }
 
-    return { ok: false, error: lastError };
+    return { ok: false, error: lastError, usage: totalUsage };
   }
 }

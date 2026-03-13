@@ -5,7 +5,12 @@
  * Ollama runs models locally — no API key required.
  */
 
-import { type LLMGenerateOptions, type LLMProvider, LLMProviderError } from '../../llm/types';
+import {
+  type LLMGenerateOptions,
+  type LLMGenerateResult,
+  type LLMProvider,
+  LLMProviderError,
+} from '../../llm/types';
 
 export interface OllamaProviderConfig {
   model?: string;
@@ -23,7 +28,7 @@ export class OllamaProvider implements LLMProvider {
     this.baseUrl = config.baseUrl ?? process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434';
   }
 
-  async generate(prompt: string, options?: LLMGenerateOptions): Promise<string> {
+  async generate(prompt: string, options?: LLMGenerateOptions): Promise<LLMGenerateResult> {
     const temperature = options?.temperature ?? 0.3;
     const url = `${this.baseUrl}/api/generate`;
 
@@ -53,13 +58,23 @@ export class OllamaProvider implements LLMProvider {
         );
       }
 
-      const data = JSON.parse(responseText) as { response: string };
+      const data = JSON.parse(responseText) as {
+        response: string;
+        prompt_eval_count?: number;
+        eval_count?: number;
+      };
 
       if (!data.response) {
         throw new LLMProviderError(this.id, undefined, 'No response content from Ollama');
       }
 
-      return data.response;
+      return {
+        text: data.response,
+        usage: {
+          inputTokens: data.prompt_eval_count ?? 0,
+          outputTokens: data.eval_count ?? 0,
+        },
+      };
     } catch (error) {
       if (error instanceof LLMProviderError) throw error;
       throw new LLMProviderError(
@@ -75,7 +90,7 @@ export class OllamaProvider implements LLMProvider {
     sourceText: string | null,
     targetText: string | null,
     context?: string
-  ): Promise<string> {
+  ): Promise<LLMGenerateResult> {
     const prompt = `You are a merge conflict resolver. Given three versions of text (base, source, and target), produce a merged result that preserves the intent of both changes.
 
 ## Base Version (Common Ancestor)

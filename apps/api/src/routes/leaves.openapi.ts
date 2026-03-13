@@ -60,6 +60,7 @@ import {
   getLLMProvider,
   getProviderRegistry,
 } from '../lib/provider-registry';
+import { getUserId, recordUsageFireAndForget, wrapWithUsageTracking } from '../lib/usage-tracking';
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
 import { pinoLogger } from '../middleware/logger';
 import { extractSentencesFromLeafOutput } from '../routes/extract.openapi';
@@ -760,6 +761,18 @@ leavesRoutes.openapi(batchGenerateRoute, async (c) => {
                   : undefined,
             });
 
+            // Record usage (fire-and-forget)
+            if (result.usage.inputTokens || result.usage.outputTokens) {
+              recordUsageFireAndForget(db, {
+                user_id: getUserId(c) ?? undefined,
+                project_id: body.project_id,
+                endpoint: 'leaf_batch_generate',
+                model: result.model,
+                input_tokens: result.usage.inputTokens,
+                output_tokens: result.usage.outputTokens,
+              });
+            }
+
             // Update leaf with output
             let updatedLeaf = await updateLeafOutput(db, leaf.id, result.output);
 
@@ -1078,6 +1091,18 @@ leavesRoutes.openapi(generateLeafRoute, async (c) => {
     if (multiRoundResult) {
       finalOutput = multiRoundResult.output;
       generationModel = 'multi-round';
+
+      // Record multi-round usage
+      if (multiRoundResult.usage.inputTokens || multiRoundResult.usage.outputTokens) {
+        recordUsageFireAndForget(db, {
+          user_id: getUserId(c) ?? undefined,
+          project_id: leaf.project_id,
+          endpoint: 'leaf_generate',
+          model: generationModel,
+          input_tokens: multiRoundResult.usage.inputTokens,
+          output_tokens: multiRoundResult.usage.outputTokens,
+        });
+      }
     } else {
       // Generate with automatic provider fallback (existing single-round path)
       const result = await generateWithFallback({
@@ -1091,6 +1116,19 @@ leavesRoutes.openapi(generateLeafRoute, async (c) => {
       });
       finalOutput = result.output;
       generationModel = result.model;
+
+      // Record single-round usage
+      if (result.usage.inputTokens || result.usage.outputTokens) {
+        recordUsageFireAndForget(db, {
+          user_id: getUserId(c) ?? undefined,
+          project_id: leaf.project_id,
+          endpoint: 'leaf_generate',
+          model: result.model,
+          input_tokens: result.usage.inputTokens,
+          output_tokens: result.usage.outputTokens,
+        });
+      }
+
       if (result.validation) {
         validationData = {
           allPassed: result.validation.allPassed,
@@ -1586,6 +1624,16 @@ leavesRoutes.openapi(compareModelsRoute, async (c) => {
 
           const latencyMs = Date.now() - start;
 
+          // Record token usage (fire-and-forget)
+          recordUsageFireAndForget(db, {
+            user_id: getUserId(c) ?? undefined,
+            project_id: leaf.project_id,
+            endpoint: 'leaf_generate',
+            model: result.model,
+            input_tokens: result.usage.inputTokens,
+            output_tokens: result.usage.outputTokens,
+          });
+
           // Save each result to history
           try {
             await createLeafHistory(db, {
@@ -1739,14 +1787,20 @@ leavesRoutes.openapi(suggestConstraintsRoute, async (c) => {
     }
 
     const registry = await getProviderRegistry();
+    const trackedUsage = { inputTokens: 0, outputTokens: 0 };
     const result = await registry.tryWithFallback(
       'generation',
       async (provider: {
         id: string;
         generate: (prompt: string, options?: Record<string, unknown>) => Promise<string>;
       }) => {
-        return suggestConstraints(
-          provider as Parameters<typeof suggestConstraints>[0],
+        const { provider: tracked, usage } = wrapWithUsageTracking(
+          provider as Parameters<typeof wrapWithUsageTracking>[0]
+        );
+        trackedUsage.inputTokens = 0;
+        trackedUsage.outputTokens = 0;
+        const r = await suggestConstraints(
+          tracked as Parameters<typeof suggestConstraints>[0],
           sentences,
           leaf.type,
           {
@@ -1754,8 +1808,23 @@ leavesRoutes.openapi(suggestConstraintsRoute, async (c) => {
             instructions: body.instructions,
           }
         );
+        trackedUsage.inputTokens = usage.inputTokens;
+        trackedUsage.outputTokens = usage.outputTokens;
+        return r;
       }
     );
+
+    // Record usage (fire-and-forget)
+    if (trackedUsage.inputTokens || trackedUsage.outputTokens) {
+      recordUsageFireAndForget(db, {
+        user_id: getUserId(c) ?? undefined,
+        project_id: leaf.project_id,
+        endpoint: 'leaf_suggest_constraints',
+        model: result.model,
+        input_tokens: trackedUsage.inputTokens,
+        output_tokens: trackedUsage.outputTokens,
+      });
+    }
 
     // Convert suggestions to proper Constraint objects with IDs
     const constraints = await suggestionsToConstraints(result.suggestions);
@@ -1881,6 +1950,18 @@ leavesRoutes.openapi(extractFromLeafRoute, async (c) => {
     const result = await extractSentencesFromLeafOutput(id, leaf.output, {
       max_sentences: body.max_sentences,
     });
+
+    // Record usage (fire-and-forget)
+    if (result.usage) {
+      recordUsageFireAndForget(db, {
+        user_id: getUserId(c) ?? undefined,
+        project_id: leaf.project_id,
+        endpoint: 'leaf_extract_sentences',
+        model: result.model,
+        input_tokens: result.usage.inputTokens,
+        output_tokens: result.usage.outputTokens,
+      });
+    }
 
     return c.json(
       {
@@ -2066,7 +2147,20 @@ Return at most ${body.max_suggestions} suggestions.
 Respond with ONLY a JSON array of constraint objects, no markdown or explanation:
 [{"type": "require", "match_mode": "semantic", "value": "...", "reason": "...", "confidence": 0.95, "dimension": "style"}, ...]`;
 
-    const raw = await llm.generate(prompt, { temperature: 0.3, maxTokens: 2000 });
+    const genResult = await llm.generate(prompt, { temperature: 0.3, maxTokens: 2000 });
+    const raw = genResult.text;
+
+    // Record usage (fire-and-forget)
+    if (genResult.usage.inputTokens || genResult.usage.outputTokens) {
+      recordUsageFireAndForget(db, {
+        user_id: getUserId(c) ?? undefined,
+        project_id: leaf.project_id,
+        endpoint: 'leaf_learn_from_edits',
+        model: llm.id,
+        input_tokens: genResult.usage.inputTokens,
+        output_tokens: genResult.usage.outputTokens,
+      });
+    }
 
     // Parse the LLM response
     let suggestions: Array<{
@@ -2253,7 +2347,8 @@ leavesRoutes.openapi(reverseLearnRoute, async (c) => {
       .map((l, i) => `${i + 1}. ${l}`)
       .join('\n');
 
-    const result = await suggestConstraints(llm, commit.content.sentences, leaf.type, {
+    const { provider: trackedLlm, usage: rlUsage } = wrapWithUsageTracking(llm);
+    const result = await suggestConstraints(trackedLlm, commit.content.sentences, leaf.type, {
       maxSuggestions: body.max_suggestions,
       instructions: `The following lessons were learned from FAILED validations on previous outputs.
 Generate constraints that would PREVENT these failures:
@@ -2262,6 +2357,18 @@ ${lessonsContext}
 
 Focus on constraints that directly address these failures.`,
     });
+
+    // Record usage (fire-and-forget)
+    if (rlUsage.inputTokens || rlUsage.outputTokens) {
+      recordUsageFireAndForget(db, {
+        user_id: getUserId(c) ?? undefined,
+        project_id: leaf.project_id,
+        endpoint: 'leaf_reverse_learn',
+        model: result.model,
+        input_tokens: rlUsage.inputTokens,
+        output_tokens: rlUsage.outputTokens,
+      });
+    }
 
     return c.json(
       {

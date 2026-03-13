@@ -17,9 +17,9 @@ function makeMockLLM(responses: string[]): LLMProvider {
     generate: vi.fn(async () => {
       const response = responses[callIndex] ?? responses[responses.length - 1];
       callIndex++;
-      return response;
+      return { text: response, usage: { inputTokens: 10, outputTokens: 5 } };
     }),
-    resolveConflict: vi.fn().mockResolvedValue(''),
+    resolveConflict: vi.fn().mockResolvedValue({ text: '', usage: { inputTokens: 0, outputTokens: 0 } }),
   };
 }
 
@@ -125,11 +125,11 @@ describe('multiRoundGenerate', () => {
       id: 'mock',
       generate: vi.fn(async (prompt: string) => {
         if (prompt.includes('Previous output:')) {
-          return 'Refined version';
+          return { text: 'Refined version', usage: { inputTokens: 10, outputTokens: 5 } };
         }
-        return 'Initial draft';
+        return { text: 'Initial draft', usage: { inputTokens: 10, outputTokens: 5 } };
       }),
-      resolveConflict: vi.fn().mockResolvedValue(''),
+      resolveConflict: vi.fn().mockResolvedValue({ text: '', usage: { inputTokens: 0, outputTokens: 0 } }),
     };
 
     const result = await multiRoundGenerate({
@@ -509,11 +509,11 @@ describe('modeGenerate', () => {
       id: 'mock',
       generate: vi.fn(async (prompt: string) => {
         if (prompt.includes('Tone: casual')) {
-          return 'Casual dark mode output';
+          return { text: 'Casual dark mode output', usage: { inputTokens: 10, outputTokens: 5 } };
         }
-        return 'dark mode output';
+        return { text: 'dark mode output', usage: { inputTokens: 10, outputTokens: 5 } };
       }),
-      resolveConflict: vi.fn().mockResolvedValue(''),
+      resolveConflict: vi.fn().mockResolvedValue({ text: '', usage: { inputTokens: 0, outputTokens: 0 } }),
     };
 
     const result = await modeGenerate({

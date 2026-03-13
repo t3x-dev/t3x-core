@@ -5,7 +5,12 @@
  * Shares GOOGLE_AI_STUDIO_KEY with the Google AI Embedding provider.
  */
 
-import { type LLMGenerateOptions, type LLMProvider, LLMProviderError } from '../../llm/types';
+import {
+  type LLMGenerateOptions,
+  type LLMGenerateResult,
+  type LLMProvider,
+  LLMProviderError,
+} from '../../llm/types';
 
 /**
  * Get proxy URL from environment variables
@@ -54,7 +59,7 @@ export class GeminiProvider implements LLMProvider {
     this.baseUrl = config.baseUrl ?? 'https://generativelanguage.googleapis.com/v1beta';
   }
 
-  async generate(prompt: string, options?: LLMGenerateOptions): Promise<string> {
+  async generate(prompt: string, options?: LLMGenerateOptions): Promise<LLMGenerateResult> {
     const temperature = options?.temperature ?? 0.3;
     const maxTokens = options?.maxTokens ?? 2048;
     const url = `${this.baseUrl}/models/${this.model}:generateContent?key=${this.apiKey}`;
@@ -94,6 +99,7 @@ export class GeminiProvider implements LLMProvider {
         candidates?: Array<{
           content?: { parts?: Array<{ text?: string }> };
         }>;
+        usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
       };
 
       const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -101,7 +107,13 @@ export class GeminiProvider implements LLMProvider {
         throw new LLMProviderError(this.id, undefined, 'No content in response');
       }
 
-      return text;
+      return {
+        text,
+        usage: {
+          inputTokens: data.usageMetadata?.promptTokenCount ?? 0,
+          outputTokens: data.usageMetadata?.candidatesTokenCount ?? 0,
+        },
+      };
     } catch (error) {
       clearTimeout(timeoutId);
       if (error instanceof LLMProviderError) throw error;
@@ -121,7 +133,7 @@ export class GeminiProvider implements LLMProvider {
     sourceText: string | null,
     targetText: string | null,
     context?: string
-  ): Promise<string> {
+  ): Promise<LLMGenerateResult> {
     const prompt = `You are a merge conflict resolver. Given three versions of text (base, source, and target), produce a merged result that preserves the intent of both changes.
 
 ## Base Version (Common Ancestor)

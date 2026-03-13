@@ -40,28 +40,38 @@ ${input.context ? `\nContext: ${input.context}` : ''}
 Output JSON only: { "slots": { ... }, "reasoning": "..." }`;
 }
 
+export interface SuggestFrameMergeResult {
+  suggestion: FrameMergeSuggestion | null;
+  usage: { inputTokens: number; outputTokens: number };
+}
+
 export async function suggestFrameMerge(
   input: FrameMergeInput,
   llm?: LLMProvider
-): Promise<FrameMergeSuggestion | null> {
-  if (!llm) return null;
+): Promise<SuggestFrameMergeResult> {
+  if (!llm) return { suggestion: null, usage: { inputTokens: 0, outputTokens: 0 } };
 
   try {
     const prompt = buildFrameMergePrompt(input);
-    const response = await llm.generate(prompt, { temperature: 0.3, maxTokens: 500 });
+    const result = await llm.generate(prompt, { temperature: 0.3, maxTokens: 500 });
 
     // Strip markdown code fences if present, then parse JSON directly
-    const fenceMatch = response.trim().match(/^```(?:json)?\s*\n?([\s\S]*?)\n?\s*```$/);
-    const cleaned = fenceMatch ? fenceMatch[1].trim() : response.trim();
+    const fenceMatch = result.text.trim().match(/^```(?:json)?\s*\n?([\s\S]*?)\n?\s*```$/);
+    const cleaned = fenceMatch ? fenceMatch[1].trim() : result.text.trim();
 
     const parsed = JSON.parse(cleaned);
-    if (!parsed.slots || typeof parsed.slots !== 'object') return null;
+    if (!parsed.slots || typeof parsed.slots !== 'object') {
+      return { suggestion: null, usage: result.usage };
+    }
 
     return {
-      slots: parsed.slots as Record<string, SlotValue>,
-      reasoning: typeof parsed.reasoning === 'string' ? parsed.reasoning : '',
+      suggestion: {
+        slots: parsed.slots as Record<string, SlotValue>,
+        reasoning: typeof parsed.reasoning === 'string' ? parsed.reasoning : '',
+      },
+      usage: result.usage,
     };
   } catch {
-    return null;
+    return { suggestion: null, usage: { inputTokens: 0, outputTokens: 0 } };
   }
 }

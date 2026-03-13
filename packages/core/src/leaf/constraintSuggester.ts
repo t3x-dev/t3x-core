@@ -25,6 +25,7 @@ export interface SuggestedConstraint {
 export interface ConstraintSuggestionResult {
   suggestions: SuggestedConstraint[];
   model: string;
+  usage: { inputTokens: number; outputTokens: number };
 }
 
 export interface SuggestConstraintsOptions {
@@ -202,16 +203,17 @@ export async function suggestConstraints(
   options?: SuggestConstraintsOptions
 ): Promise<ConstraintSuggestionResult> {
   if (sentences.length === 0) {
-    return { suggestions: [], model: provider.id };
+    return { suggestions: [], model: provider.id, usage: { inputTokens: 0, outputTokens: 0 } };
   }
 
   const prompt = buildConstraintSuggestionPrompt(sentences, leafType, options);
-  const raw = await provider.generate(prompt, { temperature: 0.3, maxTokens: 4096 });
-  const suggestions = parseConstraintSuggestions(raw);
+  const result = await provider.generate(prompt, { temperature: 0.3, maxTokens: 4096 });
+  const suggestions = parseConstraintSuggestions(result.text);
 
   return {
     suggestions,
     model: provider.id,
+    usage: result.usage,
   };
 }
 

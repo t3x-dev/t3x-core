@@ -112,6 +112,7 @@ export class BusinessGate {
     content: SemanticContent
   ): Promise<BusinessGateResult> {
     const results: BusinessGateResult['results'] = [];
+    const totalUsage = { inputTokens: 0, outputTokens: 0 };
 
     for (const rule of rules) {
       if (rule.type === 'rule') {
@@ -135,17 +136,19 @@ export class BusinessGate {
 
         try {
           const prompt = this.buildLLMPrompt(rule, content);
-          const response = await this.provider.generate(prompt, {
+          const genResult = await this.provider.generate(prompt, {
             temperature: 0.1,
             maxTokens: 256,
           });
-          const passed = this.parseLLMResponse(response);
+          totalUsage.inputTokens += genResult.usage.inputTokens;
+          totalUsage.outputTokens += genResult.usage.outputTokens;
+          const passed = this.parseLLMResponse(genResult.text);
           results.push({
             rule_id: rule.id,
             passed,
             message: passed
               ? undefined
-              : (rule.message ?? `LLM check "${rule.id}" failed: ${response.slice(0, 200)}`),
+              : (rule.message ?? `LLM check "${rule.id}" failed: ${genResult.text.slice(0, 200)}`),
             severity: rule.severity,
           });
         } catch (err: unknown) {
@@ -163,7 +166,7 @@ export class BusinessGate {
     // passed = no 'error' severity failures
     const passed = results.every((r) => r.passed || r.severity === 'warning');
 
-    return { passed, results };
+    return { passed, results, usage: totalUsage };
   }
 
   /** Build the prompt sent to the LLM for an llm-type rule */

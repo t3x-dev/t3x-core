@@ -28,6 +28,7 @@ export class RelationExtractor {
         avg_confidence: 0,
         extraction_time_ms: 0,
       },
+      usage: { inputTokens: 0, outputTokens: 0 },
     };
 
     if (sentences.length < 2) return emptyResult;
@@ -36,13 +37,13 @@ export class RelationExtractor {
     const combinedPrompt = `${systemPrompt}\n\n---\n\n${userPrompt}`;
 
     const startTime = Date.now();
-    const raw = await this.provider.generate(combinedPrompt, {
+    const genResult = await this.provider.generate(combinedPrompt, {
       temperature: options?.temperature ?? 0.1,
       maxTokens: 4096,
     });
 
     const validIds = new Set(sentences.map((s) => s.id));
-    const items = parseRelationResponse(raw, validIds);
+    const items = parseRelationResponse(genResult.text, validIds);
 
     const relations: SentenceRelation[] = items.map((item) => ({
       id: `rel_${nanoid(12)}`,
@@ -67,6 +68,7 @@ export class RelationExtractor {
         avg_confidence: avgConfidence,
         extraction_time_ms: extractionTimeMs,
       },
+      usage: genResult.usage,
     };
   }
 }

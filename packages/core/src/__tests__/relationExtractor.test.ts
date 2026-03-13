@@ -5,7 +5,7 @@ import type { LLMProvider } from '../llm/types';
 function createMockProvider(response: string): LLMProvider {
   return {
     id: 'mock',
-    generate: vi.fn().mockResolvedValue(response),
+    generate: vi.fn().mockResolvedValue({ text: response, usage: { inputTokens: 10, outputTokens: 5 } }),
     resolveConflict: vi.fn(),
   };
 }

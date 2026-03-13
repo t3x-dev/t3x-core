@@ -34,7 +34,7 @@ export interface ExtractedSentence {
 export interface LLMExtractionResult {
   sentences: ExtractedSentence[];
   model: string;
-  usage?: { input_tokens: number; output_tokens: number };
+  usage: { inputTokens: number; outputTokens: number };
 }
 
 /**
@@ -53,12 +53,12 @@ export class LLMExtractor {
     // Combine system + user into a single prompt for LLMProvider.generate()
     const combinedPrompt = `${systemPrompt}\n\n---\n\n${userPrompt}`;
 
-    const raw = await this.provider.generate(combinedPrompt, {
+    const genResult = await this.provider.generate(combinedPrompt, {
       temperature: options?.temperature ?? 0.1,
       maxTokens: 4096,
     });
 
-    const items = parseExtractionResponse(raw);
+    const items = parseExtractionResponse(genResult.text);
 
     // Resolve source refs
     const sentences: ExtractedSentence[] = items.map((item) => {
@@ -94,6 +94,7 @@ export class LLMExtractor {
     return {
       sentences,
       model: this.provider.id,
+      usage: genResult.usage,
     };
   }
 
@@ -117,12 +118,12 @@ export class LLMExtractor {
 
     const combinedPrompt = `${systemPrompt}\n\n---\n\n${userPrompt}`;
 
-    const raw = await this.provider.generate(combinedPrompt, {
+    const genResult = await this.provider.generate(combinedPrompt, {
       temperature: options?.temperature ?? 0.1,
       maxTokens: 4096,
     });
 
-    const proposals = parseIncrementalResponse(raw);
+    const proposals = parseIncrementalResponse(genResult.text);
 
     // Verify and route each proposal
     const readyPoints: SemanticPoint[] = [];
@@ -211,6 +212,7 @@ export class LLMExtractor {
         needs_review: reviewPoints.length,
         rejected,
       },
+      usage: genResult.usage,
     };
   }
 }

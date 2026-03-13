@@ -47,6 +47,7 @@ import {
 import { getDB } from '../lib/db';
 import { getEmbedder } from '../lib/embedder';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { getUserId, recordUsageFireAndForget } from '../lib/usage-tracking';
 import { pinoLogger } from '../middleware/logger';
 import { ErrorResponseSchema, IdParamSchema, SuccessResponseSchema } from '../schemas/common';
 import {
@@ -962,6 +963,18 @@ draftsRoutes.openapi(extractDraftRoute, async (c) => {
       positionOffset
     );
 
+    // Record usage (fire-and-forget)
+    if (result.usage) {
+      recordUsageFireAndForget(db, {
+        user_id: getUserId(c) ?? undefined,
+        project_id: draft.project_id,
+        endpoint: 'draft_extract',
+        model: result.model,
+        input_tokens: result.usage.inputTokens,
+        output_tokens: result.usage.outputTokens,
+      });
+    }
+
     if (result.sentences.length === 0) {
       return c.json(
         { success: true as const, data: { added_count: 0, draft: toApiDraft(draft) } },
@@ -1168,6 +1181,18 @@ draftsRoutes.openapi(createAutoDraftRoute, async (c) => {
 
     // 1. Extract sentences from conversation
     const result = await extractSentencesFromConversation(body.conversation_id, body.options);
+
+    // Record usage (fire-and-forget)
+    if (result.usage) {
+      recordUsageFireAndForget(db, {
+        user_id: getUserId(c) ?? undefined,
+        project_id: body.project_id,
+        endpoint: 'draft_auto_extract',
+        model: result.model,
+        input_tokens: result.usage.inputTokens,
+        output_tokens: result.usage.outputTokens,
+      });
+    }
 
     if (result.sentences.length === 0) {
       return errorResponse(c, 'INVALID_REQUEST', 'No sentences extracted from conversation');
