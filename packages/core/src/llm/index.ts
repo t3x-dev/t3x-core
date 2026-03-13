@@ -4,6 +4,7 @@
 
 export { getAllModels, getModelInfo, getModelsByProvider, MODEL_CATALOG } from './catalog';
 export { createProviderForModel } from './providerFactory';
+export { normalizeFrameOutput } from './normalizer';
 export {
   type Capability,
   type LLMGenerateOptions,

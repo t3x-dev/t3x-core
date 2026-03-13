@@ -268,6 +268,7 @@ export {
   getModelInfo,
   getModelsByProvider,
   type ModelInfo,
+  normalizeFrameOutput,
   type ProviderName,
   type StructuredResult,
 } from './llm';
