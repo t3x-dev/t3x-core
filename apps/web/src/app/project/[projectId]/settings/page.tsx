@@ -23,6 +23,7 @@ import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { AutopilotSettings } from '@/components/autopilot/AutopilotSettings';
 import { BusinessRulesSection } from '@/components/settings/BusinessRulesSection';
+import { ModelSelector } from '@/components/shared/ModelSelector';
 import {
   getProjectProviderConfig,
   getProviderRoles,
@@ -32,6 +33,7 @@ import {
   updateProjectProviderConfig,
 } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { useProjectStore } from '@/store/projectStore';
 
 type RoleGroup = 'generation' | 'embedding' | 'extraction' | 'merge';
 
@@ -209,6 +211,17 @@ export default function ProjectSettingsPage() {
   const [overriddenRoles, setOverriddenRoles] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  const project = useProjectStore((state) => state.projects.find((p) => p.id === projectId));
+  const updateProjectModel = useProjectStore((state) => state.updateProjectModel);
+
+  const handleModelChange = async (provider: string | null, model: string | null) => {
+    try {
+      await updateProjectModel(projectId, provider, model);
+    } catch {
+      // Error is handled by the store (notifyCallback)
+    }
+  };
 
   const loadData = useCallback(async () => {
     try {
@@ -391,6 +404,19 @@ export default function ProjectSettingsPage() {
             />
           );
         })}
+      </div>
+
+      {/* Default AI Model */}
+      <div className="mt-12 pt-8 border-t border-[var(--stroke-divider)]">
+        <h1 className="text-lg font-semibold text-[var(--text-primary)] mb-2">Default AI Model</h1>
+        <p className="text-sm text-[var(--text-secondary)] mb-6">
+          Set the default provider and model used for AI operations in this project.
+        </p>
+        <ModelSelector
+          initialProvider={project?.defaultProvider}
+          initialModel={project?.defaultModel}
+          onChange={handleModelChange}
+        />
       </div>
 
       {/* Autopilot Settings */}
