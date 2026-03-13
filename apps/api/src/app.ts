@@ -54,12 +54,12 @@ import {
 import { apiKeysRoutes } from './routes/api-keys.openapi';
 import { authLocalRoutes } from './routes/auth-local.openapi';
 import { authMeRoutes } from './routes/auth-me.openapi';
-import { usageRoutes } from './routes/usage.openapi';
 import { autopilotRoutes } from './routes/autopilot.openapi';
 import { comparisonsRoutes } from './routes/comparisons.openapi';
 import { importRoutes } from './routes/import.openapi';
 import { ingestRoutes } from './routes/ingest.openapi';
 import { knowledgeGraphRoutes } from './routes/knowledge-graph.openapi';
+import { llmRoutes } from './routes/llm.openapi';
 import { mergeRoutes } from './routes/merge.openapi';
 import { notificationsRoutes } from './routes/notifications.openapi';
 import { projectRoutes } from './routes/projects.openapi';
@@ -68,6 +68,7 @@ import { recipesRoutes } from './routes/recipes.openapi';
 import { searchRoutes } from './routes/search.openapi';
 import { shareRoutes } from './routes/share.openapi';
 import { templatesRoutes } from './routes/templates.openapi';
+import { usageRoutes } from './routes/usage.openapi';
 import { webhooksRoutes } from './routes/webhooks.openapi';
 
 export interface CreateAppOptions {
@@ -167,6 +168,7 @@ export function createApp(options?: CreateAppOptions): Hono {
   api.route('/', providersRoutes);
   api.route('/', searchRoutes);
   api.route('/', knowledgeGraphRoutes);
+  api.route('/', llmRoutes);
   api.route('/', autopilotRoutes);
   api.route('/', relationsRoutes);
   api.route('/', extractionFeedbackRoutes);
