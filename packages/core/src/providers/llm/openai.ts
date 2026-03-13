@@ -4,12 +4,18 @@
  * Implementation of LLMProvider using OpenAI's Chat Completions API.
  */
 
+import type { ZodType } from 'zod';
 import {
   type LLMGenerateOptions,
+  type LLMGenerateOptionsV2,
   type LLMGenerateResult,
+  type LLMPrompt,
   type LLMProvider,
+  type LLMResult,
   LLMProviderError,
+  type StructuredResult,
 } from '../../llm/types';
+import { zodToJsonSchema } from '../../llm/zodToJsonSchema';
 
 /**
  * Get proxy URL from environment variables
@@ -110,6 +116,177 @@ export class OpenAIProvider implements LLMProvider {
           outputTokens: data.usage?.completion_tokens ?? 0,
         },
       };
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error instanceof LLMProviderError) throw error;
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new LLMProviderError(this.id, undefined, 'Request timeout after 60000ms');
+      }
+      throw new LLMProviderError(
+        this.id,
+        undefined,
+        `Request failed: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+
+  async generateFromPrompt(prompt: LLMPrompt, options: LLMGenerateOptionsV2): Promise<LLMResult> {
+    const temperature = options.temperature ?? 0.3;
+    const maxTokens = options.maxTokens ?? 2048;
+    const url = `${this.baseUrl}/chat/completions`;
+
+    const messages: Array<{ role: string; content: string }> = [];
+    if (prompt.system) {
+      messages.push({ role: 'system', content: prompt.system });
+    }
+    for (const msg of prompt.messages) {
+      messages.push(msg);
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
+
+    try {
+      const response = await fetchWithProxy(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.apiKey}`,
+        },
+        body: JSON.stringify({
+          model: options.model,
+          max_tokens: maxTokens,
+          temperature,
+          messages,
+          ...(options.stopSequences && { stop: options.stopSequences }),
+        }),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+      const responseText = await response.text();
+
+      if (!response.ok) {
+        throw new LLMProviderError(
+          this.id,
+          response.status,
+          `API request failed: ${response.status} ${responseText}`
+        );
+      }
+
+      const data = JSON.parse(responseText) as {
+        choices: Array<{ message: { content: string } }>;
+        usage?: { prompt_tokens?: number; completion_tokens?: number };
+      };
+
+      if (!data.choices?.[0]?.message?.content) {
+        throw new LLMProviderError(this.id, undefined, 'No content in response');
+      }
+
+      return {
+        text: data.choices[0].message.content,
+        usage: {
+          inputTokens: data.usage?.prompt_tokens ?? 0,
+          outputTokens: data.usage?.completion_tokens ?? 0,
+        },
+      };
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error instanceof LLMProviderError) throw error;
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new LLMProviderError(this.id, undefined, 'Request timeout after 60000ms');
+      }
+      throw new LLMProviderError(
+        this.id,
+        undefined,
+        `Request failed: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+
+  async generateStructured<T>(
+    prompt: LLMPrompt,
+    schema: ZodType<T>,
+    options: LLMGenerateOptionsV2
+  ): Promise<StructuredResult<T>> {
+    const temperature = options.temperature ?? 0.3;
+    const maxTokens = options.maxTokens ?? 2048;
+    const jsonSchema = zodToJsonSchema(schema);
+    const url = `${this.baseUrl}/chat/completions`;
+
+    const messages: Array<{ role: string; content: string }> = [];
+    if (prompt.system) {
+      messages.push({ role: 'system', content: prompt.system });
+    }
+    for (const msg of prompt.messages) {
+      messages.push(msg);
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
+
+    try {
+      const response = await fetchWithProxy(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.apiKey}`,
+        },
+        body: JSON.stringify({
+          model: options.model,
+          max_tokens: maxTokens,
+          temperature,
+          messages,
+          response_format: {
+            type: 'json_schema',
+            json_schema: {
+              name: 'extract_data',
+              schema: jsonSchema,
+              strict: true,
+            },
+          },
+          ...(options.stopSequences && { stop: options.stopSequences }),
+        }),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+      const responseText = await response.text();
+
+      if (!response.ok) {
+        throw new LLMProviderError(
+          this.id,
+          response.status,
+          `API request failed: ${response.status} ${responseText}`
+        );
+      }
+
+      const data = JSON.parse(responseText) as {
+        choices: Array<{ message: { content: string } }>;
+        usage?: { prompt_tokens?: number; completion_tokens?: number };
+      };
+
+      const usage = {
+        inputTokens: data.usage?.prompt_tokens ?? 0,
+        outputTokens: data.usage?.completion_tokens ?? 0,
+      };
+
+      const content = data.choices?.[0]?.message?.content;
+      if (!content) {
+        throw new LLMProviderError(this.id, undefined, 'No content in response');
+      }
+
+      try {
+        const jsonData = JSON.parse(content);
+        const parsed = schema.parse(jsonData);
+        return { data: parsed, usage };
+      } catch {
+        throw new LLMProviderError(
+          this.id,
+          undefined,
+          'Failed to parse structured response as JSON'
+        );
+      }
     } catch (error) {
       clearTimeout(timeoutId);
       if (error instanceof LLMProviderError) throw error;
