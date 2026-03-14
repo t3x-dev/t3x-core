@@ -319,7 +319,7 @@ export async function updateLeafAtomic(
   id: string,
   updates: UpdateLeafInput & { output?: string | null }
 ): Promise<Leaf | null> {
-  // Drizzle ORM transaction — all AnyDB types (PGLite, Postgres, Supabase) support .transaction()
+  // Drizzle ORM transaction — all AnyDB types (Postgres, Supabase) support .transaction()
   // biome-ignore lint/suspicious/noExplicitAny: AnyDB union doesn't expose .transaction() but all concrete types do
   return (db as any).transaction(async (tx: AnyDB) => {
     const { output: outputValue, ...rest } = updates;

@@ -72,4 +72,4 @@ coverage.xml
 
 # Next.js
 .next/
-next-env.d.ts
+next-env.d.ts.t3x/test-pg-data

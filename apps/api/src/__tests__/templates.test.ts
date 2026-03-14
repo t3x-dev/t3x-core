@@ -300,7 +300,7 @@ describe('Templates Routes', () => {
       const json1: ApiResponse = await res1.json();
       const count1 = (json1.data as unknown[]).length;
 
-      // Seed again (the PGLite adapter already seeded once during setup)
+      // Seed again (the adapter already seeded once during setup)
       const { seedBuiltinTemplates } = await import('@t3x-dev/storage/seed/templates');
       await seedBuiltinTemplates(mockDB as any);
 
