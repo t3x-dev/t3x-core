@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAutoProject } from '@/hooks/useAutoProject';
 import { useConversationChat } from '@/hooks/useConversationChat';
 import { extractFrames, getSemanticDraft } from '@/lib/api/frames';
+import { getIntentSummary } from '@/lib/intentSummary';
 import { cn } from '@/lib/utils';
 import { useChatStore } from '@/store/chatStore';
 import { useExtractionPanelStore } from '@/store/extractionPanelStore';
@@ -110,6 +111,9 @@ export function ChatWorkspace({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, streamingContent]);
 
+  const focusIntentEnabled = useExtractionPanelStore((s) => s.focusIntentEnabled);
+  const setLlmHighlightedFrameIds = useExtractionPanelStore((s) => s.setLlmHighlightedFrameIds);
+
   // Extract frames after turns are saved
   useEffect(() => {
     const prev = prevTurnsSavedRef.current;
@@ -129,6 +133,13 @@ export function ChatWorkspace({
         if (result.snapshot.frames.length > 0 && s.panelMode === 'collapsed') {
           s.setPanelMode('default');
         }
+
+        if (focusIntentEnabled && result.snapshot.frames.length > 0) {
+          const controller = new AbortController();
+          getIntentSummary(result.snapshot.frames, controller.signal)
+            .then((intentResult) => setLlmHighlightedFrameIds(intentResult.coreFrameIds))
+            .catch(() => {}); // Silent fallback - degrades to deterministic-only
+        }
       })
       .catch(() => {
         // Extraction failed silently — non-critical
@@ -136,7 +147,7 @@ export function ChatWorkspace({
       .finally(() => {
         useExtractionPanelStore.getState().setExtracting(false);
       });
-  }, [resolvedConversationId, turnsSavedCounter]);
+  }, [resolvedConversationId, turnsSavedCounter, focusIntentEnabled, setLlmHighlightedFrameIds]);
 
   // Send firstMessage on mount (once only)
   useEffect(() => {
