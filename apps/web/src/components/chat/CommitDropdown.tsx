@@ -1,7 +1,7 @@
 'use client';
 
 import { ChevronDown } from 'lucide-react';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -18,6 +18,11 @@ export function CommitDropdown() {
 
   const [showMessageInput, setShowMessageInput] = useState(false);
   const [commitMessage, setCommitMessage] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (showMessageInput) inputRef.current?.focus();
+  }, [showMessageInput]);
 
   const sentences = framesToSentences(draft);
   const hasFrames = draft.frames.length > 0;
@@ -46,8 +51,8 @@ export function CommitDropdown() {
           value={commitMessage}
           onChange={(e) => setCommitMessage(e.target.value)}
           placeholder="Commit message (optional)"
+          ref={inputRef}
           className="w-full rounded border border-[var(--stroke-default)] bg-[var(--surface-panel)] px-2 py-1.5 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--accent-commit)]"
-          autoFocus
           onKeyDown={(e) => {
             if (e.key === 'Enter') handleConfirmCommit();
             if (e.key === 'Escape') setShowMessageInput(false);
