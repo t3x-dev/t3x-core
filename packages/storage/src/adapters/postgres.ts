@@ -407,6 +407,13 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     -- Migration: Add semantic column to existing commits_v4 tables
     ALTER TABLE commits_v4 ADD COLUMN IF NOT EXISTS semantic JSONB;
 
+    -- Migration: Add provider/model columns to projects and conversations (PR #554)
+    ALTER TABLE projects ADD COLUMN IF NOT EXISTS provider_config TEXT;
+    ALTER TABLE projects ADD COLUMN IF NOT EXISTS default_provider TEXT;
+    ALTER TABLE projects ADD COLUMN IF NOT EXISTS default_model TEXT;
+    ALTER TABLE conversations ADD COLUMN IF NOT EXISTS provider TEXT;
+    ALTER TABLE conversations ADD COLUMN IF NOT EXISTS model TEXT;
+
     -- Migration: Add runner_assertions column to existing leaves tables (v4.1)
     ALTER TABLE leaves ADD COLUMN IF NOT EXISTS runner_assertions JSONB;
 

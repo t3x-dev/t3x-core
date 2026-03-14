@@ -1,5 +1,6 @@
-import type { Delta, DeltaLogEntry, DeltaSource, SemanticContent } from '@t3x-dev/core';
+import type { Delta, DeltaLogEntry, DeltaSource, Frame, FrameChange, SemanticContent } from '@t3x-dev/core';
 import { create } from 'zustand';
+import { createDelta } from '@/lib/api/frames';
 
 type PanelMode = 'collapsed' | 'default' | 'preview';
 type ActiveView = 'graph' | 'yaml';
@@ -10,6 +11,12 @@ interface ExtractionPanelState {
   draft: SemanticContent;
   deltaLog: DeltaLogEntry[];
   isExtracting: boolean;
+  confirmedFrameIds: Record<string, boolean>;
+  confirmedSlotKeys: Record<string, Record<string, boolean>>; // frameId → { slotKey: true }
+  focusIntentEnabled: boolean;
+  llmHighlightedFrameIds: Record<string, boolean>;
+  lastDeltaChanges: FrameChange[];
+  removedFrames: Frame[];
 
   setPanelMode: (mode: PanelMode) => void;
   setActiveView: (view: ActiveView) => void;
@@ -18,6 +25,15 @@ interface ExtractionPanelState {
   setDraft: (content: SemanticContent) => void;
   resetDraft: () => void;
   setExtracting: (extracting: boolean) => void;
+  confirmFrame: (frameId: string) => void;
+  unconfirmFrame: (frameId: string) => void;
+  confirmSlot: (frameId: string, slotKey: string) => void;
+  unconfirmSlot: (frameId: string, slotKey: string) => void;
+  setFocusIntent: (enabled: boolean) => void;
+  setLlmHighlightedFrameIds: (ids: string[]) => void;
+  hydrateDeltaLog: (entries: DeltaLogEntry[]) => void;
+  conversationId: string | null;
+  setConversationId: (id: string | null) => void;
 }
 
 const emptyContent: SemanticContent = { frames: [], relations: [] };
@@ -28,6 +44,13 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
   draft: emptyContent,
   deltaLog: [],
   isExtracting: false,
+  confirmedFrameIds: {},
+  confirmedSlotKeys: {},
+  focusIntentEnabled: false,
+  llmHighlightedFrameIds: {},
+  lastDeltaChanges: [],
+  removedFrames: [],
+  conversationId: null,
 
   setPanelMode: (mode) => set({ panelMode: mode }),
   setActiveView: (view) => set({ activeView: view }),
@@ -59,9 +82,14 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
           });
           break;
         }
-        case 'remove':
+        case 'remove': {
+          const removed = frames.find((f) => f.id === change.target);
+          if (removed) {
+            set((s) => ({ removedFrames: [...s.removedFrames, removed] }));
+          }
           frames = frames.filter((f) => f.id !== change.target);
           break;
+        }
       }
     }
 
@@ -88,10 +116,54 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
     set({
       draft: { frames, relations },
       deltaLog: [...deltaLog, entry],
+      lastDeltaChanges: delta.changes,
     });
+
+    // Persist user edits to database (LLM extraction is already saved by the API)
+    const convId = get().conversationId;
+    if (convId && source !== 'llm_extraction') {
+      createDelta(convId, delta, source).catch(() => {
+        // Persist failed — non-critical, store has the data
+      });
+    }
   },
 
   setDraft: (content) => set({ draft: content }),
-  resetDraft: () => set({ draft: emptyContent, deltaLog: [] }),
+  resetDraft: () => set({ draft: emptyContent, deltaLog: [], removedFrames: [], lastDeltaChanges: [], confirmedFrameIds: {}, confirmedSlotKeys: {} }),
   setExtracting: (extracting) => set({ isExtracting: extracting }),
+
+  confirmFrame: (frameId) =>
+    set((s) => ({
+      confirmedFrameIds: { ...s.confirmedFrameIds, [frameId]: true },
+    })),
+  unconfirmFrame: (frameId) =>
+    set((s) => {
+      const { [frameId]: _, ...rest } = s.confirmedFrameIds;
+      return { confirmedFrameIds: rest };
+    }),
+  confirmSlot: (frameId, slotKey) =>
+    set((s) => ({
+      // Confirming a slot auto-confirms the parent frame
+      confirmedFrameIds: { ...s.confirmedFrameIds, [frameId]: true },
+      confirmedSlotKeys: {
+        ...s.confirmedSlotKeys,
+        [frameId]: { ...s.confirmedSlotKeys[frameId], [slotKey]: true },
+      },
+    })),
+  unconfirmSlot: (frameId, slotKey) =>
+    set((s) => {
+      const frameSlots = { ...s.confirmedSlotKeys[frameId] };
+      delete frameSlots[slotKey];
+      const hasRemainingSlots = Object.keys(frameSlots).length > 0;
+      return {
+        confirmedSlotKeys: { ...s.confirmedSlotKeys, [frameId]: frameSlots },
+        // If no slots confirmed and frame wasn't explicitly confirmed, unconfirm frame too
+        confirmedFrameIds: hasRemainingSlots ? s.confirmedFrameIds : s.confirmedFrameIds,
+      };
+    }),
+  setFocusIntent: (enabled) => set({ focusIntentEnabled: enabled }),
+  setLlmHighlightedFrameIds: (ids) =>
+    set({ llmHighlightedFrameIds: Object.fromEntries(ids.map((id) => [id, true])) }),
+  hydrateDeltaLog: (entries) => set({ deltaLog: entries }),
+  setConversationId: (id) => set({ conversationId: id }),
 }));

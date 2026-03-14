@@ -15,6 +15,8 @@ export interface UseConversationChatOptions {
   projectId: string;
   conversationId: string | undefined;
   title?: string;
+  provider?: string;
+  model?: string;
   onConversationCreated?: (conversationId: string) => void;
   onTurnsSaved?: () => void;
 }
@@ -40,6 +42,8 @@ export function useConversationChat({
   projectId,
   conversationId,
   title,
+  provider,
+  model,
   onConversationCreated,
   onTurnsSaved,
 }: UseConversationChatOptions): UseConversationChatReturn {
@@ -276,7 +280,7 @@ export function useConversationChat({
       let fullResponse = '';
       let addedFinalMessage = false;
 
-      for await (const event of api.chatStream({ messages })) {
+      for await (const event of api.chatStream({ messages, provider, model })) {
         if (event.type === 'token' && event.content) {
           fullResponse += event.content;
           setStreamingContent(fullResponse);
@@ -352,6 +356,8 @@ export function useConversationChat({
     isChatLoading,
     projectId,
     title,
+    provider,
+    model,
     onConversationCreated,
     onTurnsSaved,
     showWarning,
