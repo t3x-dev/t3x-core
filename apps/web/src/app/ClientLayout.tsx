@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils';
 import { useCanvasStore } from '@/store/canvasStore';
 import { usePinsStore } from '@/store/pinsStore';
 import { useProjectStore } from '@/store/projectStore';
+import { useSessionStore } from '@/store/sessionStore';
 import { useSettingsStore } from '@/store/settingsStore';
 
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
@@ -25,8 +26,14 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const setCanvasNotify = useCanvasStore((state) => state.setNotifyCallback);
   const setPinsNotify = usePinsStore((state) => state.setNotifyCallback);
   const density = useSettingsStore((s) => s.density);
+  const cleanupLegacyKeys = useSessionStore((s) => s.cleanupLegacyKeys);
   const params = useParams();
   const projectId = typeof params?.projectId === 'string' ? params.projectId : null;
+
+  // Clean up legacy onboarding localStorage keys on first mount
+  useEffect(() => {
+    cleanupLegacyKeys();
+  }, [cleanupLegacyKeys]);
 
   // Sync density attribute to document
   useEffect(() => {

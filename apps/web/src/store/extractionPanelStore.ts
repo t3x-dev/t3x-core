@@ -46,10 +46,18 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
         case 'add':
           frames.push(change.frame);
           break;
-        case 'update':
-          frames = frames.map((f) =>
-            f.id === change.target ? { ...f, slots: { ...f.slots, ...change.slots } } : f
-          );
+        case 'update': {
+          frames = frames.map((f) => {
+            if (f.id !== change.target) return f;
+            const merged = { ...f.slots };
+            for (const [k, v] of Object.entries(change.slots)) {
+              if (v === null) delete merged[k];
+              else merged[k] = v;
+            }
+            return { ...f, slots: merged };
+          });
+          break;
+        }
           break;
         case 'remove':
           frames = frames.filter((f) => f.id !== change.target);
