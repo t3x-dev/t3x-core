@@ -6,18 +6,6 @@ import { parseDisplayYAML, toDisplayYAML } from '@/lib/liteYaml';
 import { relevanceScore, RELEVANCE_THRESHOLD, type RelevanceContext } from '@/lib/relevanceScore';
 import { useExtractionPanelStore } from '@/store/extractionPanelStore';
 
-const CHANGE_COLORS: Record<string, string> = {
-  add: '#4ade80',
-  update: '#facc15',
-  remove: '#f87171',
-};
-
-const CHANGE_PREFIX: Record<string, string> = {
-  add: '+ ',
-  update: '~ ',
-  remove: '- ',
-};
-
 export function FrameYAMLView() {
   const draft = useExtractionPanelStore((s) => s.draft);
   const applyDelta = useExtractionPanelStore((s) => s.applyDelta);
@@ -30,7 +18,6 @@ export function FrameYAMLView() {
   const confirmSlot = useExtractionPanelStore((s) => s.confirmSlot);
   const unconfirmSlot = useExtractionPanelStore((s) => s.unconfirmSlot);
   const llmHighlightedFrameIds = useExtractionPanelStore((s) => s.llmHighlightedFrameIds);
-  const removedFrames = useExtractionPanelStore((s) => s.removedFrames);
   const isExtracting = useExtractionPanelStore((s) => s.isExtracting);
 
   const [isEditing, setIsEditing] = useState(false);
@@ -62,7 +49,7 @@ export function FrameYAMLView() {
     setEditValue(yamlText);
   }, [yamlText]);
 
-  // Build change map
+  // Build change map from last delta
   const changeMap = useMemo(() => {
     const map = new Map<string, 'add' | 'update' | 'remove'>();
     for (const c of lastDeltaChanges) {
@@ -73,60 +60,86 @@ export function FrameYAMLView() {
     return map;
   }, [lastDeltaChanges]);
 
-  // Build relevance context for sorting
-  const turnsAgoMap = useMemo(() => {
-    const map: Record<string, number> = {};
-    const totalEntries = deltaLog.length;
+  // Build relevance context
+  const relevanceCtx = useMemo((): RelevanceContext => {
+    const turnsAgoMap: Record<string, number> = {};
+    const touchCountMap: Record<string, number> = {};
+    const total = deltaLog.length;
     for (let i = deltaLog.length - 1; i >= 0; i--) {
-      const entry = deltaLog[i];
-      const turnsAgo = totalEntries - 1 - i;
-      for (const c of entry.delta.changes) {
+      const turnsAgo = total - 1 - i;
+      for (const c of deltaLog[i].delta.changes) {
         const fid = c.action === 'add' ? c.frame.id : c.target;
-        if (!(fid in map)) map[fid] = turnsAgo;
+        if (!(fid in turnsAgoMap)) turnsAgoMap[fid] = turnsAgo;
+        touchCountMap[fid] = (touchCountMap[fid] ?? 0) + 1;
       }
     }
-    return map;
-  }, [deltaLog]);
-
-  const touchCountMap = useMemo(() => {
-    const map: Record<string, number> = {};
-    for (const entry of deltaLog) {
-      for (const c of entry.delta.changes) {
-        const fid = c.action === 'add' ? c.frame.id : c.target;
-        map[fid] = (map[fid] ?? 0) + 1;
-      }
-    }
-    return map;
-  }, [deltaLog]);
-
-  const relationDegreeMap = useMemo(() => {
-    const map: Record<string, number> = {};
+    const relationDegreeMap: Record<string, number> = {};
     for (const r of draft.relations) {
-      map[r.from] = (map[r.from] ?? 0) + 1;
-      map[r.to] = (map[r.to] ?? 0) + 1;
+      relationDegreeMap[r.from] = (relationDegreeMap[r.from] ?? 0) + 1;
+      relationDegreeMap[r.to] = (relationDegreeMap[r.to] ?? 0) + 1;
     }
-    return map;
-  }, [draft.relations]);
+    return { confirmedFrameIds, llmHighlightedFrameIds, turnsAgoMap, touchCountMap, relationDegreeMap };
+  }, [deltaLog, draft.relations, confirmedFrameIds, llmHighlightedFrameIds]);
 
-  // Sort frames by relevance score (highest first)
+  // Sort frames by relevance
   const sortedFrames = useMemo(() => {
-    const ctx: RelevanceContext = {
-      confirmedFrameIds,
-      llmHighlightedFrameIds,
-      turnsAgoMap,
-      touchCountMap,
-      relationDegreeMap,
-    };
-    return [...draft.frames].sort((a, b) => {
-      const sa = relevanceScore(a, ctx);
-      const sb = relevanceScore(b, ctx);
-      return sb.score - sa.score;
-    });
-  }, [draft.frames, confirmedFrameIds, llmHighlightedFrameIds, turnsAgoMap, touchCountMap, relationDegreeMap]);
+    return [...draft.frames].sort((a, b) =>
+      relevanceScore(b, relevanceCtx).score - relevanceScore(a, relevanceCtx).score
+    );
+  }, [draft.frames, relevanceCtx]);
 
-  const removedFramesInDelta = removedFrames.filter((f) => changeMap.get(f.id) === 'remove');
+  // Build per-line metadata for the YAML display
+  // Each YAML line maps to a frame header or a slot line
+  const yamlLines = useMemo(() => {
+    const lines: Array<{
+      text: string;
+      frameId: string;
+      slotKey: string | null;
+      changeType: 'add' | 'update' | 'remove' | null;
+      isAutoSelected: boolean;
+      isEmpty: boolean;
+    }> = [];
 
-  if (draft.frames.length === 0 && removedFramesInDelta.length === 0 && !isEditing) {
+    for (const frame of sortedFrames) {
+      const change = changeMap.get(frame.id) ?? null;
+      const score = relevanceScore(frame, relevanceCtx).score;
+      const isAuto = score >= RELEVANCE_THRESHOLD;
+
+      // Frame header
+      lines.push({
+        text: `${frame.type}:`,
+        frameId: frame.id,
+        slotKey: null,
+        changeType: change,
+        isAutoSelected: isAuto,
+        isEmpty: false,
+      });
+
+      // Slot lines
+      for (const [key, value] of Object.entries(frame.slots)) {
+        let display: string;
+        if (Array.isArray(value)) display = JSON.stringify(value);
+        else if (typeof value === 'number') display = String(value);
+        else display = `"${String(value)}"`;
+
+        lines.push({
+          text: `  ${key}: ${display}`,
+          frameId: frame.id,
+          slotKey: key,
+          changeType: change,
+          isAutoSelected: isAuto,
+          isEmpty: false,
+        });
+      }
+
+      // Blank separator
+      lines.push({ text: '', frameId: frame.id, slotKey: null, changeType: null, isAutoSelected: false, isEmpty: true });
+    }
+
+    return lines;
+  }, [sortedFrames, changeMap, relevanceCtx]);
+
+  if (draft.frames.length === 0 && !isEditing) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2">
         {isExtracting ? (
@@ -141,84 +154,17 @@ export function FrameYAMLView() {
     );
   }
 
-  const renderFrameYAML = (frame: typeof draft.frames[0], isRemoved: boolean) => {
-    const changeType = changeMap.get(frame.id);
-    const borderColor = changeType ? CHANGE_COLORS[changeType] : undefined;
-    const prefix = changeType ? CHANGE_PREFIX[changeType] : '  ';
-    const isConfirmed = !!confirmedFrameIds[frame.id];
-    const frameSlotConfirms = confirmedSlotKeys[frame.id] ?? {};
-    const opacity = isRemoved ? 0.4 : 1;
-
-    return (
-      <div
-        key={frame.id}
-        style={{
-          borderLeft: `3px solid ${borderColor ?? 'transparent'}`,
-          paddingLeft: 6,
-          marginBottom: 2,
-          opacity,
-        }}
-      >
-        {/* Frame type line: checkbox + YAML key */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, lineHeight: '20px' }}>
-          <span style={{ color: borderColor ?? 'var(--text-tertiary)', fontWeight: 600, width: 14, flexShrink: 0, fontSize: 11 }}>
-            {prefix}
-          </span>
-          <input
-            type="checkbox"
-            checked={isConfirmed}
-            onChange={() => isConfirmed ? unconfirmFrame(frame.id) : confirmFrame(frame.id)}
-            style={{ accentColor: '#4ade80', cursor: 'pointer', flexShrink: 0 }}
-          />
-          <span style={{
-            fontWeight: 600,
-            color: 'var(--text-primary)',
-            textDecoration: isRemoved ? 'line-through' : 'none',
-          }}>
-            {frame.type}:
-          </span>
-        </div>
-        {/* Slots as YAML key-value lines with individual checkboxes */}
-        {Object.entries(frame.slots).map(([key, value]) => {
-          const isSlotConfirmed = !!frameSlotConfirms[key];
-          const displayValue = typeof value === 'string' ? value
-            : Array.isArray(value) ? `[${(value as string[]).join(', ')}]`
-            : JSON.stringify(value);
-
-          return (
-            <div
-              key={key}
-              style={{
-                display: 'flex',
-                alignItems: 'flex-start',
-                gap: 4,
-                paddingLeft: 22,
-                lineHeight: '18px',
-                textDecoration: isRemoved ? 'line-through' : 'none',
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={isSlotConfirmed}
-                onChange={() => isSlotConfirmed ? unconfirmSlot(frame.id, key) : confirmSlot(frame.id, key)}
-                style={{ accentColor: '#4ade80', cursor: 'pointer', flexShrink: 0, marginTop: 2 }}
-              />
-              <span style={{ color: 'var(--text-secondary)' }}>
-                <span style={{ color: 'var(--text-primary)' }}>{key}</span>: {displayValue}
-              </span>
-            </div>
-          );
-        })}
-      </div>
-    );
+  const deltaBarColors: Record<string, string> = {
+    add: '#4ade80',
+    update: '#facc15',
+    remove: '#f87171',
   };
 
   return (
     <div className="flex h-full flex-col gap-2 p-2">
+      {/* Header */}
       <div className="flex items-center justify-between">
-        <span className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-tertiary)]">
-          YAML
-        </span>
+        <span className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-tertiary)]">YAML</span>
         <div className="flex gap-1">
           {isEditing ? (
             <>
@@ -231,6 +177,7 @@ export function FrameYAMLView() {
         </div>
       </div>
 
+      {/* Content */}
       {isEditing ? (
         <textarea
           value={editValue}
@@ -239,12 +186,93 @@ export function FrameYAMLView() {
           spellCheck={false}
         />
       ) : (
-        <div className="flex-1 overflow-auto rounded border border-[var(--stroke-default)] bg-[var(--surface-panel)] p-2 font-mono text-xs text-[var(--text-primary)]">
-          {sortedFrames.map((frame) => renderFrameYAML(frame, false))}
-          {removedFramesInDelta.map((frame) => renderFrameYAML(frame, true))}
-          {sortedFrames.length === 0 && removedFramesInDelta.length === 0 && (
-            <span style={{ color: 'var(--text-tertiary)' }}># empty</span>
-          )}
+        <div className="flex-1 overflow-auto rounded border border-[var(--stroke-default)] bg-[var(--surface-panel)]">
+          {yamlLines.map((line, i) => {
+            // Blank separator line
+            if (line.isEmpty) return <div key={i} style={{ height: 4 }} />;
+
+            const isFrameLine = line.slotKey === null;
+            const isConfirmed = isFrameLine
+              ? !!confirmedFrameIds[line.frameId]
+              : !!(confirmedSlotKeys[line.frameId]?.[line.slotKey!]);
+
+            // Background: human-confirmed = subtle green, auto-selected = subtle blue
+            const bg = isConfirmed
+              ? 'rgba(74, 222, 128, 0.1)'
+              : line.isAutoSelected
+                ? 'rgba(96, 165, 250, 0.06)'
+                : 'transparent';
+
+            const handleCheck = () => {
+              if (isFrameLine) {
+                isConfirmed ? unconfirmFrame(line.frameId) : confirmFrame(line.frameId);
+              } else {
+                isConfirmed
+                  ? unconfirmSlot(line.frameId, line.slotKey!)
+                  : confirmSlot(line.frameId, line.slotKey!);
+              }
+            };
+
+            return (
+              <div
+                key={i}
+                style={{
+                  display: 'flex',
+                  alignItems: 'stretch',
+                  background: bg,
+                  minHeight: 20,
+                  transition: 'background 0.15s',
+                }}
+              >
+                {/* Checkbox column */}
+                <div style={{
+                  width: 22,
+                  flexShrink: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}>
+                  <input
+                    type="checkbox"
+                    checked={isConfirmed}
+                    onChange={handleCheck}
+                    style={{
+                      accentColor: '#4ade80',
+                      cursor: 'pointer',
+                      opacity: isConfirmed ? 1 : 0.25,
+                      width: 11,
+                      height: 11,
+                    }}
+                  />
+                </div>
+
+                {/* Delta color bar */}
+                <div style={{
+                  width: 3,
+                  flexShrink: 0,
+                  background: line.changeType ? deltaBarColors[line.changeType] : 'transparent',
+                }} />
+
+                {/* YAML text — actual monospace, untouched */}
+                <pre style={{
+                  margin: 0,
+                  padding: '1px 6px',
+                  fontSize: 11,
+                  lineHeight: '18px',
+                  fontFamily: 'var(--font-mono, ui-monospace, monospace)',
+                  color: isFrameLine ? 'var(--text-primary)' : 'var(--text-secondary)',
+                  fontWeight: isFrameLine ? 600 : 400,
+                  whiteSpace: 'pre',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  flex: 1,
+                  minWidth: 0,
+                }}>
+                  {line.text}
+                </pre>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
