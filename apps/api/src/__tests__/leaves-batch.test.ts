@@ -276,28 +276,42 @@ describe('Batch Generation Routes', () => {
     });
 
     it('defaults skip_generation to false', async () => {
-      // When ANTHROPIC_API_KEY is not set and skip_generation is not provided,
-      // it should return an error about generation not configured
-      const res = await app.request(
-        `/v1/commits/${encodeURIComponent(testCommitHash)}/leaves/batch`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            project_id: testProjectId,
-            leaves: [{ type: 'tweet' }],
-            // skip_generation not provided, defaults to false
-          }),
-        }
-      );
+      // Temporarily unset API keys and reset provider registry
+      // so generation is not configured for this test
+      const savedAnthropic = process.env.ANTHROPIC_API_KEY;
+      const savedGoogle = process.env.GOOGLE_AI_STUDIO_KEY;
+      delete process.env.ANTHROPIC_API_KEY;
+      delete process.env.GOOGLE_AI_STUDIO_KEY;
 
-      // Since ANTHROPIC_API_KEY is not set in test environment,
-      // this should return 400 with GENERATION_NOT_CONFIGURED
-      expect(res.status).toBe(400);
+      const { resetProviderRegistry } = await import('../lib/provider-registry');
+      resetProviderRegistry();
 
-      const data: ApiResponse = await res.json();
-      expect(data.success).toBe(false);
-      expect(data.error.code).toBe('GENERATION_NOT_CONFIGURED');
+      try {
+        const res = await app.request(
+          `/v1/commits/${encodeURIComponent(testCommitHash)}/leaves/batch`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              project_id: testProjectId,
+              leaves: [{ type: 'tweet' }],
+              // skip_generation not provided, defaults to false
+            }),
+          }
+        );
+
+        // No API key set → should return 400 with GENERATION_NOT_CONFIGURED
+        expect(res.status).toBe(400);
+
+        const data: ApiResponse = await res.json();
+        expect(data.success).toBe(false);
+        expect(data.error.code).toBe('GENERATION_NOT_CONFIGURED');
+      } finally {
+        // Restore env vars and re-initialize registry
+        if (savedAnthropic) process.env.ANTHROPIC_API_KEY = savedAnthropic;
+        if (savedGoogle) process.env.GOOGLE_AI_STUDIO_KEY = savedGoogle;
+        resetProviderRegistry();
+      }
     });
 
     it('returns correct summary for single leaf', async () => {

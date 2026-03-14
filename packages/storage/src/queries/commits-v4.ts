@@ -493,38 +493,34 @@ export async function findCommitV4History(
 ): Promise<CommitV4HistoryResult> {
   const MAX_DEPTH = 1000;
 
-  const result = await (
-    db as unknown as {
-      execute: (q: ReturnType<typeof sql>) => Promise<{ rows: Record<string, unknown>[] }>;
-    }
-  ).execute(sql`
-    WITH RECURSIVE history AS (
-      SELECT c.*, 0 AS depth, ARRAY[c.hash] AS visited
-      FROM commits_v4 c
-      WHERE c.hash = ${hash}
+  const rows = Array.from(
+    await db.execute(sql`
+      WITH RECURSIVE history AS (
+        SELECT c.*, 0 AS depth, ARRAY[c.hash] AS visited
+        FROM commits_v4 c
+        WHERE c.hash = ${hash}
 
-      UNION ALL
+        UNION ALL
 
-      SELECT c.*, h.depth + 1, h.visited || c.hash
-      FROM history h,
-           jsonb_array_elements_text(h.parents::jsonb) AS parent_hash
-      JOIN commits_v4 c ON c.hash = parent_hash
-      WHERE h.depth < ${MAX_DEPTH}
-        AND NOT (c.hash = ANY(h.visited))
-    ),
-    deduped AS (
-      SELECT DISTINCT ON (hash) hash, schema, parents, author, committed_at,
-             content, project_id, message, branch, source_refs, merkle_root,
-             merge_summary, position_x, position_y, created_at, depth
-      FROM history
-      ORDER BY hash, depth
-    )
-    SELECT * FROM deduped
-    ORDER BY depth, committed_at DESC
-    LIMIT ${limit + 1}
-  `);
-
-  const rows = result.rows;
+        SELECT c.*, h.depth + 1, h.visited || c.hash
+        FROM history h,
+             jsonb_array_elements_text(h.parents::jsonb) AS parent_hash
+        JOIN commits_v4 c ON c.hash = parent_hash
+        WHERE h.depth < ${MAX_DEPTH}
+          AND NOT (c.hash = ANY(h.visited))
+      ),
+      deduped AS (
+        SELECT DISTINCT ON (hash) hash, schema, parents, author, committed_at,
+               content, project_id, message, branch, source_refs, merkle_root,
+               merge_summary, position_x, position_y, created_at, depth
+        FROM history
+        ORDER BY hash, depth
+      )
+      SELECT * FROM deduped
+      ORDER BY depth, committed_at DESC
+      LIMIT ${limit + 1}
+    `)
+  ) as Record<string, unknown>[];
   const truncated = rows.length > limit;
   const commits = rows.slice(0, limit).map(rawRowToCommitV4);
 
