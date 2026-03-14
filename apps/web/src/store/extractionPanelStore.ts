@@ -1,4 +1,4 @@
-import type { Delta, DeltaLogEntry, DeltaSource, SemanticContent } from '@t3x-dev/core';
+import type { Delta, DeltaLogEntry, DeltaSource, Frame, FrameChange, SemanticContent } from '@t3x-dev/core';
 import { create } from 'zustand';
 
 type PanelMode = 'collapsed' | 'default' | 'preview';
@@ -10,6 +10,11 @@ interface ExtractionPanelState {
   draft: SemanticContent;
   deltaLog: DeltaLogEntry[];
   isExtracting: boolean;
+  confirmedFrameIds: Record<string, boolean>;
+  focusIntentEnabled: boolean;
+  llmHighlightedFrameIds: Record<string, boolean>;
+  lastDeltaChanges: FrameChange[];
+  removedFrames: Frame[];
 
   setPanelMode: (mode: PanelMode) => void;
   setActiveView: (view: ActiveView) => void;
@@ -18,6 +23,10 @@ interface ExtractionPanelState {
   setDraft: (content: SemanticContent) => void;
   resetDraft: () => void;
   setExtracting: (extracting: boolean) => void;
+  confirmFrame: (frameId: string) => void;
+  unconfirmFrame: (frameId: string) => void;
+  setFocusIntent: (enabled: boolean) => void;
+  setLlmHighlightedFrameIds: (ids: string[]) => void;
 }
 
 const emptyContent: SemanticContent = { frames: [], relations: [] };
@@ -28,6 +37,11 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
   draft: emptyContent,
   deltaLog: [],
   isExtracting: false,
+  confirmedFrameIds: {},
+  focusIntentEnabled: false,
+  llmHighlightedFrameIds: {},
+  lastDeltaChanges: [],
+  removedFrames: [],
 
   setPanelMode: (mode) => set({ panelMode: mode }),
   setActiveView: (view) => set({ activeView: view }),
@@ -59,9 +73,14 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
           });
           break;
         }
-        case 'remove':
+        case 'remove': {
+          const removed = frames.find((f) => f.id === change.target);
+          if (removed) {
+            set((s) => ({ removedFrames: [...s.removedFrames, removed] }));
+          }
           frames = frames.filter((f) => f.id !== change.target);
           break;
+        }
       }
     }
 
@@ -88,10 +107,24 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
     set({
       draft: { frames, relations },
       deltaLog: [...deltaLog, entry],
+      lastDeltaChanges: delta.changes,
     });
   },
 
   setDraft: (content) => set({ draft: content }),
   resetDraft: () => set({ draft: emptyContent, deltaLog: [] }),
   setExtracting: (extracting) => set({ isExtracting: extracting }),
+
+  confirmFrame: (frameId) =>
+    set((s) => ({
+      confirmedFrameIds: { ...s.confirmedFrameIds, [frameId]: true },
+    })),
+  unconfirmFrame: (frameId) =>
+    set((s) => {
+      const { [frameId]: _, ...rest } = s.confirmedFrameIds;
+      return { confirmedFrameIds: rest };
+    }),
+  setFocusIntent: (enabled) => set({ focusIntentEnabled: enabled }),
+  setLlmHighlightedFrameIds: (ids) =>
+    set({ llmHighlightedFrameIds: Object.fromEntries(ids.map((id) => [id, true])) }),
 }));
