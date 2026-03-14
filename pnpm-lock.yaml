@@ -124,6 +124,12 @@ importers:
       '@types/turndown':
         specifier: ^5.0.6
         version: 5.0.6
+      embedded-postgres:
+        specifier: 18.3.0-beta.16
+        version: 18.3.0-beta.16
+      postgres:
+        specifier: ^3.4.7
+        version: 3.4.7
       tsup:
         specifier: ^8.3.5
         version: 8.5.1(jiti@2.6.1)(postcss@8.5.6)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.2)
@@ -378,13 +384,19 @@ importers:
         version: 10.4.23(postcss@8.5.6)
       drizzle-orm:
         specifier: ^0.38.3
-        version: 0.38.4(@electric-sql/pglite@0.3.14)(@types/react@19.2.7)(pg@8.20.0)(postgres@3.4.7)(react@19.2.3)
+        version: 0.38.4(@electric-sql/pglite@0.3.14)(@types/react@19.2.7)(pg@8.20.0)(postgres@3.4.8)(react@19.2.3)
+      embedded-postgres:
+        specifier: 18.3.0-beta.16
+        version: 18.3.0-beta.16
       jsdom:
         specifier: ^28.0.0
         version: 28.0.0
       postcss:
         specifier: ^8.5.6
         version: 8.5.6
+      postgres:
+        specifier: ^3.4.8
+        version: 3.4.8
       tailwindcss:
         specifier: ^4.1.18
         version: 4.1.18
@@ -3348,6 +3360,7 @@ packages:
 
   glob@10.5.0:
     resolution: {integrity: sha512-DfXN8DfhJ7NH3Oe7cFmu3NCu1wKbkReJ8TorzSAFbSKrlNaQSKfIzqYqVY8zlbs2NLBbWpRiU52GX2PbaBVNkg==}
+    deprecated: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
     hasBin: true
 
   globby@11.1.0:
@@ -4103,6 +4116,10 @@ packages:
 
   postgres@3.4.7:
     resolution: {integrity: sha512-Jtc2612XINuBjIl/QTWsV5UvE8UHuNblcO3vVADSrKsrc6RqGX6lOW1cEo3CM2v0XG4Nat8nI+YM7/f26VxXLw==}
+    engines: {node: '>=12'}
+
+  postgres@3.4.8:
+    resolution: {integrity: sha512-d+JFcLM17njZaOLkv6SCev7uoLaBtfK86vMUXhW1Z4glPWh4jozno9APvW/XKFJ3CCxVoC7OL38BqRydtu5nGg==}
     engines: {node: '>=12'}
 
   prettier@2.8.8:
@@ -7113,6 +7130,14 @@ snapshots:
       postgres: 3.4.7
       react: 19.2.3
 
+  drizzle-orm@0.38.4(@electric-sql/pglite@0.3.14)(@types/react@19.2.7)(pg@8.20.0)(postgres@3.4.8)(react@19.2.3):
+    optionalDependencies:
+      '@electric-sql/pglite': 0.3.14
+      '@types/react': 19.2.7
+      pg: 8.20.0
+      postgres: 3.4.8
+      react: 19.2.3
+
   duck@0.1.12:
     dependencies:
       underscore: 1.13.8
@@ -8187,6 +8212,8 @@ snapshots:
       xtend: 4.0.2
 
   postgres@3.4.7: {}
+
+  postgres@3.4.8: {}
 
   prettier@2.8.8: {}
 

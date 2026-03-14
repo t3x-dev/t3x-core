@@ -6,6 +6,7 @@
  * @see packages/storage/src/queries/token-usage.ts
  */
 
+import { sql as drizzleSql } from 'drizzle-orm';
 import type postgres from 'postgres';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
@@ -24,6 +25,11 @@ describe('Token Usage Storage', () => {
     db = setup.db;
     sql = setup.sql;
     cleanup = setup.cleanup;
+
+    // Ensure date_trunc aggregation uses UTC (not system timezone)
+    // Set on both raw sql and Drizzle db connections
+    await sql`SET timezone = 'UTC'`;
+    await db.execute(drizzleSql`SET timezone = 'UTC'`);
 
     const project = await insertProject(db, testData.project({ name: 'Token Usage Test' }));
     testProjectId = project.projectId;
