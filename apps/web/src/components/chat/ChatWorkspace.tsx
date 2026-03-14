@@ -40,6 +40,15 @@ export function ChatWorkspace({
   );
   const pendingMessageRef = useRef<string | null>(null);
 
+  // Model selection state
+  const [selectedModel, setSelectedModel] = useState('claude-sonnet-4-5-20250929');
+  const [selectedProvider, setSelectedProvider] = useState('anthropic');
+
+  const handleModelChange = useCallback((provider: string, model: string) => {
+    setSelectedProvider(provider);
+    setSelectedModel(model);
+  }, []);
+
   const {
     messages,
     input,
@@ -54,6 +63,8 @@ export function ChatWorkspace({
   } = useConversationChat({
     projectId: resolvedProjectId,
     conversationId: resolvedConversationId,
+    provider: selectedProvider,
+    model: selectedModel,
     onConversationCreated: useCallback((newConvId: string) => {
       setResolvedConversationId(newConvId);
       // Update URL without triggering Next.js navigation (avoids re-mount)
@@ -182,7 +193,11 @@ export function ChatWorkspace({
   return (
     <div className={cn('flex flex-col h-full min-h-0', className)}>
       {/* Header */}
-      <ChatHeader />
+      <ChatHeader
+        conversationId={resolvedConversationId ?? null}
+        selectedModel={selectedModel}
+        onModelChange={handleModelChange}
+      />
 
       {/* Message list */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden">

@@ -6,13 +6,17 @@ import { Button } from '@/components/ui/button';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import { useChatStore } from '@/store/chatStore';
+import { ChatModelSelector } from './ChatModelSelector';
 
 interface ChatHeaderProps {
   conversationTitle?: string;
   projectName?: string;
+  conversationId?: string | null;
+  selectedModel?: string;
+  onModelChange?: (provider: string, model: string) => void;
 }
 
-export function ChatHeader({ conversationTitle, projectName }: ChatHeaderProps) {
+export function ChatHeader({ conversationTitle, projectName, conversationId, selectedModel, onModelChange }: ChatHeaderProps) {
   const router = useRouter();
   const { activeProjectId, activeBranch } = useChatStore();
 
@@ -36,7 +40,14 @@ export function ChatHeader({ conversationTitle, projectName }: ChatHeaderProps) 
         <h1 className="text-sm font-medium text-[var(--text-primary)] truncate">{displayTitle}</h1>
       </div>
 
-      {/* Center: Project + branch badge */}
+      {/* Center: Model selector + project + branch badge */}
+      {selectedModel && onModelChange && (
+        <ChatModelSelector
+          conversationId={conversationId ?? null}
+          selectedModel={selectedModel}
+          onModelChange={onModelChange}
+        />
+      )}
       {(projectName || activeBranch) && (
         <div className="flex items-center gap-2 shrink-0">
           {projectName && (
