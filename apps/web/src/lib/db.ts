@@ -96,6 +96,22 @@ async function initializeDB(): Promise<AnyDB> {
 }
 
 /**
+ * Execute raw SQL via the Drizzle db instance.
+ * Uses dynamic import of drizzle-orm's sql.raw() and casts through
+ * unknown to avoid type mismatch when multiple drizzle-orm resolutions
+ * exist in the monorepo (different postgres peer dep versions).
+ */
+export async function executeRawSQL(query: string): Promise<Record<string, unknown>[]> {
+  const db = await getDB();
+  const { sql } = await import('drizzle-orm');
+  // Cast through unknown to handle duplicate drizzle-orm type declarations
+  const result = await (db as unknown as { execute: (q: unknown) => Promise<unknown[]> }).execute(
+    sql.raw(query)
+  );
+  return Array.from(result as unknown[]) as Record<string, unknown>[];
+}
+
+/**
  * Close database connection (for graceful shutdown)
  */
 export async function closeDB(): Promise<void> {
