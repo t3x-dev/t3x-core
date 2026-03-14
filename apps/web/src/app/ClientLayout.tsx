@@ -6,8 +6,6 @@ import { useCallback, useEffect, useState } from 'react';
 import { CommandPalette } from '@/components/CommandPalette';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { KeyboardShortcutsDialog } from '@/components/KeyboardShortcutsDialog';
-import { OnboardingDialog } from '@/components/onboarding/OnboardingDialog';
-import { WelcomeModal } from '@/components/onboarding/WelcomeModal';
 import { Sidebar } from '@/components/Sidebar';
 import { NotificationBell } from '@/components/shared/NotificationBell';
 import { VerificationBadge } from '@/components/shared/VerificationBadge';
@@ -22,6 +20,7 @@ import { useSettingsStore } from '@/store/settingsStore';
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isLoginPage = pathname === '/login';
+  const isChatRoute = pathname.startsWith('/chat');
   const setProjectNotify = useProjectStore((state) => state.setNotifyCallback);
   const setCanvasNotify = useCanvasStore((state) => state.setNotifyCallback);
   const setPinsNotify = usePinsStore((state) => state.setNotifyCallback);
@@ -97,26 +96,26 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           >
             Skip to content
           </a>
-          <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
+          {!isChatRoute && <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />}
           <main
             id="main-content"
             aria-label="Main content"
             className={cn(
               'flex flex-1 flex-col overflow-hidden transition-[margin-left] duration-[var(--duration-normal)] ease-[var(--ease-out-soft)]',
-              sidebarCollapsed ? 'ml-16' : 'ml-52'
+              !isChatRoute && (sidebarCollapsed ? 'ml-16' : 'ml-52')
             )}
           >
-            <div className="flex items-center justify-end gap-2 px-4 h-8 shrink-0">
-              {projectId && <VerificationBadge key={projectId} projectId={projectId} />}
-              <NotificationBell />
-            </div>
+            {!isChatRoute && (
+              <div className="flex items-center justify-end gap-2 px-4 h-8 shrink-0">
+                {projectId && <VerificationBadge key={projectId} projectId={projectId} />}
+                <NotificationBell />
+              </div>
+            )}
             <div className="flex flex-1 flex-col min-h-0">{children}</div>
           </main>
           <Toaster position="bottom-right" richColors closeButton />
           <CommandPalette />
           <KeyboardShortcutsDialog />
-          <WelcomeModal />
-          <OnboardingDialog />
         </div>
       </ErrorBoundary>
     </ThemeProvider>
