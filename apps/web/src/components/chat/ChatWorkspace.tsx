@@ -1,10 +1,13 @@
 'use client';
 
 import { AlertCircle, Loader2, MessageSquarePlus } from 'lucide-react';
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useAutoProject } from '@/hooks/useAutoProject';
 import { useConversationChat } from '@/hooks/useConversationChat';
+import { extractFrames } from '@/lib/api/frames';
 import { cn } from '@/lib/utils';
 import { useChatStore } from '@/store/chatStore';
+import { useExtractionPanelStore } from '@/store/extractionPanelStore';
 import { useSessionStore } from '@/store/sessionStore';
 import { ChatHeader } from './ChatHeader';
 import { ChatInput } from './ChatInput';
@@ -24,6 +27,16 @@ export function ChatWorkspace({
 }: ChatWorkspaceProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const firstMessageSentRef = useRef(false);
+  const prevTurnsSavedRef = useRef(0);
+
+  // For "/chat/new" routes: auto-create project + conversation
+  const isNewChat = conversationId === 'new';
+  const { ensureProject } = useAutoProject();
+  const [resolvedProjectId, setResolvedProjectId] = useState(projectId ?? '');
+  const [resolvedConversationId, setResolvedConversationId] = useState<string | undefined>(
+    isNewChat ? undefined : conversationId
+  );
+  const pendingMessageRef = useRef<string | null>(null);
 
   const {
     messages,
@@ -35,35 +48,101 @@ export function ChatWorkspace({
     error,
     warning,
     sendMessage,
+    turnsSavedCounter,
   } = useConversationChat({
-    projectId: projectId ?? '',
-    conversationId,
+    projectId: resolvedProjectId,
+    conversationId: resolvedConversationId,
+    onConversationCreated: useCallback(
+      (newConvId: string) => {
+        setResolvedConversationId(newConvId);
+        // Update URL without triggering Next.js navigation (avoids re-mount)
+        window.history.replaceState(null, '', `/chat/${newConvId}`);
+      },
+      []
+    ),
   });
 
-  // Sync active conversation + session into stores
+  // Flush pending message once projectId is resolved and sendMessage is recreated
   useEffect(() => {
-    useChatStore.getState().setActiveConversation(conversationId, projectId ?? null);
-    if (projectId) {
-      useSessionStore.getState().setLastSession(projectId, conversationId);
+    if (resolvedProjectId && pendingMessageRef.current) {
+      const msg = pendingMessageRef.current;
+      pendingMessageRef.current = null;
+      sendMessage(msg);
     }
-  }, [conversationId, projectId]);
+  }, [resolvedProjectId, sendMessage]);
+
+  // Sync active conversation + session into stores; reset extraction draft
+  useEffect(() => {
+    const convId = resolvedConversationId ?? conversationId;
+    useChatStore.getState().setActiveConversation(convId, resolvedProjectId || null);
+    useExtractionPanelStore.getState().resetDraft();
+    if (resolvedProjectId) {
+      useSessionStore.getState().setLastSession(resolvedProjectId, convId);
+    }
+  }, [conversationId, resolvedConversationId, resolvedProjectId]);
 
   // Auto-scroll to bottom on new messages or streaming content
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, streamingContent]);
 
+  // Extract frames after turns are saved
+  useEffect(() => {
+    const prev = prevTurnsSavedRef.current;
+    prevTurnsSavedRef.current = turnsSavedCounter;
+
+    if (turnsSavedCounter === 0 || turnsSavedCounter === prev) return;
+    const convId = resolvedConversationId;
+    if (!convId) return;
+
+    const store = useExtractionPanelStore.getState();
+    store.setExtracting(true);
+
+    extractFrames(convId)
+      .then((result) => {
+        const s = useExtractionPanelStore.getState();
+        s.applyDelta(result.delta, 'llm_extraction');
+        if (result.snapshot.frames.length > 0 && s.panelMode === 'collapsed') {
+          s.setPanelMode('default');
+        }
+      })
+      .catch(() => {
+        // Extraction failed silently — non-critical
+      })
+      .finally(() => {
+        useExtractionPanelStore.getState().setExtracting(false);
+      });
+  }, [resolvedConversationId, turnsSavedCounter]);
+
   // Send firstMessage on mount (once only)
   useEffect(() => {
     if (firstMessage && !firstMessageSentRef.current && !isLoading) {
       firstMessageSentRef.current = true;
-      sendMessage(firstMessage);
-    }
-  }, [firstMessage, isLoading, sendMessage]);
 
-  const handleSend = (message: string) => {
-    sendMessage(message);
-  };
+      if (isNewChat && !resolvedProjectId) {
+        pendingMessageRef.current = firstMessage;
+        ensureProject(firstMessage).then((projId) => {
+          setResolvedProjectId(projId);
+          // pendingMessageRef will be flushed by the effect above
+        });
+      } else {
+        sendMessage(firstMessage);
+      }
+    }
+  }, [firstMessage, isLoading, isNewChat, resolvedProjectId, ensureProject, sendMessage]);
+
+  const handleSend = useCallback(
+    async (message: string) => {
+      if (!resolvedProjectId) {
+        pendingMessageRef.current = message;
+        const projId = await ensureProject(message);
+        setResolvedProjectId(projId);
+      } else {
+        sendMessage(message);
+      }
+    },
+    [resolvedProjectId, ensureProject, sendMessage]
+  );
 
   return (
     <div className={cn('flex flex-col h-full min-h-0', className)}>
