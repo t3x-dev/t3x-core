@@ -34,6 +34,12 @@ interface ExtractionPanelState {
   hydrateDeltaLog: (entries: DeltaLogEntry[]) => void;
   conversationId: string | null;
   setConversationId: (id: string | null) => void;
+
+  // Hover linking between YAML ↔ chat messages
+  hoveredFrameId: string | null;      // YAML row hovered → highlight source turn
+  hoveredTurnHash: string | null;     // Chat message hovered → highlight YAML rows
+  setHoveredFrameId: (id: string | null) => void;
+  setHoveredTurnHash: (hash: string | null) => void;
 }
 
 const emptyContent: SemanticContent = { frames: [], relations: [] };
@@ -51,6 +57,8 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
   lastDeltaChanges: [],
   removedFrames: [],
   conversationId: null,
+  hoveredFrameId: null,
+  hoveredTurnHash: null,
 
   setPanelMode: (mode) => set({ panelMode: mode }),
   setActiveView: (view) => set({ activeView: view }),
@@ -166,4 +174,6 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
     set({ llmHighlightedFrameIds: Object.fromEntries(ids.map((id) => [id, true])) }),
   hydrateDeltaLog: (entries) => set({ deltaLog: entries }),
   setConversationId: (id) => set({ conversationId: id }),
+  setHoveredFrameId: (id) => set({ hoveredFrameId: id }),
+  setHoveredTurnHash: (hash) => set({ hoveredTurnHash: hash }),
 }));

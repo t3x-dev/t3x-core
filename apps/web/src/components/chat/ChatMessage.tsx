@@ -4,18 +4,49 @@ import { User } from 'lucide-react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { cn } from '@/lib/utils';
+import { useExtractionPanelStore } from '@/store/extractionPanelStore';
 
 interface ChatMessageProps {
   sender: 'user' | 'assistant';
   content: string;
+  turnHash?: string;
+  turnIndex?: number; // 1-based turn index for matching "T3" source tags
   isStreaming?: boolean;
 }
 
-export function ChatMessage({ sender, content, isStreaming }: ChatMessageProps) {
+export function ChatMessage({ sender, content, turnHash, turnIndex, isStreaming }: ChatMessageProps) {
   const isUser = sender === 'user';
 
+  // Check if this message should be highlighted (a YAML frame sourced from this turn is hovered)
+  const hoveredFrameId = useExtractionPanelStore((s) => s.hoveredFrameId);
+  const draft = useExtractionPanelStore((s) => s.draft);
+  const setHoveredTurnHash = useExtractionPanelStore((s) => s.setHoveredTurnHash);
+
+  // Determine if this turn is the source of the currently hovered frame
+  const isHighlighted = (() => {
+    if (!hoveredFrameId) return false;
+    const frame = draft.frames.find((f) => f.id === hoveredFrameId);
+    if (!frame?.source) return false;
+
+    // Match "T3" against turnIndex, or "T3:abc12345" against turnHash prefix
+    const source = frame.source;
+    if (turnIndex && source === `T${turnIndex}`) return true;
+    if (turnHash && source.includes(':')) {
+      const hashPart = source.split(':')[1];
+      return turnHash.includes(hashPart);
+    }
+    return false;
+  })();
+
   return (
-    <div className={cn('group w-full py-4', 'animate-in fade-in duration-200')}>
+    <div
+      className={cn('group w-full py-4 transition-colors duration-200', 'animate-in fade-in duration-200')}
+      style={{
+        background: isHighlighted ? 'rgba(96, 165, 250, 0.08)' : 'transparent',
+      }}
+      onMouseEnter={() => turnHash && setHoveredTurnHash(turnHash)}
+      onMouseLeave={() => setHoveredTurnHash(null)}
+    >
       <div className="mx-auto max-w-3xl px-4">
         <div className="flex gap-3">
           {/* Avatar */}
@@ -58,6 +89,19 @@ export function ChatMessage({ sender, content, isStreaming }: ChatMessageProps) 
           </div>
         </div>
       </div>
+
+      {/* Highlight indicator bar on the left edge */}
+      {isHighlighted && (
+        <div style={{
+          position: 'absolute',
+          left: 0,
+          top: 0,
+          bottom: 0,
+          width: 3,
+          background: 'rgb(96, 165, 250)',
+          borderRadius: '0 2px 2px 0',
+        }} />
+      )}
     </div>
   );
 }
