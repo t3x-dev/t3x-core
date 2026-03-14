@@ -5,7 +5,7 @@
  * Uses postgres.js driver with Supabase connection pooling.
  *
  * WARNING: This module should NOT be bundled with webpack/Next.js.
- * Use @t3x-dev/storage/pglite for bundled environments.
+ * Use @t3x-dev/storage/embedded for local development environments.
  *
  * Usage:
  * ```typescript
