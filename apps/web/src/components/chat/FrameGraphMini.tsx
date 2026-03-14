@@ -51,6 +51,7 @@ function FrameGraphMiniInner() {
 
   useEffect(() => {
     let cancelled = false;
+    let fitTimer: ReturnType<typeof setTimeout>;
 
     async function layout() {
       const rawNodes: Node<MiniFrameNodeData>[] = draft.frames.map((frame) => {
@@ -89,14 +90,16 @@ function FrameGraphMiniInner() {
       setNodes(layoutedNodes);
       setEdges(rawEdges);
 
-      requestAnimationFrame(() => {
-        if (!cancelled) fitView({ padding: 0.2, duration: 200 });
-      });
+      // Delay fitView to allow panel expand animation to complete
+      fitTimer = setTimeout(() => {
+        if (!cancelled) fitView({ padding: 0.2, duration: 300 });
+      }, 500);
     }
 
     layout();
     return () => {
       cancelled = true;
+      clearTimeout(fitTimer);
     };
   }, [draft, setNodes, setEdges, fitView]);
 

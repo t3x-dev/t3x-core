@@ -4,6 +4,7 @@ import { useParams, useSearchParams } from 'next/navigation';
 import { useCallback, useRef, useState } from 'react';
 import { ExtractionPanel } from '@/components/chat/ExtractionPanel';
 import { ChatWorkspace } from '@/components/chat/ChatWorkspace';
+import { useChatStore } from '@/store/chatStore';
 import { useExtractionPanelStore } from '@/store/extractionPanelStore';
 import { cn } from '@/lib/utils';
 
@@ -11,6 +12,7 @@ export default function ConversationPage() {
   const { conversationId } = useParams<{ conversationId: string }>();
   const searchParams = useSearchParams();
   const firstMessage = searchParams.get('firstMessage');
+  const activeProjectId = useChatStore((s) => s.activeProjectId);
   const panelMode = useExtractionPanelStore((s) => s.panelMode);
 
   // Resizable panel via drag handle
@@ -50,6 +52,7 @@ export default function ConversationPage() {
       {/* Chat area takes remaining space */}
       <ChatWorkspace
         conversationId={conversationId}
+        projectId={activeProjectId ?? undefined}
         firstMessage={firstMessage ?? undefined}
         className="flex-1 min-w-0"
       />
