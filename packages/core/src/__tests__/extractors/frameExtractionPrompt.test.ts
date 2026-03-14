@@ -58,8 +58,7 @@ describe('buildFrameExtractionPrompt', () => {
       expect(result.userPrompt).toContain('I want to travel to Tokyo');
       expect(result.userPrompt).toContain('[user]');
       expect(result.userPrompt).toContain('[assistant]');
-      expect(result.userPrompt).not.toContain('快照');
-      expect(result.userPrompt).not.toContain('snapshot');
+      expect(result.userPrompt).not.toContain('Snapshot');
     });
 
     it('user prompt asks to extract all frames and relations', () => {
@@ -114,8 +113,10 @@ describe('buildFrameExtractionPrompt', () => {
         turns: sampleTurns,
         snapshot: sampleSnapshot,
       });
-      expect(result.userPrompt).toContain('changes');
-      expect(result.userPrompt).toContain('new_relations');
+      expect(result.userPrompt).toContain('delta');
+      // Update/remove guidance in user prompt
+      expect(result.userPrompt).toContain('update');
+      expect(result.userPrompt).toContain('remove');
     });
   });
 

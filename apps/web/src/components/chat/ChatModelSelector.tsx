@@ -47,9 +47,24 @@ export function ChatModelSelector({ conversationId, selectedModel, onModelChange
     .flatMap((p) => p.models)
     .find((m) => m.id === selectedModel)?.label ?? selectedModel;
 
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
+  // Compute popover position from button
+  const getPopoverStyle = (): React.CSSProperties => {
+    if (!buttonRef.current) return {};
+    const rect = buttonRef.current.getBoundingClientRect();
+    return {
+      position: 'fixed',
+      top: rect.bottom + 4,
+      left: rect.left,
+      zIndex: 9999,
+    };
+  };
+
   return (
     <div ref={ref} style={{ position: 'relative' }}>
       <button
+        ref={buttonRef}
         onClick={() => setOpen(!open)}
         className="text-xs px-2 py-0.5 rounded border cursor-pointer"
         style={{
@@ -62,8 +77,9 @@ export function ChatModelSelector({ conversationId, selectedModel, onModelChange
       </button>
       {open && (
         <div
-          className="absolute top-full mt-1 right-0 rounded-lg border shadow-lg z-50"
+          className="rounded-lg border shadow-lg"
           style={{
+            ...getPopoverStyle(),
             background: 'var(--surface-overlay)',
             borderColor: 'var(--stroke-default)',
             minWidth: 200,

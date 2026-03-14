@@ -138,10 +138,11 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
     const deltaRecords = await listDeltaLogByConversation(db, conversation_id);
     const currentSnapshot = buildDraft(toDeltaLogEntries(deltaRecords));
 
-    // 4. Convert turns to FrameExtractionTurn format
+    // 4. Convert turns to FrameExtractionTurn format (include turn_hash for source tracking)
     const extractionTurns: FrameExtractionTurn[] = selectedTurns.map((t) => ({
       role: t.role as FrameExtractionTurn['role'],
       content: t.content,
+      turn_hash: t.turnHash,
     }));
 
     // 5. Call FrameExtractor via provider registry with fallback (usage tracked)
