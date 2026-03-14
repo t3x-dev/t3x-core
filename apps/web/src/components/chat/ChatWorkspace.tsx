@@ -4,7 +4,7 @@ import { AlertCircle, Loader2, MessageSquarePlus } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAutoProject } from '@/hooks/useAutoProject';
 import { useConversationChat } from '@/hooks/useConversationChat';
-import { extractFrames } from '@/lib/api/frames';
+import { extractFrames, getSemanticDraft } from '@/lib/api/frames';
 import { cn } from '@/lib/utils';
 import { useChatStore } from '@/store/chatStore';
 import { useExtractionPanelStore } from '@/store/extractionPanelStore';
@@ -62,6 +62,15 @@ export function ChatWorkspace({
     ),
   });
 
+  // Sync resolved IDs when props change (e.g. sidebar navigation between conversations)
+  useEffect(() => {
+    if (projectId) setResolvedProjectId(projectId);
+  }, [projectId]);
+
+  useEffect(() => {
+    if (!isNewChat) setResolvedConversationId(conversationId);
+  }, [conversationId, isNewChat]);
+
   // Flush pending message once projectId is resolved and sendMessage is recreated
   useEffect(() => {
     if (resolvedProjectId && pendingMessageRef.current) {
@@ -71,13 +80,30 @@ export function ChatWorkspace({
     }
   }, [resolvedProjectId, sendMessage]);
 
-  // Sync active conversation + session into stores; reset extraction draft
+  // Sync active conversation + session into stores; load existing draft
   useEffect(() => {
     const convId = resolvedConversationId ?? conversationId;
     useChatStore.getState().setActiveConversation(convId, resolvedProjectId || null);
     useExtractionPanelStore.getState().resetDraft();
     if (resolvedProjectId) {
       useSessionStore.getState().setLastSession(resolvedProjectId, convId);
+    }
+
+    // Load existing semantic draft for this conversation (like canvas does)
+    if (convId && convId !== 'new') {
+      getSemanticDraft(convId)
+        .then((draft) => {
+          if (draft && draft.frames.length > 0) {
+            const store = useExtractionPanelStore.getState();
+            store.setDraft(draft);
+            if (store.panelMode === 'collapsed') {
+              store.setPanelMode('default');
+            }
+          }
+        })
+        .catch(() => {
+          // Draft load failed — non-critical
+        });
     }
   }, [conversationId, resolvedConversationId, resolvedProjectId]);
 

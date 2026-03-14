@@ -49,8 +49,9 @@ export default function ConversationPage() {
 
   return (
     <div ref={containerRef} className="flex h-full overflow-hidden">
-      {/* Chat area takes remaining space */}
+      {/* Chat area takes remaining space — key forces full re-mount on conversation switch */}
       <ChatWorkspace
+        key={conversationId}
         conversationId={conversationId}
         projectId={activeProjectId ?? undefined}
         firstMessage={firstMessage ?? undefined}

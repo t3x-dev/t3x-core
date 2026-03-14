@@ -15,6 +15,7 @@ interface ExtractionPanelState {
   setActiveView: (view: ActiveView) => void;
   togglePanel: () => void;
   applyDelta: (delta: Delta, source: DeltaSource, turnHash?: string) => void;
+  setDraft: (content: SemanticContent) => void;
   resetDraft: () => void;
   setExtracting: (extracting: boolean) => void;
 }
@@ -90,6 +91,7 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
     });
   },
 
+  setDraft: (content) => set({ draft: content }),
   resetDraft: () => set({ draft: emptyContent, deltaLog: [] }),
   setExtracting: (extracting) => set({ isExtracting: extracting }),
 }));
