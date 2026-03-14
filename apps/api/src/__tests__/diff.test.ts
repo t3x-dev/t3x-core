@@ -13,7 +13,7 @@ vi.mock('../lib/db', () => ({
   closeDB: vi.fn(() => Promise.resolve()),
 }));
 
-vi.mock('@t3x-dev/storage/pglite', () => ({
+vi.mock('@t3x-dev/storage', () => ({
   findTurnByHash: vi.fn(),
   findCommitV4ByHash: vi.fn(),
   getCommitV3: vi.fn(),
@@ -74,7 +74,7 @@ describe('Diff Routes', () => {
     });
 
     it('returns success for V4 commit hash mode', async () => {
-      const { findCommitV4ByHash } = await import('@t3x-dev/storage/pglite');
+      const { findCommitV4ByHash } = await import('@t3x-dev/storage');
       const { diffCommits } = await import('@t3x-dev/core');
 
       (findCommitV4ByHash as ReturnType<typeof vi.fn>)
@@ -117,7 +117,7 @@ describe('Diff Routes', () => {
     it('falls back to sentence splitting when rings_json is empty (turn hash mode)', async () => {
       const origGoogleKey = process.env.GOOGLE_AI_STUDIO_KEY;
       try {
-        const { findTurnByHash } = await import('@t3x-dev/storage/pglite');
+        const { findTurnByHash } = await import('@t3x-dev/storage');
 
         (findTurnByHash as ReturnType<typeof vi.fn>)
           .mockResolvedValueOnce({
@@ -182,7 +182,7 @@ describe('Diff Routes', () => {
     });
 
     it('returns 404 for non-existent V3 commit', async () => {
-      const { findCommitV4ByHash, getCommitV3 } = await import('@t3x-dev/storage/pglite');
+      const { findCommitV4ByHash, getCommitV3 } = await import('@t3x-dev/storage');
 
       (findCommitV4ByHash as ReturnType<typeof vi.fn>)
         .mockResolvedValueOnce(null)

@@ -17,7 +17,7 @@ import {
   insertRun,
   listRuns,
 } from '@t3x-dev/storage';
-import type { PGLiteDB } from '@t3x-dev/storage/pglite';
+import type { AnyDB } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setupTestDB } from '../setup';
@@ -26,7 +26,7 @@ import { setupTestDB } from '../setup';
 type ApiResponse = any;
 
 // Mock the database module before importing routes
-let mockDB: PGLiteDB;
+let mockDB: AnyDB;
 
 vi.mock('../../lib/db', () => ({
   getDB: vi.fn(() => Promise.resolve(mockDB)),
