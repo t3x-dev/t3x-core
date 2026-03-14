@@ -4,7 +4,7 @@ import { AlertCircle, Loader2, MessageSquarePlus } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAutoProject } from '@/hooks/useAutoProject';
 import { useConversationChat } from '@/hooks/useConversationChat';
-import { extractFrames, getSemanticDraft } from '@/lib/api/frames';
+import { extractFrames, getSemanticDraft, listDeltas } from '@/lib/api/frames';
 import { getIntentSummary } from '@/lib/intentSummary';
 import { cn } from '@/lib/utils';
 import { useChatStore } from '@/store/chatStore';
@@ -95,24 +95,28 @@ export function ChatWorkspace({
     const convId = resolvedConversationId ?? conversationId;
     useChatStore.getState().setActiveConversation(convId, resolvedProjectId || null);
     useExtractionPanelStore.getState().resetDraft();
+    useExtractionPanelStore.getState().setConversationId(convId === 'new' ? null : convId);
     if (resolvedProjectId) {
       useSessionStore.getState().setLastSession(resolvedProjectId, convId);
     }
 
-    // Load existing semantic draft for this conversation (like canvas does)
+    // Load existing semantic draft + full delta history for this conversation
     if (convId && convId !== 'new') {
-      getSemanticDraft(convId)
-        .then((draft) => {
+      Promise.all([getSemanticDraft(convId), listDeltas(convId)])
+        .then(([draft, deltas]) => {
+          const store = useExtractionPanelStore.getState();
           if (draft && draft.frames.length > 0) {
-            const store = useExtractionPanelStore.getState();
             store.setDraft(draft);
             if (store.panelMode === 'collapsed') {
               store.setPanelMode('default');
             }
           }
+          if (deltas && deltas.length > 0) {
+            store.hydrateDeltaLog(deltas);
+          }
         })
         .catch(() => {
-          // Draft load failed — non-critical
+          // Draft/delta load failed — non-critical
         });
     }
   }, [conversationId, resolvedConversationId, resolvedProjectId]);

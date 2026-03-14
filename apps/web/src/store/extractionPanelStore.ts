@@ -1,5 +1,6 @@
 import type { Delta, DeltaLogEntry, DeltaSource, Frame, FrameChange, SemanticContent } from '@t3x-dev/core';
 import { create } from 'zustand';
+import { createDelta } from '@/lib/api/frames';
 
 type PanelMode = 'collapsed' | 'default' | 'preview';
 type ActiveView = 'graph' | 'yaml';
@@ -30,6 +31,9 @@ interface ExtractionPanelState {
   unconfirmSlot: (frameId: string, slotKey: string) => void;
   setFocusIntent: (enabled: boolean) => void;
   setLlmHighlightedFrameIds: (ids: string[]) => void;
+  hydrateDeltaLog: (entries: DeltaLogEntry[]) => void;
+  conversationId: string | null;
+  setConversationId: (id: string | null) => void;
 }
 
 const emptyContent: SemanticContent = { frames: [], relations: [] };
@@ -46,6 +50,7 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
   llmHighlightedFrameIds: {},
   lastDeltaChanges: [],
   removedFrames: [],
+  conversationId: null,
 
   setPanelMode: (mode) => set({ panelMode: mode }),
   setActiveView: (view) => set({ activeView: view }),
@@ -113,10 +118,18 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
       deltaLog: [...deltaLog, entry],
       lastDeltaChanges: delta.changes,
     });
+
+    // Persist user edits to database (LLM extraction is already saved by the API)
+    const convId = get().conversationId;
+    if (convId && source !== 'llm_extraction') {
+      createDelta(convId, delta, source).catch(() => {
+        // Persist failed — non-critical, store has the data
+      });
+    }
   },
 
   setDraft: (content) => set({ draft: content }),
-  resetDraft: () => set({ draft: emptyContent, deltaLog: [] }),
+  resetDraft: () => set({ draft: emptyContent, deltaLog: [], removedFrames: [], lastDeltaChanges: [], confirmedFrameIds: {}, confirmedSlotKeys: {} }),
   setExtracting: (extracting) => set({ isExtracting: extracting }),
 
   confirmFrame: (frameId) =>
@@ -151,4 +164,6 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
   setFocusIntent: (enabled) => set({ focusIntentEnabled: enabled }),
   setLlmHighlightedFrameIds: (ids) =>
     set({ llmHighlightedFrameIds: Object.fromEntries(ids.map((id) => [id, true])) }),
+  hydrateDeltaLog: (entries) => set({ deltaLog: entries }),
+  setConversationId: (id) => set({ conversationId: id }),
 }));
