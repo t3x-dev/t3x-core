@@ -11,6 +11,7 @@ interface ExtractionPanelState {
   deltaLog: DeltaLogEntry[];
   isExtracting: boolean;
   confirmedFrameIds: Record<string, boolean>;
+  confirmedSlotKeys: Record<string, Record<string, boolean>>; // frameId → { slotKey: true }
   focusIntentEnabled: boolean;
   llmHighlightedFrameIds: Record<string, boolean>;
   lastDeltaChanges: FrameChange[];
@@ -25,6 +26,8 @@ interface ExtractionPanelState {
   setExtracting: (extracting: boolean) => void;
   confirmFrame: (frameId: string) => void;
   unconfirmFrame: (frameId: string) => void;
+  confirmSlot: (frameId: string, slotKey: string) => void;
+  unconfirmSlot: (frameId: string, slotKey: string) => void;
   setFocusIntent: (enabled: boolean) => void;
   setLlmHighlightedFrameIds: (ids: string[]) => void;
 }
@@ -38,6 +41,7 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
   deltaLog: [],
   isExtracting: false,
   confirmedFrameIds: {},
+  confirmedSlotKeys: {},
   focusIntentEnabled: false,
   llmHighlightedFrameIds: {},
   lastDeltaChanges: [],
@@ -123,6 +127,26 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
     set((s) => {
       const { [frameId]: _, ...rest } = s.confirmedFrameIds;
       return { confirmedFrameIds: rest };
+    }),
+  confirmSlot: (frameId, slotKey) =>
+    set((s) => ({
+      // Confirming a slot auto-confirms the parent frame
+      confirmedFrameIds: { ...s.confirmedFrameIds, [frameId]: true },
+      confirmedSlotKeys: {
+        ...s.confirmedSlotKeys,
+        [frameId]: { ...s.confirmedSlotKeys[frameId], [slotKey]: true },
+      },
+    })),
+  unconfirmSlot: (frameId, slotKey) =>
+    set((s) => {
+      const frameSlots = { ...s.confirmedSlotKeys[frameId] };
+      delete frameSlots[slotKey];
+      const hasRemainingSlots = Object.keys(frameSlots).length > 0;
+      return {
+        confirmedSlotKeys: { ...s.confirmedSlotKeys, [frameId]: frameSlots },
+        // If no slots confirmed and frame wasn't explicitly confirmed, unconfirm frame too
+        confirmedFrameIds: hasRemainingSlots ? s.confirmedFrameIds : s.confirmedFrameIds,
+      };
     }),
   setFocusIntent: (enabled) => set({ focusIntentEnabled: enabled }),
   setLlmHighlightedFrameIds: (ids) =>
