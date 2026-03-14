@@ -5,8 +5,8 @@
  */
 
 import { sha256 } from '@t3x-dev/core';
-import type { AnyDB } from '@t3x-dev/storage/pglite';
-import { findConversationsByProject } from '@t3x-dev/storage/pglite';
+import type { AnyDB } from '@t3x-dev/storage';
+import { findConversationsByProject } from '@t3x-dev/storage';
 
 /**
  * Check if content has already been imported to a project.

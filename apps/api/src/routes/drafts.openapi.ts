@@ -43,7 +43,7 @@ import {
   updateDraftV3,
   updateDraftV3Preview,
   upsertSentenceVectorsBatch,
-} from '@t3x-dev/storage/pglite';
+} from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { getEmbedder } from '../lib/embedder';
 import { errorResponse, zodErrorHook } from '../lib/errors';

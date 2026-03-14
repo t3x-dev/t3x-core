@@ -7,7 +7,7 @@
  */
 
 import { createHmac } from 'node:crypto';
-import { findRecipesByEvent, findWebhooksByEvent } from '@t3x-dev/storage/pglite';
+import { findRecipesByEvent, findWebhooksByEvent } from '@t3x-dev/storage';
 import { pinoLogger } from '../middleware/logger';
 import { getDB } from './db';
 import { executeRecipe } from './recipe-executor';

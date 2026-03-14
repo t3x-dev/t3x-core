@@ -16,7 +16,7 @@ import {
   findDeployAgents,
   insertDeployAgent,
   updateDeployAgent,
-} from '@t3x-dev/storage/pglite';
+} from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { getDB } from '../lib/db';
 import { assertProjectAccess } from '../lib/project-access';

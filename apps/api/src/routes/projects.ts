@@ -16,7 +16,7 @@ import {
   findProjects,
   insertProject,
   verifyHashChain,
-} from '@t3x-dev/storage/pglite';
+} from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { getDB } from '../lib/db';
 import { assertProjectAccess, getUserId } from '../lib/project-access';

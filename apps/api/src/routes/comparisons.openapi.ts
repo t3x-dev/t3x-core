@@ -14,7 +14,7 @@ import {
   deleteComparison,
   getComparison,
   listComparisons,
-} from '@t3x-dev/storage/pglite';
+} from '@t3x-dev/storage';
 import { nanoid } from 'nanoid';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';

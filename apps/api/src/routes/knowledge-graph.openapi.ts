@@ -26,7 +26,7 @@ import {
   insertKnowledgeNodes,
   insertNodeMembers,
   searchKnowledgeNodes,
-} from '@t3x-dev/storage/pglite';
+} from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { ErrorResponseSchema } from '../schemas/common';

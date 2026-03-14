@@ -51,7 +51,7 @@ import {
   updateLeaf,
   updateLeafAtomic,
   updateLeafOutput,
-} from '@t3x-dev/storage/pglite';
+} from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { getEmbedder, isSemanticValidationConfigured } from '../lib/embedder';
 import { errorResponse, zodErrorHook } from '../lib/errors';
