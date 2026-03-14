@@ -22,7 +22,7 @@ interface ExtractionPanelState {
 const emptyContent: SemanticContent = { frames: [], relations: [] };
 
 export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) => ({
-  panelMode: 'default',
+  panelMode: 'collapsed',
   activeView: 'graph',
   draft: emptyContent,
   deltaLog: [],
@@ -58,7 +58,6 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
           });
           break;
         }
-          break;
         case 'remove':
           frames = frames.filter((f) => f.id !== change.target);
           break;

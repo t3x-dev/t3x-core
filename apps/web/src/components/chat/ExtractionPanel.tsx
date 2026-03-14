@@ -78,7 +78,7 @@ function ViewTabs({
 
 // ── Main ExtractionPanel ──
 
-export function ExtractionPanel() {
+export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
   const panelMode = useExtractionPanelStore((s) => s.panelMode);
   const activeView = useExtractionPanelStore((s) => s.activeView);
   const draft = useExtractionPanelStore((s) => s.draft);
@@ -87,7 +87,9 @@ export function ExtractionPanel() {
   const setActiveView = useExtractionPanelStore((s) => s.setActiveView);
 
   const frameCount = draft.frames.length;
-  const targetWidth = PANEL_WIDTHS[panelMode] ?? 320;
+  const targetWidth = panelMode === 'collapsed'
+    ? PANEL_WIDTHS.collapsed
+    : (customWidth ?? PANEL_WIDTHS[panelMode] ?? 320);
 
   // Keyboard shortcut: Cmd+] to toggle panel
   useEffect(() => {

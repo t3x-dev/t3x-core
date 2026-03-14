@@ -30,7 +30,7 @@ export interface UseConversationChatReturn {
   warning: string | null;
   hasMore: boolean;
   isLoadingMore: boolean;
-  sendMessage: () => void;
+  sendMessage: (messageOverride?: string) => void;
   loadMore: () => void;
   /** Incremented each time turns are persisted to the DB — use to trigger extraction */
   turnsSavedCounter: number;
@@ -217,10 +217,11 @@ export function useConversationChat({
   }, [projectId, conversationId, chatOffset, chatHasMore, isLoadingMore]);
 
   // ========== Send message ==========
-  const sendMessage = useCallback(async () => {
-    if (!chatInput.trim() || isChatStreaming || isChatLoading) return;
+  const sendMessage = useCallback(async (messageOverride?: string) => {
+    const rawMessage = messageOverride ?? chatInput;
+    if (!rawMessage.trim() || isChatStreaming || isChatLoading) return;
 
-    const userMessage = chatInput.trim();
+    const userMessage = rawMessage.trim();
     setChatInput('');
     setChatError(null);
     setChatWarning(null);

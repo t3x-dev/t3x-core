@@ -57,16 +57,12 @@ export function ChatWorkspace({
   useEffect(() => {
     if (firstMessage && !firstMessageSentRef.current && !isLoading) {
       firstMessageSentRef.current = true;
-      setInput(firstMessage);
-      // Defer to next tick so input state is flushed before sendMessage reads it
-      setTimeout(() => sendMessage(), 0);
+      sendMessage(firstMessage);
     }
-  }, [firstMessage, isLoading, setInput, sendMessage]);
+  }, [firstMessage, isLoading, sendMessage]);
 
   const handleSend = (message: string) => {
-    setInput(message);
-    // Defer so state update is flushed
-    setTimeout(() => sendMessage(), 0);
+    sendMessage(message);
   };
 
   return (
@@ -75,7 +71,7 @@ export function ChatWorkspace({
       <ChatHeader />
 
       {/* Message list */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-3">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 flex flex-col gap-3">
         {isLoading ? (
           <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground gap-2 min-h-[200px]">
             <Loader2 size={40} strokeWidth={1} className="animate-spin" />
