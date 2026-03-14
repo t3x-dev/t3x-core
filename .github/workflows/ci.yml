@@ -119,6 +119,21 @@ jobs:
       (github.event_name == 'pull_request' || github.ref == 'refs/heads/main') &&
       (needs.changes.outputs.core == 'true' || needs.changes.outputs.storage == 'true')
 
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: postgres
+        ports:
+          - 5446:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     strategy:
       matrix:
         node-version: [20, 22]
@@ -146,6 +161,8 @@ jobs:
 
       - name: Run @t3x-dev/storage tests
         run: pnpm --filter @t3x-dev/storage test
+        env:
+          DATABASE_URL: postgresql://postgres:password@localhost:5446/postgres
 
   test-webui:
     name: Test WebUI
