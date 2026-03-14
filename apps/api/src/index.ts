@@ -53,7 +53,7 @@ pinoLogger.info(
   {
     node_env: process.env.NODE_ENV || 'not set',
     auth_disabled: process.env.AUTH_DISABLED || 'not set',
-    database: process.env.DATABASE_URL ? 'PostgreSQL' : 'PGLite (local)',
+    database: process.env.DATABASE_URL ? 'PostgreSQL' : 'Embedded PostgreSQL (local)',
     anthropic_key: process.env.ANTHROPIC_API_KEY ? 'configured' : 'not set',
     google_ai_key: process.env.GOOGLE_AI_STUDIO_KEY ? 'configured' : 'not set',
     runner_url: process.env.RUNNER_BASE_URL || 'not set',
@@ -63,8 +63,8 @@ pinoLogger.info(
 
 // Register graceful shutdown BEFORE server start — ensures handlers exist
 // even if the process is killed during initialization.
-// Note: PGLite also registers its own shutdown handlers in the storage layer
-// as a safety net, so database closure is guaranteed even if these don't fire.
+// Note: The storage layer also registers its own shutdown handlers as a safety net,
+// so database closure is guaranteed even if these don't fire.
 const shutdown = async () => {
   pinoLogger.info('Shutting down...');
   stopTimeoutChecker();
