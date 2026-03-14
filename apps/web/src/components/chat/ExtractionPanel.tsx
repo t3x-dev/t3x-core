@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { GitCommit, LayoutGrid } from 'lucide-react';
+import { GitCommit, LayoutGrid, Loader2 } from 'lucide-react';
 import { useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { useExtractionPanelStore } from '@/store/extractionPanelStore';
@@ -19,7 +19,7 @@ const PANEL_WIDTHS: Record<string, number> = {
 
 // ── Collapsed rail ──
 
-function CollapsedRail({ frameCount, onExpand }: { frameCount: number; onExpand: () => void }) {
+function CollapsedRail({ frameCount, isExtracting, onExpand }: { frameCount: number; isExtracting: boolean; onExpand: () => void }) {
   return (
     <div className="flex h-full flex-col items-center py-4 gap-3">
       <button
@@ -28,7 +28,11 @@ function CollapsedRail({ frameCount, onExpand }: { frameCount: number; onExpand:
         className="flex flex-col items-center gap-1 text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
         aria-label="Expand extraction panel"
       >
-        <LayoutGrid className="h-4 w-4" />
+        {isExtracting ? (
+          <Loader2 className="h-4 w-4 animate-spin text-[var(--accent-commit)]" />
+        ) : (
+          <LayoutGrid className="h-4 w-4" />
+        )}
         {frameCount > 0 && (
           <span className="rounded-full bg-[var(--accent-commit)] px-1.5 py-0.5 text-[9px] font-bold text-white leading-none">
             {frameCount}
@@ -40,7 +44,7 @@ function CollapsedRail({ frameCount, onExpand }: { frameCount: number; onExpand:
         className="text-[9px] font-medium uppercase tracking-widest text-[var(--text-tertiary)]"
         style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
       >
-        Frames
+        {isExtracting ? 'Processing...' : 'Frames'}
       </span>
     </div>
   );
@@ -82,6 +86,7 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
   const panelMode = useExtractionPanelStore((s) => s.panelMode);
   const activeView = useExtractionPanelStore((s) => s.activeView);
   const draft = useExtractionPanelStore((s) => s.draft);
+  const isExtracting = useExtractionPanelStore((s) => s.isExtracting);
   const togglePanel = useExtractionPanelStore((s) => s.togglePanel);
   const setPanelMode = useExtractionPanelStore((s) => s.setPanelMode);
   const setActiveView = useExtractionPanelStore((s) => s.setActiveView);
@@ -111,7 +116,7 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
     >
       {/* Collapsed rail */}
       {panelMode === 'collapsed' && (
-        <CollapsedRail frameCount={frameCount} onExpand={togglePanel} />
+        <CollapsedRail frameCount={frameCount} isExtracting={isExtracting} onExpand={togglePanel} />
       )}
 
       {/* Default / Preview panel */}
@@ -120,9 +125,15 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
           {/* Panel header */}
           <div className="flex items-center justify-between border-b border-[var(--stroke-default)] px-3 py-2">
             <div className="flex items-center gap-1.5">
-              <GitCommit className="h-3.5 w-3.5 text-[var(--accent-commit)]" />
-              <span className="text-xs font-semibold text-[var(--text-primary)]">Frames</span>
-              {frameCount > 0 && (
+              {isExtracting ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-[var(--accent-commit)]" />
+              ) : (
+                <GitCommit className="h-3.5 w-3.5 text-[var(--accent-commit)]" />
+              )}
+              <span className="text-xs font-semibold text-[var(--text-primary)]">
+                {isExtracting ? 'Extracting...' : 'Frames'}
+              </span>
+              {frameCount > 0 && !isExtracting && (
                 <span className="rounded-full bg-[var(--hover-bg)] px-1.5 py-0.5 text-[10px] text-[var(--text-secondary)]">
                   {frameCount}
                 </span>

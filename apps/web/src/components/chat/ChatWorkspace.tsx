@@ -11,6 +11,7 @@ import { useExtractionPanelStore } from '@/store/extractionPanelStore';
 import { useSessionStore } from '@/store/sessionStore';
 import { ChatHeader } from './ChatHeader';
 import { ChatInput } from './ChatInput';
+import { ChatMessage } from './ChatMessage';
 
 interface ChatWorkspaceProps {
   conversationId: string;
@@ -176,14 +177,14 @@ export function ChatWorkspace({
       <ChatHeader />
 
       {/* Message list */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 flex flex-col gap-3">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden">
         {isLoading ? (
-          <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground gap-2 min-h-[200px]">
+          <div className="flex h-full flex-col items-center justify-center text-muted-foreground gap-2">
             <Loader2 size={40} strokeWidth={1} className="animate-spin" />
             <p className="text-sm font-medium">Loading conversation...</p>
           </div>
         ) : messages.length === 0 && !isStreaming ? (
-          <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground gap-2 min-h-[200px]">
+          <div className="flex h-full flex-col items-center justify-center text-muted-foreground gap-2">
             <MessageSquarePlus size={40} strokeWidth={1} />
             <p className="text-sm font-medium text-[var(--text-primary)]">No messages yet</p>
             <span className="text-xs text-[var(--text-tertiary)]">
@@ -191,68 +192,74 @@ export function ChatWorkspace({
             </span>
           </div>
         ) : (
-          <>
+          <div className="divide-y divide-[var(--stroke-divider)]/50">
             {messages.map((msg) => (
-              <div
-                key={msg.id}
-                className={cn(
-                  'max-w-[80%] py-2.5 px-3.5 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap',
-                  'animate-in fade-in slide-in-from-bottom-2 duration-200',
-                  msg.role === 'user'
-                    ? 'self-end bg-[var(--accent-commit)] text-white rounded-br-sm'
-                    : 'self-start bg-[var(--surface-panel)] text-[var(--text-primary)] rounded-bl-sm border border-[var(--stroke-divider)]'
-                )}
-              >
-                {msg.content}
-              </div>
+              <ChatMessage key={msg.id} role={msg.role} content={msg.content} />
             ))}
 
             {/* Streaming response */}
             {isStreaming && streamingContent && (
-              <div className="max-w-[80%] self-start py-2.5 px-3.5 rounded-2xl rounded-bl-sm text-sm leading-relaxed whitespace-pre-wrap bg-[var(--surface-panel)] text-[var(--text-primary)] border border-[var(--stroke-divider)]">
-                {streamingContent}
-                <span className="animate-pulse text-[var(--accent-commit)]">{'\u2588'}</span>
-              </div>
+              <ChatMessage role="assistant" content={streamingContent} isStreaming />
             )}
 
-            {/* Waiting indicator (streaming started but no content yet) */}
+            {/* Waiting indicator */}
             {isStreaming && !streamingContent && (
-              <div className="max-w-[80%] self-start py-2.5 px-3.5 rounded-2xl rounded-bl-sm bg-[var(--surface-panel)] border border-[var(--stroke-divider)]">
-                <div className="flex items-center gap-2 text-[var(--text-tertiary)] text-sm">
-                  <Loader2 size={14} className="animate-spin" />
-                  <span>Thinking...</span>
+              <div className="w-full py-4">
+                <div className="mx-auto max-w-3xl px-4">
+                  <div className="flex gap-3">
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-medium mt-0.5 bg-gradient-to-br from-[var(--accent-commit)]/20 to-indigo-500/20 text-[var(--accent-commit)] ring-1 ring-[var(--accent-commit)]/20">
+                      T3
+                    </div>
+                    <div className="flex items-center gap-2 text-[var(--text-tertiary)] text-sm pt-1">
+                      <div className="flex gap-1">
+                        <span className="h-1.5 w-1.5 rounded-full bg-[var(--text-tertiary)] animate-bounce [animation-delay:0ms]" />
+                        <span className="h-1.5 w-1.5 rounded-full bg-[var(--text-tertiary)] animate-bounce [animation-delay:150ms]" />
+                        <span className="h-1.5 w-1.5 rounded-full bg-[var(--text-tertiary)] animate-bounce [animation-delay:300ms]" />
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
 
             {/* Error */}
             {error && (
-              <div className="flex items-center gap-2 py-2.5 px-3.5 mx-2 bg-[var(--status-error-muted)] border border-[var(--status-error)]/20 rounded-lg text-[var(--status-error)] text-xs">
-                <AlertCircle size={14} />
-                <span>{error}</span>
+              <div className="w-full py-3">
+                <div className="mx-auto max-w-3xl px-4">
+                  <div className="flex items-center gap-2 py-2.5 px-3.5 bg-[var(--status-error-muted)] border border-[var(--status-error)]/20 rounded-lg text-[var(--status-error)] text-xs">
+                    <AlertCircle size={14} />
+                    <span>{error}</span>
+                  </div>
+                </div>
               </div>
             )}
 
             {/* Non-critical warning */}
             {warning && !error && (
-              <div className="flex items-center gap-2 py-2 px-3.5 mx-2 bg-amber-500/10 border border-amber-500/20 rounded-lg text-amber-600 dark:text-amber-400 text-xs">
-                <AlertCircle size={14} />
-                <span>{warning}</span>
+              <div className="w-full py-3">
+                <div className="mx-auto max-w-3xl px-4">
+                  <div className="flex items-center gap-2 py-2 px-3.5 bg-amber-500/10 border border-amber-500/20 rounded-lg text-amber-600 dark:text-amber-400 text-xs">
+                    <AlertCircle size={14} />
+                    <span>{warning}</span>
+                  </div>
+                </div>
               </div>
             )}
-          </>
+          </div>
         )}
 
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input area */}
-      <div className="px-4 pb-4 pt-2 border-t border-[var(--stroke-divider)] shrink-0">
-        <ChatInput
-          onSend={handleSend}
-          disabled={isStreaming || isLoading}
-          placeholder="Message... (Enter to send, Shift+Enter for new line)"
-        />
+      {/* Input area — centered like messages */}
+      <div className="border-t border-[var(--stroke-divider)] shrink-0 py-3">
+        <div className="mx-auto max-w-3xl px-4">
+          <ChatInput
+            onSend={handleSend}
+            disabled={isStreaming || isLoading}
+            placeholder="Message... (Enter to send, Shift+Enter for new line)"
+          />
+        </div>
       </div>
     </div>
   );

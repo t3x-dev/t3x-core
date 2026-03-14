@@ -1,5 +1,6 @@
 'use client';
 
+import { Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { parseDisplayYAML, toDisplayYAML } from '@/lib/liteYaml';
 import { useExtractionPanelStore } from '@/store/extractionPanelStore';
@@ -43,10 +44,19 @@ export function FrameYAMLView() {
     setEditValue(yamlText);
   }, [yamlText]);
 
+  const isExtracting = useExtractionPanelStore((s) => s.isExtracting);
+
   if (draft.frames.length === 0 && !isEditing) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <p className="text-xs text-[var(--text-tertiary)]">No frames yet</p>
+      <div className="flex h-full flex-col items-center justify-center gap-2">
+        {isExtracting ? (
+          <>
+            <Loader2 className="h-5 w-5 animate-spin text-[var(--accent-commit)]" />
+            <p className="text-xs text-[var(--text-tertiary)]">Extracting frames...</p>
+          </>
+        ) : (
+          <p className="text-xs text-[var(--text-tertiary)]">No frames yet</p>
+        )}
       </div>
     );
   }

@@ -10,6 +10,7 @@ import {
   useReactFlow,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
+import { Loader2 } from 'lucide-react';
 import { useEffect } from 'react';
 import { getLayoutedElements } from '@/lib/elkLayout';
 import { cn } from '@/lib/utils';
@@ -103,10 +104,19 @@ function FrameGraphMiniInner() {
     };
   }, [draft, setNodes, setEdges, fitView]);
 
+  const isExtracting = useExtractionPanelStore((s) => s.isExtracting);
+
   if (draft.frames.length === 0) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <p className="text-xs text-[var(--text-tertiary)]">No frames yet</p>
+      <div className="flex h-full flex-col items-center justify-center gap-2">
+        {isExtracting ? (
+          <>
+            <Loader2 className="h-5 w-5 animate-spin text-[var(--accent-commit)]" />
+            <p className="text-xs text-[var(--text-tertiary)]">Extracting frames...</p>
+          </>
+        ) : (
+          <p className="text-xs text-[var(--text-tertiary)]">No frames yet</p>
+        )}
       </div>
     );
   }

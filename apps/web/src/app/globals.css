@@ -883,3 +883,134 @@ a {
 [data-density="compact"] table {
   font-size: 12px;
 }
+
+/* ── Chat markdown prose ── */
+
+.prose-chat {
+  line-height: 1.65;
+  word-break: break-word;
+}
+
+.prose-chat p {
+  margin: 0.5em 0;
+}
+
+.prose-chat p:first-child {
+  margin-top: 0;
+}
+
+.prose-chat p:last-child {
+  margin-bottom: 0;
+}
+
+.prose-chat h1,
+.prose-chat h2,
+.prose-chat h3,
+.prose-chat h4 {
+  font-weight: 600;
+  margin: 1em 0 0.4em;
+  color: var(--text-primary);
+}
+
+.prose-chat h1 { font-size: 1.25em; }
+.prose-chat h2 { font-size: 1.1em; }
+.prose-chat h3 { font-size: 1em; }
+
+.prose-chat ul,
+.prose-chat ol {
+  margin: 0.4em 0;
+  padding-left: 1.5em;
+}
+
+.prose-chat li {
+  margin: 0.2em 0;
+}
+
+.prose-chat li::marker {
+  color: var(--text-tertiary);
+}
+
+.prose-chat strong {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.prose-chat em {
+  font-style: italic;
+}
+
+.prose-chat code {
+  font-size: 0.875em;
+  padding: 0.15em 0.35em;
+  border-radius: 4px;
+  background: var(--hover-bg);
+  color: var(--accent-commit);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.prose-chat pre {
+  margin: 0.6em 0;
+  padding: 0.75em 1em;
+  border-radius: 8px;
+  background: oklch(0.15 0.01 260);
+  overflow-x: auto;
+}
+
+.dark .prose-chat pre {
+  background: oklch(0.15 0.01 260);
+}
+
+.prose-chat pre code {
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  color: oklch(0.9 0 0);
+  font-size: 0.8125em;
+}
+
+.prose-chat blockquote {
+  margin: 0.5em 0;
+  padding: 0.25em 0.75em;
+  border-left: 3px solid var(--accent-commit);
+  color: var(--text-secondary);
+}
+
+.prose-chat hr {
+  margin: 1em 0;
+  border: none;
+  border-top: 1px solid var(--stroke-divider);
+}
+
+.prose-chat table {
+  margin: 0.5em 0;
+  border-collapse: collapse;
+  font-size: 0.875em;
+}
+
+.prose-chat th,
+.prose-chat td {
+  padding: 0.35em 0.75em;
+  border: 1px solid var(--stroke-default);
+  text-align: left;
+}
+
+.prose-chat th {
+  font-weight: 600;
+  background: var(--hover-bg);
+}
+
+.prose-chat a {
+  color: var(--accent-commit);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* Smooth streaming cursor animation */
+.streaming-text {
+  animation: none;
+}
+
+@keyframes blink-cursor {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
