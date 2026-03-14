@@ -40,6 +40,25 @@ export async function deleteProject(projectId: string): Promise<DeleteProjectRes
   return handleResponse<DeleteProjectResponse>(res);
 }
 
+export interface UpdateProjectPayload {
+  name?: string;
+  metadata?: Record<string, unknown>;
+  default_provider?: string | null;
+  default_model?: string | null;
+}
+
+export async function updateProject(
+  projectId: string,
+  payload: UpdateProjectPayload
+): Promise<Project> {
+  const res = await fetchWithTimeout(`${API_V1}/projects/${encodeURIComponent(projectId)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return handleResponse<Project>(res);
+}
+
 // ============================================================================
 // Hash Chain Verification
 // ============================================================================

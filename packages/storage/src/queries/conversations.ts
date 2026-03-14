@@ -32,6 +32,8 @@ export interface UpdateConversationInput {
   positionX?: number;
   positionY?: number;
   metadata?: Record<string, unknown>;
+  provider?: string | null;
+  model?: string | null;
 }
 
 /**
@@ -163,6 +165,12 @@ export async function updateConversation(
   }
   if (updates.metadata !== undefined) {
     updateData.metadataJson = JSON.stringify(updates.metadata);
+  }
+  if (updates.provider !== undefined) {
+    updateData.provider = updates.provider;
+  }
+  if (updates.model !== undefined) {
+    updateData.model = updates.model;
   }
 
   const [updated] = await db

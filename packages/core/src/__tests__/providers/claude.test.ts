@@ -3,6 +3,7 @@
  */
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
 import { LLMProviderError } from '../../llm/types';
 import { ClaudeProvider, createClaudeProvider } from '../../providers/llm/claude';
 
@@ -158,5 +159,102 @@ describe('ClaudeProvider', () => {
       const provider = createClaudeProvider({ apiKey: 'key' });
       expect(provider).toBeInstanceOf(ClaudeProvider);
     });
+  });
+});
+
+describe('ClaudeProvider.generateFromPrompt', () => {
+  it('sends system and messages in correct format', async () => {
+    mockFetchFn.mockImplementation(() =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        text: () => Promise.resolve(JSON.stringify({
+          content: [{ type: 'text', text: 'Hello!' }],
+          usage: { input_tokens: 10, output_tokens: 5 },
+        })),
+      })
+    );
+
+    const provider = new ClaudeProvider({ apiKey: 'test-key' });
+    const result = await provider.generateFromPrompt(
+      {
+        system: 'You are helpful.',
+        messages: [{ role: 'user', content: 'Hi' }],
+      },
+      { model: 'claude-sonnet-4-20250514', temperature: 0.1, maxTokens: 100 }
+    );
+
+    expect(result.text).toBe('Hello!');
+    expect(result.usage.inputTokens).toBe(10);
+
+    const body = JSON.parse(mockFetchFn.mock.calls[0][1].body);
+    expect(body.system).toBe('You are helpful.');
+    expect(body.messages).toEqual([{ role: 'user', content: 'Hi' }]);
+    expect(body.model).toBe('claude-sonnet-4-20250514');
+  });
+});
+
+describe('ClaudeProvider.generateStructured', () => {
+  it('sends tool definition and extracts tool input', async () => {
+    const responseBody = {
+      content: [
+        {
+          type: 'tool_use',
+          id: 'tool_1',
+          name: 'extract_data',
+          input: { name: 'Alice', age: 30 },
+        },
+      ],
+      usage: { input_tokens: 20, output_tokens: 15 },
+    };
+
+    mockFetchFn.mockImplementation(() =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        text: () => Promise.resolve(JSON.stringify(responseBody)),
+      })
+    );
+
+    const provider = new ClaudeProvider({ apiKey: 'test-key' });
+    const schema = z.object({ name: z.string(), age: z.number() });
+    const result = await provider.generateStructured(
+      { messages: [{ role: 'user', content: 'Extract info about Alice, age 30' }] },
+      schema,
+      { model: 'claude-sonnet-4-20250514' }
+    );
+
+    expect(result.data).toEqual({ name: 'Alice', age: 30 });
+    expect(result.usage.inputTokens).toBe(20);
+
+    // Verify tools parameter was sent
+    const body = JSON.parse(mockFetchFn.mock.calls[0][1].body);
+    expect(body.tools).toBeDefined();
+    expect(body.tools[0].name).toBe('extract_data');
+    expect(body.tools[0].input_schema).toBeDefined();
+    expect(body.tool_choice).toEqual({ type: 'tool', name: 'extract_data' });
+  });
+
+  it('falls back to text parsing when no tool_use in response', async () => {
+    mockFetchFn.mockImplementation(() =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        text: () => Promise.resolve(JSON.stringify({
+          content: [{ type: 'text', text: '{"name": "Bob", "age": 25}' }],
+          usage: { input_tokens: 10, output_tokens: 8 },
+        })),
+      })
+    );
+
+    const provider = new ClaudeProvider({ apiKey: 'test-key' });
+    const schema = z.object({ name: z.string(), age: z.number() });
+    const result = await provider.generateStructured(
+      { messages: [{ role: 'user', content: 'Extract' }] },
+      schema,
+      { model: 'claude-sonnet-4-20250514' }
+    );
+
+    expect(result.data).toEqual({ name: 'Bob', age: 25 });
   });
 });

@@ -25,6 +25,8 @@ export interface Project {
   commits_count?: number;
   branches_count?: number;
   drafts_count?: number;
+  default_provider?: string | null;
+  default_model?: string | null;
   metadata?: Record<string, unknown>;
 }
 
@@ -49,6 +51,8 @@ export interface Conversation {
   position_y?: number;
   created_at: string;
   turns_count?: number;
+  provider?: string | null;
+  model?: string | null;
   metadata?: {
     import?: {
       source_type: 'url' | 'document' | 'platform';
@@ -411,4 +415,26 @@ export interface ApiResponse<T> {
     code: string;
     message: string;
   };
+}
+
+// ============================================================================
+// LLM types
+// ============================================================================
+
+export interface LLMModelInfo {
+  id: string;
+  label: string;
+  capabilities: string[];
+  max_output_tokens: number;
+}
+
+export interface LLMProviderInfo {
+  name: string;
+  label: string;
+  available: boolean;
+  models: LLMModelInfo[];
+}
+
+export interface LLMModelsResponse {
+  providers: LLMProviderInfo[];
 }

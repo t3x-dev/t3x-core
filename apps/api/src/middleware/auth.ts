@@ -18,7 +18,7 @@ import { createError } from '../lib/errors';
 import { pinoLogger } from './logger';
 
 /** Paths that never require authentication */
-const PUBLIC_PATHS = ['/health', '/api/docs', '/api/openapi.json'];
+const PUBLIC_PATHS = ['/health', '/api/docs', '/api/openapi.json', '/api/v1/llm/models'];
 
 /** Path prefixes that never require authentication */
 const PUBLIC_PREFIXES = ['/api/v1/auth/callback', '/api/v1/auth/register', '/api/v1/auth/login'];

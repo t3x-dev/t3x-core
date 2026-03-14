@@ -45,6 +45,8 @@ export const projects = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
     metadataJson: text('metadata_json'),
     providerConfig: text('provider_config'), // JSON: project-level provider overrides
+    defaultProvider: text('default_provider'), // "anthropic" | "openai" | "google"
+    defaultModel: text('default_model'), // model ID from catalog
     autopilotConfig: jsonb('autopilot_config').$type<{
       enabled: boolean;
       min_confidence: number;
@@ -94,6 +96,8 @@ export const conversations = pgTable(
     positionY: real('position_y'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
     metadataJson: text('metadata_json'),
+    provider: text('provider'), // override, null = inherit project default
+    model: text('model'), // override, null = inherit project default
   },
   (table) => [index('idx_conversations_project').on(table.projectId)]
 );

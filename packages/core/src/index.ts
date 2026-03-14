@@ -255,9 +255,22 @@ export {
 } from './leaf';
 // LLM Provider (interface)
 export {
+  type Capability,
+  createProviderForModel,
   type LLMGenerateOptions,
+  type LLMGenerateOptionsV2,
+  type LLMPrompt,
   type LLMProvider,
   LLMProviderError,
+  type LLMResult,
+  MODEL_CATALOG,
+  getAllModels,
+  getModelInfo,
+  getModelsByProvider,
+  type ModelInfo,
+  normalizeFrameOutput,
+  type ProviderName,
+  type StructuredResult,
 } from './llm';
 // Merge (Two-way and three-way merge for combining commits - Issue #71)
 // V4: No constraint handling, prepareMerge accepts DiffableSentence[]

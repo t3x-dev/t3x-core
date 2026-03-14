@@ -12,7 +12,7 @@
  * GET    /v1/conversations/:id/context-export - Export context as JSON/Markdown file
  */
 
-import { buildConversationContext, type ConversationData } from '@t3x-dev/core';
+import { buildConversationContext, getModelInfo, type ConversationData } from '@t3x-dev/core';
 import {
   deleteConversation,
   findCommitV4ByHash,
@@ -207,12 +207,19 @@ conversationRoutes.put('/v1/conversations/:id', async (c) => {
     position_x?: number;
     position_y?: number;
     metadata?: Record<string, unknown>;
+    provider?: string | null;
+    model?: string | null;
   } | null = null;
 
   try {
     body = await c.req.json();
   } catch {
     return jsonError(c, 'INVALID_JSON', 'Invalid JSON body', 400);
+  }
+
+  // Validate model against catalog if provided
+  if (body?.model != null && !getModelInfo(body.model)) {
+    return jsonError(c, 'INVALID_MODEL', `Unknown model: ${body.model}`, 400);
   }
 
   try {
@@ -222,6 +229,8 @@ conversationRoutes.put('/v1/conversations/:id', async (c) => {
       positionX: body?.position_x,
       positionY: body?.position_y,
       metadata: body?.metadata,
+      provider: body?.provider,
+      model: body?.model,
     });
 
     if (!conversation) {
@@ -237,6 +246,8 @@ conversationRoutes.put('/v1/conversations/:id', async (c) => {
       position_y: conversation.positionY,
       created_at: conversation.createdAt.toISOString(),
       metadata: conversation.metadataJson ? JSON.parse(conversation.metadataJson) : null,
+      provider: conversation.provider ?? null,
+      model: conversation.model ?? null,
     };
 
     return jsonSuccess(c, apiConversation);

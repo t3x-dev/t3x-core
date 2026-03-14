@@ -34,6 +34,8 @@ CREATE TABLE IF NOT EXISTS projects (
   owner_id TEXT,
   metadata_json TEXT,
   provider_config TEXT,
+  default_provider TEXT,
+  default_model TEXT,
   autopilot_config JSONB,
   business_rules JSONB DEFAULT '[]',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -49,6 +51,8 @@ CREATE TABLE IF NOT EXISTS conversations (
   position_x REAL,
   position_y REAL,
   metadata_json TEXT,
+  provider TEXT,
+  model TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

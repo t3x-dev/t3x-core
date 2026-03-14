@@ -28,6 +28,8 @@ export const ProjectSchema = z.object({
   created_at: z.string().datetime(),
   metadata: MetadataSchema,
   provider_config: ProviderConfigSchema.optional(),
+  default_provider: z.string().nullable().optional(),
+  default_model: z.string().nullable().optional(),
 });
 
 // Project with stats
@@ -50,6 +52,8 @@ export const UpdateProjectSchema = z.object({
   name: z.string().min(1).max(255).optional(),
   metadata: z.record(z.string(), z.any()).optional(),
   provider_config: ProviderConfigSchema.optional(),
+  default_provider: z.string().nullable().optional(),
+  default_model: z.string().nullable().optional(),
 });
 
 // Project with counts (for list view — lighter than full stats)

@@ -8,6 +8,7 @@ import { ConversationWorkspace } from '@/components/conversation/ConversationWor
 import { Breadcrumb } from '@/components/shared/Breadcrumb';
 import { Button } from '@/components/ui/button';
 import { PinButton } from '@/components/ui/PinButton';
+import { ConversationModelChip } from '@/components/conversation/ConversationModelChip';
 import { useConversationChat } from '@/hooks/useConversationChat';
 import type { Conversation } from '@/lib/api';
 import { getConversation } from '@/lib/api';
@@ -102,6 +103,14 @@ function ConversationPageContent() {
               { label: projectName || 'Project', href: `/project/${projectId}` },
               { label: conversation.title || 'Untitled Conversation' },
             ]}
+          />
+          <ConversationModelChip
+            conversationId={conversationId}
+            provider={conversation.provider}
+            model={conversation.model}
+            onUpdated={(provider, model) =>
+              setConversation((prev) => (prev ? { ...prev, provider, model } : prev))
+            }
           />
         </div>
         <div className="flex items-center gap-2">

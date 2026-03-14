@@ -144,9 +144,7 @@ export async function createPGLiteStorage(config: PGLiteConfig = {}): Promise<PG
 
     if (!isWasmAbort || !dataDir) throw err;
 
-    console.warn(
-      '[PGLite] WASM abort detected — database corrupted from unclean shutdown.'
-    );
+    console.warn('[PGLite] WASM abort detected — database corrupted from unclean shutdown.');
 
     // Skip client.close() on corrupted instance — calling close() on an
     // aborted WASM runtime can trigger a second abort that crashes the process.
@@ -981,6 +979,14 @@ async function initializeSchema(client: PGlite): Promise<void> {
     );
     CREATE INDEX IF NOT EXISTS idx_token_usage_user_created ON token_usage(user_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_token_usage_project_created ON token_usage(project_id, created_at);
+
+    -- Migration: Add default_provider/default_model to projects (per-project LLM selection)
+    ALTER TABLE projects ADD COLUMN IF NOT EXISTS default_provider TEXT;
+    ALTER TABLE projects ADD COLUMN IF NOT EXISTS default_model TEXT;
+
+    -- Migration: Add provider/model to conversations (per-conversation LLM override)
+    ALTER TABLE conversations ADD COLUMN IF NOT EXISTS provider TEXT;
+    ALTER TABLE conversations ADD COLUMN IF NOT EXISTS model TEXT;
 
   `);
 

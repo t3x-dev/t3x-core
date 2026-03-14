@@ -13,6 +13,8 @@ export interface ProjectSummary {
   drafts: number;
   commitsCount: number;
   branchesCount: number;
+  defaultProvider?: string | null;
+  defaultModel?: string | null;
 }
 
 type ProjectStore = {
@@ -26,6 +28,11 @@ type ProjectStore = {
   addProject: (name?: string) => Promise<ProjectSummary>;
   deleteProject: (id: string) => Promise<void>;
   getProject: (id: string) => ProjectSummary | undefined;
+  updateProjectModel: (
+    projectId: string,
+    provider: string | null,
+    model: string | null
+  ) => Promise<void>;
 };
 
 const formatDate = (dateStr: string) => {
@@ -60,6 +67,8 @@ const apiProjectToSummary = (project: api.Project): ProjectSummary => ({
   drafts: project.conversations_count || 0,
   commitsCount: project.commits_count || 0,
   branchesCount: project.branches_count || 0,
+  defaultProvider: project.default_provider ?? null,
+  defaultModel: project.default_model ?? null,
 });
 
 export const useProjectStore = create<ProjectStore>((set, get) => ({
@@ -176,4 +185,24 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
   },
 
   getProject: (id) => get().projects.find((project) => project.id === id),
+
+  updateProjectModel: async (projectId, provider, model) => {
+    const notify = get().notifyCallback;
+    try {
+      await api.updateProject(projectId, {
+        default_provider: provider,
+        default_model: model,
+      });
+      set((state) => ({
+        projects: state.projects.map((p) =>
+          p.id === projectId ? { ...p, defaultProvider: provider, defaultModel: model } : p
+        ),
+      }));
+      notify?.('Model settings saved', 'success');
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      notify?.(`Failed to save model settings: ${error.message}`, 'error');
+      throw error;
+    }
+  },
 }));
