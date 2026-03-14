@@ -4,9 +4,8 @@
  * Tests for POST /v1/leaves/:id/suggest-constraints endpoint.
  */
 
-import { insertProject } from '@t3x-dev/storage';
 import type { AnyDB } from '@t3x-dev/storage';
-import { createCommitV4, createLeaf } from '@t3x-dev/storage';
+import { createCommitV4, createLeaf, insertProject } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
@@ -132,7 +131,12 @@ describe('Suggest Constraints', () => {
         .mockImplementation(async (_role: string, fn: (provider: unknown) => Promise<unknown>) => {
           const mockProvider = {
             id: 'test-provider',
-            generate: vi.fn().mockResolvedValue({ text: mockLlmResponse, usage: { inputTokens: 10, outputTokens: 5 } }),
+            generate: vi
+              .fn()
+              .mockResolvedValue({
+                text: mockLlmResponse,
+                usage: { inputTokens: 10, outputTokens: 5 },
+              }),
             resolveConflict: vi.fn(),
           };
           return fn(mockProvider);

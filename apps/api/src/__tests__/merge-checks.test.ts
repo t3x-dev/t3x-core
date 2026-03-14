@@ -4,6 +4,7 @@
  * Tests for GET /v1/merge/drafts/:id/checks
  */
 
+import type { AnyDB } from '@t3x-dev/storage';
 import {
   createCommitV4,
   createLeaf,
@@ -11,7 +12,6 @@ import {
   insertProject,
   insertRun,
 } from '@t3x-dev/storage';
-import type { AnyDB } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';

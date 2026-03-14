@@ -361,7 +361,10 @@ export class SemanticGate {
       const parsed = parseSemanticGateResponse(result.text);
       return { ...parsed, usage: result.usage };
     } catch {
-      return { ...buildDegradedResult('LLM provider call failed'), usage: { inputTokens: 0, outputTokens: 0 } };
+      return {
+        ...buildDegradedResult('LLM provider call failed'),
+        usage: { inputTokens: 0, outputTokens: 0 },
+      };
     }
   }
 
@@ -387,7 +390,11 @@ export class SemanticGate {
       const parsed = parseCoverageResponse(result.text);
       return { ...parsed, usage: result.usage };
     } catch {
-      return { coverage_ratio: 0, uncovered_segments: [], usage: { inputTokens: 0, outputTokens: 0 } };
+      return {
+        coverage_ratio: 0,
+        uncovered_segments: [],
+        usage: { inputTokens: 0, outputTokens: 0 },
+      };
     }
   }
 }

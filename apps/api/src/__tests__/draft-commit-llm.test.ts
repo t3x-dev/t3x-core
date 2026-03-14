@@ -5,9 +5,8 @@
  */
 
 import type { SemanticPoint } from '@t3x-dev/core';
-import { insertProject } from '@t3x-dev/storage';
 import type { AnyDB } from '@t3x-dev/storage';
-import { insertDraftV3, updateDraftV3 } from '@t3x-dev/storage';
+import { insertDraftV3, insertProject, updateDraftV3 } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';

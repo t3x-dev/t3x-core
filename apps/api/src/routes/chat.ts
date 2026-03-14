@@ -194,16 +194,18 @@ chatRoutes.post('/v1/chat', async (c) => {
       // Record token usage (fire-and-forget, only if project_id provided)
       if (body?.project_id && result.usage) {
         const apiKeyCtx = c.get('apiKey') as { user_id?: string } | undefined;
-        getDB().then((db) =>
-          recordUsage(db, {
-            user_id: apiKeyCtx?.user_id,
-            project_id: body!.project_id!,
-            endpoint: 'chat',
-            model: result.model,
-            input_tokens: result.usage!.input_tokens ?? 0,
-            output_tokens: result.usage!.output_tokens ?? 0,
-          })
-        ).catch((err) => pinoLogger.warn({ err }, 'Failed to record chat usage'));
+        getDB()
+          .then((db) =>
+            recordUsage(db, {
+              user_id: apiKeyCtx?.user_id,
+              project_id: body!.project_id!,
+              endpoint: 'chat',
+              model: result.model,
+              input_tokens: result.usage!.input_tokens ?? 0,
+              output_tokens: result.usage!.output_tokens ?? 0,
+            })
+          )
+          .catch((err) => pinoLogger.warn({ err }, 'Failed to record chat usage'));
       }
 
       return jsonSuccess(c, result);
@@ -407,16 +409,18 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
         // Record token usage (fire-and-forget, only if project_id provided)
         if (body?.project_id && (usage.input_tokens || usage.output_tokens)) {
           const apiKeyCtx = c.get('apiKey') as { user_id?: string } | undefined;
-          getDB().then((db) =>
-            recordUsage(db, {
-              user_id: apiKeyCtx?.user_id,
-              project_id: body!.project_id!,
-              endpoint: 'chat',
-              model: resolvedModel,
-              input_tokens: usage.input_tokens ?? 0,
-              output_tokens: usage.output_tokens ?? 0,
-            })
-          ).catch((err) => pinoLogger.warn({ err }, 'Failed to record stream chat usage'));
+          getDB()
+            .then((db) =>
+              recordUsage(db, {
+                user_id: apiKeyCtx?.user_id,
+                project_id: body!.project_id!,
+                endpoint: 'chat',
+                model: resolvedModel,
+                input_tokens: usage.input_tokens ?? 0,
+                output_tokens: usage.output_tokens ?? 0,
+              })
+            )
+            .catch((err) => pinoLogger.warn({ err }, 'Failed to record stream chat usage'));
         }
         controller.close();
       }

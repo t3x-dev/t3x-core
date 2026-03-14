@@ -11,8 +11,8 @@
  *   node scripts/db-inspector.mjs "SELECT * FROM projects"  # Run single query
  */
 
-import { createInterface } from 'readline';
 import postgres from 'postgres';
+import { createInterface } from 'readline';
 
 const port = parseInt(process.env.T3X_PG_PORT || '', 10) || 5445;
 const connectionString = `postgresql://postgres:password@localhost:${port}/t3x`;

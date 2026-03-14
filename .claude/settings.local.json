@@ -232,7 +232,13 @@
       "Bash(ps -p 49656 -o command=)",
       "Bash(kill -TERM 49656)",
       "Bash(kill -TERM 79428)",
-      "Bash(kill -TERM 79526)"
+      "Bash(kill -TERM 79526)",
+      "Bash(git -C /Users/macethan/Projects/t3x/docs status 2>&1 | head -5\ngit submodule status 2>&1 | head -5)",
+      "Bash(do echo:*)",
+      "Read(//Users/macethan/Projects/t3x/packages/storage/src/__tests__/**)",
+      "Bash(sed -i '' 's|all AnyDB types \\(PGLite, Postgres, Supabase\\)|all AnyDB types \\(Postgres, Supabase\\)|' packages/storage/src/queries/leaves.ts && sed -i '' 's|Advantages over PGLite:|Advantages:|' packages/storage/src/adapters/embedded.ts && sed -i '' 's|PGLite may return|PostgreSQL may return|' packages/storage/src/__tests__/segmentEmbeddings.test.ts && sed -i '' 's|the PGLite adapter already seeded|the adapter already seeded|' apps/api/src/__tests__/templates.test.ts)",
+      "Bash(which gh:*)",
+      "Bash(find /Users/macethan/Projects/t3x -type f -name \"*.test.ts\" -o -name \"*.test.tsx\" ! -path \"*/node_modules/*\" ! -path \"*/.t3x/*\" ! -path \"*/dist/*\" | while read f; do if ! grep -q \"describe\\\\|test\\\\|it\" \"$f\" 2>/dev/null; then echo \"$f\"; fi; done | head -20)"
     ],
     "deny": [],
     "ask": []

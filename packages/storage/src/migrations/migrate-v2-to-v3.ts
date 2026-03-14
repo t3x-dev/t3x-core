@@ -26,12 +26,8 @@ import {
   computeCommitV3Hash,
   type Sentence,
 } from '@t3x-dev/core';
-import {
-  type AnyDB,
-  commits as commitsV2Table,
-  commitsV3 as commitsV3Table,
-} from '../index';
 import { createPostgresStorage } from '../adapters/postgres';
+import { type AnyDB, commits as commitsV2Table, commitsV3 as commitsV3Table } from '../index';
 
 // ============================================================
 // Types (exported for testing)

@@ -9,6 +9,7 @@
  * 2. apps/web/src/app/deploy/page.tsx - if field names change
  */
 
+import type { AnyDB } from '@t3x-dev/storage';
 import {
   deleteDeployAgent,
   deleteProject,
@@ -17,7 +18,6 @@ import {
   insertDeployAgent,
   insertProject,
 } from '@t3x-dev/storage';
-import type { AnyDB } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setupTestDB } from '../setup';

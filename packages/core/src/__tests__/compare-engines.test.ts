@@ -13,10 +13,10 @@
 
 import { describe, it } from 'vitest';
 import {
-  createRingExtractor,
-  createLocalNLPProvider,
-  createGoogleCloudNLPProvider,
   createClaudeProvider,
+  createGoogleCloudNLPProvider,
+  createLocalNLPProvider,
+  createRingExtractor,
   FrameExtractor,
 } from '../index';
 import type { NLPProvider } from '../providers/nlp';
@@ -49,9 +49,9 @@ const conversation: Array<{ role: 'user' | 'assistant'; content: string }> = [
   {
     role: 'assistant',
     content:
-      'Great preferences! Here\'s a refined plan:\n\n' +
+      "Great preferences! Here's a refined plan:\n\n" +
       '**Tokyo (5 nights):** Park Hotel Tokyo in Ginza (~$180/night), close to Tsukiji outer market. ' +
-      'Vegetarian-friendly spots: T\'s TanTan (vegan ramen at Tokyo Station), Ain Soph Ripple in Shinjuku.\n\n' +
+      "Vegetarian-friendly spots: T's TanTan (vegan ramen at Tokyo Station), Ain Soph Ripple in Shinjuku.\n\n" +
       '**Kyoto (4 nights):** Ryokan Yoshida-sanso (~$200/night), a traditional inn with garden views. ' +
       'Must-visit temples: Kinkaku-ji, Fushimi Inari, Kiyomizu-dera.\n\n' +
       'Total estimate: flights $2400 + Tokyo hotels $900 + Kyoto ryokan $800 + food/transport $900 = $5000.',
@@ -68,18 +68,108 @@ const conversation: Array<{ role: 'user' | 'assistant'; content: string }> = [
 // ── Helpers ──
 
 const DRAFT_STOP_WORDS = new Set([
-  'the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
-  'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
-  'should', 'may', 'might', 'must', 'shall', 'can', 'need', 'dare',
-  'to', 'of', 'in', 'for', 'on', 'with', 'at', 'by', 'from', 'as',
-  'into', 'through', 'during', 'before', 'after', 'about', 'between',
-  'and', 'but', 'or', 'nor', 'not', 'so', 'yet', 'both', 'either',
-  'neither', 'each', 'every', 'all', 'any', 'few', 'more', 'most',
-  'other', 'some', 'such', 'no', 'only', 'own', 'same', 'than',
-  'too', 'very', 'just', 'also', 'now', 'here', 'there', 'then',
-  'yes', 'like', 'want', 'get', 'got', 'let', 'make', 'go', 'know',
-  'take', 'see', 'come', 'think', 'look', 'give', 'use', 'find',
-  'tell', 'ask', 'work', 'seem', 'feel', 'try', 'leave', 'call',
+  'the',
+  'a',
+  'an',
+  'is',
+  'are',
+  'was',
+  'were',
+  'be',
+  'been',
+  'being',
+  'have',
+  'has',
+  'had',
+  'do',
+  'does',
+  'did',
+  'will',
+  'would',
+  'could',
+  'should',
+  'may',
+  'might',
+  'must',
+  'shall',
+  'can',
+  'need',
+  'dare',
+  'to',
+  'of',
+  'in',
+  'for',
+  'on',
+  'with',
+  'at',
+  'by',
+  'from',
+  'as',
+  'into',
+  'through',
+  'during',
+  'before',
+  'after',
+  'about',
+  'between',
+  'and',
+  'but',
+  'or',
+  'nor',
+  'not',
+  'so',
+  'yet',
+  'both',
+  'either',
+  'neither',
+  'each',
+  'every',
+  'all',
+  'any',
+  'few',
+  'more',
+  'most',
+  'other',
+  'some',
+  'such',
+  'no',
+  'only',
+  'own',
+  'same',
+  'than',
+  'too',
+  'very',
+  'just',
+  'also',
+  'now',
+  'here',
+  'there',
+  'then',
+  'yes',
+  'like',
+  'want',
+  'get',
+  'got',
+  'let',
+  'make',
+  'go',
+  'know',
+  'take',
+  'see',
+  'come',
+  'think',
+  'look',
+  'give',
+  'use',
+  'find',
+  'tell',
+  'ask',
+  'work',
+  'seem',
+  'feel',
+  'try',
+  'leave',
+  'call',
 ]);
 
 function isValueableKeyword(kw: string): boolean {
@@ -147,8 +237,10 @@ async function createBestNLPProvider(): Promise<{ provider: NLPProvider; name: s
   if (key) {
     // Try Google NLP with proxy support (same as apps/api/src/lib/nlp.ts)
     const proxyUrl =
-      process.env.HTTPS_PROXY || process.env.HTTP_PROXY ||
-      process.env.https_proxy || process.env.http_proxy;
+      process.env.HTTPS_PROXY ||
+      process.env.HTTP_PROXY ||
+      process.env.https_proxy ||
+      process.env.http_proxy;
 
     let customFetch: typeof fetch | undefined;
     if (proxyUrl) {
@@ -220,14 +312,20 @@ describe('Ring vs Frame Engine Comparison', () => {
         const r3 = ringOutput.ring3;
 
         const keywords = (r1.keywords ?? []).map((k) =>
-          typeof k === 'string' ? k : (k as { text?: string; lemma?: string }).text ?? (k as { lemma?: string }).lemma ?? ''
+          typeof k === 'string'
+            ? k
+            : ((k as { text?: string; lemma?: string }).text ??
+              (k as { lemma?: string }).lemma ??
+              '')
         );
-        const entities = (r1.entities ?? []).map(
-          (e) => `${e.text} (${e.type})`
-        );
+        const entities = (r1.entities ?? []).map((e) => `${e.text} (${e.type})`);
         const prefKws = r1.preference_keywords ?? [];
-        const positive = prefKws.filter((pk) => pk.polarity !== 'negative' && pk.polarity !== -1).map((pk) => pk.keyword);
-        const negative = prefKws.filter((pk) => pk.polarity === 'negative' || pk.polarity === -1).map((pk) => pk.keyword);
+        const positive = prefKws
+          .filter((pk) => pk.polarity !== 'negative' && pk.polarity !== -1)
+          .map((pk) => pk.keyword);
+        const negative = prefKws
+          .filter((pk) => pk.polarity === 'negative' || pk.polarity === -1)
+          .map((pk) => pk.keyword);
         const facets = r2.facets ?? [];
 
         console.log(`    Keywords (${keywords.length}): [${keywords.join(', ')}]`);
@@ -260,7 +358,9 @@ describe('Ring vs Frame Engine Comparison', () => {
     }
 
     console.log('\n  ── Ring Aggregated Preferences ──');
-    console.log(`  must_have (${allRingKeywords.length}): [${allRingKeywords.slice(0, 25).join(', ')}]`);
+    console.log(
+      `  must_have (${allRingKeywords.length}): [${allRingKeywords.slice(0, 25).join(', ')}]`
+    );
     console.log(`  must_not_have (${ringNegatives.length}): [${ringNegatives.join(', ')}]`);
 
     // ═══════════════════════════════════════════════════════════
@@ -284,7 +384,9 @@ describe('Ring vs Frame Engine Comparison', () => {
         content: t.content,
       }));
 
-      console.log(`\n  [Turn ${i + 1}] ${conversation[i].role}: "${conversation[i].content.substring(0, 60)}..."`);
+      console.log(
+        `\n  [Turn ${i + 1}] ${conversation[i].role}: "${conversation[i].content.substring(0, 60)}..."`
+      );
 
       try {
         const result = await frameExtractor.extract({
@@ -319,7 +421,9 @@ describe('Ring vs Frame Engine Comparison', () => {
     }
 
     console.log('\n  ── Frame Final Snapshot ──');
-    console.log(`  Frames: ${currentSnapshot.frames.length}, Relations: ${currentSnapshot.relations.length}`);
+    console.log(
+      `  Frames: ${currentSnapshot.frames.length}, Relations: ${currentSnapshot.relations.length}`
+    );
     for (const frame of currentSnapshot.frames) {
       console.log(`    [${frame.id}] ${frame.type}: ${slotDisplay(frame.slots)}`);
     }
@@ -329,8 +433,12 @@ describe('Ring vs Frame Engine Comparison', () => {
 
     console.log('\n  ── Frame Aggregated Preferences (extractPreferencesFromFrames) ──');
     const framePrefs = extractPreferencesFromFrames(currentSnapshot);
-    console.log(`  must_have (${framePrefs.mustHave.length}): [${framePrefs.mustHave.slice(0, 25).join(', ')}]`);
-    console.log(`  must_not_have (${framePrefs.mustNotHave.length}): [${framePrefs.mustNotHave.join(', ')}]`);
+    console.log(
+      `  must_have (${framePrefs.mustHave.length}): [${framePrefs.mustHave.slice(0, 25).join(', ')}]`
+    );
+    console.log(
+      `  must_not_have (${framePrefs.mustNotHave.length}): [${framePrefs.mustNotHave.join(', ')}]`
+    );
 
     // ═══════════════════════════════════════════════════════════
     // COMPARISON
@@ -339,7 +447,18 @@ describe('Ring vs Frame Engine Comparison', () => {
     console.log('  SIDE-BY-SIDE COMPARISON');
     console.log('═'.repeat(70));
 
-    const keyConcepts = ['Japan', 'April', 'vegetarian', 'ryokan', 'Tokyo', 'Kyoto', 'Osaka', 'shellfish', 'temples', 'budget'];
+    const keyConcepts = [
+      'Japan',
+      'April',
+      'vegetarian',
+      'ryokan',
+      'Tokyo',
+      'Kyoto',
+      'Osaka',
+      'shellfish',
+      'temples',
+      'budget',
+    ];
     const negConcepts = ['group tours', 'hostels', 'theme parks', 'shellfish'];
 
     console.log('\n  ✅ Positive Concept Coverage:');
@@ -351,7 +470,9 @@ describe('Ring vs Frame Engine Comparison', () => {
       const inFrame = framePrefs.mustHave.some((k) => k.toLowerCase().includes(cL));
       if (inRing) ringScore++;
       if (inFrame) frameScore++;
-      console.log(`    "${concept}":  Ring=${inRing ? '✅' : '❌'}  Frame=${inFrame ? '✅' : '❌'}`);
+      console.log(
+        `    "${concept}":  Ring=${inRing ? '✅' : '❌'}  Frame=${inFrame ? '✅' : '❌'}`
+      );
     }
 
     console.log('\n  🚫 Negative Concept Coverage:');
@@ -363,14 +484,22 @@ describe('Ring vs Frame Engine Comparison', () => {
       const inFrame = framePrefs.mustNotHave.some((k) => k.toLowerCase().includes(cL));
       if (inRing) ringNegScore++;
       if (inFrame) frameNegScore++;
-      console.log(`    "${concept}":  Ring=${inRing ? '✅' : '❌'}  Frame=${inFrame ? '✅' : '❌'}`);
+      console.log(
+        `    "${concept}":  Ring=${inRing ? '✅' : '❌'}  Frame=${inFrame ? '✅' : '❌'}`
+      );
     }
 
     console.log('\n  📊 Summary:');
-    console.log(`    Ring (${nlpName}):  ${ringScore}/${keyConcepts.length} positive, ${ringNegScore}/${negConcepts.length} negative`);
-    console.log(`    Frame (Claude):    ${frameScore}/${keyConcepts.length} positive, ${frameNegScore}/${negConcepts.length} negative`);
+    console.log(
+      `    Ring (${nlpName}):  ${ringScore}/${keyConcepts.length} positive, ${ringNegScore}/${negConcepts.length} negative`
+    );
+    console.log(
+      `    Frame (Claude):    ${frameScore}/${keyConcepts.length} positive, ${frameNegScore}/${negConcepts.length} negative`
+    );
     console.log(`    Ring total keywords: ${allRingKeywords.length} (flat bag)`);
-    console.log(`    Frame total frames: ${currentSnapshot.frames.length} with ${currentSnapshot.relations.length} relations (semantic graph)`);
+    console.log(
+      `    Frame total frames: ${currentSnapshot.frames.length} with ${currentSnapshot.relations.length} relations (semantic graph)`
+    );
 
     const frameMustSet = new Set(framePrefs.mustHave.map((k) => k.toLowerCase()));
     const ringMustSet = new Set(allRingKeywords.map((k) => k.toLowerCase()));
@@ -383,7 +512,9 @@ describe('Ring vs Frame Engine Comparison', () => {
     const totalRing = ringScore + ringNegScore;
     const totalFrame = frameScore + frameNegScore;
     if (totalFrame > totalRing) {
-      console.log(`    Frame engine captures MORE relevant concepts (${totalFrame} vs ${totalRing}).`);
+      console.log(
+        `    Frame engine captures MORE relevant concepts (${totalFrame} vs ${totalRing}).`
+      );
     } else if (totalFrame === totalRing) {
       console.log(`    Both engines capture EQUAL concepts (${totalFrame}).`);
     } else {

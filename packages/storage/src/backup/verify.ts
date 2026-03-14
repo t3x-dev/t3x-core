@@ -207,9 +207,7 @@ export async function verifyHashChain(db: AnyDB, projectId: string): Promise<Ver
 
   return {
     valid:
-      hashMismatch.length === 0 &&
-      parentNotFound.length === 0 &&
-      merkleMismatches.length === 0,
+      hashMismatch.length === 0 && parentNotFound.length === 0 && merkleMismatches.length === 0,
     total: commits.length,
     verified_depth: maxDepth,
     entry_points: entryPoints,

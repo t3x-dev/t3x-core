@@ -8,7 +8,7 @@
  * - PATCH /v1/auth/me  — Update profile (name, avatar_url)
  */
 
-import { createAccount, createUser, type AnyDB } from '@t3x-dev/storage';
+import { type AnyDB, createAccount, createUser } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDB } from './setup';
@@ -64,7 +64,17 @@ describe('Auth Me Routes', () => {
     const app = new Hono();
     app.use('*', async (c, next) => {
       if (userId) {
-        c.set('apiKey', { user_id: userId, id: 'ak_test', key_prefix: 'test', key_hash: '', name: 'test', project_id: null, created_at: '', last_used_at: null, revoked_at: null });
+        c.set('apiKey', {
+          user_id: userId,
+          id: 'ak_test',
+          key_prefix: 'test',
+          key_hash: '',
+          name: 'test',
+          project_id: null,
+          created_at: '',
+          last_used_at: null,
+          revoked_at: null,
+        });
       }
       await next();
     });

@@ -39,7 +39,9 @@ describe('Users Storage', () => {
     it('updates avatar_url only', async () => {
       const user = await createUser(db, { name: 'Avatar Test', email: 'avatar@test.com' });
 
-      const updated = await updateUser(db, user.id, { avatar_url: 'https://example.com/avatar.png' });
+      const updated = await updateUser(db, user.id, {
+        avatar_url: 'https://example.com/avatar.png',
+      });
 
       expect(updated).not.toBeNull();
       expect(updated!.avatar_url).toBe('https://example.com/avatar.png');

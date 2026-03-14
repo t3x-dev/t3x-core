@@ -6,6 +6,7 @@
  * - POST /v1/projects/:id/backfill-merkle (Backfill missing merkle roots)
  */
 
+import type { AnyDB } from '@t3x-dev/storage';
 import {
   commitsV4,
   createCommitV4,
@@ -13,7 +14,6 @@ import {
   findProjects,
   insertProject,
 } from '@t3x-dev/storage';
-import type { AnyDB } from '@t3x-dev/storage';
 import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';

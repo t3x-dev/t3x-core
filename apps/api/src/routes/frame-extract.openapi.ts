@@ -154,14 +154,16 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
       trackedUsage.outputTokens = 0;
       trackedModel = tracked.id;
       const extractor = new FrameExtractor(tracked);
-      return extractor.extract({
-        turns: extractionTurns,
-        snapshot: currentSnapshot.frames.length > 0 ? currentSnapshot : undefined,
-      }).then((r) => {
-        trackedUsage.inputTokens = usage.inputTokens;
-        trackedUsage.outputTokens = usage.outputTokens;
-        return r;
-      });
+      return extractor
+        .extract({
+          turns: extractionTurns,
+          snapshot: currentSnapshot.frames.length > 0 ? currentSnapshot : undefined,
+        })
+        .then((r) => {
+          trackedUsage.inputTokens = usage.inputTokens;
+          trackedUsage.outputTokens = usage.outputTokens;
+          return r;
+        });
     });
 
     // 6. Check extraction result

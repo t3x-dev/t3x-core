@@ -78,7 +78,7 @@ export function ConversationModelChip({
           className="inline-flex items-center gap-1 rounded-full border border-[var(--stroke-divider)] bg-[var(--hover-bg)] px-2 py-0.5 text-[11px] text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface-raised)] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <span className="truncate max-w-[140px]">
-            {hasOverride ? modelLabel ?? '...' : 'Project default'}
+            {hasOverride ? (modelLabel ?? '...') : 'Project default'}
           </span>
           <ChevronDown size={10} className="shrink-0 opacity-60" />
         </button>

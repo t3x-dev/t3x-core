@@ -1,4 +1,4 @@
-import { beforeAll, afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { LLMProviderError } from '../../llm/types';
 import { OpenAIProvider } from '../../providers/llm/openai';
@@ -37,10 +37,13 @@ describe('OpenAIProvider.generateFromPrompt', () => {
       Promise.resolve({
         ok: true,
         status: 200,
-        text: () => Promise.resolve(JSON.stringify({
-          choices: [{ message: { content: 'Hello!' } }],
-          usage: { prompt_tokens: 10, completion_tokens: 5 },
-        })),
+        text: () =>
+          Promise.resolve(
+            JSON.stringify({
+              choices: [{ message: { content: 'Hello!' } }],
+              usage: { prompt_tokens: 10, completion_tokens: 5 },
+            })
+          ),
       })
     );
 
@@ -70,10 +73,13 @@ describe('OpenAIProvider.generateStructured', () => {
       Promise.resolve({
         ok: true,
         status: 200,
-        text: () => Promise.resolve(JSON.stringify({
-          choices: [{ message: { content: '{"name": "Alice", "age": 30}' } }],
-          usage: { prompt_tokens: 20, completion_tokens: 15 },
-        })),
+        text: () =>
+          Promise.resolve(
+            JSON.stringify({
+              choices: [{ message: { content: '{"name": "Alice", "age": 30}' } }],
+              usage: { prompt_tokens: 20, completion_tokens: 15 },
+            })
+          ),
       })
     );
 
@@ -102,21 +108,22 @@ describe('OpenAIProvider.generateStructured', () => {
       Promise.resolve({
         ok: true,
         status: 200,
-        text: () => Promise.resolve(JSON.stringify({
-          choices: [{ message: { content: 'not valid json' } }],
-          usage: { prompt_tokens: 10, completion_tokens: 8 },
-        })),
+        text: () =>
+          Promise.resolve(
+            JSON.stringify({
+              choices: [{ message: { content: 'not valid json' } }],
+              usage: { prompt_tokens: 10, completion_tokens: 8 },
+            })
+          ),
       })
     );
 
     const provider = new OpenAIProvider({ apiKey: 'test-key' });
     const schema = z.object({ name: z.string(), age: z.number() });
     await expect(
-      provider.generateStructured(
-        { messages: [{ role: 'user', content: 'Extract' }] },
-        schema,
-        { model: 'gpt-4o' }
-      )
+      provider.generateStructured({ messages: [{ role: 'user', content: 'Extract' }] }, schema, {
+        model: 'gpt-4o',
+      })
     ).rejects.toThrow(LLMProviderError);
   });
 });
