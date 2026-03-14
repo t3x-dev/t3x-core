@@ -1,4 +1,3 @@
-import type { PGlite } from '@electric-sql/pglite';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
 import { insertConversation } from '../queries/conversations';
@@ -13,7 +12,6 @@ import { createTestDB, sleep, testData } from './setup';
 
 describe('Delta Log Storage', () => {
   let db: AnyDB;
-  let _client: PGlite;
   let cleanup: () => Promise<void>;
   let testProjectId: string;
   let testConversationId: string;
@@ -21,7 +19,6 @@ describe('Delta Log Storage', () => {
   beforeAll(async () => {
     const setup = await createTestDB();
     db = setup.db;
-    _client = setup.client;
     cleanup = setup.cleanup;
 
     const project = await insertProject(db, testData.project({ name: 'DeltaLog Test' }));

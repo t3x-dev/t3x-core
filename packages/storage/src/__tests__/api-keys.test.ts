@@ -1,7 +1,7 @@
 /**
  * API Keys Storage Tests
  *
- * Tests all API key CRUD operations using PGLite.
+ * Tests all API key CRUD operations.
  * API keys authenticate requests to the T3X API.
  *
  * Security model:
@@ -12,8 +12,6 @@
  * @see packages/storage/src/queries/api-keys.ts
  */
 
-import { PGlite } from '@electric-sql/pglite';
-import { drizzle } from 'drizzle-orm/pglite';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
 import {
@@ -25,43 +23,17 @@ import {
   touchLastUsed,
 } from '../queries/api-keys';
 import { insertProject } from '../queries/projects';
-import * as schema from '../schema';
-import { CREATE_TABLES_SQL, testData } from './setup';
-
-/**
- * SQL to create the api_keys table (defined in schema-v4.ts but not in
- * the default CREATE_TABLES_SQL used by storage tests).
- */
-const CREATE_API_KEYS_TABLE_SQL = `
-CREATE TABLE IF NOT EXISTS api_keys (
-  id TEXT PRIMARY KEY,
-  key_prefix TEXT NOT NULL,
-  key_hash TEXT NOT NULL,
-  name TEXT NOT NULL,
-  project_id TEXT REFERENCES projects(project_id) ON DELETE CASCADE,
-  user_id TEXT,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  last_used_at TIMESTAMPTZ,
-  revoked_at TIMESTAMPTZ
-);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys(key_hash);
-CREATE INDEX IF NOT EXISTS idx_api_keys_project ON api_keys(project_id);
-`;
+import { createTestDB, testData } from './setup';
 
 describe('API Keys Storage', () => {
   let db: AnyDB;
-  let client: PGlite;
   let cleanup: () => Promise<void>;
   let testProjectId: string;
 
   beforeAll(async () => {
-    client = new PGlite();
-    db = drizzle(client, { schema }) as unknown as AnyDB;
-    await client.exec(CREATE_TABLES_SQL);
-    await client.exec(CREATE_API_KEYS_TABLE_SQL);
-    cleanup = async () => {
-      await client.close();
-    };
+    const setup = await createTestDB();
+    db = setup.db;
+    cleanup = setup.cleanup;
 
     // Create a test project for project-scoped keys
     const project = await insertProject(db, testData.project({ name: 'API Keys Test Project' }));

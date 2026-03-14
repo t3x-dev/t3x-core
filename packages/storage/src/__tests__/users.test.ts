@@ -1,55 +1,28 @@
 /**
  * Users & Accounts Storage Tests
  *
- * Tests updateUser query using PGLite.
+ * Tests updateUser query.
  *
  * @see packages/storage/src/queries/users.ts
  */
 
-import { PGlite } from '@electric-sql/pglite';
-import { drizzle } from 'drizzle-orm/pglite';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
 import { createUser, findUserById, updateUser } from '../queries/users';
-import * as schema from '../schema';
-
-/**
- * SQL to create users & accounts tables (V4 schema).
- */
-const CREATE_USERS_TABLES_SQL = `
-CREATE TABLE IF NOT EXISTS users (
-  id TEXT PRIMARY KEY,
-  email TEXT,
-  email_verified BOOLEAN NOT NULL DEFAULT FALSE,
-  name TEXT,
-  avatar_url TEXT,
-  username TEXT UNIQUE,
-  password_hash TEXT,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS accounts (
-  id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  provider TEXT NOT NULL,
-  provider_account_id TEXT NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_accounts_provider ON accounts(provider, provider_account_id);
-`;
+import { createTestDB } from './setup';
 
 describe('Users Storage', () => {
   let db: AnyDB;
-  let client: PGlite;
+  let cleanup: () => Promise<void>;
 
   beforeAll(async () => {
-    client = new PGlite();
-    db = drizzle(client, { schema }) as unknown as AnyDB;
-    await client.exec(CREATE_USERS_TABLES_SQL);
+    const setup = await createTestDB();
+    db = setup.db;
+    cleanup = setup.cleanup;
   });
 
   afterAll(async () => {
-    await client.close();
+    await cleanup();
   });
 
   describe('updateUser', () => {

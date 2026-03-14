@@ -1,4 +1,4 @@
-import type { PGlite } from '@electric-sql/pglite';
+import type postgres from 'postgres';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
 import { insertProject } from '../queries/projects';
@@ -18,14 +18,14 @@ import { createTestDB, testData } from './setup';
 
 describe('Runs Storage', () => {
   let db: AnyDB;
-  let client: PGlite;
+  let sql: postgres.Sql;
   let cleanup: () => Promise<void>;
   let testProjectId: string;
 
   beforeAll(async () => {
     const setup = await createTestDB();
     db = setup.db;
-    client = setup.client;
+    sql = setup.sql;
     cleanup = setup.cleanup;
 
     const project = await insertProject(db, testData.project({ name: 'Runs Test' }));
@@ -240,7 +240,7 @@ describe('Runs Storage', () => {
       await insertRun(db, { run_id: 'run_timeout_1', status: 'running' });
       // Set updatedAt to 10 minutes ago via direct SQL
       const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-      await client.exec(
+      await sql.unsafe(
         `UPDATE runs SET updated_at = '${tenMinAgo}' WHERE run_id = 'run_timeout_1'`
       );
 
@@ -260,7 +260,7 @@ describe('Runs Storage', () => {
     it('does not return completed runs', async () => {
       await insertRun(db, { run_id: 'run_timeout_3', status: 'completed' });
       const oldTime = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-      await client.exec(`UPDATE runs SET updated_at = '${oldTime}' WHERE run_id = 'run_timeout_3'`);
+      await sql.unsafe(`UPDATE runs SET updated_at = '${oldTime}' WHERE run_id = 'run_timeout_3'`);
 
       const timedOut = await getTimedOutRuns(db, 5 * 60 * 1000);
       const found = timedOut.find((r) => r.runId === 'run_timeout_3');

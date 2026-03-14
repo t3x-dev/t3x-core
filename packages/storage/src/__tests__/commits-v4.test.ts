@@ -7,7 +7,6 @@
  * @see docs/specification/semantic-layer-architecture.md
  */
 
-import type { PGlite } from '@electric-sql/pglite';
 import type { CommitAuthorV4, CommitV4, SentenceV4 } from '@t3x-dev/core';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -33,14 +32,12 @@ import { createTestDB, testData } from './setup';
 
 describe('Commits V4 Storage', () => {
   let db: AnyDB;
-  let _client: PGlite;
   let cleanup: () => Promise<void>;
   let testProjectId: string;
 
   beforeAll(async () => {
     const setup = await createTestDB();
     db = setup.db;
-    _client = setup.client;
     cleanup = setup.cleanup;
 
     // Create a test project
