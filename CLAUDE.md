@@ -162,7 +162,7 @@ apps/cli (@t3x-dev/cli)
 ### Storage Architecture
 
 T3X uses PostgreSQL (via Drizzle ORM):
-- **PGLite** for local development (PostgreSQL WASM, data in `.t3x/database/`)
+- **Embedded PostgreSQL** for local development
 - **Postgres** for Docker/production
 - **Supabase** adapter available
 
@@ -300,7 +300,7 @@ All consumers import from `canvasStore.ts` (re-exports selectors/types for backw
 
 ## Testing
 
-All packages use **vitest** with PGLite for isolated test databases:
+All packages use **vitest** with embedded PostgreSQL for isolated test databases:
 
 ```typescript
 // Test setup pattern
@@ -578,7 +578,6 @@ Before writing code, must first answer: Does the project already have something 
 | API call fails | Assuming API is in Next.js (old architecture) | API is in `apps/api` (port 8000), WebUI is in `apps/web` (port 3000) |
 | Tests can't find module | Dependency packages not built first | Run `pnpm build:core && pnpm build:storage` first |
 | Tailwind styles not working | Global styles in `globals.css` (e.g., `button { background: none }`) not in `@layer`, takes precedence over Tailwind utility classes | Global reset styles must be in `@layer base`, or remove conflicting properties |
-| PGLite data lost after restart | Closing terminal directly or `kill -9` causes improper database shutdown, file corruption | Use `pnpm stop:api` for graceful stop, or `kill -TERM $(lsof -ti:8000)` |
 
 ## Prohibited Actions
 
@@ -625,9 +624,6 @@ lsof -i :3000                    # WebUI port
 
 # View API logs (real-time)
 pnpm dev:api 2>&1 | tee api.log
-
-# Database status (PGLite files)
-ls -la .t3x/database/
 
 # Clean rebuild
 pnpm clean && pnpm install && pnpm build
