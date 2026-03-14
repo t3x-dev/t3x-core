@@ -11,9 +11,8 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { Loader2 } from 'lucide-react';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { getLayoutedElements } from '@/lib/elkLayout';
-import { cn } from '@/lib/utils';
 import { useExtractionPanelStore } from '@/store/extractionPanelStore';
 
 // ── Inline mini node ──
@@ -21,21 +20,104 @@ import { useExtractionPanelStore } from '@/store/extractionPanelStore';
 interface MiniFrameNodeData {
   type: string;
   summary: string;
-  isNew?: boolean;
+  changeType?: 'add' | 'update' | 'remove';
+  isConfirmed?: boolean;
+  confidence?: number;
+  frameId?: string;
+  onConfirmToggle?: (frameId: string) => void;
   [key: string]: unknown;
 }
 
+const CHANGE_BORDER_COLORS: Record<string, string> = {
+  add: '#4ade80',
+  update: '#facc15',
+  remove: '#f87171',
+};
+
 function MiniFrameNode({ data }: { data: MiniFrameNodeData }) {
+  const { changeType, isConfirmed, confidence, frameId, onConfirmToggle } = data;
+
+  const borderColor =
+    changeType && CHANGE_BORDER_COLORS[changeType]
+      ? CHANGE_BORDER_COLORS[changeType]
+      : 'var(--stroke-default)';
+
+  const isRemoved = changeType === 'remove';
+  const lowConfidence = typeof confidence === 'number' && confidence < 0.5;
+  const borderStyle = isRemoved || (lowConfidence && !isConfirmed) ? 'dashed' : 'solid';
+  const opacity = isRemoved ? 0.5 : 1;
+
+  function handleConfirmClick(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!frameId || !onConfirmToggle) return;
+    onConfirmToggle(frameId);
+  }
+
   return (
     <div
-      className={cn(
-        'rounded-lg border px-3 py-2 text-xs bg-[var(--surface-panel)]',
-        data.isNew && 'border-[var(--accent-commit)] ring-1 ring-[var(--accent-commit)]/30'
-      )}
-      style={{ borderColor: data.isNew ? undefined : 'var(--stroke-default)' }}
+      style={{
+        borderColor,
+        borderStyle,
+        opacity,
+        display: 'flex',
+        alignItems: 'center',
+        gap: '6px',
+        borderWidth: '1px',
+        borderRadius: '8px',
+        padding: '6px 10px',
+        fontSize: '12px',
+        background: 'var(--surface-panel)',
+      }}
     >
-      <div className="font-semibold text-[var(--text-primary)]">{data.type}</div>
-      <div className="text-[var(--text-tertiary)] truncate max-w-[200px]">{data.summary}</div>
+      {/* Confirm button */}
+      <button
+        type="button"
+        onClick={handleConfirmClick}
+        title={isConfirmed ? 'Unconfirm frame' : 'Confirm frame'}
+        style={{
+          width: '16px',
+          height: '16px',
+          minWidth: '16px',
+          borderRadius: '3px',
+          border: `1px solid ${isConfirmed ? '#4ade80' : '#6b7280'}`,
+          background: isConfirmed ? 'rgba(74,222,128,0.15)' : 'transparent',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+          padding: 0,
+          fontSize: '10px',
+          color: isConfirmed ? '#4ade80' : 'transparent',
+          flexShrink: 0,
+        }}
+      >
+        ✓
+      </button>
+
+      {/* Text content */}
+      <div>
+        <div
+          style={{
+            fontWeight: 600,
+            color: 'var(--text-primary)',
+            textDecoration: isRemoved ? 'line-through' : 'none',
+          }}
+        >
+          {data.type}
+        </div>
+        <div
+          style={{
+            color: 'var(--text-tertiary)',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            maxWidth: '180px',
+            textDecoration: isRemoved ? 'line-through' : 'none',
+          }}
+        >
+          {data.summary}
+        </div>
+      </div>
     </div>
   );
 }
@@ -46,9 +128,36 @@ const nodeTypes = { miniFrame: MiniFrameNode };
 
 function FrameGraphMiniInner() {
   const draft = useExtractionPanelStore((s) => s.draft);
+  const lastDeltaChanges = useExtractionPanelStore((s) => s.lastDeltaChanges);
+  const confirmedFrameIds = useExtractionPanelStore((s) => s.confirmedFrameIds);
+  const confirmFrame = useExtractionPanelStore((s) => s.confirmFrame);
+  const unconfirmFrame = useExtractionPanelStore((s) => s.unconfirmFrame);
+
   const [nodes, setNodes, onNodesChange] = useNodesState([] as Node[]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([] as Edge[]);
   const { fitView } = useReactFlow();
+
+  // Build changeMap from lastDeltaChanges
+  const changeMap = useMemo(() => {
+    const map = new Map<string, 'add' | 'update' | 'remove'>();
+    for (const c of lastDeltaChanges) {
+      if (c.action === 'add') map.set(c.frame.id, 'add');
+      else if (c.action === 'update') map.set(c.target, 'update');
+      else if (c.action === 'remove') map.set(c.target, 'remove');
+    }
+    return map;
+  }, [lastDeltaChanges]);
+
+  const handleConfirmToggle = useMemo(
+    () => (frameId: string) => {
+      if (confirmedFrameIds[frameId]) {
+        unconfirmFrame(frameId);
+      } else {
+        confirmFrame(frameId);
+      }
+    },
+    [confirmedFrameIds, confirmFrame, unconfirmFrame]
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -61,11 +170,23 @@ function FrameGraphMiniInner() {
           slotEntries.length > 0
             ? `${slotEntries[0][0]}: ${String(slotEntries[0][1])}`
             : '(no slots)';
+
+        const changeType = changeMap.get(frame.id);
+        const isConfirmed = Boolean(confirmedFrameIds[frame.id]);
+
         return {
           id: frame.id,
           type: 'miniFrame',
           position: { x: 0, y: 0 },
-          data: { type: frame.type, summary },
+          data: {
+            type: frame.type,
+            summary,
+            changeType,
+            isConfirmed,
+            confidence: frame.confidence,
+            frameId: frame.id,
+            onConfirmToggle: handleConfirmToggle,
+          },
         };
       });
 
@@ -102,7 +223,7 @@ function FrameGraphMiniInner() {
       cancelled = true;
       clearTimeout(fitTimer);
     };
-  }, [draft, setNodes, setEdges, fitView]);
+  }, [draft, changeMap, confirmedFrameIds, handleConfirmToggle, setNodes, setEdges, fitView]);
 
   const isExtracting = useExtractionPanelStore((s) => s.isExtracting);
 
