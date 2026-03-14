@@ -1,6 +1,7 @@
 'use client';
 
 import { useParams, useSearchParams } from 'next/navigation';
+import { ExtractionPanel } from '@/components/chat/ExtractionPanel';
 import { ChatWorkspace } from '@/components/chat/ChatWorkspace';
 
 export default function ConversationPage() {
@@ -15,7 +16,7 @@ export default function ConversationPage() {
         firstMessage={firstMessage ?? undefined}
         className="flex-1"
       />
-      {/* ExtractionPanel will be added in Task 8 */}
+      <ExtractionPanel />
     </div>
   );
 }
