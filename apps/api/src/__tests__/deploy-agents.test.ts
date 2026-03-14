@@ -8,14 +8,14 @@ import {
   insertDeployAgent,
   insertProject,
 } from '@t3x-dev/storage';
-import type { PGLiteDB } from '@t3x-dev/storage/pglite';
+import type { AnyDB } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
 
 type ApiResponse = Record<string, unknown>;
 
-let mockDB: PGLiteDB;
+let mockDB: AnyDB;
 
 vi.mock('../lib/db', () => ({
   getDB: vi.fn(() => Promise.resolve(mockDB)),

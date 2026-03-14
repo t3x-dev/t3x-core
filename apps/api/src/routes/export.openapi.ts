@@ -12,7 +12,7 @@ import {
   findConversationsByProject,
   findTurnsByProject,
   listCommitsV3,
-} from '@t3x-dev/storage/pglite';
+} from '@t3x-dev/storage';
 import * as crypto from 'crypto';
 import { getDB } from '../lib/db';
 import { toDeltaLogEntries } from '../lib/delta-log-utils';

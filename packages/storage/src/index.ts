@@ -4,24 +4,23 @@
  * T3X Storage - PostgreSQL persistence layer with Drizzle ORM.
  *
  * Supports multiple backends:
- * - PGLite: Local development (WASM PostgreSQL)
- * - PostgreSQL: Docker/production
- * - Supabase: Cloud deployment
+ * - Embedded PostgreSQL: Local development (crash-safe, via @t3x-dev/storage/embedded)
+ * - PostgreSQL: Docker/production (postgres.js driver)
+ * - Supabase: Cloud deployment (via @t3x-dev/storage/supabase)
  *
  * Usage:
  *
  * ```typescript
- * // Local development
- * import { createPGLiteStorage, insertProject } from '@t3x-dev/storage';
- * const db = await createPGLiteStorage({ dataDir: '.t3x/database' });
- * const project = await insertProject(db, { name: 'My Project' });
+ * // Local development (embedded PostgreSQL)
+ * import { createEmbeddedStorage } from '@t3x-dev/storage/embedded';
+ * const db = await createEmbeddedStorage({ dataDir: '.t3x/pg-data' });
  *
- * // Docker
+ * // Docker / production
  * import { createPostgresStorage } from '@t3x-dev/storage';
  * const db = await createPostgresStorage({ connectionString: process.env.DATABASE_URL });
  *
  * // Supabase
- * import { createSupabaseStorage } from '@t3x-dev/storage';
+ * import { createSupabaseStorage } from '@t3x-dev/storage/supabase';
  * const db = await createSupabaseStorage({ connectionString: process.env.SUPABASE_URL });
  * ```
  */

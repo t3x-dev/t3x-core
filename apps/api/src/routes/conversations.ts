@@ -28,7 +28,7 @@ import {
   insertConversation,
   setConversationContext,
   updateConversation,
-} from '@t3x-dev/storage/pglite';
+} from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { formatContextForExport } from '../lib/context-formatter';
 import { getDB } from '../lib/db';

@@ -1,14 +1,16 @@
 /**
  * Test Setup
  *
- * Provides isolated PGLite database for each test file.
- * Each test file gets a fresh in-memory database.
+ * Provides isolated PostgreSQL database for each test file.
+ * Each test file gets a fresh database dropped after the test.
+ *
+ * Requires the embedded-postgres globalSetup to be running (see globalSetup.ts).
+ * If DATABASE_URL is set, connects to that instead (CI with Docker PG).
  */
 
-import { PGlite } from '@electric-sql/pglite';
-import { drizzle } from 'drizzle-orm/pglite';
+import postgres from 'postgres';
 import type { AnyDB } from '../adapters';
-import * as schema from '../schema';
+import { closePostgresStorage, createPostgresStorage } from '../adapters/postgres';
 
 /**
  * SQL to create all tables (matching schema.ts)
@@ -569,51 +571,89 @@ CREATE INDEX IF NOT EXISTS idx_sv_tsv ON sentence_vectors USING GIN (tsv);
 UPDATE sentence_vectors SET tsv = to_tsvector('simple', text) WHERE tsv IS NULL;
 `;
 
+const TEST_PORT = parseInt(process.env.T3X_TEST_PG_PORT || '5446', 10);
+const TEST_HOST = 'localhost';
+const TEST_USER = 'postgres';
+const TEST_PASSWORD = 'password';
+
+function getAdminUrl(): string {
+  if (process.env.DATABASE_URL) {
+    // CI: connect to the admin database from DATABASE_URL but switch to postgres db
+    const url = new URL(process.env.DATABASE_URL);
+    url.pathname = '/postgres';
+    return url.toString();
+  }
+  return `postgresql://${TEST_USER}:${TEST_PASSWORD}@${TEST_HOST}:${TEST_PORT}/postgres`;
+}
+
+function getDbUrl(dbName: string): string {
+  if (process.env.DATABASE_URL) {
+    const url = new URL(process.env.DATABASE_URL);
+    url.pathname = `/${dbName}`;
+    return url.toString();
+  }
+  return `postgresql://${TEST_USER}:${TEST_PASSWORD}@${TEST_HOST}:${TEST_PORT}/${dbName}`;
+}
+
 /**
- * Create a fresh test database
- * Each call creates a new in-memory PGLite instance
+ * Create a fresh isolated test database.
+ * Each call creates a new PostgreSQL database, runs schema setup, and returns
+ * a Drizzle instance. The cleanup function drops the database on teardown.
+ *
+ * `sql` is a raw postgres.js Sql instance for direct SQL execution in tests
+ * that need to bypass the ORM (e.g., to backdate timestamps).
  */
 export async function createTestDB(): Promise<{
   db: AnyDB;
-  client: PGlite;
+  /** Raw postgres.js Sql for direct SQL execution in tests */
+  sql: postgres.Sql;
   cleanup: () => Promise<void>;
 }> {
-  // Try to load pgvector extension (optional)
-  // biome-ignore lint/suspicious/noExplicitAny: PGLite extension types are dynamic
-  let extensions: any;
+  const suffix = Math.random().toString(36).slice(2, 10);
+  const dbName = `test_${suffix}`;
+
+  // Create the database via admin connection
+  const adminSql = postgres(getAdminUrl(), { max: 1 });
+  await adminSql.unsafe(`CREATE DATABASE "${dbName}"`);
+  await adminSql.end();
+
+  // Connect to the new database and run schema setup
+  const schemaSql = postgres(getDbUrl(dbName), { max: 1 });
+  await schemaSql.unsafe(CREATE_TABLES_SQL);
+
+  // Try to create vector tables (graceful — skipped if pgvector unavailable)
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { vector } = require('@electric-sql/pglite/vector');
-    extensions = { vector };
-  } catch {
-    // pgvector not available
-  }
-
-  // Create in-memory PGLite (with pgvector if available)
-  const client = new PGlite({
-    ...(extensions ? { extensions } : {}),
-  });
-
-  // Create Drizzle instance
-  const db = drizzle(client, { schema }) as unknown as AnyDB;
-
-  // Create core tables
-  await client.exec(CREATE_TABLES_SQL);
-
-  // Try to create vector tables (graceful — skipped if vector unavailable)
-  try {
-    await client.exec('CREATE EXTENSION IF NOT EXISTS vector;');
-    await client.exec(CREATE_VECTOR_TABLES_SQL);
+    await schemaSql.unsafe('CREATE EXTENSION IF NOT EXISTS vector;');
+    await schemaSql.unsafe(CREATE_VECTOR_TABLES_SQL);
   } catch {
     // pgvector not available — sentence vector tests will be skipped
   }
+  await schemaSql.end();
 
-  // Cleanup function
+  // Keep a raw sql connection for tests that need direct SQL access
+  const rawSql = postgres(getDbUrl(dbName), { max: 5 });
+
+  // Create Drizzle instance via postgres adapter
+  const db = await createPostgresStorage({ connectionString: getDbUrl(dbName) });
+
+  // Cleanup: close connection and drop the database
   const cleanup = async () => {
-    await client.close();
+    await closePostgresStorage();
+    await rawSql.end();
+
+    const dropSql = postgres(getAdminUrl(), { max: 1 });
+    try {
+      // Terminate any remaining connections to the test database
+      await dropSql.unsafe(
+        `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${dbName}' AND pid <> pg_backend_pid()`
+      );
+      await dropSql.unsafe(`DROP DATABASE IF EXISTS "${dbName}"`);
+    } finally {
+      await dropSql.end();
+    }
   };
 
-  return { db, client, cleanup };
+  return { db, sql: rawSql, cleanup };
 }
 
 /**

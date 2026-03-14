@@ -18,7 +18,7 @@ import {
   EmbeddingProviderError,
   sha256,
 } from '@t3x-dev/core';
-import { findConversationById, findTurnsByConversation } from '@t3x-dev/storage/pglite';
+import { findConversationById, findTurnsByConversation } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { ProxyAgent, fetch as undiciFetch } from 'undici';
 import { getDB } from '../lib/db';

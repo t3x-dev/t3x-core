@@ -10,8 +10,8 @@
 
 import type { SemanticPoint } from '@t3x-dev/core';
 import { insertProject } from '@t3x-dev/storage';
-import type { PGLiteDB } from '@t3x-dev/storage/pglite';
-import { insertDraftV3, updateDraftV3 } from '@t3x-dev/storage/pglite';
+import type { AnyDB } from '@t3x-dev/storage';
+import { insertDraftV3, updateDraftV3 } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
@@ -19,7 +19,7 @@ import { setupTestDB, testData } from './setup';
 // biome-ignore lint/suspicious/noExplicitAny: test helper
 type ApiResponse = any;
 
-let mockDB: PGLiteDB;
+let mockDB: AnyDB;
 
 vi.mock('../lib/db', () => ({
   getDB: vi.fn(() => Promise.resolve(mockDB)),
@@ -45,8 +45,8 @@ vi.mock('@t3x-dev/core', async (importOriginal) => {
 });
 
 // Mock insertExtractionFeedback while keeping all other storage functions real
-vi.mock('@t3x-dev/storage/pglite', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@t3x-dev/storage/pglite')>();
+vi.mock('@t3x-dev/storage', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@t3x-dev/storage')>();
   return {
     ...actual,
     insertExtractionFeedback: mockInsertExtractionFeedback,

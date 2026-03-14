@@ -29,7 +29,7 @@ import {
   type RegistryConfig,
   type TurnInput,
 } from '@t3x-dev/core';
-import { findProjectById, getGlobalSetting, setGlobalSetting } from '@t3x-dev/storage/pglite';
+import { findProjectById, getGlobalSetting, setGlobalSetting } from '@t3x-dev/storage';
 import { getDB } from './db';
 
 // ═══════════════════════════════════════════════════════════════════════════

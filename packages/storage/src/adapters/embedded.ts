@@ -4,7 +4,7 @@
  * Downloads and manages a real PostgreSQL binary for local development.
  * Delegates to the existing postgres adapter for Drizzle/schema operations.
  *
- * Advantages over PGLite:
+ * Advantages:
  * - Crash-safe: PostgreSQL WAL recovery handles ungraceful shutdowns
  * - Real PostgreSQL: No WASM quirks, full feature parity
  * - Independent process: Database survives Node.js crashes

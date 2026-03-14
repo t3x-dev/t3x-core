@@ -16,7 +16,7 @@ import {
   findTurnsByConversation,
   insertDraft,
   updateDraft,
-} from '@t3x-dev/storage/pglite';
+} from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { getDB } from '../lib/db';
 import { toDeltaLogEntries } from '../lib/delta-log-utils';

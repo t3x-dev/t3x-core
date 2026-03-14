@@ -5,7 +5,7 @@
  */
 
 import { insertProject } from '@t3x-dev/storage';
-import type { PGLiteDB } from '@t3x-dev/storage/pglite';
+import type { AnyDB } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
@@ -14,7 +14,7 @@ import { setupTestDB, testData } from './setup';
 type ApiResponse = any;
 
 // Mock the database module before importing routes
-let mockDB: PGLiteDB;
+let mockDB: AnyDB;
 
 vi.mock('../lib/db', () => ({
   getDB: vi.fn(() => Promise.resolve(mockDB)),
@@ -471,7 +471,7 @@ describe('Drafts V3 Routes', () => {
       const draftId = await createDraftWithSentences('Preview Committed');
 
       // Mark as committed directly via storage
-      const { commitDraftV3 } = await import('@t3x-dev/storage/pglite');
+      const { commitDraftV3 } = await import('@t3x-dev/storage');
       await commitDraftV3(mockDB, draftId, 'sha256:previewtest');
 
       mockIsGenerationConfigured.mockReturnValue(true);
@@ -616,7 +616,7 @@ describe('Drafts V3 Routes', () => {
       const draftId = await createDraftWithSentences('Already Committed');
 
       // Commit via storage directly
-      const { commitDraftV3 } = await import('@t3x-dev/storage/pglite');
+      const { commitDraftV3 } = await import('@t3x-dev/storage');
       await commitDraftV3(mockDB, draftId, 'sha256:alreadycommitted');
 
       const res = await app.request(`/v1/drafts/${draftId}/commit`, {
@@ -651,7 +651,7 @@ describe('Drafts V3 Routes', () => {
       // Add sentences and commit (we need to manually commit via storage since commit
       // endpoint requires actual commits; instead we use the fork validation path)
       // We'll use the PATCH + storage layer to mark as committed
-      const { commitDraftV3 } = await import('@t3x-dev/storage/pglite');
+      const { commitDraftV3 } = await import('@t3x-dev/storage');
       await commitDraftV3(mockDB, draftId, 'sha256:forktest');
 
       // Fork

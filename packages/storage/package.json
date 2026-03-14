@@ -11,11 +11,6 @@
       "import": "./dist/index.js",
       "require": "./dist/index.js"
     },
-    "./pglite": {
-      "types": "./dist/pglite.d.ts",
-      "import": "./dist/pglite.js",
-      "require": "./dist/pglite.js"
-    },
     "./postgres": {
       "types": "./dist/postgres.d.ts",
       "import": "./dist/postgres.js",
@@ -56,7 +51,6 @@
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "@electric-sql/pglite": "^0.3.14",
     "@t3x-dev/core": "workspace:*",
     "drizzle-orm": "^0.38.3",
     "embedded-postgres": "^18.3.0-beta.16",
@@ -77,7 +71,6 @@
     "storage",
     "drizzle",
     "postgres",
-    "pglite",
     "supabase"
   ],
   "repository": {

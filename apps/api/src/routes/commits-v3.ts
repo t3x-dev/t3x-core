@@ -14,7 +14,7 @@ import {
   getCommitV3,
   listCommitsV3,
   ParentNotFoundError,
-} from '@t3x-dev/storage/pglite';
+} from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { getAuthorFromContext } from '../lib/auth';
 import { getDB } from '../lib/db';

@@ -96,7 +96,7 @@ describe('registerStatusCommands', () => {
         version: '1.0.0',
         environment: 'development',
         uptime_seconds: 3600,
-        database: { type: 'pglite', connected: true },
+        database: { type: 'embedded', connected: true },
       });
 
       const program = createProgram();

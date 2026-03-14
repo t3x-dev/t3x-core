@@ -4,7 +4,6 @@
  * Tests for auto-draft creation, lookup by conversation, and promotion.
  */
 
-import type { PGlite } from '@electric-sql/pglite';
 import type { DraftSentence } from '@t3x-dev/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
@@ -31,14 +30,12 @@ function makeSentences(texts: string[]): DraftSentence[] {
 
 describe('Auto-Draft Storage (Upgrade #7)', () => {
   let db: AnyDB;
-  let _client: PGlite;
   let cleanup: () => Promise<void>;
   let projectId: string;
 
   beforeAll(async () => {
     const setup = await createTestDB();
     db = setup.db;
-    _client = setup.client;
     cleanup = setup.cleanup;
 
     const project = await insertProject(db, testData.project({ name: 'Auto Draft Test' }));

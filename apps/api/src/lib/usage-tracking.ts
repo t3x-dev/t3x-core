@@ -9,7 +9,7 @@
  */
 
 import type { LLMProvider } from '@t3x-dev/core';
-import { type RecordUsageInput, recordUsage } from '@t3x-dev/storage/pglite';
+import { type RecordUsageInput, recordUsage } from '@t3x-dev/storage';
 import { pinoLogger } from '../middleware/logger';
 
 export type { RecordUsageInput };

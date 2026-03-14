@@ -5,7 +5,6 @@
  * Share tokens grant read-only access to entities via public URLs.
  */
 
-import type { PGlite } from '@electric-sql/pglite';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
 import { createCommitV4 } from '../queries/commits-v4';
@@ -22,7 +21,6 @@ import { createTestDB, testData } from './setup';
 
 describe('Share Tokens Storage', () => {
   let db: AnyDB;
-  let _client: PGlite;
   let cleanup: () => Promise<void>;
   let testProjectId: string;
   let testLeafId: string;
@@ -31,7 +29,6 @@ describe('Share Tokens Storage', () => {
   beforeAll(async () => {
     const setup = await createTestDB();
     db = setup.db;
-    _client = setup.client;
     cleanup = setup.cleanup;
 
     // Create a test project

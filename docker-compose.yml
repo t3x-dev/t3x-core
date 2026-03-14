@@ -12,7 +12,7 @@
 #
 # Database Modes:
 #   Default (docker): Uses PostgreSQL container
-#   Local dev:        Uses PGLite (run webui directly with pnpm dev)
+#   Local dev:        Uses embedded PostgreSQL (run webui directly with pnpm dev)
 #   Cloud:            Uses Supabase (set SUPABASE_DATABASE_URL)
 #
 # Usage:

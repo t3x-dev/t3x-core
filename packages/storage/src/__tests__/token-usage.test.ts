@@ -1,53 +1,36 @@
 /**
  * Token Usage Storage Tests
  *
- * Tests for token_usage CRUD and aggregation queries using PGLite.
+ * Tests for token_usage CRUD and aggregation queries.
  *
  * @see packages/storage/src/queries/token-usage.ts
  */
 
-import { PGlite } from '@electric-sql/pglite';
-import { drizzle } from 'drizzle-orm/pglite';
+import type postgres from 'postgres';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
 import { insertProject } from '../queries/projects';
 import { estimateCost, getUsageSummary, getUsageTotal, recordUsage } from '../queries/token-usage';
-import * as schema from '../schema';
-import { CREATE_TABLES_SQL, testData } from './setup';
-
-const CREATE_TOKEN_USAGE_TABLE_SQL = `
-CREATE TABLE IF NOT EXISTS token_usage (
-  id TEXT PRIMARY KEY,
-  user_id TEXT,
-  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
-  endpoint TEXT NOT NULL,
-  model TEXT NOT NULL,
-  input_tokens INTEGER NOT NULL,
-  output_tokens INTEGER NOT NULL,
-  estimated_cost NUMERIC(10,6) DEFAULT 0,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-CREATE INDEX IF NOT EXISTS idx_token_usage_user_created ON token_usage(user_id, created_at);
-CREATE INDEX IF NOT EXISTS idx_token_usage_project_created ON token_usage(project_id, created_at);
-`;
+import { createTestDB, testData } from './setup';
 
 describe('Token Usage Storage', () => {
   let db: AnyDB;
-  let client: PGlite;
+  let sql: postgres.Sql;
+  let cleanup: () => Promise<void>;
   let testProjectId: string;
 
   beforeAll(async () => {
-    client = new PGlite();
-    db = drizzle(client, { schema }) as unknown as AnyDB;
-    await client.exec(CREATE_TABLES_SQL);
-    await client.exec(CREATE_TOKEN_USAGE_TABLE_SQL);
+    const setup = await createTestDB();
+    db = setup.db;
+    sql = setup.sql;
+    cleanup = setup.cleanup;
 
     const project = await insertProject(db, testData.project({ name: 'Token Usage Test' }));
     testProjectId = project.projectId;
   });
 
   afterAll(async () => {
-    await client.close();
+    await cleanup();
   });
 
   // ============================================================
@@ -133,20 +116,9 @@ describe('Token Usage Storage', () => {
 
       for (const day of days) {
         // Use raw SQL to set specific created_at
-        await client.query(
+        await sql.unsafe(
           `INSERT INTO token_usage (id, user_id, project_id, endpoint, model, input_tokens, output_tokens, estimated_cost, created_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-          [
-            `tu_test_${day.getTime()}`,
-            userId,
-            testProjectId,
-            'chat',
-            'claude-sonnet-4-5',
-            100,
-            50,
-            '0.001050',
-            day.toISOString(),
-          ]
+           VALUES ('tu_test_${day.getTime()}', '${userId}', '${testProjectId}', 'chat', 'claude-sonnet-4-5', 100, 50, 0.001050, '${day.toISOString()}')`
         );
       }
 
@@ -169,20 +141,9 @@ describe('Token Usage Storage', () => {
       const months = [new Date('2025-01-15T12:00:00Z'), new Date('2025-02-15T12:00:00Z')];
 
       for (const month of months) {
-        await client.query(
+        await sql.unsafe(
           `INSERT INTO token_usage (id, user_id, project_id, endpoint, model, input_tokens, output_tokens, estimated_cost, created_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-          [
-            `tu_month_${month.getTime()}`,
-            userId,
-            testProjectId,
-            'chat',
-            'gpt-4o',
-            500,
-            200,
-            '0.003250',
-            month.toISOString(),
-          ]
+           VALUES ('tu_month_${month.getTime()}', '${userId}', '${testProjectId}', 'chat', 'gpt-4o', 500, 200, 0.003250, '${month.toISOString()}')`
         );
       }
 
@@ -208,20 +169,9 @@ describe('Token Usage Storage', () => {
 
       // Insert 3 records
       for (let i = 0; i < 3; i++) {
-        await client.query(
+        await sql.unsafe(
           `INSERT INTO token_usage (id, user_id, project_id, endpoint, model, input_tokens, output_tokens, estimated_cost, created_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-          [
-            `tu_total_${i}`,
-            userId,
-            testProjectId,
-            'chat',
-            'claude-sonnet-4-5',
-            1000,
-            500,
-            '0.010500',
-            new Date('2025-03-15T12:00:00Z').toISOString(),
-          ]
+           VALUES ('tu_total_${i}', '${userId}', '${testProjectId}', 'chat', 'claude-sonnet-4-5', 1000, 500, 0.010500, '${new Date('2025-03-15T12:00:00Z').toISOString()}')`
         );
       }
 

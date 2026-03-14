@@ -31,9 +31,8 @@ const nextConfig: NextConfig = {
   // Transpile workspace packages
   transpilePackages: ['@t3x-dev/core', '@t3x-dev/storage'],
   // Externalize packages with binary/WASM files that bundler cannot handle
-  // - @electric-sql/pglite: has postgres.data WASM file
   // - postgres: has binary data files (for Docker/production)
-  serverExternalPackages: ['@electric-sql/pglite', 'postgres'],
+  serverExternalPackages: ['postgres'],
   // Next.js 16: Enable Turbopack (default bundler)
   turbopack: {},
   // Hide the dev indicator floating ball (N button) in development

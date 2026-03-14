@@ -17,7 +17,7 @@ import {
   findTurnsByConversation,
   insertTurn,
   type Turn,
-} from '@t3x-dev/storage/pglite';
+} from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { getDB } from '../lib/db';
 import { getNLPProvider } from '../lib/nlp';

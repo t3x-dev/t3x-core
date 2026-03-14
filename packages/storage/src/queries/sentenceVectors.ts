@@ -77,7 +77,7 @@ export async function upsertSentenceVector(
 
 /**
  * Batch insert/update sentence vectors.
- * Uses individual upserts for PGLite compatibility (no prepared statement batching).
+ * Uses individual upserts (no prepared statement batching).
  */
 export async function upsertSentenceVectorsBatch(
   db: AnyDB,

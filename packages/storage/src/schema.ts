@@ -2,7 +2,7 @@
  * T3X Storage Schema (Drizzle ORM)
  *
  * PostgreSQL schema definition that works with:
- * - PGLite (local development)
+ * - Embedded PostgreSQL (local development)
  * - PostgreSQL (Docker)
  * - Supabase (cloud)
  */
@@ -76,7 +76,7 @@ export const projects = pgTable(
  */
 export const globalSettings = pgTable('global_settings', {
   key: text('key').primaryKey(),
-  value: text('value').notNull(), // JSON as text (PGLite compatible)
+  value: text('value').notNull(), // JSON as text
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 

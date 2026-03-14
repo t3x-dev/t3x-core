@@ -4,7 +4,6 @@
  * Tests L2/L3 chain verification and L1 incremental verification.
  */
 
-import type { PGlite } from '@electric-sql/pglite';
 import type { CommitAuthorV4, SentenceV4 } from '@t3x-dev/core';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -27,14 +26,12 @@ function makeSentences(texts: string[]): SentenceV4[] {
 
 describe('Hash Chain Verification', () => {
   let db: AnyDB;
-  let _client: PGlite;
   let cleanup: () => Promise<void>;
   let projectId: string;
 
   beforeAll(async () => {
     const setup = await createTestDB();
     db = setup.db;
-    _client = setup.client;
     cleanup = setup.cleanup;
 
     const project = await insertProject(db, testData.project({ name: 'Verify Test Project' }));
