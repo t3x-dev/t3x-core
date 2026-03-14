@@ -2,11 +2,11 @@
 
 import { useParams, useSearchParams } from 'next/navigation';
 import { useCallback, useRef, useState } from 'react';
-import { ExtractionPanel } from '@/components/chat/ExtractionPanel';
 import { ChatWorkspace } from '@/components/chat/ChatWorkspace';
+import { ExtractionPanel } from '@/components/chat/ExtractionPanel';
+import { cn } from '@/lib/utils';
 import { useChatStore } from '@/store/chatStore';
 import { useExtractionPanelStore } from '@/store/extractionPanelStore';
-import { cn } from '@/lib/utils';
 
 export default function ConversationPage() {
   const { conversationId } = useParams<{ conversationId: string }>();

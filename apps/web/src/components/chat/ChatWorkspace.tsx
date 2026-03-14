@@ -53,14 +53,11 @@ export function ChatWorkspace({
   } = useConversationChat({
     projectId: resolvedProjectId,
     conversationId: resolvedConversationId,
-    onConversationCreated: useCallback(
-      (newConvId: string) => {
-        setResolvedConversationId(newConvId);
-        // Update URL without triggering Next.js navigation (avoids re-mount)
-        window.history.replaceState(null, '', `/chat/${newConvId}`);
-      },
-      []
-    ),
+    onConversationCreated: useCallback((newConvId: string) => {
+      setResolvedConversationId(newConvId);
+      // Update URL without triggering Next.js navigation (avoids re-mount)
+      window.history.replaceState(null, '', `/chat/${newConvId}`);
+    }, []),
   });
 
   // Sync resolved IDs when props change (e.g. sidebar navigation between conversations)
@@ -194,12 +191,12 @@ export function ChatWorkspace({
         ) : (
           <div className="divide-y divide-[var(--stroke-divider)]/50">
             {messages.map((msg) => (
-              <ChatMessage key={msg.id} role={msg.role} content={msg.content} />
+              <ChatMessage key={msg.id} sender={msg.role} content={msg.content} />
             ))}
 
             {/* Streaming response */}
             {isStreaming && streamingContent && (
-              <ChatMessage role="assistant" content={streamingContent} isStreaming />
+              <ChatMessage sender="assistant" content={streamingContent} isStreaming />
             )}
 
             {/* Waiting indicator */}

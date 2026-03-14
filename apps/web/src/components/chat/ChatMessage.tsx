@@ -6,21 +6,16 @@ import remarkGfm from 'remark-gfm';
 import { cn } from '@/lib/utils';
 
 interface ChatMessageProps {
-  role: 'user' | 'assistant';
+  sender: 'user' | 'assistant';
   content: string;
   isStreaming?: boolean;
 }
 
-export function ChatMessage({ role, content, isStreaming }: ChatMessageProps) {
-  const isUser = role === 'user';
+export function ChatMessage({ sender, content, isStreaming }: ChatMessageProps) {
+  const isUser = sender === 'user';
 
   return (
-    <div
-      className={cn(
-        'group w-full py-4',
-        'animate-in fade-in duration-200'
-      )}
-    >
+    <div className={cn('group w-full py-4', 'animate-in fade-in duration-200')}>
       <div className="mx-auto max-w-3xl px-4">
         <div className="flex gap-3">
           {/* Avatar */}
@@ -48,10 +43,12 @@ export function ChatMessage({ role, content, isStreaming }: ChatMessageProps) {
                 {content}
               </div>
             ) : (
-              <div className={cn(
-                'prose-chat text-sm leading-relaxed text-[var(--text-primary)]',
-                isStreaming && 'streaming-text'
-              )}>
+              <div
+                className={cn(
+                  'prose-chat text-sm leading-relaxed text-[var(--text-primary)]',
+                  isStreaming && 'streaming-text'
+                )}
+              >
                 <Markdown remarkPlugins={[remarkGfm]}>{content}</Markdown>
                 {isStreaming && (
                   <span className="inline-block w-1.5 h-4 ml-0.5 -mb-0.5 bg-[var(--accent-commit)] rounded-sm animate-pulse" />
