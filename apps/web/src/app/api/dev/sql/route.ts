@@ -6,8 +6,9 @@
  * SECURITY: This route only works in development mode.
  */
 
+import { sql as drizzleSql } from 'drizzle-orm';
 import { type NextRequest, NextResponse } from 'next/server';
-import { getDB, getRawClient } from '@/lib/db';
+import { getDB } from '@/lib/db';
 
 export async function POST(request: NextRequest) {
   // Only allow in development
@@ -25,18 +26,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'SQL query is required' }, { status: 400 });
     }
 
-    // Ensure DB is initialized and get raw client
-    await getDB();
-    const client = getRawClient();
-    const result = await client.query(sql);
+    const db = await getDB();
+    const rows = await db.execute(drizzleSql.raw(sql));
 
     return NextResponse.json({
-      rows: result.rows,
-      rowCount: result.rows.length,
-      fields: (result.fields as { name: string; dataTypeID: number }[] | undefined)?.map((f) => ({
-        name: f.name,
-        dataTypeID: f.dataTypeID,
-      })),
+      rows: Array.from(rows),
+      rowCount: rows.length,
     });
   } catch (error) {
     console.error('[dev/sql POST] Error:', error);
@@ -55,25 +50,22 @@ export async function GET() {
   }
 
   try {
-    await getDB();
-    const client = getRawClient();
+    const db = await getDB();
 
-    // Get table names and row counts
-    const tables = await client.query(`
-      SELECT
-        tablename as name,
-        (SELECT COUNT(*) FROM pg_catalog.pg_tables) as table_count
+    // Get table names
+    const tables = await db.execute(drizzleSql.raw(`
+      SELECT tablename as name
       FROM pg_catalog.pg_tables
       WHERE schemaname = 'public'
       ORDER BY tablename
-    `);
+    `));
 
     // Get row counts for each table
-    const tableRows = tables.rows as { name: string }[];
+    const tableRows = Array.from(tables) as { name: string }[];
     const tableInfo = await Promise.all(
       tableRows.map(async (t) => {
-        const countResult = await client.query(`SELECT COUNT(*) as count FROM "${t.name}"`);
-        const countRow = countResult.rows[0] as { count: number } | undefined;
+        const countResult = await db.execute(drizzleSql.raw(`SELECT COUNT(*) as count FROM "${t.name}"`));
+        const countRow = (Array.from(countResult) as { count: number }[])[0];
         return {
           name: t.name,
           rowCount: Number(countRow?.count || 0),
