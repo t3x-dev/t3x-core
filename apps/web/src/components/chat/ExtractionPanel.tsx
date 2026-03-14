@@ -90,8 +90,15 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
   const togglePanel = useExtractionPanelStore((s) => s.togglePanel);
   const setPanelMode = useExtractionPanelStore((s) => s.setPanelMode);
   const setActiveView = useExtractionPanelStore((s) => s.setActiveView);
+  const lastDeltaChanges = useExtractionPanelStore((s) => s.lastDeltaChanges);
+  const focusIntentEnabled = useExtractionPanelStore((s) => s.focusIntentEnabled);
+  const setFocusIntent = useExtractionPanelStore((s) => s.setFocusIntent);
 
   const frameCount = draft.frames.length;
+  const added = lastDeltaChanges.filter((c) => c.action === 'add').length;
+  const updated = lastDeltaChanges.filter((c) => c.action === 'update').length;
+  const removed = lastDeltaChanges.filter((c) => c.action === 'remove').length;
+  const hasChanges = added + updated + removed > 0;
   const targetWidth = panelMode === 'collapsed'
     ? PANEL_WIDTHS.collapsed
     : (customWidth ?? PANEL_WIDTHS[panelMode] ?? 320);
@@ -138,6 +145,16 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
                   {frameCount}
                 </span>
               )}
+              {hasChanges && !isExtracting && (
+                <span style={{
+                  fontSize: 10, padding: '1px 6px', borderRadius: 4,
+                  background: 'var(--hover-bg)', color: 'var(--text-secondary)',
+                }}>
+                  {added > 0 && <span style={{ color: '#4ade80' }}>+{added}</span>}
+                  {updated > 0 && <span style={{ color: '#facc15' }}> ~{updated}</span>}
+                  {removed > 0 && <span style={{ color: '#f87171' }}> -{removed}</span>}
+                </span>
+              )}
             </div>
             <button
               type="button"
@@ -151,6 +168,23 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
 
           {/* View toggle */}
           <ViewTabs activeView={activeView} onChangeView={setActiveView} />
+
+          {/* Focus intent toggle */}
+          <div className="px-3 py-1.5 border-b border-[var(--stroke-default)]">
+            <label style={{
+              display: 'flex', alignItems: 'center', gap: 4,
+              fontSize: 11, color: 'var(--text-secondary)', cursor: 'pointer',
+              padding: '2px 0',
+            }}>
+              <input
+                type="checkbox"
+                checked={focusIntentEnabled}
+                onChange={(e) => setFocusIntent(e.target.checked)}
+                style={{ accentColor: 'rgb(139,92,246)' }}
+              />
+              Focus intent
+            </label>
+          </div>
 
           {/* Content area */}
           {panelMode === 'default' ? (
