@@ -35,22 +35,20 @@ export function framesToSentences(content: SemanticContent, conversationId?: str
     const text = `[${frame.type}] ${slotParts.join('; ')}`;
     const id = `s_${frame.id.replace('f_', '')}`;
 
+    // Only include source_ref when all required fields are present
+    // (API requires conversation_id, turn_hash, start_char, end_char — all non-optional)
     let source_ref: Sentence['source_ref'] | undefined;
-    if (frame.slot_sources) {
+    if (frame.slot_sources && conversationId) {
       const firstSource = Object.values(frame.slot_sources)[0];
-      if (firstSource) {
+      const turnHash = firstSource?.turn_hash ?? firstSource?.turn;
+      if (firstSource && turnHash && firstSource.start_char != null && firstSource.end_char != null) {
         source_ref = {
           conversation_id: conversationId,
-          turn_hash: firstSource.turn_hash ?? firstSource.turn,
+          turn_hash: turnHash,
           start_char: firstSource.start_char,
           end_char: firstSource.end_char,
         };
       }
-    } else if (frame.source) {
-      source_ref = {
-        conversation_id: conversationId,
-        turn_hash: frame.source,
-      };
     }
 
     return {

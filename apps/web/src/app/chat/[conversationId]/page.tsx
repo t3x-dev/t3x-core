@@ -26,7 +26,9 @@ export default function ConversationPage() {
   if (panelMode !== prevModeRef.current) {
     if (panelMode === 'preview' && prevModeRef.current !== 'preview') {
       setPreviewPrevWidth(panelWidth);
-      setPanelWidth(Math.max(480, panelWidth));
+      // Take ~60% of viewport for preview mode
+      const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1200;
+      setPanelWidth(Math.max(Math.round(viewportWidth * 0.6), panelWidth));
     } else if (panelMode !== 'preview' && prevModeRef.current === 'preview') {
       setPanelWidth(previewPrevWidth);
     }
