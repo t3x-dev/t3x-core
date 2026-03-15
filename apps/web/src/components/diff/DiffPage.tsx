@@ -1,30 +1,29 @@
 'use client';
 
 /**
- * DiffPage — Full-screen diff comparison with three-layer provenance.
+ * DiffPage — Frame-based diff comparison page.
  *
- * Layer 0: Page Header (breadcrumb + commit badges)
- * Layer 1: Source Cards (macro provenance — all contributing sources)
- * Layer 2: Stats Bar (stats + view/snippet toggles)
- * Layer 3: Diff Body (sentences with source group headers + context snippets)
+ * 3-column layout:
+ *   Left (160px):  FrameDiffIndex — frame list with diff status icons
+ *   Center (flex):  Tabbed content — Diff | Graph | JSON
+ *   Right (240px):  Comparison metadata sidebar
  */
 
+import type { Commit, FrameDiff } from '@t3x-dev/core';
+import { ArrowLeft, GitBranch } from 'lucide-react';
 import { Loader2 } from 'lucide-react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { KeyboardHintBar } from '@/components/shared/KeyboardHintBar';
-import { useKeyboardNavigation } from '@/hooks/useKeyboardNavigation';
-import type { CommitV4, DiffResultRaw } from '@/lib/api';
-import { diffRaw, getCommitV4 } from '@/lib/api';
-import { shortHash } from '@/lib/formatters';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { relativeTime, shortHash } from '@/components/commit/CommitDetailHelpers';
+import { FrameGraphView } from '@/components/frame-graph';
+import type { CommitMeta, FrameDiffResponse } from '@/lib/api/frameDiff';
+import { getCommitAsFrames } from '@/lib/api/commitUnified';
+import { getFrameDiff } from '@/lib/api/frameDiff';
+import { PAGE_ANIMATION_STYLES } from '@/lib/pageAnimations';
 import { useProjectStore } from '@/store/projectStore';
-import { DiffHeader } from './DiffHeader';
-import type { DiffMode } from './DiffModeToggle';
-import type { DiffSideBySideHandle } from './DiffSideBySide';
-import { DiffSideBySide } from './DiffSideBySide';
-import { DiffSourceCards } from './DiffSourceCards';
-import { DiffStatsBar } from './DiffStatsBar';
-import { FrameDiffView } from './FrameDiffView';
+import { FrameDiffCard } from './FrameDiffCard';
+import { FrameDiffIndex } from './FrameDiffIndex';
 
 // ============================================================================
 // Types
@@ -36,94 +35,150 @@ interface DiffPageProps {
   targetHash: string;
 }
 
-export interface SourceInfo {
-  conversationId: string;
-  title: string | null;
-  type: 'conversation' | 'leaf';
-  baseSentenceCount: number;
-  targetSentenceCount: number;
-  isNew: boolean;
-  branch: string | null;
+type TabId = 'diff' | 'graph' | 'json';
+
+// ============================================================================
+// CommitInfoBlock — metadata block for base/target in sidebar
+// ============================================================================
+
+function CommitInfoBlock({
+  label,
+  meta,
+  accentColor,
+}: {
+  label: string;
+  meta: CommitMeta;
+  accentColor: string;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <div
+        className="text-[10px] font-semibold uppercase tracking-wide"
+        style={{ color: accentColor }}
+      >
+        {label}
+      </div>
+      <div className="space-y-1 text-[11px]">
+        <div className="flex items-center gap-1.5">
+          <span className="font-mono text-[var(--text-tertiary)]">{shortHash(meta.hash)}</span>
+          {meta.branch && (
+            <span className="inline-flex items-center gap-0.5 rounded-full border border-[var(--stroke-divider)] px-1.5 py-px text-[10px] text-[var(--text-tertiary)]">
+              <GitBranch className="h-2.5 w-2.5" />
+              {meta.branch}
+            </span>
+          )}
+        </div>
+        {meta.message && (
+          <div className="text-[var(--text-secondary)] line-clamp-2">{meta.message}</div>
+        )}
+        <div className="text-[var(--text-tertiary)]">
+          {meta.author?.name ?? meta.author?.type ?? 'unknown'} · {relativeTime(meta.committed_at)}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ============================================================================
-// Helpers
+// DiffStatsBlock — summary stats in sidebar
 // ============================================================================
 
-/** Format column label: "branch @ shortHash" or just shortHash */
-function formatCommitLabel(branch: string | null | undefined, hash: string): string {
-  const short = shortHash(hash);
-  return branch ? `${branch} @ ${short}` : short;
+function DiffStatsBlock({ diff }: { diff: FrameDiff }) {
+  const stats = [
+    { label: 'Modified', count: diff.modified.length, color: 'var(--diff-modified-accent)' },
+    { label: 'Added', count: diff.onlyInTarget.length, color: 'var(--diff-added-accent)' },
+    { label: 'Removed', count: diff.onlyInSource.length, color: 'var(--diff-removed-accent)' },
+    { label: 'Identical', count: diff.identical.length, color: 'var(--text-tertiary)' },
+  ];
+
+  return (
+    <div className="space-y-1.5">
+      <div className="text-[10px] font-semibold uppercase tracking-wide text-[var(--text-tertiary)]">
+        Frame Changes
+      </div>
+      <div className="space-y-1">
+        {stats.map(
+          (s) =>
+            s.count > 0 && (
+              <div key={s.label} className="flex items-center justify-between text-[11px]">
+                <span style={{ color: s.color }}>{s.label}</span>
+                <span className="font-mono text-[var(--text-secondary)]">{s.count}</span>
+              </div>
+            )
+        )}
+      </div>
+    </div>
+  );
 }
 
-/** Build source map from both commits' sentences and source_refs */
-function buildSourceMap(
-  baseCommit: CommitV4 | null,
-  targetCommit: CommitV4 | null
-): Map<string, SourceInfo> {
-  const map = new Map<string, SourceInfo>();
+// ============================================================================
+// RelationChangesBlock — relation additions/removals in sidebar
+// ============================================================================
 
-  // Collect commit-level source_refs for titles
-  const titleMap = new Map<string, { title: string | null; type: 'conversation' | 'leaf' }>();
-  for (const ref of baseCommit?.source_refs ?? []) {
-    titleMap.set(ref.id, { title: ref.title ?? null, type: ref.type });
-  }
-  for (const ref of targetCommit?.source_refs ?? []) {
-    titleMap.set(ref.id, { title: ref.title ?? null, type: ref.type });
-  }
+function RelationChangesBlock({ diff }: { diff: FrameDiff }) {
+  const added = diff.relationsAdded?.length ?? 0;
+  const removed = diff.relationsRemoved?.length ?? 0;
 
-  // Count sentences per conversation in base
-  const baseConvIds = new Set<string>();
-  for (const s of baseCommit?.content.sentences ?? []) {
-    const convId = s.source_ref?.conversation_id;
-    if (!convId) continue;
-    baseConvIds.add(convId);
-    const existing = map.get(convId);
-    if (existing) {
-      existing.baseSentenceCount++;
-    } else {
-      const meta = titleMap.get(convId);
-      map.set(convId, {
-        conversationId: convId,
-        title: meta?.title ?? null,
-        type: meta?.type ?? 'conversation',
-        baseSentenceCount: 1,
-        targetSentenceCount: 0,
-        isNew: false,
-        branch: baseCommit?.branch ?? null,
-      });
-    }
-  }
+  if (added === 0 && removed === 0) return null;
 
-  // Count sentences per conversation in target
-  for (const s of targetCommit?.content.sentences ?? []) {
-    const convId = s.source_ref?.conversation_id;
-    if (!convId) continue;
-    const existing = map.get(convId);
-    if (existing) {
-      existing.targetSentenceCount++;
-    } else {
-      const meta = titleMap.get(convId);
-      map.set(convId, {
-        conversationId: convId,
-        title: meta?.title ?? null,
-        type: meta?.type ?? 'conversation',
-        baseSentenceCount: 0,
-        targetSentenceCount: 1,
-        isNew: true,
-        branch: targetCommit?.branch ?? null,
-      });
-    }
-  }
+  return (
+    <div className="space-y-1.5">
+      <div className="text-[10px] font-semibold uppercase tracking-wide text-[var(--text-tertiary)]">
+        Relation Changes
+      </div>
+      <div className="space-y-1">
+        {added > 0 && (
+          <div className="flex items-center justify-between text-[11px]">
+            <span style={{ color: 'var(--diff-added-accent)' }}>Added</span>
+            <span className="font-mono text-[var(--text-secondary)]">{added}</span>
+          </div>
+        )}
+        {removed > 0 && (
+          <div className="flex items-center justify-between text-[11px]">
+            <span style={{ color: 'var(--diff-removed-accent)' }}>Removed</span>
+            <span className="font-mono text-[var(--text-secondary)]">{removed}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
-  // Mark sources that only appear in target as "new"
-  for (const [convId, info] of map) {
-    if (!baseConvIds.has(convId)) {
-      info.isNew = true;
-    }
-  }
+// ============================================================================
+// TabBar
+// ============================================================================
 
-  return map;
+const TABS: Array<{ id: TabId; label: string }> = [
+  { id: 'diff', label: 'Diff' },
+  { id: 'graph', label: 'Graph' },
+  { id: 'json', label: 'JSON' },
+];
+
+function TabBar({
+  activeTab,
+  onTabChange,
+}: {
+  activeTab: TabId;
+  onTabChange: (tab: TabId) => void;
+}) {
+  return (
+    <div className="flex shrink-0 border-b border-[var(--stroke-divider)]">
+      {TABS.map((tab) => (
+        <button
+          key={tab.id}
+          type="button"
+          onClick={() => onTabChange(tab.id)}
+          className={`px-4 py-2 text-[12px] font-medium transition-colors border-b-2 ${
+            activeTab === tab.id
+              ? 'border-[var(--accent-commit)] text-[var(--text-primary)]'
+              : 'border-transparent text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]'
+          }`}
+        >
+          {tab.label}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 // ============================================================================
@@ -132,18 +187,15 @@ function buildSourceMap(
 
 export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
   const router = useRouter();
-  const sideBySideRef = useRef<DiffSideBySideHandle>(null);
 
   // State
-  const [baseCommit, setBaseCommit] = useState<CommitV4 | null>(null);
-  const [targetCommit, setTargetCommit] = useState<CommitV4 | null>(null);
-  const [diffData, setDiffData] = useState<DiffResultRaw | null>(null);
+  const [diffResponse, setDiffResponse] = useState<FrameDiffResponse | null>(null);
+  const [targetCommit, setTargetCommit] = useState<Commit | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'split' | 'unified' | 'document'>('document');
-  const [showSourceCards, setShowSourceCards] = useState(true);
-  const [showSnippets, setShowSnippets] = useState(false);
-  const [diffMode, setDiffMode] = useState<DiffMode>('sentence');
+  const [activeTab, setActiveTab] = useState<TabId>('diff');
+  const [activeFrameId, setActiveFrameId] = useState<string | null>(null);
+  const [showIdentical, setShowIdentical] = useState(false);
 
   // Project name for breadcrumb
   const getProject = useProjectStore((s) => s.getProject);
@@ -155,12 +207,14 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
     setLoading(true);
     setError(null);
 
-    Promise.all([getCommitV4(baseHash), getCommitV4(targetHash), diffRaw(baseHash, targetHash)])
-      .then(([base, target, diff]) => {
+    Promise.all([
+      getFrameDiff(baseHash, targetHash),
+      getCommitAsFrames(targetHash),
+    ])
+      .then(([diffResp, commit]) => {
         if (cancelled) return;
-        setBaseCommit(base);
-        setTargetCommit(target);
-        setDiffData(diff);
+        setDiffResponse(diffResp);
+        setTargetCommit(commit);
       })
       .catch((err) => {
         if (cancelled) return;
@@ -175,68 +229,24 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
     };
   }, [baseHash, targetHash]);
 
-  // Derived: source map
-  const sourceMap = useMemo(
-    () => buildSourceMap(baseCommit, targetCommit),
-    [baseCommit, targetCommit]
-  );
-
-  // Derived: source ref titles (conversation ID → title from commit-level source_refs)
-  const sourceRefTitles = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const ref of baseCommit?.source_refs ?? []) {
-      if (ref.title) map.set(ref.id, ref.title);
-    }
-    for (const ref of targetCommit?.source_refs ?? []) {
-      if (ref.title) map.set(ref.id, ref.title);
-    }
-    return map;
-  }, [baseCommit, targetCommit]);
-
-  // Check if both commits have semantic data for Frame mode
-  const hasSemanticData = !!(
-    baseCommit?.semantic?.frames?.length && targetCommit?.semantic?.frames?.length
-  );
-
-  // Default to Frame mode when semantic data is available, reset when not
-  useEffect(() => {
-    if (hasSemanticData) {
-      setDiffMode('frame');
-    } else {
-      setDiffMode('sentence');
-    }
-  }, [hasSemanticData]);
-
   // Handlers
   const handleBack = useCallback(() => {
     router.push(`/project/${projectId}`);
   }, [router, projectId]);
 
-  const handleJump = useCallback((section: string) => {
-    sideBySideRef.current?.jumpToSection(section);
+  const handleSelectFrame = useCallback((id: string) => {
+    setActiveFrameId(id);
   }, []);
 
-  const handleScrollToSource = useCallback((conversationId: string) => {
-    sideBySideRef.current?.scrollToSource?.(conversationId);
+  const handleToggleIdentical = useCallback(() => {
+    setShowIdentical((v) => !v);
   }, []);
 
-  // Navigable segment IDs for keyboard nav (only changed segments)
-  const changedSegmentIds = useMemo(() => {
-    if (!diffData) return [];
-    return diffData.segmentDiffs.filter((s) => s.diffType !== 'same').map((s) => s.segmentId);
-  }, [diffData]);
-
-  // Keyboard navigation for diff changes
-  useKeyboardNavigation({
-    ids: changedSegmentIds,
-    onSelect: (id) => {
-      if (id) {
-        const el = document.querySelector(`[data-segment-id="${id}"]`);
-        el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
-    },
-    enabled: !loading && !!diffData,
-  });
+  // Derived: check if base and target are on different branches
+  const crossBranch = useMemo(() => {
+    if (!diffResponse) return false;
+    return diffResponse.base.branch !== diffResponse.target.branch;
+  }, [diffResponse]);
 
   // Loading state
   if (loading) {
@@ -251,7 +261,7 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
   }
 
   // Error state
-  if (error || !diffData) {
+  if (error || !diffResponse) {
     return (
       <div className="flex h-screen items-center justify-center bg-[var(--surface-app)]">
         <div className="flex flex-col items-center justify-center p-8 text-center max-w-md">
@@ -280,84 +290,218 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
     );
   }
 
-  const hasSources = sourceMap.size > 0;
+  const diff = diffResponse.diff;
 
   return (
     <div className="flex flex-col h-screen bg-[var(--surface-app)]">
-      {/* Layer 0: Page Header */}
-      <DiffHeader
-        baseCommit={{
-          hash: baseHash,
-          message: baseCommit?.message,
-          branch: baseCommit?.branch,
-        }}
-        targetCommit={{
-          hash: targetHash,
-          message: targetCommit?.message,
-          branch: targetCommit?.branch,
-        }}
-        onClose={handleBack}
-        mode="page"
-        projectName={project?.name}
-      />
+      <style>{PAGE_ANIMATION_STYLES}</style>
 
-      {/* Layer 1: Source Cards */}
-      {hasSources && (
-        <DiffSourceCards
-          sourceMap={sourceMap}
-          collapsed={!showSourceCards}
-          onToggle={() => setShowSourceCards((v) => !v)}
-          onScrollToSource={handleScrollToSource}
+      {/* ═══════ HEADER ═══════ */}
+      <header className="flex h-14 shrink-0 items-center justify-between border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-4">
+        <div className="flex items-center gap-3">
+          {/* Back button */}
+          <button
+            type="button"
+            onClick={handleBack}
+            className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-secondary)] transition-colors"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </button>
+
+          {/* Breadcrumb */}
+          <nav className="flex items-center gap-1.5 text-[12px]">
+            <Link
+              href={`/project/${projectId}`}
+              className="text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] transition-colors"
+            >
+              {project?.name ?? 'Project'}
+            </Link>
+            <span className="text-[var(--text-tertiary)]">/</span>
+            <span className="text-[var(--text-primary)] font-medium">Diff</span>
+          </nav>
+
+          {/* Commit badges */}
+          <div className="flex items-center gap-2 ml-3">
+            <span className="inline-flex items-center rounded-full border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-2 py-0.5 font-mono text-[10px] text-[var(--text-tertiary)]">
+              base: {shortHash(baseHash)}
+            </span>
+            <span className="text-[var(--text-tertiary)] text-[10px]">vs</span>
+            <span className="inline-flex items-center rounded-full border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-2 py-0.5 font-mono text-[10px] text-[var(--text-tertiary)]">
+              target: {shortHash(targetHash)}
+            </span>
+          </div>
+        </div>
+      </header>
+
+      {/* ═══════ BODY: 3-column layout ═══════ */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* ── Left sidebar: Frame index ── */}
+        <FrameDiffIndex
+          diff={diff}
+          activeFrameId={activeFrameId}
+          onSelectFrame={handleSelectFrame}
+          showIdentical={showIdentical}
+          onToggleIdentical={handleToggleIdentical}
         />
-      )}
 
-      {/* Layer 2: Stats Bar + Keyboard Hints */}
-      <DiffStatsBar
-        identical={diffData.stats.sameCount}
-        equivalent={diffData.stats.equivalentCount ?? 0}
-        modified={diffData.stats.modifiedCount}
-        added={diffData.stats.addedCount}
-        removed={diffData.stats.removedCount}
-        onJump={handleJump}
-        viewMode={viewMode}
-        onViewModeChange={setViewMode}
-        showSnippets={showSnippets}
-        onToggleSnippets={() => setShowSnippets((v) => !v)}
-        diffMode={diffMode}
-        onDiffModeChange={setDiffMode}
-        hasSemanticData={hasSemanticData}
-      />
-      <div className="shrink-0 border-b border-[var(--stroke-divider)] bg-[var(--surface-app)] px-6 py-1.5">
-        <div className="ml-auto w-fit">
-          <KeyboardHintBar
-            hints={[
-              { key: 'j k', label: 'navigate changes' },
-              { key: 'esc', label: 'deselect' },
-            ]}
+        {/* ── Center: Tabbed content ── */}
+        <div className="flex flex-1 flex-col overflow-hidden">
+          <TabBar activeTab={activeTab} onTabChange={setActiveTab} />
+
+          {/* Tab content */}
+          <div className="flex-1 overflow-auto">
+            {activeTab === 'diff' && (
+              <DiffTabContent
+                diff={diff}
+                activeFrameId={activeFrameId}
+                onSelectFrame={handleSelectFrame}
+                showIdentical={showIdentical}
+              />
+            )}
+
+            {activeTab === 'graph' && targetCommit?.content && (
+              <div className="h-full">
+                <FrameGraphView content={targetCommit.content} />
+              </div>
+            )}
+
+            {activeTab === 'json' && (
+              <div className="p-[var(--space-page)]">
+                <pre className="rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-4 font-mono text-[11px] text-[var(--text-secondary)] overflow-auto max-h-[calc(100vh-200px)]">
+                  {JSON.stringify(diff, null, 2)}
+                </pre>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ── Right sidebar: Metadata ── */}
+        <aside className="hidden w-[240px] shrink-0 overflow-y-auto border-l border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-4 lg:block">
+          <div className="space-y-5">
+            {/* Base commit info */}
+            <CommitInfoBlock
+              label="Base"
+              meta={diffResponse.base}
+              accentColor="var(--diff-removed-accent)"
+            />
+
+            <div className="border-t border-[var(--stroke-divider)]" />
+
+            {/* Target commit info */}
+            <CommitInfoBlock
+              label="Target"
+              meta={diffResponse.target}
+              accentColor="var(--diff-added-accent)"
+            />
+
+            <div className="border-t border-[var(--stroke-divider)]" />
+
+            {/* Diff stats */}
+            <DiffStatsBlock diff={diff} />
+
+            {/* Relation changes */}
+            <RelationChangesBlock diff={diff} />
+
+            {/* Cross-branch merge button */}
+            {crossBranch && (
+              <>
+                <div className="border-t border-[var(--stroke-divider)]" />
+                <button
+                  type="button"
+                  className="w-full rounded-md border border-[var(--accent-commit)]/30 bg-[var(--accent-commit)]/8 px-3 py-2 text-[12px] font-medium text-[var(--accent-commit)] hover:bg-[var(--accent-commit)]/15 transition-colors"
+                  onClick={() => {
+                    // Placeholder: navigate to merge page when available
+                  }}
+                >
+                  <GitBranch className="inline-block h-3.5 w-3.5 mr-1.5 -mt-0.5" />
+                  Start Merge
+                </button>
+              </>
+            )}
+          </div>
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// DiffTabContent — renders frame diff cards in order
+// ============================================================================
+
+function DiffTabContent({
+  diff,
+  activeFrameId,
+  onSelectFrame,
+  showIdentical,
+}: {
+  diff: FrameDiff;
+  activeFrameId: string | null;
+  onSelectFrame: (id: string) => void;
+  showIdentical: boolean;
+}) {
+  return (
+    <div className="space-y-3 p-[var(--space-page)]">
+      {/* Modified frames first */}
+      {diff.modified.map(({ frameId, targetFrame, sourceFrame, slotDiffs }) => (
+        <div key={frameId} id={`diff-frame-${frameId}`}>
+          <FrameDiffCard
+            type="modified"
+            frame={targetFrame}
+            sourceFrame={sourceFrame}
+            slotDiffs={slotDiffs}
+            isActive={activeFrameId === frameId}
+            onSelect={() => onSelectFrame(frameId)}
           />
         </div>
-      </div>
+      ))}
 
-      {/* Layer 3: Diff Body */}
-      {diffMode === 'frame' && hasSemanticData && baseCommit?.semantic && targetCommit?.semantic ? (
-        <div className="flex-1 overflow-auto p-[var(--space-page)]">
-          <FrameDiffView source={baseCommit.semantic} target={targetCommit.semantic} />
+      {/* Added frames */}
+      {diff.onlyInTarget.map((frame) => (
+        <div key={frame.id} id={`diff-frame-${frame.id}`}>
+          <FrameDiffCard
+            type="added"
+            frame={frame}
+            isActive={activeFrameId === frame.id}
+            onSelect={() => onSelectFrame(frame.id)}
+          />
         </div>
-      ) : (
-        <DiffSideBySide
-          ref={sideBySideRef}
-          segmentDiffs={diffData.segmentDiffs}
-          baseSentences={baseCommit?.content.sentences ?? []}
-          targetSentences={targetCommit?.content.sentences ?? []}
-          projectId={projectId}
-          viewMode={viewMode}
-          showSnippets={showSnippets}
-          groupBySource
-          sourceRefTitles={sourceRefTitles}
-          baseLabel={formatCommitLabel(baseCommit?.branch, baseHash)}
-          targetLabel={formatCommitLabel(targetCommit?.branch, targetHash)}
-        />
-      )}
+      ))}
+
+      {/* Removed frames */}
+      {diff.onlyInSource.map((frame) => (
+        <div key={frame.id} id={`diff-frame-${frame.id}`}>
+          <FrameDiffCard
+            type="removed"
+            frame={frame}
+            isActive={activeFrameId === frame.id}
+            onSelect={() => onSelectFrame(frame.id)}
+          />
+        </div>
+      ))}
+
+      {/* Identical frames (only if toggled on) */}
+      {showIdentical &&
+        diff.identical.map((frame) => (
+          <div key={frame.id} id={`diff-frame-${frame.id}`}>
+            <FrameDiffCard
+              type="identical"
+              frame={frame}
+              isActive={activeFrameId === frame.id}
+              onSelect={() => onSelectFrame(frame.id)}
+            />
+          </div>
+        ))}
+
+      {/* Empty state */}
+      {diff.modified.length === 0 &&
+        diff.onlyInTarget.length === 0 &&
+        diff.onlyInSource.length === 0 &&
+        diff.identical.length === 0 && (
+          <div className="flex items-center justify-center py-20 text-[var(--text-tertiary)] text-sm">
+            No frame differences found.
+          </div>
+        )}
     </div>
   );
 }
