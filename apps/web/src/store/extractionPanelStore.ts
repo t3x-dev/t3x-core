@@ -260,16 +260,11 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
       const deltaContent: SemanticContent = { frames: deltaFrames, relations: [] };
       const sentences = framesToSentences(deltaContent, conversationId ?? undefined) as CommitV4Sentence[];
 
-      // Strip slot_sources from frames before sending — API schema doesn't include it
-      const cleanFrames = draft.frames.map(({ slot_sources: _, ...f }) => f);
-      const cleanSemantic: SemanticContent = { frames: cleanFrames, relations: draft.relations };
-
       const result = await createCommitV4(projectId, sentences, {
         parents: lastCommitHash ? [lastCommitHash] : [],
         inherit_parent_sentences: true,
         branch: commitBranch,
         message: message || undefined,
-        semantic: cleanSemantic,
         source_refs: conversationId
           ? [{ type: 'conversation' as const, id: conversationId, title: conversationTitle ?? undefined }]
           : undefined,
