@@ -4,7 +4,100 @@ import { Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { parseDisplayYAML, toDisplayYAML } from '@/lib/liteYaml';
 import { relevanceScore, RELEVANCE_THRESHOLD, type RelevanceContext } from '@/lib/relevanceScore';
+import type { SlotValue } from '@t3x-dev/core';
 import { useExtractionPanelStore } from '@/store/extractionPanelStore';
+
+// ── YAML Rendering Helpers ──
+
+interface YAMLLine {
+  text: string;
+  frameId: string;
+  slotKey: string | null;
+  changeType: 'add' | 'update' | 'remove' | null;
+  isAutoSelected: boolean;
+  isEmpty: boolean;
+}
+
+function formatValue(value: SlotValue): string {
+  if (typeof value === 'string') return `"${value}"`;
+  if (typeof value === 'number') return String(value);
+  if (typeof value === 'object' && value !== null && 'ref' in value) {
+    return `*${(value as { ref: string }).ref}`;
+  }
+  return String(value);
+}
+
+function renderSlotLines(
+  lines: YAMLLine[],
+  key: string,
+  value: SlotValue,
+  indent: number,
+  frameId: string,
+  slotKey: string,
+  changeType: 'add' | 'update' | 'remove' | null,
+  isAutoSelected: boolean
+): void {
+  const pad = '  '.repeat(indent);
+
+  // Simple values: key: "value"
+  if (typeof value === 'string' || typeof value === 'number') {
+    lines.push({ text: `${pad}${key}: ${formatValue(value)}`, frameId, slotKey, changeType, isAutoSelected, isEmpty: false });
+    return;
+  }
+
+  // SlotRef: key: *f_002
+  if (typeof value === 'object' && value !== null && !Array.isArray(value) && 'ref' in value) {
+    lines.push({ text: `${pad}${key}: ${formatValue(value)}`, frameId, slotKey, changeType, isAutoSelected, isEmpty: false });
+    return;
+  }
+
+  // InlineFrame: nested object with type + slots
+  if (typeof value === 'object' && value !== null && !Array.isArray(value) && 'type' in value && 'slots' in value) {
+    const inlineFrame = value as { type: string; slots: Record<string, SlotValue> };
+    lines.push({ text: `${pad}${key}:`, frameId, slotKey, changeType, isAutoSelected, isEmpty: false });
+    for (const [k, v] of Object.entries(inlineFrame.slots)) {
+      renderSlotLines(lines, k, v, indent + 1, frameId, slotKey, changeType, isAutoSelected);
+    }
+    return;
+  }
+
+  // Array
+  if (Array.isArray(value)) {
+    const arr = value as SlotValue[];
+    // Short simple array: inline
+    const allSimple = arr.every((item) => typeof item === 'string' || typeof item === 'number');
+    if (allSimple && arr.length <= 5) {
+      lines.push({
+        text: `${pad}${key}: [${arr.map(formatValue).join(', ')}]`,
+        frameId, slotKey, changeType, isAutoSelected, isEmpty: false,
+      });
+      return;
+    }
+
+    // Multi-line array
+    lines.push({ text: `${pad}${key}:`, frameId, slotKey, changeType, isAutoSelected, isEmpty: false });
+    for (const item of arr) {
+      if (typeof item === 'string' || typeof item === 'number') {
+        lines.push({ text: `${pad}  - ${formatValue(item)}`, frameId, slotKey, changeType, isAutoSelected, isEmpty: false });
+      } else if (typeof item === 'object' && item !== null && 'type' in item && 'slots' in item) {
+        // InlineFrame in array
+        const inlineFrame = item as { type: string; slots: Record<string, SlotValue> };
+        lines.push({ text: `${pad}  - ${inlineFrame.type}:`, frameId, slotKey, changeType, isAutoSelected, isEmpty: false });
+        for (const [k, v] of Object.entries(inlineFrame.slots)) {
+          renderSlotLines(lines, k, v, indent + 2, frameId, slotKey, changeType, isAutoSelected);
+        }
+      } else {
+        lines.push({ text: `${pad}  - ${formatValue(item)}`, frameId, slotKey, changeType, isAutoSelected, isEmpty: false });
+      }
+    }
+    return;
+  }
+
+  // Fallback
+  lines.push({ text: `${pad}${key}: ${JSON.stringify(value)}`, frameId, slotKey, changeType, isAutoSelected, isEmpty: false });
+}
+
+// ── Component ──
 
 export function FrameYAMLView() {
   const draft = useExtractionPanelStore((s) => s.draft);
@@ -94,14 +187,7 @@ export function FrameYAMLView() {
   // Build per-line metadata for the YAML display
   // Each YAML line maps to a frame header or a slot line
   const yamlLines = useMemo(() => {
-    const lines: Array<{
-      text: string;
-      frameId: string;
-      slotKey: string | null;
-      changeType: 'add' | 'update' | 'remove' | null;
-      isAutoSelected: boolean;
-      isEmpty: boolean;
-    }> = [];
+    const lines: YAMLLine[] = [];
 
     for (const frame of sortedFrames) {
       const change = changeMap.get(frame.id) ?? null;
@@ -118,21 +204,9 @@ export function FrameYAMLView() {
         isEmpty: false,
       });
 
-      // Slot lines
+      // Slot lines — render nested structures as proper YAML
       for (const [key, value] of Object.entries(frame.slots)) {
-        let display: string;
-        if (Array.isArray(value)) display = JSON.stringify(value);
-        else if (typeof value === 'number') display = String(value);
-        else display = `"${String(value)}"`;
-
-        lines.push({
-          text: `  ${key}: ${display}`,
-          frameId: frame.id,
-          slotKey: key,
-          changeType: change,
-          isAutoSelected: isAuto,
-          isEmpty: false,
-        });
+        renderSlotLines(lines, key, value, 1, frame.id, key, change, isAuto);
       }
 
       // Blank separator
