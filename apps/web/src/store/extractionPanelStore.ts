@@ -37,8 +37,9 @@ interface ExtractionPanelState {
 
   // Hover linking between YAML ↔ chat messages
   hoveredFrameId: string | null;      // YAML row hovered → highlight source turn
+  hoveredSlotKey: string | null;      // Specific slot hovered (for character-level highlight)
   hoveredTurnHash: string | null;     // Chat message hovered → highlight YAML rows
-  setHoveredFrameId: (id: string | null) => void;
+  setHoveredFrameId: (id: string | null, slotKey?: string | null) => void;
   setHoveredTurnHash: (hash: string | null) => void;
 }
 
@@ -58,6 +59,7 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
   removedFrames: [],
   conversationId: null,
   hoveredFrameId: null,
+  hoveredSlotKey: null,
   hoveredTurnHash: null,
 
   setPanelMode: (mode) => set({ panelMode: mode }),
@@ -174,6 +176,6 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
     set({ llmHighlightedFrameIds: Object.fromEntries(ids.map((id) => [id, true])) }),
   hydrateDeltaLog: (entries) => set({ deltaLog: entries }),
   setConversationId: (id) => set({ conversationId: id }),
-  setHoveredFrameId: (id) => set({ hoveredFrameId: id }),
+  setHoveredFrameId: (id, slotKey) => set({ hoveredFrameId: id, hoveredSlotKey: slotKey ?? null }),
   setHoveredTurnHash: (hash) => set({ hoveredTurnHash: hash }),
 }));

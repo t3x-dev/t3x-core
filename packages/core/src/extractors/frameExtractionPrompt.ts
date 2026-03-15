@@ -136,12 +136,26 @@ const DELTA_SYSTEM_PROMPT = `You are a semantic extraction engine. Your task is 
 5. depends — A references/needs B
 6. elaborates — A adds detail to B
 
+## Source Quoting (CRITICAL for traceability)
+For EACH slot, include a "slot_quotes" object that maps each slot key to the EXACT verbatim text from the conversation that this slot was extracted from. Copy the text exactly — do not paraphrase.
+
 ## JSON Output Format
 \`\`\`json
 {
   "changes": [
-    { "action": "add", "frame": { "id": "f_xxx", "type": "...", "slots": { ... }, "source": "T3", "confidence": 0.9 } },
-    { "action": "update", "target": "f_001", "slots": { "changed_key": "new_value" } },
+    {
+      "action": "add",
+      "frame": {
+        "id": "f_xxx", "type": "...", "source": "T3", "confidence": 0.9,
+        "slots": { "destination": "Tokyo", "budget": 7000 },
+        "slot_quotes": { "destination": "I want to travel to Tokyo", "budget": "budget is around $7000" }
+      }
+    },
+    {
+      "action": "update", "target": "f_001",
+      "slots": { "budget": 5000 },
+      "slot_quotes": { "budget": "actually let's keep it under $5000" }
+    },
     { "action": "remove", "target": "f_002", "reason": "user changed mind" }
   ],
   "new_relations": [
@@ -177,11 +191,18 @@ const FIRST_EXTRACTION_SYSTEM_PROMPT = `You are a semantic extraction engine. Yo
 5. depends — A references/needs B
 6. elaborates — A adds detail to B
 
+## Source Quoting (CRITICAL for traceability)
+For EACH slot, include a "slot_quotes" object that maps each slot key to the EXACT verbatim text from the conversation that this slot was extracted from. Copy the text exactly — do not paraphrase.
+
 ## JSON Output Format
 \`\`\`json
 {
   "frames": [
-    { "id": "f_001", "type": "...", "slots": { ... }, "source": "T1", "confidence": 0.9 }
+    {
+      "id": "f_001", "type": "...", "source": "T1", "confidence": 0.9,
+      "slots": { "destination": "Tokyo", "budget": 7000 },
+      "slot_quotes": { "destination": "I want to travel to Tokyo", "budget": "budget is around $7000" }
+    }
   ],
   "relations": [
     { "from": "f_001", "to": "f_002", "type": "causes", "confidence": 0.8 }

@@ -234,7 +234,7 @@ export function FrameYAMLView() {
             return (
               <div
                 key={i}
-                onMouseEnter={() => setHoveredFrameId(line.frameId)}
+                onMouseEnter={() => setHoveredFrameId(line.frameId, line.slotKey)}
                 onMouseLeave={() => setHoveredFrameId(null)}
                 style={{
                   display: 'flex',
