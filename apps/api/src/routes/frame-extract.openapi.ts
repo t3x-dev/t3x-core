@@ -9,7 +9,7 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { buildDraft, type FrameExtractionTurn, FrameExtractor, fuzzyLocate, MeaningOrganizer, type SlotQuotesMap } from '@t3x-dev/core';
+import { buildDraft, createMeaningPipeline, type FrameExtractionTurn, FrameExtractor, fuzzyLocate, type SlotQuotesMap } from '@t3x-dev/core';
 import {
   findConversationById,
   findTurnsByConversation,
@@ -229,36 +229,42 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
       }
     }
 
-    // 6c. Organize flat frames into nested meaning document (Step 2 agent)
+    // 6c. Run Meaning Pipeline — multi-agent post-processing
     let organizedSnapshot = result.snapshot;
     try {
-      const organizer = new MeaningOrganizer(
-        await (async () => {
-          const r = await getProviderRegistry();
-          return r.getProvider('generation');
-        })()
-      );
-      const orgResult = await organizer.organize(
+      const pipelineProvider = await (async () => {
+        const r = await getProviderRegistry();
+        return r.getProvider('generation');
+      })();
+      const pipeline = createMeaningPipeline(pipelineProvider);
+      const pipelineResult = await pipeline.run(
         result.snapshot,
-        selectedTurns.map((t, i) => `[T${i + 1}] [${t.role}]: ${t.content}`).join('\n')
+        extractionTurns,
+        currentSnapshot.frames.length > 0 ? currentSnapshot : undefined
       );
-      if (orgResult.ok) {
-        organizedSnapshot = orgResult.content;
-        // Record organizer usage
-        if (orgResult.usage.inputTokens || orgResult.usage.outputTokens) {
-          recordUsageFireAndForget(db, {
-            user_id: getUserId(c) ?? undefined,
-            project_id: conversation.projectId,
-            endpoint: 'organize_frames',
-            model: trackedModel,
-            input_tokens: orgResult.usage.inputTokens,
-            output_tokens: orgResult.usage.outputTokens,
-          });
+      organizedSnapshot = pipelineResult.content;
+
+      // Record pipeline usage
+      const pu = pipelineResult.meta.totalUsage;
+      if (pu.inputTokens || pu.outputTokens) {
+        recordUsageFireAndForget(db, {
+          user_id: getUserId(c) ?? undefined,
+          project_id: conversation.projectId,
+          endpoint: 'meaning_pipeline',
+          model: trackedModel,
+          input_tokens: pu.inputTokens,
+          output_tokens: pu.outputTokens,
+        });
+      }
+
+      // Log agent results for debugging
+      if (pipelineResult.meta.agentErrors.length > 0) {
+        for (const ae of pipelineResult.meta.agentErrors) {
+          console.warn(`[meaning-pipeline] Agent "${ae.agent}" failed: ${ae.error}`);
         }
       }
-      // If organization fails, we fall back to flat frames (organizedSnapshot = result.snapshot)
     } catch {
-      // Organization is optional — flat frames are still valid
+      // Pipeline is optional — flat frames are still valid
     }
 
     // 7. Insert delta into delta log
