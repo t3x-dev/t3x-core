@@ -506,48 +506,23 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
 
           {/* Tab Content */}
           <div className="flex-1 overflow-y-auto p-[var(--space-page)]">
-            {/* YAML Tab */}
+            {/* YAML Tab — Clean snapshot (no diff colors) */}
             {activeTab === 'yaml' && (
               <div className="mx-auto max-w-3xl space-y-3">
-                {/* Frame Cards */}
-                {enrichedFrames.map((ef) => (
-                  <div key={ef.frame.id} id={`frame-card-${ef.frame.id}`}>
+                {commit.content.frames.map((frame) => (
+                  <div key={frame.id} id={`frame-card-${frame.id}`}>
                     <CommitFrameCard
-                      enrichedFrame={ef}
-                      isActive={activeFrameId === ef.frame.id}
-                      onSelect={() => setActiveFrame(ef.frame.id)}
+                      enrichedFrame={{ frame, diffStatus: 'identical' }}
+                      isActive={activeFrameId === frame.id}
+                      onSelect={() => setActiveFrame(frame.id)}
                       cardRef={(el) => {
-                        frameRefs.current[ef.frame.id] = el;
+                        frameRefs.current[frame.id] = el;
                       }}
                     />
                   </div>
                 ))}
 
-                {/* Removed frames section */}
-                {removedFrames.length > 0 && (
-                  <div className="mt-6">
-                    <h3 className="text-xs font-bold text-[var(--diff-removed-accent)] uppercase tracking-wider mb-3">
-                      Removed from parent ({removedFrames.length})
-                    </h3>
-                    <div className="space-y-3">
-                      {removedFrames.map((ef) => (
-                        <div key={ef.frame.id} id={`frame-card-${ef.frame.id}`}>
-                          <CommitFrameCard
-                            enrichedFrame={ef}
-                            isActive={activeFrameId === ef.frame.id}
-                            onSelect={() => setActiveFrame(ef.frame.id)}
-                            cardRef={(el) => {
-                              frameRefs.current[ef.frame.id] = el;
-                            }}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Empty state */}
-                {enrichedFrames.length === 0 && (
+                {commit.content.frames.length === 0 && (
                   <div className="flex flex-col items-center justify-center py-12 text-center">
                     <p className="text-sm text-[var(--text-tertiary)] italic">
                       No frames in this commit.
@@ -575,12 +550,61 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
               </div>
             )}
 
-            {/* CHANGES Tab */}
+            {/* CHANGES Tab — Diff vs parent */}
             {activeTab === 'changes' && (
-              <div className="mx-auto max-w-3xl flex flex-col items-center justify-center py-12 text-center gap-2">
-                <p className="text-sm text-[var(--text-tertiary)] italic">
-                  Changes view coming soon — will show slot-level diff vs parent commit
-                </p>
+              <div className="mx-auto max-w-3xl space-y-3">
+                {commit.parents.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <p className="text-sm text-[var(--text-tertiary)] italic">
+                      Root commit — no parent to compare against.
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    {enrichedFrames.map((ef) => (
+                      <div key={ef.frame.id} id={`frame-card-${ef.frame.id}`}>
+                        <CommitFrameCard
+                          enrichedFrame={ef}
+                          isActive={activeFrameId === ef.frame.id}
+                          onSelect={() => setActiveFrame(ef.frame.id)}
+                          cardRef={(el) => {
+                            frameRefs.current[ef.frame.id] = el;
+                          }}
+                        />
+                      </div>
+                    ))}
+
+                    {removedFrames.length > 0 && (
+                      <div className="mt-6">
+                        <h3 className="text-xs font-bold text-[var(--diff-removed-accent)] uppercase tracking-wider mb-3">
+                          Removed from parent ({removedFrames.length})
+                        </h3>
+                        <div className="space-y-3">
+                          {removedFrames.map((ef) => (
+                            <div key={ef.frame.id} id={`frame-card-${ef.frame.id}`}>
+                              <CommitFrameCard
+                                enrichedFrame={ef}
+                                isActive={activeFrameId === ef.frame.id}
+                                onSelect={() => setActiveFrame(ef.frame.id)}
+                                cardRef={(el) => {
+                                  frameRefs.current[ef.frame.id] = el;
+                                }}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {enrichedFrames.length === 0 && removedFrames.length === 0 && (
+                      <div className="flex flex-col items-center justify-center py-12 text-center">
+                        <p className="text-sm text-[var(--text-tertiary)] italic">
+                          No changes from parent commit.
+                        </p>
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
             )}
 
