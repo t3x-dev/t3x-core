@@ -17,8 +17,21 @@ export default function ConversationPage() {
 
   // Resizable panel via drag handle
   const [panelWidth, setPanelWidth] = useState(320);
+  const [previewPrevWidth, setPreviewPrevWidth] = useState(320);
   const isDragging = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Auto-widen when entering preview mode, restore when leaving
+  const prevModeRef = useRef(panelMode);
+  if (panelMode !== prevModeRef.current) {
+    if (panelMode === 'preview' && prevModeRef.current !== 'preview') {
+      setPreviewPrevWidth(panelWidth);
+      setPanelWidth(Math.max(480, panelWidth));
+    } else if (panelMode !== 'preview' && prevModeRef.current === 'preview') {
+      setPanelWidth(previewPrevWidth);
+    }
+    prevModeRef.current = panelMode;
+  }
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
