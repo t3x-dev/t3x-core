@@ -16,7 +16,7 @@
  */
 
 import type { LLMProvider } from '../llm/types';
-import type { SemanticContent, Frame, Relation } from '../semantic/types';
+import type { SemanticContent, Frame, Relation, SlotValue } from '../semantic/types';
 import type { FrameExtractionTurn } from './frameExtractionPrompt';
 
 // ── Pipeline Context ──
@@ -48,6 +48,7 @@ export interface PipelineContext {
       agent: string;
       timestamp: string;
       frameCount: number;
+      quality: QualityMetrics;
       content: SemanticContent;
     }>;
   };
@@ -127,10 +128,87 @@ export function defaultDispatch(
 
 // ── Pipeline Runner ──
 
+// ── Quality Metrics ──
+
+export interface QualityMetrics {
+  /** Total number of frames */
+  frameCount: number;
+  /** Maximum nesting depth */
+  maxDepth: number;
+  /** Number of unique frame types */
+  uniqueTypes: number;
+  /** Number of duplicate frame types */
+  duplicateTypes: number;
+  /** Average slots per frame */
+  avgSlotsPerFrame: number;
+  /** Frames with arrays (good — consolidated) */
+  framesWithArrays: number;
+  /** Overall quality score 0-100 */
+  score: number;
+}
+
+function computeMetrics(content: SemanticContent): QualityMetrics {
+  const frames = content.frames;
+  const typeCount = new Map<string, number>();
+  let totalSlots = 0;
+  let framesWithArrays = 0;
+  let maxDepth = 0;
+
+  function measureDepth(slots: Record<string, SlotValue>, depth: number): number {
+    let max = depth;
+    for (const value of Object.values(slots)) {
+      if (typeof value === 'object' && value !== null && !Array.isArray(value) && 'type' in value && 'slots' in value) {
+        const d = measureDepth((value as { slots: Record<string, SlotValue> }).slots, depth + 1);
+        if (d > max) max = d;
+      }
+    }
+    return max;
+  }
+
+  for (const frame of frames) {
+    typeCount.set(frame.type, (typeCount.get(frame.type) ?? 0) + 1);
+    const slotKeys = Object.keys(frame.slots);
+    totalSlots += slotKeys.length;
+
+    const hasArray = Object.values(frame.slots).some((v) => Array.isArray(v));
+    if (hasArray) framesWithArrays++;
+
+    const depth = measureDepth(frame.slots, 1);
+    if (depth > maxDepth) maxDepth = depth;
+  }
+
+  const duplicateTypes = [...typeCount.values()].filter((c) => c > 1).length;
+  const avgSlotsPerFrame = frames.length > 0 ? totalSlots / frames.length : 0;
+
+  // Score: penalize too many frames, duplicates, shallow nesting
+  let score = 100;
+  if (frames.length > 8) score -= (frames.length - 8) * 5;    // Too many frames
+  if (frames.length > 15) score -= 20;                         // Way too many
+  if (duplicateTypes > 0) score -= duplicateTypes * 10;        // Duplicates bad
+  if (maxDepth < 2 && frames.length > 3) score -= 15;         // Too flat
+  if (avgSlotsPerFrame < 2) score -= 10;                       // Too thin
+  if (framesWithArrays > 0) score += 5;                        // Arrays good
+  score = Math.max(0, Math.min(100, score));
+
+  return {
+    frameCount: frames.length,
+    maxDepth,
+    uniqueTypes: typeCount.size,
+    duplicateTypes,
+    avgSlotsPerFrame: Math.round(avgSlotsPerFrame * 10) / 10,
+    framesWithArrays,
+    score,
+  };
+}
+
+// ── Pipeline Result ──
+
 export interface PipelineResult {
   content: SemanticContent;
   topicName: string | null;
   meta: PipelineContext['meta'];
+  /** Quality metrics for the final output */
+  quality: QualityMetrics;
 }
 
 export class MeaningPipeline {
@@ -184,33 +262,61 @@ export class MeaningPipeline {
       },
     };
 
-    // Save initial snapshot (raw extractor output)
+    // Save initial snapshot with quality metrics
+    const initialMetrics = computeMetrics(ctx.content);
     ctx.meta.stepSnapshots.push({
       agent: 'extractor_output',
       timestamp: new Date().toISOString(),
       frameCount: ctx.content.frames.length,
+      quality: initialMetrics,
       content: JSON.parse(JSON.stringify(ctx.content)),
     });
 
     // Dispatch — decide which agents to run
     const decision = this.dispatch(ctx, this.registry);
 
-    // Run agents in order
+    // Run agents in order with validation gates
     let currentCtx = ctx;
     for (const agentName of decision.agentsToRun) {
       const agent = this.registry.get(agentName);
       if (!agent) continue;
 
+      // Save pre-agent state for rollback
+      const preAgentContent = JSON.parse(JSON.stringify(currentCtx.content)) as SemanticContent;
+      const preMetrics = computeMetrics(preAgentContent);
+
       try {
         currentCtx = await agent.run(currentCtx, this.provider);
-        currentCtx.meta.completedAgents.push(agentName);
 
-        // Save snapshot after each step for human review
+        // Validation gate: did this agent make things better or worse?
+        const postMetrics = computeMetrics(currentCtx.content);
+
+        if (currentCtx.content.frames.length === 0 && preAgentContent.frames.length > 0) {
+          // Agent wiped all frames — rollback
+          currentCtx.content = preAgentContent;
+          currentCtx.meta.agentErrors.push({
+            agent: agentName,
+            error: 'ROLLBACK: agent produced 0 frames, reverted to pre-agent state',
+          });
+        } else if (postMetrics.score < preMetrics.score - 20) {
+          // Quality dropped significantly — rollback
+          currentCtx.content = preAgentContent;
+          currentCtx.meta.agentErrors.push({
+            agent: agentName,
+            error: `ROLLBACK: quality dropped ${preMetrics.score}→${postMetrics.score}, reverted`,
+          });
+        } else {
+          currentCtx.meta.completedAgents.push(agentName);
+        }
+
+        // Save snapshot with quality metrics
+        const snapshotMetrics = computeMetrics(currentCtx.content);
         currentCtx.meta.stepSnapshots.push({
           agent: agentName,
           timestamp: new Date().toISOString(),
           frameCount: currentCtx.content.frames.length,
-          content: JSON.parse(JSON.stringify(currentCtx.content)), // deep clone
+          quality: snapshotMetrics,
+          content: JSON.parse(JSON.stringify(currentCtx.content)),
         });
       } catch (err) {
         // Non-fatal — log error and continue with what we have
@@ -225,6 +331,7 @@ export class MeaningPipeline {
       content: currentCtx.content,
       topicName: currentCtx.topicName,
       meta: currentCtx.meta,
+      quality: computeMetrics(currentCtx.content),
     };
   }
 }

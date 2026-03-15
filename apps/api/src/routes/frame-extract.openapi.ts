@@ -256,19 +256,20 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
         });
       }
 
-      // Log agent results
+      // Log agent results with quality metrics
       const completed = pipelineResult.meta.completedAgents;
       const errors = pipelineResult.meta.agentErrors;
       const snapshots = pipelineResult.meta.stepSnapshots;
-      console.info(`[meaning-pipeline] Completed: ${completed.join(' → ')} | ${snapshots.length} snapshots`);
+      const q = pipelineResult.quality;
+      console.info(`[meaning-pipeline] Completed: ${completed.join(' → ')}`);
+      console.info(`[meaning-pipeline] Quality: score=${q.score} frames=${q.frameCount} depth=${q.maxDepth} dupes=${q.duplicateTypes}`);
+      for (const snap of snapshots) {
+        console.info(`[meaning-pipeline] Step "${snap.agent}": ${snap.frameCount} frames, score=${snap.quality.score}`);
+      }
       if (errors.length > 0) {
         for (const ae of errors) {
-          console.warn(`[meaning-pipeline] Agent "${ae.agent}" failed: ${ae.error}`);
+          console.warn(`[meaning-pipeline] Agent "${ae.agent}": ${ae.error}`);
         }
-      }
-      // Store snapshots for debugging (logged, could be returned to UI in future)
-      for (const snap of snapshots) {
-        console.info(`[meaning-pipeline] Step "${snap.agent}": ${snap.frameCount} frames`);
       }
     } catch (pipelineErr) {
       console.warn(`[meaning-pipeline] Pipeline error: ${pipelineErr instanceof Error ? pipelineErr.message : String(pipelineErr)}`);
