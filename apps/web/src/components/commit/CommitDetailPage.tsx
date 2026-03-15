@@ -51,6 +51,7 @@ import { useProjectStore } from '@/store/projectStore';
 import { CommitFrameCard } from './CommitFrameCard';
 import { CommitFrameIndex } from './CommitFrameIndex';
 import { CopyButton, DotIndicator, useCountUp } from './CommitDetailHelpers';
+import { CommitOperationsSidebar } from './CommitOperationsSidebar';
 import { ProvenanceGraph } from './CommitProvenanceGraph';
 import { SourceSlideIn } from './SourceSlideIn';
 
@@ -610,67 +611,16 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
           </div>
         </div>
 
-        {/* RIGHT: Source Slide-In (when open) or lightweight context */}
-        {sourceViewer.isOpen ? (
-          <SourceSlideIn projectId={projectId} />
-        ) : (
-          <aside className="hidden w-[280px] shrink-0 overflow-y-auto border-l border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-4 lg:block">
-            {/* Commit History */}
-            {commitHistory.length > 0 && (
-              <div>
-                <div className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-[var(--text-tertiary)]">
-                  Commit History
-                </div>
-                <div className="space-y-1">
-                  {commitHistory.map((h) => (
-                    <Link
-                      key={h.hash}
-                      href={`/project/${projectId}/commit/${encodeURIComponent(h.hash)}`}
-                      className={`group/hist flex items-center gap-2 rounded-md px-2 py-1.5 text-[11px] transition-colors ${
-                        h.hash === commitHash
-                          ? 'bg-[var(--accent-commit)]/8 text-[var(--text-primary)]'
-                          : 'text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-secondary)]'
-                      }`}
-                    >
-                      <DotIndicator status={h.hash === commitHash ? 'added' : 'identical'} />
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate font-mono text-[10px]">{shortHash(h.hash)}</div>
-                        <div className="truncate text-[11px]">{h.message || 'No message'}</div>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            )}
+        {/* RIGHT: Source Slide-In (pushes center) */}
+        {sourceViewer.isOpen && <SourceSlideIn projectId={projectId} />}
 
-            {/* Relations summary */}
-            {commit.content.relations.length > 0 && (
-              <div className="mt-4">
-                <div className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-[var(--text-tertiary)]">
-                  Relations ({commit.content.relations.length})
-                </div>
-                <div className="space-y-1">
-                  {commit.content.relations.map((rel, i) => (
-                    <div
-                      key={`${rel.from}-${rel.to}-${i}`}
-                      className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] text-[var(--text-tertiary)]"
-                    >
-                      <span className="font-mono text-[10px] text-[var(--text-secondary)] truncate max-w-[60px]">
-                        {rel.from}
-                      </span>
-                      <span className="rounded bg-[var(--surface-app)] px-1 py-0.5 text-[9px] font-medium border border-[var(--stroke-divider)]">
-                        {rel.type}
-                      </span>
-                      <span className="font-mono text-[10px] text-[var(--text-secondary)] truncate max-w-[60px]">
-                        {rel.to}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </aside>
-        )}
+        {/* RIGHT: Operations Sidebar (always visible) */}
+        <CommitOperationsSidebar
+          projectId={projectId}
+          commitHash={commitHash}
+          leaves={leaves}
+          onLeavesChange={setLeaves}
+        />
       </div>
 
       {/* ═══════ BOTTOM: Provenance Graph ═══════ */}
