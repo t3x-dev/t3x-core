@@ -89,6 +89,8 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
 
   // ── UI state ──────────────────────────────────────
   const [bottomCollapsed, setBottomCollapsed] = useState(false);
+  type CommitTab = 'yaml' | 'graph' | 'json' | 'changes' | 'relations';
+  const [activeTab, setActiveTab] = useState<CommitTab>('yaml');
 
   // ── Refs ──────────────────────────────────────────
   const frameRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -481,67 +483,128 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
           onLeavesChange={setLeaves}
         />
 
-        {/* CENTER: Frame Graph + Frame Cards */}
-        <div className="flex-1 overflow-y-auto p-[var(--space-page)]">
-          <div className="mx-auto max-w-3xl space-y-3">
-            {/* Frame Graph (when frames + relations exist) */}
-            {commit.content.frames.length > 0 && commit.content.relations.length > 0 && (
-              <div className="rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-panel)] overflow-hidden">
-                <div className="px-4 py-2 border-b border-[var(--stroke-divider)]">
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
-                    Frame Graph ({commit.content.frames.length} frames,{' '}
-                    {commit.content.relations.length} relations)
-                  </h3>
-                </div>
-                <div className="h-[400px]">
+        {/* CENTER: Tabbed Panel */}
+        <div className="flex flex-1 flex-col overflow-hidden">
+          {/* Tab Bar */}
+          <div className="flex gap-0 border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-3 shrink-0">
+            {(['yaml', 'graph', 'json', 'changes', 'relations'] as const).map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => setActiveTab(tab)}
+                className={`px-3.5 py-2 text-[11px] font-medium border-b-2 transition-colors ${
+                  activeTab === tab
+                    ? 'border-[var(--accent-commit)] text-[var(--text-primary)]'
+                    : 'border-transparent text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]'
+                }`}
+              >
+                {tab.toUpperCase()}
+              </button>
+            ))}
+          </div>
+
+          {/* Tab Content */}
+          <div className="flex-1 overflow-y-auto p-[var(--space-page)]">
+            {/* YAML Tab */}
+            {activeTab === 'yaml' && (
+              <div className="mx-auto max-w-3xl space-y-3">
+                {/* Frame Cards */}
+                {enrichedFrames.map((ef) => (
+                  <div key={ef.frame.id} id={`frame-card-${ef.frame.id}`}>
+                    <CommitFrameCard
+                      enrichedFrame={ef}
+                      isActive={activeFrameId === ef.frame.id}
+                      onSelect={() => setActiveFrame(ef.frame.id)}
+                      cardRef={(el) => {
+                        frameRefs.current[ef.frame.id] = el;
+                      }}
+                    />
+                  </div>
+                ))}
+
+                {/* Removed frames section */}
+                {removedFrames.length > 0 && (
+                  <div className="mt-6">
+                    <h3 className="text-xs font-bold text-[var(--diff-removed-accent)] uppercase tracking-wider mb-3">
+                      Removed from parent ({removedFrames.length})
+                    </h3>
+                    <div className="space-y-3">
+                      {removedFrames.map((ef) => (
+                        <div key={ef.frame.id} id={`frame-card-${ef.frame.id}`}>
+                          <CommitFrameCard
+                            enrichedFrame={ef}
+                            isActive={activeFrameId === ef.frame.id}
+                            onSelect={() => setActiveFrame(ef.frame.id)}
+                            cardRef={(el) => {
+                              frameRefs.current[ef.frame.id] = el;
+                            }}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Empty state */}
+                {enrichedFrames.length === 0 && (
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <p className="text-sm text-[var(--text-tertiary)] italic">
+                      No frames in this commit.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* GRAPH Tab */}
+            {activeTab === 'graph' && (
+              <div className="mx-auto max-w-3xl">
+                <div className="h-[500px]">
                   <FrameGraphView content={commit.content} className="h-full w-full" />
                 </div>
               </div>
             )}
 
-            {/* Frame Cards */}
-            {enrichedFrames.map((ef) => (
-              <div key={ef.frame.id} id={`frame-card-${ef.frame.id}`}>
-                <CommitFrameCard
-                  enrichedFrame={ef}
-                  isActive={activeFrameId === ef.frame.id}
-                  onSelect={() => setActiveFrame(ef.frame.id)}
-                  cardRef={(el) => {
-                    frameRefs.current[ef.frame.id] = el;
-                  }}
-                />
-              </div>
-            ))}
-
-            {/* Removed frames section */}
-            {removedFrames.length > 0 && (
-              <div className="mt-6">
-                <h3 className="text-xs font-bold text-[var(--diff-removed-accent)] uppercase tracking-wider mb-3">
-                  Removed from parent ({removedFrames.length})
-                </h3>
-                <div className="space-y-3">
-                  {removedFrames.map((ef) => (
-                    <div key={ef.frame.id} id={`frame-card-${ef.frame.id}`}>
-                      <CommitFrameCard
-                        enrichedFrame={ef}
-                        isActive={activeFrameId === ef.frame.id}
-                        onSelect={() => setActiveFrame(ef.frame.id)}
-                        cardRef={(el) => {
-                          frameRefs.current[ef.frame.id] = el;
-                        }}
-                      />
-                    </div>
-                  ))}
-                </div>
+            {/* JSON Tab */}
+            {activeTab === 'json' && (
+              <div className="mx-auto max-w-3xl">
+                <pre className="p-4 bg-[var(--surface-code,#0d1117)] text-[12px] font-mono text-[var(--text-secondary)] overflow-auto rounded-lg">
+                  {JSON.stringify(commit, null, 2)}
+                </pre>
               </div>
             )}
 
-            {/* Empty state */}
-            {enrichedFrames.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-12 text-center">
+            {/* CHANGES Tab */}
+            {activeTab === 'changes' && (
+              <div className="mx-auto max-w-3xl flex flex-col items-center justify-center py-12 text-center gap-2">
                 <p className="text-sm text-[var(--text-tertiary)] italic">
-                  No frames in this commit.
+                  Changes view coming soon — will show slot-level diff vs parent commit
                 </p>
+              </div>
+            )}
+
+            {/* RELATIONS Tab */}
+            {activeTab === 'relations' && (
+              <div className="mx-auto max-w-3xl">
+                {commit.content.relations.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <p className="text-sm text-[var(--text-tertiary)] italic">
+                      No relations in this commit.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-panel)] divide-y divide-[var(--stroke-divider)]">
+                    {commit.content.relations.map((rel, i) => (
+                      <div key={`${rel.from}-${rel.to}-${i}`} className="flex items-center gap-2 px-4 py-1.5 text-[11px]">
+                        <span className="font-mono text-[var(--accent-commit)]">{rel.from}</span>
+                        <span className="text-[var(--diff-modified-accent)]">→</span>
+                        <span className="text-[var(--text-tertiary)] text-[10px]">{rel.type}</span>
+                        <span className="text-[var(--diff-modified-accent)]">→</span>
+                        <span className="font-mono text-[var(--accent-commit)]">{rel.to}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
