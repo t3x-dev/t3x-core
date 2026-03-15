@@ -8,7 +8,6 @@ export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
-  rings?: api.RingsData | null;
 }
 
 export interface UseConversationChatOptions {
@@ -129,7 +128,7 @@ export function useConversationChat({
             id: turn.turn_hash,
             role: turn.role as 'user' | 'assistant',
             content: turn.content,
-            rings: api.parseRingsData((turn as api.TurnDetail).rings),
+
           }))
           .reverse();
         setChatMessages(messages);
@@ -199,7 +198,6 @@ export function useConversationChat({
           id: turn.turn_hash,
           role: turn.role as 'user' | 'assistant',
           content: turn.content,
-          rings: api.parseRingsData((turn as api.TurnDetail).rings),
         }))
         .reverse();
 

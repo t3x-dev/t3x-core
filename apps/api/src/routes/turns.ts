@@ -9,7 +9,7 @@
  */
 
 import type { ContentBlock } from '@t3x-dev/core';
-import { createRingExtractor, textFromBlocks } from '@t3x-dev/core';
+import { textFromBlocks } from '@t3x-dev/core';
 import {
   findConversationById,
   findTurnByHash,
@@ -20,7 +20,6 @@ import {
 } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { getDB } from '../lib/db';
-import { getNLPProvider } from '../lib/nlp';
 import { jsonError, jsonSuccess } from '../lib/response';
 
 export const turnRoutes = new Hono();
@@ -193,26 +192,8 @@ turnRoutes.post('/v1/turns', async (c) => {
       );
     }
 
-    // Extract rings if not provided — graceful fallback if NLP unavailable
-    // Feature flag: DISABLE_RING_EXTRACTION=true skips ring extraction (ring retirement)
-    const disableRings = process.env.DISABLE_RING_EXTRACTION === 'true';
-    let rings = body.rings as Record<string, unknown> | undefined;
-    if (!disableRings && !rings && body.content) {
-      try {
-        const nlpProvider = getNLPProvider();
-        const extractor = createRingExtractor(nlpProvider);
-        const ringOutput = await extractor.extract('temp', body.content, body.language);
-        rings = {
-          rings: {
-            ring1: ringOutput.ring1,
-            ring2: ringOutput.ring2,
-            ring3: ringOutput.ring3,
-          },
-        };
-      } catch (_nlpErr) {
-        // NLP unavailable — save turn without ring data (graceful degradation)
-      }
-    }
+    // Ring extraction has been retired — pass through any rings provided by the client
+    const rings = body.rings as Record<string, unknown> | undefined;
 
     const turn = await insertTurn(db, {
       projectId: body.project_id,

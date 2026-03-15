@@ -4,7 +4,7 @@
  * T3X Core - Deterministic semantic extraction, diff, and merge engine.
  *
  * This package provides:
- * - Ring 1/2/3 semantic extraction
+ * - Frame semantic extraction
  * - Semantic diff (two-way)
  * - Two-way merge for combining commits
  * - Provider interfaces (NLP, Embedding, LLM)
@@ -88,12 +88,12 @@ export {
   type WordDiffSegment,
   wordDiff,
 } from './diff';
-// Extractors (Ring 1/2/3)
+// Extractors
 export {
   type AdaptiveConfig,
   type AdaptiveFeedbackStats,
   type AdaptiveThresholds,
-  // v1.1: Anchor types
+  // Anchor types
   type AnchorCandidate,
   type AnchorSource,
   type AnchorType,
@@ -105,26 +105,16 @@ export {
   buildFrameExtractionPrompt,
   // Incremental Extraction (LLM pipeline)
   buildIncrementalPrompt,
-  // Ring 4: Relations
+  // Relations
   buildRelationPrompt,
   buildStyleSeed,
   computeAdaptiveConfig,
   computeAdaptiveThresholds,
-  createEmptyRing1,
-  createEmptyRing2,
-  createEmptyRing3,
-  createEmptyRingOutput,
   createLLMExtractor,
-  createPolarityRuleEngine,
   createRelationExtractor,
-  createRingExtractor,
   type ExtractedSentence,
   type ExtractionItem,
   ExtractionParseError,
-  // Ring Extractor
-  type ExtractorConfig,
-  type Facet,
-  type FacetType,
   type FrameDeltaParseResult,
   type FrameExtractionInput,
   type FrameExtractionPromptResult,
@@ -134,19 +124,11 @@ export {
   type SlotQuotesMap,
   type FuzzyLocateResult,
   fuzzyLocate,
-  type Keyword,
   type LLMExtractionOptions,
   type LLMExtractionResult,
   LLMExtractor,
   type OverlapResult,
   type OverlapStatus,
-  type Polarity,
-  // Polarity Rules
-  type PolarityRule,
-  PolarityRuleEngine,
-  // Types
-  type PosTag,
-  type PreferenceRelation,
   parseExtractionResponse,
   parseFrameDelta,
   parseIncrementalResponse,
@@ -154,11 +136,6 @@ export {
   RelationExtractor,
   type RelationItem,
   RelationParseError,
-  type Ring1Output,
-  type Ring2Output,
-  type Ring3Output,
-  RingExtractor,
-  type RingOutput,
   type RouteResult,
   resolveSourceRef,
   routeProposal,

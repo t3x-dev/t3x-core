@@ -48,46 +48,18 @@ export {
   type LLMExtractionResult,
   LLMExtractor,
 } from './llmExtractor';
-// Polarity Rules
-export {
-  createPolarityRuleEngine,
-  type PolarityRule,
-  PolarityRuleEngine,
-  type PreferenceRelation,
-} from './polarityRules';
 // Relation Extraction (Inter-sentence Relations)
 export { createRelationExtractor, RelationExtractor } from './relationExtractor';
 export { parseRelationResponse, type RelationItem, RelationParseError } from './relationParser';
 export { buildRelationPrompt } from './relationPrompt';
-// Ring Extractor
-/** @deprecated Use Frame semantic engine instead of Ring extraction. */
-export {
-  createRingExtractor,
-  type ExtractorConfig,
-  RingExtractor,
-} from './ringExtractor';
 export { type RouteResult, routeProposal } from './routeProposal';
 export { resolveSourceRef } from './sourceRefResolver';
 export { spToSentence } from './spToSentence';
 // Types
 export {
-  // v1.1: Anchor types
   type AnchorCandidate,
   type AnchorSource,
   type AnchorType,
-  createEmptyRing1,
-  createEmptyRing2,
-  createEmptyRing3,
-  createEmptyRingOutput,
-  type Facet,
-  type FacetType,
-  type Keyword,
-  type Polarity,
-  type PosTag,
-  type Ring1Output,
-  type Ring2Output,
-  type Ring3Output,
-  type RingOutput,
   type Segment,
 } from './types';
 export {

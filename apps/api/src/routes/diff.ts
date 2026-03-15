@@ -14,7 +14,6 @@ import {
   DiffType,
   diffCommits,
   EmbeddingProviderError,
-  type RingOutput,
   type SegmentDiff,
   type WordDiffSegment,
 } from '@t3x-dev/core';
@@ -54,10 +53,12 @@ async function extractSegmentsFromTurn(db: DBType, turnHash: string): Promise<Ex
     return { ok: false, error: 'not_found', message: `Turn ${turnHash} not found` };
   }
 
-  // Strategy 1: Ring 3 segments (legacy)
+  // Strategy 1: Ring 3 segments (legacy data that may still exist in DB)
   if (turn.ringsJson) {
     try {
-      const rings = JSON.parse(turn.ringsJson) as RingOutput;
+      const rings = JSON.parse(turn.ringsJson) as {
+        ring3?: { segments?: Array<{ segmentId: string; text: string }> };
+      };
       if (rings.ring3 && Array.isArray(rings.ring3.segments) && rings.ring3.segments.length > 0) {
         const segments: DiffSegment[] = rings.ring3.segments.map((seg) => ({
           segmentId: seg.segmentId,
