@@ -14,13 +14,17 @@ import {
   DiffType,
   diffCommits,
   EmbeddingProviderError,
+  type FrameDiff,
+  frameDiff,
   type SegmentDiff,
+  upgradeLegacyCommit,
   type WordDiffSegment,
 } from '@t3x-dev/core';
 import {
   findCommitV4ByHash,
   findSegmentEmbeddingsByTurn,
   findTurnByHash,
+  getCommit,
   getCommitV3,
 } from '@t3x-dev/storage';
 import { Hono } from 'hono';
@@ -503,4 +507,80 @@ diffRoutes.post('/v1/diff/three-way', async (c) => {
     }
     return jsonError(c, 'DIFF_FAILED', (error as Error).message, 500);
   }
+});
+
+/**
+ * POST /v1/diff/frame — Frame-based diff between two commits
+ */
+diffRoutes.post('/v1/diff/frame', async (c) => {
+  let body: {
+    base_commit_hash?: string;
+    target_commit_hash?: string;
+  } | null = null;
+
+  try {
+    body = await c.req.json();
+  } catch {
+    return jsonError(c, 'INVALID_JSON', 'Invalid JSON body', 400);
+  }
+
+  if (!body) {
+    return jsonError(c, 'INVALID_REQUEST', 'Request body is required', 400);
+  }
+
+  if (!body.base_commit_hash || !body.target_commit_hash) {
+    return jsonError(
+      c,
+      'INVALID_REQUEST',
+      'Both base_commit_hash and target_commit_hash are required',
+      400
+    );
+  }
+
+  const db = await getDB();
+
+  // Fetch commit — try V5 first, fall back to V4, then V3 (all upgraded to frame-based)
+  const fetchCommit = async (hash: string) => {
+    // Try V5 (frame-based)
+    const v5 = await getCommit(db, hash);
+    if (v5) return v5;
+
+    // Try V4 (sentence-based) and upgrade to frame-based
+    const v4 = await findCommitV4ByHash(db, hash);
+    if (v4) return upgradeLegacyCommit(v4 as Parameters<typeof upgradeLegacyCommit>[0]);
+
+    // Try V3 and upgrade
+    const v3 = await getCommitV3(db, hash);
+    if (v3) return upgradeLegacyCommit(v3 as Parameters<typeof upgradeLegacyCommit>[0]);
+
+    return null;
+  };
+
+  const [baseCommit, targetCommit] = await Promise.all([
+    fetchCommit(body.base_commit_hash),
+    fetchCommit(body.target_commit_hash),
+  ]);
+
+  if (!baseCommit) {
+    return jsonError(c, 'NOT_FOUND', `Base commit ${body.base_commit_hash} not found`, 404);
+  }
+  if (!targetCommit) {
+    return jsonError(c, 'NOT_FOUND', `Target commit ${body.target_commit_hash} not found`, 404);
+  }
+
+  const diff: FrameDiff = frameDiff(baseCommit.content, targetCommit.content);
+
+  const commitMeta = (commit: typeof baseCommit) => ({
+    hash: commit.hash,
+    message: commit.message ?? null,
+    author: commit.author,
+    committed_at: commit.committed_at,
+    branch: commit.branch,
+  });
+
+  return jsonSuccess(c, {
+    diff,
+    base: commitMeta(baseCommit),
+    target: commitMeta(targetCommit),
+  });
 });

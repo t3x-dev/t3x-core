@@ -48,11 +48,11 @@ import { relativeTime, shortHash } from '@/lib/formatters';
 import { PAGE_ANIMATION_STYLES } from '@/lib/pageAnimations';
 import { useCommitDetailStore } from '@/store/commitDetailStore';
 import { useProjectStore } from '@/store/projectStore';
-import { CommitFrameCard } from './CommitFrameCard';
 import { CommitFrameIndex } from './CommitFrameIndex';
 import { CopyButton, DotIndicator, useCountUp } from './CommitDetailHelpers';
 import { CommitOperationsSidebar } from './CommitOperationsSidebar';
 import { ProvenanceGraph } from './CommitProvenanceGraph';
+import { CommitYAMLDocument } from './CommitYAMLDocument';
 import { SourceSlideIn } from './SourceSlideIn';
 
 // ============================================================================
@@ -87,10 +87,11 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
   const setActiveFrame = useCommitDetailStore((s) => s.setActiveFrame);
   const sourceViewer = useCommitDetailStore((s) => s.sourceViewer);
   const storeSetCommit = useCommitDetailStore((s) => s.setCommit);
+  const openSourceViewer = useCommitDetailStore((s) => s.openSourceViewer);
 
   // ── UI state ──────────────────────────────────────
   const [bottomCollapsed, setBottomCollapsed] = useState(false);
-  type CommitTab = 'yaml' | 'graph' | 'json' | 'changes' | 'relations';
+  type CommitTab = 'yaml' | 'graph' | 'json' | 'relations';
   const [activeTab, setActiveTab] = useState<CommitTab>('yaml');
 
   // ── Refs ──────────────────────────────────────────
@@ -488,7 +489,7 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
         <div className="flex flex-1 flex-col overflow-hidden">
           {/* Tab Bar */}
           <div className="flex gap-0 border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-3 shrink-0">
-            {(['yaml', 'graph', 'json', 'changes', 'relations'] as const).map((tab) => (
+            {(['yaml', 'graph', 'json', 'relations'] as const).map((tab) => (
               <button
                 key={tab}
                 type="button"
@@ -506,54 +507,16 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
 
           {/* Tab Content */}
           <div className="flex-1 overflow-y-auto p-[var(--space-page)]">
-            {/* YAML Tab */}
+            {/* YAML Tab — Nested YAML document */}
             {activeTab === 'yaml' && (
-              <div className="mx-auto max-w-3xl space-y-3">
-                {/* Frame Cards */}
-                {enrichedFrames.map((ef) => (
-                  <div key={ef.frame.id} id={`frame-card-${ef.frame.id}`}>
-                    <CommitFrameCard
-                      enrichedFrame={ef}
-                      isActive={activeFrameId === ef.frame.id}
-                      onSelect={() => setActiveFrame(ef.frame.id)}
-                      cardRef={(el) => {
-                        frameRefs.current[ef.frame.id] = el;
-                      }}
-                    />
-                  </div>
-                ))}
-
-                {/* Removed frames section */}
-                {removedFrames.length > 0 && (
-                  <div className="mt-6">
-                    <h3 className="text-xs font-bold text-[var(--diff-removed-accent)] uppercase tracking-wider mb-3">
-                      Removed from parent ({removedFrames.length})
-                    </h3>
-                    <div className="space-y-3">
-                      {removedFrames.map((ef) => (
-                        <div key={ef.frame.id} id={`frame-card-${ef.frame.id}`}>
-                          <CommitFrameCard
-                            enrichedFrame={ef}
-                            isActive={activeFrameId === ef.frame.id}
-                            onSelect={() => setActiveFrame(ef.frame.id)}
-                            cardRef={(el) => {
-                              frameRefs.current[ef.frame.id] = el;
-                            }}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Empty state */}
-                {enrichedFrames.length === 0 && (
-                  <div className="flex flex-col items-center justify-center py-12 text-center">
-                    <p className="text-sm text-[var(--text-tertiary)] italic">
-                      No frames in this commit.
-                    </p>
-                  </div>
-                )}
+              <div className="mx-auto max-w-3xl">
+                <CommitYAMLDocument
+                  content={commit.content}
+                  onSlotClick={(frameId, slotKey) => {
+                    setActiveFrame(frameId);
+                    openSourceViewer(slotKey);
+                  }}
+                />
               </div>
             )}
 
@@ -572,15 +535,6 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
                 <pre className="p-4 bg-[var(--surface-code,#0d1117)] text-[12px] font-mono text-[var(--text-secondary)] overflow-auto rounded-lg">
                   {JSON.stringify(commit, null, 2)}
                 </pre>
-              </div>
-            )}
-
-            {/* CHANGES Tab */}
-            {activeTab === 'changes' && (
-              <div className="mx-auto max-w-3xl flex flex-col items-center justify-center py-12 text-center gap-2">
-                <p className="text-sm text-[var(--text-tertiary)] italic">
-                  Changes view coming soon — will show slot-level diff vs parent commit
-                </p>
               </div>
             )}
 
