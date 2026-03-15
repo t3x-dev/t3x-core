@@ -626,7 +626,7 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
       {/* ═══════ BOTTOM: Provenance Graph ═══════ */}
       <ProvenanceGraph
         activeSentenceId={activeFrameId}
-        commit={commit as unknown as import('@/lib/api').CommitV4}
+        commit={commit}
         leaves={leaves}
         projectId={projectId}
         collapsed={bottomCollapsed}

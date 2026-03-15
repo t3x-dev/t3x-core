@@ -11,7 +11,8 @@
 import { ChevronDown, GitCommit, Leaf as LeafIcon, MessageSquare } from 'lucide-react';
 import Link from 'next/link';
 import { type MutableRefObject, type RefObject, useEffect, useState } from 'react';
-import type { CommitV4, Leaf } from '@/lib/api';
+import type { Commit } from '@t3x-dev/core';
+import type { Leaf } from '@/lib/api';
 import { relativeTime, shortHash } from './CommitDetailHelpers';
 
 // ============================================================================
@@ -112,7 +113,7 @@ export function ConnectionLines({
 
 interface ProvenanceGraphProps {
   activeSentenceId: string | null;
-  commit: CommitV4;
+  commit: Commit;
   leaves: Leaf[];
   projectId: string;
   collapsed: boolean;
@@ -129,8 +130,8 @@ export function ProvenanceGraph({
 }: ProvenanceGraphProps) {
   const isConnected = activeSentenceId !== null;
   const sourceConversations =
-    commit.source_refs?.filter((ref) => ref.type === 'conversation') ?? [];
-  const sourceLeaves = commit.source_refs?.filter((ref) => ref.type === 'leaf') ?? [];
+    commit.sources?.filter((ref) => ref.type === 'conversation') ?? [];
+  const sourceLeaves = commit.sources?.filter((ref) => ref.type === 'leaf') ?? [];
   const totalSources = sourceConversations.length + sourceLeaves.length;
 
   return (
@@ -222,7 +223,7 @@ export function ProvenanceGraph({
               <polygon points="92,8 100,12 92,16" fill="var(--accent-commit)" opacity="0.7" />
             </svg>
             <span className="text-[9px] text-[var(--text-tertiary)] whitespace-nowrap -mt-1">
-              {commit.content.sentences.length} sentences
+              {commit.content.frames.length} frames
             </span>
           </div>
 
