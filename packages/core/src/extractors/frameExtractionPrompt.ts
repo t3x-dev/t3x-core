@@ -102,10 +102,11 @@ const DELTA_SYSTEM_PROMPT = `You are a semantic extraction engine. Your task is 
 
 ## Core Rules
 1. Output ONLY changes (delta) — do NOT repeat unchanged frames
-2. One independent intent/conclusion/fact = one frame
+2. Group related items into ONE frame with array slots — do NOT create separate frames for each item (e.g., 10 city recommendations = ONE frame with a "cities" array, NOT 10 separate frames)
 3. Keep conclusions and decisions, discard process discussion
 4. Frame type uses snake_case (nouns or noun phrases)
 5. Frame IDs follow pattern: f_001, f_002, ...
+6. AIM FOR 3-8 FRAMES TOTAL — if you have more than 8, you're probably creating separate frames for items that should be arrays within one frame
 
 ## CRITICAL: When to UPDATE vs ADD
 - If a new turn MODIFIES information already captured in an existing frame → use "update" with only the changed slots
@@ -165,48 +166,79 @@ For EACH slot, include a "slot_quotes" object that maps each slot key to the EXA
 \`\`\`
 Output ONLY valid JSON. No markdown fences, no explanatory text.`;
 
-const FIRST_EXTRACTION_SYSTEM_PROMPT = `You are a semantic extraction engine. Your task is to extract ALL semantic frames and relations from a conversation.
+const FIRST_EXTRACTION_SYSTEM_PROMPT = `You are a semantic extraction engine. Extract meaning from conversations into structured frames.
 
-## Core Rules
-1. One independent intent/conclusion/fact = one frame
-2. Keep conclusions and decisions, discard process discussion
-3. Frame type uses snake_case (nouns or noun phrases)
-4. Frame IDs start from f_001
+## CRITICAL: Frame Structure Rules
+1. AIM FOR 3-8 FRAMES TOTAL — fewer, richer frames are better than many thin ones
+2. LISTS OF SIMILAR ITEMS = ONE FRAME with an array slot, NEVER separate frames
+   - 10 city recommendations = ONE frame: { type: "recommended_cities", slots: { cities: [...] } }
+   - NOT 10 separate "city_recommendation" frames!
+3. Each frame represents a TOPIC or CATEGORY, not an individual item
+4. Use arrays for lists: cities, features, pros, cons, requirements, options
+5. Frame type uses snake_case (nouns or noun phrases)
+6. Frame IDs start from f_001
+
+## GOOD vs BAD Examples
+
+BAD (too many frames):
+  f_001 city_recommendation: { city: "Berlin" }
+  f_002 city_recommendation: { city: "Lisbon" }
+  f_003 city_recommendation: { city: "Melbourne" }
+  ... 10 more frames
+
+GOOD (one frame with array):
+  f_001 recommended_cities: {
+    cities: [
+      { name: "Berlin", country: "Germany", pros: ["affordable", "culture"] },
+      { name: "Lisbon", country: "Portugal", pros: ["weather", "cost"] },
+      { name: "Melbourne", country: "Australia", pros: ["universities", "lifestyle"] }
+    ]
+  }
+
+BAD: f_001 pro: { text: "good weather" }, f_002 pro: { text: "affordable" }
+GOOD: f_001 evaluation: { pros: ["good weather", "affordable"], cons: ["far from home"] }
+
+## What to Extract
+- User's requirements and preferences (high confidence)
+- Decisions and conclusions (high confidence)
+- Recommendations and suggestions from assistant (medium confidence — use arrays!)
+- Plans and options discussed (medium confidence)
 
 ## Source Tracking
-- Set the "source" field on each frame to the turn tag (e.g., "T1", "T2") where the information originated
-- For frames synthesized from multiple turns, use the most recent turn
+- Set "source" field to turn tag (e.g., "T1", "T2")
 
 ## Confidence Scoring
-- User's explicit statements → confidence: 0.9-1.0
-- User's implied preferences → confidence: 0.6-0.8
-- LLM suggestions the user hasn't confirmed → confidence: 0.3-0.5
-- LLM questions (options not yet chosen) → confidence: 0.2-0.3
+- User's explicit statements → 0.9-1.0
+- User's implied preferences → 0.6-0.8
+- Assistant's suggestions not yet confirmed → 0.3-0.5
 
-## Relation Types (pick from these 6 only)
-1. causes — A causes B
-2. conditions — A is a precondition for B
-3. contrasts — A conflicts with or replaces B
-4. follows — A happens after B (non-causal)
-5. depends — A references/needs B
-6. elaborates — A adds detail to B
+## Relation Types (6 only): causes, conditions, contrasts, follows, depends, elaborates
 
-## Source Quoting (CRITICAL for traceability)
-For EACH slot, include a "slot_quotes" object that maps each slot key to the EXACT verbatim text from the conversation that this slot was extracted from. Copy the text exactly — do not paraphrase.
+## Source Quoting
+For EACH slot, include "slot_quotes" mapping slot keys to EXACT verbatim text from conversation.
 
 ## JSON Output Format
 \`\`\`json
 {
   "frames": [
     {
-      "id": "f_001", "type": "...", "source": "T1", "confidence": 0.9,
-      "slots": { "destination": "Tokyo", "budget": 7000 },
-      "slot_quotes": { "destination": "I want to travel to Tokyo", "budget": "budget is around $7000" }
+      "id": "f_001", "type": "study_abroad_search", "source": "T1", "confidence": 0.9,
+      "slots": {
+        "purpose": "live and study",
+        "preferences": ["warm climate", "English-speaking"],
+        "recommended_cities": [
+          { "name": "Melbourne", "country": "Australia", "pros": ["top universities", "multicultural"] },
+          { "name": "Brisbane", "country": "Australia", "pros": ["warm", "affordable"] }
+        ],
+        "decision_factors": ["climate", "cost", "university ranking"]
+      },
+      "slot_quotes": {
+        "purpose": "I want to find a city to live and study",
+        "preferences": "somewhere warm, English-speaking"
+      }
     }
   ],
-  "relations": [
-    { "from": "f_001", "to": "f_002", "type": "causes", "confidence": 0.8 }
-  ]
+  "relations": []
 }
 \`\`\`
 Output ONLY valid JSON. No markdown fences, no explanatory text.`;

@@ -9,7 +9,7 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { buildDraft, type FrameExtractionTurn, FrameExtractor, fuzzyLocate, type SlotQuotesMap } from '@t3x-dev/core';
+import { buildDraft, createMeaningPipeline, type FrameExtractionTurn, FrameExtractor, fuzzyLocate, type SlotQuotesMap } from '@t3x-dev/core';
 import {
   findConversationById,
   findTurnsByConversation,
@@ -229,6 +229,53 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
       }
     }
 
+    // 6c. Run Meaning Pipeline — multi-agent post-processing
+    let organizedSnapshot = result.snapshot;
+    try {
+      const pipelineReg = await getProviderRegistry();
+      const pipelineResult = await pipelineReg.tryWithFallback('generation', async (pipelineProvider) => {
+        const pipeline = createMeaningPipeline(pipelineProvider);
+        return pipeline.run(
+        result.snapshot,
+        extractionTurns,
+        currentSnapshot.frames.length > 0 ? currentSnapshot : undefined
+      );
+      });
+      organizedSnapshot = pipelineResult.content;
+
+      // Record pipeline usage
+      const pu = pipelineResult.meta.totalUsage;
+      if (pu.inputTokens || pu.outputTokens) {
+        recordUsageFireAndForget(db, {
+          user_id: getUserId(c) ?? undefined,
+          project_id: conversation.projectId,
+          endpoint: 'meaning_pipeline',
+          model: trackedModel,
+          input_tokens: pu.inputTokens,
+          output_tokens: pu.outputTokens,
+        });
+      }
+
+      // Log agent results with quality metrics
+      const completed = pipelineResult.meta.completedAgents;
+      const errors = pipelineResult.meta.agentErrors;
+      const snapshots = pipelineResult.meta.stepSnapshots;
+      const q = pipelineResult.quality;
+      console.info(`[meaning-pipeline] Completed: ${completed.join(' → ')}`);
+      console.info(`[meaning-pipeline] Quality: score=${q.score} frames=${q.frameCount} depth=${q.maxDepth} dupes=${q.duplicateTypes}`);
+      for (const snap of snapshots) {
+        console.info(`[meaning-pipeline] Step "${snap.agent}": ${snap.frameCount} frames, score=${snap.quality.score}`);
+      }
+      if (errors.length > 0) {
+        for (const ae of errors) {
+          console.warn(`[meaning-pipeline] Agent "${ae.agent}": ${ae.error}`);
+        }
+      }
+    } catch (pipelineErr) {
+      console.warn(`[meaning-pipeline] Pipeline error: ${pipelineErr instanceof Error ? pipelineErr.message : String(pipelineErr)}`);
+      // Pipeline is optional — flat frames are still valid
+    }
+
     // 7. Insert delta into delta log
     const record = await insertDeltaLogEntry(db, {
       conversationId: conversation_id,
@@ -243,7 +290,7 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
         success: true as const,
         data: {
           delta: result.delta,
-          snapshot: result.snapshot,
+          snapshot: organizedSnapshot,
           delta_log_id: record.id,
         },
       },

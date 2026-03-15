@@ -21,7 +21,87 @@ function buildTypeNameMap(frames: Frame[]): Map<string, string> {
   return nameMap;
 }
 
-/** Convert SemanticContent to lite YAML for display */
+/** Render a SlotValue as YAML lines with proper indentation */
+function renderSlotValue(value: SlotValue, indent: number, lines: string[]): void {
+  const pad = '  '.repeat(indent);
+
+  if (typeof value === 'string') {
+    lines.push(`"${value}"`);
+    return;
+  }
+
+  if (typeof value === 'number') {
+    lines.push(String(value));
+    return;
+  }
+
+  // SlotRef: { ref: "f_002" }
+  if (value !== null && typeof value === 'object' && !Array.isArray(value) && 'ref' in value) {
+    lines.push(`*${(value as { ref: string }).ref}`);
+    return;
+  }
+
+  // InlineFrame: { type: "...", slots: { ... } }
+  if (value !== null && typeof value === 'object' && !Array.isArray(value) && 'type' in value && 'slots' in value) {
+    const inlineFrame = value as { type: string; slots: Record<string, SlotValue> };
+    // Render as nested YAML — key already written by caller, just add newline
+    lines.push('');
+    for (const [k, v] of Object.entries(inlineFrame.slots)) {
+      const valueLine: string[] = [];
+      renderSlotValue(v, indent + 1, valueLine);
+      if (valueLine.length === 1 && !valueLine[0].startsWith('\n')) {
+        lines.push(`${pad}  ${k}: ${valueLine[0]}`);
+      } else {
+        lines.push(`${pad}  ${k}:${valueLine.join('')}`);
+      }
+    }
+    return;
+  }
+
+  // Array
+  if (Array.isArray(value)) {
+    const arr = value as SlotValue[];
+    // Check if simple array (all primitives)
+    const allSimple = arr.every((item) => typeof item === 'string' || typeof item === 'number');
+
+    if (allSimple && arr.length <= 5) {
+      // Inline array for short simple lists
+      lines.push(`[${arr.map((item) => typeof item === 'string' ? `"${item}"` : String(item)).join(', ')}]`);
+      return;
+    }
+
+    // Multi-line array
+    lines.push('');
+    for (const item of arr) {
+      if (typeof item === 'string') {
+        lines.push(`${pad}  - "${item}"`);
+      } else if (typeof item === 'number') {
+        lines.push(`${pad}  - ${item}`);
+      } else if (typeof item === 'object' && item !== null && 'type' in item && 'slots' in item) {
+        // Array of InlineFrames
+        const inlineFrame = item as { type: string; slots: Record<string, SlotValue> };
+        lines.push(`${pad}  - ${inlineFrame.type}:`);
+        for (const [k, v] of Object.entries(inlineFrame.slots)) {
+          const valueLine: string[] = [];
+          renderSlotValue(v, indent + 2, valueLine);
+          if (valueLine.length === 1 && !valueLine[0].startsWith('\n')) {
+            lines.push(`${pad}      ${k}: ${valueLine[0]}`);
+          } else {
+            lines.push(`${pad}      ${k}:${valueLine.join('')}`);
+          }
+        }
+      } else {
+        lines.push(`${pad}  - ${JSON.stringify(item)}`);
+      }
+    }
+    return;
+  }
+
+  // Fallback: unknown object
+  lines.push(JSON.stringify(value));
+}
+
+/** Convert SemanticContent to properly nested YAML for display */
 export function toDisplayYAML(content: SemanticContent): string {
   const nameMap = buildTypeNameMap(content.frames);
   const lines: string[] = [];
@@ -30,12 +110,12 @@ export function toDisplayYAML(content: SemanticContent): string {
     const displayName = nameMap.get(frame.id) ?? frame.type;
     lines.push(`${displayName}:`);
     for (const [key, value] of Object.entries(frame.slots)) {
-      if (Array.isArray(value)) {
-        lines.push(`  ${key}: ${JSON.stringify(value)}`);
-      } else if (typeof value === 'number') {
-        lines.push(`  ${key}: ${value}`);
+      const valueLine: string[] = [];
+      renderSlotValue(value, 1, valueLine);
+      if (valueLine.length === 1 && !valueLine[0].startsWith('\n')) {
+        lines.push(`  ${key}: ${valueLine[0]}`);
       } else {
-        lines.push(`  ${key}: "${String(value)}"`);
+        lines.push(`  ${key}:${valueLine.join('')}`);
       }
     }
     lines.push('');

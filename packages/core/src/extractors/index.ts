@@ -38,6 +38,12 @@ export {
   FrameExtractor,
   type SlotQuotesMap,
 } from './frameExtractor';
+// Meaning Organizer Agent (Step 2 — legacy, replaced by pipeline)
+export { MeaningOrganizer, type MeaningOrganizerResult } from './meaningOrganizer';
+// Meaning Pipeline (multi-agent orchestration)
+export { MeaningPipeline, type MeaningAgent, type PipelineContext, type PipelineResult, type QualityMetrics, AgentRegistry } from './meaningPipeline';
+export { createMeaningPipeline } from './createMeaningPipeline';
+export { nesterAgent, topicNamerAgent, slotPolisherAgent, dedupCheckerAgent, topicEvolverAgent } from './agents';
 // Incremental Extraction (LLM pipeline)
 export { type FuzzyLocateResult, fuzzyLocate } from './fuzzyLocate';
 export { parseIncrementalResponse } from './incrementalParser';
