@@ -19,6 +19,7 @@ export function CommitDropdown() {
   const commitFrames = useExtractionPanelStore((s) => s.commitFrames);
   const commitBranch = useExtractionPanelStore((s) => s.commitBranch);
   const isCommitting = useExtractionPanelStore((s) => s.isCommitting);
+  const projectId = useExtractionPanelStore((s) => s.projectId);
 
   const [showMessageInput, setShowMessageInput] = useState(false);
   const [commitMessage, setCommitMessage] = useState('');
@@ -40,8 +41,17 @@ export function CommitDropdown() {
   const handleConfirmCommit = useCallback(async () => {
     try {
       const result = await commitFrames(commitMessage);
+      const commitUrl = projectId
+        ? `/project/${projectId}/commit/${encodeURIComponent(result.hash)}`
+        : null;
       toast.success(`Committed to ${commitBranch}`, {
         description: result.hash.slice(0, 16),
+        action: commitUrl
+          ? {
+              label: 'View commit',
+              onClick: () => window.location.assign(commitUrl),
+            }
+          : undefined,
       });
       setShowMessageInput(false);
       setCommitMessage('');

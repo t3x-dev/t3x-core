@@ -87,6 +87,7 @@ function ViewTabs({
 
 function CommitPreviewSection() {
   const conversationId = useExtractionPanelStore((s) => s.conversationId);
+  const projectId = useExtractionPanelStore((s) => s.projectId);
   const lastCommitHash = useExtractionPanelStore((s) => s.lastCommitHash);
   const commitBranch = useExtractionPanelStore((s) => s.commitBranch);
   const isCommitting = useExtractionPanelStore((s) => s.isCommitting);
@@ -106,8 +107,17 @@ function CommitPreviewSection() {
   const handleConfirm = async () => {
     try {
       const result = await commitFrames(commitMessage);
+      const commitUrl = projectId
+        ? `/project/${projectId}/commit/${encodeURIComponent(result.hash)}`
+        : null;
       toast.success(`Committed to ${commitBranch}`, {
         description: result.hash.slice(0, 16),
+        action: commitUrl
+          ? {
+              label: 'View commit',
+              onClick: () => window.location.assign(commitUrl),
+            }
+          : undefined,
       });
       setCommitMessage('');
     } catch {
