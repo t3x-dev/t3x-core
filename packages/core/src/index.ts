@@ -132,6 +132,8 @@ export {
   type FrameExtractionResult,
   type FrameExtractionTurn,
   FrameExtractor,
+  MeaningOrganizer,
+  type MeaningOrganizerResult,
   type SlotQuotesMap,
   type FuzzyLocateResult,
   fuzzyLocate,

@@ -9,7 +9,7 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { buildDraft, type FrameExtractionTurn, FrameExtractor, fuzzyLocate, type SlotQuotesMap } from '@t3x-dev/core';
+import { buildDraft, type FrameExtractionTurn, FrameExtractor, fuzzyLocate, MeaningOrganizer, type SlotQuotesMap } from '@t3x-dev/core';
 import {
   findConversationById,
   findTurnsByConversation,
@@ -229,6 +229,38 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
       }
     }
 
+    // 6c. Organize flat frames into nested meaning document (Step 2 agent)
+    let organizedSnapshot = result.snapshot;
+    try {
+      const organizer = new MeaningOrganizer(
+        await (async () => {
+          const r = await getProviderRegistry();
+          return r.getProvider('generation');
+        })()
+      );
+      const orgResult = await organizer.organize(
+        result.snapshot,
+        selectedTurns.map((t, i) => `[T${i + 1}] [${t.role}]: ${t.content}`).join('\n')
+      );
+      if (orgResult.ok) {
+        organizedSnapshot = orgResult.content;
+        // Record organizer usage
+        if (orgResult.usage.inputTokens || orgResult.usage.outputTokens) {
+          recordUsageFireAndForget(db, {
+            user_id: getUserId(c) ?? undefined,
+            project_id: conversation.projectId,
+            endpoint: 'organize_frames',
+            model: trackedModel,
+            input_tokens: orgResult.usage.inputTokens,
+            output_tokens: orgResult.usage.outputTokens,
+          });
+        }
+      }
+      // If organization fails, we fall back to flat frames (organizedSnapshot = result.snapshot)
+    } catch {
+      // Organization is optional — flat frames are still valid
+    }
+
     // 7. Insert delta into delta log
     const record = await insertDeltaLogEntry(db, {
       conversationId: conversation_id,
@@ -243,7 +275,7 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
         success: true as const,
         data: {
           delta: result.delta,
-          snapshot: result.snapshot,
+          snapshot: organizedSnapshot,
           delta_log_id: record.id,
         },
       },

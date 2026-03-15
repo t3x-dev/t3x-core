@@ -38,6 +38,8 @@ export {
   FrameExtractor,
   type SlotQuotesMap,
 } from './frameExtractor';
+// Meaning Organizer Agent (Step 2)
+export { MeaningOrganizer, type MeaningOrganizerResult } from './meaningOrganizer';
 // Incremental Extraction (LLM pipeline)
 export { type FuzzyLocateResult, fuzzyLocate } from './fuzzyLocate';
 export { parseIncrementalResponse } from './incrementalParser';
