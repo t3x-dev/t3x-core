@@ -107,6 +107,13 @@ export function ChatWorkspace({
       useSessionStore.getState().setLastSession(resolvedProjectId, convId);
     }
 
+    useExtractionPanelStore.getState().setProjectId(resolvedProjectId || null);
+
+    // Initialize commit state (load branch head)
+    if (resolvedProjectId) {
+      useExtractionPanelStore.getState().initCommitState(resolvedProjectId);
+    }
+
     // Load existing semantic draft + full delta history for this conversation
     if (convId && convId !== 'new') {
       Promise.all([getSemanticDraft(convId), listDeltas(convId)])
