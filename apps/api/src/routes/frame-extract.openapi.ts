@@ -257,13 +257,22 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
         });
       }
 
-      // Log agent results for debugging
-      if (pipelineResult.meta.agentErrors.length > 0) {
-        for (const ae of pipelineResult.meta.agentErrors) {
+      // Log agent results
+      const completed = pipelineResult.meta.completedAgents;
+      const errors = pipelineResult.meta.agentErrors;
+      const snapshots = pipelineResult.meta.stepSnapshots;
+      console.info(`[meaning-pipeline] Completed: ${completed.join(' → ')} | ${snapshots.length} snapshots`);
+      if (errors.length > 0) {
+        for (const ae of errors) {
           console.warn(`[meaning-pipeline] Agent "${ae.agent}" failed: ${ae.error}`);
         }
       }
-    } catch {
+      // Store snapshots for debugging (logged, could be returned to UI in future)
+      for (const snap of snapshots) {
+        console.info(`[meaning-pipeline] Step "${snap.agent}": ${snap.frameCount} frames`);
+      }
+    } catch (pipelineErr) {
+      console.warn(`[meaning-pipeline] Pipeline error: ${pipelineErr instanceof Error ? pipelineErr.message : String(pipelineErr)}`);
       // Pipeline is optional — flat frames are still valid
     }
 

@@ -43,6 +43,13 @@ export interface PipelineContext {
     agentErrors: Array<{ agent: string; error: string }>;
     /** Total LLM usage across all agents */
     totalUsage: { inputTokens: number; outputTokens: number };
+    /** Snapshot after each agent step — for human review and debugging */
+    stepSnapshots: Array<{
+      agent: string;
+      timestamp: string;
+      frameCount: number;
+      content: SemanticContent;
+    }>;
   };
 }
 
@@ -173,8 +180,17 @@ export class MeaningPipeline {
         completedAgents: [],
         agentErrors: [],
         totalUsage: { inputTokens: 0, outputTokens: 0 },
+        stepSnapshots: [],
       },
     };
+
+    // Save initial snapshot (raw extractor output)
+    ctx.meta.stepSnapshots.push({
+      agent: 'extractor_output',
+      timestamp: new Date().toISOString(),
+      frameCount: ctx.content.frames.length,
+      content: JSON.parse(JSON.stringify(ctx.content)),
+    });
 
     // Dispatch — decide which agents to run
     const decision = this.dispatch(ctx, this.registry);
@@ -188,6 +204,14 @@ export class MeaningPipeline {
       try {
         currentCtx = await agent.run(currentCtx, this.provider);
         currentCtx.meta.completedAgents.push(agentName);
+
+        // Save snapshot after each step for human review
+        currentCtx.meta.stepSnapshots.push({
+          agent: agentName,
+          timestamp: new Date().toISOString(),
+          frameCount: currentCtx.content.frames.length,
+          content: JSON.parse(JSON.stringify(currentCtx.content)), // deep clone
+        });
       } catch (err) {
         // Non-fatal — log error and continue with what we have
         currentCtx.meta.agentErrors.push({
