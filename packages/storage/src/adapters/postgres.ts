@@ -722,6 +722,8 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     );
     CREATE INDEX IF NOT EXISTS idx_delta_log_conv ON delta_log(conversation_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_delta_log_project ON delta_log(project_id);
+    ALTER TABLE delta_log ADD COLUMN IF NOT EXISTS commit_hash TEXT;
+    ALTER TABLE delta_log ADD COLUMN IF NOT EXISTS model TEXT;
 
     -- Sentence Relations (Inter-sentence Relations)
     CREATE TABLE IF NOT EXISTS sentence_relations (

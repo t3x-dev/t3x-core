@@ -277,6 +277,21 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
         newSnapshot[f.id] = { ...f, slots: { ...f.slots } };
       }
 
+      // Insert commit marker into delta log (links change history to commit)
+      if (conversationId) {
+        const markerEntry: DeltaLogEntry = {
+          id: crypto.randomUUID(),
+          source: 'commit_marker',
+          delta: { changes: [] },
+          created_at: new Date().toISOString(),
+          commit_hash: result.commit.hash,
+        };
+        set((s) => ({ deltaLog: [...s.deltaLog, markerEntry] }));
+
+        // Persist the marker to DB
+        createDelta(conversationId, { changes: [] }, 'commit_marker').catch(() => {});
+      }
+
       set({
         lastCommitHash: result.commit.hash,
         committedFrameIds: newCommittedIds,

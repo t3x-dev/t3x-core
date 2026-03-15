@@ -1051,6 +1051,12 @@ export const deltaLog = pgTable(
     /** The Delta content (JSONB) */
     delta: jsonb('delta').notNull(),
 
+    /** Commit hash — set when this delta is included in a commit, or for commit_marker entries */
+    commitHash: text('commit_hash'),
+
+    /** Which model produced this extraction (for llm_extraction source) */
+    model: text('model'),
+
     /** When this delta was recorded */
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },

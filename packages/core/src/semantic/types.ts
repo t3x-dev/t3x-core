@@ -95,7 +95,7 @@ export interface Delta {
 
 // ── Delta Log ──
 
-export type DeltaSource = 'llm_extraction' | 'user_graph_edit' | 'user_yaml_edit';
+export type DeltaSource = 'llm_extraction' | 'user_graph_edit' | 'user_yaml_edit' | 'commit_marker';
 
 export interface DeltaLogEntry {
   id: string;
@@ -103,6 +103,10 @@ export interface DeltaLogEntry {
   turn_hash?: string;
   delta: Delta;
   created_at: string;
+  /** Commit hash — set when this delta is included in a commit, or for commit_marker entries */
+  commit_hash?: string;
+  /** Which model produced this extraction (for llm_extraction source) */
+  model?: string;
 }
 
 // ── Validation ──
