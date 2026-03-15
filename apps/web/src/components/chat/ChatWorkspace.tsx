@@ -220,8 +220,8 @@ export function ChatWorkspace({
           </div>
         ) : (
           <div className="divide-y divide-[var(--stroke-divider)]/50">
-            {messages.map((msg) => (
-              <ChatMessage key={msg.id} sender={msg.role} content={msg.content} />
+            {messages.map((msg, i) => (
+              <ChatMessage key={msg.id} sender={msg.role} content={msg.content} turnHash={msg.id} turnIndex={i + 1} />
             ))}
 
             {/* Streaming response */}

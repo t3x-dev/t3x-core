@@ -9,7 +9,7 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { buildDraft, type FrameExtractionTurn, FrameExtractor } from '@t3x-dev/core';
+import { buildDraft, type FrameExtractionTurn, FrameExtractor, fuzzyLocate, type SlotQuotesMap } from '@t3x-dev/core';
 import {
   findConversationById,
   findTurnsByConversation,
@@ -138,10 +138,11 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
     const deltaRecords = await listDeltaLogByConversation(db, conversation_id);
     const currentSnapshot = buildDraft(toDeltaLogEntries(deltaRecords));
 
-    // 4. Convert turns to FrameExtractionTurn format
+    // 4. Convert turns to FrameExtractionTurn format (include turn_hash for source tracking)
     const extractionTurns: FrameExtractionTurn[] = selectedTurns.map((t) => ({
       role: t.role as FrameExtractionTurn['role'],
       content: t.content,
+      turn_hash: t.turnHash,
     }));
 
     // 5. Call FrameExtractor via provider registry with fallback (usage tracked)
@@ -179,6 +180,53 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
         input_tokens: trackedUsage.inputTokens,
         output_tokens: trackedUsage.outputTokens,
       });
+    }
+
+    // 6b. Resolve slot quotes into character offsets using fuzzyLocate
+    const slotQuotes: SlotQuotesMap = result.slotQuotes ?? new Map();
+
+    if (slotQuotes.size > 0) {
+      // Build turn content lookup: try all turns for each quote
+      const turnInfoList = selectedTurns.map((t, i) => ({
+        tag: `T${i + 1}`,
+        content: t.content,
+        turnHash: t.turnHash,
+      }));
+
+      for (let i = 0; i < result.delta.changes.length; i++) {
+        const quotes = slotQuotes.get(i);
+        if (!quotes) continue;
+
+        const change = result.delta.changes[i];
+        const slotSources: Record<string, { turn: string; turn_hash?: string; start_char: number; end_char: number; quote?: string }> = {};
+
+        for (const [slotKey, quote] of Object.entries(quotes)) {
+          if (typeof quote !== 'string' || !quote) continue;
+
+          // Try matching the quote against all turns (best match wins)
+          for (const turnInfo of turnInfoList) {
+            const located = fuzzyLocate(turnInfo.content, quote);
+            if (located && located.score >= 0.6) {
+              slotSources[slotKey] = {
+                turn: turnInfo.tag,
+                turn_hash: turnInfo.turnHash,
+                start_char: located.start,
+                end_char: located.end,
+                quote,
+              };
+              break;
+            }
+          }
+        }
+
+        if (Object.keys(slotSources).length > 0) {
+          if (change.action === 'add') {
+            change.frame.slot_sources = slotSources;
+          }
+          // For updates, attach slot_sources to the frame in the snapshot
+          // (the delta itself doesn't carry slot_sources, but we update the snapshot)
+        }
+      }
     }
 
     // 7. Insert delta into delta log

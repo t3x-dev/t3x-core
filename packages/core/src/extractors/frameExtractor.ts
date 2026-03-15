@@ -28,14 +28,53 @@ const MAX_TOKENS = 4096;
 
 // ── Result Type ──
 
+/** Per-change slot quotes extracted from LLM output before Zod strips them */
+export type SlotQuotesMap = Map<number, Record<string, string>>; // changeIndex → { slotKey: quote }
+
 export type FrameExtractionResult =
   | {
       ok: true;
       delta: Delta;
       snapshot: SemanticContent;
       usage: { inputTokens: number; outputTokens: number };
+      slotQuotes?: SlotQuotesMap;
     }
   | { ok: false; error: string; usage: { inputTokens: number; outputTokens: number } };
+
+/**
+ * Extract slot_quotes from raw LLM JSON before Zod validation strips them.
+ * Returns a map of changeIndex → { slotKey: quote }.
+ */
+function extractSlotQuotes(rawJson: unknown): SlotQuotesMap {
+  const map: SlotQuotesMap = new Map();
+  if (!rawJson || typeof rawJson !== 'object') return map;
+
+  const obj = rawJson as Record<string, unknown>;
+  const changes = (obj.changes ?? obj.frames) as Array<Record<string, unknown>> | undefined;
+  if (!Array.isArray(changes)) return map;
+
+  for (let i = 0; i < changes.length; i++) {
+    const change = changes[i];
+    // For delta format: changes[i].frame.slot_quotes or changes[i].slot_quotes
+    const quotes =
+      (change.frame as Record<string, unknown>)?.slot_quotes ??
+      change.slot_quotes;
+    if (quotes && typeof quotes === 'object') {
+      map.set(i, quotes as Record<string, string>);
+      // Clean from the object so Zod doesn't reject unknown keys
+      if ((change.frame as Record<string, unknown>)?.slot_quotes) {
+        delete (change.frame as Record<string, unknown>).slot_quotes;
+      }
+      delete change.slot_quotes;
+    }
+    // For first-extraction format: frames[i].slot_quotes
+    if (change.slot_quotes) {
+      map.set(i, change.slot_quotes as Record<string, string>);
+      delete change.slot_quotes;
+    }
+  }
+  return map;
+}
 
 // ── Re-export input types ──
 
@@ -80,60 +119,9 @@ export class FrameExtractor {
     const baseSnapshot: SemanticContent = input.snapshot ?? { frames: [], relations: [] };
     const totalUsage = { inputTokens: 0, outputTokens: 0 };
 
-    // ── Structured output path (provider-native, more reliable) ──
-    if (typeof this.provider.generateStructured === 'function') {
-      const { systemPrompt, userPrompt } = buildFrameExtractionPrompt(input);
-      const prompt: LLMPrompt = {
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userPrompt }],
-      };
-      const options: LLMGenerateOptionsV2 = {
-        model: this.provider.id,
-        temperature: TEMPERATURE,
-        maxTokens: MAX_TOKENS,
-      };
-
-      let delta: Delta;
-      try {
-        const structured = await callGenerateStructured(
-          this.provider as Required<Pick<LLMProvider, 'generateStructured'>>,
-          prompt,
-          options
-        );
-        delta = structured.delta;
-        totalUsage.inputTokens += structured.usage.inputTokens;
-        totalUsage.outputTokens += structured.usage.outputTokens;
-      } catch (err) {
-        return {
-          ok: false,
-          error: `LLM structured output error: ${err instanceof Error ? err.message : String(err)}`,
-          usage: totalUsage,
-        };
-      }
-
-      // Apply delta
-      let snapshot: SemanticContent;
-      try {
-        snapshot = applyDelta(baseSnapshot, delta);
-      } catch (err) {
-        return {
-          ok: false,
-          error: `Failed to apply delta: ${err instanceof Error ? err.message : String(err)}`,
-          usage: totalUsage,
-        };
-      }
-
-      // Validate integrity
-      const validation = validateIntegrity(snapshot);
-      if (!validation.valid) {
-        const errorMessages = validation.errors.map((e) => e.message).join('; ');
-        return { ok: false, error: `Validation failed: ${errorMessages}`, usage: totalUsage };
-      }
-
-      return { ok: true, delta, snapshot, usage: totalUsage };
-    }
-
-    // ── Legacy path: generate() + text parsing ──
+    // ── Text generation path ──
+    // Always use generate() (not generateStructured) so we can extract
+    // slot_quotes from the raw JSON before Zod validation strips them.
     let lastError = '';
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
@@ -156,14 +144,29 @@ export class FrameExtractor {
         continue;
       }
 
-      // 3. Parse delta
+      // 3. Extract slot_quotes from raw JSON before parsing strips them
+      let slotQuotes: SlotQuotesMap = new Map();
+      try {
+        // Find JSON in the raw text
+        const jsonMatch = raw.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const rawJson = JSON.parse(jsonMatch[0]);
+          slotQuotes = extractSlotQuotes(rawJson);
+          // Re-stringify so parser gets clean JSON without slot_quotes
+          raw = JSON.stringify(rawJson);
+        }
+      } catch {
+        // JSON extraction failed — continue with original raw text
+      }
+
+      // 4. Parse delta
       const parseResult = parseFrameDelta(raw, input.snapshot);
       if (!parseResult.ok) {
         lastError = `Failed to parse LLM output: ${parseResult.error}`;
         continue;
       }
 
-      // 4. Apply delta
+      // 5. Apply delta
       let snapshot: SemanticContent;
       try {
         snapshot = applyDelta(baseSnapshot, parseResult.delta);
@@ -172,7 +175,7 @@ export class FrameExtractor {
         continue;
       }
 
-      // 5. Validate integrity
+      // 6. Validate integrity
       const validation = validateIntegrity(snapshot);
       if (!validation.valid) {
         const errorMessages = validation.errors.map((e) => e.message).join('; ');
@@ -180,7 +183,7 @@ export class FrameExtractor {
         continue;
       }
 
-      return { ok: true, delta: parseResult.delta, snapshot, usage: totalUsage };
+      return { ok: true, delta: parseResult.delta, snapshot, usage: totalUsage, slotQuotes };
     }
 
     return { ok: false, error: lastError, usage: totalUsage };

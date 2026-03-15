@@ -19,6 +19,8 @@ export function FrameYAMLView() {
   const unconfirmSlot = useExtractionPanelStore((s) => s.unconfirmSlot);
   const llmHighlightedFrameIds = useExtractionPanelStore((s) => s.llmHighlightedFrameIds);
   const isExtracting = useExtractionPanelStore((s) => s.isExtracting);
+  const setHoveredFrameId = useExtractionPanelStore((s) => s.setHoveredFrameId);
+  const hoveredTurnHash = useExtractionPanelStore((s) => s.hoveredTurnHash);
 
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState('');
@@ -196,12 +198,28 @@ export function FrameYAMLView() {
               ? !!confirmedFrameIds[line.frameId]
               : !!(confirmedSlotKeys[line.frameId]?.[line.slotKey!]);
 
-            // Background: human-confirmed = subtle green, auto-selected = subtle blue
-            const bg = isConfirmed
-              ? 'rgba(74, 222, 128, 0.1)'
-              : line.isAutoSelected
-                ? 'rgba(96, 165, 250, 0.06)'
-                : 'transparent';
+            // Check if this row's frame is highlighted by reverse hover (chat → YAML)
+            const frame = draft.frames.find((f) => f.id === line.frameId);
+            const isReverseHighlighted = (() => {
+              if (!hoveredTurnHash || !frame?.source) return false;
+              const source = frame.source;
+              // Match "T3" by checking if hoveredTurnHash is the Nth turn
+              // Match "T3:abc12345" by checking hash prefix
+              if (source.includes(':')) {
+                const hashPart = source.split(':')[1];
+                return hoveredTurnHash.includes(hashPart);
+              }
+              return false;
+            })();
+
+            // Background: reverse-highlight > confirmed > auto-selected > transparent
+            const bg = isReverseHighlighted
+              ? 'rgba(96, 165, 250, 0.15)'
+              : isConfirmed
+                ? 'rgba(74, 222, 128, 0.1)'
+                : line.isAutoSelected
+                  ? 'rgba(96, 165, 250, 0.06)'
+                  : 'transparent';
 
             const handleCheck = () => {
               if (isFrameLine) {
@@ -216,12 +234,15 @@ export function FrameYAMLView() {
             return (
               <div
                 key={i}
+                onMouseEnter={() => setHoveredFrameId(line.frameId, line.slotKey)}
+                onMouseLeave={() => setHoveredFrameId(null)}
                 style={{
                   display: 'flex',
                   alignItems: 'stretch',
                   background: bg,
                   minHeight: 20,
                   transition: 'background 0.15s',
+                  cursor: isFrameLine ? 'pointer' : undefined,
                 }}
               >
                 {/* Checkbox column */}
