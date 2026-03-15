@@ -150,16 +150,21 @@ japan_trip:                          # ONE root topic
 
 ## What to Extract
 
-- **Decisions and conclusions** — what was decided (high confidence)
-- **User preferences and requirements** — what they want (high confidence)
-- **Plans and intentions** — what they plan to do (medium confidence)
-- **Open questions** — things not yet decided (low confidence, marked clearly)
+- **User's stated preferences and requirements** — what they explicitly want (confidence: 0.9-1.0)
+- **User's decisions and conclusions** — what was decided (confidence: 0.9-1.0)
+- **Assistant's recommendations and suggestions** — structured plans, itineraries, breakdowns, options the assistant provided (confidence: 0.3-0.5, upgrade to 0.8+ if user confirms)
+- **Plans and intentions** — what they plan to do (confidence: 0.6-0.8)
+- **Key information from assistant** — factual details like prices, dates, distances, requirements that the assistant shared and user didn't reject (confidence: 0.4-0.6)
+- **Open questions** — things not yet decided (confidence: 0.1-0.2)
+
+IMPORTANT: Assistant responses often contain the MOST structured and valuable information — detailed itineraries, budget breakdowns, option comparisons, step-by-step plans. Extract these as nested structures. The user asked for this information, so it matters.
 
 ## What to SKIP
 
-- Process discussion ("let me think about this...")
-- LLM reasoning or explanations (unless user confirmed it)
-- Greetings, pleasantries, meta-conversation
+- Generic greetings and pleasantries
+- Meta-conversation ("let me think about this...", "sure, I can help")
+- Assistant's reasoning process (the "why" behind suggestions — keep only the conclusion)
+- Repetition of what the user already said
 
 ## Confidence Scoring
 - User's explicit statements → confidence: 0.9-1.0
