@@ -129,11 +129,11 @@ function YAMLKey({ text }: { text: string }) {
 }
 
 function Colon() {
-  return <span style={{ color: '#89ddff' }}>: </span>;
+  return <span style={{ color: '#89ddff' }}>:&nbsp;</span>;
 }
 
 function StringValue({ text }: { text: string }) {
-  return <span style={{ color: '#9ece6a' }}>{text}</span>;
+  return <span style={{ color: '#9ece6a' }}>"{text}"</span>;
 }
 
 function NumberValue({ value }: { value: number }) {
@@ -145,7 +145,7 @@ function RefValue({ ref: refId }: { ref: string }) {
 }
 
 function ArrayDash() {
-  return <span style={{ color: '#89ddff' }}>- </span>;
+  return <span style={{ color: '#89ddff' }}>-{' '}</span>;
 }
 
 // ============================================================================
@@ -367,20 +367,26 @@ export function CommitYAMLDocument({ content, className, onSlotClick }: CommitYA
 
   return (
     <div
-      className={`rounded-lg bg-[var(--surface-code,#0d1117)] p-4 font-mono text-[12px] leading-relaxed ${className ?? ''}`}
+      className={`rounded-lg bg-[var(--surface-code,#0d1117)] px-6 py-5 font-mono text-[13px] leading-[1.9] ${className ?? ''}`}
     >
-      {lines.map((line) => (
-        <div
-          key={line.key}
-          className={`flex items-baseline py-[1px] transition-colors ${
-            line.slotKey ? 'cursor-pointer hover:bg-white/5 rounded-sm' : ''
-          }`}
-          style={{ paddingLeft: `${line.indent * 16}px` }}
-          onClick={line.slotKey ? () => handleClick(line.frameId, line.slotKey) : undefined}
-        >
-          {line.elements}
-        </div>
-      ))}
+      {lines.map((line, i) => {
+        // Add spacing before top-level frame headers (indent 0, not first line)
+        const isFrameHeader = line.indent === 0 && line.key.startsWith('frame-');
+        const needsTopGap = isFrameHeader && i > 0;
+
+        return (
+          <div
+            key={line.key}
+            className={`flex items-baseline transition-colors ${
+              line.slotKey ? 'cursor-pointer hover:bg-white/5 rounded-sm px-2 -mx-2' : ''
+            } ${needsTopGap ? 'mt-3 pt-3 border-t border-white/5' : ''}`}
+            style={{ paddingLeft: `${line.indent * 24}px` }}
+            onClick={line.slotKey ? () => handleClick(line.frameId, line.slotKey) : undefined}
+          >
+            {line.elements}
+          </div>
+        );
+      })}
     </div>
   );
 }
