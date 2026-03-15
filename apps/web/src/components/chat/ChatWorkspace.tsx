@@ -19,6 +19,8 @@ interface ChatWorkspaceProps {
   projectId?: string;
   firstMessage?: string;
   className?: string;
+  /** Called when a new conversation is created (e.g. from /chat/new). Overrides default URL update. */
+  onConversationCreated?: (conversationId: string) => void;
 }
 
 export function ChatWorkspace({
@@ -26,6 +28,7 @@ export function ChatWorkspace({
   projectId,
   firstMessage,
   className,
+  onConversationCreated: onConversationCreatedProp,
 }: ChatWorkspaceProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const firstMessageSentRef = useRef(false);
@@ -67,9 +70,13 @@ export function ChatWorkspace({
     model: selectedModel,
     onConversationCreated: useCallback((newConvId: string) => {
       setResolvedConversationId(newConvId);
-      // Update URL without triggering Next.js navigation (avoids re-mount)
-      window.history.replaceState(null, '', `/chat/${newConvId}`);
-    }, []),
+      if (onConversationCreatedProp) {
+        onConversationCreatedProp(newConvId);
+      } else {
+        // Update URL without triggering Next.js navigation (avoids re-mount)
+        window.history.replaceState(null, '', `/chat/${newConvId}`);
+      }
+    }, [onConversationCreatedProp]),
   });
 
   // Sync resolved IDs when props change (e.g. sidebar navigation between conversations)

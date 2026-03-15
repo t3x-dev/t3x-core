@@ -4,7 +4,7 @@ import type { Node } from '@xyflow/react';
 import { Check, Clock, GitCommit, Link2, Settings, X } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import { useMemo, useRef, useState } from 'react';
-import { ConversationWorkspace } from '@/components/conversation/ConversationWorkspace';
+import { ChatWorkspace } from '@/components/chat/ChatWorkspace';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -48,10 +48,6 @@ export function ConversationView({
   projectId,
   isStagingUnit,
   quickActions,
-  onSaveConstraints: _onSaveConstraints,
-  effectiveConstraints: _effectiveConstraints,
-  onUpdateConstraintOverrides: _onUpdateConstraintOverrides,
-  isConversationLocked: _isConversationLocked,
   onShowCommitConfig,
 }: ConversationViewProps) {
   const { t } = useTerminology();
@@ -69,90 +65,6 @@ export function ConversationView({
 
   // ========== Layout state ==========
   const [showSettings, setShowSettings] = useState(false);
-
-  // ========== Chat hook ==========
-  const chat = useConversationChat({
-    projectId,
-    conversationId: data?.conversationId,
-    title: data?.title,
-    onConversationCreated: (convId) => {
-      onUpdate({ conversationId: convId, sourceConversationId: convId });
-      if (node?.id && node.id !== convId) {
-        useCanvasStore.getState().updateNodeId(node.id, convId);
-      }
-    },
-  });
-
-  // Keep a ref to messages for the commit config flow
-  const chatMessagesRef = useRef(chat.messages);
-  chatMessagesRef.current = chat.messages;
-
-  // ========== Metadata sidebar ==========
-  const metadataSidebar = showSettings ? (
-    <div className="p-5">
-      <div className="mb-5">
-        <h4 className="text-[10px] font-semibold text-[var(--text-tertiary)] uppercase tracking-wide mb-3">
-          Metadata
-        </h4>
-        <div className="mb-[var(--space-group)]">
-          <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">
-            Title
-          </label>
-          <Input
-            type="text"
-            value={data.title}
-            onChange={(e) => onUpdate({ title: e.target.value })}
-          />
-        </div>
-        <div className="mb-[var(--space-group)]">
-          <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">
-            Tags
-          </label>
-          <Input
-            type="text"
-            value={data.tags.join(', ')}
-            onChange={(e) =>
-              onUpdate({
-                tags: e.target.value
-                  .split(',')
-                  .map((t) => t.trim())
-                  .filter(Boolean),
-              })
-            }
-            placeholder="tag1, tag2, ..."
-          />
-        </div>
-      </div>
-
-      <div className="h-px bg-[var(--stroke-divider)] my-4" />
-
-      <div className="mb-5">
-        <h4 className="text-[10px] font-semibold text-[var(--text-tertiary)] uppercase tracking-wide mb-3">
-          Info
-        </h4>
-        <div className="flex items-center gap-2 text-[0.85rem] text-[var(--text-secondary)] mb-[var(--space-item)]">
-          <Clock size={14} className="text-[var(--text-tertiary)] shrink-0" />
-          <span>Created: {data.timestamp}</span>
-        </div>
-        <div className="flex items-center gap-2 text-[0.85rem] text-[var(--text-secondary)] mb-[var(--space-item)]">
-          <Link2 size={14} className="text-[var(--text-tertiary)] shrink-0" />
-          <span>Upstream: {data.baselineSummary ? 'Connected' : 'None (root)'}</span>
-        </div>
-      </div>
-
-      <div className="h-px bg-[var(--stroke-divider)] my-4" />
-
-      <MemoryContextSidebar
-        projectId={routeProjectId || projectId || undefined}
-        conversationId={data?.conversationId || data?.sourceConversationId}
-        branch={
-          data.branchName ||
-          (data.pendingBranch === 'main' ? 'main' : data.pendingBranchName) ||
-          'main'
-        }
-      />
-    </div>
-  ) : null;
 
   // ========== Render ==========
   return (
@@ -201,16 +113,7 @@ export function ConversationView({
             {/* For staging units: show Commit button to enter commit config view */}
             {isStagingUnit && (
               <Button
-                onClick={() => {
-                  // Save chat messages as baselineSummary so PendingCommitView has source data
-                  // even if turns weren't persisted to the backend
-                  const msgs = chatMessagesRef.current;
-                  if (msgs.length > 0) {
-                    const fullText = msgs.map((m) => `[${m.role}]: ${m.content}`).join('\n\n');
-                    onUpdate({ baselineSummary: fullText });
-                  }
-                  onShowCommitConfig();
-                }}
+                onClick={() => onShowCommitConfig()}
                 title={t('configure_and_commit')}
                 className="gap-1.5"
               >
@@ -245,13 +148,90 @@ export function ConversationView({
           </div>
         </header>
 
-        {/* Replace the old flex layout with ConversationWorkspace */}
-        <ConversationWorkspace
-          projectId={projectId}
-          conversationId={data?.conversationId}
-          leftSidebar={metadataSidebar}
-          {...chat}
-        />
+        {/* Content: settings sidebar + chat */}
+        <div className="flex flex-1 overflow-hidden">
+          {/* Settings sidebar */}
+          {showSettings && (
+            <aside className="w-72 shrink-0 border-r border-[var(--stroke-divider)] overflow-y-auto">
+              <div className="p-5">
+                <div className="mb-5">
+                  <h4 className="text-[10px] font-semibold text-[var(--text-tertiary)] uppercase tracking-wide mb-3">
+                    Metadata
+                  </h4>
+                  <div className="mb-[var(--space-group)]">
+                    <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">
+                      Title
+                    </label>
+                    <Input
+                      type="text"
+                      value={data.title}
+                      onChange={(e) => onUpdate({ title: e.target.value })}
+                    />
+                  </div>
+                  <div className="mb-[var(--space-group)]">
+                    <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">
+                      Tags
+                    </label>
+                    <Input
+                      type="text"
+                      value={data.tags.join(', ')}
+                      onChange={(e) =>
+                        onUpdate({
+                          tags: e.target.value
+                            .split(',')
+                            .map((t) => t.trim())
+                            .filter(Boolean),
+                        })
+                      }
+                      placeholder="tag1, tag2, ..."
+                    />
+                  </div>
+                </div>
+
+                <div className="h-px bg-[var(--stroke-divider)] my-4" />
+
+                <div className="mb-5">
+                  <h4 className="text-[10px] font-semibold text-[var(--text-tertiary)] uppercase tracking-wide mb-3">
+                    Info
+                  </h4>
+                  <div className="flex items-center gap-2 text-[0.85rem] text-[var(--text-secondary)] mb-[var(--space-item)]">
+                    <Clock size={14} className="text-[var(--text-tertiary)] shrink-0" />
+                    <span>Created: {data.timestamp}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-[0.85rem] text-[var(--text-secondary)] mb-[var(--space-item)]">
+                    <Link2 size={14} className="text-[var(--text-tertiary)] shrink-0" />
+                    <span>Upstream: {data.baselineSummary ? 'Connected' : 'None (root)'}</span>
+                  </div>
+                </div>
+
+                <div className="h-px bg-[var(--stroke-divider)] my-4" />
+
+                <MemoryContextSidebar
+                  projectId={routeProjectId || projectId || undefined}
+                  conversationId={data?.conversationId || data?.sourceConversationId}
+                  branch={
+                    data.branchName ||
+                    (data.pendingBranch === 'main' ? 'main' : data.pendingBranchName) ||
+                    'main'
+                  }
+                />
+              </div>
+            </aside>
+          )}
+
+          {/* ChatWorkspace replaces ConversationWorkspace */}
+          <ChatWorkspace
+            conversationId={data?.conversationId || 'new'}
+            projectId={projectId}
+            className="flex-1"
+            onConversationCreated={(convId) => {
+              onUpdate({ conversationId: convId, sourceConversationId: convId });
+              if (node?.id && node.id !== convId) {
+                useCanvasStore.getState().updateNodeId(node.id, convId);
+              }
+            }}
+          />
+        </div>
       </div>
     </div>
   );
