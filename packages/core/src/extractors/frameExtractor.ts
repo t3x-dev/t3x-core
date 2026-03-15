@@ -119,60 +119,9 @@ export class FrameExtractor {
     const baseSnapshot: SemanticContent = input.snapshot ?? { frames: [], relations: [] };
     const totalUsage = { inputTokens: 0, outputTokens: 0 };
 
-    // ── Structured output path (provider-native, more reliable) ──
-    if (typeof this.provider.generateStructured === 'function') {
-      const { systemPrompt, userPrompt } = buildFrameExtractionPrompt(input);
-      const prompt: LLMPrompt = {
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userPrompt }],
-      };
-      const options: LLMGenerateOptionsV2 = {
-        model: this.provider.id,
-        temperature: TEMPERATURE,
-        maxTokens: MAX_TOKENS,
-      };
-
-      let delta: Delta;
-      try {
-        const structured = await callGenerateStructured(
-          this.provider as Required<Pick<LLMProvider, 'generateStructured'>>,
-          prompt,
-          options
-        );
-        delta = structured.delta;
-        totalUsage.inputTokens += structured.usage.inputTokens;
-        totalUsage.outputTokens += structured.usage.outputTokens;
-      } catch (err) {
-        return {
-          ok: false,
-          error: `LLM structured output error: ${err instanceof Error ? err.message : String(err)}`,
-          usage: totalUsage,
-        };
-      }
-
-      // Apply delta
-      let snapshot: SemanticContent;
-      try {
-        snapshot = applyDelta(baseSnapshot, delta);
-      } catch (err) {
-        return {
-          ok: false,
-          error: `Failed to apply delta: ${err instanceof Error ? err.message : String(err)}`,
-          usage: totalUsage,
-        };
-      }
-
-      // Validate integrity
-      const validation = validateIntegrity(snapshot);
-      if (!validation.valid) {
-        const errorMessages = validation.errors.map((e) => e.message).join('; ');
-        return { ok: false, error: `Validation failed: ${errorMessages}`, usage: totalUsage };
-      }
-
-      return { ok: true, delta, snapshot, usage: totalUsage };
-    }
-
-    // ── Legacy path: generate() + text parsing ──
+    // ── Text generation path ──
+    // Always use generate() (not generateStructured) so we can extract
+    // slot_quotes from the raw JSON before Zod validation strips them.
     let lastError = '';
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
