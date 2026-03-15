@@ -30,6 +30,17 @@ export {
   getLocalAuthor,
   getWebAuthor,
 } from './commit';
+// Commit (frame-based)
+export {
+  computeCommitHash,
+  COMMIT_SCHEMA,
+  upgradeLegacyCommit,
+  type Author,
+  type Commit,
+  type CommitFirstClass,
+  type Provenance,
+  type Source,
+} from './commit';
 // Common utilities
 export { canonText, computeCommitV3Hash, hashText, sha256 } from './common';
 // Conflict Detection (#9)
