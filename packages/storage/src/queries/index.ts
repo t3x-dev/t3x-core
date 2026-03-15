@@ -64,6 +64,18 @@ export {
   ParentNotFoundError,
   updateCommitV3Position,
 } from './commits-v3';
+// Commits (frame-based — commits_v5)
+export {
+  type CreateCommitInput,
+  createCommit,
+  deleteCommit,
+  getCommit,
+  getCommitsByHashes,
+  getLatestCommit,
+  listCommits,
+  type ListCommitsOptions,
+  updateCommitPosition,
+} from './commits';
 // Commits V4 (pure knowledge - no constraints)
 export {
   backfillMerkleRoots,

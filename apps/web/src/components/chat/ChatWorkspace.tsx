@@ -114,6 +114,20 @@ export function ChatWorkspace({
       useExtractionPanelStore.getState().initCommitState(resolvedProjectId);
     }
 
+    // If no project ID yet, try to get it from the conversation
+    if (!resolvedProjectId && convId && convId !== 'new') {
+      import('@/lib/api').then(({ getConversation }) => {
+        getConversation(convId).then((conv) => {
+          if (conv?.project_id) {
+            setResolvedProjectId(conv.project_id);
+            useExtractionPanelStore.getState().setProjectId(conv.project_id);
+            useExtractionPanelStore.getState().initCommitState(conv.project_id);
+            useChatStore.getState().setActiveConversation(convId, conv.project_id);
+          }
+        }).catch(() => {});
+      });
+    }
+
     // Load existing semantic draft + full delta history for this conversation
     if (convId && convId !== 'new') {
       Promise.all([getSemanticDraft(convId), listDeltas(convId)])

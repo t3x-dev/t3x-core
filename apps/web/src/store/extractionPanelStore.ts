@@ -1,9 +1,7 @@
 import type { Delta, DeltaLogEntry, DeltaSource, Frame, FrameChange, SemanticContent } from '@t3x-dev/core';
 import { create } from 'zustand';
-import type { CommitV4Sentence } from '@/lib/api/commits';
-import { createCommitV4, listCommitsV4 } from '@/lib/api/commits';
+import { createCommit, listCommitsV4 } from '@/lib/api/commits';
 import { createDelta } from '@/lib/api/frames';
-import { framesToSentences } from '@/lib/framesToSentences';
 
 // Debounce helper for hover interactions — prevents rapid-fire re-renders
 // when mouse sweeps across YAML rows
@@ -257,17 +255,19 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
     set({ isCommitting: true, commitError: null });
     try {
       const deltaFrames = selectDeltaFrames();
-      const deltaContent: SemanticContent = { frames: deltaFrames, relations: [] };
-      const sentences = framesToSentences(deltaContent, conversationId ?? undefined) as CommitV4Sentence[];
+      const cleanFrames = deltaFrames.map(({ slot_sources: _, source: __, ...f }) => f);
 
-      const result = await createCommitV4(projectId, sentences, {
+      const result = await createCommit(projectId, {
+        frames: cleanFrames,
+        relations: draft.relations,
+      }, {
         parents: lastCommitHash ? [lastCommitHash] : [],
-        inherit_parent_sentences: true,
         branch: commitBranch,
         message: message || undefined,
-        source_refs: conversationId
-          ? [{ type: 'conversation' as const, id: conversationId, title: conversationTitle ?? undefined }]
+        sources: conversationId
+          ? [{ type: 'conversation', id: conversationId, title: conversationTitle ?? undefined }]
           : undefined,
+        provenance: { method: 'llm_extraction' },
       });
 
       const newCommittedIds: Record<string, boolean> = {};
@@ -275,6 +275,21 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
       for (const f of draft.frames) {
         newCommittedIds[f.id] = true;
         newSnapshot[f.id] = { ...f, slots: { ...f.slots } };
+      }
+
+      // Insert commit marker into delta log (links change history to commit)
+      if (conversationId) {
+        const markerEntry: DeltaLogEntry = {
+          id: crypto.randomUUID(),
+          source: 'commit_marker',
+          delta: { changes: [] },
+          created_at: new Date().toISOString(),
+          commit_hash: result.commit.hash,
+        };
+        set((s) => ({ deltaLog: [...s.deltaLog, markerEntry] }));
+
+        // Persist the marker to DB
+        createDelta(conversationId, { changes: [] }, 'commit_marker').catch(() => {});
       }
 
       set({
