@@ -398,7 +398,7 @@ export default function RunDetailPage() {
       });
       // Refresh pins store so other components see the new/updated pin
       await fetchPins(projectId);
-      router.push(`/project/${projectId}/conversation/${conversationId}`);
+      router.push(`/chat/${conversationId}`);
     } catch (_err) {
       // Retuning failed — stay on current page
     } finally {
@@ -867,7 +867,7 @@ export default function RunDetailPage() {
                                     constraintSourceRefMap.get(assertion.constraint_id) &&
                                     projectId && (
                                       <Link
-                                        href={`/project/${projectId}/conversation/${constraintSourceRefMap.get(assertion.constraint_id)!.conversation_id}`}
+                                        href={`/chat/${constraintSourceRefMap.get(assertion.constraint_id)!.conversation_id}`}
                                         className="inline-flex items-center gap-1 text-xs text-[var(--status-info)] hover:underline mt-1"
                                       >
                                         <MapPin size={10} />

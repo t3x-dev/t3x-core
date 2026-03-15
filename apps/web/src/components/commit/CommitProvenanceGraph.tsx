@@ -159,7 +159,7 @@ export function ProvenanceGraph({
             {sourceConversations.map((src) => (
               <Link
                 key={src.id}
-                href={`/project/${projectId}/conversation/${src.id}`}
+                href={`/chat/${src.id}`}
                 className={`provenance-node flex items-center gap-2 rounded-lg border px-3 py-2 text-[12px] transition-all duration-500 hover:bg-[var(--hover-bg)] ${
                   isConnected
                     ? 'border-[var(--accent-conversation)]/40 bg-[var(--accent-conversation)]/8 node-pulse-conversation'

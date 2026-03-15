@@ -748,7 +748,7 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
                 {sourceConversations.map((src) => (
                   <Link
                     key={src.id}
-                    href={`/project/${projectId}/conversation/${src.id}`}
+                    href={`/chat/${src.id}`}
                     className="group/link flex items-center gap-1.5 py-1.5 px-1.5 -mx-1.5 rounded text-[11px] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] active:bg-[var(--active-bg)] transition-colors"
                   >
                     <MessageSquare

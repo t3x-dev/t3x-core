@@ -189,7 +189,7 @@ export function CommitContextPanel({
                 showHeader
                 showJumpLink
                 onJumpClick={(convId) => {
-                  router.push(`/project/${projectId}/conversation/${convId}`);
+                  router.push(`/chat/${convId}`);
                 }}
               />
             ) : (
