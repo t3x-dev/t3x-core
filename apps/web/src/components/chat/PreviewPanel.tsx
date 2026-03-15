@@ -1,7 +1,8 @@
 'use client';
 
-import { RefreshCw } from 'lucide-react';
-import { useState } from 'react';
+import { RefreshCw, Square } from 'lucide-react';
+import { useCallback, useRef, useState } from 'react';
+import { chatStream } from '@/lib/api/chat';
 import { cn } from '@/lib/utils';
 import { useExtractionPanelStore } from '@/store/extractionPanelStore';
 
@@ -13,13 +14,13 @@ interface PreviewPanelProps {
   className?: string;
 }
 
-// ── Type chips ──
+// ── Type prompts ──
 
-const LEAF_TYPES: { value: LeafType; label: string }[] = [
-  { value: 'tweet', label: 'Tweet' },
-  { value: 'email', label: 'Email' },
-  { value: 'article', label: 'Article' },
-  { value: 'custom', label: 'Custom' },
+const LEAF_TYPES: { value: LeafType; label: string; systemHint: string }[] = [
+  { value: 'tweet', label: 'Tweet', systemHint: 'Write a concise tweet (max 280 chars). Be punchy and engaging.' },
+  { value: 'email', label: 'Email', systemHint: 'Write a professional email with subject line, greeting, body, and sign-off.' },
+  { value: 'article', label: 'Article', systemHint: 'Write a well-structured article with title, introduction, body paragraphs, and conclusion.' },
+  { value: 'custom', label: 'Custom', systemHint: 'Generate content based on the user\'s instructions.' },
 ];
 
 // ── Component ──
@@ -31,16 +32,72 @@ export function PreviewPanel({ className }: PreviewPanelProps) {
   const [prompt, setPrompt] = useState('');
   const [generatedOutput, setGeneratedOutput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [commitMessage, setCommitMessage] = useState('');
-  const [showApiKeyNote, setShowApiKeyNote] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
 
   const frameCount = draft.frames.length;
 
-  const handleRegenerate = () => {
-    // v1: Generation requires a committed commit + leaf — not available at preview time.
-    setShowApiKeyNote(true);
+  // Build context string from extracted frames
+  const buildContext = useCallback(() => {
+    return draft.frames.map((frame) => {
+      const slots = Object.entries(frame.slots)
+        .map(([k, v]) => `  ${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`)
+        .join('\n');
+      return `[${frame.type}]\n${slots}`;
+    }).join('\n\n');
+  }, [draft.frames]);
+
+  const handleGenerate = useCallback(async () => {
+    if (frameCount === 0) return;
+
+    // Cancel any in-flight generation
+    if (abortRef.current) abortRef.current.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    const leafType = LEAF_TYPES.find((t) => t.value === selectedType)!;
+    const context = buildContext();
+    const userPrompt = prompt || `Generate a ${selectedType} from the knowledge below.`;
+
+    setIsLoading(true);
+    setGeneratedOutput('');
+
+    try {
+      let output = '';
+      for await (const event of chatStream({
+        messages: [
+          {
+            role: 'system',
+            content: `You are a content generator. Use ONLY the knowledge context below to generate content. Do not make up information.\n\n${leafType.systemHint}\n\n--- KNOWLEDGE CONTEXT ---\n${context}\n--- END CONTEXT ---`,
+          },
+          { role: 'user', content: userPrompt },
+        ],
+        temperature: 0.7,
+        max_tokens: 1024,
+      })) {
+        if (controller.signal.aborted) break;
+        if (event.type === 'token' && event.content) {
+          output += event.content;
+          setGeneratedOutput(output);
+        }
+        if (event.type === 'error') {
+          setGeneratedOutput(`Error: ${event.message || 'Generation failed'}`);
+          break;
+        }
+      }
+    } catch (err) {
+      if (!controller.signal.aborted) {
+        setGeneratedOutput(`Error: ${err instanceof Error ? err.message : 'Generation failed'}`);
+      }
+    } finally {
+      setIsLoading(false);
+      if (abortRef.current === controller) abortRef.current = null;
+    }
+  }, [frameCount, selectedType, prompt, buildContext]);
+
+  const handleStop = useCallback(() => {
+    abortRef.current?.abort();
     setIsLoading(false);
-  };
+  }, []);
 
   return (
     <div className={cn('flex flex-col gap-0 text-xs', className)}>
@@ -57,10 +114,7 @@ export function PreviewPanel({ className }: PreviewPanelProps) {
           <button
             key={value}
             type="button"
-            onClick={() => {
-              setSelectedType(value);
-              setShowApiKeyNote(false);
-            }}
+            onClick={() => setSelectedType(value)}
             className={cn(
               'rounded-full border px-2 py-0.5 text-[10px] font-medium transition-colors',
               selectedType === value
@@ -89,67 +143,50 @@ export function PreviewPanel({ className }: PreviewPanelProps) {
           placeholder={`Generate a ${selectedType} from these frames...`}
           className="w-full rounded border border-[var(--stroke-default)] bg-[var(--surface-panel)] px-2 py-1.5 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--accent-commit)]"
           onKeyDown={(e) => {
-            if (e.key === 'Enter') handleRegenerate();
+            if (e.key === 'Enter' && !isLoading) handleGenerate();
           }}
+          disabled={isLoading}
         />
-        <button
-          type="button"
-          onClick={handleRegenerate}
-          disabled={isLoading || frameCount === 0}
-          className="flex items-center gap-1 self-start rounded border border-[var(--stroke-default)] px-2 py-1 text-[10px] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] disabled:opacity-40"
-        >
-          <RefreshCw className={cn('h-3 w-3', isLoading && 'animate-spin')} />
-          Regenerate
-        </button>
+        <div className="flex gap-1">
+          <button
+            type="button"
+            onClick={isLoading ? handleStop : handleGenerate}
+            disabled={!isLoading && frameCount === 0}
+            className="flex items-center gap-1 self-start rounded border border-[var(--stroke-default)] px-2 py-1 text-[10px] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] disabled:opacity-40"
+          >
+            {isLoading ? (
+              <>
+                <Square className="h-3 w-3" />
+                Stop
+              </>
+            ) : (
+              <>
+                <RefreshCw className="h-3 w-3" />
+                Generate
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
-      {/* Generated output / placeholder */}
-      <div className="flex flex-1 flex-col gap-1 border-b border-[var(--stroke-default)] px-3 py-2">
+      {/* Generated output */}
+      <div className="flex flex-1 flex-col gap-1 px-3 py-2">
         <span className="text-[10px] font-medium text-[var(--text-tertiary)]">Output</span>
 
-        {showApiKeyNote ? (
-          <div className="rounded border border-[var(--stroke-default)] bg-[var(--hover-bg)] p-2">
-            <p className="text-[10px] leading-relaxed text-[var(--text-secondary)]">
-              Generation requires a committed commit and leaf. Use &ldquo;Commit&rdquo; first, then
-              generate from the leaf detail view.
-            </p>
-          </div>
-        ) : generatedOutput ? (
-          <pre className="flex-1 overflow-auto whitespace-pre-wrap rounded border border-[var(--stroke-default)] bg-[var(--surface-panel)] p-2 text-[10px] leading-relaxed text-[var(--text-primary)]">
+        {generatedOutput ? (
+          <pre className="flex-1 overflow-auto whitespace-pre-wrap rounded border border-[var(--stroke-default)] bg-[var(--surface-panel)] p-2 text-[11px] leading-relaxed text-[var(--text-primary)]">
             {generatedOutput}
+            {isLoading && (
+              <span className="inline-block w-1.5 h-3 ml-0.5 bg-[var(--accent-commit)] rounded-sm animate-pulse" />
+            )}
           </pre>
         ) : (
           <div className="flex flex-1 items-center justify-center rounded border border-dashed border-[var(--stroke-default)] py-4">
             <p className="text-center text-[10px] text-[var(--text-tertiary)]">
-              {frameCount === 0 ? 'No frames to preview' : 'Click Regenerate to preview output'}
+              {frameCount === 0 ? 'No frames to preview' : 'Click Generate to preview output'}
             </p>
           </div>
         )}
-      </div>
-
-      {/* Commit message + commit */}
-      <div className="flex flex-col gap-1.5 px-3 py-2">
-        <label
-          htmlFor="preview-commit-msg"
-          className="text-[10px] font-medium text-[var(--text-tertiary)]"
-        >
-          Commit message
-        </label>
-        <input
-          id="preview-commit-msg"
-          type="text"
-          value={commitMessage}
-          onChange={(e) => setCommitMessage(e.target.value)}
-          placeholder="Describe this commit..."
-          className="w-full rounded border border-[var(--stroke-default)] bg-[var(--surface-panel)] px-2 py-1.5 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--accent-commit)]"
-        />
-        <button
-          type="button"
-          disabled={frameCount === 0}
-          className="w-full rounded bg-[var(--accent-commit)] py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-40"
-        >
-          Commit
-        </button>
       </div>
     </div>
   );
