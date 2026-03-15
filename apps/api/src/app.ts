@@ -29,6 +29,7 @@ import {
   agentDraftRoutes,
   branchRoutes,
   chatRoutes,
+  commitRoutes,
   commitsV3Routes,
   commitsV4Routes,
   conversationRoutes,
@@ -137,6 +138,7 @@ export function createApp(options?: CreateAppOptions): Hono {
   api.route('/', projectRoutes);
   api.route('/', conversationRoutes);
   api.route('/', turnRoutes);
+  api.route('/', commitRoutes);
   api.route('/', commitsV3Routes);
   api.route('/', branchRoutes);
   api.route('/', agentDraftRoutes);
