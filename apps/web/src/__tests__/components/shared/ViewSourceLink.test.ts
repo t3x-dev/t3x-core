@@ -5,12 +5,12 @@ describe('ViewSourceLink utilities', () => {
   describe('buildSourceUrl', () => {
     it('builds URL with turn hash only', () => {
       const url = buildSourceUrl('proj_123', 'conv_456', 'sha256:abc');
-      expect(url).toBe('/project/proj_123/conversation/conv_456?turn=sha256%3Aabc');
+      expect(url).toBe('/chat/conv_456?turn=sha256%3Aabc');
     });
 
     it('builds URL with highlight range', () => {
       const url = buildSourceUrl('proj_123', 'conv_456', 'sha256:abc', 10, 50);
-      expect(url).toBe('/project/proj_123/conversation/conv_456?turn=sha256%3Aabc&highlight=10-50');
+      expect(url).toBe('/chat/conv_456?turn=sha256%3Aabc&highlight=10-50');
     });
 
     it('handles special characters in turn hash', () => {
