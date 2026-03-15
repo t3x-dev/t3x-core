@@ -44,9 +44,9 @@ describe('buildFrameExtractionPrompt', () => {
   });
 
   describe('first extraction mode (no snapshot)', () => {
-    it('system prompt instructs knowledge document creation', () => {
+    it('system prompt instructs meaning document creation', () => {
       const result = buildFrameExtractionPrompt({ turns: sampleTurns });
-      expect(result.systemPrompt).toContain('knowledge document');
+      expect(result.systemPrompt).toContain('meaning document');
       expect(result.systemPrompt).toContain('ONE');
       expect(result.systemPrompt).toContain('nesting');
     });
@@ -59,9 +59,9 @@ describe('buildFrameExtractionPrompt', () => {
       expect(result.userPrompt).not.toContain('Knowledge Document');
     });
 
-    it('user prompt asks to create knowledge document', () => {
+    it('user prompt asks to create meaning document', () => {
       const result = buildFrameExtractionPrompt({ turns: sampleTurns });
-      expect(result.userPrompt).toContain('knowledge document');
+      expect(result.userPrompt).toContain('meaning document');
       expect(result.userPrompt).toContain('MAIN TOPIC');
     });
   });
@@ -110,7 +110,7 @@ describe('buildFrameExtractionPrompt', () => {
         turns: sampleTurns,
         snapshot: sampleSnapshot,
       });
-      expect(result.userPrompt).toContain('Update the knowledge document');
+      expect(result.userPrompt).toContain('Update the meaning document');
       expect(result.userPrompt).toContain('existing');
     });
   });
@@ -158,7 +158,7 @@ describe('buildFrameExtractionPrompt', () => {
       const snapshot: SemanticContent = { frames: [], relations: [] };
       const result = buildFrameExtractionPrompt({ turns: sampleTurns, snapshot });
       // Empty snapshot → first extraction mode (creates document)
-      expect(result.userPrompt).toContain('knowledge document');
+      expect(result.userPrompt).toContain('meaning document');
     });
   });
 

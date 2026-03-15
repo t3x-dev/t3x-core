@@ -3,8 +3,8 @@
  *
  * Constructs system + user prompts for LLM-based frame semantic extraction.
  *
- * Design philosophy: ONE conversation = ONE knowledge document.
- * The LLM acts as a "knowledge editor" maintaining a well-organized, deeply
+ * Design philosophy: ONE conversation = ONE meaning document.
+ * The LLM acts as a "meaning editor" maintaining a well-organized, deeply
  * nested YAML-like structure — not a fact extractor producing scattered frames.
  *
  * Supports two modes:
@@ -104,7 +104,7 @@ function formatTurns(turns: FrameExtractionTurn[]): string {
 
 // ── System Prompts ──
 
-const DOCUMENT_SYSTEM_PROMPT = `You are a knowledge document editor. Your job is to organize knowledge from conversations into a clean, well-structured YAML document.
+const DOCUMENT_SYSTEM_PROMPT = `You are a meaning document editor. Your job is to organize knowledge from conversations into a clean, well-structured YAML document.
 
 ## The Golden Rule: ONE Document, Deeply Nested
 
@@ -268,7 +268,7 @@ Key rules for delta:
 
 const DELTA_RULES = `## CRITICAL: Maintain Document Structure
 
-You are editing an existing knowledge document. Your job is to UPDATE it, not rebuild it.
+You are editing an existing meaning document. Your job is to UPDATE it, not rebuild it.
 
 ### When to UPDATE (most common)
 - New information about an existing topic → update the relevant slot
@@ -299,7 +299,7 @@ You are editing an existing knowledge document. Your job is to UPDATE it, not re
  * Build system + user prompts for frame semantic extraction.
  *
  * When `snapshot` is provided, produces delta-mode prompts that ask the LLM
- * to update the existing knowledge document.
+ * to update the existing meaning document.
  * When no snapshot, produces first-extraction prompts to create the document.
  */
 export function buildFrameExtractionPrompt(
@@ -319,14 +319,14 @@ ${DELTA_RULES}
 
 ${DELTA_JSON_FORMAT}`;
 
-    const userPrompt = `## Current Knowledge Document
+    const userPrompt = `## Current Meaning Document
 ${snapshotYaml}
 
 ## New Conversation Turns
 ${turnsText}
 
 ## Instructions
-Update the knowledge document with information from the new turns.
+Update the meaning document with information from the new turns.
 - Prefer updating existing slots over adding new frames
 - Nest new sub-topics under the existing root frame
 - New frame IDs start from ${nextId} (only if genuinely needed)
@@ -347,7 +347,7 @@ ${FIRST_EXTRACTION_JSON_FORMAT}`;
 ${turnsText}
 
 ## Instructions
-Create a knowledge document from this conversation.
+Create a meaning document from this conversation.
 - Identify the MAIN TOPIC and use it as the root frame type
 - Nest all related information under that root frame
 - Use deep nesting for sub-topics (budget, accommodation, itinerary, etc.)

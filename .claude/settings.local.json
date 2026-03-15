@@ -232,7 +232,16 @@
       "Bash(ps -p 49656 -o command=)",
       "Bash(kill -TERM 49656)",
       "Bash(kill -TERM 79428)",
-      "Bash(kill -TERM 79526)"
+      "Bash(kill -TERM 79526)",
+      "Bash(__NEW_LINE_06aaf69ed0daed2f__ echo:*)",
+      "Bash(__NEW_LINE_6c049b20d67ee0d1__ echo:*)",
+      "Bash(pnpm turbo:*)",
+      "Bash(gh pr:*)",
+      "Bash(rm:*)",
+      "Bash(/Users/macethan/.claude/plugins/cache/claude-plugins-official/superpowers/5.0.2/scripts/start-server.sh --project-dir /Users/macethan/Projects/t3x 2>&1)",
+      "Bash(/Users/macethan/.claude/plugins/cache/claude-plugins-official/superpowers/5.0.2/scripts/start-server.sh --project-dir /Users/macethan/Projects/t3x)",
+      "Bash(bash /Users/macethan/.claude/plugins/cache/claude-plugins-official/superpowers/5.0.2/skills/brainstorming/scripts/start-server.sh --project-dir /Users/macethan/Projects/t3x)",
+      "Bash(sed:*)"
     ],
     "deny": [],
     "ask": []
