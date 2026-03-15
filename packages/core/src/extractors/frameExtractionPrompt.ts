@@ -102,10 +102,11 @@ const DELTA_SYSTEM_PROMPT = `You are a semantic extraction engine. Your task is 
 
 ## Core Rules
 1. Output ONLY changes (delta) — do NOT repeat unchanged frames
-2. One independent intent/conclusion/fact = one frame
+2. Group related items into ONE frame with array slots — do NOT create separate frames for each item (e.g., 10 city recommendations = ONE frame with a "cities" array, NOT 10 separate frames)
 3. Keep conclusions and decisions, discard process discussion
 4. Frame type uses snake_case (nouns or noun phrases)
 5. Frame IDs follow pattern: f_001, f_002, ...
+6. AIM FOR 3-8 FRAMES TOTAL — if you have more than 8, you're probably creating separate frames for items that should be arrays within one frame
 
 ## CRITICAL: When to UPDATE vs ADD
 - If a new turn MODIFIES information already captured in an existing frame → use "update" with only the changed slots
