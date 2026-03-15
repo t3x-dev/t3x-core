@@ -1,7 +1,7 @@
 /**
  * Sentence Relations Queries
  *
- * CRUD operations for inter-sentence relations (Ring 4).
+ * CRUD operations for inter-sentence relations.
  * Relations are derivative data extracted at commit time.
  */
 

@@ -1064,8 +1064,8 @@ export type DeltaLogRecord = typeof deltaLog.$inferSelect;
 export type DeltaLogInsert = typeof deltaLog.$inferInsert;
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Sentence Relations (Ring 4 — Inter-sentence relationships)
-// @see docs/plans/2026-03-05-ring4-inter-sentence-relations-design.md
+// Sentence Relations (Inter-sentence Relations)
+// @see docs/plans/2026-03-05-inter-sentence-relations-design.md
 // ═══════════════════════════════════════════════════════════════════════════
 
 export const sentenceRelations = pgTable(

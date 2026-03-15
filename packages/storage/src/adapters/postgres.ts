@@ -723,7 +723,7 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_delta_log_conv ON delta_log(conversation_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_delta_log_project ON delta_log(project_id);
 
-    -- Sentence Relations (Ring 4)
+    -- Sentence Relations (Inter-sentence Relations)
     CREATE TABLE IF NOT EXISTS sentence_relations (
       id TEXT PRIMARY KEY,
       project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,

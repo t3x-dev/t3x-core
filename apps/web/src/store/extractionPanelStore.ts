@@ -2,6 +2,12 @@ import type { Delta, DeltaLogEntry, DeltaSource, Frame, FrameChange, SemanticCon
 import { create } from 'zustand';
 import { createDelta } from '@/lib/api/frames';
 
+// Debounce helper for hover interactions — prevents rapid-fire re-renders
+// when mouse sweeps across YAML rows
+let hoverFrameTimer: ReturnType<typeof setTimeout> | null = null;
+let hoverTurnTimer: ReturnType<typeof setTimeout> | null = null;
+const HOVER_DEBOUNCE_MS = 60;
+
 type PanelMode = 'collapsed' | 'default' | 'preview';
 type ActiveView = 'graph' | 'yaml';
 
@@ -176,6 +182,25 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
     set({ llmHighlightedFrameIds: Object.fromEntries(ids.map((id) => [id, true])) }),
   hydrateDeltaLog: (entries) => set({ deltaLog: entries }),
   setConversationId: (id) => set({ conversationId: id }),
-  setHoveredFrameId: (id, slotKey) => set({ hoveredFrameId: id, hoveredSlotKey: slotKey ?? null }),
-  setHoveredTurnHash: (hash) => set({ hoveredTurnHash: hash }),
+  setHoveredFrameId: (id, slotKey) => {
+    if (hoverFrameTimer) clearTimeout(hoverFrameTimer);
+    if (id === null) {
+      // Clear immediately on mouse leave for snappy feel
+      set({ hoveredFrameId: null, hoveredSlotKey: null });
+    } else {
+      hoverFrameTimer = setTimeout(() => {
+        set({ hoveredFrameId: id, hoveredSlotKey: slotKey ?? null });
+      }, HOVER_DEBOUNCE_MS);
+    }
+  },
+  setHoveredTurnHash: (hash) => {
+    if (hoverTurnTimer) clearTimeout(hoverTurnTimer);
+    if (hash === null) {
+      set({ hoveredTurnHash: null });
+    } else {
+      hoverTurnTimer = setTimeout(() => {
+        set({ hoveredTurnHash: hash });
+      }, HOVER_DEBOUNCE_MS);
+    }
+  },
 }));

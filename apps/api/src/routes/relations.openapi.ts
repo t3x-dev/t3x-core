@@ -1,5 +1,5 @@
 /**
- * Sentence Relations Routes (Ring 4)
+ * Sentence Relations Routes (Inter-sentence Relations)
  *
  * - GET  /v1/commits-v4/:hash/relations           — Get relations for a commit
  * - POST /v1/commits-v4/:hash/relations/extract    — Trigger (re-)extraction
