@@ -232,16 +232,15 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
     // 6c. Run Meaning Pipeline — multi-agent post-processing
     let organizedSnapshot = result.snapshot;
     try {
-      const pipelineProvider = await (async () => {
-        const r = await getProviderRegistry();
-        return r.getProvider('generation');
-      })();
-      const pipeline = createMeaningPipeline(pipelineProvider);
-      const pipelineResult = await pipeline.run(
+      const pipelineReg = await getProviderRegistry();
+      const pipelineResult = await pipelineReg.tryWithFallback('generation', async (pipelineProvider) => {
+        const pipeline = createMeaningPipeline(pipelineProvider);
+        return pipeline.run(
         result.snapshot,
         extractionTurns,
         currentSnapshot.frames.length > 0 ? currentSnapshot : undefined
       );
+      });
       organizedSnapshot = pipelineResult.content;
 
       // Record pipeline usage
