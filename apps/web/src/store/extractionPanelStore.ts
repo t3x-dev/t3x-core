@@ -1,6 +1,15 @@
 import type { Delta, DeltaLogEntry, DeltaSource, Frame, FrameChange, SemanticContent } from '@t3x-dev/core';
 import { create } from 'zustand';
+import type { CommitV4Sentence } from '@/lib/api/commits';
+import { createCommitV4, listCommitsV4 } from '@/lib/api/commits';
 import { createDelta } from '@/lib/api/frames';
+import { framesToSentences } from '@/lib/framesToSentences';
+
+// Debounce helper for hover interactions — prevents rapid-fire re-renders
+// when mouse sweeps across YAML rows
+let hoverFrameTimer: ReturnType<typeof setTimeout> | null = null;
+let hoverTurnTimer: ReturnType<typeof setTimeout> | null = null;
+const HOVER_DEBOUNCE_MS = 60;
 
 type PanelMode = 'collapsed' | 'default' | 'preview';
 type ActiveView = 'graph' | 'yaml';
@@ -41,6 +50,25 @@ interface ExtractionPanelState {
   hoveredTurnHash: string | null;     // Chat message hovered → highlight YAML rows
   setHoveredFrameId: (id: string | null, slotKey?: string | null) => void;
   setHoveredTurnHash: (hash: string | null) => void;
+
+  // Commit tracking
+  lastCommitHash: string | null;
+  committedFrameIds: Record<string, boolean>;
+  committedFrameSnapshot: Record<string, Frame>;
+  commitBranch: string;
+  projectId: string | null;
+  conversationTitle: string | null;
+  isCommitting: boolean;
+  commitError: string | null;
+
+  // Commit actions
+  selectDeltaFrames: () => Frame[];
+  commitFrames: (message: string) => Promise<{ hash: string }>;
+  setCommitBranch: (branch: string) => void;
+  setProjectId: (id: string | null) => void;
+  setConversationTitle: (title: string | null) => void;
+  initCommitState: (projectId: string) => Promise<void>;
+  clearCommitError: () => void;
 }
 
 const emptyContent: SemanticContent = { frames: [], relations: [] };
@@ -61,6 +89,16 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
   hoveredFrameId: null,
   hoveredSlotKey: null,
   hoveredTurnHash: null,
+
+  // Commit tracking defaults
+  lastCommitHash: null,
+  committedFrameIds: {},
+  committedFrameSnapshot: {},
+  commitBranch: 'main',
+  projectId: null,
+  conversationTitle: null,
+  isCommitting: false,
+  commitError: null,
 
   setPanelMode: (mode) => set({ panelMode: mode }),
   setActiveView: (view) => set({ activeView: view }),
@@ -176,6 +214,110 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
     set({ llmHighlightedFrameIds: Object.fromEntries(ids.map((id) => [id, true])) }),
   hydrateDeltaLog: (entries) => set({ deltaLog: entries }),
   setConversationId: (id) => set({ conversationId: id }),
-  setHoveredFrameId: (id, slotKey) => set({ hoveredFrameId: id, hoveredSlotKey: slotKey ?? null }),
-  setHoveredTurnHash: (hash) => set({ hoveredTurnHash: hash }),
+  setHoveredFrameId: (id, slotKey) => {
+    if (hoverFrameTimer) clearTimeout(hoverFrameTimer);
+    if (id === null) {
+      // Clear immediately on mouse leave for snappy feel
+      set({ hoveredFrameId: null, hoveredSlotKey: null });
+    } else {
+      hoverFrameTimer = setTimeout(() => {
+        set({ hoveredFrameId: id, hoveredSlotKey: slotKey ?? null });
+      }, HOVER_DEBOUNCE_MS);
+    }
+  },
+  setHoveredTurnHash: (hash) => {
+    if (hoverTurnTimer) clearTimeout(hoverTurnTimer);
+    if (hash === null) {
+      set({ hoveredTurnHash: null });
+    } else {
+      hoverTurnTimer = setTimeout(() => {
+        set({ hoveredTurnHash: hash });
+      }, HOVER_DEBOUNCE_MS);
+    }
+  },
+
+  // Commit actions
+
+  selectDeltaFrames: () => {
+    const { draft, committedFrameIds, committedFrameSnapshot } = get();
+    return draft.frames.filter((f) => {
+      if (!committedFrameIds[f.id]) return true;
+      const snap = committedFrameSnapshot[f.id];
+      if (!snap) return true;
+      const sortedStringify = (obj: unknown) =>
+        JSON.stringify(obj, Object.keys(obj as Record<string, unknown>).sort());
+      return sortedStringify(f.slots) !== sortedStringify(snap.slots);
+    });
+  },
+
+  commitFrames: async (message) => {
+    const { draft, projectId, conversationId, conversationTitle, lastCommitHash, commitBranch, selectDeltaFrames } = get();
+    if (!projectId) throw new Error('No project ID');
+
+    set({ isCommitting: true, commitError: null });
+    try {
+      const deltaFrames = selectDeltaFrames();
+      const deltaContent: SemanticContent = { frames: deltaFrames, relations: [] };
+      const sentences = framesToSentences(deltaContent, conversationId ?? undefined) as CommitV4Sentence[];
+
+      const result = await createCommitV4(projectId, sentences, {
+        parents: lastCommitHash ? [lastCommitHash] : [],
+        inherit_parent_sentences: true,
+        branch: commitBranch,
+        message: message || undefined,
+        source_refs: conversationId
+          ? [{ type: 'conversation' as const, id: conversationId, title: conversationTitle ?? undefined }]
+          : undefined,
+      });
+
+      const newCommittedIds: Record<string, boolean> = {};
+      const newSnapshot: Record<string, Frame> = {};
+      for (const f of draft.frames) {
+        newCommittedIds[f.id] = true;
+        newSnapshot[f.id] = { ...f, slots: { ...f.slots } };
+      }
+
+      set({
+        lastCommitHash: result.commit.hash,
+        committedFrameIds: newCommittedIds,
+        committedFrameSnapshot: newSnapshot,
+        isCommitting: false,
+        panelMode: 'default',
+      });
+
+      return { hash: result.commit.hash };
+    } catch (err) {
+      set({
+        isCommitting: false,
+        commitError: err instanceof Error ? err.message : 'Commit failed',
+      });
+      throw err;
+    }
+  },
+
+  setCommitBranch: (branch) => set({ commitBranch: branch }),
+  setProjectId: (id) => set({ projectId: id }),
+  setConversationTitle: (title) => set({ conversationTitle: title }),
+  clearCommitError: () => set({ commitError: null }),
+
+  initCommitState: async (projectId) => {
+    try {
+      const commits = await listCommitsV4(projectId, 'main', 1);
+      if (commits.length > 0) {
+        const head = commits[0];
+        set({ lastCommitHash: head.hash });
+        if (head.semantic?.frames) {
+          const ids: Record<string, boolean> = {};
+          const snapshot: Record<string, Frame> = {};
+          for (const f of head.semantic.frames) {
+            ids[f.id] = true;
+            snapshot[f.id] = f;
+          }
+          set({ committedFrameIds: ids, committedFrameSnapshot: snapshot });
+        }
+      }
+    } catch {
+      // Silent fallback — treat as no prior commits
+    }
+  },
 }));

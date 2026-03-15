@@ -80,63 +80,9 @@ export interface Turn {
   created_at: string;
 }
 
-// Keyword from Ring 1 - aligned with @t3x-dev/core Keyword
-export interface RingKeyword {
-  text: string;
-  lemma: string;
-  polarity: -1 | 0 | 1;
-  pos: string;
-  entityType: string | null;
-  confidence: number;
-}
-
-// Facet from Ring 2 - aligned with @t3x-dev/core Facet
-export interface RingFacet {
-  facetType: 'intent_seed' | 'time_window' | 'preference_soft' | 'unknown_slot';
-  key: string;
-  value: unknown;
-  confidence: number;
-}
-
-// Segment from Ring 3 - aligned with @t3x-dev/core Segment
-export interface RingSegment {
-  segmentId: string;
-  text: string;
-  startChar: number;
-  endChar: number;
-}
-
-// Anchor candidate from Ring 1 (camelCase for internal use)
-export interface RingAnchorCandidate {
-  text: string;
-  type: 'number' | 'money' | 'duration' | 'percent' | 'date' | 'entity' | 'term' | 'phrase';
-  startChar: number;
-  endChar: number;
-  confidence: number;
-  source: 'token' | 'entity' | 'phrase';
-}
-
-// Ring output structure - aligned with @t3x-dev/core RingOutput
-export interface RingsData {
-  ring1: {
-    keywords: RingKeyword[];
-    timeAnchor: string | null;
-    topic: string | null;
-    preferenceKeywords: RingKeyword[];
-    /** v1.1: Anchor candidates for inline highlighting */
-    anchorCandidates?: RingAnchorCandidate[];
-  };
-  ring2: {
-    facets: RingFacet[];
-  };
-  ring3: {
-    segments: RingSegment[];
-  };
-}
-
 export interface TurnDetail extends Turn {
-  // API returns { rings: { ring1, ring2, ring3 } } wrapper
-  rings: { rings: RingsData } | RingsData | null;
+  // Legacy ring data (if present in DB) — ring extraction has been retired
+  rings: Record<string, unknown> | null;
 }
 
 // ============================================================================

@@ -39,7 +39,7 @@ export function DiffSourceGroupHeader({
 }: DiffSourceGroupHeaderProps) {
   const Icon = type === 'leaf' ? Leaf : MessageSquare;
   const displayTitle = conversationTitle || conversationId.slice(0, 16);
-  const href = `/project/${projectId}/conversation/${conversationId}`;
+  const href = `/chat/${conversationId}`;
 
   return (
     <div

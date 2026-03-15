@@ -86,10 +86,36 @@ export function ChatMessage({ sender, content, turnHash, turnIndex, isStreaming 
     const frame = draft.frames.find((f) => f.id === hoveredFrameId);
     if (!frame) return [];
 
-    // Check if this turn matches the frame's source
+    // If slot_sources exist, use character-level highlighting per turn_hash
+    if (frame.slot_sources) {
+      if (hoveredSlotKey && frame.slot_sources[hoveredSlotKey]) {
+        // Specific slot hovered — highlight just that span if turn matches
+        const ref = frame.slot_sources[hoveredSlotKey];
+        if (turnHash && ref.turn_hash && turnHash === ref.turn_hash) {
+          return [{ start: ref.start_char, end: ref.end_char }];
+        }
+        // Fallback: match by turn tag (T1, T2, ...)
+        if (turnIndex != null && ref.turn === `T${turnIndex}`) {
+          return [{ start: ref.start_char, end: ref.end_char }];
+        }
+        return [];
+      }
+      // Frame header hovered — highlight ALL slots from this turn
+      const ranges: Array<{ start: number; end: number }> = [];
+      for (const ref of Object.values(frame.slot_sources)) {
+        const hashMatch = turnHash && ref.turn_hash && turnHash === ref.turn_hash;
+        const tagMatch = turnIndex != null && ref.turn === `T${turnIndex}`;
+        if (hashMatch || tagMatch) {
+          ranges.push({ start: ref.start_char, end: ref.end_char });
+        }
+      }
+      return ranges;
+    }
+
+    // No slot_sources — check if this turn matches frame's source (whole-message tint fallback)
     const isSourceTurn = (() => {
       if (!frame.source) return false;
-      if (turnIndex && frame.source === `T${turnIndex}`) return true;
+      if (turnIndex != null && frame.source === `T${turnIndex}`) return true;
       if (turnHash && frame.source.includes(':')) {
         const hashPart = frame.source.split(':')[1];
         return turnHash.includes(hashPart);
@@ -97,38 +123,24 @@ export function ChatMessage({ sender, content, turnHash, turnIndex, isStreaming 
       return false;
     })();
 
-    if (!isSourceTurn) return [];
-
-    // If slot_sources exist, use character-level highlighting
-    if (frame.slot_sources) {
-      if (hoveredSlotKey && frame.slot_sources[hoveredSlotKey]) {
-        // Specific slot hovered — highlight just that span
-        const ref = frame.slot_sources[hoveredSlotKey];
-        // Verify the turn_hash matches
-        if (ref.turn_hash && turnHash && !turnHash.includes(ref.turn_hash.slice(0, 8))) {
-          // This source ref points to a different turn — check all turns
-          return [];
-        }
-        return [{ start: ref.start_char, end: ref.end_char }];
-      }
-      // Frame header hovered — highlight ALL slots from this turn
-      const ranges: Array<{ start: number; end: number }> = [];
-      for (const ref of Object.values(frame.slot_sources)) {
-        if (ref.turn_hash && turnHash && !turnHash.includes(ref.turn_hash.slice(0, 8))) continue;
-        ranges.push({ start: ref.start_char, end: ref.end_char });
-      }
-      return ranges;
-    }
-
-    // No slot_sources — fall back to whole-message highlight (empty ranges = use bg tint)
-    return [];
+    // Return empty ranges — caller will check isSourceTurn via isWholeMessageHighlight
+    return isSourceTurn ? [] : [];
   }, [hoveredFrameId, hoveredSlotKey, draft.frames, turnHash, turnIndex]);
 
   const hasCharHighlights = highlightRanges.length > 0;
   const isWholeMessageHighlight = hoveredFrameId && !hasCharHighlights && (() => {
     const frame = draft.frames.find((f) => f.id === hoveredFrameId);
-    if (!frame?.source) return false;
-    if (turnIndex && frame.source === `T${turnIndex}`) return true;
+    if (!frame) return false;
+    // Check if any slot_source points to this turn
+    if (frame.slot_sources) {
+      for (const ref of Object.values(frame.slot_sources)) {
+        if (turnHash && ref.turn_hash && turnHash === ref.turn_hash) return true;
+        if (turnIndex != null && ref.turn === `T${turnIndex}`) return true;
+      }
+    }
+    // Fallback: check frame.source
+    if (!frame.source) return false;
+    if (turnIndex != null && frame.source === `T${turnIndex}`) return true;
     if (turnHash && frame.source.includes(':')) {
       return turnHash.includes(frame.source.split(':')[1]);
     }

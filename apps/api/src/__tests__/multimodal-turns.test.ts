@@ -20,14 +20,6 @@ vi.mock('../lib/db', () => ({
   closeDB: vi.fn(() => Promise.resolve()),
 }));
 
-// Mock NLP provider to avoid real API calls
-vi.mock('../lib/nlp', () => ({
-  getNLPProvider: vi.fn(() => ({
-    detectLanguage: vi.fn(() => Promise.resolve({ language: 'en', confidence: 1 })),
-    extractEntities: vi.fn(() => Promise.resolve([])),
-    analyzeSentiment: vi.fn(() => Promise.resolve({ score: 0, magnitude: 0 })),
-  })),
-}));
 
 import { turnRoutes } from '../routes/turns';
 

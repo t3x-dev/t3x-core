@@ -25,7 +25,7 @@ function slotValueToString(value: SlotValue): string {
 }
 
 /** Convert SemanticContent frames into Sentence[] for CommitV4 content */
-export function framesToSentences(content: SemanticContent): Sentence[] {
+export function framesToSentences(content: SemanticContent, conversationId?: string): Sentence[] {
   return content.frames.map((frame) => {
     // Combine slot values into a natural-language sentence
     const slotParts = Object.entries(frame.slots).map(([key, value]) => {
@@ -35,11 +35,27 @@ export function framesToSentences(content: SemanticContent): Sentence[] {
     const text = `[${frame.type}] ${slotParts.join('; ')}`;
     const id = `s_${frame.id.replace('f_', '')}`;
 
+    // Only include source_ref when all required fields are present
+    // (API requires conversation_id, turn_hash, start_char, end_char — all non-optional)
+    let source_ref: Sentence['source_ref'] | undefined;
+    if (frame.slot_sources && conversationId) {
+      const firstSource = Object.values(frame.slot_sources)[0];
+      const turnHash = firstSource?.turn_hash ?? firstSource?.turn;
+      if (firstSource && turnHash && firstSource.start_char != null && firstSource.end_char != null) {
+        source_ref = {
+          conversation_id: conversationId,
+          turn_hash: turnHash,
+          start_char: firstSource.start_char,
+          end_char: firstSource.end_char,
+        };
+      }
+    }
+
     return {
       id,
       text,
       confidence: frame.confidence ?? 1.0,
-      source_ref: frame.source ? { turn_hash: frame.source } : undefined,
+      source_ref,
     };
   });
 }

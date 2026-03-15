@@ -41,7 +41,7 @@ export function buildSourceUrl(
   startChar?: number,
   endChar?: number
 ): string {
-  const basePath = `/project/${projectId}/conversation/${conversationId}`;
+  const basePath = `/chat/${conversationId}`;
   const params = new URLSearchParams();
 
   params.set('turn', turnHash);

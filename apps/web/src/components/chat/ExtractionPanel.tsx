@@ -2,12 +2,15 @@
 
 import { motion } from 'framer-motion';
 import { GitCommit, LayoutGrid, Loader2 } from 'lucide-react';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
+import { framesToSentences } from '@/lib/framesToSentences';
 import { cn } from '@/lib/utils';
 import { useExtractionPanelStore } from '@/store/extractionPanelStore';
 import { CommitDropdown } from './CommitDropdown';
 import { FrameGraphMini } from './FrameGraphMini';
 import { FrameYAMLView } from './FrameYAMLView';
+import { PreviewPanel } from './PreviewPanel';
 
 // ── Panel widths ──
 
@@ -76,6 +79,115 @@ function ViewTabs({
           {view}
         </button>
       ))}
+    </div>
+  );
+}
+
+// ── Commit preview section ──
+
+function CommitPreviewSection() {
+  const conversationId = useExtractionPanelStore((s) => s.conversationId);
+  const lastCommitHash = useExtractionPanelStore((s) => s.lastCommitHash);
+  const commitBranch = useExtractionPanelStore((s) => s.commitBranch);
+  const isCommitting = useExtractionPanelStore((s) => s.isCommitting);
+  const commitError = useExtractionPanelStore((s) => s.commitError);
+  const selectDeltaFrames = useExtractionPanelStore((s) => s.selectDeltaFrames);
+  const commitFrames = useExtractionPanelStore((s) => s.commitFrames);
+  const setPanelMode = useExtractionPanelStore((s) => s.setPanelMode);
+  const clearCommitError = useExtractionPanelStore((s) => s.clearCommitError);
+
+  const [commitMessage, setCommitMessage] = useState('');
+  const deltaFrames = selectDeltaFrames();
+  const deltaSentences = framesToSentences(
+    { frames: deltaFrames, relations: [] },
+    conversationId ?? undefined
+  );
+
+  const handleConfirm = async () => {
+    try {
+      const result = await commitFrames(commitMessage);
+      toast.success(`Committed to ${commitBranch}`, {
+        description: result.hash.slice(0, 16),
+      });
+      setCommitMessage('');
+    } catch {
+      // Error already set in store
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-2 p-3">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-semibold text-[var(--text-primary)]">
+          Commit Preview
+        </span>
+        <span className="text-[10px] text-[var(--text-tertiary)]">
+          {deltaSentences.length} new sentence{deltaSentences.length !== 1 ? 's' : ''}
+        </span>
+      </div>
+
+      <div className="flex flex-col gap-1 max-h-40 overflow-y-auto">
+        {deltaSentences.length === 0 ? (
+          <div className="text-[11px] text-[var(--text-tertiary)] italic py-2">
+            All frames already committed — up to date
+          </div>
+        ) : (
+          deltaSentences.map((s) => (
+            <div
+              key={s.id}
+              className="text-[11px] text-[var(--text-secondary)] rounded px-2 py-1 bg-[var(--hover-bg)]"
+            >
+              <span className="text-green-500 mr-1">+</span>
+              {s.text.length > 80 ? `${s.text.slice(0, 80)}...` : s.text}
+            </div>
+          ))
+        )}
+      </div>
+
+      <div className="flex items-center gap-2 text-[10px] text-[var(--text-tertiary)]">
+        <span>Branch: <strong>{commitBranch}</strong></span>
+        <span>·</span>
+        <span>{lastCommitHash ? `Parent: ${lastCommitHash.slice(0, 12)}` : 'Root commit'}</span>
+      </div>
+
+      <input
+        type="text"
+        value={commitMessage}
+        onChange={(e) => setCommitMessage(e.target.value)}
+        placeholder="Commit message (optional)"
+        className="w-full rounded border border-[var(--stroke-default)] bg-[var(--surface-panel)] px-2 py-1.5 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--accent-commit)]"
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && !isCommitting && deltaSentences.length > 0) handleConfirm();
+          if (e.key === 'Escape') setPanelMode('default');
+        }}
+        disabled={isCommitting}
+      />
+
+      {commitError && (
+        <div className="text-[11px] text-red-400 bg-red-400/10 rounded px-2 py-1">
+          {commitError}
+          <button type="button" onClick={clearCommitError} className="ml-2 underline">dismiss</button>
+        </div>
+      )}
+
+      <div className="flex gap-1.5">
+        <button
+          type="button"
+          onClick={() => setPanelMode('default')}
+          disabled={isCommitting}
+          className="flex-1 rounded border border-[var(--stroke-default)] px-2 py-1.5 text-xs text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] disabled:opacity-40"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={handleConfirm}
+          disabled={isCommitting || deltaSentences.length === 0}
+          className="flex-1 rounded bg-[var(--accent-commit)] px-2 py-1.5 text-xs text-white hover:opacity-90 disabled:opacity-40"
+        >
+          {isCommitting ? 'Committing...' : 'Confirm Commit'}
+        </button>
+      </div>
     </div>
   );
 }
@@ -195,27 +307,27 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
               <CommitDropdown />
             </div>
           ) : (
-            /* Preview mode: split vertically */
-            <div className="flex flex-1 flex-col overflow-hidden">
-              {/* Top: extraction content */}
-              <div className="flex-1 overflow-hidden border-b border-[var(--stroke-default)]">
-                {activeView === 'graph' ? <FrameGraphMini /> : <FrameYAMLView />}
+            /* Preview mode: side-by-side (frames left, preview+commit right) */
+            <div className="flex flex-1 overflow-hidden">
+              {/* Left: extraction content */}
+              <div className="flex flex-1 flex-col overflow-hidden border-r border-[var(--stroke-default)]">
+                <div className="flex-1 overflow-hidden">
+                  {activeView === 'graph' ? <FrameGraphMini /> : <FrameYAMLView />}
+                </div>
+                <CommitDropdown />
               </div>
 
-              {/* Bottom: PreviewPanel placeholder (Task 9) */}
-              <div className="flex flex-1 flex-col items-center justify-center gap-2 bg-[var(--surface-panel)]">
-                <span className="text-xs text-[var(--text-tertiary)]">Preview Panel</span>
-                <span className="text-[10px] text-[var(--text-tertiary)]">(Task 9)</span>
-                <button
-                  type="button"
-                  onClick={() => setPanelMode('default')}
-                  className="mt-2 rounded px-2 py-1 text-xs text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]"
-                >
-                  Back to Default
-                </button>
+              {/* Right: Preview + Commit */}
+              <div className="flex flex-1 flex-col overflow-hidden">
+                {/* Leaf preview */}
+                <div className="flex-1 overflow-y-auto border-b border-[var(--stroke-default)]">
+                  <PreviewPanel />
+                </div>
+                {/* Commit section */}
+                <div className="overflow-y-auto">
+                  <CommitPreviewSection />
+                </div>
               </div>
-
-              <CommitDropdown />
             </div>
           )}
         </div>

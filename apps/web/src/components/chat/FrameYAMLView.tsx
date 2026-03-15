@@ -17,6 +17,7 @@ export function FrameYAMLView() {
   const unconfirmFrame = useExtractionPanelStore((s) => s.unconfirmFrame);
   const confirmSlot = useExtractionPanelStore((s) => s.confirmSlot);
   const unconfirmSlot = useExtractionPanelStore((s) => s.unconfirmSlot);
+  const committedFrameIds = useExtractionPanelStore((s) => s.committedFrameIds);
   const llmHighlightedFrameIds = useExtractionPanelStore((s) => s.llmHighlightedFrameIds);
   const isExtracting = useExtractionPanelStore((s) => s.isExtracting);
   const setHoveredFrameId = useExtractionPanelStore((s) => s.setHoveredFrameId);
@@ -288,7 +289,12 @@ export function FrameYAMLView() {
                   textOverflow: 'ellipsis',
                   flex: 1,
                   minWidth: 0,
+                  display: 'flex',
+                  alignItems: 'center',
                 }}>
+                  {isFrameLine && committedFrameIds[line.frameId] && (
+                    <span style={{ fontSize: 9, color: 'rgba(74, 222, 128, 0.6)', marginRight: 4 }} title="Committed">✓</span>
+                  )}
                   {line.text}
                 </pre>
               </div>

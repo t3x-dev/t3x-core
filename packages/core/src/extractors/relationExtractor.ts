@@ -4,7 +4,7 @@
  * Extracts inter-sentence relations using a dedicated LLM call.
  * Triggered at commit time when sentences are finalized.
  *
- * @see docs/plans/2026-03-05-ring4-inter-sentence-relations-design.md
+ * @see docs/plans/2026-03-05-inter-sentence-relations-design.md
  */
 
 import { nanoid } from 'nanoid';

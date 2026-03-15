@@ -2,6 +2,7 @@
 
 import { ChevronDown } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -9,12 +10,15 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { framesToSentences } from '@/lib/framesToSentences';
 import { useExtractionPanelStore } from '@/store/extractionPanelStore';
 
 export function CommitDropdown() {
   const draft = useExtractionPanelStore((s) => s.draft);
   const setPanelMode = useExtractionPanelStore((s) => s.setPanelMode);
+  const selectDeltaFrames = useExtractionPanelStore((s) => s.selectDeltaFrames);
+  const commitFrames = useExtractionPanelStore((s) => s.commitFrames);
+  const commitBranch = useExtractionPanelStore((s) => s.commitBranch);
+  const isCommitting = useExtractionPanelStore((s) => s.isCommitting);
 
   const [showMessageInput, setShowMessageInput] = useState(false);
   const [commitMessage, setCommitMessage] = useState('');
@@ -24,20 +28,27 @@ export function CommitDropdown() {
     if (showMessageInput) inputRef.current?.focus();
   }, [showMessageInput]);
 
-  const sentences = framesToSentences(draft);
+  const deltaCount = selectDeltaFrames().length;
   const hasFrames = draft.frames.length > 0;
+  const hasDelta = deltaCount > 0;
 
   const handleCommit = useCallback(() => {
-    if (!hasFrames) return;
+    if (!hasDelta) return;
     setShowMessageInput(true);
-  }, [hasFrames]);
+  }, [hasDelta]);
 
-  const handleConfirmCommit = useCallback(() => {
-    // Placeholder: actual commit API call goes here
-    // The sentences payload is ready: sentences
-    setShowMessageInput(false);
-    setCommitMessage('');
-  }, []);
+  const handleConfirmCommit = useCallback(async () => {
+    try {
+      const result = await commitFrames(commitMessage);
+      toast.success(`Committed to ${commitBranch}`, {
+        description: result.hash.slice(0, 16),
+      });
+      setShowMessageInput(false);
+      setCommitMessage('');
+    } catch {
+      toast.error('Commit failed');
+    }
+  }, [commitFrames, commitMessage, commitBranch]);
 
   const handlePreviewAndCommit = useCallback(() => {
     setPanelMode('preview');
@@ -54,29 +65,26 @@ export function CommitDropdown() {
           ref={inputRef}
           className="w-full rounded border border-[var(--stroke-default)] bg-[var(--surface-panel)] px-2 py-1.5 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--accent-commit)]"
           onKeyDown={(e) => {
-            if (e.key === 'Enter') handleConfirmCommit();
+            if (e.key === 'Enter' && !isCommitting) handleConfirmCommit();
             if (e.key === 'Escape') setShowMessageInput(false);
           }}
+          disabled={isCommitting}
         />
         <div className="flex gap-1.5">
-          <Button
-            size="sm"
-            variant="outline"
-            className="flex-1 text-xs"
-            onClick={() => setShowMessageInput(false)}
-          >
+          <Button size="sm" variant="outline" className="flex-1 text-xs" onClick={() => setShowMessageInput(false)} disabled={isCommitting}>
             Cancel
           </Button>
           <Button
             size="sm"
             className="flex-1 bg-[var(--accent-commit)] text-xs text-white hover:opacity-90"
             onClick={handleConfirmCommit}
+            disabled={isCommitting || !hasDelta}
           >
-            Confirm
+            {isCommitting ? 'Committing...' : 'Confirm'}
           </Button>
         </div>
         <p className="text-[10px] text-[var(--text-tertiary)]">
-          {sentences.length} sentence{sentences.length !== 1 ? 's' : ''} ready
+          {deltaCount} new sentence{deltaCount !== 1 ? 's' : ''}
         </p>
       </div>
     );
@@ -85,22 +93,20 @@ export function CommitDropdown() {
   return (
     <div className="flex border-t border-[var(--stroke-default)] p-3">
       <div className="flex flex-1 rounded-md overflow-hidden">
-        {/* Primary commit button */}
         <Button
           size="sm"
-          disabled={!hasFrames}
+          disabled={!hasDelta || isCommitting}
           onClick={handleCommit}
           className="flex-1 rounded-r-none bg-[var(--accent-commit)] text-xs text-white hover:opacity-90 disabled:opacity-40"
         >
-          Commit
+          {hasDelta ? `Commit (${deltaCount})` : hasFrames ? 'Up to date' : 'Commit'}
         </Button>
 
-        {/* Dropdown chevron */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
               size="sm"
-              disabled={!hasFrames}
+              disabled={!hasDelta || isCommitting}
               className="rounded-l-none border-l border-white/20 bg-[var(--accent-commit)] px-2 text-white hover:opacity-90 disabled:opacity-40"
             >
               <ChevronDown className="h-3 w-3" />

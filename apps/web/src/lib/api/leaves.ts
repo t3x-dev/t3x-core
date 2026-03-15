@@ -3,6 +3,7 @@
  */
 
 import { API_V1, fetchWithTimeout, handleResponse } from './core';
+import type { AnchorCandidate } from '@/types/nodes';
 import type {
   AnchorConstraint,
   AnchorType,
@@ -11,7 +12,6 @@ import type {
   ApiSentenceWithAnchors,
   CommitAnchors,
   ConfirmedAnchor,
-  RingAnchorCandidate,
   SentenceWithAnchors,
 } from './types';
 
@@ -438,7 +438,7 @@ export interface ApiAnchorCandidate {
 /**
  * Convert API anchor candidate (snake_case) to internal format (camelCase)
  */
-export function parseApiAnchorCandidate(api: ApiAnchorCandidate): RingAnchorCandidate {
+export function parseApiAnchorCandidate(api: ApiAnchorCandidate): AnchorCandidate {
   return {
     text: api.text,
     type: api.type,
@@ -454,7 +454,7 @@ export function parseApiAnchorCandidate(api: ApiAnchorCandidate): RingAnchorCand
  */
 export function parseApiAnchorCandidates(
   apis: ApiAnchorCandidate[] | undefined
-): RingAnchorCandidate[] {
+): AnchorCandidate[] {
   if (!apis) return [];
   return apis.map(parseApiAnchorCandidate);
 }
