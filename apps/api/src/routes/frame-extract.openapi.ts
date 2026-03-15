@@ -9,7 +9,7 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { buildDraft, type FrameExtractionTurn, FrameExtractor, fuzzyLocate } from '@t3x-dev/core';
+import { buildDraft, type FrameExtractionTurn, FrameExtractor, fuzzyLocate, type SlotQuotesMap } from '@t3x-dev/core';
 import {
   findConversationById,
   findTurnsByConversation,
@@ -183,81 +183,48 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
     }
 
     // 6b. Resolve slot quotes into character offsets using fuzzyLocate
-    // Build a map of turn tag → turn content for quote matching
-    const turnContentMap = new Map<string, { content: string; turnHash: string }>();
-    selectedTurns.forEach((t, i) => {
-      const tag = `T${i + 1}`;
-      turnContentMap.set(tag, { content: t.content, turnHash: t.turnHash });
-      // Also map by hash prefix for "T3:abc12345" format
-      if (t.turnHash) {
-        turnContentMap.set(`T${i + 1}:${t.turnHash.slice(0, 8)}`, { content: t.content, turnHash: t.turnHash });
-      }
-    });
+    const slotQuotes: SlotQuotesMap = result.slotQuotes ?? new Map();
 
-    for (const change of result.delta.changes) {
-      if (change.action === 'add' && change.frame) {
-        const frame = change.frame;
-        const slotQuotes = (frame as Record<string, unknown>).slot_quotes as Record<string, string> | undefined;
-        if (slotQuotes && frame.source) {
-          const turnInfo = turnContentMap.get(frame.source);
-          if (turnInfo) {
-            const slotSources: Record<string, { turn: string; turn_hash?: string; start_char: number; end_char: number; quote?: string }> = {};
-            for (const [slotKey, quote] of Object.entries(slotQuotes)) {
-              if (typeof quote !== 'string') continue;
-              const located = fuzzyLocate(turnInfo.content, quote);
-              if (located) {
-                slotSources[slotKey] = {
-                  turn: frame.source,
-                  turn_hash: turnInfo.turnHash,
-                  start_char: located.start,
-                  end_char: located.end,
-                  quote,
-                };
-              }
-            }
-            if (Object.keys(slotSources).length > 0) {
-              frame.slot_sources = slotSources;
+    if (slotQuotes.size > 0) {
+      // Build turn content lookup: try all turns for each quote
+      const turnInfoList = selectedTurns.map((t, i) => ({
+        tag: `T${i + 1}`,
+        content: t.content,
+        turnHash: t.turnHash,
+      }));
+
+      for (let i = 0; i < result.delta.changes.length; i++) {
+        const quotes = slotQuotes.get(i);
+        if (!quotes) continue;
+
+        const change = result.delta.changes[i];
+        const slotSources: Record<string, { turn: string; turn_hash?: string; start_char: number; end_char: number; quote?: string }> = {};
+
+        for (const [slotKey, quote] of Object.entries(quotes)) {
+          if (typeof quote !== 'string' || !quote) continue;
+
+          // Try matching the quote against all turns (best match wins)
+          for (const turnInfo of turnInfoList) {
+            const located = fuzzyLocate(turnInfo.content, quote);
+            if (located && located.score >= 0.6) {
+              slotSources[slotKey] = {
+                turn: turnInfo.tag,
+                turn_hash: turnInfo.turnHash,
+                start_char: located.start,
+                end_char: located.end,
+                quote,
+              };
+              break;
             }
           }
         }
-        // Clean up slot_quotes from the frame (internal LLM output, not persisted)
-        delete (frame as Record<string, unknown>).slot_quotes;
-      }
-      // Handle update changes with slot_quotes too
-      if (change.action === 'update') {
-        const slotQuotes = (change as Record<string, unknown>).slot_quotes as Record<string, string> | undefined;
-        if (slotQuotes) {
-          // Find the frame's source from snapshot
-          const existingFrame = currentSnapshot.frames.find((f) => f.id === change.target);
-          const source = existingFrame?.source;
-          if (source) {
-            const turnInfo = turnContentMap.get(source);
-            if (turnInfo) {
-              const slotSources: Record<string, { turn: string; turn_hash?: string; start_char: number; end_char: number; quote?: string }> = {};
-              for (const [slotKey, quote] of Object.entries(slotQuotes)) {
-                if (typeof quote !== 'string') continue;
-                // Try matching in all turns (update may reference a different turn)
-                for (const [tag, info] of turnContentMap) {
-                  const located = fuzzyLocate(info.content, quote);
-                  if (located) {
-                    slotSources[slotKey] = {
-                      turn: tag,
-                      turn_hash: info.turnHash,
-                      start_char: located.start,
-                      end_char: located.end,
-                      quote,
-                    };
-                    break;
-                  }
-                }
-              }
-              // Attach slot_sources to the change for the frontend
-              if (Object.keys(slotSources).length > 0) {
-                (change as Record<string, unknown>).slot_sources = slotSources;
-              }
-            }
+
+        if (Object.keys(slotSources).length > 0) {
+          if (change.action === 'add') {
+            change.frame.slot_sources = slotSources;
           }
-          delete (change as Record<string, unknown>).slot_quotes;
+          // For updates, attach slot_sources to the frame in the snapshot
+          // (the delta itself doesn't carry slot_sources, but we update the snapshot)
         }
       }
     }

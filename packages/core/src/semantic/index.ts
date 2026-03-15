@@ -59,6 +59,7 @@ export type {
   SlotConflict,
   SlotDiff,
   SlotRef,
+  SlotSourceRef,
   SlotValue,
   StructureGateResult,
   ValidationError,

@@ -36,6 +36,7 @@ export {
   type FrameExtractionResult,
   type FrameExtractionTurn,
   FrameExtractor,
+  type SlotQuotesMap,
 } from './frameExtractor';
 // Incremental Extraction (LLM pipeline)
 export { type FuzzyLocateResult, fuzzyLocate } from './fuzzyLocate';
