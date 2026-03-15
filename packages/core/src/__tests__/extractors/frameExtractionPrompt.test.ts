@@ -44,13 +44,11 @@ describe('buildFrameExtractionPrompt', () => {
   });
 
   describe('first extraction mode (no snapshot)', () => {
-    it('system prompt instructs full frame output', () => {
+    it('system prompt instructs knowledge document creation', () => {
       const result = buildFrameExtractionPrompt({ turns: sampleTurns });
-      expect(result.systemPrompt).toContain('frames');
-      expect(result.systemPrompt).toContain('relations');
-      // Should NOT mention delta/changes in first extraction mode
-      expect(result.systemPrompt).not.toContain('delta');
-      expect(result.systemPrompt).not.toContain('changes');
+      expect(result.systemPrompt).toContain('knowledge document');
+      expect(result.systemPrompt).toContain('ONE');
+      expect(result.systemPrompt).toContain('nesting');
     });
 
     it('user prompt contains turns but no snapshot', () => {
@@ -58,23 +56,24 @@ describe('buildFrameExtractionPrompt', () => {
       expect(result.userPrompt).toContain('I want to travel to Tokyo');
       expect(result.userPrompt).toContain('[user]');
       expect(result.userPrompt).toContain('[assistant]');
-      expect(result.userPrompt).not.toContain('Snapshot');
+      expect(result.userPrompt).not.toContain('Knowledge Document');
     });
 
-    it('user prompt asks to extract all frames and relations', () => {
+    it('user prompt asks to create knowledge document', () => {
       const result = buildFrameExtractionPrompt({ turns: sampleTurns });
-      expect(result.userPrompt).toContain('frames');
-      expect(result.userPrompt).toContain('relations');
+      expect(result.userPrompt).toContain('knowledge document');
+      expect(result.userPrompt).toContain('MAIN TOPIC');
     });
   });
 
   describe('delta mode (with snapshot)', () => {
-    it('system prompt instructs delta output', () => {
+    it('system prompt instructs document update', () => {
       const result = buildFrameExtractionPrompt({
         turns: sampleTurns,
         snapshot: sampleSnapshot,
       });
-      expect(result.systemPrompt).toContain('delta');
+      expect(result.systemPrompt).toContain('UPDATE');
+      expect(result.systemPrompt).toContain('Document Structure');
     });
 
     it('includes snapshot in user prompt when provided', () => {
@@ -82,7 +81,6 @@ describe('buildFrameExtractionPrompt', () => {
         turns: sampleTurns,
         snapshot: sampleSnapshot,
       });
-      // Should contain snapshot data as YAML-like text
       expect(result.userPrompt).toContain('travel_plan');
       expect(result.userPrompt).toContain('budget_constraint');
       expect(result.userPrompt).toContain('f_001');
@@ -104,19 +102,16 @@ describe('buildFrameExtractionPrompt', () => {
         turns: sampleTurns,
         snapshot: sampleSnapshot,
       });
-      // Max existing id is f_002 → next should be f_003
       expect(result.userPrompt).toContain('f_003');
     });
 
-    it('user prompt asks for delta output', () => {
+    it('user prompt asks to update existing document', () => {
       const result = buildFrameExtractionPrompt({
         turns: sampleTurns,
         snapshot: sampleSnapshot,
       });
-      expect(result.userPrompt).toContain('delta');
-      // Update/remove guidance in user prompt
-      expect(result.userPrompt).toContain('update');
-      expect(result.userPrompt).toContain('remove');
+      expect(result.userPrompt).toContain('Update the knowledge document');
+      expect(result.userPrompt).toContain('existing');
     });
   });
 
@@ -156,15 +151,14 @@ describe('buildFrameExtractionPrompt', () => {
         relations: [],
       };
       const result = buildFrameExtractionPrompt({ turns: sampleTurns, snapshot });
-      // Max is f_010, next should be f_011
       expect(result.userPrompt).toContain('f_011');
     });
 
-    it('handles empty frames in snapshot', () => {
+    it('uses first extraction mode for empty snapshot', () => {
       const snapshot: SemanticContent = { frames: [], relations: [] };
       const result = buildFrameExtractionPrompt({ turns: sampleTurns, snapshot });
-      // No frames → next should be f_001
-      expect(result.userPrompt).toContain('f_001');
+      // Empty snapshot → first extraction mode (creates document)
+      expect(result.userPrompt).toContain('knowledge document');
     });
   });
 
@@ -180,6 +174,19 @@ describe('buildFrameExtractionPrompt', () => {
         snapshot: sampleSnapshot,
       });
       expect(result.systemPrompt).toContain('JSON');
+    });
+  });
+
+  describe('document structure guidance', () => {
+    it('emphasizes deep nesting over many frames', () => {
+      const result = buildFrameExtractionPrompt({ turns: sampleTurns });
+      expect(result.systemPrompt).toContain('Deeply Nested');
+      expect(result.systemPrompt).toContain('1 root frame');
+    });
+
+    it('includes InlineFrame nesting example', () => {
+      const result = buildFrameExtractionPrompt({ turns: sampleTurns });
+      expect(result.systemPrompt).toContain('InlineFrame');
     });
   });
 });

@@ -2,9 +2,14 @@
  * Frame Extraction Prompt Builder
  *
  * Constructs system + user prompts for LLM-based frame semantic extraction.
+ *
+ * Design philosophy: ONE conversation = ONE knowledge document.
+ * The LLM acts as a "knowledge editor" maintaining a well-organized, deeply
+ * nested YAML-like structure — not a fact extractor producing scattered frames.
+ *
  * Supports two modes:
- * - First extraction (no snapshot): asks LLM for full frames + relations output
- * - Delta mode (with snapshot): asks LLM for incremental changes only
+ * - First extraction (no snapshot): creates the document structure
+ * - Delta mode (with snapshot): updates the existing document
  */
 
 import type { Frame, SemanticContent } from '../semantic/types';
@@ -50,6 +55,7 @@ function calcNextFrameId(frames: Frame[]): string {
 
 /**
  * Serialize a snapshot to a YAML-like readable text format.
+ * Shows nested structure for readability.
  */
 function serializeSnapshot(snapshot: SemanticContent): string {
   const lines: string[] = [];
@@ -98,118 +104,194 @@ function formatTurns(turns: FrameExtractionTurn[]): string {
 
 // ── System Prompts ──
 
-const DELTA_SYSTEM_PROMPT = `You are a semantic extraction engine. Your task is to extract semantic CHANGES (delta) from new conversation turns — NOT re-generate everything.
+const DOCUMENT_SYSTEM_PROMPT = `You are a knowledge document editor. Your job is to organize knowledge from conversations into a clean, well-structured YAML document.
 
-## Core Rules
-1. Output ONLY changes (delta) — do NOT repeat unchanged frames
-2. One independent intent/conclusion/fact = one frame
-3. Keep conclusions and decisions, discard process discussion
-4. Frame type uses snake_case (nouns or noun phrases)
-5. Frame IDs follow pattern: f_001, f_002, ...
+## The Golden Rule: ONE Document, Deeply Nested
 
-## CRITICAL: When to UPDATE vs ADD
-- If a new turn MODIFIES information already captured in an existing frame → use "update" with only the changed slots
-- If a new turn provides NEW information on a DIFFERENT topic → use "add"
-- DO NOT add a new frame when an existing frame covers the same topic — UPDATE it instead
-- Examples of updates: price changes, preference changes, plan modifications, corrected information
+A conversation has ONE main topic. Your output should have:
+- **1 root frame** (the main topic, e.g., "japan_trip", "product_design", "hiring_plan")
+- **Deep nesting via slot values** — sub-topics are nested objects, NOT separate frames
+- **Maximum 2-3 top-level frames** — only if the conversation genuinely covers unrelated topics
 
-## CRITICAL: When to REMOVE
-- If the user explicitly rejects, cancels, or changes their mind about something → use "remove"
-- If the user replaces one option with another (e.g., "actually, let's skip Kyoto") → REMOVE the old frame AND add/update the new one
-- If the assistant's suggestion is rejected by the user → remove frames from that suggestion
+Think of it like writing a well-organized document outline:
+\`\`\`yaml
+japan_trip:                          # ONE root topic
+  destination: "Tokyo"
+  budget:                            # nested object for sub-topic
+    total: 5000
+    daily: 50
+    accommodation: 2800
+  accommodation:                     # another sub-topic
+    type: "ryokan"
+    location: "Asakusa"
+    requirements:
+      - "private onsen"
+      - "traditional room"
+  itinerary:
+    main_cities:
+      - name: "Tokyo"
+        duration: "3-4 days"
+        activities: ["temple visits", "cooking classes"]
+      - name: "Kyoto"
+        duration: "2-3 days"
+\`\`\`
 
-## Source Tracking
-- Set the "source" field on each new/updated frame to the turn tag (e.g., "T3") where the information came from
-- For frames derived from multiple turns, use the most recent turn
+## Structure Rules
+
+1. **Root frame type** = the conversation topic (e.g., "japan_trip", "app_redesign", "team_hiring")
+2. **Sub-topics become nested objects** in slots — NOT separate frames
+   - budget details → nest under \`budget: { total: ..., daily: ... }\`
+   - accommodation → nest under \`accommodation: { type: ..., location: ... }\`
+3. **Lists of similar items** → use arrays of objects
+   - Cities to visit → \`cities: [{ name: "Tokyo", duration: "3 days" }, ...]\`
+4. **Simple values stay flat** — don't over-nest single values
+   - \`destination: "Tokyo"\` (not \`destination: { name: "Tokyo" }\`)
+5. **Keep it scannable** — a human should understand the entire document in 5 seconds
+
+## What to Extract
+
+- **Decisions and conclusions** — what was decided (high confidence)
+- **User preferences and requirements** — what they want (high confidence)
+- **Plans and intentions** — what they plan to do (medium confidence)
+- **Open questions** — things not yet decided (low confidence, marked clearly)
+
+## What to SKIP
+
+- Process discussion ("let me think about this...")
+- LLM reasoning or explanations (unless user confirmed it)
+- Greetings, pleasantries, meta-conversation
 
 ## Confidence Scoring
 - User's explicit statements → confidence: 0.9-1.0
 - User's implied preferences → confidence: 0.6-0.8
 - LLM suggestions the user hasn't confirmed → confidence: 0.3-0.5
-- LLM questions (options not yet chosen) → confidence: 0.2-0.3
+- Unresolved questions → confidence: 0.1-0.2
 
-## Relation Types (pick from these 6 only)
-1. causes — A causes B
-2. conditions — A is a precondition for B
-3. contrasts — A conflicts with or replaces B
-4. follows — A happens after B (non-causal)
-5. depends — A references/needs B
-6. elaborates — A adds detail to B
+## Source Tracking
+- Set "source" field on each frame to the turn tag (e.g., "T3")
+- For nested objects, source goes on the root frame
 
-## Source Quoting (CRITICAL for traceability)
-For EACH slot, include a "slot_quotes" object that maps each slot key to the EXACT verbatim text from the conversation that this slot was extracted from. Copy the text exactly — do not paraphrase.
+## Source Quoting (CRITICAL)
+For EACH slot (including nested ones), include a "slot_quotes" object mapping each slot key to the EXACT verbatim text from the conversation. Copy text exactly — do not paraphrase. For nested objects, use dot notation: \`"budget.total": "budget of $5000"\`.
 
-## JSON Output Format
-\`\`\`json
-{
-  "changes": [
-    {
-      "action": "add",
-      "frame": {
-        "id": "f_xxx", "type": "...", "source": "T3", "confidence": 0.9,
-        "slots": { "destination": "Tokyo", "budget": 7000 },
-        "slot_quotes": { "destination": "I want to travel to Tokyo", "budget": "budget is around $7000" }
-      }
-    },
-    {
-      "action": "update", "target": "f_001",
-      "slots": { "budget": 5000 },
-      "slot_quotes": { "budget": "actually let's keep it under $5000" }
-    },
-    { "action": "remove", "target": "f_002", "reason": "user changed mind" }
-  ],
-  "new_relations": [
-    { "from": "f_001", "to": "f_003", "type": "causes", "confidence": 0.8 }
-  ]
-}
-\`\`\`
+## Relations — Use Sparingly
+Relations connect SEPARATE top-level frames (rare). Do NOT create relations between a parent and its nested content. Only use when two genuinely independent topics are connected:
+- causes, conditions, contrasts, follows, depends, elaborates
+
 Output ONLY valid JSON. No markdown fences, no explanatory text.`;
 
-const FIRST_EXTRACTION_SYSTEM_PROMPT = `You are a semantic extraction engine. Your task is to extract ALL semantic frames and relations from a conversation.
-
-## Core Rules
-1. One independent intent/conclusion/fact = one frame
-2. Keep conclusions and decisions, discard process discussion
-3. Frame type uses snake_case (nouns or noun phrases)
-4. Frame IDs start from f_001
-
-## Source Tracking
-- Set the "source" field on each frame to the turn tag (e.g., "T1", "T2") where the information originated
-- For frames synthesized from multiple turns, use the most recent turn
-
-## Confidence Scoring
-- User's explicit statements → confidence: 0.9-1.0
-- User's implied preferences → confidence: 0.6-0.8
-- LLM suggestions the user hasn't confirmed → confidence: 0.3-0.5
-- LLM questions (options not yet chosen) → confidence: 0.2-0.3
-
-## Relation Types (pick from these 6 only)
-1. causes — A causes B
-2. conditions — A is a precondition for B
-3. contrasts — A conflicts with or replaces B
-4. follows — A happens after B (non-causal)
-5. depends — A references/needs B
-6. elaborates — A adds detail to B
-
-## Source Quoting (CRITICAL for traceability)
-For EACH slot, include a "slot_quotes" object that maps each slot key to the EXACT verbatim text from the conversation that this slot was extracted from. Copy the text exactly — do not paraphrase.
-
-## JSON Output Format
+const FIRST_EXTRACTION_JSON_FORMAT = `## JSON Output Format
 \`\`\`json
 {
   "frames": [
     {
-      "id": "f_001", "type": "...", "source": "T1", "confidence": 0.9,
-      "slots": { "destination": "Tokyo", "budget": 7000 },
-      "slot_quotes": { "destination": "I want to travel to Tokyo", "budget": "budget is around $7000" }
+      "id": "f_001",
+      "type": "japan_trip",
+      "source": "T1",
+      "confidence": 0.9,
+      "slots": {
+        "destination": "Tokyo",
+        "budget": {
+          "type": "budget_breakdown",
+          "slots": {
+            "total": 5000,
+            "daily": 50
+          }
+        },
+        "activities": ["temple visits", "cooking classes"],
+        "accommodation": {
+          "type": "accommodation_preference",
+          "slots": {
+            "style": "ryokan",
+            "requirements": ["private onsen"]
+          }
+        }
+      },
+      "slot_quotes": {
+        "destination": "I want to travel to Tokyo",
+        "budget.total": "budget of around $5000",
+        "accommodation.style": "I'd love to stay in a traditional ryokan"
+      }
     }
   ],
-  "relations": [
-    { "from": "f_001", "to": "f_002", "type": "causes", "confidence": 0.8 }
-  ]
+  "relations": []
 }
 \`\`\`
-Output ONLY valid JSON. No markdown fences, no explanatory text.`;
+
+Key rules for nesting:
+- Sub-topics use InlineFrame format: \`{ "type": "topic_name", "slots": { ... } }\`
+- Arrays of objects: \`[{ "type": "city", "slots": { "name": "Tokyo" } }, ...]\`
+- Simple values stay as strings/numbers: \`"destination": "Tokyo"\`
+- Prefer DEEP nesting over MANY frames. 1 deeply nested frame > 8 flat frames.`;
+
+const DELTA_JSON_FORMAT = `## JSON Output Format
+\`\`\`json
+{
+  "changes": [
+    {
+      "action": "update",
+      "target": "f_001",
+      "slots": {
+        "budget": {
+          "type": "budget_breakdown",
+          "slots": { "total": 7000, "daily": 70 }
+        }
+      },
+      "slot_quotes": { "budget.total": "let's increase to $7000" }
+    },
+    {
+      "action": "update",
+      "target": "f_001",
+      "slots": {
+        "accommodation": {
+          "type": "accommodation_preference",
+          "slots": {
+            "style": "ryokan",
+            "location": "Asakusa",
+            "requirements": ["private onsen", "garden view"]
+          }
+        }
+      },
+      "slot_quotes": { "accommodation.location": "preferably in Asakusa area" }
+    }
+  ],
+  "new_relations": []
+}
+\`\`\`
+
+Key rules for delta:
+- UPDATE nested slots by providing the full nested object (replaces the sub-object)
+- To add a new sub-topic, update the parent frame with a new nested slot
+- To remove a sub-topic, set the slot to null
+- Do NOT add new top-level frames unless it's a genuinely new topic
+- Prefer deepening the existing structure over widening it`;
+
+const DELTA_RULES = `## CRITICAL: Maintain Document Structure
+
+You are editing an existing knowledge document. Your job is to UPDATE it, not rebuild it.
+
+### When to UPDATE (most common)
+- New information about an existing topic → update the relevant slot
+- Price/date/preference changed → update that specific nested value
+- New detail about a sub-topic → add nested slot to existing frame
+- Example: user says "actually budget is $7000" → update \`budget.total\` in the existing frame
+
+### When to ADD a new slot (common)
+- New sub-topic within the main topic → add as nested object in existing frame
+- Example: user discusses dining for the first time → add \`dining: { ... }\` to existing trip frame
+
+### When to ADD a new frame (rare)
+- Conversation shifts to a genuinely DIFFERENT topic
+- Example: after discussing a trip, user asks about a work project → new frame
+
+### When to REMOVE
+- User explicitly cancels or rejects something → remove that slot or frame
+- User replaces one option with another → update (don't remove + add)
+
+### NEVER do this
+- Don't create a new frame for every new piece of information
+- Don't flatten nested structure into separate frames
+- Don't create relations between parent and child — use nesting instead`;
 
 // ── Main Function ──
 
@@ -217,46 +299,61 @@ Output ONLY valid JSON. No markdown fences, no explanatory text.`;
  * Build system + user prompts for frame semantic extraction.
  *
  * When `snapshot` is provided, produces delta-mode prompts that ask the LLM
- * to output only changes relative to the existing snapshot.
- * When no snapshot, produces first-extraction prompts for full output.
+ * to update the existing knowledge document.
+ * When no snapshot, produces first-extraction prompts to create the document.
  */
 export function buildFrameExtractionPrompt(
   input: FrameExtractionInput
 ): FrameExtractionPromptResult {
   const { turns, snapshot } = input;
 
-  if (snapshot) {
-    // Delta mode
+  if (snapshot && snapshot.frames.length > 0) {
+    // Delta mode — update existing document
     const nextId = calcNextFrameId(snapshot.frames);
     const snapshotYaml = serializeSnapshot(snapshot);
     const turnsText = formatTurns(turns);
 
-    const userPrompt = `## Current Snapshot
+    const systemPrompt = `${DOCUMENT_SYSTEM_PROMPT}
+
+${DELTA_RULES}
+
+${DELTA_JSON_FORMAT}`;
+
+    const userPrompt = `## Current Knowledge Document
 ${snapshotYaml}
 
 ## New Conversation Turns
 ${turnsText}
 
 ## Instructions
-Output the delta (changes only). For each piece of new information:
-- If it MODIFIES an existing frame → "update" with only changed slots
-- If it's a NEW topic → "add" a new frame
-- If it NEGATES or REPLACES something → "remove" the old frame
-New frame IDs start from ${nextId}.
-Include "source" field referencing the turn tag (T1, T2, etc.).`;
+Update the knowledge document with information from the new turns.
+- Prefer updating existing slots over adding new frames
+- Nest new sub-topics under the existing root frame
+- New frame IDs start from ${nextId} (only if genuinely needed)
+- Include "source" field referencing turn tags (T1, T2, etc.)
+- Include "slot_quotes" for traceability`;
 
-    return { systemPrompt: DELTA_SYSTEM_PROMPT, userPrompt };
+    return { systemPrompt, userPrompt };
   }
 
-  // First extraction mode
+  // First extraction — create the document
   const turnsText = formatTurns(turns);
+
+  const systemPrompt = `${DOCUMENT_SYSTEM_PROMPT}
+
+${FIRST_EXTRACTION_JSON_FORMAT}`;
 
   const userPrompt = `## Conversation
 ${turnsText}
 
 ## Instructions
-Extract all semantic frames and relations from this conversation.
-Include "source" field referencing the turn tag (T1, T2, etc.) for each frame.`;
+Create a knowledge document from this conversation.
+- Identify the MAIN TOPIC and use it as the root frame type
+- Nest all related information under that root frame
+- Use deep nesting for sub-topics (budget, accommodation, itinerary, etc.)
+- Only create multiple root frames if the conversation covers genuinely separate topics
+- Include "source" field referencing turn tags (T1, T2, etc.)
+- Include "slot_quotes" for traceability`;
 
-  return { systemPrompt: FIRST_EXTRACTION_SYSTEM_PROMPT, userPrompt };
+  return { systemPrompt, userPrompt };
 }
