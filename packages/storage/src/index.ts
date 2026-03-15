@@ -42,5 +42,7 @@ export * from './schema-sentence-modifications';
 // V4 Schema (commits_v4, leaves, pins, conversation_contexts)
 // @see docs/specification/semantic-layer-architecture.md
 export * from './schema-v4';
+// Commits Schema (commits_v5, frame_lineage — frame-based commits)
+export * from './schema-commits';
 // Backup / verify utilities
 export * from './backup';
