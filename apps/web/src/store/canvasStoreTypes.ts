@@ -1,4 +1,5 @@
 import type { Connection, Edge, EdgeChange, Node, NodeChange } from '@xyflow/react';
+import type { Template } from '@/lib/api';
 import type { ConflictReport } from '@/lib/api/commits';
 import type { CommitV3, MergeState } from '../types/merge';
 import type {
@@ -41,6 +42,7 @@ export interface LeafPanelSlice {
   openLeafPanel: (commitId: string) => void;
   closeLeafPanel: () => void;
   addLeafNode: (leafType: LeafType) => Promise<string | null>;
+  addLeafFromTemplate: (template: Template) => Promise<string | null>;
   removeLeafFromNode: (commitNodeId: string, leafId: string) => Promise<void>;
 }
 

@@ -109,6 +109,87 @@ export const createLeafSlice: StateCreator<CanvasState, [], [], LeafPanelSlice> 
     }
   },
 
+  addLeafFromTemplate: async (template) => {
+    const state = get();
+    const notify = state.notifyCallback;
+
+    const commitId = state.leafPanelCommitId;
+    if (!commitId) {
+      notify?.('No commit selected', 'error');
+      return null;
+    }
+
+    const unitNode = state.nodes.find((node) => node.id === commitId && node.data.kind === 'unit');
+    if (!unitNode) {
+      notify?.('Unit not found', 'error');
+      return null;
+    }
+
+    const commitHash = unitNode.data.commitHash;
+    if (!commitHash) {
+      const dev = useSettingsStore.getState().developerMode;
+      notify?.(
+        `${getTerminology('commit', dev)} not saved yet. Please ${getTerminology('commitAction', dev).toLowerCase()} first before adding output.`,
+        'error'
+      );
+      return null;
+    }
+
+    const projectId = state.projectId;
+    if (!projectId) {
+      notify?.('Project not found', 'error');
+      return null;
+    }
+
+    set({ leafCreating: true });
+
+    try {
+      const leafType = template.leaf_type as LeafType;
+      const leaf = await api.createLeaf({
+        commit_hash: commitHash,
+        type: leafType,
+        title: template.title,
+        project_id: projectId,
+        constraints: [],
+        config: {
+          template_id: template.template_id,
+          prompt_template: template.system_prompt,
+        },
+      });
+
+      set({ leafPanelOpen: false, leafPanelCommitId: undefined, leafCreating: false });
+
+      // Embed leaf into parent commit node
+      set((state) => {
+        const newEmbeddedLeaf: EmbeddedLeaf = {
+          id: leaf.id,
+          type: leafType,
+          title: template.title,
+          createdAt: leaf.created_at,
+        };
+
+        const updatedNodes = state.nodes.map((node) => {
+          if (node.id !== commitId) return node;
+          const existingLeaves = node.data.leaves || [];
+          return {
+            ...node,
+            data: { ...node.data, leaves: [...existingLeaves, newEmbeddedLeaf] },
+          };
+        });
+
+        return { nodes: updatedNodes };
+      });
+
+      notify?.(`${template.title} leaf created from template`, 'success');
+      return leaf.id;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to create leaf from template';
+      notify?.(message, 'error');
+      set({ leafCreating: false });
+      return null;
+    }
+  },
+
   removeLeafFromNode: async (commitNodeId: string, leafId: string) => {
     const notify = get().notifyCallback;
     try {
