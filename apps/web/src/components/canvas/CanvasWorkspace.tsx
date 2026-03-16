@@ -182,6 +182,7 @@ function CanvasWorkspaceInner({
       fitView,
       handleAutoLayout,
       onAutoExtract: handleAutoExtract,
+      onNavigate: (url: string) => router.push(url),
     });
 
   // Path highlight (extracted hook)
