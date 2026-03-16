@@ -1,9 +1,12 @@
 'use client';
 
 import { AnimatePresence, motion } from 'framer-motion';
-import { Loader2 } from 'lucide-react';
+import { ExternalLink, LayoutGrid, Loader2, Search } from 'lucide-react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useCallback, useEffect, useState } from 'react';
 import { AnimatedButton } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   Sheet,
   SheetContent,
@@ -11,7 +14,10 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import type { Template } from '@/lib/api';
+import { listTemplates } from '@/lib/api';
 import { reducedMotion, staggerContainer, staggerItem } from '@/lib/motion';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
@@ -26,22 +32,74 @@ export function LeafPanel() {
   const leafPanelOpen = useCanvasStore((state) => state.leafPanelOpen);
   const closeLeafPanel = useCanvasStore((state) => state.closeLeafPanel);
   const addLeafNode = useCanvasStore((state) => state.addLeafNode);
+  const addLeafFromTemplate = useCanvasStore((state) => state.addLeafFromTemplate);
   const projectId = useCanvasStore((state) => state.projectId);
   const leafCreating = useCanvasStore((state) => state.leafCreating);
   const prefersReducedMotion = useReducedMotion();
+
+  const [activeTab, setActiveTab] = useState<'type' | 'template'>('type');
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [templateSearch, setTemplateSearch] = useState('');
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
 
   const containerVariants = prefersReducedMotion
     ? reducedMotion.staggerContainer
     : staggerContainer;
   const itemVariants = prefersReducedMotion ? reducedMotion.staggerItem : staggerItem;
 
+  // Fetch templates when switching to template tab
+  useEffect(() => {
+    if (activeTab !== 'template' || !leafPanelOpen) return;
+    let cancelled = false;
+    setLoadingTemplates(true);
+    listTemplates()
+      .then((data) => {
+        if (!cancelled) setTemplates(data);
+      })
+      .catch(() => {
+        if (!cancelled) setTemplates([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingTemplates(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, leafPanelOpen]);
+
+  // Reset tab when panel closes
+  useEffect(() => {
+    if (!leafPanelOpen) {
+      setActiveTab('type');
+      setTemplateSearch('');
+    }
+  }, [leafPanelOpen]);
+
   const handleSelectLeaf = async (leafType: LeafType) => {
     const leafId = await addLeafNode(leafType);
-    // Navigate to leaf detail page after creation
     if (leafId && projectId) {
       router.push(`/project/${projectId}/leaf/${leafId}`);
     }
   };
+
+  const handleSelectTemplate = useCallback(
+    async (template: Template) => {
+      const leafId = await addLeafFromTemplate(template);
+      if (leafId && projectId) {
+        router.push(`/project/${projectId}/leaf/${leafId}`);
+      }
+    },
+    [addLeafFromTemplate, projectId, router]
+  );
+
+  const filteredTemplates = templateSearch
+    ? templates.filter(
+        (t) =>
+          t.title.toLowerCase().includes(templateSearch.toLowerCase()) ||
+          t.leaf_type.toLowerCase().includes(templateSearch.toLowerCase()) ||
+          t.category.toLowerCase().includes(templateSearch.toLowerCase())
+      )
+    : templates;
 
   return (
     <Sheet open={leafPanelOpen} onOpenChange={(open) => !open && closeLeafPanel()}>
@@ -51,46 +109,144 @@ export function LeafPanel() {
           <SheetDescription>Select where to publish your content</SheetDescription>
         </SheetHeader>
 
-        <AnimatePresence initial={false}>
-          {leafPanelOpen && (
-            <motion.div
-              className="flex flex-col gap-[var(--space-group)] p-[var(--space-group)]"
-              variants={containerVariants}
-              initial="initial"
-              animate="animate"
-              exit="exit"
-            >
-              <motion.div variants={itemVariants}>
-                <p className="mb-[var(--space-item)] text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
-                  Output
-                </p>
-                <div className="flex flex-col gap-2">
-                  {LEAF_TYPES.filter((lt) => isRunnerEnabled || lt.type !== 'deploy_agent').map(
-                    ({ type, label, icon: Icon }) => (
-                      <motion.div key={type} variants={itemVariants}>
-                        <AnimatedButton
-                          variant="canvas-outline"
-                          className="h-auto w-full justify-start gap-3 px-4 py-3"
-                          onClick={() => handleSelectLeaf(type)}
-                          disabled={leafCreating}
-                        >
-                          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[var(--accent-conversation)]/10">
-                            {leafCreating ? (
-                              <Loader2 className="h-4 w-4 animate-spin text-[var(--accent-conversation)]" />
-                            ) : (
-                              <Icon className="h-4 w-4 text-[var(--accent-conversation)]" />
-                            )}
-                          </div>
-                          <span className="font-medium">{label}</span>
-                        </AnimatedButton>
-                      </motion.div>
-                    )
-                  )}
-                </div>
-              </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        <Tabs
+          value={activeTab}
+          onValueChange={(v) => setActiveTab(v as 'type' | 'template')}
+          className="flex flex-col gap-0 px-4 pt-1"
+        >
+          <TabsList className="w-full">
+            <TabsTrigger value="type" className="flex-1 text-xs">
+              By Type
+            </TabsTrigger>
+            <TabsTrigger value="template" className="flex-1 text-xs">
+              From Template
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="type" className="pt-3">
+            <AnimatePresence initial={false}>
+              {leafPanelOpen && (
+                <motion.div
+                  className="flex flex-col gap-[var(--space-group)]"
+                  variants={containerVariants}
+                  initial="initial"
+                  animate="animate"
+                  exit="exit"
+                >
+                  <motion.div variants={itemVariants}>
+                    <p className="mb-[var(--space-item)] text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
+                      Output
+                    </p>
+                    <div className="flex flex-col gap-2">
+                      {LEAF_TYPES.filter((lt) => isRunnerEnabled || lt.type !== 'deploy_agent').map(
+                        ({ type, label, icon: Icon }) => (
+                          <motion.div key={type} variants={itemVariants}>
+                            <AnimatedButton
+                              variant="canvas-outline"
+                              className="h-auto w-full justify-start gap-3 px-4 py-3"
+                              onClick={() => handleSelectLeaf(type)}
+                              disabled={leafCreating}
+                            >
+                              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[var(--accent-conversation)]/10">
+                                {leafCreating ? (
+                                  <Loader2 className="h-4 w-4 animate-spin text-[var(--accent-conversation)]" />
+                                ) : (
+                                  <Icon className="h-4 w-4 text-[var(--accent-conversation)]" />
+                                )}
+                              </div>
+                              <span className="font-medium">{label}</span>
+                            </AnimatedButton>
+                          </motion.div>
+                        )
+                      )}
+                    </div>
+                  </motion.div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </TabsContent>
+
+          <TabsContent value="template" className="pt-3">
+            <div className="flex flex-col gap-3">
+              {/* Search */}
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--text-tertiary)]" />
+                <Input
+                  placeholder="Search templates..."
+                  value={templateSearch}
+                  onChange={(e) => setTemplateSearch(e.target.value)}
+                  className="pl-8 h-8 text-xs"
+                />
+              </div>
+
+              {/* Template list */}
+              <div className="flex flex-col gap-2 max-h-[400px] overflow-y-auto">
+                {loadingTemplates ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-5 w-5 animate-spin text-[var(--text-tertiary)]" />
+                  </div>
+                ) : filteredTemplates.length === 0 ? (
+                  <div className="flex flex-col items-center gap-2 py-8 text-center">
+                    <LayoutGrid className="h-8 w-8 text-[var(--text-tertiary)] opacity-50" />
+                    <p className="text-xs text-[var(--text-tertiary)]">
+                      {templateSearch ? 'No matching templates' : 'No templates yet'}
+                    </p>
+                  </div>
+                ) : (
+                  filteredTemplates.map((template) => (
+                    <button
+                      key={template.template_id}
+                      type="button"
+                      className={cn(
+                        'flex flex-col gap-1 rounded-lg border border-[var(--stroke-default)] p-3 text-left',
+                        'transition-colors hover:border-[var(--accent-conversation)]/40 hover:bg-[var(--hover-bg)]',
+                        'disabled:opacity-50 disabled:cursor-not-allowed'
+                      )}
+                      onClick={() => handleSelectTemplate(template)}
+                      disabled={leafCreating}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm font-medium text-[var(--text-primary)] truncate">
+                          {template.title}
+                        </span>
+                        {leafCreating ? (
+                          <Loader2 className="h-3 w-3 shrink-0 animate-spin text-[var(--text-tertiary)]" />
+                        ) : null}
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="inline-flex items-center rounded-full bg-[var(--hover-bg)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--text-secondary)]">
+                          {template.leaf_type}
+                        </span>
+                        <span className="inline-flex items-center rounded-full bg-[var(--hover-bg)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--text-secondary)]">
+                          {template.category}
+                        </span>
+                      </div>
+                      {template.description && (
+                        <p className="text-[11px] text-[var(--text-tertiary)] line-clamp-2">
+                          {template.description}
+                        </p>
+                      )}
+                    </button>
+                  ))
+                )}
+              </div>
+
+              {/* Browse all link */}
+              <Link
+                href="/templates"
+                className={cn(
+                  'flex items-center justify-center gap-1.5 rounded-md py-2 text-xs font-medium',
+                  'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--hover-bg)]',
+                  'transition-colors'
+                )}
+                onClick={() => closeLeafPanel()}
+              >
+                <span>Browse All Templates</span>
+                <ExternalLink className="h-3 w-3" />
+              </Link>
+            </div>
+          </TabsContent>
+        </Tabs>
       </SheetContent>
     </Sheet>
   );
