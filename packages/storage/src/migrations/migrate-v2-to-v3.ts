@@ -30,9 +30,8 @@ import {
   type AnyDB,
   commits as commitsV2Table,
   commitsV3 as commitsV3Table,
-  createPGLiteStorage,
-  createPostgresStorage,
 } from '../index';
+import { createPostgresStorage } from '../adapters/postgres';
 
 // ============================================================
 // Types (exported for testing)
@@ -456,16 +455,15 @@ async function main() {
   const databaseUrl = process.env.DATABASE_URL;
 
   let db: AnyDB;
-  let cleanup: (() => Promise<void>) | undefined;
 
   if (databaseUrl) {
     console.log('📦 Connecting to PostgreSQL...');
     db = await createPostgresStorage({ connectionString: databaseUrl });
   } else {
-    console.log('📦 Connecting to PGLite (local)...');
-    const storage = await createPGLiteStorage({ dataDir: '.t3x/database' });
-    db = storage;
-    // PGLite returns the db directly, cleanup handled by process exit
+    const port = process.env.T3X_PG_PORT ?? '5445';
+    const connectionString = `postgresql://postgres:password@localhost:${port}/t3x`;
+    console.log(`📦 Connecting to PostgreSQL at localhost:${port}...`);
+    db = await createPostgresStorage({ connectionString });
   }
 
   try {
@@ -474,10 +472,7 @@ async function main() {
     console.error('❌ Migration failed:', err);
     process.exit(1);
   } finally {
-    // Cleanup database connection if available
-    if (cleanup) {
-      await cleanup();
-    }
+    // Connection cleanup handled by process exit
   }
 }
 

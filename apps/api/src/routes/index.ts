@@ -5,6 +5,7 @@
 export { agentDraftRoutes } from './agent-drafts';
 export { branchRoutes } from './branches';
 export { chatRoutes } from './chat';
+export { commitRoutes } from './commits.openapi';
 export { commitsV3Routes } from './commits-v3.openapi';
 export { commitsV4Routes } from './commits-v4.openapi';
 export { conversationRoutes } from './conversations';
@@ -22,7 +23,7 @@ export { healthRoutes } from './health';
 export { leavesRoutes } from './leaves.openapi';
 export { mergeRoutes } from './merge.openapi';
 export { pinsRoutes } from './pins.openapi';
-export { projectRoutes } from './projects';
+export { projectRoutes } from './projects.openapi';
 export { providersRoutes } from './providers.openapi';
 export { relationsRoutes } from './relations.openapi';
 export { runnerRoutes } from './runner';

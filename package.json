@@ -16,7 +16,9 @@
     "test:core": "turbo run test --filter=@t3x-dev/core",
     "test:storage": "turbo run test --filter=@t3x-dev/storage",
     "test:webui": "turbo run test --filter=t3x-webui",
+    "test:webui:no-deps": "pnpm --filter t3x-webui exec vitest run",
     "test:runner": "turbo run test --filter=@t3x-dev/runner",
+    "typecheck": "turbo run typecheck",
     "lint": "biome lint .",
     "lint:fix": "biome lint --write .",
     "format": "biome format .",
@@ -47,7 +49,8 @@
       "@embedded-postgres/darwin-arm64",
       "@embedded-postgres/darwin-x64",
       "@embedded-postgres/linux-arm64",
-      "@embedded-postgres/linux-x64"
+      "@embedded-postgres/linux-x64",
+      "@swc/core"
     ]
   },
   "devDependencies": {

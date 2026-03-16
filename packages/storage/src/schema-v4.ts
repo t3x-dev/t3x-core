@@ -1051,6 +1051,12 @@ export const deltaLog = pgTable(
     /** The Delta content (JSONB) */
     delta: jsonb('delta').notNull(),
 
+    /** Commit hash — set when this delta is included in a commit, or for commit_marker entries */
+    commitHash: text('commit_hash'),
+
+    /** Which model produced this extraction (for llm_extraction source) */
+    model: text('model'),
+
     /** When this delta was recorded */
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -1064,8 +1070,8 @@ export type DeltaLogRecord = typeof deltaLog.$inferSelect;
 export type DeltaLogInsert = typeof deltaLog.$inferInsert;
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Sentence Relations (Ring 4 — Inter-sentence relationships)
-// @see docs/plans/2026-03-05-ring4-inter-sentence-relations-design.md
+// Sentence Relations (Inter-sentence Relations)
+// @see docs/plans/2026-03-05-inter-sentence-relations-design.md
 // ═══════════════════════════════════════════════════════════════════════════
 
 export const sentenceRelations = pgTable(

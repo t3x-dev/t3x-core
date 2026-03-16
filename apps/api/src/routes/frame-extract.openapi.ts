@@ -9,7 +9,7 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { buildDraft, type FrameExtractionTurn, FrameExtractor } from '@t3x-dev/core';
+import { buildDraft, createMeaningPipeline, type FrameExtractionTurn, FrameExtractor, fuzzyLocate, type SlotQuotesMap } from '@t3x-dev/core';
 import {
   findConversationById,
   findTurnsByConversation,
@@ -138,10 +138,11 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
     const deltaRecords = await listDeltaLogByConversation(db, conversation_id);
     const currentSnapshot = buildDraft(toDeltaLogEntries(deltaRecords));
 
-    // 4. Convert turns to FrameExtractionTurn format
+    // 4. Convert turns to FrameExtractionTurn format (include turn_hash for source tracking)
     const extractionTurns: FrameExtractionTurn[] = selectedTurns.map((t) => ({
       role: t.role as FrameExtractionTurn['role'],
       content: t.content,
+      turn_hash: t.turnHash,
     }));
 
     // 5. Call FrameExtractor via provider registry with fallback (usage tracked)
@@ -181,6 +182,100 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
       });
     }
 
+    // 6b. Resolve slot quotes into character offsets using fuzzyLocate
+    const slotQuotes: SlotQuotesMap = result.slotQuotes ?? new Map();
+
+    if (slotQuotes.size > 0) {
+      // Build turn content lookup: try all turns for each quote
+      const turnInfoList = selectedTurns.map((t, i) => ({
+        tag: `T${i + 1}`,
+        content: t.content,
+        turnHash: t.turnHash,
+      }));
+
+      for (let i = 0; i < result.delta.changes.length; i++) {
+        const quotes = slotQuotes.get(i);
+        if (!quotes) continue;
+
+        const change = result.delta.changes[i];
+        const slotSources: Record<string, { turn: string; turn_hash?: string; start_char: number; end_char: number; quote?: string }> = {};
+
+        for (const [slotKey, quote] of Object.entries(quotes)) {
+          if (typeof quote !== 'string' || !quote) continue;
+
+          // Try matching the quote against all turns (best match wins)
+          for (const turnInfo of turnInfoList) {
+            const located = fuzzyLocate(turnInfo.content, quote);
+            if (located && located.score >= 0.6) {
+              slotSources[slotKey] = {
+                turn: turnInfo.tag,
+                turn_hash: turnInfo.turnHash,
+                start_char: located.start,
+                end_char: located.end,
+                quote,
+              };
+              break;
+            }
+          }
+        }
+
+        if (Object.keys(slotSources).length > 0) {
+          if (change.action === 'add') {
+            change.frame.slot_sources = slotSources;
+          }
+          // For updates, attach slot_sources to the frame in the snapshot
+          // (the delta itself doesn't carry slot_sources, but we update the snapshot)
+        }
+      }
+    }
+
+    // 6c. Run Meaning Pipeline — multi-agent post-processing
+    let organizedSnapshot = result.snapshot;
+    try {
+      const pipelineReg = await getProviderRegistry();
+      const pipelineResult = await pipelineReg.tryWithFallback('generation', async (pipelineProvider) => {
+        const pipeline = createMeaningPipeline(pipelineProvider);
+        return pipeline.run(
+        result.snapshot,
+        extractionTurns,
+        currentSnapshot.frames.length > 0 ? currentSnapshot : undefined
+      );
+      });
+      organizedSnapshot = pipelineResult.content;
+
+      // Record pipeline usage
+      const pu = pipelineResult.meta.totalUsage;
+      if (pu.inputTokens || pu.outputTokens) {
+        recordUsageFireAndForget(db, {
+          user_id: getUserId(c) ?? undefined,
+          project_id: conversation.projectId,
+          endpoint: 'meaning_pipeline',
+          model: trackedModel,
+          input_tokens: pu.inputTokens,
+          output_tokens: pu.outputTokens,
+        });
+      }
+
+      // Log agent results with quality metrics
+      const completed = pipelineResult.meta.completedAgents;
+      const errors = pipelineResult.meta.agentErrors;
+      const snapshots = pipelineResult.meta.stepSnapshots;
+      const q = pipelineResult.quality;
+      console.info(`[meaning-pipeline] Completed: ${completed.join(' → ')}`);
+      console.info(`[meaning-pipeline] Quality: score=${q.score} frames=${q.frameCount} depth=${q.maxDepth} dupes=${q.duplicateTypes}`);
+      for (const snap of snapshots) {
+        console.info(`[meaning-pipeline] Step "${snap.agent}": ${snap.frameCount} frames, score=${snap.quality.score}`);
+      }
+      if (errors.length > 0) {
+        for (const ae of errors) {
+          console.warn(`[meaning-pipeline] Agent "${ae.agent}": ${ae.error}`);
+        }
+      }
+    } catch (pipelineErr) {
+      console.warn(`[meaning-pipeline] Pipeline error: ${pipelineErr instanceof Error ? pipelineErr.message : String(pipelineErr)}`);
+      // Pipeline is optional — flat frames are still valid
+    }
+
     // 7. Insert delta into delta log
     const record = await insertDeltaLogEntry(db, {
       conversationId: conversation_id,
@@ -195,7 +290,7 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
         success: true as const,
         data: {
           delta: result.delta,
-          snapshot: result.snapshot,
+          snapshot: organizedSnapshot,
           delta_log_id: record.id,
         },
       },

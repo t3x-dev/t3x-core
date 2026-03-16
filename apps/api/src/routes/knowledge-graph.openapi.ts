@@ -26,7 +26,7 @@ import {
   insertKnowledgeNodes,
   insertNodeMembers,
   searchKnowledgeNodes,
-} from '@t3x-dev/storage/pglite';
+} from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { ErrorResponseSchema } from '../schemas/common';
@@ -103,7 +103,7 @@ const buildRoute = createRoute({
   tags: ['Knowledge Graph'],
   summary: 'Build or rebuild knowledge graph for a project',
   description:
-    'Clusters sentence embeddings into topic nodes, promotes Ring 4 relations ' +
+    'Clusters sentence embeddings into topic nodes, promotes Inter-sentence Relations ' +
     'and knowledge conflicts to typed edges. Replaces any existing graph.',
   request: { params: ProjectIdParam },
   responses: {

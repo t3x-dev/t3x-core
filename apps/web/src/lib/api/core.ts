@@ -2,7 +2,7 @@
  * API client core infrastructure - shared utilities
  */
 
-import type { ApiCommitAnchors, ApiResponse, RingsData, TurnDetail } from './types';
+import type { ApiCommitAnchors, ApiResponse } from './types';
 
 // Use standalone API if configured, otherwise fall back to embedded routes
 export const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
@@ -43,26 +43,6 @@ export function safeJsonParse<T>(json: string | null, fallback: T): T {
     }
     return fallback;
   }
-}
-
-/**
- * Parse rings data from API response
- * API returns { rings: { ring1, ring2, ring3 } } or directly { ring1, ring2, ring3 }
- */
-export function parseRingsData(rings: TurnDetail['rings']): RingsData | null {
-  if (!rings) return null;
-
-  // Check if it's wrapped in { rings: ... }
-  if ('rings' in rings && rings.rings) {
-    return rings.rings as RingsData;
-  }
-
-  // Direct format
-  if ('ring1' in rings) {
-    return rings as RingsData;
-  }
-
-  return null;
 }
 
 /**

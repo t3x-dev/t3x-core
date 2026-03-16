@@ -208,7 +208,7 @@ export function DiffSourceContextModal({
         params.set('highlight', `${highlightStart}-${highlightEnd}`);
       }
       const qs = params.toString();
-      const url = `/project/${projectId}/conversation/${effectiveConversationId}${qs ? `?${qs}` : ''}`;
+      const url = `/chat/${effectiveConversationId}${qs ? `?${qs}` : ''}`;
       window.open(url, '_blank');
     }
   };

@@ -3,45 +3,33 @@
 /**
  * Database Inspector
  *
- * Standalone script to inspect the PGLite database.
- * Works independently of Next.js bundler.
+ * Connects to embedded PostgreSQL and provides an interactive SQL prompt.
+ * Requires the API server to be running first (pnpm dev:api).
  *
  * Usage:
  *   node scripts/db-inspector.mjs                     # Interactive mode
  *   node scripts/db-inspector.mjs "SELECT * FROM projects"  # Run single query
  */
 
-import { existsSync } from 'fs';
-import { resolve } from 'path';
 import { createInterface } from 'readline';
+import postgres from 'postgres';
 
-// Find the database directory
-const dbPaths = ['./t3x-webui/.t3x/database', './.t3x/database', process.env.T3X_DATA_DIR].filter(
-  Boolean
-);
-
-let dbPath = dbPaths.find((p) => existsSync(resolve(p)));
-
-if (!dbPath) {
-  console.log('No existing database found. Will create new one at: .t3x/database');
-  dbPath = '.t3x/database';
-}
+const port = parseInt(process.env.T3X_PG_PORT || '', 10) || 5445;
+const connectionString = `postgresql://postgres:password@localhost:${port}/t3x`;
 
 console.log(`\n  Database Inspector`);
-console.log(`  Database: ${resolve(dbPath)}`);
+console.log(`  Database: localhost:${port}/t3x`);
 console.log(`  ─────────────────────────────────────`);
 
-// Dynamic import PGLite
-const { PGlite } = await import('@electric-sql/pglite');
-const db = new PGlite(dbPath);
+const db = postgres(connectionString);
 
 // Helper to format table output
-function formatTable(rows, fields) {
+function formatTable(rows) {
   if (!rows || rows.length === 0) {
     return '  (no rows)';
   }
 
-  const headers = fields?.map((f) => f.name) || Object.keys(rows[0]);
+  const headers = Object.keys(rows[0]);
   const colWidths = headers.map((h) => h.length);
 
   // Calculate column widths
@@ -76,15 +64,15 @@ function formatTable(rows, fields) {
 }
 
 // Run a query and print results
-async function runQuery(sql) {
+async function runQuery(sqlStr) {
   try {
     const start = Date.now();
-    const result = await db.query(sql);
+    const result = await db.unsafe(sqlStr);
     const elapsed = Date.now() - start;
 
     console.log();
-    console.log(formatTable(result.rows, result.fields));
-    console.log(`\n  ${result.rows.length} row(s) in ${elapsed}ms`);
+    console.log(formatTable(result));
+    console.log(`\n  ${result.length} row(s) in ${elapsed}ms`);
   } catch (err) {
     console.error(`\n  Error: ${err.message}`);
   }
@@ -92,25 +80,28 @@ async function runQuery(sql) {
 
 // Show table info
 async function showTables() {
-  const result = await db.query(`
+  const result = await db`
     SELECT tablename as name
     FROM pg_tables
     WHERE schemaname = 'public'
     ORDER BY tablename
-  `);
+  `;
 
   console.log('\n  Tables:');
-  for (const row of result.rows) {
-    const countResult = await db.query(`SELECT COUNT(*) as count FROM "${row.name}"`);
-    console.log(`    ${row.name}: ${countResult.rows[0].count} rows`);
+  for (const row of result) {
+    const countResult = await db.unsafe(`SELECT COUNT(*) as count FROM "${row.name}"`);
+    console.log(`    ${row.name}: ${countResult[0].count} rows`);
   }
 }
 
 // Check for single query mode
 const queryArg = process.argv[2];
 if (queryArg) {
-  await runQuery(queryArg);
-  await db.close();
+  try {
+    await runQuery(queryArg);
+  } finally {
+    await db.end();
+  }
   process.exit(0);
 }
 
@@ -139,7 +130,7 @@ rl.on('line', async (line) => {
 
   if (input === '.quit' || input === '.exit') {
     console.log('\n  Goodbye!\n');
-    await db.close();
+    await db.end();
     rl.close();
     return;
   }

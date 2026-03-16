@@ -12,9 +12,10 @@
  *   node scripts/trace-record.mjs all                          # Show everything
  */
 
-import { PGlite } from '@electric-sql/pglite';
+import postgres from 'postgres';
 
-const dataDir = process.env.T3X_DB || './t3x-webui/.t3x/database';
+const port = parseInt(process.env.T3X_PG_PORT || '', 10) || 5445;
+const connectionString = `postgresql://postgres:password@localhost:${port}/t3x`;
 const [, , command, id] = process.argv;
 
 const CYAN = '\x1b[36m';
@@ -24,132 +25,119 @@ const DIM = '\x1b[2m';
 const RESET = '\x1b[0m';
 
 async function main() {
-  const client = new PGlite(dataDir);
+  const sql = postgres(connectionString);
 
-  console.log(`${DIM}Database: ${dataDir}${RESET}\n`);
+  console.log(`${DIM}Database: localhost:${port}/t3x${RESET}\n`);
 
-  switch (command) {
-    case 'project':
-      await traceProject(client, id);
-      break;
-    case 'conversation':
-    case 'conv':
-      await traceConversation(client, id);
-      break;
-    case 'turn':
-      await traceTurn(client, id);
-      break;
-    case 'commit':
-      await traceCommit(client, id);
-      break;
-    case 'all':
-      await showAll(client);
-      break;
-    default:
-      console.log('Usage:');
-      console.log('  node scripts/trace-record.mjs project <project_id>');
-      console.log('  node scripts/trace-record.mjs conversation <conversation_id>');
-      console.log('  node scripts/trace-record.mjs turn <turn_hash>');
-      console.log('  node scripts/trace-record.mjs commit <commit_hash>');
-      console.log('  node scripts/trace-record.mjs all');
-      console.log('');
-      console.log('Examples:');
-      console.log('  node scripts/trace-record.mjs project proj_abc123');
-      console.log('  node scripts/trace-record.mjs turn sha256:abc...');
-      console.log('  node scripts/trace-record.mjs all');
+  try {
+    switch (command) {
+      case 'project':
+        await traceProject(sql, id);
+        break;
+      case 'conversation':
+      case 'conv':
+        await traceConversation(sql, id);
+        break;
+      case 'turn':
+        await traceTurn(sql, id);
+        break;
+      case 'commit':
+        await traceCommit(sql, id);
+        break;
+      case 'all':
+        await showAll(sql);
+        break;
+      default:
+        console.log('Usage:');
+        console.log('  node scripts/trace-record.mjs project <project_id>');
+        console.log('  node scripts/trace-record.mjs conversation <conversation_id>');
+        console.log('  node scripts/trace-record.mjs turn <turn_hash>');
+        console.log('  node scripts/trace-record.mjs commit <commit_hash>');
+        console.log('  node scripts/trace-record.mjs all');
+        console.log('');
+        console.log('Examples:');
+        console.log('  node scripts/trace-record.mjs project proj_abc123');
+        console.log('  node scripts/trace-record.mjs turn sha256:abc...');
+        console.log('  node scripts/trace-record.mjs all');
+    }
+  } finally {
+    await sql.end();
   }
-
-  await client.close();
 }
 
-async function traceProject(client, projectId) {
+async function traceProject(sql, projectId) {
   console.log(`${CYAN}=== Tracing Project: ${projectId} ===${RESET}\n`);
 
   // Get project
-  const project = await client.query('SELECT * FROM projects WHERE project_id = $1', [projectId]);
+  const project = await sql`SELECT * FROM projects WHERE project_id = ${projectId}`;
 
-  if (project.rows.length === 0) {
+  if (project.length === 0) {
     console.log('Project not found.');
     return;
   }
 
-  const p = project.rows[0];
+  const p = project[0];
   console.log(`${GREEN}Project Record:${RESET}`);
   console.log(JSON.stringify(p, null, 2));
 
   // Get conversations
-  const convs = await client.query(
-    'SELECT conversation_id, title, created_at FROM conversations WHERE project_id = $1 ORDER BY created_at',
-    [projectId]
-  );
-  console.log(`\n${GREEN}Conversations (${convs.rows.length}):${RESET}`);
-  convs.rows.forEach((c) => {
+  const convs = await sql`
+    SELECT conversation_id, title, created_at FROM conversations
+    WHERE project_id = ${projectId} ORDER BY created_at
+  `;
+  console.log(`\n${GREEN}Conversations (${convs.length}):${RESET}`);
+  convs.forEach((c) => {
     console.log(`  - ${c.conversation_id}: ${c.title || '(untitled)'}`);
   });
 
   // Get branches
-  const branches = await client.query(
-    'SELECT name, is_current, head_commit_hash FROM branches WHERE project_id = $1',
-    [projectId]
-  );
-  console.log(`\n${GREEN}Branches (${branches.rows.length}):${RESET}`);
-  branches.rows.forEach((b) => {
+  const branches = await sql`
+    SELECT name, is_current, head_commit_hash FROM branches WHERE project_id = ${projectId}
+  `;
+  console.log(`\n${GREEN}Branches (${branches.length}):${RESET}`);
+  branches.forEach((b) => {
     const current = b.is_current ? ' *' : '';
     console.log(`  - ${b.name}${current} → ${b.head_commit_hash || '(no commits)'}`);
   });
 
   // Get turn count
-  const turnCount = await client.query(
-    'SELECT COUNT(*) as count FROM turns_v2 WHERE project_id = $1',
-    [projectId]
-  );
-  console.log(`\n${GREEN}Total Turns:${RESET} ${turnCount.rows[0].count}`);
+  const turnCount = await sql`SELECT COUNT(*) as count FROM turns_v2 WHERE project_id = ${projectId}`;
+  console.log(`\n${GREEN}Total Turns:${RESET} ${turnCount[0].count}`);
 
   // Get commit count
-  const commitCount = await client.query(
-    'SELECT COUNT(*) as count FROM commits_v2 WHERE project_id = $1',
-    [projectId]
-  );
-  console.log(`${GREEN}Total Commits:${RESET} ${commitCount.rows[0].count}`);
+  const commitCount = await sql`SELECT COUNT(*) as count FROM commits_v2 WHERE project_id = ${projectId}`;
+  console.log(`${GREEN}Total Commits:${RESET} ${commitCount[0].count}`);
 }
 
-async function traceConversation(client, convId) {
+async function traceConversation(sql, convId) {
   console.log(`${CYAN}=== Tracing Conversation: ${convId} ===${RESET}\n`);
 
   // Get conversation
-  const conv = await client.query('SELECT * FROM conversations WHERE conversation_id = $1', [
-    convId,
-  ]);
+  const conv = await sql`SELECT * FROM conversations WHERE conversation_id = ${convId}`;
 
-  if (conv.rows.length === 0) {
+  if (conv.length === 0) {
     console.log('Conversation not found.');
     return;
   }
 
-  const c = conv.rows[0];
+  const c = conv[0];
   console.log(`${GREEN}Conversation Record:${RESET}`);
   console.log(JSON.stringify(c, null, 2));
 
   // Get parent project
-  const project = await client.query(
-    'SELECT project_id, name FROM projects WHERE project_id = $1',
-    [c.project_id]
-  );
-  console.log(`\n${GREEN}Parent Project:${RESET} ${project.rows[0]?.name} (${c.project_id})`);
+  const project = await sql`SELECT project_id, name FROM projects WHERE project_id = ${c.project_id}`;
+  console.log(`\n${GREEN}Parent Project:${RESET} ${project[0]?.name} (${c.project_id})`);
 
   // Get turns in this conversation
-  const turns = await client.query(
-    `
+  const turns = await sql`
     SELECT turn_hash, parent_turn_hash, role, LEFT(content, 80) as content_preview, created_at
     FROM turns_v2
-    WHERE conversation_id = $1
+    WHERE conversation_id = ${convId}
     ORDER BY created_at ASC
-  `,
-    [convId]
-  );
+  `;
 
-  console.log(`\n${GREEN}Turns (${turns.rows.length}):${RESET}`);
-  turns.rows.forEach((t, i) => {
+  console.log(`\n${GREEN}Turns (${turns.length}):${RESET}`);
+  turns.forEach((t, i) => {
     const parent = t.parent_turn_hash ? `← ${t.parent_turn_hash.substring(0, 15)}...` : '← (root)';
     console.log(`\n  ${YELLOW}[${i + 1}] ${t.role}${RESET} ${parent}`);
     console.log(`      hash: ${t.turn_hash}`);
@@ -157,18 +145,18 @@ async function traceConversation(client, convId) {
   });
 }
 
-async function traceTurn(client, turnHash) {
+async function traceTurn(sql, turnHash) {
   console.log(`${CYAN}=== Tracing Turn: ${turnHash} ===${RESET}\n`);
 
   // Get turn
-  const turn = await client.query('SELECT * FROM turns_v2 WHERE turn_hash = $1', [turnHash]);
+  const turn = await sql`SELECT * FROM turns_v2 WHERE turn_hash = ${turnHash}`;
 
-  if (turn.rows.length === 0) {
+  if (turn.length === 0) {
     console.log('Turn not found.');
     return;
   }
 
-  const t = turn.rows[0];
+  const t = turn[0];
 
   console.log(`${GREEN}Turn Record:${RESET}`);
   console.log(`  turn_hash: ${t.turn_hash}`);
@@ -200,45 +188,38 @@ async function traceTurn(client, turnHash) {
     const indent = '  '.repeat(depth);
     console.log(`${indent}↳ [${current.role}] ${current.turn_hash.substring(0, 30)}...`);
     if (!current.parent_turn_hash) break;
-    const parent = await client.query('SELECT * FROM turns_v2 WHERE turn_hash = $1', [
-      current.parent_turn_hash,
-    ]);
-    current = parent.rows[0];
+    const parent = await sql`SELECT * FROM turns_v2 WHERE turn_hash = ${current.parent_turn_hash}`;
+    current = parent[0];
     depth++;
   }
 
   // Check if this turn is in any commit's turn window
-  const commits = await client.query(
-    `
+  const commits = await sql.unsafe(`
     SELECT commit_hash, branch, message, turn_window_json
     FROM commits_v2
     WHERE turn_window_json LIKE $1 OR turn_window_json LIKE $2
-  `,
-    [`%${turnHash}%`, `%${turnHash}%`]
-  );
+  `, [`%${turnHash}%`, `%${turnHash}%`]);
 
-  if (commits.rows.length > 0) {
+  if (commits.length > 0) {
     console.log(`\n${GREEN}Referenced in Commits:${RESET}`);
-    commits.rows.forEach((c) => {
+    commits.forEach((c) => {
       console.log(`  - ${c.commit_hash.substring(0, 30)}... (${c.branch})`);
     });
   }
 }
 
-async function traceCommit(client, commitHash) {
+async function traceCommit(sql, commitHash) {
   console.log(`${CYAN}=== Tracing Commit: ${commitHash} ===${RESET}\n`);
 
   // Get commit
-  const commit = await client.query('SELECT * FROM commits_v2 WHERE commit_hash = $1', [
-    commitHash,
-  ]);
+  const commit = await sql`SELECT * FROM commits_v2 WHERE commit_hash = ${commitHash}`;
 
-  if (commit.rows.length === 0) {
+  if (commit.length === 0) {
     console.log('Commit not found.');
     return;
   }
 
-  const c = commit.rows[0];
+  const c = commit[0];
 
   console.log(`${GREEN}Commit Record:${RESET}`);
   console.log(`  commit_hash: ${c.commit_hash}`);
@@ -266,17 +247,13 @@ async function traceCommit(client, commitHash) {
     console.log(`  end: ${tw.end_turn_hash}`);
 
     // Count turns in window
-    // This is simplified - real implementation would walk the chain
-    const turns = await client.query(
-      `
+    const turns = await sql`
       SELECT COUNT(*) as count FROM turns_v2
       WHERE conversation_id = (
-        SELECT conversation_id FROM turns_v2 WHERE turn_hash = $1
+        SELECT conversation_id FROM turns_v2 WHERE turn_hash = ${tw.start_turn_hash}
       )
-    `,
-      [tw.start_turn_hash]
-    );
-    console.log(`  (conversation has ${turns.rows[0].count} total turns)`);
+    `;
+    console.log(`  (conversation has ${turns[0].count} total turns)`);
   }
 
   // Facet snapshot
@@ -296,13 +273,13 @@ async function traceCommit(client, commitHash) {
   }
 }
 
-async function showAll(client) {
+async function showAll(sql) {
   console.log(`${CYAN}=== All Records ===${RESET}\n`);
 
   // Projects
-  const projects = await client.query('SELECT * FROM projects ORDER BY created_at DESC');
-  console.log(`${GREEN}Projects (${projects.rows.length}):${RESET}`);
-  projects.rows.forEach((p) => {
+  const projects = await sql`SELECT * FROM projects ORDER BY created_at DESC`;
+  console.log(`${GREEN}Projects (${projects.length}):${RESET}`);
+  projects.forEach((p) => {
     console.log(`\n  ${YELLOW}${p.project_id}${RESET}`);
     console.log(`    name: ${p.name}`);
     console.log(`    created: ${p.created_at}`);
@@ -310,9 +287,9 @@ async function showAll(client) {
   });
 
   // Conversations
-  const convs = await client.query('SELECT * FROM conversations ORDER BY created_at DESC');
-  console.log(`\n${GREEN}Conversations (${convs.rows.length}):${RESET}`);
-  convs.rows.forEach((c) => {
+  const convs = await sql`SELECT * FROM conversations ORDER BY created_at DESC`;
+  console.log(`\n${GREEN}Conversations (${convs.length}):${RESET}`);
+  convs.forEach((c) => {
     console.log(`\n  ${YELLOW}${c.conversation_id}${RESET}`);
     console.log(`    project: ${c.project_id}`);
     console.log(`    title: ${c.title || '(untitled)'}`);
@@ -320,9 +297,9 @@ async function showAll(client) {
   });
 
   // Turns
-  const turns = await client.query('SELECT * FROM turns_v2 ORDER BY created_at DESC LIMIT 10');
+  const turns = await sql`SELECT * FROM turns_v2 ORDER BY created_at DESC LIMIT 10`;
   console.log(`\n${GREEN}Recent Turns (showing 10):${RESET}`);
-  turns.rows.forEach((t) => {
+  turns.forEach((t) => {
     console.log(`\n  ${YELLOW}${t.turn_hash.substring(0, 40)}...${RESET}`);
     console.log(`    role: ${t.role}`);
     console.log(`    content: "${t.content.substring(0, 60)}..."`);
@@ -330,9 +307,9 @@ async function showAll(client) {
   });
 
   // Commits
-  const commits = await client.query('SELECT * FROM commits_v2 ORDER BY created_at DESC');
-  console.log(`\n${GREEN}Commits (${commits.rows.length}):${RESET}`);
-  commits.rows.forEach((c) => {
+  const commits = await sql`SELECT * FROM commits_v2 ORDER BY created_at DESC`;
+  console.log(`\n${GREEN}Commits (${commits.length}):${RESET}`);
+  commits.forEach((c) => {
     console.log(`\n  ${YELLOW}${c.commit_hash.substring(0, 40)}...${RESET}`);
     console.log(`    branch: ${c.branch}`);
     console.log(`    message: ${c.message || '(no message)'}`);
@@ -343,15 +320,15 @@ async function showAll(client) {
   });
 
   // Summary
-  const counts = await client.query(`
+  const counts = await sql`
     SELECT
       (SELECT COUNT(*) FROM projects) as projects,
       (SELECT COUNT(*) FROM conversations) as conversations,
       (SELECT COUNT(*) FROM turns_v2) as turns,
       (SELECT COUNT(*) FROM commits_v2) as commits,
       (SELECT COUNT(*) FROM branches) as branches
-  `);
-  const s = counts.rows[0];
+  `;
+  const s = counts[0];
   console.log(`\n${GREEN}Summary:${RESET}`);
   console.log(
     `  Projects: ${s.projects} | Conversations: ${s.conversations} | Turns: ${s.turns} | Commits: ${s.commits} | Branches: ${s.branches}`

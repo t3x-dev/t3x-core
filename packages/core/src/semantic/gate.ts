@@ -134,9 +134,23 @@ function defaultDimensionResult(): DimensionResult {
  */
 export function parseSemanticGateResponse(raw: string): Omit<SemanticGateResult, 'usage'> {
   try {
-    // Extract JSON from possible markdown code block
+    // Strategy 1: Extract from markdown code block
     const jsonMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
-    const jsonStr = jsonMatch ? jsonMatch[1].trim() : raw.trim();
+    let jsonStr = jsonMatch ? jsonMatch[1].trim() : null;
+
+    // Strategy 2: Find first { ... } block (handles LLM adding surrounding text)
+    if (!jsonStr) {
+      const braceStart = raw.indexOf('{');
+      const braceEnd = raw.lastIndexOf('}');
+      if (braceStart !== -1 && braceEnd > braceStart) {
+        jsonStr = raw.slice(braceStart, braceEnd + 1);
+      }
+    }
+
+    // Strategy 3: Try raw as-is
+    if (!jsonStr) {
+      jsonStr = raw.trim();
+    }
 
     const parsed = JSON.parse(jsonStr);
 
@@ -280,7 +294,20 @@ ${framesText}
 export function parseCoverageResponse(raw: string): Omit<CoverageResult, 'usage'> {
   try {
     const jsonMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
-    const jsonStr = jsonMatch ? jsonMatch[1].trim() : raw.trim();
+    let jsonStr = jsonMatch ? jsonMatch[1].trim() : null;
+
+    if (!jsonStr) {
+      const braceStart = raw.indexOf('{');
+      const braceEnd = raw.lastIndexOf('}');
+      if (braceStart !== -1 && braceEnd > braceStart) {
+        jsonStr = raw.slice(braceStart, braceEnd + 1);
+      }
+    }
+
+    if (!jsonStr) {
+      jsonStr = raw.trim();
+    }
+
     const parsed = JSON.parse(jsonStr);
 
     const ratio =

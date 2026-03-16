@@ -342,38 +342,36 @@ export async function findCommitV3History(
 ): Promise<CommitV3Output[]> {
   const MAX_DEPTH = 1000;
 
-  const result = await (
-    db as unknown as {
-      execute: (q: ReturnType<typeof sql>) => Promise<{ rows: Record<string, unknown>[] }>;
-    }
-  ).execute(sql`
-    WITH RECURSIVE history AS (
-      SELECT c.*, 0 AS depth, ARRAY[c.hash] AS visited
-      FROM commits_v3 c
-      WHERE c.hash = ${commitHash}
+  const rows = Array.from(
+    await db.execute(sql`
+      WITH RECURSIVE history AS (
+        SELECT c.*, 0 AS depth, ARRAY[c.hash] AS visited
+        FROM commits_v3 c
+        WHERE c.hash = ${commitHash}
 
-      UNION ALL
+        UNION ALL
 
-      SELECT c.*, h.depth + 1, h.visited || c.hash
-      FROM history h,
-           unnest(h.parents) AS parent_hash
-      JOIN commits_v3 c ON c.hash = parent_hash
-      WHERE h.depth < ${MAX_DEPTH}
-        AND NOT (c.hash = ANY(h.visited))
-    ),
-    deduped AS (
-      SELECT DISTINCT ON (hash) hash, schema, parents, author, committed_at,
-             content, project_id, message, branch,
-             position_x, position_y, created_at, updated_at, depth
-      FROM history
-      ORDER BY hash, depth
-    )
-    SELECT * FROM deduped
-    ORDER BY depth, hash
-    LIMIT ${limit}
-  `);
+        SELECT c.*, h.depth + 1, h.visited || c.hash
+        FROM history h,
+             unnest(h.parents) AS parent_hash
+        JOIN commits_v3 c ON c.hash = parent_hash
+        WHERE h.depth < ${MAX_DEPTH}
+          AND NOT (c.hash = ANY(h.visited))
+      ),
+      deduped AS (
+        SELECT DISTINCT ON (hash) hash, schema, parents, author, committed_at,
+               content, project_id, message, branch,
+               position_x, position_y, created_at, updated_at, depth
+        FROM history
+        ORDER BY hash, depth
+      )
+      SELECT * FROM deduped
+      ORDER BY depth, hash
+      LIMIT ${limit}
+    `)
+  ) as Record<string, unknown>[];
 
-  return result.rows.map(rawRowToCommitV3);
+  return rows.map(rawRowToCommitV3);
 }
 
 /**
@@ -390,56 +388,53 @@ export async function findCommonAncestorV3(
 ): Promise<CommitV3Output | null> {
   const MAX_DEPTH = 1000;
 
-  const result = await (
-    db as unknown as {
-      execute: (q: ReturnType<typeof sql>) => Promise<{ rows: Record<string, unknown>[] }>;
-    }
-  ).execute(sql`
-    WITH RECURSIVE
-      ancestors1 AS (
-        SELECT hash, parents, 0 AS depth, ARRAY[hash] AS visited
-        FROM commits_v3
-        WHERE hash = ${hash1}
+  const rows = Array.from(
+    await db.execute(sql`
+      WITH RECURSIVE
+        ancestors1 AS (
+          SELECT hash, parents, 0 AS depth, ARRAY[hash] AS visited
+          FROM commits_v3
+          WHERE hash = ${hash1}
 
-        UNION ALL
+          UNION ALL
 
-        SELECT c.hash, c.parents, a.depth + 1, a.visited || c.hash
-        FROM ancestors1 a,
-             unnest(a.parents) AS ph
-        JOIN commits_v3 c ON c.hash = ph
-        WHERE a.depth < ${MAX_DEPTH}
-          AND NOT (c.hash = ANY(a.visited))
-      ),
-      ancestors2 AS (
-        SELECT hash, parents, 0 AS depth, ARRAY[hash] AS visited
-        FROM commits_v3
-        WHERE hash = ${hash2}
+          SELECT c.hash, c.parents, a.depth + 1, a.visited || c.hash
+          FROM ancestors1 a,
+               unnest(a.parents) AS ph
+          JOIN commits_v3 c ON c.hash = ph
+          WHERE a.depth < ${MAX_DEPTH}
+            AND NOT (c.hash = ANY(a.visited))
+        ),
+        ancestors2 AS (
+          SELECT hash, parents, 0 AS depth, ARRAY[hash] AS visited
+          FROM commits_v3
+          WHERE hash = ${hash2}
 
-        UNION ALL
+          UNION ALL
 
-        SELECT c.hash, c.parents, a.depth + 1, a.visited || c.hash
-        FROM ancestors2 a,
-             unnest(a.parents) AS ph
-        JOIN commits_v3 c ON c.hash = ph
-        WHERE a.depth < ${MAX_DEPTH}
-          AND NOT (c.hash = ANY(a.visited))
+          SELECT c.hash, c.parents, a.depth + 1, a.visited || c.hash
+          FROM ancestors2 a,
+               unnest(a.parents) AS ph
+          JOIN commits_v3 c ON c.hash = ph
+          WHERE a.depth < ${MAX_DEPTH}
+            AND NOT (c.hash = ANY(a.visited))
+        )
+      SELECT c.hash, c.schema, c.parents, c.author, c.committed_at,
+             c.content, c.project_id, c.message, c.branch,
+             c.position_x, c.position_y, c.created_at, c.updated_at
+      FROM commits_v3 c
+      WHERE c.hash IN (
+        SELECT a1.hash
+        FROM (SELECT DISTINCT hash, MIN(depth) AS min_depth FROM ancestors1 GROUP BY hash) a1
+        JOIN (SELECT DISTINCT hash, MIN(depth) AS min_depth FROM ancestors2 GROUP BY hash) a2
+          ON a1.hash = a2.hash
+        ORDER BY a1.min_depth + a2.min_depth
+        LIMIT 1
       )
-    SELECT c.hash, c.schema, c.parents, c.author, c.committed_at,
-           c.content, c.project_id, c.message, c.branch,
-           c.position_x, c.position_y, c.created_at, c.updated_at
-    FROM commits_v3 c
-    WHERE c.hash IN (
-      SELECT a1.hash
-      FROM (SELECT DISTINCT hash, MIN(depth) AS min_depth FROM ancestors1 GROUP BY hash) a1
-      JOIN (SELECT DISTINCT hash, MIN(depth) AS min_depth FROM ancestors2 GROUP BY hash) a2
-        ON a1.hash = a2.hash
-      ORDER BY a1.min_depth + a2.min_depth
       LIMIT 1
-    )
-    LIMIT 1
-  `);
+    `)
+  ) as Record<string, unknown>[];
 
-  const rows = result.rows;
   return rows.length > 0 ? rawRowToCommitV3(rows[0]) : null;
 }
 

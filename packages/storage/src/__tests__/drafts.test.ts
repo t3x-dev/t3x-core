@@ -5,7 +5,6 @@
  * Drafts track LLM-generated content with lifecycle states.
  */
 
-import type { PGlite } from '@electric-sql/pglite';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
@@ -27,7 +26,6 @@ import { createTestDB, testData } from './setup';
 
 describe('Drafts Storage', () => {
   let db: AnyDB;
-  let _client: PGlite;
   let cleanup: () => Promise<void>;
   let testProjectId: string;
   let testConversationId: string;
@@ -35,7 +33,6 @@ describe('Drafts Storage', () => {
   beforeAll(async () => {
     const setup = await createTestDB();
     db = setup.db;
-    _client = setup.client;
     cleanup = setup.cleanup;
 
     // Create a test project and conversation

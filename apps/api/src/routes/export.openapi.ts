@@ -12,7 +12,7 @@ import {
   findConversationsByProject,
   findTurnsByProject,
   listCommitsV3,
-} from '@t3x-dev/storage/pglite';
+} from '@t3x-dev/storage';
 import * as crypto from 'crypto';
 import { getDB } from '../lib/db';
 import { toDeltaLogEntries } from '../lib/delta-log-utils';
@@ -24,49 +24,6 @@ import { ExportQuery } from '../schemas/export-contracts';
 // ============================================================================
 // Types (matching Python schemas)
 // ============================================================================
-
-interface Entity {
-  text: string;
-  type: string;
-  start?: number;
-  end?: number;
-}
-
-interface PreferenceKeyword {
-  keyword: string;
-  polarity: string;
-  lemma: string;
-}
-
-interface Segment {
-  id: string;
-  text: string;
-}
-
-interface Ring1 {
-  keywords: string[];
-  entities: Entity[];
-  time_anchor?: string;
-  preference_keywords: PreferenceKeyword[];
-}
-
-interface Ring2 {
-  intent_seed?: string;
-  time_window?: string;
-  preference_soft: string[];
-  unknown_slot: string[];
-  facets: string[];
-}
-
-interface Ring3 {
-  segments: Segment[];
-}
-
-interface Rings {
-  ring1: Ring1;
-  ring2: Ring2;
-  ring3: Ring3;
-}
 
 interface TurnWindow {
   start_turn_hash: string;
@@ -97,7 +54,7 @@ interface CfpackTurn {
   role: string;
   content: string;
   created_at: string;
-  rings: Rings | null;
+  rings: Record<string, unknown> | null;
 }
 
 interface CfpackCommit {
@@ -148,45 +105,14 @@ interface CfpackResponseType {
 // Helpers
 // ============================================================================
 
-function parseRings(ringsJson: string | null): Rings | null {
+/**
+ * Parse legacy rings JSON from DB. Returns raw parsed data or null.
+ * Ring extraction has been retired but existing data may still be in the DB.
+ */
+function parseRings(ringsJson: string | null): Record<string, unknown> | null {
   if (!ringsJson) return null;
-
   try {
-    const data = JSON.parse(ringsJson);
-    const ring1 = data.ring1 ?? {};
-    const ring2 = data.ring2 ?? {};
-    const ring3 = data.ring3 ?? {};
-
-    return {
-      ring1: {
-        keywords: ring1.keywords ?? [],
-        entities: (ring1.entities ?? []).map((e: Entity) => ({
-          text: e.text,
-          type: e.type,
-          start: e.start,
-          end: e.end,
-        })),
-        time_anchor: ring1.time_anchor,
-        preference_keywords: (ring1.preference_keywords ?? []).map((pk: PreferenceKeyword) => ({
-          keyword: pk.keyword,
-          polarity: pk.polarity,
-          lemma: pk.lemma,
-        })),
-      },
-      ring2: {
-        intent_seed: ring2.intent_seed,
-        time_window: ring2.time_window,
-        preference_soft: ring2.preference_soft ?? [],
-        unknown_slot: ring2.unknown_slot ?? [],
-        facets: ring2.facets ?? [],
-      },
-      ring3: {
-        segments: (ring3.segments ?? []).map((s: Segment) => ({
-          id: s.id,
-          text: s.text,
-        })),
-      },
-    };
+    return JSON.parse(ringsJson) as Record<string, unknown>;
   } catch {
     return null;
   }
@@ -268,8 +194,12 @@ exportRoutes.openapi(exportCfpackRoute, async (c) => {
         rings,
       });
 
-      if (rings?.ring1.keywords) {
-        for (const kw of rings.ring1.keywords) {
+      // Extract keywords from legacy ring data if present
+      const ring1 = (rings as Record<string, unknown>)?.ring1 as
+        | { keywords?: unknown[] }
+        | undefined;
+      if (ring1?.keywords) {
+        for (const kw of ring1.keywords) {
           const kwStr = typeof kw === 'string' ? kw : (kw as { lemma: string }).lemma;
           const existing = allKeywords.get(kwStr);
           if (existing) {

@@ -5,7 +5,9 @@
  * Handles draft persistence, auto-save, and user decisions.
  */
 
+import type { FrameMergeResult } from '@t3x-dev/core';
 import { create } from 'zustand';
+import type { FrameResolution } from '@/components/merge/FrameConflictCard';
 import { getTerminology, type TermKey } from '@/hooks/useTerminology';
 import * as api from '@/lib/api';
 import { API_V1, fetchWithTimeout, handleResponse } from '@/lib/api/core';
@@ -105,6 +107,12 @@ interface MergeWorkspaceState {
   serverChecksLoading: boolean;
   serverChecksError: string | null;
 
+  // Frame merge state (coexists with sentence-based state)
+  frameMergeResult: FrameMergeResult | null;
+  frameResolutions: Map<string, FrameResolution>;
+  keepSourceFrames: Set<string>;
+  keepTargetFrames: Set<string>;
+
   // Actions
   fetchServerChecks: () => Promise<void>;
   loadDraft: (draftId: string) => Promise<void>;
@@ -130,6 +138,13 @@ interface MergeWorkspaceState {
   resolveConflict: (index: number, resolution: 'source' | 'target' | 'both') => void;
   fetchSourceContext: (turnHash: string, sentence: Sentence) => Promise<TurnContextData | null>;
   getEffectiveResolution: (index: number) => 'source' | 'target' | 'both' | null;
+
+  // Frame merge actions
+  setFrameMergeResult: (result: FrameMergeResult) => void;
+  resolveFrameConflict: (frameId: string, resolution: FrameResolution) => void;
+  toggleKeepSourceFrame: (frameId: string) => void;
+  toggleKeepTargetFrame: (frameId: string) => void;
+  allFrameConflictsResolved: () => boolean;
 
   // Computed getters
   getUnresolvedCount: () => number;
@@ -324,6 +339,10 @@ const initialState = {
   serverChecks: [] as MergeCheck[],
   serverChecksLoading: false,
   serverChecksError: null,
+  frameMergeResult: null as FrameMergeResult | null,
+  frameResolutions: new Map<string, FrameResolution>(),
+  keepSourceFrames: new Set<string>(),
+  keepTargetFrames: new Set<string>(),
 };
 
 export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => ({
@@ -571,6 +590,57 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
         serverChecksError: err instanceof Error ? err.message : 'Failed to fetch server checks',
       });
     }
+  },
+
+  // ============================================================================
+  // Frame Merge Actions
+  // ============================================================================
+
+  setFrameMergeResult: (result: FrameMergeResult) => {
+    // Initialize keepSource/keepTarget with all source-only/target-only frames kept by default
+    const keepSource = new Set(result.onlyInSource.map((f) => f.id));
+    const keepTarget = new Set(result.onlyInTarget.map((f) => f.id));
+    set({
+      frameMergeResult: result,
+      frameResolutions: new Map(),
+      keepSourceFrames: keepSource,
+      keepTargetFrames: keepTarget,
+    });
+  },
+
+  resolveFrameConflict: (frameId: string, resolution: FrameResolution) => {
+    const prev = get().frameResolutions;
+    const next = new Map(prev);
+    next.set(frameId, resolution);
+    set({ frameResolutions: next, isDirty: true });
+  },
+
+  toggleKeepSourceFrame: (frameId: string) => {
+    const prev = get().keepSourceFrames;
+    const next = new Set(prev);
+    if (next.has(frameId)) {
+      next.delete(frameId);
+    } else {
+      next.add(frameId);
+    }
+    set({ keepSourceFrames: next, isDirty: true });
+  },
+
+  toggleKeepTargetFrame: (frameId: string) => {
+    const prev = get().keepTargetFrames;
+    const next = new Set(prev);
+    if (next.has(frameId)) {
+      next.delete(frameId);
+    } else {
+      next.add(frameId);
+    }
+    set({ keepTargetFrames: next, isDirty: true });
+  },
+
+  allFrameConflictsResolved: () => {
+    const { frameMergeResult, frameResolutions } = get();
+    if (!frameMergeResult) return true;
+    return frameMergeResult.conflicts.every((c) => frameResolutions.has(c.frameId));
   },
 
   // ============================================================================

@@ -26,7 +26,7 @@ import {
   getAdaptiveFeedbackStats,
   getAutopilotConfig,
   updateAutopilotConfig,
-} from '@t3x-dev/storage/pglite';
+} from '@t3x-dev/storage';
 import { eq } from 'drizzle-orm';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';

@@ -1,6 +1,6 @@
 {
   "name": "@t3x-dev/core",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "T3X Core - Deterministic semantic extraction, diff, and merge engine",
   "license": "MIT",
   "main": "dist/index.js",
@@ -9,11 +9,14 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsup src/index.ts --format cjs --dts --clean",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
     "clean": "rm -rf dist",
     "bench": "vitest bench",
     "bench:watch": "vitest bench --watch",
-    "test": "vitest run",
+    "test": "vitest run --exclude='**/golden/**' --exclude='**/compare-engines*'",
+    "test:llm": "vitest run src/__tests__/golden/ src/__tests__/compare-engines.test.ts",
+    "test:changed": "vitest run --changed",
     "test:watch": "vitest",
     "prepublishOnly": "npm run build"
   },
@@ -24,10 +27,13 @@
     "zod": "^4.2.1"
   },
   "devDependencies": {
+    "@swc/core": "^1.15.18",
     "@types/node": "^20.12.7",
     "@vitest/coverage-v8": "^2.1.9",
     "dotenv": "^17.3.1",
+    "tsup": "^8.5.1",
     "typescript": "^5.9.3",
+    "unplugin-swc": "^1.5.9",
     "vitest": "^2.1.9"
   },
   "engines": {

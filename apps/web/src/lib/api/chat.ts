@@ -35,19 +35,6 @@ export interface ChatStreamEvent {
   usage?: { input_tokens?: number; output_tokens?: number };
 }
 
-export interface ChatProvidersResponse {
-  providers: string[];
-  default: string;
-}
-
-/**
- * Get available chat providers
- */
-export async function getChatProviders(): Promise<ChatProvidersResponse> {
-  const res = await fetchWithTimeout(`${API_V1}/chat/providers`);
-  return handleResponse<ChatProvidersResponse>(res);
-}
-
 /**
  * Non-streaming chat
  */

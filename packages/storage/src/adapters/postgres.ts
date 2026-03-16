@@ -407,6 +407,13 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     -- Migration: Add semantic column to existing commits_v4 tables
     ALTER TABLE commits_v4 ADD COLUMN IF NOT EXISTS semantic JSONB;
 
+    -- Migration: Add provider/model columns to projects and conversations (PR #554)
+    ALTER TABLE projects ADD COLUMN IF NOT EXISTS provider_config TEXT;
+    ALTER TABLE projects ADD COLUMN IF NOT EXISTS default_provider TEXT;
+    ALTER TABLE projects ADD COLUMN IF NOT EXISTS default_model TEXT;
+    ALTER TABLE conversations ADD COLUMN IF NOT EXISTS provider TEXT;
+    ALTER TABLE conversations ADD COLUMN IF NOT EXISTS model TEXT;
+
     -- Migration: Add runner_assertions column to existing leaves tables (v4.1)
     ALTER TABLE leaves ADD COLUMN IF NOT EXISTS runner_assertions JSONB;
 
@@ -715,8 +722,10 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     );
     CREATE INDEX IF NOT EXISTS idx_delta_log_conv ON delta_log(conversation_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_delta_log_project ON delta_log(project_id);
+    ALTER TABLE delta_log ADD COLUMN IF NOT EXISTS commit_hash TEXT;
+    ALTER TABLE delta_log ADD COLUMN IF NOT EXISTS model TEXT;
 
-    -- Sentence Relations (Ring 4)
+    -- Sentence Relations (Inter-sentence Relations)
     CREATE TABLE IF NOT EXISTS sentence_relations (
       id TEXT PRIMARY KEY,
       project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
@@ -827,6 +836,45 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT;
     CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username) WHERE username IS NOT NULL;
+
+    -- ═══════════════════════════════════════════════════════════════
+    -- Frame-Based Commits (commits_v5 + frame_lineage)
+    -- ═══════════════════════════════════════════════════════════════
+
+    CREATE TABLE IF NOT EXISTS commits_v5 (
+      -- First class (in hash)
+      hash TEXT PRIMARY KEY,
+      schema TEXT NOT NULL DEFAULT 't3x/commit/5',
+      parents JSONB NOT NULL DEFAULT '[]',
+      author JSONB NOT NULL,
+      committed_at TIMESTAMPTZ NOT NULL,
+      content JSONB NOT NULL,
+
+      -- Second class (not in hash)
+      project_id TEXT REFERENCES projects(project_id) ON DELETE CASCADE,
+      message TEXT,
+      branch TEXT DEFAULT 'main',
+      sources JSONB,
+      provenance JSONB,
+      position_x REAL,
+      position_y REAL,
+
+      -- Timestamps
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_commits_v5_project ON commits_v5(project_id);
+    CREATE INDEX IF NOT EXISTS idx_commits_v5_branch ON commits_v5(branch);
+    CREATE INDEX IF NOT EXISTS idx_commits_v5_committed_at ON commits_v5(committed_at);
+
+    CREATE TABLE IF NOT EXISTS frame_lineage (
+      id TEXT PRIMARY KEY,
+      commit_hash TEXT NOT NULL,
+      frame_id TEXT NOT NULL,
+      slot_sources JSONB,
+      meta JSONB
+    );
+    CREATE INDEX IF NOT EXISTS idx_frame_lineage_commit ON frame_lineage(commit_hash);
+    CREATE INDEX IF NOT EXISTS idx_frame_lineage_frame ON frame_lineage(frame_id);
 
     -- Token Usage table (LLM token metering)
     CREATE TABLE IF NOT EXISTS token_usage (

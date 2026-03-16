@@ -18,7 +18,7 @@ import {
   MessageSquarePlus,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useContextMenu } from '@/hooks/useContextMenu';
 import { usePathHighlight } from '@/hooks/usePathHighlight';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
@@ -26,9 +26,11 @@ import { useTerminology } from '@/hooks/useTerminology';
 import '@xyflow/react/dist/style.css';
 import { useTheme } from 'next-themes';
 import { AnimatedEdge } from './AnimatedEdge';
+import { useCanvasKeyboardShortcuts } from './CanvasKeyboardShortcuts';
 import { canvasNodeTypes } from './CanvasNodes';
 import { CanvasStatusBar } from './CanvasStatusBar';
 import { CanvasToolbar } from './CanvasToolbar';
+import { useCanvasHandlers } from './CanvasWorkspaceHandlers';
 import { NodeContextMenu } from './NodeContextMenu';
 import { NodePalette } from './NodePalette';
 
@@ -41,8 +43,6 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ZoomSlider } from '@/components/ui/zoom-slider';
-import * as api from '@/lib/api';
-import { getLayoutedElements } from '@/lib/elkLayout';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import { useCanvasStore } from '@/store/canvasStore';
@@ -143,59 +143,32 @@ function CanvasWorkspaceInner({
   }, []);
   const notify = useProjectStore((state) => state.notifyCallback);
 
-  // Auto-layout handler
-  const handleAutoLayout = useCallback(async () => {
-    const currentNodes = getNodes();
-    const currentEdges = getEdges();
-
-    if (currentNodes.length === 0) return;
-
-    setIsLayouting(true);
-    try {
-      const layoutedNodes = await getLayoutedElements(currentNodes, currentEdges, {
-        direction: 'DOWN',
-        nodeSpacing: 80,
-        rankSpacing: 120,
-      });
-      setNodes(layoutedNodes);
-      // Fit view after layout — double rAF ensures DOM has updated after React render
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          fitView({ padding: 0.2, duration: 300 });
-        });
-      });
-    } catch (_err) {
-      notify?.('Auto-layout failed', 'error');
-    } finally {
-      setIsLayouting(false);
-    }
-  }, [getNodes, getEdges, setNodes, fitView, notify]);
-
-  // Auto-extract: create a draft from a conversation node via LLM extraction
-  const handleAutoExtract = useCallback(
-    async (nodeId: string) => {
-      const node = getNodes().find((n) => n.id === nodeId);
-      const conversationId = node?.data.conversationId as string | undefined;
-      if (!conversationId || !projectId) {
-        notify?.('No conversation found on this node', 'warning');
-        return;
-      }
-      try {
-        notify?.('Creating auto-draft...', 'success');
-        const draft = await api.createAutoDraft({
-          project_id: projectId,
-          conversation_id: conversationId,
-        });
-        // Reload canvas to pick up the new draft node, then navigate
-        await useCanvasStore.getState().loadProjectData(projectId);
-        router.push(`/project/${projectId}/draft/${draft.id}`);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Auto-extract failed';
-        notify?.(message, 'error');
-      }
-    },
-    [getNodes, projectId, notify, router]
-  );
+  // Extracted handlers
+  const {
+    handleAutoLayout,
+    handleAutoExtract,
+    handleAddNode,
+    onDragOver,
+    onDrop,
+    selectAllNodes,
+    deselectAllNodes,
+    navigateToNode,
+  } = useCanvasHandlers({
+    getNodes,
+    getEdges,
+    setNodes,
+    fitView,
+    setCenter,
+    screenToFlowPosition,
+    canvasRef,
+    projectId,
+    notify,
+    router,
+    addNode,
+    addDraftNode,
+    setIsAdding,
+    setIsLayouting,
+  });
 
   // Context menu (extracted hook)
   const { contextMenu, closeContextMenu, handleNodeContextMenu, handlePaneContextMenu } =
@@ -280,201 +253,8 @@ function CanvasWorkspaceInner({
     return undefined;
   }, [modalNode, addPendingCommitFromCommit]);
 
-  // Select all nodes (Ctrl/Cmd+A)
-  const selectAllNodes = useCallback(() => {
-    const currentNodes = getNodes();
-    setNodes(currentNodes.map((node) => ({ ...node, selected: true })));
-  }, [getNodes, setNodes]);
-
-  // Deselect all nodes (Escape)
-  const deselectAllNodes = useCallback(() => {
-    const currentNodes = getNodes();
-    setNodes(currentNodes.map((node) => ({ ...node, selected: false })));
-  }, [getNodes, setNodes]);
-
-  // Navigate to adjacent node (Arrow keys)
-  const navigateToNode = useCallback(
-    (direction: 'up' | 'down' | 'left' | 'right') => {
-      const currentNodes = getNodes();
-      const selectedNodes = currentNodes.filter((node) => node.selected);
-
-      // If no nodes selected, select the first one
-      if (selectedNodes.length === 0 && currentNodes.length > 0) {
-        setNodes(currentNodes.map((node, i) => ({ ...node, selected: i === 0 })));
-        return;
-      }
-
-      // Get the "anchor" node (last selected)
-      const anchorNode = selectedNodes[selectedNodes.length - 1];
-      if (!anchorNode) return;
-
-      // Find the nearest node in the given direction
-      let bestNodeId: string | null = null;
-      let bestDistance = Number.POSITIVE_INFINITY;
-
-      for (const node of currentNodes) {
-        if (node.id === anchorNode.id) continue;
-
-        const dx = node.position.x - anchorNode.position.x;
-        const dy = node.position.y - anchorNode.position.y;
-
-        // Check if node is in the correct direction
-        const isInDirection =
-          (direction === 'up' && dy < -20) ||
-          (direction === 'down' && dy > 20) ||
-          (direction === 'left' && dx < -20) ||
-          (direction === 'right' && dx > 20);
-
-        if (!isInDirection) continue;
-
-        // Calculate distance with preference for the primary axis
-        const primaryDistance =
-          direction === 'up' || direction === 'down' ? Math.abs(dy) : Math.abs(dx);
-        const secondaryDistance =
-          direction === 'up' || direction === 'down' ? Math.abs(dx) : Math.abs(dy);
-
-        // Weight primary axis more heavily
-        const distance = primaryDistance + secondaryDistance * 0.3;
-
-        if (distance < bestDistance) {
-          bestDistance = distance;
-          bestNodeId = node.id;
-        }
-      }
-
-      if (bestNodeId) {
-        const targetNode = currentNodes.find((n) => n.id === bestNodeId);
-        setNodes(
-          currentNodes.map((node) => ({
-            ...node,
-            selected: node.id === bestNodeId,
-          }))
-        );
-        // Auto-pan viewport to follow selected node
-        if (targetNode) {
-          setCenter(targetNode.position.x + 100, targetNode.position.y + 50, { duration: 200 });
-        }
-      }
-    },
-    [getNodes, setNodes, setCenter]
-  );
-
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      // Don't handle shortcuts when typing in input
-      const target = event.target as HTMLElement;
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
-        return;
-      }
-
-      // Pan mode toggle (Meta/Ctrl held) — always allowed
-      if (event.key === 'Meta' || event.key === 'Control') {
-        setIsPanMode(true);
-      }
-
-      // Don't handle navigation shortcuts when modal/dialog is open
-      if (openNodeId || showShortcuts) {
-        return;
-      }
-
-      // Space: toggle pan mode (skip when focus is on interactive elements)
-      if (event.key === ' ') {
-        if (
-          target.tagName === 'BUTTON' ||
-          target.tagName === 'SELECT' ||
-          target.getAttribute('role') === 'button' ||
-          target.getAttribute('role') === 'combobox'
-        ) {
-          return;
-        }
-        event.preventDefault();
-        setIsPanMode((prev) => !prev);
-        return;
-      }
-
-      // Select all (Ctrl/Cmd+A)
-      if (event.key === 'a' && (event.metaKey || event.ctrlKey)) {
-        event.preventDefault();
-        selectAllNodes();
-        return;
-      }
-
-      // Deselect all (Escape)
-      if (event.key === 'Escape') {
-        deselectAllNodes();
-        return;
-      }
-
-      // Tab: cycle through nodes
-      if (event.key === 'Tab') {
-        event.preventDefault();
-        const currentNodes = getNodes();
-        if (currentNodes.length === 0) return;
-        const selectedIdx = currentNodes.findIndex((n) => n.selected);
-        const nextIdx = event.shiftKey
-          ? selectedIdx <= 0
-            ? currentNodes.length - 1
-            : selectedIdx - 1
-          : (selectedIdx + 1) % currentNodes.length;
-        setNodes(currentNodes.map((node, i) => ({ ...node, selected: i === nextIdx })));
-        return;
-      }
-
-      // Enter: open selected node (committed → full page, others → modal)
-      if (event.key === 'Enter') {
-        const currentNodes = getNodes();
-        const selectedNode = currentNodes.find((n) => n.selected);
-        if (selectedNode) {
-          event.preventDefault();
-          const nodeData = selectedNode.data as import('@/types/nodes').CanvasNodeData;
-          if (nodeData.commitStatus === 'committed' && nodeData.commitHash && projectId) {
-            router.push(`/project/${projectId}/commit/${encodeURIComponent(nodeData.commitHash)}`);
-          } else {
-            openNodeModal(selectedNode.id, 'commit');
-          }
-        }
-        return;
-      }
-
-      // Arrow key navigation
-      if (event.key === 'ArrowUp') {
-        event.preventDefault();
-        navigateToNode('up');
-        return;
-      }
-      if (event.key === 'ArrowDown') {
-        event.preventDefault();
-        navigateToNode('down');
-        return;
-      }
-      if (event.key === 'ArrowLeft') {
-        event.preventDefault();
-        navigateToNode('left');
-        return;
-      }
-      if (event.key === 'ArrowRight') {
-        event.preventDefault();
-        navigateToNode('right');
-        return;
-      }
-    };
-    const handleKeyUp = (event: KeyboardEvent) => {
-      if (event.key === 'Meta' || event.key === 'Control') {
-        setIsPanMode(false);
-      }
-    };
-    const handleBlur = () => setIsPanMode(false);
-
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
-    window.addEventListener('blur', handleBlur);
-
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
-      window.removeEventListener('blur', handleBlur);
-    };
-  }, [
+  // Keyboard shortcuts (extracted hook)
+  useCanvasKeyboardShortcuts({
     selectAllNodes,
     deselectAllNodes,
     navigateToNode,
@@ -485,18 +265,9 @@ function CanvasWorkspaceInner({
     showShortcuts,
     router,
     projectId,
-  ]);
-
-  // Keyboard shortcut help dialog toggle (? key)
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === '?' && !['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) {
-        setShowShortcuts((prev) => !prev);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+    setIsPanMode,
+    setShowShortcuts,
+  });
 
   const branchNames = useMemo(() => {
     const names = new Set<string>();
@@ -527,71 +298,6 @@ function CanvasWorkspaceInner({
       });
     }
   }, [branchFilter, branchNames, setHighlight]);
-
-  const getViewportCenter = useCallback(() => {
-    if (!canvasRef.current) {
-      return undefined;
-    }
-    const bounds = canvasRef.current.getBoundingClientRect();
-    return screenToFlowPosition({
-      x: bounds.width / 2,
-      y: bounds.height / 2,
-    });
-  }, [screenToFlowPosition]);
-
-  const handleAddNode = useCallback(
-    async (kind: NodeKind) => {
-      const position = getViewportCenter();
-      setIsAdding(true);
-      try {
-        await addNode(kind, position);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to create node';
-        notify?.(message, 'error');
-      } finally {
-        setIsAdding(false);
-      }
-    },
-    [getViewportCenter, addNode, notify]
-  );
-
-  // Drag-and-drop handlers for node palette
-  const onDragOver = useCallback((event: React.DragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    event.dataTransfer.dropEffect = 'move';
-  }, []);
-
-  const onDrop = useCallback(
-    async (event: React.DragEvent<HTMLDivElement>) => {
-      event.preventDefault();
-
-      const kind = event.dataTransfer.getData('application/reactflow') as NodeKind;
-      if (!kind) return;
-
-      const isDraft = event.dataTransfer.getData('application/reactflow-draft') === 'true';
-
-      // Get the drop position in flow coordinates
-      const position = screenToFlowPosition({
-        x: event.clientX,
-        y: event.clientY,
-      });
-
-      setIsAdding(true);
-      try {
-        if (isDraft) {
-          await addDraftNode(position);
-        } else {
-          await addNode(kind, position);
-        }
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to create node';
-        notify?.(message, 'error');
-      } finally {
-        setIsAdding(false);
-      }
-    },
-    [screenToFlowPosition, addNode, addDraftNode, notify]
-  );
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
@@ -652,7 +358,7 @@ function CanvasWorkspaceInner({
           }}
           onNodeDoubleClick={(_, node) => {
             const data = node.data as import('@/types/nodes').CanvasNodeData;
-            // Committed commits → navigate to full-page detail view
+            // Committed commits -> navigate to full-page detail view
             if (data.commitStatus === 'committed' && data.commitHash && projectId) {
               router.push(`/project/${projectId}/commit/${encodeURIComponent(data.commitHash)}`);
               return;

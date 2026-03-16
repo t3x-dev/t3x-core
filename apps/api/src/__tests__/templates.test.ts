@@ -2,14 +2,14 @@
  * Templates Route Tests
  */
 
-import type { PGLiteDB } from '@t3x-dev/storage/pglite';
+import type { AnyDB } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDB } from './setup';
 
 type ApiResponse = Record<string, unknown>;
 
-let mockDB: PGLiteDB;
+let mockDB: AnyDB;
 
 vi.mock('../lib/db', () => ({
   getDB: vi.fn(() => Promise.resolve(mockDB)),
@@ -300,7 +300,7 @@ describe('Templates Routes', () => {
       const json1: ApiResponse = await res1.json();
       const count1 = (json1.data as unknown[]).length;
 
-      // Seed again (the PGLite adapter already seeded once during setup)
+      // Seed again (the adapter already seeded once during setup)
       const { seedBuiltinTemplates } = await import('@t3x-dev/storage/seed/templates');
       await seedBuiltinTemplates(mockDB as any);
 

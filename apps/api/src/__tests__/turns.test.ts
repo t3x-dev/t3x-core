@@ -3,28 +3,20 @@
  */
 
 import { insertConversation, insertProject, insertTurn } from '@t3x-dev/storage';
-import type { PGLiteDB } from '@t3x-dev/storage/pglite';
+import type { AnyDB } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
 
 type ApiResponse = any;
 
-let mockDB: PGLiteDB;
+let mockDB: AnyDB;
 
 vi.mock('../lib/db', () => ({
   getDB: vi.fn(() => Promise.resolve(mockDB)),
   closeDB: vi.fn(() => Promise.resolve()),
 }));
 
-// Mock NLP provider to avoid real API calls
-vi.mock('../lib/nlp', () => ({
-  getNLPProvider: vi.fn(() => ({
-    detectLanguage: vi.fn(() => Promise.resolve({ language: 'en', confidence: 1 })),
-    extractEntities: vi.fn(() => Promise.resolve([])),
-    analyzeSentiment: vi.fn(() => Promise.resolve({ score: 0, magnitude: 0 })),
-  })),
-}));
 
 import { turnRoutes } from '../routes/turns';
 
@@ -176,33 +168,22 @@ describe('Turns Routes', () => {
       expect(res.status).toBe(400);
     });
 
-    it('skips ring extraction when DISABLE_RING_EXTRACTION=true', async () => {
-      const origEnv = process.env.DISABLE_RING_EXTRACTION;
-      process.env.DISABLE_RING_EXTRACTION = 'true';
-      try {
-        const res = await app.request('/v1/turns', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            project_id: testProjectId,
-            conversation_id: testConversationId,
-            role: 'user',
-            content: 'Ring extraction should be skipped',
-          }),
-        });
+    it('creates turn without rings when none provided', async () => {
+      const res = await app.request('/v1/turns', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_id: testProjectId,
+          conversation_id: testConversationId,
+          role: 'user',
+          content: 'No rings should be present',
+        }),
+      });
 
-        expect(res.status).toBe(201);
-        const data: ApiResponse = await res.json();
-        expect(data.success).toBe(true);
-        // rings should be null since extraction was skipped and no rings were provided
-        expect(data.data.rings).toBeNull();
-      } finally {
-        if (origEnv === undefined) {
-          delete process.env.DISABLE_RING_EXTRACTION;
-        } else {
-          process.env.DISABLE_RING_EXTRACTION = origEnv;
-        }
-      }
+      expect(res.status).toBe(201);
+      const data: ApiResponse = await res.json();
+      expect(data.success).toBe(true);
+      expect(data.data.rings).toBeNull();
     });
   });
 

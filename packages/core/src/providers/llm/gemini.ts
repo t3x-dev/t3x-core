@@ -5,12 +5,18 @@
  * Shares GOOGLE_AI_STUDIO_KEY with the Google AI Embedding provider.
  */
 
+import type { ZodType } from 'zod';
 import {
   type LLMGenerateOptions,
+  type LLMGenerateOptionsV2,
   type LLMGenerateResult,
+  type LLMPrompt,
   type LLMProvider,
   LLMProviderError,
+  type LLMResult,
+  type StructuredResult,
 } from '../../llm/types';
+import { zodToJsonSchema } from '../../llm/zodToJsonSchema';
 
 /**
  * Get proxy URL from environment variables
@@ -114,6 +120,176 @@ export class GeminiProvider implements LLMProvider {
           outputTokens: data.usageMetadata?.candidatesTokenCount ?? 0,
         },
       };
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error instanceof LLMProviderError) throw error;
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new LLMProviderError(this.id, undefined, 'Request timeout after 60000ms');
+      }
+      throw new LLMProviderError(
+        this.id,
+        undefined,
+        `Request failed: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+
+  async generateFromPrompt(prompt: LLMPrompt, options: LLMGenerateOptionsV2): Promise<LLMResult> {
+    const temperature = options.temperature ?? 0.3;
+    const maxTokens = options.maxTokens ?? 2048;
+    const model = options.model ?? this.model;
+    const url = `${this.baseUrl}/models/${model}:generateContent?key=${this.apiKey}`;
+
+    const contents = prompt.messages.map((msg) => ({
+      role: msg.role === 'assistant' ? 'model' : msg.role,
+      parts: [{ text: msg.content }],
+    }));
+
+    const requestBody: Record<string, unknown> = {
+      contents,
+      generationConfig: {
+        temperature,
+        maxOutputTokens: maxTokens,
+        ...(options.stopSequences && { stopSequences: options.stopSequences }),
+      },
+    };
+
+    if (prompt.system) {
+      requestBody.systemInstruction = { parts: [{ text: prompt.system }] };
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
+
+    try {
+      const response = await fetchWithProxy(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+      const responseText = await response.text();
+
+      if (!response.ok) {
+        throw new LLMProviderError(
+          this.id,
+          response.status,
+          `API request failed: ${response.status} ${responseText}`
+        );
+      }
+
+      const data = JSON.parse(responseText) as {
+        candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+        usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
+      };
+
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!text) {
+        throw new LLMProviderError(this.id, undefined, 'No content in response');
+      }
+
+      return {
+        text,
+        usage: {
+          inputTokens: data.usageMetadata?.promptTokenCount ?? 0,
+          outputTokens: data.usageMetadata?.candidatesTokenCount ?? 0,
+        },
+      };
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error instanceof LLMProviderError) throw error;
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new LLMProviderError(this.id, undefined, 'Request timeout after 60000ms');
+      }
+      throw new LLMProviderError(
+        this.id,
+        undefined,
+        `Request failed: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+
+  async generateStructured<T>(
+    prompt: LLMPrompt,
+    schema: ZodType<T>,
+    options: LLMGenerateOptionsV2
+  ): Promise<StructuredResult<T>> {
+    const temperature = options.temperature ?? 0.3;
+    const maxTokens = options.maxTokens ?? 2048;
+    const model = options.model ?? this.model;
+    const jsonSchema = zodToJsonSchema(schema);
+    const url = `${this.baseUrl}/models/${model}:generateContent?key=${this.apiKey}`;
+
+    const contents = prompt.messages.map((msg) => ({
+      role: msg.role === 'assistant' ? 'model' : msg.role,
+      parts: [{ text: msg.content }],
+    }));
+
+    const requestBody: Record<string, unknown> = {
+      contents,
+      generationConfig: {
+        temperature,
+        maxOutputTokens: maxTokens,
+        responseSchema: jsonSchema,
+        responseMimeType: 'application/json',
+        ...(options.stopSequences && { stopSequences: options.stopSequences }),
+      },
+    };
+
+    if (prompt.system) {
+      requestBody.systemInstruction = { parts: [{ text: prompt.system }] };
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
+
+    try {
+      const response = await fetchWithProxy(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+      const responseText = await response.text();
+
+      if (!response.ok) {
+        throw new LLMProviderError(
+          this.id,
+          response.status,
+          `API request failed: ${response.status} ${responseText}`
+        );
+      }
+
+      const data = JSON.parse(responseText) as {
+        candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+        usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
+      };
+
+      const usage = {
+        inputTokens: data.usageMetadata?.promptTokenCount ?? 0,
+        outputTokens: data.usageMetadata?.candidatesTokenCount ?? 0,
+      };
+
+      const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!content) {
+        throw new LLMProviderError(this.id, undefined, 'No content in response');
+      }
+
+      try {
+        const jsonData = JSON.parse(content);
+        const parsed = schema.parse(jsonData);
+        return { data: parsed, usage };
+      } catch {
+        throw new LLMProviderError(
+          this.id,
+          undefined,
+          'Failed to parse structured response as JSON'
+        );
+      }
     } catch (error) {
       clearTimeout(timeoutId);
       if (error instanceof LLMProviderError) throw error;

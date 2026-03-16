@@ -5,7 +5,7 @@
  */
 
 import { createCommitV4, insertProject } from '@t3x-dev/storage';
-import type { PGLiteDB } from '@t3x-dev/storage/pglite';
+import type { AnyDB } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
@@ -14,7 +14,7 @@ import { setupTestDB, testData } from './setup';
 type ApiResponse = any;
 
 // Mock the database module
-let mockDB: PGLiteDB;
+let mockDB: AnyDB;
 
 vi.mock('../lib/db', () => ({
   getDB: vi.fn(() => Promise.resolve(mockDB)),
@@ -107,7 +107,7 @@ describe('POST /v1/leaves/:id/validate', () => {
       });
 
       // Directly update the leaf output in DB for testing
-      const { updateLeafOutput } = await import('@t3x-dev/storage/pglite');
+      const { updateLeafOutput } = await import('@t3x-dev/storage');
       await updateLeafOutput(mockDB, leafId, options.output);
     }
 

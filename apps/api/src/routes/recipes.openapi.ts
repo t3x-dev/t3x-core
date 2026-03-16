@@ -15,7 +15,7 @@ import {
   findRecipeById,
   listRecipesByProject,
   updateRecipe,
-} from '@t3x-dev/storage/pglite';
+} from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';

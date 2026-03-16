@@ -29,6 +29,7 @@ import {
   agentDraftRoutes,
   branchRoutes,
   chatRoutes,
+  commitRoutes,
   commitsV3Routes,
   commitsV4Routes,
   conversationRoutes,
@@ -60,6 +61,7 @@ import { comparisonsRoutes } from './routes/comparisons.openapi';
 import { importRoutes } from './routes/import.openapi';
 import { ingestRoutes } from './routes/ingest.openapi';
 import { knowledgeGraphRoutes } from './routes/knowledge-graph.openapi';
+import { llmRoutes } from './routes/llm.openapi';
 import { mergeRoutes } from './routes/merge.openapi';
 import { notificationsRoutes } from './routes/notifications.openapi';
 import { projectRoutes } from './routes/projects.openapi';
@@ -68,6 +70,7 @@ import { recipesRoutes } from './routes/recipes.openapi';
 import { searchRoutes } from './routes/search.openapi';
 import { shareRoutes } from './routes/share.openapi';
 import { templatesRoutes } from './routes/templates.openapi';
+import { usageRoutes } from './routes/usage.openapi';
 import { webhooksRoutes } from './routes/webhooks.openapi';
 
 export interface CreateAppOptions {
@@ -136,6 +139,7 @@ export function createApp(options?: CreateAppOptions): Hono {
   api.route('/', projectRoutes);
   api.route('/', conversationRoutes);
   api.route('/', turnRoutes);
+  api.route('/', commitRoutes);
   api.route('/', commitsV3Routes);
   api.route('/', branchRoutes);
   api.route('/', agentDraftRoutes);
@@ -167,6 +171,7 @@ export function createApp(options?: CreateAppOptions): Hono {
   api.route('/', providersRoutes);
   api.route('/', searchRoutes);
   api.route('/', knowledgeGraphRoutes);
+  api.route('/', llmRoutes);
   api.route('/', autopilotRoutes);
   api.route('/', relationsRoutes);
   api.route('/', extractionFeedbackRoutes);

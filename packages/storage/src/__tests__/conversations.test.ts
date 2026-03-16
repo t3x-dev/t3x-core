@@ -4,7 +4,6 @@
  * Tests all conversation CRUD operations and verifies database effects.
  */
 
-import type { PGlite } from '@electric-sql/pglite';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
@@ -23,14 +22,12 @@ import { createTestDB, testData } from './setup';
 
 describe('Conversations Storage', () => {
   let db: AnyDB;
-  let _client: PGlite;
   let cleanup: () => Promise<void>;
   let testProjectId: string;
 
   beforeAll(async () => {
     const setup = await createTestDB();
     db = setup.db;
-    _client = setup.client;
     cleanup = setup.cleanup;
 
     // Create a test project for all conversation tests

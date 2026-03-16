@@ -5,7 +5,7 @@
  * GET /ready  - Readiness probe (verifies DB connectivity)
  */
 
-import { findProjects } from '@t3x-dev/storage/pglite';
+import { findProjects } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { getDB } from '../lib/db';
 

@@ -10,7 +10,7 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { getAdaptiveFeedbackStats, getFeedbackByCosineBucket } from '@t3x-dev/storage/pglite';
+import { getAdaptiveFeedbackStats, getFeedbackByCosineBucket } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { zodErrorHook } from '../lib/errors';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';

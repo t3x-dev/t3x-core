@@ -16,7 +16,8 @@ import {
   updateProject,
   verifyHashChain,
   verifyMerkleRoots,
-} from '@t3x-dev/storage/pglite';
+} from '@t3x-dev/storage';
+import { getModelInfo } from '@t3x-dev/core';
 import { eq, sql } from 'drizzle-orm';
 import { getDB } from '../lib/db';
 import { assertProjectAccess, getUserId } from '../lib/project-access';
@@ -322,6 +323,14 @@ const updateProjectRoute = createRoute({
         },
       },
     },
+    400: {
+      description: 'Invalid request (e.g., unknown model)',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
     404: {
       description: 'Project not found',
       content: {
@@ -352,6 +361,17 @@ projectRoutes.openapi(updateProjectRoute, async (c) => {
     const accessResult = await assertProjectAccess(c, db, id);
     if (accessResult instanceof Response) return accessResult;
 
+    // Validate default_model against catalog if provided
+    if (body.default_model != null && !getModelInfo(body.default_model)) {
+      return c.json(
+        {
+          success: false as const,
+          error: { code: 'INVALID_MODEL', message: `Unknown model: ${body.default_model}` },
+        },
+        400
+      );
+    }
+
     const project = await updateProject(db, id, {
       name: body.name,
       metadata: body.metadata,
@@ -361,6 +381,8 @@ projectRoutes.openapi(updateProjectRoute, async (c) => {
           : body.provider_config === null
             ? null
             : JSON.stringify(body.provider_config),
+      defaultProvider: body.default_provider,
+      defaultModel: body.default_model,
     });
 
     if (!project) {
@@ -379,6 +401,8 @@ projectRoutes.openapi(updateProjectRoute, async (c) => {
       created_at: project.createdAt.toISOString(),
       metadata: project.metadataJson ? JSON.parse(project.metadataJson) : null,
       provider_config: project.providerConfig ? JSON.parse(project.providerConfig) : null,
+      default_provider: project.defaultProvider ?? null,
+      default_model: project.defaultModel ?? null,
     };
 
     return c.json({ success: true as const, data: apiProject }, 200);

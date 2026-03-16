@@ -1,0 +1,50 @@
+import { describe, it, expect } from 'vitest';
+import type {
+  ProviderName,
+  Capability,
+  ModelInfo,
+  LLMPrompt,
+  LLMGenerateOptionsV2,
+  LLMResult,
+  StructuredResult,
+} from '../../llm/types';
+
+describe('LLM extended types', () => {
+  it('ProviderName accepts valid values', () => {
+    const names: ProviderName[] = ['anthropic', 'openai', 'google'];
+    expect(names).toHaveLength(3);
+  });
+
+  it('ModelInfo has required fields', () => {
+    const model: ModelInfo = {
+      id: 'claude-sonnet-4-20250514',
+      label: 'Claude Sonnet 4',
+      provider: 'anthropic',
+      capabilities: ['tool_use'],
+      maxOutputTokens: 8192,
+    };
+    expect(model.id).toBe('claude-sonnet-4-20250514');
+    expect(model.capabilities).toContain('tool_use');
+  });
+
+  it('LLMPrompt supports system and messages', () => {
+    const prompt: LLMPrompt = {
+      system: 'You are helpful.',
+      messages: [
+        { role: 'user', content: 'Hello' },
+        { role: 'assistant', content: 'Hi' },
+      ],
+    };
+    expect(prompt.messages).toHaveLength(2);
+  });
+
+  it('LLMGenerateOptionsV2 includes stopSequences', () => {
+    const opts: LLMGenerateOptionsV2 = {
+      model: 'claude-sonnet-4-20250514',
+      temperature: 0.1,
+      maxTokens: 4096,
+      stopSequences: ['```'],
+    };
+    expect(opts.stopSequences).toContain('```');
+  });
+});

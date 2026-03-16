@@ -1,4 +1,3 @@
-import type { PGlite } from '@electric-sql/pglite';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
 import {
@@ -14,14 +13,12 @@ import { createTestDB, testData } from './setup';
 
 describe('Notifications Storage', () => {
   let db: AnyDB;
-  let _client: PGlite;
   let cleanup: () => Promise<void>;
   let testProjectId: string;
 
   beforeAll(async () => {
     const setup = await createTestDB();
     db = setup.db;
-    _client = setup.client;
     cleanup = setup.cleanup;
 
     const project = await insertProject(db, testData.project({ name: 'Notification Test' }));

@@ -31,6 +31,8 @@ export interface CommitHistoryRowProps {
     modifiedCount: number;
     removedCount: number;
   } | null;
+  /** Number of frames in this commit */
+  frameCount?: number;
   /** Whether this is the first row (no top connector line) */
   isFirst: boolean;
   /** Whether this is the last row (no bottom connector line) */
@@ -52,6 +54,7 @@ export function CommitHistoryRow({
   branch,
   parentCount,
   diffStats,
+  frameCount,
   isFirst,
   isLast,
   isActive,
@@ -123,6 +126,13 @@ export function CommitHistoryRow({
                   {diffStats.removedCount}
                 </span>
               )}
+            </span>
+          )}
+
+          {/* Frame count */}
+          {frameCount != null && (
+            <span className="text-[var(--text-tertiary)]">
+              {frameCount} frame{frameCount !== 1 ? 's' : ''}
             </span>
           )}
 

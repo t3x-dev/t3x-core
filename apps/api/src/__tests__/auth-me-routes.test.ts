@@ -8,15 +8,14 @@
  * - PATCH /v1/auth/me  — Update profile (name, avatar_url)
  */
 
-import { createAccount, createUser } from '@t3x-dev/storage';
-import { getPGLiteClient, type PGLiteDB } from '@t3x-dev/storage/pglite';
+import { createAccount, createUser, type AnyDB } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDB } from './setup';
 
 /**
  * SQL to create users & accounts tables (V4 schema).
- * These are not included in PGLite adapter's default initializeSchema.
+ * These are not included in the shared CREATE_TABLES_SQL used by the test setup.
  */
 const CREATE_AUTH_TABLES_SQL = `
 CREATE TABLE IF NOT EXISTS users (
@@ -44,7 +43,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_accounts_provider ON accounts(provider, pr
 type ApiResponse = any;
 
 // Mock the database module before importing routes
-let mockDB: PGLiteDB;
+let mockDB: AnyDB;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let testSql: any;
 
 vi.mock('../lib/db', () => ({
   getDB: vi.fn(() => Promise.resolve(mockDB)),
@@ -74,11 +75,11 @@ describe('Auth Me Routes', () => {
   beforeAll(async () => {
     const setup = await setupTestDB();
     mockDB = setup.db;
+    testSql = setup.sql;
     cleanup = setup.cleanup;
 
-    // Create auth tables
-    const client = getPGLiteClient();
-    await client.exec(CREATE_AUTH_TABLES_SQL);
+    // Create auth tables (not included in the shared CREATE_TABLES_SQL)
+    await testSql.unsafe(CREATE_AUTH_TABLES_SQL);
 
     // Create a test user
     const user = await createUser(mockDB, {

@@ -6,8 +6,8 @@
  * All other endpoints work with regular tables.
  */
 
-import type { PGLiteDB } from '@t3x-dev/storage/pglite';
-import { insertProject } from '@t3x-dev/storage/pglite';
+import type { AnyDB } from '@t3x-dev/storage';
+import { insertProject } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
@@ -15,7 +15,7 @@ import { setupTestDB, testData } from './setup';
 // biome-ignore lint/suspicious/noExplicitAny: test helper
 type ApiResponse = any;
 
-let mockDB: PGLiteDB;
+let mockDB: AnyDB;
 
 vi.mock('../lib/db', () => ({
   getDB: vi.fn(() => Promise.resolve(mockDB)),
@@ -38,7 +38,7 @@ import {
   insertKnowledgeNode,
   insertKnowledgeNodes,
   insertNodeMembers,
-} from '@t3x-dev/storage/pglite';
+} from '@t3x-dev/storage';
 import { knowledgeGraphRoutes } from '../routes/knowledge-graph.openapi';
 
 describe('Knowledge Graph Routes', () => {

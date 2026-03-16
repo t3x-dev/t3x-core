@@ -232,7 +232,18 @@
       "Bash(ps -p 49656 -o command=)",
       "Bash(kill -TERM 49656)",
       "Bash(kill -TERM 79428)",
-      "Bash(kill -TERM 79526)"
+      "Bash(kill -TERM 79526)",
+      "Bash(__NEW_LINE_06aaf69ed0daed2f__ echo:*)",
+      "Bash(__NEW_LINE_6c049b20d67ee0d1__ echo:*)",
+      "Bash(pnpm turbo:*)",
+      "Bash(gh pr:*)",
+      "Bash(rm:*)",
+      "Bash(sed:*)",
+      "Bash(pnpm changeset:*)",
+      "Bash(gh run:*)",
+      "Bash(cd /Users/heliuqi/t3x-cloud && ./scripts/link-local.sh on 2>&1)",
+      "Bash(cd /Users/heliuqi/t3x-cloud && rm -rf node_modules/@t3x-dev/core node_modules/@t3x-dev/storage node_modules/@t3x-dev/api && ln -s /Users/heliuqi/t3x/packages/core node_modules/@t3x-dev/core && ln -s /Users/heliuqi/t3x/packages/storage node_modules/@t3x-dev/storage && ln -s /Users/heliuqi/t3x/apps/api node_modules/@t3x-dev/api && echo \"Symlinked successfully\" && ls -la node_modules/@t3x-dev/)",
+      "Bash(mkdir -p /Users/heliuqi/t3x-cloud/docs && cp /Users/heliuqi/t3x/docs/hlq_docs/cloud-features-progress.md /Users/heliuqi/t3x-cloud/docs/cloud-features-progress.md && echo \"Copied\")"
     ],
     "deny": [],
     "ask": []

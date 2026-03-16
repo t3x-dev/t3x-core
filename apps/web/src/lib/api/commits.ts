@@ -303,6 +303,43 @@ export async function createCommitV4(
 }
 
 // ============================================================================
+// Frame-based Commits (new model)
+// ============================================================================
+
+/**
+ * Create a frame-based commit (new model).
+ * Sends frames directly as content — no sentence conversion needed.
+ */
+export async function createCommit(
+  projectId: string,
+  content: { frames: unknown[]; relations: unknown[] },
+  options?: {
+    branch?: string;
+    message?: string;
+    parents?: string[];
+    author?: { type: string; id?: string; name?: string };
+    sources?: Array<{ type: string; id: string; title?: string }>;
+    provenance?: { method: string; model?: string };
+  }
+): Promise<{ commit: { hash: string } }> {
+  const res = await fetchWithTimeout(`${API_V1}/commits`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      project_id: projectId,
+      content,
+      branch: options?.branch ?? 'main',
+      message: options?.message,
+      parents: options?.parents ?? [],
+      author: options?.author ?? { type: 'human', name: 'User' },
+      sources: options?.sources,
+      provenance: options?.provenance,
+    }),
+  });
+  return handleResponse(res);
+}
+
+// ============================================================================
 // Conflict Detection
 // ============================================================================
 

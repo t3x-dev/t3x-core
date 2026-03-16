@@ -7,7 +7,6 @@
  * @see docs/specification/semantic-layer-architecture.md
  */
 
-import type { PGlite } from '@electric-sql/pglite';
 import type { CreatePinInput } from '@t3x-dev/core';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -32,7 +31,6 @@ import { createTestDB, testData } from './setup';
 
 describe('Pins Storage', () => {
   let db: AnyDB;
-  let _client: PGlite;
   let cleanup: () => Promise<void>;
   let testProjectId: string;
   let testConversationId: string;
@@ -41,7 +39,6 @@ describe('Pins Storage', () => {
   beforeAll(async () => {
     const setup = await createTestDB();
     db = setup.db;
-    _client = setup.client;
     cleanup = setup.cleanup;
 
     // Create a test project

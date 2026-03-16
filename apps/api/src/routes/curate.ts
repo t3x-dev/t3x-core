@@ -18,7 +18,7 @@ import {
   EmbeddingProviderError,
   sha256,
 } from '@t3x-dev/core';
-import { findConversationById, findTurnsByConversation } from '@t3x-dev/storage/pglite';
+import { findConversationById, findTurnsByConversation } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { ProxyAgent, fetch as undiciFetch } from 'undici';
 import { getDB } from '../lib/db';
@@ -141,9 +141,10 @@ interface CuratePreviewResponse {
 // ============================================================================
 
 /**
- * Ring3 segment structure from @t3x-dev/core
+ * Legacy ring segment structure (may still exist in DB)
+ * Supports both camelCase and snake_case property names
  */
-interface Ring3Segment {
+interface LegacyRingSegment {
   segmentId?: string;
   segment_id?: string;
   text: string;
@@ -154,9 +155,9 @@ interface Ring3Segment {
 }
 
 /**
- * Ring1 anchor candidate structure from @t3x-dev/core v1.1
+ * Legacy ring anchor candidate structure (may still exist in DB)
  */
-interface Ring1AnchorCandidate {
+interface LegacyAnchorCandidate {
   text: string;
   type: AnchorType;
   startChar?: number;
@@ -168,12 +169,12 @@ interface Ring1AnchorCandidate {
 }
 
 /**
- * Ring1 output structure (partial, for hash extraction)
+ * Legacy Ring1 output structure (partial, for hash extraction)
  * Supports both camelCase and snake_case property names
  */
-interface Ring1Output {
-  anchorCandidates?: Ring1AnchorCandidate[];
-  anchor_candidates?: Ring1AnchorCandidate[];
+interface LegacyRing1Output {
+  anchorCandidates?: LegacyAnchorCandidate[];
+  anchor_candidates?: LegacyAnchorCandidate[];
   inputTextHash?: string;
   input_text_hash?: string;
 }
@@ -214,11 +215,11 @@ function extractChunksFromTurns(
     rings?: {
       // Support both formats: { rings: { ring1, ring3 } } and { ring1, ring3 }
       rings?: {
-        ring1?: Ring1Output;
-        ring3?: { segments?: Ring3Segment[] };
+        ring1?: LegacyRing1Output;
+        ring3?: { segments?: LegacyRingSegment[] };
       };
-      ring1?: Ring1Output;
-      ring3?: { segments?: Ring3Segment[] };
+      ring1?: LegacyRing1Output;
+      ring3?: { segments?: LegacyRingSegment[] };
     };
   }>,
   computeHash: (text: string) => string
@@ -421,7 +422,7 @@ function extractChunksFromTurns(
         const source = candidate.source;
 
         // Validate ALL required fields - strict fail-fast
-        // Normal flow (RingExtractor) always provides all fields.
+        // Normal flow always provides all fields.
         // Missing fields indicate data corruption or incompatible external data.
         if (typeof text !== 'string') issues.push('text: required, got ' + typeof text);
         if (typeof type !== 'string') {
@@ -862,4 +863,4 @@ curateRoutes.post('/v1/curate/preview', async (c) => {
 });
 
 // Export for testing
-export { extractChunksFromTurns, type ExtractedData, type Ring1Output, type Ring3Segment };
+export { extractChunksFromTurns, type ExtractedData };

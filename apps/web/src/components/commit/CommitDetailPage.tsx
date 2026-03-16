@@ -12,9 +12,9 @@
  *  │ LINEAGE: parent · leaves count · sources count · kbd shortcuts │
  *  ├──────────┬─────────────────────────────┬────────────────────────┤
  *  │ LEFT     │ CENTER                      │ RIGHT                  │
- *  │ Sentence │ Sentence Cards (scrollable) │ Context Panel          │
- *  │ Index    │                             │ (source, linked,       │
- *  │ Leaves   │                             │  history, neighbors)   │
+ *  │ Frame    │ Frame Cards (scrollable)    │ Source SlideIn /        │
+ *  │ Index    │                             │ Context                │
+ *  │ Leaves   │                             │                        │
  *  │ Sources  │                             │                        │
  *  ├──────────┴─────────────────────────────┴────────────────────────┤
  *  │ BOTTOM: Provenance Graph (collapsible)                          │
@@ -30,35 +30,30 @@ import {
   GitCommit,
   Leaf as LeafIcon,
   Loader2,
-  MessageSquare,
   Pin,
-  Plus,
   Sparkles,
   Tag,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { Commit } from '@t3x-dev/core';
 import { FrameGraphView } from '@/components/frame-graph';
 import { KeyboardHintBar } from '@/components/shared/KeyboardHintBar';
 import { useKeyboardNavigation } from '@/hooks/useKeyboardNavigation';
-import type { CommitV4, DiffResultRaw, Leaf } from '@/lib/api';
-import {
-  createLeaf,
-  diffRaw,
-  getCommitV4,
-  getCommitV4History,
-  getProject,
-  listLeavesByCommit,
-} from '@/lib/api';
-import type { LeafType } from '@/lib/api/leaves';
+import type { Leaf } from '@/lib/api';
+import { getProject, listLeavesByCommit } from '@/lib/api';
+import { getCommitAsFrames, getCommitHistoryAsFrames } from '@/lib/api/commitUnified';
 import { relativeTime, shortHash } from '@/lib/formatters';
 import { PAGE_ANIMATION_STYLES } from '@/lib/pageAnimations';
+import { useCommitDetailStore } from '@/store/commitDetailStore';
 import { useProjectStore } from '@/store/projectStore';
-import { CommitContextPanel } from './CommitContextPanel';
+import { CommitFrameIndex } from './CommitFrameIndex';
 import { CopyButton, DotIndicator, useCountUp } from './CommitDetailHelpers';
-import { ConnectionLines, ProvenanceGraph } from './CommitProvenanceGraph';
-import { CommitSentenceCard, type SentenceDiffStatus } from './CommitSentenceCard';
+import { CommitOperationsSidebar } from './CommitOperationsSidebar';
+import { ProvenanceGraph } from './CommitProvenanceGraph';
+import { CommitYAMLDocument } from './CommitYAMLDocument';
+import { SourceSlideIn } from './SourceSlideIn';
 
 // ============================================================================
 // Types
@@ -69,25 +64,6 @@ interface CommitDetailPageProps {
   commitHash: string;
 }
 
-interface EnrichedSentence {
-  id: string;
-  text: string;
-  confidence: number | undefined;
-  diffStatus: SentenceDiffStatus;
-  oldText?: string;
-  wordDiff?: import('@t3x-dev/core').WordDiffSegment[];
-  sourceRef?: {
-    conversation_id: string;
-    turn_hash: string;
-    start_char: number;
-    end_char: number;
-  };
-  inheritedFrom?: string;
-}
-
-// CSS animations imported from shared module
-// (injected via <style> tag, same pattern as before)
-
 // ============================================================================
 // Component
 // ============================================================================
@@ -97,25 +73,29 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
   const notify = useProjectStore((state) => state.notifyCallback);
 
   // ── Data state ────────────────────────────────────
-  const [commit, setCommit] = useState<CommitV4 | null>(null);
+  const [commit, setCommitLocal] = useState<Commit | null>(null);
   const [leaves, setLeaves] = useState<Leaf[]>([]);
-  const [diffResult, setDiffResult] = useState<DiffResultRaw | null>(null);
-  const [commitHistory, setCommitHistory] = useState<CommitV4[]>([]);
+  const [commitHistory, setCommitHistory] = useState<Commit[]>([]);
   const [projectName, setProjectName] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // ── Store ──────────────────────────────────────────
+  const enrichedFrames = useCommitDetailStore((s) => s.enrichedFrames);
+  const removedFrames = useCommitDetailStore((s) => s.removedFrames);
+  const activeFrameId = useCommitDetailStore((s) => s.activeFrameId);
+  const setActiveFrame = useCommitDetailStore((s) => s.setActiveFrame);
+  const sourceViewer = useCommitDetailStore((s) => s.sourceViewer);
+  const storeSetCommit = useCommitDetailStore((s) => s.setCommit);
+  const openSourceViewer = useCommitDetailStore((s) => s.openSourceViewer);
+
   // ── UI state ──────────────────────────────────────
-  const [activeSentence, setActiveSentence] = useState<string | null>(null);
-  const [expandedSources, setExpandedSources] = useState<Set<string>>(new Set());
   const [bottomCollapsed, setBottomCollapsed] = useState(false);
-  const [leafMenuOpen, setLeafMenuOpen] = useState(false);
-  const [leafCreating, setLeafCreating] = useState(false);
+  type CommitTab = 'yaml' | 'graph' | 'json' | 'relations';
+  const [activeTab, setActiveTab] = useState<CommitTab>('yaml');
 
   // ── Refs ──────────────────────────────────────────
-  const sentenceRefs = useRef<Record<string, HTMLDivElement | null>>({});
-  const rightPanelRef = useRef<HTMLDivElement>(null);
-  const mainAreaRef = useRef<HTMLDivElement>(null);
+  const frameRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   // ── Fetch data ────────────────────────────────────
   useEffect(() => {
@@ -124,27 +104,30 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
       setError(null);
       try {
         const [commitData, leavesData, projectData] = await Promise.all([
-          getCommitV4(commitHash),
+          getCommitAsFrames(commitHash),
           listLeavesByCommit(commitHash).catch(() => [] as Leaf[]),
           getProject(projectId).catch(() => null),
         ]);
-        setCommit(commitData);
+        setCommitLocal(commitData);
         setLeaves(leavesData);
         if (projectData?.name) setProjectName(projectData.name);
 
-        // Fetch diff vs parent if single parent exists
+        // Fetch parent commit for diff computation (if single parent)
+        let parentCommit: Commit | null = null;
         if (commitData.parents.length === 1) {
           try {
-            const diff = await diffRaw(commitData.parents[0], commitHash);
-            setDiffResult(diff);
+            parentCommit = await getCommitAsFrames(commitData.parents[0]);
           } catch {
-            // Diff fetch failure is non-critical
+            // Parent fetch failure is non-critical
           }
         }
 
+        // Store computes enriched frames automatically
+        storeSetCommit(commitData, parentCommit);
+
         // Fetch commit history
         try {
-          const history = await getCommitV4History(commitHash, 10);
+          const history = await getCommitHistoryAsFrames(commitHash, 10);
           setCommitHistory(history);
         } catch {
           // History fetch failure is non-critical
@@ -156,181 +139,61 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
       }
     };
     load();
-  }, [commitHash]);
+  }, [commitHash, projectId, storeSetCommit]);
 
-  // ── Build enriched sentences with diff info ───────
-  const enrichedSentences = useMemo((): EnrichedSentence[] => {
-    if (!commit) return [];
-
-    // Build diff map: segmentId → diffInfo
-    const diffMap = new Map<
-      string,
-      {
-        diffType: string;
-        matchedText?: string;
-        wordDiff?: import('@t3x-dev/core').WordDiffSegment[];
-        similarity?: number;
-      }
-    >();
-    if (diffResult) {
-      for (const seg of diffResult.segmentDiffs) {
-        diffMap.set(seg.segmentId, {
-          diffType: seg.diffType,
-          matchedText: seg.matchedText,
-          wordDiff: seg.wordDiff as import('@t3x-dev/core').WordDiffSegment[],
-          similarity: seg.similarity,
-        });
-      }
-    }
-
-    // Derive confidence: prefer sentence.confidence > diff.similarity > nothing.
-    // Never fabricate 100% — only show real data.
-    function derivedConfidence(
-      diff: { diffType: string; similarity?: number } | undefined
-    ): number | undefined {
-      if (diff?.similarity != null) return diff.similarity;
-      return undefined;
-    }
-
-    return commit.content.sentences.map((s) => {
-      const diff = diffMap.get(s.id);
-      let diffStatus: SentenceDiffStatus = 'identical';
-      if (diff) {
-        diffStatus = diff.diffType as SentenceDiffStatus;
-      } else if (commit.parents.length === 0) {
-        diffStatus = 'added'; // Root commit: all sentences are new
-      }
-      // Normalize 'same' to 'identical'
-      if (diffStatus === ('same' as string)) diffStatus = 'identical';
-
-      return {
-        id: s.id,
-        text: s.text,
-        confidence: s.confidence ?? derivedConfidence(diff),
-        diffStatus,
-        oldText: diff?.matchedText,
-        wordDiff: diff?.wordDiff,
-        sourceRef: s.source_ref
-          ? {
-              conversation_id: s.source_ref.conversation_id,
-              turn_hash: s.source_ref.turn_hash,
-              start_char: s.source_ref.start_char,
-              end_char: s.source_ref.end_char,
-            }
-          : undefined,
-        inheritedFrom: s.inherited_from,
-      };
-    });
-  }, [commit, diffResult]);
-
-  // ── Removed sentences from diff ───────────────────
-  const removedSentences = useMemo((): EnrichedSentence[] => {
-    if (!diffResult) return [];
-    return diffResult.segmentDiffs
-      .filter((seg) => seg.diffType === 'removed')
-      .map((seg) => ({
-        id: seg.segmentId,
-        text: seg.text,
-        confidence: 0,
-        diffStatus: 'removed' as SentenceDiffStatus,
-      }));
-  }, [diffResult]);
-
-  // All sentences (current + removed) for keyboard navigation
-  const allSentenceIds = useMemo(() => {
-    return [...enrichedSentences.map((s) => s.id), ...removedSentences.map((s) => s.id)];
-  }, [enrichedSentences, removedSentences]);
-
-  // ── Diff stats ────────────────────────────────────
-  const stats = diffResult?.stats;
-  const countIdentical = useCountUp(stats?.sameCount ?? 0);
-  const countModified = useCountUp(stats?.modifiedCount ?? 0);
-  const countAdded = useCountUp(
-    stats?.addedCount ?? (commit?.parents.length === 0 ? enrichedSentences.length : 0)
+  // ── Frame stats ─────────────────────────────────
+  const frameStats = useMemo(
+    () => ({
+      added: enrichedFrames.filter((f) => f.diffStatus === 'added').length,
+      modified: enrichedFrames.filter((f) => f.diffStatus === 'modified').length,
+      identical: enrichedFrames.filter((f) => f.diffStatus === 'identical').length,
+      removed: removedFrames.length,
+    }),
+    [enrichedFrames, removedFrames]
   );
-  const countRemoved = useCountUp(stats?.removedCount ?? 0);
 
-  // ── Source info ───────────────────────────────────
-  const sourceConversations = useMemo(
-    () => commit?.source_refs?.filter((ref) => ref.type === 'conversation') ?? [],
-    [commit?.source_refs]
-  );
-  const sourceLeafRefs = useMemo(
-    () => commit?.source_refs?.filter((ref) => ref.type === 'leaf') ?? [],
-    [commit?.source_refs]
-  );
+  const countIdentical = useCountUp(frameStats.identical);
+  const countModified = useCountUp(frameStats.modified);
+  const countAdded = useCountUp(frameStats.added);
+  const countRemoved = useCountUp(frameStats.removed);
+
+  // ── Frame IDs for keyboard navigation ───────────
+  const allFrameIds = useMemo(() => {
+    return [
+      ...enrichedFrames.map((ef) => ef.frame.id),
+      ...removedFrames.map((ef) => ef.frame.id),
+    ];
+  }, [enrichedFrames, removedFrames]);
 
   // ── Callbacks ─────────────────────────────────────
-  const toggleSource = useCallback((id: string) => {
-    setExpandedSources((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, []);
-
-  const scrollToSentence = useCallback((id: string) => {
-    setActiveSentence(id);
+  const scrollToFrame = useCallback((id: string) => {
+    setActiveFrame(id);
     setTimeout(() => {
-      sentenceRefs.current[id]?.scrollIntoView({
+      frameRefs.current[id]?.scrollIntoView({
         behavior: 'smooth',
         block: 'center',
       });
     }, 50);
-  }, []);
+  }, [setActiveFrame]);
 
   // ── Keyboard navigation (shared hook, controlled mode) ──
   useKeyboardNavigation({
-    ids: allSentenceIds,
-    activeId: activeSentence,
+    ids: allFrameIds,
+    activeId: activeFrameId,
     onSelect: (id) => {
-      if (id) scrollToSentence(id);
-      else {
-        setActiveSentence(null);
-        setExpandedSources(new Set());
-      }
+      if (id) scrollToFrame(id);
+      else setActiveFrame(null);
     },
-    onAction: toggleSource,
   });
 
-  // ── Create leaf ──────────────────────────────────
-  const leafTypeOptions: { type: LeafType; label: string }[] = [
-    { type: 'tweet', label: 'Twitter' },
-    { type: 'weibo', label: '微博' },
-    { type: 'wechat', label: '朋友圈' },
-    { type: 'email', label: 'Email' },
-    { type: 'article', label: '文章' },
-    { type: 'slack', label: 'Slack' },
-    { type: 'deploy_agent', label: 'Deploy Agent' },
-  ];
-
-  const handleCreateLeaf = useCallback(
-    async (leafType: LeafType) => {
-      if (!commit || leafCreating) return;
-      setLeafMenuOpen(false);
-      setLeafCreating(true);
-      try {
-        const label = leafTypeOptions.find((o) => o.type === leafType)?.label || leafType;
-        const leaf = await createLeaf({
-          commit_hash: commit.hash,
-          type: leafType,
-          title: label,
-          project_id: projectId,
-          constraints: [],
-          config: {},
-        });
-        setLeaves((prev) => [...prev, leaf]);
-        router.push(`/project/${projectId}/leaf/${leaf.id}`);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to create leaf';
-        notify?.(message, 'error');
-      } finally {
-        setLeafCreating(false);
-      }
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [commit, leafCreating, projectId, router]
+  // ── Source info (from V5 commit) ────────────────
+  const sourceConversations = useMemo(
+    () => commit?.sources?.filter((ref) => ref.type === 'conversation') ?? [],
+    [commit?.sources]
+  );
+  const sourceLeafRefs = useMemo(
+    () => commit?.sources?.filter((ref) => ref.type === 'leaf') ?? [],
+    [commit?.sources]
   );
 
   // ── Loading state ─────────────────────────────────
@@ -482,14 +345,6 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
                 {commitHash.replace('sha256:', '').slice(0, 12)}...
                 <CopyButton text={commitHash} size={10} />
               </span>
-              {commit.merge_summary && (
-                <>
-                  <span className="text-[var(--text-tertiary)]">&middot;</span>
-                  <span className="rounded-full border border-[var(--accent-branch)]/30 bg-[var(--accent-branch)]/8 px-2 py-0.5 text-[10px] font-medium text-[var(--accent-branch)]">
-                    merge
-                  </span>
-                </>
-              )}
             </div>
           </div>
 
@@ -562,6 +417,26 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
 
           <span className="h-3 w-px bg-[var(--stroke-divider)]" />
 
+          {/* Frame count */}
+          <div className="flex items-center gap-1.5 text-[var(--text-tertiary)]">
+            <Tag size={10} />
+            <span className="font-medium text-[var(--text-secondary)]">
+              {commit.content.frames.length} frame{commit.content.frames.length !== 1 ? 's' : ''}
+            </span>
+          </div>
+
+          <span className="h-3 w-px bg-[var(--stroke-divider)]" />
+
+          {/* Relation count */}
+          <div className="flex items-center gap-1.5 text-[var(--text-tertiary)]">
+            <GitBranch size={10} />
+            <span className="font-medium text-[var(--text-secondary)]">
+              {commit.content.relations.length} relation{commit.content.relations.length !== 1 ? 's' : ''}
+            </span>
+          </div>
+
+          <span className="h-3 w-px bg-[var(--stroke-divider)]" />
+
           {/* Leaves count */}
           <div className="flex items-center gap-1.5 text-[var(--text-tertiary)]">
             <LeafIcon size={10} className="text-[var(--accent-leaf)]" />
@@ -583,7 +458,7 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
 
           <span className="h-3 w-px bg-[var(--stroke-divider)]" />
 
-          {/* Schema / tags */}
+          {/* Schema */}
           <div className="flex items-center gap-1.5 text-[var(--text-tertiary)]">
             <Tag size={10} />
             <span className="font-mono text-[10px]">{commit.schema}</span>
@@ -594,7 +469,6 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
             <KeyboardHintBar
               hints={[
                 { key: 'j k', label: 'navigate' },
-                { key: 'o', label: 'source' },
                 { key: 'esc', label: 'deselect' },
               ]}
             />
@@ -603,278 +477,109 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
       </div>
 
       {/* ═══════ MAIN CONTENT: 3-Panel Layout ═══════ */}
-      <div ref={mainAreaRef} className="relative flex flex-1 overflow-hidden">
-        {/* SVG Connection Lines Overlay */}
-        <ConnectionLines
-          activeSentenceId={activeSentence}
-          sentenceRefs={sentenceRefs}
-          rightPanelRef={rightPanelRef}
-          containerRef={mainAreaRef}
+      <div className="relative flex flex-1 overflow-hidden">
+        {/* LEFT: Frame Index */}
+        <CommitFrameIndex
+          projectId={projectId}
+          leaves={leaves}
+          onLeavesChange={setLeaves}
         />
 
-        {/* LEFT: Sentence Index */}
-        <aside className="hidden w-[200px] shrink-0 overflow-y-auto border-r border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-2 md:block">
-          <div className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-wide text-[var(--text-tertiary)]">
-            Sentence Index
-          </div>
-          {enrichedSentences.map((s) => (
-            <button
-              key={s.id}
-              type="button"
-              onClick={() => scrollToSentence(s.id)}
-              className={`group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-all duration-200 ${
-                activeSentence === s.id
-                  ? 'bg-[var(--accent-commit)]/8 text-[var(--text-primary)] sidebar-item-active'
-                  : 'text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-secondary)]'
-              }`}
-            >
-              <DotIndicator status={s.diffStatus} />
-              <div className="min-w-0 flex-1">
-                <div className="truncate font-mono text-[10px]">{s.id}</div>
-                <div className="truncate text-[11px]">{s.text.slice(0, 30)}&hellip;</div>
-              </div>
-            </button>
-          ))}
-
-          {/* Removed sentences */}
-          {removedSentences.length > 0 && (
-            <>
-              <div className="mt-3 mb-2 px-2 text-[10px] font-semibold uppercase tracking-wide text-[var(--diff-removed-accent)]">
-                Removed ({removedSentences.length})
-              </div>
-              {removedSentences.map((s) => (
-                <button
-                  key={s.id}
-                  type="button"
-                  onClick={() => scrollToSentence(s.id)}
-                  className={`group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-all duration-200 ${
-                    activeSentence === s.id
-                      ? 'bg-[var(--diff-removed-accent)]/8 text-[var(--text-primary)]'
-                      : 'text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-secondary)]'
-                  }`}
-                >
-                  <DotIndicator status="removed" />
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate font-mono text-[10px]">{s.id}</div>
-                    <div className="truncate text-[11px] line-through">
-                      {s.text.slice(0, 30)}&hellip;
-                    </div>
-                  </div>
-                </button>
-              ))}
-            </>
-          )}
-
-          {/* Leaf & Source quick links */}
-          <div className="mt-4 border-t border-[var(--stroke-divider)] pt-3 px-2">
-            <div className="mb-2 flex items-center justify-between">
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--text-tertiary)]">
-                Leaves
-              </span>
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setLeafMenuOpen(!leafMenuOpen)}
-                  disabled={leafCreating}
-                  className="inline-flex items-center gap-1 rounded border border-[var(--stroke-divider)] px-1.5 py-0.5 text-[10px] text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-secondary)] transition-colors disabled:opacity-50"
-                >
-                  {leafCreating ? (
-                    <Loader2 size={10} className="animate-spin" />
-                  ) : (
-                    <Plus size={10} />
-                  )}
-                  Add
-                </button>
-                {leafMenuOpen && (
-                  <>
-                    <div
-                      className="fixed inset-0 z-40"
-                      onClick={() => setLeafMenuOpen(false)}
-                      onKeyDown={() => {}}
-                      role="presentation"
-                    />
-                    <div className="absolute right-0 top-full z-50 mt-1 w-36 rounded-lg border border-[var(--stroke-default)] bg-[var(--surface-panel)] py-1 shadow-lg">
-                      {leafTypeOptions.map((opt) => (
-                        <button
-                          key={opt.type}
-                          type="button"
-                          onClick={() => handleCreateLeaf(opt.type)}
-                          className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] transition-colors"
-                        >
-                          <LeafIcon size={10} className="text-[var(--accent-leaf)]" />
-                          {opt.label}
-                        </button>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-            {leaves.length > 0 &&
-              leaves.map((leaf) => {
-                const passedCount = leaf.assertions?.filter((a) => a.passed).length ?? 0;
-                const totalCount = leaf.assertions?.length ?? 0;
-                return (
-                  <Link
-                    key={leaf.id}
-                    href={`/project/${projectId}/leaf/${leaf.id}`}
-                    className="group/link flex items-center gap-1.5 py-1.5 px-1.5 -mx-1.5 rounded text-[11px] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] active:bg-[var(--active-bg)] transition-colors"
-                  >
-                    <LeafIcon size={10} className="shrink-0 text-[var(--accent-leaf)]" />
-                    <span className="truncate flex-1">{leaf.title || leaf.id}</span>
-                    {totalCount > 0 && (
-                      <span
-                        className={`ml-auto font-mono text-[9px] ${
-                          passedCount === totalCount
-                            ? 'text-[var(--status-success)]'
-                            : 'text-[var(--status-error)]'
-                        }`}
-                      >
-                        {passedCount}/{totalCount}
-                      </span>
-                    )}
-                    <ChevronRight
-                      size={10}
-                      className="shrink-0 text-[var(--text-tertiary)] opacity-0 group-hover/link:opacity-100 transition-opacity"
-                    />
-                  </Link>
-                );
-              })}
-            {sourceConversations.length > 0 && (
-              <>
-                <div className="mb-2 mt-3 text-[10px] font-semibold uppercase tracking-wide text-[var(--text-tertiary)]">
-                  Sources
-                </div>
-                {sourceConversations.map((src) => (
-                  <Link
-                    key={src.id}
-                    href={`/project/${projectId}/conversation/${src.id}`}
-                    className="group/link flex items-center gap-1.5 py-1.5 px-1.5 -mx-1.5 rounded text-[11px] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] active:bg-[var(--active-bg)] transition-colors"
-                  >
-                    <MessageSquare
-                      size={10}
-                      className="shrink-0 text-[var(--accent-conversation)]"
-                    />
-                    <span className="truncate flex-1">{src.title || src.id}</span>
-                    <ChevronRight
-                      size={10}
-                      className="shrink-0 text-[var(--text-tertiary)] opacity-0 group-hover/link:opacity-100 transition-opacity"
-                    />
-                  </Link>
-                ))}
-                {sourceLeafRefs.map((src) => (
-                  <Link
-                    key={src.id}
-                    href={`/project/${projectId}/leaf/${src.id}`}
-                    className="group/link flex items-center gap-1.5 py-1.5 px-1.5 -mx-1.5 rounded text-[11px] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] active:bg-[var(--active-bg)] transition-colors"
-                  >
-                    <LeafIcon size={10} className="shrink-0 text-[var(--accent-leaf)]" />
-                    <span className="truncate flex-1">{src.title || src.id}</span>
-                    <ChevronRight
-                      size={10}
-                      className="shrink-0 text-[var(--text-tertiary)] opacity-0 group-hover/link:opacity-100 transition-opacity"
-                    />
-                  </Link>
-                ))}
-              </>
-            )}
-          </div>
-        </aside>
-
-        {/* CENTER: Frame Graph + Sentence Cards */}
-        <div className="flex-1 overflow-y-auto p-[var(--space-page)]">
-          <div className="mx-auto max-w-3xl space-y-3">
-            {/* Frame Graph (when semantic content exists) */}
-            {commit.semantic && (
-              <div className="rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-panel)] overflow-hidden">
-                <div className="px-4 py-2 border-b border-[var(--stroke-divider)]">
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
-                    Frame Graph ({commit.semantic.frames.length} frames,{' '}
-                    {commit.semantic.relations.length} relations)
-                  </h3>
-                </div>
-                <div className="h-[400px]">
-                  <FrameGraphView content={commit.semantic} className="h-full w-full" />
-                </div>
-              </div>
-            )}
-
-            {enrichedSentences.map((s) => (
-              <CommitSentenceCard
-                key={s.id}
-                id={s.id}
-                text={s.text}
-                confidence={s.confidence}
-                diffStatus={s.diffStatus}
-                oldText={s.oldText}
-                wordDiff={s.wordDiff}
-                sourceRef={s.sourceRef}
-                inheritedFrom={s.inheritedFrom}
-                isActive={activeSentence === s.id}
-                isSourceExpanded={expandedSources.has(s.id)}
-                onSelect={() => setActiveSentence(s.id)}
-                onToggleSource={() => toggleSource(s.id)}
-                cardRef={(el) => {
-                  sentenceRefs.current[s.id] = el;
-                }}
-                projectId={projectId}
-                parentHashes={commit.parents}
-              />
+        {/* CENTER: Tabbed Panel */}
+        <div className="flex flex-1 flex-col overflow-hidden">
+          {/* Tab Bar */}
+          <div className="flex gap-0 border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-3 shrink-0">
+            {(['yaml', 'graph', 'json', 'relations'] as const).map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => setActiveTab(tab)}
+                className={`px-3.5 py-2 text-[11px] font-medium border-b-2 transition-colors ${
+                  activeTab === tab
+                    ? 'border-[var(--accent-commit)] text-[var(--text-primary)]'
+                    : 'border-transparent text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]'
+                }`}
+              >
+                {tab.toUpperCase()}
+              </button>
             ))}
+          </div>
 
-            {/* Removed sentences section */}
-            {removedSentences.length > 0 && (
-              <div className="mt-6">
-                <h3 className="text-xs font-bold text-[var(--diff-removed-accent)] uppercase tracking-wider mb-3">
-                  Removed from parent ({removedSentences.length})
-                </h3>
-                <div className="space-y-3">
-                  {removedSentences.map((s) => (
-                    <CommitSentenceCard
-                      key={s.id}
-                      id={s.id}
-                      text={s.text}
-                      confidence={0}
-                      diffStatus="removed"
-                      isActive={activeSentence === s.id}
-                      isSourceExpanded={false}
-                      onSelect={() => setActiveSentence(s.id)}
-                      onToggleSource={() => {}}
-                      cardRef={(el) => {
-                        sentenceRefs.current[s.id] = el;
-                      }}
-                      projectId={projectId}
-                      parentHashes={commit.parents}
-                    />
-                  ))}
+          {/* Tab Content */}
+          <div className="flex-1 overflow-y-auto p-[var(--space-page)]">
+            {/* YAML Tab — Nested YAML document */}
+            {activeTab === 'yaml' && (
+              <div className="mx-auto max-w-3xl">
+                <CommitYAMLDocument
+                  content={commit.content}
+                  onSlotClick={(frameId, slotKey) => {
+                    setActiveFrame(frameId);
+                    openSourceViewer(slotKey);
+                  }}
+                />
+              </div>
+            )}
+
+            {/* GRAPH Tab */}
+            {activeTab === 'graph' && (
+              <div className="mx-auto max-w-3xl">
+                <div className="h-[500px]">
+                  <FrameGraphView content={commit.content} className="h-full w-full" />
                 </div>
               </div>
             )}
 
-            {/* Empty state */}
-            {enrichedSentences.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-12 text-center">
-                <p className="text-sm text-[var(--text-tertiary)] italic">
-                  No sentences in this commit.
-                </p>
+            {/* JSON Tab */}
+            {activeTab === 'json' && (
+              <div className="mx-auto max-w-3xl">
+                <pre className="p-4 bg-[var(--surface-code,#0d1117)] text-[12px] font-mono text-[var(--text-secondary)] overflow-auto rounded-lg">
+                  {JSON.stringify(commit, null, 2)}
+                </pre>
+              </div>
+            )}
+
+            {/* RELATIONS Tab */}
+            {activeTab === 'relations' && (
+              <div className="mx-auto max-w-3xl">
+                {commit.content.relations.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <p className="text-sm text-[var(--text-tertiary)] italic">
+                      No relations in this commit.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-panel)] divide-y divide-[var(--stroke-divider)]">
+                    {commit.content.relations.map((rel, i) => (
+                      <div key={`${rel.from}-${rel.to}-${i}`} className="flex items-center gap-2 px-4 py-1.5 text-[11px]">
+                        <span className="font-mono text-[var(--accent-commit)]">{rel.from}</span>
+                        <span className="text-[var(--diff-modified-accent)]">→</span>
+                        <span className="text-[var(--text-tertiary)] text-[10px]">{rel.type}</span>
+                        <span className="text-[var(--diff-modified-accent)]">→</span>
+                        <span className="font-mono text-[var(--accent-commit)]">{rel.to}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
         </div>
 
-        {/* RIGHT: Context Panel */}
-        <CommitContextPanel
-          activeSentenceId={activeSentence}
-          commit={commit}
-          commitHistory={commitHistory}
+        {/* RIGHT: Source Slide-In (pushes center) */}
+        {sourceViewer.isOpen && <SourceSlideIn projectId={projectId} />}
+
+        {/* RIGHT: Operations Sidebar (always visible) */}
+        <CommitOperationsSidebar
           projectId={projectId}
-          panelRef={rightPanelRef}
+          commitHash={commitHash}
+          leaves={leaves}
+          onLeavesChange={setLeaves}
         />
       </div>
 
       {/* ═══════ BOTTOM: Provenance Graph ═══════ */}
       <ProvenanceGraph
-        activeSentenceId={activeSentence}
+        activeSentenceId={activeFrameId}
         commit={commit}
         leaves={leaves}
         projectId={projectId}

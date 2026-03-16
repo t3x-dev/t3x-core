@@ -36,7 +36,14 @@ export {
   type FrameExtractionResult,
   type FrameExtractionTurn,
   FrameExtractor,
+  type SlotQuotesMap,
 } from './frameExtractor';
+// Meaning Organizer Agent (Step 2 — legacy, replaced by pipeline)
+export { MeaningOrganizer, type MeaningOrganizerResult } from './meaningOrganizer';
+// Meaning Pipeline (multi-agent orchestration)
+export { MeaningPipeline, type MeaningAgent, type PipelineContext, type PipelineResult, type QualityMetrics, AgentRegistry } from './meaningPipeline';
+export { createMeaningPipeline } from './createMeaningPipeline';
+export { nesterAgent, topicNamerAgent, slotPolisherAgent, dedupCheckerAgent, topicEvolverAgent } from './agents';
 // Incremental Extraction (LLM pipeline)
 export { type FuzzyLocateResult, fuzzyLocate } from './fuzzyLocate';
 export { parseIncrementalResponse } from './incrementalParser';
@@ -47,46 +54,18 @@ export {
   type LLMExtractionResult,
   LLMExtractor,
 } from './llmExtractor';
-// Polarity Rules
-export {
-  createPolarityRuleEngine,
-  type PolarityRule,
-  PolarityRuleEngine,
-  type PreferenceRelation,
-} from './polarityRules';
-// Relation Extraction (Ring 4)
+// Relation Extraction (Inter-sentence Relations)
 export { createRelationExtractor, RelationExtractor } from './relationExtractor';
 export { parseRelationResponse, type RelationItem, RelationParseError } from './relationParser';
 export { buildRelationPrompt } from './relationPrompt';
-// Ring Extractor
-/** @deprecated Use Frame semantic engine instead of Ring extraction. */
-export {
-  createRingExtractor,
-  type ExtractorConfig,
-  RingExtractor,
-} from './ringExtractor';
 export { type RouteResult, routeProposal } from './routeProposal';
 export { resolveSourceRef } from './sourceRefResolver';
 export { spToSentence } from './spToSentence';
 // Types
 export {
-  // v1.1: Anchor types
   type AnchorCandidate,
   type AnchorSource,
   type AnchorType,
-  createEmptyRing1,
-  createEmptyRing2,
-  createEmptyRing3,
-  createEmptyRingOutput,
-  type Facet,
-  type FacetType,
-  type Keyword,
-  type Polarity,
-  type PosTag,
-  type Ring1Output,
-  type Ring2Output,
-  type Ring3Output,
-  type RingOutput,
   type Segment,
 } from './types';
 export {

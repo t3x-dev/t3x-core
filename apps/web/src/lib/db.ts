@@ -5,9 +5,8 @@
  *
  * Environment detection:
  * 1. DATABASE_URL set → PostgreSQL (Docker/production)
- * 2. T3X_USE_PGLITE=true → PGLite (in-memory testing)
- * 3. Default → Try connecting to embedded PostgreSQL on port 5445
- *    (started by API server), fall back to PGLite if not available
+ * 2. Default → Connect to embedded PostgreSQL on port 5445
+ *    (started by API server). Throws if not reachable.
  */
 
 import type { AnyDB } from '@t3x-dev/storage';
@@ -15,7 +14,6 @@ import type { AnyDB } from '@t3x-dev/storage';
 let dbInstance: AnyDB | null = null;
 let initPromise: Promise<AnyDB> | null = null;
 let closeDbFn: (() => Promise<void>) | null = null;
-let rawClientFn: (() => { query: (sql: string) => Promise<{ rows: unknown[]; fields?: unknown[] }> }) | null = null;
 let shutdownRegistered = false;
 
 /**
@@ -59,19 +57,8 @@ async function initializeDB(): Promise<AnyDB> {
     dbInstance = await createPostgresStorage({ connectionString: databaseUrl });
     closeDbFn = closePostgresStorage;
     console.log('[db] PostgreSQL initialized');
-  } else if (process.env.T3X_USE_PGLITE === 'true') {
-    // Explicit PGLite mode (for in-memory testing)
-    const dataDir = process.env.T3X_DATA_DIR || '.t3x/database';
-    console.log('[db] Using PGLite:', dataDir);
-    const { createPGLiteStorage, getPGLiteClient, closePGLiteStorage } = await import(
-      '@t3x-dev/storage/pglite'
-    );
-    dbInstance = await createPGLiteStorage({ dataDir });
-    rawClientFn = getPGLiteClient;
-    closeDbFn = closePGLiteStorage;
-    console.log('[db] PGLite initialized');
   } else {
-    // Default: Try connecting to embedded PostgreSQL (started by API server).
+    // Default: Connect to embedded PostgreSQL (started by API server).
     // WebUI does NOT manage the embedded-postgres process — the API owns that.
     // This avoids importing embedded-postgres which has platform-specific binaries
     // that break Next.js Turbopack bundling.
@@ -87,16 +74,9 @@ async function initializeDB(): Promise<AnyDB> {
       closeDbFn = closePostgresStorage;
       console.log('[db] Connected to embedded PostgreSQL');
     } else {
-      // Fallback: PGLite (API not running, standalone WebUI mode)
-      const dataDir = process.env.T3X_DATA_DIR || '.t3x/database';
-      console.log('[db] Embedded PostgreSQL not found on port', port, '— falling back to PGLite:', dataDir);
-      const { createPGLiteStorage, getPGLiteClient, closePGLiteStorage } = await import(
-        '@t3x-dev/storage/pglite'
+      throw new Error(
+        `Cannot connect to database on port ${port}. Start the API server first: pnpm dev:api`
       );
-      dbInstance = await createPGLiteStorage({ dataDir });
-      rawClientFn = getPGLiteClient;
-      closeDbFn = closePGLiteStorage;
-      console.log('[db] PGLite initialized (fallback)');
     }
   }
 
@@ -116,18 +96,19 @@ async function initializeDB(): Promise<AnyDB> {
 }
 
 /**
- * Get raw database client for direct SQL execution (dev tools only).
- * Works with PGLite (getRawClient). For embedded PostgreSQL,
- * the dev SQL route can use the Drizzle instance directly.
- * Must call getDB() first to ensure initialization.
+ * Execute raw SQL via the Drizzle db instance.
+ * Uses dynamic import of drizzle-orm's sql.raw() and casts through
+ * unknown to avoid type mismatch when multiple drizzle-orm resolutions
+ * exist in the monorepo (different postgres peer dep versions).
  */
-export function getRawClient() {
-  if (!rawClientFn) {
-    throw new Error(
-      'Raw client not available. Either database not initialized or using external PostgreSQL.'
-    );
-  }
-  return rawClientFn();
+export async function executeRawSQL(query: string): Promise<Record<string, unknown>[]> {
+  const db = await getDB();
+  const { sql } = await import('drizzle-orm');
+  // Cast through unknown to handle duplicate drizzle-orm type declarations
+  const result = await (db as unknown as { execute: (q: unknown) => Promise<unknown[]> }).execute(
+    sql.raw(query)
+  );
+  return Array.from(result as unknown[]) as Record<string, unknown>[];
 }
 
 /**
@@ -140,5 +121,4 @@ export async function closeDB(): Promise<void> {
   }
   dbInstance = null;
   initPromise = null;
-  rawClientFn = null;
 }

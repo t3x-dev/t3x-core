@@ -14,6 +14,7 @@ import type { Frame, SemanticContent } from '../semantic/types';
 export interface FrameExtractionTurn {
   role: 'user' | 'assistant' | 'system' | 'tool';
   content: string;
+  turn_hash?: string; // Source tracking — which turn this is
 }
 
 export interface FrameExtractionInput {
@@ -32,7 +33,7 @@ export interface FrameExtractionPromptResult {
 
 /**
  * Calculate the next frame ID from existing frames.
- * Frame IDs follow the pattern f_001, f_002, etc.
+ * Frame IDs follow the pattern f_001, f_002, ...
  */
 function calcNextFrameId(frames: Frame[]): string {
   if (frames.length === 0) return 'f_001';
@@ -86,81 +87,161 @@ function serializeSnapshot(snapshot: SemanticContent): string {
 
 /**
  * Format conversation turns for prompt inclusion.
+ * Includes turn_hash as [T1], [T2], etc. for source tracking.
  */
 function formatTurns(turns: FrameExtractionTurn[]): string {
-  return turns.map((t) => `[${t.role}]: ${t.content}`).join('\n');
+  return turns.map((t, i) => {
+    const tag = t.turn_hash ? `[T${i + 1}:${t.turn_hash.slice(0, 8)}]` : `[T${i + 1}]`;
+    return `${tag} [${t.role}]: ${t.content}`;
+  }).join('\n');
 }
-
-// ── Shared prompt fragments ──
-
-const FRAME_NAMING_RULES = `## Frame 命名规则
-- type 使用 snake_case
-- type 是名词或名词短语
-- id 格式: f_001, f_002, ...`;
-
-const RELATION_RULES = `## 关系判断规则（优先级）
-1. 因果 → causes
-2. 前置条件 → conditions
-3. 矛盾/对立/替代 → contrasts
-4. 时间先后（非因果） → follows
-5. 引用依赖 → depends
-6. 其他关联 → elaborates`;
 
 // ── System Prompts ──
 
-const DELTA_SYSTEM_PROMPT = `你是一个语义提取引擎。你的任务是从新对话中提取语义变更（delta），而不是重新生成全量。
+const DELTA_SYSTEM_PROMPT = `You are a semantic extraction engine. Your task is to extract semantic CHANGES (delta) from new conversation turns — NOT re-generate everything.
 
-## 输出规则
-1. 只输出 changes（delta），不要重复没变的 frame
-2. 一个独立的意图/结论/事实 = 一个 frame
-3. 过程性讨论不保留，只保留结果
-4. 修改已有 frame 的 slot → update + 只写变了的 slot
-5. 全新话题 → add
-6. 明确否定 → remove
-7. relation type 只能从 6 种中选：causes | conditions | contrasts | elaborates | follows | depends
+## Core Rules
+1. Output ONLY changes (delta) — do NOT repeat unchanged frames
+2. Group related items into ONE frame with array slots — do NOT create separate frames for each item (e.g., 10 city recommendations = ONE frame with a "cities" array, NOT 10 separate frames)
+3. Keep conclusions and decisions, discard process discussion
+4. Frame type uses snake_case (nouns or noun phrases)
+5. Frame IDs follow pattern: f_001, f_002, ...
+6. AIM FOR 3-8 FRAMES TOTAL — if you have more than 8, you're probably creating separate frames for items that should be arrays within one frame
 
-${FRAME_NAMING_RULES}
+## CRITICAL: When to UPDATE vs ADD
+- If a new turn MODIFIES information already captured in an existing frame → use "update" with only the changed slots
+- If a new turn provides NEW information on a DIFFERENT topic → use "add"
+- DO NOT add a new frame when an existing frame covers the same topic — UPDATE it instead
+- Examples of updates: price changes, preference changes, plan modifications, corrected information
 
-${RELATION_RULES}
+## CRITICAL: When to REMOVE
+- If the user explicitly rejects, cancels, or changes their mind about something → use "remove"
+- If the user replaces one option with another (e.g., "actually, let's skip Kyoto") → REMOVE the old frame AND add/update the new one
+- If the assistant's suggestion is rejected by the user → remove frames from that suggestion
 
-## JSON 输出格式
+## Source Tracking
+- Set the "source" field on each new/updated frame to the turn tag (e.g., "T3") where the information came from
+- For frames derived from multiple turns, use the most recent turn
+
+## Confidence Scoring
+- User's explicit statements → confidence: 0.9-1.0
+- User's implied preferences → confidence: 0.6-0.8
+- LLM suggestions the user hasn't confirmed → confidence: 0.3-0.5
+- LLM questions (options not yet chosen) → confidence: 0.2-0.3
+
+## Relation Types (pick from these 6 only)
+1. causes — A causes B
+2. conditions — A is a precondition for B
+3. contrasts — A conflicts with or replaces B
+4. follows — A happens after B (non-causal)
+5. depends — A references/needs B
+6. elaborates — A adds detail to B
+
+## Source Quoting (CRITICAL for traceability)
+For EACH slot, include a "slot_quotes" object that maps each slot key to the EXACT verbatim text from the conversation that this slot was extracted from. Copy the text exactly — do not paraphrase.
+
+## JSON Output Format
 \`\`\`json
 {
   "changes": [
-    { "action": "add", "frame": { "id": "f_xxx", "type": "...", "slots": { ... }, "confidence": 0.9 } },
-    { "action": "update", "target": "f_001", "slots": { "changed_key": "new_value" } },
-    { "action": "remove", "target": "f_002", "reason": "..." }
+    {
+      "action": "add",
+      "frame": {
+        "id": "f_xxx", "type": "...", "source": "T3", "confidence": 0.9,
+        "slots": { "destination": "Tokyo", "budget": 7000 },
+        "slot_quotes": { "destination": "I want to travel to Tokyo", "budget": "budget is around $7000" }
+      }
+    },
+    {
+      "action": "update", "target": "f_001",
+      "slots": { "budget": 5000 },
+      "slot_quotes": { "budget": "actually let's keep it under $5000" }
+    },
+    { "action": "remove", "target": "f_002", "reason": "user changed mind" }
   ],
   "new_relations": [
     { "from": "f_001", "to": "f_003", "type": "causes", "confidence": 0.8 }
   ]
 }
 \`\`\`
-只输出 JSON，不要输出 markdown 围栏或其他说明文字。`;
+Output ONLY valid JSON. No markdown fences, no explanatory text.`;
 
-const FIRST_EXTRACTION_SYSTEM_PROMPT = `你是一个语义提取引擎。你的任务是从对话中提取所有语义 frames 和 relations。
+const FIRST_EXTRACTION_SYSTEM_PROMPT = `You are a semantic extraction engine. Extract meaning from conversations into structured frames.
 
-## 输出规则
-1. 一个独立的意图/结论/事实 = 一个 frame
-2. 过程性讨论不保留，只保留结果
-3. relation type 只能从 6 种中选：causes | conditions | contrasts | elaborates | follows | depends
+## CRITICAL: Frame Structure Rules
+1. AIM FOR 3-8 FRAMES TOTAL — fewer, richer frames are better than many thin ones
+2. LISTS OF SIMILAR ITEMS = ONE FRAME with an array slot, NEVER separate frames
+   - 10 city recommendations = ONE frame: { type: "recommended_cities", slots: { cities: [...] } }
+   - NOT 10 separate "city_recommendation" frames!
+3. Each frame represents a TOPIC or CATEGORY, not an individual item
+4. Use arrays for lists: cities, features, pros, cons, requirements, options
+5. Frame type uses snake_case (nouns or noun phrases)
+6. Frame IDs start from f_001
 
-${FRAME_NAMING_RULES}（从 f_001 开始编号）
+## GOOD vs BAD Examples
 
-${RELATION_RULES}
+BAD (too many frames):
+  f_001 city_recommendation: { city: "Berlin" }
+  f_002 city_recommendation: { city: "Lisbon" }
+  f_003 city_recommendation: { city: "Melbourne" }
+  ... 10 more frames
 
-## JSON 输出格式
+GOOD (one frame with array):
+  f_001 recommended_cities: {
+    cities: [
+      { name: "Berlin", country: "Germany", pros: ["affordable", "culture"] },
+      { name: "Lisbon", country: "Portugal", pros: ["weather", "cost"] },
+      { name: "Melbourne", country: "Australia", pros: ["universities", "lifestyle"] }
+    ]
+  }
+
+BAD: f_001 pro: { text: "good weather" }, f_002 pro: { text: "affordable" }
+GOOD: f_001 evaluation: { pros: ["good weather", "affordable"], cons: ["far from home"] }
+
+## What to Extract
+- User's requirements and preferences (high confidence)
+- Decisions and conclusions (high confidence)
+- Recommendations and suggestions from assistant (medium confidence — use arrays!)
+- Plans and options discussed (medium confidence)
+
+## Source Tracking
+- Set "source" field to turn tag (e.g., "T1", "T2")
+
+## Confidence Scoring
+- User's explicit statements → 0.9-1.0
+- User's implied preferences → 0.6-0.8
+- Assistant's suggestions not yet confirmed → 0.3-0.5
+
+## Relation Types (6 only): causes, conditions, contrasts, follows, depends, elaborates
+
+## Source Quoting
+For EACH slot, include "slot_quotes" mapping slot keys to EXACT verbatim text from conversation.
+
+## JSON Output Format
 \`\`\`json
 {
   "frames": [
-    { "id": "f_001", "type": "...", "slots": { ... }, "confidence": 0.9 }
+    {
+      "id": "f_001", "type": "study_abroad_search", "source": "T1", "confidence": 0.9,
+      "slots": {
+        "purpose": "live and study",
+        "preferences": ["warm climate", "English-speaking"],
+        "recommended_cities": [
+          { "name": "Melbourne", "country": "Australia", "pros": ["top universities", "multicultural"] },
+          { "name": "Brisbane", "country": "Australia", "pros": ["warm", "affordable"] }
+        ],
+        "decision_factors": ["climate", "cost", "university ranking"]
+      },
+      "slot_quotes": {
+        "purpose": "I want to find a city to live and study",
+        "preferences": "somewhere warm, English-speaking"
+      }
+    }
   ],
-  "relations": [
-    { "from": "f_001", "to": "f_002", "type": "causes", "confidence": 0.8 }
-  ]
+  "relations": []
 }
 \`\`\`
-只输出 JSON，不要输出 markdown 围栏或其他说明文字。`;
+Output ONLY valid JSON. No markdown fences, no explanatory text.`;
 
 // ── Main Function ──
 
@@ -182,15 +263,19 @@ export function buildFrameExtractionPrompt(
     const snapshotYaml = serializeSnapshot(snapshot);
     const turnsText = formatTurns(turns);
 
-    const userPrompt = `## 当前快照
+    const userPrompt = `## Current Snapshot
 ${snapshotYaml}
 
-## 新对话
+## New Conversation Turns
 ${turnsText}
 
-## 请输出 delta
-按照规则输出 changes 和 new_relations。只输出变化的部分。
-新增 frame 的 id 从 ${nextId} 开始。`;
+## Instructions
+Output the delta (changes only). For each piece of new information:
+- If it MODIFIES an existing frame → "update" with only changed slots
+- If it's a NEW topic → "add" a new frame
+- If it NEGATES or REPLACES something → "remove" the old frame
+New frame IDs start from ${nextId}.
+Include "source" field referencing the turn tag (T1, T2, etc.).`;
 
     return { systemPrompt: DELTA_SYSTEM_PROMPT, userPrompt };
   }
@@ -198,10 +283,12 @@ ${turnsText}
   // First extraction mode
   const turnsText = formatTurns(turns);
 
-  const userPrompt = `## 对话
+  const userPrompt = `## Conversation
 ${turnsText}
 
-## 请提取所有 frames 和 relations`;
+## Instructions
+Extract all semantic frames and relations from this conversation.
+Include "source" field referencing the turn tag (T1, T2, etc.) for each frame.`;
 
   return { systemPrompt: FIRST_EXTRACTION_SYSTEM_PROMPT, userPrompt };
 }

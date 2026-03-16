@@ -1,65 +1,89 @@
 /**
  * Test Setup for t3x-webui
  *
- * Provides isolated PGLite database for API route tests.
+ * Provides isolated PostgreSQL database for API route tests.
  * Mocks the database singleton so API routes use test database.
  */
 
-import { PGlite } from '@electric-sql/pglite';
-import type { AnyDB } from '@t3x-dev/storage';
-// Import schema tables for drizzle
 import {
-  branches,
-  commits,
-  conversations,
-  drafts,
-  projects,
-  segmentEmbeddings,
-  turns,
+  closePostgresStorage,
+  createPostgresStorage,
+  type AnyDB,
 } from '@t3x-dev/storage';
-import { drizzle } from 'drizzle-orm/pglite';
+import postgres from 'postgres';
 import { vi } from 'vitest';
 
 // Import shared SQL from @t3x-dev/storage test utilities
 import { CREATE_TABLES_SQL } from '../../../../packages/storage/src/__tests__/setup';
 
-const schema = {
-  projects,
-  conversations,
-  turns,
-  branches,
-  commits,
-  drafts,
-  segmentEmbeddings,
-};
+const TEST_PORT = parseInt(process.env.T3X_TEST_PG_PORT || '', 10) || 5446;
+const TEST_PASSWORD = 'password';
+
+function getAdminUrl(): string {
+  if (process.env.DATABASE_URL) {
+    const url = new URL(process.env.DATABASE_URL);
+    url.pathname = '/postgres';
+    return url.toString();
+  }
+  return `postgresql://postgres:${TEST_PASSWORD}@localhost:${TEST_PORT}/postgres`;
+}
+
+function getDbUrl(dbName: string): string {
+  if (process.env.DATABASE_URL) {
+    const url = new URL(process.env.DATABASE_URL);
+    url.pathname = `/${dbName}`;
+    return url.toString();
+  }
+  return `postgresql://postgres:${TEST_PASSWORD}@localhost:${TEST_PORT}/${dbName}`;
+}
 
 // Shared test database instance
 let testDB: AnyDB | null = null;
-let _testClient: PGlite | null = null;
 
 /**
  * Create a fresh test database
  */
 export async function createTestDB(): Promise<{
   db: AnyDB;
-  client: PGlite;
+  sql: postgres.Sql;
   cleanup: () => Promise<void>;
 }> {
-  // Create in-memory PGLite
-  const client = new PGlite();
+  const dbName = `test_web_${Math.random().toString(36).substring(2, 10)}`;
+
+  // Create isolated test database
+  const adminSql = postgres(getAdminUrl(), { max: 1 });
+  await adminSql.unsafe(`CREATE DATABASE "${dbName}"`);
+  await adminSql.end();
+
+  // Initialize schema
+  const connectionString = getDbUrl(dbName);
+  const setupSql = postgres(connectionString, { max: 1 });
+  await setupSql.unsafe(CREATE_TABLES_SQL);
+  await setupSql.end();
+
+  // Keep a raw sql connection for tests that need direct SQL access
+  const rawSql = postgres(connectionString, { max: 5 });
 
   // Create Drizzle instance
-  const db = drizzle(client, { schema }) as unknown as AnyDB;
-
-  // Create tables
-  await client.exec(CREATE_TABLES_SQL);
+  const db = await createPostgresStorage({ connectionString });
 
   // Cleanup function
   const cleanup = async () => {
-    await client.close();
+    await closePostgresStorage();
+    await rawSql.end();
+
+    const dropSql = postgres(getAdminUrl(), { max: 1 });
+    try {
+      await dropSql.unsafe(
+        `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${dbName}' AND pid <> pg_backend_pid()`
+      );
+      await dropSql.unsafe(`DROP DATABASE IF EXISTS "${dbName}"`);
+    } finally {
+      await dropSql.end();
+    }
   };
 
-  return { db, client, cleanup };
+  return { db, sql: rawSql, cleanup };
 }
 
 /**
@@ -70,9 +94,8 @@ export async function setupTestDB(): Promise<{
   db: AnyDB;
   cleanup: () => Promise<void>;
 }> {
-  const { db, client, cleanup } = await createTestDB();
+  const { db, cleanup } = await createTestDB();
   testDB = db;
-  _testClient = client;
 
   return { db, cleanup };
 }

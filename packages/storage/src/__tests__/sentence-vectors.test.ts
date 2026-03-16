@@ -2,10 +2,10 @@
  * Sentence Vectors Tests
  *
  * Tests for pgvector-powered sentence similarity search.
- * Uses PGLite with the vector extension for isolated in-memory testing.
+ * Uses embedded-postgres with the pgvector extension for isolated testing.
  */
 
-import type { PGlite } from '@electric-sql/pglite';
+import type postgres from 'postgres';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
 import {
@@ -20,10 +20,10 @@ import {
 } from '../queries/sentenceVectors';
 import { createTestDB } from './setup';
 
-/** Check if pgvector is available in this PGLite instance */
-async function hasVector(client: PGlite): Promise<boolean> {
+/** Check if pgvector is available in this postgres instance */
+async function hasVector(sql: postgres.Sql): Promise<boolean> {
   try {
-    await client.exec("SELECT 'test'::vector(1)");
+    await sql.unsafe("SELECT 'test'::vector(1)");
     return true;
   } catch {
     return false;
@@ -39,7 +39,7 @@ describe('sentenceVectors', () => {
     const testEnv = await createTestDB();
     db = testEnv.db;
     cleanup = testEnv.cleanup;
-    vectorAvailable = await hasVector(testEnv.client);
+    vectorAvailable = await hasVector(testEnv.sql);
   });
 
   afterAll(async () => {
@@ -220,7 +220,7 @@ describe('searchByKeyword (keyword)', () => {
     const testEnv = await createTestDB();
     db = testEnv.db;
     cleanup = testEnv.cleanup;
-    vectorAvailable = await hasVector(testEnv.client);
+    vectorAvailable = await hasVector(testEnv.sql);
 
     if (!vectorAvailable) return;
 
@@ -412,7 +412,7 @@ describe('searchHybrid', () => {
     const testEnv = await createTestDB();
     db = testEnv.db;
     cleanup = testEnv.cleanup;
-    vectorAvailable = await hasVector(testEnv.client);
+    vectorAvailable = await hasVector(testEnv.sql);
 
     if (!vectorAvailable) return;
 

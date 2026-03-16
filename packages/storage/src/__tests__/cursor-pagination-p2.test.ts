@@ -8,7 +8,6 @@
  * Pattern: create 3 items, paginate with limit=2, verify two pages.
  */
 
-import type { PGlite } from '@electric-sql/pglite';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
 import { findBranchesByProject, insertBranch } from '../queries/branches';
@@ -22,14 +21,12 @@ import { createTestDB, sleep } from './setup';
 
 describe('Cursor Pagination — P2 queries', () => {
   let db: AnyDB;
-  let _client: PGlite;
   let cleanup: () => Promise<void>;
   let testProjectId: string;
 
   beforeAll(async () => {
     const setup = await createTestDB();
     db = setup.db;
-    _client = setup.client;
     cleanup = setup.cleanup;
 
     // Create a test project for queries that need projectId

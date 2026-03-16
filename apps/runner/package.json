@@ -1,6 +1,6 @@
 {
   "name": "@t3x-dev/runner",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "T3X Runner - Grey-box agent evaluation, CI/CD, and workflow orchestration",
   "license": "MIT",
   "publishConfig": {
@@ -24,7 +24,8 @@
     "schemas"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsup src/index.ts src/server.ts --format cjs --dts --clean",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
     "clean": "rm -rf dist",
     "dev": "tsx watch --env-file=.env src/server.ts",
     "start": "node dist/server.js",
@@ -46,14 +47,17 @@
     "zod": "^4.2.1"
   },
   "devDependencies": {
+    "@swc/core": "^1.15.18",
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^20.12.7",
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
+    "tsup": "^8.5.1",
     "tsx": "^4.19.0",
     "typescript": "^5.9.3",
+    "unplugin-swc": "^1.5.9",
     "vitest": "^2.1.9"
   },
   "engines": {

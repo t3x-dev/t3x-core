@@ -6,8 +6,6 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ErrorMessage, LoadingSpinner } from '@/components/ApiStatus';
 import { CanvasWorkspace } from '@/components/canvas';
-import { GuidedTour } from '@/components/onboarding/GuidedTour';
-import { QuickStartChecklist } from '@/components/onboarding/QuickStartChecklist';
 import { ListView } from '@/components/project/ListView';
 import { TimelineView } from '@/components/project/TimelineView';
 import { ViewSwitcher } from '@/components/project/ViewSwitcher';
@@ -211,8 +209,6 @@ function ProjectDetailPageContent() {
 
   return (
     <div className="flex h-full flex-col">
-      <GuidedTour ready={canvasReady} />
-      <QuickStartChecklist nodeTypes={nodeTypes} />
       {mode === 'editor' && viewMode === 'canvas' ? (
         <CanvasWorkspace
           projectName={project.name}

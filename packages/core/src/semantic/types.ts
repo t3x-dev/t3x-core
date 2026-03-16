@@ -21,6 +21,21 @@ export interface InlineFrame {
 /** The 5 slot value types (+ array) */
 export type SlotValue = string | number | SlotRef | InlineFrame | SlotValue[];
 
+// ── Source Reference (per-slot traceability) ──
+
+export interface SlotSourceRef {
+  /** Turn tag (e.g., "T3") or turn hash prefix */
+  turn: string;
+  /** Full turn hash for precise matching */
+  turn_hash?: string;
+  /** Character offset where the source text starts in the turn content */
+  start_char: number;
+  /** Character offset where the source text ends in the turn content */
+  end_char: number;
+  /** The verbatim quote from the source turn */
+  quote?: string;
+}
+
 // ── Frame ──
 
 export interface Frame {
@@ -34,6 +49,8 @@ export interface Frame {
   source?: string;
   /** Extraction confidence 0-1 (optional) */
   confidence?: number;
+  /** Per-slot source references mapping slot key → source text location */
+  slot_sources?: Record<string, SlotSourceRef>;
 }
 
 // ── Relation ──
@@ -78,7 +95,7 @@ export interface Delta {
 
 // ── Delta Log ──
 
-export type DeltaSource = 'llm_extraction' | 'user_graph_edit' | 'user_yaml_edit';
+export type DeltaSource = 'llm_extraction' | 'user_graph_edit' | 'user_yaml_edit' | 'commit_marker';
 
 export interface DeltaLogEntry {
   id: string;
@@ -86,6 +103,10 @@ export interface DeltaLogEntry {
   turn_hash?: string;
   delta: Delta;
   created_at: string;
+  /** Commit hash — set when this delta is included in a commit, or for commit_marker entries */
+  commit_hash?: string;
+  /** Which model produced this extraction (for llm_extraction source) */
+  model?: string;
 }
 
 // ── Validation ──

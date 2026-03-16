@@ -22,6 +22,7 @@ export * from './frames';
 export * from './health';
 export * from './knowledge-graph';
 export * from './leaves';
+export * from './llm';
 export * from './misc';
 export * from './pins';
 export * from './projects';

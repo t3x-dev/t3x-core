@@ -3,7 +3,7 @@
  *
  * Orchestrates the full graph build pipeline:
  * 1. Cluster sentences into entity/topic nodes
- * 2. Promote Ring 4 relations to edges between nodes
+ * 2. Promote Inter-sentence Relations to edges between nodes
  * 3. Promote knowledge conflicts to contradicts edges
  * 4. Aggregate duplicate edges
  *
@@ -164,7 +164,7 @@ export function buildKnowledgeGraph(
   // Step 3 & 4: Create raw edges from relations and conflicts, aggregating duplicates
   const rawEdges = new Map<string, RawEdge>();
 
-  // Promote Ring 4 relations to inter-cluster edges
+  // Promote Inter-sentence Relations to inter-cluster edges
   for (const relation of input.relations) {
     const sourceCluster = sentenceToCluster.get(relation.source_id);
     const targetCluster = sentenceToCluster.get(relation.target_id);

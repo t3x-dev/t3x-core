@@ -10,7 +10,7 @@
 import { randomBytes } from 'node:crypto';
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { API_KEY_VALUE_PREFIX, type ApiKey } from '@t3x-dev/core';
-import { createApiKey, findApiKeyById, listApiKeys, revokeApiKey } from '@t3x-dev/storage/pglite';
+import { createApiKey, findApiKeyById, listApiKeys, revokeApiKey } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { pinoLogger } from '../middleware/logger';

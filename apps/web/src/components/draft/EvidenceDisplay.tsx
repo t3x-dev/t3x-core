@@ -68,7 +68,7 @@ export function EvidenceDisplay({
                 <div className="space-y-0.5">
                   {projectId ? (
                     <Link
-                      href={`/project/${projectId}/conversation/${e.conversation_id}#turn_${e.turn_hash}`}
+                      href={`/chat/${e.conversation_id}#turn_${e.turn_hash}`}
                       className="inline-flex items-center gap-0.5 text-[10px] text-blue-600 dark:text-blue-400 hover:underline"
                     >
                       <ExternalLink className="h-2.5 w-2.5" />

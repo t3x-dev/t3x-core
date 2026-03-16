@@ -1,5 +1,5 @@
 /**
- * Sentence Relations Routes (Ring 4)
+ * Sentence Relations Routes (Inter-sentence Relations)
  *
  * - GET  /v1/commits-v4/:hash/relations           — Get relations for a commit
  * - POST /v1/commits-v4/:hash/relations/extract    — Trigger (re-)extraction
@@ -12,7 +12,7 @@ import {
   findCommitV4ByHash,
   findRelationsByCommit,
   upsertRelations,
-} from '@t3x-dev/storage/pglite';
+} from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { getLLMProvider } from '../lib/provider-registry';

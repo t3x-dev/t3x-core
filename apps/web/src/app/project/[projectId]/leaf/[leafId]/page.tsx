@@ -99,7 +99,7 @@ export default function LeafDetailPage() {
   const onRetune = useCallback(async () => {
     const conversationId = await handleRetune();
     if (conversationId) {
-      router.push(`/project/${projectId}/conversation/${conversationId}`);
+      router.push(`/chat/${conversationId}`);
     }
   }, [handleRetune, router, projectId]);
 

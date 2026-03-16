@@ -1,4 +1,3 @@
-import type { PGlite } from '@electric-sql/pglite';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
 import { createCommitV4 } from '../queries/commits-v4';
@@ -17,7 +16,6 @@ import { createTestDB, sleep, testData } from './setup';
 
 describe('Leaf History Storage', () => {
   let db: AnyDB;
-  let _client: PGlite;
   let cleanup: () => Promise<void>;
   let testProjectId: string;
   let testLeafId: string;
@@ -25,7 +23,6 @@ describe('Leaf History Storage', () => {
   beforeAll(async () => {
     const setup = await createTestDB();
     db = setup.db;
-    _client = setup.client;
     cleanup = setup.cleanup;
 
     const project = await insertProject(db, testData.project({ name: 'Leaf History Test' }));

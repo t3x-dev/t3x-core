@@ -8,13 +8,14 @@ export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
-  rings?: api.RingsData | null;
 }
 
 export interface UseConversationChatOptions {
   projectId: string;
   conversationId: string | undefined;
   title?: string;
+  provider?: string;
+  model?: string;
   onConversationCreated?: (conversationId: string) => void;
   onTurnsSaved?: () => void;
 }
@@ -30,7 +31,7 @@ export interface UseConversationChatReturn {
   warning: string | null;
   hasMore: boolean;
   isLoadingMore: boolean;
-  sendMessage: () => void;
+  sendMessage: (messageOverride?: string) => void;
   loadMore: () => void;
   /** Incremented each time turns are persisted to the DB — use to trigger extraction */
   turnsSavedCounter: number;
@@ -40,6 +41,8 @@ export function useConversationChat({
   projectId,
   conversationId,
   title,
+  provider,
+  model,
   onConversationCreated,
   onTurnsSaved,
 }: UseConversationChatOptions): UseConversationChatReturn {
@@ -125,7 +128,7 @@ export function useConversationChat({
             id: turn.turn_hash,
             role: turn.role as 'user' | 'assistant',
             content: turn.content,
-            rings: api.parseRingsData((turn as api.TurnDetail).rings),
+
           }))
           .reverse();
         setChatMessages(messages);
@@ -195,7 +198,6 @@ export function useConversationChat({
           id: turn.turn_hash,
           role: turn.role as 'user' | 'assistant',
           content: turn.content,
-          rings: api.parseRingsData((turn as api.TurnDetail).rings),
         }))
         .reverse();
 
@@ -217,10 +219,11 @@ export function useConversationChat({
   }, [projectId, conversationId, chatOffset, chatHasMore, isLoadingMore]);
 
   // ========== Send message ==========
-  const sendMessage = useCallback(async () => {
-    if (!chatInput.trim() || isChatStreaming || isChatLoading) return;
+  const sendMessage = useCallback(async (messageOverride?: string) => {
+    const rawMessage = messageOverride ?? chatInput;
+    if (!rawMessage.trim() || isChatStreaming || isChatLoading) return;
 
-    const userMessage = chatInput.trim();
+    const userMessage = rawMessage.trim();
     setChatInput('');
     setChatError(null);
     setChatWarning(null);
@@ -275,7 +278,7 @@ export function useConversationChat({
       let fullResponse = '';
       let addedFinalMessage = false;
 
-      for await (const event of api.chatStream({ messages })) {
+      for await (const event of api.chatStream({ messages, provider, model })) {
         if (event.type === 'token' && event.content) {
           fullResponse += event.content;
           setStreamingContent(fullResponse);
@@ -351,6 +354,8 @@ export function useConversationChat({
     isChatLoading,
     projectId,
     title,
+    provider,
+    model,
     onConversationCreated,
     onTurnsSaved,
     showWarning,

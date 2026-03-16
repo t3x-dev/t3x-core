@@ -14,7 +14,14 @@ const InlineFrameSchema: z.ZodType<{ type: string; slots: Record<string, unknown
 );
 
 export const SlotValueSchema: z.ZodType<unknown> = z.lazy(() =>
-  z.union([z.string(), z.number(), SlotRefSchema, InlineFrameSchema, z.array(SlotValueSchema)])
+  z.union([
+    z.string(),
+    z.number(),
+    z.boolean(),
+    SlotRefSchema,
+    InlineFrameSchema,
+    z.array(SlotValueSchema),
+  ])
 );
 
 // ── Frame ──
