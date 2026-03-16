@@ -20,6 +20,8 @@ export interface FrameExtractionTurn {
 export interface FrameExtractionInput {
   turns: FrameExtractionTurn[];
   snapshot?: SemanticContent;
+  /** Number of turns already processed by previous extractions (from the start). Used in delta mode to split context vs new turns. */
+  processedTurnCount?: number;
 }
 
 // ── Output Type ──
@@ -311,22 +313,50 @@ Output ONLY valid JSON. No markdown fences, no explanatory text.`;
 export function buildFrameExtractionPrompt(
   input: FrameExtractionInput
 ): FrameExtractionPromptResult {
-  const { turns, snapshot } = input;
+  const { turns, snapshot, processedTurnCount } = input;
 
   if (snapshot) {
     // Delta mode
     const nextId = calcNextFrameId(snapshot.frames);
     const snapshotYaml = serializeSnapshot(snapshot);
-    const turnsText = formatTurns(turns);
+
+    // Split turns into context (already processed) and new (to extract from)
+    const splitAt = processedTurnCount ?? 0;
+    const contextTurns = splitAt > 0 ? turns.slice(0, splitAt) : [];
+    const newTurns = splitAt > 0 ? turns.slice(splitAt) : turns;
+
+    let turnsSection: string;
+    if (contextTurns.length > 0 && newTurns.length > 0) {
+      // Two-section layout: context + new
+      const contextText = formatTurns(contextTurns);
+      const newText = contextTurns.length > 0
+        ? newTurns.map((t, i) => {
+            const idx = contextTurns.length + i;
+            const tag = t.turn_hash ? `[T${idx + 1}:${t.turn_hash.slice(0, 8)}]` : `[T${idx + 1}]`;
+            return `${tag} [${t.role}]: ${t.content}`;
+          }).join('\n')
+        : formatTurns(newTurns);
+      turnsSection = `## Context Turns (already in snapshot — do NOT re-extract these)
+${contextText}
+
+## ★ NEW Turns (extract delta from THESE) ★
+${newText}`;
+    } else {
+      // No split info — treat all as new (backward compatible)
+      turnsSection = `## New Conversation Turns
+${formatTurns(turns)}`;
+    }
 
     const userPrompt = `## Current Snapshot
 ${snapshotYaml}
 
-## New Conversation Turns
-${turnsText}
+${turnsSection}
 
 ## Instructions
-Output the delta (changes only). For each piece of new information:
+Output the delta (changes only) based on the NEW turns above.
+IMPORTANT: The context turns are provided for reference only — their information is already in the snapshot. Focus on NEW turns.
+However, if you notice the snapshot is MISSING important user points from context turns (constraints, preferences, facts), ADD them as new frames.
+For each piece of new information:
 - If it MODIFIES an existing frame → "update" with only changed slots
 - If it's a NEW topic → "add" a new frame
 - If it NEGATES or REPLACES something → "remove" the old frame

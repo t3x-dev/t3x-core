@@ -1,9 +1,11 @@
 /**
- * Coverage Checker Agent — LLM
+ * Coverage Checker Agent — LLM (Two-Step)
  *
- * ONE job: compare user turns against extracted frames and find missing points.
- * If the user said "I'm allergic to peanuts" but no frame captures this,
- * the agent auto-adds it to the appropriate frame (or creates a new one).
+ * Step 1: Extract ALL user-stated key points from conversation (without seeing frames).
+ * Step 2: Compare key points against extracted frames, find missing ones, auto-add.
+ *
+ * Two-step approach is more reliable than single-step because the LLM extracts
+ * user points without being biased by seeing existing frames first.
  *
  * Runs after reviewer — needs fully structured YAML to compare against.
  */
@@ -12,26 +14,50 @@ import type { LLMProvider } from '../../llm/types';
 import type { Frame, SlotValue } from '../../semantic/types';
 import type { MeaningAgent, PipelineContext } from '../meaningPipeline';
 
-const SYSTEM_PROMPT = `You verify that ALL important points from the user's messages are captured in the extracted frames.
+// ── Step 1: Extract user key points (no frames shown) ──
 
-Focus ONLY on what the USER said (ignore assistant responses). Check for:
-1. Constraints — allergies, avoidances, rejections, hard limits
-2. Preferences — stated wants, likes, dislikes, interests
-3. Facts — dates, numbers, group details, logistics
-4. Open questions — things the user asked but remain unresolved
+const STEP1_PROMPT = `You extract ALL important points from the USER's messages. Ignore assistant responses completely.
 
-For each missing point, specify which frame type it belongs to and what slot to add.
+Categorize each point into one of these types:
+- constraint: allergies, avoidances, rejections, hard limits, dealbreakers
+- preference: stated wants, likes, dislikes, interests, style preferences
+- fact: dates, numbers, group details, budget, logistics, transport
+- question: things the user asked but remain unresolved
 
 Output JSON:
 {
-  "coverage_score": 0.8,
+  "points": [
+    { "type": "constraint", "text": "peanut allergy for one friend", "quote": "One friend is allergic to peanuts" },
+    { "type": "preference", "text": "wants bar or live music at night", "quote": "we'd love to check out a nice bar or live music spot" },
+    { "type": "fact", "text": "group of 3 people", "quote": "three of us" },
+    { "type": "question", "text": "weather inquiry", "quote": "What's the weather like in early April?" }
+  ]
+}
+
+Be thorough — capture EVERY point the user made, no matter how small.
+Output ONLY JSON. No explanation.`;
+
+// ── Step 2: Compare points against frames ──
+
+const STEP2_PROMPT = `You compare a list of user-stated points against extracted semantic frames to find what's MISSING.
+
+For each point, check if it is captured in any frame's slots. A point is "captured" if the frame contains the essential meaning — exact wording match is not required.
+
+For each MISSING point, specify how to add it:
+- frame_type: which frame type it belongs to (constraints, preferences, logistics, open_questions, etc.)
+- slot_key: the slot key to use
+- slot_value: the value to add
+
+Output JSON:
+{
+  "coverage_score": 0.7,
   "missing_points": [
     {
-      "text": "peanut allergy",
+      "text": "peanut allergy for one friend",
       "quote": "One friend is allergic to peanuts",
       "frame_type": "constraints",
       "slot_key": "dietary",
-      "slot_value": { "type": "peanut_allergy", "applies_to": "friend" }
+      "slot_value": [{ "type": "peanut_allergy", "applies_to": "friend", "severity": "must avoid" }]
     }
   ]
 }
@@ -59,7 +85,7 @@ function nextFrameId(frames: Frame[]): string {
 
 export const coverageCheckerAgent: MeaningAgent = {
   name: 'coverage_checker',
-  description: 'Verify all user-stated points are captured in frames',
+  description: 'Two-step coverage verification: extract user points then compare against frames',
   usesLLM: true,
 
   shouldRun(ctx: PipelineContext): boolean {
@@ -72,22 +98,49 @@ export const coverageCheckerAgent: MeaningAgent = {
       .map((t, i) => `[U${i + 1}]: ${t.content}`)
       .join('\n');
 
-    const framesDescription = ctx.content.frames
-      .map((f) => `${f.id} ${f.type}: ${JSON.stringify(f.slots, null, 1).slice(0, 400)}`)
-      .join('\n\n');
+    // ── Step 1: Extract user key points (LLM does NOT see frames) ──
+    const step1Prompt = `${STEP1_PROMPT}\n\n## User Messages\n${userTurns}\n\nExtract all points:`;
 
-    const userPrompt = `## User Messages\n${userTurns}\n\n## Current Frames\n${framesDescription}\n\nCheck coverage:`;
-
-    const result = await provider.generate(`${SYSTEM_PROMPT}\n\n${userPrompt}`, {
+    const step1Result = await provider.generate(step1Prompt, {
       temperature: 0.1,
       maxTokens: 2048,
     });
 
-    ctx.meta.totalUsage.inputTokens += result.usage.inputTokens;
-    ctx.meta.totalUsage.outputTokens += result.usage.outputTokens;
+    ctx.meta.totalUsage.inputTokens += step1Result.usage.inputTokens;
+    ctx.meta.totalUsage.outputTokens += step1Result.usage.outputTokens;
+
+    let userPoints: Array<{ type: string; text: string; quote?: string }>;
+    try {
+      const jsonMatch = step1Result.text.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) return ctx;
+      const parsed = JSON.parse(jsonMatch[0]) as { points?: Array<{ type: string; text: string; quote?: string }> };
+      if (!parsed.points || parsed.points.length === 0) return ctx;
+      userPoints = parsed.points;
+    } catch {
+      return ctx; // Step 1 parse failed — non-fatal
+    }
+
+    // ── Step 2: Compare points against frames (LLM sees both) ──
+    const framesDescription = ctx.content.frames
+      .map((f) => `${f.id} ${f.type}: ${JSON.stringify(f.slots, null, 1).slice(0, 400)}`)
+      .join('\n\n');
+
+    const pointsList = userPoints
+      .map((p, i) => `${i + 1}. [${p.type}] ${p.text}${p.quote ? ` — "${p.quote}"` : ''}`)
+      .join('\n');
+
+    const step2Prompt = `${STEP2_PROMPT}\n\n## User Key Points\n${pointsList}\n\n## Current Frames\n${framesDescription}\n\nCompare and find missing:`;
+
+    const step2Result = await provider.generate(step2Prompt, {
+      temperature: 0.1,
+      maxTokens: 2048,
+    });
+
+    ctx.meta.totalUsage.inputTokens += step2Result.usage.inputTokens;
+    ctx.meta.totalUsage.outputTokens += step2Result.usage.outputTokens;
 
     try {
-      const jsonMatch = result.text.match(/\{[\s\S]*\}/);
+      const jsonMatch = step2Result.text.match(/\{[\s\S]*\}/);
       if (!jsonMatch) return ctx;
 
       const parsed = JSON.parse(jsonMatch[0]) as {
@@ -114,7 +167,7 @@ export const coverageCheckerAgent: MeaningAgent = {
           const currentValue = existing.slots[point.slot_key];
           if (Array.isArray(currentValue)) {
             // Append to existing array
-            existing.slots[point.slot_key] = [...currentValue, point.slot_value];
+            existing.slots[point.slot_key] = [...currentValue, ...(Array.isArray(point.slot_value) ? point.slot_value : [point.slot_value])];
           } else if (currentValue === undefined) {
             // New slot
             existing.slots[point.slot_key] = point.slot_value;
@@ -135,7 +188,7 @@ export const coverageCheckerAgent: MeaningAgent = {
 
       ctx.content = { ...ctx.content, frames };
     } catch {
-      // Parse failed — non-fatal, continue with what we have
+      // Step 2 parse failed — non-fatal, continue with what we have
     }
 
     return ctx;

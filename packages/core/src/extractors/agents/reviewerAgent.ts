@@ -22,6 +22,9 @@ const SYSTEM_PROMPT = `You review a structured meaning document for quality. Che
 3. Are slot names clear and consistent? (all snake_case, no abbreviations)
 4. Is the nesting logical? (sub-topics under correct parents)
 5. Are arrays used for lists of similar items?
+6. Are the user's explicit CONSTRAINTS captured? (allergies, avoidances, rejections, hard limits — these MUST exist as a separate "constraints" frame if the user stated any)
+7. Does any frame content CONTRADICT what the user explicitly said? (e.g., user said "avoid X" but a frame recommends X)
+8. If the user asked unresolved questions, is there an "open_questions" frame?
 
 If issues found, output JSON with fixes:
 \`\`\`json

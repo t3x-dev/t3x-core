@@ -145,6 +145,16 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
       turn_hash: t.turnHash,
     }));
 
+    // 4b. Calculate processedTurnCount — how many turns were present at the last extraction
+    let processedTurnCount: number | undefined;
+    if (deltaRecords.length > 0 && currentSnapshot.frames.length > 0) {
+      const lastDelta = deltaRecords[deltaRecords.length - 1];
+      const lastExtractionTime = new Date(lastDelta.createdAt).getTime();
+      processedTurnCount = selectedTurns.filter(
+        (t) => new Date(t.createdAt).getTime() <= lastExtractionTime
+      ).length;
+    }
+
     // 5. Call FrameExtractor via provider registry with fallback (usage tracked)
     const reg = await getProviderRegistry();
     const trackedUsage = { inputTokens: 0, outputTokens: 0 };
@@ -158,6 +168,7 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
       return extractor.extract({
         turns: extractionTurns,
         snapshot: currentSnapshot.frames.length > 0 ? currentSnapshot : undefined,
+        processedTurnCount,
       }).then((r) => {
         trackedUsage.inputTokens = usage.inputTokens;
         trackedUsage.outputTokens = usage.outputTokens;
