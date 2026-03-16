@@ -26,7 +26,7 @@ export interface ShareResolveResult {
 }
 
 export async function createShareLink(
-  entityType: 'leaf' | 'run' | 'comparison',
+  entityType: 'leaf' | 'run' | 'comparison' | 'commit',
   entityId: string
 ): Promise<ShareLink> {
   const res = await fetchWithTimeout(`${API_V1}/share`, {

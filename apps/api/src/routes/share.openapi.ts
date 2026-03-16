@@ -11,6 +11,7 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
   createShareToken,
+  findCommitV4ByHash,
   findLeafById,
   findShareTokenById,
   findShareTokenByToken,
@@ -99,6 +100,16 @@ shareRoutes.openapi(createShareRoute, async (c) => {
         );
       }
       projectId = comparison.projectId || undefined;
+    } else if (body.entity_type === 'commit') {
+      const commit = await findCommitV4ByHash(db, body.entity_id);
+      if (!commit) {
+        return errorResponse(
+          c,
+          'SHARE_ENTITY_NOT_FOUND',
+          `Commit not found: ${body.entity_id}`
+        );
+      }
+      projectId = commit.project_id ?? undefined;
     }
 
     if (!projectId) {
@@ -176,6 +187,8 @@ shareRoutes.openapi(resolveShareRoute, async (c) => {
       entity = await getRun(db, shareToken.entity_id);
     } else if (shareToken.entity_type === 'comparison') {
       entity = await getComparison(db, shareToken.entity_id);
+    } else if (shareToken.entity_type === 'commit') {
+      entity = await findCommitV4ByHash(db, shareToken.entity_id);
     } else {
       return errorResponse(c, 'SHARE_ENTITY_NOT_FOUND', 'Unsupported entity type');
     }
@@ -267,7 +280,7 @@ const listShareRoute = createRoute({
   request: {
     params: z.object({
       entityType: z
-        .enum(['leaf', 'run', 'comparison'])
+        .enum(['leaf', 'run', 'comparison', 'commit'])
         .openapi({ description: 'Type of shared entity' }),
       entityId: z.string().min(1),
     }),
