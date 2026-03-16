@@ -67,8 +67,13 @@ export function useContextMenu({
       const hasConversation = !!node.data.conversationId;
       const commitHash =
         node.data.commitV4?.hash || node.data.commitV3?.hash || node.data.commitHash || '';
+      const conversationId = node.data.conversationId;
       const groups = buildUnitNodeMenu({
         onOpenDetail: () => openNodeModal(node.id, 'commit'),
+        onOpenConversation:
+          hasConversation && conversationId && onNavigate
+            ? () => onNavigate(`/chat/${conversationId}`)
+            : undefined,
         onViewCommitPage:
           isCommitted && commitHash && projectId && onNavigate
             ? () => onNavigate(`/project/${projectId}/commit/${encodeURIComponent(commitHash)}`)

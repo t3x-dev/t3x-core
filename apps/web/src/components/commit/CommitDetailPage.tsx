@@ -40,6 +40,7 @@ import type { Commit } from '@t3x-dev/core';
 import { FrameGraphView } from '@/components/frame-graph';
 import { Breadcrumb } from '@/components/shared/Breadcrumb';
 import { KeyboardHintBar } from '@/components/shared/KeyboardHintBar';
+import { ShareLinkButton } from '@/components/shared/ShareLinkButton';
 import { useKeyboardNavigation } from '@/hooks/useKeyboardNavigation';
 import type { Leaf } from '@/lib/api';
 import { getProject, listLeavesByCommit } from '@/lib/api';
@@ -268,6 +269,7 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
               <Sparkles size={13} /> View Diff
             </Link>
           )}
+          <ShareLinkButton entityType="commit" entityId={commitHash} />
           <button
             type="button"
             onClick={() => {

@@ -164,6 +164,7 @@ export function buildUnitNodeMenu(opts: {
   onCreateBranch: () => void;
   onConnectLeaf: () => void;
   onAutoExtract?: () => void;
+  onOpenConversation?: () => void;
   onViewCommitPage?: () => void;
   onCopyHash?: () => void;
   onDelete?: () => void;
@@ -174,6 +175,14 @@ export function buildUnitNodeMenu(opts: {
   const primaryItems: ContextMenuItem[] = [
     { label: 'Open Detail', icon: <Eye size={14} />, action: opts.onOpenDetail },
   ];
+
+  if (opts.onOpenConversation) {
+    primaryItems.push({
+      label: 'Open Conversation',
+      icon: <MessageSquarePlus size={14} />,
+      action: opts.onOpenConversation,
+    });
+  }
 
   if (opts.onViewCommitPage) {
     primaryItems.push({

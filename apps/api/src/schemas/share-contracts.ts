@@ -12,7 +12,7 @@ import { z } from '@hono/zod-openapi';
 export const CreateShareLinkRequest = z
   .object({
     entity_type: z
-      .enum(['leaf', 'run', 'comparison'])
+      .enum(['leaf', 'run', 'comparison', 'commit'])
       .openapi({ description: 'Type of entity to share' }),
     entity_id: z.string().min(1).openapi({ description: 'ID of the entity to share' }),
   })

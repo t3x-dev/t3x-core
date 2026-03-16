@@ -14,6 +14,8 @@ import {
   Clock,
   Coins,
   FileText,
+  GitBranch,
+  GitCommit,
   Loader2,
   Trophy,
   XCircle,
@@ -62,6 +64,22 @@ interface ComparisonData {
   treatmentConfig: { model: string; prompt_version: string };
   resultSnapshot: Record<string, unknown>;
   createdAt: string;
+}
+
+interface CommitData {
+  hash: string;
+  schema: string;
+  parents: string[];
+  author: { type?: string; name?: string; id?: string };
+  committed_at: string;
+  content: {
+    sentences?: Array<{ id: string; text: string; confidence?: number }>;
+    frames?: Array<{ id: string; type: string; slots: Record<string, unknown> }>;
+    relations?: Array<{ from: string; to: string; type: string }>;
+  };
+  project_id?: string;
+  message?: string;
+  branch?: string;
 }
 
 export default function SharePage() {
@@ -122,6 +140,10 @@ export default function SharePage() {
 
   if (entityType === 'comparison') {
     return <SharedComparisonView comparison={entity as ComparisonData} />;
+  }
+
+  if (entityType === 'commit') {
+    return <SharedCommitView commit={entity as CommitData} />;
   }
 
   // Fallback for unsupported entity types
@@ -492,6 +514,134 @@ function SharedComparisonView({ comparison }: { comparison: ComparisonData }) {
               <p className="text-xs text-[var(--text-tertiary)]">B Tokens</p>
             </div>
           </div>
+        )}
+      </main>
+    </div>
+  );
+}
+
+function SharedCommitView({ commit }: { commit: CommitData }) {
+  const shortHash = commit.hash.replace('sha256:', '').slice(0, 12);
+  const sentences = commit.content.sentences ?? [];
+  const frames = commit.content.frames ?? [];
+  const relations = commit.content.relations ?? [];
+
+  return (
+    <div className="min-h-screen bg-[var(--surface-app)]">
+      {/* Header */}
+      <header className={cn('flex h-14 items-center gap-4 px-6 border-b', glass.panelBase)}>
+        <GitCommit className="h-5 w-5 text-[var(--text-secondary)]" />
+        <h1 className="text-lg font-semibold text-[var(--text-primary)]">
+          {commit.message || 'Shared Commit'}
+        </h1>
+        {commit.branch && (
+          <span className="inline-flex items-center gap-1 rounded-full border border-[var(--accent-branch,#8b5cf6)]/30 bg-[var(--accent-branch,#8b5cf6)]/8 px-2 py-0.5 text-xs font-medium text-[var(--accent-branch,#8b5cf6)]">
+            <GitBranch size={11} />
+            {commit.branch}
+          </span>
+        )}
+        <div className="flex-1" />
+        <span className="text-xs text-[var(--text-tertiary)]">Shared via T3X</span>
+      </header>
+
+      {/* Content */}
+      <main className="mx-auto max-w-3xl p-6 space-y-6">
+        {/* Metadata */}
+        <div className="flex flex-wrap items-center gap-3 text-sm text-[var(--text-secondary)]">
+          <span className="font-mono text-xs bg-[var(--hover-bg)] px-2 py-0.5 rounded">
+            {shortHash}
+          </span>
+          <span>&middot;</span>
+          <span>{commit.author?.name || commit.author?.type || 'unknown'}</span>
+          <span>&middot;</span>
+          <span>{new Date(commit.committed_at).toLocaleString()}</span>
+          {commit.parents.length > 0 && (
+            <>
+              <span>&middot;</span>
+              <span className="text-[var(--text-tertiary)]">
+                {commit.parents.length} parent{commit.parents.length !== 1 ? 's' : ''}
+              </span>
+            </>
+          )}
+        </div>
+
+        {/* Frames (V5) */}
+        {frames.length > 0 && (
+          <section>
+            <h2 className="text-sm font-medium text-[var(--text-secondary)] mb-2">
+              Frames ({frames.length})
+            </h2>
+            <div className="space-y-2">
+              {frames.map((frame) => (
+                <div key={frame.id} className={cn('rounded-lg px-4 py-3', glass.cardBase)}>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="font-mono text-xs text-[var(--accent-commit,#f59e0b)]">
+                      {frame.id}
+                    </span>
+                    <span className="rounded bg-[var(--hover-bg)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--text-tertiary)]">
+                      {frame.type}
+                    </span>
+                  </div>
+                  <div className="text-sm text-[var(--text-primary)]">
+                    {Object.entries(frame.slots).map(([key, val]) => (
+                      <div key={key} className="flex gap-2 py-0.5">
+                        <span className="shrink-0 text-[var(--text-tertiary)] text-xs font-mono">
+                          {key}:
+                        </span>
+                        <span className="text-[var(--text-secondary)]">
+                          {typeof val === 'string' ? val : JSON.stringify(val)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Relations */}
+        {relations.length > 0 && (
+          <section>
+            <h2 className="text-sm font-medium text-[var(--text-secondary)] mb-2">
+              Relations ({relations.length})
+            </h2>
+            <div className={cn('rounded-lg divide-y divide-[var(--stroke-divider)]', glass.cardBase)}>
+              {relations.map((rel, i) => (
+                <div key={`${rel.from}-${rel.to}-${i}`} className="flex items-center gap-2 px-4 py-2 text-xs">
+                  <span className="font-mono text-[var(--accent-commit,#f59e0b)]">{rel.from}</span>
+                  <span className="text-[var(--text-tertiary)]">{rel.type}</span>
+                  <span className="font-mono text-[var(--accent-commit,#f59e0b)]">{rel.to}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Sentences (V4 fallback) */}
+        {sentences.length > 0 && frames.length === 0 && (
+          <section>
+            <h2 className="text-sm font-medium text-[var(--text-secondary)] mb-2">
+              Sentences ({sentences.length})
+            </h2>
+            <div className="space-y-2">
+              {sentences.map((s) => (
+                <div key={s.id} className={cn('rounded-lg px-4 py-3', glass.cardBase)}>
+                  <div className="flex items-start gap-2">
+                    <span className="shrink-0 font-mono text-[10px] text-[var(--text-tertiary)] mt-0.5">
+                      {s.id}
+                    </span>
+                    <p className="text-sm text-[var(--text-primary)] leading-relaxed">{s.text}</p>
+                  </div>
+                  {s.confidence !== undefined && (
+                    <div className="mt-1 text-[10px] text-[var(--text-tertiary)]">
+                      confidence: {(s.confidence * 100).toFixed(0)}%
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
         )}
       </main>
     </div>
