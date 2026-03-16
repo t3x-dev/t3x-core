@@ -9,6 +9,7 @@
 
 import {
   Copy,
+  ExternalLink,
   Eye,
   FileOutput,
   GitBranch,
@@ -163,21 +164,31 @@ export function buildUnitNodeMenu(opts: {
   onCreateBranch: () => void;
   onConnectLeaf: () => void;
   onAutoExtract?: () => void;
+  onViewCommitPage?: () => void;
   onCopyHash?: () => void;
   onDelete?: () => void;
   isDraft: boolean;
   isDeveloperMode: boolean;
   hasConversation?: boolean;
 }): ContextMenuGroup[] {
-  const groups: ContextMenuGroup[] = [
-    {
-      items: [
-        { label: 'Open Detail', icon: <Eye size={14} />, action: opts.onOpenDetail },
-        { label: 'Create Branch', icon: <GitBranch size={14} />, action: opts.onCreateBranch },
-        { label: 'Connect Leaf', icon: <Leaf size={14} />, action: opts.onConnectLeaf },
-      ],
-    },
+  const primaryItems: ContextMenuItem[] = [
+    { label: 'Open Detail', icon: <Eye size={14} />, action: opts.onOpenDetail },
   ];
+
+  if (opts.onViewCommitPage) {
+    primaryItems.push({
+      label: 'View Commit Page',
+      icon: <ExternalLink size={14} />,
+      action: opts.onViewCommitPage,
+    });
+  }
+
+  primaryItems.push(
+    { label: 'Create Branch', icon: <GitBranch size={14} />, action: opts.onCreateBranch },
+    { label: 'Connect Leaf', icon: <Leaf size={14} />, action: opts.onConnectLeaf },
+  );
+
+  const groups: ContextMenuGroup[] = [{ items: primaryItems }];
 
   if (opts.hasConversation && opts.onAutoExtract) {
     groups.push({
@@ -191,7 +202,7 @@ export function buildUnitNodeMenu(opts: {
     });
   }
 
-  if (opts.isDeveloperMode && opts.onCopyHash) {
+  if (opts.onCopyHash) {
     groups.push({
       items: [{ label: 'Copy Hash', icon: <Copy size={14} />, action: opts.onCopyHash }],
     });

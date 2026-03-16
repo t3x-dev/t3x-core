@@ -37,6 +37,8 @@ interface UseContextMenuOptions {
   handleAutoLayout: () => Promise<void>;
   /** Callback for auto-extract context menu action (optional, shows when hasConversation is true) */
   onAutoExtract?: (nodeId: string) => void;
+  /** Router push for page navigation */
+  onNavigate?: (url: string) => void;
 }
 
 export function useContextMenu({
@@ -49,6 +51,7 @@ export function useContextMenu({
   fitView,
   handleAutoLayout,
   onAutoExtract,
+  onNavigate,
 }: UseContextMenuOptions) {
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [, startTransition] = useTransition();
@@ -60,9 +63,16 @@ export function useContextMenu({
     (event: React.MouseEvent, node: Node<CanvasNodeData>) => {
       event.preventDefault();
       const isDraft = node.data.commitStatus === 'draft';
+      const isCommitted = node.data.commitStatus === 'committed';
       const hasConversation = !!node.data.conversationId;
+      const commitHash =
+        node.data.commitV4?.hash || node.data.commitV3?.hash || node.data.commitHash || '';
       const groups = buildUnitNodeMenu({
         onOpenDetail: () => openNodeModal(node.id, 'commit'),
+        onViewCommitPage:
+          isCommitted && commitHash && projectId && onNavigate
+            ? () => onNavigate(`/project/${projectId}/commit/${encodeURIComponent(commitHash)}`)
+            : undefined,
         onCreateBranch: () => {
           const position = { x: node.position.x + 320, y: node.position.y };
           startTransition(async () => {
@@ -75,13 +85,13 @@ export function useContextMenu({
         },
         onConnectLeaf: () => useCanvasStore.getState().openLeafPanel(node.id),
         onAutoExtract: onAutoExtract ? () => onAutoExtract(node.id) : undefined,
-        onCopyHash: isDeveloperMode
-          ? () => {
-              const hash =
-                node.data.commitV4?.hash || node.data.commitV3?.hash || node.data.commitHash || '';
-              navigator.clipboard.writeText(hash);
-            }
-          : undefined,
+        onCopyHash:
+          commitHash
+            ? () => {
+                navigator.clipboard.writeText(commitHash);
+                notify?.('Hash copied to clipboard', 'success');
+              }
+            : undefined,
         onDelete: isDraft
           ? () => {
               // Trigger removal via onNodesChange (same as pressing Delete key)
@@ -95,7 +105,7 @@ export function useContextMenu({
       });
       setContextMenu({ x: event.clientX, y: event.clientY, groups });
     },
-    [openNodeModal, addNode, isDeveloperMode, notify, onAutoExtract]
+    [openNodeModal, addNode, isDeveloperMode, notify, onAutoExtract, projectId, onNavigate]
   );
 
   // Pane context menu — inline addNode to avoid forward-declaration of handleAddNode
@@ -129,11 +139,12 @@ export function useContextMenu({
       event.stopPropagation();
       const groups = buildLeafNodeMenu({
         onOpenDetail: () => {
-          const node = getNodes().find((n) => n.id === nodeId);
-          const leaves = node?.data.leaves as Array<{ id: string }> | undefined;
-          const leaf = leaves?.find((l) => l.id === leafId);
-          if (leaf && projectId) {
-            window.location.href = `/project/${projectId}/leaf/${leafId}`;
+          if (projectId) {
+            if (onNavigate) {
+              onNavigate(`/project/${projectId}/leaf/${leafId}`);
+            } else {
+              window.location.href = `/project/${projectId}/leaf/${leafId}`;
+            }
           }
         },
         onGenerate: () => {

@@ -16,6 +16,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { relativeTime, shortHash } from '@/components/commit/CommitDetailHelpers';
+import { Breadcrumb } from '@/components/shared/Breadcrumb';
 import { FrameGraphView } from '@/components/frame-graph';
 import type { CommitMeta, FrameDiffResponse } from '@/lib/api/frameDiff';
 import { getCommitAsFrames } from '@/lib/api/commitUnified';
@@ -332,16 +333,13 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
           </button>
 
           {/* Breadcrumb */}
-          <nav className="flex items-center gap-1.5 text-[12px]">
-            <Link
-              href={`/project/${projectId}`}
-              className="text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] transition-colors"
-            >
-              {project?.name ?? 'Project'}
-            </Link>
-            <span className="text-[var(--text-tertiary)]">/</span>
-            <span className="text-[var(--text-primary)] font-medium">Diff</span>
-          </nav>
+          <Breadcrumb
+            className="text-[12px]"
+            segments={[
+              { label: project?.name ?? 'Project', href: `/project/${projectId}` },
+              { label: 'Diff' },
+            ]}
+          />
 
           {/* Commit badges */}
           <div className="flex items-center gap-2 ml-3">

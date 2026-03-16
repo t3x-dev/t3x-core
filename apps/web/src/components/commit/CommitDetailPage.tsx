@@ -23,7 +23,6 @@
 
 import {
   ArrowLeft,
-  ChevronRight,
   ExternalLink,
   Eye,
   GitBranch,
@@ -39,6 +38,7 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Commit } from '@t3x-dev/core';
 import { FrameGraphView } from '@/components/frame-graph';
+import { Breadcrumb } from '@/components/shared/Breadcrumb';
 import { KeyboardHintBar } from '@/components/shared/KeyboardHintBar';
 import { useKeyboardNavigation } from '@/hooks/useKeyboardNavigation';
 import type { Leaf } from '@/lib/api';
@@ -242,29 +242,16 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
           >
             <ArrowLeft size={16} />
           </button>
-          <nav className="flex items-center gap-1 text-[13px]">
-            <Link
-              href={`/project/${projectId}`}
-              className="text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] transition-colors"
-            >
-              {projectName || 'Canvas'}
-            </Link>
-            <ChevronRight size={12} className="text-[var(--text-tertiary)]" />
-            {commit.branch && (
-              <>
-                <Link
-                  href={`/project/${projectId}/history`}
-                  className="text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] transition-colors"
-                >
-                  {commit.branch}
-                </Link>
-                <ChevronRight size={12} className="text-[var(--text-tertiary)]" />
-              </>
-            )}
-            <span className="font-mono text-[var(--text-primary)] font-medium">
-              {shortHash(commitHash)}
-            </span>
-          </nav>
+          <Breadcrumb
+            className="text-[13px]"
+            segments={[
+              { label: projectName || 'Project', href: `/project/${projectId}` },
+              ...(commit.branch
+                ? [{ label: commit.branch, href: `/project/${projectId}/history` }]
+                : []),
+              { label: shortHash(commitHash) },
+            ]}
+          />
         </div>
         <div className="flex items-center gap-1.5">
           <Link
