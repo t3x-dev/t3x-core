@@ -42,6 +42,8 @@ import { UnifiedDiffView } from './UnifiedDiffView';
 interface MergeWorkspaceProps {
   projectId: string;
   onClose: () => void;
+  /** Called after a successful merge commit with the new commit hash */
+  onMergeCommitted?: (commitHash: string) => void;
 }
 
 /**
@@ -129,7 +131,7 @@ function buildMergedContent(
   return { frames, relations };
 }
 
-export function MergeWorkspace({ projectId, onClose }: MergeWorkspaceProps) {
+export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWorkspaceProps) {
   const {
     prepared,
     message,
@@ -357,9 +359,26 @@ export function MergeWorkspace({ projectId, onClose }: MergeWorkspaceProps) {
     fetchServerChecks();
   }, [fetchServerChecks]);
 
+  // Store committed hash so the dialog's celebration timer can navigate to it
+  const committedHashRef = useRef<string | null>(null);
+
   const handleConfirmMerge = useCallback(async () => {
-    await commitMerge();
+    const result = await commitMerge();
+    if (result?.hash) {
+      committedHashRef.current = result.hash;
+    }
   }, [commitMerge]);
+
+  // Wrap onClose: after a successful merge, navigate to commit detail instead of canvas
+  const handleCloseOrNavigate = useCallback(() => {
+    const hash = committedHashRef.current;
+    if (hash && onMergeCommitted) {
+      committedHashRef.current = null;
+      onMergeCommitted(hash);
+    } else {
+      onClose();
+    }
+  }, [onClose, onMergeCommitted]);
 
   // Frame merge commit handler
   const handleFrameCommitMerge = useCallback(async () => {
@@ -374,7 +393,7 @@ export function MergeWorkspace({ projectId, onClose }: MergeWorkspaceProps) {
         keepTargetFrames
       );
 
-      await createCommit(
+      const result = await createCommit(
         projectId,
         {
           frames: mergedContent.frames,
@@ -391,7 +410,13 @@ export function MergeWorkspace({ projectId, onClose }: MergeWorkspaceProps) {
 
       // Reload canvas data to show the new merge commit
       useCanvasStore.getState().loadProjectData(projectId);
-      onClose();
+
+      // Navigate to the new merge commit detail page
+      if (onMergeCommitted && result?.commit?.hash) {
+        onMergeCommitted(result.commit.hash);
+      } else {
+        onClose();
+      }
     } catch (err) {
       setFrameError(err instanceof Error ? err.message : 'Failed to commit frame merge');
     } finally {
@@ -408,6 +433,7 @@ export function MergeWorkspace({ projectId, onClose }: MergeWorkspaceProps) {
     targetBranch,
     message,
     onClose,
+    onMergeCommitted,
   ]);
 
   // Frame merge can-commit check
@@ -790,7 +816,7 @@ export function MergeWorkspace({ projectId, onClose }: MergeWorkspaceProps) {
         sentenceCount={getPreviewSentences().length}
         summary={summary}
         serverChecksLoading={serverChecksLoading}
-        onBackToCanvas={onClose}
+        onBackToCanvas={handleCloseOrNavigate}
         prepared={prepared}
         extendedResolutions={extendedResolutions}
       />

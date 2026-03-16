@@ -43,6 +43,11 @@ export default function MergeWorkspacePage() {
     router.push(`/project/${projectId}`);
   };
 
+  const handleMergeCommitted = (commitHash: string) => {
+    reset();
+    router.push(`/project/${projectId}/commit/${encodeURIComponent(commitHash)}`);
+  };
+
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
@@ -73,5 +78,5 @@ export default function MergeWorkspacePage() {
     );
   }
 
-  return <MergeWorkspace projectId={projectId} onClose={handleClose} />;
+  return <MergeWorkspace projectId={projectId} onClose={handleClose} onMergeCommitted={handleMergeCommitted} />;
 }

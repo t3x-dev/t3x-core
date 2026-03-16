@@ -1,6 +1,7 @@
 'use client';
 
 import { ChevronDown } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -13,6 +14,7 @@ import {
 import { useExtractionPanelStore } from '@/store/extractionPanelStore';
 
 export function CommitDropdown() {
+  const router = useRouter();
   const draft = useExtractionPanelStore((s) => s.draft);
   const setPanelMode = useExtractionPanelStore((s) => s.setPanelMode);
   const selectDeltaFrames = useExtractionPanelStore((s) => s.selectDeltaFrames);
@@ -49,7 +51,7 @@ export function CommitDropdown() {
         action: commitUrl
           ? {
               label: 'View commit',
-              onClick: () => window.location.assign(commitUrl),
+              onClick: () => router.push(commitUrl),
             }
           : undefined,
       });

@@ -138,12 +138,35 @@ function ProjectDetailPageContent() {
     }
   }, [projectId, loadedProjectId]);
 
-  // Refresh leaves when page becomes visible (handles returning from commit detail page)
+  // Refresh project data when page becomes visible OR on a 30s polling interval.
+  // This ensures canvas stays up-to-date when commits are created from Chat.
+  const lastRefreshRef = useRef(0);
   useEffect(() => {
     if (!projectId) return;
-    const onFocus = () => useCanvasStore.getState().refreshLeaves(projectId);
-    window.addEventListener('focus', onFocus);
-    return () => window.removeEventListener('focus', onFocus);
+
+    const refreshIfStale = () => {
+      const now = Date.now();
+      if (now - lastRefreshRef.current > 5000) {
+        lastRefreshRef.current = now;
+        useCanvasStore.getState().loadProjectData(projectId);
+      }
+    };
+
+    // Refresh on tab re-focus
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') refreshIfStale();
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    // Poll every 30s while page is visible
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') refreshIfStale();
+    }, 30_000);
+
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      clearInterval(interval);
+    };
   }, [projectId]);
 
   // Initialize pins store for the project
