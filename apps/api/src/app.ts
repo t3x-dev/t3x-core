@@ -55,6 +55,7 @@ import {
 import { apiKeysRoutes } from './routes/api-keys.openapi';
 import { authLocalRoutes } from './routes/auth-local.openapi';
 import { authMeRoutes } from './routes/auth-me.openapi';
+import { usageRoutes } from './routes/usage.openapi';
 import { autopilotRoutes } from './routes/autopilot.openapi';
 import { comparisonsRoutes } from './routes/comparisons.openapi';
 import { importRoutes } from './routes/import.openapi';
@@ -69,7 +70,6 @@ import { recipesRoutes } from './routes/recipes.openapi';
 import { searchRoutes } from './routes/search.openapi';
 import { shareRoutes } from './routes/share.openapi';
 import { templatesRoutes } from './routes/templates.openapi';
-import { usageRoutes } from './routes/usage.openapi';
 import { webhooksRoutes } from './routes/webhooks.openapi';
 
 export interface CreateAppOptions {

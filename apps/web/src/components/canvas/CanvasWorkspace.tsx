@@ -358,9 +358,19 @@ function CanvasWorkspaceInner({
           }}
           onNodeDoubleClick={(_, node) => {
             const data = node.data as import('@/types/nodes').CanvasNodeData;
-            // Committed commits -> navigate to full-page detail view
+            // Leaf nodes -> navigate to leaf detail page
+            if (data.kind === 'leaf' && data.leafId && projectId) {
+              router.push(`/project/${projectId}/leaf/${data.leafId}`);
+              return;
+            }
+            // Committed commits -> navigate to full-page commit detail view
             if (data.commitStatus === 'committed' && data.commitHash && projectId) {
               router.push(`/project/${projectId}/commit/${encodeURIComponent(data.commitHash)}`);
+              return;
+            }
+            // Conversation nodes (non-staging unit without commit) -> navigate to chat
+            if (data.kind === 'unit' && data.conversationId && data.commitStatus !== 'staging' && !data.commitHash) {
+              router.push(`/chat/${data.conversationId}`);
               return;
             }
             openNodeModal(node.id, 'commit');
