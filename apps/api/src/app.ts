@@ -70,7 +70,6 @@ import { recipesRoutes } from './routes/recipes.openapi';
 import { searchRoutes } from './routes/search.openapi';
 import { shareRoutes } from './routes/share.openapi';
 import { templatesRoutes } from './routes/templates.openapi';
-import { usageRoutes } from './routes/usage.openapi';
 import { webhooksRoutes } from './routes/webhooks.openapi';
 
 export interface CreateAppOptions {
