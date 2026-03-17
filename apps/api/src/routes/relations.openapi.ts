@@ -6,11 +6,11 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { createRelationExtractor } from '@t3x-dev/core';
+import { createRelationExtractor, framesToTextSegments } from '@t3x-dev/core';
 import {
   deleteRelationsByCommit,
-  findCommitV4ByHash,
   findRelationsByCommit,
+  getCommitUnified,
   upsertRelations,
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
@@ -77,7 +77,7 @@ relationsRoutes.openapi(getRelationsRoute, async (c) => {
   const decodedHash = decodeURIComponent(hash);
   try {
     const db = await getDB();
-    const commit = await findCommitV4ByHash(db, decodedHash);
+    const commit = await getCommitUnified(db, decodedHash);
     if (!commit) {
       return errorResponse(c, 'COMMIT_NOT_FOUND', `Commit not found: ${decodedHash}`);
     }
@@ -140,7 +140,7 @@ relationsRoutes.openapi(extractRelationsRoute, async (c) => {
   const decodedHash = decodeURIComponent(hash);
   try {
     const db = await getDB();
-    const commit = await findCommitV4ByHash(db, decodedHash);
+    const commit = await getCommitUnified(db, decodedHash);
     if (!commit) {
       return errorResponse(c, 'COMMIT_NOT_FOUND', `Commit not found: ${decodedHash}`);
     }
@@ -156,7 +156,7 @@ relationsRoutes.openapi(extractRelationsRoute, async (c) => {
         'No LLM provider configured. Set ANTHROPIC_API_KEY or another provider key.'
       );
     }
-    const sentences = commit.content.sentences.map((s) => ({ id: s.id, text: s.text }));
+    const sentences = framesToTextSegments(commit.content);
     const { provider: trackedProvider, usage: trackedUsage } = wrapWithUsageTracking(provider);
     const extractor = createRelationExtractor(trackedProvider);
     const result = await extractor.extract(sentences);

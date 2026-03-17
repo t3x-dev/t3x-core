@@ -16,16 +16,11 @@ import {
   EmbeddingProviderError,
   type FrameDiff,
   frameDiff,
+  framesToTextSegments,
   type SegmentDiff,
-  upgradeLegacyCommit,
   type WordDiffSegment,
 } from '@t3x-dev/core';
-import {
-  findCommitV4ByHash,
-  findSegmentEmbeddingsByTurn,
-  findTurnByHash,
-  getCommit,
-} from '@t3x-dev/storage';
+import { findSegmentEmbeddingsByTurn, findTurnByHash, getCommitUnified } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { getDB } from '../lib/db';
 import { jsonError, jsonSuccess } from '../lib/response';
@@ -154,17 +149,16 @@ diffRoutes.post('/v1/diff/two-way', async (c) => {
 
   const db = await getDB();
 
-  // Mode 1: commit_hash mode (V4 first, fallback to V3)
+  // Mode 1: commit_hash mode (V5 unified, fallback to V4/V3)
   if (body.base_commit_hash && body.target_commit_hash) {
-    // Try V4 commits first
-    const baseV4 = await findCommitV4ByHash(db, body.base_commit_hash);
-    const targetV4 = await findCommitV4ByHash(db, body.target_commit_hash);
+    const baseCommit = await getCommitUnified(db, body.base_commit_hash);
+    const targetCommit = await getCommitUnified(db, body.target_commit_hash);
 
-    if (baseV4 && targetV4) {
-      // V4 path: use local Jaccard + Hungarian diff (no embedding API needed)
+    if (baseCommit && targetCommit) {
+      // Use framesToTextSegments to convert frames to {id, text}[] for diffCommits
       const commitDiff = diffCommits(
-        baseV4.content.sentences.map((s) => ({ id: s.id, text: s.text })),
-        targetV4.content.sentences.map((s) => ({ id: s.id, text: s.text }))
+        framesToTextSegments(baseCommit.content),
+        framesToTextSegments(targetCommit.content)
       );
 
       // Convert CommitDiff → response format for frontend compatibility
@@ -201,10 +195,10 @@ diffRoutes.post('/v1/diff/two-way', async (c) => {
         cacheStats: null,
       });
     } else {
-      if (!baseV4) {
+      if (!baseCommit) {
         return jsonError(c, 'NOT_FOUND', `Base commit ${body.base_commit_hash} not found`, 404);
       }
-      if (!targetV4) {
+      if (!targetCommit) {
         return jsonError(c, 'NOT_FOUND', `Target commit ${body.target_commit_hash} not found`, 404);
       }
     }
@@ -479,22 +473,9 @@ diffRoutes.post('/v1/diff/frame', async (c) => {
 
   const db = await getDB();
 
-  // Fetch commit — try V5 first, fall back to V4, then V3 (all upgraded to frame-based)
-  const fetchCommit = async (hash: string) => {
-    // Try V5 (frame-based)
-    const v5 = await getCommit(db, hash);
-    if (v5) return v5;
-
-    // Try V4 (sentence-based) and upgrade to frame-based
-    const v4 = await findCommitV4ByHash(db, hash);
-    if (v4) return upgradeLegacyCommit(v4 as Parameters<typeof upgradeLegacyCommit>[0]);
-
-    return null;
-  };
-
   const [baseCommit, targetCommit] = await Promise.all([
-    fetchCommit(body.base_commit_hash),
-    fetchCommit(body.target_commit_hash),
+    getCommitUnified(db, body.base_commit_hash),
+    getCommitUnified(db, body.target_commit_hash),
   ]);
 
   if (!baseCommit) {

@@ -10,9 +10,12 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
+import type { Commit } from '@t3x-dev/core';
 import {
   AllProvidersFailedError,
+  type CommitV4,
   collectLessons,
+  framesToTextSegments,
   GenerationError,
   type GenerationMode,
   isGenerationConfigured,
@@ -23,9 +26,9 @@ import {
 import {
   createLeaf,
   createLeafHistory,
-  findCommitV4ByHash,
   findLeafById,
   findLeavesByCommit,
+  getCommitUnified,
   updateLeaf,
   updateLeafOutput,
 } from '@t3x-dev/storage';
@@ -55,6 +58,29 @@ import { pushNotification } from './notifications.openapi';
 export const leavesGenerationRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
 });
+
+// ============================================================
+// Helpers
+// ============================================================
+
+/**
+ * Convert a V5 unified Commit to a V4-compatible CommitV4 shape.
+ * Needed because generateLeafOutput / modeGenerate expect CommitV4.
+ */
+function commitToV4Compatible(commit: Commit): CommitV4 {
+  const segments = framesToTextSegments(commit.content);
+  return {
+    ...commit,
+    schema: 't3x/commit/v4' as const,
+    content: {
+      sentences: segments.map((seg) => ({
+        id: seg.id,
+        text: seg.text,
+        confidence: 1,
+      })),
+    },
+  } as CommitV4;
+}
 
 // ============================================================
 // Route Definitions
@@ -264,11 +290,12 @@ leavesGenerationRoutes.openapi(generateLeafRoute, async (c) => {
       return errorResponse(c, 'LEAF_NOT_FOUND', `Leaf not found: ${id}`);
     }
 
-    // Get source commit by hash (V4 only)
-    const commit = await findCommitV4ByHash(db, leaf.commit_hash);
-    if (!commit) {
+    // Get source commit by hash (V5 unified, auto-upgrades V4)
+    const unifiedCommit = await getCommitUnified(db, leaf.commit_hash);
+    if (!unifiedCommit) {
       return errorResponse(c, 'COMMIT_NOT_FOUND', `Source commit not found: ${leaf.commit_hash}`);
     }
+    const commit = commitToV4Compatible(unifiedCommit);
 
     // Collect lessons from historical leaves on the same commit (#4 feedback loop)
     const historicalLeaves = await findLeavesByCommit(db, leaf.commit_hash);
@@ -599,11 +626,12 @@ leavesGenerationRoutes.openapi(batchGenerateRoute, async (c) => {
   try {
     const db = await getDB();
 
-    // 1. Verify commit exists
-    const commit = await findCommitV4ByHash(db, decodedHash);
-    if (!commit) {
+    // 1. Verify commit exists (V5 unified, auto-upgrades V4)
+    const unifiedCommit = await getCommitUnified(db, decodedHash);
+    if (!unifiedCommit) {
       return errorResponse(c, 'COMMIT_NOT_FOUND', `Commit not found: ${decodedHash}`);
     }
+    const commit = commitToV4Compatible(unifiedCommit);
 
     // 2. Check generation configuration if generation is needed
     const needsGeneration = !body.skip_generation;

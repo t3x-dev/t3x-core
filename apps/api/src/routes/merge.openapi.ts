@@ -16,6 +16,7 @@ import type { CreateCommitV4Input, MergeSummaryData, SlotValue } from '@t3x-dev/
 import {
   executeMerge,
   type FrameMergeInput,
+  framesToTextSegments,
   type Merge2WayResult,
   prepareMerge,
   suggestFrameMerge,
@@ -26,8 +27,8 @@ import {
   createCommitV4,
   createMergeDraft,
   deleteMergeDraft,
-  findCommitV4ByHash,
   findPendingMergeDraft,
+  getCommitUnified,
   getMergeDraft,
   updateBranchHead,
   updateMergeDraft,
@@ -112,8 +113,8 @@ mergeRoutes.openapi(prepareMergeRoute, async (c) => {
   try {
     const db = await getDB();
 
-    // Load V4 commits
-    const sourceCommit = await findCommitV4ByHash(db, source_hash);
+    // Load commits (V5 unified, auto-upgrades V4)
+    const sourceCommit = await getCommitUnified(db, source_hash);
     if (!sourceCommit) {
       return c.json(
         {
@@ -127,7 +128,7 @@ mergeRoutes.openapi(prepareMergeRoute, async (c) => {
       );
     }
 
-    const targetCommit = await findCommitV4ByHash(db, target_hash);
+    const targetCommit = await getCommitUnified(db, target_hash);
     if (!targetCommit) {
       return c.json(
         {
@@ -141,8 +142,11 @@ mergeRoutes.openapi(prepareMergeRoute, async (c) => {
       );
     }
 
-    // Prepare merge using V4 sentences (DiffableSentence[])
-    const prepared = prepareMerge(sourceCommit.content.sentences, targetCommit.content.sentences);
+    // Prepare merge using text segments extracted from frames
+    const prepared = prepareMerge(
+      framesToTextSegments(sourceCommit.content),
+      framesToTextSegments(targetCommit.content)
+    );
 
     return c.json({ success: true as const, data: prepared }, 200);
   } catch (error) {
@@ -267,7 +271,7 @@ mergeRoutes.openapi(executeMergeRoute, async (c) => {
 
   try {
     // Get project_id from source commit for executeMerge
-    const sourceCommit = await findCommitV4ByHash(db, source_hash);
+    const sourceCommit = await getCommitUnified(db, source_hash);
     if (!sourceCommit) {
       return c.json(
         {
@@ -465,8 +469,8 @@ mergeRoutes.openapi(createDraftRoute, async (c) => {
     );
   }
 
-  // Load V4 commits
-  const sourceCommit = await findCommitV4ByHash(db, source_hash);
+  // Load commits (V5 unified, auto-upgrades V4)
+  const sourceCommit = await getCommitUnified(db, source_hash);
   if (!sourceCommit) {
     return c.json(
       {
@@ -477,7 +481,7 @@ mergeRoutes.openapi(createDraftRoute, async (c) => {
     );
   }
 
-  const targetCommit = await findCommitV4ByHash(db, target_hash);
+  const targetCommit = await getCommitUnified(db, target_hash);
   if (!targetCommit) {
     return c.json(
       {
@@ -488,8 +492,11 @@ mergeRoutes.openapi(createDraftRoute, async (c) => {
     );
   }
 
-  // Prepare merge using V4 sentences
-  const prepared = prepareMerge(sourceCommit.content.sentences, targetCommit.content.sentences);
+  // Prepare merge using text segments extracted from frames
+  const prepared = prepareMerge(
+    framesToTextSegments(sourceCommit.content),
+    framesToTextSegments(targetCommit.content)
+  );
 
   // Create draft
   const draft = await createMergeDraft(db, {
