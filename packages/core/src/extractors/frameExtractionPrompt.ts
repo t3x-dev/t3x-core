@@ -20,6 +20,8 @@ export interface FrameExtractionTurn {
 export interface FrameExtractionInput {
   turns: FrameExtractionTurn[];
   snapshot?: SemanticContent;
+  /** Number of turns already processed by previous extractions (from the start). Used in delta mode to split context vs new turns. */
+  processedTurnCount?: number;
 }
 
 // ── Output Type ──
@@ -100,34 +102,57 @@ function formatTurns(turns: FrameExtractionTurn[]): string {
 
 const DELTA_SYSTEM_PROMPT = `You are a semantic extraction engine. Your task is to extract semantic CHANGES (delta) from new conversation turns — NOT re-generate everything.
 
+## CRITICAL: Extraction Priority (MUST follow this order)
+1. USER CONSTRAINTS — allergies, avoidances, rejections, hard limits, dealbreakers (confidence: 0.95)
+2. USER PREFERENCES — explicitly stated wants, likes, dislikes, interests (confidence: 0.9)
+3. USER FACTS — dates, group size, budget, logistics, travel method (confidence: 0.9)
+4. USER OPEN QUESTIONS — things the user asked but remain unresolved (confidence: 0.7)
+5. MUTUAL DECISIONS — things both parties agreed on or user confirmed (confidence: 0.8)
+6. ASSISTANT SUGGESTIONS — recommendations NOT yet confirmed by user (confidence: 0.3-0.5)
+
+Categories 1-4 MUST ALWAYS be extracted. Category 6 should ONLY be extracted if the user acknowledged or built upon it.
+
 ## Core Rules
 1. Output ONLY changes (delta) — do NOT repeat unchanged frames
-2. Group related items into ONE frame with array slots — do NOT create separate frames for each item (e.g., 10 city recommendations = ONE frame with a "cities" array, NOT 10 separate frames)
+2. Group related items into ONE frame with array slots — do NOT create separate frames for each item
 3. Keep conclusions and decisions, discard process discussion
 4. Frame type uses snake_case (nouns or noun phrases)
 5. Frame IDs follow pattern: f_001, f_002, ...
-6. AIM FOR 3-8 FRAMES TOTAL — if you have more than 8, you're probably creating separate frames for items that should be arrays within one frame
+6. AIM FOR 3-8 FRAMES TOTAL
 
 ## CRITICAL: When to UPDATE vs ADD
 - If a new turn MODIFIES information already captured in an existing frame → use "update" with only the changed slots
 - If a new turn provides NEW information on a DIFFERENT topic → use "add"
 - DO NOT add a new frame when an existing frame covers the same topic — UPDATE it instead
-- Examples of updates: price changes, preference changes, plan modifications, corrected information
+- When the user states a NEW constraint or preference → if a "constraints" or "preferences" frame already exists, UPDATE it by adding to the array; otherwise ADD a new frame
 
 ## CRITICAL: When to REMOVE
 - If the user explicitly rejects, cancels, or changes their mind about something → use "remove"
-- If the user replaces one option with another (e.g., "actually, let's skip Kyoto") → REMOVE the old frame AND add/update the new one
+- If the user replaces one option with another → REMOVE the old frame AND add/update the new one
 - If the assistant's suggestion is rejected by the user → remove frames from that suggestion
 
+## CRITICAL: New User Constraints
+When the user states a new constraint (allergy, avoidance, rejection) in a later turn:
+- This is HIGHEST PRIORITY — it MUST appear in the delta output
+- If a "constraints" frame exists → UPDATE it with the new constraint added to the relevant array
+- If no "constraints" frame exists → ADD one
+- NEVER ignore a user constraint just because it appeared in a later turn
+
+## Frame Type Guidance
+Ensure these frame types exist when relevant:
+- constraints: { dietary: [...], avoid_places: [...], health: [...] }
+- preferences: { accommodation: ..., interests: [...], nightlife: ... }
+- logistics: { transport: ..., arrival: ..., departure: ..., dates: ... }
+- open_questions: { items: ["unanswered question 1", "unanswered question 2"] }
+
 ## Source Tracking
-- Set the "source" field on each new/updated frame to the turn tag (e.g., "T3") where the information came from
+- Set the "source" field on each new/updated frame to the turn tag (e.g., "T3")
 - For frames derived from multiple turns, use the most recent turn
 
 ## Confidence Scoring
 - User's explicit statements → confidence: 0.9-1.0
 - User's implied preferences → confidence: 0.6-0.8
-- LLM suggestions the user hasn't confirmed → confidence: 0.3-0.5
-- LLM questions (options not yet chosen) → confidence: 0.2-0.3
+- Assistant's suggestions not confirmed → confidence: 0.3-0.5
 
 ## Relation Types (pick from these 6 only)
 1. causes — A causes B
@@ -147,9 +172,15 @@ For EACH slot, include a "slot_quotes" object that maps each slot key to the EXA
     {
       "action": "add",
       "frame": {
-        "id": "f_xxx", "type": "...", "source": "T3", "confidence": 0.9,
-        "slots": { "destination": "Tokyo", "budget": 7000 },
-        "slot_quotes": { "destination": "I want to travel to Tokyo", "budget": "budget is around $7000" }
+        "id": "f_xxx", "type": "constraints", "source": "T4", "confidence": 0.95,
+        "slots": {
+          "dietary": [{ "type": "peanut_allergy", "applies_to": "friend" }],
+          "avoid_places": [{ "place": "Hefang Street", "reason": "too commercial" }]
+        },
+        "slot_quotes": {
+          "dietary": "One friend is allergic to peanuts",
+          "avoid_places": "avoid the Hefang Street tourist area"
+        }
       }
     },
     {
@@ -160,15 +191,25 @@ For EACH slot, include a "slot_quotes" object that maps each slot key to the EXA
     { "action": "remove", "target": "f_002", "reason": "user changed mind" }
   ],
   "new_relations": [
-    { "from": "f_001", "to": "f_003", "type": "causes", "confidence": 0.8 }
+    { "from": "f_003", "to": "f_001", "type": "conditions", "confidence": 0.9 }
   ]
 }
 \`\`\`
 Output ONLY valid JSON. No markdown fences, no explanatory text.`;
 
-const FIRST_EXTRACTION_SYSTEM_PROMPT = `You are a semantic extraction engine. Extract meaning from conversations into structured frames.
+const FIRST_EXTRACTION_SYSTEM_PROMPT = `You are a semantic extraction engine. Extract the USER'S meaning from conversations into structured frames.
 
-## CRITICAL: Frame Structure Rules
+## CRITICAL: Extraction Priority (MUST follow this order)
+1. USER CONSTRAINTS — allergies, avoidances, rejections, hard limits, dealbreakers (confidence: 0.95)
+2. USER PREFERENCES — explicitly stated wants, likes, dislikes, interests (confidence: 0.9)
+3. USER FACTS — dates, group size, budget, logistics, travel method (confidence: 0.9)
+4. USER OPEN QUESTIONS — things the user asked but remain unresolved (confidence: 0.7)
+5. MUTUAL DECISIONS — things both parties agreed on or user confirmed (confidence: 0.8)
+6. ASSISTANT SUGGESTIONS — recommendations NOT yet confirmed by user (confidence: 0.3-0.5)
+
+Categories 1-4 MUST ALWAYS be extracted. Category 6 should ONLY be extracted if the user acknowledged, discussed, or built upon the suggestion. Do NOT extract the assistant's full itinerary, budget breakdown, or recommendation list as facts — those are suggestions until the user confirms them.
+
+## Frame Structure Rules
 1. AIM FOR 3-8 FRAMES TOTAL — fewer, richer frames are better than many thin ones
 2. LISTS OF SIMILAR ITEMS = ONE FRAME with an array slot, NEVER separate frames
    - 10 city recommendations = ONE frame: { type: "recommended_cities", slots: { cities: [...] } }
@@ -178,34 +219,41 @@ const FIRST_EXTRACTION_SYSTEM_PROMPT = `You are a semantic extraction engine. Ex
 5. Frame type uses snake_case (nouns or noun phrases)
 6. Frame IDs start from f_001
 
+## Frame Type Guidance
+Use these frame types when applicable:
+- constraints: { dietary: [...], avoid_places: [...], health: [...] }
+- preferences: { accommodation: ..., interests: [...], nightlife: ... }
+- logistics: { transport: ..., arrival: ..., departure: ..., dates: ... }
+- open_questions: { items: ["What's the weather like?", "Should we rent bikes?"] }
+- trip_plan / project_plan / ...: { destination: ..., duration: ..., group: ... }
+You may create other types as needed, but constraints, preferences, and open_questions should always be separate frames when present.
+
+## ANTI-PATTERNS (DO NOT DO THIS)
+- Do NOT extract the assistant's detailed itinerary/schedule as facts — unless the user said "yes, let's do that"
+- Do NOT create frames for the assistant's budget breakdown or cost estimates — those are suggestions
+- Do NOT ignore when the user says "avoid X", "I'm allergic to X", "I don't want X" — these are HIGHEST PRIORITY
+- Do NOT put constraints inside a general trip_plan frame — constraints MUST be a separate frame so they are clearly visible
+- Do NOT omit open questions — if the user asked something and it wasn't resolved, capture it
+
 ## GOOD vs BAD Examples
 
-BAD (too many frames):
-  f_001 city_recommendation: { city: "Berlin" }
-  f_002 city_recommendation: { city: "Lisbon" }
-  f_003 city_recommendation: { city: "Melbourne" }
-  ... 10 more frames
+BAD (misses user constraints, over-extracts AI suggestions):
+  f_001 trip_plan: { destination: "Hangzhou", duration: "3 days" }
+  f_002 itinerary: { day_1: "Lingyin Temple → Silk Museum → ...", day_2: "..." }
+  f_003 budget_breakdown: { accommodation: 800, food: 900, transport: 1000 }
+  // PROBLEM: user said "peanut allergy" and "avoid Hefang Street" — both missing!
+  // PROBLEM: itinerary and budget are AI suggestions, not user knowledge
 
-GOOD (one frame with array):
-  f_001 recommended_cities: {
-    cities: [
-      { name: "Berlin", country: "Germany", pros: ["affordable", "culture"] },
-      { name: "Lisbon", country: "Portugal", pros: ["weather", "cost"] },
-      { name: "Melbourne", country: "Australia", pros: ["universities", "lifestyle"] }
-    ]
-  }
-
-BAD: f_001 pro: { text: "good weather" }, f_002 pro: { text: "affordable" }
-GOOD: f_001 evaluation: { pros: ["good weather", "affordable"], cons: ["far from home"] }
-
-## What to Extract
-- User's requirements and preferences (high confidence)
-- Decisions and conclusions (high confidence)
-- Recommendations and suggestions from assistant (medium confidence — use arrays!)
-- Plans and options discussed (medium confidence)
+GOOD (captures what the user actually said):
+  f_001 trip_plan: { destination: "Hangzhou", duration: "3 days", group_size: 3, budget_per_person: 3000 }
+  f_002 constraints: { dietary: [{ type: "peanut_allergy", applies_to: "friend" }], avoid: [{ place: "Hefang Street", reason: "too commercial" }] }
+  f_003 preferences: { accommodation: "boutique hotel or guesthouse", area: "near West Lake", interests: ["tea culture", "Longjing Village"], nightlife: "bar or live music" }
+  f_004 logistics: { inbound: "high-speed train from Shanghai, arriving 10am", local_transport: "considering bike rental" }
+  f_005 open_questions: { items: ["What's the weather like?", "Is Wuzhen doable as a day trip?"] }
 
 ## Source Tracking
 - Set "source" field to turn tag (e.g., "T1", "T2")
+- For frames derived from multiple turns, use the most recent turn
 
 ## Confidence Scoring
 - User's explicit statements → 0.9-1.0
@@ -222,23 +270,33 @@ For EACH slot, include "slot_quotes" mapping slot keys to EXACT verbatim text fr
 {
   "frames": [
     {
-      "id": "f_001", "type": "study_abroad_search", "source": "T1", "confidence": 0.9,
+      "id": "f_001", "type": "trip_plan", "source": "T1", "confidence": 0.9,
       "slots": {
-        "purpose": "live and study",
-        "preferences": ["warm climate", "English-speaking"],
-        "recommended_cities": [
-          { "name": "Melbourne", "country": "Australia", "pros": ["top universities", "multicultural"] },
-          { "name": "Brisbane", "country": "Australia", "pros": ["warm", "affordable"] }
-        ],
-        "decision_factors": ["climate", "cost", "university ranking"]
+        "destination": "Hangzhou",
+        "duration": "3 days",
+        "group_size": 3,
+        "budget_per_person": 3000
       },
       "slot_quotes": {
-        "purpose": "I want to find a city to live and study",
-        "preferences": "somewhere warm, English-speaking"
+        "destination": "planning a 3-day trip to Hangzhou",
+        "budget_per_person": "Budget is around ¥3000 per person"
+      }
+    },
+    {
+      "id": "f_002", "type": "constraints", "source": "T4", "confidence": 0.95,
+      "slots": {
+        "dietary": [{ "type": "peanut_allergy", "applies_to": "friend", "severity": "must avoid" }],
+        "avoid_places": [{ "place": "Hefang Street", "reason": "too commercial" }]
+      },
+      "slot_quotes": {
+        "dietary": "One friend is allergic to peanuts",
+        "avoid_places": "avoid the Hefang Street tourist area — heard it's too commercial"
       }
     }
   ],
-  "relations": []
+  "relations": [
+    { "from": "f_002", "to": "f_001", "type": "conditions", "confidence": 0.9 }
+  ]
 }
 \`\`\`
 Output ONLY valid JSON. No markdown fences, no explanatory text.`;
@@ -255,22 +313,50 @@ Output ONLY valid JSON. No markdown fences, no explanatory text.`;
 export function buildFrameExtractionPrompt(
   input: FrameExtractionInput
 ): FrameExtractionPromptResult {
-  const { turns, snapshot } = input;
+  const { turns, snapshot, processedTurnCount } = input;
 
   if (snapshot) {
     // Delta mode
     const nextId = calcNextFrameId(snapshot.frames);
     const snapshotYaml = serializeSnapshot(snapshot);
-    const turnsText = formatTurns(turns);
+
+    // Split turns into context (already processed) and new (to extract from)
+    const splitAt = processedTurnCount ?? 0;
+    const contextTurns = splitAt > 0 ? turns.slice(0, splitAt) : [];
+    const newTurns = splitAt > 0 ? turns.slice(splitAt) : turns;
+
+    let turnsSection: string;
+    if (contextTurns.length > 0 && newTurns.length > 0) {
+      // Two-section layout: context + new
+      const contextText = formatTurns(contextTurns);
+      const newText = contextTurns.length > 0
+        ? newTurns.map((t, i) => {
+            const idx = contextTurns.length + i;
+            const tag = t.turn_hash ? `[T${idx + 1}:${t.turn_hash.slice(0, 8)}]` : `[T${idx + 1}]`;
+            return `${tag} [${t.role}]: ${t.content}`;
+          }).join('\n')
+        : formatTurns(newTurns);
+      turnsSection = `## Context Turns (already in snapshot — do NOT re-extract these)
+${contextText}
+
+## ★ NEW Turns (extract delta from THESE) ★
+${newText}`;
+    } else {
+      // No split info — treat all as new (backward compatible)
+      turnsSection = `## New Conversation Turns
+${formatTurns(turns)}`;
+    }
 
     const userPrompt = `## Current Snapshot
 ${snapshotYaml}
 
-## New Conversation Turns
-${turnsText}
+${turnsSection}
 
 ## Instructions
-Output the delta (changes only). For each piece of new information:
+Output the delta (changes only) based on the NEW turns above.
+IMPORTANT: The context turns are provided for reference only — their information is already in the snapshot. Focus on NEW turns.
+However, if you notice the snapshot is MISSING important user points from context turns (constraints, preferences, facts), ADD them as new frames.
+For each piece of new information:
 - If it MODIFIES an existing frame → "update" with only changed slots
 - If it's a NEW topic → "add" a new frame
 - If it NEGATES or REPLACES something → "remove" the old frame

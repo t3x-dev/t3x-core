@@ -1,18 +1,21 @@
 /**
  * Meaning Pipeline Agents — each does ONE focused job.
  *
- * LLM agents: topic_namer, slot_polisher, dedup_checker, topic_evolver
- * Code agents: nester
+ * Code agents: output_regulator, nester
+ * LLM agents: dedup_checker, topic_namer, topic_evolver, slot_polisher,
+ *             reviewer, coverage_checker, contradiction_checker
  *
- * Order matters — nester runs before namer (needs flat frames to nest first).
+ * Order matters — see createMeaningPipeline.ts for execution order.
  */
 
 // Code agents (deterministic, run first)
 export { outputRegulatorAgent } from './outputRegulatorAgent';
 export { nesterAgent } from './nesterAgent';
 // LLM agents (focused, one job each)
-export { topicNamerAgent } from './topicNamerAgent';
-export { slotPolisherAgent } from './slotPolisherAgent';
 export { dedupCheckerAgent } from './dedupCheckerAgent';
+export { topicNamerAgent } from './topicNamerAgent';
 export { topicEvolverAgent } from './topicEvolverAgent';
+export { slotPolisherAgent } from './slotPolisherAgent';
 export { reviewerAgent } from './reviewerAgent';
+export { coverageCheckerAgent } from './coverageCheckerAgent';
+export { contradictionCheckerAgent } from './contradictionCheckerAgent';

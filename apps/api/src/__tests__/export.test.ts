@@ -23,7 +23,7 @@ vi.mock('../lib/db', () => ({
   closeDB: vi.fn(() => Promise.resolve()),
 }));
 
-import { exportRoutes } from '../routes/export';
+import { exportRoutes } from '../routes/export.openapi';
 
 describe('Export Routes', () => {
   let cleanup: () => Promise<void>;

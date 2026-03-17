@@ -21,7 +21,7 @@ vi.mock('../lib/db', () => ({
 }));
 
 import { diffRoutes } from '../routes/diff';
-import { exportRoutes } from '../routes/export';
+import { exportRoutes } from '../routes/export.openapi';
 
 describe('Diff Routes', () => {
   let cleanup: () => Promise<void>;

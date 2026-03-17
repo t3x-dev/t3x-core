@@ -20,7 +20,7 @@ vi.mock('../lib/db', () => ({
 }));
 
 // Import routes after mocking
-import { commitsV3Routes } from '../routes/commits-v3';
+import { commitsV3Routes } from '../routes/commits-v3.openapi';
 
 describe('Commits V3 Routes', () => {
   let cleanup: () => Promise<void>;

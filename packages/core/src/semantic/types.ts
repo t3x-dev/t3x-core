@@ -18,8 +18,13 @@ export interface InlineFrame {
   slots: Record<string, SlotValue>;
 }
 
-/** The 5 slot value types (+ array) */
-export type SlotValue = string | number | SlotRef | InlineFrame | SlotValue[];
+/** Plain key-value object as a slot value (e.g. {type: "peanut_allergy", severity: "must avoid"}) */
+export interface SlotRecord {
+  [key: string]: SlotValue;
+}
+
+/** Slot value types: primitives, refs, inline frames, plain objects, and arrays */
+export type SlotValue = string | number | boolean | SlotRef | InlineFrame | SlotRecord | SlotValue[];
 
 // ── Source Reference (per-slot traceability) ──
 

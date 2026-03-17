@@ -19,6 +19,14 @@ import type { LLMProvider } from '../llm/types';
 import type { SemanticContent, Frame, Relation, SlotValue } from '../semantic/types';
 import type { FrameExtractionTurn } from './frameExtractionPrompt';
 
+// ── Pipeline Mode ──
+
+export type PipelineMode = 'full' | 'incremental';
+
+export interface PipelineOptions {
+  mode?: PipelineMode;
+}
+
 // ── Pipeline Context ──
 
 export interface PipelineContext {
@@ -34,6 +42,7 @@ export interface PipelineContext {
   conversationSummary: string;
   /** Pipeline metadata */
   meta: {
+    mode: PipelineMode;
     isFirstExtraction: boolean;
     turnCount: number;
     frameCount: number;
@@ -118,11 +127,13 @@ export function defaultDispatch(
 ): DispatchDecision {
   const agents = registry.getAll();
   const applicable = agents.filter((a) => a.shouldRun(ctx));
+  const llmCount = applicable.filter((a) => a.usesLLM).length;
+  const mode = ctx.meta.mode;
   return {
     agentsToRun: applicable.map((a) => a.name),
-    reason: ctx.meta.isFirstExtraction
-      ? 'First extraction — running all applicable agents'
-      : `Delta update — ${applicable.length} agents applicable`,
+    reason: mode === 'incremental'
+      ? `Incremental mode — ${applicable.length} agents (${llmCount} LLM)`
+      : `Full mode — ${applicable.length} agents (${llmCount} LLM)`,
   };
 }
 
@@ -238,7 +249,8 @@ export class MeaningPipeline {
   async run(
     content: SemanticContent,
     turns: FrameExtractionTurn[],
-    previousSnapshot?: SemanticContent
+    previousSnapshot?: SemanticContent,
+    options?: PipelineOptions
   ): Promise<PipelineResult> {
     // Build initial context
     const ctx: PipelineContext = {
@@ -252,6 +264,7 @@ export class MeaningPipeline {
         .join(' ')
         .slice(0, 300),
       meta: {
+        mode: options?.mode ?? 'full',
         isFirstExtraction: !previousSnapshot || previousSnapshot.frames.length === 0,
         turnCount: turns.length,
         frameCount: content.frames.length,

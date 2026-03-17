@@ -138,6 +138,8 @@ export {
   createMeaningPipeline,
   type MeaningAgent,
   type PipelineContext,
+  type PipelineMode,
+  type PipelineOptions,
   type PipelineResult,
   type SlotQuotesMap,
   type FuzzyLocateResult,
