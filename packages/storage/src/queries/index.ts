@@ -54,6 +54,8 @@ export {
   listCommits,
   updateCommitPosition,
 } from './commits';
+// Commits Unified (V5 + V4 transition adapter)
+export { getCommitUnified, listCommitsUnified } from './commits-unified';
 // Commits V4 (pure knowledge - no constraints)
 export {
   backfillMerkleRoots,

@@ -11,12 +11,12 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
   createShareToken,
-  findCommitV4ByHash,
   findLeafById,
   findShareTokenById,
   findShareTokenByToken,
   findShareTokensByEntity,
   getComparison,
+  getCommitUnified,
   getRun,
   revokeShareToken,
 } from '@t3x-dev/storage';
@@ -101,7 +101,7 @@ shareRoutes.openapi(createShareRoute, async (c) => {
       }
       projectId = comparison.projectId || undefined;
     } else if (body.entity_type === 'commit') {
-      const commit = await findCommitV4ByHash(db, body.entity_id);
+      const commit = await getCommitUnified(db, body.entity_id);
       if (!commit) {
         return errorResponse(c, 'SHARE_ENTITY_NOT_FOUND', `Commit not found: ${body.entity_id}`);
       }
@@ -184,7 +184,7 @@ shareRoutes.openapi(resolveShareRoute, async (c) => {
     } else if (shareToken.entity_type === 'comparison') {
       entity = await getComparison(db, shareToken.entity_id);
     } else if (shareToken.entity_type === 'commit') {
-      entity = await findCommitV4ByHash(db, shareToken.entity_id);
+      entity = await getCommitUnified(db, shareToken.entity_id);
     } else {
       return errorResponse(c, 'SHARE_ENTITY_NOT_FOUND', 'Unsupported entity type');
     }

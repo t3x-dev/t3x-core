@@ -17,10 +17,10 @@ import {
   createLeaf,
   deleteLeaf,
   deletePinByRef,
-  findCommitV4ByHash,
   findLeafById,
   findLeavesByCommit,
   findLeavesByProject,
+  getCommitUnified,
   insertLeafOutputEdit,
   updateLeafAtomic,
 } from '@t3x-dev/storage';
@@ -321,7 +321,7 @@ leavesCrudRoutes.openapi(createLeafRoute, async (c) => {
     // Auto-generate title from commit message if not provided
     let title = body.title;
     if (!title) {
-      const commit = await findCommitV4ByHash(db, body.commit_hash);
+      const commit = await getCommitUnified(db, body.commit_hash);
       const msg = commit?.message || body.commit_hash.slice(0, 16);
       title = `${msg} — ${body.type}`;
     }
