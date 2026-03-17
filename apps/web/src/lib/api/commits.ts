@@ -208,8 +208,46 @@ export async function createCommitV4(
 }
 
 // ============================================================================
-// Frame-based Commits (new model)
+// Frame-based Commits (V5 — new model)
 // ============================================================================
+
+/** V5 commit from API response */
+export interface CommitV5 {
+  hash: string;
+  schema: 't3x/commit/5';
+  parents: string[];
+  author: { type: string; id?: string; name?: string };
+  committed_at: string;
+  content: { frames: unknown[]; relations: unknown[] };
+  project_id: string;
+  message: string | null;
+  branch: string;
+  sources: Array<{ type: string; id: string; title?: string }> | null;
+  provenance: { method: string; model?: string } | null;
+  position_x?: number;
+  position_y?: number;
+}
+
+/**
+ * List V5 commits by project
+ */
+export async function listCommitsV5(
+  projectId: string,
+  branch?: string,
+  limit = 50
+): Promise<CommitV5[]> {
+  const query = buildQueryString({ branch, limit });
+  const res = await fetchWithTimeout(`${API_V1}/projects/${projectId}/commits?${query}`);
+  return handleResponse<CommitV5[]>(res);
+}
+
+/**
+ * Get a V5 commit by hash
+ */
+export async function getCommitV5(commitHash: string): Promise<CommitV5> {
+  const res = await fetchWithTimeout(`${API_V1}/commits/${encodeURIComponent(commitHash)}`);
+  return handleResponse<CommitV5>(res);
+}
 
 /**
  * Create a frame-based commit (new model).
