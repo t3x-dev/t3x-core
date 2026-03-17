@@ -1,7 +1,7 @@
 import type { Connection, Edge, EdgeChange, Node, NodeChange } from '@xyflow/react';
 import type { Template } from '@/lib/api';
 import type { ConflictReport } from '@/lib/api/commits';
-import type { CommitV3, MergeState } from '../types/merge';
+import type { MergeState } from '../types/merge';
 import type {
   CanvasNodeData,
   ConversationConstraints,
@@ -29,7 +29,7 @@ export interface MergeSlice {
   startMerge: (sourceHash: string, targetHash: string) => Promise<void>;
   resolveSimilarPair: (index: number, pick: 'source' | 'target') => void;
   toggleKeep: (side: 'source' | 'target', index: number) => void;
-  executeMerge: (message: string) => Promise<CommitV3>;
+  executeMerge: (message: string) => Promise<unknown>;
   cancelMerge: () => void;
   clearMergeError: () => void;
 }

@@ -1,15 +1,18 @@
 /**
- * Commits V3 + V4 API
+ * Commits V4 API
  */
 
 import { API_V1, buildQueryString, fetchWithTimeout, handleResponse } from './core';
 
 // ============================================================================
-// Commits V3 (Sentence-based commits)
+// Sentence type (used by DiffDisplayView and other components)
 // ============================================================================
 
-// CommitV3 sentence from API
-export interface CommitV3Sentence {
+/**
+ * Sentence with source info — used by diff display and other components
+ * that need sentence text plus source tracing information.
+ */
+export interface SentenceWithSourceInfo {
   id: string;
   text: string;
   source: {
@@ -17,104 +20,6 @@ export interface CommitV3Sentence {
     start_char: number;
     end_char: number;
   };
-}
-
-// CommitV3 constraint from API
-export interface CommitV3Constraint {
-  type: 'require' | 'exclude';
-  id: string;
-  value: string;
-  match: 'exact' | 'semantic';
-  source_sentence_id?: string;
-  suggested?: boolean;
-  reason?: string;
-}
-
-// CommitV3 author from API
-export interface CommitV3Author {
-  name: string;
-  identity?: string;
-  verification?: 'none' | 'device' | 'verified';
-}
-
-// CommitV3 from API response
-export interface CommitV3 {
-  hash: string;
-  schema: 'commit/v3';
-  parents: string[];
-  author: CommitV3Author;
-  committed_at: string;
-  content: {
-    sentences: CommitV3Sentence[];
-    constraints?: CommitV3Constraint[];
-  };
-  project_id: string | null;
-  message: string | null;
-  branch: string | null;
-  position?: { x: number; y: number };
-  created_at: string;
-  updated_at: string;
-}
-
-export interface CommitV3ListData {
-  commits: CommitV3[];
-  project_id: string;
-  branch?: string;
-  limit: number;
-  offset: number;
-}
-
-export async function listCommitsV3(
-  projectId: string,
-  branch?: string,
-  limit = 50,
-  offset = 0
-): Promise<CommitV3ListData> {
-  const query = buildQueryString({ project_id: projectId, branch, limit, offset });
-  const res = await fetchWithTimeout(`${API_V1}/commits-v3?${query}`);
-  return handleResponse<CommitV3ListData>(res);
-}
-
-export async function getCommitV3(commitHash: string): Promise<CommitV3> {
-  const res = await fetchWithTimeout(`${API_V1}/commits-v3/${commitHash}`);
-  return handleResponse<CommitV3>(res);
-}
-
-/**
- * Create a V3 commit (sentence-based)
- *
- * V3 commits use sentences[] and constraints[] instead of V2's turn_window and facet_snapshot.
- * This is the format required by the merge API.
- */
-export async function createCommitV3(
-  projectId: string,
-  content: {
-    sentences: CommitV3Sentence[];
-    constraints?: CommitV3Constraint[];
-  },
-  options?: {
-    branch?: string;
-    message?: string;
-    parents?: string[];
-    position?: { x: number; y: number };
-    author?: CommitV3Author;
-  }
-): Promise<CommitV3> {
-  const res = await fetchWithTimeout(`${API_V1}/commits-v3`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      project_id: projectId,
-      content,
-      branch: options?.branch ?? 'main',
-      message: options?.message,
-      parents: options?.parents ?? [],
-      position_x: options?.position?.x,
-      position_y: options?.position?.y,
-      author: options?.author,
-    }),
-  });
-  return handleResponse<CommitV3>(res);
 }
 
 // ============================================================================

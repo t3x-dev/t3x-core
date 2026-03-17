@@ -13,7 +13,6 @@ import {
   findPinsByProject,
   findProjectById,
   findTurnsByProject,
-  listCommitsV3,
 } from '../queries';
 
 export interface CfpackData {
@@ -38,7 +37,6 @@ export interface CfpackData {
     rings_json: string | null;
     created_at: string;
   }>;
-  commits_v3: Array<Record<string, unknown>>;
   commits_v4: Array<Record<string, unknown>>;
   leaves: Array<Record<string, unknown>>;
   pins: Array<Record<string, unknown>>;
@@ -60,7 +58,6 @@ export async function backupAsCfpack(db: AnyDB, projectId: string): Promise<Cfpa
 
   const conversations = await findConversationsByProject(db, { projectId, limit: 100000 });
   const turnRows = await findTurnsByProject(db, { projectId, limit: 100000 });
-  const commitsV3 = await listCommitsV3(db, { projectId, limit: 100000 });
   const commitsV4 = await findCommitsV4ByProject(db, projectId, { limit: 100000 });
   const leaves = await findLeavesByProject(db, projectId, { limit: 100000 });
   const pins = await findPinsByProject(db, projectId, { limit: 100000 });
@@ -87,7 +84,6 @@ export async function backupAsCfpack(db: AnyDB, projectId: string): Promise<Cfpa
       rings_json: t.ringsJson ?? null,
       created_at: t.createdAt.toISOString(),
     })),
-    commits_v3: commitsV3 as unknown as Array<Record<string, unknown>>,
     commits_v4: commitsV4 as unknown as Array<Record<string, unknown>>,
     leaves: leaves as unknown as Array<Record<string, unknown>>,
     pins: pins as unknown as Array<Record<string, unknown>>,

@@ -176,35 +176,6 @@ export function useCurrentBranch(projectId: string | undefined) {
 }
 
 // ============================================================================
-// Commits V3
-// ============================================================================
-
-export function useCommitsV3(
-  projectId: string | undefined,
-  branch?: string,
-  limit = 50,
-  offset = 0
-) {
-  return useApiCall(
-    (pid: string | undefined, b: string | undefined, l: number, o: number) => async () => {
-      if (!pid) return { commits: [], project_id: '', limit: l, offset: o };
-      return api.listCommitsV3(pid, b, l, o);
-    },
-    [projectId, branch, limit, offset]
-  );
-}
-
-export function useCommitV3(commitHash: string | undefined) {
-  return useApiCall(
-    (hash: string | undefined) => async () => {
-      if (!hash) return null;
-      return api.getCommitV3(hash);
-    },
-    [commitHash]
-  );
-}
-
-// ============================================================================
 // Drafts
 // ============================================================================
 

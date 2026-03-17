@@ -16,7 +16,6 @@ vi.mock('../lib/db', () => ({
 vi.mock('@t3x-dev/storage', () => ({
   findTurnByHash: vi.fn(),
   findCommitV4ByHash: vi.fn(),
-  getCommitV3: vi.fn(),
   findSegmentEmbeddingsByTurn: vi.fn().mockResolvedValue([]),
 }));
 
@@ -181,13 +180,12 @@ describe('Diff Routes', () => {
       }
     });
 
-    it('returns 404 for non-existent V3 commit', async () => {
-      const { findCommitV4ByHash, getCommitV3 } = await import('@t3x-dev/storage');
+    it('returns 404 for non-existent commit', async () => {
+      const { findCommitV4ByHash } = await import('@t3x-dev/storage');
 
       (findCommitV4ByHash as ReturnType<typeof vi.fn>)
         .mockResolvedValueOnce(null)
         .mockResolvedValueOnce(null);
-      (getCommitV3 as ReturnType<typeof vi.fn>).mockResolvedValueOnce(null);
 
       const res = await app.request('/v1/diff/two-way', {
         method: 'POST',

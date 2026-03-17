@@ -10,7 +10,6 @@ import type { AnyDB } from '../adapters';
 import {
   agentDrafts,
   branches,
-  commitsV3,
   conversations,
   type NewProject,
   type Project,
@@ -220,11 +219,6 @@ export async function findProjectWithStats(
     .from(turns)
     .where(eq(turns.projectId, projectId));
 
-  const [commitV3Count] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(commitsV3)
-    .where(eq(commitsV3.projectId, projectId));
-
   const [commitV4Count] = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(commitsV4)
@@ -245,7 +239,7 @@ export async function findProjectWithStats(
     stats: {
       conversationsCount: Number(convCount?.count ?? 0),
       turnsCount: Number(turnCount?.count ?? 0),
-      commitsCount: Number(commitV3Count?.count ?? 0) + Number(commitV4Count?.count ?? 0),
+      commitsCount: Number(commitV4Count?.count ?? 0),
       branchesCount: Number(branchCount?.count ?? 0),
       draftsCount: Number(draftCount?.count ?? 0),
     },

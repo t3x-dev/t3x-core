@@ -1,83 +1,58 @@
 import { Hono } from 'hono';
-import { describe, expect, it } from 'vitest';
-import { getAuthorFromContext } from '../lib/auth';
+import { describe, expect, it, vi } from 'vitest';
+import { getV4AuthorFromContext } from '../lib/auth';
+
+// Mock dependencies
+vi.mock('../lib/db', () => ({
+  getDB: vi.fn(() => Promise.resolve({})),
+}));
+
+vi.mock('@t3x-dev/storage', () => ({
+  findUserById: vi.fn(),
+}));
 
 /**
- * Creates a minimal Hono app that extracts author from request context
- * and returns it as JSON, allowing us to test getAuthorFromContext
- * with real HTTP request headers.
+ * Creates a minimal Hono app that extracts V4 author from request context
+ * and returns it as JSON.
  */
 function createTestApp() {
   const app = new Hono();
   app.get('/author', async (c) => {
-    const author = await getAuthorFromContext(c);
+    const author = await getV4AuthorFromContext(c);
+    return c.json(author);
+  });
+  app.get('/author-with-client', async (c) => {
+    const author = await getV4AuthorFromContext(c, {
+      type: 'human',
+      name: 'Client User',
+      id: 'client_123',
+    });
     return c.json(author);
   });
   return app;
 }
 
-describe('getAuthorFromContext', () => {
+describe('getV4AuthorFromContext', () => {
   const app = createTestApp();
 
-  it('returns verified author when both headers are present', async () => {
-    const res = await app.request('/author', {
-      headers: {
-        'X-User-Name': 'Alice',
-        'X-User-Email': 'alice@example.com',
-      },
-    });
-
-    const author = await res.json();
-    expect(author).toEqual({
-      name: 'Alice',
-      identity: 'email:alice@example.com',
-      verification: 'verified',
-    });
-  });
-
-  it('returns local author when no headers are present', async () => {
+  it('returns default anonymous author when no auth and no client author', async () => {
     const res = await app.request('/author');
 
     const author = await res.json();
-    expect(author.verification).toBe('none');
-    expect(author.identity).toMatch(/^local:/);
-    expect(author.name).toBeDefined();
+    expect(author).toEqual({
+      type: 'human',
+      name: 'Anonymous',
+    });
   });
 
-  it('returns local author when only X-User-Name is present', async () => {
-    const res = await app.request('/author', {
-      headers: {
-        'X-User-Name': 'Bob',
-      },
-    });
+  it('returns client-supplied author when no auth context', async () => {
+    const res = await app.request('/author-with-client');
 
     const author = await res.json();
-    expect(author.verification).toBe('none');
-    expect(author.identity).toMatch(/^local:/);
-  });
-
-  it('returns local author when only X-User-Email is present', async () => {
-    const res = await app.request('/author', {
-      headers: {
-        'X-User-Email': 'bob@example.com',
-      },
+    expect(author).toEqual({
+      type: 'human',
+      name: 'Client User',
+      id: 'client_123',
     });
-
-    const author = await res.json();
-    expect(author.verification).toBe('none');
-    expect(author.identity).toMatch(/^local:/);
-  });
-
-  it('uses exact header values for verified author', async () => {
-    const res = await app.request('/author', {
-      headers: {
-        'X-User-Name': 'Jane Doe',
-        'X-User-Email': 'jane.doe@company.org',
-      },
-    });
-
-    const author = await res.json();
-    expect(author.name).toBe('Jane Doe');
-    expect(author.identity).toBe('email:jane.doe@company.org');
   });
 });

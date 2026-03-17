@@ -42,28 +42,6 @@ export {
   getBusinessRules,
   putBusinessRules,
 } from './business-rules';
-// Commits V3
-export {
-  type CommitV3Author,
-  type CommitV3Constraint,
-  type CommitV3Content,
-  type CommitV3Output,
-  type CommitV3Sentence,
-  type CommitV3SentenceSource,
-  type CreateCommitV3Input,
-  type CreateCommitV3Options,
-  createCommitV3,
-  deleteCommitV3,
-  findCommitV3History,
-  findCommonAncestorV3,
-  getCommitsV3ByHashes,
-  getCommitV3,
-  getCommitV3Parents,
-  type ListCommitsV3Options,
-  listCommitsV3,
-  ParentNotFoundError,
-  updateCommitV3Position,
-} from './commits-v3';
 // Commits (frame-based — commits_v5)
 export {
   type CreateCommitInput,
@@ -72,8 +50,8 @@ export {
   getCommit,
   getCommitsByHashes,
   getLatestCommit,
-  listCommits,
   type ListCommitsOptions,
+  listCommits,
   updateCommitPosition,
 } from './commits';
 // Commits V4 (pure knowledge - no constraints)

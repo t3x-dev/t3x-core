@@ -9,14 +9,7 @@ import { PinDropdownSelector } from '@/components/ui/PinDropdownSelector';
 import { useTerminology } from '@/hooks/useTerminology';
 import { cn } from '@/lib/utils';
 import { usePinsStore } from '@/store/pinsStore';
-import type {
-  CommitDisplay,
-  CommitSourceRef,
-  CommitV3Display,
-  CommitV4Display,
-  ConstraintDisplay,
-  EmbeddedLeaf,
-} from '@/types/nodes';
+import type { CommitDisplay, CommitSourceRef, CommitV4Display, EmbeddedLeaf } from '@/types/nodes';
 import { CommitSourceContext } from '../CommitSourceContext';
 import { LeafCreationDialog } from '../LeafCreationDialog';
 
@@ -25,25 +18,6 @@ import { LeafCreationDialog } from '../LeafCreationDialog';
  */
 export function isCommitV4(commit: CommitDisplay): commit is CommitV4Display {
   return commit.schema === 't3x/commit/v4';
-}
-
-/**
- * Author badge for V3 commits (with verification)
- */
-export function CommitV3AuthorBadge({ author }: { author: CommitV3Display['author'] }) {
-  const isVerified = author.verification === 'verified';
-  return (
-    <span
-      className={`inline-flex items-center gap-1 text-sm px-2 py-1 rounded ${
-        isVerified
-          ? 'bg-[var(--status-success-muted)] text-[var(--status-success)]'
-          : 'bg-muted text-muted-foreground'
-      }`}
-    >
-      {author.name}
-      {isVerified && ' \u2713'}
-    </span>
-  );
 }
 
 /**
@@ -61,24 +35,6 @@ export function CommitV4AuthorBadge({ author }: { author: CommitV4Display['autho
     >
       {isAgent ? <Bot size={14} /> : <User size={14} />}
       {author.name || author.id || 'Unknown'}
-    </span>
-  );
-}
-
-/**
- * Constraint badge for V3 commits
- */
-export function CommitV3ConstraintBadge({ constraint }: { constraint: ConstraintDisplay }) {
-  const isRequire = constraint.type === 'require';
-  return (
-    <span
-      className={`inline-flex items-center gap-1 text-sm px-2 py-1 rounded ${
-        isRequire
-          ? 'bg-[var(--status-success-muted)] text-[var(--status-success)] border border-[var(--status-success)]/20'
-          : 'bg-[var(--status-error-muted)] text-[var(--status-error)] border border-[var(--status-error)]/20 line-through'
-      }`}
-    >
-      {isRequire ? '\u2713' : '\u2717'} {constraint.value}
     </span>
   );
 }
@@ -291,11 +247,7 @@ export function CommitFullHeader({
           </span>
         )}
       </div>
-      {isV4 ? (
-        <CommitV4AuthorBadge author={commit.author} />
-      ) : (
-        <CommitV3AuthorBadge author={(commit as CommitV3Display).author} />
-      )}
+      <CommitV4AuthorBadge author={commit.author} />
     </div>
   );
 }
@@ -304,45 +256,27 @@ export function CommitFullHeader({
  * Renders the source context / sentence display for a commit, used inside tabs.
  */
 export function CommitSourceContent({ commit }: { commit: CommitDisplay }) {
-  const isV4 = isCommitV4(commit);
-  const sentences = isV4 ? commit.content.sentences : (commit as CommitV3Display).sentences;
+  const sentences = commit.content.sentences;
 
-  const hasLeafSources =
-    isV4 && (commit as CommitV4Display).source_refs?.some((r) => r.type === 'leaf');
-  const hasTurnSourceInfo = isV4
-    ? (commit as CommitV4Display).content.sentences.some((s) => s.source_ref?.turn_hash)
-    : (commit as CommitV3Display).sentences.some((s) => s.source?.turn_hash);
+  const hasLeafSources = commit.source_refs?.some((r) => r.type === 'leaf');
+  const hasTurnSourceInfo = commit.content.sentences.some((s) => s.source_ref?.turn_hash);
   const hasSourceInfo = hasTurnSourceInfo || hasLeafSources;
 
   if (hasSourceInfo) {
-    const mappedSentences = isV4
-      ? (commit as CommitV4Display).content.sentences.map((s) => ({
-          id: s.id,
-          text: s.text,
-          source: s.source_ref?.turn_hash
-            ? {
-                turn_hash: s.source_ref.turn_hash,
-                start_char: s.source_ref.start_char,
-                end_char: s.source_ref.end_char,
-              }
-            : undefined,
-          anchor_type: s.anchor_type,
-        }))
-      : (commit as CommitV3Display).sentences.map((s) => ({
-          id: s.id,
-          text: s.text,
-          source: s.source
-            ? {
-                turn_hash: s.source.turn_hash,
-                start_char: s.source.start_char || 0,
-                end_char: s.source.end_char || s.text.length,
-              }
-            : undefined,
-        }));
+    const mappedSentences = commit.content.sentences.map((s) => ({
+      id: s.id,
+      text: s.text,
+      source: s.source_ref?.turn_hash
+        ? {
+            turn_hash: s.source_ref.turn_hash,
+            start_char: s.source_ref.start_char,
+            end_char: s.source_ref.end_char,
+          }
+        : undefined,
+      anchor_type: s.anchor_type,
+    }));
 
-    const commitSourceRefs = isV4
-      ? ((commit as CommitV4Display).source_refs ?? undefined)
-      : undefined;
+    const commitSourceRefs = commit.source_refs ?? undefined;
 
     return <CommitSourceContext sentences={mappedSentences} sourceRefs={commitSourceRefs} />;
   }
@@ -425,47 +359,25 @@ export function CommitConstraintsAndLeaves({
 }) {
   const { t } = useTerminology();
   const [showCreateLeaf, setShowCreateLeaf] = useState(false);
-  const isV4 = isCommitV4(commit);
 
   return (
     <>
-      {isV4 ? (
-        <div className="space-y-[var(--space-item)]">
-          <V4ConstraintInfoMessage />
-          {projectId && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowCreateLeaf(true)}
-              className="w-full border-[var(--accent-conversation)]/20 text-[var(--accent-conversation)] hover:bg-[var(--accent-conversation)]/10 hover:border-[var(--accent-conversation)]/30"
-            >
-              <Plus size={16} className="mr-1" />
-              Create Leaf from This {t('commit')}
-            </Button>
-          )}
-        </div>
-      ) : (
-        <div className="p-[var(--space-group)] bg-muted/50 rounded-lg border border-border">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold text-sm text-foreground">Constraints</h3>
-            <span className="text-xs text-muted-foreground/70">
-              {(commit as CommitV3Display).constraints.length} total
-            </span>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {(commit as CommitV3Display).constraints.map((c) => (
-              <CommitV3ConstraintBadge key={c.id} constraint={c} />
-            ))}
-            {(commit as CommitV3Display).constraints.length === 0 && (
-              <span className="text-center py-4 text-muted-foreground/70 text-sm w-full">
-                No constraints
-              </span>
-            )}
-          </div>
-        </div>
-      )}
+      <div className="space-y-[var(--space-item)]">
+        <V4ConstraintInfoMessage />
+        {projectId && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowCreateLeaf(true)}
+            className="w-full border-[var(--accent-conversation)]/20 text-[var(--accent-conversation)] hover:bg-[var(--accent-conversation)]/10 hover:border-[var(--accent-conversation)]/30"
+          >
+            <Plus size={16} className="mr-1" />
+            Create Leaf from This {t('commit')}
+          </Button>
+        )}
+      </div>
 
-      {isV4 && leaves && leaves.length > 0 && projectId && (
+      {leaves && leaves.length > 0 && projectId && (
         <div className="p-[var(--space-group)] bg-[var(--status-success-muted)] rounded-lg border border-[var(--status-success)]/20">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
@@ -499,7 +411,7 @@ export function CommitConstraintsAndLeaves({
         </div>
       )}
 
-      {isV4 && projectId && (
+      {projectId && (
         <LeafCreationDialog
           open={showCreateLeaf}
           onOpenChange={setShowCreateLeaf}

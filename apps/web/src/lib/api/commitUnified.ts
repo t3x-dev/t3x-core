@@ -4,9 +4,8 @@
 
 import type { Commit } from '@t3x-dev/core';
 import { upgradeLegacyCommit } from '@t3x-dev/core';
-
-import { API_V1, fetchWithTimeout } from './core';
 import { getCommitV4, getCommitV4History } from './commits';
+import { API_V1, fetchWithTimeout } from './core';
 
 /**
  * Fetch a commit as V5 frames. Tries V5 endpoint first, falls back to V4 + upgrade.
@@ -34,10 +33,7 @@ export async function getCommitAsFrames(hash: string): Promise<Commit> {
 /**
  * Fetch commit history as V5 frames.
  */
-export async function getCommitHistoryAsFrames(
-  hash: string,
-  limit = 10
-): Promise<Commit[]> {
+export async function getCommitHistoryAsFrames(hash: string, limit = 10): Promise<Commit[]> {
   const v4History = await getCommitV4History(hash, limit);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return v4History.map((c) => upgradeLegacyCommit(c as any));

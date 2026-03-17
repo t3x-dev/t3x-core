@@ -63,8 +63,7 @@ export function useContextMenu({
       const isDraft = node.data.commitStatus === 'draft';
       const isCommitted = node.data.commitStatus === 'committed';
       const hasConversation = !!node.data.conversationId;
-      const commitHash =
-        node.data.commitV4?.hash || node.data.commitV3?.hash || node.data.commitHash || '';
+      const commitHash = node.data.commitV4?.hash || node.data.commitHash || '';
       const conversationId = node.data.conversationId;
       // Resolve parent commit hash for Quick Diff (via edges)
       let parentCommitHash: string | undefined;
@@ -103,8 +102,7 @@ export function useContextMenu({
           canMerge && projectId && onNavigate
             ? () => {
                 startTransition(async () => {
-                  const draftId =
-                    await useCanvasStore.getState().createMergePendingCommit(node.id);
+                  const draftId = await useCanvasStore.getState().createMergePendingCommit(node.id);
                   if (draftId && onNavigate) {
                     onNavigate(`/project/${projectId}/merge/${draftId}`);
                   }
@@ -122,13 +120,12 @@ export function useContextMenu({
           });
         },
         onAutoExtract: onAutoExtract ? () => onAutoExtract(node.id) : undefined,
-        onCopyHash:
-          commitHash
-            ? () => {
-                navigator.clipboard.writeText(commitHash);
-                notify?.('Hash copied to clipboard', 'success');
-              }
-            : undefined,
+        onCopyHash: commitHash
+          ? () => {
+              navigator.clipboard.writeText(commitHash);
+              notify?.('Hash copied to clipboard', 'success');
+            }
+          : undefined,
         onDelete: isDraft
           ? () => {
               // Trigger removal via onNodesChange (same as pressing Delete key)

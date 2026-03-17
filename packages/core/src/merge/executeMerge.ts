@@ -7,7 +7,7 @@
  * 执行合并 - 在用户完成所有决策后创建新的合并 CommitV4
  *
  * V4 Changes:
- * - Returns CommitV4 (not CommitV3)
+ * - Returns CommitV4
  * - Added projectId parameter
  * - No constraint handling (constraints belong to Leaf)
  */
@@ -28,7 +28,7 @@ import type { Merge2WayResult } from './types';
  * 在用户完成所有决策后执行合并
  *
  * V4 Changes:
- * - Returns CommitV4 (not CommitV3)
+ * - Returns CommitV4
  * - Added projectId parameter
  * - No constraint handling
  *
