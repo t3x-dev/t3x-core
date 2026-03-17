@@ -21,6 +21,7 @@
  *  └─────────────────────────────────────────────────────────────────┘
  */
 
+import type { Commit } from '@t3x-dev/core';
 import {
   ArrowLeft,
   ExternalLink,
@@ -36,7 +37,6 @@ import {
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { Commit } from '@t3x-dev/core';
 import { FrameGraphView } from '@/components/frame-graph';
 import { Breadcrumb } from '@/components/shared/Breadcrumb';
 import { KeyboardHintBar } from '@/components/shared/KeyboardHintBar';
@@ -49,8 +49,8 @@ import { relativeTime, shortHash } from '@/lib/formatters';
 import { PAGE_ANIMATION_STYLES } from '@/lib/pageAnimations';
 import { useCommitDetailStore } from '@/store/commitDetailStore';
 import { useProjectStore } from '@/store/projectStore';
-import { CommitFrameIndex } from './CommitFrameIndex';
 import { CopyButton, DotIndicator, useCountUp } from './CommitDetailHelpers';
+import { CommitFrameIndex } from './CommitFrameIndex';
 import { CommitOperationsSidebar } from './CommitOperationsSidebar';
 import { ProvenanceGraph } from './CommitProvenanceGraph';
 import { CommitYAMLDocument } from './CommitYAMLDocument';
@@ -160,22 +160,22 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
 
   // ── Frame IDs for keyboard navigation ───────────
   const allFrameIds = useMemo(() => {
-    return [
-      ...enrichedFrames.map((ef) => ef.frame.id),
-      ...removedFrames.map((ef) => ef.frame.id),
-    ];
+    return [...enrichedFrames.map((ef) => ef.frame.id), ...removedFrames.map((ef) => ef.frame.id)];
   }, [enrichedFrames, removedFrames]);
 
   // ── Callbacks ─────────────────────────────────────
-  const scrollToFrame = useCallback((id: string) => {
-    setActiveFrame(id);
-    setTimeout(() => {
-      frameRefs.current[id]?.scrollIntoView({
-        behavior: 'smooth',
-        block: 'center',
-      });
-    }, 50);
-  }, [setActiveFrame]);
+  const scrollToFrame = useCallback(
+    (id: string) => {
+      setActiveFrame(id);
+      setTimeout(() => {
+        frameRefs.current[id]?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center',
+        });
+      }, 50);
+    },
+    [setActiveFrame]
+  );
 
   // ── Keyboard navigation (shared hook, controlled mode) ──
   useKeyboardNavigation({
@@ -420,7 +420,8 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
           <div className="flex items-center gap-1.5 text-[var(--text-tertiary)]">
             <GitBranch size={10} />
             <span className="font-medium text-[var(--text-secondary)]">
-              {commit.content.relations.length} relation{commit.content.relations.length !== 1 ? 's' : ''}
+              {commit.content.relations.length} relation
+              {commit.content.relations.length !== 1 ? 's' : ''}
             </span>
           </div>
 
@@ -468,11 +469,7 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
       {/* ═══════ MAIN CONTENT: 3-Panel Layout ═══════ */}
       <div className="relative flex flex-1 overflow-hidden">
         {/* LEFT: Frame Index */}
-        <CommitFrameIndex
-          projectId={projectId}
-          leaves={leaves}
-          onLeavesChange={setLeaves}
-        />
+        <CommitFrameIndex projectId={projectId} leaves={leaves} onLeavesChange={setLeaves} />
 
         {/* CENTER: Tabbed Panel */}
         <div className="flex flex-1 flex-col overflow-hidden">
@@ -539,7 +536,10 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
                 ) : (
                   <div className="rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-panel)] divide-y divide-[var(--stroke-divider)]">
                     {commit.content.relations.map((rel, i) => (
-                      <div key={`${rel.from}-${rel.to}-${i}`} className="flex items-center gap-2 px-4 py-1.5 text-[11px]">
+                      <div
+                        key={`${rel.from}-${rel.to}-${i}`}
+                        className="flex items-center gap-2 px-4 py-1.5 text-[11px]"
+                      >
                         <span className="font-mono text-[var(--accent-commit)]">{rel.from}</span>
                         <span className="text-[var(--diff-modified-accent)]">→</span>
                         <span className="text-[var(--text-tertiary)] text-[10px]">{rel.type}</span>

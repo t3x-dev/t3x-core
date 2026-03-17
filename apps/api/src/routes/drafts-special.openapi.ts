@@ -22,11 +22,7 @@ import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { getUserId, recordUsageFireAndForget } from '../lib/usage-tracking';
 import { ErrorResponseSchema, IdParamSchema, SuccessResponseSchema } from '../schemas/common';
-import {
-  DraftResponse,
-  ReviewActionRequest,
-  ReviewActionResponse,
-} from '../schemas/v4-contracts';
+import { DraftResponse, ReviewActionRequest, ReviewActionResponse } from '../schemas/v4-contracts';
 import { toApiDraft } from './drafts-crud.openapi';
 import { extractSentencesFromConversation } from './extract.openapi';
 

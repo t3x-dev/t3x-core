@@ -1,8 +1,8 @@
 'use client';
 
+import type { Delta } from '@t3x-dev/core';
 import { X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import type { Delta } from '@t3x-dev/core';
 import { useExtractionPanelStore } from '@/store/extractionPanelStore';
 
 // ── Types ──

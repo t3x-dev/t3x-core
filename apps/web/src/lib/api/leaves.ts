@@ -2,8 +2,8 @@
  * Leaves + Curate Preview API
  */
 
-import { API_V1, fetchWithTimeout, handleResponse } from './core';
 import type { AnchorCandidate } from '@/types/nodes';
+import { API_V1, fetchWithTimeout, handleResponse } from './core';
 import type {
   AnchorConstraint,
   AnchorType,

@@ -1,4 +1,11 @@
-import type { Delta, DeltaLogEntry, DeltaSource, Frame, FrameChange, SemanticContent } from '@t3x-dev/core';
+import type {
+  Delta,
+  DeltaLogEntry,
+  DeltaSource,
+  Frame,
+  FrameChange,
+  SemanticContent,
+} from '@t3x-dev/core';
 import { create } from 'zustand';
 import { createCommit, listCommitsV4 } from '@/lib/api/commits';
 import { createDelta } from '@/lib/api/frames';
@@ -43,9 +50,9 @@ interface ExtractionPanelState {
   setConversationId: (id: string | null) => void;
 
   // Hover linking between YAML ↔ chat messages
-  hoveredFrameId: string | null;      // YAML row hovered → highlight source turn
-  hoveredSlotKey: string | null;      // Specific slot hovered (for character-level highlight)
-  hoveredTurnHash: string | null;     // Chat message hovered → highlight YAML rows
+  hoveredFrameId: string | null; // YAML row hovered → highlight source turn
+  hoveredSlotKey: string | null; // Specific slot hovered (for character-level highlight)
+  hoveredTurnHash: string | null; // Chat message hovered → highlight YAML rows
   setHoveredFrameId: (id: string | null, slotKey?: string | null) => void;
   setHoveredTurnHash: (hash: string | null) => void;
 
@@ -175,7 +182,15 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
   },
 
   setDraft: (content) => set({ draft: content }),
-  resetDraft: () => set({ draft: emptyContent, deltaLog: [], removedFrames: [], lastDeltaChanges: [], confirmedFrameIds: {}, confirmedSlotKeys: {} }),
+  resetDraft: () =>
+    set({
+      draft: emptyContent,
+      deltaLog: [],
+      removedFrames: [],
+      lastDeltaChanges: [],
+      confirmedFrameIds: {},
+      confirmedSlotKeys: {},
+    }),
   setExtracting: (extracting) => set({ isExtracting: extracting }),
 
   confirmFrame: (frameId) =>
@@ -249,7 +264,15 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
   },
 
   commitFrames: async (message) => {
-    const { draft, projectId, conversationId, conversationTitle, lastCommitHash, commitBranch, selectDeltaFrames } = get();
+    const {
+      draft,
+      projectId,
+      conversationId,
+      conversationTitle,
+      lastCommitHash,
+      commitBranch,
+      selectDeltaFrames,
+    } = get();
     if (!projectId) throw new Error('No project ID');
 
     set({ isCommitting: true, commitError: null });
@@ -257,18 +280,22 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
       const deltaFrames = selectDeltaFrames();
       const cleanFrames = deltaFrames.map(({ slot_sources: _, source: __, ...f }) => f);
 
-      const result = await createCommit(projectId, {
-        frames: cleanFrames,
-        relations: draft.relations,
-      }, {
-        parents: lastCommitHash ? [lastCommitHash] : [],
-        branch: commitBranch,
-        message: message || undefined,
-        sources: conversationId
-          ? [{ type: 'conversation', id: conversationId, title: conversationTitle ?? undefined }]
-          : undefined,
-        provenance: { method: 'llm_extraction' },
-      });
+      const result = await createCommit(
+        projectId,
+        {
+          frames: cleanFrames,
+          relations: draft.relations,
+        },
+        {
+          parents: lastCommitHash ? [lastCommitHash] : [],
+          branch: commitBranch,
+          message: message || undefined,
+          sources: conversationId
+            ? [{ type: 'conversation', id: conversationId, title: conversationTitle ?? undefined }]
+            : undefined,
+          provenance: { method: 'llm_extraction' },
+        }
+      );
 
       const newCommittedIds: Record<string, boolean> = {};
       const newSnapshot: Record<string, Frame> = {};

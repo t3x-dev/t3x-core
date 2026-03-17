@@ -11,8 +11,8 @@
  * 5. Target only: toggle keep/discard per frame
  */
 
-import { Check, Circle } from 'lucide-react';
 import type { Frame, FrameMergeResult } from '@t3x-dev/core';
+import { Check, Circle } from 'lucide-react';
 
 // ============================================================================
 // Types
@@ -87,7 +87,9 @@ export function MergeNavigator({
   onToggleKeepTarget,
 }: MergeNavigatorProps) {
   const totalConflicts = mergeResult.conflicts.length;
-  const resolvedCountActual = mergeResult.conflicts.filter((c) => resolutions.has(c.frameId)).length;
+  const resolvedCountActual = mergeResult.conflicts.filter((c) =>
+    resolutions.has(c.frameId)
+  ).length;
   const progress = totalConflicts > 0 ? (resolvedCountActual / totalConflicts) * 100 : 100;
 
   function handleFrameClick(frameId: string) {
@@ -183,12 +185,11 @@ export function MergeNavigator({
               key={frame.id}
               className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[var(--text-tertiary)] opacity-60"
             >
-              <Check
-                size={8}
-                className="shrink-0 rounded-full text-[var(--diff-added-accent)]"
-              />
+              <Check size={8} className="shrink-0 rounded-full text-[var(--diff-added-accent)]" />
               <div className="min-w-0 flex-1">
-                <div className="truncate text-[11px] font-medium">{formatFrameType(frame.type)}</div>
+                <div className="truncate text-[11px] font-medium">
+                  {formatFrameType(frame.type)}
+                </div>
                 <div className="truncate font-mono text-[10px]">{frame.id}</div>
               </div>
             </div>
@@ -203,10 +204,7 @@ export function MergeNavigator({
           {mergeResult.onlyInSource.map((frame) => {
             const isKept = keepSource.has(frame.id);
             return (
-              <div
-                key={frame.id}
-                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5"
-              >
+              <div key={frame.id} className="flex w-full items-center gap-2 rounded-md px-2 py-1.5">
                 <input
                   type="checkbox"
                   checked={isKept}
@@ -235,10 +233,7 @@ export function MergeNavigator({
           {mergeResult.onlyInTarget.map((frame) => {
             const isKept = keepTarget.has(frame.id);
             return (
-              <div
-                key={frame.id}
-                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5"
-              >
+              <div key={frame.id} className="flex w-full items-center gap-2 rounded-md px-2 py-1.5">
                 <input
                   type="checkbox"
                   checked={isKept}

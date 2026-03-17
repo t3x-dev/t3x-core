@@ -12,9 +12,9 @@
  * Toggle between modes via the "Resolve per slot →" / "← Back to per-frame" link.
  */
 
+import type { Frame, SlotConflict, SlotValue } from '@t3x-dev/core';
 import { Check } from 'lucide-react';
 import { useState } from 'react';
-import type { Frame, SlotConflict, SlotValue } from '@t3x-dev/core';
 import { cn } from '@/lib/utils';
 
 // ============================================================================
@@ -71,7 +71,8 @@ function renderSlotValue(value: SlotValue | undefined): React.ReactNode {
     if ('ref' in value && typeof (value as { ref: string }).ref === 'string') {
       return (
         <span style={{ color: '#bb9af7' }}>
-          {'{ '}ref: {(value as { ref: string }).ref}{' }'}
+          {'{ '}ref: {(value as { ref: string }).ref}
+          {' }'}
         </span>
       );
     }
@@ -150,7 +151,10 @@ function PerSlotRow({ conflict, choice, frameId, onChoose }: PerSlotRowProps) {
   return (
     <div className="rounded border border-[var(--diff-removed-accent)]/30 bg-[var(--diff-removed-bg)]/40 p-2 space-y-1.5">
       {/* Slot key label */}
-      <div className="flex items-center gap-1.5 text-xs font-medium" style={{ color: 'var(--diff-removed-accent)' }}>
+      <div
+        className="flex items-center gap-1.5 text-xs font-medium"
+        style={{ color: 'var(--diff-removed-accent)' }}
+      >
         <span className="font-mono">{conflict.key}</span>
         <span className="text-[var(--text-tertiary)] font-normal">conflict</span>
       </div>
@@ -319,9 +323,7 @@ export function FrameConflictCard({
               <span className="relative inline-flex rounded-full h-2 w-2 bg-[var(--diff-removed-accent)]" />
             </span>
           )}
-          {isResolved && (
-            <Check className="h-3.5 w-3.5 text-[var(--diff-added-accent)] shrink-0" />
-          )}
+          {isResolved && <Check className="h-3.5 w-3.5 text-[var(--diff-added-accent)] shrink-0" />}
 
           {/* Type badge */}
           <span className="rounded bg-[var(--surface-app)] px-1.5 py-0.5 font-mono text-[11px] font-medium text-[var(--text-secondary)] border border-[var(--stroke-divider)]">

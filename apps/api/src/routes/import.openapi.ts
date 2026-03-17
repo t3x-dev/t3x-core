@@ -168,8 +168,16 @@ const importCfpackRoute = createRoute({
                 created_at: z.string(),
               })
             ),
-            commits_v3: z.array(z.record(z.string(), z.unknown())).max(10000).optional().default([]),
-            commits_v4: z.array(z.record(z.string(), z.unknown())).max(10000).optional().default([]),
+            commits_v3: z
+              .array(z.record(z.string(), z.unknown()))
+              .max(10000)
+              .optional()
+              .default([]),
+            commits_v4: z
+              .array(z.record(z.string(), z.unknown()))
+              .max(10000)
+              .optional()
+              .default([]),
             leaves: z.array(z.record(z.string(), z.unknown())).max(10000).optional().default([]),
             pins: z.array(z.record(z.string(), z.unknown())).max(10000).optional().default([]),
             meta: z.object({

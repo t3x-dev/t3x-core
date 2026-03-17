@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { relevanceScore, type RelevanceContext } from '@/lib/relevanceScore';
+import { describe, expect, it } from 'vitest';
+import { type RelevanceContext, relevanceScore } from '@/lib/relevanceScore';
 
 const makeFrame = (id: string, confidence?: number) => ({
   id,
@@ -18,14 +18,22 @@ const emptyCtx: RelevanceContext = {
 
 describe('relevanceScore', () => {
   it('returns 1.0 for confirmed frames', () => {
-    const ctx: RelevanceContext = { ...emptyCtx, confirmedFrameIds: { f_001: true }, turnsAgoMap: { f_001: 5 } };
+    const ctx: RelevanceContext = {
+      ...emptyCtx,
+      confirmedFrameIds: { f_001: true },
+      turnsAgoMap: { f_001: 5 },
+    };
     const result = relevanceScore(makeFrame('f_001'), ctx);
     expect(result.score).toBe(1.0);
     expect(result.reasons[0].signal).toBe('confirmed');
   });
 
   it('returns 0.8 for LLM-highlighted frames', () => {
-    const ctx: RelevanceContext = { ...emptyCtx, llmHighlightedFrameIds: { f_001: true }, turnsAgoMap: { f_001: 10 } };
+    const ctx: RelevanceContext = {
+      ...emptyCtx,
+      llmHighlightedFrameIds: { f_001: true },
+      turnsAgoMap: { f_001: 10 },
+    };
     const result = relevanceScore(makeFrame('f_001'), ctx);
     expect(result.score).toBe(0.8);
     expect(result.reasons[0].signal).toBe('llm_boost');
@@ -100,9 +108,9 @@ describe('relevanceScore', () => {
   it('reasons are sorted by value descending', () => {
     const ctx: RelevanceContext = {
       ...emptyCtx,
-      turnsAgoMap: { f_001: 1 },       // 0.7
-      touchCountMap: { f_001: 5 },      // 0.7
-      relationDegreeMap: { f_001: 3 },  // 0.6
+      turnsAgoMap: { f_001: 1 }, // 0.7
+      touchCountMap: { f_001: 5 }, // 0.7
+      relationDegreeMap: { f_001: 3 }, // 0.6
     };
     const result = relevanceScore(makeFrame('f_001', 0.8), ctx);
     expect(result.reasons[0].value).toBeGreaterThanOrEqual(result.reasons[1].value);
@@ -112,9 +120,9 @@ describe('relevanceScore', () => {
   it('multiple signals combine — score is max of all', () => {
     const ctx: RelevanceContext = {
       ...emptyCtx,
-      turnsAgoMap: { f_001: 3 },        // 0.7^3 = 0.343
-      touchCountMap: { f_001: 3 },       // 0.42
-      relationDegreeMap: { f_001: 2 },   // 0.4
+      turnsAgoMap: { f_001: 3 }, // 0.7^3 = 0.343
+      touchCountMap: { f_001: 3 }, // 0.42
+      relationDegreeMap: { f_001: 2 }, // 0.4
     };
     const result = relevanceScore(makeFrame('f_001', 0.6), ctx);
     // max(0.343, 0.42, 0.4, 0.3) = 0.42 (touch_frequency wins)

@@ -9,6 +9,7 @@
  * 2. apps/runner/src/types.ts - if Runner consumes this API
  */
 
+import type { AnyDB } from '@t3x-dev/storage';
 import {
   deleteProject,
   deleteRun,
@@ -17,7 +18,6 @@ import {
   insertRun,
   listRuns,
 } from '@t3x-dev/storage';
-import type { AnyDB } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setupTestDB } from '../setup';

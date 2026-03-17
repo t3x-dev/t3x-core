@@ -5,11 +5,7 @@
  * Mocks the database singleton so API routes use test database.
  */
 
-import {
-  closePostgresStorage,
-  createPostgresStorage,
-  type AnyDB,
-} from '@t3x-dev/storage';
+import { type AnyDB, closePostgresStorage, createPostgresStorage } from '@t3x-dev/storage';
 import postgres from 'postgres';
 import { vi } from 'vitest';
 

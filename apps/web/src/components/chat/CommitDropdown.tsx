@@ -83,7 +83,13 @@ export function CommitDropdown() {
           disabled={isCommitting}
         />
         <div className="flex gap-1.5">
-          <Button size="sm" variant="outline" className="flex-1 text-xs" onClick={() => setShowMessageInput(false)} disabled={isCommitting}>
+          <Button
+            size="sm"
+            variant="outline"
+            className="flex-1 text-xs"
+            onClick={() => setShowMessageInput(false)}
+            disabled={isCommitting}
+          >
             Cancel
           </Button>
           <Button

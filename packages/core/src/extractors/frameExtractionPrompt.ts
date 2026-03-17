@@ -90,10 +90,12 @@ function serializeSnapshot(snapshot: SemanticContent): string {
  * Includes turn_hash as [T1], [T2], etc. for source tracking.
  */
 function formatTurns(turns: FrameExtractionTurn[]): string {
-  return turns.map((t, i) => {
-    const tag = t.turn_hash ? `[T${i + 1}:${t.turn_hash.slice(0, 8)}]` : `[T${i + 1}]`;
-    return `${tag} [${t.role}]: ${t.content}`;
-  }).join('\n');
+  return turns
+    .map((t, i) => {
+      const tag = t.turn_hash ? `[T${i + 1}:${t.turn_hash.slice(0, 8)}]` : `[T${i + 1}]`;
+      return `${tag} [${t.role}]: ${t.content}`;
+    })
+    .join('\n');
 }
 
 // ── System Prompts ──

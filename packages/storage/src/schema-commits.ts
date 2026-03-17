@@ -79,13 +79,14 @@ export const commitsV5 = pgTable(
     branch: text('branch').default('main'),
 
     /** Source references (conversations, imports, leaves that contributed) */
-    sources: jsonb('sources').$type<
-      Array<{
-        type: 'conversation' | 'import' | 'leaf';
-        id: string;
-        title?: string;
-      }>
-    >(),
+    sources:
+      jsonb('sources').$type<
+        Array<{
+          type: 'conversation' | 'import' | 'leaf';
+          id: string;
+          title?: string;
+        }>
+      >(),
 
     /** Provenance: how this commit was created */
     provenance: jsonb('provenance').$type<{

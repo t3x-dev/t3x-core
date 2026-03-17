@@ -4,9 +4,8 @@
  * Integration tests for POST /v1/extract/incremental endpoint.
  */
 
-import { insertConversation, insertProject, insertTurn } from '@t3x-dev/storage';
 import type { AnyDB } from '@t3x-dev/storage';
-import { insertDraftV3 } from '@t3x-dev/storage';
+import { insertConversation, insertDraftV3, insertProject, insertTurn } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
@@ -129,7 +128,12 @@ describe('POST /v1/extract/incremental', () => {
         .mockImplementation(async (_role: string, fn: (provider: unknown) => Promise<unknown>) => {
           const mockProvider = {
             id: 'test-provider',
-            generate: vi.fn().mockResolvedValue({ text: llmResponse, usage: { inputTokens: 10, outputTokens: 5 } }),
+            generate: vi
+              .fn()
+              .mockResolvedValue({
+                text: llmResponse,
+                usage: { inputTokens: 10, outputTokens: 5 },
+              }),
             resolveConflict: vi.fn(),
           };
           return fn(mockProvider);
@@ -212,7 +216,12 @@ describe('POST /v1/extract/incremental', () => {
         .mockImplementation(async (_role: string, fn: (provider: unknown) => Promise<unknown>) => {
           const mockProvider = {
             id: 'test-provider',
-            generate: vi.fn().mockResolvedValue({ text: llmResponse, usage: { inputTokens: 10, outputTokens: 5 } }),
+            generate: vi
+              .fn()
+              .mockResolvedValue({
+                text: llmResponse,
+                usage: { inputTokens: 10, outputTokens: 5 },
+              }),
             resolveConflict: vi.fn(),
           };
           return fn(mockProvider);

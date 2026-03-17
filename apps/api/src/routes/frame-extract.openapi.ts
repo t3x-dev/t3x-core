@@ -9,7 +9,14 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { buildDraft, createMeaningPipeline, type FrameExtractionTurn, FrameExtractor, fuzzyLocate, type SlotQuotesMap } from '@t3x-dev/core';
+import {
+  buildDraft,
+  createMeaningPipeline,
+  type FrameExtractionTurn,
+  FrameExtractor,
+  fuzzyLocate,
+  type SlotQuotesMap,
+} from '@t3x-dev/core';
 import {
   findConversationById,
   findTurnsByConversation,
@@ -155,14 +162,16 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
       trackedUsage.outputTokens = 0;
       trackedModel = tracked.id;
       const extractor = new FrameExtractor(tracked);
-      return extractor.extract({
-        turns: extractionTurns,
-        snapshot: currentSnapshot.frames.length > 0 ? currentSnapshot : undefined,
-      }).then((r) => {
-        trackedUsage.inputTokens = usage.inputTokens;
-        trackedUsage.outputTokens = usage.outputTokens;
-        return r;
-      });
+      return extractor
+        .extract({
+          turns: extractionTurns,
+          snapshot: currentSnapshot.frames.length > 0 ? currentSnapshot : undefined,
+        })
+        .then((r) => {
+          trackedUsage.inputTokens = usage.inputTokens;
+          trackedUsage.outputTokens = usage.outputTokens;
+          return r;
+        });
     });
 
     // 6. Check extraction result
@@ -198,7 +207,10 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
         if (!quotes) continue;
 
         const change = result.delta.changes[i];
-        const slotSources: Record<string, { turn: string; turn_hash?: string; start_char: number; end_char: number; quote?: string }> = {};
+        const slotSources: Record<
+          string,
+          { turn: string; turn_hash?: string; start_char: number; end_char: number; quote?: string }
+        > = {};
 
         for (const [slotKey, quote] of Object.entries(quotes)) {
           if (typeof quote !== 'string' || !quote) continue;
@@ -233,14 +245,17 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
     let organizedSnapshot = result.snapshot;
     try {
       const pipelineReg = await getProviderRegistry();
-      const pipelineResult = await pipelineReg.tryWithFallback('generation', async (pipelineProvider) => {
-        const pipeline = createMeaningPipeline(pipelineProvider);
-        return pipeline.run(
-        result.snapshot,
-        extractionTurns,
-        currentSnapshot.frames.length > 0 ? currentSnapshot : undefined
+      const pipelineResult = await pipelineReg.tryWithFallback(
+        'generation',
+        async (pipelineProvider) => {
+          const pipeline = createMeaningPipeline(pipelineProvider);
+          return pipeline.run(
+            result.snapshot,
+            extractionTurns,
+            currentSnapshot.frames.length > 0 ? currentSnapshot : undefined
+          );
+        }
       );
-      });
       organizedSnapshot = pipelineResult.content;
 
       // Record pipeline usage
@@ -262,9 +277,13 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
       const snapshots = pipelineResult.meta.stepSnapshots;
       const q = pipelineResult.quality;
       console.info(`[meaning-pipeline] Completed: ${completed.join(' → ')}`);
-      console.info(`[meaning-pipeline] Quality: score=${q.score} frames=${q.frameCount} depth=${q.maxDepth} dupes=${q.duplicateTypes}`);
+      console.info(
+        `[meaning-pipeline] Quality: score=${q.score} frames=${q.frameCount} depth=${q.maxDepth} dupes=${q.duplicateTypes}`
+      );
       for (const snap of snapshots) {
-        console.info(`[meaning-pipeline] Step "${snap.agent}": ${snap.frameCount} frames, score=${snap.quality.score}`);
+        console.info(
+          `[meaning-pipeline] Step "${snap.agent}": ${snap.frameCount} frames, score=${snap.quality.score}`
+        );
       }
       if (errors.length > 0) {
         for (const ae of errors) {
@@ -272,7 +291,9 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
         }
       }
     } catch (pipelineErr) {
-      console.warn(`[meaning-pipeline] Pipeline error: ${pipelineErr instanceof Error ? pipelineErr.message : String(pipelineErr)}`);
+      console.warn(
+        `[meaning-pipeline] Pipeline error: ${pipelineErr instanceof Error ? pipelineErr.message : String(pipelineErr)}`
+      );
       // Pipeline is optional — flat frames are still valid
     }
 

@@ -18,12 +18,12 @@ import {
 } from '@/utils/tokenizer';
 import { ConversationTurnRenderer } from './ConversationTurnRenderer';
 import {
-  type TokenState,
   getTokenClasses,
   getTokenState,
   isTokenInAnchorCandidate,
   isTokenInConfirmedAnchor,
   needsSpaceAfter,
+  type TokenState,
 } from './SelectableTextBlockUtils';
 
 interface SelectableTextBlockProps {
@@ -366,9 +366,10 @@ export function SelectableTextBlock({
           const addSpace = needsSpaceAfter(token, nextToken);
 
           // Skip interaction for pure punctuation (including | and separators)
-          const isPunctuation = /^[,.\u3002\uff01\uff1f\u3001\uff1b\uff1a\u201c\u201d\u2018\u2019\uff08\uff09\u300a\u300b\u3010\u3011!?;:'"()[\]{}<>|\u2502\s]+$/.test(
-            token.text
-          );
+          const isPunctuation =
+            /^[,.\u3002\uff01\uff1f\u3001\uff1b\uff1a\u201c\u201d\u2018\u2019\uff08\uff09\u300a\u300b\u3010\u3011!?;:'"()[\]{}<>|\u2502\s]+$/.test(
+              token.text
+            );
 
           // Render newline as <br /> element
           if (token.text === '\n') {

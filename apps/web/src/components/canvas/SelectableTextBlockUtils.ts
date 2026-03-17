@@ -6,10 +6,7 @@ import type {
   TextSelection,
   TextToken,
 } from '@/types/nodes';
-import {
-  isTokenInExcludeSelection,
-  isTokenInIncludeSelection,
-} from '@/utils/tokenizer';
+import { isTokenInExcludeSelection, isTokenInIncludeSelection } from '@/utils/tokenizer';
 
 export type TokenState =
   | 'normal'

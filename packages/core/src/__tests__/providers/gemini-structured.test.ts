@@ -1,4 +1,4 @@
-import { beforeAll, afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { LLMProviderError } from '../../llm/types';
 import { GeminiProvider } from '../../providers/llm/gemini';
@@ -157,9 +157,7 @@ describe('GeminiProvider.generateStructured', () => {
         ok: true,
         status: 200,
         text: () =>
-          Promise.resolve(
-            JSON.stringify(makeGeminiResponse('{"name": "Bob", "age": 25}'))
-          ),
+          Promise.resolve(JSON.stringify(makeGeminiResponse('{"name": "Bob", "age": 25}'))),
       })
     );
 
@@ -180,19 +178,16 @@ describe('GeminiProvider.generateStructured', () => {
       Promise.resolve({
         ok: true,
         status: 200,
-        text: () =>
-          Promise.resolve(JSON.stringify(makeGeminiResponse('not valid json'))),
+        text: () => Promise.resolve(JSON.stringify(makeGeminiResponse('not valid json'))),
       })
     );
 
     const provider = new GeminiProvider({ apiKey: 'test-key' });
     const schema = z.object({ name: z.string(), age: z.number() });
     await expect(
-      provider.generateStructured(
-        { messages: [{ role: 'user', content: 'Extract' }] },
-        schema,
-        { model: 'gemini-2.0-flash' }
-      )
+      provider.generateStructured({ messages: [{ role: 'user', content: 'Extract' }] }, schema, {
+        model: 'gemini-2.0-flash',
+      })
     ).rejects.toThrow(LLMProviderError);
   });
 
@@ -201,8 +196,7 @@ describe('GeminiProvider.generateStructured', () => {
       Promise.resolve({
         ok: true,
         status: 200,
-        text: () =>
-          Promise.resolve(JSON.stringify(makeGeminiResponse('{"name": "Alice"}'))),
+        text: () => Promise.resolve(JSON.stringify(makeGeminiResponse('{"name": "Alice"}'))),
       })
     );
 
@@ -210,11 +204,9 @@ describe('GeminiProvider.generateStructured', () => {
     // age is required and missing
     const schema = z.object({ name: z.string(), age: z.number() });
     await expect(
-      provider.generateStructured(
-        { messages: [{ role: 'user', content: 'Extract' }] },
-        schema,
-        { model: 'gemini-2.0-flash' }
-      )
+      provider.generateStructured({ messages: [{ role: 'user', content: 'Extract' }] }, schema, {
+        model: 'gemini-2.0-flash',
+      })
     ).rejects.toThrow(LLMProviderError);
   });
 
@@ -230,11 +222,9 @@ describe('GeminiProvider.generateStructured', () => {
     const provider = new GeminiProvider({ apiKey: 'test-key' });
     const schema = z.object({ name: z.string() });
     await expect(
-      provider.generateStructured(
-        { messages: [{ role: 'user', content: 'Extract' }] },
-        schema,
-        { model: 'gemini-2.0-flash' }
-      )
+      provider.generateStructured({ messages: [{ role: 'user', content: 'Extract' }] }, schema, {
+        model: 'gemini-2.0-flash',
+      })
     ).rejects.toThrow(LLMProviderError);
   });
 });

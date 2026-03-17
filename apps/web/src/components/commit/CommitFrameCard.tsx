@@ -13,8 +13,12 @@
  */
 
 import type { Frame, SlotValue } from '@t3x-dev/core';
-import { useCommitDetailStore, type EnrichedFrame, type FrameDiffStatus } from '@/store/commitDetailStore';
-import { DotIndicator, GutterBar, StatusBadge, ConfidenceBadge } from './CommitDetailHelpers';
+import {
+  type EnrichedFrame,
+  type FrameDiffStatus,
+  useCommitDetailStore,
+} from '@/store/commitDetailStore';
+import { ConfidenceBadge, DotIndicator, GutterBar, StatusBadge } from './CommitDetailHelpers';
 
 // ============================================================================
 // Types
@@ -94,7 +98,8 @@ function renderSlotValue(value: SlotValue): React.ReactNode {
       // SlotRef
       return (
         <span style={{ color: '#bb9af7' }}>
-          {'{ '}ref: {value.ref}{' }'}
+          {'{ '}ref: {value.ref}
+          {' }'}
         </span>
       );
     }
@@ -151,7 +156,12 @@ function SlotRow({ slotKey, value, status, oldValue, isHovered, onHover, onClick
       style={{
         borderLeft: status !== 'normal' ? `2px solid ${borderColor}` : '2px solid transparent',
         paddingLeft: status !== 'normal' ? '8px' : '10px',
-        backgroundColor: isHovered && status === 'normal' ? undefined : bgColor !== 'transparent' ? bgColor : undefined,
+        backgroundColor:
+          isHovered && status === 'normal'
+            ? undefined
+            : bgColor !== 'transparent'
+              ? bgColor
+              : undefined,
       }}
       onMouseEnter={() => onHover(slotKey)}
       onMouseLeave={() => onHover(null)}
@@ -173,14 +183,21 @@ function SlotRow({ slotKey, value, status, oldValue, isHovered, onHover, onClick
 
         {/* Status labels */}
         {status === 'added' && (
-          <span className="ml-1 rounded-sm px-1 py-px text-[9px] font-semibold uppercase tracking-wide"
-            style={{ color: 'var(--diff-added-accent)', backgroundColor: 'var(--diff-added-bg)' }}>
+          <span
+            className="ml-1 rounded-sm px-1 py-px text-[9px] font-semibold uppercase tracking-wide"
+            style={{ color: 'var(--diff-added-accent)', backgroundColor: 'var(--diff-added-bg)' }}
+          >
             new
           </span>
         )}
         {status === 'removed' && (
-          <span className="ml-1 rounded-sm px-1 py-px text-[9px] font-semibold uppercase tracking-wide"
-            style={{ color: 'var(--diff-removed-accent)', backgroundColor: 'var(--diff-removed-bg)' }}>
+          <span
+            className="ml-1 rounded-sm px-1 py-px text-[9px] font-semibold uppercase tracking-wide"
+            style={{
+              color: 'var(--diff-removed-accent)',
+              backgroundColor: 'var(--diff-removed-bg)',
+            }}
+          >
             removed
           </span>
         )}
@@ -219,7 +236,12 @@ const diffStatusLabels: Record<FrameDiffStatus, string> = {
 // CommitFrameCard
 // ============================================================================
 
-export function CommitFrameCard({ enrichedFrame, isActive, onSelect, cardRef }: CommitFrameCardProps) {
+export function CommitFrameCard({
+  enrichedFrame,
+  isActive,
+  onSelect,
+  cardRef,
+}: CommitFrameCardProps) {
   const { frame, diffStatus, previousFrame } = enrichedFrame;
   const hoveredSlotKey = useCommitDetailStore((s) => s.hoveredSlotKey);
   const setHoveredSlot = useCommitDetailStore((s) => s.setHoveredSlot);

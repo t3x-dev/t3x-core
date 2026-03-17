@@ -1,15 +1,12 @@
-import type { LLMProvider, ProviderName } from './types';
-import { getModelInfo } from './catalog';
 import { createClaudeProvider } from '../providers/llm/claude';
-import { createOpenAIProvider } from '../providers/llm/openai';
 import { createGeminiProvider } from '../providers/llm/gemini';
+import { createOpenAIProvider } from '../providers/llm/openai';
+import { getModelInfo } from './catalog';
+import type { LLMProvider, ProviderName } from './types';
 
 type ApiKeys = Record<ProviderName, string | undefined>;
 
-export function createProviderForModel(
-  modelId: string,
-  apiKeys: ApiKeys
-): LLMProvider | null {
+export function createProviderForModel(modelId: string, apiKeys: ApiKeys): LLMProvider | null {
   const model = getModelInfo(modelId);
   if (!model) return null;
 

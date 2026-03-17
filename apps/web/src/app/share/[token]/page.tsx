@@ -606,9 +606,14 @@ function SharedCommitView({ commit }: { commit: CommitData }) {
             <h2 className="text-sm font-medium text-[var(--text-secondary)] mb-2">
               Relations ({relations.length})
             </h2>
-            <div className={cn('rounded-lg divide-y divide-[var(--stroke-divider)]', glass.cardBase)}>
+            <div
+              className={cn('rounded-lg divide-y divide-[var(--stroke-divider)]', glass.cardBase)}
+            >
               {relations.map((rel, i) => (
-                <div key={`${rel.from}-${rel.to}-${i}`} className="flex items-center gap-2 px-4 py-2 text-xs">
+                <div
+                  key={`${rel.from}-${rel.to}-${i}`}
+                  className="flex items-center gap-2 px-4 py-2 text-xs"
+                >
                   <span className="font-mono text-[var(--accent-commit,#f59e0b)]">{rel.from}</span>
                   <span className="text-[var(--text-tertiary)]">{rel.type}</span>
                   <span className="font-mono text-[var(--accent-commit,#f59e0b)]">{rel.to}</span>

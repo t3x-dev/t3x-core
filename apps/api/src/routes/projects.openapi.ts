@@ -2,6 +2,7 @@
  * Projects Routes with OpenAPI
  */
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
+import { getModelInfo } from '@t3x-dev/core';
 import {
   backfillMerkleRoots,
   branches,
@@ -17,7 +18,6 @@ import {
   verifyHashChain,
   verifyMerkleRoots,
 } from '@t3x-dev/storage';
-import { getModelInfo } from '@t3x-dev/core';
 import { eq, sql } from 'drizzle-orm';
 import { getDB } from '../lib/db';
 import { assertProjectAccess, getUserId } from '../lib/project-access';

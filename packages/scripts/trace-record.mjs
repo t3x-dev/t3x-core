@@ -101,11 +101,13 @@ async function traceProject(sql, projectId) {
   });
 
   // Get turn count
-  const turnCount = await sql`SELECT COUNT(*) as count FROM turns_v2 WHERE project_id = ${projectId}`;
+  const turnCount =
+    await sql`SELECT COUNT(*) as count FROM turns_v2 WHERE project_id = ${projectId}`;
   console.log(`\n${GREEN}Total Turns:${RESET} ${turnCount[0].count}`);
 
   // Get commit count
-  const commitCount = await sql`SELECT COUNT(*) as count FROM commits_v2 WHERE project_id = ${projectId}`;
+  const commitCount =
+    await sql`SELECT COUNT(*) as count FROM commits_v2 WHERE project_id = ${projectId}`;
   console.log(`${GREEN}Total Commits:${RESET} ${commitCount[0].count}`);
 }
 
@@ -125,7 +127,8 @@ async function traceConversation(sql, convId) {
   console.log(JSON.stringify(c, null, 2));
 
   // Get parent project
-  const project = await sql`SELECT project_id, name FROM projects WHERE project_id = ${c.project_id}`;
+  const project =
+    await sql`SELECT project_id, name FROM projects WHERE project_id = ${c.project_id}`;
   console.log(`\n${GREEN}Parent Project:${RESET} ${project[0]?.name} (${c.project_id})`);
 
   // Get turns in this conversation
@@ -194,11 +197,14 @@ async function traceTurn(sql, turnHash) {
   }
 
   // Check if this turn is in any commit's turn window
-  const commits = await sql.unsafe(`
+  const commits = await sql.unsafe(
+    `
     SELECT commit_hash, branch, message, turn_window_json
     FROM commits_v2
     WHERE turn_window_json LIKE $1 OR turn_window_json LIKE $2
-  `, [`%${turnHash}%`, `%${turnHash}%`]);
+  `,
+    [`%${turnHash}%`, `%${turnHash}%`]
+  );
 
   if (commits.length > 0) {
     console.log(`\n${GREEN}Referenced in Commits:${RESET}`);

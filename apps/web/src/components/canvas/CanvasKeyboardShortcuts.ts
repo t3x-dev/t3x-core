@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
 import type { Node } from '@xyflow/react';
+import { useEffect } from 'react';
 import type { CanvasNodeData } from '@/types/nodes';
 
 interface CanvasKeyboardShortcutsOptions {

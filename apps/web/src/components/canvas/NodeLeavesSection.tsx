@@ -1,13 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import {
-  Check,
-  ChevronRight,
-  Circle,
-  Clock,
-  Loader2,
-  Trash2,
-  X,
-} from 'lucide-react';
+import { Check, ChevronRight, Circle, Clock, Loader2, Trash2, X } from 'lucide-react';
 import Link from 'next/link';
 import { memo } from 'react';
 import { cn } from '@/lib/utils';

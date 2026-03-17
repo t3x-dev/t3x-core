@@ -4,8 +4,8 @@
  * CRUD for project-level autopilot settings.
  */
 
+import { type AutopilotConfig, DEFAULT_AUTOPILOT_CONFIG } from '@t3x-dev/core';
 import { eq } from 'drizzle-orm';
-import { DEFAULT_AUTOPILOT_CONFIG, type AutopilotConfig } from '@t3x-dev/core';
 import type { AnyDB } from '../adapters';
 import { projects } from '../schema';
 

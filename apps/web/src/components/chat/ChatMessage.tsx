@@ -19,7 +19,13 @@ interface ChatMessageProps {
  * Render text content with character-range highlights.
  * Splits the text into segments: normal text and highlighted spans.
  */
-function HighlightedText({ text, ranges }: { text: string; ranges: Array<{ start: number; end: number }> }) {
+function HighlightedText({
+  text,
+  ranges,
+}: {
+  text: string;
+  ranges: Array<{ start: number; end: number }>;
+}) {
   if (ranges.length === 0) return <>{text}</>;
 
   // Sort ranges and merge overlaps
@@ -72,7 +78,13 @@ function HighlightedText({ text, ranges }: { text: string; ranges: Array<{ start
   );
 }
 
-export function ChatMessage({ sender, content, turnHash, turnIndex, isStreaming }: ChatMessageProps) {
+export function ChatMessage({
+  sender,
+  content,
+  turnHash,
+  turnIndex,
+  isStreaming,
+}: ChatMessageProps) {
   const isUser = sender === 'user';
 
   const hoveredFrameId = useExtractionPanelStore((s) => s.hoveredFrameId);
@@ -128,28 +140,34 @@ export function ChatMessage({ sender, content, turnHash, turnIndex, isStreaming 
   }, [hoveredFrameId, hoveredSlotKey, draft.frames, turnHash, turnIndex]);
 
   const hasCharHighlights = highlightRanges.length > 0;
-  const isWholeMessageHighlight = hoveredFrameId && !hasCharHighlights && (() => {
-    const frame = draft.frames.find((f) => f.id === hoveredFrameId);
-    if (!frame) return false;
-    // Check if any slot_source points to this turn
-    if (frame.slot_sources) {
-      for (const ref of Object.values(frame.slot_sources)) {
-        if (turnHash && ref.turn_hash && turnHash === ref.turn_hash) return true;
-        if (turnIndex != null && ref.turn === `T${turnIndex}`) return true;
+  const isWholeMessageHighlight =
+    hoveredFrameId &&
+    !hasCharHighlights &&
+    (() => {
+      const frame = draft.frames.find((f) => f.id === hoveredFrameId);
+      if (!frame) return false;
+      // Check if any slot_source points to this turn
+      if (frame.slot_sources) {
+        for (const ref of Object.values(frame.slot_sources)) {
+          if (turnHash && ref.turn_hash && turnHash === ref.turn_hash) return true;
+          if (turnIndex != null && ref.turn === `T${turnIndex}`) return true;
+        }
       }
-    }
-    // Fallback: check frame.source
-    if (!frame.source) return false;
-    if (turnIndex != null && frame.source === `T${turnIndex}`) return true;
-    if (turnHash && frame.source.includes(':')) {
-      return turnHash.includes(frame.source.split(':')[1]);
-    }
-    return false;
-  })();
+      // Fallback: check frame.source
+      if (!frame.source) return false;
+      if (turnIndex != null && frame.source === `T${turnIndex}`) return true;
+      if (turnHash && frame.source.includes(':')) {
+        return turnHash.includes(frame.source.split(':')[1]);
+      }
+      return false;
+    })();
 
   return (
     <div
-      className={cn('group w-full py-4 transition-colors duration-200 relative', 'animate-in fade-in duration-200')}
+      className={cn(
+        'group w-full py-4 transition-colors duration-200 relative',
+        'animate-in fade-in duration-200'
+      )}
       style={{
         background: isWholeMessageHighlight ? 'rgba(96, 165, 250, 0.08)' : 'transparent',
       }}
@@ -213,15 +231,17 @@ export function ChatMessage({ sender, content, turnHash, turnIndex, isStreaming 
 
       {/* Highlight indicator bar on left edge */}
       {(isWholeMessageHighlight || hasCharHighlights) && (
-        <div style={{
-          position: 'absolute',
-          left: 0,
-          top: 0,
-          bottom: 0,
-          width: 3,
-          background: 'rgb(96, 165, 250)',
-          borderRadius: '0 2px 2px 0',
-        }} />
+        <div
+          style={{
+            position: 'absolute',
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: 3,
+            background: 'rgb(96, 165, 250)',
+            borderRadius: '0 2px 2px 0',
+          }}
+        />
       )}
     </div>
   );

@@ -1,12 +1,10 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { normalizeFrameOutput } from '../../llm/normalizer';
 
 describe('normalizeFrameOutput', () => {
   it('passes through valid frames unchanged', () => {
     const input = {
-      frames: [
-        { id: 'f_001', type: 'travel_plan', slots: { destination: 'Tokyo' } },
-      ],
+      frames: [{ id: 'f_001', type: 'travel_plan', slots: { destination: 'Tokyo' } }],
       relations: [],
     };
     const result = normalizeFrameOutput(input);
@@ -33,9 +31,7 @@ describe('normalizeFrameOutput', () => {
 
   it('converts string numbers to numbers in slots', () => {
     const input = {
-      frames: [
-        { id: 'f_001', type: 'price', slots: { amount: '42.5', currency: 'USD' } },
-      ],
+      frames: [{ id: 'f_001', type: 'price', slots: { amount: '42.5', currency: 'USD' } }],
       relations: [],
     };
     const result = normalizeFrameOutput(input);
@@ -64,9 +60,7 @@ describe('normalizeFrameOutput', () => {
 
   it('normalizes frame type to snake_case', () => {
     const input = {
-      frames: [
-        { id: 'f_001', type: 'TravelPlan', slots: { dest: 'NYC' } },
-      ],
+      frames: [{ id: 'f_001', type: 'TravelPlan', slots: { dest: 'NYC' } }],
       relations: [],
     };
     const result = normalizeFrameOutput(input);
@@ -111,9 +105,7 @@ describe('normalizeFrameOutput', () => {
           id: 'f_001',
           type: 'list',
           slots: {
-            items: [
-              { type: 'city', slots: { name: 'Tokyo' } },
-            ],
+            items: [{ type: 'city', slots: { name: 'Tokyo' } }],
           },
         },
       ],

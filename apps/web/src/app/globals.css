@@ -912,9 +912,15 @@ a {
   color: var(--text-primary);
 }
 
-.prose-chat h1 { font-size: 1.25em; }
-.prose-chat h2 { font-size: 1.1em; }
-.prose-chat h3 { font-size: 1em; }
+.prose-chat h1 {
+  font-size: 1.25em;
+}
+.prose-chat h2 {
+  font-size: 1.1em;
+}
+.prose-chat h3 {
+  font-size: 1em;
+}
 
 .prose-chat ul,
 .prose-chat ol {
@@ -1011,6 +1017,11 @@ a {
 }
 
 @keyframes blink-cursor {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
 }

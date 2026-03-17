@@ -103,11 +103,7 @@ shareRoutes.openapi(createShareRoute, async (c) => {
     } else if (body.entity_type === 'commit') {
       const commit = await findCommitV4ByHash(db, body.entity_id);
       if (!commit) {
-        return errorResponse(
-          c,
-          'SHARE_ENTITY_NOT_FOUND',
-          `Commit not found: ${body.entity_id}`
-        );
+        return errorResponse(c, 'SHARE_ENTITY_NOT_FOUND', `Commit not found: ${body.entity_id}`);
       }
       projectId = commit.project_id ?? undefined;
     }

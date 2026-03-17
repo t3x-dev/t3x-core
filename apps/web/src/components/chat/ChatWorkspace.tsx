@@ -68,15 +68,18 @@ export function ChatWorkspace({
     conversationId: resolvedConversationId,
     provider: selectedProvider,
     model: selectedModel,
-    onConversationCreated: useCallback((newConvId: string) => {
-      setResolvedConversationId(newConvId);
-      if (onConversationCreatedProp) {
-        onConversationCreatedProp(newConvId);
-      } else {
-        // Update URL without triggering Next.js navigation (avoids re-mount)
-        window.history.replaceState(null, '', `/chat/${newConvId}`);
-      }
-    }, [onConversationCreatedProp]),
+    onConversationCreated: useCallback(
+      (newConvId: string) => {
+        setResolvedConversationId(newConvId);
+        if (onConversationCreatedProp) {
+          onConversationCreatedProp(newConvId);
+        } else {
+          // Update URL without triggering Next.js navigation (avoids re-mount)
+          window.history.replaceState(null, '', `/chat/${newConvId}`);
+        }
+      },
+      [onConversationCreatedProp]
+    ),
   });
 
   // Sync resolved IDs when props change (e.g. sidebar navigation between conversations)
@@ -117,14 +120,16 @@ export function ChatWorkspace({
     // If no project ID yet, try to get it from the conversation
     if (!resolvedProjectId && convId && convId !== 'new') {
       import('@/lib/api').then(({ getConversation }) => {
-        getConversation(convId).then((conv) => {
-          if (conv?.project_id) {
-            setResolvedProjectId(conv.project_id);
-            useExtractionPanelStore.getState().setProjectId(conv.project_id);
-            useExtractionPanelStore.getState().initCommitState(conv.project_id);
-            useChatStore.getState().setActiveConversation(convId, conv.project_id);
-          }
-        }).catch(() => {});
+        getConversation(convId)
+          .then((conv) => {
+            if (conv?.project_id) {
+              setResolvedProjectId(conv.project_id);
+              useExtractionPanelStore.getState().setProjectId(conv.project_id);
+              useExtractionPanelStore.getState().initCommitState(conv.project_id);
+              useChatStore.getState().setActiveConversation(convId, conv.project_id);
+            }
+          })
+          .catch(() => {});
       });
     }
 
@@ -249,7 +254,13 @@ export function ChatWorkspace({
         ) : (
           <div className="divide-y divide-[var(--stroke-divider)]/50">
             {messages.map((msg, i) => (
-              <ChatMessage key={msg.id} sender={msg.role} content={msg.content} turnHash={msg.id} turnIndex={i + 1} />
+              <ChatMessage
+                key={msg.id}
+                sender={msg.role}
+                content={msg.content}
+                turnHash={msg.id}
+                turnIndex={i + 1}
+              />
             ))}
 
             {/* Streaming response */}

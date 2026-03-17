@@ -12,8 +12,8 @@
  * No LLM needed — pure deterministic transformation.
  */
 
-import type { Frame, SlotValue } from '../../semantic/types';
 import type { LLMProvider } from '../../llm/types';
+import type { Frame, SlotValue } from '../../semantic/types';
 import type { MeaningAgent, PipelineContext } from '../meaningPipeline';
 
 /**

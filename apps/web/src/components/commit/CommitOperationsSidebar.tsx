@@ -28,8 +28,8 @@ import {
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useState } from 'react';
-import { createLeaf } from '@/lib/api';
 import type { Assertion, Constraint, Leaf } from '@/lib/api';
+import { createLeaf } from '@/lib/api';
 import type { LeafType } from '@/lib/api/leaves';
 import { shortHash } from '@/lib/formatters';
 import { useCommitDetailStore } from '@/store/commitDetailStore';
@@ -266,11 +266,7 @@ export function CommitOperationsSidebar({
               disabled={leafCreating}
               className="inline-flex items-center gap-1 rounded border border-[var(--stroke-divider)] px-1.5 py-0.5 text-[9px] text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-secondary)] transition-colors disabled:opacity-50"
             >
-              {leafCreating ? (
-                <Loader2 size={9} className="animate-spin" />
-              ) : (
-                <Plus size={9} />
-              )}
+              {leafCreating ? <Loader2 size={9} className="animate-spin" /> : <Plus size={9} />}
               New
             </button>
             {leafMenuOpen && (
@@ -303,12 +299,7 @@ export function CommitOperationsSidebar({
         {leaves.length > 0 ? (
           <div className="space-y-1.5">
             {leaves.map((leaf, i) => (
-              <LeafCard
-                key={leaf.id}
-                leaf={leaf}
-                projectId={projectId}
-                defaultExpanded={i === 0}
-              />
+              <LeafCard key={leaf.id} leaf={leaf} projectId={projectId} defaultExpanded={i === 0} />
             ))}
           </div>
         ) : (
