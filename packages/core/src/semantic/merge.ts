@@ -1,4 +1,12 @@
-import type { Frame, FrameMergeResult, SemanticContent, SlotConflict, SlotValue } from './types';
+import type {
+  Frame,
+  FrameMergeDecision,
+  FrameMergeResult,
+  MergeResolution,
+  SemanticContent,
+  SlotConflict,
+  SlotValue,
+} from './types';
 import { deepEqual, relKey } from './utils';
 
 export function prepareFrameMerge(
@@ -161,4 +169,63 @@ function mergeNonConflicting(base: Frame, src: Frame, tgt: Frame): Frame {
   // Use the changed side's type; if only target changed type, take target's
   const mergedType = tgt.type !== base.type && src.type === base.type ? tgt.type : src.type;
   return { ...src, type: mergedType, slots };
+}
+
+/**
+ * Execute a frame merge by applying user decisions to a prepared merge result.
+ *
+ * Returns the merged SemanticContent ready to be committed.
+ */
+export function executeFrameMerge(
+  prepared: FrameMergeResult,
+  decisions: FrameMergeDecision
+): SemanticContent {
+  const frames: Frame[] = [];
+
+  // 1. Auto-kept frames (no user decision needed)
+  frames.push(...prepared.autoKept);
+
+  // 2. Resolve conflicts based on user decisions
+  for (const conflict of prepared.conflicts) {
+    const resolution: MergeResolution | undefined =
+      decisions.conflictResolutions[conflict.frameId];
+
+    if (!resolution || resolution === 'source') {
+      frames.push(conflict.sourceFrame);
+    } else if (resolution === 'target') {
+      frames.push(conflict.targetFrame);
+    } else if (resolution === 'both') {
+      frames.push(conflict.sourceFrame);
+      frames.push(conflict.targetFrame);
+    } else if (typeof resolution === 'object' && 'edit' in resolution) {
+      frames.push(resolution.edit);
+    }
+  }
+
+  // 3. Keep selected source-only frames
+  const keepSrcSet = new Set(decisions.keepFromSource);
+  for (const frame of prepared.onlyInSource) {
+    if (keepSrcSet.has(frame.id)) {
+      frames.push(frame);
+    }
+  }
+
+  // 4. Keep selected target-only frames
+  const keepTgtSet = new Set(decisions.keepFromTarget);
+  for (const frame of prepared.onlyInTarget) {
+    if (keepTgtSet.has(frame.id)) {
+      frames.push(frame);
+    }
+  }
+
+  // 5. Merge relations
+  const relations = [...prepared.relationsInBoth];
+  if (decisions.keepRelationsFromSource) {
+    relations.push(...prepared.relationsOnlyInSource);
+  }
+  if (decisions.keepRelationsFromTarget) {
+    relations.push(...prepared.relationsOnlyInTarget);
+  }
+
+  return { frames, relations };
 }

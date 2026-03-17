@@ -24,7 +24,7 @@ export {
 // Gate Runner (Orchestrator)
 export { GateRunner, type GateRunnerOptions } from './gateRunner';
 // Merge
-export { prepareFrameMerge } from './merge';
+export { executeFrameMerge, prepareFrameMerge } from './merge';
 // Zod Schemas
 export {
   DeltaSchema,
@@ -46,6 +46,7 @@ export type {
   Frame,
   FrameChange,
   FrameDiff,
+  FrameMergeDecision,
   FrameMergeResult,
   FrameRelationType,
   GateDimension,

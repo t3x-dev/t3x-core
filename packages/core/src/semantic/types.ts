@@ -170,6 +170,23 @@ export interface SlotConflict {
 
 export type MergeResolution = 'source' | 'target' | 'both' | { edit: Frame };
 
+/**
+ * User decisions for executing a frame merge.
+ * Maps conflict frameIds to resolutions, and lists which unique frames to keep.
+ */
+export interface FrameMergeDecision {
+  /** How to resolve each conflicted frame (frameId → resolution) */
+  conflictResolutions: Record<string, MergeResolution>;
+  /** Frame IDs from onlyInSource to keep (omitted = discard) */
+  keepFromSource: string[];
+  /** Frame IDs from onlyInTarget to keep (omitted = discard) */
+  keepFromTarget: string[];
+  /** Keep source-only relations */
+  keepRelationsFromSource: boolean;
+  /** Keep target-only relations */
+  keepRelationsFromTarget: boolean;
+}
+
 export interface FrameMergeResult {
   /** Auto-kept: identical in source and target */
   autoKept: Frame[];
