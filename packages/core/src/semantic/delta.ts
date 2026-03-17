@@ -13,9 +13,18 @@ export function applyDelta(snapshot: SemanticContent, delta: Delta): SemanticCon
 
   for (const change of delta.changes) {
     switch (change.action) {
-      case 'add':
-        frames.push({ ...change.frame, slots: { ...change.frame.slots } });
+      case 'add': {
+        // If a frame with the same ID already exists, treat as update (LLM sometimes
+        // emits "add" for existing IDs in delta mode — auto-correct to avoid duplicates)
+        const existingIdx = frames.findIndex((f) => f.id === change.frame.id);
+        if (existingIdx !== -1) {
+          const merged = { ...frames[existingIdx], ...change.frame, slots: { ...frames[existingIdx].slots, ...change.frame.slots } };
+          frames[existingIdx] = merged;
+        } else {
+          frames.push({ ...change.frame, slots: { ...change.frame.slots } });
+        }
         break;
+      }
 
       case 'update': {
         const idx = frames.findIndex((f) => f.id === change.target);

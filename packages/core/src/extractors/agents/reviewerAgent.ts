@@ -52,7 +52,7 @@ export const reviewerAgent: MeaningAgent = {
   usesLLM: true,
 
   shouldRun(ctx: PipelineContext): boolean {
-    // Always run if we have content
+    if (ctx.meta.mode === 'incremental') return false;
     return ctx.content.frames.length > 0;
   },
 

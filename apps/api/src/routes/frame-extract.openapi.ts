@@ -246,10 +246,12 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
       const pipelineReg = await getProviderRegistry();
       const pipelineResult = await pipelineReg.tryWithFallback('generation', async (pipelineProvider) => {
         const pipeline = createMeaningPipeline(pipelineProvider);
+        const isIncremental = currentSnapshot.frames.length > 0;
         return pipeline.run(
         result.snapshot,
         extractionTurns,
-        currentSnapshot.frames.length > 0 ? currentSnapshot : undefined
+        isIncremental ? currentSnapshot : undefined,
+        { mode: isIncremental ? 'incremental' : 'full' }
       );
       });
       organizedSnapshot = pipelineResult.content;

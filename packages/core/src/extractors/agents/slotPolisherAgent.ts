@@ -34,6 +34,7 @@ export const slotPolisherAgent: MeaningAgent = {
   usesLLM: true,
 
   shouldRun(ctx: PipelineContext): boolean {
+    if (ctx.meta.mode === 'incremental') return false;
     return ctx.content.frames.length > 0;
   },
 
