@@ -130,8 +130,6 @@ export {
   type LLMExtractionResult,
   LLMExtractor,
   type MeaningAgent,
-  MeaningOrganizer,
-  type MeaningOrganizerResult,
   MeaningPipeline,
   type OverlapResult,
   type OverlapStatus,
