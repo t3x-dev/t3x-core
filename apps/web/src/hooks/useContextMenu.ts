@@ -27,7 +27,6 @@ export interface ContextMenuState {
 }
 
 interface UseContextMenuOptions {
-  openNodeModal: (nodeId: string, viewMode: 'commit') => void;
   addNode: (kind: NodeKind, position?: { x: number; y: number }) => Promise<void>;
   isDeveloperMode: boolean;
   notify: ((message: string, type: 'success' | 'error' | 'warning') => void) | null;
@@ -42,7 +41,6 @@ interface UseContextMenuOptions {
 }
 
 export function useContextMenu({
-  openNodeModal,
   addNode,
   isDeveloperMode,
   notify,
@@ -68,15 +66,50 @@ export function useContextMenu({
       const commitHash =
         node.data.commitV4?.hash || node.data.commitV3?.hash || node.data.commitHash || '';
       const conversationId = node.data.conversationId;
+      // Resolve parent commit hash for Quick Diff (via edges)
+      let parentCommitHash: string | undefined;
+      if (isCommitted && commitHash) {
+        const storeState = useCanvasStore.getState();
+        const incomingEdge = storeState.edges.find((e) => e.target === node.id);
+        if (incomingEdge) {
+          const parentNode = storeState.nodes.find((n) => n.id === incomingEdge.source);
+          if (parentNode?.data?.commitHash && parentNode.data.commitStatus === 'committed') {
+            parentCommitHash = parentNode.data.commitHash as string;
+          }
+        }
+      }
+
+      // Resolve Quick Merge eligibility (branch commit with main to merge into)
+      const isBranchCommit = node.data.branchType === 'branch';
+      const canMerge = isCommitted && isBranchCommit && useCanvasStore.getState().hasMainCommit;
+
       const groups = buildUnitNodeMenu({
-        onOpenDetail: () => openNodeModal(node.id, 'commit'),
         onOpenConversation:
           hasConversation && conversationId && onNavigate
             ? () => onNavigate(`/chat/${conversationId}`)
             : undefined,
-        onViewCommitPage:
+        onOpenInNewPage:
           isCommitted && commitHash && projectId && onNavigate
             ? () => onNavigate(`/project/${projectId}/commit/${encodeURIComponent(commitHash)}`)
+            : undefined,
+        onQuickDiff:
+          isCommitted && commitHash && parentCommitHash && projectId && onNavigate
+            ? () =>
+                onNavigate(
+                  `/project/${projectId}/diff?base=${encodeURIComponent(parentCommitHash)}&target=${encodeURIComponent(commitHash)}`
+                )
+            : undefined,
+        onQuickMerge:
+          canMerge && projectId && onNavigate
+            ? () => {
+                startTransition(async () => {
+                  const draftId =
+                    await useCanvasStore.getState().createMergePendingCommit(node.id);
+                  if (draftId && onNavigate) {
+                    onNavigate(`/project/${projectId}/merge/${draftId}`);
+                  }
+                });
+              }
             : undefined,
         onCreateBranch: () => {
           const position = { x: node.position.x + 320, y: node.position.y };
@@ -88,7 +121,6 @@ export function useContextMenu({
             }
           });
         },
-        onConnectLeaf: () => useCanvasStore.getState().openLeafPanel(node.id),
         onAutoExtract: onAutoExtract ? () => onAutoExtract(node.id) : undefined,
         onCopyHash:
           commitHash
@@ -110,7 +142,7 @@ export function useContextMenu({
       });
       setContextMenu({ x: event.clientX, y: event.clientY, groups });
     },
-    [openNodeModal, addNode, isDeveloperMode, notify, onAutoExtract, projectId, onNavigate]
+    [addNode, isDeveloperMode, notify, onAutoExtract, projectId, onNavigate]
   );
 
   // Pane context menu — inline addNode to avoid forward-declaration of handleAddNode

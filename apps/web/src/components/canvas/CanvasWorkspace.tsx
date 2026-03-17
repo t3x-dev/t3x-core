@@ -173,7 +173,6 @@ function CanvasWorkspaceInner({
   // Context menu (extracted hook)
   const { contextMenu, closeContextMenu, handleNodeContextMenu, handlePaneContextMenu } =
     useContextMenu({
-      openNodeModal,
       addNode,
       isDeveloperMode,
       notify,
