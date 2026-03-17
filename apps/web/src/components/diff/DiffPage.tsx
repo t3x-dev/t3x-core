@@ -14,12 +14,14 @@ import { ArrowLeft, GitBranch } from 'lucide-react';
 import { Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { relativeTime, shortHash } from '@/components/commit/CommitDetailHelpers';
+import { Breadcrumb } from '@/components/shared/Breadcrumb';
 import { FrameGraphView } from '@/components/frame-graph';
 import type { CommitMeta, FrameDiffResponse } from '@/lib/api/frameDiff';
 import { getCommitAsFrames } from '@/lib/api/commitUnified';
 import { getFrameDiff } from '@/lib/api/frameDiff';
+import { API_V1, fetchWithTimeout, handleResponse } from '@/lib/api/core';
 import { PAGE_ANIMATION_STYLES } from '@/lib/pageAnimations';
 import { useProjectStore } from '@/store/projectStore';
 import { FrameDiffCard } from './FrameDiffCard';
@@ -242,11 +244,33 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
     setShowIdentical((v) => !v);
   }, []);
 
-  // Derived: check if base and target are on different branches
-  const crossBranch = useMemo(() => {
-    if (!diffResponse) return false;
-    return diffResponse.base.branch !== diffResponse.target.branch;
-  }, [diffResponse]);
+  const [mergeLoading, setMergeLoading] = useState(false);
+  const [mergeError, setMergeError] = useState<string | null>(null);
+
+  // Start merge from diff page
+  const handleStartMerge = useCallback(async () => {
+    if (!diffResponse) return;
+    setMergeLoading(true);
+    try {
+      const res = await fetchWithTimeout(`${API_V1}/merge/drafts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_id: projectId,
+          source_hash: baseHash,
+          target_hash: targetHash,
+          source_branch: diffResponse.base.branch || 'source',
+          target_branch: diffResponse.target.branch || 'main',
+        }),
+      });
+      const data = await handleResponse<{ draftId: string }>(res);
+      router.push(`/project/${projectId}/merge/${data.draftId}`);
+    } catch (err) {
+      setMergeError(err instanceof Error ? err.message : 'Failed to create merge draft');
+    } finally {
+      setMergeLoading(false);
+    }
+  }, [diffResponse, projectId, baseHash, targetHash, router]);
 
   // Loading state
   if (loading) {
@@ -309,26 +333,31 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
           </button>
 
           {/* Breadcrumb */}
-          <nav className="flex items-center gap-1.5 text-[12px]">
-            <Link
-              href={`/project/${projectId}`}
-              className="text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] transition-colors"
-            >
-              {project?.name ?? 'Project'}
-            </Link>
-            <span className="text-[var(--text-tertiary)]">/</span>
-            <span className="text-[var(--text-primary)] font-medium">Diff</span>
-          </nav>
+          <Breadcrumb
+            className="text-[12px]"
+            segments={[
+              { label: project?.name ?? 'Project', href: `/project/${projectId}` },
+              { label: 'Diff' },
+            ]}
+          />
 
           {/* Commit badges */}
           <div className="flex items-center gap-2 ml-3">
-            <span className="inline-flex items-center rounded-full border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-2 py-0.5 font-mono text-[10px] text-[var(--text-tertiary)]">
+            <Link
+              href={`/project/${projectId}/commit/${encodeURIComponent(baseHash)}`}
+              title={baseHash}
+              className="inline-flex items-center rounded-full border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-2 py-0.5 font-mono text-[10px] text-[var(--text-tertiary)] hover:border-[var(--accent-commit)] hover:text-[var(--text-secondary)] transition-colors"
+            >
               base: {shortHash(baseHash)}
-            </span>
+            </Link>
             <span className="text-[var(--text-tertiary)] text-[10px]">vs</span>
-            <span className="inline-flex items-center rounded-full border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-2 py-0.5 font-mono text-[10px] text-[var(--text-tertiary)]">
+            <Link
+              href={`/project/${projectId}/commit/${encodeURIComponent(targetHash)}`}
+              title={targetHash}
+              className="inline-flex items-center rounded-full border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-2 py-0.5 font-mono text-[10px] text-[var(--text-tertiary)] hover:border-[var(--accent-commit)] hover:text-[var(--text-secondary)] transition-colors"
+            >
               target: {shortHash(targetHash)}
-            </span>
+            </Link>
           </div>
         </div>
       </header>
@@ -402,22 +431,26 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
             {/* Relation changes */}
             <RelationChangesBlock diff={diff} />
 
-            {/* Cross-branch merge button */}
-            {crossBranch && (
-              <>
-                <div className="border-t border-[var(--stroke-divider)]" />
-                <button
-                  type="button"
-                  className="w-full rounded-md border border-[var(--accent-commit)]/30 bg-[var(--accent-commit)]/8 px-3 py-2 text-[12px] font-medium text-[var(--accent-commit)] hover:bg-[var(--accent-commit)]/15 transition-colors"
-                  onClick={() => {
-                    // Placeholder: navigate to merge page when available
-                  }}
-                >
+            {/* Merge button */}
+            <>
+              <div className="border-t border-[var(--stroke-divider)]" />
+              <button
+                type="button"
+                className="w-full rounded-md border border-[var(--accent-commit)]/30 bg-[var(--accent-commit)]/8 px-3 py-2 text-[12px] font-medium text-[var(--accent-commit)] hover:bg-[var(--accent-commit)]/15 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                onClick={handleStartMerge}
+                disabled={mergeLoading}
+              >
+                {mergeLoading ? (
+                  <Loader2 className="inline-block h-3.5 w-3.5 mr-1.5 -mt-0.5 animate-spin" />
+                ) : (
                   <GitBranch className="inline-block h-3.5 w-3.5 mr-1.5 -mt-0.5" />
-                  Start Merge
-                </button>
-              </>
-            )}
+                )}
+                {mergeLoading ? 'Creating merge...' : 'Start Merge'}
+              </button>
+              {mergeError && (
+                <p className="text-[10px] text-red-400 mt-1">{mergeError}</p>
+              )}
+            </>
           </div>
         </aside>
       </div>

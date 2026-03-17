@@ -3,7 +3,28 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Send } from 'lucide-react';
+import { ClipboardList, Lightbulb, Send, Target } from 'lucide-react';
+
+const STARTER_CARDS = [
+  {
+    icon: ClipboardList,
+    title: 'Capture meeting notes',
+    description: 'Summarize key decisions',
+    prompt: 'I just had a meeting about... Here are my notes:',
+  },
+  {
+    icon: Target,
+    title: 'Analyze product strategy',
+    description: 'Break down your thinking',
+    prompt: 'I want to analyze our approach to...',
+  },
+  {
+    icon: Lightbulb,
+    title: 'Explore a new idea',
+    description: 'Think through possibilities',
+    prompt: "I'm exploring an idea about...",
+  },
+] as const;
 
 export default function ChatLandingPage() {
   const router = useRouter();
@@ -23,6 +44,26 @@ export default function ChatLandingPage() {
         <p className="text-muted-foreground text-center mb-8 text-sm">
           Git for Meaning
         </p>
+
+        <div className="grid grid-cols-3 gap-3 mb-6">
+          {STARTER_CARDS.map((card) => (
+            <button
+              key={card.title}
+              type="button"
+              onClick={() => setMessage(card.prompt)}
+              className="flex flex-col items-start gap-2 rounded-xl border border-[var(--stroke-default)] px-4 py-3.5 text-left transition-colors hover:bg-[var(--hover-bg)] hover:border-[var(--accent-commit)]/40"
+            >
+              <card.icon className="h-4 w-4 text-[var(--text-tertiary)]" />
+              <div>
+                <div className="text-sm font-medium">{card.title}</div>
+                <div className="text-xs text-[var(--text-tertiary)] mt-0.5">
+                  {card.description}
+                </div>
+              </div>
+            </button>
+          ))}
+        </div>
+
         <div className="relative">
           <textarea
             value={message}

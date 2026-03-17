@@ -8,12 +8,14 @@
  */
 
 import {
+  ArrowLeftRight,
   Copy,
+  ExternalLink,
   Eye,
   FileOutput,
   GitBranch,
+  GitMerge,
   LayoutGrid,
-  Leaf,
   MessageSquarePlus,
   Plus,
   Share2,
@@ -159,9 +161,11 @@ export function NodeContextMenu({ x, y, groups, onClose }: NodeContextMenuProps)
 // ============================================================================
 
 export function buildUnitNodeMenu(opts: {
-  onOpenDetail: () => void;
+  onOpenConversation?: () => void;
+  onOpenInNewPage?: () => void;
+  onQuickDiff?: () => void;
+  onQuickMerge?: () => void;
   onCreateBranch: () => void;
-  onConnectLeaf: () => void;
   onAutoExtract?: () => void;
   onCopyHash?: () => void;
   onDelete?: () => void;
@@ -169,34 +173,72 @@ export function buildUnitNodeMenu(opts: {
   isDeveloperMode: boolean;
   hasConversation?: boolean;
 }): ContextMenuGroup[] {
-  const groups: ContextMenuGroup[] = [
-    {
-      items: [
-        { label: 'Open Detail', icon: <Eye size={14} />, action: opts.onOpenDetail },
-        { label: 'Create Branch', icon: <GitBranch size={14} />, action: opts.onCreateBranch },
-        { label: 'Connect Leaf', icon: <Leaf size={14} />, action: opts.onConnectLeaf },
-      ],
-    },
-  ];
+  // Navigate group
+  const navigateItems: ContextMenuItem[] = [];
+  if (opts.onOpenConversation) {
+    navigateItems.push({
+      label: 'Open Conversation',
+      icon: <MessageSquarePlus size={14} />,
+      action: opts.onOpenConversation,
+    });
+  }
+  if (opts.onOpenInNewPage) {
+    navigateItems.push({
+      label: 'Open in New Page',
+      icon: <ExternalLink size={14} />,
+      action: opts.onOpenInNewPage,
+    });
+  }
 
+  // Actions group
+  const actionItems: ContextMenuItem[] = [];
+  if (opts.onQuickDiff) {
+    actionItems.push({
+      label: 'Compare with Parent',
+      icon: <ArrowLeftRight size={14} />,
+      action: opts.onQuickDiff,
+    });
+  }
+  if (opts.onQuickMerge) {
+    actionItems.push({
+      label: 'Merge into Main',
+      icon: <GitMerge size={14} />,
+      action: opts.onQuickMerge,
+    });
+  }
+  actionItems.push({
+    label: 'Create Branch',
+    icon: <GitBranch size={14} />,
+    action: opts.onCreateBranch,
+  });
+
+  const groups: ContextMenuGroup[] = [];
+  if (navigateItems.length > 0) {
+    groups.push({ items: navigateItems });
+  }
+  groups.push({ items: actionItems });
+
+  // Utility group
+  const utilityItems: ContextMenuItem[] = [];
   if (opts.hasConversation && opts.onAutoExtract) {
-    groups.push({
-      items: [
-        {
-          label: 'Auto-Extract to Draft',
-          icon: <Sparkles size={14} />,
-          action: opts.onAutoExtract,
-        },
-      ],
+    utilityItems.push({
+      label: 'Auto-Extract to Draft',
+      icon: <Sparkles size={14} />,
+      action: opts.onAutoExtract,
     });
   }
-
-  if (opts.isDeveloperMode && opts.onCopyHash) {
-    groups.push({
-      items: [{ label: 'Copy Hash', icon: <Copy size={14} />, action: opts.onCopyHash }],
+  if (opts.onCopyHash) {
+    utilityItems.push({
+      label: 'Copy Hash',
+      icon: <Copy size={14} />,
+      action: opts.onCopyHash,
     });
   }
+  if (utilityItems.length > 0) {
+    groups.push({ items: utilityItems });
+  }
 
+  // Danger group
   if (opts.isDraft && opts.onDelete) {
     groups.push({
       items: [{ label: 'Delete', icon: <Trash2 size={14} />, action: opts.onDelete, danger: true }],

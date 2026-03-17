@@ -2,6 +2,7 @@
 
 import { motion } from 'framer-motion';
 import { GitCommit, LayoutGrid, Loader2 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { framesToSentences } from '@/lib/framesToSentences';
@@ -86,6 +87,7 @@ function ViewTabs({
 // ── Commit preview section ──
 
 function CommitPreviewSection() {
+  const router = useRouter();
   const conversationId = useExtractionPanelStore((s) => s.conversationId);
   const projectId = useExtractionPanelStore((s) => s.projectId);
   const lastCommitHash = useExtractionPanelStore((s) => s.lastCommitHash);
@@ -115,7 +117,7 @@ function CommitPreviewSection() {
         action: commitUrl
           ? {
               label: 'View commit',
-              onClick: () => window.location.assign(commitUrl),
+              onClick: () => router.push(commitUrl),
             }
           : undefined,
       });

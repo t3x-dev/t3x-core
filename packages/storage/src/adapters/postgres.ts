@@ -65,10 +65,32 @@ export async function closePostgresStorage(): Promise<void> {
 }
 
 /**
- * Initialize database schema
+ * Schema version — bump this number whenever you add migrations below.
+ */
+const SCHEMA_VERSION = 28;
+
+/**
+ * Initialize database schema (skips if already at current version)
  */
 async function initializeSchema(sql: postgres.Sql): Promise<void> {
-  // Create tables if they don't exist
+  // Schema version gate — avoid re-running 900+ lines of idempotent SQL on every restart.
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS _schema_version (
+      singleton BOOLEAN PRIMARY KEY DEFAULT TRUE CHECK (singleton),
+      version   INTEGER NOT NULL,
+      applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  const rows = await sql.unsafe<{ version: number }[]>(
+    `SELECT version FROM _schema_version WHERE singleton = TRUE`
+  );
+
+  if (rows.length > 0 && rows[0].version >= SCHEMA_VERSION) {
+    return;
+  }
+
+  // First run or version bump — execute full schema init
   await sql.unsafe(`
     -- Projects table
     CREATE TABLE IF NOT EXISTS projects (
@@ -917,4 +939,11 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
   } catch {
     // pgvector not available — sentence similarity search disabled
   }
+
+  // Record schema version so subsequent startups skip the init SQL.
+  await sql.unsafe(`
+    INSERT INTO _schema_version (singleton, version, applied_at)
+    VALUES (TRUE, ${SCHEMA_VERSION}, NOW())
+    ON CONFLICT (singleton) DO UPDATE SET version = ${SCHEMA_VERSION}, applied_at = NOW()
+  `);
 }
