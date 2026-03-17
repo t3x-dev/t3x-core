@@ -25,9 +25,9 @@ vi.mock('../../lib/db', () => ({
 }));
 
 import { deployAgentRoutes } from '../../routes/deploy-agents';
-import { projectRoutes } from '../../routes/projects';
+import { projectRoutes } from '../../routes/projects.openapi';
 // Import all route modules
-import { runsRoutes } from '../../routes/runs';
+import { runsRoutes } from '../../routes/runs.openapi';
 import { statusRoutes } from '../../routes/status';
 
 describe('Critical Routes Smoke Tests', () => {

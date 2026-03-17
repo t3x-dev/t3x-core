@@ -34,7 +34,7 @@ vi.mock('../../lib/db', () => ({
 }));
 
 // Import routes after mocking
-import { runsRoutes } from '../../routes/runs';
+import { runsRoutes } from '../../routes/runs.openapi';
 
 describe('Runs API Contract', () => {
   let cleanup: () => Promise<void>;

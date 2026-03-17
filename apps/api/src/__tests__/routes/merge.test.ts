@@ -22,7 +22,7 @@ vi.mock('../../lib/db', () => ({
 }));
 
 // Import routes after mocking
-import { mergeRoutes } from '../../routes/merge';
+import { mergeRoutes } from '../../routes/merge.openapi';
 
 describe('Merge Routes', () => {
   let cleanup: () => Promise<void>;

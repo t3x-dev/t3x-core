@@ -21,7 +21,7 @@ vi.mock('../lib/db', () => ({
 const mockFetchFn = vi.fn();
 vi.stubGlobal('fetch', mockFetchFn);
 
-import { runsRoutes } from '../routes/runs';
+import { runsRoutes } from '../routes/runs.openapi';
 
 describe('Runs Routes', () => {
   let cleanup: () => Promise<void>;
