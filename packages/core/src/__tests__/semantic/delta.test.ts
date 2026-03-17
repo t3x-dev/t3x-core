@@ -90,20 +90,18 @@ describe('applyDelta', () => {
     expect(result.relations).toHaveLength(0);
   });
 
-  it('throws on update with non-existent target', () => {
-    expect(() =>
-      applyDelta(empty, {
-        changes: [{ action: 'update', target: 'f_999', slots: { a: 1 } }],
-      })
-    ).toThrow('f_999');
+  it('skips update with non-existent target silently', () => {
+    const result = applyDelta(empty, {
+      changes: [{ action: 'update', target: 'f_999', slots: { a: 1 } }],
+    });
+    expect(result.frames).toHaveLength(0);
   });
 
-  it('throws on remove with non-existent target', () => {
-    expect(() =>
-      applyDelta(empty, {
-        changes: [{ action: 'remove', target: 'f_999' }],
-      })
-    ).toThrow('f_999');
+  it('skips remove with non-existent target silently', () => {
+    const result = applyDelta(empty, {
+      changes: [{ action: 'remove', target: 'f_999' }],
+    });
+    expect(result.frames).toHaveLength(0);
   });
 
   it('is immutable — does not modify input', () => {

@@ -19,7 +19,7 @@ export function applyDelta(snapshot: SemanticContent, delta: Delta): SemanticCon
 
       case 'update': {
         const idx = frames.findIndex((f) => f.id === change.target);
-        if (idx === -1) throw new Error(`Frame "${change.target}" not found for update`);
+        if (idx === -1) break; // Skip silently — frame may have been removed by a prior delta
         const updated = { ...frames[idx], slots: { ...frames[idx].slots } };
         for (const [key, value] of Object.entries(change.slots)) {
           if (value === null) {
@@ -34,7 +34,7 @@ export function applyDelta(snapshot: SemanticContent, delta: Delta): SemanticCon
 
       case 'remove': {
         const idx = frames.findIndex((f) => f.id === change.target);
-        if (idx === -1) throw new Error(`Frame "${change.target}" not found for remove`);
+        if (idx === -1) break; // Skip silently — frame already removed or never existed (idempotent)
         const removedId = change.target;
         frames.splice(idx, 1);
         relations = relations.filter((r) => r.from !== removedId && r.to !== removedId);
