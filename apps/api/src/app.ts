@@ -30,7 +30,6 @@ import {
   branchRoutes,
   chatRoutes,
   commitRoutes,
-  commitsV4Routes,
   conversationRoutes,
   curateRoutes,
   deltaLogRoutes,
@@ -155,7 +154,6 @@ export function createApp(options?: CreateAppOptions): Hono {
   api.route('/', runsRoutes);
   api.route('/', leavesRoutes);
   api.route('/', pinsRoutes);
-  api.route('/', commitsV4Routes);
   api.route('/', apiKeysRoutes);
   api.route('/', shareRoutes);
   api.route('/', comparisonsRoutes);

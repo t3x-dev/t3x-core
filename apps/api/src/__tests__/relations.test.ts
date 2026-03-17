@@ -39,7 +39,6 @@ vi.mock('../middleware/logger', () => ({
   },
 }));
 
-import { commitsV4Routes } from '../routes/commits-v4.openapi';
 import { relationsRoutes } from '../routes/relations.openapi';
 
 describe('Relations Routes', () => {
@@ -47,8 +46,6 @@ describe('Relations Routes', () => {
   let testProjectId: string;
   let testCommitHash: string;
   const app = new Hono();
-  // Mount both routes — we need commits-v4 to create test commits
-  app.route('/', commitsV4Routes);
   app.route('/', relationsRoutes);
 
   beforeAll(async () => {
