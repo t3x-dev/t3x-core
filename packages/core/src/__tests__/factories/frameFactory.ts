@@ -43,11 +43,11 @@ export function createFrameWithSlots(
 
 /** Create a relation between two frames */
 export function createRelation(
-  sourceId: string,
-  targetId: string,
+  fromId: string,
+  toId: string,
   type: Relation['type'] = 'elaborates'
 ): Relation {
-  return { source: sourceId, target: targetId, type };
+  return { from: fromId, to: toId, type };
 }
 
 /** Create a SemanticContent with frames and optional relations */
