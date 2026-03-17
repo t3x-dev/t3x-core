@@ -442,6 +442,7 @@ export {
   type CommitV4Content,
   // Constraint (now belongs to Leaf)
   type Constraint as ConstraintV4,
+  type ConstraintSourceFrame,
   type ContextSource,
   // Conversation Context
   type ConversationContext,

@@ -28,13 +28,21 @@ export type LeafType =
   | 'slack'
   | 'deploy_agent';
 
+export interface ConstraintSourceFrame {
+  frame_type: string;
+  slot_key?: string;
+}
+
 export interface RequireConstraint {
   id: string;
   type: 'require';
   match_mode: 'exact' | 'semantic';
   value: string;
   description?: string;
+  /** @deprecated Use source_frame for V5 frame-based commits */
   source_sentence_id?: string;
+  /** Link to source frame + slot (V5 frame-based traceability) */
+  source_frame?: ConstraintSourceFrame;
 }
 
 export interface ExcludeConstraint {
@@ -44,6 +52,8 @@ export interface ExcludeConstraint {
   value: string;
   description?: string;
   reason?: string;
+  /** Link to source frame + slot (V5 frame-based traceability) */
+  source_frame?: ConstraintSourceFrame;
 }
 
 export type Constraint = RequireConstraint | ExcludeConstraint;

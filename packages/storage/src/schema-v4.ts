@@ -297,7 +297,10 @@ export const leaves = pgTable(
           match_mode: 'exact' | 'semantic';
           value: string;
           description?: string;
+          /** @deprecated Use source_frame for V5 */
           source_sentence_id?: string;
+          /** V5 frame-based source reference */
+          source_frame?: { frame_type: string; slot_key?: string };
           reason?: string;
         }>
       >()
