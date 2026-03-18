@@ -21,7 +21,6 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { useMergeNavigation } from '@/hooks/useMergeNavigation';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useTerminology } from '@/hooks/useTerminology';
-import { getCommitV4 } from '@/lib/api';
 import { createCommit } from '@/lib/api/commits';
 import { getCommitAsFrames } from '@/lib/api/commitUnified';
 import { computeMergeSummary } from '@/lib/mergeSummary';

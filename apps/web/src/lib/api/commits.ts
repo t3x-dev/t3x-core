@@ -1,5 +1,8 @@
 /**
- * Commits V4 API
+ * Commits API — V5 (frame-based)
+ *
+ * V4 endpoints have been removed from the API server.
+ * V4 types are kept as deprecated aliases for gradual migration.
  */
 
 import { API_V1, buildQueryString, fetchWithTimeout, handleResponse } from './core';
@@ -23,10 +26,12 @@ export interface SentenceWithSourceInfo {
 }
 
 // ============================================================================
-// Commits V4 (Pure knowledge - sentences only, no constraints)
+// V4 types — DEPRECATED, kept as aliases for gradual migration
+// These are still used by many UI components that read sentence data
+// converted from V5 frames via framesToSentences().
 // ============================================================================
 
-// CommitV4 sentence source reference (with char positions for highlighting)
+/** @deprecated Use CommitV5 source tracing instead */
 export interface CommitV4SentenceSourceRef {
   conversation_id: string;
   turn_hash: string;
@@ -34,28 +39,23 @@ export interface CommitV4SentenceSourceRef {
   end_char: number;
 }
 
-// CommitV4 sentence from API
+/** @deprecated Sentences are derived from V5 frames via framesToSentences() */
 export interface CommitV4Sentence {
   id: string;
   text: string;
   confidence?: number;
   source_ref?: CommitV4SentenceSourceRef;
-  /**
-   * The commit hash where this sentence was originally created.
-   * Set when a sentence is inherited from a parent commit.
-   * Undefined for sentences created directly in this commit.
-   */
   inherited_from?: string;
 }
 
-// CommitV4 author from API
+/** @deprecated Use CommitV5['author'] */
 export interface CommitV4Author {
   type: 'human' | 'agent';
   name?: string;
   id?: string;
 }
 
-// CommitV4 commit-level source reference
+/** @deprecated Use CommitV5['sources'] entries */
 export interface CommitV4SourceRef {
   type: 'conversation' | 'leaf';
   id: string;
@@ -63,10 +63,15 @@ export interface CommitV4SourceRef {
   assertion_lessons?: string[];
 }
 
-// CommitV4 from API response
+/**
+ * CommitV4 — DEPRECATED, kept for backward compatibility.
+ * New code should use CommitV5 directly.
+ * Existing UI code can treat a V5 commit as V4-like by deriving sentences
+ * from frames via framesToSentences().
+ */
 export interface CommitV4 {
   hash: string;
-  schema: 't3x/commit/v4';
+  schema: 't3x/commit/v4' | 't3x/commit/5';
   parents: string[];
   author: CommitV4Author;
   committed_at: string;
@@ -85,130 +90,14 @@ export interface CommitV4 {
     discarded: number;
     total_sentences: number;
   } | null;
-  /** Semantic frame content (frames + relations). Nullable — old commits have undefined. */
   semantic?: import('@t3x-dev/core').SemanticContent;
   position_x: number | null;
   position_y: number | null;
   created_at: string;
 }
 
-/**
- * List V4 commits by project
- * Returns array of CommitV4 directly
- */
-export async function listCommitsV4(
-  projectId: string,
-  branch?: string,
-  limit = 50,
-  offset = 0
-): Promise<CommitV4[]> {
-  const query = buildQueryString({ branch, limit, offset });
-  const res = await fetchWithTimeout(`${API_V1}/projects/${projectId}/commits-v4?${query}`);
-  return handleResponse<CommitV4[]>(res);
-}
-
-/**
- * Get a V4 commit by hash
- */
-export async function getCommitV4(commitHash: string): Promise<CommitV4> {
-  const res = await fetchWithTimeout(`${API_V1}/commits-v4/${encodeURIComponent(commitHash)}`);
-  return handleResponse<CommitV4>(res);
-}
-
-/**
- * Get V4 commit ancestor chain (history)
- * Walks parent chain via BFS from the given commit.
- */
-export async function getCommitV4History(commitHash: string, limit = 50): Promise<CommitV4[]> {
-  const query = buildQueryString({ limit });
-  const res = await fetchWithTimeout(
-    `${API_V1}/commits-v4/${encodeURIComponent(commitHash)}/history?${query}`
-  );
-  return handleResponse<CommitV4[]>(res);
-}
-
-/**
- * Update V4 commit canvas position
- */
-export async function updateCommitV4Position(
-  commitHash: string,
-  positionX: number,
-  positionY: number
-): Promise<CommitV4> {
-  const res = await fetchWithTimeout(
-    `${API_V1}/commits-v4/${encodeURIComponent(commitHash)}/position`,
-    {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        position_x: positionX,
-        position_y: positionY,
-      }),
-    }
-  );
-  return handleResponse<CommitV4>(res);
-}
-
-/** Response from createCommitV4 — commit data + optional conflict report */
-export interface CreateCommitV4Result {
-  commit: CommitV4;
-  conflicts: ConflictReport | null;
-}
-
-/**
- * Create a V4 commit (pure knowledge - sentences only)
- *
- * V4 commits use sentences[] only. Constraints belong to Leaves.
- * source_ref in each sentence enables source context display with highlights.
- *
- * By default (inherit_parent_sentences=true), sentences from parent commits
- * are automatically inherited into the new commit. Set to false to disable.
- *
- * Returns the created commit plus an optional conflict report.
- * If no embedding provider is configured on the server, conflicts will be null.
- */
-export async function createCommitV4(
-  projectId: string,
-  sentences: CommitV4Sentence[],
-  options?: {
-    branch?: string;
-    message?: string;
-    parents?: string[];
-    position?: { x: number; y: number };
-    author?: CommitV4Author;
-    source_refs?: CommitV4SourceRef[];
-    /**
-     * If true (default), automatically inherit all sentences from parent commits.
-     * Inherited sentences will have inherited_from set to their original commit hash.
-     * New sentences with the same text will override inherited ones.
-     */
-    inherit_parent_sentences?: boolean;
-    /** Semantic frame content (frames + relations) from the conversation's delta log. */
-    semantic?: import('@t3x-dev/core').SemanticContent;
-  }
-): Promise<CreateCommitV4Result> {
-  const res = await fetchWithTimeout(`${API_V1}/commits-v4`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      project_id: projectId,
-      sentences,
-      branch: options?.branch ?? 'main',
-      message: options?.message,
-      parents: options?.parents ?? [],
-      position_x: options?.position?.x,
-      position_y: options?.position?.y,
-      author: options?.author ?? { type: 'human', name: 'User' },
-      source_refs: options?.source_refs,
-      inherit_parent_sentences: options?.inherit_parent_sentences,
-      semantic: options?.semantic,
-    }),
-  });
-  return handleResponse<CreateCommitV4Result>(res);
-}
-
 // ============================================================================
-// Frame-based Commits (V5 — new model)
+// Frame-based Commits (V5 — current model)
 // ============================================================================
 
 /** V5 commit from API response */
@@ -229,7 +118,7 @@ export interface CommitV5 {
 }
 
 /**
- * List V5 commits by project
+ * List commits by project (V5 endpoint)
  */
 export async function listCommitsV5(
   projectId: string,
@@ -242,7 +131,7 @@ export async function listCommitsV5(
 }
 
 /**
- * Get a V5 commit by hash
+ * Get a commit by hash (V5 endpoint)
  */
 export async function getCommitV5(commitHash: string): Promise<CommitV5> {
   const res = await fetchWithTimeout(`${API_V1}/commits/${encodeURIComponent(commitHash)}`);
@@ -283,6 +172,106 @@ export async function createCommit(
 }
 
 // ============================================================================
+// Backward-compat aliases — V4 function names pointing to V5 endpoints
+// These convert V5 response data into V4-like shapes for consuming code.
+// ============================================================================
+
+import { framesToSentences } from '@/lib/framesToSentences';
+
+/**
+ * Convert a V5 commit to V4-like shape for backward compatibility.
+ * Derives sentences from frames and maps `sources` to `source_refs`.
+ */
+export function v5toV4(v5: CommitV5): CommitV4 {
+  const sentences: CommitV4Sentence[] = v5.content?.frames?.length
+    ? framesToSentences(v5.content as import('@t3x-dev/core').SemanticContent).map((s) => ({
+        id: s.id,
+        text: s.text,
+        confidence: s.confidence,
+        source_ref: s.source_ref
+          ? {
+              conversation_id: s.source_ref.conversation_id ?? '',
+              turn_hash: s.source_ref.turn_hash ?? '',
+              start_char: s.source_ref.start_char ?? 0,
+              end_char: s.source_ref.end_char ?? 0,
+            }
+          : undefined,
+      }))
+    : [];
+
+  return {
+    hash: v5.hash,
+    schema: v5.schema,
+    parents: v5.parents,
+    author: {
+      type: (v5.author.type === 'human' || v5.author.type === 'agent' ? v5.author.type : 'human') as 'human' | 'agent',
+      name: v5.author.name,
+      id: v5.author.id,
+    },
+    committed_at: v5.committed_at,
+    content: { sentences },
+    project_id: v5.project_id,
+    message: v5.message,
+    branch: v5.branch,
+    source_refs: v5.sources?.map((s) => ({
+      type: (s.type === 'leaf' ? 'leaf' : 'conversation') as 'conversation' | 'leaf',
+      id: s.id,
+      title: s.title,
+    })) ?? null,
+    merge_summary: null,
+    semantic: v5.content as import('@t3x-dev/core').SemanticContent | undefined,
+    position_x: v5.position_x ?? null,
+    position_y: v5.position_y ?? null,
+    created_at: v5.committed_at,
+  };
+}
+
+/**
+ * @deprecated Use listCommitsV5 directly. This wrapper converts V5 to V4-like shape.
+ */
+export async function listCommitsV4(
+  projectId: string,
+  branch?: string,
+  limit = 50,
+  _offset = 0
+): Promise<CommitV4[]> {
+  const v5List = await listCommitsV5(projectId, branch, limit);
+  return v5List.map(v5toV4);
+}
+
+/**
+ * @deprecated Use getCommitV5 directly. This wrapper converts V5 to V4-like shape.
+ */
+export async function getCommitV4(commitHash: string): Promise<CommitV4> {
+  const v5 = await getCommitV5(commitHash);
+  return v5toV4(v5);
+}
+
+/**
+ * @deprecated V4 history endpoint has been removed. Returns empty array.
+ */
+export async function getCommitV4History(
+  _commitHash: string,
+  _limit = 50
+): Promise<CommitV4[]> {
+  // V4 history endpoint no longer exists; callers should migrate to V5 APIs.
+  return [];
+}
+
+/**
+ * @deprecated V4 position update endpoint has been removed. No-op.
+ */
+export async function updateCommitV4Position(
+  _commitHash: string,
+  _positionX: number,
+  _positionY: number
+): Promise<CommitV4> {
+  // V4 position endpoint no longer exists.
+  // TODO: Add V5 position update endpoint when available.
+  throw new Error('updateCommitV4Position: V4 endpoint removed. V5 position update not yet available.');
+}
+
+// ============================================================================
 // Conflict Detection
 // ============================================================================
 
@@ -302,12 +291,8 @@ export interface ConflictReport {
 }
 
 /**
- * Check for semantic conflicts between a commit's sentences and existing commits
+ * @deprecated V4 conflict check endpoint has been removed. Returns empty report.
  */
-export async function checkConflicts(commitHash: string): Promise<ConflictReport> {
-  const res = await fetchWithTimeout(
-    `${API_V1}/commits-v4/${encodeURIComponent(commitHash)}/check-conflicts`,
-    { method: 'POST' }
-  );
-  return handleResponse<ConflictReport>(res);
+export async function checkConflicts(_commitHash: string): Promise<ConflictReport> {
+  return { conflicts: [], checked_count: 0 };
 }

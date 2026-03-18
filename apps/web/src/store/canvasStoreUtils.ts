@@ -487,9 +487,8 @@ export function saveNodePosition(
           });
       } else {
         // Committed unit - save position to commit via API
-        api.updateCommitV4Position(nodeId, pending.position.x, pending.position.y).catch(() => {
-          // Error handled silently
-        });
+        // V5 position update endpoint not yet available — skip silently
+        // TODO: restore when V5 PATCH /commits/:hash/position is implemented
       }
     }
   }, 500);
