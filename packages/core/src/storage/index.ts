@@ -5,8 +5,6 @@
  * For actual CRUD operations, use @t3x-dev/storage package.
  */
 
-// V4 Hash computation
-export { type CommitV4FirstClass, computeCommitV4Hash } from './hash-v4';
 // Types (pure type definitions)
 export * from './types';
 // Utils (pure functions - ID generation, hash computation, timestamps)

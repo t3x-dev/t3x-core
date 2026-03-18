@@ -72,7 +72,5 @@ export function framesToTextSegments(content: SemanticContent): FrameTextSegment
  * Compatible with buildLeafPrompt's sentenceTexts format.
  */
 export function framesToNumberedText(content: SemanticContent): string {
-  return content.frames
-    .map((frame, i) => `${i + 1}. ${frameToText(frame).text}`)
-    .join('\n');
+  return content.frames.map((frame, i) => `${i + 1}. ${frameToText(frame).text}`).join('\n');
 }

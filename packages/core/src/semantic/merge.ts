@@ -187,8 +187,7 @@ export function executeFrameMerge(
 
   // 2. Resolve conflicts based on user decisions
   for (const conflict of prepared.conflicts) {
-    const resolution: MergeResolution | undefined =
-      decisions.conflictResolutions[conflict.frameId];
+    const resolution: MergeResolution | undefined = decisions.conflictResolutions[conflict.frameId];
 
     if (!resolution || resolution === 'source') {
       frames.push(conflict.sourceFrame);

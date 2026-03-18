@@ -5,7 +5,7 @@
  */
 
 import type { AnyDB } from '@t3x-dev/storage';
-import { createCommitV4, insertProject } from '@t3x-dev/storage';
+import { createCommit, insertProject } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from '../setup';
@@ -49,7 +49,7 @@ describe('Merge Routes', () => {
 
   // Helper to create test commits (V4 format)
   const createTestCommit = async (sentences: Array<{ id: string; text: string }>) => {
-    const commit = await createCommitV4(
+    const commit = await createCommit(
       mockDB,
       {
         parents: [],

@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { dedupCheckerAgent } from '../../../extractors/agents/dedupCheckerAgent';
-import { StubLLMProvider } from '../../stubs';
-import { createFrameWithSlots, createSemanticContent, resetFrameIds } from '../../factories';
 import type { PipelineContext } from '../../../extractors/meaningPipeline';
+import { createFrameWithSlots, createSemanticContent, resetFrameIds } from '../../factories';
+import { StubLLMProvider } from '../../stubs';
 
 function makeCtx(frames: ReturnType<typeof createFrameWithSlots>[]): PipelineContext {
   return {
@@ -32,10 +32,7 @@ beforeEach(() => {
 
 describe('dedupCheckerAgent', () => {
   it('shouldRun returns false when <4 frames', () => {
-    const ctx = makeCtx([
-      createFrameWithSlots('a', { x: 1 }),
-      createFrameWithSlots('b', { y: 2 }),
-    ]);
+    const ctx = makeCtx([createFrameWithSlots('a', { x: 1 }), createFrameWithSlots('b', { y: 2 })]);
     expect(dedupCheckerAgent.shouldRun(ctx)).toBe(false);
   });
 
@@ -58,10 +55,12 @@ describe('dedupCheckerAgent', () => {
     ]);
 
     // LLM says merge the two 'preference' frames
-    provider.enqueue(JSON.stringify({
-      decision: 'merge',
-      merged_slots: { items: ['sushi', 'ramen'], sentiment: 'positive' },
-    }));
+    provider.enqueue(
+      JSON.stringify({
+        decision: 'merge',
+        merged_slots: { items: ['sushi', 'ramen'], sentiment: 'positive' },
+      })
+    );
 
     const result = await dedupCheckerAgent.run(ctx, provider);
 
@@ -90,7 +89,12 @@ describe('dedupCheckerAgent', () => {
     const f2 = createFrameWithSlots('pref', { b: 2 }, 'f_2');
     f2.confidence = 0.5;
 
-    const ctx = makeCtx([f1, f2, createFrameWithSlots('c', {}, 'f_3'), createFrameWithSlots('d', {}, 'f_4')]);
+    const ctx = makeCtx([
+      f1,
+      f2,
+      createFrameWithSlots('c', {}, 'f_3'),
+      createFrameWithSlots('d', {}, 'f_4'),
+    ]);
 
     provider.enqueue(JSON.stringify({ decision: 'merge', merged_slots: { a: 1, b: 2 } }));
 

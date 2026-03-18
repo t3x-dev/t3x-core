@@ -7,7 +7,7 @@
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
-import { createCommitV4 } from '../queries/commits-v4';
+import { createCommit } from '../queries/commits';
 import { createLeaf } from '../queries/leaves';
 import { insertProject } from '../queries/projects';
 import {
@@ -39,10 +39,18 @@ describe('Share Tokens Storage', () => {
     testProjectId = project.projectId;
 
     // Create a test commit
-    const commit = await createCommitV4(db, {
+    const commit = await createCommit(db, {
       parents: [],
       author: { type: 'human', name: 'Test Author' },
-      sentences: [{ id: 's_1', text: 'Test sentence for share tokens' }],
+      content: {
+        frames: [{ id: 's_1', text: 'Test sentence for share tokens' }].map((s) => ({
+          id: s.id,
+          type: 'legacy_sentence' as const,
+          slots: { text: s.text },
+          confidence: s.confidence,
+        })),
+        relations: [],
+      },
       project_id: testProjectId,
     });
     testCommitHash = commit.hash;

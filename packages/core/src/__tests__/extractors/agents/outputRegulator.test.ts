@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { outputRegulatorAgent } from '../../../extractors/agents/outputRegulatorAgent';
-import { StubLLMProvider } from '../../stubs';
-import { createFrameWithSlots, createSemanticContent, resetFrameIds } from '../../factories';
 import type { PipelineContext } from '../../../extractors/meaningPipeline';
+import { createFrameWithSlots, createSemanticContent, resetFrameIds } from '../../factories';
+import { StubLLMProvider } from '../../stubs';
 
-function makeCtx(frames: ReturnType<typeof createFrameWithSlots>[], relations: any[] = []): PipelineContext {
+function makeCtx(
+  frames: ReturnType<typeof createFrameWithSlots>[],
+  relations: any[] = []
+): PipelineContext {
   return {
     turns: [],
     previousSnapshot: undefined,

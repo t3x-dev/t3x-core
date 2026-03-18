@@ -21,7 +21,6 @@ import { sha256 } from '../common/hash';
 import { diffCommits } from '../diff/diffCommits';
 import { wordDiff } from '../diff/lcs';
 import type { DiffableSentence, WordDiffSegment } from '../diff/types';
-import { computeCommitV4Hash } from '../storage/hash-v4';
 import {
   type CommitAuthor,
   type CommitV4,
@@ -513,7 +512,22 @@ export function executeThreeWayMerge(
     },
   };
 
-  const hash = computeCommitV4Hash(firstClassData);
+  // Inline V4 hash computation (sha256 of first-class fields)
+  const hashableData = {
+    schema: firstClassData.schema,
+    parents: firstClassData.parents,
+    author: firstClassData.author,
+    committed_at: firstClassData.committed_at,
+    content: {
+      sentences: firstClassData.content.sentences.map((s) => ({
+        id: s.id,
+        text: s.text,
+        ...(s.confidence !== undefined ? { confidence: s.confidence } : {}),
+        ...(s.source_ref ? { source_ref: s.source_ref } : {}),
+      })),
+    },
+  };
+  const hash = `sha256:${sha256(hashableData)}`;
 
   return {
     hash,

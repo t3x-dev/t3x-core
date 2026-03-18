@@ -15,7 +15,7 @@ vi.mock('../lib/db', () => ({
 
 vi.mock('@t3x-dev/storage', () => ({
   findTurnByHash: vi.fn(),
-  findCommitV4ByHash: vi.fn(),
+  getCommitUnified: vi.fn(),
   findSegmentEmbeddingsByTurn: vi.fn().mockResolvedValue([]),
 }));
 
@@ -73,10 +73,10 @@ describe('Diff Routes', () => {
     });
 
     it('returns success for V4 commit hash mode', async () => {
-      const { findCommitV4ByHash } = await import('@t3x-dev/storage');
+      const { getCommitUnified } = await import('@t3x-dev/storage');
       const { diffCommits } = await import('@t3x-dev/core');
 
-      (findCommitV4ByHash as ReturnType<typeof vi.fn>)
+      (getCommitUnified as ReturnType<typeof vi.fn>)
         .mockResolvedValueOnce({
           content: { sentences: [{ id: 's1', text: 'Hello world' }] },
         })
@@ -181,9 +181,9 @@ describe('Diff Routes', () => {
     });
 
     it('returns 404 for non-existent commit', async () => {
-      const { findCommitV4ByHash } = await import('@t3x-dev/storage');
+      const { getCommitUnified } = await import('@t3x-dev/storage');
 
-      (findCommitV4ByHash as ReturnType<typeof vi.fn>)
+      (getCommitUnified as ReturnType<typeof vi.fn>)
         .mockResolvedValueOnce(null)
         .mockResolvedValueOnce(null);
 

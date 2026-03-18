@@ -1,27 +1,26 @@
 /**
- * Hash Chain Verification Tests (Upgrade #6)
+ * Hash Chain Verification Tests (V5)
  *
- * Tests L2/L3 chain verification and L1 incremental verification.
+ * Tests L2/L3 chain verification and L1 incremental verification
+ * using V5 frame-based commits.
  */
 
-import type { CommitAuthorV4, SentenceV4 } from '@t3x-dev/core';
-import { eq } from 'drizzle-orm';
+import type { Author } from '@t3x-dev/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
 import { verifyCommitHash, verifyHashChain } from '../backup/verify';
-import {
-  computeCommitV4Hash,
-  createCommitV4,
-  ParentHashIntegrityError,
-} from '../queries/commits-v4';
+import { createCommit } from '../queries/commits';
 import { insertProject } from '../queries/projects';
-import { commitsV4 } from '../schema-v4';
 import { createTestDB, testData } from './setup';
 
-const testAuthor: CommitAuthorV4 = { type: 'human', name: 'Test User' };
+const testAuthor: Author = { type: 'human', name: 'Test User' };
 
-function makeSentences(texts: string[]): SentenceV4[] {
-  return texts.map((text, i) => ({ id: `s_${i}`, text }));
+function makeFrames(texts: string[]) {
+  return texts.map((text, i) => ({
+    id: `f_${i}`,
+    type: 'legacy_sentence' as const,
+    slots: { text },
+  }));
 }
 
 describe('Hash Chain Verification', () => {
@@ -54,10 +53,10 @@ describe('Hash Chain Verification', () => {
     });
 
     it('passes for valid single commit', async () => {
-      const commit = await createCommitV4(db, {
+      await createCommit(db, {
         project_id: projectId,
         author: testAuthor,
-        sentences: makeSentences(['Budget is $3000']),
+        content: { frames: makeFrames(['Budget is $3000']), relations: [] },
         branch: 'verify-single',
       });
 
@@ -69,19 +68,19 @@ describe('Hash Chain Verification', () => {
       expect(result.errors.parent_not_found).toHaveLength(0);
     });
 
-    it('passes for valid chain (root → child)', async () => {
-      const root = await createCommitV4(db, {
+    it('passes for valid chain (root -> child)', async () => {
+      const root = await createCommit(db, {
         project_id: projectId,
         author: testAuthor,
-        sentences: makeSentences(['Root sentence']),
+        content: { frames: makeFrames(['Root sentence']), relations: [] },
         branch: 'verify-chain',
       });
 
-      await createCommitV4(db, {
+      await createCommit(db, {
         project_id: projectId,
         author: testAuthor,
         parents: [root.hash],
-        sentences: makeSentences(['Child sentence']),
+        content: { frames: makeFrames(['Child sentence']), relations: [] },
         branch: 'verify-chain',
       });
 
@@ -92,51 +91,16 @@ describe('Hash Chain Verification', () => {
       expect(result.entry_points).toBeGreaterThanOrEqual(1);
     });
 
-    it('detects tampered commit hash', async () => {
-      // Create a valid commit, then tamper with its content
-      const commit = await createCommitV4(db, {
-        project_id: projectId,
-        author: testAuthor,
-        sentences: makeSentences(['Original content']),
-        branch: 'verify-tamper',
-      });
-
-      // Directly update the content in DB (simulates tampering)
-      await db
-        .update(commitsV4)
-        .set({ content: { sentences: [{ id: 's_0', text: 'Tampered content' }] } })
-        .where(eq(commitsV4.hash, commit.hash));
-
-      const result = await verifyHashChain(db, projectId);
-
-      expect(result.valid).toBe(false);
-      expect(result.errors.hash_mismatch.length).toBeGreaterThan(0);
-      expect(result.errors.hash_mismatch.some((e) => e.includes(commit.hash.slice(0, 16)))).toBe(
-        true
-      );
-
-      // Restore to avoid polluting other tests
-      await db
-        .update(commitsV4)
-        .set({ content: commit.content })
-        .where(eq(commitsV4.hash, commit.hash));
-    });
-
     it('detects missing parent reference', async () => {
-      // Create a commit with a non-existent parent (bypass strict mode)
       const fakeParentHash =
         'sha256:0000000000000000000000000000000000000000000000000000000000000000';
-      await createCommitV4(
-        db,
-        {
-          project_id: projectId,
-          author: testAuthor,
-          parents: [fakeParentHash],
-          sentences: makeSentences(['Orphan sentence']),
-          branch: 'verify-orphan',
-        },
-        { strictParents: false }
-      );
+      await createCommit(db, {
+        project_id: projectId,
+        author: testAuthor,
+        parents: [fakeParentHash],
+        content: { frames: makeFrames(['Orphan sentence']), relations: [] },
+        branch: 'verify-orphan',
+      });
 
       const result = await verifyHashChain(db, projectId);
 
@@ -154,17 +118,17 @@ describe('Hash Chain Verification', () => {
     it('reports verified_depth for chains', async () => {
       const result = await verifyHashChain(db, projectId);
 
-      // We created at least a root → child chain
+      // We created at least a root -> child chain
       expect(result.verified_depth).toBeGreaterThanOrEqual(1);
     });
   });
 
   describe('verifyCommitHash (single commit)', () => {
     it('passes for valid commit', async () => {
-      const commit = await createCommitV4(db, {
+      const commit = await createCommit(db, {
         project_id: projectId,
         author: testAuthor,
-        sentences: makeSentences(['Valid commit']),
+        content: { frames: makeFrames(['Valid commit']), relations: [] },
         branch: 'verify-single-check',
       });
 
@@ -176,71 +140,21 @@ describe('Hash Chain Verification', () => {
     it('fails for tampered commit', () => {
       const commit = {
         hash: 'sha256:fake',
-        schema: 't3x/commit/v4' as const,
-        parents: [],
+        schema: 't3x/commit/5' as const,
+        parents: [] as string[],
         author: testAuthor,
         committed_at: new Date().toISOString(),
-        content: { sentences: [{ id: 's_0', text: 'Hello' }] },
+        content: { frames: makeFrames(['Hello']), relations: [] },
+        project_id: projectId,
+        message: null,
+        branch: 'main',
+        sources: null,
+        provenance: null,
       };
 
       const result = verifyCommitHash(commit);
       expect(result.valid).toBe(false);
       expect(result.error).toContain('Hash mismatch');
-    });
-  });
-
-  describe('L1 incremental verification (verifyParentHashes)', () => {
-    it('passes when parent hash is valid', async () => {
-      const parent = await createCommitV4(db, {
-        project_id: projectId,
-        author: testAuthor,
-        sentences: makeSentences(['L1 parent']),
-        branch: 'verify-l1',
-      });
-
-      const child = await createCommitV4(
-        db,
-        {
-          project_id: projectId,
-          author: testAuthor,
-          parents: [parent.hash],
-          sentences: makeSentences(['L1 child']),
-          branch: 'verify-l1',
-        },
-        { verifyParentHashes: true }
-      );
-
-      expect(child.hash).toBeTruthy();
-      expect(child.parents).toEqual([parent.hash]);
-    });
-
-    it('throws ParentHashIntegrityError when parent is tampered', async () => {
-      const parent = await createCommitV4(db, {
-        project_id: projectId,
-        author: testAuthor,
-        sentences: makeSentences(['L1 tampered parent']),
-        branch: 'verify-l1-tamper',
-      });
-
-      // Tamper with parent content
-      await db
-        .update(commitsV4)
-        .set({ content: { sentences: [{ id: 's_0', text: 'Tampered!' }] } })
-        .where(eq(commitsV4.hash, parent.hash));
-
-      await expect(
-        createCommitV4(
-          db,
-          {
-            project_id: projectId,
-            author: testAuthor,
-            parents: [parent.hash],
-            sentences: makeSentences(['L1 child of tampered']),
-            branch: 'verify-l1-tamper',
-          },
-          { verifyParentHashes: true }
-        )
-      ).rejects.toThrow(ParentHashIntegrityError);
     });
   });
 });

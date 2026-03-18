@@ -3,7 +3,7 @@
  */
 
 import type { AnyDB } from '@t3x-dev/storage';
-import { createCommitV4, deleteProject, findProjects, insertProject } from '@t3x-dev/storage';
+import { createCommit, deleteProject, findProjects, insertProject } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
@@ -187,7 +187,7 @@ describe('Projects Routes', () => {
         testData.project({ name: 'Verify With Commits' })
       );
 
-      await createCommitV4(mockDB, {
+      await createCommit(mockDB, {
         project_id: project.projectId,
         author: { type: 'human', name: 'Tester' },
         sentences: [{ id: 's_1', text: 'Test sentence' }],
@@ -218,7 +218,7 @@ describe('Projects Routes', () => {
         testData.project({ name: 'Merkle Mismatch Verify' })
       );
 
-      await createCommitV4(mockDB, {
+      await createCommit(mockDB, {
         project_id: project.projectId,
         author: { type: 'human', name: 'Tester' },
         sentences: [{ id: 's_mm1', text: 'Merkle mismatch test' }],

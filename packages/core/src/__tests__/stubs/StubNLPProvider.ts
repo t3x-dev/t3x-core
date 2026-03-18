@@ -4,7 +4,13 @@
  * Parses text with basic heuristics — no external calls.
  */
 
-import type { NLPAnalysis, NLPEntity, NLPProvider, NLPSentence, NLPToken } from '../../providers/nlp';
+import type {
+  NLPAnalysis,
+  NLPEntity,
+  NLPProvider,
+  NLPSentence,
+  NLPToken,
+} from '../../providers/nlp';
 
 export class StubNLPProvider implements NLPProvider {
   readonly id = 'stub-nlp';
@@ -97,7 +103,13 @@ export class StubNLPProvider implements NLPProvider {
     if (pos === 'VERB') return -1;
     for (let i = 0; i < words.length; i++) {
       const w = words[i].replace(/[.,!?;:'"]+/g, '').toLowerCase();
-      if (this.positiveVerbs.has(w) || this.negativeVerbs.has(w) || w.endsWith('ing') || w.endsWith('ed')) return i;
+      if (
+        this.positiveVerbs.has(w) ||
+        this.negativeVerbs.has(w) ||
+        w.endsWith('ing') ||
+        w.endsWith('ed')
+      )
+        return i;
     }
     return index > 0 ? index - 1 : -1;
   }
@@ -117,11 +129,29 @@ export class StubNLPProvider implements NLPProvider {
       if (token.pos === 'PROPN') {
         let type = 'PERSON';
         const lower = token.lemma.toLowerCase();
-        if (['japan', 'tokyo', 'paris', 'london', 'new', 'york', 'usa', 'china'].includes(lower)) type = 'GPE';
-        entities.push({ text: token.text, type, salience: 0.8, beginOffset: token.beginOffset, endOffset: token.endOffset });
+        if (['japan', 'tokyo', 'paris', 'london', 'new', 'york', 'usa', 'china'].includes(lower))
+          type = 'GPE';
+        entities.push({
+          text: token.text,
+          type,
+          salience: 0.8,
+          beginOffset: token.beginOffset,
+          endOffset: token.endOffset,
+        });
       }
-      if (/^\d{4}$/.test(token.text) || /^(january|february|march|april|may|june|july|august|september|october|november|december)$/i.test(token.text)) {
-        entities.push({ text: token.text, type: 'DATE', salience: 0.7, beginOffset: token.beginOffset, endOffset: token.endOffset });
+      if (
+        /^\d{4}$/.test(token.text) ||
+        /^(january|february|march|april|may|june|july|august|september|october|november|december)$/i.test(
+          token.text
+        )
+      ) {
+        entities.push({
+          text: token.text,
+          type: 'DATE',
+          salience: 0.7,
+          beginOffset: token.beginOffset,
+          endOffset: token.endOffset,
+        });
       }
     }
     return entities;

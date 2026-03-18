@@ -5,7 +5,7 @@
  */
 
 import type { AnyDB } from '@t3x-dev/storage';
-import { createCommitV4, insertProject } from '@t3x-dev/storage';
+import { createCommit, insertProject } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
@@ -91,12 +91,20 @@ describe('POST /v1/leaves/:id/generate', () => {
     testProjectId = project.projectId;
 
     // Create a test commit
-    const commit = await createCommitV4(mockDB, {
+    const commit = await createCommit(mockDB, {
       author: { type: 'human', name: 'Test User' },
-      sentences: [
-        { id: 's_1', text: 'User prefers dark mode' },
-        { id: 's_2', text: 'User speaks English' },
-      ],
+      content: {
+        frames: [
+          { id: 's_1', text: 'User prefers dark mode' },
+          { id: 's_2', text: 'User speaks English' },
+        ].map((s) => ({
+          id: s.id,
+          type: 'legacy_sentence' as const,
+          slots: { text: s.text },
+          confidence: s.confidence,
+        })),
+        relations: [],
+      },
       project_id: testProjectId,
       branch: 'main',
       message: 'Test commit for generation',

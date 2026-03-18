@@ -9,9 +9,9 @@
  * This module implements L2/L3 verification.
  */
 
-import { buildMerkleTree, type CommitV4 } from '@t3x-dev/core';
+import { type Commit, computeCommitHash } from '@t3x-dev/core';
 import type { AnyDB } from '../adapters';
-import { computeCommitV4Hash, findCommitsV4ByProject } from '../queries';
+import { listCommits } from '../queries';
 
 /**
  * Legacy verify result (kept for backward compatibility)
@@ -64,7 +64,7 @@ const VERIFY_LIMIT = 100_000;
  * also appending a warning to errors.other so callers know results are partial.
  */
 export async function verifyHashChain(db: AnyDB, projectId: string): Promise<VerifyChainResult> {
-  const commits = await findCommitsV4ByProject(db, projectId, { limit: VERIFY_LIMIT });
+  const commits = await listCommits(db, { projectId, limit: VERIFY_LIMIT });
   const hashMismatch: string[] = [];
   const parentNotFound: string[] = [];
   const other: string[] = [];
@@ -93,7 +93,7 @@ export async function verifyHashChain(db: AnyDB, projectId: string): Promise<Ver
   }
 
   // Index all commits by hash for O(1) lookup
-  const commitMap = new Map<string, CommitV4>();
+  const commitMap = new Map<string, Commit>();
   for (const commit of commits) {
     commitMap.set(commit.hash, commit);
   }
@@ -101,8 +101,8 @@ export async function verifyHashChain(db: AnyDB, projectId: string): Promise<Ver
   // Step 1: Verify each commit's hash integrity
   for (const commit of commits) {
     try {
-      const recomputed = computeCommitV4Hash({
-        schema: commit.schema as 't3x/commit/v4',
+      const recomputed = computeCommitHash({
+        schema: commit.schema,
         parents: commit.parents,
         author: commit.author,
         committed_at: commit.committed_at,
@@ -178,32 +178,9 @@ export async function verifyHashChain(db: AnyDB, projectId: string): Promise<Ver
     );
   }
 
-  // Step 4: Build Merkle tree for each commit's sentences and compare with stored
+  // Step 4: Merkle verification skipped for V5 commits (frame-based, no merkle_root field)
   const merkleRoots: Record<string, string> = {};
   const merkleMismatches: string[] = [];
-  for (const commit of commits) {
-    const sentences = commit.content.sentences ?? [];
-
-    // Skip empty-sentence commits — they store null merkle_root by design
-    if (sentences.length === 0) continue;
-
-    try {
-      const tree = buildMerkleTree(sentences.map((s) => ({ id: s.id, text: s.text })));
-      merkleRoots[commit.hash] = tree.root;
-
-      // Compare stored merkle_root with recomputed root
-      if (!commit.merkle_root) {
-        // Non-empty commit with missing stored root — flag as mismatch
-        merkleMismatches.push(commit.hash);
-      } else if (commit.merkle_root !== tree.root) {
-        merkleMismatches.push(commit.hash);
-      }
-    } catch (err) {
-      other.push(
-        `Commit ${commit.hash.slice(0, 16)}: merkle tree build failed: ${err instanceof Error ? err.message : String(err)}`
-      );
-    }
-  }
 
   return {
     valid:
@@ -229,10 +206,10 @@ export async function verifyHashChain(db: AnyDB, projectId: string): Promise<Ver
  * Used by L1 incremental verification during commit creation
  * to validate parent commits are untampered.
  */
-export function verifyCommitHash(commit: CommitV4): { valid: boolean; error?: string } {
+export function verifyCommitHash(commit: Commit): { valid: boolean; error?: string } {
   try {
-    const recomputed = computeCommitV4Hash({
-      schema: commit.schema as 't3x/commit/v4',
+    const recomputed = computeCommitHash({
+      schema: commit.schema,
       parents: commit.parents,
       author: commit.author,
       committed_at: commit.committed_at,

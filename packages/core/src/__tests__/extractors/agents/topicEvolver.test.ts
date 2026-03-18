@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { topicEvolverAgent } from '../../../extractors/agents/topicEvolverAgent';
-import { StubLLMProvider } from '../../stubs';
-import { createFrameWithSlots, createSemanticContent, resetFrameIds } from '../../factories';
 import type { PipelineContext } from '../../../extractors/meaningPipeline';
+import { createFrameWithSlots, createSemanticContent, resetFrameIds } from '../../factories';
+import { StubLLMProvider } from '../../stubs';
 
 function makeCtx(rootType: string, isFirst: boolean): PipelineContext {
   resetFrameIds();

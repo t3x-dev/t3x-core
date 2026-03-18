@@ -7,7 +7,7 @@
  */
 
 import type { AnyDB } from '@t3x-dev/storage';
-import { createCommitV4, createLeaf, insertProject, updateLeaf } from '@t3x-dev/storage';
+import { createCommit, createLeaf, insertProject, updateLeaf } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
@@ -93,12 +93,20 @@ describe('POST /v1/leaves/:id/generate — lesson collector wiring', () => {
     testProjectId = project.projectId;
 
     // Create a test commit
-    const commit = await createCommitV4(mockDB, {
+    const commit = await createCommit(mockDB, {
       author: { type: 'human', name: 'Test User' },
-      sentences: [
-        { id: 's_lc1', text: 'User prefers concise responses' },
-        { id: 's_lc2', text: 'User likes bullet points' },
-      ],
+      content: {
+        frames: [
+          { id: 's_lc1', text: 'User prefers concise responses' },
+          { id: 's_lc2', text: 'User likes bullet points' },
+        ].map((s) => ({
+          id: s.id,
+          type: 'legacy_sentence' as const,
+          slots: { text: s.text },
+          confidence: s.confidence,
+        })),
+        relations: [],
+      },
       project_id: testProjectId,
       branch: 'main',
       message: 'Commit for lesson collector tests',
@@ -256,9 +264,17 @@ describe('POST /v1/leaves/:id/generate — lesson collector wiring', () => {
 
   it('generates successfully when no other historical leaves exist', async () => {
     // Create a fresh commit with no sibling leaves
-    const freshCommit = await createCommitV4(mockDB, {
+    const freshCommit = await createCommit(mockDB, {
       author: { type: 'human', name: 'Test User' },
-      sentences: [{ id: 's_fresh1', text: 'A brand new sentence' }],
+      content: {
+        frames: [{ id: 's_fresh1', text: 'A brand new sentence' }].map((s) => ({
+          id: s.id,
+          type: 'legacy_sentence' as const,
+          slots: { text: s.text },
+          confidence: s.confidence,
+        })),
+        relations: [],
+      },
       project_id: testProjectId,
       branch: 'main',
       message: 'Isolated commit for lesson test',

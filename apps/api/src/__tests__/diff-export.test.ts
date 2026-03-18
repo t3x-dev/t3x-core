@@ -6,7 +6,7 @@
  */
 
 import type { AnyDB } from '@t3x-dev/storage';
-import { createCommitV4, insertConversation, insertProject, insertTurn } from '@t3x-dev/storage';
+import { createCommit, insertConversation, insertProject, insertTurn } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
@@ -40,26 +40,42 @@ describe('Diff Routes', () => {
     testProjectId = project.projectId;
 
     // Create V4 commits for testing
-    const baseCommit = await createCommitV4(mockDB, {
+    const baseCommit = await createCommit(mockDB, {
       parents: [],
       author: { type: 'human', name: 'Test' },
-      sentences: [
-        { id: 's_1', text: 'The budget is three thousand dollars' },
-        { id: 's_2', text: 'The deadline is next Friday' },
-        { id: 's_3', text: 'Unique to base' },
-      ],
+      content: {
+        frames: [
+          { id: 's_1', text: 'The budget is three thousand dollars' },
+          { id: 's_2', text: 'The deadline is next Friday' },
+          { id: 's_3', text: 'Unique to base' },
+        ].map((s) => ({
+          id: s.id,
+          type: 'legacy_sentence' as const,
+          slots: { text: s.text },
+          confidence: s.confidence,
+        })),
+        relations: [],
+      },
       project_id: testProjectId,
     });
     baseCommitHash = baseCommit.hash;
 
-    const targetCommit = await createCommitV4(mockDB, {
+    const targetCommit = await createCommit(mockDB, {
       parents: [baseCommitHash],
       author: { type: 'human', name: 'Test' },
-      sentences: [
-        { id: 's_4', text: 'The budget is five thousand dollars' },
-        { id: 's_5', text: 'The deadline is next Friday' },
-        { id: 's_6', text: 'Unique to target' },
-      ],
+      content: {
+        frames: [
+          { id: 's_4', text: 'The budget is five thousand dollars' },
+          { id: 's_5', text: 'The deadline is next Friday' },
+          { id: 's_6', text: 'Unique to target' },
+        ].map((s) => ({
+          id: s.id,
+          type: 'legacy_sentence' as const,
+          slots: { text: s.text },
+          confidence: s.confidence,
+        })),
+        relations: [],
+      },
       project_id: testProjectId,
     });
     targetCommitHash = targetCommit.hash;

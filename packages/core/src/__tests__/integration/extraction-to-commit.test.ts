@@ -50,7 +50,11 @@ describe('extraction-to-commit integration', () => {
     };
 
     const turns = [
-      { role: 'user', content: 'I want to plan a 2-week trip to Tokyo. Budget is under $5000. I love Japanese food.' },
+      {
+        role: 'user',
+        content:
+          'I want to plan a 2-week trip to Tokyo. Budget is under $5000. I love Japanese food.',
+      },
       { role: 'assistant', content: 'Great! Tokyo is wonderful. Let me help you plan.' },
     ];
 
@@ -58,7 +62,9 @@ describe('extraction-to-commit integration', () => {
     // dedup_checker won't run (<4 frames), topic_evolver won't run (first extraction)
     provider
       .enqueue('tokyo_trip_plan') // topic_namer
-      .enqueue(JSON.stringify({ slots: { destination: 'Tokyo', duration: '2 weeks', budget: 5000 } })) // slot_polisher frame 1
+      .enqueue(
+        JSON.stringify({ slots: { destination: 'Tokyo', duration: '2 weeks', budget: 5000 } })
+      ) // slot_polisher frame 1
       .enqueue(JSON.stringify({ slots: { item: 'Japanese food', sentiment: 'likes' } })) // slot_polisher frame 2
       .enqueue(JSON.stringify({ slots: { type: 'budget', value: 'under $5000' } })) // slot_polisher frame 3
       .enqueue(JSON.stringify({ status: 'approved', issues: [] })); // reviewer
@@ -95,9 +101,7 @@ describe('extraction-to-commit integration', () => {
     const pipeline = createMeaningPipeline(provider);
 
     const emptyContent: SemanticContent = { frames: [], relations: [] };
-    const result = await pipeline.run(emptyContent, [
-      { role: 'user', content: 'hello' },
-    ] as any[]);
+    const result = await pipeline.run(emptyContent, [{ role: 'user', content: 'hello' }] as any[]);
 
     // No frames → content stays empty, some agents may run but produce no change
     expect(result.content.frames).toHaveLength(0);
@@ -125,9 +129,11 @@ describe('extraction-to-commit integration', () => {
       .enqueue(JSON.stringify({ status: 'approved' })); // reviewer
 
     const pipeline = createMeaningPipeline(provider);
-    const result = await pipeline.run(updatedContent, [
-      { role: 'user', content: 'My budget is $5000' },
-    ] as any[], existingSnapshot);
+    const result = await pipeline.run(
+      updatedContent,
+      [{ role: 'user', content: 'My budget is $5000' }] as any[],
+      existingSnapshot
+    );
 
     // Should still have frames
     expect(result.content.frames.length).toBeGreaterThan(0);

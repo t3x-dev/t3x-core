@@ -1,10 +1,13 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { slotPolisherAgent } from '../../../extractors/agents/slotPolisherAgent';
-import { StubLLMProvider } from '../../stubs';
-import { createFrameWithSlots, createSemanticContent, resetFrameIds } from '../../factories';
 import type { PipelineContext } from '../../../extractors/meaningPipeline';
+import { createFrameWithSlots, createSemanticContent, resetFrameIds } from '../../factories';
+import { StubLLMProvider } from '../../stubs';
 
-function makeCtx(frames: ReturnType<typeof createFrameWithSlots>[], isFirst = true): PipelineContext {
+function makeCtx(
+  frames: ReturnType<typeof createFrameWithSlots>[],
+  isFirst = true
+): PipelineContext {
   return {
     turns: [],
     previousSnapshot: undefined,
@@ -54,9 +57,11 @@ describe('slotPolisherAgent', () => {
       }),
     ]);
 
-    provider.enqueue(JSON.stringify({
-      slots: { season: 'spring', budget: 5000 },
-    }));
+    provider.enqueue(
+      JSON.stringify({
+        slots: { season: 'spring', budget: 5000 },
+      })
+    );
 
     const result = await slotPolisherAgent.run(ctx, provider);
 
@@ -101,9 +106,7 @@ describe('slotPolisherAgent', () => {
   });
 
   it('preserves arrays in slot values', async () => {
-    const ctx = makeCtx([
-      createFrameWithSlots('prefs', { items: ['sushi', 'ramen'] as any }),
-    ]);
+    const ctx = makeCtx([createFrameWithSlots('prefs', { items: ['sushi', 'ramen'] as any })]);
 
     provider.enqueue(JSON.stringify({ slots: { foods: ['sushi', 'ramen'] } }));
 

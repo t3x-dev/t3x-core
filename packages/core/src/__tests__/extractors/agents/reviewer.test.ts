@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { reviewerAgent } from '../../../extractors/agents/reviewerAgent';
-import { StubLLMProvider } from '../../stubs';
-import { createFrameWithSlots, createSemanticContent, resetFrameIds } from '../../factories';
 import type { PipelineContext } from '../../../extractors/meaningPipeline';
+import { createFrameWithSlots, createSemanticContent, resetFrameIds } from '../../factories';
+import { StubLLMProvider } from '../../stubs';
 
 function makeCtx(frames: ReturnType<typeof createFrameWithSlots>[]): PipelineContext {
   return {
@@ -42,9 +42,7 @@ describe('reviewerAgent', () => {
   });
 
   it('returns unchanged context when review is approved', async () => {
-    const ctx = makeCtx([
-      createFrameWithSlots('japan_trip', { dest: 'Tokyo' }, 'f_1'),
-    ]);
+    const ctx = makeCtx([createFrameWithSlots('japan_trip', { dest: 'Tokyo' }, 'f_1')]);
 
     provider.enqueue(JSON.stringify({ status: 'approved', issues: [] }));
 
@@ -53,15 +51,15 @@ describe('reviewerAgent', () => {
   });
 
   it('renames root frame when reviewer suggests rename_root', async () => {
-    const ctx = makeCtx([
-      createFrameWithSlots('conversation', { dest: 'Tokyo' }, 'f_1'),
-    ]);
+    const ctx = makeCtx([createFrameWithSlots('conversation', { dest: 'Tokyo' }, 'f_1')]);
 
-    provider.enqueue(JSON.stringify({
-      status: 'needs_fixes',
-      issues: ['Root topic name is too generic'],
-      fixes: { rename_root: 'japan_travel_plan' },
-    }));
+    provider.enqueue(
+      JSON.stringify({
+        status: 'needs_fixes',
+        issues: ['Root topic name is too generic'],
+        fixes: { rename_root: 'japan_travel_plan' },
+      })
+    );
 
     const result = await reviewerAgent.run(ctx, provider);
     expect(result.content.frames[0].type).toBe('japan_travel_plan');
@@ -74,13 +72,15 @@ describe('reviewerAgent', () => {
       createFrameWithSlots('budget', { dest: 'related', amt: 5000 }, 'f_2'),
     ]);
 
-    provider.enqueue(JSON.stringify({
-      status: 'needs_fixes',
-      issues: ['Slot names too abbreviated'],
-      fixes: {
-        rename_slots: { dest: 'destination', dur: 'duration', amt: 'amount' },
-      },
-    }));
+    provider.enqueue(
+      JSON.stringify({
+        status: 'needs_fixes',
+        issues: ['Slot names too abbreviated'],
+        fixes: {
+          rename_slots: { dest: 'destination', dur: 'duration', amt: 'amount' },
+        },
+      })
+    );
 
     const result = await reviewerAgent.run(ctx, provider);
     expect(result.content.frames[0].slots.destination).toBe('Tokyo');
@@ -98,11 +98,13 @@ describe('reviewerAgent', () => {
       createFrameWithSlots('budget', { amount: 5000 }, 'f_3'),
     ]);
 
-    provider.enqueue(JSON.stringify({
-      status: 'needs_fixes',
-      issues: ['Duplicate preference frames'],
-      fixes: { merge_frames: [['f_1', 'f_2']] },
-    }));
+    provider.enqueue(
+      JSON.stringify({
+        status: 'needs_fixes',
+        issues: ['Duplicate preference frames'],
+        fixes: { merge_frames: [['f_1', 'f_2']] },
+      })
+    );
 
     const result = await reviewerAgent.run(ctx, provider);
     // f_2 merged into f_1 and removed
@@ -127,10 +129,12 @@ describe('reviewerAgent', () => {
       createFrameWithSlots('pref', { drink: 'sake', shared: 'duplicate' }, 'f_2'),
     ]);
 
-    provider.enqueue(JSON.stringify({
-      status: 'needs_fixes',
-      fixes: { merge_frames: [['f_1', 'f_2']] },
-    }));
+    provider.enqueue(
+      JSON.stringify({
+        status: 'needs_fixes',
+        fixes: { merge_frames: [['f_1', 'f_2']] },
+      })
+    );
 
     const result = await reviewerAgent.run(ctx, provider);
     // 'shared' should keep f_1's value (not overwritten by f_2)

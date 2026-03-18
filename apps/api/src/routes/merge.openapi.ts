@@ -12,7 +12,7 @@
  * DELETE /v1/merge/drafts/:id - Delete a merge draft
  */
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import type { CreateCommitV4Input, MergeSummaryData, SlotValue } from '@t3x-dev/core';
+import type { MergeSummaryData, SlotValue } from '@t3x-dev/core';
 import {
   executeMerge,
   type FrameMergeInput,
@@ -24,7 +24,7 @@ import {
 } from '@t3x-dev/core';
 import {
   commitMergeDraft,
-  createCommitV4,
+  createCommit,
   createMergeDraft,
   deleteMergeDraft,
   findPendingMergeDraft,
@@ -329,19 +329,28 @@ mergeRoutes.openapi(executeMergeRoute, async (c) => {
       total_sentences: mergeCommit.content.sentences.length,
     };
 
-    // Convert to CreateCommitV4Input format
-    const commitInput: CreateCommitV4Input = {
+    // Convert sentences to V5 legacy_sentence frames
+    const frames = mergeCommit.content.sentences.map((s, i) => ({
+      id: s.id || `f_${String(i + 1).padStart(3, '0')}`,
+      type: 'legacy_sentence' as const,
+      slots: { text: s.text },
+      confidence: s.confidence,
+    }));
+
+    // Save to storage as V5 commit
+    await createCommit(db, {
       parents: mergeCommit.parents,
-      author: mergeCommit.author,
-      sentences: mergeCommit.content.sentences,
+      author: {
+        type: mergeCommit.author.type as 'human' | 'agent' | 'system',
+        name: mergeCommit.author.name,
+        id: mergeCommit.author.id,
+      },
+      content: { frames, relations: [] },
       project_id: projectId,
       message: mergeCommit.message,
       branch: mergeCommit.branch,
-      merge_summary: mergeSummary,
-    };
-
-    // Save to storage as V4 commit
-    await createCommitV4(db, commitInput, { strictParents: false });
+      provenance: { method: 'merge' },
+    });
 
     // Update branch head if branch specified
     if (branch && projectId) {
@@ -771,21 +780,30 @@ mergeRoutes.openapi(commitDraftRoute, async (c) => {
       total_sentences: mergeCommit.content.sentences.length,
     };
 
-    // Convert to CreateCommitV4Input format
-    const commitInput: CreateCommitV4Input = {
-      parents: mergeCommit.parents,
-      author: mergeCommit.author,
-      sentences: mergeCommit.content.sentences,
-      project_id: draft.projectId,
-      message: mergeCommit.message,
-      branch: mergeCommit.branch,
-      merge_summary: draftMergeSummary,
-    };
+    // Convert sentences to V5 legacy_sentence frames
+    const draftFrames = mergeCommit.content.sentences.map((s, i) => ({
+      id: s.id || `f_${String(i + 1).padStart(3, '0')}`,
+      type: 'legacy_sentence' as const,
+      slots: { text: s.text },
+      confidence: s.confidence,
+    }));
 
     // Save commit + update branch head + mark draft committed atomically
     // biome-ignore lint/suspicious/noExplicitAny: AnyDB union doesn't expose .transaction() but all concrete types do
     await (db as any).transaction(async (tx: typeof db) => {
-      await createCommitV4(tx, commitInput, { strictParents: false });
+      await createCommit(tx, {
+        parents: mergeCommit.parents,
+        author: {
+          type: mergeCommit.author.type as 'human' | 'agent' | 'system',
+          name: mergeCommit.author.name,
+          id: mergeCommit.author.id,
+        },
+        content: { frames: draftFrames, relations: [] },
+        project_id: draft.projectId,
+        message: mergeCommit.message,
+        branch: mergeCommit.branch,
+        provenance: { method: 'merge' },
+      });
       await updateBranchHead(tx, draft.projectId, targetBranch, mergeCommit.hash);
       await commitMergeDraft(tx, id);
     });

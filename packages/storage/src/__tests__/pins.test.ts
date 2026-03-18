@@ -11,7 +11,7 @@ import type { CreatePinInput } from '@t3x-dev/core';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
-import { createCommitV4 } from '../queries/commits-v4';
+import { createCommit } from '../queries/commits';
 import { insertConversation } from '../queries/conversations';
 import { createLeaf } from '../queries/leaves';
 import {
@@ -53,10 +53,18 @@ describe('Pins Storage', () => {
     testConversationId = conversation.conversationId;
 
     // Create a test commit and leaf (for leaf pins)
-    const commit = await createCommitV4(db, {
+    const commit = await createCommit(db, {
       parents: [],
       author: { type: 'human', name: 'Test Author' },
-      sentences: [{ id: 's_1', text: 'Test sentence' }],
+      content: {
+        frames: [{ id: 's_1', text: 'Test sentence' }].map((s) => ({
+          id: s.id,
+          type: 'legacy_sentence' as const,
+          slots: { text: s.text },
+          confidence: s.confidence,
+        })),
+        relations: [],
+      },
       project_id: testProjectId,
     });
 

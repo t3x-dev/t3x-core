@@ -1,10 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { frameToText, framesToNumberedText, framesToTextSegments } from '../../semantic/frameToText';
+import {
+  framesToNumberedText,
+  framesToTextSegments,
+  frameToText,
+} from '../../semantic/frameToText';
 import type { Frame, SemanticContent } from '../../semantic/types';
 
 describe('frameToText', () => {
   it('converts a simple frame to text', () => {
-    const frame: Frame = { id: 'f_001', type: 'travel_plan', slots: { destination: 'Tokyo', duration: '2 weeks' } };
+    const frame: Frame = {
+      id: 'f_001',
+      type: 'travel_plan',
+      slots: { destination: 'Tokyo', duration: '2 weeks' },
+    };
     const result = frameToText(frame);
     expect(result.id).toBe('f_001');
     expect(result.text).toBe('[travel_plan] destination: Tokyo; duration: 2 weeks');
@@ -16,7 +24,11 @@ describe('frameToText', () => {
   });
 
   it('converts array slot values', () => {
-    const frame: Frame = { id: 'f_001', type: 'prefs', slots: { foods: ['sushi', 'ramen'] as any } };
+    const frame: Frame = {
+      id: 'f_001',
+      type: 'prefs',
+      slots: { foods: ['sushi', 'ramen'] as any },
+    };
     expect(frameToText(frame).text).toBe('[prefs] foods: sushi, ramen');
   });
 

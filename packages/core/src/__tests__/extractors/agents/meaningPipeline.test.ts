@@ -1,9 +1,14 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { MeaningPipeline } from '../../../extractors/meaningPipeline';
-import type { MeaningAgent, PipelineContext } from '../../../extractors/meaningPipeline';
 import { createMeaningPipeline } from '../../../extractors/createMeaningPipeline';
+import type { MeaningAgent, PipelineContext } from '../../../extractors/meaningPipeline';
+import { MeaningPipeline } from '../../../extractors/meaningPipeline';
+import {
+  createContentWithDuplicates,
+  createSemanticContent,
+  createTypicalContent,
+  resetFrameIds,
+} from '../../factories';
 import { StubLLMProvider } from '../../stubs';
-import { createSemanticContent, createTypicalContent, createContentWithDuplicates, resetFrameIds } from '../../factories';
 
 let provider: StubLLMProvider;
 
@@ -22,7 +27,10 @@ describe('MeaningPipeline', () => {
         description: `test ${name}`,
         usesLLM: false,
         shouldRun: () => true,
-        run: async (ctx) => { order.push(name); return ctx; },
+        run: async (ctx) => {
+          order.push(name);
+          return ctx;
+        },
       });
 
       const pipeline = new MeaningPipeline(provider)
@@ -45,14 +53,20 @@ describe('MeaningPipeline', () => {
           description: 'always runs',
           usesLLM: false,
           shouldRun: () => true,
-          run: async (ctx) => { order.push('always'); return ctx; },
+          run: async (ctx) => {
+            order.push('always');
+            return ctx;
+          },
         })
         .register({
           name: 'never',
           description: 'never runs',
           usesLLM: false,
           shouldRun: () => false,
-          run: async (ctx) => { order.push('never'); return ctx; },
+          run: async (ctx) => {
+            order.push('never');
+            return ctx;
+          },
         });
 
       await pipeline.run(createTypicalContent(), [{ role: 'user', content: 'test' }] as any[]);
@@ -63,52 +77,50 @@ describe('MeaningPipeline', () => {
 
   describe('quality gate rollback', () => {
     it('rolls back when agent produces 0 frames', async () => {
-      const pipeline = new MeaningPipeline(provider)
-        .register({
-          name: 'wiper',
-          description: 'wipes all frames',
-          usesLLM: false,
-          shouldRun: () => true,
-          run: async (ctx) => {
-            ctx.content = { frames: [], relations: [] };
-            return ctx;
-          },
-        });
+      const pipeline = new MeaningPipeline(provider).register({
+        name: 'wiper',
+        description: 'wipes all frames',
+        usesLLM: false,
+        shouldRun: () => true,
+        run: async (ctx) => {
+          ctx.content = { frames: [], relations: [] };
+          return ctx;
+        },
+      });
 
       const content = createTypicalContent();
       const result = await pipeline.run(content, [{ role: 'user', content: 'test' }] as any[]);
 
       // Should rollback — frames preserved
       expect(result.content.frames.length).toBeGreaterThan(0);
-      expect(result.meta.agentErrors.some(e => e.error.includes('ROLLBACK'))).toBe(true);
+      expect(result.meta.agentErrors.some((e) => e.error.includes('ROLLBACK'))).toBe(true);
     });
 
     it('rolls back when quality drops more than 20 points', async () => {
-      const pipeline = new MeaningPipeline(provider)
-        .register({
-          name: 'degrader',
-          description: 'makes quality worse',
-          usesLLM: false,
-          shouldRun: () => true,
-          run: async (ctx) => {
-            // Add many duplicate type frames to tank the quality score
-            for (let i = 0; i < 20; i++) {
-              ctx.content.frames.push({
-                id: `spam_${i}`,
-                type: 'spam',
-                slots: { n: i },
-              });
-            }
-            return ctx;
-          },
-        });
+      const pipeline = new MeaningPipeline(provider).register({
+        name: 'degrader',
+        description: 'makes quality worse',
+        usesLLM: false,
+        shouldRun: () => true,
+        run: async (ctx) => {
+          // Add many duplicate type frames to tank the quality score
+          for (let i = 0; i < 20; i++) {
+            ctx.content.frames.push({
+              id: `spam_${i}`,
+              type: 'spam',
+              slots: { n: i },
+            });
+          }
+          return ctx;
+        },
+      });
 
       const content = createTypicalContent();
       const result = await pipeline.run(content, [{ role: 'user', content: 'test' }] as any[]);
 
       // Should rollback — original frame count preserved
       expect(result.content.frames.length).toBe(3); // typical content has 3
-      expect(result.meta.agentErrors.some(e => e.error.includes('ROLLBACK'))).toBe(true);
+      expect(result.meta.agentErrors.some((e) => e.error.includes('ROLLBACK'))).toBe(true);
     });
   });
 
@@ -120,7 +132,9 @@ describe('MeaningPipeline', () => {
           description: 'throws error',
           usesLLM: false,
           shouldRun: () => true,
-          run: async () => { throw new Error('boom'); },
+          run: async () => {
+            throw new Error('boom');
+          },
         })
         .register({
           name: 'survivor',
@@ -133,7 +147,9 @@ describe('MeaningPipeline', () => {
           },
         });
 
-      const result = await pipeline.run(createTypicalContent(), [{ role: 'user', content: 'test' }] as any[]);
+      const result = await pipeline.run(createTypicalContent(), [
+        { role: 'user', content: 'test' },
+      ] as any[]);
 
       // Crasher error logged, survivor still ran
       expect(result.meta.agentErrors).toHaveLength(1);
@@ -161,7 +177,9 @@ describe('MeaningPipeline', () => {
           run: async (ctx) => ctx,
         });
 
-      const result = await pipeline.run(createTypicalContent(), [{ role: 'user', content: 'test' }] as any[]);
+      const result = await pipeline.run(createTypicalContent(), [
+        { role: 'user', content: 'test' },
+      ] as any[]);
 
       // Initial snapshot + 2 agent snapshots
       expect(result.meta.stepSnapshots).toHaveLength(3);
@@ -185,7 +203,9 @@ describe('MeaningPipeline', () => {
       provider
         .enqueue(JSON.stringify({ decision: 'keep_separate' })) // dedup
         .enqueue('japan_trip_plan') // topic_namer
-        .enqueue(JSON.stringify({ slots: { destination: 'Tokyo', duration: '2 weeks', budget: 5000 } })) // slot_polisher frame 1
+        .enqueue(
+          JSON.stringify({ slots: { destination: 'Tokyo', duration: '2 weeks', budget: 5000 } })
+        ) // slot_polisher frame 1
         .enqueue(JSON.stringify({ slots: { item: 'Japanese food', sentiment: 'likes' } })) // slot_polisher frame 2
         .enqueue(JSON.stringify({ slots: { type: 'budget', value: 'under $5000' } })) // slot_polisher frame 3
         .enqueue(JSON.stringify({ status: 'approved', issues: [] })); // reviewer
@@ -193,7 +213,10 @@ describe('MeaningPipeline', () => {
       const pipeline = createMeaningPipeline(provider);
       const content = createTypicalContent();
       const turns = [
-        { role: 'user', content: 'I want to plan a 2 week trip to Tokyo under $5000. I love Japanese food.' },
+        {
+          role: 'user',
+          content: 'I want to plan a 2 week trip to Tokyo under $5000. I love Japanese food.',
+        },
       ] as any[];
 
       const result = await pipeline.run(content, turns);

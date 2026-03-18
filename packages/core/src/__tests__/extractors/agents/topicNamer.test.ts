@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { topicNamerAgent } from '../../../extractors/agents/topicNamerAgent';
-import { StubLLMProvider } from '../../stubs';
-import { createFrameWithSlots, createSemanticContent, resetFrameIds } from '../../factories';
 import type { PipelineContext } from '../../../extractors/meaningPipeline';
+import { createFrameWithSlots, createSemanticContent, resetFrameIds } from '../../factories';
+import { StubLLMProvider } from '../../stubs';
 
 function makeCtx(
   frames: ReturnType<typeof createFrameWithSlots>[],
@@ -41,11 +41,11 @@ describe('topicNamerAgent', () => {
   });
 
   it('shouldRun when 3+ frames and no topic name', () => {
-    const ctx = makeCtx([
-      createFrameWithSlots('a', {}),
-      createFrameWithSlots('b', {}),
-      createFrameWithSlots('c', {}),
-    ], false, null);
+    const ctx = makeCtx(
+      [createFrameWithSlots('a', {}), createFrameWithSlots('b', {}), createFrameWithSlots('c', {})],
+      false,
+      null
+    );
     expect(topicNamerAgent.shouldRun(ctx)).toBe(true);
   });
 

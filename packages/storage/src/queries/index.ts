@@ -56,28 +56,6 @@ export {
 } from './commits';
 // Commits Unified (V5 + V4 transition adapter)
 export { getCommitUnified, listCommitsUnified } from './commits-unified';
-// Commits V4 (pure knowledge - no constraints)
-export {
-  backfillMerkleRoots,
-  type CreateCommitV4Options,
-  computeCommitV4Hash,
-  createCommitV4,
-  createCommitV4Atomic,
-  deleteCommitV4,
-  findCommitsV4ByBranch,
-  findCommitsV4ByProject,
-  findCommitV4ByHash,
-  findCommitV4History,
-  getCommitsV4ByHashes,
-  getCommitV4Parents,
-  type ListCommitsV4Options,
-  MainBranchLinearityError,
-  ParentHashIntegrityError,
-  ParentNotFoundErrorV4,
-  updateCommitV4Position,
-  validateMainBranchLinearity,
-  verifyMerkleRoots,
-} from './commits-v4';
 // Comparisons (saved A/B comparison snapshots)
 export {
   type CreateComparisonInput,

@@ -94,12 +94,10 @@ describe('Extract Routes', () => {
         .mockImplementation(async (_role: string, fn: (provider: unknown) => Promise<unknown>) => {
           const mockProvider = {
             id: 'test-provider',
-            generate: vi
-              .fn()
-              .mockResolvedValue({
-                text: mockLlmResponse,
-                usage: { inputTokens: 10, outputTokens: 5 },
-              }),
+            generate: vi.fn().mockResolvedValue({
+              text: mockLlmResponse,
+              usage: { inputTokens: 10, outputTokens: 5 },
+            }),
             resolveConflict: vi.fn(),
           };
           return fn(mockProvider);

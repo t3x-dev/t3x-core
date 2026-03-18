@@ -6,7 +6,7 @@
 
 import type { AnyDB } from '@t3x-dev/storage';
 import {
-  createCommitV4,
+  createCommit,
   createLeaf,
   createMergeDraft,
   insertProject,
@@ -52,7 +52,7 @@ describe('GET /v1/merge/drafts/:id/checks', () => {
     testProjectId = project.projectId;
   });
 
-  // Helper: create a test commit
+  // Helper: create a test commit (converts sentences to V5 frames)
   const createTestCommit = async (
     sentences: Array<{
       id: string;
@@ -65,18 +65,19 @@ describe('GET /v1/merge/drafts/:id/checks', () => {
       };
     }>
   ) => {
-    return createCommitV4(
-      mockDB,
-      {
-        parents: [],
-        author: { type: 'human', name: 'Test User' },
-        sentences,
-        project_id: testProjectId,
-        message: 'Test commit',
-        branch: 'main',
-      },
-      { strictParents: false }
-    );
+    const frames = sentences.map((s) => ({
+      id: s.id,
+      type: 'legacy_sentence' as const,
+      slots: { text: s.text },
+    }));
+    return createCommit(mockDB, {
+      parents: [],
+      author: { type: 'human' as const, name: 'Test User' },
+      content: { frames, relations: [] },
+      project_id: testProjectId,
+      message: 'Test commit',
+      branch: 'main',
+    });
   };
 
   // Helper: create a merge draft with prepared data

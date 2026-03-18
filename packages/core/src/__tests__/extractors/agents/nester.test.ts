@@ -1,8 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { nesterAgent } from '../../../extractors/agents/nesterAgent';
-import { StubLLMProvider } from '../../stubs';
-import { createFrameWithSlots, createRelation, createSemanticContent, resetFrameIds } from '../../factories';
 import type { PipelineContext } from '../../../extractors/meaningPipeline';
+import {
+  createFrameWithSlots,
+  createRelation,
+  createSemanticContent,
+  resetFrameIds,
+} from '../../factories';
+import { StubLLMProvider } from '../../stubs';
 
 function makeCtx(
   frames: ReturnType<typeof createFrameWithSlots>[],
@@ -94,10 +99,7 @@ describe('nesterAgent', () => {
 
     const ctx = makeCtx(
       [parent, child1, child2, filler],
-      [
-        createRelation('f_c1', 'f_p', 'elaborates'),
-        createRelation('f_c2', 'f_p', 'elaborates'),
-      ]
+      [createRelation('f_c1', 'f_p', 'elaborates'), createRelation('f_c2', 'f_p', 'elaborates')]
     );
 
     const result = await nesterAgent.run(ctx, provider);
@@ -118,10 +120,7 @@ describe('nesterAgent', () => {
     // Cycle: f_2 → f_1, f_1 → f_2 (via different relation)
     const ctx = makeCtx(
       [f1, f2, f3],
-      [
-        createRelation('f_2', 'f_1', 'elaborates'),
-        createRelation('f_1', 'f_2', 'conditions'),
-      ]
+      [createRelation('f_2', 'f_1', 'elaborates'), createRelation('f_1', 'f_2', 'conditions')]
     );
 
     // Should not throw or infinite loop
@@ -136,10 +135,7 @@ describe('nesterAgent', () => {
     const f3 = createFrameWithSlots('c', { z: 3 }, 'f_3');
 
     // Relations with non-nesting type
-    const ctx = makeCtx(
-      [f1, f2, f3],
-      [{ from: 'f_1', to: 'f_2', type: 'supports' } as any]
-    );
+    const ctx = makeCtx([f1, f2, f3], [{ from: 'f_1', to: 'f_2', type: 'supports' } as any]);
 
     const result = await nesterAgent.run(ctx, provider);
     // 'supports' is not in NESTING_RELATIONS, so no nesting happens

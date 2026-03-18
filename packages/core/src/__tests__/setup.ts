@@ -5,15 +5,6 @@
  * Existing tests that import from './setup' continue to work.
  */
 
-// Stubs
-export {
-  ExactMatchEmbeddingProvider,
-  StubEmbeddingProvider,
-  StubLLMProvider,
-  StubNLPProvider,
-  WordOverlapEmbeddingProvider,
-} from './stubs';
-
 // Factories
 export {
   createContentWithDuplicates,
@@ -25,6 +16,14 @@ export {
   createTypicalContent,
   resetFrameIds,
 } from './factories';
+// Stubs
+export {
+  ExactMatchEmbeddingProvider,
+  StubEmbeddingProvider,
+  StubLLMProvider,
+  StubNLPProvider,
+  WordOverlapEmbeddingProvider,
+} from './stubs';
 
 // Legacy test data (kept for existing tests)
 export const testSegments = {

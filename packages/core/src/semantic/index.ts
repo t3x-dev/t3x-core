@@ -16,9 +16,9 @@ export { frameDiff } from './diff';
 // Frame-to-Text
 export {
   type FrameTextSegment,
-  frameToText,
   framesToNumberedText,
   framesToTextSegments,
+  frameToText,
 } from './frameToText';
 // Gate (Gate 2 — Semantic)
 export {
