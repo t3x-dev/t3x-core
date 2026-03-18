@@ -2,10 +2,10 @@
  * Projects Routes with OpenAPI
  */
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
+import { getModelInfo } from '@t3x-dev/core';
 import {
-  backfillMerkleRoots,
   branches,
-  commitsV4,
+  commitsV5,
   conversations,
   deleteProject,
   findProjects,
@@ -15,9 +15,7 @@ import {
   putBusinessRules,
   updateProject,
   verifyHashChain,
-  verifyMerkleRoots,
 } from '@t3x-dev/storage';
-import { getModelInfo } from '@t3x-dev/core';
 import { eq, sql } from 'drizzle-orm';
 import { getDB } from '../lib/db';
 import { assertProjectAccess, getUserId } from '../lib/project-access';
@@ -89,8 +87,8 @@ projectRoutes.openapi(listProjectsRoute, async (c) => {
         .then((rows) => rows[0]),
       db
         .select({ count: sql<number>`count(*)::int` })
-        .from(commitsV4)
-        .where(eq(commitsV4.projectId, p.projectId))
+        .from(commitsV5)
+        .where(eq(commitsV5.projectId, p.projectId))
         .then((rows) => rows[0]),
       db
         .select({ count: sql<number>`count(*)::int` })
@@ -271,12 +269,12 @@ projectRoutes.openapi(getProjectRoute, async (c) => {
       );
     }
 
-    // Use COUNT(*) query for v4 commits — same pattern as list endpoint
-    const [v4CommitCountRow] = await db
+    // Count V5 commits for this project
+    const [commitCountRow] = await db
       .select({ count: sql<number>`count(*)::int` })
-      .from(commitsV4)
-      .where(eq(commitsV4.projectId, id));
-    const v4CommitsCount = Number(v4CommitCountRow?.count ?? 0);
+      .from(commitsV5)
+      .where(eq(commitsV5.projectId, id));
+    const commitsCount = Number(commitCountRow?.count ?? 0);
 
     const apiProject = {
       project_id: project.projectId,
@@ -286,7 +284,7 @@ projectRoutes.openapi(getProjectRoute, async (c) => {
       provider_config: project.providerConfig ? JSON.parse(project.providerConfig) : null,
       conversations_count: project.stats.conversationsCount,
       turns_count: project.stats.turnsCount,
-      commits_count: v4CommitsCount || project.stats.commitsCount,
+      commits_count: commitsCount || project.stats.commitsCount,
       branches_count: project.stats.branchesCount,
       drafts_count: project.stats.draftsCount,
     };
@@ -555,153 +553,6 @@ projectRoutes.openapi(verifyProjectRoute, async (c) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return c.json({ success: false as const, error: { code: 'VERIFY_FAILED', message } }, 500);
-  }
-});
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Quick Merkle Verification
-// ═══════════════════════════════════════════════════════════════════════════
-
-const QuickVerifyResultSchema = z.object({
-  valid: z.boolean(),
-  checked: z.number(),
-  mismatches: z.array(z.string()),
-  missing_roots: z.array(z.string()),
-  verified_at: z.string(),
-});
-
-const quickVerifyRoute = createRoute({
-  method: 'get',
-  path: '/v1/projects/{id}/verify/quick',
-  tags: ['Projects'],
-  summary: 'Quick Merkle root verification for recent commits',
-  request: {
-    params: IdParamSchema,
-  },
-  responses: {
-    200: {
-      description: 'Quick verification result',
-      content: {
-        'application/json': {
-          schema: SuccessResponseSchema(QuickVerifyResultSchema),
-        },
-      },
-    },
-    404: {
-      description: 'Project not found',
-      content: {
-        'application/json': {
-          schema: ErrorResponseSchema,
-        },
-      },
-    },
-    500: {
-      description: 'Server error',
-      content: {
-        'application/json': {
-          schema: ErrorResponseSchema,
-        },
-      },
-    },
-  },
-});
-
-projectRoutes.openapi(quickVerifyRoute, async (c) => {
-  const { id } = c.req.valid('param');
-
-  try {
-    const db = await getDB();
-
-    // Access control check
-    const accessResult = await assertProjectAccess(c, db, id);
-    if (accessResult instanceof Response) return accessResult;
-
-    const result = await verifyMerkleRoots(db, id);
-
-    return c.json(
-      {
-        success: true as const,
-        data: { ...result, verified_at: new Date().toISOString() },
-      },
-      200
-    );
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error';
-    return c.json(
-      { success: false as const, error: { code: 'QUICK_VERIFY_FAILED', message } },
-      500
-    );
-  }
-});
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Merkle Root Backfill
-// ═══════════════════════════════════════════════════════════════════════════
-
-const BackfillResultSchema = z.object({
-  updated: z.number(),
-  remaining: z.boolean(),
-  verified_at: z.string(),
-});
-
-const backfillMerkleRoute = createRoute({
-  method: 'post',
-  path: '/v1/projects/{id}/backfill-merkle',
-  tags: ['Projects'],
-  summary: 'Backfill merkle roots for commits without one',
-  request: {
-    params: IdParamSchema,
-  },
-  responses: {
-    200: {
-      description: 'Backfill result',
-      content: {
-        'application/json': {
-          schema: SuccessResponseSchema(BackfillResultSchema),
-        },
-      },
-    },
-    404: {
-      description: 'Project not found',
-      content: {
-        'application/json': {
-          schema: ErrorResponseSchema,
-        },
-      },
-    },
-    500: {
-      description: 'Server error',
-      content: {
-        'application/json': {
-          schema: ErrorResponseSchema,
-        },
-      },
-    },
-  },
-});
-
-projectRoutes.openapi(backfillMerkleRoute, async (c) => {
-  const { id } = c.req.valid('param');
-
-  try {
-    const db = await getDB();
-
-    // Access control check
-    const accessResult = await assertProjectAccess(c, db, id);
-    if (accessResult instanceof Response) return accessResult;
-
-    const result = await backfillMerkleRoots(db, id);
-
-    return c.json(
-      {
-        success: true as const,
-        data: { ...result, verified_at: new Date().toISOString() },
-      },
-      200
-    );
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error';
-    return c.json({ success: false as const, error: { code: 'BACKFILL_FAILED', message } }, 500);
   }
 });
 

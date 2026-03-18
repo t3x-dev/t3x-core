@@ -6,49 +6,12 @@
  * Priority (Phase 1.5):
  * 1. Authenticated user (userId in context) → verified author from DB
  * 2. Client headers (X-User-Name / X-User-Email) → only when auth disabled
- * 3. Fallback → local author (OS username)
+ * 3. Fallback → default anonymous author
  */
 
-import {
-  type CommitAuthor,
-  type CommitAuthorV4,
-  getLocalAuthor,
-  getWebAuthor,
-} from '@t3x-dev/core';
+import type { CommitAuthorV4 } from '@t3x-dev/core';
 import type { Context } from 'hono';
 import { getDB } from './db';
-
-/**
- * Get V3 CommitAuthor from request context.
- *
- * When authenticated (userId in context): uses verified user info, ignores client headers.
- * When not authenticated (AUTH_DISABLED=true): falls back to client headers or OS username.
- */
-export async function getAuthorFromContext(c: Context): Promise<CommitAuthor> {
-  const userId = c.get('userId') as string | undefined;
-
-  if (userId) {
-    // Authenticated: use verified identity from DB
-    const { findUserById } = await import('@t3x-dev/storage');
-    const db = await getDB();
-    const user = await findUserById(db, userId);
-    return {
-      name: user?.name || 'Anonymous',
-      identity: `user:${userId}`,
-      verification: 'verified',
-    };
-  }
-
-  // Not authenticated: fall back to client headers or local author
-  const userName = c.req.header('X-User-Name');
-  const userEmail = c.req.header('X-User-Email');
-
-  if (userName && userEmail) {
-    return getWebAuthor({ name: userName, email: userEmail });
-  }
-
-  return getLocalAuthor();
-}
 
 /**
  * Get V4 CommitAuthor from request context.

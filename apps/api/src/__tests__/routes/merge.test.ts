@@ -4,8 +4,8 @@
  * Tests for POST /v1/merge/prepare and POST /v1/merge/execute
  */
 
-import { createCommitV4, insertProject } from '@t3x-dev/storage';
 import type { AnyDB } from '@t3x-dev/storage';
+import { createCommit, insertProject } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from '../setup';
@@ -47,25 +47,66 @@ describe('Merge Routes', () => {
     testProjectId = project.projectId;
   });
 
-  // Helper to create test commits (V4 format)
+  // Helper to create test commits (V5 format — frames)
   const createTestCommit = async (sentences: Array<{ id: string; text: string }>) => {
-    const commit = await createCommitV4(
+    const commit = await createCommit(
       mockDB,
       {
         parents: [],
         author: { type: 'human', name: 'Test User' },
-        sentences: sentences.map((s) => ({
-          id: s.id,
-          text: s.text,
-        })),
+        content: {
+          frames: sentences.map((s) => ({
+            id: s.id,
+            type: 'legacy_sentence' as const,
+            slots: { text: s.text },
+          })),
+          relations: [],
+        },
         project_id: testProjectId,
         message: 'Test commit',
         branch: 'main',
       },
-      { strictParents: false }
     );
     return commit;
   };
+
+  /**
+   * Helper to augment prepare result with fields required by execute Zod schema.
+   * The prepare route returns raw MergeCandidate (no constraints), but the execute
+   * route's Zod schema (CandidateSchema, SimilarPairSchema) requires them.
+   */
+  function augmentPreparedForExecute(prepared: ApiResponse): ApiResponse {
+    return {
+      ...prepared,
+      similarPairs: prepared.similarPairs.map((p: ApiResponse) => ({
+        ...p,
+        source: { ...p.source, source: p.source.source ?? { turn_hash: 'sha256:test', start_char: 0, end_char: 0 } },
+        target: { ...p.target, source: p.target.source ?? { turn_hash: 'sha256:test', start_char: 0, end_char: 0 } },
+        sourceConstraints: p.sourceConstraints ?? [],
+        targetConstraints: p.targetConstraints ?? [],
+      })),
+      onlyInSource: prepared.onlyInSource.map((c: ApiResponse) => ({
+        ...c,
+        sentence: {
+          ...c.sentence,
+          source: c.sentence?.source ?? { turn_hash: 'sha256:test', start_char: 0, end_char: 0 },
+        },
+        constraints: c.constraints ?? [],
+      })),
+      onlyInTarget: prepared.onlyInTarget.map((c: ApiResponse) => ({
+        ...c,
+        sentence: {
+          ...c.sentence,
+          source: c.sentence?.source ?? { turn_hash: 'sha256:test', start_char: 0, end_char: 0 },
+        },
+        constraints: c.constraints ?? [],
+      })),
+      identical: prepared.identical.map((s: ApiResponse) => ({
+        ...s,
+        source: s.source ?? { turn_hash: 'sha256:test', start_char: 0, end_char: 0 },
+      })),
+    };
+  }
 
   // ============================================================================
   // POST /v1/merge/prepare Tests
@@ -119,7 +160,8 @@ describe('Merge Routes', () => {
       expect(res.status).toBe(200);
       const json: ApiResponse = await res.json();
       expect(json.data.identical).toHaveLength(1);
-      expect(json.data.identical[0].text).toBe('Same sentence');
+      // V5: framesToTextSegments wraps text as "[legacy_sentence] text: ..."
+      expect(json.data.identical[0].text).toContain('Same sentence');
     });
 
     it('returns similar pairs for similar sentences', async () => {
@@ -202,7 +244,7 @@ describe('Merge Routes', () => {
       });
 
       const prepareJson: ApiResponse = await prepareRes.json();
-      const prepared = prepareJson.data;
+      let prepared = prepareJson.data;
 
       // Resolve all similarPairs (if any)
       if (prepared.similarPairs.length > 0) {
@@ -211,20 +253,22 @@ describe('Merge Routes', () => {
         }
       }
 
-      // Execute merge - V4 API requires project_id
+      // Augment prepared data with fields required by execute Zod schema
+      prepared = augmentPreparedForExecute(prepared);
+
+      // Execute merge
       const res = await app.request('/v1/merge/execute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           source_hash: sourceCommit.hash,
           target_hash: targetCommit.hash,
-          project_id: testProjectId,
           prepared,
           message: 'Merge test',
         }),
       });
 
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(201);
       const json: ApiResponse = await res.json();
       expect(json.success).toBe(true);
       expect(json.data.hash).toBeDefined();
@@ -238,15 +282,18 @@ describe('Merge Routes', () => {
 
       const targetCommit = await createTestCommit([{ id: 't1', text: 'Budget is $5000' }]);
 
-      // V4: No sourceConstraints, targetConstraints
+      // Build prepared data matching execute Zod schema
+      const dummySource = { turn_hash: 'sha256:test', start_char: 0, end_char: 0 };
       const prepared = {
         identical: [],
         similarPairs: [
           {
-            source: { id: 's1', text: 'Budget is $3000' },
-            target: { id: 't1', text: 'Budget is $5000' },
+            source: { id: 's1', text: 'Budget is $3000', source: dummySource },
+            target: { id: 't1', text: 'Budget is $5000', source: dummySource },
             wordDiff: [],
-            resolution: undefined, // Not resolved!
+            sourceConstraints: [],
+            targetConstraints: [],
+            // resolution intentionally omitted — not resolved
           },
         ],
         onlyInSource: [],
@@ -259,7 +306,6 @@ describe('Merge Routes', () => {
         body: JSON.stringify({
           source_hash: sourceCommit.hash,
           target_hash: targetCommit.hash,
-          project_id: testProjectId,
           prepared,
           message: 'Merge',
         }),
@@ -276,12 +322,14 @@ describe('Merge Routes', () => {
 
       const targetCommit = await createTestCommit([{ id: 't1', text: 'Test' }]);
 
-      // V4: DiffableSentence only needs id + text
+      // Build prepared data matching execute Zod schema
+      const dummySource = { turn_hash: 'sha256:test', start_char: 0, end_char: 0 };
       const prepared = {
         identical: [
           {
             id: 's1',
-            text: 'Test',
+            text: '[legacy_sentence] text: Test',
+            source: dummySource,
           },
         ],
         similarPairs: [],
@@ -295,14 +343,13 @@ describe('Merge Routes', () => {
         body: JSON.stringify({
           source_hash: sourceCommit.hash,
           target_hash: targetCommit.hash,
-          project_id: testProjectId,
           prepared,
           message: 'Merge',
           branch: 'main',
         }),
       });
 
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(201);
       const json: ApiResponse = await res.json();
       expect(json.success).toBe(true);
       expect(json.data.branch).toBe('main');

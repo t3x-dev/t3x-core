@@ -60,7 +60,13 @@ export async function getConversation(
 
 export async function updateConversation(
   conversationId: string,
-  updates: { title?: string; position_x?: number; position_y?: number; provider?: string | null; model?: string | null }
+  updates: {
+    title?: string;
+    position_x?: number;
+    position_y?: number;
+    provider?: string | null;
+    model?: string | null;
+  }
 ): Promise<Conversation> {
   const res = await fetchWithTimeout(
     `${API_V1}/conversations/${encodeURIComponent(conversationId)}`,

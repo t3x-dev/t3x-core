@@ -1,6 +1,6 @@
-import { Hono } from 'hono';
-import { MODEL_CATALOG, getModelsByProvider } from '@t3x-dev/core';
 import type { ProviderName } from '@t3x-dev/core';
+import { getModelsByProvider, MODEL_CATALOG } from '@t3x-dev/core';
+import { Hono } from 'hono';
 
 const PROVIDER_LABELS: Record<ProviderName, string> = {
   anthropic: 'Anthropic',

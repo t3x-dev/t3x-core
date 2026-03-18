@@ -227,9 +227,9 @@ export function ChatSidebar() {
   } = useChatStore();
 
   const [projects, setProjects] = useState<Project[]>([]);
-  const [projectConversations, setProjectConversations] = useState<
-    Record<string, Conversation[]>
-  >({});
+  const [projectConversations, setProjectConversations] = useState<Record<string, Conversation[]>>(
+    {}
+  );
 
   // Fetch projects on mount
   useEffect(() => {

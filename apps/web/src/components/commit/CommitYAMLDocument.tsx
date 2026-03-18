@@ -9,8 +9,8 @@
  * at the top level.
  */
 
-import { useCallback, useMemo } from 'react';
 import type { Frame, InlineFrame, SemanticContent, SlotValue } from '@t3x-dev/core';
+import { useCallback, useMemo } from 'react';
 
 // ============================================================================
 // Props
@@ -145,7 +145,7 @@ function RefValue({ ref: refId }: { ref: string }) {
 }
 
 function ArrayDash() {
-  return <span style={{ color: '#89ddff' }}>-{' '}</span>;
+  return <span style={{ color: '#89ddff' }}>- </span>;
 }
 
 // ============================================================================
@@ -159,7 +159,7 @@ function renderSlotValueLines(
   slotKey: string,
   lines: YAMLLine[],
   lineKeyPrefix: string,
-  isArrayItem?: boolean,
+  isArrayItem?: boolean
 ): void {
   if (typeof value === 'string') {
     lines.push({
@@ -236,7 +236,11 @@ function renderSlotValueLines(
   lines.push({
     key: lineKeyPrefix,
     indent,
-    elements: [<span key="v" style={{ color: '#89ddff' }}>{JSON.stringify(value)}</span>],
+    elements: [
+      <span key="v" style={{ color: '#89ddff' }}>
+        {JSON.stringify(value)}
+      </span>,
+    ],
     frameId,
     slotKey,
   });
@@ -249,10 +253,13 @@ function renderSlotEntry(
   frameId: string,
   slotKey: string,
   lines: YAMLLine[],
-  lineKeyPrefix: string,
+  lineKeyPrefix: string
 ): void {
   // For arrays and inline frames, the key goes on its own line
-  if (Array.isArray(value) || (typeof value === 'object' && value !== null && 'type' in value && 'slots' in value)) {
+  if (
+    Array.isArray(value) ||
+    (typeof value === 'object' && value !== null && 'type' in value && 'slots' in value)
+  ) {
     lines.push({
       key: `${lineKeyPrefix}-key`,
       indent,
@@ -324,7 +331,7 @@ function treeToLines(nodes: FrameTreeNode[], baseIndent: number, lines: YAMLLine
         frame.id,
         slotKey,
         lines,
-        `slot-${frame.id}-${slotKey}`,
+        `slot-${frame.id}-${slotKey}`
       );
     }
 
@@ -354,7 +361,7 @@ export function CommitYAMLDocument({ content, className, onSlotClick }: CommitYA
         onSlotClick(frameId, slotKey);
       }
     },
-    [onSlotClick],
+    [onSlotClick]
   );
 
   if (content.frames.length === 0) {

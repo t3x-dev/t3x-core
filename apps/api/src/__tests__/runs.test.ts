@@ -2,8 +2,8 @@
  * Runs Route Tests
  */
 
-import { deleteRun, getRun, insertProject, insertRun, listRuns } from '@t3x-dev/storage';
 import type { AnyDB } from '@t3x-dev/storage';
+import { deleteRun, getRun, insertProject, insertRun, listRuns } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { generateId, setupTestDB, testData } from './setup';
@@ -292,7 +292,7 @@ describe('Runs Routes', () => {
       });
       expect(res.status).toBe(400);
       const data: ApiResponse = await res.json();
-      expect((data.error as Record<string, unknown>).code).toBe('VALIDATION_FAILED');
+      expect((data.error as Record<string, unknown>).code).toBe('INVALID_REQUEST');
     });
 
     it('updates updatedAt on each PATCH', async () => {

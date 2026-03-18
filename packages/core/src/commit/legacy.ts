@@ -70,7 +70,7 @@ export function upgradeLegacyCommit(raw: LegacyCommit): Commit {
         id: sr.id,
         title: sr.title,
       }))
-    : raw.sources ?? null;
+    : (raw.sources ?? null);
 
   return {
     hash: raw.hash,

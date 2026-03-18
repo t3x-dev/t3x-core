@@ -11,7 +11,7 @@ import type { Assertion, ConstraintV4 as Constraint, CreateLeafInput, Leaf } fro
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
-import { createCommitV4 } from '../queries/commits-v4';
+import { createCommit } from '../queries/commits';
 import {
   createLeaf,
   deleteLeaf,
@@ -44,10 +44,18 @@ describe('Leaves Storage', () => {
     testProjectId = project.projectId;
 
     // Create a test commit (leaves require a commit hash)
-    const commit = await createCommitV4(db, {
+    const commit = await createCommit(db, {
       parents: [],
       author: { type: 'human', name: 'Test Author' },
-      sentences: [{ id: 's_1', text: 'Test sentence' }],
+      content: {
+        frames: [{ id: 's_1', text: 'Test sentence' }].map((s) => ({
+          id: s.id,
+          type: 'legacy_sentence' as const,
+          slots: { text: s.text },
+          confidence: s.confidence,
+        })),
+        relations: [],
+      },
       project_id: testProjectId,
     });
     testCommitHash = commit.hash;
@@ -205,10 +213,18 @@ describe('Leaves Storage', () => {
   describe('findLeavesByCommit', () => {
     it('returns leaves for a specific commit', async () => {
       // Create a new commit to avoid pollution from other tests
-      const commit = await createCommitV4(db, {
+      const commit = await createCommit(db, {
         parents: [],
         author: { type: 'human', name: 'Commit Author' },
-        sentences: [{ id: 's_commit', text: 'Commit sentence' }],
+        content: {
+          frames: [{ id: 's_commit', text: 'Commit sentence' }].map((s) => ({
+            id: s.id,
+            type: 'legacy_sentence' as const,
+            slots: { text: s.text },
+            confidence: s.confidence,
+          })),
+          relations: [],
+        },
         project_id: testProjectId,
       });
 
@@ -231,10 +247,18 @@ describe('Leaves Storage', () => {
     });
 
     it('orders by createdAt descending', async () => {
-      const commit = await createCommitV4(db, {
+      const commit = await createCommit(db, {
         parents: [],
         author: { type: 'human', name: 'Order Author' },
-        sentences: [{ id: 's_order', text: 'Order sentence' }],
+        content: {
+          frames: [{ id: 's_order', text: 'Order sentence' }].map((s) => ({
+            id: s.id,
+            type: 'legacy_sentence' as const,
+            slots: { text: s.text },
+            confidence: s.confidence,
+          })),
+          relations: [],
+        },
         project_id: testProjectId,
       });
 
@@ -261,10 +285,18 @@ describe('Leaves Storage', () => {
     });
 
     it('respects limit option', async () => {
-      const commit = await createCommitV4(db, {
+      const commit = await createCommit(db, {
         parents: [],
         author: { type: 'human', name: 'Limit Author' },
-        sentences: [{ id: 's_limit', text: 'Limit sentence' }],
+        content: {
+          frames: [{ id: 's_limit', text: 'Limit sentence' }].map((s) => ({
+            id: s.id,
+            type: 'legacy_sentence' as const,
+            slots: { text: s.text },
+            confidence: s.confidence,
+          })),
+          relations: [],
+        },
         project_id: testProjectId,
       });
 
@@ -288,10 +320,18 @@ describe('Leaves Storage', () => {
     });
 
     it('filters by type', async () => {
-      const commit = await createCommitV4(db, {
+      const commit = await createCommit(db, {
         parents: [],
         author: { type: 'human', name: 'Type Filter Author' },
-        sentences: [{ id: 's_type_filter', text: 'Type filter sentence' }],
+        content: {
+          frames: [{ id: 's_type_filter', text: 'Type filter sentence' }].map((s) => ({
+            id: s.id,
+            type: 'legacy_sentence' as const,
+            slots: { text: s.text },
+            confidence: s.confidence,
+          })),
+          relations: [],
+        },
         project_id: testProjectId,
       });
 
@@ -329,10 +369,18 @@ describe('Leaves Storage', () => {
     it('returns leaves for a specific project', async () => {
       const project = await insertProject(db, testData.project({ name: 'Project Leaves Test' }));
 
-      const commit = await createCommitV4(db, {
+      const commit = await createCommit(db, {
         parents: [],
         author: { type: 'human', name: 'Project Author' },
-        sentences: [{ id: 's_proj', text: 'Project sentence' }],
+        content: {
+          frames: [{ id: 's_proj', text: 'Project sentence' }].map((s) => ({
+            id: s.id,
+            type: 'legacy_sentence' as const,
+            slots: { text: s.text },
+            confidence: s.confidence,
+          })),
+          relations: [],
+        },
         project_id: project.projectId,
       });
 
@@ -357,10 +405,18 @@ describe('Leaves Storage', () => {
     it('respects limit and offset options', async () => {
       const project = await insertProject(db, testData.project({ name: 'Pagination Leaves Test' }));
 
-      const commit = await createCommitV4(db, {
+      const commit = await createCommit(db, {
         parents: [],
         author: { type: 'human', name: 'Page Author' },
-        sentences: [{ id: 's_page', text: 'Page sentence' }],
+        content: {
+          frames: [{ id: 's_page', text: 'Page sentence' }].map((s) => ({
+            id: s.id,
+            type: 'legacy_sentence' as const,
+            slots: { text: s.text },
+            confidence: s.confidence,
+          })),
+          relations: [],
+        },
         project_id: project.projectId,
       });
 
@@ -387,10 +443,18 @@ describe('Leaves Storage', () => {
         testData.project({ name: 'Type Filter Project Test' })
       );
 
-      const commit = await createCommitV4(db, {
+      const commit = await createCommit(db, {
         parents: [],
         author: { type: 'human', name: 'Type Filter Project Author' },
-        sentences: [{ id: 's_type_proj', text: 'Type filter project sentence' }],
+        content: {
+          frames: [{ id: 's_type_proj', text: 'Type filter project sentence' }].map((s) => ({
+            id: s.id,
+            type: 'legacy_sentence' as const,
+            slots: { text: s.text },
+            confidence: s.confidence,
+          })),
+          relations: [],
+        },
         project_id: project.projectId,
       });
 
@@ -623,10 +687,18 @@ describe('Leaves Storage', () => {
 
   describe('getLeavesByIds', () => {
     it('returns multiple leaves in single query', async () => {
-      const commit = await createCommitV4(db, {
+      const commit = await createCommit(db, {
         parents: [],
         author: { type: 'human', name: 'Batch Author' },
-        sentences: [{ id: 's_batch', text: 'Batch sentence' }],
+        content: {
+          frames: [{ id: 's_batch', text: 'Batch sentence' }].map((s) => ({
+            id: s.id,
+            type: 'legacy_sentence' as const,
+            slots: { text: s.text },
+            confidence: s.confidence,
+          })),
+          relations: [],
+        },
         project_id: testProjectId,
       });
 
@@ -673,10 +745,18 @@ describe('Leaves Storage', () => {
     });
 
     it('preserves input order', async () => {
-      const commit = await createCommitV4(db, {
+      const commit = await createCommit(db, {
         parents: [],
         author: { type: 'human', name: 'Order Author' },
-        sentences: [{ id: 's_order2', text: 'Order sentence' }],
+        content: {
+          frames: [{ id: 's_order2', text: 'Order sentence' }].map((s) => ({
+            id: s.id,
+            type: 'legacy_sentence' as const,
+            slots: { text: s.text },
+            confidence: s.confidence,
+          })),
+          relations: [],
+        },
         project_id: testProjectId,
       });
 
@@ -777,10 +857,18 @@ describe('Leaves Storage', () => {
       const project = await insertProject(db, testData.project({ name: 'Cursor Pagination Test' }));
       cursorProjectId = project.projectId;
 
-      const commit = await createCommitV4(db, {
+      const commit = await createCommit(db, {
         parents: [],
         author: { type: 'human', name: 'Cursor Author' },
-        sentences: [{ id: 's_cursor', text: 'Cursor sentence' }],
+        content: {
+          frames: [{ id: 's_cursor', text: 'Cursor sentence' }].map((s) => ({
+            id: s.id,
+            type: 'legacy_sentence' as const,
+            slots: { text: s.text },
+            confidence: s.confidence,
+          })),
+          relations: [],
+        },
         project_id: cursorProjectId,
       });
 
@@ -876,10 +964,18 @@ describe('Leaves Storage', () => {
       );
       cursorProjId = project.projectId;
 
-      const commit = await createCommitV4(db, {
+      const commit = await createCommit(db, {
         parents: [],
         author: { type: 'human', name: 'Cursor Commit Author' },
-        sentences: [{ id: 's_cc', text: 'Cursor commit sentence' }],
+        content: {
+          frames: [{ id: 's_cc', text: 'Cursor commit sentence' }].map((s) => ({
+            id: s.id,
+            type: 'legacy_sentence' as const,
+            slots: { text: s.text },
+            confidence: s.confidence,
+          })),
+          relations: [],
+        },
         project_id: cursorProjId,
       });
       cursorCommitHash = commit.hash;

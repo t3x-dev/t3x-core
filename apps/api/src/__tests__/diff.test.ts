@@ -15,8 +15,7 @@ vi.mock('../lib/db', () => ({
 
 vi.mock('@t3x-dev/storage', () => ({
   findTurnByHash: vi.fn(),
-  findCommitV4ByHash: vi.fn(),
-  getCommitV3: vi.fn(),
+  getCommitUnified: vi.fn(),
   findSegmentEmbeddingsByTurn: vi.fn().mockResolvedValue([]),
 }));
 
@@ -25,6 +24,13 @@ vi.mock('@t3x-dev/core', () => ({
   createGoogleAIEmbeddingProvider: vi.fn(),
   createCachedEmbeddingProvider: vi.fn(),
   diffCommits: vi.fn(),
+  frameDiff: vi.fn(),
+  framesToTextSegments: vi.fn((content: { frames: Array<{ id: string; type: string; slots: Record<string, string> }> }) =>
+    (content?.frames ?? []).map((f: { id: string; slots: Record<string, string> }) => ({
+      id: f.id,
+      text: f.slots?.text ?? '',
+    }))
+  ),
   calculateDiffStats: vi.fn(() => ({ same: 0, modified: 0, added: 0, removed: 0 })),
   DiffType: { SAME: 'same', MODIFIED: 'modified', ADDED: 'added', REMOVED: 'removed' },
   EmbeddingProviderError: class extends Error {
@@ -74,15 +80,21 @@ describe('Diff Routes', () => {
     });
 
     it('returns success for V4 commit hash mode', async () => {
-      const { findCommitV4ByHash } = await import('@t3x-dev/storage');
+      const { getCommitUnified } = await import('@t3x-dev/storage');
       const { diffCommits } = await import('@t3x-dev/core');
 
-      (findCommitV4ByHash as ReturnType<typeof vi.fn>)
+      (getCommitUnified as ReturnType<typeof vi.fn>)
         .mockResolvedValueOnce({
-          content: { sentences: [{ id: 's1', text: 'Hello world' }] },
+          content: {
+            frames: [{ id: 'f_001', type: 'legacy_sentence', slots: { text: 'Hello world' } }],
+            relations: [],
+          },
         })
         .mockResolvedValueOnce({
-          content: { sentences: [{ id: 's2', text: 'Hello there' }] },
+          content: {
+            frames: [{ id: 'f_002', type: 'legacy_sentence', slots: { text: 'Hello there' } }],
+            relations: [],
+          },
         });
 
       (diffCommits as ReturnType<typeof vi.fn>).mockReturnValue({
@@ -181,13 +193,12 @@ describe('Diff Routes', () => {
       }
     });
 
-    it('returns 404 for non-existent V3 commit', async () => {
-      const { findCommitV4ByHash, getCommitV3 } = await import('@t3x-dev/storage');
+    it('returns 404 for non-existent commit', async () => {
+      const { getCommitUnified } = await import('@t3x-dev/storage');
 
-      (findCommitV4ByHash as ReturnType<typeof vi.fn>)
+      (getCommitUnified as ReturnType<typeof vi.fn>)
         .mockResolvedValueOnce(null)
         .mockResolvedValueOnce(null);
-      (getCommitV3 as ReturnType<typeof vi.fn>).mockResolvedValueOnce(null);
 
       const res = await app.request('/v1/diff/two-way', {
         method: 'POST',

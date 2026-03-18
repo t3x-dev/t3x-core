@@ -8,10 +8,10 @@
  * from the active sentence card to the right context panel.
  */
 
+import type { Commit } from '@t3x-dev/core';
 import { ChevronDown, GitCommit, Leaf as LeafIcon, MessageSquare } from 'lucide-react';
 import Link from 'next/link';
 import { type MutableRefObject, type RefObject, useEffect, useState } from 'react';
-import type { Commit } from '@t3x-dev/core';
 import type { Leaf } from '@/lib/api';
 import { relativeTime, shortHash } from './CommitDetailHelpers';
 
@@ -129,8 +129,7 @@ export function ProvenanceGraph({
   onToggleCollapse,
 }: ProvenanceGraphProps) {
   const isConnected = activeSentenceId !== null;
-  const sourceConversations =
-    commit.sources?.filter((ref) => ref.type === 'conversation') ?? [];
+  const sourceConversations = commit.sources?.filter((ref) => ref.type === 'conversation') ?? [];
   const sourceLeaves = commit.sources?.filter((ref) => ref.type === 'leaf') ?? [];
   const totalSources = sourceConversations.length + sourceLeaves.length;
 

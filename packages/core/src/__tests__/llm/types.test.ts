@@ -1,11 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import type {
-  ProviderName,
   Capability,
-  ModelInfo,
-  LLMPrompt,
   LLMGenerateOptionsV2,
+  LLMPrompt,
   LLMResult,
+  ModelInfo,
+  ProviderName,
   StructuredResult,
 } from '../../llm/types';
 

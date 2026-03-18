@@ -21,13 +21,12 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { useMergeNavigation } from '@/hooks/useMergeNavigation';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useTerminology } from '@/hooks/useTerminology';
-import { getCommitV4 } from '@/lib/api';
 import { createCommit } from '@/lib/api/commits';
 import { getCommitAsFrames } from '@/lib/api/commitUnified';
 import { computeMergeSummary } from '@/lib/mergeSummary';
 import { fullScreenEnter, reducedMotion } from '@/lib/motion';
-import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
 import { useCanvasStore } from '@/store/canvasStore';
+import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
 import { buildMergeNavItems } from './buildMergeNavItems';
 import { FrameConflictCard, type FrameResolution } from './FrameConflictCard';
 import { FrameMergeSection } from './FrameMergeSection';
@@ -94,8 +93,7 @@ function buildMergedContent(
             }
           } else {
             // Non-conflicting: take whichever exists (or source by preference)
-            mergedSlots[key] =
-              conflict.sourceFrame.slots[key] ?? conflict.targetFrame.slots[key];
+            mergedSlots[key] = conflict.sourceFrame.slots[key] ?? conflict.targetFrame.slots[key];
           }
         }
         frames.push({
@@ -233,11 +231,7 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
             getCommitAsFrames(baseParent)
               .then((baseCommit) => {
                 if (cancelled) return;
-                const result = prepareFrameMerge(
-                  baseCommit.content,
-                  sourceContent,
-                  targetContent
-                );
+                const result = prepareFrameMerge(baseCommit.content, sourceContent, targetContent);
                 setFrameMergeResult(result);
                 setFrameLoading(false);
                 setDiffMode('frame');
@@ -267,7 +261,9 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
       })
       .catch((err) => {
         if (cancelled) return;
-        setFrameError(err instanceof Error ? err.message : 'Failed to load commits for frame merge');
+        setFrameError(
+          err instanceof Error ? err.message : 'Failed to load commits for frame merge'
+        );
         setFrameLoading(false);
         // Fall back to sentence mode
         setDiffMode('sentence');
@@ -352,7 +348,15 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [saveDraft, canCommit, handleCancel, showReviewDialog, isFrameMode, allFrameConflictsResolved, message]);
+  }, [
+    saveDraft,
+    canCommit,
+    handleCancel,
+    showReviewDialog,
+    isFrameMode,
+    allFrameConflictsResolved,
+    message,
+  ]);
 
   const handleOpenReview = useCallback(() => {
     setShowReviewDialog(true);
@@ -457,7 +461,9 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
       (c) => !frameResolutions.has(c.frameId)
     ).length;
 
-    const containerVariants = prefersReducedMotion ? reducedMotion.fullScreenEnter : fullScreenEnter;
+    const containerVariants = prefersReducedMotion
+      ? reducedMotion.fullScreenEnter
+      : fullScreenEnter;
 
     return (
       <motion.div
@@ -512,10 +518,7 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
                 </h3>
                 <div className="space-y-3">
                   {frameMergeResult.conflicts.map((conflict) => (
-                    <div
-                      key={conflict.frameId}
-                      id={`merge-frame-${conflict.frameId}`}
-                    >
+                    <div key={conflict.frameId} id={`merge-frame-${conflict.frameId}`}>
                       <FrameConflictCard
                         conflict={conflict}
                         resolution={frameResolutions.get(conflict.frameId) ?? null}
@@ -722,7 +725,9 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
                 <div className="flex items-center gap-1.5">
                   <span
                     className={`h-1.5 w-1.5 rounded-full ${
-                      message.trim() ? 'bg-[var(--diff-added-accent)]' : 'bg-[var(--diff-removed-accent)]'
+                      message.trim()
+                        ? 'bg-[var(--diff-added-accent)]'
+                        : 'bg-[var(--diff-removed-accent)]'
                     }`}
                   />
                   <span className="text-[var(--text-secondary)]">

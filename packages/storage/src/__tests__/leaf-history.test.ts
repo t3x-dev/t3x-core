@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
-import { createCommitV4 } from '../queries/commits-v4';
+import { createCommit } from '../queries/commits';
 import {
   countHistoryByLeafId,
   createLeafHistory,
@@ -28,10 +28,18 @@ describe('Leaf History Storage', () => {
     const project = await insertProject(db, testData.project({ name: 'Leaf History Test' }));
     testProjectId = project.projectId;
 
-    const commit = await createCommitV4(db, {
+    const commit = await createCommit(db, {
       parents: [],
       author: { type: 'human', name: 'Test' },
-      sentences: [{ id: 's_1', text: 'Test sentence' }],
+      content: {
+        frames: [{ id: 's_1', text: 'Test sentence' }].map((s) => ({
+          id: s.id,
+          type: 'legacy_sentence' as const,
+          slots: { text: s.text },
+          confidence: s.confidence,
+        })),
+        relations: [],
+      },
       project_id: testProjectId,
     });
 
@@ -124,10 +132,18 @@ describe('Leaf History Storage', () => {
     let multiLeafId: string;
 
     beforeAll(async () => {
-      const commit = await createCommitV4(db, {
+      const commit = await createCommit(db, {
         parents: [],
         author: { type: 'human', name: 'Test' },
-        sentences: [{ id: 's_multi', text: 'Multi history' }],
+        content: {
+          frames: [{ id: 's_multi', text: 'Multi history' }].map((s) => ({
+            id: s.id,
+            type: 'legacy_sentence' as const,
+            slots: { text: s.text },
+            confidence: s.confidence,
+          })),
+          relations: [],
+        },
         project_id: testProjectId,
       });
       const leaf = await createLeaf(db, {
@@ -182,10 +198,18 @@ describe('Leaf History Storage', () => {
   // =========================================================================
   describe('countHistoryByLeafId', () => {
     it('returns correct count', async () => {
-      const commit = await createCommitV4(db, {
+      const commit = await createCommit(db, {
         parents: [],
         author: { type: 'human', name: 'Test' },
-        sentences: [{ id: 's_count', text: 'Count test' }],
+        content: {
+          frames: [{ id: 's_count', text: 'Count test' }].map((s) => ({
+            id: s.id,
+            type: 'legacy_sentence' as const,
+            slots: { text: s.text },
+            confidence: s.confidence,
+          })),
+          relations: [],
+        },
         project_id: testProjectId,
       });
       const leaf = await createLeaf(db, {
@@ -247,10 +271,18 @@ describe('Leaf History Storage', () => {
   // =========================================================================
   describe('deleteHistoryByLeafId', () => {
     it('deletes all history for a leaf', async () => {
-      const commit = await createCommitV4(db, {
+      const commit = await createCommit(db, {
         parents: [],
         author: { type: 'human', name: 'Test' },
-        sentences: [{ id: 's_delall', text: 'Delete all' }],
+        content: {
+          frames: [{ id: 's_delall', text: 'Delete all' }].map((s) => ({
+            id: s.id,
+            type: 'legacy_sentence' as const,
+            slots: { text: s.text },
+            confidence: s.confidence,
+          })),
+          relations: [],
+        },
         project_id: testProjectId,
       });
       const leaf = await createLeaf(db, {
@@ -338,10 +370,18 @@ describe('Leaf History Storage', () => {
 
     it('findHistoryByLeafIdOrderedByAttempt returns in ascending attempt order', async () => {
       // Create a fresh leaf for this test
-      const commit = await createCommitV4(db, {
+      const commit = await createCommit(db, {
         parents: [],
         author: { type: 'human', name: 'Test' },
-        sentences: [{ id: 's_attempt_order', text: 'Attempt ordering test' }],
+        content: {
+          frames: [{ id: 's_attempt_order', text: 'Attempt ordering test' }].map((s) => ({
+            id: s.id,
+            type: 'legacy_sentence' as const,
+            slots: { text: s.text },
+            confidence: s.confidence,
+          })),
+          relations: [],
+        },
         project_id: testProjectId,
       });
       const leaf = await createLeaf(db, {

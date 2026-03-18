@@ -30,9 +30,9 @@ export function ChatModelSelector({ selectedModel, onModelChange }: ChatModelSel
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  const currentLabel = providers
-    .flatMap((p) => p.models)
-    .find((m) => m.id === selectedModel)?.label ?? selectedModel.split('-').slice(0, -1).join(' ');
+  const currentLabel =
+    providers.flatMap((p) => p.models).find((m) => m.id === selectedModel)?.label ??
+    selectedModel.split('-').slice(0, -1).join(' ');
 
   const getPopoverStyle = (): React.CSSProperties => {
     if (!buttonRef.current) return {};
@@ -73,18 +73,25 @@ export function ChatModelSelector({ selectedModel, onModelChange }: ChatModelSel
         >
           {providers.map((provider) => (
             <div key={provider.name}>
-              <div className="text-[10px] uppercase px-2 py-1" style={{ color: 'var(--text-secondary)' }}>
+              <div
+                className="text-[10px] uppercase px-2 py-1"
+                style={{ color: 'var(--text-secondary)' }}
+              >
                 {provider.label}
               </div>
               {provider.models.map((model) => (
                 <button
                   key={model.id}
                   type="button"
-                  onClick={() => { onModelChange(provider.name, model.id); setOpen(false); }}
+                  onClick={() => {
+                    onModelChange(provider.name, model.id);
+                    setOpen(false);
+                  }}
                   className="block w-full text-left text-xs px-2 py-1.5 rounded hover:bg-[var(--hover-bg)]"
                   style={{ color: model.id === selectedModel ? 'rgb(167,139,250)' : undefined }}
                 >
-                  {model.id === selectedModel ? '✓ ' : '  '}{model.label}
+                  {model.id === selectedModel ? '✓ ' : '  '}
+                  {model.label}
                 </button>
               ))}
             </div>

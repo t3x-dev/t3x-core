@@ -1,10 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import {
-  MODEL_CATALOG,
-  getAllModels,
-  getModelsByProvider,
-  getModelInfo,
-} from '../../llm/catalog';
+import { describe, expect, it } from 'vitest';
+import { getAllModels, getModelInfo, getModelsByProvider, MODEL_CATALOG } from '../../llm/catalog';
 
 describe('Model Catalog', () => {
   it('has entries for all 3 providers', () => {

@@ -10,9 +10,7 @@ describe('computeCommitHash', () => {
     author: { type: 'human', name: 'Test' },
     committed_at: '2026-03-15T00:00:00Z',
     content: {
-      frames: [
-        { id: 'f_001', type: 'trip_plan', slots: { destination: 'Tokyo', budget: 5000 } },
-      ],
+      frames: [{ id: 'f_001', type: 'trip_plan', slots: { destination: 'Tokyo', budget: 5000 } }],
       relations: [],
     },
   };
@@ -46,11 +44,14 @@ describe('computeCommitHash', () => {
     const withSources: CommitFirstClass = {
       ...baseCommit,
       content: {
-        frames: [{
-          id: 'f_001', type: 'trip_plan',
-          slots: { destination: 'Tokyo', budget: 5000 },
-          slot_sources: { destination: { turn: 'T1', start_char: 0, end_char: 5 } },
-        }],
+        frames: [
+          {
+            id: 'f_001',
+            type: 'trip_plan',
+            slots: { destination: 'Tokyo', budget: 5000 },
+            slot_sources: { destination: { turn: 'T1', start_char: 0, end_char: 5 } },
+          },
+        ],
         relations: [],
       },
     };
@@ -61,11 +62,14 @@ describe('computeCommitHash', () => {
     const withSource: CommitFirstClass = {
       ...baseCommit,
       content: {
-        frames: [{
-          id: 'f_001', type: 'trip_plan',
-          slots: { destination: 'Tokyo', budget: 5000 },
-          source: 'T1',
-        }],
+        frames: [
+          {
+            id: 'f_001',
+            type: 'trip_plan',
+            slots: { destination: 'Tokyo', budget: 5000 },
+            source: 'T1',
+          },
+        ],
         relations: [],
       },
     };
@@ -76,11 +80,14 @@ describe('computeCommitHash', () => {
     const withConfidence: CommitFirstClass = {
       ...baseCommit,
       content: {
-        frames: [{
-          id: 'f_001', type: 'trip_plan',
-          slots: { destination: 'Tokyo', budget: 5000 },
-          confidence: 0.9,
-        }],
+        frames: [
+          {
+            id: 'f_001',
+            type: 'trip_plan',
+            slots: { destination: 'Tokyo', budget: 5000 },
+            confidence: 0.9,
+          },
+        ],
         relations: [],
       },
     };

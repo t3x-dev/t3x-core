@@ -56,9 +56,7 @@ function extractSlotQuotes(rawJson: unknown): SlotQuotesMap {
   for (let i = 0; i < changes.length; i++) {
     const change = changes[i];
     // For delta format: changes[i].frame.slot_quotes or changes[i].slot_quotes
-    const quotes =
-      (change.frame as Record<string, unknown>)?.slot_quotes ??
-      change.slot_quotes;
+    const quotes = (change.frame as Record<string, unknown>)?.slot_quotes ?? change.slot_quotes;
     if (quotes && typeof quotes === 'object') {
       map.set(i, quotes as Record<string, string>);
       // Clean from the object so Zod doesn't reject unknown keys

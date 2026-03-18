@@ -16,7 +16,13 @@ interface ChatHeaderProps {
   onModelChange?: (provider: string, model: string) => void;
 }
 
-export function ChatHeader({ conversationTitle, projectName, conversationId, selectedModel, onModelChange }: ChatHeaderProps) {
+export function ChatHeader({
+  conversationTitle,
+  projectName,
+  conversationId,
+  selectedModel,
+  onModelChange,
+}: ChatHeaderProps) {
   const router = useRouter();
   const { activeProjectId, activeBranch } = useChatStore();
 

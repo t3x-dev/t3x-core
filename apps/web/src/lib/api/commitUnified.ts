@@ -1,18 +1,16 @@
 /**
- * Unified commit fetch — V5 frames with V4 fallback
+ * Unified commit fetch — V5 frames
  */
 
 import type { Commit } from '@t3x-dev/core';
 import { upgradeLegacyCommit } from '@t3x-dev/core';
-
+import { getCommitV5 } from './commits';
 import { API_V1, fetchWithTimeout } from './core';
-import { getCommitV4, getCommitV4History } from './commits';
 
 /**
- * Fetch a commit as V5 frames. Tries V5 endpoint first, falls back to V4 + upgrade.
+ * Fetch a commit as V5 frames.
  */
 export async function getCommitAsFrames(hash: string): Promise<Commit> {
-  // Try V5 first
   try {
     const res = await fetchWithTimeout(`${API_V1}/commits/${encodeURIComponent(hash)}`);
     if (res.ok) {
@@ -22,23 +20,20 @@ export async function getCommitAsFrames(hash: string): Promise<Commit> {
       }
     }
   } catch {
-    // V5 not available, fall through to V4
+    // Fall through
   }
 
-  // Fall back to V4 + upgrade
-  const v4 = await getCommitV4(hash);
+  // Fallback: fetch via V5 API and attempt upgrade
+  const v5 = await getCommitV5(hash);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return upgradeLegacyCommit(v4 as any);
+  return upgradeLegacyCommit(v5 as any);
 }
 
 /**
  * Fetch commit history as V5 frames.
+ * Note: V4 history endpoint is removed; this returns empty for now.
  */
-export async function getCommitHistoryAsFrames(
-  hash: string,
-  limit = 10
-): Promise<Commit[]> {
-  const v4History = await getCommitV4History(hash, limit);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return v4History.map((c) => upgradeLegacyCommit(c as any));
+export async function getCommitHistoryAsFrames(_hash: string, _limit = 10): Promise<Commit[]> {
+  // V4 history endpoint removed. Callers should migrate to V5 APIs.
+  return [];
 }

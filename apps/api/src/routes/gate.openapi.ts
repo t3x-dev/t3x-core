@@ -252,7 +252,11 @@ gateRoutes.openapi(gateCheckRoute, async (c) => {
     });
 
     // Record usage (fire-and-forget)
-    if (trackedUsage && (trackedUsage.inputTokens || trackedUsage.outputTokens) && resolvedProjectId) {
+    if (
+      trackedUsage &&
+      (trackedUsage.inputTokens || trackedUsage.outputTokens) &&
+      resolvedProjectId
+    ) {
       recordUsageFireAndForget(db, {
         user_id: getUserId(c) ?? undefined,
         project_id: resolvedProjectId,

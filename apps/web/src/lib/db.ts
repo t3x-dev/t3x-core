@@ -24,9 +24,15 @@ async function isPortReachable(port: number): Promise<boolean> {
   return new Promise((resolve) => {
     const socket = new net.Socket();
     socket.setTimeout(500);
-    socket.once('connect', () => { socket.destroy(); resolve(true); });
+    socket.once('connect', () => {
+      socket.destroy();
+      resolve(true);
+    });
     socket.once('error', () => resolve(false));
-    socket.once('timeout', () => { socket.destroy(); resolve(false); });
+    socket.once('timeout', () => {
+      socket.destroy();
+      resolve(false);
+    });
     socket.connect(port, '127.0.0.1');
   });
 }

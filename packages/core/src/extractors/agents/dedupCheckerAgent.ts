@@ -98,7 +98,10 @@ export const dedupCheckerAgent: MeaningAgent = {
             // Merge into frame A, mark frame B for removal
             frames[i] = {
               ...frameA,
-              slots: parsed.merged_slots as Record<string, import('../../semantic/types').SlotValue>,
+              slots: parsed.merged_slots as Record<
+                string,
+                import('../../semantic/types').SlotValue
+              >,
               confidence: Math.min(frameA.confidence ?? 1, frameB.confidence ?? 1),
             };
             toRemove.add(j);

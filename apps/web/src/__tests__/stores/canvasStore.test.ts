@@ -21,7 +21,6 @@ vi.mock('@/lib/api', () => ({
   listTurns: vi.fn(),
   createConversation: vi.fn(),
   updateConversation: vi.fn(),
-  listCommitsV3: vi.fn(),
   listConversations: vi.fn(),
   listBranches: vi.fn(),
   getProject: vi.fn(),

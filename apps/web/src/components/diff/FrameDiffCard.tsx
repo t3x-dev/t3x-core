@@ -10,8 +10,8 @@
  * - identical: dimmed card, collapsed by default
  */
 
-import { useState } from 'react';
 import type { Frame, SlotDiff, SlotValue } from '@t3x-dev/core';
+import { useState } from 'react';
 
 // ============================================================================
 // Props
@@ -34,10 +34,18 @@ function renderSlotValue(value: SlotValue, strikethrough = false): React.ReactNo
   const wrapClass = strikethrough ? 'line-through opacity-60' : '';
 
   if (typeof value === 'string') {
-    return <span className={wrapClass} style={{ color: '#9ece6a' }}>&quot;{value}&quot;</span>;
+    return (
+      <span className={wrapClass} style={{ color: '#9ece6a' }}>
+        &quot;{value}&quot;
+      </span>
+    );
   }
   if (typeof value === 'number') {
-    return <span className={wrapClass} style={{ color: '#ff9e64' }}>{value}</span>;
+    return (
+      <span className={wrapClass} style={{ color: '#ff9e64' }}>
+        {value}
+      </span>
+    );
   }
   if (Array.isArray(value)) {
     return (
@@ -55,15 +63,24 @@ function renderSlotValue(value: SlotValue, strikethrough = false): React.ReactNo
     if ('ref' in value && typeof value.ref === 'string') {
       return (
         <span className={wrapClass} style={{ color: '#bb9af7' }}>
-          {'{ '}ref: {value.ref}{' }'}
+          {'{ '}ref: {value.ref}
+          {' }'}
         </span>
       );
     }
     if ('type' in value && 'slots' in value) {
-      return <span className={wrapClass} style={{ color: '#89ddff' }}>{JSON.stringify(value)}</span>;
+      return (
+        <span className={wrapClass} style={{ color: '#89ddff' }}>
+          {JSON.stringify(value)}
+        </span>
+      );
     }
   }
-  return <span className={wrapClass} style={{ color: '#89ddff' }}>{JSON.stringify(value)}</span>;
+  return (
+    <span className={wrapClass} style={{ color: '#89ddff' }}>
+      {JSON.stringify(value)}
+    </span>
+  );
 }
 
 // ============================================================================
@@ -97,7 +114,11 @@ function renderWordDiff(
             </span>
           );
         }
-        return <span key={i} style={{ color: '#9ece6a' }}>{chunk.text}</span>;
+        return (
+          <span key={i} style={{ color: '#9ece6a' }}>
+            {chunk.text}
+          </span>
+        );
       })}
     </>
   );
@@ -171,7 +192,9 @@ function SlotRow({ slotKey, value, diff, cardType }: SlotRowProps) {
             <span className="line-through opacity-60">
               {diff?.oldValue !== undefined ? renderSlotValue(diff.oldValue) : null}
             </span>
-            <span style={{ color: '#89ddff' }} className="mx-1">→</span>
+            <span style={{ color: '#89ddff' }} className="mx-1">
+              →
+            </span>
             {renderSlotValue(value)}
           </>
         ) : (
@@ -190,7 +213,10 @@ function SlotRow({ slotKey, value, diff, cardType }: SlotRowProps) {
         {slotType === 'removed' && (
           <span
             className="ml-1 rounded-sm px-1 py-px text-[9px] font-semibold uppercase tracking-wide"
-            style={{ color: 'var(--diff-removed-accent)', backgroundColor: 'var(--diff-removed-bg)' }}
+            style={{
+              color: 'var(--diff-removed-accent)',
+              backgroundColor: 'var(--diff-removed-bg)',
+            }}
           >
             removed
           </span>
@@ -220,9 +246,7 @@ function GutterBar({ type }: { type: 'modified' | 'added' | 'removed' | 'identic
     identical: 'bg-[var(--text-tertiary)]/15',
   };
   return (
-    <div
-      className={`absolute left-0 top-0 bottom-0 w-[3px] rounded-l-lg ${colorMap[type]}`}
-    />
+    <div className={`absolute left-0 top-0 bottom-0 w-[3px] rounded-l-lg ${colorMap[type]}`} />
   );
 }
 
@@ -245,9 +269,12 @@ function DotIndicator({ type }: { type: 'modified' | 'added' | 'removed' | 'iden
 // ============================================================================
 
 const badgeStyles = {
-  modified: 'border-[var(--diff-modified-accent)]/40 text-[var(--diff-modified-accent)] bg-[var(--diff-modified-bg)]',
-  added: 'border-[var(--diff-added-accent)]/40 text-[var(--diff-added-accent)] bg-[var(--diff-added-bg)]',
-  removed: 'border-[var(--diff-removed-accent)]/40 text-[var(--diff-removed-accent)] bg-[var(--diff-removed-bg)]',
+  modified:
+    'border-[var(--diff-modified-accent)]/40 text-[var(--diff-modified-accent)] bg-[var(--diff-modified-bg)]',
+  added:
+    'border-[var(--diff-added-accent)]/40 text-[var(--diff-added-accent)] bg-[var(--diff-added-bg)]',
+  removed:
+    'border-[var(--diff-removed-accent)]/40 text-[var(--diff-removed-accent)] bg-[var(--diff-removed-bg)]',
   identical: 'border-[var(--stroke-divider)] text-[var(--text-tertiary)] bg-transparent',
 };
 

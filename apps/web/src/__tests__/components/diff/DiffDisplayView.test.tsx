@@ -257,7 +257,7 @@ describe('DiffDisplayView - Diff Algorithm', () => {
 });
 
 describe('DiffDisplayView - Component Types', () => {
-  test('CommitV3Sentence has required fields for diff', () => {
+  test('SentenceWithSourceInfo has required fields for diff', () => {
     const sentence = {
       id: 's1',
       text: 'Test sentence',

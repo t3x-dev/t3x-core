@@ -65,13 +65,7 @@ export function ChatInput({
       )}
     >
       {/* Hidden file input */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        className="hidden"
-        tabIndex={-1}
-        aria-hidden="true"
-      />
+      <input ref={fileInputRef} type="file" className="hidden" tabIndex={-1} aria-hidden="true" />
 
       {/* Paperclip button */}
       <Button

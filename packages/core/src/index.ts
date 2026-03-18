@@ -21,28 +21,19 @@ export {
   evaluateAutoCommit,
   mergeAutopilotConfig,
 } from './autopilot';
-// Commit Builders
-export {
-  buildConstraints,
-  buildSentencesFromSegments,
-  findBestSourceSentenceId,
-  getDockerAuthor,
-  getLocalAuthor,
-  getWebAuthor,
-} from './commit';
 // Commit (frame-based)
 export {
-  computeCommitHash,
-  COMMIT_SCHEMA,
-  upgradeLegacyCommit,
   type Author,
+  COMMIT_SCHEMA,
   type Commit,
   type CommitFirstClass,
+  computeCommitHash,
   type Provenance,
   type Source,
+  upgradeLegacyCommit,
 } from './commit';
 // Common utilities
-export { canonText, computeCommitV3Hash, hashText, sha256 } from './common';
+export { canonText, hashText, sha256 } from './common';
 // Conflict Detection (#9)
 export {
   type ConflictCandidate,
@@ -122,6 +113,7 @@ export {
   computeAdaptiveConfig,
   computeAdaptiveThresholds,
   createLLMExtractor,
+  createMeaningPipeline,
   createRelationExtractor,
   type ExtractedSentence,
   type ExtractionItem,
@@ -132,23 +124,21 @@ export {
   type FrameExtractionResult,
   type FrameExtractionTurn,
   FrameExtractor,
-  MeaningOrganizer,
-  type MeaningOrganizerResult,
-  MeaningPipeline,
-  createMeaningPipeline,
-  type MeaningAgent,
-  type PipelineContext,
-  type PipelineMode,
-  type PipelineOptions,
-  type PipelineResult,
-  type SlotQuotesMap,
   type FuzzyLocateResult,
   fuzzyLocate,
   type LLMExtractionOptions,
   type LLMExtractionResult,
   LLMExtractor,
+  type MeaningAgent,
+  MeaningPipeline,
   type OverlapResult,
   type OverlapStatus,
+  type PipelineContext,
+  type PipelineMode,
+  type PipelineOptions,
+  type PipelineResult,
+  type QualityMetrics,
+  AgentRegistry,
   parseExtractionResponse,
   parseFrameDelta,
   parseIncrementalResponse,
@@ -160,6 +150,7 @@ export {
   resolveSourceRef,
   routeProposal,
   type Segment,
+  type SlotQuotesMap,
   spToSentence,
   type TurnInput,
   type ValidationResult as ExtractionValidationResult,
@@ -255,6 +246,9 @@ export {
 export {
   type Capability,
   createProviderForModel,
+  getAllModels,
+  getModelInfo,
+  getModelsByProvider,
   type LLMGenerateOptions,
   type LLMGenerateOptionsV2,
   type LLMPrompt,
@@ -262,9 +256,6 @@ export {
   LLMProviderError,
   type LLMResult,
   MODEL_CATALOG,
-  getAllModels,
-  getModelInfo,
-  getModelsByProvider,
   type ModelInfo,
   normalizeFrameOutput,
   type ProviderName,
@@ -377,6 +368,7 @@ export type {
   Frame,
   FrameChange,
   FrameDiff,
+  FrameMergeDecision,
   FrameMergeResult,
   FrameRelationType,
   GateDimension,
@@ -414,12 +406,17 @@ export {
   FRAME_RELATION_TYPES,
   FrameRelationTypeSchema,
   FrameSchema,
+  type FrameTextSegment,
   frameDiff,
+  framesToNumberedText,
+  framesToTextSegments,
+  frameToText,
   GateRunner,
   type GateRunnerOptions,
   parseCoverageResponse,
   parseGatesConfig,
   parseSemanticGateResponse,
+  executeFrameMerge,
   prepareFrameMerge,
   RelationSchema,
   SemanticContentSchema,
@@ -430,17 +427,6 @@ export {
 // Storage (types + pure utils only)
 // For CRUD operations, use @t3x-dev/storage package
 export * from './storage';
-// CommitV3 types
-export type {
-  CommitAuthor,
-  CommitContent,
-  CommitV3,
-  Constraint,
-  ExcludeConstraint,
-  RequireConstraint,
-  Sentence,
-  SentenceSource,
-} from './types';
 // ═══════════════════════════════════════════════════════════════════════════
 // V4 Architecture Types
 // @see docs/specification/semantic-layer-architecture.md
@@ -466,6 +452,7 @@ export {
   type CommitV4Content,
   // Constraint (now belongs to Leaf)
   type Constraint as ConstraintV4,
+  type ConstraintSourceFrame,
   type ContextSource,
   // Conversation Context
   type ConversationContext,

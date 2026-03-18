@@ -11,8 +11,8 @@ import {
   type LLMGenerateResult,
   type LLMPrompt,
   type LLMProvider,
-  type LLMResult,
   LLMProviderError,
+  type LLMResult,
   type StructuredResult,
 } from '../../llm/types';
 import { zodToJsonSchema } from '../../llm/zodToJsonSchema';

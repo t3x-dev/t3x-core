@@ -12,7 +12,7 @@ interface IntentResult {
  */
 export async function getIntentSummary(
   frames: Frame[],
-  signal?: AbortSignal,
+  signal?: AbortSignal
 ): Promise<IntentResult> {
   const frameSummaries = frames.map((f) => ({
     id: f.id,

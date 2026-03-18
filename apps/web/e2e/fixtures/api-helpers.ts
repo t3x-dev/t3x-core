@@ -53,7 +53,7 @@ export async function createTestTurn(
 }
 
 /**
- * Create a V4 commit
+ * Create a V5 commit (frame-based)
  */
 export async function createTestCommitV4(
   request: APIRequestContext,
@@ -61,10 +61,15 @@ export async function createTestCommitV4(
   sentences: Array<{ id: string; text: string }>,
   options?: { branch?: string; message?: string; parents?: string[] }
 ): Promise<string> {
-  const response = await request.post(`${API_BASE}/commits-v4`, {
+  const frames = sentences.map((s, i) => ({
+    id: `f_${String(i + 1).padStart(3, '0')}`,
+    type: 'legacy_sentence',
+    slots: { text: s.text },
+  }));
+  const response = await request.post(`${API_BASE}/commits`, {
     data: {
       project_id: projectId,
-      sentences,
+      content: { frames, relations: [] },
       author: { type: 'human', name: 'E2E Tester' },
       branch: options?.branch || 'main',
       message: options?.message || 'E2E test commit',

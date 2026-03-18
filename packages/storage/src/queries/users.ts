@@ -13,7 +13,7 @@ import { randomUUID } from 'node:crypto';
 import type { Account, User } from '@t3x-dev/core';
 import { and, eq } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
-import { type AccountRecord, type UserRecord, accounts, users } from '../schema-v4';
+import { type AccountRecord, accounts, type UserRecord, users } from '../schema-v4';
 
 // ============================================================
 // Constants
@@ -74,7 +74,12 @@ function generateAccountId(): string {
  */
 export async function createUser(
   db: AnyDB,
-  input: { email?: string | null; email_verified?: boolean; name?: string | null; avatar_url?: string | null }
+  input: {
+    email?: string | null;
+    email_verified?: boolean;
+    name?: string | null;
+    avatar_url?: string | null;
+  }
 ): Promise<User> {
   const id = generateUserId();
 
@@ -179,7 +184,9 @@ export async function findOrCreateUser(db: AnyDB, input: CreateUserInput): Promi
     const user = await findUserById(db, existingAccount.user_id);
     if (!user) {
       // Orphan account — shouldn't happen, but handle gracefully
-      throw new Error(`Account ${existingAccount.id} references missing user ${existingAccount.user_id}`);
+      throw new Error(
+        `Account ${existingAccount.id} references missing user ${existingAccount.user_id}`
+      );
     }
 
     // Update profile fields if they changed
@@ -278,11 +285,7 @@ export async function updateUser(
 
   if (Object.keys(updates).length === 0) return findUserById(db, userId);
 
-  const result = await db
-    .update(users)
-    .set(updates)
-    .where(eq(users.id, userId))
-    .returning();
+  const result = await db.update(users).set(updates).where(eq(users.id, userId)).returning();
 
   return result[0] ? rowToUser(result[0]) : null;
 }

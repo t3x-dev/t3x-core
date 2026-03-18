@@ -73,7 +73,8 @@ const meRoute = createRoute({
   path: '/v1/auth/me',
   tags: ['Auth'],
   summary: 'Get current user',
-  description: 'Return the profile of the currently authenticated user, including linked OAuth accounts.',
+  description:
+    'Return the profile of the currently authenticated user, including linked OAuth accounts.',
   responses: {
     200: {
       description: 'Current user info',

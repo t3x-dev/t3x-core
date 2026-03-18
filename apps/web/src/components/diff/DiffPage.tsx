@@ -10,18 +10,17 @@
  */
 
 import type { Commit, FrameDiff } from '@t3x-dev/core';
-import { ArrowLeft, GitBranch } from 'lucide-react';
-import { Loader2 } from 'lucide-react';
+import { ArrowLeft, GitBranch, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { relativeTime, shortHash } from '@/components/commit/CommitDetailHelpers';
-import { Breadcrumb } from '@/components/shared/Breadcrumb';
 import { FrameGraphView } from '@/components/frame-graph';
-import type { CommitMeta, FrameDiffResponse } from '@/lib/api/frameDiff';
+import { Breadcrumb } from '@/components/shared/Breadcrumb';
 import { getCommitAsFrames } from '@/lib/api/commitUnified';
-import { getFrameDiff } from '@/lib/api/frameDiff';
 import { API_V1, fetchWithTimeout, handleResponse } from '@/lib/api/core';
+import type { CommitMeta, FrameDiffResponse } from '@/lib/api/frameDiff';
+import { getFrameDiff } from '@/lib/api/frameDiff';
 import { PAGE_ANIMATION_STYLES } from '@/lib/pageAnimations';
 import { useProjectStore } from '@/store/projectStore';
 import { FrameDiffCard } from './FrameDiffCard';
@@ -209,10 +208,7 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
     setLoading(true);
     setError(null);
 
-    Promise.all([
-      getFrameDiff(baseHash, targetHash),
-      getCommitAsFrames(targetHash),
-    ])
+    Promise.all([getFrameDiff(baseHash, targetHash), getCommitAsFrames(targetHash)])
       .then(([diffResp, commit]) => {
         if (cancelled) return;
         setDiffResponse(diffResp);
@@ -447,9 +443,7 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
                 )}
                 {mergeLoading ? 'Creating merge...' : 'Start Merge'}
               </button>
-              {mergeError && (
-                <p className="text-[10px] text-red-400 mt-1">{mergeError}</p>
-              )}
+              {mergeError && <p className="text-[10px] text-red-400 mt-1">{mergeError}</p>}
             </>
           </div>
         </aside>

@@ -12,16 +12,22 @@
  * GET    /v1/conversations/:id/context-export - Export context as JSON/Markdown file
  */
 
-import { buildConversationContext, getModelInfo, type ConversationData } from '@t3x-dev/core';
+import {
+  buildConversationContext,
+  type CommitV4,
+  type ConversationData,
+  framesToTextSegments,
+  getModelInfo,
+} from '@t3x-dev/core';
 import {
   deleteConversation,
-  findCommitV4ByHash,
   findConversationById,
   findConversationsByProject,
   findCurrentBranch,
   findPinsByProject,
   findProjectById,
   findTurnsByConversation,
+  getCommitUnified,
   getConversationContext,
   getConversationTurnCount,
   getLeavesByIds,
@@ -379,11 +385,25 @@ conversationRoutes.get('/v1/conversations/:id/memory', async (c) => {
     const projectPins = await findPinsByProject(db, conversation.projectId);
 
     // 4. Get current commit from branch HEAD (reuse existing branch system)
-    let currentCommit;
+    let currentCommit: CommitV4 | undefined;
     const currentBranch = await findCurrentBranch(db, conversation.projectId);
     if (currentBranch?.headCommitHash) {
-      // Try V4 commit first, fallback gracefully if not found
-      currentCommit = (await findCommitV4ByHash(db, currentBranch.headCommitHash)) ?? undefined;
+      const unified = await getCommitUnified(db, currentBranch.headCommitHash);
+      if (unified) {
+        // Convert V5 Commit to V4-compatible shape for buildConversationContext
+        const segments = framesToTextSegments(unified.content);
+        currentCommit = {
+          ...unified,
+          schema: 't3x/commit/v4' as const,
+          content: {
+            sentences: segments.map((seg) => ({
+              id: seg.id,
+              text: seg.text,
+              confidence: 1,
+            })),
+          },
+        } as CommitV4;
+      }
     }
 
     // 5. Load pinned conversations data
@@ -462,10 +482,25 @@ conversationRoutes.get('/v1/conversations/:id/context-export', async (c) => {
     const projectPins = await findPinsByProject(db, conversation.projectId);
 
     // 4. Get current commit from branch HEAD
-    let currentCommit;
+    let currentCommit: CommitV4 | undefined;
     const currentBranch = await findCurrentBranch(db, conversation.projectId);
     if (currentBranch?.headCommitHash) {
-      currentCommit = (await findCommitV4ByHash(db, currentBranch.headCommitHash)) ?? undefined;
+      const unified = await getCommitUnified(db, currentBranch.headCommitHash);
+      if (unified) {
+        // Convert V5 Commit to V4-compatible shape for buildConversationContext
+        const segments = framesToTextSegments(unified.content);
+        currentCommit = {
+          ...unified,
+          schema: 't3x/commit/v4' as const,
+          content: {
+            sentences: segments.map((seg) => ({
+              id: seg.id,
+              text: seg.text,
+              confidence: 1,
+            })),
+          },
+        } as CommitV4;
+      }
     }
 
     // 5. Load pinned conversations data

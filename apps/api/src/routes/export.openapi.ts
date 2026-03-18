@@ -7,11 +7,10 @@
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { buildDraft } from '@t3x-dev/core';
-import { listDeltaLogByConversation } from '@t3x-dev/storage';
 import {
   findConversationsByProject,
   findTurnsByProject,
-  listCommitsV3,
+  listDeltaLogByConversation,
 } from '@t3x-dev/storage';
 import * as crypto from 'crypto';
 import { getDB } from '../lib/db';
@@ -211,39 +210,7 @@ exportRoutes.openapi(exportCfpackRoute, async (c) => {
       }
     }
 
-    const commitRows = await listCommitsV3(db, { projectId, limit: 10000 });
-
     const commits: CfpackCommit[] = [];
-    for (const row of commitRows) {
-      const sentences = row.content.sentences || [];
-      const firstSentence = sentences[0];
-      const lastSentence = sentences[sentences.length - 1];
-      const turnWindow: TurnWindow = {
-        start_turn_hash: firstSentence?.source?.turn_hash || '',
-        end_turn_hash: lastSentence?.source?.turn_hash || firstSentence?.source?.turn_hash || '',
-      };
-
-      const facetSnapshotData: FacetSnapshot[] = sentences.map(
-        (s: { text: string; id: string; source?: { turn_hash: string } }, i: number) => ({
-          facet: `sentence_${i + 1}`,
-          text: s.text,
-          keywords: [],
-          evidence: s.source?.turn_hash
-            ? [{ turn_hash: s.source.turn_hash, segment_id: s.id, similarity_score: 1.0 }]
-            : [],
-        })
-      );
-
-      commits.push({
-        commit_hash: row.hash,
-        parent_hashes: row.parents,
-        branch: row.branch || 'main',
-        turn_window: turnWindow,
-        facet_snapshot: facetSnapshotData,
-        pipeline_config: null,
-        created_at: row.createdAt,
-      });
-    }
 
     const aggregatedKeywords = Array.from(allKeywords.entries())
       .map(([lemma, data]) => ({ lemma, count: data.count, polarity: data.polarity }))
@@ -402,34 +369,6 @@ exportRoutes.openapi(exportLedgerRoute, async (c) => {
           content: turn.content,
           rings,
           created_at: turn.createdAt.toISOString(),
-        })
-      );
-    }
-
-    const commits = await listCommitsV3(db, { projectId, limit: 10000 });
-    for (const commit of commits) {
-      const sentences = commit.content.sentences || [];
-      const firstSource = sentences[0]?.source;
-      const lastSource = sentences[sentences.length - 1]?.source || firstSource;
-
-      lines.push(
-        JSON.stringify({
-          type: 'commit',
-          schema: 't3x/commit/v3',
-          commit_hash: commit.hash,
-          project_id: commit.projectId,
-          branch: commit.branch || 'main',
-          message: commit.message,
-          parent_hashes: commit.parents,
-          author: commit.author,
-          content: commit.content,
-          turn_window: firstSource
-            ? {
-                start_turn_hash: firstSource.turn_hash,
-                end_turn_hash: lastSource?.turn_hash || firstSource.turn_hash,
-              }
-            : null,
-          created_at: commit.createdAt,
         })
       );
     }

@@ -1,9 +1,9 @@
 'use client';
 
+import { ClipboardList, Lightbulb, Send, Target } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { ClipboardList, Lightbulb, Send, Target } from 'lucide-react';
 
 const STARTER_CARDS = [
   {
@@ -41,9 +41,7 @@ export default function ChatLandingPage() {
     <div className="flex flex-col items-center justify-center h-full">
       <div className="max-w-2xl w-full px-4">
         <h1 className="text-2xl font-bold text-center mb-2">T3X</h1>
-        <p className="text-muted-foreground text-center mb-8 text-sm">
-          Git for Meaning
-        </p>
+        <p className="text-muted-foreground text-center mb-8 text-sm">Git for Meaning</p>
 
         <div className="grid grid-cols-3 gap-3 mb-6">
           {STARTER_CARDS.map((card) => (
@@ -56,9 +54,7 @@ export default function ChatLandingPage() {
               <card.icon className="h-4 w-4 text-[var(--text-tertiary)]" />
               <div>
                 <div className="text-sm font-medium">{card.title}</div>
-                <div className="text-xs text-[var(--text-tertiary)] mt-0.5">
-                  {card.description}
-                </div>
+                <div className="text-xs text-[var(--text-tertiary)] mt-0.5">{card.description}</div>
               </div>
             </button>
           ))}

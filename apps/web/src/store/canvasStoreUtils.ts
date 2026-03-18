@@ -487,9 +487,11 @@ export function saveNodePosition(
           });
       } else {
         // Committed unit - save position to commit via API
-        api.updateCommitV4Position(nodeId, pending.position.x, pending.position.y).catch(() => {
-          // Error handled silently
-        });
+        api
+          .updateCommitV4Position(nodeId, pending.position.x, pending.position.y)
+          .catch(() => {
+            // Error handled silently
+          });
       }
     }
   }, 500);

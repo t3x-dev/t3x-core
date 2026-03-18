@@ -4,8 +4,8 @@
  * Integration tests for Pins CRUD API endpoints.
  */
 
-import { createLeaf, insertConversation, insertProject } from '@t3x-dev/storage';
 import type { AnyDB } from '@t3x-dev/storage';
+import { createLeaf, insertConversation, insertProject } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';

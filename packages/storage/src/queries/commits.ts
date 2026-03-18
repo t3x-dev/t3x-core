@@ -7,13 +7,7 @@
  * @see packages/core/src/commit/types.ts
  */
 
-import type {
-  Author,
-  Commit,
-  Provenance,
-  SemanticContent,
-  Source,
-} from '@t3x-dev/core';
+import type { Author, Commit, Provenance, SemanticContent, Source } from '@t3x-dev/core';
 import { COMMIT_SCHEMA, computeCommitHash } from '@t3x-dev/core';
 
 export { computeCommitHash } from '@t3x-dev/core';
@@ -56,10 +50,7 @@ export interface ListCommitsOptions {
  * Computes the hash from first-class fields, inserts into commits_v5,
  * and returns the full Commit object.
  */
-export async function createCommit(
-  db: AnyDB,
-  input: CreateCommitInput
-): Promise<Commit> {
+export async function createCommit(db: AnyDB, input: CreateCommitInput): Promise<Commit> {
   const parents = input.parents ?? [];
   const now = new Date().toISOString();
   const branch = input.branch ?? 'main';
@@ -98,15 +89,8 @@ export async function createCommit(
 /**
  * Get a single commit by hash.
  */
-export async function getCommit(
-  db: AnyDB,
-  hash: string
-): Promise<Commit | null> {
-  const [row] = await db
-    .select()
-    .from(commitsV5)
-    .where(eq(commitsV5.hash, hash))
-    .limit(1);
+export async function getCommit(db: AnyDB, hash: string): Promise<Commit | null> {
+  const [row] = await db.select().from(commitsV5).where(eq(commitsV5.hash, hash)).limit(1);
 
   return row ? rowToCommit(row) : null;
 }
@@ -116,10 +100,7 @@ export async function getCommit(
  *
  * Returns commits ordered by committed_at descending.
  */
-export async function listCommits(
-  db: AnyDB,
-  options: ListCommitsOptions
-): Promise<Commit[]> {
+export async function listCommits(db: AnyDB, options: ListCommitsOptions): Promise<Commit[]> {
   const { projectId, branch, limit = 100, offset = 0 } = options;
 
   const conditions = [eq(commitsV5.projectId, projectId)];
@@ -149,9 +130,7 @@ export async function getLatestCommit(
   const [row] = await db
     .select()
     .from(commitsV5)
-    .where(
-      and(eq(commitsV5.projectId, projectId), eq(commitsV5.branch, branch))
-    )
+    .where(and(eq(commitsV5.projectId, projectId), eq(commitsV5.branch, branch)))
     .orderBy(desc(commitsV5.committedAt), desc(commitsV5.hash))
     .limit(1);
 
@@ -164,16 +143,10 @@ export async function getLatestCommit(
  * Returns commits in the same order as the input hashes array.
  * Missing hashes are skipped (no nulls in result).
  */
-export async function getCommitsByHashes(
-  db: AnyDB,
-  hashes: string[]
-): Promise<Commit[]> {
+export async function getCommitsByHashes(db: AnyDB, hashes: string[]): Promise<Commit[]> {
   if (hashes.length === 0) return [];
 
-  const rows = await db
-    .select()
-    .from(commitsV5)
-    .where(inArray(commitsV5.hash, hashes));
+  const rows = await db.select().from(commitsV5).where(inArray(commitsV5.hash, hashes));
 
   const commitMap = new Map<string, Commit>();
   for (const row of rows) {
@@ -194,14 +167,8 @@ export async function getCommitsByHashes(
  *
  * @returns true if deleted, false if not found
  */
-export async function deleteCommit(
-  db: AnyDB,
-  hash: string
-): Promise<boolean> {
-  const result = await db
-    .delete(commitsV5)
-    .where(eq(commitsV5.hash, hash))
-    .returning();
+export async function deleteCommit(db: AnyDB, hash: string): Promise<boolean> {
+  const result = await db.delete(commitsV5).where(eq(commitsV5.hash, hash)).returning();
 
   return result.length > 0;
 }

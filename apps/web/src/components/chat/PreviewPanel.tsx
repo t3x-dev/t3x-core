@@ -17,10 +17,27 @@ interface PreviewPanelProps {
 // ── Type prompts ──
 
 const LEAF_TYPES: { value: LeafType; label: string; systemHint: string }[] = [
-  { value: 'tweet', label: 'Tweet', systemHint: 'Write a concise tweet (max 280 chars). Be punchy and engaging.' },
-  { value: 'email', label: 'Email', systemHint: 'Write a professional email with subject line, greeting, body, and sign-off.' },
-  { value: 'article', label: 'Article', systemHint: 'Write a well-structured article with title, introduction, body paragraphs, and conclusion.' },
-  { value: 'custom', label: 'Custom', systemHint: 'Generate content based on the user\'s instructions.' },
+  {
+    value: 'tweet',
+    label: 'Tweet',
+    systemHint: 'Write a concise tweet (max 280 chars). Be punchy and engaging.',
+  },
+  {
+    value: 'email',
+    label: 'Email',
+    systemHint: 'Write a professional email with subject line, greeting, body, and sign-off.',
+  },
+  {
+    value: 'article',
+    label: 'Article',
+    systemHint:
+      'Write a well-structured article with title, introduction, body paragraphs, and conclusion.',
+  },
+  {
+    value: 'custom',
+    label: 'Custom',
+    systemHint: "Generate content based on the user's instructions.",
+  },
 ];
 
 // ── Component ──
@@ -38,12 +55,14 @@ export function PreviewPanel({ className }: PreviewPanelProps) {
 
   // Build context string from extracted frames
   const buildContext = useCallback(() => {
-    return draft.frames.map((frame) => {
-      const slots = Object.entries(frame.slots)
-        .map(([k, v]) => `  ${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`)
-        .join('\n');
-      return `[${frame.type}]\n${slots}`;
-    }).join('\n\n');
+    return draft.frames
+      .map((frame) => {
+        const slots = Object.entries(frame.slots)
+          .map(([k, v]) => `  ${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`)
+          .join('\n');
+        return `[${frame.type}]\n${slots}`;
+      })
+      .join('\n\n');
   }, [draft.frames]);
 
   const handleGenerate = useCallback(async () => {

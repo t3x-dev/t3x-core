@@ -37,13 +37,13 @@ import { MeaningPipeline } from './meaningPipeline';
  */
 export function createMeaningPipeline(provider: LLMProvider): MeaningPipeline {
   return new MeaningPipeline(provider)
-    .register(outputRegulatorAgent)      // CODE: fix duplicates first
-    .register(dedupCheckerAgent)         // LLM: semantic dedup
-    .register(nesterAgent)               // CODE: build tree
-    .register(topicNamerAgent)           // LLM: name root topic
-    .register(topicEvolverAgent)         // LLM: evolve topic name
-    .register(slotPolisherAgent)         // LLM: clean up slots
-    .register(reviewerAgent)             // LLM: quality gate
-    .register(coverageCheckerAgent)      // LLM: check coverage
+    .register(outputRegulatorAgent) // CODE: fix duplicates first
+    .register(dedupCheckerAgent) // LLM: semantic dedup
+    .register(nesterAgent) // CODE: build tree
+    .register(topicNamerAgent) // LLM: name root topic
+    .register(topicEvolverAgent) // LLM: evolve topic name
+    .register(slotPolisherAgent) // LLM: clean up slots
+    .register(reviewerAgent) // LLM: quality gate
+    .register(coverageCheckerAgent) // LLM: check coverage
     .register(contradictionCheckerAgent); // LLM: check contradictions
 }

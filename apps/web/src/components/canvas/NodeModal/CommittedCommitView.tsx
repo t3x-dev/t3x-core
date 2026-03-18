@@ -369,9 +369,9 @@ export function CommittedCommitView({
           {/* Main Content - Tabbed Source View & Generated Output */}
           <div className="flex-1 min-w-0 overflow-y-auto p-[var(--space-page)] flex flex-col gap-[var(--space-section)]">
             {/* Commit header + tabbed source view */}
-            {(data.commitV3 || data.commitV4) &&
+            {data.commitV4 &&
               (() => {
-                const commit = (data.commitV4 || data.commitV3) as CommitDisplay;
+                const commit = data.commitV4 as CommitDisplay;
                 const branchName =
                   data.branchName || (data.branchType === 'main' ? 'main' : undefined);
                 const isV4 = isCommitV4(commit);
@@ -507,7 +507,7 @@ export function CommittedCommitView({
               })()}
 
             {/* Generated Output - LLM generated content (only show if no commit data) */}
-            {!data.commitV3 && !data.commitV4 && (
+            {!data.commitV4 && (
               <div className="p-[var(--space-group)] bg-[var(--surface-app)] rounded-lg border border-[var(--stroke-divider)] elevation-1">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="font-semibold text-sm text-[var(--text-secondary)]">
@@ -520,7 +520,7 @@ export function CommittedCommitView({
               </div>
             )}
 
-            {data.status && !data.commitV3 && !data.commitV4 && (
+            {data.status && !data.commitV4 && (
               <div className="p-[var(--space-group)] bg-[var(--surface-app)] rounded-lg border border-[var(--stroke-divider)] elevation-1">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="font-semibold text-sm text-[var(--text-secondary)]">Intent</h3>
@@ -532,7 +532,7 @@ export function CommittedCommitView({
             )}
 
             {/* Facets - Extracted semantic data (only show if no commit data) */}
-            {!data.commitV3 && !data.commitV4 && (
+            {!data.commitV4 && (
               <div className="p-[var(--space-group)] bg-[var(--surface-app)] rounded-lg border border-[var(--stroke-divider)] elevation-1">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="font-semibold text-sm text-[var(--text-secondary)]">Facets</h3>

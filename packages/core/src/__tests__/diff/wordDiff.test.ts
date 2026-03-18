@@ -6,16 +6,11 @@
 
 import { describe, expect, it } from 'vitest';
 import { diffCommits, JACCARD_THRESHOLD, jaccard, lcs, tokenize, wordDiff } from '../../diff';
-import type { Sentence } from '../../types/commit';
+import type { DiffableSentence } from '../../diff/types';
 
 // Helper to create test sentences
-function createSentence(id: string, text: string): Sentence {
-  return {
-    id,
-    text,
-    confidence: 1,
-    source: { type: 'test', id: `turn-${id}` },
-  };
+function createSentence(id: string, text: string): DiffableSentence {
+  return { id, text };
 }
 
 describe('tokenize', () => {

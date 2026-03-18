@@ -1,10 +1,10 @@
 'use client';
 
+import type { SlotValue } from '@t3x-dev/core';
 import { Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { parseDisplayYAML, toDisplayYAML } from '@/lib/liteYaml';
-import { relevanceScore, RELEVANCE_THRESHOLD, type RelevanceContext } from '@/lib/relevanceScore';
-import type { SlotValue } from '@t3x-dev/core';
+import { RELEVANCE_THRESHOLD, type RelevanceContext, relevanceScore } from '@/lib/relevanceScore';
 import { useExtractionPanelStore } from '@/store/extractionPanelStore';
 
 // ── YAML Rendering Helpers ──
@@ -41,20 +41,47 @@ function renderSlotLines(
 
   // Simple values: key: "value"
   if (typeof value === 'string' || typeof value === 'number') {
-    lines.push({ text: `${pad}${key}: ${formatValue(value)}`, frameId, slotKey, changeType, isAutoSelected, isEmpty: false });
+    lines.push({
+      text: `${pad}${key}: ${formatValue(value)}`,
+      frameId,
+      slotKey,
+      changeType,
+      isAutoSelected,
+      isEmpty: false,
+    });
     return;
   }
 
   // SlotRef: key: *f_002
   if (typeof value === 'object' && value !== null && !Array.isArray(value) && 'ref' in value) {
-    lines.push({ text: `${pad}${key}: ${formatValue(value)}`, frameId, slotKey, changeType, isAutoSelected, isEmpty: false });
+    lines.push({
+      text: `${pad}${key}: ${formatValue(value)}`,
+      frameId,
+      slotKey,
+      changeType,
+      isAutoSelected,
+      isEmpty: false,
+    });
     return;
   }
 
   // InlineFrame: nested object with type + slots
-  if (typeof value === 'object' && value !== null && !Array.isArray(value) && 'type' in value && 'slots' in value) {
+  if (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    'type' in value &&
+    'slots' in value
+  ) {
     const inlineFrame = value as { type: string; slots: Record<string, SlotValue> };
-    lines.push({ text: `${pad}${key}:`, frameId, slotKey, changeType, isAutoSelected, isEmpty: false });
+    lines.push({
+      text: `${pad}${key}:`,
+      frameId,
+      slotKey,
+      changeType,
+      isAutoSelected,
+      isEmpty: false,
+    });
     for (const [k, v] of Object.entries(inlineFrame.slots)) {
       renderSlotLines(lines, k, v, indent + 1, frameId, slotKey, changeType, isAutoSelected);
     }
@@ -69,32 +96,71 @@ function renderSlotLines(
     if (allSimple && arr.length <= 5) {
       lines.push({
         text: `${pad}${key}: [${arr.map(formatValue).join(', ')}]`,
-        frameId, slotKey, changeType, isAutoSelected, isEmpty: false,
+        frameId,
+        slotKey,
+        changeType,
+        isAutoSelected,
+        isEmpty: false,
       });
       return;
     }
 
     // Multi-line array
-    lines.push({ text: `${pad}${key}:`, frameId, slotKey, changeType, isAutoSelected, isEmpty: false });
+    lines.push({
+      text: `${pad}${key}:`,
+      frameId,
+      slotKey,
+      changeType,
+      isAutoSelected,
+      isEmpty: false,
+    });
     for (const item of arr) {
       if (typeof item === 'string' || typeof item === 'number') {
-        lines.push({ text: `${pad}  - ${formatValue(item)}`, frameId, slotKey, changeType, isAutoSelected, isEmpty: false });
+        lines.push({
+          text: `${pad}  - ${formatValue(item)}`,
+          frameId,
+          slotKey,
+          changeType,
+          isAutoSelected,
+          isEmpty: false,
+        });
       } else if (typeof item === 'object' && item !== null && 'type' in item && 'slots' in item) {
         // InlineFrame in array
         const inlineFrame = item as { type: string; slots: Record<string, SlotValue> };
-        lines.push({ text: `${pad}  - ${inlineFrame.type}:`, frameId, slotKey, changeType, isAutoSelected, isEmpty: false });
+        lines.push({
+          text: `${pad}  - ${inlineFrame.type}:`,
+          frameId,
+          slotKey,
+          changeType,
+          isAutoSelected,
+          isEmpty: false,
+        });
         for (const [k, v] of Object.entries(inlineFrame.slots)) {
           renderSlotLines(lines, k, v, indent + 2, frameId, slotKey, changeType, isAutoSelected);
         }
       } else {
-        lines.push({ text: `${pad}  - ${formatValue(item)}`, frameId, slotKey, changeType, isAutoSelected, isEmpty: false });
+        lines.push({
+          text: `${pad}  - ${formatValue(item)}`,
+          frameId,
+          slotKey,
+          changeType,
+          isAutoSelected,
+          isEmpty: false,
+        });
       }
     }
     return;
   }
 
   // Fallback
-  lines.push({ text: `${pad}${key}: ${JSON.stringify(value)}`, frameId, slotKey, changeType, isAutoSelected, isEmpty: false });
+  lines.push({
+    text: `${pad}${key}: ${JSON.stringify(value)}`,
+    frameId,
+    slotKey,
+    changeType,
+    isAutoSelected,
+    isEmpty: false,
+  });
 }
 
 // ── Component ──
@@ -174,13 +240,19 @@ export function FrameYAMLView() {
       relationDegreeMap[r.from] = (relationDegreeMap[r.from] ?? 0) + 1;
       relationDegreeMap[r.to] = (relationDegreeMap[r.to] ?? 0) + 1;
     }
-    return { confirmedFrameIds, llmHighlightedFrameIds, turnsAgoMap, touchCountMap, relationDegreeMap };
+    return {
+      confirmedFrameIds,
+      llmHighlightedFrameIds,
+      turnsAgoMap,
+      touchCountMap,
+      relationDegreeMap,
+    };
   }, [deltaLog, draft.relations, confirmedFrameIds, llmHighlightedFrameIds]);
 
   // Sort frames by relevance
   const sortedFrames = useMemo(() => {
-    return [...draft.frames].sort((a, b) =>
-      relevanceScore(b, relevanceCtx).score - relevanceScore(a, relevanceCtx).score
+    return [...draft.frames].sort(
+      (a, b) => relevanceScore(b, relevanceCtx).score - relevanceScore(a, relevanceCtx).score
     );
   }, [draft.frames, relevanceCtx]);
 
@@ -210,7 +282,14 @@ export function FrameYAMLView() {
       }
 
       // Blank separator
-      lines.push({ text: '', frameId: frame.id, slotKey: null, changeType: null, isAutoSelected: false, isEmpty: true });
+      lines.push({
+        text: '',
+        frameId: frame.id,
+        slotKey: null,
+        changeType: null,
+        isAutoSelected: false,
+        isEmpty: true,
+      });
     }
 
     return lines;
@@ -241,15 +320,35 @@ export function FrameYAMLView() {
     <div className="flex h-full flex-col gap-2 p-2">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <span className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-tertiary)]">YAML</span>
+        <span className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-tertiary)]">
+          YAML
+        </span>
         <div className="flex gap-1">
           {isEditing ? (
             <>
-              <button type="button" onClick={handleCancel} className="rounded px-2 py-0.5 text-xs text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]">Cancel</button>
-              <button type="button" onClick={handleSave} className="rounded bg-[var(--accent-commit)] px-2 py-0.5 text-xs text-white hover:opacity-90">Save</button>
+              <button
+                type="button"
+                onClick={handleCancel}
+                className="rounded px-2 py-0.5 text-xs text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSave}
+                className="rounded bg-[var(--accent-commit)] px-2 py-0.5 text-xs text-white hover:opacity-90"
+              >
+                Save
+              </button>
             </>
           ) : (
-            <button type="button" onClick={handleEdit} className="rounded px-2 py-0.5 text-xs text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]">Edit</button>
+            <button
+              type="button"
+              onClick={handleEdit}
+              className="rounded px-2 py-0.5 text-xs text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]"
+            >
+              Edit
+            </button>
           )}
         </div>
       </div>
@@ -271,7 +370,7 @@ export function FrameYAMLView() {
             const isFrameLine = line.slotKey === null;
             const isConfirmed = isFrameLine
               ? !!confirmedFrameIds[line.frameId]
-              : !!(confirmedSlotKeys[line.frameId]?.[line.slotKey!]);
+              : !!confirmedSlotKeys[line.frameId]?.[line.slotKey!];
 
             // Check if this row's frame is highlighted by reverse hover (chat → YAML)
             const frame = draft.frames.find((f) => f.id === line.frameId);
@@ -321,13 +420,15 @@ export function FrameYAMLView() {
                 }}
               >
                 {/* Checkbox column */}
-                <div style={{
-                  width: 22,
-                  flexShrink: 0,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}>
+                <div
+                  style={{
+                    width: 22,
+                    flexShrink: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
                   <input
                     type="checkbox"
                     checked={isConfirmed}
@@ -343,31 +444,40 @@ export function FrameYAMLView() {
                 </div>
 
                 {/* Delta color bar */}
-                <div style={{
-                  width: 3,
-                  flexShrink: 0,
-                  background: line.changeType ? deltaBarColors[line.changeType] : 'transparent',
-                }} />
+                <div
+                  style={{
+                    width: 3,
+                    flexShrink: 0,
+                    background: line.changeType ? deltaBarColors[line.changeType] : 'transparent',
+                  }}
+                />
 
                 {/* YAML text — actual monospace, untouched */}
-                <pre style={{
-                  margin: 0,
-                  padding: '1px 6px',
-                  fontSize: 11,
-                  lineHeight: '18px',
-                  fontFamily: 'var(--font-mono, ui-monospace, monospace)',
-                  color: isFrameLine ? 'var(--text-primary)' : 'var(--text-secondary)',
-                  fontWeight: isFrameLine ? 600 : 400,
-                  whiteSpace: 'pre',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  flex: 1,
-                  minWidth: 0,
-                  display: 'flex',
-                  alignItems: 'center',
-                }}>
+                <pre
+                  style={{
+                    margin: 0,
+                    padding: '1px 6px',
+                    fontSize: 11,
+                    lineHeight: '18px',
+                    fontFamily: 'var(--font-mono, ui-monospace, monospace)',
+                    color: isFrameLine ? 'var(--text-primary)' : 'var(--text-secondary)',
+                    fontWeight: isFrameLine ? 600 : 400,
+                    whiteSpace: 'pre',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    flex: 1,
+                    minWidth: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                  }}
+                >
                   {isFrameLine && committedFrameIds[line.frameId] && (
-                    <span style={{ fontSize: 9, color: 'rgba(74, 222, 128, 0.6)', marginRight: 4 }} title="Committed">✓</span>
+                    <span
+                      style={{ fontSize: 9, color: 'rgba(74, 222, 128, 0.6)', marginRight: 4 }}
+                      title="Committed"
+                    >
+                      ✓
+                    </span>
                   )}
                   {line.text}
                 </pre>

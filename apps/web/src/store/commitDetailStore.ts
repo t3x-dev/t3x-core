@@ -1,6 +1,7 @@
 // apps/web/src/store/commitDetailStore.ts
-import { create } from 'zustand';
+
 import type { Commit, Frame } from '@t3x-dev/core';
+import { create } from 'zustand';
 
 export type FrameDiffStatus = 'identical' | 'added' | 'modified' | 'removed';
 
@@ -44,9 +45,7 @@ function enrichFrames(
   commit: Commit,
   parent: Commit | null
 ): { enriched: EnrichedFrame[]; removed: EnrichedFrame[] } {
-  const parentFrameMap = new Map(
-    (parent?.content.frames ?? []).map((f) => [f.id, f])
-  );
+  const parentFrameMap = new Map((parent?.content.frames ?? []).map((f) => [f.id, f]));
   const currentIds = new Set(commit.content.frames.map((f) => f.id));
 
   const enriched: EnrichedFrame[] = commit.content.frames.map((frame) => {
@@ -54,8 +53,7 @@ function enrichFrames(
     if (!parent) return { frame, diffStatus: 'added' as const };
     if (!prev) return { frame, diffStatus: 'added' as const };
     const slotsChanged =
-      JSON.stringify(frame.slots) !== JSON.stringify(prev.slots) ||
-      frame.type !== prev.type;
+      JSON.stringify(frame.slots) !== JSON.stringify(prev.slots) || frame.type !== prev.type;
     return {
       frame,
       diffStatus: slotsChanged ? ('modified' as const) : ('identical' as const),
