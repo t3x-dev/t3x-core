@@ -460,7 +460,7 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
     }>;
 
     if (draft.extraction_mode === 'llm') {
-      // LLM mode: convert staged SemanticPoints to SentenceV5
+      // LLM mode: convert staged SemanticPoints to sentences
       const activeSPs = ((draft.semantic_points ?? []) as SemanticPoint[]).filter(
         (sp) => sp.zone === 'ready' && sp.status !== 'undone' && sp.staged
       );
@@ -502,7 +502,7 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
     // 4. Set parents
     const parents = draft.parent_commit_hash ? [draft.parent_commit_hash] : [];
 
-    // 5. Create V5 commit (convert sentences to legacy_sentence frames)
+    // 5. Create commit (convert sentences to legacy_sentence frames)
     const commitFrames = sentences.map((s, i) => ({
       id: s.id || `f_${String(i + 1).padStart(3, '0')}`,
       type: 'legacy_sentence' as const,

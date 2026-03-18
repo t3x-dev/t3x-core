@@ -1,5 +1,5 @@
 /**
- * Commits API — V5 (frame-based)
+ * Commits API (frame-based)
  *
  * V4 endpoints have been removed from the API server.
  * V4 types are kept as deprecated aliases for gradual migration.
@@ -28,10 +28,10 @@ export interface SentenceWithSourceInfo {
 // ============================================================================
 // V4 types — DEPRECATED, kept as aliases for gradual migration
 // These are still used by many UI components that read sentence data
-// converted from V5 frames via framesToSentences().
+// converted from frames via framesToSentences().
 // ============================================================================
 
-/** @deprecated Use CommitV5 source tracing instead */
+/** @deprecated Use ApiCommit source tracing instead */
 export interface CommitV4SentenceSourceRef {
   conversation_id: string;
   turn_hash: string;
@@ -39,7 +39,7 @@ export interface CommitV4SentenceSourceRef {
   end_char: number;
 }
 
-/** @deprecated Sentences are derived from V5 frames via framesToSentences() */
+/** @deprecated Sentences are derived from frames via framesToSentences() */
 export interface CommitV4Sentence {
   id: string;
   text: string;
@@ -48,14 +48,14 @@ export interface CommitV4Sentence {
   inherited_from?: string;
 }
 
-/** @deprecated Use CommitV5['author'] */
+/** @deprecated Use ApiCommit['author'] */
 export interface CommitV4Author {
   type: 'human' | 'agent';
   name?: string;
   id?: string;
 }
 
-/** @deprecated Use CommitV5['sources'] entries */
+/** @deprecated Use ApiCommit['sources'] entries */
 export interface CommitV4SourceRef {
   type: 'conversation' | 'leaf';
   id: string;
@@ -65,9 +65,9 @@ export interface CommitV4SourceRef {
 
 /**
  * CommitV4 — DEPRECATED, kept for backward compatibility.
- * New code should use CommitV5 directly.
- * Existing UI code can treat a V5 commit as V4-like by deriving sentences
- * from frames via framesToSentences().
+ * New code should use ApiCommit directly.
+ * Existing UI code can treat a frame-based commit as V4-like by deriving
+ * sentences from frames via framesToSentences().
  */
 export interface CommitV4 {
   hash: string;
@@ -97,11 +97,11 @@ export interface CommitV4 {
 }
 
 // ============================================================================
-// Frame-based Commits (V5 — current model)
+// Frame-based Commits
 // ============================================================================
 
-/** V5 commit from API response */
-export interface CommitV5 {
+/** Frame-based commit from API response */
+export interface ApiCommit {
   hash: string;
   schema: 't3x/commit/5';
   parents: string[];
@@ -118,25 +118,25 @@ export interface CommitV5 {
 }
 
 /**
- * List commits by project (V5 endpoint)
+ * List commits by project
  */
-export async function listCommitsV5(
+export async function listCommits(
   projectId: string,
   branch?: string,
   limit = 50
-): Promise<CommitV5[]> {
+): Promise<ApiCommit[]> {
   const query = buildQueryString({ branch, limit });
   const res = await fetchWithTimeout(`${API_V1}/projects/${projectId}/commits?${query}`);
-  const data = await handleResponse<{ commits: CommitV5[] }>(res);
+  const data = await handleResponse<{ commits: ApiCommit[] }>(res);
   return data.commits;
 }
 
 /**
- * Get a commit by hash (V5 endpoint)
+ * Get a commit by hash
  */
-export async function getCommitV5(commitHash: string): Promise<CommitV5> {
+export async function getApiCommit(commitHash: string): Promise<ApiCommit> {
   const res = await fetchWithTimeout(`${API_V1}/commits/${encodeURIComponent(commitHash)}`);
-  const data = await handleResponse<{ commit: CommitV5 }>(res);
+  const data = await handleResponse<{ commit: ApiCommit }>(res);
   return data.commit;
 }
 
@@ -174,17 +174,17 @@ export async function createCommit(
 }
 
 // ============================================================================
-// Backward-compat aliases — V4 function names pointing to V5 endpoints
-// These convert V5 response data into V4-like shapes for consuming code.
+// Backward-compat aliases — V4 function names pointing to frame-based endpoints
+// These convert frame-based response data into V4-like shapes for consuming code.
 // ============================================================================
 
 import { framesToSentences } from '@/lib/framesToSentences';
 
 /**
- * Convert a V5 commit to V4-like shape for backward compatibility.
+ * Convert a frame-based commit to V4-like shape for backward compatibility.
  * Derives sentences from frames and maps `sources` to `source_refs`.
  */
-export function v5toV4(v5: CommitV5): CommitV4 {
+export function toV4Compat(v5: ApiCommit): CommitV4 {
   const sentences: CommitV4Sentence[] = v5.content?.frames?.length
     ? framesToSentences(v5.content as import('@t3x-dev/core').SemanticContent).map((s) => ({
         id: s.id,
@@ -229,7 +229,7 @@ export function v5toV4(v5: CommitV5): CommitV4 {
 }
 
 /**
- * @deprecated Use listCommitsV5 directly. This wrapper converts V5 to V4-like shape.
+ * @deprecated Use listCommits directly. This wrapper converts frame-based to V4-like shape.
  */
 export async function listCommitsV4(
   projectId: string,
@@ -237,21 +237,21 @@ export async function listCommitsV4(
   limit = 50,
   _offset = 0
 ): Promise<CommitV4[]> {
-  const v5List = await listCommitsV5(projectId, branch, limit);
-  return v5List.map(v5toV4);
+  const v5List = await listCommits(projectId, branch, limit);
+  return v5List.map(toV4Compat);
 }
 
 /**
- * @deprecated Use getCommitV5 directly. This wrapper converts V5 to V4-like shape.
+ * @deprecated Use getApiCommit directly. This wrapper converts frame-based to V4-like shape.
  */
 export async function getCommitV4(commitHash: string): Promise<CommitV4> {
-  const v5 = await getCommitV5(commitHash);
-  return v5toV4(v5);
+  const v5 = await getApiCommit(commitHash);
+  return toV4Compat(v5);
 }
 
 /**
- * Get commit ancestor chain (V5 endpoint).
- * @deprecated Name kept for backward compat. Calls V5 GET /v1/commits/:hash/history.
+ * Get commit ancestor chain.
+ * @deprecated Name kept for backward compat. Calls GET /v1/commits/:hash/history.
  */
 export async function getCommitV4History(
   commitHash: string,
@@ -262,16 +262,16 @@ export async function getCommitV4History(
     const res = await fetchWithTimeout(
       `${API_V1}/commits/${encodeURIComponent(commitHash)}/history?${query}`
     );
-    const data = await handleResponse<{ commits: CommitV5[]; truncated: boolean }>(res);
-    return data.commits.map(v5toV4);
+    const data = await handleResponse<{ commits: ApiCommit[]; truncated: boolean }>(res);
+    return data.commits.map(toV4Compat);
   } catch {
     return [];
   }
 }
 
 /**
- * Update commit canvas position (V5 endpoint).
- * @deprecated Name kept for backward compat. Calls V5 PATCH /v1/commits/:hash/position.
+ * Update commit canvas position.
+ * @deprecated Name kept for backward compat. Calls PATCH /v1/commits/:hash/position.
  */
 export async function updateCommitV4Position(
   commitHash: string,
@@ -286,8 +286,8 @@ export async function updateCommitV4Position(
       body: JSON.stringify({ position_x: positionX, position_y: positionY }),
     }
   );
-  const v5 = await handleResponse<CommitV5>(res);
-  return v5toV4(v5);
+  const v5 = await handleResponse<ApiCommit>(res);
+  return toV4Compat(v5);
 }
 
 // ============================================================================

@@ -149,7 +149,7 @@ diffRoutes.post('/v1/diff/two-way', async (c) => {
 
   const db = await getDB();
 
-  // Mode 1: commit_hash mode (V5 unified, fallback to V4/V3)
+  // Mode 1: commit_hash mode (unified, fallback to V4/V3)
   if (body.base_commit_hash && body.target_commit_hash) {
     const baseCommit = await getCommitUnified(db, body.base_commit_hash);
     const targetCommit = await getCommitUnified(db, body.target_commit_hash);

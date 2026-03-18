@@ -33,7 +33,7 @@ export * from './backup';
 export * from './queries';
 // Schema (table definitions and types)
 export * from './schema';
-// Commits Schema (commits_v5, frame_lineage — frame-based commits)
+// Commits Schema (commits, frame_lineage — frame-based commits)
 export * from './schema-commits';
 // Extraction Feedback Schema (Anchoring L4)
 export * from './schema-extraction-feedback';

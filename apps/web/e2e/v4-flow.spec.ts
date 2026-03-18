@@ -29,7 +29,7 @@ test.describe('V4 WebUI Flow', () => {
     expect(data.success).toBe(true);
     projectId = data.data.project_id;
 
-    // Create a V5 commit via API
+    // Create a frame-based commit via API
     const commitResponse = await request.post('http://localhost:8000/api/v1/commits', {
       data: {
         project_id: projectId,

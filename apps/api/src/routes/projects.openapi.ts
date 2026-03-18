@@ -5,7 +5,7 @@ import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { getModelInfo } from '@t3x-dev/core';
 import {
   branches,
-  commitsV5,
+  commits,
   conversations,
   deleteProject,
   findProjects,
@@ -87,8 +87,8 @@ projectRoutes.openapi(listProjectsRoute, async (c) => {
         .then((rows) => rows[0]),
       db
         .select({ count: sql<number>`count(*)::int` })
-        .from(commitsV5)
-        .where(eq(commitsV5.projectId, p.projectId))
+        .from(commits)
+        .where(eq(commits.projectId, p.projectId))
         .then((rows) => rows[0]),
       db
         .select({ count: sql<number>`count(*)::int` })
@@ -269,11 +269,11 @@ projectRoutes.openapi(getProjectRoute, async (c) => {
       );
     }
 
-    // Count V5 commits for this project
+    // Count commits for this project
     const [commitCountRow] = await db
       .select({ count: sql<number>`count(*)::int` })
-      .from(commitsV5)
-      .where(eq(commitsV5.projectId, id));
+      .from(commits)
+      .where(eq(commits.projectId, id));
     const commitsCount = Number(commitCountRow?.count ?? 0);
 
     const apiProject = {

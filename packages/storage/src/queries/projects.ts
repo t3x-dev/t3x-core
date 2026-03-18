@@ -16,7 +16,7 @@ import {
   projects,
   turns,
 } from '../schema';
-import { commitsV5 } from '../schema-commits';
+import { commits } from '../schema-commits';
 import { type CursorPage, decodeCursor, toCursorPage } from './pagination';
 
 export interface CreateProjectInput {
@@ -221,8 +221,8 @@ export async function findProjectWithStats(
 
   const [commitCount] = await db
     .select({ count: sql<number>`count(*)::int` })
-    .from(commitsV5)
-    .where(eq(commitsV5.projectId, projectId));
+    .from(commits)
+    .where(eq(commits.projectId, projectId));
 
   const [branchCount] = await db
     .select({ count: sql<number>`count(*)::int` })

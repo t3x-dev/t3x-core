@@ -52,7 +52,7 @@ describe('GET /v1/merge/drafts/:id/checks', () => {
     testProjectId = project.projectId;
   });
 
-  // Helper: create a test commit (converts sentences to V5 frames)
+  // Helper: create a test commit (converts sentences to frames)
   const createTestCommit = async (
     sentences: Array<{
       id: string;

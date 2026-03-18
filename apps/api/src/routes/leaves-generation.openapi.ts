@@ -64,7 +64,7 @@ export const leavesGenerationRoutes = new OpenAPIHono({
 // ============================================================
 
 /**
- * Convert a V5 unified Commit to a V4-compatible CommitV4 shape.
+ * Convert a unified Commit to a V4-compatible CommitV4 shape.
  * Needed because generateLeafOutput / modeGenerate expect CommitV4.
  */
 function commitToV4Compatible(commit: Commit): CommitV4 {
@@ -290,7 +290,7 @@ leavesGenerationRoutes.openapi(generateLeafRoute, async (c) => {
       return errorResponse(c, 'LEAF_NOT_FOUND', `Leaf not found: ${id}`);
     }
 
-    // Get source commit by hash (V5 unified, auto-upgrades V4)
+    // Get source commit by hash (unified, auto-upgrades V4)
     const unifiedCommit = await getCommitUnified(db, leaf.commit_hash);
     if (!unifiedCommit) {
       return errorResponse(c, 'COMMIT_NOT_FOUND', `Source commit not found: ${leaf.commit_hash}`);
@@ -626,7 +626,7 @@ leavesGenerationRoutes.openapi(batchGenerateRoute, async (c) => {
   try {
     const db = await getDB();
 
-    // 1. Verify commit exists (V5 unified, auto-upgrades V4)
+    // 1. Verify commit exists (unified, auto-upgrades V4)
     const unifiedCommit = await getCommitUnified(db, decodedHash);
     if (!unifiedCommit) {
       return errorResponse(c, 'COMMIT_NOT_FOUND', `Commit not found: ${decodedHash}`);

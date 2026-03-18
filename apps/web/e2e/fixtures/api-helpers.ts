@@ -53,7 +53,7 @@ export async function createTestTurn(
 }
 
 /**
- * Create a V5 commit (frame-based)
+ * Create a frame-based commit
  */
 export async function createTestCommitV4(
   request: APIRequestContext,

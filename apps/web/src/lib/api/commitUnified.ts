@@ -1,14 +1,14 @@
 /**
- * Unified commit fetch — V5 frames
+ * Unified commit fetch — frame-based
  */
 
 import type { Commit } from '@t3x-dev/core';
 import { upgradeLegacyCommit } from '@t3x-dev/core';
-import { getCommitV5 } from './commits';
+import { getApiCommit } from './commits';
 import { API_V1, fetchWithTimeout } from './core';
 
 /**
- * Fetch a commit as V5 frames.
+ * Fetch a commit as frames.
  */
 export async function getCommitAsFrames(hash: string): Promise<Commit> {
   try {
@@ -23,14 +23,14 @@ export async function getCommitAsFrames(hash: string): Promise<Commit> {
     // Fall through
   }
 
-  // Fallback: fetch via V5 API and attempt upgrade
-  const v5 = await getCommitV5(hash);
+  // Fallback: fetch via API and attempt upgrade
+  const v5 = await getApiCommit(hash);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return upgradeLegacyCommit(v5 as any);
 }
 
 /**
- * Fetch commit history as V5 frames.
+ * Fetch commit history as frames.
  */
 export async function getCommitHistoryAsFrames(hash: string, limit = 10): Promise<Commit[]> {
   try {

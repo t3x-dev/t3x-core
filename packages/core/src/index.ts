@@ -508,7 +508,7 @@ export {
   type Sentence as SentenceV4,
   type SentenceRelation,
   type SentenceSourceRef,
-  type SentenceV5,
+  type SentenceWithEvidence,
   // Share Token
   type ShareToken,
   type User,

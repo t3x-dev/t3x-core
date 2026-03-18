@@ -113,7 +113,7 @@ mergeRoutes.openapi(prepareMergeRoute, async (c) => {
   try {
     const db = await getDB();
 
-    // Load commits (V5 unified, auto-upgrades V4)
+    // Load commits (unified, auto-upgrades V4)
     const sourceCommit = await getCommitUnified(db, source_hash);
     if (!sourceCommit) {
       return c.json(
@@ -329,7 +329,7 @@ mergeRoutes.openapi(executeMergeRoute, async (c) => {
       total_sentences: mergeCommit.content.sentences.length,
     };
 
-    // Convert sentences to V5 legacy_sentence frames
+    // Convert sentences to legacy_sentence frames
     const frames = mergeCommit.content.sentences.map((s, i) => ({
       id: s.id || `f_${String(i + 1).padStart(3, '0')}`,
       type: 'legacy_sentence' as const,
@@ -337,7 +337,7 @@ mergeRoutes.openapi(executeMergeRoute, async (c) => {
       confidence: s.confidence,
     }));
 
-    // Save to storage as V5 commit
+    // Save to storage as frame-based commit
     const savedCommit = await createCommit(db, {
       parents: mergeCommit.parents,
       author: {
@@ -352,7 +352,7 @@ mergeRoutes.openapi(executeMergeRoute, async (c) => {
       provenance: { method: 'merge' },
     });
 
-    // Update branch head with the actual V5 commit hash
+    // Update branch head with the actual commit hash
     if (branch && projectId) {
       await updateBranchHead(db, projectId, branch, savedCommit.hash);
     }
@@ -478,7 +478,7 @@ mergeRoutes.openapi(createDraftRoute, async (c) => {
     );
   }
 
-  // Load commits (V5 unified, auto-upgrades V4)
+  // Load commits (unified, auto-upgrades V4)
   const sourceCommit = await getCommitUnified(db, source_hash);
   if (!sourceCommit) {
     return c.json(
@@ -780,7 +780,7 @@ mergeRoutes.openapi(commitDraftRoute, async (c) => {
       total_sentences: mergeCommit.content.sentences.length,
     };
 
-    // Convert sentences to V5 legacy_sentence frames
+    // Convert sentences to legacy_sentence frames
     const draftFrames = mergeCommit.content.sentences.map((s, i) => ({
       id: s.id || `f_${String(i + 1).padStart(3, '0')}`,
       type: 'legacy_sentence' as const,

@@ -1,7 +1,7 @@
 /**
  * Unified Commit Query Adapter
  *
- * Now delegates directly to V5 queries. V4 table is retired.
+ * Delegates directly to frame-based commit queries. V4 table is retired.
  * Kept as a thin wrapper for backward compatibility of callers.
  */
 
@@ -10,14 +10,14 @@ import type { AnyDB } from '../adapters';
 import { getCommit, listCommits } from './commits';
 
 /**
- * Get a commit by hash. Delegates to V5 getCommit.
+ * Get a commit by hash. Delegates to getCommit.
  */
 export async function getCommitUnified(db: AnyDB, hash: string): Promise<Commit | null> {
   return getCommit(db, hash);
 }
 
 /**
- * List commits by project. Delegates to V5 listCommits.
+ * List commits by project. Delegates to listCommits.
  */
 export async function listCommitsUnified(
   db: AnyDB,

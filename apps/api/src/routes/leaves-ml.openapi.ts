@@ -45,7 +45,7 @@ export const leavesMLRoutes = new OpenAPIHono({
 // ============================================================
 
 /**
- * Convert a V5 unified Commit to a V4-compatible CommitV4 shape.
+ * Convert a unified Commit to a V4-compatible CommitV4 shape.
  * Needed because generateLeafOutput / suggestConstraints expect CommitV4.
  */
 function commitToV4Compatible(commit: Commit): CommitV4 {

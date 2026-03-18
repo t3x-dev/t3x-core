@@ -2,7 +2,7 @@
  * T3X Database Schema — Leaves, Pins, Contexts, Drafts
  *
  * commits_v4 table is RETIRED (kept for migration reference only).
- * Active commit storage is in schema-commits.ts (commits_v5).
+ * Active commit storage is in schema-commits.ts (commits table).
  *
  * Key tables:
  * - leaves: Application layer (owns constraints, output, validation)
@@ -111,7 +111,7 @@ export type AccountInsert = typeof accounts.$inferInsert;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // commits_v4: RETIRED — Table definition kept for migration reference only.
-// All production queries now use commits_v5 (schema-commits.ts).
+// All production queries now use commits table (schema-commits.ts).
 // DROP TABLE commits_v4 should be run during deployment after data migration.
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -286,9 +286,9 @@ export const leaves = pgTable(
           match_mode: 'exact' | 'semantic';
           value: string;
           description?: string;
-          /** @deprecated Use source_frame for V5 */
+          /** @deprecated Use source_frame instead */
           source_sentence_id?: string;
-          /** V5 frame-based source reference */
+          /** Frame-based source reference */
           source_frame?: { frame_type: string; slot_key?: string };
           reason?: string;
         }>
