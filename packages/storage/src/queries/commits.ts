@@ -1,8 +1,8 @@
 /**
  * Frame-Based Commits Queries
  *
- * CRUD operations for commits_v5 table using Drizzle ORM.
- * V5 commits store frame-based semantic content (frames + relations).
+ * CRUD operations for commits table using Drizzle ORM.
+ * Commits store frame-based semantic content (frames + relations).
  *
  * @see packages/core/src/commit/types.ts
  */
@@ -14,7 +14,7 @@ export { computeCommitHash } from '@t3x-dev/core';
 
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
-import { type CommitV5Record, commitsV5 } from '../schema-commits';
+import { type CommitRecord, commits } from '../schema-commits';
 
 // ============================================================
 // Types
@@ -47,7 +47,7 @@ export interface ListCommitsOptions {
 /**
  * Create a new frame-based commit.
  *
- * Computes the hash from first-class fields, inserts into commits_v5,
+ * Computes the hash from first-class fields, inserts into commits table,
  * and returns the full Commit object.
  */
 export async function createCommit(db: AnyDB, input: CreateCommitInput): Promise<Commit> {
@@ -65,7 +65,7 @@ export async function createCommit(db: AnyDB, input: CreateCommitInput): Promise
   });
 
   const [row] = await db
-    .insert(commitsV5)
+    .insert(commits)
     .values({
       hash,
       schema: COMMIT_SCHEMA,
@@ -90,7 +90,7 @@ export async function createCommit(db: AnyDB, input: CreateCommitInput): Promise
  * Get a single commit by hash.
  */
 export async function getCommit(db: AnyDB, hash: string): Promise<Commit | null> {
-  const [row] = await db.select().from(commitsV5).where(eq(commitsV5.hash, hash)).limit(1);
+  const [row] = await db.select().from(commits).where(eq(commits.hash, hash)).limit(1);
 
   return row ? rowToCommit(row) : null;
 }
@@ -103,16 +103,16 @@ export async function getCommit(db: AnyDB, hash: string): Promise<Commit | null>
 export async function listCommits(db: AnyDB, options: ListCommitsOptions): Promise<Commit[]> {
   const { projectId, branch, limit = 100, offset = 0 } = options;
 
-  const conditions = [eq(commitsV5.projectId, projectId)];
+  const conditions = [eq(commits.projectId, projectId)];
   if (branch) {
-    conditions.push(eq(commitsV5.branch, branch));
+    conditions.push(eq(commits.branch, branch));
   }
 
   const rows = await db
     .select()
-    .from(commitsV5)
+    .from(commits)
     .where(and(...conditions))
-    .orderBy(desc(commitsV5.committedAt), desc(commitsV5.hash))
+    .orderBy(desc(commits.committedAt), desc(commits.hash))
     .limit(limit)
     .offset(offset);
 
@@ -129,9 +129,9 @@ export async function getLatestCommit(
 ): Promise<Commit | null> {
   const [row] = await db
     .select()
-    .from(commitsV5)
-    .where(and(eq(commitsV5.projectId, projectId), eq(commitsV5.branch, branch)))
-    .orderBy(desc(commitsV5.committedAt), desc(commitsV5.hash))
+    .from(commits)
+    .where(and(eq(commits.projectId, projectId), eq(commits.branch, branch)))
+    .orderBy(desc(commits.committedAt), desc(commits.hash))
     .limit(1);
 
   return row ? rowToCommit(row) : null;
@@ -146,7 +146,7 @@ export async function getLatestCommit(
 export async function getCommitsByHashes(db: AnyDB, hashes: string[]): Promise<Commit[]> {
   if (hashes.length === 0) return [];
 
-  const rows = await db.select().from(commitsV5).where(inArray(commitsV5.hash, hashes));
+  const rows = await db.select().from(commits).where(inArray(commits.hash, hashes));
 
   const commitMap = new Map<string, Commit>();
   for (const row of rows) {
@@ -168,7 +168,7 @@ export async function getCommitsByHashes(db: AnyDB, hashes: string[]): Promise<C
  * @returns true if deleted, false if not found
  */
 export async function deleteCommit(db: AnyDB, hash: string): Promise<boolean> {
-  const result = await db.delete(commitsV5).where(eq(commitsV5.hash, hash)).returning();
+  const result = await db.delete(commits).where(eq(commits.hash, hash)).returning();
 
   return result.length > 0;
 }
@@ -185,9 +185,9 @@ export async function updateCommitPosition(
   y: number
 ): Promise<Commit | null> {
   const [updated] = await db
-    .update(commitsV5)
+    .update(commits)
     .set({ positionX: x, positionY: y })
-    .where(eq(commitsV5.hash, hash))
+    .where(eq(commits.hash, hash))
     .returning();
 
   return updated ? rowToCommit(updated) : null;
@@ -200,7 +200,7 @@ export async function updateCommitPosition(
 /**
  * Convert database row to Commit type.
  */
-function rowToCommit(row: CommitV5Record): Commit {
+function rowToCommit(row: CommitRecord): Commit {
   return {
     hash: row.hash,
     schema: COMMIT_SCHEMA,

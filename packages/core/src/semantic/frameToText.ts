@@ -4,7 +4,7 @@
  * Converts SemanticContent frames into text representations
  * for use in LLM prompts, context builders, and other text-consuming functions.
  *
- * This is the bridge between V5 frame-based commits and functions
+ * This is the bridge between frame-based commits and functions
  * that expect text input (leaf generation, context building, etc.).
  */
 

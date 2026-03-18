@@ -390,7 +390,7 @@ conversationRoutes.get('/v1/conversations/:id/memory', async (c) => {
     if (currentBranch?.headCommitHash) {
       const unified = await getCommitUnified(db, currentBranch.headCommitHash);
       if (unified) {
-        // Convert V5 Commit to V4-compatible shape for buildConversationContext
+        // Convert unified Commit to V4-compatible shape for buildConversationContext
         const segments = framesToTextSegments(unified.content);
         currentCommit = {
           ...unified,
@@ -487,7 +487,7 @@ conversationRoutes.get('/v1/conversations/:id/context-export', async (c) => {
     if (currentBranch?.headCommitHash) {
       const unified = await getCommitUnified(db, currentBranch.headCommitHash);
       if (unified) {
-        // Convert V5 Commit to V4-compatible shape for buildConversationContext
+        // Convert unified Commit to V4-compatible shape for buildConversationContext
         const segments = framesToTextSegments(unified.content);
         currentCommit = {
           ...unified,

@@ -178,7 +178,7 @@ export async function verifyHashChain(db: AnyDB, projectId: string): Promise<Ver
     );
   }
 
-  // Step 4: Merkle verification skipped for V5 commits (frame-based, no merkle_root field)
+  // Step 4: Merkle verification skipped for frame-based commits (no merkle_root field)
   const merkleRoots: Record<string, string> = {};
   const merkleMismatches: string[] = [];
 

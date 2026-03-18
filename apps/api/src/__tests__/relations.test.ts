@@ -59,7 +59,7 @@ describe('Relations Routes', () => {
     const project = await insertProject(mockDB, testData.project({ name: 'Relations Test' }));
     testProjectId = project.projectId;
 
-    // Create a test commit with frames (V5)
+    // Create a test commit with frames
     const res = await app.request('/v1/commits', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

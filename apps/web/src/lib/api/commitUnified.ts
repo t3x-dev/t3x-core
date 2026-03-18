@@ -1,14 +1,14 @@
 /**
- * Unified commit fetch — V5 frames
+ * Unified commit fetch — frame-based
  */
 
 import type { Commit } from '@t3x-dev/core';
 import { upgradeLegacyCommit } from '@t3x-dev/core';
-import { getCommitV5 } from './commits';
+import { getApiCommit } from './commits';
 import { API_V1, fetchWithTimeout } from './core';
 
 /**
- * Fetch a commit as V5 frames.
+ * Fetch a commit as frames.
  */
 export async function getCommitAsFrames(hash: string): Promise<Commit> {
   try {
@@ -23,17 +23,28 @@ export async function getCommitAsFrames(hash: string): Promise<Commit> {
     // Fall through
   }
 
-  // Fallback: fetch via V5 API and attempt upgrade
-  const v5 = await getCommitV5(hash);
+  // Fallback: fetch via API and attempt upgrade
+  const v5 = await getApiCommit(hash);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return upgradeLegacyCommit(v5 as any);
 }
 
 /**
- * Fetch commit history as V5 frames.
- * Note: V4 history endpoint is removed; this returns empty for now.
+ * Fetch commit history as frames.
  */
-export async function getCommitHistoryAsFrames(_hash: string, _limit = 10): Promise<Commit[]> {
-  // V4 history endpoint removed. Callers should migrate to V5 APIs.
+export async function getCommitHistoryAsFrames(hash: string, limit = 10): Promise<Commit[]> {
+  try {
+    const res = await fetchWithTimeout(
+      `${API_V1}/commits/${encodeURIComponent(hash)}/history?limit=${limit}`
+    );
+    if (res.ok) {
+      const json = (await res.json()) as { success: boolean; data?: { commits?: Commit[] } };
+      if (json.success && json.data?.commits) {
+        return json.data.commits;
+      }
+    }
+  } catch {
+    // Fall through
+  }
   return [];
 }

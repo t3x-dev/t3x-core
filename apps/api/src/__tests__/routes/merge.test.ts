@@ -47,7 +47,7 @@ describe('Merge Routes', () => {
     testProjectId = project.projectId;
   });
 
-  // Helper to create test commits (V5 format — frames)
+  // Helper to create test commits (frame-based format)
   const createTestCommit = async (sentences: Array<{ id: string; text: string }>) => {
     const commit = await createCommit(
       mockDB,
@@ -160,7 +160,7 @@ describe('Merge Routes', () => {
       expect(res.status).toBe(200);
       const json: ApiResponse = await res.json();
       expect(json.data.identical).toHaveLength(1);
-      // V5: framesToTextSegments wraps text as "[legacy_sentence] text: ..."
+      // framesToTextSegments wraps text as "[legacy_sentence] text: ..."
       expect(json.data.identical[0].text).toContain('Same sentence');
     });
 

@@ -1,29 +1,28 @@
 /**
- * Migration Script: commits_v4 → commits_v5
+ * Migration Script: commits_v4 → commits
  *
  * Converts all V4 sentence-based commits to V5 frame-based commits.
  * Each sentence becomes a frame with type 'legacy_sentence' and slots: { text }.
  * If the V4 commit has a `semantic` JSONB field with frames, those are used directly.
  *
  * This script is IDEMPOTENT — safe to run multiple times.
- * Commits already in commits_v5 (by hash) are skipped.
+ * Commits already in commits table (by hash) are skipped.
  *
  * Usage:
  *   npx tsx packages/storage/src/migrations/migrate-v4-to-v5.ts [--dry-run]
  *
  * After migration, verify with:
- *   SELECT count(*) FROM commits_v4 WHERE hash NOT IN (SELECT hash FROM commits_v5);
+ *   SELECT count(*) FROM commits_v4 WHERE hash NOT IN (SELECT hash FROM commits);
  *   -- Must return 0
  *
  * Then DROP:
  *   DROP TABLE IF EXISTS commits_v4;
- *   ALTER TABLE commits_v5 RENAME TO commits;
  */
 
 import { sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { commitsV4 } from '../schema-v4';
-import { commitsV5 } from '../schema-commits';
+import { commits } from '../schema-commits';
 
 export interface MigrationResult {
   total: number;
@@ -51,7 +50,7 @@ export async function migrateV4ToV5(db: AnyDB, dryRun = false): Promise<Migratio
 
   // Fetch existing V5 hashes for dedup
   const v5Hashes = new Set(
-    (await db.select({ hash: commitsV5.hash }).from(commitsV5)).map((r) => r.hash)
+    (await db.select({ hash: commits.hash }).from(commits)).map((r) => r.hash)
   );
 
   for (const row of v4Rows) {
@@ -91,7 +90,7 @@ export async function migrateV4ToV5(db: AnyDB, dryRun = false): Promise<Migratio
         const author = (row.author as { type?: string; name?: string; id?: string }) ?? {};
         const sourceRefs = row.sourceRefs as Array<{ type: string; id: string; title?: string }> | null;
 
-        await db.insert(commitsV5).values({
+        await db.insert(commits).values({
           hash: row.hash,
           schema: 't3x/commit/5',
           parents,
@@ -134,13 +133,13 @@ export async function migrateV4ToV5(db: AnyDB, dryRun = false): Promise<Migratio
  */
 export async function verifyMigration(db: AnyDB): Promise<{ orphanCount: number; leafOrphanCount: number }> {
   const [orphanResult] = await db.execute(
-    sql`SELECT count(*)::int as count FROM commits_v4 WHERE hash NOT IN (SELECT hash FROM commits_v5)`
+    sql`SELECT count(*)::int as count FROM commits_v4 WHERE hash NOT IN (SELECT hash FROM commits)`
   );
   const orphanCount = (orphanResult as { count: number })?.count ?? -1;
 
   // Check leaves referencing commits not in V5
   const [leafOrphanResult] = await db.execute(
-    sql`SELECT count(*)::int as count FROM leaves WHERE commit_hash NOT IN (SELECT hash FROM commits_v5)`
+    sql`SELECT count(*)::int as count FROM leaves WHERE commit_hash NOT IN (SELECT hash FROM commits)`
   );
   const leafOrphanCount = (leafOrphanResult as { count: number })?.count ?? -1;
 
@@ -178,7 +177,7 @@ if (process.argv[1]?.includes('migrate-v4-to-v5')) {
 
       if (verify.orphanCount === 0 && verify.leafOrphanCount === 0) {
         console.log('\n✅ Safe to DROP TABLE commits_v4');
-        console.log('   Run: ALTER TABLE commits_v5 RENAME TO commits;');
+        console.log('   Table is already named "commits" — no rename needed.');
       } else {
         console.log('\n⚠️  Migration incomplete — DO NOT drop commits_v4');
       }

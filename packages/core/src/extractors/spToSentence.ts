@@ -1,23 +1,23 @@
 /**
- * SemanticPoint → SentenceV5 Converter
+ * SemanticPoint → SentenceWithEvidence Converter
  *
- * Converts a SemanticPoint to a SentenceV5 for commit.
+ * Converts a SemanticPoint to a SentenceWithEvidence for commit.
  * - Primary evidence → source_ref
  * - Supporting evidence → supporting_refs
  * - inference_type → anchor_type mapping
  */
 
 import { nanoid } from 'nanoid';
-import type { SemanticPoint, SentenceSourceRef, SentenceV5 } from '../types/v4';
+import type { SemanticPoint, SentenceSourceRef, SentenceWithEvidence } from '../types/v4';
 
-const INFERENCE_TO_ANCHOR: Record<string, SentenceV5['anchor_type']> = {
+const INFERENCE_TO_ANCHOR: Record<string, SentenceWithEvidence['anchor_type']> = {
   direct: 'verbatim',
   paraphrase: 'paraphrase',
   cross_turn: 'inference',
   implicit: 'inference',
 };
 
-export function spToSentence(sp: SemanticPoint): SentenceV5 {
+export function spToSentence(sp: SemanticPoint): SentenceWithEvidence {
   const enabledEvidence = sp.evidence.filter((e) => e.enabled);
   const primary = enabledEvidence.find((e) => e.role === 'primary');
   const supporting = enabledEvidence.filter((e) => e.role === 'supporting');

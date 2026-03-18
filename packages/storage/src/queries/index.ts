@@ -42,7 +42,7 @@ export {
   getBusinessRules,
   putBusinessRules,
 } from './business-rules';
-// Commits (frame-based — commits_v5)
+// Commits (frame-based)
 export {
   type CreateCommitInput,
   createCommit,
@@ -54,7 +54,7 @@ export {
   listCommits,
   updateCommitPosition,
 } from './commits';
-// Commits Unified (V5 + V4 transition adapter)
+// Commits Unified (transition adapter)
 export { getCommitUnified, listCommitsUnified } from './commits-unified';
 // Comparisons (saved A/B comparison snapshots)
 export {

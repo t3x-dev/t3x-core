@@ -7,7 +7,7 @@ import type {
   SemanticContent,
 } from '@t3x-dev/core';
 import { create } from 'zustand';
-import { createCommit, listCommitsV5 } from '@/lib/api/commits';
+import { createCommit, listCommits } from '@/lib/api/commits';
 import { createDelta } from '@/lib/api/frames';
 
 // Debounce helper for hover interactions — prevents rapid-fire re-renders
@@ -344,8 +344,8 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
 
   initCommitState: async (projectId) => {
     try {
-      // Try V5 commits first (frame-based), fall back to V4
-      const v5Commits = await listCommitsV5(projectId, 'main', 1).catch(() => []);
+      // Try frame-based commits first, fall back to V4
+      const v5Commits = await listCommits(projectId, 'main', 1).catch(() => []);
       if (v5Commits.length > 0) {
         const head = v5Commits[0];
         set({ lastCommitHash: head.hash });

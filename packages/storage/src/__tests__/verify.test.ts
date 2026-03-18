@@ -1,8 +1,8 @@
 /**
- * Hash Chain Verification Tests (V5)
+ * Hash Chain Verification Tests
  *
  * Tests L2/L3 chain verification and L1 incremental verification
- * using V5 frame-based commits.
+ * using frame-based commits.
  */
 
 import type { Author } from '@t3x-dev/core';

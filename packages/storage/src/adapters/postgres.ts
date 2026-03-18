@@ -802,10 +802,10 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username) WHERE username IS NOT NULL;
 
     -- ═══════════════════════════════════════════════════════════════
-    -- Frame-Based Commits (commits_v5 + frame_lineage)
+    -- Frame-Based Commits (commits + frame_lineage)
     -- ═══════════════════════════════════════════════════════════════
 
-    CREATE TABLE IF NOT EXISTS commits_v5 (
+    CREATE TABLE IF NOT EXISTS commits (
       -- First class (in hash)
       hash TEXT PRIMARY KEY,
       schema TEXT NOT NULL DEFAULT 't3x/commit/5',
@@ -826,9 +826,9 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
       -- Timestamps
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
-    CREATE INDEX IF NOT EXISTS idx_commits_v5_project ON commits_v5(project_id);
-    CREATE INDEX IF NOT EXISTS idx_commits_v5_branch ON commits_v5(branch);
-    CREATE INDEX IF NOT EXISTS idx_commits_v5_committed_at ON commits_v5(committed_at);
+    CREATE INDEX IF NOT EXISTS idx_commits_project ON commits(project_id);
+    CREATE INDEX IF NOT EXISTS idx_commits_branch ON commits(branch);
+    CREATE INDEX IF NOT EXISTS idx_commits_committed_at ON commits(committed_at);
 
     CREATE TABLE IF NOT EXISTS frame_lineage (
       id TEXT PRIMARY KEY,

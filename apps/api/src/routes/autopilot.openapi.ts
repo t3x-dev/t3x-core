@@ -390,7 +390,7 @@ autopilotRoutes.openapi(autoCommitRoute, async (c) => {
       );
     }
 
-    // 9. Create commit as V5 (only the winner of step 8 reaches here)
+    // 9. Create commit (only the winner of step 8 reaches here)
     const autoFrames = sentences.map((s, i) => ({
       id: s.id || `f_${String(i + 1).padStart(3, '0')}`,
       type: 'legacy_sentence' as const,
