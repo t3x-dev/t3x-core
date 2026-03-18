@@ -805,6 +805,12 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     -- Frame-Based Commits (commits + frame_lineage)
     -- ═══════════════════════════════════════════════════════════════
 
+    -- Auto-migrate: rename legacy commits_v5 table if it exists
+    ALTER TABLE IF EXISTS commits_v5 RENAME TO commits;
+    ALTER INDEX IF EXISTS idx_commits_v5_project RENAME TO idx_commits_project;
+    ALTER INDEX IF EXISTS idx_commits_v5_branch RENAME TO idx_commits_branch;
+    ALTER INDEX IF EXISTS idx_commits_v5_committed_at RENAME TO idx_commits_committed_at;
+
     CREATE TABLE IF NOT EXISTS commits (
       -- First class (in hash)
       hash TEXT PRIMARY KEY,
