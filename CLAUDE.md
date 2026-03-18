@@ -166,7 +166,7 @@ T3X uses PostgreSQL (via Drizzle ORM):
 - **Postgres** for Docker/production
 - **Supabase** adapter available
 
-Key tables: `projects`, `conversations`, `turns`, `branches`, `commits`, `agent_drafts`, `drafts_v3`, `leaves`, `pins`, `leaf_history`, `conversation_contexts`, `segment_embeddings`, `merge_drafts`, `deploy_agents`, `runs`
+Key tables: `projects`, `conversations`, `turns`, `branches`, `commits`, `agent_drafts`, `drafts`, `leaves`, `pins`, `leaf_history`, `conversation_contexts`, `segment_embeddings`, `merge_drafts`, `deploy_agents`, `runs`
 
 ### Hash Chains
 
@@ -326,7 +326,7 @@ vi.mock('@/lib/db', () => ({
 }
 ```
 
-### CommitV4 Record (Current)
+### SentenceCommit Record (Current)
 ```json
 {
   "hash": "sha256:...",
@@ -358,7 +358,7 @@ vi.mock('@/lib/db', () => ({
 }
 ```
 
-**Key difference from V3**: CommitV4 content has sentences ONLY. No constraints. Constraints belong to Leaf.
+**Key point**: SentenceCommit content has sentences ONLY. No constraints. Constraints belong to Leaf.
 
 **Field Classification:**
 - **First-class (in hash)**: `hash`, `schema`, `parents`, `author`, `committed_at`, `content`
@@ -472,7 +472,7 @@ T3X uses prefixed IDs for type safety:
 |------|---------|-------------------|
 | packages/core/src/types/v4/index.ts | TypeScript types | ❌ No |
 | packages/storage/src/schema-v4.ts | Database schema | ❌ No |
-| apps/api/src/schemas/v4-contracts.ts | API contracts | ❌ No |
+| apps/api/src/schemas/contracts.ts | API contracts | ❌ No |
 
 Rule: Contract = Law, Implementation = Freedom
 
@@ -484,7 +484,7 @@ Rule: Contract = Law, Implementation = Freedom
 
 ```typescript
 // ✅ Correct: Import from @t3x-dev/core
-import { CommitV4, Leaf, Pin, Constraint } from '@t3x-dev/core';
+import { SentenceCommit, Leaf, Pin, Constraint } from '@t3x-dev/core';
 
 // ❌ Wrong: Redefine types locally
 interface Leaf { ... }  // DON'T DO THIS
@@ -513,7 +513,7 @@ interface Leaf { ... }  // DON'T DO THIS
 ### V4 Architecture Summary
 
 ```
-CommitV4        = Sentences only (pure knowledge, NO constraints)
+SentenceCommit  = Sentences only (pure knowledge, NO constraints)
 Leaf            = Constraints + Output + Validation (application layer)
 LeafHistory     = Snapshot of each generation (for rollback/comparison)
 Pin             = Source selection (for commit sources + conversation context)
@@ -536,8 +536,8 @@ At the start of a new conversation, read relevant documentation based on task ty
 | **Product Overview** | `docs/product-overview/01-product-and-user-layer.md`, `docs/product-overview/02-architecture-and-design-layer.md`, `docs/product-overview/03-engineering-and-implementation-layer.md` |
 | **Team Collaboration** | `docs/collaboration-protocol.md`, `docs/phase0-protocol.md` |
 | WebUI Development | `apps/web/README.md`, `apps/web/src/store/`, `docs/frontend-rules.md`, `docs/frontend-design-principles.md`, `docs/frontend-art-template.md`, `docs/frontend-ia-map.md` |
-| API / Backend Development | `apps/api/src/schemas/v4-contracts.ts`, `docs/backend-rules.md`, `docs/API_REFERENCE.md`, `apps/api/docs/merge-api.md`, `apps/api/docs/openapi-summary.md` |
-| V4 Architecture Development | `docs/specification/semantic-layer-architecture.md`, `docs/specification/memory-pin-system-design.md` |
+| API / Backend Development | `apps/api/src/schemas/contracts.ts`, `docs/backend-rules.md`, `docs/API_REFERENCE.md`, `apps/api/docs/merge-api.md`, `apps/api/docs/openapi-summary.md` |
+| Architecture Development | `docs/specification/semantic-layer-architecture.md`, `docs/specification/memory-pin-system-design.md` |
 | Source Context / Highlighting | `docs/specification/commit-source-context-presentation.md`, `docs/specification/commit-source-context-implementation-review.md` |
 | Diff / Merge Algorithms | `docs/specification/words-based-diff-merge-architecture.md` |
 | Core Algorithms | `packages/core/src/types/`, `docs/specification/ring-schema.md` |
