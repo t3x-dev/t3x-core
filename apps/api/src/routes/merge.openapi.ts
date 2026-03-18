@@ -338,7 +338,7 @@ mergeRoutes.openapi(executeMergeRoute, async (c) => {
     }));
 
     // Save to storage as V5 commit
-    await createCommit(db, {
+    const savedCommit = await createCommit(db, {
       parents: mergeCommit.parents,
       author: {
         type: mergeCommit.author.type as 'human' | 'agent' | 'system',
@@ -352,16 +352,16 @@ mergeRoutes.openapi(executeMergeRoute, async (c) => {
       provenance: { method: 'merge' },
     });
 
-    // Update branch head if branch specified
+    // Update branch head with the actual V5 commit hash
     if (branch && projectId) {
-      await updateBranchHead(db, projectId, branch, mergeCommit.hash);
+      await updateBranchHead(db, projectId, branch, savedCommit.hash);
     }
 
     // Fire webhook event (fire-and-forget)
     webhookDispatcher.dispatch(
       'merge.completed',
       {
-        commit_hash: mergeCommit.hash,
+        commit_hash: savedCommit?.hash ?? mergeCommit.hash,
         project_id: projectId,
         source_hash,
         target_hash,
@@ -376,7 +376,7 @@ mergeRoutes.openapi(executeMergeRoute, async (c) => {
       title: 'Merge Completed',
       message: `Merge completed on ${branch || 'main'}`,
       project_id: projectId,
-      ref_id: mergeCommit.hash,
+      ref_id: savedCommit.hash,
     });
 
     return c.json(
@@ -789,9 +789,10 @@ mergeRoutes.openapi(commitDraftRoute, async (c) => {
     }));
 
     // Save commit + update branch head + mark draft committed atomically
+    let savedDraftCommitHash = mergeCommit.hash;
     // biome-ignore lint/suspicious/noExplicitAny: AnyDB union doesn't expose .transaction() but all concrete types do
     await (db as any).transaction(async (tx: typeof db) => {
-      await createCommit(tx, {
+      const saved = await createCommit(tx, {
         parents: mergeCommit.parents,
         author: {
           type: mergeCommit.author.type as 'human' | 'agent' | 'system',
@@ -804,7 +805,8 @@ mergeRoutes.openapi(commitDraftRoute, async (c) => {
         branch: mergeCommit.branch,
         provenance: { method: 'merge' },
       });
-      await updateBranchHead(tx, draft.projectId, targetBranch, mergeCommit.hash);
+      savedDraftCommitHash = saved.hash;
+      await updateBranchHead(tx, draft.projectId, targetBranch, saved.hash);
       await commitMergeDraft(tx, id);
     });
 
@@ -812,7 +814,7 @@ mergeRoutes.openapi(commitDraftRoute, async (c) => {
     webhookDispatcher.dispatch(
       'merge.completed',
       {
-        commit_hash: mergeCommit.hash,
+        commit_hash: savedDraftCommitHash,
         project_id: draft.projectId,
         branch: targetBranch,
         source_hash: draft.sourceHash,
@@ -826,7 +828,7 @@ mergeRoutes.openapi(commitDraftRoute, async (c) => {
       title: 'Merge Completed',
       message: `Merged into ${targetBranch} with ${mergeCommit.content.sentences.length} sentence${mergeCommit.content.sentences.length === 1 ? '' : 's'}`,
       project_id: draft.projectId,
-      ref_id: mergeCommit.hash,
+      ref_id: savedDraftCommitHash,
     });
 
     return c.json(

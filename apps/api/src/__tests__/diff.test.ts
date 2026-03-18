@@ -78,10 +78,16 @@ describe('Diff Routes', () => {
 
       (getCommitUnified as ReturnType<typeof vi.fn>)
         .mockResolvedValueOnce({
-          content: { sentences: [{ id: 's1', text: 'Hello world' }] },
+          content: {
+            frames: [{ id: 'f_001', type: 'legacy_sentence', slots: { text: 'Hello world' } }],
+            relations: [],
+          },
         })
         .mockResolvedValueOnce({
-          content: { sentences: [{ id: 's2', text: 'Hello there' }] },
+          content: {
+            frames: [{ id: 'f_002', type: 'legacy_sentence', slots: { text: 'Hello there' } }],
+            relations: [],
+          },
         });
 
       (diffCommits as ReturnType<typeof vi.fn>).mockReturnValue({
