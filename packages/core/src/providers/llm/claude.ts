@@ -11,8 +11,8 @@ import {
   type LLMGenerateResult,
   type LLMPrompt,
   type LLMProvider,
-  type LLMResult,
   LLMProviderError,
+  type LLMResult,
   type StructuredResult,
 } from '../../llm/types';
 import { zodToJsonSchema } from '../../llm/zodToJsonSchema';
@@ -305,11 +305,7 @@ export class ClaudeProvider implements LLMProvider {
         }
       }
 
-      throw new LLMProviderError(
-        this.id,
-        undefined,
-        'No structured data found in response'
-      );
+      throw new LLMProviderError(this.id, undefined, 'No structured data found in response');
     } catch (error) {
       clearTimeout(timeoutId);
       if (error instanceof LLMProviderError) {

@@ -42,29 +42,7 @@ export {
   getBusinessRules,
   putBusinessRules,
 } from './business-rules';
-// Commits V3
-export {
-  type CommitV3Author,
-  type CommitV3Constraint,
-  type CommitV3Content,
-  type CommitV3Output,
-  type CommitV3Sentence,
-  type CommitV3SentenceSource,
-  type CreateCommitV3Input,
-  type CreateCommitV3Options,
-  createCommitV3,
-  deleteCommitV3,
-  findCommitV3History,
-  findCommonAncestorV3,
-  getCommitsV3ByHashes,
-  getCommitV3,
-  getCommitV3Parents,
-  type ListCommitsV3Options,
-  listCommitsV3,
-  ParentNotFoundError,
-  updateCommitV3Position,
-} from './commits-v3';
-// Commits (frame-based — commits_v5)
+// Commits (frame-based)
 export {
   type CreateCommitInput,
   createCommit,
@@ -72,32 +50,12 @@ export {
   getCommit,
   getCommitsByHashes,
   getLatestCommit,
-  listCommits,
   type ListCommitsOptions,
+  listCommits,
   updateCommitPosition,
 } from './commits';
-// Commits V4 (pure knowledge - no constraints)
-export {
-  backfillMerkleRoots,
-  type CreateCommitV4Options,
-  computeCommitV4Hash,
-  createCommitV4,
-  createCommitV4Atomic,
-  deleteCommitV4,
-  findCommitsV4ByBranch,
-  findCommitsV4ByProject,
-  findCommitV4ByHash,
-  findCommitV4History,
-  getCommitsV4ByHashes,
-  getCommitV4Parents,
-  type ListCommitsV4Options,
-  MainBranchLinearityError,
-  ParentHashIntegrityError,
-  ParentNotFoundErrorV4,
-  updateCommitV4Position,
-  validateMainBranchLinearity,
-  verifyMerkleRoots,
-} from './commits-v4';
+// Commits Unified (transition adapter)
+export { getCommitUnified, listCommitsUnified } from './commits-unified';
 // Comparisons (saved A/B comparison snapshots)
 export {
   type CreateComparisonInput,

@@ -4,7 +4,7 @@ import type { StateCreator } from 'zustand';
 import { getTerminology } from '@/hooks/useTerminology';
 import { API_V1, fetchWithTimeout, handleResponse } from '@/lib/api/core';
 import { useSettingsStore } from '@/store/settingsStore';
-import type { CommitV3, Merge2WayResult } from '../types/merge';
+import type { Merge2WayResult } from '../types/merge';
 import type { CanvasNodeData } from '../types/nodes';
 import type { CanvasState, MergeSlice } from './canvasStoreTypes';
 import { edgeStyle, edgeType, snapPosition } from './canvasStoreUtils';
@@ -143,7 +143,17 @@ export const createMergeSlice: StateCreator<CanvasState, [], [], MergeSlice> = (
         }),
       });
 
-      const mergeCommit = (await handleResponse(response)) as CommitV3 & {
+      const mergeCommit = (await handleResponse(response)) as {
+        hash: string;
+        parents: string[];
+        author: { type?: 'human' | 'agent'; name?: string };
+        committed_at: string;
+        content: {
+          sentences: Array<{ id: string; text: string }>;
+          constraints?: Array<{ type: string; value: string }>;
+        };
+        message: string | null | undefined;
+        branch: string | null | undefined;
         merge_summary?: MergeSummaryData;
       };
 
@@ -217,8 +227,8 @@ export const createMergeSlice: StateCreator<CanvasState, [], [], MergeSlice> = (
             author: { type: 'human' as const, ...mergeCommit.author },
             committed_at: mergeCommit.committed_at,
             content: { sentences: mergeCommit.content.sentences },
-            message: mergeCommit.message,
-            branch: mergeCommit.branch,
+            message: mergeCommit.message ?? undefined,
+            branch: mergeCommit.branch ?? undefined,
             merge_summary: mergeCommit.merge_summary,
           },
         },

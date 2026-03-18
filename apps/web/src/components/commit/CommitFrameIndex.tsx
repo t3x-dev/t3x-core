@@ -10,14 +10,14 @@
  * 4. Sources: conversation and leaf source links.
  */
 
+import type { Source } from '@t3x-dev/core';
 import { ChevronRight, Leaf as LeafIcon, Loader2, MessageSquare, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useState } from 'react';
-import { createLeaf } from '@/lib/api';
 import type { Leaf } from '@/lib/api';
+import { createLeaf } from '@/lib/api';
 import type { LeafType } from '@/lib/api/leaves';
-import type { Source } from '@t3x-dev/core';
 import { useCommitDetailStore } from '@/store/commitDetailStore';
 import { useProjectStore } from '@/store/projectStore';
 import { DotIndicator } from './CommitDetailHelpers';
@@ -80,9 +80,7 @@ export function CommitFrameIndex({ projectId, leaves, onLeavesChange }: CommitFr
   const sourceConversations: Source[] = (commit?.sources ?? []).filter(
     (src) => src.type === 'conversation'
   );
-  const sourceLeafRefs: Source[] = (commit?.sources ?? []).filter(
-    (src) => src.type === 'leaf'
-  );
+  const sourceLeafRefs: Source[] = (commit?.sources ?? []).filter((src) => src.type === 'leaf');
 
   // ── Handlers ──────────────────────────────────────
 
@@ -149,9 +147,7 @@ export function CommitFrameIndex({ projectId, leaves, onLeavesChange }: CommitFr
         >
           <DotIndicator status={ef.diffStatus} />
           <div className="min-w-0 flex-1">
-            <div className="truncate text-[11px] font-medium">
-              {formatFrameType(ef.frame.type)}
-            </div>
+            <div className="truncate text-[11px] font-medium">{formatFrameType(ef.frame.type)}</div>
             <div className="truncate font-mono text-[10px] text-[var(--text-tertiary)]">
               {ef.frame.id}
             </div>
@@ -196,11 +192,7 @@ export function CommitFrameIndex({ projectId, leaves, onLeavesChange }: CommitFr
               disabled={leafCreating}
               className="inline-flex items-center gap-1 rounded border border-[var(--stroke-divider)] px-1.5 py-0.5 text-[10px] text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-secondary)] transition-colors disabled:opacity-50"
             >
-              {leafCreating ? (
-                <Loader2 size={10} className="animate-spin" />
-              ) : (
-                <Plus size={10} />
-              )}
+              {leafCreating ? <Loader2 size={10} className="animate-spin" /> : <Plus size={10} />}
               Add
             </button>
             {leafMenuOpen && (

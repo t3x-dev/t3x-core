@@ -369,7 +369,12 @@ function CanvasWorkspaceInner({
               return;
             }
             // Conversation nodes (non-staging unit without commit) -> navigate to chat
-            if (data.kind === 'unit' && data.conversationId && data.commitStatus !== 'staging' && !data.commitHash) {
+            if (
+              data.kind === 'unit' &&
+              data.conversationId &&
+              data.commitStatus !== 'staging' &&
+              !data.commitHash
+            ) {
               router.push(`/chat/${data.conversationId}`);
               return;
             }

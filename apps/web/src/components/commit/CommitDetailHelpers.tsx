@@ -137,4 +137,3 @@ export function GutterBar({ status }: { status: string }) {
     />
   );
 }
-

@@ -9,8 +9,8 @@
  * 5. Preview stale detection (after update, preview should be stale)
  */
 
-import { insertProject } from '@t3x-dev/storage';
 import type { AnyDB } from '@t3x-dev/storage';
+import { insertProject } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
@@ -312,7 +312,7 @@ describe('Drafts V2 Features', () => {
       expect(data.success).toBe(true);
       expect(data.data.commit).toBeDefined();
       expect(data.data.commit.hash).toMatch(/^sha256:/);
-      expect(data.data.commit.content.sentences).toHaveLength(2);
+      expect(data.data.commit.content.frames).toHaveLength(2);
       expect(data.data.draft_status).toBe('committed');
     });
 

@@ -16,7 +16,7 @@
  */
 
 import type { LLMCallLogger, LLMProvider } from '../llm/types';
-import type { SemanticContent, Frame, Relation, SlotValue } from '../semantic/types';
+import type { Frame, Relation, SemanticContent, SlotValue } from '../semantic/types';
 import type { FrameExtractionTurn } from './frameExtractionPrompt';
 
 // ── Pipeline Mode ──
@@ -131,7 +131,7 @@ export interface DispatchDecision {
 export function defaultDispatch(
   ctx: PipelineContext,
   registry: AgentRegistry,
-  options?: PipelineOptions
+  options?: PipelineOptions,
 ): DispatchDecision {
   const disabled = new Set(options?.disabledAgents ?? []);
   const agents = registry.getAll();
@@ -208,7 +208,13 @@ function computeMetrics(content: SemanticContent): QualityMetrics {
   function measureDepth(slots: Record<string, SlotValue>, depth: number): number {
     let max = depth;
     for (const value of Object.values(slots)) {
-      if (typeof value === 'object' && value !== null && !Array.isArray(value) && 'type' in value && 'slots' in value) {
+      if (
+        typeof value === 'object' &&
+        value !== null &&
+        !Array.isArray(value) &&
+        'type' in value &&
+        'slots' in value
+      ) {
         const d = measureDepth((value as { slots: Record<string, SlotValue> }).slots, depth + 1);
         if (d > max) max = d;
       }
@@ -233,12 +239,12 @@ function computeMetrics(content: SemanticContent): QualityMetrics {
 
   // Score: penalize too many frames, duplicates, shallow nesting
   let score = 100;
-  if (frames.length > 8) score -= (frames.length - 8) * 5;    // Too many frames
-  if (frames.length > 15) score -= 20;                         // Way too many
-  if (duplicateTypes > 0) score -= duplicateTypes * 10;        // Duplicates bad
-  if (maxDepth < 2 && frames.length > 3) score -= 15;         // Too flat
-  if (avgSlotsPerFrame < 2) score -= 10;                       // Too thin
-  if (framesWithArrays > 0) score += 5;                        // Arrays good
+  if (frames.length > 8) score -= (frames.length - 8) * 5; // Too many frames
+  if (frames.length > 15) score -= 20; // Way too many
+  if (duplicateTypes > 0) score -= duplicateTypes * 10; // Duplicates bad
+  if (maxDepth < 2 && frames.length > 3) score -= 15; // Too flat
+  if (avgSlotsPerFrame < 2) score -= 10; // Too thin
+  if (framesWithArrays > 0) score += 5; // Arrays good
   score = Math.max(0, Math.min(100, score));
 
   return {

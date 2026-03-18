@@ -12,10 +12,11 @@
  * DELETE /v1/merge/drafts/:id - Delete a merge draft
  */
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import type { CreateCommitV4Input, MergeSummaryData, SlotValue } from '@t3x-dev/core';
+import type { MergeSummaryData, SlotValue } from '@t3x-dev/core';
 import {
   executeMerge,
   type FrameMergeInput,
+  framesToTextSegments,
   type Merge2WayResult,
   prepareMerge,
   suggestFrameMerge,
@@ -23,11 +24,11 @@ import {
 } from '@t3x-dev/core';
 import {
   commitMergeDraft,
-  createCommitV4,
+  createCommit,
   createMergeDraft,
   deleteMergeDraft,
-  findCommitV4ByHash,
   findPendingMergeDraft,
+  getCommitUnified,
   getMergeDraft,
   updateBranchHead,
   updateMergeDraft,
@@ -112,8 +113,8 @@ mergeRoutes.openapi(prepareMergeRoute, async (c) => {
   try {
     const db = await getDB();
 
-    // Load V4 commits
-    const sourceCommit = await findCommitV4ByHash(db, source_hash);
+    // Load commits (unified, auto-upgrades V4)
+    const sourceCommit = await getCommitUnified(db, source_hash);
     if (!sourceCommit) {
       return c.json(
         {
@@ -127,7 +128,7 @@ mergeRoutes.openapi(prepareMergeRoute, async (c) => {
       );
     }
 
-    const targetCommit = await findCommitV4ByHash(db, target_hash);
+    const targetCommit = await getCommitUnified(db, target_hash);
     if (!targetCommit) {
       return c.json(
         {
@@ -141,8 +142,11 @@ mergeRoutes.openapi(prepareMergeRoute, async (c) => {
       );
     }
 
-    // Prepare merge using V4 sentences (DiffableSentence[])
-    const prepared = prepareMerge(sourceCommit.content.sentences, targetCommit.content.sentences);
+    // Prepare merge using text segments extracted from frames
+    const prepared = prepareMerge(
+      framesToTextSegments(sourceCommit.content),
+      framesToTextSegments(targetCommit.content)
+    );
 
     return c.json({ success: true as const, data: prepared }, 200);
   } catch (error) {
@@ -267,7 +271,7 @@ mergeRoutes.openapi(executeMergeRoute, async (c) => {
 
   try {
     // Get project_id from source commit for executeMerge
-    const sourceCommit = await findCommitV4ByHash(db, source_hash);
+    const sourceCommit = await getCommitUnified(db, source_hash);
     if (!sourceCommit) {
       return c.json(
         {
@@ -325,30 +329,39 @@ mergeRoutes.openapi(executeMergeRoute, async (c) => {
       total_sentences: mergeCommit.content.sentences.length,
     };
 
-    // Convert to CreateCommitV4Input format
-    const commitInput: CreateCommitV4Input = {
+    // Convert sentences to legacy_sentence frames
+    const frames = mergeCommit.content.sentences.map((s, i) => ({
+      id: s.id || `f_${String(i + 1).padStart(3, '0')}`,
+      type: 'legacy_sentence' as const,
+      slots: { text: s.text },
+      confidence: s.confidence,
+    }));
+
+    // Save to storage as frame-based commit
+    const savedCommit = await createCommit(db, {
       parents: mergeCommit.parents,
-      author: mergeCommit.author,
-      sentences: mergeCommit.content.sentences,
+      author: {
+        type: mergeCommit.author.type as 'human' | 'agent' | 'system',
+        name: mergeCommit.author.name,
+        id: mergeCommit.author.id,
+      },
+      content: { frames, relations: [] },
       project_id: projectId,
       message: mergeCommit.message,
       branch: mergeCommit.branch,
-      merge_summary: mergeSummary,
-    };
+      provenance: { method: 'merge' },
+    });
 
-    // Save to storage as V4 commit
-    await createCommitV4(db, commitInput, { strictParents: false });
-
-    // Update branch head if branch specified
+    // Update branch head with the actual commit hash
     if (branch && projectId) {
-      await updateBranchHead(db, projectId, branch, mergeCommit.hash);
+      await updateBranchHead(db, projectId, branch, savedCommit.hash);
     }
 
     // Fire webhook event (fire-and-forget)
     webhookDispatcher.dispatch(
       'merge.completed',
       {
-        commit_hash: mergeCommit.hash,
+        commit_hash: savedCommit?.hash ?? mergeCommit.hash,
         project_id: projectId,
         source_hash,
         target_hash,
@@ -363,7 +376,7 @@ mergeRoutes.openapi(executeMergeRoute, async (c) => {
       title: 'Merge Completed',
       message: `Merge completed on ${branch || 'main'}`,
       project_id: projectId,
-      ref_id: mergeCommit.hash,
+      ref_id: savedCommit.hash,
     });
 
     return c.json(
@@ -465,8 +478,8 @@ mergeRoutes.openapi(createDraftRoute, async (c) => {
     );
   }
 
-  // Load V4 commits
-  const sourceCommit = await findCommitV4ByHash(db, source_hash);
+  // Load commits (unified, auto-upgrades V4)
+  const sourceCommit = await getCommitUnified(db, source_hash);
   if (!sourceCommit) {
     return c.json(
       {
@@ -477,7 +490,7 @@ mergeRoutes.openapi(createDraftRoute, async (c) => {
     );
   }
 
-  const targetCommit = await findCommitV4ByHash(db, target_hash);
+  const targetCommit = await getCommitUnified(db, target_hash);
   if (!targetCommit) {
     return c.json(
       {
@@ -488,8 +501,11 @@ mergeRoutes.openapi(createDraftRoute, async (c) => {
     );
   }
 
-  // Prepare merge using V4 sentences
-  const prepared = prepareMerge(sourceCommit.content.sentences, targetCommit.content.sentences);
+  // Prepare merge using text segments extracted from frames
+  const prepared = prepareMerge(
+    framesToTextSegments(sourceCommit.content),
+    framesToTextSegments(targetCommit.content)
+  );
 
   // Create draft
   const draft = await createMergeDraft(db, {
@@ -764,22 +780,33 @@ mergeRoutes.openapi(commitDraftRoute, async (c) => {
       total_sentences: mergeCommit.content.sentences.length,
     };
 
-    // Convert to CreateCommitV4Input format
-    const commitInput: CreateCommitV4Input = {
-      parents: mergeCommit.parents,
-      author: mergeCommit.author,
-      sentences: mergeCommit.content.sentences,
-      project_id: draft.projectId,
-      message: mergeCommit.message,
-      branch: mergeCommit.branch,
-      merge_summary: draftMergeSummary,
-    };
+    // Convert sentences to legacy_sentence frames
+    const draftFrames = mergeCommit.content.sentences.map((s, i) => ({
+      id: s.id || `f_${String(i + 1).padStart(3, '0')}`,
+      type: 'legacy_sentence' as const,
+      slots: { text: s.text },
+      confidence: s.confidence,
+    }));
 
     // Save commit + update branch head + mark draft committed atomically
+    let savedDraftCommitHash = mergeCommit.hash;
     // biome-ignore lint/suspicious/noExplicitAny: AnyDB union doesn't expose .transaction() but all concrete types do
     await (db as any).transaction(async (tx: typeof db) => {
-      await createCommitV4(tx, commitInput, { strictParents: false });
-      await updateBranchHead(tx, draft.projectId, targetBranch, mergeCommit.hash);
+      const saved = await createCommit(tx, {
+        parents: mergeCommit.parents,
+        author: {
+          type: mergeCommit.author.type as 'human' | 'agent' | 'system',
+          name: mergeCommit.author.name,
+          id: mergeCommit.author.id,
+        },
+        content: { frames: draftFrames, relations: [] },
+        project_id: draft.projectId,
+        message: mergeCommit.message,
+        branch: mergeCommit.branch,
+        provenance: { method: 'merge' },
+      });
+      savedDraftCommitHash = saved.hash;
+      await updateBranchHead(tx, draft.projectId, targetBranch, saved.hash);
       await commitMergeDraft(tx, id);
     });
 
@@ -787,7 +814,7 @@ mergeRoutes.openapi(commitDraftRoute, async (c) => {
     webhookDispatcher.dispatch(
       'merge.completed',
       {
-        commit_hash: mergeCommit.hash,
+        commit_hash: savedDraftCommitHash,
         project_id: draft.projectId,
         branch: targetBranch,
         source_hash: draft.sourceHash,
@@ -801,7 +828,7 @@ mergeRoutes.openapi(commitDraftRoute, async (c) => {
       title: 'Merge Completed',
       message: `Merged into ${targetBranch} with ${mergeCommit.content.sentences.length} sentence${mergeCommit.content.sentences.length === 1 ? '' : 's'}`,
       project_id: draft.projectId,
-      ref_id: mergeCommit.hash,
+      ref_id: savedDraftCommitHash,
     });
 
     return c.json(

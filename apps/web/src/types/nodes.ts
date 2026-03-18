@@ -31,47 +31,6 @@ export interface LeafNodeConfig {
 }
 
 // ============================================
-// CommitV3 Display Types
-// ============================================
-
-/**
- * CommitV3 display data for canvas nodes
- * Sentence-based semantic commits with constraints
- */
-export interface CommitV3Display {
-  hash: string;
-  schema: 'commit/v3';
-  author: {
-    name: string;
-    verification?: 'none' | 'device' | 'verified';
-  };
-  committed_at: string;
-  sentences: SentenceDisplay[];
-  constraints: ConstraintDisplay[];
-  message?: string;
-  branch?: string;
-}
-
-export interface SentenceDisplay {
-  id: string;
-  text: string;
-  /** Source reference for tracing back to original turn */
-  source?: {
-    turn_hash: string;
-    start_char: number;
-    end_char: number;
-  };
-}
-
-export interface ConstraintDisplay {
-  type: 'require' | 'exclude';
-  id: string;
-  value: string;
-  match: 'exact' | 'semantic';
-  source_sentence_id?: string;
-}
-
-// ============================================
 // CommitV4 Display Types
 // Re-export from @t3x-dev/core contract types
 // ============================================
@@ -118,9 +77,9 @@ export type CommitV4Display = Pick<
 >;
 
 /**
- * Union type for commit display - supports both V3 and V4
+ * Commit display type (V4 only)
  */
-export type CommitDisplay = CommitV3Display | CommitV4Display;
+export type CommitDisplay = CommitV4Display;
 
 // ============================================
 // Embedded Leaf (inside UnitNode)
@@ -557,12 +516,6 @@ export interface CanvasNodeData {
    * @format SentenceWithAnchors[] with confirmed anchor spans
    */
   anchors?: CommitAnchors;
-
-  /**
-   * CommitV3 data for sentence-based commits
-   * @display UnitNode: Sentences list and constraint badges
-   */
-  commitV3?: CommitV3Display;
 
   /**
    * CommitV4 data for V4 architecture (sentences only, no constraints)

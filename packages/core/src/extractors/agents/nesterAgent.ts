@@ -9,13 +9,18 @@
  * No LLM needed — pure deterministic transformation.
  */
 
+import type { LLMProvider } from '../../llm/types';
 import type { Frame, Relation, SemanticContent, SlotValue } from '../../semantic/types';
 import type { MeaningAgent, PipelineContext } from '../meaningPipeline';
-import type { LLMProvider } from '../../llm/types';
 
 /** Relations that indicate parent-child nesting */
 const NESTING_RELATIONS = new Set([
-  'elaborates', 'conditions', 'depends', 'follows', 'causes', 'contrasts',
+  'elaborates',
+  'conditions',
+  'depends',
+  'follows',
+  'causes',
+  'contrasts',
 ]);
 
 /** Frame types that MUST stay as top-level frames — never nest into other frames */

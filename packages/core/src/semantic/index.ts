@@ -13,6 +13,13 @@ export { BusinessGate, evaluateRule, parseGatesConfig } from './businessGate';
 export { applyDelta, buildDraft } from './delta';
 // Diff
 export { frameDiff } from './diff';
+// Frame-to-Text
+export {
+  type FrameTextSegment,
+  framesToNumberedText,
+  framesToTextSegments,
+  frameToText,
+} from './frameToText';
 // Gate (Gate 2 — Semantic)
 export {
   buildCoveragePrompt,
@@ -24,7 +31,7 @@ export {
 // Gate Runner (Orchestrator)
 export { GateRunner, type GateRunnerOptions } from './gateRunner';
 // Merge
-export { prepareFrameMerge } from './merge';
+export { executeFrameMerge, prepareFrameMerge } from './merge';
 // Zod Schemas
 export {
   DeltaSchema,
@@ -46,6 +53,7 @@ export type {
   Frame,
   FrameChange,
   FrameDiff,
+  FrameMergeDecision,
   FrameMergeResult,
   FrameRelationType,
   GateDimension,

@@ -11,7 +11,6 @@ import { z } from '@hono/zod-openapi';
 
 /**
  * Sentence schema
- * Matches @t3x-dev/core Sentence type from commit-v3.ts
  */
 export const SentenceSchema = z.object({
   id: z.string().openapi({
@@ -244,8 +243,9 @@ export const MergeCommitSchema = z.object({
     description: 'Commit hash (sha256:...)',
     example: 'sha256:merge789...',
   }),
-  schema: z.literal('commit/v3').openapi({
+  schema: z.string().openapi({
     description: 'Commit schema version',
+    example: 't3x/commit/v4',
   }),
   parents: z.array(z.string()).openapi({
     description: 'Parent commit hashes [source, target]',

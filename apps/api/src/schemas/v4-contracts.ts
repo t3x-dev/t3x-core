@@ -124,13 +124,21 @@ export const SentenceSchema = z.object({
 // Constraint Schema
 // ═══════════════════════════════════════════════════════════════════════════
 
+export const ConstraintSourceFrameSchema = z.object({
+  frame_type: z.string(),
+  slot_key: z.string().optional(),
+});
+
 export const ConstraintSchema = z.object({
   id: z.string().optional(), // Optional on create, required on response
   type: z.enum(['require', 'exclude']),
   match_mode: z.enum(['exact', 'semantic']),
   value: z.string().min(1),
   description: z.string().optional(),
+  /** @deprecated Use source_frame for frame-based commits */
   source_sentence_id: z.string().optional(),
+  /** Link to source frame + slot (frame-based traceability) */
+  source_frame: ConstraintSourceFrameSchema.optional(),
   reason: z.string().optional(), // For exclude constraints
 });
 

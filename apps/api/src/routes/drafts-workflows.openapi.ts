@@ -21,7 +21,7 @@ import {
 import {
   ConflictError,
   commitDraftV3,
-  createCommitV4,
+  createCommit,
   createLeaf,
   findDraftV3ById,
   forkDraftV3,
@@ -460,7 +460,7 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
     }>;
 
     if (draft.extraction_mode === 'llm') {
-      // LLM mode: convert staged SemanticPoints to SentenceV5
+      // LLM mode: convert staged SemanticPoints to sentences
       const activeSPs = ((draft.semantic_points ?? []) as SemanticPoint[]).filter(
         (sp) => sp.zone === 'ready' && sp.status !== 'undone' && sp.staged
       );
@@ -502,14 +502,21 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
     // 4. Set parents
     const parents = draft.parent_commit_hash ? [draft.parent_commit_hash] : [];
 
-    // 5. Create CommitV4
-    const commit = await createCommitV4(db, {
+    // 5. Create commit (convert sentences to legacy_sentence frames)
+    const commitFrames = sentences.map((s, i) => ({
+      id: s.id || `f_${String(i + 1).padStart(3, '0')}`,
+      type: 'legacy_sentence' as const,
+      slots: { text: s.text },
+      confidence: s.confidence,
+    }));
+    const commit = await createCommit(db, {
       parents,
-      author: { type: 'human', name: 'workbench' },
-      sentences,
+      author: { type: 'human' as const, name: 'workbench' },
+      content: { frames: commitFrames, relations: [] },
       project_id: draft.project_id,
       message: body?.message ?? `Draft: ${draft.title}`,
       branch: draft.target_branch ?? 'main',
+      provenance: { method: 'human_curation' },
     });
 
     // 6. Optionally create Leaf (if constraints or preview_type exist)
@@ -567,7 +574,7 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
     // 8. Build response
     const commitResponse = {
       hash: commit.hash,
-      schema: commit.schema as 't3x/commit/v4',
+      schema: commit.schema,
       parents: commit.parents,
       author: commit.author,
       committed_at: commit.committed_at,
@@ -575,10 +582,10 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
       project_id: commit.project_id ?? null,
       message: commit.message ?? null,
       branch: commit.branch ?? null,
-      source_refs: commit.source_refs ?? null,
+      sources: commit.sources ?? null,
+      provenance: commit.provenance ?? null,
       position_x: commit.position_x ?? null,
       position_y: commit.position_y ?? null,
-      created_at: commit.created_at ?? new Date().toISOString(),
     };
 
     const leafResponse = leaf

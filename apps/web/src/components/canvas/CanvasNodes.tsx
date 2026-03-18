@@ -40,12 +40,12 @@ import { useProjectStore } from '@/store/projectStore';
 import type { CanvasNodeData, EmbeddedLeaf } from '@/types/nodes';
 
 import {
-  SOURCE_ICONS,
   constellationColors,
   getToneAccentKey,
+  SOURCE_ICONS,
   useSemanticZoom,
 } from './CanvasNodeUtils';
-import { CommitV3Content, CommitV4Content, PREVIEW_MAX_SENTENCES } from './CommitNodeContent';
+import { CommitV4Content, PREVIEW_MAX_SENTENCES } from './CommitNodeContent';
 import { NodeLeavesSection } from './NodeLeavesSection';
 
 // Re-export LEAF_TYPES for backward compatibility
@@ -212,11 +212,10 @@ const UnitNode = memo(function UnitNode(props: Props) {
     }
   };
 
-  // Copy commit hash to clipboard (V4/V3 hash takes priority)
+  // Copy commit hash to clipboard
   const handleCopyHash = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const hash =
-      data.commitV4?.hash || data.commitV3?.hash || data.commitHash || data.entryId || '';
+    const hash = data.commitV4?.hash || data.commitHash || data.entryId || '';
     navigator.clipboard
       .writeText(hash)
       .then(() => {
@@ -285,9 +284,7 @@ const UnitNode = memo(function UnitNode(props: Props) {
     ? 0 // Draft shows its own summary in title area
     : data.commitV4
       ? data.commitV4.content.sentences.length
-      : data.commitV3
-        ? data.commitV3.sentences.length
-        : 0;
+      : 0;
 
   // Constellation mode — render minified dot at low zoom
   if (isConstellation) {
@@ -426,9 +423,9 @@ const UnitNode = memo(function UnitNode(props: Props) {
                   <GitBranch size={11} className={toneAccent.branch.text} />
                 )}
                 <span className="font-medium text-[var(--text-primary)]">{branchLabel}</span>
-                {(data.commitV4?.hash || data.commitV3?.hash || data.commitHash) && (
+                {(data.commitV4?.hash || data.commitHash) && (
                   <span className="font-mono text-[var(--text-tertiary)] text-[10px]">
-                    {(data.commitV4?.hash || data.commitV3?.hash || data.commitHash || '')
+                    {(data.commitV4?.hash || data.commitHash || '')
                       .replace('sha256:', '')
                       .slice(0, 7)}
                   </span>
@@ -581,9 +578,9 @@ const UnitNode = memo(function UnitNode(props: Props) {
           </div>
 
           {/* Row 2: Self hash (committed only) */}
-          {isCommitted && (data.commitV4?.hash || data.commitV3?.hash || data.commitHash) && (
+          {isCommitted && (data.commitV4?.hash || data.commitHash) && (
             <div className="font-mono text-[11px] text-[var(--text-tertiary)] mb-1">
-              {(data.commitV4?.hash || data.commitV3?.hash || data.commitHash || '')
+              {(data.commitV4?.hash || data.commitHash || '')
                 .replace('sha256:', 'sha:')
                 .slice(0, 11)}
             </div>
@@ -646,7 +643,7 @@ const UnitNode = memo(function UnitNode(props: Props) {
           )}
 
           {/* B-8: Details toggle */}
-          {(data.commitV3 || data.commitV4 || data.commitHash) && (
+          {(data.commitV4 || data.commitHash) && (
             <button
               type="button"
               className="w-full flex items-center justify-center gap-1 text-xs text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] py-1 rounded hover:bg-[var(--hover-bg)] transition-colors nodrag"
@@ -673,13 +670,7 @@ const UnitNode = memo(function UnitNode(props: Props) {
                         onClick={handleCopyHash}
                         className="inline-flex items-center gap-1 font-mono text-[var(--text-tertiary)] bg-[var(--hover-bg)] hover:bg-[var(--hover-bg-strong)] px-1.5 py-0.5 rounded text-xs transition-colors cursor-pointer"
                       >
-                        {(
-                          data.commitV4?.hash ||
-                          data.commitV3?.hash ||
-                          data.commitHash ||
-                          data.entryId ||
-                          ''
-                        )
+                        {(data.commitV4?.hash || data.commitHash || data.entryId || '')
                           .replace('sha256:', 'sha:')
                           .slice(0, 11)}
                         {copiedHash ? (
@@ -779,37 +770,27 @@ const UnitNode = memo(function UnitNode(props: Props) {
                     </span>
                   )}
                 </div>
-                {!data.commitV3 &&
-                  isStaging &&
-                  (data.mustHave?.length || 0) + (data.mustntHave?.length || 0) > 0 && (
-                    <span className="text-xs font-medium">
-                      <span className="text-[var(--status-success)]">
-                        {data.mustHave?.length || 0}✓
-                      </span>{' '}
-                      <span className="text-[var(--status-error)]">
-                        {data.mustntHave?.length || 0}✗
-                      </span>
+                {isStaging && (data.mustHave?.length || 0) + (data.mustntHave?.length || 0) > 0 && (
+                  <span className="text-xs font-medium">
+                    <span className="text-[var(--status-success)]">
+                      {data.mustHave?.length || 0}✓
+                    </span>{' '}
+                    <span className="text-[var(--status-error)]">
+                      {data.mustntHave?.length || 0}✗
                     </span>
-                  )}
-                {!data.commitV3 && !isStaging && data.summary && (
+                  </span>
+                )}
+                {!isStaging && data.summary && (
                   <span className="text-xs text-[var(--text-tertiary)] truncate max-w-[100px]">
                     {data.summary}
                   </span>
                 )}
               </div>
 
-              {/* V3/V4: Sentences and Constraints content */}
+              {/* V4: Sentences content */}
               {data.commitV4 && (
                 <CommitV4Content
                   commit={data.commitV4}
-                  onViewFull={() => openNodeModal(id, 'commit')}
-                  projectId={projectId}
-                  maxSentences={isDetail ? Number.MAX_SAFE_INTEGER : PREVIEW_MAX_SENTENCES}
-                />
-              )}
-              {data.commitV3 && !data.commitV4 && (
-                <CommitV3Content
-                  commit={data.commitV3}
                   onViewFull={() => openNodeModal(id, 'commit')}
                   projectId={projectId}
                   maxSentences={isDetail ? Number.MAX_SAFE_INTEGER : PREVIEW_MAX_SENTENCES}

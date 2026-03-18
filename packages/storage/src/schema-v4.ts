@@ -1,11 +1,10 @@
 /**
- * T3X V4 Architecture Database Schema
+ * T3X Database Schema — Leaves, Pins, Contexts, Drafts
  *
- * This defines the database tables for V4 architecture.
- * All tables are additive - we don't modify existing V3 tables.
+ * commits_v4 table is RETIRED (kept for migration reference only).
+ * Active commit storage is in schema-commits.ts (commits table).
  *
  * Key tables:
- * - commits_v4: Pure knowledge (sentences only, no constraints)
  * - leaves: Application layer (owns constraints, output, validation)
  * - pins: Source selection mechanism
  * - conversation_contexts: Per-conversation context customization
@@ -111,22 +110,12 @@ export type AccountRecord = typeof accounts.$inferSelect;
 export type AccountInsert = typeof accounts.$inferInsert;
 
 // ═══════════════════════════════════════════════════════════════════════════
-// commits_v4: Pure Knowledge Storage
+// commits_v4: RETIRED — Table definition kept for migration reference only.
+// All production queries now use commits table (schema-commits.ts).
+// DROP TABLE commits_v4 should be run during deployment after data migration.
 // ═══════════════════════════════════════════════════════════════════════════
 
-/**
- * CommitV4 stores pure knowledge (sentences only).
- *
- * Key difference from commits_v3:
- * - content.sentences exists
- * - content.constraints does NOT exist (moved to leaves)
- *
- * JSONB columns:
- * - parents: string[]
- * - author: { type: 'human' | 'agent', id?: string, name?: string }
- * - content: { sentences: Sentence[] }
- * - source_refs: CommitSourceRef[]
- */
+/** @deprecated Retired — kept for migration tooling reference only */
 export const commitsV4 = pgTable(
   'commits_v4',
   {
@@ -297,7 +286,10 @@ export const leaves = pgTable(
           match_mode: 'exact' | 'semantic';
           value: string;
           description?: string;
+          /** @deprecated Use source_frame instead */
           source_sentence_id?: string;
+          /** Frame-based source reference */
+          source_frame?: { frame_type: string; slot_key?: string };
           reason?: string;
         }>
       >()

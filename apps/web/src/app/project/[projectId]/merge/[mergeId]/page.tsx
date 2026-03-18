@@ -78,5 +78,11 @@ export default function MergeWorkspacePage() {
     );
   }
 
-  return <MergeWorkspace projectId={projectId} onClose={handleClose} onMergeCommitted={handleMergeCommitted} />;
+  return (
+    <MergeWorkspace
+      projectId={projectId}
+      onClose={handleClose}
+      onMergeCommitted={handleMergeCommitted}
+    />
+  );
 }

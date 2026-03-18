@@ -6,8 +6,12 @@ import type { MergeSimilarPair } from '../types';
 function makeMockLLM(response: string): LLMProvider {
   return {
     id: 'mock',
-    generate: vi.fn().mockResolvedValue({ text: response, usage: { inputTokens: 10, outputTokens: 5 } }),
-    resolveConflict: vi.fn().mockResolvedValue({ text: response, usage: { inputTokens: 10, outputTokens: 5 } }),
+    generate: vi
+      .fn()
+      .mockResolvedValue({ text: response, usage: { inputTokens: 10, outputTokens: 5 } }),
+    resolveConflict: vi
+      .fn()
+      .mockResolvedValue({ text: response, usage: { inputTokens: 10, outputTokens: 5 } }),
   };
 }
 

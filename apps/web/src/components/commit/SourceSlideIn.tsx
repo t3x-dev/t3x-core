@@ -9,15 +9,14 @@
  * colored border + reduced opacity on non-source turns.
  */
 
-import { X, ExternalLink, MessageSquare, ChevronRight } from 'lucide-react';
+import type { SlotSourceRef } from '@t3x-dev/core';
+import { ChevronRight, ExternalLink, MessageSquare, X } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
-
 import { TurnBubble } from '@/components/shared/TurnBubble';
 import { listTurns } from '@/lib/api/turns';
 import { useCommitDetailStore } from '@/store/commitDetailStore';
 import type { TurnBubbleData } from '@/types/sourceContext';
-import type { SlotSourceRef } from '@t3x-dev/core';
 
 // ============================================================================
 // Types
@@ -101,7 +100,9 @@ function StatusBadge({ status }: { status: 'changed' | 'added' | 'source' }) {
   const labels = { changed: 'changed', added: 'added', source: 'source' } as const;
 
   return (
-    <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium ${styles[status]}`}>
+    <span
+      className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium ${styles[status]}`}
+    >
       {labels[status]}
     </span>
   );
@@ -151,14 +152,8 @@ function TabToggle({
 // ============================================================================
 
 export function SourceSlideIn({ projectId }: SourceSlideInProps) {
-  const {
-    commit,
-    enrichedFrames,
-    activeFrameId,
-    sourceViewer,
-    closeSourceViewer,
-    setSourceTab,
-  } = useCommitDetailStore();
+  const { commit, enrichedFrames, activeFrameId, sourceViewer, closeSourceViewer, setSourceTab } =
+    useCommitDetailStore();
 
   const { isOpen, activeSlotKey, activeTab } = sourceViewer;
 
@@ -262,7 +257,9 @@ export function SourceSlideIn({ projectId }: SourceSlideInProps) {
     if (!slotSource) return false;
     // Match by turn_hash if available
     if (slotSource.turn_hash) {
-      return turn.turn_hash === slotSource.turn_hash || turn.turn_hash.startsWith(slotSource.turn_hash);
+      return (
+        turn.turn_hash === slotSource.turn_hash || turn.turn_hash.startsWith(slotSource.turn_hash)
+      );
     }
     // Fallback: match by turn tag (e.g., "T3" → index 2)
     if (slotSource.turn && /^T\d+$/.test(slotSource.turn)) {
@@ -366,9 +363,7 @@ export function SourceSlideIn({ projectId }: SourceSlideInProps) {
             <div className="flex flex-col items-center justify-center gap-3 py-16 text-center px-6">
               <MessageSquare size={24} className="text-[var(--text-tertiary)]" />
               <p className="text-[13px] text-[var(--text-tertiary)]">
-                {!hasSource
-                  ? 'No source available for this slot.'
-                  : 'No conversation turns found.'}
+                {!hasSource ? 'No source available for this slot.' : 'No conversation turns found.'}
               </p>
             </div>
           )}
@@ -388,11 +383,7 @@ export function SourceSlideIn({ projectId }: SourceSlideInProps) {
                         : 'opacity-50'
                     }`}
                   >
-                    <TurnBubble
-                      turn={turnData}
-                      highlightColor="green"
-                      showTargetRing={false}
-                    />
+                    <TurnBubble turn={turnData} highlightColor="green" showTargetRing={false} />
                   </div>
                 );
               })}

@@ -23,7 +23,15 @@ const PANEL_WIDTHS: Record<string, number> = {
 
 // ── Collapsed rail ──
 
-function CollapsedRail({ frameCount, isExtracting, onExpand }: { frameCount: number; isExtracting: boolean; onExpand: () => void }) {
+function CollapsedRail({
+  frameCount,
+  isExtracting,
+  onExpand,
+}: {
+  frameCount: number;
+  isExtracting: boolean;
+  onExpand: () => void;
+}) {
   return (
     <div className="flex h-full flex-col items-center py-4 gap-3">
       <button
@@ -130,9 +138,7 @@ function CommitPreviewSection() {
   return (
     <div className="flex flex-col gap-2 p-3">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-semibold text-[var(--text-primary)]">
-          Commit Preview
-        </span>
+        <span className="text-xs font-semibold text-[var(--text-primary)]">Commit Preview</span>
         <span className="text-[10px] text-[var(--text-tertiary)]">
           {deltaSentences.length} new sentence{deltaSentences.length !== 1 ? 's' : ''}
         </span>
@@ -157,7 +163,9 @@ function CommitPreviewSection() {
       </div>
 
       <div className="flex items-center gap-2 text-[10px] text-[var(--text-tertiary)]">
-        <span>Branch: <strong>{commitBranch}</strong></span>
+        <span>
+          Branch: <strong>{commitBranch}</strong>
+        </span>
         <span>·</span>
         <span>{lastCommitHash ? `Parent: ${lastCommitHash.slice(0, 12)}` : 'Root commit'}</span>
       </div>
@@ -178,7 +186,9 @@ function CommitPreviewSection() {
       {commitError && (
         <div className="text-[11px] text-red-400 bg-red-400/10 rounded px-2 py-1">
           {commitError}
-          <button type="button" onClick={clearCommitError} className="ml-2 underline">dismiss</button>
+          <button type="button" onClick={clearCommitError} className="ml-2 underline">
+            dismiss
+          </button>
         </div>
       )}
 
@@ -223,9 +233,10 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
   const updated = lastDeltaChanges.filter((c) => c.action === 'update').length;
   const removed = lastDeltaChanges.filter((c) => c.action === 'remove').length;
   const hasChanges = added + updated + removed > 0;
-  const targetWidth = panelMode === 'collapsed'
-    ? PANEL_WIDTHS.collapsed
-    : (customWidth ?? PANEL_WIDTHS[panelMode] ?? 320);
+  const targetWidth =
+    panelMode === 'collapsed'
+      ? PANEL_WIDTHS.collapsed
+      : (customWidth ?? PANEL_WIDTHS[panelMode] ?? 320);
 
   // Keyboard shortcut: Cmd+] to toggle panel
   useEffect(() => {
@@ -270,10 +281,15 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
                 </span>
               )}
               {hasChanges && !isExtracting && (
-                <span style={{
-                  fontSize: 10, padding: '1px 6px', borderRadius: 4,
-                  background: 'var(--hover-bg)', color: 'var(--text-secondary)',
-                }}>
+                <span
+                  style={{
+                    fontSize: 10,
+                    padding: '1px 6px',
+                    borderRadius: 4,
+                    background: 'var(--hover-bg)',
+                    color: 'var(--text-secondary)',
+                  }}
+                >
                   {added > 0 && <span style={{ color: '#4ade80' }}>+{added}</span>}
                   {updated > 0 && <span style={{ color: '#facc15' }}> ~{updated}</span>}
                   {removed > 0 && <span style={{ color: '#f87171' }}> -{removed}</span>}
@@ -295,11 +311,17 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
 
           {/* Focus intent toggle */}
           <div className="px-3 py-1.5 border-b border-[var(--stroke-default)]">
-            <label style={{
-              display: 'flex', alignItems: 'center', gap: 4,
-              fontSize: 11, color: 'var(--text-secondary)', cursor: 'pointer',
-              padding: '2px 0',
-            }}>
+            <label
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+                fontSize: 11,
+                color: 'var(--text-secondary)',
+                cursor: 'pointer',
+                padding: '2px 0',
+              }}
+            >
               <input
                 type="checkbox"
                 checked={focusIntentEnabled}

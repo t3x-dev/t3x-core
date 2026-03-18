@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
 import { insertBranch } from '../queries/branches';
-import { createCommitV4 } from '../queries/commits-v4';
+import { createCommit } from '../queries/commits';
 import {
   deleteEditsByLeafId,
   findEditsByLeafId,
@@ -32,7 +32,7 @@ describe('Leaf Output Edits Storage', () => {
       name: 'main',
     });
 
-    const commit = await createCommitV4(db, {
+    const commit = await createCommit(db, {
       project_id: testProjectId,
       branch: 'main',
       author: { type: 'human', id: 'test', name: 'Test User' },

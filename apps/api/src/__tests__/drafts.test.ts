@@ -4,8 +4,8 @@
  * Integration tests for Draft CRUD + preview + commit + fork endpoints.
  */
 
-import { insertProject } from '@t3x-dev/storage';
 import type { AnyDB } from '@t3x-dev/storage';
+import { insertProject } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
@@ -536,8 +536,9 @@ describe('Drafts V3 Routes', () => {
       expect(data.success).toBe(true);
       expect(data.data.commit).toBeDefined();
       expect(data.data.commit.hash).toMatch(/^sha256:/);
-      expect(data.data.commit.content.sentences).toHaveLength(2);
-      expect(data.data.commit.content.sentences[0].id).toMatch(/^s_/);
+      expect(data.data.commit.content.frames).toHaveLength(2);
+      expect(data.data.commit.content.frames[0].type).toBe('legacy_sentence');
+      expect(data.data.commit.content.frames[0].slots.text).toBeDefined();
       expect(data.data.commit.message).toBe('My first commit');
       expect(data.data.leaf).toBeNull();
       expect(data.data.draft_status).toBe('committed');

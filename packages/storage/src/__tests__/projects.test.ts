@@ -8,7 +8,7 @@ import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
 import { insertBranch } from '../queries/branches';
-import { createCommitV3 } from '../queries/commits-v3';
+import { createCommit } from '../queries/commits';
 import { insertConversation } from '../queries/conversations';
 import { insertDraft } from '../queries/drafts';
 import {
@@ -235,19 +235,25 @@ describe('Projects Storage', () => {
         text: 'Draft text',
       });
 
-      // Create 1 commit (V3 format)
-      await createCommitV3(
+      // Create 1 commit (V4 format)
+      await createCommit(
         db,
         {
           hash: `sha256:test_${Date.now()}`,
-          author: { name: 'Test User' },
+          author: { type: 'human', name: 'Test User' },
           committedAt: new Date(),
           content: {
             sentences: [
               {
-                id: 's1',
+                id: 's_1',
                 text: 'Test sentence',
-                source: { turn_hash: 'sha256:test', start_char: 0, end_char: 12 },
+                confidence: 1.0,
+                source_ref: {
+                  conversation_id: conv1.conversationId,
+                  turn_hash: 'sha256:test',
+                  start_char: 0,
+                  end_char: 12,
+                },
               },
             ],
           },

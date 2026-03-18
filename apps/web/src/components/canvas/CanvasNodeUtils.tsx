@@ -1,10 +1,7 @@
 import { useStore } from '@xyflow/react';
-import type { ComponentType } from 'react';
-import { useRef } from 'react';
-import type { LeafType, SourceType } from '@/types/nodes';
 import {
-  FileText,
   FilePlus,
+  FileText,
   Mail,
   MessageCircle,
   MessageSquare,
@@ -12,6 +9,9 @@ import {
   Twitter,
   Users,
 } from 'lucide-react';
+import type { ComponentType } from 'react';
+import { useRef } from 'react';
+import type { LeafType, SourceType } from '@/types/nodes';
 
 // Leaf type definitions with icons and labels
 // Must match @t3x-dev/core LeafType from V4 schema
@@ -75,7 +75,10 @@ export function getToneAccentKey(toneKey: string): 'commit' | 'pending' | 'branc
 }
 
 // Source type icon mapping
-export const SOURCE_ICONS: Record<SourceType, ComponentType<{ size?: number; className?: string }>> = {
+export const SOURCE_ICONS: Record<
+  SourceType,
+  ComponentType<{ size?: number; className?: string }>
+> = {
   conversation: MessageSquare,
   meeting: Users,
   file: FileText,

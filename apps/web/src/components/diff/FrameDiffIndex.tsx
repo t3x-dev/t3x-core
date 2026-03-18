@@ -70,9 +70,7 @@ function FrameRow({ frameId, frameType, status, isActive, onClick }: FrameRowPro
       <DotIndicator status={status} />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1">
-          <div
-            className={`truncate text-[11px] font-medium ${isRemoved ? 'line-through' : ''}`}
-          >
+          <div className={`truncate text-[11px] font-medium ${isRemoved ? 'line-through' : ''}`}>
             {formatFrameType(frameType)}
           </div>
           {status === 'added' && (
@@ -228,9 +226,7 @@ export function FrameDiffIndex({
             onClick={onToggleIdentical}
             className="w-full rounded px-2 py-1.5 text-left text-[10px] text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-secondary)] transition-colors"
           >
-            {showIdentical
-              ? `Hide identical`
-              : `Show identical (${identicalCount})`}
+            {showIdentical ? `Hide identical` : `Show identical (${identicalCount})`}
           </button>
         </div>
       )}

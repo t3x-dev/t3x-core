@@ -155,44 +155,6 @@ export const branches = pgTable(
 );
 
 /**
- * Commits V2 - Semantic snapshots with hash chain (DAG)
- *
- * @deprecated Use commits_v3 (commitsV3) instead. This table is kept for backward
- * compatibility but should not be used for new commits. Migration to V3 is complete.
- */
-export const commits = pgTable(
-  'commits_v2',
-  {
-    commitHash: text('commit_hash').primaryKey(),
-    projectId: text('project_id')
-      .notNull()
-      .references(() => projects.projectId, { onDelete: 'cascade' }),
-    branch: text('branch').notNull(),
-    message: text('message'),
-    parentsJson: text('parents_json').notNull(), // JSON array of parent commit hashes
-    turnWindowJson: text('turn_window_json').notNull(), // { start_turn_hash, end_turn_hash }
-    facetSnapshotJson: text('facet_snapshot_json').notNull(), // Semantic extraction result
-    pipelineConfigJson: text('pipeline_config_json'),
-    draftId: text('draft_id'),
-    draftTextHash: text('draft_text_hash'),
-    signatureJson: text('signature_json'),
-    sourceExcerptJson: text('source_excerpt_json'),
-    mustHaveJson: text('must_have_json'),
-    mustntHaveJson: text('mustnt_have_json'),
-    positionX: real('position_x'),
-    positionY: real('position_y'),
-    sourceRefsJson: text('source_refs_json'), // Multi-source references
-    anchorsJson: text('anchors_json'), // v1.1: Confirmed anchors for auditing
-    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
-  },
-  (table) => [
-    index('idx_commits_v2_project').on(table.projectId),
-    index('idx_commits_v2_branch').on(table.branch),
-    index('idx_commits_v2_draft').on(table.draftId),
-  ]
-);
-
-/**
  * Drafts V2 - LLM-generated drafts pending adoption
  */
 export const agentDrafts = pgTable(
@@ -314,51 +276,6 @@ export const runs = pgTable(
 );
 
 /**
- * Commits V3 - Sentence-based semantic snapshots with JSONB content
- *
- * First-class fields (included in hash computation):
- * - hash, schema, parents, author, committedAt, content
- *
- * Second-class fields (not in hash, for UI/organization):
- * - projectId, message, branch, positionX, positionY
- */
-export const commitsV3 = pgTable(
-  'commits_v3',
-  {
-    // First class (in hash)
-    hash: text('hash').primaryKey(),
-    schema: text('schema').notNull().default('commit/v3'),
-    parents: text('parents').array().notNull().default([]),
-    author: jsonb('author').notNull().$type<{
-      name: string;
-      identity?: string;
-      verification?: string;
-    }>(),
-    committedAt: timestamp('committed_at', { withTimezone: true }).notNull(),
-    content: jsonb('content').notNull().$type<{
-      sentences: unknown[];
-      constraints?: unknown[];
-    }>(),
-
-    // Second class (not in hash)
-    projectId: text('project_id').references(() => projects.projectId, { onDelete: 'cascade' }),
-    message: text('message'),
-    branch: text('branch'),
-    positionX: real('position_x'),
-    positionY: real('position_y'),
-
-    // Timestamps
-    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-  },
-  (table) => [
-    index('idx_commits_v3_project').on(table.projectId),
-    index('idx_commits_v3_branch').on(table.branch),
-    index('idx_commits_v3_committed_at').on(table.committedAt),
-  ]
-);
-
-/**
  * Segment Embeddings - Pre-computed vectors for Ring 3 segments
  */
 export const segmentEmbeddings = pgTable(
@@ -471,9 +388,6 @@ export type NewTurn = typeof turns.$inferInsert;
 export type Branch = typeof branches.$inferSelect;
 export type NewBranch = typeof branches.$inferInsert;
 
-export type Commit = typeof commits.$inferSelect;
-export type NewCommit = typeof commits.$inferInsert;
-
 export type AgentDraft = typeof agentDrafts.$inferSelect;
 export type NewAgentDraft = typeof agentDrafts.$inferInsert;
 
@@ -485,9 +399,6 @@ export type NewDeployAgent = typeof deployAgents.$inferInsert;
 
 export type Run = typeof runs.$inferSelect;
 export type NewRun = typeof runs.$inferInsert;
-
-export type CommitV3 = typeof commitsV3.$inferSelect;
-export type NewCommitV3 = typeof commitsV3.$inferInsert;
 
 export type MergeDraft = typeof mergeDrafts.$inferSelect;
 export type NewMergeDraft = typeof mergeDrafts.$inferInsert;

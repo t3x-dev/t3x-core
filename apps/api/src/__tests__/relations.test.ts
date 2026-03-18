@@ -4,8 +4,8 @@
  * Integration tests for GET/POST inter-sentence relation endpoints.
  */
 
-import { insertProject } from '@t3x-dev/storage';
 import type { AnyDB } from '@t3x-dev/storage';
+import { insertProject } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
@@ -39,7 +39,7 @@ vi.mock('../middleware/logger', () => ({
   },
 }));
 
-import { commitsV4Routes } from '../routes/commits-v4.openapi';
+import { commitRoutes } from '../routes/commits.openapi';
 import { relationsRoutes } from '../routes/relations.openapi';
 
 describe('Relations Routes', () => {
@@ -47,8 +47,7 @@ describe('Relations Routes', () => {
   let testProjectId: string;
   let testCommitHash: string;
   const app = new Hono();
-  // Mount both routes — we need commits-v4 to create test commits
-  app.route('/', commitsV4Routes);
+  app.route('/', commitRoutes);
   app.route('/', relationsRoutes);
 
   beforeAll(async () => {
@@ -60,18 +59,21 @@ describe('Relations Routes', () => {
     const project = await insertProject(mockDB, testData.project({ name: 'Relations Test' }));
     testProjectId = project.projectId;
 
-    // Create a test commit with multiple sentences (needed for relation extraction)
-    const res = await app.request('/v1/commits-v4', {
+    // Create a test commit with frames
+    const res = await app.request('/v1/commits', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         parents: [],
         author: { type: 'human', name: 'Relation Tester' },
-        sentences: [
-          { id: 's_r1', text: 'We want to visit Tokyo in spring.' },
-          { id: 's_r2', text: 'Cherry blossoms bloom in late March.' },
-          { id: 's_r3', text: 'Budget is around $3000 per person.' },
-        ],
+        content: {
+          frames: [
+            { id: 'f_001', type: 'legacy_sentence', slots: { text: 'We want to visit Tokyo in spring.' } },
+            { id: 'f_002', type: 'legacy_sentence', slots: { text: 'Cherry blossoms bloom in late March.' } },
+          { id: 'f_003', type: 'legacy_sentence', slots: { text: 'Budget is around $3000 per person.' } },
+          ],
+          relations: [],
+        },
         project_id: testProjectId,
         message: 'Initial plan for relations test',
         branch: 'main',
@@ -87,10 +89,10 @@ describe('Relations Routes', () => {
     await cleanup();
   });
 
-  describe('GET /v1/commits-v4/:hash/relations', () => {
+  describe('GET /v1/commits/:hash/relations', () => {
     it('returns empty array initially', async () => {
       const res = await app.request(
-        `/v1/commits-v4/${encodeURIComponent(testCommitHash)}/relations`
+        `/v1/commits/${encodeURIComponent(testCommitHash)}/relations`
       );
       expect(res.status).toBe(200);
 
@@ -100,7 +102,7 @@ describe('Relations Routes', () => {
     });
 
     it('returns 404 for non-existent commit', async () => {
-      const res = await app.request('/v1/commits-v4/sha256:nonexistent_hash/relations');
+      const res = await app.request('/v1/commits/sha256:nonexistent_hash/relations');
       expect(res.status).toBe(404);
 
       const data: ApiResponse = await res.json();
@@ -109,9 +111,9 @@ describe('Relations Routes', () => {
     });
   });
 
-  describe('POST /v1/commits-v4/:hash/relations/extract', () => {
+  describe('POST /v1/commits/:hash/relations/extract', () => {
     it('returns 404 for non-existent commit', async () => {
-      const res = await app.request('/v1/commits-v4/sha256:nonexistent_hash/relations/extract', {
+      const res = await app.request('/v1/commits/sha256:nonexistent_hash/relations/extract', {
         method: 'POST',
       });
       expect(res.status).toBe(404);
@@ -125,7 +127,7 @@ describe('Relations Routes', () => {
       mockGetLLMProvider.mockResolvedValueOnce(null);
 
       const res = await app.request(
-        `/v1/commits-v4/${encodeURIComponent(testCommitHash)}/relations/extract`,
+        `/v1/commits/${encodeURIComponent(testCommitHash)}/relations/extract`,
         { method: 'POST' }
       );
       expect(res.status).toBe(400);
@@ -141,15 +143,15 @@ describe('Relations Routes', () => {
         generate: vi.fn().mockResolvedValue({
           text: JSON.stringify([
             {
-              source_id: 's_r1',
-              target_id: 's_r2',
+              source_id: 'f_001',
+              target_id: 'f_002',
               type: 'elaborates',
               confidence: 0.9,
               reasoning: 'Cherry blossoms elaborate on the spring visit timing.',
             },
             {
-              source_id: 's_r3',
-              target_id: 's_r1',
+              source_id: 'f_003',
+              target_id: 'f_001',
               type: 'supports',
               confidence: 0.75,
               reasoning: 'Budget supports the trip plan.',
@@ -161,7 +163,7 @@ describe('Relations Routes', () => {
       mockGetLLMProvider.mockResolvedValueOnce(mockProvider);
 
       const res = await app.request(
-        `/v1/commits-v4/${encodeURIComponent(testCommitHash)}/relations/extract`,
+        `/v1/commits/${encodeURIComponent(testCommitHash)}/relations/extract`,
         { method: 'POST' }
       );
       expect(res.status).toBe(200);
@@ -184,8 +186,8 @@ describe('Relations Routes', () => {
         generate: vi.fn().mockResolvedValue({
           text: JSON.stringify([
             {
-              source_id: 's_r1',
-              target_id: 's_r2',
+              source_id: 'f_001',
+              target_id: 'f_002',
               type: 'temporal_follows',
               confidence: 0.85,
               reasoning: 'Cherry blossoms follow the plan to visit in spring.',
@@ -198,14 +200,14 @@ describe('Relations Routes', () => {
 
       // Trigger extraction
       const extractRes = await app.request(
-        `/v1/commits-v4/${encodeURIComponent(testCommitHash)}/relations/extract`,
+        `/v1/commits/${encodeURIComponent(testCommitHash)}/relations/extract`,
         { method: 'POST' }
       );
       expect(extractRes.status).toBe(200);
 
       // Fetch relations via GET
       const getRes = await app.request(
-        `/v1/commits-v4/${encodeURIComponent(testCommitHash)}/relations`
+        `/v1/commits/${encodeURIComponent(testCommitHash)}/relations`
       );
       expect(getRes.status).toBe(200);
 
@@ -215,8 +217,8 @@ describe('Relations Routes', () => {
 
       const rel = data.data.relations[0];
       expect(rel.id).toBeDefined();
-      expect(rel.source_id).toBe('s_r1');
-      expect(rel.target_id).toBe('s_r2');
+      expect(rel.source_id).toBe('f_001');
+      expect(rel.target_id).toBe('f_002');
       expect(rel.type).toBe('temporal_follows');
       expect(rel.confidence).toBe(0.85);
       expect(rel.reasoning).toBe('Cherry blossoms follow the plan to visit in spring.');
@@ -228,8 +230,8 @@ describe('Relations Routes', () => {
         generate: vi.fn().mockResolvedValue({
           text: JSON.stringify([
             {
-              source_id: 's_r1',
-              target_id: 's_r2',
+              source_id: 'f_001',
+              target_id: 'f_002',
               type: 'causes',
               confidence: 0.7,
               reasoning: 'First extraction result.',
@@ -240,7 +242,7 @@ describe('Relations Routes', () => {
       };
       mockGetLLMProvider.mockResolvedValueOnce(mockProvider1);
 
-      await app.request(`/v1/commits-v4/${encodeURIComponent(testCommitHash)}/relations/extract`, {
+      await app.request(`/v1/commits/${encodeURIComponent(testCommitHash)}/relations/extract`, {
         method: 'POST',
       });
 
@@ -249,8 +251,8 @@ describe('Relations Routes', () => {
         generate: vi.fn().mockResolvedValue({
           text: JSON.stringify([
             {
-              source_id: 's_r2',
-              target_id: 's_r3',
+              source_id: 'f_002',
+              target_id: 'f_003',
               type: 'contrasts',
               confidence: 0.8,
               reasoning: 'Second extraction replaces first.',
@@ -262,21 +264,21 @@ describe('Relations Routes', () => {
       mockGetLLMProvider.mockResolvedValueOnce(mockProvider2);
 
       const extractRes = await app.request(
-        `/v1/commits-v4/${encodeURIComponent(testCommitHash)}/relations/extract`,
+        `/v1/commits/${encodeURIComponent(testCommitHash)}/relations/extract`,
         { method: 'POST' }
       );
       expect(extractRes.status).toBe(200);
 
       // Verify the old relations are gone, only new ones remain
       const getRes = await app.request(
-        `/v1/commits-v4/${encodeURIComponent(testCommitHash)}/relations`
+        `/v1/commits/${encodeURIComponent(testCommitHash)}/relations`
       );
       const data: ApiResponse = await getRes.json();
       expect(data.success).toBe(true);
       // Should only have the relation from the second extraction
       expect(data.data.relations).toHaveLength(1);
-      expect(data.data.relations[0].source_id).toBe('s_r2');
-      expect(data.data.relations[0].target_id).toBe('s_r3');
+      expect(data.data.relations[0].source_id).toBe('f_002');
+      expect(data.data.relations[0].target_id).toBe('f_003');
       expect(data.data.relations[0].type).toBe('contrasts');
     });
   });

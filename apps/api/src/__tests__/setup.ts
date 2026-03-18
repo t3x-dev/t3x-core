@@ -4,13 +4,9 @@
  * Creates an isolated embedded PostgreSQL database for each test file.
  */
 
-import {
-  closePostgresStorage,
-  createPostgresStorage,
-  type AnyDB,
-} from '@t3x-dev/storage';
-import { afterAll, beforeAll, vi } from 'vitest';
+import { type AnyDB, closePostgresStorage, createPostgresStorage } from '@t3x-dev/storage';
 import postgres from 'postgres';
+import { afterAll, beforeAll, vi } from 'vitest';
 
 // Import CREATE_TABLES_SQL from storage test setup
 import { CREATE_TABLES_SQL } from '../../../../packages/storage/src/__tests__/setup';

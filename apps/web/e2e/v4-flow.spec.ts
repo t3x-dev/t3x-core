@@ -29,23 +29,26 @@ test.describe('V4 WebUI Flow', () => {
     expect(data.success).toBe(true);
     projectId = data.data.project_id;
 
-    // Create a V4 commit via API
-    const commitResponse = await request.post('http://localhost:8000/api/v1/commits-v4', {
+    // Create a frame-based commit via API
+    const commitResponse = await request.post('http://localhost:8000/api/v1/commits', {
       data: {
         project_id: projectId,
         branch: 'main',
         message: 'E2E test commit',
-        sentences: [
-          { id: 's_1', text: 'User prefers dark mode' },
-          { id: 's_2', text: 'User speaks English' },
-          { id: 's_3', text: 'User timezone is UTC+8' },
-        ],
+        content: {
+          frames: [
+            { id: 'f_001', type: 'legacy_sentence', slots: { text: 'User prefers dark mode' } },
+            { id: 'f_002', type: 'legacy_sentence', slots: { text: 'User speaks English' } },
+            { id: 'f_003', type: 'legacy_sentence', slots: { text: 'User timezone is UTC+8' } },
+          ],
+          relations: [],
+        },
         author: { type: 'human', name: 'E2E Tester' },
       },
     });
     const commitData = await commitResponse.json();
     expect(commitData.success).toBe(true);
-    commitHash = commitData.data.hash;
+    commitHash = commitData.data.commit.hash;
   });
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -315,8 +318,8 @@ test.describe('V4 WebUI UI Tests', () => {
     // Wait for page content to load
     await page.locator('body').waitFor({ state: 'visible', timeout: 10000 });
 
-    // Basic navigation test
-    const navigation = page.locator('nav').or(page.locator('[role="navigation"]')).first();
-    await expect(navigation).toBeVisible({ timeout: 10000 });
+    // Basic navigation test — chat sidebar should be visible
+    const sidebar = page.getByRole('complementary', { name: /chat navigation/i });
+    await expect(sidebar).toBeVisible({ timeout: 10000 });
   });
 });

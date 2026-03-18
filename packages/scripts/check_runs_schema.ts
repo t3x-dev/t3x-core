@@ -13,9 +13,7 @@ async function main() {
       ORDER BY ordinal_position
     `;
     console.log('Columns in runs table:');
-    (result as Array<{ column_name: string }>).forEach((row) =>
-      console.log(' -', row.column_name)
-    );
+    (result as Array<{ column_name: string }>).forEach((row) => console.log(' -', row.column_name));
   } finally {
     await sql.end();
   }

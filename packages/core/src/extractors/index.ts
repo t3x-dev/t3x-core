@@ -11,6 +11,16 @@ export {
   type FeedbackStats,
 } from './adaptiveThresholds';
 export {
+  contradictionCheckerAgent,
+  coverageCheckerAgent,
+  dedupCheckerAgent,
+  nesterAgent,
+  slotPolisherAgent,
+  topicEvolverAgent,
+  topicNamerAgent,
+} from './agents';
+export { createMeaningPipeline } from './createMeaningPipeline';
+export {
   type ExtractionItem,
   ExtractionParseError,
   parseExtractionResponse,
@@ -38,12 +48,6 @@ export {
   FrameExtractor,
   type SlotQuotesMap,
 } from './frameExtractor';
-// Meaning Organizer Agent (Step 2 — legacy, replaced by pipeline)
-export { MeaningOrganizer, type MeaningOrganizerResult } from './meaningOrganizer';
-// Meaning Pipeline (multi-agent orchestration)
-export { MeaningPipeline, type MeaningAgent, type PipelineContext, type PipelineResult, type PipelineMode, type PipelineOptions, type QualityMetrics, AgentRegistry } from './meaningPipeline';
-export { createMeaningPipeline } from './createMeaningPipeline';
-export { nesterAgent, topicNamerAgent, slotPolisherAgent, dedupCheckerAgent, topicEvolverAgent } from './agents';
 // Incremental Extraction (LLM pipeline)
 export { type FuzzyLocateResult, fuzzyLocate } from './fuzzyLocate';
 export { parseIncrementalResponse } from './incrementalParser';
@@ -54,6 +58,17 @@ export {
   type LLMExtractionResult,
   LLMExtractor,
 } from './llmExtractor';
+// Meaning Pipeline (multi-agent orchestration)
+export {
+  AgentRegistry,
+  type MeaningAgent,
+  MeaningPipeline,
+  type PipelineContext,
+  type PipelineMode,
+  type PipelineOptions,
+  type PipelineResult,
+  type QualityMetrics,
+} from './meaningPipeline';
 // Relation Extraction (Inter-sentence Relations)
 export { createRelationExtractor, RelationExtractor } from './relationExtractor';
 export { parseRelationResponse, type RelationItem, RelationParseError } from './relationParser';
@@ -62,11 +77,11 @@ export { type RouteResult, routeProposal } from './routeProposal';
 export { resolveSourceRef } from './sourceRefResolver';
 export { spToSentence } from './spToSentence';
 // Types
-export {
-  type AnchorCandidate,
-  type AnchorSource,
-  type AnchorType,
-  type Segment,
+export type {
+  AnchorCandidate,
+  AnchorSource,
+  AnchorType,
+  Segment,
 } from './types';
 export {
   type OverlapResult,

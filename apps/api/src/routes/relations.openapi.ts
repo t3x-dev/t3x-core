@@ -1,16 +1,16 @@
 /**
  * Sentence Relations Routes (Inter-sentence Relations)
  *
- * - GET  /v1/commits-v4/:hash/relations           — Get relations for a commit
- * - POST /v1/commits-v4/:hash/relations/extract    — Trigger (re-)extraction
+ * - GET  /v1/commits/:hash/relations           — Get relations for a commit
+ * - POST /v1/commits/:hash/relations/extract    — Trigger (re-)extraction
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { createRelationExtractor } from '@t3x-dev/core';
+import { createRelationExtractor, framesToTextSegments } from '@t3x-dev/core';
 import {
   deleteRelationsByCommit,
-  findCommitV4ByHash,
   findRelationsByCommit,
+  getCommitUnified,
   upsertRelations,
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
@@ -45,11 +45,11 @@ const CommitHashParam = z.object({
   hash: z.string().openapi({ description: 'Commit hash (URL-encoded)' }),
 });
 
-// ── GET /v1/commits-v4/:hash/relations ───────────────────────
+// ── GET /v1/commits/:hash/relations ───────────────────────
 
 const getRelationsRoute = createRoute({
   method: 'get',
-  path: '/v1/commits-v4/{hash}/relations',
+  path: '/v1/commits/{hash}/relations',
   tags: ['Relations'],
   summary: 'Get inter-sentence relations for a commit',
   request: { params: CommitHashParam },
@@ -77,7 +77,7 @@ relationsRoutes.openapi(getRelationsRoute, async (c) => {
   const decodedHash = decodeURIComponent(hash);
   try {
     const db = await getDB();
-    const commit = await findCommitV4ByHash(db, decodedHash);
+    const commit = await getCommitUnified(db, decodedHash);
     if (!commit) {
       return errorResponse(c, 'COMMIT_NOT_FOUND', `Commit not found: ${decodedHash}`);
     }
@@ -89,11 +89,11 @@ relationsRoutes.openapi(getRelationsRoute, async (c) => {
   }
 });
 
-// ── POST /v1/commits-v4/:hash/relations/extract ──────────────
+// ── POST /v1/commits/:hash/relations/extract ──────────────
 
 const extractRelationsRoute = createRoute({
   method: 'post',
-  path: '/v1/commits-v4/{hash}/relations/extract',
+  path: '/v1/commits/{hash}/relations/extract',
   tags: ['Relations'],
   summary: 'Extract (or re-extract) inter-sentence relations for a commit',
   description:
@@ -140,7 +140,7 @@ relationsRoutes.openapi(extractRelationsRoute, async (c) => {
   const decodedHash = decodeURIComponent(hash);
   try {
     const db = await getDB();
-    const commit = await findCommitV4ByHash(db, decodedHash);
+    const commit = await getCommitUnified(db, decodedHash);
     if (!commit) {
       return errorResponse(c, 'COMMIT_NOT_FOUND', `Commit not found: ${decodedHash}`);
     }
@@ -156,7 +156,7 @@ relationsRoutes.openapi(extractRelationsRoute, async (c) => {
         'No LLM provider configured. Set ANTHROPIC_API_KEY or another provider key.'
       );
     }
-    const sentences = commit.content.sentences.map((s) => ({ id: s.id, text: s.text }));
+    const sentences = framesToTextSegments(commit.content);
     const { provider: trackedProvider, usage: trackedUsage } = wrapWithUsageTracking(provider);
     const extractor = createRelationExtractor(trackedProvider);
     const result = await extractor.extract(sentences);

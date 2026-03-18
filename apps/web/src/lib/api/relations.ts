@@ -41,7 +41,7 @@ export interface ExtractionStats {
  * Get existing relations for a commit.
  */
 export async function getCommitRelations(hash: string): Promise<{ relations: SentenceRelation[] }> {
-  const res = await fetchWithTimeout(`${API_V1}/commits-v4/${encodeURIComponent(hash)}/relations`);
+  const res = await fetchWithTimeout(`${API_V1}/commits/${encodeURIComponent(hash)}/relations`);
   return handleResponse<{ relations: SentenceRelation[] }>(res);
 }
 
@@ -52,7 +52,7 @@ export async function extractCommitRelations(
   hash: string
 ): Promise<{ relations_found: number; stats: ExtractionStats }> {
   const res = await fetchWithTimeout(
-    `${API_V1}/commits-v4/${encodeURIComponent(hash)}/relations/extract`,
+    `${API_V1}/commits/${encodeURIComponent(hash)}/relations/extract`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

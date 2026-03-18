@@ -26,15 +26,18 @@ test.describe('Draft Workbench', () => {
     const { projectId: id } = await createTestProject(request, `Draft E2E ${Date.now()}`);
     projectId = id;
 
-    // Create a commit with sentences (knowledge base for suggestions)
-    const commitResp = await request.post(`${API_BASE}/commits-v4`, {
+    // Create a commit with frames (knowledge base for suggestions)
+    const commitResp = await request.post(`${API_BASE}/commits`, {
       data: {
         project_id: projectId,
-        sentences: [
-          { id: 's_e2e_1', text: 'Product pricing starts at $29 per month' },
-          { id: 's_e2e_2', text: 'Enterprise tier includes 99.9% SLA' },
-          { id: 's_e2e_3', text: 'Free trial lasts 14 days' },
-        ],
+        content: {
+          frames: [
+            { id: 'f_001', type: 'legacy_sentence', slots: { text: 'Product pricing starts at $29 per month' } },
+            { id: 'f_002', type: 'legacy_sentence', slots: { text: 'Enterprise tier includes 99.9% SLA' } },
+            { id: 'f_003', type: 'legacy_sentence', slots: { text: 'Free trial lasts 14 days' } },
+          ],
+          relations: [],
+        },
         author: { type: 'human', name: 'E2E Tester' },
         branch: 'main',
         message: 'Initial knowledge commit',

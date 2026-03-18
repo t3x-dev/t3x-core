@@ -3,8 +3,8 @@
  */
 
 export { getAllModels, getModelInfo, getModelsByProvider, MODEL_CATALOG } from './catalog';
-export { createProviderForModel } from './providerFactory';
 export { normalizeFrameOutput } from './normalizer';
+export { createProviderForModel } from './providerFactory';
 export {
   type Capability,
   type LLMCallLog,

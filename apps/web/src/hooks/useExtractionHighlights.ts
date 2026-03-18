@@ -1,5 +1,5 @@
-import { useMemo } from 'react';
 import type { SemanticContent } from '@t3x-dev/core';
+import { useMemo } from 'react';
 
 export interface HighlightSpan {
   frameId: string;

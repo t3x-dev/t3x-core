@@ -168,10 +168,13 @@ describe('ClaudeProvider.generateFromPrompt', () => {
       Promise.resolve({
         ok: true,
         status: 200,
-        text: () => Promise.resolve(JSON.stringify({
-          content: [{ type: 'text', text: 'Hello!' }],
-          usage: { input_tokens: 10, output_tokens: 5 },
-        })),
+        text: () =>
+          Promise.resolve(
+            JSON.stringify({
+              content: [{ type: 'text', text: 'Hello!' }],
+              usage: { input_tokens: 10, output_tokens: 5 },
+            })
+          ),
       })
     );
 
@@ -240,10 +243,13 @@ describe('ClaudeProvider.generateStructured', () => {
       Promise.resolve({
         ok: true,
         status: 200,
-        text: () => Promise.resolve(JSON.stringify({
-          content: [{ type: 'text', text: '{"name": "Bob", "age": 25}' }],
-          usage: { input_tokens: 10, output_tokens: 8 },
-        })),
+        text: () =>
+          Promise.resolve(
+            JSON.stringify({
+              content: [{ type: 'text', text: '{"name": "Bob", "age": 25}' }],
+              usage: { input_tokens: 10, output_tokens: 8 },
+            })
+          ),
       })
     );
 

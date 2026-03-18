@@ -308,13 +308,15 @@ export async function extractSentencesFromLeafOutput(
     const { provider: tracked, usage } = wrapWithUsageTracking(provider);
     trackedUsage.inputTokens = 0;
     trackedUsage.outputTokens = 0;
-    return createLLMExtractor(tracked).extract(turnInputs, {
-      maxSentences: options?.max_sentences ?? 20,
-    }).then((r) => {
-      trackedUsage.inputTokens = usage.inputTokens;
-      trackedUsage.outputTokens = usage.outputTokens;
-      return r;
-    });
+    return createLLMExtractor(tracked)
+      .extract(turnInputs, {
+        maxSentences: options?.max_sentences ?? 20,
+      })
+      .then((r) => {
+        trackedUsage.inputTokens = usage.inputTokens;
+        trackedUsage.outputTokens = usage.outputTokens;
+        return r;
+      });
   });
 
   const { valid, removed } = validateExtractedSentences(result.sentences, turnInputs);

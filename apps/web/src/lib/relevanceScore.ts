@@ -57,7 +57,10 @@ export function relevanceScore(frame: Frame, context: RelevanceContext): Relevan
   const turnsAgo = context.turnsAgoMap[frame.id];
   const recency = turnsAgo != null ? RECENCY_DECAY ** turnsAgo : 0;
   if (recency > 0) {
-    const label = turnsAgo === 0 ? 'Changed this turn' : `Changed ${turnsAgo} turn${turnsAgo > 1 ? 's' : ''} ago`;
+    const label =
+      turnsAgo === 0
+        ? 'Changed this turn'
+        : `Changed ${turnsAgo} turn${turnsAgo > 1 ? 's' : ''} ago`;
     reasons.push({ signal: 'recency', value: recency, reason: label });
   }
 
@@ -65,20 +68,32 @@ export function relevanceScore(frame: Frame, context: RelevanceContext): Relevan
   const touchCount = context.touchCountMap[frame.id] ?? 0;
   const touchFreq = Math.min(touchCount / TOUCH_FREQ_CAP, 1.0) * 0.7;
   if (touchFreq > 0) {
-    reasons.push({ signal: 'touch_frequency', value: touchFreq, reason: `Discussed ${touchCount} time${touchCount > 1 ? 's' : ''}` });
+    reasons.push({
+      signal: 'touch_frequency',
+      value: touchFreq,
+      reason: `Discussed ${touchCount} time${touchCount > 1 ? 's' : ''}`,
+    });
   }
 
   // Signal 5: Relation degree (centrality)
   const degree = context.relationDegreeMap[frame.id] ?? 0;
   const relationScore = Math.min(degree / RELATION_DEGREE_CAP, 1.0) * 0.6;
   if (relationScore > 0) {
-    reasons.push({ signal: 'relation_degree', value: relationScore, reason: `Connected to ${degree} other frame${degree > 1 ? 's' : ''}` });
+    reasons.push({
+      signal: 'relation_degree',
+      value: relationScore,
+      reason: `Connected to ${degree} other frame${degree > 1 ? 's' : ''}`,
+    });
   }
 
   // Signal 6: LLM-assigned confidence
   const confidence = (frame.confidence ?? 0) * 0.5;
   if (confidence > 0) {
-    reasons.push({ signal: 'confidence', value: confidence, reason: `Extraction confidence: ${Math.round((frame.confidence ?? 0) * 100)}%` });
+    reasons.push({
+      signal: 'confidence',
+      value: confidence,
+      reason: `Extraction confidence: ${Math.round((frame.confidence ?? 0) * 100)}%`,
+    });
   }
 
   const score = Math.max(confirmed, llmBoost, recency, touchFreq, relationScore, confidence);

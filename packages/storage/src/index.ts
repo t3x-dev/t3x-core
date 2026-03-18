@@ -27,10 +27,14 @@
 
 // Database adapters
 export * from './adapters';
+// Backup / verify utilities
+export * from './backup';
 // Query functions
 export * from './queries';
 // Schema (table definitions and types)
 export * from './schema';
+// Commits Schema (commits, frame_lineage — frame-based commits)
+export * from './schema-commits';
 // Extraction Feedback Schema (Anchoring L4)
 export * from './schema-extraction-feedback';
 // Knowledge Conflicts Schema (conflict detection persistence)
@@ -42,7 +46,3 @@ export * from './schema-sentence-modifications';
 // V4 Schema (commits_v4, leaves, pins, conversation_contexts)
 // @see docs/specification/semantic-layer-architecture.md
 export * from './schema-v4';
-// Commits Schema (commits_v5, frame_lineage — frame-based commits)
-export * from './schema-commits';
-// Backup / verify utilities
-export * from './backup';

@@ -144,36 +144,6 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     );
     CREATE INDEX IF NOT EXISTS idx_branches_project ON branches(project_id);
 
-    -- Commits V2 table
-    CREATE TABLE IF NOT EXISTS commits_v2 (
-      commit_hash TEXT PRIMARY KEY,
-      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
-      branch TEXT NOT NULL,
-      message TEXT,
-      parents_json TEXT NOT NULL,
-      turn_window_json TEXT NOT NULL,
-      facet_snapshot_json TEXT NOT NULL,
-      pipeline_config_json TEXT,
-      draft_id TEXT,
-      draft_text_hash TEXT,
-      signature_json TEXT,
-      source_excerpt_json TEXT,
-      must_have_json TEXT,
-      mustnt_have_json TEXT,
-      position_x REAL,
-      position_y REAL,
-      source_refs_json TEXT,
-      anchors_json TEXT,
-      created_at TIMESTAMPTZ NOT NULL
-    );
-    CREATE INDEX IF NOT EXISTS idx_commits_v2_project ON commits_v2(project_id);
-    CREATE INDEX IF NOT EXISTS idx_commits_v2_branch ON commits_v2(branch);
-    CREATE INDEX IF NOT EXISTS idx_commits_v2_draft ON commits_v2(draft_id);
-
-    -- Migration: Add anchors_json column to existing commits_v2 tables (v1.1)
-    -- Note: ADD COLUMN IF NOT EXISTS is idempotent in PostgreSQL 9.6+
-    ALTER TABLE commits_v2 ADD COLUMN IF NOT EXISTS anchors_json TEXT;
-
     -- Migration: rename drafts_v2 → agent_drafts for existing databases
     DO $$ BEGIN
       IF EXISTS (SELECT 1 FROM pg_tables WHERE tablename = 'drafts_v2' AND schemaname = 'public') THEN
@@ -272,34 +242,6 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     ALTER TABLE runs ADD COLUMN IF NOT EXISTS title TEXT;
     ALTER TABLE runs ADD COLUMN IF NOT EXISTS description TEXT;
     ALTER TABLE runs ADD COLUMN IF NOT EXISTS tags JSONB DEFAULT '[]';
-
-    -- Commits V3 table (sentence-based semantic snapshots)
-    -- NOTE: project_id is nullable by design (commits can be standalone/unattached).
-    CREATE TABLE IF NOT EXISTS commits_v3 (
-      -- First class (in hash)
-      hash TEXT PRIMARY KEY,
-      schema TEXT NOT NULL DEFAULT 'commit/v3',
-      parents TEXT[] NOT NULL DEFAULT '{}',
-      author JSONB NOT NULL,
-      committed_at TIMESTAMPTZ NOT NULL,
-      content JSONB NOT NULL,
-
-      -- Second class (not in hash)
-      project_id TEXT REFERENCES projects(project_id) ON DELETE CASCADE,
-      message TEXT,
-      branch TEXT,
-      position_x REAL,
-      position_y REAL,
-
-      -- Timestamps
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-    CREATE INDEX IF NOT EXISTS idx_commits_v3_project ON commits_v3(project_id);
-    CREATE INDEX IF NOT EXISTS idx_commits_v3_branch ON commits_v3(branch);
-    CREATE INDEX IF NOT EXISTS idx_commits_v3_committed_at ON commits_v3(committed_at);
-    CREATE INDEX IF NOT EXISTS idx_commits_v3_sentences ON commits_v3 USING GIN ((content->'sentences'));
-    CREATE INDEX IF NOT EXISTS idx_commits_v3_constraints ON commits_v3 USING GIN ((content->'constraints'));
 
     -- Merge Drafts table (for merge workspace PENDING state)
     CREATE TABLE IF NOT EXISTS merge_drafts (
@@ -860,10 +802,10 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username) WHERE username IS NOT NULL;
 
     -- ═══════════════════════════════════════════════════════════════
-    -- Frame-Based Commits (commits_v5 + frame_lineage)
+    -- Frame-Based Commits (commits + frame_lineage)
     -- ═══════════════════════════════════════════════════════════════
 
-    CREATE TABLE IF NOT EXISTS commits_v5 (
+    CREATE TABLE IF NOT EXISTS commits (
       -- First class (in hash)
       hash TEXT PRIMARY KEY,
       schema TEXT NOT NULL DEFAULT 't3x/commit/5',
@@ -884,9 +826,9 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
       -- Timestamps
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
-    CREATE INDEX IF NOT EXISTS idx_commits_v5_project ON commits_v5(project_id);
-    CREATE INDEX IF NOT EXISTS idx_commits_v5_branch ON commits_v5(branch);
-    CREATE INDEX IF NOT EXISTS idx_commits_v5_committed_at ON commits_v5(committed_at);
+    CREATE INDEX IF NOT EXISTS idx_commits_project ON commits(project_id);
+    CREATE INDEX IF NOT EXISTS idx_commits_branch ON commits(branch);
+    CREATE INDEX IF NOT EXISTS idx_commits_committed_at ON commits(committed_at);
 
     CREATE TABLE IF NOT EXISTS frame_lineage (
       id TEXT PRIMARY KEY,

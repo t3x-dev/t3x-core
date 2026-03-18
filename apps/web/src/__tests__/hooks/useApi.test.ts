@@ -17,15 +17,11 @@ vi.mock('@/lib/api', () => ({
   getTurn: vi.fn(),
   listBranches: vi.fn(),
   getCurrentBranch: vi.fn(),
-  listCommitsV3: vi.fn(),
-  getCommitV3: vi.fn(),
   getDraft: vi.fn(),
 }));
 
 import {
   useBranches,
-  useCommitsV3,
-  useCommitV3,
   useConversations,
   useCurrentBranch,
   useDraft,
@@ -290,56 +286,6 @@ describe('useCurrentBranch', () => {
     await waitForHook();
 
     expect(api.getCurrentBranch).not.toHaveBeenCalled();
-    expect(result.current.data).toBeNull();
-    unmount();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// useCommitsV3 / useCommitV3
-// ---------------------------------------------------------------------------
-
-describe('useCommitsV3', () => {
-  it('fetches commits with branch filter', async () => {
-    const payload = { commits: [], project_id: 'proj_1', limit: 50, offset: 0 };
-    vi.mocked(api.listCommitsV3).mockResolvedValue(payload as never);
-
-    const { result, unmount } = renderHook(() => useCommitsV3('proj_1', 'main'));
-    await waitForHook();
-
-    expect(api.listCommitsV3).toHaveBeenCalledWith('proj_1', 'main', 50, 0);
-    expect(result.current.data).toEqual(payload);
-    unmount();
-  });
-
-  it('returns empty when projectId is undefined', async () => {
-    const { result, unmount } = renderHook(() => useCommitsV3(undefined));
-    await waitForHook();
-
-    expect(api.listCommitsV3).not.toHaveBeenCalled();
-    expect(result.current.data).toEqual({ commits: [], project_id: '', limit: 50, offset: 0 });
-    unmount();
-  });
-});
-
-describe('useCommitV3', () => {
-  it('fetches single commit by hash', async () => {
-    const commit = { hash: 'sha256:abc', content: {} };
-    vi.mocked(api.getCommitV3).mockResolvedValue(commit as never);
-
-    const { result, unmount } = renderHook(() => useCommitV3('sha256:abc'));
-    await waitForHook();
-
-    expect(api.getCommitV3).toHaveBeenCalledWith('sha256:abc');
-    expect(result.current.data).toEqual(commit);
-    unmount();
-  });
-
-  it('returns null when hash is undefined', async () => {
-    const { result, unmount } = renderHook(() => useCommitV3(undefined));
-    await waitForHook();
-
-    expect(api.getCommitV3).not.toHaveBeenCalled();
     expect(result.current.data).toBeNull();
     unmount();
   });

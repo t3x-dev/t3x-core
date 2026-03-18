@@ -6,7 +6,9 @@ import { LLMExtractor } from '../llmExtractor';
 function createMockProvider(response: string): LLMProvider {
   return {
     id: 'mock-model',
-    generate: vi.fn().mockResolvedValue({ text: response, usage: { inputTokens: 10, outputTokens: 5 } }),
+    generate: vi
+      .fn()
+      .mockResolvedValue({ text: response, usage: { inputTokens: 10, outputTokens: 5 } }),
     resolveConflict: vi.fn(),
   };
 }

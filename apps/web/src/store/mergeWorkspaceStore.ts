@@ -12,13 +12,7 @@ import { getTerminology, type TermKey } from '@/hooks/useTerminology';
 import * as api from '@/lib/api';
 import { API_V1, fetchWithTimeout, handleResponse } from '@/lib/api/core';
 import { useSettingsStore } from '@/store/settingsStore';
-import type {
-  CommitV3,
-  Merge2WayResult,
-  MergeDraft,
-  Sentence,
-  TurnContextData,
-} from '@/types/merge';
+import type { Merge2WayResult, MergeDraft, Sentence, TurnContextData } from '@/types/merge';
 import { useCanvasStore } from './canvasStore';
 
 // ============================================================================
@@ -127,7 +121,7 @@ interface MergeWorkspaceState {
   toggleKeep: (side: 'source' | 'target', index: number) => void;
   setMessage: (message: string) => void;
   saveDraft: () => Promise<void>;
-  commitMerge: (branch?: string) => Promise<CommitV3>;
+  commitMerge: (branch?: string) => Promise<{ hash: string }>;
   cancelMerge: () => Promise<void>;
   reset: () => void;
 
@@ -510,7 +504,7 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
     set({ error: null });
 
     try {
-      const commitResult = await fetchApi<CommitV3>(`/merge/drafts/${draftId}/commit`, {
+      const commitResult = await fetchApi<{ hash: string }>(`/merge/drafts/${draftId}/commit`, {
         method: 'POST',
         body: JSON.stringify({
           message,

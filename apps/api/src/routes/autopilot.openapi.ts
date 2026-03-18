@@ -20,7 +20,7 @@ import {
 } from '@t3x-dev/core';
 import {
   commitDraftV3,
-  createCommitV4,
+  createCommit,
   draftsV3,
   findDraftV3ById,
   getAdaptiveFeedbackStats,
@@ -378,7 +378,7 @@ autopilotRoutes.openapi(autoCommitRoute, async (c) => {
     const sentences = qualifyingSPs.map((sp) => spToSentence(sp));
 
     // 8. Atomically claim the draft (status WHERE guard prevents double-commit)
-    //    Must run BEFORE createCommitV4 to avoid orphan commits on race.
+    //    Must run BEFORE createCommit to avoid orphan commits on race.
     //    We pass a placeholder hash; it will be updated after commit creation.
     const PLACEHOLDER_HASH = 'pending';
     const claimed = await commitDraftV3(db, draftId, PLACEHOLDER_HASH);
@@ -391,18 +391,21 @@ autopilotRoutes.openapi(autoCommitRoute, async (c) => {
     }
 
     // 9. Create commit (only the winner of step 8 reaches here)
-    const commit = await createCommitV4(
-      db,
-      {
-        parents: draft.parent_commit_hash ? [draft.parent_commit_hash] : [],
-        author: { type: 'agent', name: 'autopilot' },
-        sentences,
-        project_id: draft.project_id,
-        message: `Auto-commit: ${sentences.length} sentence(s)`,
-        branch: config.target_branch,
-      },
-      { strictParents: false }
-    );
+    const autoFrames = sentences.map((s, i) => ({
+      id: s.id || `f_${String(i + 1).padStart(3, '0')}`,
+      type: 'legacy_sentence' as const,
+      slots: { text: s.text },
+      confidence: s.confidence,
+    }));
+    const commit = await createCommit(db, {
+      parents: draft.parent_commit_hash ? [draft.parent_commit_hash] : [],
+      author: { type: 'agent' as const, name: 'autopilot' },
+      content: { frames: autoFrames, relations: [] },
+      project_id: draft.project_id,
+      message: `Auto-commit: ${sentences.length} sentence(s)`,
+      branch: config.target_branch,
+      provenance: { method: 'human_curation' },
+    });
 
     // 10. Update draft with the real commit hash
     await db

@@ -9,12 +9,7 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import {
-  createTemplate,
-  deleteTemplate,
-  findTemplateById,
-  listTemplates,
-} from '@t3x-dev/storage';
+import { createTemplate, deleteTemplate, findTemplateById, listTemplates } from '@t3x-dev/storage';
 import { nanoid } from 'nanoid';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';

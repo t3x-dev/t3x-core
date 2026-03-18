@@ -42,7 +42,13 @@ function renderSlotValue(value: SlotValue, indent: number, lines: string[]): voi
   }
 
   // InlineFrame: { type: "...", slots: { ... } }
-  if (value !== null && typeof value === 'object' && !Array.isArray(value) && 'type' in value && 'slots' in value) {
+  if (
+    value !== null &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    'type' in value &&
+    'slots' in value
+  ) {
     const inlineFrame = value as { type: string; slots: Record<string, SlotValue> };
     // Render as nested YAML — key already written by caller, just add newline
     lines.push('');
@@ -66,7 +72,9 @@ function renderSlotValue(value: SlotValue, indent: number, lines: string[]): voi
 
     if (allSimple && arr.length <= 5) {
       // Inline array for short simple lists
-      lines.push(`[${arr.map((item) => typeof item === 'string' ? `"${item}"` : String(item)).join(', ')}]`);
+      lines.push(
+        `[${arr.map((item) => (typeof item === 'string' ? `"${item}"` : String(item))).join(', ')}]`
+      );
       return;
     }
 

@@ -11,12 +11,6 @@ import * as api from '@/lib/api';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import type { WordDiffSegment } from '@/types/merge';
-import { DiffContextSnippet } from './DiffContextSnippet';
-import { DiffHunkHeader } from './DiffHunkHeader';
-import { DiffSentenceLine } from './DiffSentenceLine';
-import { DiffSourceContextModal } from './DiffSourceContextModal';
-import { DiffSourceGroupHeader } from './DiffSourceGroupHeader';
-
 import type { InlineContextState, SegmentDiffItem, UnifiedLine } from './DiffBuilders';
 import {
   buildDocumentLines,
@@ -24,6 +18,11 @@ import {
   formatHunkRange,
   insertGroupHeaders,
 } from './DiffBuilders';
+import { DiffContextSnippet } from './DiffContextSnippet';
+import { DiffHunkHeader } from './DiffHunkHeader';
+import { DiffSentenceLine } from './DiffSentenceLine';
+import { DiffSourceContextModal } from './DiffSourceContextModal';
+import { DiffSourceGroupHeader } from './DiffSourceGroupHeader';
 
 // ============================================================================
 // Props

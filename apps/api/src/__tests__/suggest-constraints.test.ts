@@ -4,9 +4,8 @@
  * Tests for POST /v1/leaves/:id/suggest-constraints endpoint.
  */
 
-import { insertProject } from '@t3x-dev/storage';
 import type { AnyDB } from '@t3x-dev/storage';
-import { createCommitV4, createLeaf } from '@t3x-dev/storage';
+import { createCommit, createLeaf, insertProject } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
@@ -82,12 +81,20 @@ describe('Suggest Constraints', () => {
     testProjectId = project.projectId;
 
     // Create a commit with sentences
-    const commit = await createCommitV4(mockDB, {
+    const commit = await createCommit(mockDB, {
       author: { type: 'human', name: 'test' },
-      sentences: [
-        { id: 's_test001', text: 'The user prefers budget-friendly travel.', confidence: 0.9 },
-        { id: 's_test002', text: 'The user wants to visit Japan in spring.', confidence: 0.95 },
-      ],
+      content: {
+        frames: [
+          { id: 's_test001', text: 'The user prefers budget-friendly travel.', confidence: 0.9 },
+          { id: 's_test002', text: 'The user wants to visit Japan in spring.', confidence: 0.95 },
+        ].map((s) => ({
+          id: s.id,
+          type: 'legacy_sentence' as const,
+          slots: { text: s.text },
+          confidence: s.confidence,
+        })),
+        relations: [],
+      },
       project_id: testProjectId,
       message: 'Test commit for suggestion',
       branch: 'main',
@@ -132,7 +139,10 @@ describe('Suggest Constraints', () => {
         .mockImplementation(async (_role: string, fn: (provider: unknown) => Promise<unknown>) => {
           const mockProvider = {
             id: 'test-provider',
-            generate: vi.fn().mockResolvedValue({ text: mockLlmResponse, usage: { inputTokens: 10, outputTokens: 5 } }),
+            generate: vi.fn().mockResolvedValue({
+              text: mockLlmResponse,
+              usage: { inputTokens: 10, outputTokens: 5 },
+            }),
             resolveConflict: vi.fn(),
           };
           return fn(mockProvider);

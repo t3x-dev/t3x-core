@@ -2,7 +2,7 @@
  * Frame-Based Commit Storage Schema
  *
  * Two tables:
- * - commits_v5: Frame-based commits (SemanticContent = frames + relations)
+ * - commits: Frame-based commits (SemanticContent = frames + relations)
  * - frame_lineage: Per-frame lineage tracking across commits
  *
  * @see packages/core/src/commit/types.ts
@@ -13,16 +13,13 @@ import { index, jsonb, pgTable, real, text, timestamp } from 'drizzle-orm/pg-cor
 import { projects } from './schema';
 
 // ═══════════════════════════════════════════════════════════════════════════
-// commits_v5: Frame-Based Knowledge Storage
+// commits: Frame-Based Knowledge Storage
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * CommitV5 stores frame-based semantic knowledge.
+ * Stores frame-based semantic knowledge.
  *
- * Key difference from commits_v4:
- * - content is SemanticContent (frames + relations) instead of { sentences }
- * - sources replaces source_refs
- * - provenance tracks extraction method
+ * Content is SemanticContent (frames + relations).
  *
  * JSONB columns:
  * - parents: string[]
@@ -31,8 +28,8 @@ import { projects } from './schema';
  * - sources: Source[]
  * - provenance: Provenance
  */
-export const commitsV5 = pgTable(
-  'commits_v5',
+export const commits = pgTable(
+  'commits',
   {
     // ─────────────────────────────────────────────────────────────────────────
     // First-class fields (participate in hash)
@@ -79,13 +76,14 @@ export const commitsV5 = pgTable(
     branch: text('branch').default('main'),
 
     /** Source references (conversations, imports, leaves that contributed) */
-    sources: jsonb('sources').$type<
-      Array<{
-        type: 'conversation' | 'import' | 'leaf';
-        id: string;
-        title?: string;
-      }>
-    >(),
+    sources:
+      jsonb('sources').$type<
+        Array<{
+          type: 'conversation' | 'import' | 'leaf';
+          id: string;
+          title?: string;
+        }>
+      >(),
 
     /** Provenance: how this commit was created */
     provenance: jsonb('provenance').$type<{
@@ -102,9 +100,9 @@ export const commitsV5 = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   },
   (table) => ({
-    projectIdx: index('idx_commits_v5_project').on(table.projectId),
-    branchIdx: index('idx_commits_v5_branch').on(table.branch),
-    committedAtIdx: index('idx_commits_v5_committed_at').on(table.committedAt),
+    projectIdx: index('idx_commits_project').on(table.projectId),
+    branchIdx: index('idx_commits_branch').on(table.branch),
+    committedAtIdx: index('idx_commits_committed_at').on(table.committedAt),
   })
 );
 
@@ -146,8 +144,8 @@ export const frameLineage = pgTable(
 // Type Exports
 // ═══════════════════════════════════════════════════════════════════════════
 
-export type CommitV5Record = typeof commitsV5.$inferSelect;
-export type CommitV5Insert = typeof commitsV5.$inferInsert;
+export type CommitRecord = typeof commits.$inferSelect;
+export type CommitInsert = typeof commits.$inferInsert;
 
 export type FrameLineageRecord = typeof frameLineage.$inferSelect;
 export type FrameLineageInsert = typeof frameLineage.$inferInsert;

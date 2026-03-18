@@ -17,15 +17,9 @@
 export {
   closeEmbeddedStorage,
   createEmbeddedStorage,
-  getEmbeddedRawClient,
   type EmbeddedConfig,
+  getEmbeddedRawClient,
 } from './adapters/embedded';
-
-// Query functions (driver-agnostic, work with any AnyDB)
-export * from './queries';
-// Schema (table definitions and types)
-export * from './schema';
-export * from './schema-v4';
 // Backup & verification
 export {
   type VerifyChainResult,
@@ -33,6 +27,11 @@ export {
   verifyCommitHash,
   verifyHashChain,
 } from './backup';
+// Query functions (driver-agnostic, work with any AnyDB)
+export * from './queries';
+// Schema (table definitions and types)
+export * from './schema';
+export * from './schema-v4';
 
 // Type alias — embedded adapter returns PostgresDB
 import type { PostgresDB } from './adapters/postgres';

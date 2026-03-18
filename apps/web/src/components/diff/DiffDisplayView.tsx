@@ -30,7 +30,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { WordDiffDisplay } from '@/components/merge/WordDiffDisplay';
 import { Button } from '@/components/ui/button';
 import { EmptyStateInline } from '@/components/ui/empty-state';
-import type { CommitV3Sentence, TurnContextData } from '@/lib/api';
+import type { SentenceWithSourceInfo, TurnContextData } from '@/lib/api';
 import * as api from '@/lib/api';
 import {
   type CommitDiff,
@@ -71,9 +71,9 @@ interface UnifiedDiffLine {
 
 interface DiffDisplayViewProps {
   /** Sentences from source commit (base/old version) */
-  sourceSentences: CommitV3Sentence[];
+  sourceSentences: SentenceWithSourceInfo[];
   /** Sentences from target commit (new version) */
-  targetSentences: CommitV3Sentence[];
+  targetSentences: SentenceWithSourceInfo[];
   /** Source commit hash (for display) */
   sourceCommitHash?: string;
   /** Target commit hash (for display) */

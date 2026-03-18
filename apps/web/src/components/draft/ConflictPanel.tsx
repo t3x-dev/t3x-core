@@ -13,7 +13,7 @@ interface ConflictPanelProps {
 
 /**
  * Panel that shows cross-conversation conflicts for a commit.
- * Calls POST /v1/commits-v4/:hash/check-conflicts.
+ * Calls checkConflicts() (deprecated — V4 endpoint removed, returns empty).
  */
 export function ConflictPanel({ commitHash }: ConflictPanelProps) {
   const [conflicts, setConflicts] = useState<ConflictCandidate[]>([]);

@@ -1,18 +1,16 @@
 /**
- * Unified commit fetch — V5 frames with V4 fallback
+ * Unified commit fetch — frame-based
  */
 
 import type { Commit } from '@t3x-dev/core';
 import { upgradeLegacyCommit } from '@t3x-dev/core';
-
+import { getApiCommit } from './commits';
 import { API_V1, fetchWithTimeout } from './core';
-import { getCommitV4, getCommitV4History } from './commits';
 
 /**
- * Fetch a commit as V5 frames. Tries V5 endpoint first, falls back to V4 + upgrade.
+ * Fetch a commit as frames.
  */
 export async function getCommitAsFrames(hash: string): Promise<Commit> {
-  // Try V5 first
   try {
     const res = await fetchWithTimeout(`${API_V1}/commits/${encodeURIComponent(hash)}`);
     if (res.ok) {
@@ -22,23 +20,31 @@ export async function getCommitAsFrames(hash: string): Promise<Commit> {
       }
     }
   } catch {
-    // V5 not available, fall through to V4
+    // Fall through
   }
 
-  // Fall back to V4 + upgrade
-  const v4 = await getCommitV4(hash);
+  // Fallback: fetch via API and attempt upgrade
+  const v5 = await getApiCommit(hash);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return upgradeLegacyCommit(v4 as any);
+  return upgradeLegacyCommit(v5 as any);
 }
 
 /**
- * Fetch commit history as V5 frames.
+ * Fetch commit history as frames.
  */
-export async function getCommitHistoryAsFrames(
-  hash: string,
-  limit = 10
-): Promise<Commit[]> {
-  const v4History = await getCommitV4History(hash, limit);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return v4History.map((c) => upgradeLegacyCommit(c as any));
+export async function getCommitHistoryAsFrames(hash: string, limit = 10): Promise<Commit[]> {
+  try {
+    const res = await fetchWithTimeout(
+      `${API_V1}/commits/${encodeURIComponent(hash)}/history?limit=${limit}`
+    );
+    if (res.ok) {
+      const json = (await res.json()) as { success: boolean; data?: { commits?: Commit[] } };
+      if (json.success && json.data?.commits) {
+        return json.data.commits;
+      }
+    }
+  } catch {
+    // Fall through
+  }
+  return [];
 }

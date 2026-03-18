@@ -199,6 +199,14 @@ export interface CommitSourceRef {
  */
 export type Constraint = RequireConstraint | ExcludeConstraint;
 
+/** Reference to a source frame's slot (for frame-based constraints) */
+export interface ConstraintSourceFrame {
+  /** Frame type to target (e.g., "preference", "budget") */
+  frame_type: string;
+  /** Specific slot key within the frame (optional — omit to target the frame as a whole) */
+  slot_key?: string;
+}
+
 export interface RequireConstraint {
   /** Unique ID, format: "cst_" + nanoid(12) */
   id: string;
@@ -214,8 +222,11 @@ export interface RequireConstraint {
   /** Human explanation of this constraint */
   description?: string;
 
-  /** Link to source sentence (for traceability) */
+  /** @deprecated Use source_frame for frame-based commits */
   source_sentence_id?: string;
+
+  /** Link to source frame + slot (frame-based traceability) */
+  source_frame?: ConstraintSourceFrame;
 }
 
 export interface ExcludeConstraint {
@@ -235,6 +246,9 @@ export interface ExcludeConstraint {
 
   /** Why this is excluded (policy/compliance reason) */
   reason?: string;
+
+  /** Link to source frame + slot (frame-based traceability) */
+  source_frame?: ConstraintSourceFrame;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1058,7 +1072,7 @@ export interface EvidenceAnchor {
 /**
  * Extended Sentence with multi-evidence support for LLM-extracted commits.
  */
-export interface SentenceV5 extends Sentence {
+export interface SentenceWithEvidence extends Sentence {
   supporting_refs?: SentenceSourceRef[];
 }
 
