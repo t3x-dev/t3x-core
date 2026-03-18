@@ -7,6 +7,8 @@ export { normalizeFrameOutput } from './normalizer';
 export { createProviderForModel } from './providerFactory';
 export {
   type Capability,
+  type LLMCallLog,
+  type LLMCallLogger,
   type LLMGenerateOptions,
   type LLMGenerateOptionsV2,
   type LLMGenerateResult,

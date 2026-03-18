@@ -249,6 +249,8 @@ export {
   getAllModels,
   getModelInfo,
   getModelsByProvider,
+  type LLMCallLog,
+  type LLMCallLogger,
   type LLMGenerateOptions,
   type LLMGenerateOptionsV2,
   type LLMPrompt,

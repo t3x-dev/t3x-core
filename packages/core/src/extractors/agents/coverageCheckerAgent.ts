@@ -48,6 +48,8 @@ For each MISSING point, specify how to add it:
 - slot_key: the slot key to use
 - slot_value: the value to add
 
+CRITICAL: The slot_value MUST come directly from the user's words. Do NOT invent numbers, names, prices, or details not explicitly stated by the user. If the user said "in-laws offered to help" the value is "in-laws offered to help" — do NOT infer an amount like 10000.
+
 Output JSON:
 {
   "coverage_score": 0.7,
@@ -167,8 +169,14 @@ export const coverageCheckerAgent: MeaningAgent = {
           // Add slot to existing frame
           const currentValue = existing.slots[point.slot_key];
           if (Array.isArray(currentValue)) {
-            // Append to existing array
-            existing.slots[point.slot_key] = [...currentValue, ...(Array.isArray(point.slot_value) ? point.slot_value : [point.slot_value])];
+            // Append to existing array, dedup by stringified value
+            const newItems = Array.isArray(point.slot_value) ? point.slot_value : [point.slot_value];
+            const existingSet = new Set(currentValue.map((v) => typeof v === 'string' ? v : JSON.stringify(v)));
+            const deduped = newItems.filter((v) => {
+              const key = typeof v === 'string' ? v : JSON.stringify(v);
+              return !existingSet.has(key);
+            });
+            existing.slots[point.slot_key] = [...currentValue, ...deduped];
           } else if (currentValue === undefined) {
             // New slot
             existing.slots[point.slot_key] = point.slot_value;
