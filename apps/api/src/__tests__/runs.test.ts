@@ -292,7 +292,7 @@ describe('Runs Routes', () => {
       });
       expect(res.status).toBe(400);
       const data: ApiResponse = await res.json();
-      expect((data.error as Record<string, unknown>).code).toBe('VALIDATION_FAILED');
+      expect((data.error as Record<string, unknown>).code).toBe('INVALID_REQUEST');
     });
 
     it('updates updatedAt on each PATCH', async () => {

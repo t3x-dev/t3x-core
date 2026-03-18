@@ -24,6 +24,13 @@ vi.mock('@t3x-dev/core', () => ({
   createGoogleAIEmbeddingProvider: vi.fn(),
   createCachedEmbeddingProvider: vi.fn(),
   diffCommits: vi.fn(),
+  frameDiff: vi.fn(),
+  framesToTextSegments: vi.fn((content: { frames: Array<{ id: string; type: string; slots: Record<string, string> }> }) =>
+    (content?.frames ?? []).map((f: { id: string; slots: Record<string, string> }) => ({
+      id: f.id,
+      text: f.slots?.text ?? '',
+    }))
+  ),
   calculateDiffStats: vi.fn(() => ({ same: 0, modified: 0, added: 0, removed: 0 })),
   DiffType: { SAME: 'same', MODIFIED: 'modified', ADDED: 'added', REMOVED: 'removed' },
   EmbeddingProviderError: class extends Error {

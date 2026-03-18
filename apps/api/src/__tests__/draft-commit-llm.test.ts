@@ -130,11 +130,11 @@ describe('POST /v1/drafts/{id}/commit (LLM mode)', () => {
     expect(data.data.commit).toBeDefined();
     expect(data.data.commit.hash).toMatch(/^sha256:/);
 
-    // Verify sentences were created from SPs
-    const sentences = data.data.commit.content.sentences;
-    expect(sentences).toHaveLength(2);
-    expect(sentences[0].text).toBe('User prefers dark mode.');
-    expect(sentences[1].text).toBe('Dark mode reduces eye strain.');
+    // Verify frames were created from SPs
+    const frames = data.data.commit.content.frames;
+    expect(frames).toHaveLength(2);
+    expect(frames[0].slots.text).toBe('User prefers dark mode.');
+    expect(frames[1].slots.text).toBe('Dark mode reduces eye strain.');
 
     // Draft should be marked as committed
     expect(data.data.draft_status).toBe('committed');
@@ -169,10 +169,10 @@ describe('POST /v1/drafts/{id}/commit (LLM mode)', () => {
     const data: ApiResponse = await res.json();
     expect(data.success).toBe(true);
 
-    // Only active SP should become a sentence
-    const sentences = data.data.commit.content.sentences;
-    expect(sentences).toHaveLength(1);
-    expect(sentences[0].text).toBe('Active point.');
+    // Only active SP should become a frame
+    const frames = data.data.commit.content.frames;
+    expect(frames).toHaveLength(1);
+    expect(frames[0].slots.text).toBe('Active point.');
   });
 
   it('rejects commit with no staged SPs', async () => {
