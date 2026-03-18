@@ -13,13 +13,22 @@ export function applyDelta(snapshot: SemanticContent, delta: Delta): SemanticCon
 
   for (const change of delta.changes) {
     switch (change.action) {
-      case 'add':
-        frames.push({ ...change.frame, slots: { ...change.frame.slots } });
+      case 'add': {
+        // If a frame with the same ID already exists, treat as update (LLM sometimes
+        // emits "add" for existing IDs in delta mode — auto-correct to avoid duplicates)
+        const existingIdx = frames.findIndex((f) => f.id === change.frame.id);
+        if (existingIdx !== -1) {
+          const merged = { ...frames[existingIdx], ...change.frame, slots: { ...frames[existingIdx].slots, ...change.frame.slots } };
+          frames[existingIdx] = merged;
+        } else {
+          frames.push({ ...change.frame, slots: { ...change.frame.slots } });
+        }
         break;
+      }
 
       case 'update': {
         const idx = frames.findIndex((f) => f.id === change.target);
-        if (idx === -1) throw new Error(`Frame "${change.target}" not found for update`);
+        if (idx === -1) break; // Skip silently — frame may have been removed by a prior delta
         const updated = { ...frames[idx], slots: { ...frames[idx].slots } };
         for (const [key, value] of Object.entries(change.slots)) {
           if (value === null) {
@@ -34,7 +43,7 @@ export function applyDelta(snapshot: SemanticContent, delta: Delta): SemanticCon
 
       case 'remove': {
         const idx = frames.findIndex((f) => f.id === change.target);
-        if (idx === -1) throw new Error(`Frame "${change.target}" not found for remove`);
+        if (idx === -1) break; // Skip silently — frame already removed or never existed (idempotent)
         const removedId = change.target;
         frames.splice(idx, 1);
         relations = relations.filter((r) => r.from !== removedId && r.to !== removedId);

@@ -228,6 +228,15 @@ export function useConversationChat({
       setChatError(null);
       setChatWarning(null);
 
+      // Capture current messages BEFORE adding new user message to state.
+      // This prevents the duplicate user message bug: if we read chatMessagesRef
+      // AFTER the setState + await, the ref might already include the new message
+      // (due to useEffect syncing), causing it to appear twice in the API call.
+      const previousMessages = chatMessagesRef.current.map((msg) => ({
+        role: msg.role as 'user' | 'assistant',
+        content: msg.content,
+      }));
+
       // Add user message to chat
       const newUserMessage: ChatMessage = {
         id: `msg-${Date.now()}`,
@@ -262,15 +271,12 @@ export function useConversationChat({
           }
         }
 
-        // Build messages array from chat history (use ref to get latest)
-        const currentMessages = chatMessagesRef.current;
+        // Build messages array from captured history (before state update)
+        // previousMessages does NOT include the new user message, so we add it once at the end
         const messages: api.ChatMessage[] = [
           // Inject pin memory as system message (if available)
           ...(memoryContext ? [{ role: 'system' as const, content: memoryContext }] : []),
-          ...currentMessages.map((msg) => ({
-            role: msg.role as 'user' | 'assistant',
-            content: msg.content,
-          })),
+          ...previousMessages,
           { role: 'user' as const, content: userMessage },
         ];
 

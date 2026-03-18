@@ -13,14 +13,14 @@ import type { LLMProvider } from '../../llm/types';
 import type { Frame } from '../../semantic/types';
 import type { MeaningAgent, PipelineContext } from '../meaningPipeline';
 
-const SYSTEM_PROMPT = `You check if two semantic frames describe the same concept and should be merged.
+const SYSTEM_PROMPT = `You check if two semantic frames describe the same concept, are different, or contradict each other.
 
 Rules:
-1. "merge" if they describe the SAME thing (even with different names)
+1. "merge" if they describe the SAME thing (even with different names) — output merged slots
 2. "keep_separate" if they describe DIFFERENT things
-3. If merging, output the merged slots (union of both)
+3. "contradicts" if they contain CONFLICTING information (e.g., one says "avoid X" and the other recommends X) — output which frame to keep ("A" or "B"), prefer the one with higher confidence or from the user
 
-Output JSON: { "decision": "merge" | "keep_separate", "merged_slots": { ... } | null }
+Output JSON: { "decision": "merge" | "keep_separate" | "contradicts", "merged_slots": { ... } | null, "keep": "A" | "B" | null }
 Output ONLY JSON. No explanation.`;
 
 /** Find candidate pairs that might be duplicates */
@@ -89,8 +89,9 @@ export const dedupCheckerAgent: MeaningAgent = {
         const jsonMatch = result.text.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
           const parsed = JSON.parse(jsonMatch[0]) as {
-            decision: 'merge' | 'keep_separate';
+            decision: 'merge' | 'keep_separate' | 'contradicts';
             merged_slots?: Record<string, unknown>;
+            keep?: 'A' | 'B';
           };
 
           if (parsed.decision === 'merge' && parsed.merged_slots) {
@@ -104,6 +105,18 @@ export const dedupCheckerAgent: MeaningAgent = {
               confidence: Math.min(frameA.confidence ?? 1, frameB.confidence ?? 1),
             };
             toRemove.add(j);
+          } else if (parsed.decision === 'contradicts') {
+            // Keep the frame with higher confidence (user-sourced), remove the other
+            if (parsed.keep === 'A') {
+              toRemove.add(j);
+            } else if (parsed.keep === 'B') {
+              toRemove.add(i);
+            } else {
+              // Default: keep the one with higher confidence
+              const confA = frameA.confidence ?? 0.5;
+              const confB = frameB.confidence ?? 0.5;
+              toRemove.add(confA >= confB ? j : i);
+            }
           }
         }
       } catch {

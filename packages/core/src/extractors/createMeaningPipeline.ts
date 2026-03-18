@@ -1,18 +1,14 @@
 /**
  * Factory for creating a pre-configured MeaningPipeline.
  *
- * Registers all default agents in the correct order:
- * 1. dedup_checker (LLM) — merge duplicate frames
- * 2. nester (CODE) — build nested tree from relations
- * 3. topic_namer (LLM) — name the root topic (first extraction only)
- * 4. topic_evolver (LLM) — update topic name (delta updates only)
- * 5. slot_polisher (LLM) — clean up slot names/values
- *
+ * Registers all default agents in the correct order.
  * Each agent decides independently whether to run via shouldRun().
  */
 
 import type { LLMProvider } from '../llm/types';
 import {
+  contradictionCheckerAgent,
+  coverageCheckerAgent,
   dedupCheckerAgent,
   nesterAgent,
   outputRegulatorAgent,
@@ -34,6 +30,8 @@ import { MeaningPipeline } from './meaningPipeline';
  * 5. topic_evolver (LLM) — update topic name (delta updates)
  * 6. slot_polisher (LLM) — clean up slot names and values
  * 7. reviewer (LLM) — quality gate: review structure, flag issues, auto-fix
+ * 8. coverage_checker (LLM) — verify all user points are captured, auto-add missing
+ * 9. contradiction_checker (LLM) — detect and remove content contradicting user statements
  *
  * After each step, a snapshot is saved for human review.
  */
@@ -45,5 +43,7 @@ export function createMeaningPipeline(provider: LLMProvider): MeaningPipeline {
     .register(topicNamerAgent) // LLM: name root topic
     .register(topicEvolverAgent) // LLM: evolve topic name
     .register(slotPolisherAgent) // LLM: clean up slots
-    .register(reviewerAgent); // LLM: quality gate
+    .register(reviewerAgent) // LLM: quality gate
+    .register(coverageCheckerAgent) // LLM: check coverage
+    .register(contradictionCheckerAgent); // LLM: check contradictions
 }

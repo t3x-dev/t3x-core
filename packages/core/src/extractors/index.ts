@@ -11,6 +11,8 @@ export {
   type FeedbackStats,
 } from './adaptiveThresholds';
 export {
+  contradictionCheckerAgent,
+  coverageCheckerAgent,
   dedupCheckerAgent,
   nesterAgent,
   slotPolisherAgent,
@@ -62,6 +64,8 @@ export {
   type MeaningAgent,
   MeaningPipeline,
   type PipelineContext,
+  type PipelineMode,
+  type PipelineOptions,
   type PipelineResult,
   type QualityMetrics,
 } from './meaningPipeline';

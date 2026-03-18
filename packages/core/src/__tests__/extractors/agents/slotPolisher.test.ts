@@ -39,8 +39,9 @@ describe('slotPolisherAgent', () => {
     expect(slotPolisherAgent.shouldRun(ctx)).toBe(true);
   });
 
-  it('shouldRun returns false on delta update', () => {
-    const ctx = makeCtx([createFrameWithSlots('a', { x: 1 })], false);
+  it('shouldRun returns false in incremental mode', () => {
+    const ctx = makeCtx([createFrameWithSlots('a', { x: 1 })], true);
+    (ctx.meta as any).mode = 'incremental';
     expect(slotPolisherAgent.shouldRun(ctx)).toBe(false);
   });
 

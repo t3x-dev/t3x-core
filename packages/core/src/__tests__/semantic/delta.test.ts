@@ -90,20 +90,34 @@ describe('applyDelta', () => {
     expect(result.relations).toHaveLength(0);
   });
 
-  it('throws on update with non-existent target', () => {
-    expect(() =>
-      applyDelta(empty, {
-        changes: [{ action: 'update', target: 'f_999', slots: { a: 1 } }],
-      })
-    ).toThrow('f_999');
+  it('skips update with non-existent target silently', () => {
+    const result = applyDelta(empty, {
+      changes: [{ action: 'update', target: 'f_999', slots: { a: 1 } }],
+    });
+    expect(result.frames).toHaveLength(0);
   });
 
-  it('throws on remove with non-existent target', () => {
-    expect(() =>
-      applyDelta(empty, {
-        changes: [{ action: 'remove', target: 'f_999' }],
-      })
-    ).toThrow('f_999');
+  it('skips remove with non-existent target silently', () => {
+    const result = applyDelta(empty, {
+      changes: [{ action: 'remove', target: 'f_999' }],
+    });
+    expect(result.frames).toHaveLength(0);
+  });
+
+  it('merges add with existing frame ID instead of duplicating', () => {
+    const snapshot: SemanticContent = {
+      frames: [{ id: 'f_001', type: 'x', slots: { a: 1, b: 2 } }],
+      relations: [],
+    };
+    const delta: Delta = {
+      changes: [{ action: 'add', frame: { id: 'f_001', type: 'x_updated', slots: { a: 99, c: 3 } } }],
+    };
+    const result = applyDelta(snapshot, delta);
+    expect(result.frames).toHaveLength(1); // No duplicate
+    expect(result.frames[0].type).toBe('x_updated');
+    expect(result.frames[0].slots.a).toBe(99); // Overwritten
+    expect(result.frames[0].slots.b).toBe(2);  // Preserved from original
+    expect(result.frames[0].slots.c).toBe(3);  // New slot added
   });
 
   it('is immutable — does not modify input', () => {

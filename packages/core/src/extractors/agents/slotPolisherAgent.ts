@@ -34,8 +34,8 @@ export const slotPolisherAgent: MeaningAgent = {
   usesLLM: true,
 
   shouldRun(ctx: PipelineContext): boolean {
-    // Run on first extraction when we have content to polish
-    return ctx.meta.isFirstExtraction && ctx.content.frames.length > 0;
+    if (ctx.meta.mode === 'incremental') return false;
+    return ctx.content.frames.length > 0;
   },
 
   async run(ctx: PipelineContext, provider: LLMProvider): Promise<PipelineContext> {
