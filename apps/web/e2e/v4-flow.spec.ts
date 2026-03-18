@@ -48,7 +48,7 @@ test.describe('V4 WebUI Flow', () => {
     });
     const commitData = await commitResponse.json();
     expect(commitData.success).toBe(true);
-    commitHash = commitData.data.hash;
+    commitHash = commitData.data.commit.hash;
   });
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -318,8 +318,8 @@ test.describe('V4 WebUI UI Tests', () => {
     // Wait for page content to load
     await page.locator('body').waitFor({ state: 'visible', timeout: 10000 });
 
-    // Basic navigation test
-    const navigation = page.locator('nav').or(page.locator('[role="navigation"]')).first();
-    await expect(navigation).toBeVisible({ timeout: 10000 });
+    // Basic navigation test — chat sidebar should be visible
+    const sidebar = page.getByRole('complementary', { name: /chat navigation/i });
+    await expect(sidebar).toBeVisible({ timeout: 10000 });
   });
 });
