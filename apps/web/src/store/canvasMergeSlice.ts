@@ -221,7 +221,7 @@ export const createMergeSlice: StateCreator<CanvasState, [], [], MergeSlice> = (
               ?.filter((c) => c.type === 'exclude')
               .map((c) => c.value) ?? undefined,
           // V4 commit data including merge summary
-          commitV4: {
+          commit: {
             hash: mergeCommit.hash,
             schema: 't3x/commit/v4' as const,
             author: { type: 'human' as const, ...mergeCommit.author },

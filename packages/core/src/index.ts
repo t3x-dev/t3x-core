@@ -249,8 +249,8 @@ export {
   getAllModels,
   getModelInfo,
   getModelsByProvider,
+  type LLMBasicGenerateOptions,
   type LLMGenerateOptions,
-  type LLMGenerateOptionsV2,
   type LLMPrompt,
   type LLMProvider,
   LLMProviderError,
@@ -445,13 +445,13 @@ export {
   type Assertion,
   // Built Context
   type BuiltContext,
-  type CommitAuthor as CommitAuthorV4,
+  type CommitAuthor,
   type CommitSourceRef,
   // SentenceCommit (pure knowledge, no constraints)
   type SentenceCommit,
   type SentenceCommitContent,
   // Constraint (now belongs to Leaf)
-  type Constraint as ConstraintV4,
+  type Constraint,
   type ConstraintSourceFrame,
   type ContextSource,
   // Conversation Context
@@ -469,10 +469,10 @@ export {
   type DraftConstraint,
   type DraftSentence,
   type DraftSentenceOrigin,
-  type DraftStatus as DraftV4Status,
+  type DraftStatus,
   // Evidence / Extraction (LLM Incremental)
   type EvidenceAnchor,
-  type ExcludeConstraint as ExcludeConstraintV4,
+  type ExcludeConstraint,
   type ExtractionCursor,
   type ExtractionProposal,
   type ExtractionStats,
@@ -490,10 +490,6 @@ export {
   type LocatedEvidence,
   // Merge summary
   type MergeSummaryData,
-  type MergeV4Candidate,
-  // Merge V4 types
-  type MergeV4Result,
-  type MergeV4SimilarPair,
   // Pin (source selection)
   type Pin,
   type PinType,
@@ -502,15 +498,14 @@ export {
   type RelationExtractionResult,
   // Ring 4: Relations
   type RelationType,
-  type RequireConstraint as RequireConstraintV4,
+  type RequireConstraint,
   type SemanticPoint,
   // Sentence
-  type Sentence as SentenceV4,
+  type Sentence,
   type SentenceRelation,
   type SentenceSourceRef,
   type SentenceWithEvidence,
   // Share Token
   type ShareToken,
   type User,
-  type WordDiffSegment as WordDiffSegmentV4,
 } from './types/v4';

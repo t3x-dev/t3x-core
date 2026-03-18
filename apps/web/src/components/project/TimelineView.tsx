@@ -44,7 +44,7 @@ export function TimelineView({ projectId: _projectId }: { projectId: string }) {
         });
       } else {
         // Committed node
-        const commitV4 = d.commitV4 as { sentences?: { text: string }[] } | undefined;
+        const commitData = d.commit as { sentences?: { text: string }[] } | undefined;
         items.push({
           id: node.id,
           type: isMerge ? 'merge' : isBranch ? 'branch' : 'commit',
@@ -53,7 +53,7 @@ export function TimelineView({ projectId: _projectId }: { projectId: string }) {
           timestamp: d.timestamp,
           branch: isBranch ? (d.branchName as string) || 'branch' : 'main',
           hash: d.commitHash?.slice(0, 8),
-          sentenceCount: commitV4?.sentences?.length,
+          sentenceCount: commitData?.sentences?.length,
         });
       }
     }

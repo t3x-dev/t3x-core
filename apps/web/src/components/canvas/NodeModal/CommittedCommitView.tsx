@@ -43,7 +43,6 @@ import {
   CommitConstraintsAndLeaves,
   CommitFullHeader,
   CommitSourceContent,
-  isSentenceCommit,
   MemoryContextSidebar,
   PinnedSourcesSection,
 } from './shared';
@@ -122,11 +121,11 @@ export function CommittedCommitView({
   // Export commit
   const handleCommitExport = useCallback(
     async (format: CommitExportFormat) => {
-      const commit = data.commitV4 as SentenceCommit | undefined;
+      const commit = data.commit as SentenceCommit | undefined;
       if (!commit) return;
       await exportCommit(commit, format);
     },
-    [data.commitV4]
+    [data.commit]
   );
 
   // B-15: Navigate to full-screen diff page
@@ -265,7 +264,7 @@ export function CommittedCommitView({
                 <span>Open Full Page</span>
               </Link>
             )}
-            {data.commitV4 && (
+            {data.commit && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -369,20 +368,19 @@ export function CommittedCommitView({
           {/* Main Content - Tabbed Source View & Generated Output */}
           <div className="flex-1 min-w-0 overflow-y-auto p-[var(--space-page)] flex flex-col gap-[var(--space-section)]">
             {/* Commit header + tabbed source view */}
-            {data.commitV4 &&
+            {data.commit &&
               (() => {
-                const commit = data.commitV4 as CommitDisplay;
+                const commit = data.commit as CommitDisplay;
                 const branchName =
                   data.branchName || (data.branchType === 'main' ? 'main' : undefined);
-                const isV4 = isSentenceCommit(commit);
                 const commitProjectId = routeProjectId || projectId || undefined;
 
                 return (
                   <div className="space-y-[var(--space-group)]">
                     <CommitFullHeader commit={commit} branchName={branchName} />
 
-                    {/* Pinned Sources - V4 only */}
-                    {isV4 && commit.source_refs && commit.source_refs.length > 0 && (
+                    {/* Pinned Sources */}
+                    {commit.source_refs && commit.source_refs.length > 0 && (
                       <PinnedSourcesSection
                         sourceRefs={commit.source_refs}
                         projectId={commitProjectId}
@@ -410,8 +408,7 @@ export function CommittedCommitView({
                         >
                           JSON
                         </TabsTrigger>
-                        {isV4 &&
-                          (commit as SentenceCommit)?.semantic &&
+                        {(commit as SentenceCommit)?.semantic &&
                           (commit as SentenceCommit).semantic!.frames.length > 0 && (
                             <TabsTrigger
                               value="frame-graph"
@@ -468,8 +465,7 @@ export function CommittedCommitView({
                         </pre>
                       </TabsContent>
 
-                      {isV4 &&
-                        (commit as SentenceCommit)?.semantic &&
+                      {(commit as SentenceCommit)?.semantic &&
                         (commit as SentenceCommit).semantic!.frames.length > 0 && (
                           <TabsContent value="frame-graph">
                             <div className="h-[400px] border border-[var(--stroke-divider)] rounded-md overflow-hidden">
@@ -485,7 +481,7 @@ export function CommittedCommitView({
                         <RelationsTab
                           commitHash={data.commitHash || ''}
                           sentences={
-                            isV4 && commit.content?.sentences
+                            commit.content?.sentences
                               ? commit.content.sentences.map((s: { id: string; text: string }) => ({
                                   id: s.id,
                                   text: s.text,
@@ -507,7 +503,7 @@ export function CommittedCommitView({
               })()}
 
             {/* Generated Output - LLM generated content (only show if no commit data) */}
-            {!data.commitV4 && (
+            {!data.commit && (
               <div className="p-[var(--space-group)] bg-[var(--surface-app)] rounded-lg border border-[var(--stroke-divider)] elevation-1">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="font-semibold text-sm text-[var(--text-secondary)]">
@@ -520,7 +516,7 @@ export function CommittedCommitView({
               </div>
             )}
 
-            {data.status && !data.commitV4 && (
+            {data.status && !data.commit && (
               <div className="p-[var(--space-group)] bg-[var(--surface-app)] rounded-lg border border-[var(--stroke-divider)] elevation-1">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="font-semibold text-sm text-[var(--text-secondary)]">Intent</h3>
@@ -532,7 +528,7 @@ export function CommittedCommitView({
             )}
 
             {/* Facets - Extracted semantic data (only show if no commit data) */}
-            {!data.commitV4 && (
+            {!data.commit && (
               <div className="p-[var(--space-group)] bg-[var(--surface-app)] rounded-lg border border-[var(--stroke-divider)] elevation-1">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="font-semibold text-sm text-[var(--text-secondary)]">Facets</h3>
@@ -647,7 +643,7 @@ export function CommittedCommitView({
             style={{ width: commitRightWidth }}
           >
             {/* History Section */}
-            {data.commitV4 && data.commitHash && (
+            {data.commit && data.commitHash && (
               <>
                 <div className="mb-5">
                   <h4 className="text-[10px] font-semibold text-[var(--text-tertiary)] uppercase tracking-wide mb-3 flex items-center gap-1.5">

@@ -206,7 +206,7 @@ export interface ApiCommitAnchors {
 // ============================================================================
 
 // Parsed commit for frontend use
-// Aligned with @t3x-dev/core CommitV2Record
+// Aligned with @t3x-dev/core Commit
 export interface Commit {
   commit_hash: string;
   project_id: string;

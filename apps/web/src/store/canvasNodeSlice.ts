@@ -26,7 +26,7 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
 
     try {
       // Fetch conversations, sentence commits, and leaves in parallel
-      const [convResponse, commitsV4, projectLeaves] = await Promise.all([
+      const [convResponse, sentenceCommits, projectLeaves] = await Promise.all([
         api.listConversations(projectId, 100, 0),
         api.listSentenceCommits(projectId, undefined, 100, 0),
         api.listLeavesByProject(projectId).catch((err) => {
@@ -41,7 +41,7 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
       const conversations = convResponse.conversations;
 
       // Convert sentence commits to V2-compatible format for unitToNode
-      const commits: api.Commit[] = commitsV4.map(
+      const commits: api.Commit[] = sentenceCommits.map(
         (v4) =>
           ({
             commit_hash: v4.hash,
@@ -151,9 +151,9 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
       });
 
       // Build a map: commit_hash -> original sentence commit data (for source context display)
-      const commitV4Map = new Map<string, api.SentenceCommit>();
-      commitsV4.forEach((v4) => {
-        commitV4Map.set(v4.hash, v4);
+      const sentenceCommitMap = new Map<string, api.SentenceCommit>();
+      sentenceCommits.forEach((v4) => {
+        sentenceCommitMap.set(v4.hash, v4);
       });
 
       // Build a map: conversation_id -> commit (for pairing into units)
@@ -178,8 +178,8 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
       let nodeIndex = 0;
       conversations.forEach((conv) => {
         const commit = convToCommitMap.get(conv.conversation_id);
-        const originalV4 = commit ? commitV4Map.get(commit.commit_hash) : undefined;
-        const node = unitToNode(conv, commit || null, nodeIndex++, originalV4);
+        const originalCommit = commit ? sentenceCommitMap.get(commit.commit_hash) : undefined;
+        const node = unitToNode(conv, commit || null, nodeIndex++, originalCommit);
         const existingPos = existingNodePositions.get(node.id);
         if (existingPos) {
           node.position = existingPos;
@@ -207,8 +207,8 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
           position_y: undefined,
           created_at: commit.created_at,
         };
-        const originalV4 = commitV4Map.get(commit.commit_hash);
-        const node = unitToNode(virtualConv, commit, nodeIndex++, originalV4);
+        const originalCommit = sentenceCommitMap.get(commit.commit_hash);
+        const node = unitToNode(virtualConv, commit, nodeIndex++, originalCommit);
         const existingPos = existingNodePositions.get(node.id);
         if (existingPos) {
           node.position = existingPos;

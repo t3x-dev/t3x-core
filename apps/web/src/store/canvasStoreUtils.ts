@@ -504,7 +504,7 @@ export const unitToNode = (
   conv: api.Conversation,
   commit: api.Commit | null, // null for staging units (no commit yet)
   index: number,
-  originalV4?: api.SentenceCommit // Original sentence-based commit for source context display
+  originalCommit?: api.SentenceCommit // Original sentence-based commit for source context display
 ): Node<CanvasNodeData> => {
   // Use saved position from commit if available, otherwise from conversation, otherwise calculate
   const position =
@@ -575,28 +575,28 @@ export const unitToNode = (
         ? (api.parseApiCommitAnchors(commit.anchors) ?? undefined)
         : undefined,
       // V4 commit data for source context display
-      commitV4: originalV4
+      commit: originalCommit
         ? {
-            hash: originalV4.hash,
+            hash: originalCommit.hash,
             schema: 't3x/commit/v4' as const,
             author: {
-              type: originalV4.author.type,
-              name: originalV4.author.name,
-              id: originalV4.author.id,
+              type: originalCommit.author.type,
+              name: originalCommit.author.name,
+              id: originalCommit.author.id,
             },
-            committed_at: originalV4.committed_at,
+            committed_at: originalCommit.committed_at,
             content: {
-              sentences: originalV4.content.sentences.map((s) => ({
+              sentences: originalCommit.content.sentences.map((s) => ({
                 id: s.id,
                 text: s.text,
                 source_ref: s.source_ref,
               })),
             },
-            message: originalV4.message ?? undefined,
-            branch: originalV4.branch ?? undefined,
-            source_refs: originalV4.source_refs ?? undefined,
-            merge_summary: originalV4.merge_summary ?? undefined,
-            semantic: originalV4.semantic ?? undefined,
+            message: originalCommit.message ?? undefined,
+            branch: originalCommit.branch ?? undefined,
+            source_refs: originalCommit.source_refs ?? undefined,
+            merge_summary: originalCommit.merge_summary ?? undefined,
+            semantic: originalCommit.semantic ?? undefined,
           }
         : undefined,
     },

@@ -267,39 +267,8 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_merge_drafts_status ON merge_drafts(status);
 
     -- ═══════════════════════════════════════════════════════════════════════════
-    -- V4 Architecture Tables
+    -- V4 Architecture Tables (commits_v4 RETIRED — use 'commits' table)
     -- ═══════════════════════════════════════════════════════════════════════════
-
-    -- Commits V4 table (pure knowledge - sentences only, NO constraints)
-    CREATE TABLE IF NOT EXISTS commits_v4 (
-      -- First class (in hash)
-      hash TEXT PRIMARY KEY,
-      schema TEXT NOT NULL DEFAULT 't3x/commit/v4',
-      parents JSONB NOT NULL DEFAULT '[]',
-      author JSONB NOT NULL,
-      committed_at TIMESTAMPTZ NOT NULL,
-      content JSONB NOT NULL,
-
-      -- Second class (not in hash)
-      project_id TEXT REFERENCES projects(project_id) ON DELETE CASCADE,
-      message TEXT,
-      branch TEXT,
-      source_refs JSONB,
-      merge_summary JSONB,
-      semantic JSONB,
-      merkle_root TEXT,
-      position_x REAL,
-      position_y REAL,
-
-      -- Timestamps
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-    CREATE INDEX IF NOT EXISTS idx_commits_v4_project ON commits_v4(project_id);
-    CREATE INDEX IF NOT EXISTS idx_commits_v4_branch ON commits_v4(branch);
-    CREATE INDEX IF NOT EXISTS idx_commits_v4_created_at ON commits_v4(created_at);
-
-    -- Migration: Add merkle_root column to existing commits_v4 tables
-    ALTER TABLE commits_v4 ADD COLUMN IF NOT EXISTS merkle_root TEXT;
 
     -- Leaves table (application layer - owns constraints, output, validation)
     CREATE TABLE IF NOT EXISTS leaves (
@@ -370,12 +339,6 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     ALTER TABLE leaf_history ADD COLUMN IF NOT EXISTS attempt_number INTEGER NOT NULL DEFAULT 1;
     ALTER TABLE leaf_history ADD COLUMN IF NOT EXISTS corrective_feedback TEXT;
     ALTER TABLE leaf_history ADD COLUMN IF NOT EXISTS prompt_used TEXT;
-
-    -- Migration: Add merge_summary column to existing commits_v4 tables (v4.1)
-    ALTER TABLE commits_v4 ADD COLUMN IF NOT EXISTS merge_summary JSONB;
-
-    -- Migration: Add semantic column to existing commits_v4 tables
-    ALTER TABLE commits_v4 ADD COLUMN IF NOT EXISTS semantic JSONB;
 
     -- Migration: Add provider/model columns to projects and conversations (PR #554)
     ALTER TABLE projects ADD COLUMN IF NOT EXISTS provider_config TEXT;

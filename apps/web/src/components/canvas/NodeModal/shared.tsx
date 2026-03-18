@@ -13,12 +13,6 @@ import type { CommitDisplay, CommitSourceRef, EmbeddedLeaf } from '@/types/nodes
 import { CommitSourceContext } from '../CommitSourceContext';
 import { LeafCreationDialog } from '../LeafCreationDialog';
 
-/**
- * Helper to determine if commit uses sentence-based schema
- */
-export function isSentenceCommit(commit: CommitDisplay): boolean {
-  return commit.schema === 't3x/commit/v4';
-}
 
 /**
  * Author badge for commits (with type indicator)
@@ -201,7 +195,6 @@ export function CommitFullHeader({
   branchName?: string;
 }) {
   const [copiedHash, setCopiedHash] = useState(false);
-  const isV4 = isSentenceCommit(commit);
 
   const handleCopyHash = () => {
     navigator.clipboard.writeText(commit.hash);
@@ -224,16 +217,6 @@ export function CommitFullHeader({
             <Copy size={14} className="text-muted-foreground/70" />
           )}
         </button>
-        <span
-          className={cn(
-            'text-xs font-medium px-1.5 py-0.5 rounded',
-            isV4
-              ? 'bg-[var(--accent-conversation)]/10 text-[var(--accent-conversation)]'
-              : 'bg-muted text-muted-foreground'
-          )}
-        >
-          {isV4 ? 'V4' : 'V3'}
-        </span>
         {branchName && (
           <span
             className={cn(

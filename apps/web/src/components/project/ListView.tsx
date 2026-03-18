@@ -53,7 +53,7 @@ export function ListView({ projectId }: { projectId: string }) {
       const isCommitted = d.commitStatus === 'committed';
       const isMerge = d.isMergeCommit === true;
       const isBranch = d.branchType === 'branch';
-      const commitV4 = d.commitV4 as { sentences?: { text: string }[] } | undefined;
+      const commitData = d.commit as { sentences?: { text: string }[] } | undefined;
 
       items.push({
         id: node.id,
@@ -67,7 +67,7 @@ export function ListView({ projectId }: { projectId: string }) {
             : 'main'
           : undefined,
         hash: d.commitHash?.slice(0, 8),
-        sentenceCount: commitV4?.sentences?.length,
+        sentenceCount: commitData?.sentences?.length,
         projectId,
       });
     }

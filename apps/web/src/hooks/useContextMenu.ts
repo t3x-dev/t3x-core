@@ -63,7 +63,7 @@ export function useContextMenu({
       const isDraft = node.data.commitStatus === 'draft';
       const isCommitted = node.data.commitStatus === 'committed';
       const hasConversation = !!node.data.conversationId;
-      const commitHash = node.data.commitV4?.hash || node.data.commitHash || '';
+      const commitHash = node.data.commit?.hash || node.data.commitHash || '';
       const conversationId = node.data.conversationId;
       // Resolve parent commit hash for Quick Diff (via edges)
       let parentCommitHash: string | undefined;

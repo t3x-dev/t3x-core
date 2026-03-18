@@ -25,7 +25,7 @@ import {
   type CommitAuthor,
   type SentenceCommit,
   ID_PREFIXES,
-  type Sentence as SentenceV4,
+  type Sentence,
 } from '../types/v4';
 
 // ============================================================================
@@ -482,13 +482,13 @@ export function executeThreeWayMerge(
     return a.insertionOrder - b.insertionOrder;
   });
 
-  // Convert to SentenceV4 with deterministic V4 IDs
-  const sentences: SentenceV4[] = [];
+  // Convert to Sentence with deterministic V4 IDs
+  const sentences: Sentence[] = [];
 
   for (const { sentence: s } of collected) {
     const hashInput = `${sourceCommitHash}:${targetCommitHash}:${s.id}`;
     const newId = `${ID_PREFIXES.sentence}${sha256(hashInput).slice(0, 12)}`;
-    const sentence: SentenceV4 = {
+    const sentence: Sentence = {
       id: newId,
       text: s.text,
     };

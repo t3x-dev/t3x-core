@@ -14,7 +14,7 @@ import { useRef } from 'react';
 import type { LeafType, SourceType } from '@/types/nodes';
 
 // Leaf type definitions with icons and labels
-// Must match @t3x-dev/core LeafType from V4 schema
+// Must match @t3x-dev/core LeafType
 export const LEAF_TYPES: {
   type: LeafType;
   label: string;

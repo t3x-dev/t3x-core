@@ -9,7 +9,7 @@
  * 3. Fallback → default anonymous author
  */
 
-import type { CommitAuthorV4 } from '@t3x-dev/core';
+import type { CommitAuthor } from '@t3x-dev/core';
 import type { Context } from 'hono';
 import { getDB } from './db';
 
@@ -21,8 +21,8 @@ import { getDB } from './db';
  */
 export async function getV4AuthorFromContext(
   c: Context,
-  clientAuthor?: CommitAuthorV4
-): Promise<CommitAuthorV4> {
+  clientAuthor?: CommitAuthor
+): Promise<CommitAuthor> {
   const userId = c.get('userId') as string | undefined;
 
   if (userId) {

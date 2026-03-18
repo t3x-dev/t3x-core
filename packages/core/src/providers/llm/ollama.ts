@@ -6,7 +6,7 @@
  */
 
 import {
-  type LLMGenerateOptions,
+  type LLMBasicGenerateOptions,
   type LLMGenerateResult,
   type LLMProvider,
   LLMProviderError,
@@ -28,7 +28,7 @@ export class OllamaProvider implements LLMProvider {
     this.baseUrl = config.baseUrl ?? process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434';
   }
 
-  async generate(prompt: string, options?: LLMGenerateOptions): Promise<LLMGenerateResult> {
+  async generate(prompt: string, options?: LLMBasicGenerateOptions): Promise<LLMGenerateResult> {
     const temperature = options?.temperature ?? 0.3;
     const url = `${this.baseUrl}/api/generate`;
 

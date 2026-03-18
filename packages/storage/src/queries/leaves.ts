@@ -11,7 +11,7 @@
 
 import type {
   Assertion,
-  ConstraintV4 as Constraint,
+  Constraint,
   CreateLeafInput,
   Leaf,
   LeafConfig,

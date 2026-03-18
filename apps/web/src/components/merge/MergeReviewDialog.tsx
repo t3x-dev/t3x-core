@@ -109,13 +109,13 @@ export function MergeReviewDialog({
     if (!releaseNote) return;
     // Find the latest merge commit node and update its merge_summary with release_note
     const { nodes, updateNode } = useCanvasStore.getState();
-    const mergeNode = nodes.find((n) => n.data.isMergeCommit && n.data.commitV4?.merge_summary);
-    if (mergeNode?.data.commitV4?.merge_summary) {
+    const mergeNode = nodes.find((n) => n.data.isMergeCommit && n.data.commit?.merge_summary);
+    if (mergeNode?.data.commit?.merge_summary) {
       updateNode(mergeNode.id, {
-        commitV4: {
-          ...mergeNode.data.commitV4,
+        commit: {
+          ...mergeNode.data.commit,
           merge_summary: {
-            ...mergeNode.data.commitV4.merge_summary,
+            ...mergeNode.data.commit.merge_summary,
             release_note: {
               title: releaseNote.title,
               timestamp: releaseNote.timestamp,

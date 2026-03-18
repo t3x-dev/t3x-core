@@ -37,20 +37,20 @@ export interface LeafNodeConfig {
 
 // Import contract types from @t3x-dev/core (single source of truth)
 import type {
-  CommitAuthorV4,
+  CommitAuthor,
   CommitSourceRef,
+  Sentence,
   SentenceCommit,
   SentenceCommitContent,
   SentenceSourceRef,
-  SentenceV4,
 } from '@t3x-dev/core';
 
 // Re-export contract types for convenience
 export type {
-  CommitAuthorV4,
+  CommitAuthor,
   CommitSourceRef,
+  Sentence,
   SentenceSourceRef,
-  SentenceV4,
 };
 
 /**
@@ -515,7 +515,7 @@ export interface CanvasNodeData {
    * Commit display data (sentences only, no constraints)
    * @display UnitNode: Sentences list with info about Leaf constraints
    */
-  commitV4?: CommitDisplay;
+  commit?: CommitDisplay;
 
   // Merge commit configuration
   mergeConfig?: MergeConfig;

@@ -7,8 +7,8 @@
 
 import type { ZodType } from 'zod';
 import {
+  type LLMBasicGenerateOptions,
   type LLMGenerateOptions,
-  type LLMGenerateOptionsV2,
   type LLMGenerateResult,
   type LLMPrompt,
   type LLMProvider,
@@ -65,7 +65,7 @@ export class GeminiProvider implements LLMProvider {
     this.baseUrl = config.baseUrl ?? 'https://generativelanguage.googleapis.com/v1beta';
   }
 
-  async generate(prompt: string, options?: LLMGenerateOptions): Promise<LLMGenerateResult> {
+  async generate(prompt: string, options?: LLMBasicGenerateOptions): Promise<LLMGenerateResult> {
     const temperature = options?.temperature ?? 0.3;
     const maxTokens = options?.maxTokens ?? 2048;
     const url = `${this.baseUrl}/models/${this.model}:generateContent?key=${this.apiKey}`;
@@ -134,7 +134,7 @@ export class GeminiProvider implements LLMProvider {
     }
   }
 
-  async generateFromPrompt(prompt: LLMPrompt, options: LLMGenerateOptionsV2): Promise<LLMResult> {
+  async generateFromPrompt(prompt: LLMPrompt, options: LLMGenerateOptions): Promise<LLMResult> {
     const temperature = options.temperature ?? 0.3;
     const maxTokens = options.maxTokens ?? 2048;
     const model = options.model ?? this.model;
@@ -214,7 +214,7 @@ export class GeminiProvider implements LLMProvider {
   async generateStructured<T>(
     prompt: LLMPrompt,
     schema: ZodType<T>,
-    options: LLMGenerateOptionsV2
+    options: LLMGenerateOptions
   ): Promise<StructuredResult<T>> {
     const temperature = options.temperature ?? 0.3;
     const maxTokens = options.maxTokens ?? 2048;

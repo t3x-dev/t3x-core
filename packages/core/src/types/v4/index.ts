@@ -660,7 +660,7 @@ export interface WordDiffSegment {
  * A pair of similar sentences from source and target commits.
  * User must choose which one to keep.
  */
-export interface MergeV4SimilarPair {
+export interface MergeSimilarPair {
   /** Source sentence */
   source: Sentence;
 
@@ -678,7 +678,7 @@ export interface MergeV4SimilarPair {
  * A sentence that exists in only one commit (source or target).
  * User can choose to keep or discard it.
  */
-export interface MergeV4Candidate {
+export interface MergeCandidate {
   /** The unique sentence */
   sentence: Sentence;
 
@@ -690,18 +690,18 @@ export interface MergeV4Candidate {
  * Result of preparing a V4 merge.
  * Contains all information needed for user to make merge decisions.
  */
-export interface MergeV4Result {
+export interface MergeResult {
   /** Sentences identical in both commits - auto-kept */
   identical: Sentence[];
 
   /** Similar pairs requiring user decision */
-  similar_pairs: MergeV4SimilarPair[];
+  similar_pairs: MergeSimilarPair[];
 
   /** Sentences only in source commit */
-  only_in_source: MergeV4Candidate[];
+  only_in_source: MergeCandidate[];
 
   /** Sentences only in target commit */
-  only_in_target: MergeV4Candidate[];
+  only_in_target: MergeCandidate[];
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

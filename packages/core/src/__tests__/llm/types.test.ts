@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type {
   Capability,
-  LLMGenerateOptionsV2,
+  LLMGenerateOptions,
   LLMPrompt,
   LLMResult,
   ModelInfo,
@@ -38,8 +38,8 @@ describe('LLM extended types', () => {
     expect(prompt.messages).toHaveLength(2);
   });
 
-  it('LLMGenerateOptionsV2 includes stopSequences', () => {
-    const opts: LLMGenerateOptionsV2 = {
+  it('LLMGenerateOptions includes stopSequences', () => {
+    const opts: LLMGenerateOptions = {
       model: 'claude-sonnet-4-20250514',
       temperature: 0.1,
       maxTokens: 4096,

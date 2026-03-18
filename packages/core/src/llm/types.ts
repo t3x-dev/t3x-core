@@ -5,9 +5,9 @@
  */
 
 /**
- * LLM generation options
+ * LLM generation options (basic, without model selection)
  */
-export interface LLMGenerateOptions {
+export interface LLMBasicGenerateOptions {
   /** Temperature (0-1, default: 0.3) */
   temperature?: number;
   /** Maximum tokens to generate */
@@ -42,7 +42,7 @@ export interface LLMProvider {
    * @param options - Generation options
    * @returns Generated text
    */
-  generate(prompt: string, options?: LLMGenerateOptions): Promise<LLMGenerateResult>;
+  generate(prompt: string, options?: LLMBasicGenerateOptions): Promise<LLMGenerateResult>;
 
   /**
    * Resolve a merge conflict using LLM
@@ -61,13 +61,13 @@ export interface LLMProvider {
   ): Promise<LLMGenerateResult>;
 
   /** Generate text from a structured prompt (system + messages). Optional. */
-  generateFromPrompt?(prompt: LLMPrompt, options: LLMGenerateOptionsV2): Promise<LLMResult>;
+  generateFromPrompt?(prompt: LLMPrompt, options: LLMGenerateOptions): Promise<LLMResult>;
 
   /** Generate structured output using provider-native mechanisms. Optional. */
   generateStructured?<T>(
     prompt: LLMPrompt,
     schema: import('zod').ZodType<T>,
-    options: LLMGenerateOptionsV2
+    options: LLMGenerateOptions
   ): Promise<StructuredResult<T>>;
 }
 
@@ -101,7 +101,7 @@ export interface LLMPrompt {
   messages: Array<{ role: 'user' | 'assistant'; content: string }>;
 }
 
-export interface LLMGenerateOptionsV2 {
+export interface LLMGenerateOptions {
   model: string;
   temperature?: number;
   maxTokens?: number;

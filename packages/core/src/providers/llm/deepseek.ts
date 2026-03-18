@@ -5,7 +5,7 @@
  */
 
 import {
-  type LLMGenerateOptions,
+  type LLMBasicGenerateOptions,
   type LLMGenerateResult,
   type LLMProvider,
   LLMProviderError,
@@ -58,7 +58,7 @@ export class DeepSeekProvider implements LLMProvider {
     this.baseUrl = config.baseUrl ?? 'https://api.deepseek.com/v1';
   }
 
-  async generate(prompt: string, options?: LLMGenerateOptions): Promise<LLMGenerateResult> {
+  async generate(prompt: string, options?: LLMBasicGenerateOptions): Promise<LLMGenerateResult> {
     const temperature = options?.temperature ?? 0.3;
     const maxTokens = options?.maxTokens ?? 2048;
     const url = `${this.baseUrl}/chat/completions`;

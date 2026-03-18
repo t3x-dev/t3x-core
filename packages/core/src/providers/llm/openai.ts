@@ -6,8 +6,8 @@
 
 import type { ZodType } from 'zod';
 import {
+  type LLMBasicGenerateOptions,
   type LLMGenerateOptions,
-  type LLMGenerateOptionsV2,
   type LLMGenerateResult,
   type LLMPrompt,
   type LLMProvider,
@@ -64,7 +64,7 @@ export class OpenAIProvider implements LLMProvider {
     this.baseUrl = config.baseUrl ?? 'https://api.openai.com/v1';
   }
 
-  async generate(prompt: string, options?: LLMGenerateOptions): Promise<LLMGenerateResult> {
+  async generate(prompt: string, options?: LLMBasicGenerateOptions): Promise<LLMGenerateResult> {
     const temperature = options?.temperature ?? 0.3;
     const maxTokens = options?.maxTokens ?? 2048;
     const url = `${this.baseUrl}/chat/completions`;
@@ -130,7 +130,7 @@ export class OpenAIProvider implements LLMProvider {
     }
   }
 
-  async generateFromPrompt(prompt: LLMPrompt, options: LLMGenerateOptionsV2): Promise<LLMResult> {
+  async generateFromPrompt(prompt: LLMPrompt, options: LLMGenerateOptions): Promise<LLMResult> {
     const temperature = options.temperature ?? 0.3;
     const maxTokens = options.maxTokens ?? 2048;
     const url = `${this.baseUrl}/chat/completions`;
@@ -207,7 +207,7 @@ export class OpenAIProvider implements LLMProvider {
   async generateStructured<T>(
     prompt: LLMPrompt,
     schema: ZodType<T>,
-    options: LLMGenerateOptionsV2
+    options: LLMGenerateOptions
   ): Promise<StructuredResult<T>> {
     const temperature = options.temperature ?? 0.3;
     const maxTokens = options.maxTokens ?? 2048;

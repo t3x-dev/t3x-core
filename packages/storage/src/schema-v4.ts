@@ -551,8 +551,6 @@ export const leafOutputEdits = pgTable(
 // Type Exports (for use in queries)
 // ═══════════════════════════════════════════════════════════════════════════
 
-export type CommitV4Record = typeof commitsV4.$inferSelect;
-export type CommitV4Insert = typeof commitsV4.$inferInsert;
 
 export type LeafRecord = typeof leaves.$inferSelect;
 export type LeafInsert = typeof leaves.$inferInsert;

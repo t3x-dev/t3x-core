@@ -18,7 +18,7 @@ import {
   type CommitAuthor,
   type SentenceCommit,
   ID_PREFIXES,
-  type Sentence as SentenceV4,
+  type Sentence,
 } from '../types/v4';
 import type { Merge2WayResult } from './types';
 
@@ -144,14 +144,14 @@ export function executeMerge(
     return a.insertionOrder - b.insertionOrder;
   });
 
-  // Convert to SentenceV4 with deterministic V4 IDs
-  // 转换为 SentenceV4，使用确定性 V4 格式 ID
-  const sentences: SentenceV4[] = [];
+  // Convert to Sentence with deterministic V4 IDs
+  // 转换为 Sentence，使用确定性 V4 格式 ID
+  const sentences: Sentence[] = [];
 
   for (const { sentence: s } of collected) {
     const hashInput = `${sourceCommitHash}:${targetCommitHash}:${s.id}`;
     const newId = `${ID_PREFIXES.sentence}${sha256(hashInput).slice(0, 12)}`;
-    const sentence: SentenceV4 = {
+    const sentence: Sentence = {
       id: newId,
       text: s.text,
     };
