@@ -16,8 +16,8 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useTerminology } from '@/hooks/useTerminology';
-import type { DraftSentence, DraftV3 } from '@/lib/api';
-import { createDraftV3, listDraftsV3, updateDraftV3 } from '@/lib/api';
+import type { DraftSentence, WorkbenchDraft } from '@/lib/api';
+import { createWorkbenchDraft, listWorkbenchDrafts, updateWorkbenchDraft } from '@/lib/api';
 import { nextDraftId } from '@/lib/draftUtils';
 import { cn } from '@/lib/utils';
 
@@ -75,7 +75,7 @@ export function DraftPickerDialog({
 }: DraftPickerDialogProps) {
   const { t } = useTerminology();
   const router = useRouter();
-  const [drafts, setDrafts] = useState<DraftV3[]>([]);
+  const [drafts, setDrafts] = useState<WorkbenchDraft[]>([]);
   const [loading, setLoading] = useState(false);
   const [acting, setActing] = useState(false);
 
@@ -83,7 +83,7 @@ export function DraftPickerDialog({
   useEffect(() => {
     if (!open || !projectId) return;
     setLoading(true);
-    listDraftsV3(projectId, 'editing')
+    listWorkbenchDrafts(projectId, 'editing')
       .then(setDrafts)
       .catch(() => setDrafts([]))
       .finally(() => setLoading(false));
@@ -96,7 +96,7 @@ export function DraftPickerDialog({
       const dateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
       const autoTitle = `${t('draft')} · ${titlePrefix} · ${dateStr}`;
 
-      const newDraft = await createDraftV3({ project_id: projectId, title: autoTitle });
+      const newDraft = await createWorkbenchDraft({ project_id: projectId, title: autoTitle });
       const sentence = buildSentence(
         selectedText,
         conversationId,
@@ -107,7 +107,7 @@ export function DraftPickerDialog({
         endChar,
         0
       );
-      await updateDraftV3(newDraft.id, { sentences: [sentence], if_revision: 1 });
+      await updateWorkbenchDraft(newDraft.id, { sentences: [sentence], if_revision: 1 });
 
       toast.success(`Added to "${autoTitle}"`, {
         action: {
@@ -125,7 +125,7 @@ export function DraftPickerDialog({
     }
   };
 
-  const handleAddToDraft = async (draft: DraftV3) => {
+  const handleAddToDraft = async (draft: WorkbenchDraft) => {
     setActing(true);
     try {
       const sentence = buildSentence(
@@ -139,7 +139,7 @@ export function DraftPickerDialog({
         draft.sentences.length
       );
       const updatedSentences = [...draft.sentences, sentence];
-      await updateDraftV3(draft.id, { sentences: updatedSentences, if_revision: draft.revision });
+      await updateWorkbenchDraft(draft.id, { sentences: updatedSentences, if_revision: draft.revision });
 
       toast.success(`Added to "${draft.title}"`, {
         action: {

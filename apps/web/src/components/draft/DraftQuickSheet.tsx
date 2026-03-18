@@ -24,7 +24,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { useTerminology } from '@/hooks/useTerminology';
-import type { DraftSentence, DraftV3 } from '@/lib/api';
+import type { DraftSentence, WorkbenchDraft } from '@/lib/api';
 import * as api from '@/lib/api';
 import { useCanvasStore } from '@/store/canvasStore';
 
@@ -38,7 +38,7 @@ interface DraftQuickSheetProps {
 export function DraftQuickSheet({ open, onClose, draftId, projectId }: DraftQuickSheetProps) {
   const router = useRouter();
   const { t } = useTerminology();
-  const [draft, setDraft] = useState<DraftV3 | null>(null);
+  const [draft, setDraft] = useState<WorkbenchDraft | null>(null);
   const [loading, setLoading] = useState(false);
   const [committing, setCommitting] = useState(false);
   const [promoting, setPromoting] = useState(false);
@@ -49,7 +49,7 @@ export function DraftQuickSheet({ open, onClose, draftId, projectId }: DraftQuic
     if (!open || !draftId) return;
     setLoading(true);
     api
-      .getDraftV3(draftId)
+      .getWorkbenchDraft(draftId)
       .then(setDraft)
       .catch(() => setDraft(null))
       .finally(() => setLoading(false));
@@ -66,7 +66,7 @@ export function DraftQuickSheet({ open, onClose, draftId, projectId }: DraftQuic
       // Save in background with guard against rapid toggles
       savingRef.current = true;
       api
-        .updateDraftV3(draftId, { sentences, if_revision: draft.revision })
+        .updateWorkbenchDraft(draftId, { sentences, if_revision: draft.revision })
         .catch(() => {
           // Revert on error
           setDraft(draft);
@@ -82,7 +82,7 @@ export function DraftQuickSheet({ open, onClose, draftId, projectId }: DraftQuic
     if (!draft) return;
     setCommitting(true);
     try {
-      const result = await api.commitDraftV3(draftId);
+      const result = await api.commitWorkbenchDraft(draftId);
       const commitHash = result.commit.hash as string;
 
       // Async conflict detection (non-blocking)

@@ -426,8 +426,13 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     ALTER TABLE templates ADD COLUMN IF NOT EXISTS default_constraints JSONB DEFAULT '[]'::jsonb;
     ALTER TABLE templates ADD COLUMN IF NOT EXISTS semantic_threshold JSONB;
 
-    -- Drafts V3 table (Workbench / pre-commit working area)
-    CREATE TABLE IF NOT EXISTS drafts_v3 (
+    -- Auto-migrate: rename legacy drafts_v3 table if it exists
+    ALTER TABLE IF EXISTS drafts_v3 RENAME TO drafts;
+    ALTER INDEX IF EXISTS idx_drafts_v3_project RENAME TO idx_drafts_project;
+    ALTER INDEX IF EXISTS idx_drafts_v3_status RENAME TO idx_drafts_status;
+
+    -- Drafts table (Workbench / pre-commit working area)
+    CREATE TABLE IF NOT EXISTS drafts (
       id TEXT PRIMARY KEY,
       project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
       title TEXT NOT NULL,
@@ -448,13 +453,13 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
       created_at TIMESTAMPTZ NOT NULL,
       updated_at TIMESTAMPTZ NOT NULL
     );
-    CREATE INDEX IF NOT EXISTS idx_drafts_v3_project ON drafts_v3(project_id);
-    CREATE INDEX IF NOT EXISTS idx_drafts_v3_status ON drafts_v3(status);
+    CREATE INDEX IF NOT EXISTS idx_drafts_project ON drafts(project_id);
+    CREATE INDEX IF NOT EXISTS idx_drafts_status ON drafts(status);
 
-    -- Migration: Add LLM extraction columns to drafts_v3 (incremental extraction pipeline)
-    ALTER TABLE drafts_v3 ADD COLUMN IF NOT EXISTS extraction_mode TEXT;
-    ALTER TABLE drafts_v3 ADD COLUMN IF NOT EXISTS semantic_points_json JSONB;
-    ALTER TABLE drafts_v3 ADD COLUMN IF NOT EXISTS extraction_cursor_json JSONB;
+    -- Migration: Add LLM extraction columns to drafts (incremental extraction pipeline)
+    ALTER TABLE drafts ADD COLUMN IF NOT EXISTS extraction_mode TEXT;
+    ALTER TABLE drafts ADD COLUMN IF NOT EXISTS semantic_points_json JSONB;
+    ALTER TABLE drafts ADD COLUMN IF NOT EXISTS extraction_cursor_json JSONB;
 
     -- Migration: Add foreign key constraints to existing deploy_agents/runs tables (v1.2)
     -- Note: These constraints are in CREATE TABLE for new databases, but existing databases

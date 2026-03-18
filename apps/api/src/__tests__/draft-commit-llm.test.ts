@@ -6,7 +6,7 @@
 
 import type { SemanticPoint } from '@t3x-dev/core';
 import type { AnyDB } from '@t3x-dev/storage';
-import { insertDraftV3, insertProject, updateDraftV3 } from '@t3x-dev/storage';
+import { insertDraft, insertProject, updateDraft } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
@@ -89,11 +89,11 @@ describe('POST /v1/drafts/{id}/commit (LLM mode)', () => {
   });
 
   async function createLLMDraft(sps: SemanticPoint[]) {
-    const draft = await insertDraftV3(mockDB, {
+    const draft = await insertDraft(mockDB, {
       project_id: testProjectId,
       title: 'LLM commit draft',
     });
-    await updateDraftV3(
+    await updateDraft(
       mockDB,
       draft.id,
       {

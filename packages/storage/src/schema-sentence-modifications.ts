@@ -13,13 +13,13 @@ export const sentenceModifications = pgTable(
   {
     id: text('id').primaryKey(), // smod_{nanoid}
     /**
-     * Fix 15 (no-fk note): No foreign key to drafts_v3 is declared here.
+     * Fix 15 (no-fk note): No foreign key to drafts is declared here.
      * The sentence_modifications table is an audit trail that intentionally
      * outlives its parent draft — users may delete a draft but still want to
      * retain the modification history for audit purposes. If cascade-delete
      * semantics are required in the future, add:
-     *   .references(() => draftsV3.id, { onDelete: 'cascade' })
-     * and import draftsV3 from './schema-v4'.
+     *   .references(() => drafts.id, { onDelete: 'cascade' })
+     * and import drafts from './schema-v4'.
      */
     draftId: text('draft_id').notNull(),
     spId: text('sp_id').notNull(),

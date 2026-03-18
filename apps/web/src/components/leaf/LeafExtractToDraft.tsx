@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { type DraftV3, listDraftsV3 } from '@/lib/api';
+import { type WorkbenchDraft, listWorkbenchDrafts } from '@/lib/api';
 
 interface LeafExtractToDraftProps {
   leafId: string;
@@ -25,7 +25,7 @@ interface LeafExtractToDraftProps {
 export function LeafExtractToDraft({ leafId, projectId, outputText }: LeafExtractToDraftProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [extractedText, setExtractedText] = useState('');
-  const [drafts, setDrafts] = useState<DraftV3[]>([]);
+  const [drafts, setDrafts] = useState<WorkbenchDraft[]>([]);
   const [selectedDraftId, setSelectedDraftId] = useState('');
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -41,7 +41,7 @@ export function LeafExtractToDraft({ leafId, projectId, outputText }: LeafExtrac
     setDialogOpen(true);
     setLoading(true);
     try {
-      const d = await listDraftsV3(projectId, 'editing');
+      const d = await listWorkbenchDrafts(projectId, 'editing');
       setDrafts(d);
       if (d.length > 0) setSelectedDraftId(d[0].id);
     } catch {
@@ -55,8 +55,8 @@ export function LeafExtractToDraft({ leafId, projectId, outputText }: LeafExtrac
     if (!selectedDraftId || !extractedText.trim()) return;
     setSubmitting(true);
     try {
-      const { updateDraftV3, getDraftV3 } = await import('@/lib/api');
-      const draft = await getDraftV3(selectedDraftId);
+      const { updateWorkbenchDraft, getWorkbenchDraft } = await import('@/lib/api');
+      const draft = await getWorkbenchDraft(selectedDraftId);
       const newSentence = {
         id: `s_leaf_${leafId}_${Date.now()}`,
         text: extractedText.trim(),
@@ -64,7 +64,7 @@ export function LeafExtractToDraft({ leafId, projectId, outputText }: LeafExtrac
         origin: { type: 'selected' as const },
         position: draft.sentences.length,
       };
-      await updateDraftV3(selectedDraftId, {
+      await updateWorkbenchDraft(selectedDraftId, {
         sentences: [...draft.sentences, newSentence],
         if_revision: draft.revision,
       });
@@ -113,7 +113,7 @@ export function LeafExtractToDraft({ leafId, projectId, outputText }: LeafExtrac
     setFloatingBtn(null);
     setDialogOpen(true);
     setLoading(true);
-    listDraftsV3(projectId, 'editing')
+    listWorkbenchDrafts(projectId, 'editing')
       .then((d) => {
         setDrafts(d);
         if (d.length > 0) setSelectedDraftId(d[0].id);

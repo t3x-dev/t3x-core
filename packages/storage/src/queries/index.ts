@@ -105,39 +105,39 @@ export {
 } from './deployAgents';
 // Agent Drafts (formerly drafts_v2)
 export {
-  adoptDraft,
-  type CreateDraftInput,
-  type DraftStatus,
+  adoptAgentDraft,
+  type CreateAgentDraftInput,
+  type AgentDraftStatus,
+  deleteAgentDraft,
+  findAgentDraftById,
+  findAgentDraftsByProject,
+  getAgentDraftTextHash,
+  insertAgentDraft,
+  type ListAgentDraftsOptions,
+  supersedeAgentDraft,
+  type UpdateAgentDraftInput,
+  updateAgentDraft,
+  updateAgentDraftStatus,
+} from './agent-drafts';
+// Drafts (Workbench)
+export {
+  abandonDraft,
+  ConflictError,
+  commitDraft,
   deleteDraft,
+  findAutoDraftsByConversation,
   findDraftById,
-  findDraftsByProject,
-  getDraftTextHash,
+  forkDraft,
+  insertAutoDraft,
   insertDraft,
-  type ListDraftsOptions,
-  supersedeDraft,
+  type ListDraftOptions,
+  listDraftsByProject,
+  NotFoundError,
+  promoteDraft,
   type UpdateDraftInput,
   updateDraft,
-  updateDraftStatus,
+  updateDraftPreview,
 } from './drafts';
-// Drafts V3 (Workbench)
-export {
-  abandonDraftV3,
-  ConflictError,
-  commitDraftV3,
-  deleteDraftV3,
-  findAutoDraftsByConversation,
-  findDraftV3ById,
-  forkDraftV3,
-  insertAutoDraftV3,
-  insertDraftV3,
-  type ListDraftV3Options,
-  listDraftV3ByProject,
-  NotFoundError,
-  promoteDraftV3,
-  type UpdateDraftV3Input,
-  updateDraftV3,
-  updateDraftV3Preview,
-} from './drafts-v3';
 // Extraction Feedback (Anchoring L4)
 export {
   type AdaptiveFeedbackStats,

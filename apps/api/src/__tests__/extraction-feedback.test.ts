@@ -10,7 +10,7 @@
 
 import type { SemanticPoint } from '@t3x-dev/core';
 import type { AnyDB } from '@t3x-dev/storage';
-import { insertDraftV3, insertProject, updateDraftV3 } from '@t3x-dev/storage';
+import { insertDraft, insertProject, updateDraft } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
@@ -95,11 +95,11 @@ describe('Extraction feedback recording in review-action', () => {
   });
 
   async function createDraftWithSPs(sps: SemanticPoint[]) {
-    const draft = await insertDraftV3(mockDB, {
+    const draft = await insertDraft(mockDB, {
       project_id: testProjectId,
       title: 'Feedback test draft',
     });
-    await updateDraftV3(
+    await updateDraft(
       mockDB,
       draft.id,
       {

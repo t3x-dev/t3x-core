@@ -281,7 +281,8 @@
       "mcp__plugin_playwright_playwright__browser_fill_form",
       "Bash(gh issue:*)",
       "Bash(python3 -c \":*)",
-      "Bash(pnpm:*)"
+      "Bash(pnpm:*)",
+      "Bash(find /Users/heliuqi/t3x/packages -type f \\\\\\(-name *v3* -o -name *v2* \\\\\\) ! -path */node_modules/* ! -path */dist/* ! -path */.next/*)"
     ],
     "deny": [],
     "ask": []

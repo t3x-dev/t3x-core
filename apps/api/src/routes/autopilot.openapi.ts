@@ -19,10 +19,10 @@ import {
   spToSentence,
 } from '@t3x-dev/core';
 import {
-  commitDraftV3,
+  commitDraft,
   createCommit,
-  draftsV3,
-  findDraftV3ById,
+  drafts,
+  findDraftById,
   getAdaptiveFeedbackStats,
   getAutopilotConfig,
   updateAutopilotConfig,
@@ -317,7 +317,7 @@ autopilotRoutes.openapi(autoCommitRoute, async (c) => {
     const db = await getDB();
 
     // 1. Fetch draft
-    const draft = await findDraftV3ById(db, draftId);
+    const draft = await findDraftById(db, draftId);
     if (!draft) {
       return errorResponse(c, 'DRAFT_NOT_FOUND', `Draft not found: ${draftId}`);
     }
@@ -381,7 +381,7 @@ autopilotRoutes.openapi(autoCommitRoute, async (c) => {
     //    Must run BEFORE createCommit to avoid orphan commits on race.
     //    We pass a placeholder hash; it will be updated after commit creation.
     const PLACEHOLDER_HASH = 'pending';
-    const claimed = await commitDraftV3(db, draftId, PLACEHOLDER_HASH);
+    const claimed = await commitDraft(db, draftId, PLACEHOLDER_HASH);
     if (!claimed) {
       return errorResponse(
         c,
@@ -409,9 +409,9 @@ autopilotRoutes.openapi(autoCommitRoute, async (c) => {
 
     // 10. Update draft with the real commit hash
     await db
-      .update(draftsV3)
+      .update(drafts)
       .set({ committedAs: commit.hash, updatedAt: new Date() })
-      .where(eq(draftsV3.id, draftId));
+      .where(eq(drafts.id, draftId));
 
     // 11. Push notification (fire-and-forget)
     pushNotification({

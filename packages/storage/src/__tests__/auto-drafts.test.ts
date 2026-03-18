@@ -9,12 +9,12 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
 import {
   findAutoDraftsByConversation,
-  findDraftV3ById,
-  insertAutoDraftV3,
-  insertDraftV3,
-  listDraftV3ByProject,
-  promoteDraftV3,
-} from '../queries/drafts-v3';
+  findDraftById,
+  insertAutoDraft,
+  insertDraft,
+  listDraftsByProject,
+  promoteDraft,
+} from '../queries/drafts';
 import { insertProject } from '../queries/projects';
 import { createTestDB, testData } from './setup';
 
@@ -46,9 +46,9 @@ describe('Auto-Draft Storage (Upgrade #7)', () => {
     await cleanup();
   });
 
-  describe('insertAutoDraftV3', () => {
+  describe('insertAutoDraft', () => {
     it('creates draft with status=auto', async () => {
-      const draft = await insertAutoDraftV3(db, {
+      const draft = await insertAutoDraft(db, {
         project_id: projectId,
         conversation_id: 'conv_test_001',
         title: 'Auto-draft from conversation',
@@ -62,7 +62,7 @@ describe('Auto-Draft Storage (Upgrade #7)', () => {
     });
 
     it('stores conversation_id in goal field', async () => {
-      const draft = await insertAutoDraftV3(db, {
+      const draft = await insertAutoDraft(db, {
         project_id: projectId,
         conversation_id: 'conv_test_002',
         title: 'Another auto-draft',
@@ -73,7 +73,7 @@ describe('Auto-Draft Storage (Upgrade #7)', () => {
     });
 
     it('sets parent_commit_hash when provided', async () => {
-      const draft = await insertAutoDraftV3(db, {
+      const draft = await insertAutoDraft(db, {
         project_id: projectId,
         conversation_id: 'conv_test_003',
         title: 'Draft with parent',
@@ -101,24 +101,24 @@ describe('Auto-Draft Storage (Upgrade #7)', () => {
     });
   });
 
-  describe('listDraftV3ByProject with status=auto', () => {
+  describe('listDraftsByProject with status=auto', () => {
     it('can filter by auto status', async () => {
-      const drafts = await listDraftV3ByProject(db, projectId, { status: 'auto' });
+      const drafts = await listDraftsByProject(db, projectId, { status: 'auto' });
 
       expect(drafts.length).toBeGreaterThanOrEqual(1);
       expect(drafts.every((d) => d.status === 'auto')).toBe(true);
     });
 
     it('editing filter excludes auto drafts', async () => {
-      const editingDrafts = await listDraftV3ByProject(db, projectId, { status: 'editing' });
+      const editingDrafts = await listDraftsByProject(db, projectId, { status: 'editing' });
 
       expect(editingDrafts.every((d) => d.status === 'editing')).toBe(true);
     });
   });
 
-  describe('promoteDraftV3', () => {
+  describe('promoteDraft', () => {
     it('promotes auto-draft to editing status', async () => {
-      const autoDraft = await insertAutoDraftV3(db, {
+      const autoDraft = await insertAutoDraft(db, {
         project_id: projectId,
         conversation_id: 'conv_promote_001',
         title: 'Promote me',
@@ -127,35 +127,35 @@ describe('Auto-Draft Storage (Upgrade #7)', () => {
 
       expect(autoDraft.status).toBe('auto');
 
-      const promoted = await promoteDraftV3(db, autoDraft.id);
+      const promoted = await promoteDraft(db, autoDraft.id);
 
       expect(promoted.status).toBe('editing');
       expect(promoted.sentences).toHaveLength(1);
     });
 
     it('throws for non-existent draft', async () => {
-      await expect(promoteDraftV3(db, 'draft_nonexistent')).rejects.toThrow('not found');
+      await expect(promoteDraft(db, 'draft_nonexistent')).rejects.toThrow('not found');
     });
 
     it('throws for non-auto draft', async () => {
-      const editingDraft = await insertDraftV3(db, {
+      const editingDraft = await insertDraft(db, {
         project_id: projectId,
         title: 'Normal editing draft',
       });
 
-      await expect(promoteDraftV3(db, editingDraft.id)).rejects.toThrow('Cannot promote');
+      await expect(promoteDraft(db, editingDraft.id)).rejects.toThrow('Cannot promote');
     });
 
     it('preserves sentences after promotion', async () => {
-      const autoDraft = await insertAutoDraftV3(db, {
+      const autoDraft = await insertAutoDraft(db, {
         project_id: projectId,
         conversation_id: 'conv_promote_002',
         title: 'Check sentences',
         sentences: makeSentences(['Sentence A', 'Sentence B']),
       });
 
-      const promoted = await promoteDraftV3(db, autoDraft.id);
-      const fetched = await findDraftV3ById(db, promoted.id);
+      const promoted = await promoteDraft(db, autoDraft.id);
+      const fetched = await findDraftById(db, promoted.id);
 
       expect(fetched).not.toBeNull();
       expect(fetched!.sentences).toHaveLength(2);

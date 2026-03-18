@@ -730,11 +730,11 @@ export type WebhookRecord = typeof webhooks.$inferSelect;
 export type WebhookInsert = typeof webhooks.$inferInsert;
 
 // ═══════════════════════════════════════════════════════════════════════════
-// drafts_v3: Workbench / Pre-commit Working Area
+// drafts: Workbench / Pre-commit Working Area
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * DraftV3 is a pre-commit workspace (like Git's working directory).
+ * Draft is a pre-commit workspace (like Git's working directory).
  *
  * Users compose sentences, add constraints, preview output, then commit.
  * Status lifecycle: editing → committed | abandoned.
@@ -743,8 +743,8 @@ export type WebhookInsert = typeof webhooks.$inferInsert;
  * - sentences_json: DraftSentence[]
  * - constraints_json: DraftConstraint[]
  */
-export const draftsV3 = pgTable(
-  'drafts_v3',
+export const drafts = pgTable(
+  'drafts',
   {
     /** Unique ID: "draft_" + nanoid(12) */
     id: text('id').primaryKey(),
@@ -848,13 +848,14 @@ export const draftsV3 = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
   },
   (table) => ({
-    projectIdx: index('idx_drafts_v3_project').on(table.projectId),
-    statusIdx: index('idx_drafts_v3_status').on(table.status),
+    projectIdx: index('idx_drafts_project').on(table.projectId),
+    statusIdx: index('idx_drafts_status').on(table.status),
   })
 );
 
-export type DraftV3Record = typeof draftsV3.$inferSelect;
-export type DraftV3Insert = typeof draftsV3.$inferInsert;
+export type DraftRecord = typeof drafts.$inferSelect;
+export type DraftInsert = typeof drafts.$inferInsert;
+
 
 // ═══════════════════════════════════════════════════════════════════════════
 // sentence_vectors: pgvector-powered sentence similarity search

@@ -6,7 +6,7 @@
  */
 
 import { create } from 'zustand';
-import type { DraftConstraint, DraftSentence, DraftV3 } from '@/lib/api';
+import type { DraftConstraint, DraftSentence, WorkbenchDraft } from '@/lib/api';
 import * as api from '@/lib/api';
 import { type ValidationResult, validateConstraintsLocally } from '@/lib/draftValidation';
 import { useCanvasStore } from './canvasStore';
@@ -22,7 +22,7 @@ interface DraftWorkspaceState {
   // Data
   draftId: string | null;
   projectId: string | null;
-  draft: DraftV3 | null;
+  draft: WorkbenchDraft | null;
 
   // UI state
   loading: boolean;
@@ -92,7 +92,7 @@ interface DraftWorkspaceState {
 // Helpers
 // ============================================================================
 
-function recomputeValidation(draft: DraftV3 | null): ValidationResult[] {
+function recomputeValidation(draft: WorkbenchDraft | null): ValidationResult[] {
   if (!draft) return [];
   return validateConstraintsLocally(draft.sentences, draft.constraints);
 }
@@ -135,7 +135,7 @@ function scheduleAutoPreview(get: () => DraftWorkspaceState, newPreviewStatus: P
 const initialState = {
   draftId: null as string | null,
   projectId: null as string | null,
-  draft: null as DraftV3 | null,
+  draft: null as WorkbenchDraft | null,
   loading: false,
   error: null as string | null,
   saveStatus: 'idle' as SaveStatus,
@@ -168,7 +168,7 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
     set({ loading: true, error: null, conflictError: false });
 
     try {
-      const draft = await api.getDraftV3(draftId);
+      const draft = await api.getWorkbenchDraft(draftId);
 
       // Determine preview status from server data
       let previewStatus: PreviewStatus = 'idle';
@@ -374,7 +374,7 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
     set({ previewStatus: 'loading', previewError: null });
 
     try {
-      const result = await api.previewDraftV3(draftId, {
+      const result = await api.previewWorkbenchDraft(draftId, {
         ...(previewModel ? { model: previewModel } : {}),
       });
 
@@ -439,7 +439,7 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
     set({ saveStatus: 'saving' });
 
     try {
-      const updated = await api.updateDraftV3(draftId, {
+      const updated = await api.updateWorkbenchDraft(draftId, {
         title: draft.title,
         goal: draft.goal ?? undefined,
         sentences: draft.sentences,
@@ -497,7 +497,7 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
         }
       }
 
-      const result = await api.commitDraftV3(draftId, message);
+      const result = await api.commitWorkbenchDraft(draftId, message);
 
       set({
         draft: { ...draft, status: 'committed' },

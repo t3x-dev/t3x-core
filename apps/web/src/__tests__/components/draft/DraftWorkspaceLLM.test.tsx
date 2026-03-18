@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest';
-import type { DraftV3, SemanticPointAPI } from '@/lib/api';
+import type { WorkbenchDraft, SemanticPointAPI } from '@/lib/api';
 
 /**
  * Tests for the DraftWorkspace LLM extraction mode integration.
@@ -24,7 +24,7 @@ function makeSemanticPoint(overrides: Partial<SemanticPointAPI> = {}): SemanticP
   };
 }
 
-function makeDraft(overrides: Partial<DraftV3> = {}): DraftV3 {
+function makeDraft(overrides: Partial<WorkbenchDraft> = {}): WorkbenchDraft {
   return {
     id: 'draft_test_001',
     project_id: 'proj_test',

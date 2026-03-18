@@ -287,7 +287,7 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
 
       // Load editing drafts and create draft nodes + conversation→draft edges
       try {
-        const editingDrafts = await api.listDraftsV3(projectId, 'editing');
+        const editingDrafts = await api.listWorkbenchDrafts(projectId, 'editing');
         // Build conversationId → nodeId map for edge creation
         const convToNodeId = new Map<string, string>();
         for (const node of nodes) {
@@ -519,7 +519,7 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
     };
     const snappedPosition = snapPosition(basePosition);
 
-    const draft = await api.createDraftV3({
+    const draft = await api.createWorkbenchDraft({
       project_id: state.projectId,
       title: 'Untitled Draft',
     });

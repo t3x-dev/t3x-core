@@ -319,8 +319,8 @@ CREATE TABLE IF NOT EXISTS templates (
 CREATE INDEX IF NOT EXISTS idx_templates_category ON templates(category);
 CREATE INDEX IF NOT EXISTS idx_templates_leaf_type ON templates(leaf_type);
 
--- Drafts V3 (Workbench / pre-commit working area)
-CREATE TABLE IF NOT EXISTS drafts_v3 (
+-- Drafts (Workbench / pre-commit working area)
+CREATE TABLE IF NOT EXISTS drafts (
   id TEXT PRIMARY KEY,
   project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
   title TEXT NOT NULL,
@@ -344,8 +344,8 @@ CREATE TABLE IF NOT EXISTS drafts_v3 (
   created_at TIMESTAMPTZ NOT NULL,
   updated_at TIMESTAMPTZ NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_drafts_v3_project ON drafts_v3(project_id);
-CREATE INDEX IF NOT EXISTS idx_drafts_v3_status ON drafts_v3(status);
+CREATE INDEX IF NOT EXISTS idx_drafts_project ON drafts(project_id);
+CREATE INDEX IF NOT EXISTS idx_drafts_status ON drafts(status);
 
 -- Extraction Feedback (Anchoring L4)
 CREATE TABLE IF NOT EXISTS extraction_feedback (

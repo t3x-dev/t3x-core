@@ -12,8 +12,8 @@ import { FileEdit } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import type { DraftV3 } from '@/lib/api';
-import { listDraftsV3 } from '@/lib/api';
+import type { WorkbenchDraft } from '@/lib/api';
+import { listWorkbenchDrafts } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 interface ProjectDraftsSectionProps {
@@ -35,7 +35,7 @@ function relativeTime(dateStr: string): string {
 }
 
 export function ProjectDraftsSection({ projectId, collapsed }: ProjectDraftsSectionProps) {
-  const [drafts, setDrafts] = useState<DraftV3[]>([]);
+  const [drafts, setDrafts] = useState<WorkbenchDraft[]>([]);
 
   useEffect(() => {
     if (!projectId) return;
@@ -43,7 +43,7 @@ export function ProjectDraftsSection({ projectId, collapsed }: ProjectDraftsSect
     let stale = false;
 
     const fetchDrafts = () => {
-      listDraftsV3(projectId, 'editing')
+      listWorkbenchDrafts(projectId, 'editing')
         .then((list) => {
           if (!stale) setDrafts(list);
         })

@@ -459,7 +459,7 @@ export {
   // Input types
   type CreateSentenceCommitInput,
   // Draft (Workbench)
-  type CreateDraftInput as CreateDraftV3Input,
+  type CreateDraftInput,
   type CreateLeafHistoryInput,
   type CreateLeafInput,
   type CreatePinInput,

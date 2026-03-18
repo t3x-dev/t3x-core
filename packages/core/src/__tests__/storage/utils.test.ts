@@ -58,7 +58,7 @@ describe('Storage Utils', () => {
     describe('generateDraftId', () => {
       it('generates ID with draft_ prefix', () => {
         const id = generateDraftId();
-        expect(id).toMatch(/^draft_[a-f0-9]{8}$/);
+        expect(id).toMatch(/^draft_[a-f0-9]{12}$/);
       });
 
       it('generates unique IDs', () => {
