@@ -127,7 +127,8 @@ export async function listCommitsV5(
 ): Promise<CommitV5[]> {
   const query = buildQueryString({ branch, limit });
   const res = await fetchWithTimeout(`${API_V1}/projects/${projectId}/commits?${query}`);
-  return handleResponse<CommitV5[]>(res);
+  const data = await handleResponse<{ commits: CommitV5[] }>(res);
+  return data.commits;
 }
 
 /**
@@ -135,7 +136,8 @@ export async function listCommitsV5(
  */
 export async function getCommitV5(commitHash: string): Promise<CommitV5> {
   const res = await fetchWithTimeout(`${API_V1}/commits/${encodeURIComponent(commitHash)}`);
-  return handleResponse<CommitV5>(res);
+  const data = await handleResponse<{ commit: CommitV5 }>(res);
+  return data.commit;
 }
 
 /**

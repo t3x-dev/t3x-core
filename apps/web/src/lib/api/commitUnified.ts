@@ -31,9 +31,20 @@ export async function getCommitAsFrames(hash: string): Promise<Commit> {
 
 /**
  * Fetch commit history as V5 frames.
- * Note: V4 history endpoint is removed; this returns empty for now.
  */
-export async function getCommitHistoryAsFrames(_hash: string, _limit = 10): Promise<Commit[]> {
-  // V4 history endpoint removed. Callers should migrate to V5 APIs.
+export async function getCommitHistoryAsFrames(hash: string, limit = 10): Promise<Commit[]> {
+  try {
+    const res = await fetchWithTimeout(
+      `${API_V1}/commits/${encodeURIComponent(hash)}/history?limit=${limit}`
+    );
+    if (res.ok) {
+      const json = (await res.json()) as { success: boolean; data?: { commits?: Commit[] } };
+      if (json.success && json.data?.commits) {
+        return json.data.commits;
+      }
+    }
+  } catch {
+    // Fall through
+  }
   return [];
 }
