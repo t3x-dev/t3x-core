@@ -23,7 +23,7 @@ export interface ConversationRecord {
   metadata_json: string | null;
 }
 
-export interface TurnV2Record {
+export interface TurnRecord {
   turn_hash: string;
   parent_turn_hash: string | null;
   project_id: string;
@@ -137,7 +137,7 @@ export interface CreateConversationInput {
   metadata?: Record<string, unknown>;
 }
 
-export interface CreateTurnV2Input {
+export interface CreateTurnInput {
   project_id: string;
   conversation_id: string;
   role: 'user' | 'assistant' | 'system' | 'tool';
@@ -224,7 +224,7 @@ export interface ListConversationsOptions extends ListOptions {
   project_id: string;
 }
 
-export interface ListTurnsV2Options extends ListOptions {
+export interface ListTurnsOptions extends ListOptions {
   conversation_id: string;
   /** Sort order: 'asc' (oldest first) or 'desc' (newest first). Default: 'asc' */
   order?: 'asc' | 'desc';

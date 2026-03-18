@@ -58,8 +58,8 @@ CREATE TABLE IF NOT EXISTS conversations (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Turns (turns_v2)
-CREATE TABLE IF NOT EXISTS turns_v2 (
+-- Turns
+CREATE TABLE IF NOT EXISTS turns (
   turn_hash TEXT PRIMARY KEY,
   parent_turn_hash TEXT,
   project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
@@ -107,7 +107,7 @@ CREATE TABLE IF NOT EXISTS agent_drafts (
 -- Segment Embeddings
 CREATE TABLE IF NOT EXISTS segment_embeddings (
   segment_id TEXT PRIMARY KEY,
-  turn_hash TEXT NOT NULL REFERENCES turns_v2(turn_hash) ON DELETE CASCADE,
+  turn_hash TEXT NOT NULL REFERENCES turns(turn_hash) ON DELETE CASCADE,
   segment_index INTEGER NOT NULL,
   segment_text TEXT NOT NULL,
   embedding_model TEXT NOT NULL,
@@ -178,9 +178,9 @@ CREATE TABLE IF NOT EXISTS conversation_contexts (
 
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_conversations_project ON conversations(project_id);
-CREATE INDEX IF NOT EXISTS idx_turns_v2_conversation ON turns_v2(conversation_id);
-CREATE INDEX IF NOT EXISTS idx_turns_v2_project ON turns_v2(project_id);
-CREATE INDEX IF NOT EXISTS idx_turns_v2_parent ON turns_v2(parent_turn_hash);
+CREATE INDEX IF NOT EXISTS idx_turns_conversation ON turns(conversation_id);
+CREATE INDEX IF NOT EXISTS idx_turns_project ON turns(project_id);
+CREATE INDEX IF NOT EXISTS idx_turns_parent ON turns(parent_turn_hash);
 CREATE INDEX IF NOT EXISTS idx_branches_project ON branches(project_id);
 CREATE INDEX IF NOT EXISTS idx_agent_drafts_project ON agent_drafts(project_id);
 CREATE INDEX IF NOT EXISTS idx_agent_drafts_base_commit ON agent_drafts(base_commit_hash);

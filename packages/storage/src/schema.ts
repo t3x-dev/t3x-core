@@ -103,10 +103,10 @@ export const conversations = pgTable(
 );
 
 /**
- * Turns V2 - Individual conversation turns with hash chain
+ * Turns - Individual conversation turns with hash chain
  */
 export const turns = pgTable(
-  'turns_v2',
+  'turns',
   {
     turnHash: text('turn_hash').primaryKey(),
     parentTurnHash: text('parent_turn_hash'),
@@ -124,9 +124,9 @@ export const turns = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
   },
   (table) => [
-    index('idx_turns_v2_conversation').on(table.conversationId),
-    index('idx_turns_v2_project').on(table.projectId),
-    index('idx_turns_v2_parent').on(table.parentTurnHash),
+    index('idx_turns_conversation').on(table.conversationId),
+    index('idx_turns_project').on(table.projectId),
+    index('idx_turns_parent').on(table.parentTurnHash),
   ]
 );
 

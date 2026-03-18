@@ -19,7 +19,7 @@ const EXAMPLE_QUERIES = [
   { label: 'Recent projects', sql: 'SELECT * FROM projects ORDER BY created_at DESC LIMIT 10' },
   {
     label: 'Recent turns',
-    sql: 'SELECT turn_hash, role, LEFT(content, 100) as preview, created_at FROM turns_v2 ORDER BY created_at DESC LIMIT 20',
+    sql: 'SELECT turn_hash, role, LEFT(content, 100) as preview, created_at FROM turns ORDER BY created_at DESC LIMIT 20',
   },
   {
     label: 'Commits',

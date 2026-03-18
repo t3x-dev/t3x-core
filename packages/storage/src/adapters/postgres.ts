@@ -113,8 +113,14 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     );
     CREATE INDEX IF NOT EXISTS idx_conversations_project ON conversations(project_id);
 
-    -- Turns V2 table
-    CREATE TABLE IF NOT EXISTS turns_v2 (
+    -- Auto-migrate: rename legacy turns_v2 table if it exists
+    ALTER TABLE IF EXISTS turns_v2 RENAME TO turns;
+    ALTER INDEX IF EXISTS idx_turns_v2_conversation RENAME TO idx_turns_conversation;
+    ALTER INDEX IF EXISTS idx_turns_v2_project RENAME TO idx_turns_project;
+    ALTER INDEX IF EXISTS idx_turns_v2_parent RENAME TO idx_turns_parent;
+
+    -- Turns table
+    CREATE TABLE IF NOT EXISTS turns (
       turn_hash TEXT PRIMARY KEY,
       parent_turn_hash TEXT,
       project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
@@ -125,9 +131,9 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
       rings_json TEXT,
       created_at TIMESTAMPTZ NOT NULL
     );
-    CREATE INDEX IF NOT EXISTS idx_turns_v2_conversation ON turns_v2(conversation_id);
-    CREATE INDEX IF NOT EXISTS idx_turns_v2_project ON turns_v2(project_id);
-    CREATE INDEX IF NOT EXISTS idx_turns_v2_parent ON turns_v2(parent_turn_hash);
+    CREATE INDEX IF NOT EXISTS idx_turns_conversation ON turns(conversation_id);
+    CREATE INDEX IF NOT EXISTS idx_turns_project ON turns(project_id);
+    CREATE INDEX IF NOT EXISTS idx_turns_parent ON turns(parent_turn_hash);
 
     -- Branches table
     CREATE TABLE IF NOT EXISTS branches (
@@ -178,7 +184,7 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     -- Segment Embeddings table
     CREATE TABLE IF NOT EXISTS segment_embeddings (
       segment_id TEXT PRIMARY KEY,
-      turn_hash TEXT NOT NULL REFERENCES turns_v2(turn_hash) ON DELETE CASCADE,
+      turn_hash TEXT NOT NULL REFERENCES turns(turn_hash) ON DELETE CASCADE,
       segment_index INTEGER NOT NULL,
       segment_text TEXT NOT NULL,
       embedding_model TEXT NOT NULL,
@@ -749,8 +755,8 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     -- Migration: Add business_rules column to projects (Gate Business Rules)
     ALTER TABLE projects ADD COLUMN IF NOT EXISTS business_rules JSONB DEFAULT '[]';
 
-    -- Migration: Add content_blocks column to turns_v2 (Multimodal turns)
-    ALTER TABLE turns_v2 ADD COLUMN IF NOT EXISTS content_blocks JSONB;
+    -- Migration: Add content_blocks column to turns (Multimodal turns)
+    ALTER TABLE turns ADD COLUMN IF NOT EXISTS content_blocks JSONB;
 
     -- ═══════════════════════════════════════════════════════════════
     -- Auth Migration Phase 2: Multi-provider (users + accounts split)
