@@ -160,7 +160,7 @@ describe('POST /v1/leaves/:id/generate', () => {
 
     expect(res.status).toBe(200);
 
-    // Response format per contract (v4-contracts.ts GenerateLeafOutputResponse)
+    // Response format per contract (contracts.ts GenerateLeafOutputResponse)
     const data: ApiResponse = await res.json();
     expect(data.success).toBe(true);
     expect(data.data.output).toBe('I love using dark mode! #DarkMode #Preferences');

@@ -165,7 +165,7 @@ export type ApiAnchorType =
   | 'entity'
   | 'term'
   | 'phrase'
-  // CommitV4 / Frame extraction anchor types
+  // Frame extraction anchor types
   | 'verbatim'
   | 'paraphrase'
   | 'inference';

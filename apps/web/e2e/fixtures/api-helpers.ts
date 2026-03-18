@@ -55,7 +55,7 @@ export async function createTestTurn(
 /**
  * Create a frame-based commit
  */
-export async function createTestCommitV4(
+export async function createTestCommit(
   request: APIRequestContext,
   projectId: string,
   sentences: Array<{ id: string; text: string }>,

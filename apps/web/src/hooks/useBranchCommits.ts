@@ -3,12 +3,12 @@
  * Used by PinDropdownSelector to display branch-scoped commit browsing.
  */
 
-import type { CommitV4, Leaf } from '@/lib/api';
+import type { SentenceCommit, Leaf } from '@/lib/api';
 import * as api from '@/lib/api';
 import { useQuery } from './useQuery';
 
 export interface CommitWithLeaves {
-  commit: CommitV4;
+  commit: SentenceCommit;
   leaves: Leaf[];
 }
 
@@ -28,7 +28,7 @@ export function useBranchCommits(
   const { data, isLoading, error, refetch } = useQuery<CommitWithLeaves[]>({
     queryKey: ['branchCommits', projectId, branch],
     queryFn: async () => {
-      const commits = await api.listCommitsV4(projectId!, branch!, 200, 0);
+      const commits = await api.listSentenceCommits(projectId!, branch!, 200, 0);
 
       const results: CommitWithLeaves[] = await Promise.all(
         commits.map(async (commit) => {

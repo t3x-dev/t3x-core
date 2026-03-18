@@ -1,6 +1,6 @@
 import {
   cleanupProject,
-  createTestCommitV4,
+  createTestCommit,
   createTestLeaf,
   createTestProject,
 } from '../fixtures/api-helpers';
@@ -32,7 +32,7 @@ test.describe('Leaf Workflow', () => {
     const { projectId: id } = await createTestProject(request, `Leaf E2E ${Date.now()}`);
     projectId = id;
 
-    commitHash = await createTestCommitV4(request, projectId, sentences, {
+    commitHash = await createTestCommit(request, projectId, sentences, {
       message: 'Leaf test commit',
     });
 

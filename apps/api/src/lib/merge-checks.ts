@@ -14,7 +14,7 @@ import type { DiffableSentence, Leaf, Merge2WayResult } from '@t3x-dev/core';
 import { validateConstraintsExactOnly } from '@t3x-dev/core';
 import type { AnyDB } from '@t3x-dev/storage';
 import { findLeavesByCommit, listRuns } from '@t3x-dev/storage';
-import type { MergeCheckType } from '../schemas/v4-contracts';
+import type { MergeCheckType } from '../schemas/contracts';
 
 // ============================================================
 // Types

@@ -9,21 +9,21 @@ import { PinDropdownSelector } from '@/components/ui/PinDropdownSelector';
 import { useTerminology } from '@/hooks/useTerminology';
 import { cn } from '@/lib/utils';
 import { usePinsStore } from '@/store/pinsStore';
-import type { CommitDisplay, CommitSourceRef, CommitV4Display, EmbeddedLeaf } from '@/types/nodes';
+import type { CommitDisplay, CommitSourceRef, EmbeddedLeaf } from '@/types/nodes';
 import { CommitSourceContext } from '../CommitSourceContext';
 import { LeafCreationDialog } from '../LeafCreationDialog';
 
 /**
- * Helper to determine if commit is V4 based on schema
+ * Helper to determine if commit uses sentence-based schema
  */
-export function isCommitV4(commit: CommitDisplay): commit is CommitV4Display {
+export function isSentenceCommit(commit: CommitDisplay): boolean {
   return commit.schema === 't3x/commit/v4';
 }
 
 /**
- * Author badge for V4 commits (with type indicator)
+ * Author badge for commits (with type indicator)
  */
-export function CommitV4AuthorBadge({ author }: { author: CommitV4Display['author'] }) {
+export function CommitAuthorBadge({ author }: { author: CommitDisplay['author'] }) {
   const isAgent = author.type === 'agent';
   return (
     <span
@@ -201,7 +201,7 @@ export function CommitFullHeader({
   branchName?: string;
 }) {
   const [copiedHash, setCopiedHash] = useState(false);
-  const isV4 = isCommitV4(commit);
+  const isV4 = isSentenceCommit(commit);
 
   const handleCopyHash = () => {
     navigator.clipboard.writeText(commit.hash);
@@ -247,7 +247,7 @@ export function CommitFullHeader({
           </span>
         )}
       </div>
-      <CommitV4AuthorBadge author={commit.author} />
+      <CommitAuthorBadge author={commit.author} />
     </div>
   );
 }

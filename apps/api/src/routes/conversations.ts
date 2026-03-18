@@ -14,7 +14,7 @@
 
 import {
   buildConversationContext,
-  type CommitV4,
+  type SentenceCommit,
   type ConversationData,
   framesToTextSegments,
   getModelInfo,
@@ -385,7 +385,7 @@ conversationRoutes.get('/v1/conversations/:id/memory', async (c) => {
     const projectPins = await findPinsByProject(db, conversation.projectId);
 
     // 4. Get current commit from branch HEAD (reuse existing branch system)
-    let currentCommit: CommitV4 | undefined;
+    let currentCommit: SentenceCommit | undefined;
     const currentBranch = await findCurrentBranch(db, conversation.projectId);
     if (currentBranch?.headCommitHash) {
       const unified = await getCommitUnified(db, currentBranch.headCommitHash);
@@ -402,7 +402,7 @@ conversationRoutes.get('/v1/conversations/:id/memory', async (c) => {
               confidence: 1,
             })),
           },
-        } as CommitV4;
+        } as SentenceCommit;
       }
     }
 
@@ -482,7 +482,7 @@ conversationRoutes.get('/v1/conversations/:id/context-export', async (c) => {
     const projectPins = await findPinsByProject(db, conversation.projectId);
 
     // 4. Get current commit from branch HEAD
-    let currentCommit: CommitV4 | undefined;
+    let currentCommit: SentenceCommit | undefined;
     const currentBranch = await findCurrentBranch(db, conversation.projectId);
     if (currentBranch?.headCommitHash) {
       const unified = await getCommitUnified(db, currentBranch.headCommitHash);
@@ -499,7 +499,7 @@ conversationRoutes.get('/v1/conversations/:id/context-export', async (c) => {
               confidence: 1,
             })),
           },
-        } as CommitV4;
+        } as SentenceCommit;
       }
     }
 

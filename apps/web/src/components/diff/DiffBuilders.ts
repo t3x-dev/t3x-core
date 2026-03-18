@@ -1,4 +1,4 @@
-import type { CommitV4Sentence } from '@/lib/api';
+import type { CommitSentence } from '@/lib/api';
 import type { WordDiffSegment } from '@/types/merge';
 
 // ============================================================================
@@ -10,8 +10,8 @@ export interface UnifiedLine {
   type: 'context' | 'modified' | 'removed' | 'added' | 'collapsed' | 'group-header';
   baseIndex?: number;
   targetIndex?: number;
-  baseSentence?: CommitV4Sentence;
-  targetSentence?: CommitV4Sentence;
+  baseSentence?: CommitSentence;
+  targetSentence?: CommitSentence;
   wordDiff?: WordDiffSegment[];
   collapsedCount?: number;
   /** The actual lines hidden by this collapsed section (for expand) */
@@ -64,8 +64,8 @@ const CONTEXT_LINES = 3;
  * not appended at the end (3.4 fix).
  */
 export function buildUnifiedLines(
-  baseSentences: CommitV4Sentence[],
-  targetSentences: CommitV4Sentence[],
+  baseSentences: CommitSentence[],
+  targetSentences: CommitSentence[],
   segmentDiffs: SegmentDiffItem[]
 ): UnifiedLine[] {
   const diffByBaseId = new Map<string, SegmentDiffItem>();
@@ -213,8 +213,8 @@ export function buildUnifiedLines(
  * No context folding -- all sentences are shown.
  */
 export function buildDocumentLines(
-  baseSentences: CommitV4Sentence[],
-  targetSentences: CommitV4Sentence[],
+  baseSentences: CommitSentence[],
+  targetSentences: CommitSentence[],
   segmentDiffs: SegmentDiffItem[]
 ): UnifiedLine[] {
   // Map: base sentence ID -> { sentence, index }
@@ -225,12 +225,12 @@ export function buildDocumentLines(
     string,
     {
       diffType: 'same' | 'modified';
-      baseSentence: CommitV4Sentence;
+      baseSentence: CommitSentence;
       baseIdx: number;
       wordDiff?: WordDiffSegment[];
     }
   >();
-  const removedDiffs: { baseSentence: CommitV4Sentence; baseIndex: number }[] = [];
+  const removedDiffs: { baseSentence: CommitSentence; baseIndex: number }[] = [];
 
   for (const diff of segmentDiffs) {
     if (diff.diffType === 'same') {
@@ -318,7 +318,7 @@ export function getConversationId(line: UnifiedLine): string | null {
  */
 export function insertGroupHeaders(
   lines: UnifiedLine[],
-  baseSentences: CommitV4Sentence[],
+  baseSentences: CommitSentence[],
   sourceRefTitles?: Map<string, string>
 ): UnifiedLine[] {
   // Build a set of base conversation IDs to determine "new" sources

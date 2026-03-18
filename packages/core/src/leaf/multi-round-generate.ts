@@ -15,7 +15,7 @@
  */
 
 import type { LLMProvider } from '../llm/types';
-import type { CommitV4, Leaf } from '../types/v4';
+import type { SentenceCommit, Leaf } from '../types/v4';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Types
@@ -40,7 +40,7 @@ export interface RoundResult {
 }
 
 export interface MultiRoundOptions {
-  commit: CommitV4;
+  commit: SentenceCommit;
   leaf: Leaf;
   provider: LLMProvider;
   rounds: RoundConfig[];
@@ -62,7 +62,7 @@ export interface MultiRoundResult {
 
 /** Options for mode-based generation (higher-level API) */
 export interface ModeGenerateOptions {
-  commit: CommitV4;
+  commit: SentenceCommit;
   leaf: Leaf;
   provider: LLMProvider;
   mode: GenerationMode;
@@ -513,7 +513,7 @@ export async function multiRoundGenerate(options: MultiRoundOptions): Promise<Mu
 }
 
 function buildRoundPrompt(
-  commit: CommitV4,
+  commit: SentenceCommit,
   leaf: Leaf,
   round: RoundConfig,
   previousOutput: string,

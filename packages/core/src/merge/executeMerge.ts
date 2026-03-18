@@ -2,12 +2,12 @@
  * Execute Merge
  *
  * Executes a merge after user has made all decisions.
- * Creates a new CommitV4 with 2 parents.
+ * Creates a new SentenceCommit with 2 parents.
  *
- * 执行合并 - 在用户完成所有决策后创建新的合并 CommitV4
+ * 执行合并 - 在用户完成所有决策后创建新的合并 SentenceCommit
  *
  * V4 Changes:
- * - Returns CommitV4
+ * - Returns SentenceCommit
  * - Added projectId parameter
  * - No constraint handling (constraints belong to Leaf)
  */
@@ -16,7 +16,7 @@ import { sha256 } from '../common/hash';
 import type { DiffableSentence } from '../diff/types';
 import {
   type CommitAuthor,
-  type CommitV4,
+  type SentenceCommit,
   ID_PREFIXES,
   type Sentence as SentenceV4,
 } from '../types/v4';
@@ -27,7 +27,7 @@ import type { Merge2WayResult } from './types';
  * 在用户完成所有决策后执行合并
  *
  * V4 Changes:
- * - Returns CommitV4
+ * - Returns SentenceCommit
  * - Added projectId parameter
  * - No constraint handling
  *
@@ -53,7 +53,7 @@ import type { Merge2WayResult } from './types';
  *   'Merge feature-branch into main',
  *   'proj_abc123'
  * )
- * → CommitV4 with parents: ['sha256:source123', 'sha256:target456']
+ * → SentenceCommit with parents: ['sha256:source123', 'sha256:target456']
  */
 export function executeMerge(
   prepared: Merge2WayResult,
@@ -63,7 +63,7 @@ export function executeMerge(
   message: string,
   projectId: string,
   committedAt?: string
-): CommitV4 {
+): SentenceCommit {
   // Collect sentences with their sort position for order preservation
   // 收集句子及其排序位置，用于保持原始文档顺序
   const collected: Array<{
@@ -193,8 +193,8 @@ export function executeMerge(
   };
   const hash = `sha256:${sha256(hashableData)}`;
 
-  // Return CommitV4
-  // 返回 CommitV4
+  // Return SentenceCommit
+  // 返回 SentenceCommit
   return {
     hash,
     schema: 't3x/commit/v4',

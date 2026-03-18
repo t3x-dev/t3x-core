@@ -1,7 +1,7 @@
 import {
   cleanupProject,
   createTestBranch,
-  createTestCommitV4,
+  createTestCommit,
   createTestProject,
   getCurrentBranch,
   listTestBranches,
@@ -33,7 +33,7 @@ test.describe('Branch Workflow', () => {
     projectId = id;
 
     // Create initial commit on main
-    mainCommitHash = await createTestCommitV4(request, projectId, mainSentences, {
+    mainCommitHash = await createTestCommit(request, projectId, mainSentences, {
       branch: 'main',
       message: 'Initial main commit',
     });
@@ -72,7 +72,7 @@ test.describe('Branch Workflow', () => {
 
   // BR-04: Commit on feature branch
   test('BR-04: Commit on feature branch', async ({ request }) => {
-    featureCommitHash = await createTestCommitV4(request, projectId, featureSentences, {
+    featureCommitHash = await createTestCommit(request, projectId, featureSentences, {
       branch: featureBranchName,
       message: 'Feature branch commit',
       parents: [mainCommitHash],

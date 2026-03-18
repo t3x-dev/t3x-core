@@ -1,7 +1,7 @@
 /**
- * T3X V4 API Contracts
+ * T3X API Contracts
  *
- * This defines the API request/response schemas for V4 architecture.
+ * This defines the API request/response schemas.
  * All implementations must conform to these contracts.
  *
  * Naming convention:
@@ -155,19 +155,19 @@ export const AssertionSchema = z.object({
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// CommitV4 API
+// Commit API
 // ═══════════════════════════════════════════════════════════════════════════
 
-// POST /v1/commits-v4
+// POST /v1/commits
 // Use passthrough() to preserve unknown fields for V3/invalid field detection
 //
-// V4 Validation Rules:
+// Validation Rules:
 // 1. If `schema` provided, must be 't3x/commit/v4'
 // 2. `sentences` required and must be non-empty array
 // 3. `author` required with type ('human' | 'agent')
 // 4. `constraints` NOT allowed at commit level (use Leaves instead)
 // 5. V3 fields (turn_window, facet_snapshot) NOT allowed
-export const CreateCommitV4Request = z
+export const CreateCommitRequest = z
   .object({
     // Required fields
     author: z
@@ -232,7 +232,7 @@ export const CreateCommitV4Request = z
   })
   .passthrough();
 
-export const CommitV4Response = z.object({
+export const CommitResponse = z.object({
   hash: z.string(),
   schema: z.literal('t3x/commit/v4'),
   parents: z.array(z.string()),
@@ -290,9 +290,9 @@ export const CommitV4Response = z.object({
     .optional(),
 });
 
-export const CreateCommitV4Response = SuccessResponse(CommitV4Response);
-export const GetCommitV4Response = SuccessResponse(CommitV4Response);
-export const ListCommitsV4Response = SuccessResponse(z.array(CommitV4Response));
+export const CreateCommitResponse = SuccessResponse(CommitResponse);
+export const GetCommitResponse = SuccessResponse(CommitResponse);
+export const ListCommitsResponse = SuccessResponse(z.array(CommitResponse));
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Leaves API
@@ -601,8 +601,8 @@ export const GetConversationMemoryResponse = SuccessResponse(
 // Type Exports (for use in route handlers)
 // ═══════════════════════════════════════════════════════════════════════════
 
-export type CreateCommitV4RequestType = z.infer<typeof CreateCommitV4Request>;
-export type CommitV4ResponseType = z.infer<typeof CommitV4Response>;
+export type CreateCommitRequestType = z.infer<typeof CreateCommitRequest>;
+export type CommitResponseType = z.infer<typeof CommitResponse>;
 
 export type CreateLeafRequestType = z.infer<typeof CreateLeafRequest>;
 export type UpdateLeafRequestType = z.infer<typeof UpdateLeafRequest>;
@@ -630,7 +630,7 @@ export const MergeChecksResponse = SuccessResponse(z.array(MergeCheckSchema));
 export type MergeCheckType = z.infer<typeof MergeCheckSchema>;
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Merge V4 API
+// Merge API
 // ═══════════════════════════════════════════════════════════════════════════
 
 const WordDiffSegmentSchema = z.object({
@@ -638,49 +638,49 @@ const WordDiffSegmentSchema = z.object({
   text: z.string(),
 });
 
-const MergeV4SimilarPairSchema = z.object({
+const MergeSimilarPairSchema = z.object({
   source: SentenceSchema,
   target: SentenceSchema,
   word_diff: z.array(WordDiffSegmentSchema),
   resolution: z.enum(['source', 'target']).optional(),
 });
 
-const MergeV4CandidateSchema = z.object({
+const MergeCandidateSchema = z.object({
   sentence: SentenceSchema,
   keep: z.boolean(),
 });
 
-export const MergeV4ResultSchema = z.object({
+export const MergeResultSchema = z.object({
   identical: z.array(SentenceSchema),
-  similar_pairs: z.array(MergeV4SimilarPairSchema),
-  only_in_source: z.array(MergeV4CandidateSchema),
-  only_in_target: z.array(MergeV4CandidateSchema),
+  similar_pairs: z.array(MergeSimilarPairSchema),
+  only_in_source: z.array(MergeCandidateSchema),
+  only_in_target: z.array(MergeCandidateSchema),
 });
 
 // POST /v1/merge-v4/prepare
-export const PrepareMergeV4Request = z.object({
+export const PrepareMergeRequest = z.object({
   source_hash: z.string().min(1),
   target_hash: z.string().min(1),
 });
 
-export const PrepareMergeV4Response = SuccessResponse(MergeV4ResultSchema);
+export const PrepareMergeResponse = SuccessResponse(MergeResultSchema);
 
 // POST /v1/merge-v4/execute
-export const ExecuteMergeV4Request = z.object({
+export const ExecuteMergeRequest = z.object({
   source_hash: z.string().min(1),
   target_hash: z.string().min(1),
-  prepared: MergeV4ResultSchema,
+  prepared: MergeResultSchema,
   message: z.string().min(1),
   branch: z.string().optional(),
   project_id: z.string().min(1),
 });
 
-export const ExecuteMergeV4Response = SuccessResponse(CommitV4Response);
+export const ExecuteMergeResponse = SuccessResponse(CommitResponse);
 
 // Type exports
-export type MergeV4ResultType = z.infer<typeof MergeV4ResultSchema>;
-export type PrepareMergeV4RequestType = z.infer<typeof PrepareMergeV4Request>;
-export type ExecuteMergeV4RequestType = z.infer<typeof ExecuteMergeV4Request>;
+export type MergeResultType = z.infer<typeof MergeResultSchema>;
+export type PrepareMergeRequestType = z.infer<typeof PrepareMergeRequest>;
+export type ExecuteMergeRequestType = z.infer<typeof ExecuteMergeRequest>;
 
 export type LeafHistoryResponseType = z.infer<typeof LeafHistoryResponse>;
 export type RestoreLeafOutputRequestType = z.infer<typeof RestoreLeafOutputRequest>;
@@ -813,7 +813,7 @@ export const CommitDraftRequest = z.object({
 
 export const CommitDraftResponse = SuccessResponse(
   z.object({
-    commit: CommitV4Response,
+    commit: CommitResponse,
     leaf: LeafResponse.nullable(),
     draft_status: z.literal('committed'),
   })

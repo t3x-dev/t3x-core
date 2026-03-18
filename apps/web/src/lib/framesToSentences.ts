@@ -24,7 +24,7 @@ function slotValueToString(value: SlotValue): string {
   return String(value);
 }
 
-/** Convert SemanticContent frames into Sentence[] for CommitV4 content */
+/** Convert SemanticContent frames into Sentence[] for SentenceCommit content */
 export function framesToSentences(content: SemanticContent, conversationId?: string): Sentence[] {
   return content.frames.map((frame) => {
     // Combine slot values into a natural-language sentence

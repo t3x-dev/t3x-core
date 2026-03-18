@@ -44,7 +44,7 @@ import {
   PreviewDraftResponse,
   SuggestDraftRequest,
   SuggestDraftResponse,
-} from '../schemas/v4-contracts';
+} from '../schemas/contracts';
 import { toApiDraft } from './drafts-crud.openapi';
 import { extractSentencesFromConversation } from './extract.openapi';
 
@@ -439,7 +439,7 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
       );
     }
 
-    // 3. Convert to CommitV4 Sentences (branch by extraction_mode)
+    // 3. Convert to Sentences (branch by extraction_mode)
     let sentences: Array<{
       id: string;
       text: string;

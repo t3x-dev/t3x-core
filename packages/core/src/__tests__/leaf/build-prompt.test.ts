@@ -11,13 +11,13 @@ import {
   formatConstraints,
   getTypeInstructions,
 } from '../../leaf/build-prompt';
-import type { CommitV4, Constraint, Leaf } from '../../types/v4';
+import type { SentenceCommit, Constraint, Leaf } from '../../types/v4';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Test Fixtures
 // ═══════════════════════════════════════════════════════════════════════════
 
-const createTestCommit = (sentences: string[]): CommitV4 => ({
+const createTestCommit = (sentences: string[]): SentenceCommit => ({
   hash: 'sha256:test-hash',
   schema: 't3x/commit/v4',
   parents: [],

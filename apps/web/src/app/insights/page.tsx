@@ -11,8 +11,8 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useCountUp } from '@/hooks/useCountUp';
 import { useTerminology } from '@/hooks/useTerminology';
-import type { CommitV4, Project } from '@/lib/api';
-import { listCommitsV4, listProjects } from '@/lib/api';
+import type { SentenceCommit, Project } from '@/lib/api';
+import { listSentenceCommits, listProjects } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import type { SemanticEntry } from '@/types/semantic';
 
@@ -36,7 +36,7 @@ function formatTimeAgo(dateStr: string): string {
 }
 
 function commitToSemanticEntry(
-  commit: CommitV4,
+  commit: SentenceCommit,
   projectName: string,
   commitLabel: string
 ): SemanticEntry {
@@ -84,11 +84,11 @@ export default function InsightsPage() {
         }
 
         // Fetch commits for all projects in parallel (capped per project)
-        const allCommits: { commit: CommitV4; projectName: string }[] = [];
+        const allCommits: { commit: SentenceCommit; projectName: string }[] = [];
         await Promise.all(
           projects.map(async (project: Project) => {
             try {
-              const commits = await listCommitsV4(
+              const commits = await listSentenceCommits(
                 project.project_id,
                 undefined,
                 INSIGHTS_COMMITS_PER_PROJECT,

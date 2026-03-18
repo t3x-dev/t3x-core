@@ -8,7 +8,7 @@ import { cleanupRoots, renderHook, waitForHook } from './renderHook';
 
 // Mock the api module
 vi.mock('@/lib/api', () => ({
-  listCommitsV4: vi.fn(),
+  listSentenceCommits: vi.fn(),
   listLeavesByCommit: vi.fn(),
 }));
 
@@ -72,7 +72,7 @@ describe('useBranchCommits', () => {
 
     expect(result.current.data).toBeNull();
     expect(result.current.loading).toBe(false);
-    expect(api.listCommitsV4).not.toHaveBeenCalled();
+    expect(api.listSentenceCommits).not.toHaveBeenCalled();
     unmount();
   });
 
@@ -82,7 +82,7 @@ describe('useBranchCommits', () => {
 
     expect(result.current.data).toBeNull();
     expect(result.current.loading).toBe(false);
-    expect(api.listCommitsV4).not.toHaveBeenCalled();
+    expect(api.listSentenceCommits).not.toHaveBeenCalled();
     unmount();
   });
 
@@ -91,7 +91,7 @@ describe('useBranchCommits', () => {
     const c2 = makeCommit('sha256:bbb');
     const leaf1 = makeLeaf('leaf_1', 'sha256:aaa');
 
-    vi.mocked(api.listCommitsV4).mockResolvedValue([c1, c2] as never);
+    vi.mocked(api.listSentenceCommits).mockResolvedValue([c1, c2] as never);
     vi.mocked(api.listLeavesByCommit).mockImplementation(async (hash: string) => {
       if (hash === 'sha256:aaa') return [leaf1] as never;
       return [] as never;
@@ -104,7 +104,7 @@ describe('useBranchCommits', () => {
 
     await waitForHook();
 
-    expect(api.listCommitsV4).toHaveBeenCalledWith('proj_1', 'main', 200, 0);
+    expect(api.listSentenceCommits).toHaveBeenCalledWith('proj_1', 'main', 200, 0);
     expect(api.listLeavesByCommit).toHaveBeenCalledTimes(2);
 
     expect(result.current.data).toHaveLength(2);
@@ -116,7 +116,7 @@ describe('useBranchCommits', () => {
   });
 
   it('handles empty commits list', async () => {
-    vi.mocked(api.listCommitsV4).mockResolvedValue([] as never);
+    vi.mocked(api.listSentenceCommits).mockResolvedValue([] as never);
 
     const { result, unmount } = renderHook(() => useBranchCommits('proj_1', 'main'));
     await waitForHook();
@@ -127,8 +127,8 @@ describe('useBranchCommits', () => {
     unmount();
   });
 
-  it('sets error when listCommitsV4 fails', async () => {
-    vi.mocked(api.listCommitsV4).mockRejectedValue(new Error('fetch failed'));
+  it('sets error when listSentenceCommits fails', async () => {
+    vi.mocked(api.listSentenceCommits).mockRejectedValue(new Error('fetch failed'));
 
     const { result, unmount } = renderHook(() => useBranchCommits('proj_1', 'main'));
     await waitForHook();
@@ -143,7 +143,7 @@ describe('useBranchCommits', () => {
     const c1 = makeCommit('sha256:aaa');
     const c2 = makeCommit('sha256:bbb');
 
-    vi.mocked(api.listCommitsV4).mockResolvedValue([c1, c2] as never);
+    vi.mocked(api.listSentenceCommits).mockResolvedValue([c1, c2] as never);
     vi.mocked(api.listLeavesByCommit).mockImplementation(async (hash: string) => {
       if (hash === 'sha256:aaa') throw new Error('leaf fetch error');
       return [makeLeaf('leaf_2', 'sha256:bbb')] as never;
@@ -161,7 +161,7 @@ describe('useBranchCommits', () => {
   });
 
   it('converts non-Error throws to Error instances', async () => {
-    vi.mocked(api.listCommitsV4).mockRejectedValue('string error');
+    vi.mocked(api.listSentenceCommits).mockRejectedValue('string error');
 
     const { result, unmount } = renderHook(() => useBranchCommits('proj_1', 'main'));
     await waitForHook();
@@ -172,13 +172,13 @@ describe('useBranchCommits', () => {
   });
 
   it('exposes refetch function', async () => {
-    vi.mocked(api.listCommitsV4).mockResolvedValue([] as never);
+    vi.mocked(api.listSentenceCommits).mockResolvedValue([] as never);
 
     const { result, unmount } = renderHook(() => useBranchCommits('proj_1', 'main'));
     await waitForHook();
 
     expect(result.current.data).toEqual([]);
-    expect(api.listCommitsV4).toHaveBeenCalledTimes(1);
+    expect(api.listSentenceCommits).toHaveBeenCalledTimes(1);
 
     // Call refetch
     await act(async () => {
@@ -186,7 +186,7 @@ describe('useBranchCommits', () => {
       await new Promise((r) => setTimeout(r, 0));
     });
 
-    expect(api.listCommitsV4).toHaveBeenCalledTimes(2);
+    expect(api.listSentenceCommits).toHaveBeenCalledTimes(2);
     unmount();
   });
 });

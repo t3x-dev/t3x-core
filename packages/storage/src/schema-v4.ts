@@ -887,7 +887,7 @@ const pgVector = customType<{ data: number[]; driverData: string }>({
 export const sentenceVectors = pgTable(
   'sentence_vectors',
   {
-    /** Sentence ID (same as CommitV4 sentence.id, e.g., "s_abc123") */
+    /** Sentence ID (e.g., "s_abc123") */
     id: text('id').primaryKey(),
 
     /** Project scope */

@@ -1,7 +1,7 @@
 import {
   API_BASE,
   cleanupProject,
-  createTestCommitV4,
+  createTestCommit,
   createTestMergeDraft,
   createTestProject,
 } from '../fixtures/api-helpers';
@@ -37,7 +37,7 @@ test.describe('Merge Workspace', () => {
     const { projectId: id } = await createTestProject(request, `Merge E2E ${Date.now()}`);
     projectId = id;
 
-    const baseHash = await createTestCommitV4(
+    const baseHash = await createTestCommit(
       request,
       projectId,
       [
@@ -48,7 +48,7 @@ test.describe('Merge Workspace', () => {
       { branch: 'main', message: 'Base commit' }
     );
 
-    sourceHash = await createTestCommitV4(
+    sourceHash = await createTestCommit(
       request,
       projectId,
       [
@@ -60,7 +60,7 @@ test.describe('Merge Workspace', () => {
       { branch: 'feature', message: 'Feature commit', parents: [baseHash] }
     );
 
-    targetHash = await createTestCommitV4(
+    targetHash = await createTestCommit(
       request,
       projectId,
       [

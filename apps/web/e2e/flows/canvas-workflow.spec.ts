@@ -1,4 +1,4 @@
-import { cleanupProject, createTestCommitV4, createTestProject } from '../fixtures/api-helpers';
+import { cleanupProject, createTestCommit, createTestProject } from '../fixtures/api-helpers';
 import { CanvasPage } from '../fixtures/page-objects/canvas-page';
 import { expect, test } from '../fixtures/test';
 import { generateSentences, isExpectedConsoleError } from '../fixtures/test-data-factory';
@@ -21,7 +21,7 @@ test.describe('Canvas Workflow', () => {
     const { projectId: id } = await createTestProject(request, `Canvas E2E ${Date.now()}`);
     projectId = id;
 
-    commitHash = await createTestCommitV4(request, projectId, sentences, {
+    commitHash = await createTestCommit(request, projectId, sentences, {
       message: commitMessage,
     });
   });

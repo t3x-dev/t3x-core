@@ -6,7 +6,7 @@
  * V4 Changes:
  * - No constraint handling (constraints belong to Leaf)
  * - prepareMerge accepts DiffableSentence[] instead of CommitContent
- * - executeMerge returns CommitV4 instead of CommitV3
+ * - executeMerge returns SentenceCommit
  */
 
 // Two-way merge functions

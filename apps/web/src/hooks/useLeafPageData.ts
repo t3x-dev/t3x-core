@@ -1,11 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { CommitV4, Constraint, Leaf } from '@/lib/api';
+import type { SentenceCommit, Constraint, Leaf } from '@/lib/api';
 import {
   ApiError,
   generateLeafOutput,
-  getCommitV4,
+  getSentenceCommit,
   getLeaf,
   updateLeaf,
   validateLeafOutput,
@@ -90,7 +90,7 @@ export interface UseLeafPageDataReturn {
   leaf: Leaf | null;
   loading: boolean;
   error: Error | null;
-  commitData: CommitV4 | null;
+  commitData: SentenceCommit | null;
   commitLoadError: boolean;
   sentences: SentenceWithSource[];
 
@@ -171,7 +171,7 @@ export function useLeafPageData(projectId: string, leafId: string): UseLeafPageD
     type: 'success' | 'error';
     text: string;
   } | null>(null);
-  const [commitData, setCommitData] = useState<CommitV4 | null>(null);
+  const [commitData, setCommitData] = useState<SentenceCommit | null>(null);
   const [commitLoadError, setCommitLoadError] = useState(false);
   const [savingInstruction, setSavingInstruction] = useState(false);
   const [savingModel, setSavingModel] = useState(false);
@@ -322,7 +322,7 @@ export function useLeafPageData(projectId: string, leafId: string): UseLeafPageD
   // Load parent commit data for source content display
   useEffect(() => {
     if (!leaf?.commit_hash) return;
-    getCommitV4(leaf.commit_hash)
+    getSentenceCommit(leaf.commit_hash)
       .then(setCommitData)
       .catch(() => {
         setCommitLoadError(true);

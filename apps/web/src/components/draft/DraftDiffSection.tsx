@@ -11,7 +11,7 @@ import { Equal, Minus, Pencil, Plus } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CollapsibleSection } from '@/components/shared/CollapsibleSection';
 import { Badge } from '@/components/ui/badge';
-import { getCommitV4 } from '@/lib/api';
+import { getSentenceCommit } from '@/lib/api';
 import type { DiffableSentence, DiffCache } from '@/lib/diffUtils';
 import { type CommitDiff, incrementalDiffCommits, type WordDiffSegment } from '@/lib/diffUtils';
 import { cn } from '@/lib/utils';
@@ -47,7 +47,7 @@ export function DraftDiffSection() {
     setLoading(true);
     setError(null);
 
-    getCommitV4(parentHash)
+    getSentenceCommit(parentHash)
       .then((parentCommit) => {
         if (cancelled) return;
         const sentences =

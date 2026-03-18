@@ -23,7 +23,7 @@ import { wordDiff } from '../diff/lcs';
 import type { DiffableSentence, WordDiffSegment } from '../diff/types';
 import {
   type CommitAuthor,
-  type CommitV4,
+  type SentenceCommit,
   ID_PREFIXES,
   type Sentence as SentenceV4,
 } from '../types/v4';
@@ -331,7 +331,7 @@ export function prepareThreeWayMerge(
  * Execute a three-way merge after all conflicts have been resolved.
  *
  * Takes a ThreeWayMergeResult with resolved conflicts and produces
- * a final CommitV4 with deterministic sentence IDs.
+ * a final SentenceCommit with deterministic sentence IDs.
  *
  * @param result - The three-way merge result with all conflicts resolved
  * @param sourceCommitHash - Hash of the source commit
@@ -340,7 +340,7 @@ export function prepareThreeWayMerge(
  * @param message - Merge commit message
  * @param projectId - Project ID
  * @param committedAt - Optional fixed timestamp (for deterministic tests)
- * @returns CommitV4 with merged content
+ * @returns SentenceCommit with merged content
  *
  * @throws Error if any conflict is unresolved
  * @throws Error if a conflict with resolution 'edit' has no editedText
@@ -362,7 +362,7 @@ export function executeThreeWayMerge(
   message: string,
   projectId: string,
   committedAt?: string
-): CommitV4 {
+): SentenceCommit {
   // Validate: all conflicts must be resolved
   for (const conflict of result.conflicts) {
     if (!conflict.resolution) {

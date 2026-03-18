@@ -488,7 +488,7 @@ export function saveNodePosition(
       } else {
         // Committed unit - save position to commit via API
         api
-          .updateCommitV4Position(nodeId, pending.position.x, pending.position.y)
+          .updateCommitPosition(nodeId, pending.position.x, pending.position.y)
           .catch(() => {
             // Error handled silently
           });
@@ -504,7 +504,7 @@ export const unitToNode = (
   conv: api.Conversation,
   commit: api.Commit | null, // null for staging units (no commit yet)
   index: number,
-  originalV4?: api.CommitV4 // Original V4 data for source context display
+  originalV4?: api.SentenceCommit // Original sentence-based commit for source context display
 ): Node<CanvasNodeData> => {
   // Use saved position from commit if available, otherwise from conversation, otherwise calculate
   const position =

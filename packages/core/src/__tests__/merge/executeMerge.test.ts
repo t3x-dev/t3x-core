@@ -28,7 +28,7 @@ describe('executeMerge', () => {
   // Basic merge scenarios
   // ===========================================================================
   describe('basic merge', () => {
-    it('creates CommitV4 with correct schema and parents', () => {
+    it('creates SentenceCommit with correct schema and parents', () => {
       const prepared = makePrepared();
       const result = executeMerge(
         prepared,

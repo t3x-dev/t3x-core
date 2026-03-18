@@ -13,13 +13,13 @@ import {
   estimateTokens,
   filterActivePins,
 } from '../../context/builder';
-import type { CommitV4, ConversationContext, Leaf, Pin } from '../../types/v4';
+import type { SentenceCommit, ConversationContext, Leaf, Pin } from '../../types/v4';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Test Fixtures
 // ═══════════════════════════════════════════════════════════════════════════
 
-const mockCommit: CommitV4 = {
+const mockCommit: SentenceCommit = {
   hash: 'sha256:abc123',
   schema: 't3x/commit/v4',
   parents: [],
@@ -342,7 +342,7 @@ describe('buildLeafContext', () => {
   });
 
   it('handles empty sentences array', () => {
-    const emptyCommit: CommitV4 = {
+    const emptyCommit: SentenceCommit = {
       ...mockCommit,
       content: { sentences: [] },
     };

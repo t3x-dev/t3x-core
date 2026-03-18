@@ -8,7 +8,7 @@ import {
   validateConstraintsSimple,
 } from '../../leaf/multi-round-generate';
 import type { LLMProvider } from '../../llm/types';
-import type { CommitV4, Leaf } from '../../types/v4';
+import type { SentenceCommit, Leaf } from '../../types/v4';
 
 function makeMockLLM(responses: string[]): LLMProvider {
   let callIndex = 0;
@@ -25,7 +25,7 @@ function makeMockLLM(responses: string[]): LLMProvider {
   };
 }
 
-const commit: CommitV4 = {
+const commit: SentenceCommit = {
   hash: 'sha256:test',
   schema: 't3x/commit/v4',
   parents: [],

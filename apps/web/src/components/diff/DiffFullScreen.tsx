@@ -3,7 +3,7 @@
 /**
  * DiffFullScreen - Full-screen side-by-side diff overlay
  *
- * Displays a complete diff between two V4 commits with:
+ * Displays a complete diff between two commits with:
  * - Left/Right side-by-side comparison
  * - Word-level diff highlighting for modified sentences
  * - Source context tracing (click pin icon to see inline context via SourceContextView)
@@ -14,8 +14,8 @@ import { Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { useTerminology } from '@/hooks/useTerminology';
-import type { CommitV4, DiffResultRaw } from '@/lib/api';
-import { getCommitV4 } from '@/lib/api';
+import type { SentenceCommit, DiffResultRaw } from '@/lib/api';
+import { getSentenceCommit } from '@/lib/api';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import { DiffHeader } from './DiffHeader';
@@ -58,8 +58,8 @@ export function DiffFullScreen({
   diffData,
   projectId,
 }: DiffFullScreenProps) {
-  const [baseCommit, setBaseCommit] = useState<CommitV4 | null>(null);
-  const [targetCommit, setTargetCommit] = useState<CommitV4 | null>(null);
+  const [baseCommit, setBaseCommit] = useState<SentenceCommit | null>(null);
+  const [targetCommit, setTargetCommit] = useState<SentenceCommit | null>(null);
   const [commitsLoading, setCommitsLoading] = useState(false);
   const { t } = useTerminology();
 
@@ -72,7 +72,7 @@ export function DiffFullScreen({
     let cancelled = false;
     setCommitsLoading(true);
 
-    Promise.all([getCommitV4(baseCommitHash), getCommitV4(targetCommitHash)])
+    Promise.all([getSentenceCommit(baseCommitHash), getSentenceCommit(targetCommitHash)])
       .then(([base, target]) => {
         if (!cancelled) {
           setBaseCommit(base);

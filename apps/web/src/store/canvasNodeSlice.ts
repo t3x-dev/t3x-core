@@ -25,10 +25,10 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
     set({ loading: true, loadError: null, projectId });
 
     try {
-      // Fetch conversations, V4 commits, and leaves in parallel
+      // Fetch conversations, sentence commits, and leaves in parallel
       const [convResponse, commitsV4, projectLeaves] = await Promise.all([
         api.listConversations(projectId, 100, 0),
-        api.listCommitsV4(projectId, undefined, 100, 0),
+        api.listSentenceCommits(projectId, undefined, 100, 0),
         api.listLeavesByProject(projectId).catch((err) => {
           console.warn('[canvasStore] Failed to load leaves:', err);
           return [] as api.Leaf[];
@@ -40,7 +40,7 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
 
       const conversations = convResponse.conversations;
 
-      // Convert V4 commits to V2-compatible format for unitToNode
+      // Convert sentence commits to V2-compatible format for unitToNode
       const commits: api.Commit[] = commitsV4.map(
         (v4) =>
           ({
@@ -150,8 +150,8 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
         }
       });
 
-      // Build a map: commit_hash -> original V4 data (for source context display)
-      const commitV4Map = new Map<string, api.CommitV4>();
+      // Build a map: commit_hash -> original sentence commit data (for source context display)
+      const commitV4Map = new Map<string, api.SentenceCommit>();
       commitsV4.forEach((v4) => {
         commitV4Map.set(v4.hash, v4);
       });

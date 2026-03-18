@@ -438,7 +438,7 @@ describe('executeThreeWayMerge', () => {
   // Basic execution
   // -------------------------------------------------------------------------
   describe('basic execution', () => {
-    it('creates CommitV4 with correct schema and parents', () => {
+    it('creates SentenceCommit with correct schema and parents', () => {
       const result = prepareThreeWayMerge(
         [sent('b1', 'Same text')],
         [sent('s1', 'Same text')],

@@ -26,7 +26,7 @@ import {
   DraftSentenceSchema,
   IncrementalExtractRequest,
   IncrementalExtractResponse,
-} from '../schemas/v4-contracts';
+} from '../schemas/contracts';
 
 export const extractRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,

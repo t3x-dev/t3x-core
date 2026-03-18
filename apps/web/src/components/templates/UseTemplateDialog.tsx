@@ -17,8 +17,8 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useTerminology } from '@/hooks/useTerminology';
-import type { CommitV4, LeafType, Project, Template } from '@/lib/api';
-import { createLeaf, listCommitsV4, listProjects } from '@/lib/api';
+import type { SentenceCommit, LeafType, Project, Template } from '@/lib/api';
+import { createLeaf, listSentenceCommits, listProjects } from '@/lib/api';
 
 interface UseTemplateDialogProps {
   template: Template | null;
@@ -30,7 +30,7 @@ export function UseTemplateDialog({ template, open, onOpenChange }: UseTemplateD
   const { t } = useTerminology();
   const router = useRouter();
   const [projects, setProjects] = useState<Project[]>([]);
-  const [commits, setCommits] = useState<CommitV4[]>([]);
+  const [commits, setCommits] = useState<SentenceCommit[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState('');
   const [selectedCommitHash, setSelectedCommitHash] = useState('');
   const [title, setTitle] = useState('');
@@ -67,7 +67,7 @@ export function UseTemplateDialog({ template, open, onOpenChange }: UseTemplateD
     }
     let cancelled = false;
     setLoadingCommits(true);
-    listCommitsV4(selectedProjectId)
+    listSentenceCommits(selectedProjectId)
       .then((c) => {
         if (!cancelled) {
           setCommits(c);

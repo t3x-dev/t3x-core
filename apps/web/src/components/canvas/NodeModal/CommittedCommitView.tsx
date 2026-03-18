@@ -31,7 +31,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useTerminology } from '@/hooks/useTerminology';
-import type { CommitV4 } from '@/lib/api';
+import type { SentenceCommit } from '@/lib/api';
 import { type CommitExportFormat, exportCommit } from '@/lib/exportCommit';
 import { glass, toneAccent } from '@/lib/theme';
 import { cn } from '@/lib/utils';
@@ -43,7 +43,7 @@ import {
   CommitConstraintsAndLeaves,
   CommitFullHeader,
   CommitSourceContent,
-  isCommitV4,
+  isSentenceCommit,
   MemoryContextSidebar,
   PinnedSourcesSection,
 } from './shared';
@@ -122,7 +122,7 @@ export function CommittedCommitView({
   // Export commit
   const handleCommitExport = useCallback(
     async (format: CommitExportFormat) => {
-      const commit = data.commitV4 as CommitV4 | undefined;
+      const commit = data.commitV4 as SentenceCommit | undefined;
       if (!commit) return;
       await exportCommit(commit, format);
     },
@@ -374,7 +374,7 @@ export function CommittedCommitView({
                 const commit = data.commitV4 as CommitDisplay;
                 const branchName =
                   data.branchName || (data.branchType === 'main' ? 'main' : undefined);
-                const isV4 = isCommitV4(commit);
+                const isV4 = isSentenceCommit(commit);
                 const commitProjectId = routeProjectId || projectId || undefined;
 
                 return (
@@ -411,8 +411,8 @@ export function CommittedCommitView({
                           JSON
                         </TabsTrigger>
                         {isV4 &&
-                          (commit as CommitV4)?.semantic &&
-                          (commit as CommitV4).semantic!.frames.length > 0 && (
+                          (commit as SentenceCommit)?.semantic &&
+                          (commit as SentenceCommit).semantic!.frames.length > 0 && (
                             <TabsTrigger
                               value="frame-graph"
                               className="rounded-none border-b-2 border-transparent data-[state=active]:border-[var(--accent-commit)] data-[state=active]:text-[var(--text-primary)] data-[state=active]:shadow-none text-[var(--text-tertiary)] text-xs px-3 py-2"
@@ -469,12 +469,12 @@ export function CommittedCommitView({
                       </TabsContent>
 
                       {isV4 &&
-                        (commit as CommitV4)?.semantic &&
-                        (commit as CommitV4).semantic!.frames.length > 0 && (
+                        (commit as SentenceCommit)?.semantic &&
+                        (commit as SentenceCommit).semantic!.frames.length > 0 && (
                           <TabsContent value="frame-graph">
                             <div className="h-[400px] border border-[var(--stroke-divider)] rounded-md overflow-hidden">
                               <FrameGraphView
-                                content={(commit as CommitV4).semantic!}
+                                content={(commit as SentenceCommit).semantic!}
                                 className="h-full w-full"
                               />
                             </div>

@@ -12,7 +12,7 @@
  * @see docs/plans/parallel-dev-guidelines.md
  */
 
-import type { AnyLeafType, CommitV4, Constraint, Leaf } from '../types/v4';
+import type { AnyLeafType, SentenceCommit, Constraint, Leaf } from '../types/v4';
 import { isGenerationLeaf } from '../types/v4';
 import { formatConstraints, getTypeInstructions } from './build-prompt';
 import { getDefaultTemplate } from './templates';
@@ -37,7 +37,7 @@ import { TEMPLATE_VARIABLE_NAMES } from './types';
  * @returns Template context with all variable values
  */
 export function buildTemplateContext(
-  commit: CommitV4,
+  commit: SentenceCommit,
   leaf: Leaf,
   additionalInstructions?: string
 ): TemplateContext {
@@ -222,7 +222,7 @@ function getContextValue(
  */
 export interface RenderTemplateOptions {
   /** The commit containing sentences */
-  commit: CommitV4;
+  commit: SentenceCommit;
 
   /** The leaf containing constraints and config */
   leaf: Leaf;

@@ -1,7 +1,7 @@
 import {
   API_BASE,
   cleanupProject,
-  createTestCommitV4,
+  createTestCommit,
   createTestProject,
 } from '../fixtures/api-helpers';
 import { expect, test } from '../fixtures/test';
@@ -89,7 +89,7 @@ test.describe('API-WebUI Sync', () => {
     projectIdsToCleanup.push(projectId);
 
     const sentences = generateSentences(2);
-    const commitHash = await createTestCommitV4(request, projectId, sentences, {
+    const commitHash = await createTestCommit(request, projectId, sentences, {
       message: 'Sync test commit',
     });
 

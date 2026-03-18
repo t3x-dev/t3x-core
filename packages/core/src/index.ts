@@ -447,9 +447,9 @@ export {
   type BuiltContext,
   type CommitAuthor as CommitAuthorV4,
   type CommitSourceRef,
-  // CommitV4 (pure knowledge, no constraints)
-  type CommitV4,
-  type CommitV4Content,
+  // SentenceCommit (pure knowledge, no constraints)
+  type SentenceCommit,
+  type SentenceCommitContent,
   // Constraint (now belongs to Leaf)
   type Constraint as ConstraintV4,
   type ConstraintSourceFrame,
@@ -457,7 +457,7 @@ export {
   // Conversation Context
   type ConversationContext,
   // Input types
-  type CreateCommitV4Input,
+  type CreateSentenceCommitInput,
   // Draft (Workbench)
   type CreateDraftInput as CreateDraftV3Input,
   type CreateLeafHistoryInput,

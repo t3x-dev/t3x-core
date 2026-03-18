@@ -324,7 +324,7 @@ function getLeafAssertions(leaf: Leaf): Assertion[] {
 
 /**
  * Extract conversation_id from commit's source_refs.
- * CommitV4 has source_refs with type='conversation' entries.
+ * SentenceCommit has source_refs with type='conversation' entries.
  */
 function extractConversationId(item: CommitWithLeaves): string | null {
   const ref = item.commit.source_refs?.find((r) => r.type === 'conversation');
