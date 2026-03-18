@@ -88,33 +88,42 @@ test.describe('Source Context Fix Verification', () => {
     // Position 0-30: "I prefer dark mode for coding." (30 chars)
     // Position 30: space
     // Position 31-57: "My budget is around $5000." (26 chars)
-    const commitRes = await request.post('http://localhost:8000/api/v1/commits-v4', {
+    const commitRes = await request.post('http://localhost:8000/api/v1/commits', {
       data: {
         project_id: projectId,
         branch: 'main',
         message: 'Test commit with source context',
-        sentences: [
-          {
-            id: 's_1',
-            text: 'I prefer dark mode for coding.',
-            source_ref: {
-              conversation_id: conversationId,
-              turn_hash: turnHash,
-              start_char: 0,
-              end_char: 30,
+        content: {
+          frames: [
+            {
+              id: 'f_001',
+              type: 'legacy_sentence',
+              slots: {
+                text: 'I prefer dark mode for coding.',
+                source_ref: {
+                  conversation_id: conversationId,
+                  turn_hash: turnHash,
+                  start_char: 0,
+                  end_char: 30,
+                },
+              },
             },
-          },
-          {
-            id: 's_2',
-            text: 'My budget is around $5000.',
-            source_ref: {
-              conversation_id: conversationId,
-              turn_hash: turnHash,
-              start_char: 31,
-              end_char: 57,
+            {
+              id: 'f_002',
+              type: 'legacy_sentence',
+              slots: {
+                text: 'My budget is around $5000.',
+                source_ref: {
+                  conversation_id: conversationId,
+                  turn_hash: turnHash,
+                  start_char: 31,
+                  end_char: 57,
+                },
+              },
             },
-          },
-        ],
+          ],
+          relations: [],
+        },
         author: { type: 'human', name: 'Test' },
       },
     });
@@ -124,22 +133,22 @@ test.describe('Source Context Fix Verification', () => {
     const commitHash = commitData.data.hash;
 
     // Fetch the commit and verify source_ref
-    const getRes = await request.get(`http://localhost:8000/api/v1/commits-v4/${commitHash}`);
+    const getRes = await request.get(`http://localhost:8000/api/v1/commits/${commitHash}`);
     expect(getRes.ok()).toBe(true);
     const getData = await getRes.json();
 
-    const sentences = getData.data.content.sentences;
-    expect(sentences).toHaveLength(2);
+    const frames = getData.data.content.frames;
+    expect(frames).toHaveLength(2);
 
-    // Verify sentence 1
-    expect(sentences[0].source_ref.turn_hash).toBe(turnHash);
-    expect(sentences[0].source_ref.start_char).toBe(0);
-    expect(sentences[0].source_ref.end_char).toBe(30);
+    // Verify frame 1
+    expect(frames[0].slots.source_ref.turn_hash).toBe(turnHash);
+    expect(frames[0].slots.source_ref.start_char).toBe(0);
+    expect(frames[0].slots.source_ref.end_char).toBe(30);
 
-    // Verify sentence 2
-    expect(sentences[1].source_ref.turn_hash).toBe(turnHash);
-    expect(sentences[1].source_ref.start_char).toBe(31);
-    expect(sentences[1].source_ref.end_char).toBe(57);
+    // Verify frame 2
+    expect(frames[1].slots.source_ref.turn_hash).toBe(turnHash);
+    expect(frames[1].slots.source_ref.start_char).toBe(31);
+    expect(frames[1].slots.source_ref.end_char).toBe(57);
 
     // Verify the positions match the actual text
     expect(turnContent.slice(0, 30)).toBe('I prefer dark mode for coding.');

@@ -248,27 +248,44 @@ export async function getCommitV4(commitHash: string): Promise<CommitV4> {
 }
 
 /**
- * @deprecated V4 history endpoint has been removed. Returns empty array.
+ * Get commit ancestor chain (V5 endpoint).
+ * @deprecated Name kept for backward compat. Calls V5 GET /v1/commits/:hash/history.
  */
 export async function getCommitV4History(
-  _commitHash: string,
-  _limit = 50
+  commitHash: string,
+  limit = 50
 ): Promise<CommitV4[]> {
-  // V4 history endpoint no longer exists; callers should migrate to V5 APIs.
-  return [];
+  try {
+    const query = buildQueryString({ limit });
+    const res = await fetchWithTimeout(
+      `${API_V1}/commits/${encodeURIComponent(commitHash)}/history?${query}`
+    );
+    const data = await handleResponse<{ commits: CommitV5[]; truncated: boolean }>(res);
+    return data.commits.map(v5toV4);
+  } catch {
+    return [];
+  }
 }
 
 /**
- * @deprecated V4 position update endpoint has been removed. No-op.
+ * Update commit canvas position (V5 endpoint).
+ * @deprecated Name kept for backward compat. Calls V5 PATCH /v1/commits/:hash/position.
  */
 export async function updateCommitV4Position(
-  _commitHash: string,
-  _positionX: number,
-  _positionY: number
+  commitHash: string,
+  positionX: number,
+  positionY: number
 ): Promise<CommitV4> {
-  // V4 position endpoint no longer exists.
-  // TODO: Add V5 position update endpoint when available.
-  throw new Error('updateCommitV4Position: V4 endpoint removed. V5 position update not yet available.');
+  const res = await fetchWithTimeout(
+    `${API_V1}/commits/${encodeURIComponent(commitHash)}/position`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ position_x: positionX, position_y: positionY }),
+    }
+  );
+  const v5 = await handleResponse<CommitV5>(res);
+  return v5toV4(v5);
 }
 
 // ============================================================================

@@ -1,8 +1,8 @@
 /**
  * Sentence Relations Routes (Inter-sentence Relations)
  *
- * - GET  /v1/commits-v4/:hash/relations           — Get relations for a commit
- * - POST /v1/commits-v4/:hash/relations/extract    — Trigger (re-)extraction
+ * - GET  /v1/commits/:hash/relations           — Get relations for a commit
+ * - POST /v1/commits/:hash/relations/extract    — Trigger (re-)extraction
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
@@ -45,11 +45,11 @@ const CommitHashParam = z.object({
   hash: z.string().openapi({ description: 'Commit hash (URL-encoded)' }),
 });
 
-// ── GET /v1/commits-v4/:hash/relations ───────────────────────
+// ── GET /v1/commits/:hash/relations ───────────────────────
 
 const getRelationsRoute = createRoute({
   method: 'get',
-  path: '/v1/commits-v4/{hash}/relations',
+  path: '/v1/commits/{hash}/relations',
   tags: ['Relations'],
   summary: 'Get inter-sentence relations for a commit',
   request: { params: CommitHashParam },
@@ -89,11 +89,11 @@ relationsRoutes.openapi(getRelationsRoute, async (c) => {
   }
 });
 
-// ── POST /v1/commits-v4/:hash/relations/extract ──────────────
+// ── POST /v1/commits/:hash/relations/extract ──────────────
 
 const extractRelationsRoute = createRoute({
   method: 'post',
-  path: '/v1/commits-v4/{hash}/relations/extract',
+  path: '/v1/commits/{hash}/relations/extract',
   tags: ['Relations'],
   summary: 'Extract (or re-extract) inter-sentence relations for a commit',
   description:

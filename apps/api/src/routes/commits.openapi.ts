@@ -13,7 +13,7 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { createCommit, getCommit, listCommits } from '@t3x-dev/storage';
+import { createCommit, getCommit, getCommitsByHashes, listCommits, updateCommitPosition } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import {
@@ -239,4 +239,92 @@ commitRoutes.openapi(listCommitsRoute, async (c) => {
     const message = err instanceof Error ? err.message : 'Failed to list commits';
     return errorResponse(c, 'LIST_FAILED', message);
   }
+});
+
+// ============================================================
+// PATCH /v1/commits/:hash/position — Update canvas position
+// ============================================================
+
+const updatePositionRoute = createRoute({
+  method: 'patch',
+  path: '/v1/commits/{hash}/position',
+  request: {
+    params: HashParamSchema,
+    body: {
+      content: {
+        'application/json': {
+          schema: z.object({
+            position_x: z.number(),
+            position_y: z.number(),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: { content: { 'application/json': { schema: SuccessResponseSchema } }, description: 'Position updated' },
+    404: { content: { 'application/json': { schema: ErrorResponseSchema } }, description: 'Commit not found' },
+  },
+});
+
+commitRoutes.openapi(updatePositionRoute, async (c) => {
+  const { hash } = c.req.valid('param');
+  const { position_x, position_y } = c.req.valid('json');
+  const db = await getDB();
+  const decodedHash = decodeURIComponent(hash);
+
+  const updated = await updateCommitPosition(db, decodedHash, position_x, position_y);
+  if (!updated) {
+    return errorResponse(c, 'COMMIT_NOT_FOUND', `Commit ${decodedHash} not found`);
+  }
+
+  return c.json({ success: true as const, data: updated }, 200);
+});
+
+// ============================================================
+// GET /v1/commits/:hash/history — Get commit ancestor chain
+// ============================================================
+
+const getHistoryRoute = createRoute({
+  method: 'get',
+  path: '/v1/commits/{hash}/history',
+  request: {
+    params: HashParamSchema,
+    query: z.object({ limit: z.coerce.number().int().min(1).max(500).default(50) }),
+  },
+  responses: {
+    200: { content: { 'application/json': { schema: SuccessResponseSchema } }, description: 'History chain' },
+    404: { content: { 'application/json': { schema: ErrorResponseSchema } }, description: 'Commit not found' },
+  },
+});
+
+commitRoutes.openapi(getHistoryRoute, async (c) => {
+  const { hash } = c.req.valid('param');
+  const { limit } = c.req.valid('query');
+  const db = await getDB();
+  const decodedHash = decodeURIComponent(hash);
+
+  const visited = new Set<string>();
+  const queue = [decodedHash];
+  const commits = [];
+
+  while (queue.length > 0 && commits.length < limit) {
+    const currentHash = queue.shift()!;
+    if (visited.has(currentHash)) continue;
+    visited.add(currentHash);
+
+    const commit = await getCommit(db, currentHash);
+    if (!commit) continue;
+    commits.push(commit);
+
+    for (const parentHash of commit.parents) {
+      if (!visited.has(parentHash)) queue.push(parentHash);
+    }
+  }
+
+  if (commits.length === 0) {
+    return errorResponse(c, 'COMMIT_NOT_FOUND', `Commit ${decodedHash} not found`);
+  }
+
+  return c.json({ success: true as const, data: { commits, truncated: commits.length >= limit } }, 200);
 });
