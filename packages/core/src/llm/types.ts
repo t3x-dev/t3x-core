@@ -118,6 +118,20 @@ export interface StructuredResult<T> {
   usage: { inputTokens: number; outputTokens: number };
 }
 
+// ── Debug / Observability ──
+
+/** Log entry for a single LLM call (debug/observability) */
+export interface LLMCallLog {
+  agent: string;
+  prompt: string;
+  response: string;
+  usage: { inputTokens: number; outputTokens: number };
+  durationMs: number;
+}
+
+/** Callback for logging LLM calls */
+export type LLMCallLogger = (log: LLMCallLog) => void;
+
 /**
  * LLM Provider error
  */

@@ -15,7 +15,7 @@
  * - Fail gracefully — partial result > no result
  */
 
-import type { LLMProvider } from '../llm/types';
+import type { LLMCallLogger, LLMProvider } from '../llm/types';
 import type { SemanticContent, Frame, Relation, SlotValue } from '../semantic/types';
 import type { FrameExtractionTurn } from './frameExtractionPrompt';
 
@@ -25,6 +25,12 @@ export type PipelineMode = 'full' | 'incremental';
 
 export interface PipelineOptions {
   mode?: PipelineMode;
+  /** Agent names to skip (e.g., ['slot_polisher', 'reviewer']) */
+  disabledAgents?: string[];
+  /** Enable structured console logging for each stage */
+  debug?: boolean;
+  /** Optional callback to log every LLM call (prompt/response/tokens/duration) */
+  llmLogger?: LLMCallLogger;
 }
 
 // ── Pipeline Context ──
@@ -59,6 +65,7 @@ export interface PipelineContext {
       frameCount: number;
       quality: QualityMetrics;
       content: SemanticContent;
+      durationMs?: number;
     }>;
   };
 }
@@ -123,10 +130,14 @@ export interface DispatchDecision {
  */
 export function defaultDispatch(
   ctx: PipelineContext,
-  registry: AgentRegistry
+  registry: AgentRegistry,
+  options?: PipelineOptions
 ): DispatchDecision {
+  const disabled = new Set(options?.disabledAgents ?? []);
   const agents = registry.getAll();
-  const applicable = agents.filter((a) => a.shouldRun(ctx));
+  const applicable = agents
+    .filter((a) => !disabled.has(a.name))
+    .filter((a) => a.shouldRun(ctx));
   const llmCount = applicable.filter((a) => a.usesLLM).length;
   const mode = ctx.meta.mode;
   return {
@@ -134,6 +145,35 @@ export function defaultDispatch(
     reason: mode === 'incremental'
       ? `Incremental mode — ${applicable.length} agents (${llmCount} LLM)`
       : `Full mode — ${applicable.length} agents (${llmCount} LLM)`,
+  };
+}
+
+// ── Provider Debug Wrapper ──
+
+/**
+ * Wraps an LLMProvider to call the logger on every generate() invocation.
+ * Lightweight — only used when llmLogger is provided.
+ */
+function wrapProviderWithLogger(
+  provider: LLMProvider,
+  logger: LLMCallLogger,
+  agentLabel: string
+): LLMProvider {
+  return {
+    id: provider.id,
+    generate: async (prompt, genOptions) => {
+      const start = Date.now();
+      const result = await provider.generate(prompt, genOptions);
+      logger({
+        agent: agentLabel,
+        prompt,
+        response: result.text,
+        usage: result.usage,
+        durationMs: Date.now() - start,
+      });
+      return result;
+    },
+    resolveConflict: provider.resolveConflict.bind(provider),
   };
 }
 
@@ -224,11 +264,11 @@ export interface PipelineResult {
 
 export class MeaningPipeline {
   private registry = new AgentRegistry();
-  private dispatch: (ctx: PipelineContext, reg: AgentRegistry) => DispatchDecision;
+  private dispatch: (ctx: PipelineContext, reg: AgentRegistry, options?: PipelineOptions) => DispatchDecision;
 
   constructor(
     private readonly provider: LLMProvider,
-    dispatchFn?: (ctx: PipelineContext, reg: AgentRegistry) => DispatchDecision
+    dispatchFn?: (ctx: PipelineContext, reg: AgentRegistry, options?: PipelineOptions) => DispatchDecision
   ) {
     this.dispatch = dispatchFn ?? defaultDispatch;
   }
@@ -286,7 +326,11 @@ export class MeaningPipeline {
     });
 
     // Dispatch — decide which agents to run
-    const decision = this.dispatch(ctx, this.registry);
+    const decision = this.dispatch(ctx, this.registry, options);
+
+    if (options?.debug) {
+      console.info(`[pipeline] Mode: ${ctx.meta.mode} | Agents: ${decision.agentsToRun.join(' → ')}`);
+    }
 
     // Run agents in order with validation gates
     let currentCtx = ctx;
@@ -299,7 +343,14 @@ export class MeaningPipeline {
       const preMetrics = computeMetrics(preAgentContent);
 
       try {
-        currentCtx = await agent.run(currentCtx, this.provider);
+        // Wrap provider with debug logging if llmLogger is provided
+        const agentProvider = options?.llmLogger
+          ? wrapProviderWithLogger(this.provider, options.llmLogger, agentName)
+          : this.provider;
+
+        const startTime = Date.now();
+        currentCtx = await agent.run(currentCtx, agentProvider);
+        const durationMs = Date.now() - startTime;
 
         // Validation gate: did this agent make things better or worse?
         const postMetrics = computeMetrics(currentCtx.content);
@@ -330,7 +381,22 @@ export class MeaningPipeline {
           frameCount: currentCtx.content.frames.length,
           quality: snapshotMetrics,
           content: JSON.parse(JSON.stringify(currentCtx.content)),
+          durationMs,
         });
+
+        // Structured debug log
+        if (options?.debug) {
+          const delta = snapshotMetrics.score - preMetrics.score;
+          const sign = delta >= 0 ? '+' : '';
+          const warn = delta < -3 ? ' ⚠' : '';
+          console.info(
+            `[pipeline] %-22s | frames: %d→%d | quality: %d→%d (%s%d)%s | %dms`,
+            agentName,
+            preAgentContent.frames.length, currentCtx.content.frames.length,
+            preMetrics.score, snapshotMetrics.score, sign, delta, warn,
+            durationMs
+          );
+        }
       } catch (err) {
         // Non-fatal — log error and continue with what we have
         currentCtx.meta.agentErrors.push({

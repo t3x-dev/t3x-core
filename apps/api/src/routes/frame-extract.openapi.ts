@@ -9,7 +9,7 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { buildDraft, createMeaningPipeline, type FrameExtractionTurn, FrameExtractor, fuzzyLocate, type SlotQuotesMap } from '@t3x-dev/core';
+import { buildDraft, createMeaningPipeline, type FrameExtractionTurn, FrameExtractor, fuzzyLocate, type LLMCallLogger, type SlotQuotesMap } from '@t3x-dev/core';
 import {
   findConversationById,
   findTurnsByConversation,
@@ -241,6 +241,15 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
     }
 
     // 6c. Run Meaning Pipeline — multi-agent post-processing
+    const debugPipeline = process.env.PIPELINE_DEBUG === 'true';
+    const llmLogger: LLMCallLogger | undefined = debugPipeline
+      ? (log) => {
+          console.info(`[llm:${log.agent}] tokens: in=${log.usage.inputTokens} out=${log.usage.outputTokens} | ${log.durationMs}ms`);
+          console.debug(`[llm:${log.agent}] prompt: ${log.prompt.slice(0, 200)}...`);
+          console.debug(`[llm:${log.agent}] response: ${log.response.slice(0, 300)}...`);
+        }
+      : undefined;
+
     let organizedSnapshot = result.snapshot;
     try {
       const pipelineReg = await getProviderRegistry();
@@ -251,7 +260,11 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
         result.snapshot,
         extractionTurns,
         isIncremental ? currentSnapshot : undefined,
-        { mode: isIncremental ? 'incremental' : 'full' }
+        {
+          mode: isIncremental ? 'incremental' : 'full',
+          debug: debugPipeline,
+          llmLogger,
+        }
       );
       });
       organizedSnapshot = pipelineResult.content;

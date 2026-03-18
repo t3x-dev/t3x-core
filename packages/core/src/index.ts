@@ -255,6 +255,8 @@ export {
 export {
   type Capability,
   createProviderForModel,
+  type LLMCallLog,
+  type LLMCallLogger,
   type LLMGenerateOptions,
   type LLMGenerateOptionsV2,
   type LLMPrompt,
