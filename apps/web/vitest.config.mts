@@ -21,6 +21,12 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json', 'html'],
+      include: ['src/**/*.ts', 'src/**/*.tsx'],
+      exclude: ['src/__tests__/**', 'src/**/*.test.ts', 'src/**/*.test.tsx'],
+    },
     // Tests are stateless — no need for per-file process isolation
     isolate: false,
     // Longer timeout for database operations
