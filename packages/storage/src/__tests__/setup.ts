@@ -116,31 +116,6 @@ CREATE TABLE IF NOT EXISTS segment_embeddings (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Commits V4 (pure knowledge - no constraints)
-CREATE TABLE IF NOT EXISTS commits_v4 (
-  -- First class (in hash)
-  hash TEXT PRIMARY KEY,
-  schema TEXT NOT NULL DEFAULT 't3x/commit/v4',
-  parents JSONB NOT NULL DEFAULT '[]',
-  author JSONB NOT NULL,
-  committed_at TIMESTAMPTZ NOT NULL,
-  content JSONB NOT NULL,
-
-  -- Second class (not in hash)
-  project_id TEXT REFERENCES projects(project_id) ON DELETE CASCADE,
-  message TEXT,
-  branch TEXT,
-  source_refs JSONB,
-  merkle_root TEXT,
-  merge_summary JSONB,
-  semantic JSONB,
-  position_x REAL,
-  position_y REAL,
-
-  -- Timestamps
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
 -- Leaves (application layer - owns constraints, output, validation)
 CREATE TABLE IF NOT EXISTS leaves (
   id TEXT PRIMARY KEY,
@@ -186,9 +161,6 @@ CREATE INDEX IF NOT EXISTS idx_agent_drafts_project ON agent_drafts(project_id);
 CREATE INDEX IF NOT EXISTS idx_agent_drafts_base_commit ON agent_drafts(base_commit_hash);
 CREATE INDEX IF NOT EXISTS idx_segment_embeddings_turn ON segment_embeddings(turn_hash);
 CREATE INDEX IF NOT EXISTS idx_segment_embeddings_model ON segment_embeddings(embedding_model);
-CREATE INDEX IF NOT EXISTS idx_commits_v4_project ON commits_v4(project_id);
-CREATE INDEX IF NOT EXISTS idx_commits_v4_branch ON commits_v4(branch);
-CREATE INDEX IF NOT EXISTS idx_commits_v4_created_at ON commits_v4(created_at);
 CREATE INDEX IF NOT EXISTS idx_leaves_commit ON leaves(commit_hash);
 CREATE INDEX IF NOT EXISTS idx_leaves_project ON leaves(project_id);
 CREATE INDEX IF NOT EXISTS idx_leaves_type ON leaves(type);

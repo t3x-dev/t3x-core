@@ -236,8 +236,8 @@ export async function listSentenceCommits(
   limit = 50,
   _offset = 0
 ): Promise<SentenceCommit[]> {
-  const v5List = await listCommits(projectId, branch, limit);
-  return v5List.map(toSentenceCommit);
+  const commitList = await listCommits(projectId, branch, limit);
+  return commitList.map(toSentenceCommit);
 }
 
 /**

@@ -23,7 +23,7 @@ const EXAMPLE_QUERIES = [
   },
   {
     label: 'Commits',
-    sql: 'SELECT hash, branch, message, created_at FROM commits_v4 ORDER BY created_at DESC LIMIT 10',
+    sql: 'SELECT hash, branch, message, created_at FROM commits ORDER BY created_at DESC LIMIT 10',
   },
   { label: 'Conversations', sql: 'SELECT * FROM conversations ORDER BY created_at DESC LIMIT 10' },
   {
