@@ -48,7 +48,7 @@ export interface LeafPanelSlice {
 
 // Node CRUD slice interface
 export interface NodeSlice {
-  loadProjectData: (projectId: string) => Promise<void>;
+  loadProjectData: (projectId: string, options?: { merge?: boolean }) => Promise<void>;
   refreshLeaves: (projectId: string) => Promise<void>;
   clearCanvas: () => void;
   addNode: (kind: NodeKind, position?: { x: number; y: number }) => Promise<void>;

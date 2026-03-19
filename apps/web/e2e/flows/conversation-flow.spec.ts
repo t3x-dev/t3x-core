@@ -55,8 +55,8 @@ test.describe('Conversation Flow', () => {
     await conv.expectTurnContent(assistantContent);
 
     // Role badges should be present
-    await expect(page.locator('text=USER').first()).toBeVisible({ timeout: 5000 });
-    await expect(page.locator('text=ASSISTANT').first()).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('text=User').first()).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('text=Assistant').first()).toBeVisible({ timeout: 5000 });
   });
 
   // CF-02: Turn highlighting via URL params

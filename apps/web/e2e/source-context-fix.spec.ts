@@ -130,14 +130,14 @@ test.describe('Source Context Fix Verification', () => {
 
     expect(commitRes.ok()).toBe(true);
     const commitData = await commitRes.json();
-    const commitHash = commitData.data.hash;
+    const commitHash = commitData.data.commit.hash;
 
     // Fetch the commit and verify source_ref
     const getRes = await request.get(`http://localhost:8000/api/v1/commits/${commitHash}`);
     expect(getRes.ok()).toBe(true);
     const getData = await getRes.json();
 
-    const frames = getData.data.content.frames;
+    const frames = getData.data.commit.content.frames;
     expect(frames).toHaveLength(2);
 
     // Verify frame 1

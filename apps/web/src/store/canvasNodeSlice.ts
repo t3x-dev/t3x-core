@@ -15,14 +15,19 @@ import {
 } from './canvasStoreUtils';
 
 export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (set, get) => ({
-  loadProjectData: async (projectId: string) => {
+  loadProjectData: async (projectId: string, options?: { merge?: boolean }) => {
     // Skip if already loading the same project
     const state = get();
     if (state.projectId === projectId && state.loading) {
       return;
     }
 
-    set({ loading: true, loadError: null, projectId });
+    // For merge mode (polling), don't show loading state
+    if (!options?.merge) {
+      set({ loading: true, loadError: null, projectId });
+    } else {
+      set({ projectId });
+    }
 
     try {
       // Fetch conversations, sentence commits, and leaves in parallel
@@ -156,46 +161,34 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
         sentenceCommitMap.set(v4.hash, v4);
       });
 
-      // Build a map: conversation_id -> commit (for pairing into units)
-      const convToCommitMap = new Map<string, api.Commit>();
+      // Build maps for conversation → commits (one conversation can have multiple commits)
+      const convToCommitsMap = new Map<string, api.Commit[]>();
+      const commitsWithConv = new Set<string>();
       commits.forEach((commit) => {
         const convId = commitSourceConvMap.get(commit.commit_hash);
         if (convId) {
-          // Use the latest commit for each conversation
-          const existing = convToCommitMap.get(convId);
-          if (!existing || new Date(commit.created_at) > new Date(existing.created_at)) {
-            convToCommitMap.set(convId, commit);
-          }
+          commitsWithConv.add(commit.commit_hash);
+          const list = convToCommitsMap.get(convId) || [];
+          list.push(commit);
+          convToCommitsMap.set(convId, list);
         }
       });
 
-      // Create unit nodes from conversations (paired with commits if available)
-      // Units from conversations with commits (committed units)
+      // Create unit nodes:
+      // 1. Each commit becomes its own node (so parent→child edges can connect them)
+      // 2. Conversations without commits become staging nodes
       const commitedUnitNodes: Node<CanvasNodeData>[] = [];
-      // Units from conversations without commits (staging units)
       const stagingUnitNodes: Node<CanvasNodeData>[] = [];
 
       let nodeIndex = 0;
-      conversations.forEach((conv) => {
-        const commit = convToCommitMap.get(conv.conversation_id);
-        const originalCommit = commit ? sentenceCommitMap.get(commit.commit_hash) : undefined;
-        const node = unitToNode(conv, commit || null, nodeIndex++, originalCommit);
-        const existingPos = existingNodePositions.get(node.id);
-        if (existingPos) {
-          node.position = existingPos;
-        }
-        if (commit) {
-          commitedUnitNodes.push(node);
-        } else {
-          stagingUnitNodes.push(node);
-        }
-      });
 
-      // Orphan commits (not linked to any conversation) - create standalone units
-      const orphanCommits = commits.filter((c) => !commitSourceConvMap.has(c.commit_hash));
-      orphanCommits.forEach((commit) => {
-        // Create a minimal "virtual" conversation for the orphan commit
-        const virtualConv: api.Conversation = {
+      // Create a node for each committed unit (each commit is a separate node)
+      commits.forEach((commit) => {
+        const convId = commitSourceConvMap.get(commit.commit_hash);
+        const conv = convId ? conversations.find((c) => c.conversation_id === convId) : undefined;
+
+        // Use conversation if found, otherwise create virtual one
+        const displayConv: api.Conversation = conv || {
           conversation_id: `orphan-${commit.commit_hash.slice(0, 12)}`,
           project_id: projectId,
           title:
@@ -207,13 +200,27 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
           position_y: undefined,
           created_at: commit.created_at,
         };
+
         const originalCommit = sentenceCommitMap.get(commit.commit_hash);
-        const node = unitToNode(virtualConv, commit, nodeIndex++, originalCommit);
+        const node = unitToNode(displayConv, commit, nodeIndex++, originalCommit);
         const existingPos = existingNodePositions.get(node.id);
         if (existingPos) {
           node.position = existingPos;
         }
         commitedUnitNodes.push(node);
+      });
+
+      // Create staging nodes for conversations that have NO commits at all
+      const convsWithCommits = new Set(Array.from(convToCommitsMap.keys()));
+      conversations.forEach((conv) => {
+        if (!convsWithCommits.has(conv.conversation_id)) {
+          const node = unitToNode(conv, null, nodeIndex++);
+          const existingPos = existingNodePositions.get(node.id);
+          if (existingPos) {
+            node.position = existingPos;
+          }
+          stagingUnitNodes.push(node);
+        }
       });
 
       const nodes = [...commitedUnitNodes, ...stagingUnitNodes];
@@ -375,14 +382,35 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
       const hasMainCommit = commits.some((c) => c.branch === 'main');
       const latestMainCommitId = resolveLatestMainUnitId(nodes);
 
-      set({
-        nodes,
-        edges,
-        hasMainCommit,
-        latestMainCommitId,
-        loading: false,
-        loadError: null,
-      });
+      if (options?.merge) {
+        // Incremental merge: add new nodes/edges, preserve existing positions and edges
+        const existing = get();
+        const existingNodeIds = new Set(existing.nodes.map((n) => n.id));
+        const existingEdgeIds = new Set(existing.edges.map((e) => e.id));
+
+        // Add only new nodes (preserve existing ones with their positions)
+        const newNodes = nodes.filter((n) => !existingNodeIds.has(n.id));
+        // Add only new edges (never remove existing edges)
+        const newEdges = edges.filter((e) => !existingEdgeIds.has(e.id));
+
+        if (newNodes.length > 0 || newEdges.length > 0) {
+          set({
+            nodes: [...existing.nodes, ...newNodes],
+            edges: [...existing.edges, ...newEdges],
+            hasMainCommit,
+            latestMainCommitId,
+          });
+        }
+      } else {
+        set({
+          nodes,
+          edges,
+          hasMainCommit,
+          latestMainCommitId,
+          loading: false,
+          loadError: null,
+        });
+      }
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       set({
