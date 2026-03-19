@@ -8,7 +8,7 @@ import {
   validateConstraintsSimple,
 } from '../../leaf/multi-round-generate';
 import type { LLMProvider } from '../../llm/types';
-import type { SentenceCommit, Leaf } from '../../types/v4';
+import type { Leaf, SentenceCommit } from '../../types/v4';
 
 function makeMockLLM(responses: string[]): LLMProvider {
   let callIndex = 0;

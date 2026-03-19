@@ -1,12 +1,12 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { SentenceCommit, Constraint, Leaf } from '@/lib/api';
+import type { Constraint, Leaf, SentenceCommit } from '@/lib/api';
 import {
   ApiError,
   generateLeafOutput,
-  getSentenceCommit,
   getLeaf,
+  getSentenceCommit,
   updateLeaf,
   validateLeafOutput,
 } from '@/lib/api';

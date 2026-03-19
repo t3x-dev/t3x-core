@@ -3,7 +3,7 @@
  * Used by PinDropdownSelector to display branch-scoped commit browsing.
  */
 
-import type { SentenceCommit, Leaf } from '@/lib/api';
+import type { Leaf, SentenceCommit } from '@/lib/api';
 import * as api from '@/lib/api';
 import { useQuery } from './useQuery';
 

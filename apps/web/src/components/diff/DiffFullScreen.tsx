@@ -14,7 +14,7 @@ import { Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { useTerminology } from '@/hooks/useTerminology';
-import type { SentenceCommit, DiffResultRaw } from '@/lib/api';
+import type { DiffResultRaw, SentenceCommit } from '@/lib/api';
 import { getSentenceCommit } from '@/lib/api';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';

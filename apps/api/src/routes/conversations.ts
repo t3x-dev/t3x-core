@@ -14,10 +14,10 @@
 
 import {
   buildConversationContext,
-  type SentenceCommit,
   type ConversationData,
   framesToTextSegments,
   getModelInfo,
+  type SentenceCommit,
 } from '@t3x-dev/core';
 import {
   deleteConversation,

@@ -551,7 +551,6 @@ export const leafOutputEdits = pgTable(
 // Type Exports (for use in queries)
 // ═══════════════════════════════════════════════════════════════════════════
 
-
 export type LeafRecord = typeof leaves.$inferSelect;
 export type LeafInsert = typeof leaves.$inferInsert;
 
@@ -853,7 +852,6 @@ export const drafts = pgTable(
 
 export type DraftRecord = typeof drafts.$inferSelect;
 export type DraftInsert = typeof drafts.$inferInsert;
-
 
 // ═══════════════════════════════════════════════════════════════════════════
 // sentence_vectors: pgvector-powered sentence similarity search

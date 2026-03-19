@@ -105,7 +105,10 @@ export function AddToDraftButton({
       draft.sentences.length
     );
     const updatedSentences = [...draft.sentences, sentence];
-    await updateWorkbenchDraft(draft.id, { sentences: updatedSentences, if_revision: draft.revision });
+    await updateWorkbenchDraft(draft.id, {
+      sentences: updatedSentences,
+      if_revision: draft.revision,
+    });
 
     toast.success(`Added to "${draft.title}"`, {
       action: {

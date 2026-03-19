@@ -13,13 +13,13 @@ export {
   computeJCSHash,
   computeTextHash,
   computeTurnHash,
+  generateAgentDraftId,
   // V4 ID generation
   generateAssertionId,
   // V3 ID generation
   generateBranchId,
   generateConstraintId,
   generateConversationId,
-  generateAgentDraftId,
   generateDraftConstraintId,
   generateDraftId,
   generateDraftSentenceId,

@@ -13,13 +13,13 @@ import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import type { Commit } from '@t3x-dev/core';
 import {
   AllProvidersFailedError,
-  type SentenceCommit,
   collectLessons,
   framesToTextSegments,
   GenerationError,
   type GenerationMode,
   isGenerationConfigured,
   modeGenerate,
+  type SentenceCommit,
   validateConstraints,
   validateConstraintsExactOnly,
 } from '@t3x-dev/core';

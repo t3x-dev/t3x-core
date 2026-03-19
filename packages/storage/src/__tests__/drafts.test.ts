@@ -8,7 +8,6 @@
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
-import { insertConversation } from '../queries/conversations';
 import {
   adoptAgentDraft,
   deleteAgentDraft,
@@ -20,6 +19,7 @@ import {
   updateAgentDraft,
   updateAgentDraftStatus,
 } from '../queries/agent-drafts';
+import { insertConversation } from '../queries/conversations';
 import { insertProject } from '../queries/projects';
 import { agentDrafts as drafts } from '../schema';
 import { createTestDB, testData } from './setup';

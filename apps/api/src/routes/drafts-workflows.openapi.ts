@@ -698,12 +698,7 @@ draftsWorkflowRoutes.openapi(extractDraftRoute, async (c) => {
     // 4. Append extracted sentences to draft
     const updatedSentences = [...draft.sentences, ...result.sentences];
 
-    const updatedDraft = await updateDraft(
-      db,
-      id,
-      { sentences: updatedSentences },
-      draft.revision
-    );
+    const updatedDraft = await updateDraft(db, id, { sentences: updatedSentences }, draft.revision);
 
     return c.json(
       {

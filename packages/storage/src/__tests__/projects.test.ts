@@ -7,10 +7,10 @@
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
+import { insertAgentDraft } from '../queries/agent-drafts';
 import { insertBranch } from '../queries/branches';
 import { createCommit } from '../queries/commits';
 import { insertConversation } from '../queries/conversations';
-import { insertAgentDraft } from '../queries/agent-drafts';
 import {
   deleteProject,
   findProjectById,

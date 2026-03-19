@@ -13,7 +13,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { type WorkbenchDraft, deleteWorkbenchDraft, getWorkbenchDraft, promoteDraft } from '@/lib/api';
+import {
+  deleteWorkbenchDraft,
+  getWorkbenchDraft,
+  promoteDraft,
+  type WorkbenchDraft,
+} from '@/lib/api';
 
 interface PromotePreviewDialogProps {
   open: boolean;

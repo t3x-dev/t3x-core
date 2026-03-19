@@ -24,7 +24,14 @@ export interface SlotRecord {
 }
 
 /** Slot value types: primitives, refs, inline frames, plain objects, and arrays */
-export type SlotValue = string | number | boolean | SlotRef | InlineFrame | SlotRecord | SlotValue[];
+export type SlotValue =
+  | string
+  | number
+  | boolean
+  | SlotRef
+  | InlineFrame
+  | SlotRecord
+  | SlotValue[];
 
 // ── Source Reference (per-slot traceability) ──
 

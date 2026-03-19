@@ -46,12 +46,7 @@ import type {
 } from '@t3x-dev/core';
 
 // Re-export contract types for convenience
-export type {
-  CommitAuthor,
-  CommitSourceRef,
-  Sentence,
-  SentenceSourceRef,
-};
+export type { CommitAuthor, CommitSourceRef, Sentence, SentenceSourceRef };
 
 /**
  * Commit display data for canvas nodes.
@@ -73,7 +68,6 @@ export type CommitDisplay = Pick<
   | 'merge_summary'
   | 'semantic'
 >;
-
 
 // ============================================
 // Embedded Leaf (inside UnitNode)

@@ -110,14 +110,16 @@ describe('applyDelta', () => {
       relations: [],
     };
     const delta: Delta = {
-      changes: [{ action: 'add', frame: { id: 'f_001', type: 'x_updated', slots: { a: 99, c: 3 } } }],
+      changes: [
+        { action: 'add', frame: { id: 'f_001', type: 'x_updated', slots: { a: 99, c: 3 } } },
+      ],
     };
     const result = applyDelta(snapshot, delta);
     expect(result.frames).toHaveLength(1); // No duplicate
     expect(result.frames[0].type).toBe('x_updated');
     expect(result.frames[0].slots.a).toBe(99); // Overwritten
-    expect(result.frames[0].slots.b).toBe(2);  // Preserved from original
-    expect(result.frames[0].slots.c).toBe(3);  // New slot added
+    expect(result.frames[0].slots.b).toBe(2); // Preserved from original
+    expect(result.frames[0].slots.c).toBe(3); // New slot added
   });
 
   it('is immutable — does not modify input', () => {

@@ -13,7 +13,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { useTerminology } from '@/hooks/useTerminology';
-import type { SentenceCommit, DiffResultRaw } from '@/lib/api';
+import type { DiffResultRaw, SentenceCommit } from '@/lib/api';
 import * as api from '@/lib/api';
 import { cn } from '@/lib/utils';
 

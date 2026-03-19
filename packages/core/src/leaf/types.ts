@@ -14,7 +14,14 @@
 
 import type { LLMProvider } from '../llm/types';
 import type { EmbeddingProvider } from '../providers/embedding/base';
-import type { AnyLeafType, Assertion, SentenceCommit, Constraint, Leaf, LeafType } from '../types/v4';
+import type {
+  AnyLeafType,
+  Assertion,
+  Constraint,
+  Leaf,
+  LeafType,
+  SentenceCommit,
+} from '../types/v4';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Generation Types (GEN-* uses)

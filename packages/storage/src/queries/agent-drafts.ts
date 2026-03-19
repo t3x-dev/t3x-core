@@ -82,7 +82,10 @@ export async function findAgentDraftById(db: AnyDB, draftId: string): Promise<Dr
 /**
  * Find drafts by project
  */
-export async function findAgentDraftsByProject(db: AnyDB, options: ListAgentDraftsOptions): Promise<Draft[]> {
+export async function findAgentDraftsByProject(
+  db: AnyDB,
+  options: ListAgentDraftsOptions
+): Promise<Draft[]> {
   const limit = options.limit ?? 100;
   const offset = options.offset ?? 0;
 

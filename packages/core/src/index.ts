@@ -95,6 +95,7 @@ export {
   type AdaptiveConfig,
   type AdaptiveFeedbackStats,
   type AdaptiveThresholds,
+  AgentRegistry,
   // Anchor types
   type AnchorCandidate,
   type AnchorSource,
@@ -137,12 +138,11 @@ export {
   type PipelineMode,
   type PipelineOptions,
   type PipelineResult,
-  type QualityMetrics,
-  AgentRegistry,
   parseExtractionResponse,
   parseFrameDelta,
   parseIncrementalResponse,
   parseRelationResponse,
+  type QualityMetrics,
   RelationExtractor,
   type RelationItem,
   RelationParseError,
@@ -405,6 +405,7 @@ export {
   checkRelationSanity,
   DeltaSchema,
   evaluateRule,
+  executeFrameMerge,
   FRAME_RELATION_TYPES,
   FrameRelationTypeSchema,
   FrameSchema,
@@ -418,7 +419,6 @@ export {
   parseCoverageResponse,
   parseGatesConfig,
   parseSemanticGateResponse,
-  executeFrameMerge,
   prepareFrameMerge,
   RelationSchema,
   SemanticContentSchema,
@@ -449,22 +449,19 @@ export {
   type BuiltContext,
   type CommitAuthor,
   type CommitSourceRef,
-  // SentenceCommit (pure knowledge, no constraints)
-  type SentenceCommit,
-  type SentenceCommitContent,
   // Constraint (now belongs to Leaf)
   type Constraint,
   type ConstraintSourceFrame,
   type ContextSource,
   // Conversation Context
   type ConversationContext,
-  // Input types
-  type CreateSentenceCommitInput,
   // Draft (Workbench)
   type CreateDraftInput,
   type CreateLeafHistoryInput,
   type CreateLeafInput,
   type CreatePinInput,
+  // Input types
+  type CreateSentenceCommitInput,
   DEPLOY_TYPES,
   type DeployType,
   type Draft,
@@ -504,6 +501,9 @@ export {
   type SemanticPoint,
   // Sentence
   type Sentence,
+  // SentenceCommit (pure knowledge, no constraints)
+  type SentenceCommit,
+  type SentenceCommitContent,
   type SentenceRelation,
   type SentenceSourceRef,
   type SentenceWithEvidence,

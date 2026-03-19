@@ -11,7 +11,7 @@ import {
   formatConstraints,
   getTypeInstructions,
 } from '../../leaf/build-prompt';
-import type { SentenceCommit, Constraint, Leaf } from '../../types/v4';
+import type { Constraint, Leaf, SentenceCommit } from '../../types/v4';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Test Fixtures

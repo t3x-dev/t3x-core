@@ -257,7 +257,9 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
     const debugPipeline = process.env.PIPELINE_DEBUG === 'true';
     const llmLogger: LLMCallLogger | undefined = debugPipeline
       ? (log) => {
-          console.info(`[llm:${log.agent}] tokens: in=${log.usage.inputTokens} out=${log.usage.outputTokens} | ${log.durationMs}ms`);
+          console.info(
+            `[llm:${log.agent}] tokens: in=${log.usage.inputTokens} out=${log.usage.outputTokens} | ${log.durationMs}ms`
+          );
           console.debug(`[llm:${log.agent}] prompt: ${log.prompt.slice(0, 200)}...`);
           console.debug(`[llm:${log.agent}] response: ${log.response.slice(0, 300)}...`);
         }
@@ -279,9 +281,9 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
               mode: isIncremental ? 'incremental' : 'full',
               debug: debugPipeline,
               llmLogger,
-            },
+            }
           );
-        },
+        }
       );
       organizedSnapshot = pipelineResult.content;
 

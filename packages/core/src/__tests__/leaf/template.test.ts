@@ -21,7 +21,7 @@ import {
   getDefaultTemplate,
 } from '../../leaf/templates';
 import type { LeafTemplate, TemplateContext } from '../../leaf/types';
-import type { SentenceCommit, Constraint, Leaf } from '../../types/v4';
+import type { Constraint, Leaf, SentenceCommit } from '../../types/v4';
 import { LEAF_TYPES } from '../../types/v4';
 
 // ═══════════════════════════════════════════════════════════════════════════

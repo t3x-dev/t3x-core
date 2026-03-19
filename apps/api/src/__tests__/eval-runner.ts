@@ -28,24 +28,27 @@ if (fs.existsSync(rootEnvPath)) {
     const eqIdx = trimmed.indexOf('=');
     if (eqIdx === -1) continue;
     const key = trimmed.slice(0, eqIdx).trim();
-    const val = trimmed.slice(eqIdx + 1).trim().replace(/^["']|["']$/g, '');
+    const val = trimmed
+      .slice(eqIdx + 1)
+      .trim()
+      .replace(/^["']|["']$/g, '');
     if (!process.env[key]) process.env[key] = val;
   }
 }
+
+import { buildDraft, type Frame, type Relation, type SemanticContent } from '@t3x-dev/core';
 import {
+  findTurnsByConversation,
   insertConversation,
   insertProject,
   insertTurn,
-  findTurnsByConversation,
   listDeltaLogByConversation,
 } from '@t3x-dev/storage';
-import { buildDraft, type SemanticContent, type Frame, type Relation } from '@t3x-dev/core';
 import { Hono } from 'hono';
-
+import { closeDB, getDB } from '../lib/db';
+import { toDeltaLogEntries } from '../lib/delta-log-utils';
 // Import the actual route (uses real DB + real LLM via provider-registry)
 import { frameExtractRoutes } from '../routes/frame-extract.openapi';
-import { toDeltaLogEntries } from '../lib/delta-log-utils';
-import { getDB, closeDB } from '../lib/db';
 
 // ============================================================
 // Output Directory
@@ -92,12 +95,12 @@ const SCENARIOS: Scenario[] = [
       {
         role: 'assistant',
         content:
-          "A modern minimalist kitchen with a $15k budget is very doable. White shaker cabinets with quartz countertops are a popular combo. For under-cabinet lighting, LED strips are both affordable and energy-efficient. Would you like me to break down the estimated costs?",
+          'A modern minimalist kitchen with a $15k budget is very doable. White shaker cabinets with quartz countertops are a popular combo. For under-cabinet lighting, LED strips are both affordable and energy-efficient. Would you like me to break down the estimated costs?',
       },
       {
         role: 'user',
         content:
-          "Yes please. Oh, I should mention — the kitchen is about 120 square feet. And we need to keep the current layout because moving plumbing would be too expensive.",
+          'Yes please. Oh, I should mention — the kitchen is about 120 square feet. And we need to keep the current layout because moving plumbing would be too expensive.',
       },
       {
         role: 'assistant',
@@ -112,12 +115,12 @@ const SCENARIOS: Scenario[] = [
       {
         role: 'assistant',
         content:
-          "Great news on the expanded budget! Farmhouse style is charming. With $25k you can get high-quality cream shaker cabinets, butcher block counters (maple or walnut), a beautiful apron-front fireclay sink, and maybe even open shelving with reclaimed wood. Want me to revise the breakdown?",
+          'Great news on the expanded budget! Farmhouse style is charming. With $25k you can get high-quality cream shaker cabinets, butcher block counters (maple or walnut), a beautiful apron-front fireclay sink, and maybe even open shelving with reclaimed wood. Want me to revise the breakdown?',
       },
       {
         role: 'user',
         content:
-          "Yes, and I definitely want the walnut butcher block, not maple. Also, we need a new dishwasher — ours is 15 years old. Looking at Bosch or KitchenAid. And please factor in a tile backsplash, something with a subway tile pattern.",
+          'Yes, and I definitely want the walnut butcher block, not maple. Also, we need a new dishwasher — ours is 15 years old. Looking at Bosch or KitchenAid. And please factor in a tile backsplash, something with a subway tile pattern.',
       },
       {
         role: 'assistant',
@@ -199,7 +202,7 @@ const SCENARIOS: Scenario[] = [
       {
         role: 'user',
         content:
-          "I want to plan a trip to Portugal for two weeks in September. Thinking Lisbon for 5 days, then Porto for 4 days, and maybe the Algarve coast for the rest. Budget about $3,500 not including flights.",
+          'I want to plan a trip to Portugal for two weeks in September. Thinking Lisbon for 5 days, then Porto for 4 days, and maybe the Algarve coast for the rest. Budget about $3,500 not including flights.',
       },
       {
         role: 'assistant',
@@ -229,7 +232,7 @@ const SCENARIOS: Scenario[] = [
       {
         role: 'user',
         content:
-          "We use Grafana for monitoring and I can pull the adoption data from our internal analytics DB. The three regions are US-East, EU-West, and APAC. I think US-East had the best improvement — something like 40% latency reduction. Anyway, I need to focus on that today, but let me finish the Portugal planning real quick.",
+          'We use Grafana for monitoring and I can pull the adoption data from our internal analytics DB. The three regions are US-East, EU-West, and APAC. I think US-East had the best improvement — something like 40% latency reduction. Anyway, I need to focus on that today, but let me finish the Portugal planning real quick.',
       },
       {
         role: 'assistant',
@@ -239,7 +242,7 @@ const SCENARIOS: Scenario[] = [
       {
         role: 'user',
         content:
-          "Mostly go with the flow, but I do want to make sure we hit the main spots: Belém Tower and Jerónimos Monastery in Lisbon, wine tasting in Porto, and at least one day of beach hopping in the Algarve. Oh and we want to take the train between cities, not rent a car.",
+          'Mostly go with the flow, but I do want to make sure we hit the main spots: Belém Tower and Jerónimos Monastery in Lisbon, wine tasting in Porto, and at least one day of beach hopping in the Algarve. Oh and we want to take the train between cities, not rent a car.',
       },
       {
         role: 'assistant',
@@ -266,38 +269,38 @@ const SCENARIOS: Scenario[] = [
       {
         role: 'assistant',
         content:
-          "For a 60 sq ft bathroom with $8k, you have good options. A new vanity ($500-1500), toilet ($200-600), and shower tiling ($1500-3000) are all within range. What style are you going for?",
+          'For a 60 sq ft bathroom with $8k, you have good options. A new vanity ($500-1500), toilet ($200-600), and shower tiling ($1500-3000) are all within range. What style are you going for?',
       },
       {
         role: 'user',
         content:
-          "Clean and modern. White subway tiles in the shower, a floating vanity with a vessel sink, and a wall-mounted toilet to save space. I also want a large mirror with built-in LED lighting.",
+          'Clean and modern. White subway tiles in the shower, a floating vanity with a vessel sink, and a wall-mounted toilet to save space. I also want a large mirror with built-in LED lighting.',
       },
       {
         role: 'assistant',
         content:
-          "Great choices for a small space — wall-mounted fixtures really open things up. White subway tiles are timeless. For the floating vanity, 30-36 inches wide would work well for 60 sq ft. LED mirror is a nice touch. Are you doing the work yourself or hiring a contractor?",
+          'Great choices for a small space — wall-mounted fixtures really open things up. White subway tiles are timeless. For the floating vanity, 30-36 inches wide would work well for 60 sq ft. LED mirror is a nice touch. Are you doing the work yourself or hiring a contractor?',
       },
       // --- splitAt: 4 --- First extraction happens here ---
       {
         role: 'user',
         content:
-          "Hiring a contractor. My neighbor recommended someone who charges $50/hour. Also, I want to add heated floors — is that feasible with the budget?",
+          'Hiring a contractor. My neighbor recommended someone who charges $50/hour. Also, I want to add heated floors — is that feasible with the budget?',
       },
       {
         role: 'assistant',
         content:
-          "Electric radiant floor heating for 60 sq ft is around $400-600 for materials, plus installation. With your $8k budget you should still be fine. At $50/hour your contractor rate is reasonable. How soon do you want to start?",
+          'Electric radiant floor heating for 60 sq ft is around $400-600 for materials, plus installation. With your $8k budget you should still be fine. At $50/hour your contractor rate is reasonable. How soon do you want to start?',
       },
       {
         role: 'user',
         content:
-          "Hoping to start in about 3 weeks. Oh, and I forgot — I want a rain showerhead, the large 12-inch kind. Chrome finish to match the other fixtures. Everything should be chrome.",
+          'Hoping to start in about 3 weeks. Oh, and I forgot — I want a rain showerhead, the large 12-inch kind. Chrome finish to match the other fixtures. Everything should be chrome.',
       },
       {
         role: 'assistant',
         content:
-          "Chrome fixtures throughout will give it a cohesive look. A 12-inch rain showerhead in chrome runs about $80-200 for a good one. Three weeks should be enough time to order everything. Want me to put together a full materials list?",
+          'Chrome fixtures throughout will give it a cohesive look. A 12-inch rain showerhead in chrome runs about $80-200 for a good one. Three weeks should be enough time to order everything. Want me to put together a full materials list?',
       },
     ],
   },
@@ -310,7 +313,9 @@ const SCENARIOS: Scenario[] = [
 function formatFrameToMarkdown(frame: Frame, indent = 0): string {
   const pad = '  '.repeat(indent);
   const lines: string[] = [];
-  lines.push(`${pad}- **${frame.type}** (id: \`${frame.id}\`, confidence: ${frame.confidence ?? 'N/A'})`);
+  lines.push(
+    `${pad}- **${frame.type}** (id: \`${frame.id}\`, confidence: ${frame.confidence ?? 'N/A'})`
+  );
   if (frame.source) {
     lines.push(`${pad}  - Source: ${frame.source}`);
   }
@@ -321,7 +326,9 @@ function formatFrameToMarkdown(frame: Frame, indent = 0): string {
   if (frame.slot_sources) {
     lines.push(`${pad}  - **Slot Sources:**`);
     for (const [key, src] of Object.entries(frame.slot_sources)) {
-      lines.push(`${pad}    - \`${key}\` → Turn ${src.turn} [${src.start_char}:${src.end_char}] "${src.quote ?? ''}"`);
+      lines.push(
+        `${pad}    - \`${key}\` → Turn ${src.turn} [${src.start_char}:${src.end_char}] "${src.quote ?? ''}"`
+      );
     }
   }
   return lines.join('\n');
@@ -343,7 +350,9 @@ function formatSnapshotToMarkdown(snapshot: SemanticContent): string {
     lines.push('_No relations._\n');
   } else {
     for (const rel of snapshot.relations) {
-      lines.push(`- \`${rel.from}\` → \`${rel.to}\` (${rel.type}, confidence: ${rel.confidence ?? 'N/A'})`);
+      lines.push(
+        `- \`${rel.from}\` → \`${rel.to}\` (${rel.type}, confidence: ${rel.confidence ?? 'N/A'})`
+      );
     }
     lines.push('');
   }
@@ -393,13 +402,17 @@ function generateScenarioMarkdown(
       lines.push('Compare first and second extraction results:\n');
       lines.push(`- First extraction frames: ${snapshot.frames.length}`);
       lines.push(`- Second extraction frames: ${secondSnapshot.frames.length}`);
-      lines.push(`- Frames added in second extraction: ${Math.max(0, secondSnapshot.frames.length - snapshot.frames.length)}`);
+      lines.push(
+        `- Frames added in second extraction: ${Math.max(0, secondSnapshot.frames.length - snapshot.frames.length)}`
+      );
       lines.push('');
     }
   } else {
     lines.push('## Extraction Result\n');
     lines.push(`_Extraction time: ${durationMs}ms_\n`);
-    lines.push(`_Delta changes: ${delta.changes.length}, New relations: ${(delta.new_relations as unknown[])?.length ?? 0}_\n`);
+    lines.push(
+      `_Delta changes: ${delta.changes.length}, New relations: ${(delta.new_relations as unknown[])?.length ?? 0}_\n`
+    );
     lines.push(formatSnapshotToMarkdown(snapshot));
   }
 
@@ -408,7 +421,13 @@ function generateScenarioMarkdown(
   lines.push('<summary>Raw JSON</summary>\n');
   lines.push('```json');
   if (scenario.splitAt && secondSnapshot) {
-    lines.push(JSON.stringify({ first: { snapshot, delta }, second: { snapshot: secondSnapshot, delta: secondDelta } }, null, 2));
+    lines.push(
+      JSON.stringify(
+        { first: { snapshot, delta }, second: { snapshot: secondSnapshot, delta: secondDelta } },
+        null,
+        2
+      )
+    );
   } else {
     lines.push(JSON.stringify({ snapshot, delta }, null, 2));
   }
@@ -436,10 +455,7 @@ function generateScenarioMarkdown(
 // Main Runner
 // ============================================================
 
-async function runScenario(
-  app: Hono,
-  scenario: Scenario
-): Promise<void> {
+async function runScenario(app: Hono, scenario: Scenario): Promise<void> {
   const db = await getDB();
   console.log(`\n${'='.repeat(60)}`);
   console.log(`Scenario ${scenario.id}: ${scenario.name}`);
@@ -454,7 +470,9 @@ async function runScenario(
     title: scenario.name,
   });
 
-  const turnsToInsert = scenario.splitAt ? scenario.turns.slice(0, scenario.splitAt) : scenario.turns;
+  const turnsToInsert = scenario.splitAt
+    ? scenario.turns.slice(0, scenario.splitAt)
+    : scenario.turns;
   const remainingTurns = scenario.splitAt ? scenario.turns.slice(scenario.splitAt) : [];
 
   // Insert initial turns
@@ -489,8 +507,13 @@ async function runScenario(
     return;
   }
 
-  const body1 = (await res1.json()) as { success: boolean; data: { delta: any; snapshot: SemanticContent; delta_log_id: string } };
-  console.log(`  First extraction: ${body1.data.snapshot.frames.length} frames, ${body1.data.delta.changes.length} changes (${durationMs}ms)`);
+  const body1 = (await res1.json()) as {
+    success: boolean;
+    data: { delta: any; snapshot: SemanticContent; delta_log_id: string };
+  };
+  console.log(
+    `  First extraction: ${body1.data.snapshot.frames.length} frames, ${body1.data.delta.changes.length} changes (${durationMs}ms)`
+  );
 
   let secondSnapshot: SemanticContent | undefined;
   let secondDelta: any;
@@ -521,10 +544,15 @@ async function runScenario(
       const errBody = await res2.json();
       console.error(`  Incremental FAILED (${res2.status}):`, JSON.stringify(errBody, null, 2));
     } else {
-      const body2 = (await res2.json()) as { success: boolean; data: { delta: any; snapshot: SemanticContent; delta_log_id: string } };
+      const body2 = (await res2.json()) as {
+        success: boolean;
+        data: { delta: any; snapshot: SemanticContent; delta_log_id: string };
+      };
       secondSnapshot = body2.data.snapshot;
       secondDelta = body2.data.delta;
-      console.log(`  Incremental extraction: ${secondSnapshot.frames.length} frames, ${secondDelta.changes.length} changes (${secondDurationMs}ms)`);
+      console.log(
+        `  Incremental extraction: ${secondSnapshot.frames.length} frames, ${secondDelta.changes.length} changes (${secondDurationMs}ms)`
+      );
     }
   }
 
@@ -565,7 +593,9 @@ async function main(): Promise<void> {
     ? SCENARIOS.filter((s) => scenarioFilter.includes(s.id))
     : SCENARIOS;
 
-  console.log(`Running ${scenarios.length} scenario(s): ${scenarios.map((s) => `S${s.id}`).join(', ')}`);
+  console.log(
+    `Running ${scenarios.length} scenario(s): ${scenarios.map((s) => `S${s.id}`).join(', ')}`
+  );
 
   for (const scenario of scenarios) {
     try {

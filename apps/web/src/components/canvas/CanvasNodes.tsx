@@ -580,9 +580,7 @@ const UnitNode = memo(function UnitNode(props: Props) {
           {/* Row 2: Self hash (committed only) */}
           {isCommitted && (data.commit?.hash || data.commitHash) && (
             <div className="font-mono text-[11px] text-[var(--text-tertiary)] mb-1">
-              {(data.commit?.hash || data.commitHash || '')
-                .replace('sha256:', 'sha:')
-                .slice(0, 11)}
+              {(data.commit?.hash || data.commitHash || '').replace('sha256:', 'sha:').slice(0, 11)}
             </div>
           )}
 

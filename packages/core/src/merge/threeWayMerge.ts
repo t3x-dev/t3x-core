@@ -21,12 +21,7 @@ import { sha256 } from '../common/hash';
 import { diffCommits } from '../diff/diffCommits';
 import { wordDiff } from '../diff/lcs';
 import type { DiffableSentence, WordDiffSegment } from '../diff/types';
-import {
-  type CommitAuthor,
-  type SentenceCommit,
-  ID_PREFIXES,
-  type Sentence,
-} from '../types/v4';
+import { type CommitAuthor, ID_PREFIXES, type Sentence, type SentenceCommit } from '../types/v4';
 
 // ============================================================================
 // Types

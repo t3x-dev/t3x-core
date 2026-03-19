@@ -15,7 +15,7 @@
  */
 
 import type { LLMProvider } from '../llm/types';
-import type { SentenceCommit, Leaf } from '../types/v4';
+import type { Leaf, SentenceCommit } from '../types/v4';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Types

@@ -43,13 +43,13 @@ import { PinButton } from '@/components/ui/PinButton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useKeyboardNavigation } from '@/hooks/useKeyboardNavigation';
 import {
-  type SentenceCommit,
-  type SentenceSourceRef,
   type EngineRun,
-  getSentenceCommit,
   getEngineRun,
   getLeaf,
+  getSentenceCommit,
   type Leaf,
+  type SentenceCommit,
+  type SentenceSourceRef,
   updateEngineRun,
 } from '@/lib/api';
 import { exportRunAsJSON, exportRunAsMarkdown } from '@/lib/exportReport';

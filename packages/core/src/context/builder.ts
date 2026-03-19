@@ -10,11 +10,11 @@
 
 import type {
   BuiltContext,
-  SentenceCommit,
   ContextSource,
   ConversationContext,
   Leaf,
   Pin,
+  SentenceCommit,
 } from '../types/v4';
 
 // ═══════════════════════════════════════════════════════════════════════════

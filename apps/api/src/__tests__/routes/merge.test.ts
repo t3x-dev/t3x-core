@@ -49,24 +49,21 @@ describe('Merge Routes', () => {
 
   // Helper to create test commits (frame-based format)
   const createTestCommit = async (sentences: Array<{ id: string; text: string }>) => {
-    const commit = await createCommit(
-      mockDB,
-      {
-        parents: [],
-        author: { type: 'human', name: 'Test User' },
-        content: {
-          frames: sentences.map((s) => ({
-            id: s.id,
-            type: 'legacy_sentence' as const,
-            slots: { text: s.text },
-          })),
-          relations: [],
-        },
-        project_id: testProjectId,
-        message: 'Test commit',
-        branch: 'main',
+    const commit = await createCommit(mockDB, {
+      parents: [],
+      author: { type: 'human', name: 'Test User' },
+      content: {
+        frames: sentences.map((s) => ({
+          id: s.id,
+          type: 'legacy_sentence' as const,
+          slots: { text: s.text },
+        })),
+        relations: [],
       },
-    );
+      project_id: testProjectId,
+      message: 'Test commit',
+      branch: 'main',
+    });
     return commit;
   };
 
@@ -80,8 +77,14 @@ describe('Merge Routes', () => {
       ...prepared,
       similarPairs: prepared.similarPairs.map((p: ApiResponse) => ({
         ...p,
-        source: { ...p.source, source: p.source.source ?? { turn_hash: 'sha256:test', start_char: 0, end_char: 0 } },
-        target: { ...p.target, source: p.target.source ?? { turn_hash: 'sha256:test', start_char: 0, end_char: 0 } },
+        source: {
+          ...p.source,
+          source: p.source.source ?? { turn_hash: 'sha256:test', start_char: 0, end_char: 0 },
+        },
+        target: {
+          ...p.target,
+          source: p.target.source ?? { turn_hash: 'sha256:test', start_char: 0, end_char: 0 },
+        },
         sourceConstraints: p.sourceConstraints ?? [],
         targetConstraints: p.targetConstraints ?? [],
       })),

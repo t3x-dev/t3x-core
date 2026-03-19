@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { type WorkbenchDraft, listWorkbenchDrafts } from '@/lib/api';
+import { listWorkbenchDrafts, type WorkbenchDraft } from '@/lib/api';
 
 interface LeafExtractToDraftProps {
   leafId: string;

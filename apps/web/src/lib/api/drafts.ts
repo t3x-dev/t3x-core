@@ -144,7 +144,9 @@ export interface UpdateWorkbenchDraftInput {
   if_revision: number;
 }
 
-export async function createWorkbenchDraft(input: CreateWorkbenchDraftInput): Promise<WorkbenchDraft> {
+export async function createWorkbenchDraft(
+  input: CreateWorkbenchDraftInput
+): Promise<WorkbenchDraft> {
   const res = await fetchWithTimeout(`${API_V1}/drafts`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -158,7 +160,10 @@ export async function getWorkbenchDraft(draftId: string): Promise<WorkbenchDraft
   return handleResponse<WorkbenchDraft>(res);
 }
 
-export async function listWorkbenchDrafts(projectId: string, status?: string): Promise<WorkbenchDraft[]> {
+export async function listWorkbenchDrafts(
+  projectId: string,
+  status?: string
+): Promise<WorkbenchDraft[]> {
   const params = new URLSearchParams({ project_id: projectId });
   if (status) params.set('status', status);
   const res = await fetchWithTimeout(`${API_V1}/drafts?${params.toString()}`);

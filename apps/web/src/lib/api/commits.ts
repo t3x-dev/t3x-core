@@ -95,7 +95,6 @@ export interface SentenceCommit {
   created_at: string;
 }
 
-
 // ============================================================================
 // Frame-based Commits
 // ============================================================================
@@ -205,7 +204,9 @@ export function toSentenceCommit(v5: ApiCommit): SentenceCommit {
     schema: v5.schema,
     parents: v5.parents,
     author: {
-      type: (v5.author.type === 'human' || v5.author.type === 'agent' ? v5.author.type : 'human') as 'human' | 'agent',
+      type: (v5.author.type === 'human' || v5.author.type === 'agent' ? v5.author.type : 'human') as
+        | 'human'
+        | 'agent',
       name: v5.author.name,
       id: v5.author.id,
     },
@@ -214,11 +215,12 @@ export function toSentenceCommit(v5: ApiCommit): SentenceCommit {
     project_id: v5.project_id,
     message: v5.message,
     branch: v5.branch,
-    source_refs: v5.sources?.map((s) => ({
-      type: (s.type === 'leaf' ? 'leaf' : 'conversation') as 'conversation' | 'leaf',
-      id: s.id,
-      title: s.title,
-    })) ?? null,
+    source_refs:
+      v5.sources?.map((s) => ({
+        type: (s.type === 'leaf' ? 'leaf' : 'conversation') as 'conversation' | 'leaf',
+        id: s.id,
+        title: s.title,
+      })) ?? null,
     merge_summary: null,
     semantic: v5.content as import('@t3x-dev/core').SemanticContent | undefined,
     position_x: v5.position_x ?? null,
@@ -251,10 +253,7 @@ export async function getSentenceCommit(commitHash: string): Promise<SentenceCom
 /**
  * Get commit ancestor chain as sentence-based shape.
  */
-export async function getCommitHistory(
-  commitHash: string,
-  limit = 50
-): Promise<SentenceCommit[]> {
+export async function getCommitHistory(commitHash: string, limit = 50): Promise<SentenceCommit[]> {
   try {
     const query = buildQueryString({ limit });
     const res = await fetchWithTimeout(
@@ -286,7 +285,6 @@ export async function updateCommitPosition(
   const v5 = await handleResponse<ApiCommit>(res);
   return toSentenceCommit(v5);
 }
-
 
 // ============================================================================
 // Conflict Detection

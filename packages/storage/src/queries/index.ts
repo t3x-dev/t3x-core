@@ -5,6 +5,22 @@
  * All functions take a database instance as first parameter.
  */
 
+// Agent Drafts (formerly drafts_v2)
+export {
+  type AgentDraftStatus,
+  adoptAgentDraft,
+  type CreateAgentDraftInput,
+  deleteAgentDraft,
+  findAgentDraftById,
+  findAgentDraftsByProject,
+  getAgentDraftTextHash,
+  insertAgentDraft,
+  type ListAgentDraftsOptions,
+  supersedeAgentDraft,
+  type UpdateAgentDraftInput,
+  updateAgentDraft,
+  updateAgentDraftStatus,
+} from './agent-drafts';
 // API Keys
 export {
   type CreateApiKeyInput,
@@ -103,22 +119,6 @@ export {
   updateDeployAgent,
   updateDeployAgentRunStatus,
 } from './deployAgents';
-// Agent Drafts (formerly drafts_v2)
-export {
-  adoptAgentDraft,
-  type CreateAgentDraftInput,
-  type AgentDraftStatus,
-  deleteAgentDraft,
-  findAgentDraftById,
-  findAgentDraftsByProject,
-  getAgentDraftTextHash,
-  insertAgentDraft,
-  type ListAgentDraftsOptions,
-  supersedeAgentDraft,
-  type UpdateAgentDraftInput,
-  updateAgentDraft,
-  updateAgentDraftStatus,
-} from './agent-drafts';
 // Drafts (Workbench)
 export {
   abandonDraft,

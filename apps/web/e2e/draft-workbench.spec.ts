@@ -32,8 +32,16 @@ test.describe('Draft Workbench', () => {
         project_id: projectId,
         content: {
           frames: [
-            { id: 'f_001', type: 'legacy_sentence', slots: { text: 'Product pricing starts at $29 per month' } },
-            { id: 'f_002', type: 'legacy_sentence', slots: { text: 'Enterprise tier includes 99.9% SLA' } },
+            {
+              id: 'f_001',
+              type: 'legacy_sentence',
+              slots: { text: 'Product pricing starts at $29 per month' },
+            },
+            {
+              id: 'f_002',
+              type: 'legacy_sentence',
+              slots: { text: 'Enterprise tier includes 99.9% SLA' },
+            },
             { id: 'f_003', type: 'legacy_sentence', slots: { text: 'Free trial lasts 14 days' } },
           ],
           relations: [],

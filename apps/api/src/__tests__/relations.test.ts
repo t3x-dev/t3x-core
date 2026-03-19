@@ -68,9 +68,21 @@ describe('Relations Routes', () => {
         author: { type: 'human', name: 'Relation Tester' },
         content: {
           frames: [
-            { id: 'f_001', type: 'legacy_sentence', slots: { text: 'We want to visit Tokyo in spring.' } },
-            { id: 'f_002', type: 'legacy_sentence', slots: { text: 'Cherry blossoms bloom in late March.' } },
-          { id: 'f_003', type: 'legacy_sentence', slots: { text: 'Budget is around $3000 per person.' } },
+            {
+              id: 'f_001',
+              type: 'legacy_sentence',
+              slots: { text: 'We want to visit Tokyo in spring.' },
+            },
+            {
+              id: 'f_002',
+              type: 'legacy_sentence',
+              slots: { text: 'Cherry blossoms bloom in late March.' },
+            },
+            {
+              id: 'f_003',
+              type: 'legacy_sentence',
+              slots: { text: 'Budget is around $3000 per person.' },
+            },
           ],
           relations: [],
         },
@@ -91,9 +103,7 @@ describe('Relations Routes', () => {
 
   describe('GET /v1/commits/:hash/relations', () => {
     it('returns empty array initially', async () => {
-      const res = await app.request(
-        `/v1/commits/${encodeURIComponent(testCommitHash)}/relations`
-      );
+      const res = await app.request(`/v1/commits/${encodeURIComponent(testCommitHash)}/relations`);
       expect(res.status).toBe(200);
 
       const data: ApiResponse = await res.json();

@@ -12,7 +12,7 @@
  * @see docs/plans/parallel-dev-guidelines.md
  */
 
-import type { AnyLeafType, SentenceCommit, Constraint, Leaf } from '../types/v4';
+import type { AnyLeafType, Constraint, Leaf, SentenceCommit } from '../types/v4';
 import { isGenerationLeaf } from '../types/v4';
 import { formatConstraints, getTypeInstructions } from './build-prompt';
 import { getDefaultTemplate } from './templates';

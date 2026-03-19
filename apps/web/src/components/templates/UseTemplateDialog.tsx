@@ -17,8 +17,8 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useTerminology } from '@/hooks/useTerminology';
-import type { SentenceCommit, LeafType, Project, Template } from '@/lib/api';
-import { createLeaf, listSentenceCommits, listProjects } from '@/lib/api';
+import type { LeafType, Project, SentenceCommit, Template } from '@/lib/api';
+import { createLeaf, listProjects, listSentenceCommits } from '@/lib/api';
 
 interface UseTemplateDialogProps {
   template: Template | null;

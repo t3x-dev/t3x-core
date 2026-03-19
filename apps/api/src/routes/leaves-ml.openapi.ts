@@ -14,10 +14,10 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import type { Commit } from '@t3x-dev/core';
 import {
-  type SentenceCommit,
   collectLessons,
   framesToTextSegments,
   generateLeafOutput,
+  type SentenceCommit,
   suggestConstraints,
   suggestionsToConstraints,
 } from '@t3x-dev/core';

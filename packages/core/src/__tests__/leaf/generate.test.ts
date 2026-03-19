@@ -6,7 +6,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GenerationError, generateLeafOutput, isGenerationConfigured } from '../../leaf/generate';
-import type { SentenceCommit, Leaf } from '../../types/v4';
+import type { Leaf, SentenceCommit } from '../../types/v4';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Test Fixtures

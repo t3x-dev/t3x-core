@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest';
-import type { WorkbenchDraft, SemanticPointAPI } from '@/lib/api';
+import type { SemanticPointAPI, WorkbenchDraft } from '@/lib/api';
 
 /**
  * Tests for the DraftWorkspace LLM extraction mode integration.

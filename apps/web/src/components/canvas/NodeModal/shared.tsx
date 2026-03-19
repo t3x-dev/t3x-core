@@ -13,7 +13,6 @@ import type { CommitDisplay, CommitSourceRef, EmbeddedLeaf } from '@/types/nodes
 import { CommitSourceContext } from '../CommitSourceContext';
 import { LeafCreationDialog } from '../LeafCreationDialog';
 
-
 /**
  * Author badge for commits (with type indicator)
  */

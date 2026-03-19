@@ -13,7 +13,7 @@ import {
   estimateTokens,
   filterActivePins,
 } from '../../context/builder';
-import type { SentenceCommit, ConversationContext, Leaf, Pin } from '../../types/v4';
+import type { ConversationContext, Leaf, Pin, SentenceCommit } from '../../types/v4';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Test Fixtures
