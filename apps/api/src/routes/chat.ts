@@ -15,7 +15,10 @@ import { pinoLogger } from '../middleware/logger';
 // Create proxy-aware fetch. Always uses ProxyAgent when proxy is configured.
 function getProxyFetch() {
   const proxyUrl =
-    process.env.HTTPS_PROXY || process.env.https_proxy || process.env.HTTP_PROXY || process.env.http_proxy;
+    process.env.HTTPS_PROXY ||
+    process.env.https_proxy ||
+    process.env.HTTP_PROXY ||
+    process.env.http_proxy;
   if (proxyUrl) {
     const agent = new ProxyAgent(proxyUrl);
     return async (url: string, options?: RequestInit) => {

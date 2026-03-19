@@ -48,7 +48,6 @@ function loadEnvLocal(): void {
 
 loadEnvLocal();
 
-
 // Log environment status early (for debugging env loading issues)
 pinoLogger.info(
   {

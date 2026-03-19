@@ -185,9 +185,7 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
       // Create a node for each committed unit (each commit is a separate node)
       commits.forEach((commit) => {
         const convId = commitSourceConvMap.get(commit.commit_hash);
-        const conv = convId
-          ? conversations.find((c) => c.conversation_id === convId)
-          : undefined;
+        const conv = convId ? conversations.find((c) => c.conversation_id === convId) : undefined;
 
         // Use conversation if found, otherwise create virtual one
         const displayConv: api.Conversation = conv || {
@@ -213,9 +211,7 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
       });
 
       // Create staging nodes for conversations that have NO commits at all
-      const convsWithCommits = new Set(
-        Array.from(convToCommitsMap.keys())
-      );
+      const convsWithCommits = new Set(Array.from(convToCommitsMap.keys()));
       conversations.forEach((conv) => {
         if (!convsWithCommits.has(conv.conversation_id)) {
           const node = unitToNode(conv, null, nodeIndex++);
