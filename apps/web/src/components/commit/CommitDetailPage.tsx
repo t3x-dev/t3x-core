@@ -187,7 +187,7 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
     },
   });
 
-  // ── Source info (from V5 commit) ────────────────
+  // ── Source info (from commit) ────────────────
   const sourceConversations = useMemo(
     () => commit?.sources?.filter((ref) => ref.type === 'conversation') ?? [],
     [commit?.sources]

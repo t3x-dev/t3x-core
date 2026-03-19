@@ -80,68 +80,71 @@ test.describe('DiffDisplayView Full E2E', () => {
     expect(turn2Data.success).toBe(true);
     turn2Hash = turn2Data.data.turn_hash;
 
-    // 6. Create first V3 commit with sentences from turn 1
-    const commit1Res = await request.post(`${API_BASE}/commits-v3`, {
+    // 6. Create first commit with frames
+    const commit1Res = await request.post(`${API_BASE}/commits`, {
       data: {
         project_id: projectId,
         branch: 'main',
         message: 'Initial requirements',
+        parents: [],
         content: {
-          sentences: [
+          frames: [
             {
-              id: 's1',
-              text: 'User prefers dark mode',
-              source: { turn_hash: turn1Hash, start_char: 9, end_char: 31 },
+              id: 'f_001',
+              type: 'legacy_sentence',
+              slots: { text: 'User prefers dark mode' },
             },
             {
-              id: 's2',
-              text: 'Budget is $3000',
-              source: { turn_hash: turn1Hash, start_char: 46, end_char: 61 },
+              id: 'f_002',
+              type: 'legacy_sentence',
+              slots: { text: 'Budget is $3000' },
             },
             {
-              id: 's3',
-              text: 'Deadline is Friday',
-              source: { turn_hash: turn1Hash, start_char: 66, end_char: 84 },
+              id: 'f_003',
+              type: 'legacy_sentence',
+              slots: { text: 'Deadline is Friday' },
             },
           ],
+          relations: [],
         },
-        author: { name: 'E2E Tester' },
-        source_refs: [{ type: 'conversation', conversation_id: conversation1Id }],
+        author: { type: 'human', name: 'E2E Tester' },
+        sources: [{ type: 'conversation', id: conversation1Id }],
       },
     });
     const commit1Data = await commit1Res.json();
     expect(commit1Data.success).toBe(true);
     commit1Hash = commit1Data.data.hash;
 
-    // 7. Create second V3 commit with modified sentences from turn 2
-    const commit2Res = await request.post(`${API_BASE}/commits-v3`, {
+    // 7. Create second commit with modified frames
+    const commit2Res = await request.post(`${API_BASE}/commits`, {
       data: {
         project_id: projectId,
         branch: 'main',
         message: 'Updated requirements',
         parents: [commit1Hash],
         content: {
-          sentences: [
+          frames: [
             {
-              id: 's1',
-              text: 'User prefers dark mode',
-              source: { turn_hash: turn1Hash, start_char: 9, end_char: 31 },
+              id: 'f_001',
+              type: 'legacy_sentence',
+              slots: { text: 'User prefers dark mode' },
             },
             {
-              id: 's2',
-              text: 'Budget is $3000',
-              source: { turn_hash: turn2Hash, start_char: 11, end_char: 26 },
+              id: 'f_002',
+              type: 'legacy_sentence',
+              slots: { text: 'Budget is $3000' },
             },
             {
-              id: 's4',
-              text: 'Meeting scheduled for Monday',
-              source: { turn_hash: turn2Hash, start_char: 61, end_char: 89 },
+              id: 'f_004',
+              type: 'legacy_sentence',
+              slots: { text: 'Meeting scheduled for Monday' },
             },
-            // s3 (Deadline) removed
+            // f_003 (Deadline) removed
           ],
+          relations: [],
         },
-        author: { name: 'E2E Tester' },
-        source_refs: [{ type: 'conversation', conversation_id: conversation2Id }],
+        author: { type: 'human', name: 'E2E Tester' },
+        sources: [{ type: 'conversation', id: conversation2Id }],
       },
     });
     const commit2Data = await commit2Res.json();
@@ -152,18 +155,18 @@ test.describe('DiffDisplayView Full E2E', () => {
   test('API data is correct', async ({ request }) => {
     // Verify commits have correct data
     const [res1, res2] = await Promise.all([
-      request.get(`${API_BASE}/commits-v3/${commit1Hash}`),
-      request.get(`${API_BASE}/commits-v3/${commit2Hash}`),
+      request.get(`${API_BASE}/commits/${commit1Hash}`),
+      request.get(`${API_BASE}/commits/${commit2Hash}`),
     ]);
 
     const data1 = await res1.json();
     const data2 = await res2.json();
 
-    expect(data1.data.content.sentences).toHaveLength(3);
-    expect(data2.data.content.sentences).toHaveLength(3);
+    expect(data1.data.commit.content.frames).toHaveLength(3);
+    expect(data2.data.commit.content.frames).toHaveLength(3);
 
     // Verify parent relationship
-    expect(data2.data.parents).toContain(commit1Hash);
+    expect(data2.data.commit.parents).toContain(commit1Hash);
   });
 
   test('Canvas loads with commits', async ({ page }) => {

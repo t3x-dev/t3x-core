@@ -19,7 +19,7 @@ test.describe('DiffDisplayView Real UI Test', () => {
     // Find a project with commits
     for (const project of projectsData.data.projects) {
       const commitsRes = await request.get(
-        `http://localhost:8000/api/v1/commits-v3?project_id=${project.project_id}`
+        `http://localhost:8000/api/v1/projects/${project.project_id}/commits`
       );
       const commitsData = await commitsRes.json();
 
