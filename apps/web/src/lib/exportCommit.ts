@@ -1,5 +1,5 @@
 /**
- * Export Utilities for CommitV4 Data
+ * Export Utilities for SentenceCommit Data
  *
  * Provides functions to export commit data in various formats:
  * - Copy to clipboard
@@ -7,14 +7,14 @@
  * - Export as JSON (excludes position data)
  */
 
-import type { CommitV4 } from './api';
+import type { SentenceCommit } from './api';
 import { copyToClipboard, downloadAsFile, type ExportResult } from './export';
 
 // ============================================================================
 // Markdown Export
 // ============================================================================
 
-export function formatCommitAsMarkdown(commit: CommitV4): string {
+export function formatCommitAsMarkdown(commit: SentenceCommit): string {
   const lines: string[] = [];
 
   lines.push(`# Commit: ${commit.message || commit.hash.slice(0, 12)}`);
@@ -82,7 +82,7 @@ export function formatCommitAsMarkdown(commit: CommitV4): string {
 // JSON Export
 // ============================================================================
 
-export function formatCommitAsJSON(commit: CommitV4): string {
+export function formatCommitAsJSON(commit: SentenceCommit): string {
   const { position_x: _x, position_y: _y, ...exportData } = commit;
   return JSON.stringify(exportData, null, 2);
 }
@@ -91,19 +91,19 @@ export function formatCommitAsJSON(commit: CommitV4): string {
 // File Download
 // ============================================================================
 
-export function downloadCommitAsMarkdown(commit: CommitV4): void {
+export function downloadCommitAsMarkdown(commit: SentenceCommit): void {
   const content = formatCommitAsMarkdown(commit);
   const filename = getCommitFilename(commit, 'md');
   downloadAsFile(content, filename, 'text/markdown');
 }
 
-export function downloadCommitAsJSON(commit: CommitV4): void {
+export function downloadCommitAsJSON(commit: SentenceCommit): void {
   const content = formatCommitAsJSON(commit);
   const filename = getCommitFilename(commit, 'json');
   downloadAsFile(content, filename, 'application/json');
 }
 
-function getCommitFilename(commit: CommitV4, extension: string): string {
+function getCommitFilename(commit: SentenceCommit, extension: string): string {
   const label = commit.message || commit.hash.slice(0, 12);
   const sanitized = label.replace(/[^a-zA-Z0-9-_]/g, '_').slice(0, 50);
   const date = new Date().toISOString().slice(0, 10);
@@ -117,7 +117,7 @@ function getCommitFilename(commit: CommitV4, extension: string): string {
 export type CommitExportFormat = 'clipboard' | 'markdown' | 'json';
 
 export async function exportCommit(
-  commit: CommitV4,
+  commit: SentenceCommit,
   format: CommitExportFormat
 ): Promise<ExportResult> {
   try {

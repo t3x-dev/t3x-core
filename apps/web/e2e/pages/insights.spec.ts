@@ -1,4 +1,4 @@
-import { cleanupProject, createTestCommitV4, createTestProject } from '../fixtures/api-helpers';
+import { cleanupProject, createTestCommit, createTestProject } from '../fixtures/api-helpers';
 import { expect, test } from '../fixtures/test';
 import { generateSentences, isExpectedConsoleError } from '../fixtures/test-data-factory';
 
@@ -45,7 +45,7 @@ test.describe('Insights Page', () => {
     projectIdsToCleanup.push(projectId);
 
     const sentences = generateSentences(3);
-    await createTestCommitV4(request, projectId, sentences, {
+    await createTestCommit(request, projectId, sentences, {
       message: 'Insights test commit',
     });
 
@@ -69,7 +69,7 @@ test.describe('Insights Page', () => {
     projectIdsToCleanup.push(projectId);
 
     const sentences = generateSentences(2);
-    await createTestCommitV4(request, projectId, sentences, {
+    await createTestCommit(request, projectId, sentences, {
       message: 'Timeline test commit',
     });
 
@@ -125,7 +125,7 @@ test.describe('Insights Page', () => {
     const sentences = generateSentences(2);
     let parentHash: string | undefined;
     for (let i = 0; i < 6; i++) {
-      parentHash = await createTestCommitV4(request, projectId, sentences, {
+      parentHash = await createTestCommit(request, projectId, sentences, {
         message: `Pagination commit ${i + 1}`,
         parents: parentHash ? [parentHash] : undefined,
       });

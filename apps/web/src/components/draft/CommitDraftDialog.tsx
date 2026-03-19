@@ -107,11 +107,11 @@ export function CommitDraftDialog({
     if (!onIterate) return;
     setIterating(true);
     try {
-      const { forkDraftV3 } = await import('@/lib/api');
+      const { forkWorkbenchDraft } = await import('@/lib/api');
       const store = (await import('@/store/draftWorkspaceStore')).useDraftWorkspaceStore.getState();
       const sourceDraftId = store.draftId;
       if (!sourceDraftId) return;
-      const forked = await forkDraftV3(sourceDraftId);
+      const forked = await forkWorkbenchDraft(sourceDraftId);
       onIterate(forked.id);
     } catch {
       // Error handling — toast or silent

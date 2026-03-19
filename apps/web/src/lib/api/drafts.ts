@@ -1,5 +1,5 @@
 /**
- * Drafts V1/V2 + V3 (Workbench) API
+ * Drafts V1/V2 (Agent) + Workbench API
  */
 
 import { API_V1, fetchWithTimeout, handleResponse } from './core';
@@ -66,7 +66,7 @@ export async function updateDraft(
 }
 
 // ============================================================================
-// Drafts V3 (Workbench)
+// Workbench Drafts
 // ============================================================================
 
 export type DraftSentenceOrigin =
@@ -98,7 +98,7 @@ export interface DraftConstraint {
   reason?: string;
 }
 
-export interface DraftV3 {
+export interface WorkbenchDraft {
   id: string;
   project_id: string;
   title: string;
@@ -124,7 +124,7 @@ export interface DraftV3 {
   extraction_cursor?: ExtractionCursorAPI | null;
 }
 
-export interface CreateDraftV3Input {
+export interface CreateWorkbenchDraftInput {
   project_id: string;
   title: string;
   goal?: string;
@@ -133,7 +133,7 @@ export interface CreateDraftV3Input {
   preview_type?: string;
 }
 
-export interface UpdateDraftV3Input {
+export interface UpdateWorkbenchDraftInput {
   title?: string;
   goal?: string;
   sentences?: DraftSentence[];
@@ -144,47 +144,52 @@ export interface UpdateDraftV3Input {
   if_revision: number;
 }
 
-export async function createDraftV3(input: CreateDraftV3Input): Promise<DraftV3> {
+export async function createWorkbenchDraft(
+  input: CreateWorkbenchDraftInput
+): Promise<WorkbenchDraft> {
   const res = await fetchWithTimeout(`${API_V1}/drafts`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
   });
-  return handleResponse<DraftV3>(res);
+  return handleResponse<WorkbenchDraft>(res);
 }
 
-export async function getDraftV3(draftId: string): Promise<DraftV3> {
+export async function getWorkbenchDraft(draftId: string): Promise<WorkbenchDraft> {
   const res = await fetchWithTimeout(`${API_V1}/drafts/${encodeURIComponent(draftId)}`);
-  return handleResponse<DraftV3>(res);
+  return handleResponse<WorkbenchDraft>(res);
 }
 
-export async function listDraftsV3(projectId: string, status?: string): Promise<DraftV3[]> {
+export async function listWorkbenchDrafts(
+  projectId: string,
+  status?: string
+): Promise<WorkbenchDraft[]> {
   const params = new URLSearchParams({ project_id: projectId });
   if (status) params.set('status', status);
   const res = await fetchWithTimeout(`${API_V1}/drafts?${params.toString()}`);
-  return handleResponse<DraftV3[]>(res);
+  return handleResponse<WorkbenchDraft[]>(res);
 }
 
-export async function updateDraftV3(
+export async function updateWorkbenchDraft(
   draftId: string,
-  updates: UpdateDraftV3Input
-): Promise<DraftV3> {
+  updates: UpdateWorkbenchDraftInput
+): Promise<WorkbenchDraft> {
   const res = await fetchWithTimeout(`${API_V1}/drafts/${encodeURIComponent(draftId)}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(updates),
   });
-  return handleResponse<DraftV3>(res);
+  return handleResponse<WorkbenchDraft>(res);
 }
 
-export async function deleteDraftV3(draftId: string): Promise<void> {
+export async function deleteWorkbenchDraft(draftId: string): Promise<void> {
   const res = await fetchWithTimeout(`${API_V1}/drafts/${encodeURIComponent(draftId)}`, {
     method: 'DELETE',
   });
   await handleResponse(res);
 }
 
-export async function previewDraftV3(
+export async function previewWorkbenchDraft(
   draftId: string,
   options?: { model?: string; preview_type?: string }
 ): Promise<{ output: string; model_used: string; token_count: number; cached: boolean }> {
@@ -219,7 +224,7 @@ export async function suggestForDraft(draftId: string, limit?: number): Promise<
   return data.suggestions;
 }
 
-export async function commitDraftV3(
+export async function commitWorkbenchDraft(
   draftId: string,
   message?: string
 ): Promise<{
@@ -239,11 +244,11 @@ export async function commitDraftV3(
   }>(res);
 }
 
-export async function forkDraftV3(draftId: string): Promise<DraftV3> {
+export async function forkWorkbenchDraft(draftId: string): Promise<WorkbenchDraft> {
   const res = await fetchWithTimeout(`${API_V1}/drafts/${encodeURIComponent(draftId)}/fork`, {
     method: 'POST',
   });
-  return handleResponse<DraftV3>(res);
+  return handleResponse<WorkbenchDraft>(res);
 }
 
 // ============================================================================
@@ -262,7 +267,7 @@ export async function createAutoDraft(
     options?: { max_sentences?: number };
   },
   signal?: AbortSignal
-): Promise<DraftV3> {
+): Promise<WorkbenchDraft> {
   const res = await fetchWithTimeout(
     `${API_V1}/drafts/auto`,
     {
@@ -273,23 +278,23 @@ export async function createAutoDraft(
     60_000,
     signal
   );
-  return handleResponse<DraftV3>(res);
+  return handleResponse<WorkbenchDraft>(res);
 }
 
 /**
  * Promote an auto-draft to editing status.
  */
-export async function promoteDraft(draftId: string): Promise<DraftV3> {
+export async function promoteDraft(draftId: string): Promise<WorkbenchDraft> {
   const res = await fetchWithTimeout(`${API_V1}/drafts/${encodeURIComponent(draftId)}/promote`, {
     method: 'POST',
   });
-  return handleResponse<DraftV3>(res);
+  return handleResponse<WorkbenchDraft>(res);
 }
 
 /** Extract-to-draft response */
 export interface ExtractToDraftResult {
   added_count: number;
-  draft: DraftV3;
+  draft: WorkbenchDraft;
 }
 
 /**

@@ -25,10 +25,10 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
     set({ loading: true, loadError: null, projectId });
 
     try {
-      // Fetch conversations, V4 commits, and leaves in parallel
-      const [convResponse, commitsV4, projectLeaves] = await Promise.all([
+      // Fetch conversations, sentence commits, and leaves in parallel
+      const [convResponse, sentenceCommits, projectLeaves] = await Promise.all([
         api.listConversations(projectId, 100, 0),
-        api.listCommitsV4(projectId, undefined, 100, 0),
+        api.listSentenceCommits(projectId, undefined, 100, 0),
         api.listLeavesByProject(projectId).catch((err) => {
           console.warn('[canvasStore] Failed to load leaves:', err);
           return [] as api.Leaf[];
@@ -40,8 +40,8 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
 
       const conversations = convResponse.conversations;
 
-      // Convert V4 commits to V2-compatible format for unitToNode
-      const commits: api.Commit[] = commitsV4.map(
+      // Convert sentence commits to V2-compatible format for unitToNode
+      const commits: api.Commit[] = sentenceCommits.map(
         (v4) =>
           ({
             commit_hash: v4.hash,
@@ -150,10 +150,10 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
         }
       });
 
-      // Build a map: commit_hash -> original V4 data (for source context display)
-      const commitV4Map = new Map<string, api.CommitV4>();
-      commitsV4.forEach((v4) => {
-        commitV4Map.set(v4.hash, v4);
+      // Build a map: commit_hash -> original sentence commit data (for source context display)
+      const sentenceCommitMap = new Map<string, api.SentenceCommit>();
+      sentenceCommits.forEach((v4) => {
+        sentenceCommitMap.set(v4.hash, v4);
       });
 
       // Build a map: conversation_id -> commit (for pairing into units)
@@ -178,8 +178,8 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
       let nodeIndex = 0;
       conversations.forEach((conv) => {
         const commit = convToCommitMap.get(conv.conversation_id);
-        const originalV4 = commit ? commitV4Map.get(commit.commit_hash) : undefined;
-        const node = unitToNode(conv, commit || null, nodeIndex++, originalV4);
+        const originalCommit = commit ? sentenceCommitMap.get(commit.commit_hash) : undefined;
+        const node = unitToNode(conv, commit || null, nodeIndex++, originalCommit);
         const existingPos = existingNodePositions.get(node.id);
         if (existingPos) {
           node.position = existingPos;
@@ -207,8 +207,8 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
           position_y: undefined,
           created_at: commit.created_at,
         };
-        const originalV4 = commitV4Map.get(commit.commit_hash);
-        const node = unitToNode(virtualConv, commit, nodeIndex++, originalV4);
+        const originalCommit = sentenceCommitMap.get(commit.commit_hash);
+        const node = unitToNode(virtualConv, commit, nodeIndex++, originalCommit);
         const existingPos = existingNodePositions.get(node.id);
         if (existingPos) {
           node.position = existingPos;
@@ -287,7 +287,7 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
 
       // Load editing drafts and create draft nodes + conversation→draft edges
       try {
-        const editingDrafts = await api.listDraftsV3(projectId, 'editing');
+        const editingDrafts = await api.listWorkbenchDrafts(projectId, 'editing');
         // Build conversationId → nodeId map for edge creation
         const convToNodeId = new Map<string, string>();
         for (const node of nodes) {
@@ -519,7 +519,7 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
     };
     const snappedPosition = snapPosition(basePosition);
 
-    const draft = await api.createDraftV3({
+    const draft = await api.createWorkbenchDraft({
       project_id: state.projectId,
       title: 'Untitled Draft',
     });

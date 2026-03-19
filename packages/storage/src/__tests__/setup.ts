@@ -58,8 +58,8 @@ CREATE TABLE IF NOT EXISTS conversations (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Turns (turns_v2)
-CREATE TABLE IF NOT EXISTS turns_v2 (
+-- Turns
+CREATE TABLE IF NOT EXISTS turns (
   turn_hash TEXT PRIMARY KEY,
   parent_turn_hash TEXT,
   project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
@@ -107,37 +107,12 @@ CREATE TABLE IF NOT EXISTS agent_drafts (
 -- Segment Embeddings
 CREATE TABLE IF NOT EXISTS segment_embeddings (
   segment_id TEXT PRIMARY KEY,
-  turn_hash TEXT NOT NULL REFERENCES turns_v2(turn_hash) ON DELETE CASCADE,
+  turn_hash TEXT NOT NULL REFERENCES turns(turn_hash) ON DELETE CASCADE,
   segment_index INTEGER NOT NULL,
   segment_text TEXT NOT NULL,
   embedding_model TEXT NOT NULL,
   embedding_dim INTEGER NOT NULL,
   embedding BYTEA NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- Commits V4 (pure knowledge - no constraints)
-CREATE TABLE IF NOT EXISTS commits_v4 (
-  -- First class (in hash)
-  hash TEXT PRIMARY KEY,
-  schema TEXT NOT NULL DEFAULT 't3x/commit/v4',
-  parents JSONB NOT NULL DEFAULT '[]',
-  author JSONB NOT NULL,
-  committed_at TIMESTAMPTZ NOT NULL,
-  content JSONB NOT NULL,
-
-  -- Second class (not in hash)
-  project_id TEXT REFERENCES projects(project_id) ON DELETE CASCADE,
-  message TEXT,
-  branch TEXT,
-  source_refs JSONB,
-  merkle_root TEXT,
-  merge_summary JSONB,
-  semantic JSONB,
-  position_x REAL,
-  position_y REAL,
-
-  -- Timestamps
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -178,17 +153,14 @@ CREATE TABLE IF NOT EXISTS conversation_contexts (
 
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_conversations_project ON conversations(project_id);
-CREATE INDEX IF NOT EXISTS idx_turns_v2_conversation ON turns_v2(conversation_id);
-CREATE INDEX IF NOT EXISTS idx_turns_v2_project ON turns_v2(project_id);
-CREATE INDEX IF NOT EXISTS idx_turns_v2_parent ON turns_v2(parent_turn_hash);
+CREATE INDEX IF NOT EXISTS idx_turns_conversation ON turns(conversation_id);
+CREATE INDEX IF NOT EXISTS idx_turns_project ON turns(project_id);
+CREATE INDEX IF NOT EXISTS idx_turns_parent ON turns(parent_turn_hash);
 CREATE INDEX IF NOT EXISTS idx_branches_project ON branches(project_id);
 CREATE INDEX IF NOT EXISTS idx_agent_drafts_project ON agent_drafts(project_id);
 CREATE INDEX IF NOT EXISTS idx_agent_drafts_base_commit ON agent_drafts(base_commit_hash);
 CREATE INDEX IF NOT EXISTS idx_segment_embeddings_turn ON segment_embeddings(turn_hash);
 CREATE INDEX IF NOT EXISTS idx_segment_embeddings_model ON segment_embeddings(embedding_model);
-CREATE INDEX IF NOT EXISTS idx_commits_v4_project ON commits_v4(project_id);
-CREATE INDEX IF NOT EXISTS idx_commits_v4_branch ON commits_v4(branch);
-CREATE INDEX IF NOT EXISTS idx_commits_v4_created_at ON commits_v4(created_at);
 CREATE INDEX IF NOT EXISTS idx_leaves_commit ON leaves(commit_hash);
 CREATE INDEX IF NOT EXISTS idx_leaves_project ON leaves(project_id);
 CREATE INDEX IF NOT EXISTS idx_leaves_type ON leaves(type);
@@ -319,8 +291,8 @@ CREATE TABLE IF NOT EXISTS templates (
 CREATE INDEX IF NOT EXISTS idx_templates_category ON templates(category);
 CREATE INDEX IF NOT EXISTS idx_templates_leaf_type ON templates(leaf_type);
 
--- Drafts V3 (Workbench / pre-commit working area)
-CREATE TABLE IF NOT EXISTS drafts_v3 (
+-- Drafts (Workbench / pre-commit working area)
+CREATE TABLE IF NOT EXISTS drafts (
   id TEXT PRIMARY KEY,
   project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
   title TEXT NOT NULL,
@@ -344,8 +316,8 @@ CREATE TABLE IF NOT EXISTS drafts_v3 (
   created_at TIMESTAMPTZ NOT NULL,
   updated_at TIMESTAMPTZ NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_drafts_v3_project ON drafts_v3(project_id);
-CREATE INDEX IF NOT EXISTS idx_drafts_v3_status ON drafts_v3(status);
+CREATE INDEX IF NOT EXISTS idx_drafts_project ON drafts(project_id);
+CREATE INDEX IF NOT EXISTS idx_drafts_status ON drafts(status);
 
 -- Extraction Feedback (Anchoring L4)
 CREATE TABLE IF NOT EXISTS extraction_feedback (

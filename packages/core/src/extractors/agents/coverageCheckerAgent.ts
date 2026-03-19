@@ -116,7 +116,9 @@ export const coverageCheckerAgent: MeaningAgent = {
     try {
       const jsonMatch = step1Result.text.match(/\{[\s\S]*\}/);
       if (!jsonMatch) return ctx;
-      const parsed = JSON.parse(jsonMatch[0]) as { points?: Array<{ type: string; text: string; quote?: string }> };
+      const parsed = JSON.parse(jsonMatch[0]) as {
+        points?: Array<{ type: string; text: string; quote?: string }>;
+      };
       if (!parsed.points || parsed.points.length === 0) return ctx;
       userPoints = parsed.points;
     } catch {
@@ -170,8 +172,12 @@ export const coverageCheckerAgent: MeaningAgent = {
           const currentValue = existing.slots[point.slot_key];
           if (Array.isArray(currentValue)) {
             // Append to existing array, dedup by stringified value
-            const newItems = Array.isArray(point.slot_value) ? point.slot_value : [point.slot_value];
-            const existingSet = new Set(currentValue.map((v) => typeof v === 'string' ? v : JSON.stringify(v)));
+            const newItems = Array.isArray(point.slot_value)
+              ? point.slot_value
+              : [point.slot_value];
+            const existingSet = new Set(
+              currentValue.map((v) => (typeof v === 'string' ? v : JSON.stringify(v)))
+            );
             const deduped = newItems.filter((v) => {
               const key = typeof v === 'string' ? v : JSON.stringify(v);
               return !existingSet.has(key);

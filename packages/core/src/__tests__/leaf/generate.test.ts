@@ -6,13 +6,13 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GenerationError, generateLeafOutput, isGenerationConfigured } from '../../leaf/generate';
-import type { CommitV4, Leaf } from '../../types/v4';
+import type { Leaf, SentenceCommit } from '../../types/v4';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Test Fixtures
 // ═══════════════════════════════════════════════════════════════════════════
 
-const createTestCommit = (): CommitV4 => ({
+const createTestCommit = (): SentenceCommit => ({
   hash: 'sha256:test-hash',
   schema: 't3x/commit/v4',
   parents: [],

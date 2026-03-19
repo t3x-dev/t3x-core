@@ -13,13 +13,13 @@ import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import type { Commit } from '@t3x-dev/core';
 import {
   AllProvidersFailedError,
-  type CommitV4,
   collectLessons,
   framesToTextSegments,
   GenerationError,
   type GenerationMode,
   isGenerationConfigured,
   modeGenerate,
+  type SentenceCommit,
   validateConstraints,
   validateConstraintsExactOnly,
 } from '@t3x-dev/core';
@@ -51,7 +51,7 @@ import {
   GenerateLeafOutputResponse,
   ValidateLeafOutputRequest,
   ValidateLeafOutputResponse,
-} from '../schemas/v4-contracts';
+} from '../schemas/contracts';
 import { toApiLeaf } from './leaves-shared';
 import { pushNotification } from './notifications.openapi';
 
@@ -64,10 +64,10 @@ export const leavesGenerationRoutes = new OpenAPIHono({
 // ============================================================
 
 /**
- * Convert a unified Commit to a V4-compatible CommitV4 shape.
- * Needed because generateLeafOutput / modeGenerate expect CommitV4.
+ * Convert a unified Commit to a sentence-based SentenceCommit shape.
+ * Needed because generateLeafOutput / modeGenerate expect SentenceCommit.
  */
-function commitToV4Compatible(commit: Commit): CommitV4 {
+function toSentenceCommit(commit: Commit): SentenceCommit {
   const segments = framesToTextSegments(commit.content);
   return {
     ...commit,
@@ -79,7 +79,7 @@ function commitToV4Compatible(commit: Commit): CommitV4 {
         confidence: 1,
       })),
     },
-  } as CommitV4;
+  } as SentenceCommit;
 }
 
 // ============================================================
@@ -295,7 +295,7 @@ leavesGenerationRoutes.openapi(generateLeafRoute, async (c) => {
     if (!unifiedCommit) {
       return errorResponse(c, 'COMMIT_NOT_FOUND', `Source commit not found: ${leaf.commit_hash}`);
     }
-    const commit = commitToV4Compatible(unifiedCommit);
+    const commit = toSentenceCommit(unifiedCommit);
 
     // Collect lessons from historical leaves on the same commit (#4 feedback loop)
     const historicalLeaves = await findLeavesByCommit(db, leaf.commit_hash);
@@ -457,7 +457,7 @@ leavesGenerationRoutes.openapi(generateLeafRoute, async (c) => {
       ref_id: id,
     });
 
-    // Return response according to contract (v4-contracts.ts)
+    // Return response according to contract (contracts.ts)
     return c.json(
       {
         success: true as const,
@@ -631,7 +631,7 @@ leavesGenerationRoutes.openapi(batchGenerateRoute, async (c) => {
     if (!unifiedCommit) {
       return errorResponse(c, 'COMMIT_NOT_FOUND', `Commit not found: ${decodedHash}`);
     }
-    const commit = commitToV4Compatible(unifiedCommit);
+    const commit = toSentenceCommit(unifiedCommit);
 
     // 2. Check generation configuration if generation is needed
     const needsGeneration = !body.skip_generation;

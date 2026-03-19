@@ -43,6 +43,6 @@ export * from './schema-knowledge-conflicts';
 export * from './schema-metrics';
 // Sentence Modifications Schema (audit trail)
 export * from './schema-sentence-modifications';
-// V4 Schema (commits_v4, leaves, pins, conversation_contexts)
+// Schema (leaves, pins, conversation_contexts + retired commits_v4 for migration)
 // @see docs/specification/semantic-layer-architecture.md
 export * from './schema-v4';

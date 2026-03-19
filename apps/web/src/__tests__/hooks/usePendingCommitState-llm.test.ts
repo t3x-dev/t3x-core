@@ -3,7 +3,7 @@
  * Tests for usePendingCommitState — LLM commit flow
  *
  * Verifies: draft creation on Proceed, extraction failure handling,
- * commit via commitDraftV3, reset clears state.
+ * commit via commitWorkbenchDraft, reset clears state.
  */
 import { act } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -16,9 +16,9 @@ vi.mock('sonner', () => ({
 
 // Mock the api module
 vi.mock('@/lib/api', () => ({
-  createDraftV3: vi.fn(),
+  createWorkbenchDraft: vi.fn(),
   extractIncremental: vi.fn(),
-  commitDraftV3: vi.fn(),
+  commitWorkbenchDraft: vi.fn(),
   listBranches: vi.fn(() => Promise.resolve({ branches: [] })),
   diffRaw: vi.fn(),
   createBranch: vi.fn(),
@@ -151,7 +151,7 @@ describe('usePendingCommitState — LLM commit flow', () => {
   });
 
   it('creates draft and triggers extraction on handleProceed', async () => {
-    (api.createDraftV3 as ReturnType<typeof vi.fn>).mockResolvedValue(mockDraft);
+    (api.createWorkbenchDraft as ReturnType<typeof vi.fn>).mockResolvedValue(mockDraft);
     (api.extractIncremental as ReturnType<typeof vi.fn>).mockResolvedValue(mockExtractResult);
 
     const node = makeNode();
@@ -172,7 +172,7 @@ describe('usePendingCommitState — LLM commit flow', () => {
     });
 
     // Assert: draft created
-    expect(api.createDraftV3).toHaveBeenCalledWith(
+    expect(api.createWorkbenchDraft).toHaveBeenCalledWith(
       expect.objectContaining({
         project_id: 'proj_1',
         title: 'Test Commit',
@@ -192,7 +192,7 @@ describe('usePendingCommitState — LLM commit flow', () => {
   });
 
   it('sets extractionError when extraction fails', async () => {
-    (api.createDraftV3 as ReturnType<typeof vi.fn>).mockResolvedValue(mockDraft);
+    (api.createWorkbenchDraft as ReturnType<typeof vi.fn>).mockResolvedValue(mockDraft);
     (api.extractIncremental as ReturnType<typeof vi.fn>).mockRejectedValue(
       new Error('LLM API key missing')
     );
@@ -215,10 +215,10 @@ describe('usePendingCommitState — LLM commit flow', () => {
     expect(result.current.configLocked).toBe(false);
   });
 
-  it('commits via commitDraftV3', async () => {
-    (api.createDraftV3 as ReturnType<typeof vi.fn>).mockResolvedValue(mockDraft);
+  it('commits via commitWorkbenchDraft', async () => {
+    (api.createWorkbenchDraft as ReturnType<typeof vi.fn>).mockResolvedValue(mockDraft);
     (api.extractIncremental as ReturnType<typeof vi.fn>).mockResolvedValue(mockExtractResult);
-    (api.commitDraftV3 as ReturnType<typeof vi.fn>).mockResolvedValue({
+    (api.commitWorkbenchDraft as ReturnType<typeof vi.fn>).mockResolvedValue({
       commit: { hash: 'sha256:abc123' },
       leaf: null,
       draft_status: 'committed',
@@ -243,13 +243,13 @@ describe('usePendingCommitState — LLM commit flow', () => {
       await result.current.handleCommit();
     });
 
-    expect(api.commitDraftV3).toHaveBeenCalledWith('draft_abc', 'Test Commit');
+    expect(api.commitWorkbenchDraft).toHaveBeenCalledWith('draft_abc', 'Test Commit');
     expect(result.current.commitSuccess).not.toBeNull();
     expect(result.current.commitSuccess?.commitHash).toBe('sha256:abc123');
   });
 
   it('resets draft state on handleReset', async () => {
-    (api.createDraftV3 as ReturnType<typeof vi.fn>).mockResolvedValue(mockDraft);
+    (api.createWorkbenchDraft as ReturnType<typeof vi.fn>).mockResolvedValue(mockDraft);
     (api.extractIncremental as ReturnType<typeof vi.fn>).mockResolvedValue(mockExtractResult);
 
     const node = makeNode();
@@ -279,7 +279,7 @@ describe('usePendingCommitState — LLM commit flow', () => {
   });
 
   it('re-extracts on handleReExtract after initial extraction', async () => {
-    (api.createDraftV3 as ReturnType<typeof vi.fn>).mockResolvedValue(mockDraft);
+    (api.createWorkbenchDraft as ReturnType<typeof vi.fn>).mockResolvedValue(mockDraft);
     (api.extractIncremental as ReturnType<typeof vi.fn>).mockResolvedValue(mockExtractResult);
 
     const node = makeNode();
@@ -338,9 +338,9 @@ describe('usePendingCommitState — LLM commit flow', () => {
   });
 
   it('calls onUpdate with commitStatus committed after successful commit', async () => {
-    (api.createDraftV3 as ReturnType<typeof vi.fn>).mockResolvedValue(mockDraft);
+    (api.createWorkbenchDraft as ReturnType<typeof vi.fn>).mockResolvedValue(mockDraft);
     (api.extractIncremental as ReturnType<typeof vi.fn>).mockResolvedValue(mockExtractResult);
-    (api.commitDraftV3 as ReturnType<typeof vi.fn>).mockResolvedValue({
+    (api.commitWorkbenchDraft as ReturnType<typeof vi.fn>).mockResolvedValue({
       commit: { hash: 'sha256:abc123' },
       leaf: null,
       draft_status: 'committed',

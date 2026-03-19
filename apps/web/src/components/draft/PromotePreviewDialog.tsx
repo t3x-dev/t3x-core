@@ -13,7 +13,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { type DraftV3, deleteDraftV3, getDraftV3, promoteDraft } from '@/lib/api';
+import {
+  deleteWorkbenchDraft,
+  getWorkbenchDraft,
+  promoteDraft,
+  type WorkbenchDraft,
+} from '@/lib/api';
 
 interface PromotePreviewDialogProps {
   open: boolean;
@@ -32,7 +37,7 @@ export function PromotePreviewDialog({
   onViewFull,
   onDiscarded,
 }: PromotePreviewDialogProps) {
-  const [draft, setDraft] = useState<DraftV3 | null>(null);
+  const [draft, setDraft] = useState<WorkbenchDraft | null>(null);
   const [loading, setLoading] = useState(false);
   const [promoting, setPromoting] = useState(false);
   const [discarding, setDiscarding] = useState(false);
@@ -42,7 +47,7 @@ export function PromotePreviewDialog({
     let cancelled = false;
     setDraft(null);
     setLoading(true);
-    getDraftV3(autoDraftId)
+    getWorkbenchDraft(autoDraftId)
       .then((d) => {
         if (!cancelled) setDraft(d);
       })
@@ -136,7 +141,7 @@ export function PromotePreviewDialog({
                   if (!window.confirm('Discard this auto-draft? This cannot be undone.')) return;
                   setDiscarding(true);
                   try {
-                    await deleteDraftV3(autoDraftId);
+                    await deleteWorkbenchDraft(autoDraftId);
                     toast.success('Auto-draft discarded');
                     onDiscarded?.();
                     onOpenChange(false);

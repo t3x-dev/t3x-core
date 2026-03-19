@@ -13,16 +13,16 @@ import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import type { Draft } from '@t3x-dev/core';
 import {
   ConflictError,
-  deleteDraftV3,
-  findDraftV3ById,
-  insertDraftV3,
-  listDraftV3ByProject,
-  updateDraftV3,
+  deleteDraft,
+  findDraftById,
+  insertDraft,
+  listDraftsByProject,
+  updateDraft,
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { ErrorResponseSchema, IdParamSchema, SuccessResponseSchema } from '../schemas/common';
-import { CreateDraftRequest, DraftResponse, UpdateDraftRequest } from '../schemas/v4-contracts';
+import { CreateDraftRequest, DraftResponse, UpdateDraftRequest } from '../schemas/contracts';
 import { previewCache, previewDebounce } from './drafts-workflows.openapi';
 
 export const draftsCrudRoutes = new OpenAPIHono({
@@ -209,7 +209,7 @@ draftsCrudRoutes.openapi(createDraftRoute, async (c) => {
 
   try {
     const db = await getDB();
-    const draft = await insertDraftV3(db, {
+    const draft = await insertDraft(db, {
       project_id: body.project_id,
       title: body.title,
       goal: body.goal,
@@ -234,7 +234,7 @@ draftsCrudRoutes.openapi(listDraftsRoute, async (c) => {
 
   try {
     const db = await getDB();
-    const drafts = await listDraftV3ByProject(db, project_id, { status, limit, offset });
+    const drafts = await listDraftsByProject(db, project_id, { status, limit, offset });
 
     return c.json({ success: true as const, data: drafts.map(toApiDraft) }, 200);
   } catch (err) {
@@ -249,7 +249,7 @@ draftsCrudRoutes.openapi(getDraftRoute, async (c) => {
 
   try {
     const db = await getDB();
-    const draft = await findDraftV3ById(db, id);
+    const draft = await findDraftById(db, id);
 
     if (!draft) {
       return errorResponse(c, 'NOT_FOUND', `Draft not found: ${id}`);
@@ -270,7 +270,7 @@ draftsCrudRoutes.openapi(updateDraftRoute, async (c) => {
 
   try {
     const db = await getDB();
-    const draft = await updateDraftV3(db, id, updateFields, if_revision);
+    const draft = await updateDraft(db, id, updateFields, if_revision);
 
     return c.json({ success: true as const, data: toApiDraft(draft) }, 200);
   } catch (err) {
@@ -294,12 +294,12 @@ draftsCrudRoutes.openapi(deleteDraftRoute, async (c) => {
 
   try {
     const db = await getDB();
-    const draft = await findDraftV3ById(db, id);
+    const draft = await findDraftById(db, id);
     if (!draft) {
       return errorResponse(c, 'NOT_FOUND', `Draft not found: ${id}`);
     }
 
-    await deleteDraftV3(db, id);
+    await deleteDraft(db, id);
 
     // Clean up in-memory preview cache and debounce state for this draft
     previewCache.delete(id);

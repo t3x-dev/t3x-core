@@ -471,8 +471,8 @@ describe('Drafts V3 Routes', () => {
       const draftId = await createDraftWithSentences('Preview Committed');
 
       // Mark as committed directly via storage
-      const { commitDraftV3 } = await import('@t3x-dev/storage');
-      await commitDraftV3(mockDB, draftId, 'sha256:previewtest');
+      const { commitDraft } = await import('@t3x-dev/storage');
+      await commitDraft(mockDB, draftId, 'sha256:previewtest');
 
       mockIsGenerationConfigured.mockReturnValue(true);
 
@@ -617,8 +617,8 @@ describe('Drafts V3 Routes', () => {
       const draftId = await createDraftWithSentences('Already Committed');
 
       // Commit via storage directly
-      const { commitDraftV3 } = await import('@t3x-dev/storage');
-      await commitDraftV3(mockDB, draftId, 'sha256:alreadycommitted');
+      const { commitDraft } = await import('@t3x-dev/storage');
+      await commitDraft(mockDB, draftId, 'sha256:alreadycommitted');
 
       const res = await app.request(`/v1/drafts/${draftId}/commit`, {
         method: 'POST',
@@ -652,8 +652,8 @@ describe('Drafts V3 Routes', () => {
       // Add sentences and commit (we need to manually commit via storage since commit
       // endpoint requires actual commits; instead we use the fork validation path)
       // We'll use the PATCH + storage layer to mark as committed
-      const { commitDraftV3 } = await import('@t3x-dev/storage');
-      await commitDraftV3(mockDB, draftId, 'sha256:forktest');
+      const { commitDraft } = await import('@t3x-dev/storage');
+      await commitDraft(mockDB, draftId, 'sha256:forktest');
 
       // Fork
       const res = await app.request(`/v1/drafts/${draftId}/fork`, {

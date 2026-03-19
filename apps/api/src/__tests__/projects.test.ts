@@ -218,7 +218,9 @@ describe('Projects Routes', () => {
         project_id: project.projectId,
         author: { type: 'human', name: 'Tester' },
         content: {
-          frames: [{ id: 's_mm1', type: 'legacy_sentence', slots: { text: 'Merkle mismatch test' } }],
+          frames: [
+            { id: 's_mm1', type: 'legacy_sentence', slots: { text: 'Merkle mismatch test' } },
+          ],
           relations: [],
         },
         branch: 'main',

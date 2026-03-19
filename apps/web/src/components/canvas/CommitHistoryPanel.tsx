@@ -13,7 +13,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { useTerminology } from '@/hooks/useTerminology';
-import type { CommitV4, DiffResultRaw } from '@/lib/api';
+import type { DiffResultRaw, SentenceCommit } from '@/lib/api';
 import * as api from '@/lib/api';
 import { cn } from '@/lib/utils';
 
@@ -47,7 +47,7 @@ function CommitHistoryRow({
   onClick,
   t,
 }: {
-  commit: CommitV4;
+  commit: SentenceCommit;
   index: number;
   isHead: boolean;
   isRoot: boolean;
@@ -136,7 +136,7 @@ export function CommitHistoryPanel({
   projectId,
 }: CommitHistoryPanelProps) {
   const { t } = useTerminology();
-  const [history, setHistory] = useState<CommitV4[]>([]);
+  const [history, setHistory] = useState<SentenceCommit[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedHash, setSelectedHash] = useState<string | null>(null);
@@ -164,7 +164,7 @@ export function CommitHistoryPanel({
     setError(null);
 
     api
-      .getCommitV4History(commitHash, 100)
+      .getCommitHistory(commitHash, 100)
       .then((data) => {
         if (!cancelled) setHistory(data);
       })

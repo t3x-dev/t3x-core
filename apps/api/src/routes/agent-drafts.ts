@@ -9,13 +9,13 @@
 import type { SemanticContent } from '@t3x-dev/core';
 import { buildDraft, createClaudeProvider, LLMProviderError } from '@t3x-dev/core';
 import {
+  findAgentDraftById,
   findConversationById,
-  findDraftById,
   findProjectById,
   findTurnsByConversation,
-  insertDraft,
+  insertAgentDraft,
   listDeltaLogByConversation,
-  updateDraft,
+  updateAgentDraft,
 } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { getDB } from '../lib/db';
@@ -608,7 +608,7 @@ agentDraftRoutes.post('/v1/agent/drafts', async (c) => {
     const validation = validateDraft(generatedText, mustHave, mustntHave);
 
     // Save to database
-    const draft = await insertDraft(db, {
+    const draft = await insertAgentDraft(db, {
       projectId: body.project_id,
       conversationId: body.conversation_id,
       baseCommitHash: body.base_commit_hash,
@@ -664,7 +664,7 @@ agentDraftRoutes.get('/v1/agent/drafts/:id', async (c) => {
 
   try {
     const db = await getDB();
-    const draft = await findDraftById(db, draftId);
+    const draft = await findAgentDraftById(db, draftId);
 
     if (!draft) {
       return jsonError(c, 'NOT_FOUND', `Draft ${draftId} not found`, 404);
@@ -722,7 +722,7 @@ agentDraftRoutes.patch('/v1/agent/drafts/:id', async (c) => {
 
   try {
     const db = await getDB();
-    const draft = await findDraftById(db, draftId);
+    const draft = await findAgentDraftById(db, draftId);
 
     if (!draft) {
       return jsonError(c, 'NOT_FOUND', `Draft ${draftId} not found`, 404);
@@ -802,7 +802,7 @@ agentDraftRoutes.patch('/v1/agent/drafts/:id', async (c) => {
     const completedAt = new Date();
 
     // Update database
-    await updateDraft(db, draftId, {
+    await updateAgentDraft(db, draftId, {
       text: generatedText,
       mustHave,
       bridgePayload: { intent },

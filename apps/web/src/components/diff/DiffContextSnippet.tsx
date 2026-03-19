@@ -10,7 +10,7 @@
 import { Loader2, Paperclip } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { SourceContextView } from '@/components/shared/SourceContextView';
-import type { CommitV4Sentence, TurnContextData } from '@/lib/api';
+import type { CommitSentence, TurnContextData } from '@/lib/api';
 import { fetchTurnContextCached } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
@@ -19,7 +19,7 @@ import { cn } from '@/lib/utils';
 // ============================================================================
 
 interface DiffContextSnippetProps {
-  sentence: CommitV4Sentence;
+  sentence: CommitSentence;
   onJumpToConversation?: (conversationId: string) => void;
 }
 

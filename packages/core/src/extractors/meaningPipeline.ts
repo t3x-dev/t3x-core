@@ -131,20 +131,19 @@ export interface DispatchDecision {
 export function defaultDispatch(
   ctx: PipelineContext,
   registry: AgentRegistry,
-  options?: PipelineOptions,
+  options?: PipelineOptions
 ): DispatchDecision {
   const disabled = new Set(options?.disabledAgents ?? []);
   const agents = registry.getAll();
-  const applicable = agents
-    .filter((a) => !disabled.has(a.name))
-    .filter((a) => a.shouldRun(ctx));
+  const applicable = agents.filter((a) => !disabled.has(a.name)).filter((a) => a.shouldRun(ctx));
   const llmCount = applicable.filter((a) => a.usesLLM).length;
   const mode = ctx.meta.mode;
   return {
     agentsToRun: applicable.map((a) => a.name),
-    reason: mode === 'incremental'
-      ? `Incremental mode — ${applicable.length} agents (${llmCount} LLM)`
-      : `Full mode — ${applicable.length} agents (${llmCount} LLM)`,
+    reason:
+      mode === 'incremental'
+        ? `Incremental mode — ${applicable.length} agents (${llmCount} LLM)`
+        : `Full mode — ${applicable.length} agents (${llmCount} LLM)`,
   };
 }
 
@@ -270,11 +269,19 @@ export interface PipelineResult {
 
 export class MeaningPipeline {
   private registry = new AgentRegistry();
-  private dispatch: (ctx: PipelineContext, reg: AgentRegistry, options?: PipelineOptions) => DispatchDecision;
+  private dispatch: (
+    ctx: PipelineContext,
+    reg: AgentRegistry,
+    options?: PipelineOptions
+  ) => DispatchDecision;
 
   constructor(
     private readonly provider: LLMProvider,
-    dispatchFn?: (ctx: PipelineContext, reg: AgentRegistry, options?: PipelineOptions) => DispatchDecision
+    dispatchFn?: (
+      ctx: PipelineContext,
+      reg: AgentRegistry,
+      options?: PipelineOptions
+    ) => DispatchDecision
   ) {
     this.dispatch = dispatchFn ?? defaultDispatch;
   }
@@ -335,7 +342,9 @@ export class MeaningPipeline {
     const decision = this.dispatch(ctx, this.registry, options);
 
     if (options?.debug) {
-      console.info(`[pipeline] Mode: ${ctx.meta.mode} | Agents: ${decision.agentsToRun.join(' → ')}`);
+      console.info(
+        `[pipeline] Mode: ${ctx.meta.mode} | Agents: ${decision.agentsToRun.join(' → ')}`
+      );
     }
 
     // Run agents in order with validation gates
@@ -398,8 +407,13 @@ export class MeaningPipeline {
           console.info(
             `[pipeline] %-22s | frames: %d→%d | quality: %d→%d (%s%d)%s | %dms`,
             agentName,
-            preAgentContent.frames.length, currentCtx.content.frames.length,
-            preMetrics.score, snapshotMetrics.score, sign, delta, warn,
+            preAgentContent.frames.length,
+            currentCtx.content.frames.length,
+            preMetrics.score,
+            snapshotMetrics.score,
+            sign,
+            delta,
+            warn,
             durationMs
           );
         }

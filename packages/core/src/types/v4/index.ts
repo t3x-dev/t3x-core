@@ -5,7 +5,7 @@
  * All layers (storage, api, web) must import from here.
  *
  * Key changes from V3:
- * - CommitV4: sentences only, NO constraints
+ * - SentenceCommit: sentences only, NO constraints
  * - Leaf: owns constraints, validation, output
  * - Pin: source selection mechanism for commit + conversation context
  *
@@ -93,16 +93,16 @@ export interface SentenceSourceRef {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// CommitV4 (Pure Knowledge, NO Constraints)
+// SentenceCommit (Pure Knowledge, NO Constraints)
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * CommitV4 is a pure knowledge container.
+ * SentenceCommit is a pure knowledge container.
  *
  * Key difference from V3: NO constraints in content.
  * Constraints now belong to Leaf (application layer).
  */
-export interface CommitV4 {
+export interface SentenceCommit {
   // ─────────────────────────────────────────────────────────────────────────
   // First-class fields (participate in hash calculation)
   // ─────────────────────────────────────────────────────────────────────────
@@ -123,7 +123,7 @@ export interface CommitV4 {
   committed_at: string;
 
   /** The actual content - ONLY sentences, no constraints */
-  content: CommitV4Content;
+  content: SentenceCommitContent;
 
   // ─────────────────────────────────────────────────────────────────────────
   // Second-class fields (NOT in hash calculation)
@@ -164,7 +164,7 @@ export interface CommitV4 {
   merge_summary?: MergeSummaryData;
 }
 
-export interface CommitV4Content {
+export interface SentenceCommitContent {
   /** The knowledge - array of sentences */
   sentences: Sentence[];
 
@@ -585,22 +585,22 @@ export interface MergeSummaryData {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * First-class fields of CommitV4 that participate in hash calculation.
+ * First-class fields of SentenceCommit that participate in hash calculation.
  *
- * Used by computeCommitV4Hash() to ensure only these fields are hashed.
+ * Used by computeCommitHash() to ensure only these fields are hashed.
  *
  * NOT included (second-class):
  * - project_id, message, branch, source_refs, position_x, position_y, created_at
  */
-export type CommitV4FirstClass = Pick<
-  CommitV4,
+export type SentenceCommitFirstClass = Pick<
+  SentenceCommit,
   'schema' | 'parents' | 'author' | 'committed_at' | 'content'
 >;
 
 /**
- * Input for creating a new CommitV4.
+ * Input for creating a new SentenceCommit.
  */
-export interface CreateCommitV4Input {
+export interface CreateSentenceCommitInput {
   parents?: string[];
   author: CommitAuthor;
   sentences: Sentence[];
@@ -660,7 +660,7 @@ export interface WordDiffSegment {
  * A pair of similar sentences from source and target commits.
  * User must choose which one to keep.
  */
-export interface MergeV4SimilarPair {
+export interface MergeSimilarPair {
   /** Source sentence */
   source: Sentence;
 
@@ -678,7 +678,7 @@ export interface MergeV4SimilarPair {
  * A sentence that exists in only one commit (source or target).
  * User can choose to keep or discard it.
  */
-export interface MergeV4Candidate {
+export interface MergeCandidate {
   /** The unique sentence */
   sentence: Sentence;
 
@@ -690,18 +690,18 @@ export interface MergeV4Candidate {
  * Result of preparing a V4 merge.
  * Contains all information needed for user to make merge decisions.
  */
-export interface MergeV4Result {
+export interface MergeResult {
   /** Sentences identical in both commits - auto-kept */
   identical: Sentence[];
 
   /** Similar pairs requiring user decision */
-  similar_pairs: MergeV4SimilarPair[];
+  similar_pairs: MergeSimilarPair[];
 
   /** Sentences only in source commit */
-  only_in_source: MergeV4Candidate[];
+  only_in_source: MergeCandidate[];
 
   /** Sentences only in target commit */
-  only_in_target: MergeV4Candidate[];
+  only_in_target: MergeCandidate[];
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -857,7 +857,7 @@ export type DraftSentenceOrigin =
 
 /**
  * A sentence within a Draft. Uses ds_ prefix IDs.
- * Converted to CommitV4 Sentence (s_) on commit.
+ * Converted to SentenceCommit Sentence (s_) on commit.
  */
 export interface DraftSentence {
   /** Unique ID, format: "ds_" + nanoid(12) */

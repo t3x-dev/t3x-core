@@ -20,7 +20,7 @@ export function generateBranchId(): string {
   return `branch_${randomUUID().replace(/-/g, '').slice(0, 8)}`;
 }
 
-export function generateDraftId(): string {
+export function generateAgentDraftId(): string {
   return `draft_${randomUUID().replace(/-/g, '').slice(0, 8)}`;
 }
 
@@ -54,7 +54,7 @@ export function generateSentenceId(): string {
   return `s_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
 }
 
-export function generateDraftV3Id(): string {
+export function generateDraftId(): string {
   return `draft_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
 }
 

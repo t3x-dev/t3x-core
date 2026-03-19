@@ -7,10 +7,10 @@
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
+import { insertAgentDraft } from '../queries/agent-drafts';
 import { insertBranch } from '../queries/branches';
 import { createCommit } from '../queries/commits';
 import { insertConversation } from '../queries/conversations';
-import { insertDraft } from '../queries/drafts';
 import {
   deleteProject,
   findProjectById,
@@ -226,7 +226,7 @@ describe('Projects Storage', () => {
       await insertBranch(db, { projectId, name: 'main' });
 
       // Create 1 draft
-      await insertDraft(db, {
+      await insertAgentDraft(db, {
         projectId,
         conversationId: conv1.conversationId,
         bridgeId: 'test',

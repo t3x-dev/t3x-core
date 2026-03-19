@@ -13,7 +13,13 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { createCommit, getCommit, getCommitsByHashes, listCommits, updateCommitPosition } from '@t3x-dev/storage';
+import {
+  createCommit,
+  getCommit,
+  getCommitsByHashes,
+  listCommits,
+  updateCommitPosition,
+} from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import {
@@ -262,8 +268,14 @@ const updatePositionRoute = createRoute({
     },
   },
   responses: {
-    200: { content: { 'application/json': { schema: SuccessResponseSchema } }, description: 'Position updated' },
-    404: { content: { 'application/json': { schema: ErrorResponseSchema } }, description: 'Commit not found' },
+    200: {
+      content: { 'application/json': { schema: SuccessResponseSchema } },
+      description: 'Position updated',
+    },
+    404: {
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+      description: 'Commit not found',
+    },
   },
 });
 
@@ -293,8 +305,14 @@ const getHistoryRoute = createRoute({
     query: z.object({ limit: z.coerce.number().int().min(1).max(500).default(50) }),
   },
   responses: {
-    200: { content: { 'application/json': { schema: SuccessResponseSchema } }, description: 'History chain' },
-    404: { content: { 'application/json': { schema: ErrorResponseSchema } }, description: 'Commit not found' },
+    200: {
+      content: { 'application/json': { schema: SuccessResponseSchema } },
+      description: 'History chain',
+    },
+    404: {
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+      description: 'Commit not found',
+    },
   },
 });
 
@@ -326,5 +344,8 @@ commitRoutes.openapi(getHistoryRoute, async (c) => {
     return errorResponse(c, 'COMMIT_NOT_FOUND', `Commit ${decodedHash} not found`);
   }
 
-  return c.json({ success: true as const, data: { commits, truncated: commits.length >= limit } }, 200);
+  return c.json(
+    { success: true as const, data: { commits, truncated: commits.length >= limit } },
+    200
+  );
 });

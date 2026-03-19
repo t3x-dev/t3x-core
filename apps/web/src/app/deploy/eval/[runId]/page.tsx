@@ -43,13 +43,13 @@ import { PinButton } from '@/components/ui/PinButton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useKeyboardNavigation } from '@/hooks/useKeyboardNavigation';
 import {
-  type CommitV4,
-  type CommitV4SentenceSourceRef,
   type EngineRun,
-  getCommitV4,
   getEngineRun,
   getLeaf,
+  getSentenceCommit,
   type Leaf,
+  type SentenceCommit,
+  type SentenceSourceRef,
   updateEngineRun,
 } from '@/lib/api';
 import { exportRunAsJSON, exportRunAsMarkdown } from '@/lib/exportReport';
@@ -219,7 +219,7 @@ export default function RunDetailPage() {
 
   const [run, setRun] = useState<EngineRun | null>(null);
   const [leaf, setLeaf] = useState<Leaf | null>(null);
-  const [commit, setCommit] = useState<CommitV4 | null>(null);
+  const [commit, setCommit] = useState<SentenceCommit | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('overview');
@@ -269,7 +269,7 @@ export default function RunDetailPage() {
   // Fetch commit data for lineage chain (assertion → constraint → sentence → source_ref)
   useEffect(() => {
     if (!leaf?.commit_hash) return;
-    getCommitV4(leaf.commit_hash)
+    getSentenceCommit(leaf.commit_hash)
       .then(setCommit)
       .catch(() => {
         // Commit fetch failure is non-fatal
@@ -278,7 +278,7 @@ export default function RunDetailPage() {
 
   // Build map: constraint_id → source_ref (for lineage links)
   const constraintSourceRefMap = useMemo(() => {
-    const map = new Map<string, CommitV4SentenceSourceRef>();
+    const map = new Map<string, SentenceSourceRef>();
     if (!leaf?.constraints || !commit?.content?.sentences) return map;
 
     // Index sentences by ID for fast lookup

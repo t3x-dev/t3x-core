@@ -6,7 +6,7 @@ import { WordDiffDisplay } from '@/components/merge/WordDiffDisplay';
 import { SourceContextView } from '@/components/shared/SourceContextView';
 import { EmptyStateInline } from '@/components/ui/empty-state';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import type { CommitV4Sentence, TurnContextData } from '@/lib/api';
+import type { CommitSentence, TurnContextData } from '@/lib/api';
 import * as api from '@/lib/api';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
@@ -30,8 +30,8 @@ import { DiffSourceGroupHeader } from './DiffSourceGroupHeader';
 
 interface DiffSideBySideProps {
   segmentDiffs: SegmentDiffItem[];
-  baseSentences: CommitV4Sentence[];
-  targetSentences: CommitV4Sentence[];
+  baseSentences: CommitSentence[];
+  targetSentences: CommitSentence[];
   projectId?: string;
   /** View mode: split (side-by-side), unified (single column), or document (readable) */
   viewMode?: 'split' | 'unified' | 'document';
@@ -137,7 +137,7 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
     );
 
     const handleSourceToggle = useCallback(
-      async (segmentId: string, sentence: CommitV4Sentence, lineWordDiff?: WordDiffSegment[]) => {
+      async (segmentId: string, sentence: CommitSentence, lineWordDiff?: WordDiffSegment[]) => {
         // Use updater form to avoid stale closure over expandedSegmentIds
         let wasExpanded = false;
         setExpandedSegmentIds((prev) => {
@@ -260,7 +260,7 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
 
     /** Create a jump handler that opens the context modal with source_ref info */
     const makeJumpHandler = useCallback(
-      (sentence: CommitV4Sentence | undefined, lineWordDiff?: WordDiffSegment[]) => {
+      (sentence: CommitSentence | undefined, lineWordDiff?: WordDiffSegment[]) => {
         if (!projectId || !sentence?.source_ref?.conversation_id) return undefined;
         return (conversationId: string) => {
           const ref = sentence.source_ref;
@@ -305,7 +305,7 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
 
     /** Get the source conversation title for a sentence */
     const getSourceTitle = useCallback(
-      (sentence: CommitV4Sentence | undefined): string | undefined => {
+      (sentence: CommitSentence | undefined): string | undefined => {
         const convId = sentence?.source_ref?.conversation_id;
         if (!convId) return undefined;
         return sourceRefTitles?.get(convId) ?? undefined;

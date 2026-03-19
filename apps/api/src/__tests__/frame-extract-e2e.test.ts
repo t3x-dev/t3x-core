@@ -8,12 +8,8 @@
  * Replaces the need to manually chat 5 rounds in the WebUI.
  */
 
-import {
-  insertConversation,
-  insertProject,
-  insertTurn,
-} from '@t3x-dev/storage';
 import type { AnyDB } from '@t3x-dev/storage';
+import { insertConversation, insertProject, insertTurn } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
@@ -46,25 +42,53 @@ import { frameExtractRoutes } from '../routes/frame-extract.openapi';
 const CONVERSATION_TURNS = [
   // Round 1
   { role: 'user' as const, content: '我和两个朋友想去杭州玩，计划三天两夜，每人预算 3000 左右。' },
-  { role: 'assistant' as const, content: '杭州三天两夜的行程可以安排得很丰富！西湖、灵隐寺、龙井茶园都是热门景点。你们有什么偏好吗？' },
+  {
+    role: 'assistant' as const,
+    content:
+      '杭州三天两夜的行程可以安排得很丰富！西湖、灵隐寺、龙井茶园都是热门景点。你们有什么偏好吗？',
+  },
   // Round 2
-  { role: 'user' as const, content: '对了，小王花生过敏，这个一定要注意。还有我听说河坊街太商业化了，不想去。' },
-  { role: 'assistant' as const, content: '好的，记下了花生过敏和避开河坊街。饮食方面我会特别注意推荐无花生的餐厅。' },
+  {
+    role: 'user' as const,
+    content: '对了，小王花生过敏，这个一定要注意。还有我听说河坊街太商业化了，不想去。',
+  },
+  {
+    role: 'assistant' as const,
+    content: '好的，记下了花生过敏和避开河坊街。饮食方面我会特别注意推荐无花生的餐厅。',
+  },
   // Round 3
-  { role: 'user' as const, content: '西湖肯定要去，还有灵隐寺和龙井茶园。我们都喜欢摄影，也想去品茶。' },
-  { role: 'assistant' as const, content: '这些都是杭州的经典景点，龙井茶园可以安排品茶和摄影，时间上建议放在下午。' },
+  {
+    role: 'user' as const,
+    content: '西湖肯定要去，还有灵隐寺和龙井茶园。我们都喜欢摄影，也想去品茶。',
+  },
+  {
+    role: 'assistant' as const,
+    content: '这些都是杭州的经典景点，龙井茶园可以安排品茶和摄影，时间上建议放在下午。',
+  },
   // Round 4
   { role: 'user' as const, content: '住宿想住民宿，最好在西湖附近，要安静有停车位的。' },
-  { role: 'assistant' as const, content: '西湖附近有不少精品民宿，我推荐几个安静的区域，比如杨公堤一带。' },
+  {
+    role: 'assistant' as const,
+    content: '西湖附近有不少精品民宿，我推荐几个安静的区域，比如杨公堤一带。',
+  },
   // Round 5
-  { role: 'user' as const, content: '美食方面，一定要尝西湖醋鱼和龙井虾仁，东坡肉也要试试。注意不要有花生的菜。' },
-  { role: 'assistant' as const, content: '好的，这几道都是杭帮菜经典，我帮你标注好避开花生类菜品。' },
+  {
+    role: 'user' as const,
+    content: '美食方面，一定要尝西湖醋鱼和龙井虾仁，东坡肉也要试试。注意不要有花生的菜。',
+  },
+  {
+    role: 'assistant' as const,
+    content: '好的，这几道都是杭帮菜经典，我帮你标注好避开花生类菜品。',
+  },
 ];
 
 // Extra turns for incremental test
 const INCREMENTAL_TURNS = [
   { role: 'user' as const, content: '预算提高到每人 5000 吧，我们打算自驾去杭州。' },
-  { role: 'assistant' as const, content: '自驾去杭州不错，高速大约 3-4 小时。预算提高后可以考虑更好的住宿和餐厅。' },
+  {
+    role: 'assistant' as const,
+    content: '自驾去杭州不错，高速大约 3-4 小时。预算提高后可以考虑更好的住宿和餐厅。',
+  },
 ];
 
 // ============================================================
@@ -258,7 +282,10 @@ function createMockProvider(mode: 'full' | 'incremental' = 'full') {
       }
 
       // coverage_checker step 2 (compare against frames)
-      if (prompt.includes('compare a list of user-stated points') || prompt.includes('You compare')) {
+      if (
+        prompt.includes('compare a list of user-stated points') ||
+        prompt.includes('You compare')
+      ) {
         return { text: PIPELINE_RESPONSES.coverageStep2, usage };
       }
 
@@ -408,9 +435,7 @@ describe('Frame Extraction E2E — Hangzhou Trip', () => {
 
     // Delta should have update changes
     expect(delta.changes.length).toBeGreaterThanOrEqual(1);
-    const updateChange = delta.changes.find(
-      (c: { action: string }) => c.action === 'update'
-    );
+    const updateChange = delta.changes.find((c: { action: string }) => c.action === 'update');
     expect(updateChange).toBeDefined();
     expect(updateChange.target).toBe('f_001');
     expect(updateChange.slots.budget_per_person).toBe(5000);

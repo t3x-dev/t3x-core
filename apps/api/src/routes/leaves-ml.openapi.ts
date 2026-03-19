@@ -14,10 +14,10 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import type { Commit } from '@t3x-dev/core';
 import {
-  type CommitV4,
   collectLessons,
   framesToTextSegments,
   generateLeafOutput,
+  type SentenceCommit,
   suggestConstraints,
   suggestionsToConstraints,
 } from '@t3x-dev/core';
@@ -45,10 +45,10 @@ export const leavesMLRoutes = new OpenAPIHono({
 // ============================================================
 
 /**
- * Convert a unified Commit to a V4-compatible CommitV4 shape.
- * Needed because generateLeafOutput / suggestConstraints expect CommitV4.
+ * Convert a unified Commit to a sentence-based SentenceCommit shape.
+ * Needed because generateLeafOutput / suggestConstraints expect SentenceCommit.
  */
-function commitToV4Compatible(commit: Commit): CommitV4 {
+function toSentenceCommit(commit: Commit): SentenceCommit {
   const segments = framesToTextSegments(commit.content);
   return {
     ...commit,
@@ -60,7 +60,7 @@ function commitToV4Compatible(commit: Commit): CommitV4 {
         confidence: 1,
       })),
     },
-  } as CommitV4;
+  } as SentenceCommit;
 }
 
 // ============================================================
@@ -420,7 +420,7 @@ leavesMLRoutes.openapi(suggestConstraintsRoute, async (c) => {
     if (!unifiedCommit) {
       return errorResponse(c, 'NOT_FOUND', `Commit ${leaf.commit_hash} not found`);
     }
-    const commit = commitToV4Compatible(unifiedCommit);
+    const commit = toSentenceCommit(unifiedCommit);
 
     const sentences = commit.content.sentences;
     if (sentences.length === 0) {
@@ -749,7 +749,7 @@ leavesMLRoutes.openapi(reverseLearnRoute, async (c) => {
     if (!unifiedCommit) {
       return errorResponse(c, 'NOT_FOUND', `Commit ${leaf.commit_hash} not found`);
     }
-    const commit = commitToV4Compatible(unifiedCommit);
+    const commit = toSentenceCommit(unifiedCommit);
 
     // Collect lessons from failed assertions on this leaf and siblings
     const allLeaves = await findLeavesByCommit(db, leaf.commit_hash);
@@ -851,7 +851,7 @@ leavesMLRoutes.openapi(compareModelsRoute, async (c) => {
     if (!unifiedCommit) {
       return errorResponse(c, 'COMMIT_NOT_FOUND', `Source commit not found: ${leaf.commit_hash}`);
     }
-    const commit = commitToV4Compatible(unifiedCommit);
+    const commit = toSentenceCommit(unifiedCommit);
 
     const registry = await getProviderRegistry();
     const additionalInstructions =

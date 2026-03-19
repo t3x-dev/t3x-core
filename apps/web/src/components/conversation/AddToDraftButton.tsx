@@ -16,8 +16,8 @@ import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import { useTerminology } from '@/hooks/useTerminology';
 import type { TextSelectionResult } from '@/hooks/useTextSelection';
-import type { DraftV3 } from '@/lib/api';
-import { createDraftV3, listDraftsV3, updateDraftV3 } from '@/lib/api';
+import type { WorkbenchDraft } from '@/lib/api';
+import { createWorkbenchDraft, listWorkbenchDrafts, updateWorkbenchDraft } from '@/lib/api';
 import { nextDraftId } from '@/lib/draftUtils';
 import { DraftPickerDialog } from './DraftPickerDialog';
 
@@ -81,9 +81,9 @@ export function AddToDraftButton({
     const dateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     const autoTitle = `${t('draft')} · ${titlePrefix} · ${dateStr}`;
 
-    const newDraft = await createDraftV3({ project_id: projectId, title: autoTitle });
+    const newDraft = await createWorkbenchDraft({ project_id: projectId, title: autoTitle });
     const sentence = buildSentence(selection.text, selection, conversationId, conversationTitle, 0);
-    await updateDraftV3(newDraft.id, { sentences: [sentence], if_revision: 1 });
+    await updateWorkbenchDraft(newDraft.id, { sentences: [sentence], if_revision: 1 });
 
     toast.success(`Added to "${autoTitle}"`, {
       action: {
@@ -96,7 +96,7 @@ export function AddToDraftButton({
     onDone();
   };
 
-  const addToDraft = async (draft: DraftV3) => {
+  const addToDraft = async (draft: WorkbenchDraft) => {
     const sentence = buildSentence(
       selection.text,
       selection,
@@ -105,7 +105,10 @@ export function AddToDraftButton({
       draft.sentences.length
     );
     const updatedSentences = [...draft.sentences, sentence];
-    await updateDraftV3(draft.id, { sentences: updatedSentences, if_revision: draft.revision });
+    await updateWorkbenchDraft(draft.id, {
+      sentences: updatedSentences,
+      if_revision: draft.revision,
+    });
 
     toast.success(`Added to "${draft.title}"`, {
       action: {
@@ -121,7 +124,7 @@ export function AddToDraftButton({
   const handleClick = async () => {
     setActing(true);
     try {
-      const drafts = await listDraftsV3(projectId, 'editing');
+      const drafts = await listWorkbenchDrafts(projectId, 'editing');
 
       if (drafts.length === 0) {
         await quickCollect();

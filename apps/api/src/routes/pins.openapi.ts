@@ -28,7 +28,7 @@ import {
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { ErrorResponseSchema, IdParamSchema, SuccessResponseSchema } from '../schemas/common';
-import { CreatePinRequest, PinResponse, UpdatePinAssertionsRequest } from '../schemas/v4-contracts';
+import { CreatePinRequest, PinResponse, UpdatePinAssertionsRequest } from '../schemas/contracts';
 
 export const pinsRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,

@@ -34,7 +34,7 @@ import {
   IdParamSchema,
   SuccessResponseSchema,
 } from '../schemas/common';
-import { CreateLeafRequest, LeafResponse, UpdateLeafRequest } from '../schemas/v4-contracts';
+import { CreateLeafRequest, LeafResponse, UpdateLeafRequest } from '../schemas/contracts';
 import { toApiLeaf } from './leaves-shared';
 
 export const leavesCrudRoutes = new OpenAPIHono({

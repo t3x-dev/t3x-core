@@ -14,7 +14,14 @@
 
 import type { LLMProvider } from '../llm/types';
 import type { EmbeddingProvider } from '../providers/embedding/base';
-import type { AnyLeafType, Assertion, CommitV4, Constraint, Leaf, LeafType } from '../types/v4';
+import type {
+  AnyLeafType,
+  Assertion,
+  Constraint,
+  Leaf,
+  LeafType,
+  SentenceCommit,
+} from '../types/v4';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Generation Types (GEN-* uses)
@@ -25,7 +32,7 @@ import type { AnyLeafType, Assertion, CommitV4, Constraint, Leaf, LeafType } fro
  */
 export interface BuildPromptOptions {
   /** The commit containing sentences (knowledge) */
-  commit: CommitV4;
+  commit: SentenceCommit;
 
   /** The leaf containing constraints and config */
   leaf: Leaf;

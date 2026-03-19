@@ -45,7 +45,7 @@ import {
   SOURCE_ICONS,
   useSemanticZoom,
 } from './CanvasNodeUtils';
-import { CommitV4Content, PREVIEW_MAX_SENTENCES } from './CommitNodeContent';
+import { CommitContentSection, PREVIEW_MAX_SENTENCES } from './CommitNodeContent';
 import { NodeLeavesSection } from './NodeLeavesSection';
 
 // Re-export LEAF_TYPES for backward compatibility
@@ -215,7 +215,7 @@ const UnitNode = memo(function UnitNode(props: Props) {
   // Copy commit hash to clipboard
   const handleCopyHash = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const hash = data.commitV4?.hash || data.commitHash || data.entryId || '';
+    const hash = data.commit?.hash || data.commitHash || data.entryId || '';
     navigator.clipboard
       .writeText(hash)
       .then(() => {
@@ -282,8 +282,8 @@ const UnitNode = memo(function UnitNode(props: Props) {
   // B-8: Compute stats for collapsed view
   const sentenceCount = isDraft
     ? 0 // Draft shows its own summary in title area
-    : data.commitV4
-      ? data.commitV4.content.sentences.length
+    : data.commit
+      ? data.commit.content.sentences.length
       : 0;
 
   // Constellation mode — render minified dot at low zoom
@@ -423,9 +423,9 @@ const UnitNode = memo(function UnitNode(props: Props) {
                   <GitBranch size={11} className={toneAccent.branch.text} />
                 )}
                 <span className="font-medium text-[var(--text-primary)]">{branchLabel}</span>
-                {(data.commitV4?.hash || data.commitHash) && (
+                {(data.commit?.hash || data.commitHash) && (
                   <span className="font-mono text-[var(--text-tertiary)] text-[10px]">
-                    {(data.commitV4?.hash || data.commitHash || '')
+                    {(data.commit?.hash || data.commitHash || '')
                       .replace('sha256:', '')
                       .slice(0, 7)}
                   </span>
@@ -578,11 +578,9 @@ const UnitNode = memo(function UnitNode(props: Props) {
           </div>
 
           {/* Row 2: Self hash (committed only) */}
-          {isCommitted && (data.commitV4?.hash || data.commitHash) && (
+          {isCommitted && (data.commit?.hash || data.commitHash) && (
             <div className="font-mono text-[11px] text-[var(--text-tertiary)] mb-1">
-              {(data.commitV4?.hash || data.commitHash || '')
-                .replace('sha256:', 'sha:')
-                .slice(0, 11)}
+              {(data.commit?.hash || data.commitHash || '').replace('sha256:', 'sha:').slice(0, 11)}
             </div>
           )}
 
@@ -643,7 +641,7 @@ const UnitNode = memo(function UnitNode(props: Props) {
           )}
 
           {/* B-8: Details toggle */}
-          {(data.commitV4 || data.commitHash) && (
+          {(data.commit || data.commitHash) && (
             <button
               type="button"
               className="w-full flex items-center justify-center gap-1 text-xs text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] py-1 rounded hover:bg-[var(--hover-bg)] transition-colors nodrag"
@@ -670,7 +668,7 @@ const UnitNode = memo(function UnitNode(props: Props) {
                         onClick={handleCopyHash}
                         className="inline-flex items-center gap-1 font-mono text-[var(--text-tertiary)] bg-[var(--hover-bg)] hover:bg-[var(--hover-bg-strong)] px-1.5 py-0.5 rounded text-xs transition-colors cursor-pointer"
                       >
-                        {(data.commitV4?.hash || data.commitHash || data.entryId || '')
+                        {(data.commit?.hash || data.commitHash || data.entryId || '')
                           .replace('sha256:', 'sha:')
                           .slice(0, 11)}
                         {copiedHash ? (
@@ -697,9 +695,9 @@ const UnitNode = memo(function UnitNode(props: Props) {
 
               {/* Merge summary one-liner */}
               {data.isMergeCommit &&
-                data.commitV4?.merge_summary &&
+                data.commit?.merge_summary &&
                 (() => {
-                  const ms = data.commitV4.merge_summary;
+                  const ms = data.commit.merge_summary;
                   const parts = [
                     `${ms.total_sentences} kept`,
                     `${ms.resolved_conflicts} ${t('resolved').toLowerCase()}`,
@@ -788,9 +786,9 @@ const UnitNode = memo(function UnitNode(props: Props) {
               </div>
 
               {/* V4: Sentences content */}
-              {data.commitV4 && (
-                <CommitV4Content
-                  commit={data.commitV4}
+              {data.commit && (
+                <CommitContentSection
+                  commit={data.commit}
                   onViewFull={() => openNodeModal(id, 'commit')}
                   projectId={projectId}
                   maxSentences={isDetail ? Number.MAX_SAFE_INTEGER : PREVIEW_MAX_SENTENCES}

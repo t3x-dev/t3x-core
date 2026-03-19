@@ -5,7 +5,7 @@
  */
 
 import type { AnyDB } from '@t3x-dev/storage';
-import { insertConversation, insertDraftV3, insertProject, insertTurn } from '@t3x-dev/storage';
+import { insertConversation, insertDraft, insertProject, insertTurn } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
@@ -74,7 +74,7 @@ describe('POST /v1/extract/incremental', () => {
     });
     turnHash2 = turn2.turnHash;
 
-    const draft = await insertDraftV3(mockDB, {
+    const draft = await insertDraft(mockDB, {
       project_id: testProjectId,
       title: 'Incremental test draft',
     });

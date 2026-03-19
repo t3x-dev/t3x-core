@@ -16,7 +16,7 @@ export type AnchorType =
   | 'date' // Date expression: January 2025
   | 'entity' // Named entity from NLP: Bangkok, Party A
   | 'term' // Domain-specific term: indemnify, terminate
-  // CommitV4 / Frame extraction anchor types
+  // Frame extraction anchor types
   | 'verbatim' // Exact quote from source
   | 'paraphrase' // Reworded from source
   | 'inference'; // Inferred from context (cross-turn)

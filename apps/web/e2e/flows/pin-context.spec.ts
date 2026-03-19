@@ -1,7 +1,7 @@
 import {
   API_BASE,
   cleanupProject,
-  createTestCommitV4,
+  createTestCommit,
   createTestConversation,
   createTestLeaf,
   createTestPin,
@@ -49,7 +49,7 @@ test.describe('Pin & Context Management', () => {
 
     // Create commit and leaf
     const sentences = generateSentences(3);
-    commitHash = await createTestCommitV4(request, projectId, sentences, {
+    commitHash = await createTestCommit(request, projectId, sentences, {
       message: 'Pin test commit',
     });
     leafId = await createTestLeaf(request, commitHash, projectId);

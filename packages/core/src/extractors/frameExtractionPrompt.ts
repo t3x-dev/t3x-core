@@ -352,13 +352,18 @@ export function buildFrameExtractionPrompt(
     if (contextTurns.length > 0 && newTurns.length > 0) {
       // Two-section layout: context + new
       const contextText = formatTurns(contextTurns);
-      const newText = contextTurns.length > 0
-        ? newTurns.map((t, i) => {
-            const idx = contextTurns.length + i;
-            const tag = t.turn_hash ? `[T${idx + 1}:${t.turn_hash.slice(0, 8)}]` : `[T${idx + 1}]`;
-            return `${tag} [${t.role}]: ${t.content}`;
-          }).join('\n')
-        : formatTurns(newTurns);
+      const newText =
+        contextTurns.length > 0
+          ? newTurns
+              .map((t, i) => {
+                const idx = contextTurns.length + i;
+                const tag = t.turn_hash
+                  ? `[T${idx + 1}:${t.turn_hash.slice(0, 8)}]`
+                  : `[T${idx + 1}]`;
+                return `${tag} [${t.role}]: ${t.content}`;
+              })
+              .join('\n')
+          : formatTurns(newTurns);
       turnsSection = `## Context Turns (already in snapshot — do NOT re-extract these)
 ${contextText}
 

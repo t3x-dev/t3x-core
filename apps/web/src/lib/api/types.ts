@@ -165,7 +165,7 @@ export type ApiAnchorType =
   | 'entity'
   | 'term'
   | 'phrase'
-  // CommitV4 / Frame extraction anchor types
+  // Frame extraction anchor types
   | 'verbatim'
   | 'paraphrase'
   | 'inference';
@@ -206,7 +206,7 @@ export interface ApiCommitAnchors {
 // ============================================================================
 
 // Parsed commit for frontend use
-// Aligned with @t3x-dev/core CommitV2Record
+// Aligned with @t3x-dev/core Commit
 export interface Commit {
   commit_hash: string;
   project_id: string;

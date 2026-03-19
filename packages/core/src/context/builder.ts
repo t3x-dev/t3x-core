@@ -10,11 +10,11 @@
 
 import type {
   BuiltContext,
-  CommitV4,
   ContextSource,
   ConversationContext,
   Leaf,
   Pin,
+  SentenceCommit,
 } from '../types/v4';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -35,7 +35,7 @@ export interface ConversationData {
  */
 export interface ContextBuildInput {
   /** Current commit (HEAD) - provides base knowledge */
-  currentCommit?: CommitV4;
+  currentCommit?: SentenceCommit;
 
   /** All project pins */
   projectPins: Pin[];
@@ -179,7 +179,7 @@ export function buildConversationContext(input: ContextBuildInput): BuiltContext
  * @param commit - The commit to build context from
  * @returns Built context with knowledge sentences
  */
-export function buildLeafContext(commit: CommitV4): BuiltContext {
+export function buildLeafContext(commit: SentenceCommit): BuiltContext {
   let text = '## Knowledge\n\n';
 
   for (const sentence of commit.content.sentences) {

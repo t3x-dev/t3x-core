@@ -9,12 +9,7 @@
  */
 
 import type { AnyDB } from '@t3x-dev/storage';
-import {
-  insertDraftV3,
-  insertProject,
-  updateAutopilotConfig,
-  updateDraftV3,
-} from '@t3x-dev/storage';
+import { insertDraft, insertProject, updateAutopilotConfig, updateDraft } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
@@ -175,13 +170,13 @@ describe('Autopilot Routes', () => {
       await updateAutopilotConfig(mockDB, testProjectId, { enabled: false });
 
       // Create a draft with LLM extraction mode
-      const draft = await insertDraftV3(mockDB, {
+      const draft = await insertDraft(mockDB, {
         project_id: testProjectId,
         title: 'Test Draft for AutoCommit',
       });
 
       // Set extraction_mode to 'llm' and add semantic points
-      await updateDraftV3(
+      await updateDraft(
         mockDB,
         draft.id,
         {
@@ -216,13 +211,13 @@ describe('Autopilot Routes', () => {
 
     it('returns 400 for non-llm extraction mode', async () => {
       // Create a draft with deterministic extraction mode
-      const draft = await insertDraftV3(mockDB, {
+      const draft = await insertDraft(mockDB, {
         project_id: testProjectId,
         title: 'Deterministic Draft',
       });
 
       // Set extraction_mode to 'deterministic'
-      await updateDraftV3(
+      await updateDraft(
         mockDB,
         draft.id,
         {
@@ -251,12 +246,12 @@ describe('Autopilot Routes', () => {
       });
 
       // Create a draft with LLM mode and qualifying semantic points
-      const draft = await insertDraftV3(mockDB, {
+      const draft = await insertDraft(mockDB, {
         project_id: testProjectId,
         title: 'Auto-Commit Draft',
       });
 
-      await updateDraftV3(
+      await updateDraft(
         mockDB,
         draft.id,
         {

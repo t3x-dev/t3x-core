@@ -8,14 +8,14 @@
  * Order matters — see createMeaningPipeline.ts for execution order.
  */
 
-// Code agents (deterministic, run first)
-export { outputRegulatorAgent } from './outputRegulatorAgent';
-export { nesterAgent } from './nesterAgent';
+export { contradictionCheckerAgent } from './contradictionCheckerAgent';
+export { coverageCheckerAgent } from './coverageCheckerAgent';
 // LLM agents (focused, one job each)
 export { dedupCheckerAgent } from './dedupCheckerAgent';
-export { topicNamerAgent } from './topicNamerAgent';
-export { topicEvolverAgent } from './topicEvolverAgent';
-export { slotPolisherAgent } from './slotPolisherAgent';
+export { nesterAgent } from './nesterAgent';
+// Code agents (deterministic, run first)
+export { outputRegulatorAgent } from './outputRegulatorAgent';
 export { reviewerAgent } from './reviewerAgent';
-export { coverageCheckerAgent } from './coverageCheckerAgent';
-export { contradictionCheckerAgent } from './contradictionCheckerAgent';
+export { slotPolisherAgent } from './slotPolisherAgent';
+export { topicEvolverAgent } from './topicEvolverAgent';
+export { topicNamerAgent } from './topicNamerAgent';

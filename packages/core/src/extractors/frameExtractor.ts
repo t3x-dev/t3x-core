@@ -11,7 +11,7 @@
  * Retries once on parse or validation failure (MAX_RETRIES = 1, 2 attempts total).
  */
 
-import type { LLMGenerateOptionsV2, LLMPrompt, LLMProvider } from '../llm/types';
+import type { LLMGenerateOptions, LLMPrompt, LLMProvider } from '../llm/types';
 import { applyDelta } from '../semantic/delta';
 import { DeltaSchema } from '../semantic/schema';
 import type { Delta, SemanticContent } from '../semantic/types';
@@ -87,7 +87,7 @@ export type { FrameExtractionInput, FrameExtractionTurn };
 async function callGenerateStructured(
   provider: Required<Pick<LLMProvider, 'generateStructured'>>,
   prompt: LLMPrompt,
-  options: LLMGenerateOptionsV2
+  options: LLMGenerateOptions
 ): Promise<{
   delta: Delta;
   usage: { inputTokens: number; outputTokens: number };

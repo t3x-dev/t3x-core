@@ -1,6 +1,6 @@
 /**
- * Storage layer types for V2 tables
- * These types map to the Python core_api storage layer
+ * Storage layer types
+ * Record types, input types, and query options for the storage layer.
  */
 
 // === Record Types (DB rows) ===
@@ -23,7 +23,7 @@ export interface ConversationRecord {
   metadata_json: string | null;
 }
 
-export interface TurnV2Record {
+export interface TurnRecord {
   turn_hash: string;
   parent_turn_hash: string | null;
   project_id: string;
@@ -45,57 +45,6 @@ export interface BranchRecord {
   is_current: number; // SQLite uses 0/1 for boolean
   created_at: string;
   updated_at: string;
-}
-
-export interface CommitV2Record {
-  commit_hash: string;
-  project_id: string;
-  branch: string;
-  message: string | null;
-  parents_json: string;
-  turn_window_json: string;
-  facet_snapshot_json: string;
-  pipeline_config_json: string | null;
-  draft_id: string | null;
-  draft_text_hash: string | null;
-  signature_json: string | null;
-  source_excerpt_json: string | null;
-  must_have_json: string | null;
-  mustnt_have_json: string | null;
-  position_x: number | null;
-  position_y: number | null;
-  source_refs_json: string | null;
-  created_at: string;
-}
-
-// Source reference for multi-source commits
-export interface SourceRef {
-  type: 'conversation' | 'commit';
-  // For conversation source
-  conversation_id?: string;
-  turn_window?: {
-    start_turn_hash: string;
-    end_turn_hash: string;
-  };
-  // For commit source
-  commit_hash?: string;
-}
-
-export interface DraftV2Record {
-  draft_id: string;
-  project_id: string;
-  conversation_id: string;
-  base_commit_hash: string | null;
-  turn_anchor_hash: string | null;
-  bridge_id: string;
-  bridge_payload_json: string;
-  must_have_json: string | null;
-  mustnt_have_json: string | null;
-  llm_config_json: string;
-  text: string;
-  status: 'ephemeral' | 'adopted' | 'superseded';
-  created_at: string;
-  completed_at: string | null;
 }
 
 export interface MergeResultRecord {
@@ -137,7 +86,7 @@ export interface CreateConversationInput {
   metadata?: Record<string, unknown>;
 }
 
-export interface CreateTurnV2Input {
+export interface CreateTurnInput {
   project_id: string;
   conversation_id: string;
   role: 'user' | 'assistant' | 'system' | 'tool';
@@ -151,44 +100,6 @@ export interface CreateBranchInput {
   name: string;
   parent_branch?: string;
   description?: string;
-}
-
-export interface CreateCommitV2Input {
-  project_id: string;
-  branch: string;
-  message?: string;
-  // For regular commits: turn window reference
-  turn_window?: {
-    start_turn_hash: string;
-    end_turn_hash: string;
-  };
-  // For merge commits: explicit parent hashes and resolved facets
-  merge_parents?: string[]; // [source_hash, target_hash]
-  facet_snapshot: unknown[];
-  pipeline_config?: unknown;
-  draft_id?: string;
-  draft_text_hash?: string;
-  signature?: unknown;
-  source_excerpt?: string[];
-  must_have?: string[];
-  mustnt_have?: string[];
-  position_x?: number;
-  position_y?: number;
-  // Multi-source references (optional, for multi-source commits)
-  source_refs?: SourceRef[];
-}
-
-export interface CreateDraftV2Input {
-  project_id: string;
-  conversation_id: string;
-  base_commit_hash?: string;
-  turn_anchor_hash?: string;
-  bridge_id: string;
-  bridge_payload: unknown;
-  must_have?: string[];
-  mustnt_have?: string[];
-  llm_config: unknown;
-  text: string;
 }
 
 export interface CreateSegmentEmbeddingInput {
@@ -224,7 +135,7 @@ export interface ListConversationsOptions extends ListOptions {
   project_id: string;
 }
 
-export interface ListTurnsV2Options extends ListOptions {
+export interface ListTurnsOptions extends ListOptions {
   conversation_id: string;
   /** Sort order: 'asc' (oldest first) or 'desc' (newest first). Default: 'asc' */
   order?: 'asc' | 'desc';
@@ -232,16 +143,6 @@ export interface ListTurnsV2Options extends ListOptions {
 
 export interface ListBranchesOptions extends ListOptions {
   project_id: string;
-}
-
-export interface ListCommitsV2Options extends ListOptions {
-  project_id: string;
-  branch?: string;
-}
-
-export interface ListDraftsV2Options extends ListOptions {
-  project_id: string;
-  status?: 'ephemeral' | 'adopted' | 'superseded';
 }
 
 // === Update Types ===

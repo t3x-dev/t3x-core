@@ -4,7 +4,7 @@
  * Returns configurable preset responses — no external calls.
  */
 
-import type { LLMGenerateOptions, LLMGenerateResult, LLMProvider } from '../../llm';
+import type { LLMBasicGenerateOptions, LLMGenerateResult, LLMProvider } from '../../llm';
 
 export class StubLLMProvider implements LLMProvider {
   readonly id = 'stub-llm';
@@ -15,7 +15,7 @@ export class StubLLMProvider implements LLMProvider {
   /** Record of all prompts received */
   readonly calls: string[] = [];
 
-  async generate(prompt: string, _options?: LLMGenerateOptions): Promise<LLMGenerateResult> {
+  async generate(prompt: string, _options?: LLMBasicGenerateOptions): Promise<LLMGenerateResult> {
     this.calls.push(prompt);
     const text = this.responseQueue.shift() ?? `LLM response to: ${prompt.slice(0, 50)}...`;
     return { text, usage: { inputTokens: 10, outputTokens: 5 } };

@@ -20,7 +20,10 @@ export const SlotValueSchema: z.ZodType<unknown> = z.lazy(() =>
     z.boolean(),
     SlotRefSchema,
     InlineFrameSchema,
-    z.record(z.string(), z.lazy(() => SlotValueSchema)),
+    z.record(
+      z.string(),
+      z.lazy(() => SlotValueSchema)
+    ),
     z.array(SlotValueSchema),
   ])
 );

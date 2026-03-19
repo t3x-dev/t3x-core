@@ -5,7 +5,7 @@ import { describe, expect, test } from 'vitest';
  *
  * The persistence path is:
  * 1. review-action 'undo' → sets { status: 'undone', staged: false }
- * 2. updateDraftV3(db, id, { semantic_points: sps }) → persists to semantic_points_json
+ * 2. updateDraft(db, id, { semantic_points: sps }) → persists to semantic_points_json
  * 3. GET /drafts/:id → returns draft with semantic_points_json from DB
  * 4. Commit endpoint filters: sp.zone === 'ready' && sp.status !== 'undone' && sp.staged
  *
@@ -27,7 +27,7 @@ describe('Semantic Points undone persistence', () => {
       { id: 'sp_3', text: 'Review point', status: 'active', staged: false, zone: 'review' },
     ];
 
-    // After updateDraftV3 and reload, all SPs should be present
+    // After updateDraft and reload, all SPs should be present
     expect(sps).toHaveLength(3);
     const undone = sps.find((sp) => sp.status === 'undone');
     expect(undone).toBeDefined();

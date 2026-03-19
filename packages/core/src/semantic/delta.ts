@@ -18,7 +18,11 @@ export function applyDelta(snapshot: SemanticContent, delta: Delta): SemanticCon
         // emits "add" for existing IDs in delta mode — auto-correct to avoid duplicates)
         const existingIdx = frames.findIndex((f) => f.id === change.frame.id);
         if (existingIdx !== -1) {
-          const merged = { ...frames[existingIdx], ...change.frame, slots: { ...frames[existingIdx].slots, ...change.frame.slots } };
+          const merged = {
+            ...frames[existingIdx],
+            ...change.frame,
+            slots: { ...frames[existingIdx].slots, ...change.frame.slots },
+          };
           frames[existingIdx] = merged;
         } else {
           frames.push({ ...change.frame, slots: { ...change.frame.slots } });

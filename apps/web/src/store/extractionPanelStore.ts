@@ -344,10 +344,10 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
 
   initCommitState: async (projectId) => {
     try {
-      // Try frame-based commits first, fall back to V4
-      const v5Commits = await listCommits(projectId, 'main', 1).catch(() => []);
-      if (v5Commits.length > 0) {
-        const head = v5Commits[0];
+      // Try to load the latest commit
+      const recentCommits = await listCommits(projectId, 'main', 1).catch(() => []);
+      if (recentCommits.length > 0) {
+        const head = recentCommits[0];
         set({ lastCommitHash: head.hash });
         const frames = (head.content?.frames ?? []) as Frame[];
         if (frames.length > 0) {

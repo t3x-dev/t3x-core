@@ -20,14 +20,14 @@ import {
 } from '@t3x-dev/core';
 import {
   ConflictError,
-  commitDraftV3,
+  commitDraft,
   createCommit,
   createLeaf,
-  findDraftV3ById,
-  forkDraftV3,
+  findDraftById,
+  forkDraft,
   searchSimilarSentences,
-  updateDraftV3,
-  updateDraftV3Preview,
+  updateDraft,
+  updateDraftPreview,
   upsertSentenceVectorsBatch,
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
@@ -44,7 +44,7 @@ import {
   PreviewDraftResponse,
   SuggestDraftRequest,
   SuggestDraftResponse,
-} from '../schemas/v4-contracts';
+} from '../schemas/contracts';
 import { toApiDraft } from './drafts-crud.openapi';
 import { extractSentencesFromConversation } from './extract.openapi';
 
@@ -269,7 +269,7 @@ draftsWorkflowRoutes.openapi(previewDraftRoute, async (c) => {
     const db = await getDB();
 
     // 1. Get draft
-    const draft = await findDraftV3ById(db, id);
+    const draft = await findDraftById(db, id);
     if (!draft) {
       return errorResponse(c, 'NOT_FOUND', `Draft not found: ${id}`);
     }
@@ -396,7 +396,7 @@ draftsWorkflowRoutes.openapi(previewDraftRoute, async (c) => {
       time: now,
     });
 
-    await updateDraftV3Preview(db, id, result.output);
+    await updateDraftPreview(db, id, result.output);
 
     return c.json(
       {
@@ -425,7 +425,7 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
     const db = await getDB();
 
     // 1. Get draft
-    const draft = await findDraftV3ById(db, id);
+    const draft = await findDraftById(db, id);
     if (!draft) {
       return errorResponse(c, 'NOT_FOUND', `Draft not found: ${id}`);
     }
@@ -439,7 +439,7 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
       );
     }
 
-    // 3. Convert to CommitV4 Sentences (branch by extraction_mode)
+    // 3. Convert to Sentences (branch by extraction_mode)
     let sentences: Array<{
       id: string;
       text: string;
@@ -541,7 +541,7 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
     }
 
     // 7. Update draft status
-    await commitDraftV3(db, id, commit.hash, leaf?.id);
+    await commitDraft(db, id, commit.hash, leaf?.id);
 
     // 7b. Populate sentence vectors (best-effort — errors are swallowed)
     const embedder = getEmbedder();
@@ -628,7 +628,7 @@ draftsWorkflowRoutes.openapi(forkDraftRoute, async (c) => {
 
   try {
     const db = await getDB();
-    const forked = await forkDraftV3(db, id);
+    const forked = await forkDraft(db, id);
 
     return c.json({ success: true as const, data: toApiDraft(forked) }, 201);
   } catch (err) {
@@ -654,7 +654,7 @@ draftsWorkflowRoutes.openapi(extractDraftRoute, async (c) => {
     const db = await getDB();
 
     // 1. Get draft
-    const draft = await findDraftV3ById(db, id);
+    const draft = await findDraftById(db, id);
     if (!draft) {
       return errorResponse(c, 'NOT_FOUND', `Draft not found: ${id}`);
     }
@@ -698,12 +698,7 @@ draftsWorkflowRoutes.openapi(extractDraftRoute, async (c) => {
     // 4. Append extracted sentences to draft
     const updatedSentences = [...draft.sentences, ...result.sentences];
 
-    const updatedDraft = await updateDraftV3(
-      db,
-      id,
-      { sentences: updatedSentences },
-      draft.revision
-    );
+    const updatedDraft = await updateDraft(db, id, { sentences: updatedSentences }, draft.revision);
 
     return c.json(
       {
@@ -752,7 +747,7 @@ draftsWorkflowRoutes.openapi(suggestDraftRoute, async (c) => {
     const db = await getDB();
 
     // 1. Get draft
-    const draft = await findDraftV3ById(db, id);
+    const draft = await findDraftById(db, id);
     if (!draft) {
       return errorResponse(c, 'NOT_FOUND', `Draft not found: ${id}`);
     }

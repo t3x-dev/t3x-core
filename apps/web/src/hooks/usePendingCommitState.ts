@@ -217,7 +217,7 @@ export function usePendingCommitState({
     document.addEventListener('mouseup', handleMouseUp);
   };
 
-  // Handle Proceed — create DraftV3 and auto-trigger LLM extraction
+  // Handle Proceed — create WorkbenchDraft and auto-trigger LLM extraction
   const handleProceed = useCallback(async () => {
     const sourceConversationId = data.sourceConversationId || data.conversationId;
     if (!sourceConversationId || !projectId) return;
@@ -235,8 +235,8 @@ export function usePendingCommitState({
         branch = 'main';
       }
 
-      // 2. Create DraftV3
-      const draft = await api.createDraftV3({
+      // 2. Create WorkbenchDraft
+      const draft = await api.createWorkbenchDraft({
         project_id: projectId,
         title: data.title || 'Untitled Unit',
         parent_commit_hash: data.sourceCommitHash || undefined,
@@ -288,7 +288,7 @@ export function usePendingCommitState({
     setCommitError(null);
   }, []);
 
-  // Handle Commit — commit via DraftV3 API
+  // Handle Commit — commit via WorkbenchDraft API
   const handleCommit = useCallback(async () => {
     if (!draftId || !projectId) {
       setCommitError('No draft created');
@@ -345,7 +345,7 @@ export function usePendingCommitState({
       }
 
       // 4. Commit via draft API
-      const result = await api.commitDraftV3(draftId, data.title);
+      const result = await api.commitWorkbenchDraft(draftId, data.title);
       const commitHash = result.commit.hash as string;
 
       // 5. Fetch diff stats if there's a parent commit
@@ -459,7 +459,7 @@ export function usePendingCommitState({
   const handleOpenAsDraft = useCallback(async () => {
     setOpeningAsDraft(true);
     try {
-      const newDraft = await api.createDraftV3({
+      const newDraft = await api.createWorkbenchDraft({
         project_id: projectId,
         title: data.title || 'Draft from Canvas',
         parent_commit_hash: data.sourceCommitHash || undefined,

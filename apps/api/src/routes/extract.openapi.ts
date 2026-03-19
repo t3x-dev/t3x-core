@@ -16,7 +16,7 @@ import {
   type TurnInput,
   validateExtractedSentences,
 } from '@t3x-dev/core';
-import { findDraftV3ById, findTurnsByConversation, updateDraftV3 } from '@t3x-dev/storage';
+import { findDraftById, findTurnsByConversation, updateDraft } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { getProviderRegistry } from '../lib/provider-registry';
@@ -26,7 +26,7 @@ import {
   DraftSentenceSchema,
   IncrementalExtractRequest,
   IncrementalExtractResponse,
-} from '../schemas/v4-contracts';
+} from '../schemas/contracts';
 
 export const extractRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
@@ -400,7 +400,7 @@ extractRoutes.openapi(incrementalExtractRoute, async (c) => {
     const db = await getDB();
 
     // 1. Load draft
-    const draft = await findDraftV3ById(db, draft_id);
+    const draft = await findDraftById(db, draft_id);
     if (!draft) return errorResponse(c, 'NOT_FOUND', 'Draft not found');
 
     // Validate project_id matches draft
@@ -460,7 +460,7 @@ extractRoutes.openapi(incrementalExtractRoute, async (c) => {
     const existingSPs = (draft.semantic_points ?? []) as SemanticPoint[];
     const allSPs = [...existingSPs, ...result.readyPoints, ...result.reviewPoints];
 
-    await updateDraftV3(
+    await updateDraft(
       db,
       draft_id,
       {

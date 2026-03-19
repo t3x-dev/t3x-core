@@ -3,18 +3,18 @@ import { memo } from 'react';
 import { FrameGraphView } from '@/components/frame-graph';
 import { toneAccent } from '@/lib/theme';
 import { cn } from '@/lib/utils';
-import type { CommitV4Display } from '@/types/nodes';
+import type { CommitDisplay } from '@/types/nodes';
 
 // Preview limits for UnitNode display
 export const PREVIEW_MAX_SENTENCES = 3;
 
 /**
- * Author badge for V4 commits (with type indicator)
+ * Author badge for commits (with type indicator)
  */
-export const AuthorBadgeV4 = memo(function AuthorBadgeV4({
+export const AuthorBadge = memo(function AuthorBadge({
   author,
 }: {
-  author: CommitV4Display['author'];
+  author: CommitDisplay['author'];
 }) {
   const isAgent = author.type === 'agent';
   return (
@@ -32,19 +32,19 @@ export const AuthorBadgeV4 = memo(function AuthorBadgeV4({
 });
 
 /**
- * CommitV4 content section - shows sentences only (constraints are in Leaves)
+ * Commit content section - shows sentences only (constraints are in Leaves)
  * Header (title, branch, hash, status) is rendered by parent UnitNode
  *
- * Note: V4 sentences use source_ref (conversation_id + turn_hash) without
+ * Note: Sentences use source_ref (conversation_id + turn_hash) without
  * character positions, so we show a compact list with View full link.
  */
-export const CommitV4Content = memo(function CommitV4Content({
+export const CommitContentSection = memo(function CommitContentSection({
   commit,
   onViewFull,
   projectId: _projectId, // Reserved for future TruncatedCommitView integration
   maxSentences = PREVIEW_MAX_SENTENCES,
 }: {
-  commit: CommitV4Display;
+  commit: CommitDisplay;
   onViewFull?: () => void;
   projectId?: string;
   maxSentences?: number;
@@ -58,7 +58,7 @@ export const CommitV4Content = memo(function CommitV4Content({
       {/* Author badge */}
       <div className="flex items-center gap-1.5 mb-[var(--space-item)]">
         <span className="text-xs text-[var(--text-tertiary)]">by</span>
-        <AuthorBadgeV4 author={commit.author} />
+        <AuthorBadge author={commit.author} />
         {/* V4 badge */}
         <span
           className={cn(
@@ -144,7 +144,7 @@ export const CommitV4Content = memo(function CommitV4Content({
         </div>
       )}
 
-      {/* V4: Constraints notice */}
+      {/* Constraints notice */}
       <div className="mt-2 px-2 py-1.5 bg-[var(--hover-bg)] rounded border border-[var(--stroke-divider)]">
         <p className="text-xs text-[var(--text-tertiary)]">Constraints are defined in Leaves</p>
       </div>

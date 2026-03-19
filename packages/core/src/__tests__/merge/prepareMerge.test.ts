@@ -5,7 +5,7 @@
  *
  * V4 Changes:
  * - prepareMerge accepts DiffableSentence[] instead of CommitContent
- * - executeMerge returns CommitV4 instead of CommitV3
+ * - executeMerge returns SentenceCommit
  * - No constraint handling (constraints belong to Leaf)
  */
 
@@ -347,7 +347,7 @@ describe('executeMerge', () => {
 
     const result = executeMerge(prepared, 'a', 'b', author, 'Merge', projectId);
 
-    // V4 CommitV4Content has only sentences, no constraints
+    // SentenceCommit content has only sentences, no constraints
     expect(result.content).toHaveProperty('sentences');
     expect(result.content).not.toHaveProperty('constraints');
   });

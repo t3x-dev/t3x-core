@@ -31,39 +31,32 @@ export interface LeafNodeConfig {
 }
 
 // ============================================
-// CommitV4 Display Types
+// Commit Display Types
 // Re-export from @t3x-dev/core contract types
 // ============================================
 
 // Import contract types from @t3x-dev/core (single source of truth)
 import type {
-  CommitAuthorV4,
+  CommitAuthor,
   CommitSourceRef,
-  CommitV4,
-  CommitV4Content,
+  Sentence,
+  SentenceCommit,
+  SentenceCommitContent,
   SentenceSourceRef,
-  SentenceV4,
 } from '@t3x-dev/core';
 
 // Re-export contract types for convenience
-export type {
-  CommitAuthorV4,
-  CommitSourceRef,
-  CommitV4,
-  CommitV4Content,
-  SentenceSourceRef,
-  SentenceV4,
-};
+export type { CommitAuthor, CommitSourceRef, Sentence, SentenceSourceRef };
 
 /**
- * CommitV4 display data for canvas nodes
+ * Commit display data for canvas nodes.
  * Uses Pick to select only the fields needed for display from the contract type.
  * Maintains contract compliance while allowing UI-specific field selection.
  *
  * Note: parents field is intentionally omitted as it's not needed for display.
  */
-export type CommitV4Display = Pick<
-  CommitV4,
+export type CommitDisplay = Pick<
+  SentenceCommit,
   | 'hash'
   | 'schema'
   | 'author'
@@ -75,11 +68,6 @@ export type CommitV4Display = Pick<
   | 'merge_summary'
   | 'semantic'
 >;
-
-/**
- * Commit display type (V4 only)
- */
-export type CommitDisplay = CommitV4Display;
 
 // ============================================
 // Embedded Leaf (inside UnitNode)
@@ -518,10 +506,10 @@ export interface CanvasNodeData {
   anchors?: CommitAnchors;
 
   /**
-   * CommitV4 data for V4 architecture (sentences only, no constraints)
+   * Commit display data (sentences only, no constraints)
    * @display UnitNode: Sentences list with info about Leaf constraints
    */
-  commitV4?: CommitV4Display;
+  commit?: CommitDisplay;
 
   // Merge commit configuration
   mergeConfig?: MergeConfig;
@@ -561,7 +549,7 @@ export interface CanvasNodeData {
   // ============================================
   // Draft workbench link
   // ============================================
-  /** Link to drafts_v3 record (when commitStatus === 'draft') */
+  /** Link to drafts record (when commitStatus === 'draft') */
   draftId?: string;
   /** Auto-draft ID available for this conversation (status === 'auto') */
   autoDraftId?: string;

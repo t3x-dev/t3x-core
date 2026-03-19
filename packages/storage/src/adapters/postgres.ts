@@ -113,8 +113,14 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     );
     CREATE INDEX IF NOT EXISTS idx_conversations_project ON conversations(project_id);
 
-    -- Turns V2 table
-    CREATE TABLE IF NOT EXISTS turns_v2 (
+    -- Auto-migrate: rename legacy turns_v2 table if it exists
+    ALTER TABLE IF EXISTS turns_v2 RENAME TO turns;
+    ALTER INDEX IF EXISTS idx_turns_v2_conversation RENAME TO idx_turns_conversation;
+    ALTER INDEX IF EXISTS idx_turns_v2_project RENAME TO idx_turns_project;
+    ALTER INDEX IF EXISTS idx_turns_v2_parent RENAME TO idx_turns_parent;
+
+    -- Turns table
+    CREATE TABLE IF NOT EXISTS turns (
       turn_hash TEXT PRIMARY KEY,
       parent_turn_hash TEXT,
       project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
@@ -125,9 +131,9 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
       rings_json TEXT,
       created_at TIMESTAMPTZ NOT NULL
     );
-    CREATE INDEX IF NOT EXISTS idx_turns_v2_conversation ON turns_v2(conversation_id);
-    CREATE INDEX IF NOT EXISTS idx_turns_v2_project ON turns_v2(project_id);
-    CREATE INDEX IF NOT EXISTS idx_turns_v2_parent ON turns_v2(parent_turn_hash);
+    CREATE INDEX IF NOT EXISTS idx_turns_conversation ON turns(conversation_id);
+    CREATE INDEX IF NOT EXISTS idx_turns_project ON turns(project_id);
+    CREATE INDEX IF NOT EXISTS idx_turns_parent ON turns(parent_turn_hash);
 
     -- Branches table
     CREATE TABLE IF NOT EXISTS branches (
@@ -178,7 +184,7 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     -- Segment Embeddings table
     CREATE TABLE IF NOT EXISTS segment_embeddings (
       segment_id TEXT PRIMARY KEY,
-      turn_hash TEXT NOT NULL REFERENCES turns_v2(turn_hash) ON DELETE CASCADE,
+      turn_hash TEXT NOT NULL REFERENCES turns(turn_hash) ON DELETE CASCADE,
       segment_index INTEGER NOT NULL,
       segment_text TEXT NOT NULL,
       embedding_model TEXT NOT NULL,
@@ -261,39 +267,8 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_merge_drafts_status ON merge_drafts(status);
 
     -- ═══════════════════════════════════════════════════════════════════════════
-    -- V4 Architecture Tables
+    -- V4 Architecture Tables (commits_v4 RETIRED — use 'commits' table)
     -- ═══════════════════════════════════════════════════════════════════════════
-
-    -- Commits V4 table (pure knowledge - sentences only, NO constraints)
-    CREATE TABLE IF NOT EXISTS commits_v4 (
-      -- First class (in hash)
-      hash TEXT PRIMARY KEY,
-      schema TEXT NOT NULL DEFAULT 't3x/commit/v4',
-      parents JSONB NOT NULL DEFAULT '[]',
-      author JSONB NOT NULL,
-      committed_at TIMESTAMPTZ NOT NULL,
-      content JSONB NOT NULL,
-
-      -- Second class (not in hash)
-      project_id TEXT REFERENCES projects(project_id) ON DELETE CASCADE,
-      message TEXT,
-      branch TEXT,
-      source_refs JSONB,
-      merge_summary JSONB,
-      semantic JSONB,
-      merkle_root TEXT,
-      position_x REAL,
-      position_y REAL,
-
-      -- Timestamps
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-    CREATE INDEX IF NOT EXISTS idx_commits_v4_project ON commits_v4(project_id);
-    CREATE INDEX IF NOT EXISTS idx_commits_v4_branch ON commits_v4(branch);
-    CREATE INDEX IF NOT EXISTS idx_commits_v4_created_at ON commits_v4(created_at);
-
-    -- Migration: Add merkle_root column to existing commits_v4 tables
-    ALTER TABLE commits_v4 ADD COLUMN IF NOT EXISTS merkle_root TEXT;
 
     -- Leaves table (application layer - owns constraints, output, validation)
     CREATE TABLE IF NOT EXISTS leaves (
@@ -365,12 +340,6 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     ALTER TABLE leaf_history ADD COLUMN IF NOT EXISTS corrective_feedback TEXT;
     ALTER TABLE leaf_history ADD COLUMN IF NOT EXISTS prompt_used TEXT;
 
-    -- Migration: Add merge_summary column to existing commits_v4 tables (v4.1)
-    ALTER TABLE commits_v4 ADD COLUMN IF NOT EXISTS merge_summary JSONB;
-
-    -- Migration: Add semantic column to existing commits_v4 tables
-    ALTER TABLE commits_v4 ADD COLUMN IF NOT EXISTS semantic JSONB;
-
     -- Migration: Add provider/model columns to projects and conversations (PR #554)
     ALTER TABLE projects ADD COLUMN IF NOT EXISTS provider_config TEXT;
     ALTER TABLE projects ADD COLUMN IF NOT EXISTS default_provider TEXT;
@@ -420,8 +389,13 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     ALTER TABLE templates ADD COLUMN IF NOT EXISTS default_constraints JSONB DEFAULT '[]'::jsonb;
     ALTER TABLE templates ADD COLUMN IF NOT EXISTS semantic_threshold JSONB;
 
-    -- Drafts V3 table (Workbench / pre-commit working area)
-    CREATE TABLE IF NOT EXISTS drafts_v3 (
+    -- Auto-migrate: rename legacy drafts_v3 table if it exists
+    ALTER TABLE IF EXISTS drafts_v3 RENAME TO drafts;
+    ALTER INDEX IF EXISTS idx_drafts_v3_project RENAME TO idx_drafts_project;
+    ALTER INDEX IF EXISTS idx_drafts_v3_status RENAME TO idx_drafts_status;
+
+    -- Drafts table (Workbench / pre-commit working area)
+    CREATE TABLE IF NOT EXISTS drafts (
       id TEXT PRIMARY KEY,
       project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
       title TEXT NOT NULL,
@@ -442,13 +416,13 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
       created_at TIMESTAMPTZ NOT NULL,
       updated_at TIMESTAMPTZ NOT NULL
     );
-    CREATE INDEX IF NOT EXISTS idx_drafts_v3_project ON drafts_v3(project_id);
-    CREATE INDEX IF NOT EXISTS idx_drafts_v3_status ON drafts_v3(status);
+    CREATE INDEX IF NOT EXISTS idx_drafts_project ON drafts(project_id);
+    CREATE INDEX IF NOT EXISTS idx_drafts_status ON drafts(status);
 
-    -- Migration: Add LLM extraction columns to drafts_v3 (incremental extraction pipeline)
-    ALTER TABLE drafts_v3 ADD COLUMN IF NOT EXISTS extraction_mode TEXT;
-    ALTER TABLE drafts_v3 ADD COLUMN IF NOT EXISTS semantic_points_json JSONB;
-    ALTER TABLE drafts_v3 ADD COLUMN IF NOT EXISTS extraction_cursor_json JSONB;
+    -- Migration: Add LLM extraction columns to drafts (incremental extraction pipeline)
+    ALTER TABLE drafts ADD COLUMN IF NOT EXISTS extraction_mode TEXT;
+    ALTER TABLE drafts ADD COLUMN IF NOT EXISTS semantic_points_json JSONB;
+    ALTER TABLE drafts ADD COLUMN IF NOT EXISTS extraction_cursor_json JSONB;
 
     -- Migration: Add foreign key constraints to existing deploy_agents/runs tables (v1.2)
     -- Note: These constraints are in CREATE TABLE for new databases, but existing databases
@@ -749,8 +723,8 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     -- Migration: Add business_rules column to projects (Gate Business Rules)
     ALTER TABLE projects ADD COLUMN IF NOT EXISTS business_rules JSONB DEFAULT '[]';
 
-    -- Migration: Add content_blocks column to turns_v2 (Multimodal turns)
-    ALTER TABLE turns_v2 ADD COLUMN IF NOT EXISTS content_blocks JSONB;
+    -- Migration: Add content_blocks column to turns (Multimodal turns)
+    ALTER TABLE turns ADD COLUMN IF NOT EXISTS content_blocks JSONB;
 
     -- ═══════════════════════════════════════════════════════════════
     -- Auth Migration Phase 2: Multi-provider (users + accounts split)
@@ -804,6 +778,12 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     -- ═══════════════════════════════════════════════════════════════
     -- Frame-Based Commits (commits + frame_lineage)
     -- ═══════════════════════════════════════════════════════════════
+
+    -- Auto-migrate: rename legacy commits_v5 table if it exists
+    ALTER TABLE IF EXISTS commits_v5 RENAME TO commits;
+    ALTER INDEX IF EXISTS idx_commits_v5_project RENAME TO idx_commits_project;
+    ALTER INDEX IF EXISTS idx_commits_v5_branch RENAME TO idx_commits_branch;
+    ALTER INDEX IF EXISTS idx_commits_v5_committed_at RENAME TO idx_commits_committed_at;
 
     CREATE TABLE IF NOT EXISTS commits (
       -- First class (in hash)

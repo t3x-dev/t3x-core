@@ -24,9 +24,7 @@ const NESTING_RELATIONS = new Set([
 ]);
 
 /** Frame types that MUST stay as top-level frames — never nest into other frames */
-const PROTECTED_TYPES = new Set([
-  'constraints', 'preferences', 'open_questions', 'logistics',
-]);
+const PROTECTED_TYPES = new Set(['constraints', 'preferences', 'open_questions', 'logistics']);
 
 function buildNestedContent(content: SemanticContent): SemanticContent {
   const frameMap = new Map<string, Frame>();

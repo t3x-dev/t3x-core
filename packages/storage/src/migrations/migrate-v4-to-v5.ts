@@ -21,8 +21,8 @@
 
 import { sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
-import { commitsV4 } from '../schema-v4';
 import { commits } from '../schema-commits';
+import { commitsV4 } from '../schema-v4';
 
 export interface MigrationResult {
   total: number;
@@ -62,7 +62,9 @@ export async function migrateV4ToV5(db: AnyDB, dryRun = false): Promise<Migratio
 
     try {
       // Convert V4 content to V5 frames
-      const content = row.content as { sentences?: Array<{ id: string; text: string; confidence?: number }> } | null;
+      const content = row.content as {
+        sentences?: Array<{ id: string; text: string; confidence?: number }>;
+      } | null;
       const semantic = row.semantic as { frames?: unknown[]; relations?: unknown[] } | null;
 
       let frames: unknown[];
@@ -88,7 +90,11 @@ export async function migrateV4ToV5(db: AnyDB, dryRun = false): Promise<Migratio
         // Parse V4 fields
         const parents = (row.parents as string[]) ?? [];
         const author = (row.author as { type?: string; name?: string; id?: string }) ?? {};
-        const sourceRefs = row.sourceRefs as Array<{ type: string; id: string; title?: string }> | null;
+        const sourceRefs = row.sourceRefs as Array<{
+          type: string;
+          id: string;
+          title?: string;
+        }> | null;
 
         await db.insert(commits).values({
           hash: row.hash,
@@ -104,11 +110,12 @@ export async function migrateV4ToV5(db: AnyDB, dryRun = false): Promise<Migratio
           projectId: row.projectId,
           message: row.message,
           branch: row.branch ?? 'main',
-          sources: sourceRefs?.map((sr) => ({
-            type: sr.type,
-            id: sr.id,
-            title: sr.title,
-          })) ?? null,
+          sources:
+            sourceRefs?.map((sr) => ({
+              type: sr.type,
+              id: sr.id,
+              title: sr.title,
+            })) ?? null,
           provenance: { method: 'import' as const },
           positionX: row.positionX,
           positionY: row.positionY,
@@ -131,7 +138,9 @@ export async function migrateV4ToV5(db: AnyDB, dryRun = false): Promise<Migratio
  * Verify migration completeness.
  * Returns count of V4 commits NOT in V5.
  */
-export async function verifyMigration(db: AnyDB): Promise<{ orphanCount: number; leafOrphanCount: number }> {
+export async function verifyMigration(
+  db: AnyDB
+): Promise<{ orphanCount: number; leafOrphanCount: number }> {
   const [orphanResult] = await db.execute(
     sql`SELECT count(*)::int as count FROM commits_v4 WHERE hash NOT IN (SELECT hash FROM commits)`
   );

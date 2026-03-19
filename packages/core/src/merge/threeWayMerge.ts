@@ -21,12 +21,7 @@ import { sha256 } from '../common/hash';
 import { diffCommits } from '../diff/diffCommits';
 import { wordDiff } from '../diff/lcs';
 import type { DiffableSentence, WordDiffSegment } from '../diff/types';
-import {
-  type CommitAuthor,
-  type CommitV4,
-  ID_PREFIXES,
-  type Sentence as SentenceV4,
-} from '../types/v4';
+import { type CommitAuthor, ID_PREFIXES, type Sentence, type SentenceCommit } from '../types/v4';
 
 // ============================================================================
 // Types
@@ -331,7 +326,7 @@ export function prepareThreeWayMerge(
  * Execute a three-way merge after all conflicts have been resolved.
  *
  * Takes a ThreeWayMergeResult with resolved conflicts and produces
- * a final CommitV4 with deterministic sentence IDs.
+ * a final SentenceCommit with deterministic sentence IDs.
  *
  * @param result - The three-way merge result with all conflicts resolved
  * @param sourceCommitHash - Hash of the source commit
@@ -340,7 +335,7 @@ export function prepareThreeWayMerge(
  * @param message - Merge commit message
  * @param projectId - Project ID
  * @param committedAt - Optional fixed timestamp (for deterministic tests)
- * @returns CommitV4 with merged content
+ * @returns SentenceCommit with merged content
  *
  * @throws Error if any conflict is unresolved
  * @throws Error if a conflict with resolution 'edit' has no editedText
@@ -362,7 +357,7 @@ export function executeThreeWayMerge(
   message: string,
   projectId: string,
   committedAt?: string
-): CommitV4 {
+): SentenceCommit {
   // Validate: all conflicts must be resolved
   for (const conflict of result.conflicts) {
     if (!conflict.resolution) {
@@ -482,13 +477,13 @@ export function executeThreeWayMerge(
     return a.insertionOrder - b.insertionOrder;
   });
 
-  // Convert to SentenceV4 with deterministic V4 IDs
-  const sentences: SentenceV4[] = [];
+  // Convert to Sentence with deterministic V4 IDs
+  const sentences: Sentence[] = [];
 
   for (const { sentence: s } of collected) {
     const hashInput = `${sourceCommitHash}:${targetCommitHash}:${s.id}`;
     const newId = `${ID_PREFIXES.sentence}${sha256(hashInput).slice(0, 12)}`;
-    const sentence: SentenceV4 = {
+    const sentence: Sentence = {
       id: newId,
       text: s.text,
     };

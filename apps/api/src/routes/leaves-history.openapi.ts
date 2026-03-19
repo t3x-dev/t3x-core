@@ -25,7 +25,7 @@ import {
   LeafHistoryResponse,
   LeafResponse,
   RestoreLeafOutputRequest,
-} from '../schemas/v4-contracts';
+} from '../schemas/contracts';
 import { toApiLeaf, toApiLeafHistory } from './leaves-shared';
 
 export const leavesHistoryRoutes = new OpenAPIHono({

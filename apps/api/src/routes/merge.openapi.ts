@@ -299,7 +299,7 @@ mergeRoutes.openapi(executeMergeRoute, async (c) => {
     }
     const projectId = sourceCommit.project_id;
 
-    // Execute merge - returns CommitV4
+    // Execute merge - returns SentenceCommit
     const mergeCommit = executeMerge(
       prepared as Merge2WayResult,
       source_hash,
@@ -671,7 +671,7 @@ const commitDraftRoute = createRoute({
   path: '/v1/merge/drafts/{id}/commit',
   tags: ['Merge'],
   summary: 'Commit a merge draft',
-  description: 'Finalizes the merge by creating a CommitV4.',
+  description: 'Finalizes the merge by creating a SentenceCommit.',
   request: {
     params: DraftIdParamSchema,
     body: {
@@ -747,7 +747,7 @@ mergeRoutes.openapi(commitDraftRoute, async (c) => {
   const author = await getV4AuthorFromContext(c);
 
   try {
-    // Execute merge - returns CommitV4
+    // Execute merge - returns SentenceCommit
     const mergeCommit = executeMerge(
       prepared,
       draft.sourceHash,

@@ -95,6 +95,7 @@ export {
   type AdaptiveConfig,
   type AdaptiveFeedbackStats,
   type AdaptiveThresholds,
+  AgentRegistry,
   // Anchor types
   type AnchorCandidate,
   type AnchorSource,
@@ -137,12 +138,11 @@ export {
   type PipelineMode,
   type PipelineOptions,
   type PipelineResult,
-  type QualityMetrics,
-  AgentRegistry,
   parseExtractionResponse,
   parseFrameDelta,
   parseIncrementalResponse,
   parseRelationResponse,
+  type QualityMetrics,
   RelationExtractor,
   type RelationItem,
   RelationParseError,
@@ -249,10 +249,10 @@ export {
   getAllModels,
   getModelInfo,
   getModelsByProvider,
+  type LLMBasicGenerateOptions,
   type LLMCallLog,
   type LLMCallLogger,
   type LLMGenerateOptions,
-  type LLMGenerateOptionsV2,
   type LLMPrompt,
   type LLMProvider,
   LLMProviderError,
@@ -405,6 +405,7 @@ export {
   checkRelationSanity,
   DeltaSchema,
   evaluateRule,
+  executeFrameMerge,
   FRAME_RELATION_TYPES,
   FrameRelationTypeSchema,
   FrameSchema,
@@ -418,7 +419,6 @@ export {
   parseCoverageResponse,
   parseGatesConfig,
   parseSemanticGateResponse,
-  executeFrameMerge,
   prepareFrameMerge,
   RelationSchema,
   SemanticContentSchema,
@@ -447,34 +447,31 @@ export {
   type Assertion,
   // Built Context
   type BuiltContext,
-  type CommitAuthor as CommitAuthorV4,
+  type CommitAuthor,
   type CommitSourceRef,
-  // CommitV4 (pure knowledge, no constraints)
-  type CommitV4,
-  type CommitV4Content,
   // Constraint (now belongs to Leaf)
-  type Constraint as ConstraintV4,
+  type Constraint,
   type ConstraintSourceFrame,
   type ContextSource,
   // Conversation Context
   type ConversationContext,
-  // Input types
-  type CreateCommitV4Input,
   // Draft (Workbench)
-  type CreateDraftInput as CreateDraftV3Input,
+  type CreateDraftInput,
   type CreateLeafHistoryInput,
   type CreateLeafInput,
   type CreatePinInput,
+  // Input types
+  type CreateSentenceCommitInput,
   DEPLOY_TYPES,
   type DeployType,
   type Draft,
   type DraftConstraint,
   type DraftSentence,
   type DraftSentenceOrigin,
-  type DraftStatus as DraftV4Status,
+  type DraftStatus,
   // Evidence / Extraction (LLM Incremental)
   type EvidenceAnchor,
-  type ExcludeConstraint as ExcludeConstraintV4,
+  type ExcludeConstraint,
   type ExtractionCursor,
   type ExtractionProposal,
   type ExtractionStats,
@@ -492,10 +489,6 @@ export {
   type LocatedEvidence,
   // Merge summary
   type MergeSummaryData,
-  type MergeV4Candidate,
-  // Merge V4 types
-  type MergeV4Result,
-  type MergeV4SimilarPair,
   // Pin (source selection)
   type Pin,
   type PinType,
@@ -504,15 +497,17 @@ export {
   type RelationExtractionResult,
   // Ring 4: Relations
   type RelationType,
-  type RequireConstraint as RequireConstraintV4,
+  type RequireConstraint,
   type SemanticPoint,
   // Sentence
-  type Sentence as SentenceV4,
+  type Sentence,
+  // SentenceCommit (pure knowledge, no constraints)
+  type SentenceCommit,
+  type SentenceCommitContent,
   type SentenceRelation,
   type SentenceSourceRef,
   type SentenceWithEvidence,
   // Share Token
   type ShareToken,
   type User,
-  type WordDiffSegment as WordDiffSegmentV4,
 } from './types/v4';

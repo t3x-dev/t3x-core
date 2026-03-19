@@ -12,17 +12,17 @@ import type { SemanticPoint } from '@t3x-dev/core';
 import {
   ConflictError,
   findConversationById,
-  findDraftV3ById,
-  insertAutoDraftV3,
+  findDraftById,
+  insertAutoDraft,
   insertExtractionFeedback,
-  promoteDraftV3,
-  updateDraftV3,
+  promoteDraft,
+  updateDraft,
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { getUserId, recordUsageFireAndForget } from '../lib/usage-tracking';
 import { ErrorResponseSchema, IdParamSchema, SuccessResponseSchema } from '../schemas/common';
-import { DraftResponse, ReviewActionRequest, ReviewActionResponse } from '../schemas/v4-contracts';
+import { DraftResponse, ReviewActionRequest, ReviewActionResponse } from '../schemas/contracts';
 import { toApiDraft } from './drafts-crud.openapi';
 import { extractSentencesFromConversation } from './extract.openapi';
 
@@ -186,7 +186,7 @@ draftsSpecialRoutes.openapi(createAutoDraftRoute, async (c) => {
     }
 
     // 2. Create auto-draft
-    const draft = await insertAutoDraftV3(db, {
+    const draft = await insertAutoDraft(db, {
       project_id: body.project_id,
       conversation_id: body.conversation_id,
       title: `Auto-draft from ${body.conversation_id.slice(0, 16)}`,
@@ -221,7 +221,7 @@ draftsSpecialRoutes.openapi(promoteDraftRoute, async (c) => {
 
   try {
     const db = await getDB();
-    const promoted = await promoteDraftV3(db, id);
+    const promoted = await promoteDraft(db, id);
 
     return c.json({ success: true as const, data: toApiDraft(promoted) }, 200);
   } catch (err) {
@@ -245,7 +245,7 @@ draftsSpecialRoutes.openapi(reviewActionRoute, async (c) => {
 
   try {
     const db = await getDB();
-    const draft = await findDraftV3ById(db, draftId);
+    const draft = await findDraftById(db, draftId);
     if (!draft) return errorResponse(c, 'NOT_FOUND', 'Draft not found');
 
     const sps = [...((draft.semantic_points ?? []) as SemanticPoint[])];
@@ -282,7 +282,7 @@ draftsSpecialRoutes.openapi(reviewActionRoute, async (c) => {
         break;
     }
 
-    await updateDraftV3(db, draftId, { semantic_points: sps }, draft.revision);
+    await updateDraft(db, draftId, { semantic_points: sps }, draft.revision);
 
     // Record sentence modification audit trail — fire-and-forget
     try {

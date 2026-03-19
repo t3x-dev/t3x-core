@@ -5,7 +5,7 @@
  */
 
 import type { AnyDB } from '@t3x-dev/storage';
-import { insertConversation, insertDraftV3, insertProject, insertTurn } from '@t3x-dev/storage';
+import { insertConversation, insertDraft, insertProject, insertTurn } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
@@ -109,7 +109,7 @@ describe('Drafts Extract', () => {
   it('extracts sentences and adds to draft', async () => {
     setupMockLLM();
 
-    const draft = await insertDraftV3(mockDB, {
+    const draft = await insertDraft(mockDB, {
       project_id: testProjectId,
       title: 'Extract Test Draft',
     });
@@ -148,7 +148,7 @@ describe('Drafts Extract', () => {
   it('succeeds for editing draft', async () => {
     setupMockLLM();
 
-    const draft = await insertDraftV3(mockDB, {
+    const draft = await insertDraft(mockDB, {
       project_id: testProjectId,
       title: 'Editing Draft',
     });
@@ -175,7 +175,7 @@ describe('Drafts Extract', () => {
       tryWithFallback: vi.fn().mockRejectedValue(allProvidersError),
     });
 
-    const draft = await insertDraftV3(mockDB, {
+    const draft = await insertDraft(mockDB, {
       project_id: testProjectId,
       title: 'No LLM Draft',
     });
