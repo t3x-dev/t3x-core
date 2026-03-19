@@ -46,16 +46,18 @@ function getProxyUrl(): string | undefined {
 
 /**
  * Fetch with proxy support - uses undici when proxy is configured.
- * Respects NO_PROXY env var to skip proxy for specified hosts.
+ * Respects NO_PROXY env var: uses undici.Agent (direct) for bypassed hosts.
  */
 async function fetchWithProxy(url: string, options: RequestInit): Promise<Response> {
   const proxyUrl = getProxyUrl();
-  if (proxyUrl && !isNoProxy(url)) {
+  if (proxyUrl) {
     try {
-      const { ProxyAgent, fetch: undiciFetch } = await import('undici');
+      const { Agent, ProxyAgent, fetch: undiciFetch } = await import('undici');
+      // Use direct Agent for NO_PROXY hosts, ProxyAgent otherwise
+      const dispatcher = isNoProxy(url) ? new Agent() : new ProxyAgent(proxyUrl);
       const response = await undiciFetch(url, {
         ...options,
-        dispatcher: new ProxyAgent(proxyUrl),
+        dispatcher,
       } as Parameters<typeof undiciFetch>[1]);
       return response as unknown as Response;
     } catch {

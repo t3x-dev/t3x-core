@@ -7,7 +7,7 @@
 
 import { recordUsage } from '@t3x-dev/storage';
 import { Hono } from 'hono';
-import { ProxyAgent, fetch as undiciFetch } from 'undici';
+import { Agent, ProxyAgent, fetch as undiciFetch } from 'undici';
 import { getDB } from '../lib/db';
 import { jsonError, jsonSuccess } from '../lib/response';
 import { pinoLogger } from '../middleware/logger';
@@ -25,25 +25,19 @@ function isNoProxy(url: string): boolean {
   }
 }
 
-// Create proxy-aware fetch. Respects NO_PROXY env var.
+// Create proxy-aware fetch. Uses undici Agent (direct) for NO_PROXY hosts.
 function getProxyFetch() {
   const proxyUrl = process.env.HTTPS_PROXY || process.env.HTTP_PROXY;
   if (proxyUrl) {
-    const agent = new ProxyAgent(proxyUrl);
+    const proxyAgent = new ProxyAgent(proxyUrl);
+    const directAgent = new Agent();
     return async (url: string, options?: RequestInit) => {
-      if (isNoProxy(url)) {
-        // Node.js built-in fetch also uses proxy env vars — temporarily unset them
-        const saved = { hp: process.env.HTTP_PROXY, hs: process.env.HTTPS_PROXY, hp2: process.env.http_proxy, hs2: process.env.https_proxy };
-        delete process.env.HTTP_PROXY; delete process.env.HTTPS_PROXY; delete process.env.http_proxy; delete process.env.https_proxy;
-        try { return await fetch(url, options); } finally {
-          if (saved.hp) process.env.HTTP_PROXY = saved.hp; if (saved.hs) process.env.HTTPS_PROXY = saved.hs;
-          if (saved.hp2) process.env.http_proxy = saved.hp2; if (saved.hs2) process.env.https_proxy = saved.hs2;
-        }
-      }
+      // For NO_PROXY hosts, use undici with a direct (non-proxy) Agent
+      const dispatcher = isNoProxy(url) ? directAgent : proxyAgent;
       try {
         return await undiciFetch(url, {
           ...options,
-          dispatcher: agent,
+          dispatcher,
         } as Parameters<typeof undiciFetch>[1]);
       } catch {
         return fetch(url, options);
