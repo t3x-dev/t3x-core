@@ -113,7 +113,7 @@ test.describe('DiffDisplayView Full E2E', () => {
     });
     const commit1Data = await commit1Res.json();
     expect(commit1Data.success).toBe(true);
-    commit1Hash = commit1Data.data.hash;
+    commit1Hash = commit1Data.data.commit.hash;
 
     // 7. Create second commit with modified frames
     const commit2Res = await request.post(`${API_BASE}/commits`, {
@@ -149,7 +149,7 @@ test.describe('DiffDisplayView Full E2E', () => {
     });
     const commit2Data = await commit2Res.json();
     expect(commit2Data.success).toBe(true);
-    commit2Hash = commit2Data.data.hash;
+    commit2Hash = commit2Data.data.commit.hash;
   });
 
   test('API data is correct', async ({ request }) => {

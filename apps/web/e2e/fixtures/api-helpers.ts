@@ -78,7 +78,7 @@ export async function createTestCommit(
   });
   const data = await response.json();
   if (!data.success) throw new Error(`Failed to create commit: ${data.error?.message}`);
-  return data.data.hash;
+  return data.data.commit.hash;
 }
 
 /**

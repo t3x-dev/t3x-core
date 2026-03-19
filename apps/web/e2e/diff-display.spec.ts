@@ -59,7 +59,7 @@ test.describe('DiffDisplayView Integration', () => {
     });
     const commit1Data = await commit1Res.json();
     expect(commit1Data.success).toBe(true);
-    commitHash1 = commit1Data.data.hash;
+    commitHash1 = commit1Data.data.commit.hash;
 
     // Create second commit with changes
     const commit2Res = await request.post('http://localhost:8000/api/v1/commits', {
@@ -94,7 +94,7 @@ test.describe('DiffDisplayView Integration', () => {
     });
     const commit2Data = await commit2Res.json();
     expect(commit2Data.success).toBe(true);
-    commitHash2 = commit2Data.data.hash;
+    commitHash2 = commit2Data.data.commit.hash;
   });
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -158,7 +158,7 @@ test.describe('DiffDisplayView Integration', () => {
     });
     const emptyCommitData = await emptyCommitRes.json();
     expect(emptyCommitData.success).toBe(true);
-    const emptyCommitHash = emptyCommitData.data.hash;
+    const emptyCommitHash = emptyCommitData.data.commit.hash;
 
     // Verify empty commit has 0 frames
     const verifyRes = await request.get(`http://localhost:8000/api/v1/commits/${emptyCommitHash}`);
