@@ -76,7 +76,7 @@ test.describe('Error Scenarios', () => {
 
     // Navigate to home — should work normally
     await page.goto('/');
-    const navigation = page.locator('nav').or(page.locator('[role="navigation"]')).first();
+    const navigation = page.locator('aside[aria-label="Chat navigation"]').first();
     await expect(navigation).toBeVisible({ timeout: 15000 });
   });
 
