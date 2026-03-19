@@ -202,7 +202,7 @@ export function toSentenceCommit(commit: ApiCommit): SentenceCommit {
   return {
     hash: commit.hash,
     schema: commit.schema,
-    parents: commit.parents,
+    parents: commit.parents ?? [],
     author: {
       type: (commit.author.type === 'human' || commit.author.type === 'agent'
         ? commit.author.type
