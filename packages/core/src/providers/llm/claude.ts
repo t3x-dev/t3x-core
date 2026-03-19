@@ -30,18 +30,22 @@ function getProxyUrl(): string | undefined {
 }
 
 /**
- * Fetch with proxy support - uses undici when proxy is configured
+ * Fetch with proxy support - uses undici when proxy is configured.
+ * Skips proxy for Anthropic API (undici ProxyAgent causes 403 with some local proxies).
  */
 async function fetchWithProxy(url: string, options: RequestInit): Promise<Response> {
   const proxyUrl = getProxyUrl();
-  if (proxyUrl) {
-    // Dynamic import to avoid build-time issues with undici
-    const { ProxyAgent, fetch: undiciFetch } = await import('undici');
-    const response = await undiciFetch(url, {
-      ...options,
-      dispatcher: new ProxyAgent(proxyUrl),
-    } as Parameters<typeof undiciFetch>[1]);
-    return response as unknown as Response;
+  if (proxyUrl && !url.includes('api.anthropic.com')) {
+    try {
+      const { ProxyAgent, fetch: undiciFetch } = await import('undici');
+      const response = await undiciFetch(url, {
+        ...options,
+        dispatcher: new ProxyAgent(proxyUrl),
+      } as Parameters<typeof undiciFetch>[1]);
+      return response as unknown as Response;
+    } catch {
+      return fetch(url, options);
+    }
   }
   return fetch(url, options);
 }
@@ -52,7 +56,7 @@ async function fetchWithProxy(url: string, options: RequestInit): Promise<Respon
 export interface ClaudeProviderConfig {
   /** Anthropic API key */
   apiKey: string;
-  /** Model to use (default: claude-sonnet-4-5-20250929) */
+  /** Model to use (default: claude-sonnet-4-20250514) */
   model?: string;
   /** Base URL (default: https://api.anthropic.com) */
   baseUrl?: string;
@@ -70,7 +74,7 @@ export class ClaudeProvider implements LLMProvider {
 
   constructor(config: ClaudeProviderConfig) {
     this.apiKey = config.apiKey;
-    this.model = config.model ?? 'claude-sonnet-4-5-20250929';
+    this.model = config.model ?? 'claude-sonnet-4-20250514';
     this.baseUrl = config.baseUrl ?? 'https://api.anthropic.com';
   }
 

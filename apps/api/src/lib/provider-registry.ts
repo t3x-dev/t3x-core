@@ -136,9 +136,9 @@ function registerBuiltinProviders(reg: ProviderRegistry): void {
     name: 'Anthropic Claude',
     role: 'generation',
     requiredEnvKeys: ['ANTHROPIC_API_KEY'],
-    defaultModel: 'claude-sonnet-4-5-20250929',
+    defaultModel: 'claude-sonnet-4-20250514',
     availableModels: [
-      'claude-sonnet-4-5-20250929',
+      'claude-sonnet-4-20250514',
       'claude-opus-4-20250514',
       'claude-haiku-4-5-20251001',
     ],
@@ -210,7 +210,7 @@ function registerBuiltinProviders(reg: ProviderRegistry): void {
     name: 'Anthropic Claude (Merge)',
     role: 'merge',
     requiredEnvKeys: ['ANTHROPIC_API_KEY'],
-    defaultModel: 'claude-sonnet-4-5-20250929',
+    defaultModel: 'claude-sonnet-4-20250514',
     factory: (config) =>
       createClaudeProvider({
         apiKey: config.ANTHROPIC_API_KEY!,

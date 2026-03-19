@@ -12,13 +12,25 @@ import { getDB } from '../lib/db';
 import { jsonError, jsonSuccess } from '../lib/response';
 import { pinoLogger } from '../middleware/logger';
 
-// Create proxy agent if proxy is configured
+// Create proxy-aware fetch. Skips proxy for Anthropic API (known incompatibility with local SOCKS/HTTP proxies).
 function getProxyFetch() {
   const proxyUrl = process.env.HTTPS_PROXY || process.env.HTTP_PROXY;
   if (proxyUrl) {
     const agent = new ProxyAgent(proxyUrl);
-    return (url: string, options?: RequestInit) =>
-      undiciFetch(url, { ...options, dispatcher: agent } as Parameters<typeof undiciFetch>[1]);
+    return async (url: string, options?: RequestInit) => {
+      // Skip proxy for Anthropic API — undici ProxyAgent causes 403 with some local proxies
+      if (url.includes('api.anthropic.com')) {
+        return fetch(url, options);
+      }
+      try {
+        return await undiciFetch(url, {
+          ...options,
+          dispatcher: agent,
+        } as Parameters<typeof undiciFetch>[1]);
+      } catch {
+        return fetch(url, options);
+      }
+    };
   }
   return fetch;
 }
@@ -43,8 +55,8 @@ interface ChatResponse {
 }
 
 const PROVIDER_DEFAULTS: Record<string, { model: string; envKey: string }> = {
-  claude: { model: 'claude-sonnet-4-5-20250929', envKey: 'ANTHROPIC_API_KEY' },
-  anthropic: { model: 'claude-sonnet-4-5-20250929', envKey: 'ANTHROPIC_API_KEY' },
+  claude: { model: 'claude-sonnet-4-20250514', envKey: 'ANTHROPIC_API_KEY' },
+  anthropic: { model: 'claude-sonnet-4-20250514', envKey: 'ANTHROPIC_API_KEY' },
   openai: { model: 'gpt-4o-mini', envKey: 'OPENAI_API_KEY' },
   gpt: { model: 'gpt-4o-mini', envKey: 'OPENAI_API_KEY' },
 };
@@ -182,7 +194,7 @@ chatRoutes.post('/v1/chat', async (c) => {
     return jsonError(c, 'PROVIDER_ERROR', `API key not configured for provider: ${provider}`, 400);
   }
 
-  const model = body.model ?? PROVIDER_DEFAULTS[provider]?.model ?? 'claude-sonnet-4-5-20250929';
+  const model = body.model ?? PROVIDER_DEFAULTS[provider]?.model ?? 'claude-sonnet-4-20250514';
   const temperature = body.temperature ?? 0.7;
   const maxTokens = Math.min(Math.max(parseInt(String(body.max_tokens), 10) || 4096, 1), 16384);
 
@@ -260,7 +272,7 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
     return jsonError(c, 'PROVIDER_ERROR', `API key not configured for provider: ${provider}`, 400);
   }
 
-  const model = body.model ?? PROVIDER_DEFAULTS[provider]?.model ?? 'claude-sonnet-4-5-20250929';
+  const model = body.model ?? PROVIDER_DEFAULTS[provider]?.model ?? 'claude-sonnet-4-20250514';
   const temperature = body.temperature ?? 0.7;
   const maxTokens = Math.min(Math.max(parseInt(String(body.max_tokens), 10) || 4096, 1), 16384);
 

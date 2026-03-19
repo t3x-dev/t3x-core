@@ -44,7 +44,7 @@ export function ChatWorkspace({
   const pendingMessageRef = useRef<string | null>(null);
 
   // Model selection state
-  const [selectedModel, setSelectedModel] = useState('claude-sonnet-4-5-20250929');
+  const [selectedModel, setSelectedModel] = useState('claude-sonnet-4-20250514');
   const [selectedProvider, setSelectedProvider] = useState('anthropic');
 
   const handleModelChange = useCallback((provider: string, model: string) => {
