@@ -18,21 +18,6 @@ import {
 import { zodToJsonSchema } from '../../llm/zodToJsonSchema';
 
 /**
- * Check if a URL's host is in the NO_PROXY list.
- */
-function isNoProxy(url: string): boolean {
-  const noProxy = process.env.NO_PROXY || process.env.no_proxy;
-  if (!noProxy) return false;
-  if (noProxy === '*') return true;
-  try {
-    const host = new URL(url).hostname;
-    return noProxy.split(',').some((p) => host.endsWith(p.trim()));
-  } catch {
-    return false;
-  }
-}
-
-/**
  * Get proxy URL from environment variables
  */
 function getProxyUrl(): string | undefined {
@@ -45,19 +30,16 @@ function getProxyUrl(): string | undefined {
 }
 
 /**
- * Fetch with proxy support - uses undici when proxy is configured.
- * Respects NO_PROXY env var: uses undici.Agent (direct) for bypassed hosts.
+ * Fetch with proxy support - always uses undici ProxyAgent when proxy is configured.
  */
 async function fetchWithProxy(url: string, options: RequestInit): Promise<Response> {
   const proxyUrl = getProxyUrl();
   if (proxyUrl) {
     try {
-      const { Agent, ProxyAgent, fetch: undiciFetch } = await import('undici');
-      // Use direct Agent for NO_PROXY hosts, ProxyAgent otherwise
-      const dispatcher = isNoProxy(url) ? new Agent() : new ProxyAgent(proxyUrl);
+      const { ProxyAgent, fetch: undiciFetch } = await import('undici');
       const response = await undiciFetch(url, {
         ...options,
-        dispatcher,
+        dispatcher: new ProxyAgent(proxyUrl),
       } as Parameters<typeof undiciFetch>[1]);
       return response as unknown as Response;
     } catch {

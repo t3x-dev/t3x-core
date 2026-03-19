@@ -7,37 +7,22 @@
 
 import { recordUsage } from '@t3x-dev/storage';
 import { Hono } from 'hono';
-import { Agent, ProxyAgent, fetch as undiciFetch } from 'undici';
+import { ProxyAgent, fetch as undiciFetch } from 'undici';
 import { getDB } from '../lib/db';
 import { jsonError, jsonSuccess } from '../lib/response';
 import { pinoLogger } from '../middleware/logger';
 
-// Check if URL host matches NO_PROXY list
-function isNoProxy(url: string): boolean {
-  const noProxy = process.env.NO_PROXY || process.env.no_proxy;
-  if (!noProxy) return false;
-  if (noProxy === '*') return true;
-  try {
-    const host = new URL(url).hostname;
-    return noProxy.split(',').some((p) => host.endsWith(p.trim()));
-  } catch {
-    return false;
-  }
-}
-
-// Create proxy-aware fetch. Uses undici Agent (direct) for NO_PROXY hosts.
+// Create proxy-aware fetch. Always uses ProxyAgent when proxy is configured.
 function getProxyFetch() {
-  const proxyUrl = process.env.HTTPS_PROXY || process.env.HTTP_PROXY;
+  const proxyUrl =
+    process.env.HTTPS_PROXY || process.env.https_proxy || process.env.HTTP_PROXY || process.env.http_proxy;
   if (proxyUrl) {
-    const proxyAgent = new ProxyAgent(proxyUrl);
-    const directAgent = new Agent();
+    const agent = new ProxyAgent(proxyUrl);
     return async (url: string, options?: RequestInit) => {
-      // For NO_PROXY hosts, use undici with a direct (non-proxy) Agent
-      const dispatcher = isNoProxy(url) ? directAgent : proxyAgent;
       try {
         return await undiciFetch(url, {
           ...options,
-          dispatcher,
+          dispatcher: agent,
         } as Parameters<typeof undiciFetch>[1]);
       } catch {
         return fetch(url, options);
