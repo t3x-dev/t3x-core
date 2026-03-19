@@ -148,7 +148,8 @@ function ProjectDetailPageContent() {
       const now = Date.now();
       if (now - lastRefreshRef.current > 5000) {
         lastRefreshRef.current = now;
-        useCanvasStore.getState().loadProjectData(projectId);
+        // Use incremental merge to avoid clearing existing edges/positions
+        useCanvasStore.getState().loadProjectData(projectId, { merge: true });
       }
     };
 

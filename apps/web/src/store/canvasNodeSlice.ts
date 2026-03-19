@@ -15,14 +15,19 @@ import {
 } from './canvasStoreUtils';
 
 export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (set, get) => ({
-  loadProjectData: async (projectId: string) => {
+  loadProjectData: async (projectId: string, options?: { merge?: boolean }) => {
     // Skip if already loading the same project
     const state = get();
     if (state.projectId === projectId && state.loading) {
       return;
     }
 
-    set({ loading: true, loadError: null, projectId });
+    // For merge mode (polling), don't show loading state
+    if (!options?.merge) {
+      set({ loading: true, loadError: null, projectId });
+    } else {
+      set({ projectId });
+    }
 
     try {
       // Fetch conversations, sentence commits, and leaves in parallel
@@ -375,14 +380,35 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
       const hasMainCommit = commits.some((c) => c.branch === 'main');
       const latestMainCommitId = resolveLatestMainUnitId(nodes);
 
-      set({
-        nodes,
-        edges,
-        hasMainCommit,
-        latestMainCommitId,
-        loading: false,
-        loadError: null,
-      });
+      if (options?.merge) {
+        // Incremental merge: add new nodes/edges, preserve existing positions and edges
+        const existing = get();
+        const existingNodeIds = new Set(existing.nodes.map((n) => n.id));
+        const existingEdgeIds = new Set(existing.edges.map((e) => e.id));
+
+        // Add only new nodes (preserve existing ones with their positions)
+        const newNodes = nodes.filter((n) => !existingNodeIds.has(n.id));
+        // Add only new edges (never remove existing edges)
+        const newEdges = edges.filter((e) => !existingEdgeIds.has(e.id));
+
+        if (newNodes.length > 0 || newEdges.length > 0) {
+          set({
+            nodes: [...existing.nodes, ...newNodes],
+            edges: [...existing.edges, ...newEdges],
+            hasMainCommit,
+            latestMainCommitId,
+          });
+        }
+      } else {
+        set({
+          nodes,
+          edges,
+          hasMainCommit,
+          latestMainCommitId,
+          loading: false,
+          loadError: null,
+        });
+      }
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       set({
