@@ -48,6 +48,17 @@ function loadEnvLocal(): void {
 
 loadEnvLocal();
 
+// If NO_PROXY is set, remove proxy env vars so Node.js built-in fetch doesn't use them.
+// Node.js 24's fetch internally caches proxy settings from env vars at startup,
+// so selective NO_PROXY per-request doesn't work — must remove them globally.
+const noProxy = process.env.NO_PROXY || process.env.no_proxy;
+if (noProxy) {
+  delete process.env.HTTP_PROXY;
+  delete process.env.HTTPS_PROXY;
+  delete process.env.http_proxy;
+  delete process.env.https_proxy;
+}
+
 // Log environment status early (for debugging env loading issues)
 pinoLogger.info(
   {

@@ -12,15 +12,33 @@ import { getDB } from '../lib/db';
 import { jsonError, jsonSuccess } from '../lib/response';
 import { pinoLogger } from '../middleware/logger';
 
-// Create proxy-aware fetch. Skips proxy for Anthropic API (known incompatibility with local SOCKS/HTTP proxies).
+// Check if URL host matches NO_PROXY list
+function isNoProxy(url: string): boolean {
+  const noProxy = process.env.NO_PROXY || process.env.no_proxy;
+  if (!noProxy) return false;
+  if (noProxy === '*') return true;
+  try {
+    const host = new URL(url).hostname;
+    return noProxy.split(',').some((p) => host.endsWith(p.trim()));
+  } catch {
+    return false;
+  }
+}
+
+// Create proxy-aware fetch. Respects NO_PROXY env var.
 function getProxyFetch() {
   const proxyUrl = process.env.HTTPS_PROXY || process.env.HTTP_PROXY;
   if (proxyUrl) {
     const agent = new ProxyAgent(proxyUrl);
     return async (url: string, options?: RequestInit) => {
-      // Skip proxy for Anthropic API — undici ProxyAgent causes 403 with some local proxies
-      if (url.includes('api.anthropic.com')) {
-        return fetch(url, options);
+      if (isNoProxy(url)) {
+        // Node.js built-in fetch also uses proxy env vars — temporarily unset them
+        const saved = { hp: process.env.HTTP_PROXY, hs: process.env.HTTPS_PROXY, hp2: process.env.http_proxy, hs2: process.env.https_proxy };
+        delete process.env.HTTP_PROXY; delete process.env.HTTPS_PROXY; delete process.env.http_proxy; delete process.env.https_proxy;
+        try { return await fetch(url, options); } finally {
+          if (saved.hp) process.env.HTTP_PROXY = saved.hp; if (saved.hs) process.env.HTTPS_PROXY = saved.hs;
+          if (saved.hp2) process.env.http_proxy = saved.hp2; if (saved.hs2) process.env.https_proxy = saved.hs2;
+        }
       }
       try {
         return await undiciFetch(url, {

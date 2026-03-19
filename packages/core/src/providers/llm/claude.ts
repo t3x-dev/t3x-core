@@ -18,6 +18,21 @@ import {
 import { zodToJsonSchema } from '../../llm/zodToJsonSchema';
 
 /**
+ * Check if a URL's host is in the NO_PROXY list.
+ */
+function isNoProxy(url: string): boolean {
+  const noProxy = process.env.NO_PROXY || process.env.no_proxy;
+  if (!noProxy) return false;
+  if (noProxy === '*') return true;
+  try {
+    const host = new URL(url).hostname;
+    return noProxy.split(',').some((p) => host.endsWith(p.trim()));
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Get proxy URL from environment variables
  */
 function getProxyUrl(): string | undefined {
@@ -31,11 +46,11 @@ function getProxyUrl(): string | undefined {
 
 /**
  * Fetch with proxy support - uses undici when proxy is configured.
- * Skips proxy for Anthropic API (undici ProxyAgent causes 403 with some local proxies).
+ * Respects NO_PROXY env var to skip proxy for specified hosts.
  */
 async function fetchWithProxy(url: string, options: RequestInit): Promise<Response> {
   const proxyUrl = getProxyUrl();
-  if (proxyUrl && !url.includes('api.anthropic.com')) {
+  if (proxyUrl && !isNoProxy(url)) {
     try {
       const { ProxyAgent, fetch: undiciFetch } = await import('undici');
       const response = await undiciFetch(url, {
