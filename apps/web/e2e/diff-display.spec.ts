@@ -161,9 +161,7 @@ test.describe('DiffDisplayView Integration', () => {
     const emptyCommitHash = emptyCommitData.data.hash;
 
     // Verify empty commit has 0 frames
-    const verifyRes = await request.get(
-      `http://localhost:8000/api/v1/commits/${emptyCommitHash}`
-    );
+    const verifyRes = await request.get(`http://localhost:8000/api/v1/commits/${emptyCommitHash}`);
     const verifyData = await verifyRes.json();
     expect(verifyData.data.commit.content.frames).toHaveLength(0);
   });

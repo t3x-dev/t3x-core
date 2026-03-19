@@ -33,7 +33,7 @@ import {
   updateBranchHead,
   updateMergeDraft,
 } from '@t3x-dev/storage';
-import { getV4AuthorFromContext } from '../lib/auth';
+import { getAuthorFromContext } from '../lib/auth';
 import { getDB } from '../lib/db';
 import { computeMergeChecks } from '../lib/merge-checks';
 import { getLLMProvider } from '../lib/provider-registry';
@@ -266,7 +266,7 @@ mergeRoutes.openapi(executeMergeRoute, async (c) => {
   }
 
   // Get author from context
-  const author = await getV4AuthorFromContext(c);
+  const author = await getAuthorFromContext(c);
   const db = await getDB();
 
   try {
@@ -744,7 +744,7 @@ mergeRoutes.openapi(commitDraftRoute, async (c) => {
     );
   }
 
-  const author = await getV4AuthorFromContext(c);
+  const author = await getAuthorFromContext(c);
 
   try {
     // Execute merge - returns SentenceCommit

@@ -224,10 +224,6 @@ export function createApp(options?: CreateAppOptions): Hono {
       { name: 'Templates', description: 'Reusable prompt templates for leaf generation' },
       { name: 'Leaves', description: 'Leaf node management (constraints, output, validation)' },
       { name: 'Pins', description: 'Pin management (source selection for commits and context)' },
-      {
-        name: 'Commits V4',
-        description: 'Commits v4 (pure knowledge, sentences only, no constraints)',
-      },
       { name: 'Webhooks', description: 'Webhook event subscriptions' },
       {
         name: 'Recipes',

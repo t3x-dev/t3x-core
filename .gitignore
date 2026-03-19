@@ -52,6 +52,9 @@ venv/
 *.egg-info/
 .pytest_cache/
 
+# Test results
+test-results/
+
 # Test coverage
 coverage/
 .nyc_output/

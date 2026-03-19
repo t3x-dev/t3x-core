@@ -14,12 +14,12 @@ import type { Context } from 'hono';
 import { getDB } from './db';
 
 /**
- * Get V4 CommitAuthor from request context.
+ * Get CommitAuthor from request context.
  *
  * When authenticated: returns verified author, ignoring any client-supplied author.
  * When not authenticated: returns the client-supplied author or a default.
  */
-export async function getV4AuthorFromContext(
+export async function getAuthorFromContext(
   c: Context,
   clientAuthor?: CommitAuthor
 ): Promise<CommitAuthor> {

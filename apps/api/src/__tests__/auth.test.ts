@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { describe, expect, it, vi } from 'vitest';
-import { getV4AuthorFromContext } from '../lib/auth';
+import { getAuthorFromContext } from '../lib/auth';
 
 // Mock dependencies
 vi.mock('../lib/db', () => ({
@@ -12,17 +12,17 @@ vi.mock('@t3x-dev/storage', () => ({
 }));
 
 /**
- * Creates a minimal Hono app that extracts V4 author from request context
+ * Creates a minimal Hono app that extracts author from request context
  * and returns it as JSON.
  */
 function createTestApp() {
   const app = new Hono();
   app.get('/author', async (c) => {
-    const author = await getV4AuthorFromContext(c);
+    const author = await getAuthorFromContext(c);
     return c.json(author);
   });
   app.get('/author-with-client', async (c) => {
-    const author = await getV4AuthorFromContext(c, {
+    const author = await getAuthorFromContext(c, {
       type: 'human',
       name: 'Client User',
       id: 'client_123',
@@ -32,7 +32,7 @@ function createTestApp() {
   return app;
 }
 
-describe('getV4AuthorFromContext', () => {
+describe('getAuthorFromContext', () => {
   const app = createTestApp();
 
   it('returns default anonymous author when no auth and no client author', async () => {

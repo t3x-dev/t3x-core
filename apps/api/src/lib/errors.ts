@@ -1,7 +1,7 @@
 /**
- * Standardized Error Handling for V4 API
+ * Standardized Error Handling
  *
- * Provides consistent error response format across all V4 endpoints.
+ * Provides consistent error response format across all endpoints.
  *
  * Error Format:
  * {
@@ -22,7 +22,7 @@
 import type { Context } from 'hono';
 
 /**
- * Standardized error codes for V4 API
+ * Standardized error codes
  */
 export const ErrorCodes = {
   // Version errors

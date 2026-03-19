@@ -20,21 +20,9 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 // Load root .env (eval-runner runs from apps/api, .env is at repo root)
-const rootEnvPath = path.resolve(process.cwd(), '../../.env');
-if (fs.existsSync(rootEnvPath)) {
-  for (const line of fs.readFileSync(rootEnvPath, 'utf-8').split('\n')) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
-    const eqIdx = trimmed.indexOf('=');
-    if (eqIdx === -1) continue;
-    const key = trimmed.slice(0, eqIdx).trim();
-    const val = trimmed
-      .slice(eqIdx + 1)
-      .trim()
-      .replace(/^["']|["']$/g, '');
-    if (!process.env[key]) process.env[key] = val;
-  }
-}
+import dotenv from 'dotenv';
+
+dotenv.config({ path: path.resolve(process.cwd(), '../../.env') });
 
 import { buildDraft, type Frame, type Relation, type SemanticContent } from '@t3x-dev/core';
 import {
@@ -56,7 +44,7 @@ import { frameExtractRoutes } from '../routes/frame-extract.openapi';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const RESULTS_DIR = path.resolve(__dirname, '../../../../docs/wyx_docs/eval-results');
+const RESULTS_DIR = path.resolve(__dirname, '../../test-results/eval');
 
 // ============================================================
 // Conversation Scenarios
