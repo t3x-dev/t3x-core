@@ -24,9 +24,9 @@ export async function getCommitAsFrames(hash: string): Promise<Commit> {
   }
 
   // Fallback: fetch via API and attempt upgrade
-  const v5 = await getApiCommit(hash);
+  const apiCommit = await getApiCommit(hash);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return upgradeLegacyCommit(v5 as any);
+  return upgradeLegacyCommit(apiCommit as any);
 }
 
 /**

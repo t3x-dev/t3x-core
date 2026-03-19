@@ -27,69 +27,69 @@ test.describe('DiffDisplayView Integration', () => {
     expect(projectData.success).toBe(true);
     projectId = projectData.data.project_id;
 
-    // Fake turn hash for testing (must be non-empty)
-    const fakeTurnHash = 'sha256:e2e_test_turn_hash_placeholder_for_diff_test';
-
-    // Create first V3 commit
-    const commit1Res = await request.post('http://localhost:8000/api/v1/commits-v3', {
+    // Create first commit
+    const commit1Res = await request.post('http://localhost:8000/api/v1/commits', {
       data: {
         project_id: projectId,
         branch: 'main',
         message: 'Base commit',
+        parents: [],
         content: {
-          sentences: [
+          frames: [
             {
-              id: 's1',
-              text: 'User prefers dark mode',
-              source: { turn_hash: fakeTurnHash, start_char: 0, end_char: 22 },
+              id: 'f_001',
+              type: 'legacy_sentence',
+              slots: { text: 'User prefers dark mode' },
             },
             {
-              id: 's2',
-              text: 'Budget is $3000',
-              source: { turn_hash: fakeTurnHash, start_char: 23, end_char: 38 },
+              id: 'f_002',
+              type: 'legacy_sentence',
+              slots: { text: 'Budget is $3000' },
             },
             {
-              id: 's3',
-              text: 'Deadline is Friday',
-              source: { turn_hash: fakeTurnHash, start_char: 39, end_char: 57 },
+              id: 'f_003',
+              type: 'legacy_sentence',
+              slots: { text: 'Deadline is Friday' },
             },
           ],
+          relations: [],
         },
-        author: { name: 'E2E Tester' },
+        author: { type: 'human', name: 'E2E Tester' },
       },
     });
     const commit1Data = await commit1Res.json();
     expect(commit1Data.success).toBe(true);
     commitHash1 = commit1Data.data.hash;
 
-    // Create second V3 commit with changes
-    const commit2Res = await request.post('http://localhost:8000/api/v1/commits-v3', {
+    // Create second commit with changes
+    const commit2Res = await request.post('http://localhost:8000/api/v1/commits', {
       data: {
         project_id: projectId,
         branch: 'main',
         message: 'Updated commit',
         parents: [commitHash1],
         content: {
-          sentences: [
+          frames: [
             {
-              id: 's1',
-              text: 'User prefers dark mode',
-              source: { turn_hash: fakeTurnHash, start_char: 0, end_char: 22 },
+              id: 'f_001',
+              type: 'legacy_sentence',
+              slots: { text: 'User prefers dark mode' },
             },
             {
-              id: 's2',
-              text: 'Budget is $5000',
-              source: { turn_hash: fakeTurnHash, start_char: 23, end_char: 38 },
+              id: 'f_002',
+              type: 'legacy_sentence',
+              slots: { text: 'Budget is $5000' },
             }, // Modified
             {
-              id: 's4',
-              text: 'Meeting scheduled for Monday',
-              source: { turn_hash: fakeTurnHash, start_char: 58, end_char: 86 },
+              id: 'f_004',
+              type: 'legacy_sentence',
+              slots: { text: 'Meeting scheduled for Monday' },
             }, // Added
-            // s3 removed
+            // f_003 removed
           ],
+          relations: [],
         },
-        author: { name: 'E2E Tester' },
+        author: { type: 'human', name: 'E2E Tester' },
       },
     });
     const commit2Data = await commit2Res.json();
@@ -102,40 +102,40 @@ test.describe('DiffDisplayView Integration', () => {
   // ─────────────────────────────────────────────────────────────────────────
   test('API returns correct data for diff comparison', async ({ request }) => {
     // Fetch commit 1
-    const commit1Res = await request.get(`http://localhost:8000/api/v1/commits-v3/${commitHash1}`);
+    const commit1Res = await request.get(`http://localhost:8000/api/v1/commits/${commitHash1}`);
     const commit1Data = await commit1Res.json();
     expect(commit1Data.success).toBe(true);
-    expect(commit1Data.data.content.sentences).toHaveLength(3);
+    expect(commit1Data.data.commit.content.frames).toHaveLength(3);
 
     // Fetch commit 2
-    const commit2Res = await request.get(`http://localhost:8000/api/v1/commits-v3/${commitHash2}`);
+    const commit2Res = await request.get(`http://localhost:8000/api/v1/commits/${commitHash2}`);
     const commit2Data = await commit2Res.json();
     expect(commit2Data.success).toBe(true);
-    expect(commit2Data.data.content.sentences).toHaveLength(3);
+    expect(commit2Data.data.commit.content.frames).toHaveLength(3);
 
     // Verify expected diff data:
-    const commit1Sentences = commit1Data.data.content.sentences.map(
-      (s: { text: string }) => s.text
+    const commit1Texts = commit1Data.data.commit.content.frames.map(
+      (f: { slots: { text: string } }) => f.slots.text
     );
-    const commit2Sentences = commit2Data.data.content.sentences.map(
-      (s: { text: string }) => s.text
+    const commit2Texts = commit2Data.data.commit.content.frames.map(
+      (f: { slots: { text: string } }) => f.slots.text
     );
 
     // Unchanged sentence
-    expect(commit1Sentences).toContain('User prefers dark mode');
-    expect(commit2Sentences).toContain('User prefers dark mode');
+    expect(commit1Texts).toContain('User prefers dark mode');
+    expect(commit2Texts).toContain('User prefers dark mode');
 
     // Modified sentence
-    expect(commit1Sentences).toContain('Budget is $3000');
-    expect(commit2Sentences).toContain('Budget is $5000');
+    expect(commit1Texts).toContain('Budget is $3000');
+    expect(commit2Texts).toContain('Budget is $5000');
 
     // Removed from commit1
-    expect(commit1Sentences).toContain('Deadline is Friday');
-    expect(commit2Sentences).not.toContain('Deadline is Friday');
+    expect(commit1Texts).toContain('Deadline is Friday');
+    expect(commit2Texts).not.toContain('Deadline is Friday');
 
     // Added in commit2
-    expect(commit2Sentences).toContain('Meeting scheduled for Monday');
-    expect(commit1Sentences).not.toContain('Meeting scheduled for Monday');
+    expect(commit2Texts).toContain('Meeting scheduled for Monday');
+    expect(commit1Texts).not.toContain('Meeting scheduled for Monday');
   });
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -143,27 +143,29 @@ test.describe('DiffDisplayView Integration', () => {
   // ─────────────────────────────────────────────────────────────────────────
   test('Empty commit comparison works (validates || fix)', async ({ request }) => {
     // Create an empty commit
-    const emptyCommitRes = await request.post('http://localhost:8000/api/v1/commits-v3', {
+    const emptyCommitRes = await request.post('http://localhost:8000/api/v1/commits', {
       data: {
         project_id: projectId,
         branch: 'test-empty',
         message: 'Empty commit',
+        parents: [],
         content: {
-          sentences: [],
+          frames: [],
+          relations: [],
         },
-        author: { name: 'E2E Tester' },
+        author: { type: 'human', name: 'E2E Tester' },
       },
     });
     const emptyCommitData = await emptyCommitRes.json();
     expect(emptyCommitData.success).toBe(true);
     const emptyCommitHash = emptyCommitData.data.hash;
 
-    // Verify empty commit has 0 sentences
+    // Verify empty commit has 0 frames
     const verifyRes = await request.get(
-      `http://localhost:8000/api/v1/commits-v3/${emptyCommitHash}`
+      `http://localhost:8000/api/v1/commits/${emptyCommitHash}`
     );
     const verifyData = await verifyRes.json();
-    expect(verifyData.data.content.sentences).toHaveLength(0);
+    expect(verifyData.data.commit.content.frames).toHaveLength(0);
   });
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -172,31 +174,35 @@ test.describe('DiffDisplayView Integration', () => {
   test('Diff algorithm produces expected results', async ({ request }) => {
     // Fetch both commits
     const [res1, res2] = await Promise.all([
-      request.get(`http://localhost:8000/api/v1/commits-v3/${commitHash1}`),
-      request.get(`http://localhost:8000/api/v1/commits-v3/${commitHash2}`),
+      request.get(`http://localhost:8000/api/v1/commits/${commitHash1}`),
+      request.get(`http://localhost:8000/api/v1/commits/${commitHash2}`),
     ]);
 
     const data1 = await res1.json();
     const data2 = await res2.json();
 
-    const sentences1 = data1.data.content.sentences;
-    const sentences2 = data2.data.content.sentences;
+    const frames1 = data1.data.commit.content.frames;
+    const frames2 = data2.data.commit.content.frames;
 
     // Simulate the diff algorithm logic (same as DiffDisplayView uses)
-    const texts1 = new Set(sentences1.map((s: { text: string }) => s.text));
-    const texts2 = new Set(sentences2.map((s: { text: string }) => s.text));
+    const texts1 = new Set(frames1.map((f: { slots: { text: string } }) => f.slots.text));
+    const texts2 = new Set(frames2.map((f: { slots: { text: string } }) => f.slots.text));
 
     // Identical (in both)
-    const identical = sentences1.filter((s: { text: string }) => texts2.has(s.text));
+    const identical = frames1.filter((f: { slots: { text: string } }) => texts2.has(f.slots.text));
     expect(identical).toHaveLength(1);
-    expect(identical[0].text).toBe('User prefers dark mode');
+    expect(identical[0].slots.text).toBe('User prefers dark mode');
 
     // Only in source (removed)
-    const onlyInSource = sentences1.filter((s: { text: string }) => !texts2.has(s.text));
+    const onlyInSource = frames1.filter(
+      (f: { slots: { text: string } }) => !texts2.has(f.slots.text)
+    );
     expect(onlyInSource).toHaveLength(2); // Budget $3000 (modified) + Deadline (removed)
 
     // Only in target (added)
-    const onlyInTarget = sentences2.filter((s: { text: string }) => !texts1.has(s.text));
+    const onlyInTarget = frames2.filter(
+      (f: { slots: { text: string } }) => !texts1.has(f.slots.text)
+    );
     expect(onlyInTarget).toHaveLength(2); // Budget $5000 (modified) + Meeting (added)
   });
 
@@ -217,13 +223,13 @@ test.describe('DiffDisplayView Integration', () => {
     const canvas = page.locator('.react-flow');
     await expect(canvas).toBeVisible({ timeout: 15000 });
 
-    // Verify canvas loaded with nodes (V3 commits may take longer to render)
+    // Verify canvas loaded with nodes
     const nodes = page.locator('.react-flow__node');
     const hasNodes = await nodes
       .first()
       .isVisible({ timeout: 15000 })
       .catch(() => false);
-    // V3 commits may not always render as canvas nodes in current UI
-    test.skip(!hasNodes, 'Canvas nodes not visible — V3 commits may not render as nodes');
+    // Commits may take longer to render
+    test.skip(!hasNodes, 'Canvas nodes not visible — commits may not render as nodes');
   });
 });

@@ -565,7 +565,7 @@ function SharedCommitView({ commit }: { commit: CommitData }) {
           )}
         </div>
 
-        {/* Frames (V5) */}
+        {/* Frames */}
         {frames.length > 0 && (
           <section>
             <h2 className="text-sm font-medium text-[var(--text-secondary)] mb-2">

@@ -182,9 +182,9 @@ import { framesToSentences } from '@/lib/framesToSentences';
  * Convert a frame-based commit to sentence-based shape.
  * Derives sentences from frames and maps `sources` to `source_refs`.
  */
-export function toSentenceCommit(v5: ApiCommit): SentenceCommit {
-  const sentences: CommitSentence[] = v5.content?.frames?.length
-    ? framesToSentences(v5.content as import('@t3x-dev/core').SemanticContent).map((s) => ({
+export function toSentenceCommit(commit: ApiCommit): SentenceCommit {
+  const sentences: CommitSentence[] = commit.content?.frames?.length
+    ? framesToSentences(commit.content as import('@t3x-dev/core').SemanticContent).map((s) => ({
         id: s.id,
         text: s.text,
         confidence: s.confidence,
@@ -200,32 +200,32 @@ export function toSentenceCommit(v5: ApiCommit): SentenceCommit {
     : [];
 
   return {
-    hash: v5.hash,
-    schema: v5.schema,
-    parents: v5.parents,
+    hash: commit.hash,
+    schema: commit.schema,
+    parents: commit.parents,
     author: {
-      type: (v5.author.type === 'human' || v5.author.type === 'agent' ? v5.author.type : 'human') as
+      type: (commit.author.type === 'human' || commit.author.type === 'agent' ? commit.author.type : 'human') as
         | 'human'
         | 'agent',
-      name: v5.author.name,
-      id: v5.author.id,
+      name: commit.author.name,
+      id: commit.author.id,
     },
-    committed_at: v5.committed_at,
+    committed_at: commit.committed_at,
     content: { sentences },
-    project_id: v5.project_id,
-    message: v5.message,
-    branch: v5.branch,
+    project_id: commit.project_id,
+    message: commit.message,
+    branch: commit.branch,
     source_refs:
-      v5.sources?.map((s) => ({
+      commit.sources?.map((s) => ({
         type: (s.type === 'leaf' ? 'leaf' : 'conversation') as 'conversation' | 'leaf',
         id: s.id,
         title: s.title,
       })) ?? null,
     merge_summary: null,
-    semantic: v5.content as import('@t3x-dev/core').SemanticContent | undefined,
-    position_x: v5.position_x ?? null,
-    position_y: v5.position_y ?? null,
-    created_at: v5.committed_at,
+    semantic: commit.content as import('@t3x-dev/core').SemanticContent | undefined,
+    position_x: commit.position_x ?? null,
+    position_y: commit.position_y ?? null,
+    created_at: commit.committed_at,
   };
 }
 
@@ -246,8 +246,8 @@ export async function listSentenceCommits(
  * Get a single commit as sentence-based shape.
  */
 export async function getSentenceCommit(commitHash: string): Promise<SentenceCommit> {
-  const v5 = await getApiCommit(commitHash);
-  return toSentenceCommit(v5);
+  const apiCommit = await getApiCommit(commitHash);
+  return toSentenceCommit(apiCommit);
 }
 
 /**
@@ -282,8 +282,8 @@ export async function updateCommitPosition(
       body: JSON.stringify({ position_x: positionX, position_y: positionY }),
     }
   );
-  const v5 = await handleResponse<ApiCommit>(res);
-  return toSentenceCommit(v5);
+  const apiCommit = await handleResponse<ApiCommit>(res);
+  return toSentenceCommit(apiCommit);
 }
 
 // ============================================================================
