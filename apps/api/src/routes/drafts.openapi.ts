@@ -1,5 +1,5 @@
 /**
- * Drafts V3 Routes (Workbench) — Aggregator
+ * Drafts Routes (Workbench) — Aggregator
  *
  * Combines all draft sub-routers into a single exported router.
  * Sub-modules:

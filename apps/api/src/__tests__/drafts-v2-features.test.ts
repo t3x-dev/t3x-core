@@ -1,7 +1,7 @@
 /**
- * Drafts V2 Features Tests
+ * Draft Workbench Features Tests
  *
- * Integration tests for Workbench V2 features:
+ * Integration tests for Workbench features:
  * 1. Preview with model parameter (haiku/sonnet/opus)
  * 2. Suggest endpoint (returns suggestions based on draft goal)
  * 3. Commit populates sentence vectors (best-effort)
@@ -51,7 +51,7 @@ vi.mock('../lib/embedder', () => ({
 // Import routes after mocking
 import { draftsRoutes } from '../routes/drafts.openapi';
 
-describe('Drafts V2 Features', () => {
+describe('Draft Workbench Features', () => {
   let cleanup: () => Promise<void>;
   let testProjectId: string;
   const app = new Hono();
@@ -62,7 +62,7 @@ describe('Drafts V2 Features', () => {
     mockDB = setup.db;
     cleanup = setup.cleanup;
 
-    const project = await insertProject(mockDB, testData.project({ name: 'Drafts V2 Test' }));
+    const project = await insertProject(mockDB, testData.project({ name: 'Draft Workbench Test' }));
     testProjectId = project.projectId;
 
     // Reset generation mocks

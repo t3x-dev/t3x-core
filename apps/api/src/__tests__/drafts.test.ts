@@ -1,5 +1,5 @@
 /**
- * Drafts V3 Route Tests
+ * Drafts Route Tests
  *
  * Integration tests for Draft CRUD + preview + commit + fork endpoints.
  */
@@ -39,7 +39,7 @@ vi.mock('@t3x-dev/core', async (importOriginal) => {
 // Import routes after mocking
 import { draftsRoutes } from '../routes/drafts.openapi';
 
-describe('Drafts V3 Routes', () => {
+describe('Drafts Routes', () => {
   let cleanup: () => Promise<void>;
   let testProjectId: string;
   const app = new Hono();

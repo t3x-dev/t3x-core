@@ -173,6 +173,13 @@ function wrapProviderWithLogger(
       return result;
     },
     resolveConflict: provider.resolveConflict.bind(provider),
+    // Forward optional methods if the original provider implements them
+    ...(provider.generateFromPrompt && {
+      generateFromPrompt: provider.generateFromPrompt.bind(provider),
+    }),
+    ...(provider.generateStructured && {
+      generateStructured: provider.generateStructured.bind(provider),
+    }),
   };
 }
 

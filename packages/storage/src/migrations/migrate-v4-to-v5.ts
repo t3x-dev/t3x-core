@@ -1,7 +1,7 @@
 /**
  * Migration Script: commits_v4 → commits
  *
- * Converts all V4 sentence-based commits to V5 frame-based commits.
+ * Converts all V4 sentence-based commits to frame-based commits.
  * Each sentence becomes a frame with type 'legacy_sentence' and slots: { text }.
  * If the V4 commit has a `semantic` JSONB field with frames, those are used directly.
  *
@@ -32,7 +32,7 @@ export interface MigrationResult {
 }
 
 /**
- * Migrate all V4 commits to V5 format.
+ * Migrate all V4 sentence-based commits to frame-based format.
  *
  * @param db - Database instance
  * @param dryRun - If true, report what would be migrated without writing
@@ -48,7 +48,7 @@ export async function migrateV4ToV5(db: AnyDB, dryRun = false): Promise<Migratio
     return result;
   }
 
-  // Fetch existing V5 hashes for dedup
+  // Fetch existing frame-based commit hashes for dedup
   const v5Hashes = new Set(
     (await db.select({ hash: commits.hash }).from(commits)).map((r) => r.hash)
   );
@@ -61,7 +61,7 @@ export async function migrateV4ToV5(db: AnyDB, dryRun = false): Promise<Migratio
     }
 
     try {
-      // Convert V4 content to V5 frames
+      // Convert V4 content to frames
       const content = row.content as {
         sentences?: Array<{ id: string; text: string; confidence?: number }>;
       } | null;
@@ -136,7 +136,7 @@ export async function migrateV4ToV5(db: AnyDB, dryRun = false): Promise<Migratio
 
 /**
  * Verify migration completeness.
- * Returns count of V4 commits NOT in V5.
+ * Returns count of V4 commits NOT in the commits table.
  */
 export async function verifyMigration(
   db: AnyDB
@@ -146,7 +146,7 @@ export async function verifyMigration(
   );
   const orphanCount = (orphanResult as { count: number })?.count ?? -1;
 
-  // Check leaves referencing commits not in V5
+  // Check leaves referencing commits not yet migrated
   const [leafOrphanResult] = await db.execute(
     sql`SELECT count(*)::int as count FROM leaves WHERE commit_hash NOT IN (SELECT hash FROM commits)`
   );
@@ -159,7 +159,7 @@ export async function verifyMigration(
 if (process.argv[1]?.includes('migrate-v4-to-v5')) {
   const dryRun = process.argv.includes('--dry-run');
 
-  console.log(`V4 → V5 Migration ${dryRun ? '(DRY RUN)' : ''}`);
+  console.log(`V4 → Frame Migration ${dryRun ? '(DRY RUN)' : ''}`);
   console.log('=========================================');
 
   import('../embedded').then(async ({ getDB }) => {

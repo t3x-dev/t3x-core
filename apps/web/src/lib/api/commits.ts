@@ -204,9 +204,9 @@ export function toSentenceCommit(commit: ApiCommit): SentenceCommit {
     schema: commit.schema,
     parents: commit.parents,
     author: {
-      type: (commit.author.type === 'human' || commit.author.type === 'agent' ? commit.author.type : 'human') as
-        | 'human'
-        | 'agent',
+      type: (commit.author.type === 'human' || commit.author.type === 'agent'
+        ? commit.author.type
+        : 'human') as 'human' | 'agent',
       name: commit.author.name,
       id: commit.author.id,
     },
