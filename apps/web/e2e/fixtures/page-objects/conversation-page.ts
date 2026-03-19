@@ -25,23 +25,23 @@ export class ConversationPage {
     await this.page.goto(url);
   }
 
-  /** #1, #14: Wait for actual turn role badges (USER/ASSISTANT) to appear. */
+  /** #1, #14: Wait for actual turn role badges (User/Assistant) to appear. */
   async waitForLoad(timeout = 15000): Promise<void> {
     const turnBadge = this.page
-      .locator('text=USER')
-      .or(this.page.locator('text=ASSISTANT'))
-      .or(this.page.locator('text=SYSTEM'));
+      .locator('text=User')
+      .or(this.page.locator('text=Assistant'))
+      .or(this.page.locator('text=System'));
     await expect(turnBadge.first()).toBeVisible({ timeout });
   }
 
   /** #9: Use role badge text instead of fragile Tailwind class selectors. */
   getTurnCards(): Locator {
-    return this.page.locator('text=USER').or(this.page.locator('text=ASSISTANT'));
+    return this.page.locator('text=User').or(this.page.locator('text=Assistant'));
   }
 
   async getTurnCount(): Promise<number> {
-    const userTurns = this.page.locator('text=USER');
-    const assistantTurns = this.page.locator('text=ASSISTANT');
+    const userTurns = this.page.locator('text=User');
+    const assistantTurns = this.page.locator('text=Assistant');
     return (await userTurns.count()) + (await assistantTurns.count());
   }
 
