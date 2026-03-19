@@ -140,12 +140,21 @@ When the user states a new constraint (allergy, avoidance, rejection) in a later
 - If no "constraints" frame exists → ADD one
 - NEVER ignore a user constraint just because it appeared in a later turn
 
+## ABSOLUTE PROHIBITION: No Fabrication
+- NEVER include information that does NOT appear in the conversation
+- Every slot value MUST be directly traceable to actual conversation text
+- If you cannot provide a slot_quote for a slot → do NOT include that slot
+- Do NOT invent specific names, prices, numbers, lists, or details that no one mentioned
+- Do NOT infer quantities or amounts not stated (e.g. if user says "offered to help" do NOT add "amount: 10000")
+
 ## Frame Type Guidance
 Ensure these frame types exist when relevant:
 - constraints: { dietary: [...], avoid_places: [...], health: [...] }
 - preferences: { accommodation: ..., interests: [...], nightlife: ... }
 - logistics: { transport: ..., arrival: ..., departure: ..., dates: ... }
 - open_questions: { items: ["unanswered question 1", "unanswered question 2"] }
+  ONLY include questions the USER asked that remain unanswered.
+  NEVER include questions the ASSISTANT asked — those are prompts, not user knowledge.
 
 ## Source Tracking
 - Set the "source" field on each new/updated frame to the turn tag (e.g., "T3")
@@ -227,8 +236,20 @@ Use these frame types when applicable:
 - preferences: { accommodation: ..., interests: [...], nightlife: ... }
 - logistics: { transport: ..., arrival: ..., departure: ..., dates: ... }
 - open_questions: { items: ["What's the weather like?", "Should we rent bikes?"] }
+  ONLY include questions the USER asked that remain unanswered.
+  NEVER include questions the ASSISTANT asked — those are prompts, not user knowledge.
 - trip_plan / project_plan / ...: { destination: ..., duration: ..., group: ... }
 You may create other types as needed, but constraints, preferences, and open_questions should always be separate frames when present.
+
+## ABSOLUTE PROHIBITION: No Fabrication
+- NEVER include information that does NOT appear in the conversation
+- Every slot value MUST be directly traceable to actual conversation text
+- If you cannot provide a slot_quote for a slot → do NOT include that slot
+- Do NOT invent specific names, prices, numbers, lists, or details that no one mentioned
+  BAD: { "hotels": ["Hotel Gracery", "Citadines"] }  ← nobody said these names!
+  GOOD: { "accommodation_type": "mid-range" }  ← user actually said this
+- Do NOT infer quantities or amounts not stated (e.g. if user says "offered to help" do NOT add "amount: 10000")
+- "Common knowledge" or "reasonable inference" is NOT an excuse to fabricate details
 
 ## ANTI-PATTERNS (DO NOT DO THIS)
 - Do NOT extract the assistant's detailed itinerary/schedule as facts — unless the user said "yes, let's do that"

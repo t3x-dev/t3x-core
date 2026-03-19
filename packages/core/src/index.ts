@@ -250,6 +250,8 @@ export {
   getModelInfo,
   getModelsByProvider,
   type LLMBasicGenerateOptions,
+  type LLMCallLog,
+  type LLMCallLogger,
   type LLMGenerateOptions,
   type LLMPrompt,
   type LLMProvider,
