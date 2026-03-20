@@ -11,11 +11,19 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
   buildDraft,
+  checkDiffCompatibility,
+  checkReadiness,
+  computeSessionContext,
   createMeaningPipeline,
+  decideAction,
+  detectAmbiguity,
+  detectDrift,
   type FrameExtractionTurn,
   FrameExtractor,
   fuzzyLocate,
+  GateRunner,
   type LLMCallLogger,
+  preFilterDrift,
   type SlotQuotesMap,
 } from '@t3x-dev/core';
 import {
@@ -40,9 +48,16 @@ export const frameExtractRoutes = new OpenAPIHono({
 // Schemas
 // ============================================================
 
+const DriftDecisionSchema = z.object({
+  choice: z.enum(['keep_old', 'keep_new', 'keep_both_separate', 'keep_both_together']),
+  relation: z.string().optional(),
+  new_topic: z.string().optional(),
+});
+
 const FrameExtractRequest = z.object({
   conversation_id: z.string().min(1),
   turn_hashes: z.array(z.string().min(1)).optional(),
+  drift_decision: DriftDecisionSchema.optional(),
 });
 
 const DeltaResponseSchema = z.object({
@@ -58,9 +73,19 @@ const SnapshotResponseSchema = z.object({
 
 const FrameExtractResponse = SuccessResponseSchema(
   z.object({
-    delta: DeltaResponseSchema,
-    snapshot: SnapshotResponseSchema,
-    delta_log_id: z.string(),
+    delta: DeltaResponseSchema.optional(),
+    snapshot: SnapshotResponseSchema.optional(),
+    delta_log_id: z.string().optional(),
+    status: z.enum(['completed', 'drift_detected', 'skipped']),
+    drift: z.object({
+      relation: z.string().optional(),
+      new_topic: z.string().optional(),
+      old_topic: z.string().optional(),
+    }).optional(),
+    choices: z.array(z.string()).optional(),
+    gate_result: z.any().optional(),
+    advisory_questions: z.array(z.any()).optional(),
+    reason: z.string().optional(),
   })
 );
 
@@ -109,7 +134,7 @@ const extractFramesRoute = createRoute({
 // ============================================================
 
 frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
-  const { conversation_id, turn_hashes } = c.req.valid('json');
+  const { conversation_id, turn_hashes, drift_decision } = c.req.valid('json');
 
   try {
     const db = await getDB();
@@ -166,6 +191,100 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
       processedTurnCount = selectedTurns.filter(
         (t) => new Date(t.createdAt).getTime() <= lastExtractionTime
       ).length;
+    }
+
+    // ── Step 1: SessionStateManager ──
+    // Returns 'skipped' early only for ReadinessGate failures (content quality).
+    // SessionStateManager 'wait'/'skip' are logged but do NOT block — the caller
+    // explicitly requested extraction and we respect that intent.
+    if (!drift_decision) {
+      const sessionCtx = computeSessionContext(
+        deltaRecords.map((d) => d.source),
+        processedTurnCount ?? 0,
+        selectedTurns.length
+      );
+      const decision = decideAction(sessionCtx);
+      if (decision === 'wait') {
+        return c.json({
+          success: true as const,
+          data: { status: 'skipped' as const, reason: 'wait' },
+        }, 200);
+      }
+      // 'skip' (no new turns) is advisory — log but don't block
+      // The API caller may have valid reasons to re-extract
+    }
+
+    // ── Step 2: ReadinessGate ──
+    if (!drift_decision) {
+      const isFirstExtraction = currentSnapshot.frames.length === 0;
+      const readiness = checkReadiness(
+        selectedTurns.map((t) => ({ role: t.role, content: t.content })),
+        isFirstExtraction
+      );
+      if (!readiness.pass) {
+        return c.json({
+          success: true as const,
+          data: { status: 'skipped' as const, reason: readiness.reason },
+        }, 200);
+      }
+    }
+
+    // ── Step 3: DriftDetector ──
+    if (!drift_decision && currentSnapshot.frames.length > 0) {
+      // Only run drift detection when there's existing content (steady phase)
+      const extractionCount = deltaRecords.filter(
+        (d) => d.source === 'pipeline' || d.source === 'llm_extraction'
+      ).length;
+
+      if (extractionCount >= 2) {
+        // Collect existing frame info for pre-filter
+        const frameTypes = currentSnapshot.frames.map((f) => f.type);
+        const slotValues = currentSnapshot.frames.flatMap((f) =>
+          Object.values(f.slots).filter((v): v is string => typeof v === 'string')
+        );
+        const newTurnContent = selectedTurns
+          .filter((t) => {
+            if (!processedTurnCount) return true;
+            return selectedTurns.indexOf(t) >= processedTurnCount;
+          })
+          .map((t) => t.content)
+          .join(' ');
+
+        if (newTurnContent) {
+          const preFilter = preFilterDrift(newTurnContent, frameTypes, slotValues);
+
+          if (preFilter.needsLLM) {
+            try {
+              const reg = await getProviderRegistry();
+              const driftResult = await reg.tryWithFallback('generation', (provider) => {
+                const recentTurns = selectedTurns.slice(-3).map((t) => ({
+                  role: t.role,
+                  content: t.content,
+                }));
+                const topicName = currentSnapshot.frames[0]?.type ?? 'unknown';
+                return detectDrift(provider, topicName, frameTypes, recentTurns);
+              });
+
+              if (driftResult.drifted) {
+                return c.json({
+                  success: true as const,
+                  data: {
+                    status: 'drift_detected' as const,
+                    drift: {
+                      relation: driftResult.relationType,
+                      new_topic: driftResult.newTopicName,
+                      old_topic: currentSnapshot.frames[0]?.type,
+                    },
+                    choices: ['keep_old', 'keep_new', 'keep_both_separate', 'keep_both_together'],
+                  },
+                }, 200);
+              }
+            } catch {
+              // Drift detection failure → continue with extraction (fail-safe)
+            }
+          }
+        }
+      }
     }
 
     // 5. Call FrameExtractor via provider registry with fallback (usage tracked)
@@ -331,12 +450,61 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
       // Pipeline is optional — flat frames are still valid
     }
 
+    // ── Step 5: VALIDATE — GateRunner + DiffCompatibilityCheck ──
+    let gateResult: unknown;
+    try {
+      const gateRunner = new GateRunner();
+      // Gate 1 (structure) always runs, Gate 2 (semantic) needs provider
+      // Use skipSemantic if no provider available to avoid failure
+      const gr = await gateRunner.run(organizedSnapshot, {
+        turns: extractionTurns.map((t) => ({ role: t.role, content: t.content })),
+        skipSemantic: true, // Gate 2 is expensive; run only on commit for now
+        skipBusiness: true, // Gate 3 only at commit time
+      });
+      gateResult = gr;
+
+      if (!gr.structure.passed) {
+        return errorResponse(c, 'GATE_STRUCTURE_FAILED', `Structural validation failed: ${JSON.stringify(gr.structure.checks)}`);
+      }
+    } catch (gateErr) {
+      console.warn(`[gate] Gate check error: ${gateErr instanceof Error ? gateErr.message : String(gateErr)}`);
+      // Gate failure is non-fatal for extraction — continue
+    }
+
+    // DiffCompatibilityCheck (non-blocking, log only)
+    if (currentSnapshot.frames.length > 0) {
+      const diffCheck = checkDiffCompatibility(currentSnapshot, result.delta);
+      if (!diffCheck.compatible) {
+        console.warn(`[gate] DiffCompatibilityCheck warnings: ${diffCheck.errors.join('; ')}`);
+      }
+    }
+
+    // ── Step 6: AmbiguityDetector (advisory-only) ──
+    let advisoryQuestions: unknown[] | undefined;
+    try {
+      const reg3 = await getProviderRegistry();
+      const ambiguityResult = await reg3.tryWithFallback('generation', (ambProvider) => {
+        const recentTurns = selectedTurns.slice(-5).map((t) => ({
+          role: t.role,
+          content: t.content,
+        }));
+        return detectAmbiguity(ambProvider, organizedSnapshot, recentTurns);
+      });
+      if (!ambiguityResult.clean) {
+        advisoryQuestions = ambiguityResult.questions;
+      }
+    } catch {
+      // Ambiguity detection failure → continue without questions
+    }
+
     // 7. Insert delta into delta log
     const record = await insertDeltaLogEntry(db, {
       conversationId: conversation_id,
       projectId: conversation.projectId,
-      source: 'llm_extraction',
+      source: 'pipeline',
       delta: result.delta,
+      pipelineState: 'completed',
+      gateResultJson: gateResult ?? null,
     });
 
     // 8. Return delta + updated snapshot + delta_log_id
@@ -344,9 +512,12 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
       {
         success: true as const,
         data: {
+          status: 'completed' as const,
           delta: result.delta,
           snapshot: organizedSnapshot,
           delta_log_id: record.id,
+          gate_result: gateResult,
+          advisory_questions: advisoryQuestions,
         },
       },
       200
