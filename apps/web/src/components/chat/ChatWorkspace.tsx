@@ -2,6 +2,7 @@
 
 import { AlertCircle, Loader2, MessageSquarePlus } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { DriftPopup } from '@/components/chat/DriftPopup';
 import { useAutoProject } from '@/hooks/useAutoProject';
 import { useConversationChat } from '@/hooks/useConversationChat';
 import { extractFrames, getSemanticDraft, listDeltas } from '@/lib/api/frames';
@@ -177,12 +178,46 @@ export function ChatWorkspace({
     extractFrames(convId)
       .then((result) => {
         const s = useExtractionPanelStore.getState();
-        s.applyDelta(result.delta, 'llm_extraction');
-        if (result.snapshot.frames.length > 0 && s.panelMode === 'collapsed') {
+
+        // Handle pipeline response status
+        if (result.status === 'skipped') {
+          // ReadinessGate or SessionStateManager blocked — nothing to do
+          return;
+        }
+
+        if (result.status === 'drift_detected') {
+          if (result.drift && result.choices) {
+            s.setDriftDetected(result.drift, result.choices);
+          }
+          return;
+        }
+
+        // status === 'completed' — normal flow
+        if (result.delta) {
+          s.applyDelta(result.delta, 'pipeline');
+        }
+        if (result.snapshot && result.snapshot.frames.length > 0 && s.panelMode === 'collapsed') {
           s.setPanelMode('default');
         }
 
-        if (focusIntentEnabled && result.snapshot.frames.length > 0) {
+        // Store advisory questions (Step 6)
+        if (result.advisory_questions?.length) {
+          s.setAdvisoryQuestions(result.advisory_questions);
+        }
+
+        // Store gate issues for frame annotation (Step 5)
+        if (result.gate_result?.semantic?.issues) {
+          const issuesByFrame: Record<string, { severity: 'error' | 'warning' | 'info'; description: string }[]> = {};
+          for (const issue of result.gate_result.semantic.issues) {
+            if (issue.frame_id) {
+              if (!issuesByFrame[issue.frame_id]) issuesByFrame[issue.frame_id] = [];
+              issuesByFrame[issue.frame_id].push({ severity: issue.severity, description: issue.description });
+            }
+          }
+          s.setGateIssues(issuesByFrame);
+        }
+
+        if (focusIntentEnabled && result.snapshot && result.snapshot.frames.length > 0) {
           const controller = new AbortController();
           getIntentSummary(result.snapshot.frames, controller.signal)
             .then((intentResult) => setLlmHighlightedFrameIds(intentResult.coreFrameIds))
@@ -228,7 +263,10 @@ export function ChatWorkspace({
   );
 
   return (
-    <div className={cn('flex flex-col h-full min-h-0', className)}>
+    <div className={cn('flex flex-col h-full min-h-0 relative', className)}>
+      {/* Drift popup overlay */}
+      <DriftPopup />
+
       {/* Header */}
       <ChatHeader
         conversationId={resolvedConversationId ?? null}

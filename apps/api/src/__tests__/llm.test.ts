@@ -38,7 +38,8 @@ describe('GET /api/v1/llm/models', () => {
     expect(anthropic.models.length).toBeGreaterThanOrEqual(2);
 
     const openai = providers.find((p: { name: string }) => p.name === 'openai');
-    expect(openai.available).toBe(false);
+    // available is always true (security: don't leak which keys are configured)
+    expect(openai.available).toBe(true);
 
     const google = providers.find((p: { name: string }) => p.name === 'google');
     expect(google.available).toBe(true);

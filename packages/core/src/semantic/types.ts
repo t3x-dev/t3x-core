@@ -63,6 +63,8 @@ export interface Frame {
   confidence?: number;
   /** Per-slot source references mapping slot key → source text location */
   slot_sources?: Record<string, SlotSourceRef>;
+  /** Frame display status: active (default) or collapsed (drift choice 2: keep new) */
+  status?: 'active' | 'collapsed';
 }
 
 // ── Relation ──
@@ -107,7 +109,15 @@ export interface Delta {
 
 // ── Delta Log ──
 
-export type DeltaSource = 'llm_extraction' | 'user_graph_edit' | 'user_yaml_edit' | 'commit_marker';
+export type DeltaSource =
+  | 'llm_extraction'
+  | 'user_graph_edit'
+  | 'user_yaml_edit'
+  | 'commit_marker'
+  | 'pipeline'
+  | 'manual'
+  | 'answer'
+  | 'collapse';
 
 export interface DeltaLogEntry {
   id: string;
@@ -119,6 +129,14 @@ export interface DeltaLogEntry {
   commit_hash?: string;
   /** Which model produced this extraction (for llm_extraction source) */
   model?: string;
+  /** V2: per-conversation auto-increment version number */
+  version?: number;
+  /** V2: pipeline state at time of recording */
+  pipeline_state?: 'completed' | 'failed';
+  /** V2: gate check result (Step 5) */
+  gate_result?: unknown;
+  /** V2: extensible metadata */
+  metadata?: Record<string, unknown>;
 }
 
 // ── Validation ──

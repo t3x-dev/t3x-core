@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils';
 import { useExtractionPanelStore } from '@/store/extractionPanelStore';
 import { CommitDropdown } from './CommitDropdown';
 import { FrameGraphMini } from './FrameGraphMini';
+import { AdvisoryPanel } from './AdvisoryPanel';
 import { FrameYAMLView } from './FrameYAMLView';
 import { PreviewPanel } from './PreviewPanel';
 
@@ -338,6 +339,7 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
               <div className="flex-1 overflow-hidden">
                 {activeView === 'graph' ? <FrameGraphMini /> : <FrameYAMLView />}
               </div>
+              <AdvisoryPanel />
               <CommitDropdown />
             </div>
           ) : (
@@ -348,6 +350,7 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
                 <div className="flex-1 overflow-hidden">
                   {activeView === 'graph' ? <FrameGraphMini /> : <FrameYAMLView />}
                 </div>
+                <AdvisoryPanel />
                 <CommitDropdown />
               </div>
 

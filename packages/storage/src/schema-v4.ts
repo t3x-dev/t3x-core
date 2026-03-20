@@ -1048,6 +1048,20 @@ export const deltaLog = pgTable(
 
     /** When this delta was recorded */
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+
+    // ── V2 columns ──
+
+    /** Per-conversation auto-increment version number */
+    version: integer('version'),
+
+    /** Pipeline state at time of recording */
+    pipelineState: text('pipeline_state'),
+
+    /** Gate check result (Step 5 VALIDATE) */
+    gateResultJson: jsonb('gate_result_json'),
+
+    /** Extensible metadata */
+    metadata: jsonb('metadata'),
   },
   (table) => ({
     convIdx: index('idx_delta_log_conv').on(table.conversationId, table.createdAt),

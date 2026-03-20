@@ -17,5 +17,7 @@ export { nesterAgent } from './nesterAgent';
 export { outputRegulatorAgent } from './outputRegulatorAgent';
 export { reviewerAgent } from './reviewerAgent';
 export { slotPolisherAgent } from './slotPolisherAgent';
+// Step 5 validators (deterministic, run last)
+export { structuralValidatorAgent } from './structuralValidatorAgent';
 export { topicEvolverAgent } from './topicEvolverAgent';
 export { topicNamerAgent } from './topicNamerAgent';

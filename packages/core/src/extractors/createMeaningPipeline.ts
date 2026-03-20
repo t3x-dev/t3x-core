@@ -14,6 +14,7 @@ import {
   outputRegulatorAgent,
   reviewerAgent,
   slotPolisherAgent,
+  structuralValidatorAgent,
   topicEvolverAgent,
   topicNamerAgent,
 } from './agents';
@@ -32,6 +33,7 @@ import { MeaningPipeline } from './meaningPipeline';
  * 7. reviewer (LLM) — quality gate: review structure, flag issues, auto-fix
  * 8. coverage_checker (LLM) — verify all user points are captured, auto-add missing
  * 9. contradiction_checker (LLM) — detect and remove content contradicting user statements
+ * 10. structural_validator (CODE) — validate structural integrity after all agents
  *
  * After each step, a snapshot is saved for human review.
  */
@@ -45,5 +47,6 @@ export function createMeaningPipeline(provider: LLMProvider): MeaningPipeline {
     .register(slotPolisherAgent) // LLM: clean up slots
     .register(reviewerAgent) // LLM: quality gate
     .register(coverageCheckerAgent) // LLM: check coverage
-    .register(contradictionCheckerAgent); // LLM: check contradictions
+    .register(contradictionCheckerAgent) // LLM: check contradictions
+    .register(structuralValidatorAgent); // CODE: structural integrity (Step 5)
 }

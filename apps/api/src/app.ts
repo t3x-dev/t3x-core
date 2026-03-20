@@ -39,6 +39,7 @@ import {
   exportRoutes,
   extractionFeedbackRoutes,
   extractRoutes,
+  frameAnswerRoutes,
   frameExtractRoutes,
   gateRoutes,
   healthRoutes,
@@ -149,6 +150,7 @@ export function createApp(options?: CreateAppOptions): Hono {
   api.route('/', draftsRoutes);
   api.route('/', extractRoutes);
   api.route('/', frameExtractRoutes); // /v1/extract/frames
+  api.route('/', frameAnswerRoutes); // /v1/extract/frames/answer
   api.route('/', gateRoutes); // /v1/gate/check
   api.route('/', deltaLogRoutes); // /v1/conversations/:conversationId/deltas
   api.route('/', runsRoutes);

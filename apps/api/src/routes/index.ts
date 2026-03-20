@@ -15,6 +15,7 @@ export { draftsRoutes } from './drafts.openapi';
 export { exportRoutes } from './export.openapi';
 export { extractRoutes } from './extract.openapi';
 export { extractionFeedbackRoutes } from './extraction-feedback.openapi';
+export { frameAnswerRoutes } from './frame-answer.openapi';
 export { frameExtractRoutes } from './frame-extract.openapi';
 export { gateRoutes } from './gate.openapi';
 export { healthRoutes } from './health';

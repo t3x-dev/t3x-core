@@ -159,6 +159,35 @@ export {
   validateExtractedSentences,
   verifyProposal,
 } from './extractors';
+// Pipeline intelligence layer (8-step orchestrator)
+export {
+  type AmbiguityResult,
+  type AnswerApplyResult,
+  applyAnswer,
+  applyStructuralAnswer,
+  applyVaguenessAnswer,
+  generateCollapseDelta,
+  checkDiffCompatibility,
+  checkReadiness,
+  detectAmbiguity,
+  parseAmbiguityResponse,
+  computeSessionContext,
+  decideAction,
+  detectDrift,
+  parseDriftResponse,
+  preFilterDrift,
+  type AdvisoryQuestion,
+  type DiffCheckResult,
+  type DriftDecision,
+  type DriftResult,
+  type PipelineDecision,
+  type PipelineOrchestratorContext,
+  type PreFilterResult,
+  type ReadinessBlockReason,
+  type ReadinessResult,
+  type SessionContext,
+  type UserAnswer,
+} from './pipeline';
 // Hash / Merkle Tree (#14)
 export {
   buildMerkleTree,

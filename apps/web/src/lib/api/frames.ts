@@ -9,10 +9,35 @@ import { API_V1, fetchWithTimeout, handleResponse } from './core';
 
 export type { DeltaSource, DeltaLogEntry };
 
+export interface AdvisoryQuestion {
+  id: string;
+  type: 'vagueness' | 'structural';
+  frameId: string;
+  slotKey?: string;
+  question: string;
+  currentValue?: unknown;
+}
+
 export interface FrameExtractResult {
-  delta: Delta;
-  snapshot: SemanticContent;
-  delta_log_id: string;
+  delta?: Delta;
+  snapshot?: SemanticContent;
+  delta_log_id?: string;
+  status: 'completed' | 'drift_detected' | 'skipped';
+  drift?: { relation?: string; new_topic?: string; old_topic?: string };
+  choices?: string[];
+  gate_result?: GateCheckResult;
+  advisory_questions?: AdvisoryQuestion[];
+  reason?: string;
+}
+
+export interface FrameAnswerResult {
+  applied: boolean;
+  delta?: Delta;
+  snapshot?: SemanticContent;
+  delta_log_id?: string;
+  new_project_id?: string;
+  new_project_url?: string;
+  errors?: string[];
 }
 
 export interface GateCheckResult {
@@ -58,7 +83,8 @@ export type GateIssue = NonNullable<GateCheckResult['semantic']>['issues'][numbe
 
 export async function extractFrames(
   conversationId: string,
-  turnHashes?: string[]
+  turnHashes?: string[],
+  driftDecision?: { choice: string; relation?: string; new_topic?: string }
 ): Promise<FrameExtractResult> {
   const res = await fetchWithTimeout(
     `${API_V1}/extract/frames`,
@@ -68,11 +94,40 @@ export async function extractFrames(
       body: JSON.stringify({
         conversation_id: conversationId,
         ...(turnHashes && { turn_hashes: turnHashes }),
+        ...(driftDecision && { drift_decision: driftDecision }),
       }),
     },
     60_000
   );
   return handleResponse<FrameExtractResult>(res);
+}
+
+export async function answerFrameQuestion(
+  conversationId: string,
+  answers: Array<{
+    question_id: string;
+    drift_choice?: string;
+    answer_text?: string;
+    selected_value?: unknown;
+  }>,
+  questionContext?: { type?: string; frame_id?: string; slot_key?: string },
+  driftContext?: { relation?: string; new_topic?: string }
+): Promise<FrameAnswerResult> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/extract/frames/answer`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        conversation_id: conversationId,
+        answers,
+        ...(questionContext && { question_context: questionContext }),
+        ...(driftContext && { drift_context: driftContext }),
+      }),
+    },
+    60_000
+  );
+  return handleResponse<FrameAnswerResult>(res);
 }
 
 // ── Delta Log CRUD ──
