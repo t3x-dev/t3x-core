@@ -2,6 +2,7 @@
 
 import { AlertCircle, Loader2, MessageSquarePlus } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { DriftPopup } from '@/components/chat/DriftPopup';
 import { useAutoProject } from '@/hooks/useAutoProject';
 import { useConversationChat } from '@/hooks/useConversationChat';
 import { extractFrames, getSemanticDraft, listDeltas } from '@/lib/api/frames';
@@ -185,8 +186,9 @@ export function ChatWorkspace({
         }
 
         if (result.status === 'drift_detected') {
-          // Store drift info for UI popup (Task 4 will add DriftPopup component)
-          console.info('[extraction] Drift detected:', result.drift);
+          if (result.drift && result.choices) {
+            s.setDriftDetected(result.drift, result.choices);
+          }
           return;
         }
 
@@ -196,6 +198,11 @@ export function ChatWorkspace({
         }
         if (result.snapshot && result.snapshot.frames.length > 0 && s.panelMode === 'collapsed') {
           s.setPanelMode('default');
+        }
+
+        // Store advisory questions (Step 6)
+        if (result.advisory_questions?.length) {
+          s.setAdvisoryQuestions(result.advisory_questions);
         }
 
         // Store gate issues for frame annotation (Step 5)
@@ -256,7 +263,10 @@ export function ChatWorkspace({
   );
 
   return (
-    <div className={cn('flex flex-col h-full min-h-0', className)}>
+    <div className={cn('flex flex-col h-full min-h-0 relative', className)}>
+      {/* Drift popup overlay */}
+      <DriftPopup />
+
       {/* Header */}
       <ChatHeader
         conversationId={resolvedConversationId ?? null}
