@@ -177,12 +177,28 @@ export function ChatWorkspace({
     extractFrames(convId)
       .then((result) => {
         const s = useExtractionPanelStore.getState();
-        s.applyDelta(result.delta, 'llm_extraction');
-        if (result.snapshot.frames.length > 0 && s.panelMode === 'collapsed') {
+
+        // Handle pipeline response status
+        if (result.status === 'skipped') {
+          // ReadinessGate or SessionStateManager blocked — nothing to do
+          return;
+        }
+
+        if (result.status === 'drift_detected') {
+          // Store drift info for UI popup (Task 4 will add DriftPopup component)
+          console.info('[extraction] Drift detected:', result.drift);
+          return;
+        }
+
+        // status === 'completed' — normal flow
+        if (result.delta) {
+          s.applyDelta(result.delta, 'pipeline');
+        }
+        if (result.snapshot && result.snapshot.frames.length > 0 && s.panelMode === 'collapsed') {
           s.setPanelMode('default');
         }
 
-        if (focusIntentEnabled && result.snapshot.frames.length > 0) {
+        if (focusIntentEnabled && result.snapshot && result.snapshot.frames.length > 0) {
           const controller = new AbortController();
           getIntentSummary(result.snapshot.frames, controller.signal)
             .then((intentResult) => setLlmHighlightedFrameIds(intentResult.coreFrameIds))
