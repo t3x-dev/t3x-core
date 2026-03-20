@@ -183,6 +183,7 @@ export function FrameYAMLView() {
   const isExtracting = useExtractionPanelStore((s) => s.isExtracting);
   const setHoveredFrameId = useExtractionPanelStore((s) => s.setHoveredFrameId);
   const hoveredTurnHash = useExtractionPanelStore((s) => s.hoveredTurnHash);
+  const gateIssues = useExtractionPanelStore((s) => s.gateIssues);
 
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState('');
@@ -444,6 +445,11 @@ export function FrameYAMLView() {
                 key={i}
                 onMouseEnter={() => setHoveredFrameId(line.frameId, line.slotKey)}
                 onMouseLeave={() => setHoveredFrameId(null)}
+                title={
+                  isFrameLine && gateIssues[line.frameId]?.length
+                    ? gateIssues[line.frameId].map((i) => `[${i.severity}] ${i.description}`).join('\n')
+                    : undefined
+                }
                 style={{
                   display: 'flex',
                   alignItems: 'stretch',
@@ -451,6 +457,9 @@ export function FrameYAMLView() {
                   minHeight: 20,
                   transition: 'background 0.15s',
                   cursor: isFrameLine ? 'pointer' : undefined,
+                  borderLeft: isFrameLine && gateIssues[line.frameId]?.length
+                    ? `3px solid ${gateIssues[line.frameId].some((i) => i.severity === 'error') ? '#f87171' : '#facc15'}`
+                    : undefined,
                 }}
               >
                 {/* Checkbox column */}

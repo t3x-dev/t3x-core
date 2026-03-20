@@ -49,6 +49,10 @@ interface ExtractionPanelState {
   conversationId: string | null;
   setConversationId: (id: string | null) => void;
 
+  // Gate result (Step 5 — frame quality annotation)
+  gateIssues: Record<string, { severity: 'error' | 'warning' | 'info'; description: string }[]>;
+  setGateIssues: (issues: Record<string, { severity: 'error' | 'warning' | 'info'; description: string }[]>) => void;
+
   // Hover linking between YAML ↔ chat messages
   hoveredFrameId: string | null; // YAML row hovered → highlight source turn
   hoveredSlotKey: string | null; // Specific slot hovered (for character-level highlight)
@@ -91,6 +95,7 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
   lastDeltaChanges: [],
   removedFrames: [],
   conversationId: null,
+  gateIssues: {},
   hoveredFrameId: null,
   hoveredSlotKey: null,
   hoveredTurnHash: null,
@@ -223,6 +228,7 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
       };
     }),
   setFocusIntent: (enabled) => set({ focusIntentEnabled: enabled }),
+  setGateIssues: (issues) => set({ gateIssues: issues }),
   setLlmHighlightedFrameIds: (ids) =>
     set({ llmHighlightedFrameIds: Object.fromEntries(ids.map((id) => [id, true])) }),
   hydrateDeltaLog: (entries) => set({ deltaLog: entries }),

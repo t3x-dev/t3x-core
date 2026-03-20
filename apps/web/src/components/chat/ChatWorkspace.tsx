@@ -198,6 +198,18 @@ export function ChatWorkspace({
           s.setPanelMode('default');
         }
 
+        // Store gate issues for frame annotation (Step 5)
+        if (result.gate_result?.semantic?.issues) {
+          const issuesByFrame: Record<string, { severity: 'error' | 'warning' | 'info'; description: string }[]> = {};
+          for (const issue of result.gate_result.semantic.issues) {
+            if (issue.frame_id) {
+              if (!issuesByFrame[issue.frame_id]) issuesByFrame[issue.frame_id] = [];
+              issuesByFrame[issue.frame_id].push({ severity: issue.severity, description: issue.description });
+            }
+          }
+          s.setGateIssues(issuesByFrame);
+        }
+
         if (focusIntentEnabled && result.snapshot && result.snapshot.frames.length > 0) {
           const controller = new AbortController();
           getIntentSummary(result.snapshot.frames, controller.signal)
