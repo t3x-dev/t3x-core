@@ -44,10 +44,13 @@ describe('Rate Limit Middleware', () => {
   // Use fake timers to prevent the cleanup interval from running.
   beforeEach(() => {
     vi.useFakeTimers();
+    // Trust proxy headers in tests (simulates reverse proxy deployment)
+    process.env.TRUST_PROXY = '1';
   });
 
   afterEach(() => {
     vi.useRealTimers();
+    delete process.env.TRUST_PROXY;
   });
 
   describe('L1 — IP-based rate limiting', () => {
