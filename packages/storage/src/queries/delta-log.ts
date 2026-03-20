@@ -19,6 +19,14 @@ export interface InsertDeltaLogInput {
   source: string;
   turnHash?: string;
   delta: unknown;
+  /** V2: per-conversation version (caller computes) */
+  version?: number;
+  /** V2: pipeline state */
+  pipelineState?: string;
+  /** V2: gate check result */
+  gateResultJson?: unknown;
+  /** V2: extensible metadata */
+  metadata?: unknown;
 }
 
 // ============================================================
@@ -40,6 +48,10 @@ export async function insertDeltaLogEntry(
     source: input.source,
     turnHash: input.turnHash ?? null,
     delta: input.delta,
+    version: input.version ?? null,
+    pipelineState: input.pipelineState ?? null,
+    gateResultJson: input.gateResultJson ?? null,
+    metadata: input.metadata ?? null,
   };
 
   const [result] = await db.insert(deltaLog).values(row).returning();

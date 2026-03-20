@@ -662,6 +662,11 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_delta_log_project ON delta_log(project_id);
     ALTER TABLE delta_log ADD COLUMN IF NOT EXISTS commit_hash TEXT;
     ALTER TABLE delta_log ADD COLUMN IF NOT EXISTS model TEXT;
+    -- V2 columns (agentic pipeline)
+    ALTER TABLE delta_log ADD COLUMN IF NOT EXISTS version INTEGER;
+    ALTER TABLE delta_log ADD COLUMN IF NOT EXISTS pipeline_state TEXT;
+    ALTER TABLE delta_log ADD COLUMN IF NOT EXISTS gate_result_json JSONB;
+    ALTER TABLE delta_log ADD COLUMN IF NOT EXISTS metadata JSONB;
 
     -- Sentence Relations (Inter-sentence Relations)
     CREATE TABLE IF NOT EXISTS sentence_relations (
