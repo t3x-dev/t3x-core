@@ -34,9 +34,10 @@ describe('parseIncrementalResponse', () => {
     expect(result).toHaveLength(1);
   });
 
-  it('returns empty array for invalid JSON', () => {
-    const result = parseIncrementalResponse('not json at all');
-    expect(result).toEqual([]);
+  it('throws on invalid JSON', () => {
+    expect(() => parseIncrementalResponse('not json at all')).toThrow(
+      /Failed to parse incremental extraction response/
+    );
   });
 
   it('filters out proposals with missing required fields', () => {
