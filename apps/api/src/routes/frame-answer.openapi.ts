@@ -14,17 +14,28 @@ import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
   applyAnswer,
   buildDraft,
+  createMeaningPipeline,
+  type FrameExtractionTurn,
+  FrameExtractor,
+  type FrameRelationType,
+  FRAME_RELATION_TYPES,
   type UserAnswer,
 } from '@t3x-dev/core';
 import {
   findConversationById,
+  findTurnsByConversation,
+  insertConversation,
   insertDeltaLogEntry,
+  insertProject,
+  insertTurn,
   listDeltaLogByConversation,
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { toDeltaLogEntries } from '../lib/delta-log-utils';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { assertProjectAccess } from '../lib/project-access';
+import { getProviderRegistry } from '../lib/provider-registry';
+import { getUserId, recordUsageFireAndForget, wrapWithUsageTracking } from '../lib/usage-tracking';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
 export const frameAnswerRoutes = new OpenAPIHono({
@@ -50,6 +61,11 @@ const FrameAnswerRequest = z.object({
     type: z.enum(['vagueness', 'structural']).optional(),
     frame_id: z.string().optional(),
     slot_key: z.string().optional(),
+  }).optional(),
+  /** Drift context — relation type and new topic from drift detection */
+  drift_context: z.object({
+    relation: z.string().optional(),
+    new_topic: z.string().optional(),
   }).optional(),
 });
 
@@ -105,7 +121,7 @@ const answerRoute = createRoute({
 // ============================================================
 
 frameAnswerRoutes.openapi(answerRoute, async (c) => {
-  const { conversation_id, answers, question_context } = c.req.valid('json');
+  const { conversation_id, answers, question_context, drift_context } = c.req.valid('json');
 
   try {
     const db = await getDB();
@@ -138,9 +154,15 @@ frameAnswerRoutes.openapi(answerRoute, async (c) => {
       // Check if this is an API-orchestration case (drift choice 3/4)
       const needsOrchestration = result.errors?.some((e) => e.includes('API-layer orchestration'));
       if (needsOrchestration) {
-        // TODO: implement drift choice 3 (new project) and choice 4 (same project + extract)
-        // For now, return the intent for the frontend to handle
-        return errorResponse(c, 'NOT_IMPLEMENTED', `Drift choice '${answer.drift_choice}' is not yet implemented in the API layer`);
+        // ── Drift Choice 4: keep_both_together — extract + relation ──
+        if (answer.drift_choice === 'keep_both_together') {
+          return await handleDriftChoice4(c, db, conversation, currentSnapshot, deltaRecords, drift_context);
+        }
+        // ── Drift Choice 3: keep_both_separate — new project ──
+        if (answer.drift_choice === 'keep_both_separate') {
+          return await handleDriftChoice3(c, db, conversation, drift_context);
+        }
+        return errorResponse(c, 'INVALID_REQUEST', `Unknown drift choice: ${answer.drift_choice}`);
       }
 
       return c.json({
@@ -180,5 +202,185 @@ frameAnswerRoutes.openapi(answerRoute, async (c) => {
     return errorResponse(c, 'ANSWER_FAILED', message);
   }
 });
+
+// ============================================================
+// Drift Choice Handlers
+// ============================================================
+
+/**
+ * Drift Choice 4: keep_both_together
+ * Extract new frames from post-drift turns, add relation connecting old root → new root.
+ */
+async function handleDriftChoice4(
+  c: any,
+  db: any,
+  conversation: { projectId: string; conversationId: string },
+  currentSnapshot: any,
+  deltaRecords: any[],
+  driftContext?: { relation?: string; new_topic?: string }
+) {
+  // 1. Fetch turns
+  const allTurns = await findTurnsByConversation(db, {
+    conversationId: conversation.conversationId,
+    limit: 500,
+  });
+
+  const extractionTurns: FrameExtractionTurn[] = allTurns.map((t: any) => ({
+    role: t.role as FrameExtractionTurn['role'],
+    content: t.content,
+    turn_hash: t.turnHash,
+  }));
+
+  // 2. Calculate processedTurnCount
+  let processedTurnCount: number | undefined;
+  if (deltaRecords.length > 0) {
+    const lastDelta = deltaRecords[deltaRecords.length - 1];
+    const lastExtractionTime = new Date(lastDelta.createdAt).getTime();
+    processedTurnCount = allTurns.filter(
+      (t: any) => new Date(t.createdAt).getTime() <= lastExtractionTime
+    ).length;
+  }
+
+  // 3. Extract frames via FrameExtractor
+  const reg = await getProviderRegistry();
+  const extractResult = await reg.tryWithFallback('generation', (provider) => {
+    const { provider: tracked } = wrapWithUsageTracking(provider);
+    const extractor = new FrameExtractor(tracked);
+    return extractor.extract({
+      turns: extractionTurns,
+      snapshot: currentSnapshot.frames.length > 0 ? currentSnapshot : undefined,
+      processedTurnCount,
+    });
+  });
+
+  if (!extractResult.ok) {
+    return errorResponse(c, 'EXTRACTION_FAILED', extractResult.error);
+  }
+
+  // 4. Run MeaningPipeline
+  let organizedSnapshot = extractResult.snapshot;
+  try {
+    const pipelineResult = await reg.tryWithFallback('generation', async (pipelineProvider) => {
+      const pipeline = createMeaningPipeline(pipelineProvider);
+      return pipeline.run(extractResult.snapshot, extractionTurns, currentSnapshot, {
+        mode: 'incremental',
+      });
+    });
+    organizedSnapshot = pipelineResult.content;
+  } catch {
+    // Pipeline optional — flat frames still valid
+  }
+
+  // 5. Build delta with relation connecting old root → new root
+  const oldRootId = currentSnapshot.frames[0]?.id;
+  const newFrameIds = organizedSnapshot.frames
+    .filter((f: any) => !currentSnapshot.frames.some((old: any) => old.id === f.id))
+    .map((f: any) => f.id);
+  const newRootId = newFrameIds[0];
+
+  const relationDelta: any = {
+    changes: extractResult.delta.changes,
+    new_relations: [...(extractResult.delta.new_relations ?? [])],
+    remove_relations: extractResult.delta.remove_relations,
+  };
+
+  // Add connecting relation if both roots exist
+  if (oldRootId && newRootId) {
+    const relationType = (driftContext?.relation &&
+      (FRAME_RELATION_TYPES as readonly string[]).includes(driftContext.relation))
+      ? driftContext.relation
+      : 'elaborates';
+    relationDelta.new_relations.push({
+      from: oldRootId,
+      to: newRootId,
+      type: relationType,
+    });
+  }
+
+  // 6. Persist
+  const record = await insertDeltaLogEntry(db, {
+    conversationId: conversation.conversationId,
+    projectId: conversation.projectId,
+    source: 'pipeline',
+    delta: relationDelta,
+    pipelineState: 'completed',
+  });
+
+  return c.json({
+    success: true as const,
+    data: {
+      applied: true,
+      delta: relationDelta,
+      snapshot: organizedSnapshot,
+      delta_log_id: record.id,
+    },
+  }, 200);
+}
+
+/**
+ * Drift Choice 3: keep_both_separate
+ * Create new project + conversation, copy post-drift turns, return new project info.
+ * Frontend triggers extraction in the new project separately.
+ */
+async function handleDriftChoice3(
+  c: any,
+  db: any,
+  conversation: { projectId: string; conversationId: string },
+  driftContext?: { relation?: string; new_topic?: string }
+) {
+  // 1. Fetch turns to identify post-drift turns
+  const allTurns = await findTurnsByConversation(db, {
+    conversationId: conversation.conversationId,
+    limit: 500,
+  });
+
+  const deltaRecords = await listDeltaLogByConversation(db, conversation.conversationId);
+
+  // Find post-drift turns (turns after last extraction)
+  let postDriftTurns = allTurns;
+  if (deltaRecords.length > 0) {
+    const lastDelta = deltaRecords[deltaRecords.length - 1];
+    const lastExtractionTime = new Date(lastDelta.createdAt).getTime();
+    postDriftTurns = allTurns.filter(
+      (t: any) => new Date(t.createdAt).getTime() > lastExtractionTime
+    );
+  }
+
+  if (postDriftTurns.length === 0) {
+    return errorResponse(c, 'INVALID_REQUEST', 'No post-drift turns found to copy');
+  }
+
+  // 2. Create new project
+  const topicName = driftContext?.new_topic || 'drifted_topic';
+  const newProject = await insertProject(db, {
+    name: topicName.replace(/_/g, ' '),
+  });
+
+  // 3. Create new conversation in new project
+  const newConversation = await insertConversation(db, {
+    projectId: newProject.projectId,
+    title: topicName.replace(/_/g, ' '),
+  });
+
+  // 4. Copy post-drift turns to new conversation
+  for (const turn of postDriftTurns) {
+    await insertTurn(db, {
+      projectId: newProject.projectId,
+      conversationId: newConversation.conversationId,
+      role: turn.role,
+      content: turn.content,
+    });
+  }
+
+  // 5. Return new project info (frontend triggers extraction separately)
+  return c.json({
+    success: true as const,
+    data: {
+      applied: true,
+      new_project_id: newProject.projectId,
+      new_project_url: `/project/${newProject.projectId}`,
+    },
+  }, 200);
+}
 
 export default frameAnswerRoutes;
