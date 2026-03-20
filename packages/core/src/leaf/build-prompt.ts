@@ -8,6 +8,7 @@
  * @see docs/plans/parallel-dev-guidelines.md
  */
 
+import { escapeConstraintValue } from '../llm/sanitize';
 import type { AnyLeafType, Constraint } from '../types/v4';
 import type { BuildPromptOptions, BuiltPrompt, LeafTemplate } from './types';
 
@@ -93,11 +94,13 @@ export function formatConstraints(constraints: Constraint[]): FormattedConstrain
   for (const constraint of constraints) {
     if (constraint.type === 'require') {
       const matchType = constraint.match_mode === 'exact' ? 'EXACTLY' : 'semantically';
-      requires.push(`- MUST include ${matchType}: "${constraint.value}"`);
+      requires.push('- MUST include ' + matchType + ': ' + escapeConstraintValue(constraint.value));
     } else if (constraint.type === 'exclude') {
       const matchType = constraint.match_mode === 'exact' ? 'exactly' : 'semantically';
       const reason = constraint.reason ? ` (Reason: ${constraint.reason})` : '';
-      excludes.push(`- MUST NOT include ${matchType}: "${constraint.value}"${reason}`);
+      excludes.push(
+        '- MUST NOT include ' + matchType + ': ' + escapeConstraintValue(constraint.value) + reason
+      );
     }
   }
 

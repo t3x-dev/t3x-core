@@ -83,11 +83,13 @@ export function verifyProposal(
       // so search all turns for the quoted text before rejecting.
       // Pick the turn with the highest match score.
       let bestScore = 0;
-      for (const candidateTurn of turns) {
-        const loc = fuzzyLocate(candidateTurn.content, anchor.quoted_text);
-        if (loc && loc.score > bestScore) {
+      let bestTurnIndex = -1;
+      for (let ti = 0; ti < turns.length; ti++) {
+        const loc = fuzzyLocate(turns[ti].content, anchor.quoted_text);
+        if (loc && (loc.score > bestScore || (loc.score === bestScore && bestTurnIndex === -1))) {
           bestScore = loc.score;
-          turn = candidateTurn;
+          bestTurnIndex = ti;
+          turn = turns[ti];
         }
       }
       if (!turn) {

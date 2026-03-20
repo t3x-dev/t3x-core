@@ -38,15 +38,20 @@ export interface SearchResult {
 // Validation
 // ============================================================
 
-function validateEmbedding(embedding: number[]): void {
+/**
+ * Validate and sanitize a vector embedding array.
+ * Ensures all values are finite numbers to prevent SQL injection via malformed vector literals.
+ */
+function validateEmbedding(embedding: number[]): number[] {
   if (embedding.length === 0) {
     throw new Error('Embedding must not be empty');
   }
   for (let i = 0; i < embedding.length; i++) {
-    if (!Number.isFinite(embedding[i])) {
-      throw new Error(`Embedding contains non-finite value at index ${i}`);
+    if (typeof embedding[i] !== 'number' || !Number.isFinite(embedding[i])) {
+      throw new Error(`Invalid embedding value at index ${i}: ${String(embedding[i])}`);
     }
   }
+  return embedding;
 }
 
 // ============================================================
@@ -60,8 +65,7 @@ export async function upsertSentenceVector(
   db: AnyDB,
   input: UpsertSentenceVectorInput
 ): Promise<void> {
-  validateEmbedding(input.embedding);
-  const vectorLiteral = `[${input.embedding.join(',')}]`;
+  const vectorLiteral = `[${validateEmbedding(input.embedding).join(',')}]`;
 
   await (db as unknown as { execute: (q: ReturnType<typeof sql>) => Promise<unknown> }).execute(
     sql`INSERT INTO sentence_vectors (id, project_id, commit_hash, text, embedding, model_id, created_at, tsv)
@@ -109,8 +113,7 @@ export async function searchSimilarSentences(
   limit: number,
   excludeCommitHash?: string
 ): Promise<SearchResult[]> {
-  validateEmbedding(queryEmbedding);
-  const vectorLiteral = `[${queryEmbedding.join(',')}]`;
+  const vectorLiteral = `[${validateEmbedding(queryEmbedding).join(',')}]`;
 
   const excludeClause = excludeCommitHash ? sql`AND commit_hash != ${excludeCommitHash}` : sql``;
 

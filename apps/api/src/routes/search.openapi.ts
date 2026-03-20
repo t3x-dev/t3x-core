@@ -17,6 +17,7 @@ import { searchByKeyword, searchHybrid, searchSimilarSentences } from '@t3x-dev/
 import { getDB } from '../lib/db';
 import { getEmbedder } from '../lib/embedder';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { assertProjectAccess } from '../lib/project-access';
 import { ErrorResponseSchema } from '../schemas/common';
 
 export const searchRoutes = new OpenAPIHono({ defaultHook: zodErrorHook });
@@ -98,6 +99,9 @@ searchRoutes.openapi(searchRoute, async (c) => {
 
   try {
     const db = await getDB();
+    const accessResult = await assertProjectAccess(c, db, project_id);
+    if (accessResult instanceof Response) return accessResult;
+
     let effectiveMode = mode;
 
     // Determine if embedding provider is available

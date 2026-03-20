@@ -44,16 +44,23 @@ const PROVIDER_CONFIG_KEY = 'provider_registry';
 /**
  * Get or create the global provider registry.
  * On first call, registers all built-in providers and loads saved config.
- * Uses a Promise guard to prevent concurrent initializations.
+ *
+ * Uses Promise caching to prevent concurrent initializations:
+ * the Promise itself is cached, so all concurrent callers await the SAME
+ * initialization — no race condition, no duplicate work.
  */
 export async function getProviderRegistry(): Promise<ProviderRegistry> {
   if (registry) return registry;
-  if (registryInit) return registryInit;
 
-  registryInit = initRegistry();
-  registry = await registryInit;
-  registryInit = null;
-  return registry;
+  // Cache the Promise itself — all concurrent callers share ONE init
+  if (!registryInit) {
+    registryInit = initRegistry().then((reg) => {
+      registry = reg;
+      return reg;
+    });
+  }
+
+  return registryInit;
 }
 
 async function initRegistry(): Promise<ProviderRegistry> {

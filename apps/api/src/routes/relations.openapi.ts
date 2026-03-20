@@ -15,6 +15,7 @@ import {
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { assertProjectAccess } from '../lib/project-access';
 import { getLLMProvider } from '../lib/provider-registry';
 import { getUserId, recordUsageFireAndForget, wrapWithUsageTracking } from '../lib/usage-tracking';
 import { pinoLogger } from '../middleware/logger';
@@ -80,6 +81,11 @@ relationsRoutes.openapi(getRelationsRoute, async (c) => {
     const commit = await getCommitUnified(db, decodedHash);
     if (!commit) {
       return errorResponse(c, 'COMMIT_NOT_FOUND', `Commit not found: ${decodedHash}`);
+    }
+    // Verify project ownership
+    if (commit.project_id) {
+      const accessResult = await assertProjectAccess(c, db, commit.project_id);
+      if (accessResult instanceof Response) return accessResult;
     }
     const relations = await findRelationsByCommit(db, decodedHash);
     return c.json({ success: true as const, data: { relations } }, 200);
@@ -147,6 +153,9 @@ relationsRoutes.openapi(extractRelationsRoute, async (c) => {
     if (!commit.project_id) {
       return errorResponse(c, 'INVALID_REQUEST', 'Commit has no project_id');
     }
+    // Verify project ownership
+    const accessResult = await assertProjectAccess(c, db, commit.project_id);
+    if (accessResult instanceof Response) return accessResult;
     const projectId = commit.project_id;
     const provider = await getLLMProvider();
     if (!provider) {

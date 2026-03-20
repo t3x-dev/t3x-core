@@ -23,8 +23,10 @@ export function parseIncrementalResponse(raw: string): ExtractionProposal[] {
   let parsed: unknown;
   try {
     parsed = JSON.parse(cleaned);
-  } catch {
-    return [];
+  } catch (err) {
+    throw new Error(
+      `Failed to parse incremental extraction response as JSON: ${err instanceof Error ? err.message : String(err)}. Raw (first 200 chars): ${cleaned.slice(0, 200)}`
+    );
   }
 
   if (!Array.isArray(parsed)) return [];

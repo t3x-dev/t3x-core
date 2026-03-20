@@ -68,7 +68,7 @@ export class GeminiProvider implements LLMProvider {
   async generate(prompt: string, options?: LLMBasicGenerateOptions): Promise<LLMGenerateResult> {
     const temperature = options?.temperature ?? 0.3;
     const maxTokens = options?.maxTokens ?? 2048;
-    const url = `${this.baseUrl}/models/${this.model}:generateContent?key=${this.apiKey}`;
+    const url = `${this.baseUrl}/models/${this.model}:generateContent`;
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 60000);
@@ -78,6 +78,7 @@ export class GeminiProvider implements LLMProvider {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'x-goog-api-key': this.apiKey,
         },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
@@ -138,7 +139,7 @@ export class GeminiProvider implements LLMProvider {
     const temperature = options.temperature ?? 0.3;
     const maxTokens = options.maxTokens ?? 2048;
     const model = options.model ?? this.model;
-    const url = `${this.baseUrl}/models/${model}:generateContent?key=${this.apiKey}`;
+    const url = `${this.baseUrl}/models/${model}:generateContent`;
 
     const contents = prompt.messages.map((msg) => ({
       role: msg.role === 'assistant' ? 'model' : msg.role,
@@ -164,7 +165,7 @@ export class GeminiProvider implements LLMProvider {
     try {
       const response = await fetchWithProxy(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': this.apiKey },
         body: JSON.stringify(requestBody),
         signal: controller.signal,
       });
@@ -220,7 +221,7 @@ export class GeminiProvider implements LLMProvider {
     const maxTokens = options.maxTokens ?? 2048;
     const model = options.model ?? this.model;
     const jsonSchema = zodToJsonSchema(schema);
-    const url = `${this.baseUrl}/models/${model}:generateContent?key=${this.apiKey}`;
+    const url = `${this.baseUrl}/models/${model}:generateContent`;
 
     const contents = prompt.messages.map((msg) => ({
       role: msg.role === 'assistant' ? 'model' : msg.role,
@@ -248,7 +249,7 @@ export class GeminiProvider implements LLMProvider {
     try {
       const response = await fetchWithProxy(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': this.apiKey },
         body: JSON.stringify(requestBody),
         signal: controller.signal,
       });
@@ -279,15 +280,20 @@ export class GeminiProvider implements LLMProvider {
         throw new LLMProviderError(this.id, undefined, 'No content in response');
       }
 
+      let jsonData: unknown;
       try {
-        const jsonData = JSON.parse(content);
+        jsonData = JSON.parse(content);
+      } catch {
+        throw new LLMProviderError(this.id, undefined, 'Failed to parse response as JSON');
+      }
+      try {
         const parsed = schema.parse(jsonData);
         return { data: parsed, usage };
       } catch {
         throw new LLMProviderError(
           this.id,
           undefined,
-          'Failed to parse structured response as JSON'
+          'Response JSON does not match expected schema'
         );
       }
     } catch (error) {

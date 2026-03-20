@@ -164,6 +164,10 @@ export class ProviderRegistry {
           throw error;
         }
         errors.push({ providerId: id, error });
+        // Brief backoff before trying next provider (100ms * attempt number)
+        if (ids.indexOf(id) < ids.length - 1) {
+          await new Promise((resolve) => setTimeout(resolve, 100 * (ids.indexOf(id) + 1)));
+        }
       }
     }
 
