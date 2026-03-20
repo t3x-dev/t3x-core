@@ -1,6 +1,6 @@
 'use client';
 
-import type { SlotValue } from '@t3x-dev/core';
+import type { Frame, SlotValue } from '@t3x-dev/core';
 import { Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { parseDisplayYAML, toDisplayYAML } from '@/lib/liteYaml';
@@ -16,6 +16,8 @@ interface YAMLLine {
   changeType: 'add' | 'update' | 'remove' | null;
   isAutoSelected: boolean;
   isEmpty: boolean;
+  isCollapsed?: boolean;
+  collapsedSlotCount?: number;
 }
 
 function formatValue(value: SlotValue): string {
@@ -184,6 +186,7 @@ export function FrameYAMLView() {
 
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState('');
+  const [expandedCollapsed, setExpandedCollapsed] = useState<Record<string, boolean>>({});
 
   const yamlText = toDisplayYAML(draft);
 
@@ -265,15 +268,36 @@ export function FrameYAMLView() {
       const change = changeMap.get(frame.id) ?? null;
       const score = relevanceScore(frame, relevanceCtx).score;
       const isAuto = score >= RELEVANCE_THRESHOLD;
+      const isFrameCollapsed = (frame as Frame & { status?: string }).status === 'collapsed';
+      const isExpanded = expandedCollapsed[frame.id];
 
-      // Frame header
+      if (isFrameCollapsed && !isExpanded) {
+        // Collapsed frame — single grey line with slot count
+        const slotCount = Object.keys(frame.slots).length;
+        lines.push({
+          text: `▶ ${frame.type} (${slotCount} slots)`,
+          frameId: frame.id,
+          slotKey: null,
+          changeType: null,
+          isAutoSelected: false,
+          isEmpty: false,
+          isCollapsed: true,
+          collapsedSlotCount: slotCount,
+        });
+        lines.push({ text: '', frameId: frame.id, slotKey: null, changeType: null, isAutoSelected: false, isEmpty: true });
+        continue;
+      }
+
+      // Frame header (normal or expanded-collapsed)
+      const headerPrefix = isFrameCollapsed && isExpanded ? '▼ ' : '';
       lines.push({
-        text: `${frame.type}:`,
+        text: `${headerPrefix}${frame.type}:`,
         frameId: frame.id,
         slotKey: null,
         changeType: change,
         isAutoSelected: isAuto,
         isEmpty: false,
+        isCollapsed: isFrameCollapsed,
       });
 
       // Slot lines — render nested structures as proper YAML
@@ -293,7 +317,7 @@ export function FrameYAMLView() {
     }
 
     return lines;
-  }, [sortedFrames, changeMap, relevanceCtx]);
+  }, [sortedFrames, changeMap, relevanceCtx, expandedCollapsed]);
 
   if (draft.frames.length === 0 && !isEditing) {
     return (
@@ -386,16 +410,26 @@ export function FrameYAMLView() {
               return false;
             })();
 
-            // Background: reverse-highlight > confirmed > auto-selected > transparent
-            const bg = isReverseHighlighted
-              ? 'rgba(96, 165, 250, 0.15)'
-              : isConfirmed
-                ? 'rgba(74, 222, 128, 0.1)'
-                : line.isAutoSelected
-                  ? 'rgba(96, 165, 250, 0.06)'
-                  : 'transparent';
+            // Collapsed frames get distinct grey background
+            const collapsedBg = 'rgba(128, 128, 128, 0.1)';
+
+            // Background: collapsed > reverse-highlight > confirmed > auto-selected > transparent
+            const bg = line.isCollapsed && line.slotKey === null
+              ? collapsedBg
+              : isReverseHighlighted
+                ? 'rgba(96, 165, 250, 0.15)'
+                : isConfirmed
+                  ? 'rgba(74, 222, 128, 0.1)'
+                  : line.isAutoSelected
+                    ? 'rgba(96, 165, 250, 0.06)'
+                    : 'transparent';
 
             const handleCheck = () => {
+              // Collapsed frame header — toggle expand
+              if (line.isCollapsed && isFrameLine) {
+                setExpandedCollapsed((prev) => ({ ...prev, [line.frameId]: !prev[line.frameId] }));
+                return;
+              }
               if (isFrameLine) {
                 isConfirmed ? unconfirmFrame(line.frameId) : confirmFrame(line.frameId);
               } else {
@@ -460,8 +494,11 @@ export function FrameYAMLView() {
                     fontSize: 11,
                     lineHeight: '18px',
                     fontFamily: 'var(--font-mono, ui-monospace, monospace)',
-                    color: isFrameLine ? 'var(--text-primary)' : 'var(--text-secondary)',
-                    fontWeight: isFrameLine ? 600 : 400,
+                    color: line.isCollapsed
+                      ? 'var(--text-tertiary)'
+                      : isFrameLine ? 'var(--text-primary)' : 'var(--text-secondary)',
+                    fontWeight: line.isCollapsed ? 400 : isFrameLine ? 600 : 400,
+                    fontStyle: line.isCollapsed && line.slotKey === null && !expandedCollapsed[line.frameId] ? 'italic' : undefined,
                     whiteSpace: 'pre',
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
