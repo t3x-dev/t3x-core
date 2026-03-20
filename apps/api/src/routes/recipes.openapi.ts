@@ -18,6 +18,7 @@ import {
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { assertProjectAccess } from '../lib/project-access';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
 // ============================================================
@@ -124,6 +125,9 @@ recipesRoutes.openapi(listRecipesRoute, async (c) => {
 
   try {
     const db = await getDB();
+    const accessResult = await assertProjectAccess(c, db, projectId);
+    if (accessResult instanceof Response) return accessResult;
+
     const recipes = await listRecipesByProject(db, projectId);
     return c.json({ success: true as const, data: recipes });
   } catch (_err) {
@@ -167,6 +171,9 @@ recipesRoutes.openapi(createRecipeRoute, async (c) => {
 
   try {
     const db = await getDB();
+    const accessResult = await assertProjectAccess(c, db, projectId);
+    if (accessResult instanceof Response) return accessResult;
+
     const recipe = await createRecipe(db, {
       projectId,
       name: body.name,
@@ -213,11 +220,13 @@ const updateRecipeRoute = createRoute({
 });
 
 recipesRoutes.openapi(updateRecipeRoute, async (c) => {
-  const { recipeId } = c.req.valid('param');
+  const { projectId, recipeId } = c.req.valid('param');
   const body = c.req.valid('json');
 
   try {
     const db = await getDB();
+    const accessResult = await assertProjectAccess(c, db, projectId);
+    if (accessResult instanceof Response) return accessResult;
 
     const existing = await findRecipeById(db, recipeId);
     if (!existing) {
@@ -265,10 +274,12 @@ const deleteRecipeRoute = createRoute({
 });
 
 recipesRoutes.openapi(deleteRecipeRoute, async (c) => {
-  const { recipeId } = c.req.valid('param');
+  const { projectId, recipeId } = c.req.valid('param');
 
   try {
     const db = await getDB();
+    const accessResult = await assertProjectAccess(c, db, projectId);
+    if (accessResult instanceof Response) return accessResult;
 
     const existing = await findRecipeById(db, recipeId);
     if (!existing) {

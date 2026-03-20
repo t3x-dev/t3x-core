@@ -12,6 +12,7 @@
  * - Optional adaptiveConfig for feedback-driven prompt adjustments
  */
 
+import { escapePromptContent } from '../llm/sanitize';
 import type { SemanticPoint } from '../types/v4';
 import type { AdaptiveConfig } from './adaptiveThresholds';
 import type { TurnInput } from './extractionPrompt';
@@ -146,7 +147,12 @@ Return a JSON array of proposal objects. Each object has:
 - Do NOT extract greetings, filler, or meta-conversation
 - Return ONLY the JSON array. No markdown fences, no explanation.`;
 
-  const userPrompt = newTurns.map((t) => `[${t.turn_hash}] [${t.role}]: ${t.content}`).join('\n');
+  const userPrompt = newTurns
+    .map(
+      (t) =>
+        '[' + t.turn_hash + '] [' + t.role + ']:\n' + escapePromptContent(t.content, 'turn_content')
+    )
+    .join('\n\n');
 
   return { systemPrompt, userPrompt };
 }

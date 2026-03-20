@@ -27,6 +27,7 @@ import {
 import { getDB } from '../lib/db';
 import { toDeltaLogEntries } from '../lib/delta-log-utils';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { assertProjectAccess } from '../lib/project-access';
 import { getProviderRegistry } from '../lib/provider-registry';
 import { getUserId, recordUsageFireAndForget, wrapWithUsageTracking } from '../lib/usage-tracking';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
@@ -122,6 +123,10 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
         `Conversation not found: ${conversation_id}`
       );
     }
+
+    // 1b. Verify project access
+    const accessResult = await assertProjectAccess(c, db, conversation.projectId);
+    if (accessResult instanceof Response) return accessResult;
 
     // 2. Fetch conversation turns
     const allTurns = await findTurnsByConversation(db, {

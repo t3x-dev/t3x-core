@@ -20,7 +20,7 @@ llmRoutes.get('/v1/llm/models', (c) => {
   const providers = (Object.keys(MODEL_CATALOG) as ProviderName[]).map((name) => ({
     name,
     label: PROVIDER_LABELS[name],
-    available: !!process.env[PROVIDER_ENV_KEYS[name]],
+    available: true, // Always list all providers; actual availability checked at call time
     models: getModelsByProvider(name).map((m) => ({
       id: m.id,
       label: m.label,

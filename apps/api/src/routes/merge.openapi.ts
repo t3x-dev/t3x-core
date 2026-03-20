@@ -36,6 +36,7 @@ import {
 import { getAuthorFromContext } from '../lib/auth';
 import { getDB } from '../lib/db';
 import { computeMergeChecks } from '../lib/merge-checks';
+import { assertProjectAccess } from '../lib/project-access';
 import { getLLMProvider } from '../lib/provider-registry';
 import { getUserId, recordUsageFireAndForget, wrapWithUsageTracking } from '../lib/usage-tracking';
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
@@ -126,6 +127,12 @@ mergeRoutes.openapi(prepareMergeRoute, async (c) => {
         },
         404
       );
+    }
+
+    // Verify project ownership via source commit
+    if (sourceCommit.project_id) {
+      const accessResult = await assertProjectAccess(c, db, sourceCommit.project_id);
+      if (accessResult instanceof Response) return accessResult;
     }
 
     const targetCommit = await getCommitUnified(db, target_hash);

@@ -32,6 +32,9 @@ export class OllamaProvider implements LLMProvider {
     const temperature = options?.temperature ?? 0.3;
     const url = `${this.baseUrl}/api/generate`;
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
+
     try {
       const response = await fetch(url, {
         method: 'POST',
@@ -46,8 +49,10 @@ export class OllamaProvider implements LLMProvider {
             ...(options?.stopSequences && { stop: options.stopSequences }),
           },
         }),
+        signal: controller.signal,
       });
 
+      clearTimeout(timeoutId);
       const responseText = await response.text();
 
       if (!response.ok) {
@@ -76,7 +81,11 @@ export class OllamaProvider implements LLMProvider {
         },
       };
     } catch (error) {
+      clearTimeout(timeoutId);
       if (error instanceof LLMProviderError) throw error;
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new LLMProviderError(this.id, undefined, 'Request timeout after 60000ms');
+      }
       throw new LLMProviderError(
         this.id,
         undefined,

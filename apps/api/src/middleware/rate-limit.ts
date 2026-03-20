@@ -75,10 +75,40 @@ const ipLimiter = new RateLimiter(200); // L1: 200/min per IP
 const unknownLimiter = new RateLimiter(10); // L1 fallback: 10/min for requests without IP headers
 const keyLimiter = new RateLimiter(100); // L2: 100/min per API key
 
+/**
+ * Extract client IP using TRUST_PROXY env var.
+ *
+ * TRUST_PROXY controls how many proxy hops to trust:
+ *   - "0" or unset (default): Don't trust headers, use socket address only
+ *   - "1": One proxy (e.g., Nginx) — use rightmost XFF entry or X-Real-IP
+ *   - "2": Two proxies (e.g., CDN + LB) — use second-from-right XFF entry
+ *
+ * This prevents IP spoofing in self-hosted deployments where the API is
+ * exposed directly to the internet without a reverse proxy.
+ */
 function getClientIp(c: Context): string | null {
-  return (
-    c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || c.req.header('x-real-ip') || null
-  );
+  const trustProxy = parseInt(process.env.TRUST_PROXY || '0', 10);
+
+  if (trustProxy <= 0) {
+    // Don't trust any headers — fall back to connection address
+    // Hono doesn't expose socket directly; return null to use fallback bucket
+    return null;
+  }
+
+  // Trust proxy headers: take the (N-from-right) entry in X-Forwarded-For
+  const xff = c.req.header('x-forwarded-for');
+  if (xff) {
+    const parts = xff
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    // XFF is ordered: [client, proxy1, proxy2, ...]. We trust the last N entries
+    // are proxies, so the real client is at index (length - trustProxy).
+    const clientIndex = Math.max(0, parts.length - trustProxy);
+    if (parts[clientIndex]) return parts[clientIndex];
+  }
+
+  return c.req.header('x-real-ip') || null;
 }
 
 /**

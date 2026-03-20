@@ -6,6 +6,7 @@
  */
 
 import { nanoid } from 'nanoid';
+import { estimateTokenCount } from '../llm/sanitize';
 import type { LLMProvider } from '../llm/types';
 import type {
   ExtractionCursor,
@@ -22,6 +23,13 @@ import { buildIncrementalPrompt } from './incrementalPrompt';
 import { routeProposal } from './routeProposal';
 import { resolveSourceRef } from './sourceRefResolver';
 import { verifyProposal } from './verifyProposal';
+
+/** Confidence cap when quote cannot be located in turn content */
+const UNRESOLVED_SOURCE_REF_CONFIDENCE = 0.6;
+/** Confidence multiplier when referenced turn is not found */
+const MISSING_TURN_CONFIDENCE_FACTOR = 0.5;
+/** Warn if estimated prompt tokens exceed this threshold */
+const TOKEN_WARNING_THRESHOLD = 100_000;
 
 export interface ExtractedSentence {
   text: string;
@@ -53,6 +61,13 @@ export class LLMExtractor {
     // Combine system + user into a single prompt for LLMProvider.generate()
     const combinedPrompt = `${systemPrompt}\n\n---\n\n${userPrompt}`;
 
+    const estimatedTokens = estimateTokenCount(combinedPrompt);
+    if (estimatedTokens > TOKEN_WARNING_THRESHOLD) {
+      console.warn(
+        `[LLMExtractor] High token estimate: ~${estimatedTokens} tokens for ${turns.length} turns. Consider reducing context.`
+      );
+    }
+
     const genResult = await this.provider.generate(combinedPrompt, {
       temperature: options?.temperature ?? 0.1,
       maxTokens: 4096,
@@ -76,10 +91,10 @@ export class LLMExtractor {
 
         // Lower confidence if source_ref could not be resolved
         if (!sourceRef) {
-          confidence = Math.min(confidence, 0.6);
+          confidence = Math.min(confidence, UNRESOLVED_SOURCE_REF_CONFIDENCE);
         }
       } else {
-        confidence *= 0.5;
+        confidence *= MISSING_TURN_CONFIDENCE_FACTOR;
       }
 
       return {
@@ -117,6 +132,13 @@ export class LLMExtractor {
     );
 
     const combinedPrompt = `${systemPrompt}\n\n---\n\n${userPrompt}`;
+
+    const estimatedTokens = estimateTokenCount(combinedPrompt);
+    if (estimatedTokens > TOKEN_WARNING_THRESHOLD) {
+      console.warn(
+        `[LLMExtractor] High token estimate: ~${estimatedTokens} tokens for ${turns.length} turns. Consider reducing context.`
+      );
+    }
 
     const genResult = await this.provider.generate(combinedPrompt, {
       temperature: options?.temperature ?? 0.1,

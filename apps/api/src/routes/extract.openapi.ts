@@ -19,6 +19,7 @@ import {
 import { findDraftById, findTurnsByConversation, updateDraft } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { assertProjectAccess } from '../lib/project-access';
 import { getProviderRegistry } from '../lib/provider-registry';
 import { getUserId, recordUsageFireAndForget, wrapWithUsageTracking } from '../lib/usage-tracking';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
@@ -42,7 +43,7 @@ const ExtractSentencesRequest = z.object({
   options: z
     .object({
       max_sentences: z.number().int().min(1).max(100).optional(),
-      language: z.string().optional(),
+      language: z.string().max(100).optional(),
     })
     .optional(),
 });
@@ -224,6 +225,11 @@ export async function extractSentencesFromConversation(
 
 extractRoutes.openapi(extractSentencesRoute, async (c) => {
   const body = c.req.valid('json');
+
+  // Verify project ownership before extraction
+  const db = await getDB();
+  const projectOrError = await assertProjectAccess(c, db, body.project_id);
+  if (projectOrError instanceof Response) return projectOrError;
 
   try {
     const result = await extractSentencesFromConversation(body.conversation_id, body.options);

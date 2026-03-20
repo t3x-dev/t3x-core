@@ -55,8 +55,14 @@ function isPublicPath(path: string, method?: string): boolean {
  */
 export async function authMiddleware(c: Context, next: Next) {
   // Skip auth only when explicitly disabled (AUTH_DISABLED=true, case-insensitive)
+  // WARNING: Should only be used for local development. In production (NODE_ENV=production),
+  // this setting is ignored to prevent accidental exposure.
   if (process.env.AUTH_DISABLED?.toLowerCase() === 'true') {
-    return next();
+    if (process.env.NODE_ENV === 'production') {
+      pinoLogger.warn('AUTH_DISABLED=true is ignored in production mode');
+    } else {
+      return next();
+    }
   }
 
   // Skip auth for public paths

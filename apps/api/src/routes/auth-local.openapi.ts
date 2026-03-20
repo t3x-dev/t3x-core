@@ -19,6 +19,49 @@ import { createError, errorResponse, zodErrorHook } from '../lib/errors';
 import { pinoLogger } from '../middleware/logger';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
+// ============================================================
+// Auth-specific rate limiting (per-endpoint, stricter than global)
+// ============================================================
+
+interface AuthRateLimitEntry {
+  count: number;
+  resetAt: number;
+}
+
+class AuthRateLimiter {
+  private store = new Map<string, AuthRateLimitEntry>();
+  private readonly limit: number;
+  private readonly windowMs: number;
+
+  constructor(limit: number, windowMs = 60_000) {
+    this.limit = limit;
+    this.windowMs = windowMs;
+    // Cleanup every 5 minutes
+    setInterval(() => {
+      const now = Date.now();
+      for (const [key, entry] of this.store) {
+        if (now > entry.resetAt) this.store.delete(key);
+      }
+    }, 5 * 60_000);
+  }
+
+  check(key: string): boolean {
+    const now = Date.now();
+    const entry = this.store.get(key);
+    if (!entry || now > entry.resetAt) {
+      this.store.set(key, { count: 1, resetAt: now + this.windowMs });
+      return true;
+    }
+    entry.count++;
+    return entry.count <= this.limit;
+  }
+}
+
+/** 5 registrations per IP per minute */
+const registerLimiter = new AuthRateLimiter(5);
+/** 10 login attempts per username per minute */
+const loginLimiter = new AuthRateLimiter(10);
+
 export const authLocalRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
 });
@@ -89,6 +132,15 @@ const registerRoute = createRoute({
 
 authLocalRoutes.openapi(registerRoute, async (c) => {
   const { username, password, name } = c.req.valid('json');
+
+  // Per-IP rate limit for registration (5/min)
+  const ip = c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+  if (!registerLimiter.check(`register:${ip}`)) {
+    return c.json(
+      createError('RATE_LIMITED', 'Too many registration attempts. Try again later.'),
+      429
+    );
+  }
 
   try {
     const db = await getDB();
@@ -163,6 +215,11 @@ const loginRoute = createRoute({
 
 authLocalRoutes.openapi(loginRoute, async (c) => {
   const { username, password } = c.req.valid('json');
+
+  // Per-username rate limit for login (10/min) — prevents brute force
+  if (!loginLimiter.check(`login:${username}`)) {
+    return c.json(createError('RATE_LIMITED', 'Too many login attempts. Try again later.'), 429);
+  }
 
   try {
     const db = await getDB();

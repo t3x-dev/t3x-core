@@ -110,5 +110,10 @@ export function parseExtractionResponse(raw: string): ExtractionItem[] {
   }
 
   // If some items are valid and some are not, return the valid ones (lenient parsing)
+  if (errors.length > 0 && results.length > 0) {
+    console.warn(
+      `[ExtractionParser] Dropped ${errors.length}/${parsed.length} invalid items: ${errors.slice(0, 3).join('; ')}`
+    );
+  }
   return results;
 }

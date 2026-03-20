@@ -6,6 +6,7 @@
  * on what needs to be fixed, instead of blind retry.
  */
 
+import { escapeConstraintValue, escapePromptContent } from '../llm/sanitize';
 import type { Assertion, Constraint } from '../types/v4';
 
 export interface CorrectivePromptOptions {
@@ -50,11 +51,11 @@ export function buildCorrectivePrompt(options: CorrectivePromptOptions): string 
 
     if (constraint.type === 'require') {
       failureLines.push(
-        `- ${typeLabel} (${modeLabel}) "${constraint.value}": ${assertion.details}`
+        `- ${typeLabel} (${modeLabel}) ${escapeConstraintValue(constraint.value)}: ${assertion.details}`
       );
     } else {
       failureLines.push(
-        `- ${typeLabel} (${modeLabel}) "${constraint.value}": ${assertion.details}${constraint.reason ? ` (reason: ${constraint.reason})` : ''}`
+        `- ${typeLabel} (${modeLabel}) ${escapeConstraintValue(constraint.value)}: ${assertion.details}${constraint.reason ? ` (reason: ${constraint.reason})` : ''}`
       );
     }
   }
@@ -70,9 +71,7 @@ Failed constraints:
 ${failureLines.join('\n')}
 
 Your previous output was:
----
-${output.length > 2000 ? `${output.slice(0, 2000)}... (truncated)` : output}
----
+${escapePromptContent(output.length > 2000 ? output.slice(0, 2000) + '... (truncated)' : output, 'previous_output')}
 
 Please regenerate the content, ensuring ALL constraints are satisfied. Keep the overall quality and style, but fix the specific issues listed above.`;
 }

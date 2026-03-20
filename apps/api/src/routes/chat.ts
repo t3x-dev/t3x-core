@@ -36,6 +36,43 @@ function getProxyFetch() {
 }
 
 // ============================================================================
+// Input Validation & Error Sanitization
+// ============================================================================
+
+const ALLOWED_ROLES = new Set(['system', 'user', 'assistant']);
+const MAX_MESSAGE_CONTENT_LENGTH = 128_000;
+
+function validateMessages(messages: unknown[]): string | null {
+  for (let i = 0; i < messages.length; i++) {
+    const msg = messages[i] as Record<string, unknown>;
+    if (!msg || typeof msg !== 'object') return `messages[${i}]: must be an object`;
+    if (typeof msg.role !== 'string' || !ALLOWED_ROLES.has(msg.role)) {
+      return `messages[${i}]: invalid role "${String(msg.role)}"`;
+    }
+    if (typeof msg.content !== 'string' || msg.content.length === 0) {
+      return `messages[${i}]: content must be a non-empty string`;
+    }
+    if (msg.content.length > MAX_MESSAGE_CONTENT_LENGTH) {
+      return `messages[${i}]: content exceeds ${MAX_MESSAGE_CONTENT_LENGTH} characters`;
+    }
+  }
+  return null;
+}
+
+function sanitizeError(err: unknown): string {
+  const message = err instanceof Error ? err.message : String(err);
+  if (/rate.limit/i.test(message) || /429/.test(message))
+    return 'Rate limited. Please try again later.';
+  if (/invalid.*api.*key/i.test(message) || /unauthorized/i.test(message))
+    return 'Provider authentication failed.';
+  if (/overloaded/i.test(message) || /503/.test(message)) return 'Provider temporarily overloaded.';
+  if (/timeout/i.test(message) || /abort/i.test(message)) return 'Request timed out.';
+  if (message.length > 200 || message.includes('{'))
+    return 'Chat request failed. Please try again.';
+  return message;
+}
+
+// ============================================================================
 // Types
 // ============================================================================
 
@@ -127,7 +164,8 @@ async function callClaudeNonStreaming(
   const responseText = await response.text();
 
   if (!response.ok) {
-    throw new Error(`Claude API error: ${response.status} ${responseText}`);
+    pinoLogger.error({ status: response.status, responseText }, 'Claude API error');
+    throw new Error(`Claude API error: ${response.status}`);
   }
 
   const data = JSON.parse(responseText) as {
@@ -180,6 +218,11 @@ chatRoutes.post('/v1/chat', async (c) => {
     return jsonError(c, 'INVALID_REQUEST', 'messages must be an array of 1-100 items', 400);
   }
 
+  const msgError = validateMessages(messages);
+  if (msgError) {
+    return jsonError(c, 'INVALID_REQUEST', msgError, 400);
+  }
+
   // Determine provider
   let provider = body.provider ?? 'claude';
   if (body.model && provider === 'claude') {
@@ -225,8 +268,8 @@ chatRoutes.post('/v1/chat', async (c) => {
       return jsonError(c, 'PROVIDER_ERROR', `Provider ${provider} not implemented`, 400);
     }
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error';
-    return jsonError(c, 'CHAT_ERROR', message, 500);
+    pinoLogger.error({ err }, 'Chat error');
+    return jsonError(c, 'CHAT_ERROR', sanitizeError(err), 500);
   }
 });
 
@@ -256,6 +299,11 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
   const messages = body?.messages;
   if (!Array.isArray(messages) || messages.length === 0 || messages.length > 100) {
     return jsonError(c, 'INVALID_REQUEST', 'messages must be an array of 1-100 items', 400);
+  }
+
+  const msgError = validateMessages(messages);
+  if (msgError) {
+    return jsonError(c, 'INVALID_REQUEST', msgError, 400);
   }
 
   // Determine provider
@@ -312,7 +360,11 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
 
         if (!anthropicResponse.ok) {
           const errorText = await anthropicResponse.text();
-          throw new Error(`Claude API error: ${anthropicResponse.status} ${errorText}`);
+          pinoLogger.error(
+            { status: anthropicResponse.status, errorText },
+            'Claude streaming API error'
+          );
+          throw new Error(`Claude API error: ${anthropicResponse.status}`);
         }
 
         const reader = anthropicResponse.body?.getReader();
@@ -414,8 +466,10 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
         }
         reader.releaseLock();
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Unknown error';
-        controller.enqueue(encodeSseEvent(JSON.stringify({ type: 'error', message })));
+        pinoLogger.error({ err }, 'Chat stream error');
+        controller.enqueue(
+          encodeSseEvent(JSON.stringify({ type: 'error', message: sanitizeError(err) }))
+        );
         controller.enqueue(encodeSseEvent('[DONE]'));
       } finally {
         // Record token usage (fire-and-forget, only if project_id provided)

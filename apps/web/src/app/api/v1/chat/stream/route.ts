@@ -28,6 +28,12 @@ export async function POST(request: NextRequest) {
         headers.Authorization = `Bearer ${sessionKey}`;
       }
     }
+    if (!headers.Authorization) {
+      return Response.json(
+        { success: false, error: { code: 'UNAUTHORIZED', message: 'Authentication required' } },
+        { status: 401 }
+      );
+    }
     const response = await fetch(`${API_BASE}/api/v1/chat/stream`, {
       method: 'POST',
       headers,

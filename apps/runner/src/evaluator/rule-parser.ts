@@ -160,14 +160,19 @@ export function loadRulesFromFile(filePath: string): EvalRules {
 export function parseRulesFromLeaf(leaf?: LeafForRules): EvalRules {
   // 1. If rules_ref is provided, load from file
   if (leaf?.rules_ref) {
+    // Sanitize rules_ref to prevent path traversal (e.g., "../../etc/passwd")
+    const safeRef = leaf.rules_ref.replace(/[^a-zA-Z0-9_\-\.]/g, '');
+    if (safeRef !== leaf.rules_ref) {
+      logger.warn({ rules_ref: leaf.rules_ref, sanitized: safeRef }, 'Sanitized unsafe rules_ref');
+    }
     const rulesDir = join(process.cwd(), 'resources', 'rules');
 
     // Try multiple extensions
     const candidates = [
-      join(rulesDir, `${leaf.rules_ref}.yaml`),
-      join(rulesDir, `${leaf.rules_ref}.yml`),
-      join(rulesDir, `${leaf.rules_ref}.json`),
-      join(rulesDir, leaf.rules_ref), // Full filename (e.g. "custom.yaml")
+      join(rulesDir, `${safeRef}.yaml`),
+      join(rulesDir, `${safeRef}.yml`),
+      join(rulesDir, `${safeRef}.json`),
+      join(rulesDir, safeRef), // Full filename (e.g. "custom.yaml")
     ];
 
     for (const filePath of candidates) {

@@ -19,7 +19,8 @@ export async function getGlobalSetting<T = unknown>(db: AnyDB, key: string): Pro
   try {
     return JSON.parse(rows[0].value) as T;
   } catch {
-    return rows[0].value as unknown as T;
+    console.warn(`[getGlobalSetting] Failed to parse value for key "${key}" as JSON`);
+    return null;
   }
 }
 
