@@ -102,79 +102,65 @@ function formatTurns(turns: FrameExtractionTurn[]): string {
 
 // ── System Prompts ──
 
-const DELTA_SYSTEM_PROMPT = `You are a semantic extraction engine. Your task is to extract semantic CHANGES (delta) from new conversation turns — NOT re-generate everything.
+const DELTA_SYSTEM_PROMPT = `You are a semantic extraction engine. Extract CHANGES (delta) from new conversation turns into a topic tree.
 
-## CRITICAL: Extraction Priority (MUST follow this order)
-1. USER CONSTRAINTS — allergies, avoidances, rejections, hard limits, dealbreakers (confidence: 0.95)
-2. USER PREFERENCES — explicitly stated wants, likes, dislikes, interests (confidence: 0.9)
-3. USER FACTS — dates, group size, budget, logistics, travel method (confidence: 0.9)
-4. USER OPEN QUESTIONS — things the user asked but remain unresolved (confidence: 0.7)
-5. MUTUAL DECISIONS — things both parties agreed on or user confirmed (confidence: 0.8)
-6. ASSISTANT SUGGESTIONS — recommendations NOT yet confirmed by user (confidence: 0.3-0.5)
+## Topic Tree Structure
+- Each extraction produces ONE root frame representing the main topic
+- Subtopics become child frames connected via "elaborates" relations
+- The root frame type IS the topic name (e.g., "hangzhou_trip", "product_requirements")
 
-Categories 1-4 MUST ALWAYS be extracted. Category 6 should ONLY be extracted if the user acknowledged or built upon it.
+## What to Extract
+Extract from ALL participants:
+- User statements: confidence 0.85-0.95
+- AI suggestions the user acknowledged or built upon: confidence 0.5-0.7
+- Mutual decisions: confidence 0.8
+
+## What NOT to Extract
+- Questions (from either side) — questions are not facts
+- Meta-frames like "user_preferences", "user_interests" — use domain-specific types instead
+- Explanations or reasoning — extract CONCLUSIONS ONLY
+- AI suggestions the user did not react to
 
 ## Core Rules
 1. Output ONLY changes (delta) — do NOT repeat unchanged frames
-2. Group related items into ONE frame with array slots — do NOT create separate frames for each item
-3. Keep conclusions and decisions, discard process discussion
-4. Frame type uses snake_case (nouns or noun phrases)
+2. ONE frame per topic — no fragmentation
+3. Conclusions only — no explanations, no process discussion
+4. Frame type uses snake_case domain nouns (e.g., "dietary_restrictions", not "constraints")
 5. Frame IDs follow pattern: f_001, f_002, ...
-6. AIM FOR 3-8 FRAMES TOTAL
+6. AIM FOR 3-5 FRAMES TOTAL per extraction
 
-## CRITICAL: When to UPDATE vs ADD
-- If a new turn MODIFIES information already captured in an existing frame → use "update" with only the changed slots
-- If a new turn provides NEW information on a DIFFERENT topic → use "add"
-- DO NOT add a new frame when an existing frame covers the same topic — UPDATE it instead
-- When the user states a NEW constraint or preference → if a "constraints" or "preferences" frame already exists, UPDATE it by adding to the array; otherwise ADD a new frame
+## When to UPDATE vs ADD
+- MODIFIES existing frame topic → "update" with only changed slots
+- NEW subtopic of root → "add" + relation { from: new_id, to: root_id, type: "elaborates" }
+- Completely UNRELATED topic → output "drift_detected" status (see below)
 
-## CRITICAL: When to REMOVE
-- If the user explicitly rejects, cancels, or changes their mind about something → use "remove"
-- If the user replaces one option with another → REMOVE the old frame AND add/update the new one
-- If the assistant's suggestion is rejected by the user → remove frames from that suggestion
-
-## CRITICAL: New User Constraints
-When the user states a new constraint (allergy, avoidance, rejection) in a later turn:
-- This is HIGHEST PRIORITY — it MUST appear in the delta output
-- If a "constraints" frame exists → UPDATE it with the new constraint added to the relevant array
-- If no "constraints" frame exists → ADD one
-- NEVER ignore a user constraint just because it appeared in a later turn
+## When to REMOVE
+- User explicitly rejects or cancels something → "remove"
+- User replaces one option with another → "remove" old + "add"/"update" new
 
 ## ABSOLUTE PROHIBITION: No Fabrication
-- NEVER include information that does NOT appear in the conversation
-- Every slot value MUST be directly traceable to actual conversation text
-- If you cannot provide a slot_quote for a slot → do NOT include that slot
-- Do NOT invent specific names, prices, numbers, lists, or details that no one mentioned
-- Do NOT infer quantities or amounts not stated (e.g. if user says "offered to help" do NOT add "amount: 10000")
+- Every slot value MUST trace to actual conversation text
+- Include slot_quotes for traceability
+- Do NOT invent names, prices, numbers, or details not mentioned
 
-## Frame Type Guidance
-Ensure these frame types exist when relevant:
-- constraints: { dietary: [...], avoid_places: [...], health: [...] }
-- preferences: { accommodation: ..., interests: [...], nightlife: ... }
-- logistics: { transport: ..., arrival: ..., departure: ..., dates: ... }
-- open_questions: { items: ["unanswered question 1", "unanswered question 2"] }
-  ONLY include questions the USER asked that remain unanswered.
-  NEVER include questions the ASSISTANT asked — those are prompts, not user knowledge.
+## Drift Detection
+If the new turns discuss a topic UNRELATED to the current root frame:
+- Output: { "changes": [], "drift_detected": true }
+- Do NOT extract anything — let the caller decide how to handle the new topic
 
 ## Source Tracking
-- Set the "source" field on each new/updated frame to the turn tag (e.g., "T3")
-- For frames derived from multiple turns, use the most recent turn
+- Set "source" field to turn tag (e.g., "T3")
 
-## Confidence Scoring
-- User's explicit statements → confidence: 0.9-1.0
-- User's implied preferences → confidence: 0.6-0.8
-- Assistant's suggestions not confirmed → confidence: 0.3-0.5
-
-## Relation Types (pick from these 6 only)
+## Relation Types (6 only)
 1. causes — A causes B
 2. conditions — A is a precondition for B
 3. contrasts — A conflicts with or replaces B
 4. follows — A happens after B (non-causal)
 5. depends — A references/needs B
-6. elaborates — A adds detail to B
+6. elaborates — A adds detail to B (USE THIS for subtopics)
 
-## Source Quoting (CRITICAL for traceability)
-For EACH slot, include a "slot_quotes" object that maps each slot key to the EXACT verbatim text from the conversation that this slot was extracted from. Copy the text exactly — do not paraphrase.
+## Source Quoting
+For EACH slot, include "slot_quotes" mapping slot keys to EXACT verbatim text from the conversation.
 
 ## JSON Output Format
 \`\`\`json
@@ -183,15 +169,9 @@ For EACH slot, include a "slot_quotes" object that maps each slot key to the EXA
     {
       "action": "add",
       "frame": {
-        "id": "f_xxx", "type": "constraints", "source": "T4", "confidence": 0.95,
-        "slots": {
-          "dietary": [{ "type": "peanut_allergy", "applies_to": "friend" }],
-          "avoid_places": [{ "place": "Hefang Street", "reason": "too commercial" }]
-        },
-        "slot_quotes": {
-          "dietary": "One friend is allergic to peanuts",
-          "avoid_places": "avoid the Hefang Street tourist area"
-        }
+        "id": "f_xxx", "type": "dietary_restrictions", "source": "T4", "confidence": 0.9,
+        "slots": { "allergies": [{ "type": "peanut", "applies_to": "friend" }] },
+        "slot_quotes": { "allergies": "One friend is allergic to peanuts" }
       }
     },
     {
@@ -202,88 +182,74 @@ For EACH slot, include a "slot_quotes" object that maps each slot key to the EXA
     { "action": "remove", "target": "f_002", "reason": "user changed mind" }
   ],
   "new_relations": [
-    { "from": "f_003", "to": "f_001", "type": "conditions", "confidence": 0.9 }
-  ]
+    { "from": "f_003", "to": "f_001", "type": "elaborates", "confidence": 0.9 }
+  ],
+  "drift_detected": false
 }
 \`\`\`
 Output ONLY valid JSON. No markdown fences, no explanatory text.`;
 
-const FIRST_EXTRACTION_SYSTEM_PROMPT = `You are a semantic extraction engine. Extract the USER'S meaning from conversations into structured frames.
+const FIRST_EXTRACTION_SYSTEM_PROMPT = `You are a semantic extraction engine. Extract meaning from conversations into a topic tree.
 
-## CRITICAL: Extraction Priority (MUST follow this order)
-1. USER CONSTRAINTS — allergies, avoidances, rejections, hard limits, dealbreakers (confidence: 0.95)
-2. USER PREFERENCES — explicitly stated wants, likes, dislikes, interests (confidence: 0.9)
-3. USER FACTS — dates, group size, budget, logistics, travel method (confidence: 0.9)
-4. USER OPEN QUESTIONS — things the user asked but remain unresolved (confidence: 0.7)
-5. MUTUAL DECISIONS — things both parties agreed on or user confirmed (confidence: 0.8)
-6. ASSISTANT SUGGESTIONS — recommendations NOT yet confirmed by user (confidence: 0.3-0.5)
+## Topic Tree Structure
+- Produce ONE root frame representing the main topic of the conversation
+- Subtopics become child frames connected to the root via "elaborates" relations
+- The root frame type IS the topic name (e.g., "hangzhou_trip", "product_requirements")
 
-Categories 1-4 MUST ALWAYS be extracted. Category 6 should ONLY be extracted if the user acknowledged, discussed, or built upon the suggestion. Do NOT extract the assistant's full itinerary, budget breakdown, or recommendation list as facts — those are suggestions until the user confirms them.
+## What to Extract
+Extract from ALL participants:
+- User statements: confidence 0.85-0.95
+- AI suggestions the user acknowledged or built upon: confidence 0.5-0.7
+- Mutual decisions (both agreed): confidence 0.8
+
+## What NOT to Extract
+- Questions (from either side) — questions are not facts
+- Meta-frames like "user_preferences", "user_interests" — use domain-specific types instead
+  BAD: f_001 user_preferences: { ... }
+  GOOD: f_002 accommodation: { style: "boutique", area: "near West Lake" }
+- Explanations or reasoning — extract CONCLUSIONS ONLY
+- AI suggestions the user did not acknowledge
 
 ## Frame Structure Rules
-1. AIM FOR 3-8 FRAMES TOTAL — fewer, richer frames are better than many thin ones
-2. LISTS OF SIMILAR ITEMS = ONE FRAME with an array slot, NEVER separate frames
-   - 10 city recommendations = ONE frame: { type: "recommended_cities", slots: { cities: [...] } }
-   - NOT 10 separate "city_recommendation" frames!
-3. Each frame represents a TOPIC or CATEGORY, not an individual item
-4. Use arrays for lists: cities, features, pros, cons, requirements, options
-5. Frame type uses snake_case (nouns or noun phrases)
-6. Frame IDs start from f_001
-
-## Frame Type Guidance
-Use these frame types when applicable:
-- constraints: { dietary: [...], avoid_places: [...], health: [...] }
-- preferences: { accommodation: ..., interests: [...], nightlife: ... }
-- logistics: { transport: ..., arrival: ..., departure: ..., dates: ... }
-- open_questions: { items: ["What's the weather like?", "Should we rent bikes?"] }
-  ONLY include questions the USER asked that remain unanswered.
-  NEVER include questions the ASSISTANT asked — those are prompts, not user knowledge.
-- trip_plan / project_plan / ...: { destination: ..., duration: ..., group: ... }
-You may create other types as needed, but constraints, preferences, and open_questions should always be separate frames when present.
+1. AIM FOR 3-5 FRAMES TOTAL — fewer, richer frames are better
+2. ONE frame per topic — no fragmentation
+3. LISTS OF SIMILAR ITEMS = ONE FRAME with array slots
+4. Frame type uses snake_case domain nouns (NOT generic labels)
+5. Frame IDs start from f_001
 
 ## ABSOLUTE PROHIBITION: No Fabrication
-- NEVER include information that does NOT appear in the conversation
-- Every slot value MUST be directly traceable to actual conversation text
-- If you cannot provide a slot_quote for a slot → do NOT include that slot
-- Do NOT invent specific names, prices, numbers, lists, or details that no one mentioned
-  BAD: { "hotels": ["Hotel Gracery", "Citadines"] }  ← nobody said these names!
-  GOOD: { "accommodation_type": "mid-range" }  ← user actually said this
-- Do NOT infer quantities or amounts not stated (e.g. if user says "offered to help" do NOT add "amount: 10000")
-- "Common knowledge" or "reasonable inference" is NOT an excuse to fabricate details
-
-## ANTI-PATTERNS (DO NOT DO THIS)
-- Do NOT extract the assistant's detailed itinerary/schedule as facts — unless the user said "yes, let's do that"
-- Do NOT create frames for the assistant's budget breakdown or cost estimates — those are suggestions
-- Do NOT ignore when the user says "avoid X", "I'm allergic to X", "I don't want X" — these are HIGHEST PRIORITY
-- Do NOT put constraints inside a general trip_plan frame — constraints MUST be a separate frame so they are clearly visible
-- Do NOT omit open questions — if the user asked something and it wasn't resolved, capture it
+- Every slot value MUST trace to actual conversation text
+- Include slot_quotes for traceability
+- Do NOT invent names, prices, numbers, or details not mentioned
+- Do NOT infer quantities or amounts not stated
 
 ## GOOD vs BAD Examples
 
-BAD (misses user constraints, over-extracts AI suggestions):
-  f_001 trip_plan: { destination: "Hangzhou", duration: "3 days" }
-  f_002 itinerary: { day_1: "Lingyin Temple → Silk Museum → ...", day_2: "..." }
-  f_003 budget_breakdown: { accommodation: 800, food: 900, transport: 1000 }
-  // PROBLEM: user said "peanut allergy" and "avoid Hefang Street" — both missing!
-  // PROBLEM: itinerary and budget are AI suggestions, not user knowledge
+BAD (meta-frames, over-extraction):
+  f_001 user_preferences: { accommodation: "boutique", interests: ["tea"] }
+  f_002 user_interests: { items: ["tea culture", "hiking"] }
+  f_003 itinerary: { day_1: "Lingyin Temple", day_2: "..." }
 
-GOOD (captures what the user actually said):
-  f_001 trip_plan: { destination: "Hangzhou", duration: "3 days", group_size: 3, budget_per_person: 3000 }
-  f_002 constraints: { dietary: [{ type: "peanut_allergy", applies_to: "friend" }], avoid: [{ place: "Hefang Street", reason: "too commercial" }] }
-  f_003 preferences: { accommodation: "boutique hotel or guesthouse", area: "near West Lake", interests: ["tea culture", "Longjing Village"], nightlife: "bar or live music" }
-  f_004 logistics: { inbound: "high-speed train from Shanghai, arriving 10am", local_transport: "considering bike rental" }
-  f_005 open_questions: { items: ["What's the weather like?", "Is Wuzhen doable as a day trip?"] }
+GOOD (domain-specific, topic tree):
+  f_001 hangzhou_trip: { destination: "Hangzhou", duration: "3 days", group_size: 3 }
+  f_002 accommodation: { style: "boutique hotel", area: "near West Lake" }
+  f_003 dietary_restrictions: { allergies: [{ type: "peanut", applies_to: "friend" }] }
+  relations: [
+    { from: "f_002", to: "f_001", type: "elaborates" },
+    { from: "f_003", to: "f_001", type: "elaborates" }
+  ]
 
 ## Source Tracking
 - Set "source" field to turn tag (e.g., "T1", "T2")
 - For frames derived from multiple turns, use the most recent turn
 
 ## Confidence Scoring
-- User's explicit statements → 0.9-1.0
-- User's implied preferences → 0.6-0.8
-- Assistant's suggestions not yet confirmed → 0.3-0.5
+- User's explicit statements: 0.85-0.95
+- Mutual decisions: 0.8
+- AI suggestions user acknowledged: 0.5-0.7
 
 ## Relation Types (6 only): causes, conditions, contrasts, follows, depends, elaborates
+Use "elaborates" for all subtopic relationships.
 
 ## Source Quoting
 For EACH slot, include "slot_quotes" mapping slot keys to EXACT verbatim text from conversation.
@@ -293,32 +259,18 @@ For EACH slot, include "slot_quotes" mapping slot keys to EXACT verbatim text fr
 {
   "frames": [
     {
-      "id": "f_001", "type": "trip_plan", "source": "T1", "confidence": 0.9,
-      "slots": {
-        "destination": "Hangzhou",
-        "duration": "3 days",
-        "group_size": 3,
-        "budget_per_person": 3000
-      },
-      "slot_quotes": {
-        "destination": "planning a 3-day trip to Hangzhou",
-        "budget_per_person": "Budget is around ¥3000 per person"
-      }
+      "id": "f_001", "type": "hangzhou_trip", "source": "T1", "confidence": 0.9,
+      "slots": { "destination": "Hangzhou", "duration": "3 days", "group_size": 3 },
+      "slot_quotes": { "destination": "planning a 3-day trip to Hangzhou" }
     },
     {
-      "id": "f_002", "type": "constraints", "source": "T4", "confidence": 0.95,
-      "slots": {
-        "dietary": [{ "type": "peanut_allergy", "applies_to": "friend", "severity": "must avoid" }],
-        "avoid_places": [{ "place": "Hefang Street", "reason": "too commercial" }]
-      },
-      "slot_quotes": {
-        "dietary": "One friend is allergic to peanuts",
-        "avoid_places": "avoid the Hefang Street tourist area — heard it's too commercial"
-      }
+      "id": "f_002", "type": "dietary_restrictions", "source": "T4", "confidence": 0.9,
+      "slots": { "allergies": [{ "type": "peanut", "applies_to": "friend" }] },
+      "slot_quotes": { "allergies": "One friend is allergic to peanuts" }
     }
   ],
   "relations": [
-    { "from": "f_002", "to": "f_001", "type": "conditions", "confidence": 0.9 }
+    { "from": "f_002", "to": "f_001", "type": "elaborates", "confidence": 0.9 }
   ]
 }
 \`\`\`

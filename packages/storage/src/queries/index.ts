@@ -106,6 +106,7 @@ export {
   type InsertDeltaLogInput,
   insertDeltaLogEntry,
   listDeltaLogByConversation,
+  listDeltaLogByTopic,
 } from './delta-log';
 // Deploy Agents (for Deploy page, different from agent layer)
 export {
@@ -385,6 +386,14 @@ export {
   type ListTemplatesOptions,
   listTemplates,
 } from './templates';
+// Topics (multi-topic conversations)
+export {
+  createTopic,
+  deleteTopic,
+  getTopicById,
+  listTopicsByConversation,
+  updateTopic,
+} from './topics';
 // Token Usage (LLM token metering)
 export {
   estimateCost,

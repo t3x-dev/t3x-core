@@ -22,7 +22,7 @@
 import { sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { commits } from '../schema-commits';
-import { commitsV4 } from '../schema-v4';
+import { commitsV4 } from '../schema-frames';
 
 export interface MigrationResult {
   total: number;

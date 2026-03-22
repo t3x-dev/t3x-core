@@ -7,7 +7,7 @@
 import { randomUUID } from 'node:crypto';
 import { and, desc, eq, isNull, lte, or, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
-import { type NotificationInsert, type NotificationRecord, notifications } from '../schema-v4';
+import { type NotificationInsert, type NotificationRecord, notifications } from '../schema-frames';
 
 // ============================================================
 // Types

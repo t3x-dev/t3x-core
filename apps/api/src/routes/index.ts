@@ -28,4 +28,5 @@ export { relationsRoutes } from './relations.openapi';
 export { runnerRoutes } from './runner';
 export { runsRoutes } from './runs.openapi';
 export { statusRoutes } from './status';
+export { topicsRoutes } from './topics.openapi';
 export { turnRoutes } from './turns';

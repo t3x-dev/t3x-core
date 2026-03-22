@@ -6,6 +6,7 @@ import { DriftPopup } from '@/components/chat/DriftPopup';
 import { useAutoProject } from '@/hooks/useAutoProject';
 import { useConversationChat } from '@/hooks/useConversationChat';
 import { extractFrames, getSemanticDraft, listDeltas } from '@/lib/api/frames';
+import { listTopics, updateTopicApi } from '@/lib/api/topics';
 import { getIntentSummary } from '@/lib/intentSummary';
 import { cn } from '@/lib/utils';
 import { useChatStore } from '@/store/chatStore';
@@ -134,10 +135,10 @@ export function ChatWorkspace({
       });
     }
 
-    // Load existing semantic draft + full delta history for this conversation
+    // Load existing semantic draft + full delta history + topics for this conversation
     if (convId && convId !== 'new') {
-      Promise.all([getSemanticDraft(convId), listDeltas(convId)])
-        .then(([draft, deltas]) => {
+      Promise.all([getSemanticDraft(convId), listDeltas(convId), listTopics(convId)])
+        .then(([draft, deltas, topicsList]) => {
           const store = useExtractionPanelStore.getState();
           if (draft && draft.frames.length > 0) {
             store.setDraft(draft);
@@ -148,9 +149,17 @@ export function ChatWorkspace({
           if (deltas && deltas.length > 0) {
             store.hydrateDeltaLog(deltas);
           }
+          if (topicsList && topicsList.length > 0) {
+            store.setTopics(topicsList);
+            // Auto-select the first active topic
+            const activeTopic = topicsList.find((t) => t.status === 'active');
+            if (activeTopic) {
+              store.setActiveTopicId(activeTopic.id);
+            }
+          }
         })
         .catch(() => {
-          // Draft/delta load failed — non-critical
+          // Draft/delta/topics load failed — non-critical
         });
     }
   }, [conversationId, resolvedConversationId, resolvedProjectId]);
@@ -175,7 +184,8 @@ export function ChatWorkspace({
     const store = useExtractionPanelStore.getState();
     store.setExtracting(true);
 
-    extractFrames(convId)
+    const activeTopicId = store.activeTopicId;
+    extractFrames(convId, undefined, undefined, activeTopicId ? { topicId: activeTopicId } : undefined)
       .then((result) => {
         const s = useExtractionPanelStore.getState();
 
@@ -216,6 +226,23 @@ export function ChatWorkspace({
           }
           s.setGateIssues(issuesByFrame);
         }
+
+        // Reload topics after extraction (new topic may have been auto-created)
+        listTopics(convId).then((topicsList) => {
+          const s2 = useExtractionPanelStore.getState();
+          s2.setTopics(topicsList);
+          // Auto-sync topic name with root frame type
+          if (result.snapshot && result.snapshot.frames.length > 0 && topicsList.length > 0) {
+            const rootType = result.snapshot.frames[0].type;
+            const currentTopic = topicsList.find((t) => t.id === s2.activeTopicId);
+            if (currentTopic && currentTopic.name !== rootType) {
+              updateTopicApi(currentTopic.id, { name: rootType }).catch(() => {});
+              s2.setTopics(topicsList.map((t) =>
+                t.id === currentTopic.id ? { ...t, name: rootType } : t
+              ));
+            }
+          }
+        }).catch(() => {});
 
         if (focusIntentEnabled && result.snapshot && result.snapshot.frames.length > 0) {
           const controller = new AbortController();

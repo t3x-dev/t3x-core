@@ -25,7 +25,7 @@ import {
 } from '../queries/leaves';
 import { decodeCursor } from '../queries/pagination';
 import { insertProject } from '../queries/projects';
-import { leaves } from '../schema-v4';
+import { leaves } from '../schema-frames';
 import { createTestDB, sleep, testData } from './setup';
 
 describe('Leaves Storage', () => {

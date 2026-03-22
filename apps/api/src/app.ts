@@ -49,6 +49,7 @@ import {
   runnerRoutes,
   runsRoutes,
   statusRoutes,
+  topicsRoutes,
   turnRoutes,
 } from './routes';
 import { apiKeysRoutes } from './routes/api-keys.openapi';
@@ -172,6 +173,7 @@ export function createApp(options?: CreateAppOptions): Hono {
   api.route('/', autopilotRoutes);
   api.route('/', relationsRoutes);
   api.route('/', extractionFeedbackRoutes);
+  api.route('/', topicsRoutes);
 
   // Auth /me route (always available — works with any auth provider)
   api.route('/', authMeRoutes);
