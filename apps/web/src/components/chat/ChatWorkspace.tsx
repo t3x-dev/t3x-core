@@ -224,6 +224,7 @@ export function ChatWorkspace({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, streamingContent]);
 
+  const isExtracting = useExtractionPanelStore((s) => s.isExtracting);
   const focusIntentEnabled = useExtractionPanelStore((s) => s.focusIntentEnabled);
   const setLlmHighlightedFrameIds = useExtractionPanelStore((s) => s.setLlmHighlightedFrameIds);
 
@@ -455,7 +456,7 @@ export function ChatWorkspace({
         <div className="mx-auto max-w-3xl px-4">
           <ChatInput
             onSend={handleSend}
-            disabled={isStreaming || isLoading}
+            disabled={isStreaming || isLoading || isExtracting}
             placeholder="Message... (Enter to send, Shift+Enter for new line)"
           />
         </div>
