@@ -1,7 +1,7 @@
 'use client';
 
 import type { Frame } from '@t3x-dev/core';
-import { AlertCircle, Loader2, MessageSquarePlus } from 'lucide-react';
+import { AlertCircle, GitCommit, Loader2, MessageSquarePlus } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { DriftPopup } from '@/components/chat/DriftPopup';
 import { useAutoProject } from '@/hooks/useAutoProject';
@@ -114,6 +114,8 @@ export function ChatWorkspace({
   const inheritedRef = useRef(false);
   // Lock conversation input after a commit has been made from it
   const [isConversationCommitted, setIsConversationCommitted] = useState(false);
+  // Parent conversation link (for child conversations created via "Create Unit")
+  const [parentConversationId, setParentConversationId] = useState<string | null>(null);
 
   // Sync active conversation + session into stores; load existing draft
   useEffect(() => {
@@ -158,6 +160,12 @@ export function ChatWorkspace({
     const hydrateFromParent = (hash: string) => {
       getCommitAsFrames(hash)
         .then((parentCommit) => {
+          // Extract parent conversation ID for "View parent" link
+          const sources = (parentCommit as { sources?: Array<{ type?: string; id?: string }> }).sources;
+          const parentConvSource = sources?.find((s) => s.type === 'conversation');
+          if (parentConvSource?.id) {
+            setParentConversationId(parentConvSource.id);
+          }
           const store = useExtractionPanelStore.getState();
           const frames = (parentCommit.content?.frames as Frame[]) ?? [];
           const relations = parentCommit.content?.relations ?? [];
@@ -386,6 +394,21 @@ export function ChatWorkspace({
 
       {/* Message list */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden">
+        {/* Parent conversation banner */}
+        {parentConversationId && (
+          <div className="w-full py-2 bg-[var(--accent-commit)]/5 border-b border-[var(--accent-commit)]/10">
+            <div className="mx-auto max-w-3xl px-4 flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+              <GitCommit size={12} className="text-[var(--accent-commit)]" />
+              <span>Continuing from previous commit</span>
+              <a
+                href={`/chat/${parentConversationId}`}
+                className="text-[var(--accent-commit)] hover:underline font-medium"
+              >
+                View parent conversation
+              </a>
+            </div>
+          </div>
+        )}
         {isLoading ? (
           <div className="flex h-full flex-col items-center justify-center text-muted-foreground gap-2">
             <Loader2 size={40} strokeWidth={1} className="animate-spin" />
