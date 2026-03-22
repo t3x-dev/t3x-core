@@ -99,7 +99,7 @@ const UnitNode = memo(function UnitNode(props: Props) {
 
   const { t } = useTerminology();
   const tone = useCanvasStore((state) => state.getCommitTone(id));
-  const addUnitFromUnit = useCanvasStore((state) => state.addUnitFromUnit);
+  const addConversationFromCommit = useCanvasStore((state) => state.addConversationFromCommit);
   const startMergeFromCommit = useCanvasStore((state) => state.createMergePendingCommit);
   const hasMainCommit = useCanvasStore((state) => state.hasMainCommit);
   const openLeafPanel = useCanvasStore((state) => state.openLeafPanel);
@@ -191,9 +191,20 @@ const UnitNode = memo(function UnitNode(props: Props) {
     };
   }, []);
 
-  const handleAddUnit = () => {
+  const handleAddUnit = async () => {
     try {
-      addUnitFromUnit(id);
+      await addConversationFromCommit(id);
+      // Find the newly created node and navigate to chat
+      const nodes = useCanvasStore.getState().nodes;
+      const newNode = nodes.find(
+        (n) =>
+          n.data.kind === 'unit' &&
+          n.data.commitStatus === 'staging' &&
+          n.data.sourceCommitHash === data.commitHash
+      );
+      if (newNode?.data.conversationId) {
+        router.push(`/chat/${newNode.data.conversationId}`);
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to create unit';
       notify?.(message, 'error');

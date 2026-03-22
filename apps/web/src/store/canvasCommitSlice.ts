@@ -255,6 +255,8 @@ export const createCommitSlice: StateCreator<CanvasState, [], [], CommitSlice> =
         kind: 'unit',
         conversationId: conversation.conversation_id, // Full ID for API calls
         commitStatus: 'staging',
+        sourceCommitHash: parentCommitHash,
+        inheritFromCommitHash: parentCommitHash,
       },
     };
     const newEdge: Edge = {
