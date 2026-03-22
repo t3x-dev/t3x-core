@@ -6,7 +6,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { and, desc, eq, gte, lte, sql, sum } from 'drizzle-orm';
+import { and, eq, gte, lte, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { tokenUsage } from '../schema-frames';
 
