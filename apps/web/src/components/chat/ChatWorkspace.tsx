@@ -110,11 +110,17 @@ export function ChatWorkspace({
     }
   }, [resolvedProjectId, sendMessage]);
 
+  // Track whether inheritance hydration has been done (prevents re-hydration loop)
+  const inheritedRef = useRef(false);
+
   // Sync active conversation + session into stores; load existing draft
   useEffect(() => {
     const convId = resolvedConversationId ?? conversationId;
     useChatStore.getState().setActiveConversation(convId, resolvedProjectId || null);
-    useExtractionPanelStore.getState().resetDraft();
+    // Skip resetDraft if we just hydrated from parent (prevents wipe on re-render)
+    if (!inheritedRef.current) {
+      useExtractionPanelStore.getState().resetDraft();
+    }
     useExtractionPanelStore.getState().setConversationId(convId === 'new' ? null : convId);
     if (resolvedProjectId) {
       useSessionStore.getState().setLastSession(resolvedProjectId, convId);
@@ -167,9 +173,9 @@ export function ChatWorkspace({
               store.setPanelMode('default');
             }
           }
+          // Mark as hydrated so resetDraft() is skipped on re-render
+          inheritedRef.current = true;
           // Clear the flag to prevent re-hydration on remount
-          // This is critical: resetDraft() runs at the top of this effect,
-          // so without clearing, a re-render would wipe inherited frames
           onInheritComplete?.();
         })
         .catch(() => {
@@ -216,7 +222,9 @@ export function ChatWorkspace({
     resolvedConversationId,
     resolvedProjectId,
     inheritFromCommitHash,
-    onInheritComplete,
+    // Note: onInheritComplete intentionally excluded — including it causes a
+    // resetDraft → hydrate → onInheritComplete → resetDraft wipe cycle
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   ]);
 
   // Auto-scroll to bottom on new messages or streaming content
