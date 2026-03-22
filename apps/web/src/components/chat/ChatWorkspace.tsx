@@ -137,25 +137,7 @@ export function ChatWorkspace({
       });
     }
 
-    // Load existing semantic draft + full delta history for this conversation
-    if (convId && convId !== 'new') {
-      Promise.all([getSemanticDraft(convId), listDeltas(convId)])
-        .then(([draft, deltas]) => {
-          const store = useExtractionPanelStore.getState();
-          if (draft && draft.frames.length > 0) {
-            store.setDraft(draft);
-            if (store.panelMode === 'collapsed') {
-              store.setPanelMode('default');
-            }
-          }
-          if (deltas && deltas.length > 0) {
-            store.hydrateDeltaLog(deltas);
-          }
-        })
-        .catch(() => {
-          // Draft/delta load failed — non-critical
-        });
-    }
+    // Draft loading moved to activeTopicId effect below
   }, [conversationId, resolvedConversationId, resolvedProjectId]);
 
   // Load topics when conversation changes
@@ -169,6 +151,26 @@ export function ChatWorkspace({
           const active = topics.find((t) => t.status === 'active') ?? topics[0];
           store.setActiveTopicId(active.id);
         }
+      })
+      .catch(() => {});
+  }, [resolvedConversationId]);
+
+  // Load draft + deltas for ALL topics (combined YAML view)
+  const activeTopicId = useExtractionPanelStore((s) => s.activeTopicId);
+  useEffect(() => {
+    const convId = resolvedConversationId;
+    if (!convId || convId === 'new') return;
+    Promise.all([
+      getSemanticDraft(convId),
+      listDeltas(convId),
+    ])
+      .then(([draft, deltas]) => {
+        const store = useExtractionPanelStore.getState();
+        store.setDraft(draft ?? { frames: [], relations: [] });
+        if (draft && draft.frames.length > 0 && store.panelMode === 'collapsed') {
+          store.setPanelMode('default');
+        }
+        store.hydrateDeltaLog(deltas ?? []);
       })
       .catch(() => {});
   }, [resolvedConversationId]);
@@ -215,6 +217,28 @@ export function ChatWorkspace({
             .then((intentResult) => setLlmHighlightedFrameIds(intentResult.coreFrameIds))
             .catch(() => {});
         }
+
+        // Reload topics after extraction (API may have auto-created a topic)
+        // Also update topic name to match root frame type if it changed
+        listTopics(convId).then(async (topics) => {
+          const st = useExtractionPanelStore.getState();
+          st.setTopics(topics);
+          if (topics.length > 0 && !st.activeTopicId) {
+            const active = topics.find((t) => t.status === 'active') ?? topics[0];
+            st.setActiveTopicId(active.id);
+          }
+          // Sync topic name with root frame type
+          const activeTopic = topics.find((t) => t.id === st.activeTopicId);
+          if (activeTopic && result.snapshot?.frames?.length > 0) {
+            const rootFrame = result.snapshot.frames[0];
+            if (rootFrame?.type && rootFrame.type !== activeTopic.name && activeTopic.name === 'new_topic') {
+              const { updateTopicApi } = await import('@/lib/api/topics');
+              updateTopicApi(activeTopic.id, { name: rootFrame.type }).then(() => {
+                st.setTopics(topics.map((t) => t.id === activeTopic.id ? { ...t, name: rootFrame.type } : t));
+              }).catch(() => {});
+            }
+          }
+        }).catch(() => {});
       } catch {
         // Extraction failed silently — non-critical
       } finally {

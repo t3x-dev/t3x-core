@@ -19,6 +19,7 @@ import {
   getDeltaLogEntry,
   insertDeltaLogEntry,
   listDeltaLogByConversation,
+  listDeltaLogByTopic,
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { toDeltaLogEntries } from '../lib/delta-log-utils';
@@ -273,6 +274,7 @@ deltaLogRoutes.openapi(createDeltaRoute, async (c) => {
 // GET /v1/conversations/:conversationId/deltas
 deltaLogRoutes.openapi(listDeltasRoute, async (c) => {
   const { conversationId } = c.req.valid('param');
+  const topicId = c.req.query('topic_id');
 
   try {
     const db = await getDB();
@@ -286,7 +288,9 @@ deltaLogRoutes.openapi(listDeltasRoute, async (c) => {
       );
     }
 
-    const records = await listDeltaLogByConversation(db, conversationId);
+    const records = topicId
+      ? await listDeltaLogByTopic(db, conversationId, topicId)
+      : await listDeltaLogByConversation(db, conversationId);
 
     return c.json({ success: true as const, data: records.map(toApiDeltaEntry) }, 200);
   } catch (err) {
@@ -298,6 +302,7 @@ deltaLogRoutes.openapi(listDeltasRoute, async (c) => {
 // GET /v1/conversations/:conversationId/draft
 deltaLogRoutes.openapi(getDraftRoute, async (c) => {
   const { conversationId } = c.req.valid('param');
+  const topicId = c.req.query('topic_id');
 
   try {
     const db = await getDB();
@@ -311,7 +316,9 @@ deltaLogRoutes.openapi(getDraftRoute, async (c) => {
       );
     }
 
-    const records = await listDeltaLogByConversation(db, conversationId);
+    const records = topicId
+      ? await listDeltaLogByTopic(db, conversationId, topicId)
+      : await listDeltaLogByConversation(db, conversationId);
 
     // Convert storage records to DeltaLogEntry format for buildDraft
     const draft = buildDraft(toDeltaLogEntries(records));

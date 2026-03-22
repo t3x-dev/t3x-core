@@ -307,37 +307,18 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
             </button>
           </div>
 
-          {/* View toggle */}
-          <ViewTabs activeView={activeView} onChangeView={setActiveView} />
-
-          {/* Focus intent toggle */}
-          <div className="px-3 py-1.5 border-b border-[var(--stroke-default)]">
-            <label
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 4,
-                fontSize: 11,
-                color: 'var(--text-secondary)',
-                cursor: 'pointer',
-                padding: '2px 0',
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={focusIntentEnabled}
-                onChange={(e) => setFocusIntent(e.target.checked)}
-                style={{ accentColor: 'rgb(139,92,246)' }}
-              />
-              Focus intent
-            </label>
-          </div>
+          {/* Topic list + YAML combined */}
 
           {/* Content area */}
           {panelMode === 'default' ? (
             <div className="flex flex-1 flex-col overflow-hidden">
+              {/* Topic folder list */}
+              <div className="border-b border-[var(--stroke-default)]">
+                <TopicMap />
+              </div>
+              {/* YAML view */}
               <div className="flex-1 overflow-hidden">
-                {activeView === 'graph' ? <TopicMap /> : <FrameYAMLView />}
+                <FrameYAMLView />
               </div>
               <CommitDropdown />
             </div>
@@ -346,8 +327,11 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
             <div className="flex flex-1 overflow-hidden">
               {/* Left: extraction content */}
               <div className="flex flex-1 flex-col overflow-hidden border-r border-[var(--stroke-default)]">
+                <div className="border-b border-[var(--stroke-default)]">
+                  <TopicMap />
+                </div>
                 <div className="flex-1 overflow-hidden">
-                  {activeView === 'graph' ? <TopicMap /> : <FrameYAMLView />}
+                  <FrameYAMLView />
                 </div>
                 <CommitDropdown />
               </div>

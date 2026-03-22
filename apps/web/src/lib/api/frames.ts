@@ -87,16 +87,18 @@ export async function extractFrames(
 
 // ── Delta Log CRUD ──
 
-export async function listDeltas(conversationId: string): Promise<DeltaLogEntry[]> {
+export async function listDeltas(conversationId: string, topicId?: string): Promise<DeltaLogEntry[]> {
+  const params = topicId ? `?topic_id=${encodeURIComponent(topicId)}` : '';
   const res = await fetchWithTimeout(
-    `${API_V1}/conversations/${encodeURIComponent(conversationId)}/deltas`
+    `${API_V1}/conversations/${encodeURIComponent(conversationId)}/deltas${params}`
   );
   return handleResponse<DeltaLogEntry[]>(res);
 }
 
-export async function getSemanticDraft(conversationId: string): Promise<SemanticContent> {
+export async function getSemanticDraft(conversationId: string, topicId?: string): Promise<SemanticContent> {
+  const params = topicId ? `?topic_id=${encodeURIComponent(topicId)}` : '';
   const res = await fetchWithTimeout(
-    `${API_V1}/conversations/${encodeURIComponent(conversationId)}/draft`
+    `${API_V1}/conversations/${encodeURIComponent(conversationId)}/draft${params}`
   );
   return handleResponse<SemanticContent>(res);
 }
