@@ -19,10 +19,13 @@ import {
   type SlotQuotesMap,
 } from '@t3x-dev/core';
 import {
+  createTopic,
   findConversationById,
   findTurnsByConversation,
   insertDeltaLogEntry,
   listDeltaLogByConversation,
+  listDeltaLogByTopic,
+  listTopicsByConversation,
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { toDeltaLogEntries } from '../lib/delta-log-utils';
@@ -42,6 +45,8 @@ export const frameExtractRoutes = new OpenAPIHono({
 const FrameExtractRequest = z.object({
   conversation_id: z.string().min(1),
   turn_hashes: z.array(z.string().min(1)).optional(),
+  topic_id: z.string().optional(),
+  force_extract: z.boolean().optional(),
 });
 
 const DeltaResponseSchema = z.object({
@@ -108,7 +113,7 @@ const extractFramesRoute = createRoute({
 // ============================================================
 
 frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
-  const { conversation_id, turn_hashes } = c.req.valid('json');
+  const { conversation_id, turn_hashes, topic_id, force_extract } = c.req.valid('json');
 
   try {
     const db = await getDB();
@@ -143,7 +148,13 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
     }
 
     // 3. Fetch existing delta log and build current snapshot
-    const deltaRecords = await listDeltaLogByConversation(db, conversation_id);
+    let activeTopicId = topic_id;
+    const existingTopics = await listTopicsByConversation(db, conversation_id);
+
+    // Use topic-filtered delta log if topic_id provided
+    const deltaRecords = activeTopicId
+      ? await listDeltaLogByTopic(db, conversation_id, activeTopicId)
+      : await listDeltaLogByConversation(db, conversation_id);
     const currentSnapshot = buildDraft(toDeltaLogEntries(deltaRecords));
 
     // 4. Convert turns to FrameExtractionTurn format (include turn_hash for source tracking)
@@ -189,6 +200,21 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
     // 6. Check extraction result
     if (!result.ok) {
       return errorResponse(c, 'EXTRACTION_FAILED', result.error);
+    }
+
+    // Check for drift detection
+    if (result.ok && 'drift' in result && result.drift && !force_extract) {
+      return c.json({
+        success: true as const,
+        data: {
+          status: 'drift_detected' as const,
+          drift_info: {
+            current_topic: result.drift.current_topic,
+            new_topic: result.drift.new_topic,
+            confidence: result.drift.confidence,
+          },
+        },
+      });
     }
 
     // Record usage (fire-and-forget)
@@ -326,12 +352,25 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
       // Pipeline is optional — flat frames are still valid
     }
 
+    // 6d. Auto-create topic on first extraction
+    if (!activeTopicId && existingTopics.length === 0 && result.ok && 'delta' in result) {
+      const rootFrame = result.delta?.changes?.find((ch: { action: string }) => ch.action === 'add')?.frame;
+      const topicName = rootFrame?.type ?? 'unnamed_topic';
+      const newTopic = await createTopic(db, {
+        conversationId: conversation_id,
+        projectId: conversation.projectId,
+        name: topicName,
+      });
+      activeTopicId = newTopic.id;
+    }
+
     // 7. Insert delta into delta log
     const record = await insertDeltaLogEntry(db, {
       conversationId: conversation_id,
       projectId: conversation.projectId,
       source: 'llm_extraction',
       delta: result.delta,
+      topicId: activeTopicId ?? undefined,
     });
 
     // 8. Return delta + updated snapshot + delta_log_id

@@ -42,6 +42,7 @@ export {
 } from './frameExtractionPrompt';
 // Frame Extraction (Phase 2)
 export {
+  type DriftDetected,
   type FrameExtractionInput,
   type FrameExtractionResult,
   type FrameExtractionTurn,

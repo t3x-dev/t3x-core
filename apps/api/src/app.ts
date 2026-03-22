@@ -67,6 +67,7 @@ import { recipesRoutes } from './routes/recipes.openapi';
 import { searchRoutes } from './routes/search.openapi';
 import { shareRoutes } from './routes/share.openapi';
 import { templatesRoutes } from './routes/templates.openapi';
+import { topicRoutes } from './routes/topics.openapi';
 import { usageRoutes } from './routes/usage.openapi';
 import { webhooksRoutes } from './routes/webhooks.openapi';
 
@@ -169,6 +170,7 @@ export function createApp(options?: CreateAppOptions): Hono {
   api.route('/', llmRoutes);
   api.route('/', autopilotRoutes);
   api.route('/', relationsRoutes);
+  api.route('/', topicRoutes);
   api.route('/', extractionFeedbackRoutes);
 
   // Auth /me route (always available — works with any auth provider)

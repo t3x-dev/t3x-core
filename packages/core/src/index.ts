@@ -119,6 +119,7 @@ export {
   type ExtractedSentence,
   type ExtractionItem,
   ExtractionParseError,
+  type DriftDetected,
   type FrameDeltaParseResult,
   type FrameExtractionInput,
   type FrameExtractionPromptResult,

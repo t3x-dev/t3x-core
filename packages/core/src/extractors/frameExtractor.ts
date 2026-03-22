@@ -31,6 +31,13 @@ const MAX_TOKENS = 4096;
 /** Per-change slot quotes extracted from LLM output before Zod strips them */
 export type SlotQuotesMap = Map<number, Record<string, string>>; // changeIndex → { slotKey: quote }
 
+export interface DriftDetected {
+  status: 'drift_detected';
+  current_topic: string;
+  new_topic: string;
+  confidence: number;
+}
+
 export type FrameExtractionResult =
   | {
       ok: true;
@@ -39,6 +46,7 @@ export type FrameExtractionResult =
       usage: { inputTokens: number; outputTokens: number };
       slotQuotes?: SlotQuotesMap;
     }
+  | { ok: true; drift: DriftDetected; usage: { inputTokens: number; outputTokens: number } }
   | { ok: false; error: string; usage: { inputTokens: number; outputTokens: number } };
 
 /**
@@ -154,6 +162,25 @@ export class FrameExtractor {
         }
       } catch {
         // JSON extraction failed — continue with original raw text
+      }
+
+      // 3b. Check for drift detection response
+      try {
+        const maybeJson = JSON.parse(raw);
+        if (maybeJson?.status === 'drift_detected' && typeof maybeJson.confidence === 'number') {
+          return {
+            ok: true,
+            drift: {
+              status: 'drift_detected',
+              current_topic: maybeJson.current_topic ?? '',
+              new_topic: maybeJson.new_topic ?? '',
+              confidence: maybeJson.confidence,
+            },
+            usage: totalUsage,
+          };
+        }
+      } catch {
+        // Not drift JSON — continue normal parsing
       }
 
       // 4. Parse delta
