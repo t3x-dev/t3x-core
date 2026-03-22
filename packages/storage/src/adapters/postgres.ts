@@ -67,7 +67,7 @@ export async function closePostgresStorage(): Promise<void> {
 /**
  * Schema version — bump this number whenever you add migrations below.
  */
-const SCHEMA_VERSION = 29;
+const SCHEMA_VERSION = 30;
 
 /**
  * Initialize database schema (skips if already at current version)
@@ -666,6 +666,19 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     ALTER TABLE delta_log ADD COLUMN IF NOT EXISTS pipeline_state TEXT;
     ALTER TABLE delta_log ADD COLUMN IF NOT EXISTS gate_result_json JSONB;
     ALTER TABLE delta_log ADD COLUMN IF NOT EXISTS metadata JSONB;
+
+    -- Topics table (multi-topic per conversation)
+    CREATE TABLE IF NOT EXISTS topics (
+      id TEXT PRIMARY KEY,
+      conversation_id TEXT NOT NULL REFERENCES conversations(conversation_id) ON DELETE CASCADE,
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'active',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_topics_conv ON topics(conversation_id);
+    CREATE INDEX IF NOT EXISTS idx_topics_project ON topics(project_id);
+    ALTER TABLE delta_log ADD COLUMN IF NOT EXISTS topic_id TEXT REFERENCES topics(id) ON DELETE CASCADE;
 
     -- Sentence Relations (Inter-sentence Relations)
     CREATE TABLE IF NOT EXISTS sentence_relations (

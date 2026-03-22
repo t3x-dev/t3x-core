@@ -106,7 +106,16 @@ export {
   type InsertDeltaLogInput,
   insertDeltaLogEntry,
   listDeltaLogByConversation,
+  listDeltaLogByTopic,
 } from './delta-log';
+// Topics (multi-topic per conversation)
+export {
+  type CreateTopicInput,
+  createTopic,
+  getTopicById,
+  listTopicsByConversation,
+  updateTopic,
+} from './topics';
 // Deploy Agents (for Deploy page, different from agent layer)
 export {
   type CreateDeployAgentInput,

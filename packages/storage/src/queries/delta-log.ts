@@ -5,7 +5,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { asc, eq } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { type DeltaLogInsert, type DeltaLogRecord, deltaLog } from '../schema-frames';
 
@@ -19,6 +19,7 @@ export interface InsertDeltaLogInput {
   source: string;
   turnHash?: string;
   delta: unknown;
+  topicId?: string;
 }
 
 // ============================================================
@@ -40,6 +41,7 @@ export async function insertDeltaLogEntry(
     source: input.source,
     turnHash: input.turnHash ?? null,
     delta: input.delta,
+    topicId: input.topicId ?? null,
   };
 
   const [result] = await db.insert(deltaLog).values(row).returning();
@@ -77,4 +79,19 @@ export async function deleteDeltaLogEntry(
 ): Promise<DeltaLogRecord | undefined> {
   const [result] = await db.delete(deltaLog).where(eq(deltaLog.id, id)).returning();
   return result;
+}
+
+/**
+ * List delta log entries for a specific topic within a conversation.
+ */
+export async function listDeltaLogByTopic(
+  db: AnyDB,
+  conversationId: string,
+  topicId: string
+): Promise<DeltaLogRecord[]> {
+  return db
+    .select()
+    .from(deltaLog)
+    .where(and(eq(deltaLog.conversationId, conversationId), eq(deltaLog.topicId, topicId)))
+    .orderBy(asc(deltaLog.createdAt));
 }

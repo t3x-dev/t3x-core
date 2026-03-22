@@ -1046,6 +1046,9 @@ export const deltaLog = pgTable(
     /** Which model produced this extraction (for llm_extraction source) */
     model: text('model'),
 
+    /** Topic this delta belongs to */
+    topicId: text('topic_id'),
+
     /** When this delta was recorded */
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -1057,6 +1060,33 @@ export const deltaLog = pgTable(
 
 export type DeltaLogRecord = typeof deltaLog.$inferSelect;
 export type DeltaLogInsert = typeof deltaLog.$inferInsert;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// topics: Conversation Topic Trees
+// ═══════════════════════════════════════════════════════════════════════════
+
+export const topics = pgTable(
+  'topics',
+  {
+    id: text('id').primaryKey(),
+    conversationId: text('conversation_id')
+      .notNull()
+      .references(() => conversations.conversationId, { onDelete: 'cascade' }),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.projectId, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    status: text('status').notNull().default('active'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    convIdx: index('idx_topics_conv').on(table.conversationId),
+    projectIdx: index('idx_topics_project').on(table.projectId),
+  })
+);
+
+export type TopicRecord = typeof topics.$inferSelect;
+export type TopicInsert = typeof topics.$inferInsert;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Sentence Relations (Inter-sentence Relations)
