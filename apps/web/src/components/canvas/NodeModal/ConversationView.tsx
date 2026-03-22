@@ -224,6 +224,11 @@ export function ConversationView({
             conversationId={data?.conversationId || 'new'}
             projectId={projectId}
             className="flex-1"
+            inheritFromCommitHash={data?.inheritFromCommitHash}
+            onInheritComplete={() => {
+              // Clear the flag on the node to prevent re-hydration
+              onUpdate({ inheritFromCommitHash: undefined });
+            }}
             onConversationCreated={(convId) => {
               onUpdate({ conversationId: convId, sourceConversationId: convId });
               if (node?.id && node.id !== convId) {
