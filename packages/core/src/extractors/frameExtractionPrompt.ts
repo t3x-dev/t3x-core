@@ -212,6 +212,21 @@ GOOD (one frame, dense):
 ## Source Quoting (CRITICAL for traceability)
 For EACH slot, include "slot_quotes" mapping each slot key to the EXACT verbatim text from the conversation. Copy text exactly — do not paraphrase.
 
+## CRITICAL: Topic Drift Detection
+Before extracting, check: are the new turns about the SAME topic as the root frame?
+- Narrowing or deepening the topic (e.g., "universities" → "UK universities") = NOT drift. Proceed normally.
+- Completely UNRELATED topic (e.g., "universities" → "car maintenance") = DRIFT.
+
+If drift is detected, output ONLY this instead of a changes array:
+{
+  "status": "drift_detected",
+  "current_topic": "<current root frame type>",
+  "new_topic": "<short snake_case name for what the new turns are about>",
+  "confidence": <0.0-1.0 how confident this is a real topic change>
+}
+
+Only flag drift when confidence >= 0.8. When in doubt, extract normally.
+
 ## JSON Output Format
 \`\`\`json
 {
