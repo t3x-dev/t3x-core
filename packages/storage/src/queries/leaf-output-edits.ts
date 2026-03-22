@@ -7,7 +7,7 @@
 import { randomUUID } from 'node:crypto';
 import { desc, eq } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
-import { type LeafOutputEditRecord, leafOutputEdits } from '../schema-v4';
+import { type LeafOutputEditRecord, leafOutputEdits } from '../schema-frames';
 
 // ============================================================
 // Types

@@ -4,13 +4,13 @@
  * CRUD operations for recipes table using Drizzle ORM.
  * Recipes define automated workflows triggered by T3X events.
  *
- * @see packages/storage/src/schema-v4.ts – recipes table
+ * @see packages/storage/src/schema-frames.ts – recipes table
  */
 
 import { randomUUID } from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
-import { type RecipeRecord, recipes } from '../schema-v4';
+import { type RecipeRecord, recipes } from '../schema-frames';
 
 // ============================================================
 // Constants

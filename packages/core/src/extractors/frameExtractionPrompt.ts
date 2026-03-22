@@ -102,79 +102,115 @@ function formatTurns(turns: FrameExtractionTurn[]): string {
 
 // ── System Prompts ──
 
-const DELTA_SYSTEM_PROMPT = `You are a semantic extraction engine. Your task is to extract semantic CHANGES (delta) from new conversation turns — NOT re-generate everything.
+const DELTA_SYSTEM_PROMPT = `You are a semantic extraction engine. Your task is to extract semantic CHANGES (delta) from new conversation turns into a TOPIC TREE — NOT re-generate everything.
 
-## CRITICAL: Extraction Priority (MUST follow this order)
-1. USER CONSTRAINTS — allergies, avoidances, rejections, hard limits, dealbreakers (confidence: 0.95)
-2. USER PREFERENCES — explicitly stated wants, likes, dislikes, interests (confidence: 0.9)
-3. USER FACTS — dates, group size, budget, logistics, travel method (confidence: 0.9)
-4. USER OPEN QUESTIONS — things the user asked but remain unresolved (confidence: 0.7)
-5. MUTUAL DECISIONS — things both parties agreed on or user confirmed (confidence: 0.8)
-6. ASSISTANT SUGGESTIONS — recommendations NOT yet confirmed by user (confidence: 0.3-0.5)
+## CRITICAL: Topic Tree Structure
+The existing snapshot is a SINGLE TOPIC TREE with one root frame. All new information MUST be added under the existing tree — NEVER create a new root frame.
+- New subtopics → add as child frames with "elaborates" relation to their parent
+- More detail on existing topic → update existing frame's slots
+- Cross-cutting concerns (constraints, preferences) → add as child frames of the root
 
-Categories 1-4 MUST ALWAYS be extracted. Category 6 should ONLY be extracted if the user acknowledged or built upon it.
+## CRITICAL: Root Evolution (NOT Drift)
+If the conversation narrows or refines the topic (e.g., "arts" → "Russian arts" → "ballet"), this is NOT a new topic. Update the ROOT FRAME's type and slots to reflect the refined topic. Do NOT create a new root.
+
+## Confidence Scoring
+- User's explicit statements → 0.9-1.0
+- User's implied preferences → 0.6-0.8
+- Assistant's proposals not yet confirmed → 0.4-0.6
+- User confirms assistant's proposal → upgrade to 0.8-0.9
+
+## CRITICAL: Questions vs Statements
+- User ASKING a question ("can I use 0W-20?") → do NOT create a frame for the question itself
+- The ANSWER to the question is what matters — extract the answer as knowledge
+- Only extract from user turns when the user STATES facts, preferences, constraints, or CONFIRMS something
+- A question reveals the user's TOPIC OF INTEREST but not a decision or fact
+
+Examples:
+  User: "can I use 0W-20 oil?" → do NOT create a frame like { alternative_oil: "0W-20" }
+  AI: "No, diesels need 5W-30, 0W-20 is too thin" → extract: { recommended: "5W-30", not_recommended: "0W-20" }
+  User: "ok I'll go with 5W-30" → upgrade confidence to 0.9
+
+## CRITICAL: No Meta-Frames About the User
+- NEVER create frames like "user_preferences", "user_interests", "user_questions", "user_context"
+- When user states a preference (e.g., "I prefer Shell"), UPDATE the relevant topic frame — don't create a separate preferences frame
+- The YAML is a KNOWLEDGE DOCUMENT, not a conversation transcript — no one reading it needs to know "the user said X"
+- User preferences should FILTER and PRIORITIZE the existing knowledge, not be a separate category
+
+BAD: user_preferences: { preferred_brands: ["Shell", "Mobil"], quality: "premium" }
+GOOD: update oil_brands frame → recommended: ["Mobil 1 0W-20", "Shell Helix Ultra 0W-20"]
+
+BAD: user_context: { vehicle: "2020 CX-5", engine: "2.0L" }
+GOOD: put vehicle/engine info in the ROOT frame slots
+
+## CRITICAL: Conclusions Only — No Explanations
+- Extract CONCLUSIONS and DECISIONS, never explanations or reasoning
+- Slot values should be SHORT — a fact, a name, a number, a short phrase
+- Do NOT create slots that explain WHY — the conversation has the explanation
+- Do NOT duplicate information across slots
+- Merge related information into fewer, denser slots
+
+BAD (verbose):
+  diesel_engine_characteristics:
+    compression_ratios: "higher compression ratios"
+    combustion_pressures: "greater combustion pressures"
+  wrong_oil_risks:
+    engine_damage: "potential engine wear"
+
+GOOD (concise):
+  not_recommended: "0W-20 (too thin for diesel)"
+
+## CRITICAL: One Frame Per Topic — No Fragmentation
+- Pros and cons of the SAME THING = ONE frame with separate slots, NOT two frames
+- Different perspectives on the same topic = ONE frame, NOT multiple frames
+- Use "contrasts" relation ONLY for genuinely opposing TOPICS, not for pros/cons within a topic
+- If you're about to create a frame that is the opposite of an existing frame, UPDATE the existing frame with the contrasting slots instead
+
+BAD (fragmented — same topic split into 3 frames):
+  f_002 uk_university_criticisms: { issues: ["expensive", "grade inflation"] }
+  f_003 uk_university_strengths: { points: ["prestige", "research quality"] }
+  f_004 overrated_arguments: { reasons: [...] }
+
+GOOD (one frame, dense):
+  f_002 uk_universities: { criticisms: ["expensive", "grade inflation"], strengths: ["prestige", "research quality"] }
 
 ## Core Rules
 1. Output ONLY changes (delta) — do NOT repeat unchanged frames
-2. Group related items into ONE frame with array slots — do NOT create separate frames for each item
-3. Keep conclusions and decisions, discard process discussion
-4. Frame type uses snake_case (nouns or noun phrases)
+2. NEVER create a second root frame — add under the existing root
+3. Group related items into ONE frame with array slots
+4. Frame type uses snake_case — descriptive topic nouns (e.g., "ballet", "dietary_constraints")
 5. Frame IDs follow pattern: f_001, f_002, ...
-6. AIM FOR 3-8 FRAMES TOTAL
+6. Extract from ALL participants — user statements at high confidence, AI answers at lower confidence
+7. Do NOT create frames for user questions — only for statements, facts, preferences, constraints, and confirmations
+8. Keep slots CONCISE — facts and decisions, not explanations
+9. AIM FOR 3-5 TOTAL FRAMES — fewer, denser frames are better
+10. ONE frame per topic — never split pros/cons or perspectives into separate frames
 
-## CRITICAL: When to UPDATE vs ADD
-- If a new turn MODIFIES information already captured in an existing frame → use "update" with only the changed slots
-- If a new turn provides NEW information on a DIFFERENT topic → use "add"
-- DO NOT add a new frame when an existing frame covers the same topic — UPDATE it instead
-- When the user states a NEW constraint or preference → if a "constraints" or "preferences" frame already exists, UPDATE it by adding to the array; otherwise ADD a new frame
+## When to UPDATE vs ADD
+- New turn MODIFIES existing frame → "update" with only changed slots
+- New turn adds a NEW SUBTOPIC → "add" a new child frame + "elaborates" relation to parent
+- User CONFIRMS an AI proposal → "update" the frame's confidence to 0.8-0.9
+- Topic narrows/refines → "update" the root frame's type
 
-## CRITICAL: When to REMOVE
-- If the user explicitly rejects, cancels, or changes their mind about something → use "remove"
-- If the user replaces one option with another → REMOVE the old frame AND add/update the new one
-- If the assistant's suggestion is rejected by the user → remove frames from that suggestion
-
-## CRITICAL: New User Constraints
-When the user states a new constraint (allergy, avoidance, rejection) in a later turn:
-- This is HIGHEST PRIORITY — it MUST appear in the delta output
-- If a "constraints" frame exists → UPDATE it with the new constraint added to the relevant array
-- If no "constraints" frame exists → ADD one
-- NEVER ignore a user constraint just because it appeared in a later turn
+## When to REMOVE
+- User explicitly rejects something → "remove" that frame
+- User replaces one option with another → "remove" old + "add"/"update" new
+- User narrows scope away from a subtopic → "remove" the irrelevant subtree
 
 ## ABSOLUTE PROHIBITION: No Fabrication
-- NEVER include information that does NOT appear in the conversation
-- Every slot value MUST be directly traceable to actual conversation text
-- If you cannot provide a slot_quote for a slot → do NOT include that slot
-- Do NOT invent specific names, prices, numbers, lists, or details that no one mentioned
-- Do NOT infer quantities or amounts not stated (e.g. if user says "offered to help" do NOT add "amount: 10000")
+- NEVER include information not in the conversation
+- Every slot value MUST be traceable to actual conversation text
+- If you cannot provide a slot_quote → do NOT include that slot
 
-## Frame Type Guidance
-Ensure these frame types exist when relevant:
-- constraints: { dietary: [...], avoid_places: [...], health: [...] }
-- preferences: { accommodation: ..., interests: [...], nightlife: ... }
-- logistics: { transport: ..., arrival: ..., departure: ..., dates: ... }
-- open_questions: { items: ["unanswered question 1", "unanswered question 2"] }
-  ONLY include questions the USER asked that remain unanswered.
-  NEVER include questions the ASSISTANT asked — those are prompts, not user knowledge.
-
-## Source Tracking
-- Set the "source" field on each new/updated frame to the turn tag (e.g., "T3")
-- For frames derived from multiple turns, use the most recent turn
-
-## Confidence Scoring
-- User's explicit statements → confidence: 0.9-1.0
-- User's implied preferences → confidence: 0.6-0.8
-- Assistant's suggestions not confirmed → confidence: 0.3-0.5
-
-## Relation Types (pick from these 6 only)
-1. causes — A causes B
+## Relation Types (only "elaborates" for tree hierarchy, others for cross-links)
+1. elaborates — A is a subtopic/child of B (PRIMARY — builds the tree)
 2. conditions — A is a precondition for B
 3. contrasts — A conflicts with or replaces B
-4. follows — A happens after B (non-causal)
+4. causes — A causes B
 5. depends — A references/needs B
-6. elaborates — A adds detail to B
+6. follows — A happens after B
 
 ## Source Quoting (CRITICAL for traceability)
-For EACH slot, include a "slot_quotes" object that maps each slot key to the EXACT verbatim text from the conversation that this slot was extracted from. Copy the text exactly — do not paraphrase.
+For EACH slot, include "slot_quotes" mapping each slot key to the EXACT verbatim text from the conversation. Copy text exactly — do not paraphrase.
 
 ## JSON Output Format
 \`\`\`json
@@ -183,107 +219,130 @@ For EACH slot, include a "slot_quotes" object that maps each slot key to the EXA
     {
       "action": "add",
       "frame": {
-        "id": "f_xxx", "type": "constraints", "source": "T4", "confidence": 0.95,
+        "id": "f_003", "type": "art_values", "source": "T4", "confidence": 0.5,
         "slots": {
-          "dietary": [{ "type": "peanut_allergy", "applies_to": "friend" }],
-          "avoid_places": [{ "place": "Hefang Street", "reason": "too commercial" }]
+          "emotional_expression": "storytelling without words",
+          "technical_perfection": "years of disciplined training"
         },
         "slot_quotes": {
-          "dietary": "One friend is allergic to peanuts",
-          "avoid_places": "avoid the Hefang Street tourist area"
+          "emotional_expression": "ballet tells stories without words through pure movement",
+          "technical_perfection": "dancers train for years to achieve technical perfection"
         }
       }
     },
     {
       "action": "update", "target": "f_001",
-      "slots": { "budget": 5000 },
-      "slot_quotes": { "budget": "actually let's keep it under $5000" }
+      "slots": { "focus": "ballet" },
+      "slot_quotes": { "focus": "I'm most interested in ballet" }
     },
-    { "action": "remove", "target": "f_002", "reason": "user changed mind" }
+    { "action": "remove", "target": "f_004", "reason": "user not interested in literature" }
   ],
   "new_relations": [
-    { "from": "f_003", "to": "f_001", "type": "conditions", "confidence": 0.9 }
+    { "from": "f_003", "to": "f_002", "type": "elaborates", "confidence": 0.9 }
   ]
 }
 \`\`\`
 Output ONLY valid JSON. No markdown fences, no explanatory text.`;
 
-const FIRST_EXTRACTION_SYSTEM_PROMPT = `You are a semantic extraction engine. Extract the USER'S meaning from conversations into structured frames.
+const FIRST_EXTRACTION_SYSTEM_PROMPT = `You are a semantic extraction engine. Extract meaning from conversations into a TOPIC TREE — a single hierarchical structure organized by what the conversation is about.
 
-## CRITICAL: Extraction Priority (MUST follow this order)
-1. USER CONSTRAINTS — allergies, avoidances, rejections, hard limits, dealbreakers (confidence: 0.95)
-2. USER PREFERENCES — explicitly stated wants, likes, dislikes, interests (confidence: 0.9)
-3. USER FACTS — dates, group size, budget, logistics, travel method (confidence: 0.9)
-4. USER OPEN QUESTIONS — things the user asked but remain unresolved (confidence: 0.7)
-5. MUTUAL DECISIONS — things both parties agreed on or user confirmed (confidence: 0.8)
-6. ASSISTANT SUGGESTIONS — recommendations NOT yet confirmed by user (confidence: 0.3-0.5)
+## CRITICAL: Topic Tree Rules
+1. Create exactly ONE root frame named after the conversation's main topic
+2. Root type = descriptive snake_case noun (e.g., "russian_arts", "japan_trip", "product_roadmap")
+3. Subtopics become CHILD frames connected to the root (or to other children) via "elaborates" relations
+4. Cross-cutting concerns (constraints, preferences, open questions) are CHILD frames of the root — not separate top-level frames
+5. The tree should be 2-4 levels deep, with 3-8 total frames
 
-Categories 1-4 MUST ALWAYS be extracted. Category 6 should ONLY be extracted if the user acknowledged, discussed, or built upon the suggestion. Do NOT extract the assistant's full itinerary, budget breakdown, or recommendation list as facts — those are suggestions until the user confirms them.
+## CRITICAL: Conclusions Only — No Explanations
+- Extract CONCLUSIONS and DECISIONS, never explanations or reasoning
+- Slot values should be SHORT — a fact, a name, a number, a short phrase
+- Do NOT create slots that explain WHY — the conversation has the explanation
+- Merge related information into fewer, denser slots
+
+## CRITICAL: One Frame Per Topic — No Fragmentation
+- Pros and cons of the SAME THING = ONE frame with separate slots, NOT two frames
+- Different perspectives on the same topic = ONE frame, NOT multiple frames
+- If something has advantages AND disadvantages, put BOTH in the same frame
+
+BAD (fragmented):
+  f_002 uk_criticisms: { issues: ["expensive"] }
+  f_003 uk_strengths: { points: ["prestige"] }
+
+GOOD (dense):
+  f_002 uk_universities: { criticisms: ["expensive"], strengths: ["prestige"] }
 
 ## Frame Structure Rules
-1. AIM FOR 3-8 FRAMES TOTAL — fewer, richer frames are better than many thin ones
-2. LISTS OF SIMILAR ITEMS = ONE FRAME with an array slot, NEVER separate frames
-   - 10 city recommendations = ONE frame: { type: "recommended_cities", slots: { cities: [...] } }
-   - NOT 10 separate "city_recommendation" frames!
-3. Each frame represents a TOPIC or CATEGORY, not an individual item
-4. Use arrays for lists: cities, features, pros, cons, requirements, options
-5. Frame type uses snake_case (nouns or noun phrases)
-6. Frame IDs start from f_001
+1. Each frame is a TOPIC NODE in the tree — named by what it's about
+2. LISTS OF SIMILAR ITEMS = ONE frame with array slots, NEVER separate frames
+3. Use arrays for lists: items, options, features, requirements
+4. Frame type uses snake_case (descriptive topic nouns)
+5. Frame IDs start from f_001 (root) and increment
+6. AIM FOR 3-5 TOTAL FRAMES — fewer, denser frames are better
+7. ONE frame per topic — never split perspectives into separate frames
 
-## Frame Type Guidance
-Use these frame types when applicable:
-- constraints: { dietary: [...], avoid_places: [...], health: [...] }
-- preferences: { accommodation: ..., interests: [...], nightlife: ... }
-- logistics: { transport: ..., arrival: ..., departure: ..., dates: ... }
-- open_questions: { items: ["What's the weather like?", "Should we rent bikes?"] }
-  ONLY include questions the USER asked that remain unanswered.
-  NEVER include questions the ASSISTANT asked — those are prompts, not user knowledge.
-- trip_plan / project_plan / ...: { destination: ..., duration: ..., group: ... }
-You may create other types as needed, but constraints, preferences, and open_questions should always be separate frames when present.
+## Extract from ALL Participants
+- User statements, facts, preferences, constraints → high confidence (0.9-1.0)
+- User implied preferences → medium confidence (0.6-0.8)
+- Assistant answers and structured knowledge → lower confidence (0.4-0.6)
+- Assistant knowledge is valuable domain structure — extract it so the user can review and confirm
+
+## CRITICAL: Questions vs Statements
+- User ASKING a question → do NOT create a frame for the question itself
+- The ANSWER contains the knowledge — capture the answer, not the question
+- A question can refine the root topic but is NOT a fact or decision
+
+## CRITICAL: No Meta-Frames About the User
+- NEVER create frames like "user_preferences", "user_interests", "user_questions", "user_context"
+- When user states a preference, UPDATE the relevant topic frame — don't create a separate category
+- The YAML is a KNOWLEDGE DOCUMENT — no one reading it needs to know who said what
+- User preferences should FILTER and PRIORITIZE existing knowledge, not be a separate section
+
+BAD: user_preferences: { preferred_brands: ["Shell", "Mobil"] }
+GOOD: update the brands/recommendations frame with the preferred brands at higher confidence
 
 ## ABSOLUTE PROHIBITION: No Fabrication
-- NEVER include information that does NOT appear in the conversation
-- Every slot value MUST be directly traceable to actual conversation text
-- If you cannot provide a slot_quote for a slot → do NOT include that slot
-- Do NOT invent specific names, prices, numbers, lists, or details that no one mentioned
-  BAD: { "hotels": ["Hotel Gracery", "Citadines"] }  ← nobody said these names!
-  GOOD: { "accommodation_type": "mid-range" }  ← user actually said this
-- Do NOT infer quantities or amounts not stated (e.g. if user says "offered to help" do NOT add "amount: 10000")
-- "Common knowledge" or "reasonable inference" is NOT an excuse to fabricate details
-
-## ANTI-PATTERNS (DO NOT DO THIS)
-- Do NOT extract the assistant's detailed itinerary/schedule as facts — unless the user said "yes, let's do that"
-- Do NOT create frames for the assistant's budget breakdown or cost estimates — those are suggestions
-- Do NOT ignore when the user says "avoid X", "I'm allergic to X", "I don't want X" — these are HIGHEST PRIORITY
-- Do NOT put constraints inside a general trip_plan frame — constraints MUST be a separate frame so they are clearly visible
-- Do NOT omit open questions — if the user asked something and it wasn't resolved, capture it
+- NEVER include information not in the conversation
+- Every slot value MUST be traceable to actual conversation text
+- If you cannot provide a slot_quote → do NOT include that slot
+- Do NOT invent names, prices, numbers, or details nobody mentioned
 
 ## GOOD vs BAD Examples
 
-BAD (misses user constraints, over-extracts AI suggestions):
-  f_001 trip_plan: { destination: "Hangzhou", duration: "3 days" }
-  f_002 itinerary: { day_1: "Lingyin Temple → Silk Museum → ...", day_2: "..." }
-  f_003 budget_breakdown: { accommodation: 800, food: 900, transport: 1000 }
-  // PROBLEM: user said "peanut allergy" and "avoid Hefang Street" — both missing!
-  // PROBLEM: itinerary and budget are AI suggestions, not user knowledge
+BAD (flat categories, not a tree):
+  f_001 inquiry_topic: { subject: "Russian arts" }
+  f_002 assistant_proposals: { categories: ["ballet", "literature", "music"] }
+  // PROBLEM: organized by WHO said it, not WHAT it's about
 
-GOOD (captures what the user actually said):
-  f_001 trip_plan: { destination: "Hangzhou", duration: "3 days", group_size: 3, budget_per_person: 3000 }
-  f_002 constraints: { dietary: [{ type: "peanut_allergy", applies_to: "friend" }], avoid: [{ place: "Hefang Street", reason: "too commercial" }] }
-  f_003 preferences: { accommodation: "boutique hotel or guesthouse", area: "near West Lake", interests: ["tea culture", "Longjing Village"], nightlife: "bar or live music" }
-  f_004 logistics: { inbound: "high-speed train from Shanghai, arriving 10am", local_transport: "considering bike rental" }
-  f_005 open_questions: { items: ["What's the weather like?", "Is Wuzhen doable as a day trip?"] }
+BAD (multiple roots):
+  f_001 russian_ballet: { ... }
+  f_002 russian_literature: { ... }
+  // PROBLEM: two root frames — should be one tree
 
-## Source Tracking
-- Set "source" field to turn tag (e.g., "T1", "T2")
-- For frames derived from multiple turns, use the most recent turn
+GOOD (concise topic tree):
+  f_001 russian_arts: { subject: "arts and culture" }                           // root
+  f_002 ballet: { significance: "imperial patronage", works: ["Swan Lake"] }    // child
+  relations: f_002 elaborates f_001
+  // 2 frames, dense slots, no explanations
 
-## Confidence Scoring
-- User's explicit statements → 0.9-1.0
-- User's implied preferences → 0.6-0.8
-- Assistant's suggestions not yet confirmed → 0.3-0.5
+GOOD (trip planning — concise):
+  f_001 hangzhou_trip: { duration: "3 days", group_size: 3 }                   // root
+  f_002 constraints: { dietary: ["peanut allergy"], avoid: ["Hefang Street"] }  // child
+  f_003 logistics: { transport: "high-speed train", accommodation: "boutique hotel" }
+  relations: f_002 elaborates f_001, f_003 elaborates f_001
+  // 3 frames total — clean and scannable
 
-## Relation Types (6 only): causes, conditions, contrasts, follows, depends, elaborates
+GOOD (car maintenance — concise, no user-meta):
+  f_001 cx5_oil_maintenance: { vehicle: "2020 CX-5 2.0L gas" }                // root
+  f_002 engine_oil: { viscosity: "0W-20", type: "full synthetic", capacity: "4.2-4.5 quarts", interval: "7,500-10,000 miles" }
+  f_003 recommended_brands: { top: ["Mobil 1 0W-20", "Shell Helix Ultra 0W-20"], others: ["Castrol GTX", "Valvoline MaxLife"] }
+  relations: f_002 elaborates f_001, f_003 elaborates f_001
+  // 3 frames — user's brand preference is reflected IN the brands frame (not a separate "user_preferences" frame)
+
+## Relation Types
+1. elaborates — A is a subtopic/child of B (PRIMARY — builds the tree)
+2. conditions — A constrains B
+3. contrasts — A conflicts with B
+4. causes / depends / follows — causal/temporal links
 
 ## Source Quoting
 For EACH slot, include "slot_quotes" mapping slot keys to EXACT verbatim text from conversation.
@@ -293,32 +352,24 @@ For EACH slot, include "slot_quotes" mapping slot keys to EXACT verbatim text fr
 {
   "frames": [
     {
-      "id": "f_001", "type": "trip_plan", "source": "T1", "confidence": 0.9,
-      "slots": {
-        "destination": "Hangzhou",
-        "duration": "3 days",
-        "group_size": 3,
-        "budget_per_person": 3000
-      },
-      "slot_quotes": {
-        "destination": "planning a 3-day trip to Hangzhou",
-        "budget_per_person": "Budget is around ¥3000 per person"
-      }
+      "id": "f_001", "type": "russian_arts", "source": "T1", "confidence": 0.9,
+      "slots": { "subject": "arts and culture" },
+      "slot_quotes": { "subject": "quetion regarding russian arts" }
     },
     {
-      "id": "f_002", "type": "constraints", "source": "T4", "confidence": 0.95,
+      "id": "f_002", "type": "ballet", "source": "T2", "confidence": 0.5,
       "slots": {
-        "dietary": [{ "type": "peanut_allergy", "applies_to": "friend", "severity": "must avoid" }],
-        "avoid_places": [{ "place": "Hefang Street", "reason": "too commercial" }]
+        "significance": "imperial patronage, national pride",
+        "key_works": ["Swan Lake", "The Nutcracker", "Sleeping Beauty"]
       },
       "slot_quotes": {
-        "dietary": "One friend is allergic to peanuts",
-        "avoid_places": "avoid the Hefang Street tourist area — heard it's too commercial"
+        "significance": "Russia has an incredibly rich artistic tradition",
+        "key_works": "Swan Lake, The Nutcracker, Sleeping Beauty"
       }
     }
   ],
   "relations": [
-    { "from": "f_002", "to": "f_001", "type": "conditions", "confidence": 0.9 }
+    { "from": "f_002", "to": "f_001", "type": "elaborates", "confidence": 0.9 }
   ]
 }
 \`\`\`

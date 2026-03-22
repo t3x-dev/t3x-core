@@ -31,7 +31,7 @@ export {
 export * from './queries';
 // Schema (table definitions and types)
 export * from './schema';
-export * from './schema-v4';
+export * from './schema-frames';
 
 // Type alias — embedded adapter returns PostgresDB
 import type { PostgresDB } from './adapters/postgres';

@@ -16,7 +16,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { ApiKey } from '@t3x-dev/core';
 import { and, eq, isNull } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
-import { type ApiKeyRecord, apiKeys } from '../schema-v4';
+import { type ApiKeyRecord, apiKeys } from '../schema-frames';
 
 // ============================================================
 // Constants

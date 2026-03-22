@@ -1,11 +1,60 @@
 'use client';
 
-import type { SlotValue } from '@t3x-dev/core';
+import type { Frame, Relation, SemanticContent, SlotValue } from '@t3x-dev/core';
 import { Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { parseDisplayYAML, toDisplayYAML } from '@/lib/liteYaml';
 import { RELEVANCE_THRESHOLD, type RelevanceContext, relevanceScore } from '@/lib/relevanceScore';
 import { useExtractionPanelStore } from '@/store/extractionPanelStore';
+
+// ── Tree Nesting (mirror of nesterAgent, client-side) ──
+
+const NESTING_RELATIONS = new Set(['elaborates', 'conditions', 'depends', 'follows', 'causes']);
+
+function nestFrames(content: SemanticContent): SemanticContent {
+  if (content.relations.length === 0 || content.frames.length <= 1) return content;
+
+  const frameMap = new Map<string, Frame>();
+  for (const f of content.frames) frameMap.set(f.id, f);
+
+  const childrenMap = new Map<string, Array<{ frame: Frame }>>();
+  const childIds = new Set<string>();
+
+  for (const rel of content.relations) {
+    if (!NESTING_RELATIONS.has(rel.type)) continue;
+    if (!frameMap.has(rel.from) || !frameMap.has(rel.to)) continue;
+    const child = frameMap.get(rel.from)!;
+    childIds.add(rel.from);
+    const children = childrenMap.get(rel.to) ?? [];
+    children.push({ frame: child });
+    childrenMap.set(rel.to, children);
+  }
+
+  const rootFrames = content.frames.filter((f) => !childIds.has(f.id));
+  if (rootFrames.length === content.frames.length) return content;
+
+  function nest(frame: Frame, visited: Set<string>): Frame {
+    visited.add(frame.id);
+    const children = childrenMap.get(frame.id) ?? [];
+    if (children.length === 0) return frame;
+
+    const newSlots: Record<string, SlotValue> = { ...frame.slots };
+    for (const { frame: child } of children) {
+      if (visited.has(child.id)) continue;
+      const nested = nest(child, new Set(visited));
+      let key = nested.type;
+      if (key in newSlots) {
+        let suffix = 2;
+        while (`${key}_${suffix}` in newSlots) suffix++;
+        key = `${key}_${suffix}`;
+      }
+      newSlots[key] = { type: nested.type, slots: nested.slots };
+    }
+    return { ...frame, slots: newSlots };
+  }
+
+  return { frames: rootFrames.map((f) => nest(f, new Set())), relations: [] };
+}
 
 // ── YAML Rendering Helpers ──
 
@@ -88,24 +137,9 @@ function renderSlotLines(
     return;
   }
 
-  // Array
+  // Array — always render as YAML bullet points
   if (Array.isArray(value)) {
     const arr = value as SlotValue[];
-    // Short simple array: inline
-    const allSimple = arr.every((item) => typeof item === 'string' || typeof item === 'number');
-    if (allSimple && arr.length <= 5) {
-      lines.push({
-        text: `${pad}${key}: [${arr.map(formatValue).join(', ')}]`,
-        frameId,
-        slotKey,
-        changeType,
-        isAutoSelected,
-        isEmpty: false,
-      });
-      return;
-    }
-
-    // Multi-line array
     lines.push({
       text: `${pad}${key}:`,
       frameId,
@@ -249,12 +283,14 @@ export function FrameYAMLView() {
     };
   }, [deltaLog, draft.relations, confirmedFrameIds, llmHighlightedFrameIds]);
 
-  // Sort frames by relevance
+  // Nest frames into tree using relations, then sort by relevance
+  const nestedDraft = useMemo(() => nestFrames(draft), [draft]);
+
   const sortedFrames = useMemo(() => {
-    return [...draft.frames].sort(
+    return [...nestedDraft.frames].sort(
       (a, b) => relevanceScore(b, relevanceCtx).score - relevanceScore(a, relevanceCtx).score
     );
-  }, [draft.frames, relevanceCtx]);
+  }, [nestedDraft.frames, relevanceCtx]);
 
   // Build per-line metadata for the YAML display
   // Each YAML line maps to a frame header or a slot line

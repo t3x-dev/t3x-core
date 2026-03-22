@@ -10,7 +10,7 @@
 
 import { eq, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
-import { sentenceVectors } from '../schema-v4';
+import { sentenceVectors } from '../schema-frames';
 
 // ============================================================
 // Types

@@ -23,9 +23,6 @@ const NESTING_RELATIONS = new Set([
   'contrasts',
 ]);
 
-/** Frame types that MUST stay as top-level frames — never nest into other frames */
-const PROTECTED_TYPES = new Set(['constraints', 'preferences', 'open_questions', 'logistics']);
-
 function buildNestedContent(content: SemanticContent): SemanticContent {
   const frameMap = new Map<string, Frame>();
   for (const frame of content.frames) {
@@ -40,9 +37,7 @@ function buildNestedContent(content: SemanticContent): SemanticContent {
     if (!NESTING_RELATIONS.has(rel.type)) continue;
     if (!frameMap.has(rel.from) || !frameMap.has(rel.to)) continue;
 
-    // Protected frame types are never nested as children
     const childFrame = frameMap.get(rel.from);
-    if (childFrame && PROTECTED_TYPES.has(childFrame.type)) continue;
 
     // rel.from elaborates rel.to → rel.from is child of rel.to
     childIds.add(rel.from);

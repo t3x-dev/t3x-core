@@ -324,7 +324,7 @@ export function useConversationChat({
           setStreamingContent('');
         }
 
-        // Save turns to the conversation (non-blocking, with retry)
+        // Save turns then trigger extraction once for the full exchange
         const currentConversationId = conversationIdRef.current;
         if (projectId && currentConversationId) {
           const saveTurns = async (retriesLeft: number): Promise<void> => {
@@ -344,7 +344,6 @@ export function useConversationChat({
               showWarning('Turns not saved — API may be unavailable');
             }
           };
-          // Fire-and-forget: don't block the UI
           saveTurns(1);
         }
       } catch (err) {

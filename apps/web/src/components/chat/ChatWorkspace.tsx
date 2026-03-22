@@ -33,6 +33,8 @@ export function ChatWorkspace({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const firstMessageSentRef = useRef(false);
   const prevTurnsSavedRef = useRef(0);
+  const extractionInFlightRef = useRef<Promise<void> | null>(null);
+  const pendingExtractionRef = useRef(false);
 
   // For "/chat/new" routes: auto-create project + conversation
   const isNewChat = conversationId === 'new';
@@ -161,8 +163,9 @@ export function ChatWorkspace({
 
   const focusIntentEnabled = useExtractionPanelStore((s) => s.focusIntentEnabled);
   const setLlmHighlightedFrameIds = useExtractionPanelStore((s) => s.setLlmHighlightedFrameIds);
+  const isExtracting = useExtractionPanelStore((s) => s.isExtracting);
 
-  // Extract frames after turns are saved
+  // Extract frames after turns are saved — queued to prevent duplicate concurrent extractions
   useEffect(() => {
     const prev = prevTurnsSavedRef.current;
     prevTurnsSavedRef.current = turnsSavedCounter;
@@ -171,30 +174,46 @@ export function ChatWorkspace({
     const convId = resolvedConversationId;
     if (!convId) return;
 
-    const store = useExtractionPanelStore.getState();
-    store.setExtracting(true);
-
-    extractFrames(convId)
-      .then((result) => {
+    const runExtraction = async () => {
+      const store = useExtractionPanelStore.getState();
+      store.setExtracting(true);
+      try {
+        const result = await extractFrames(convId);
         const s = useExtractionPanelStore.getState();
         s.applyDelta(result.delta, 'llm_extraction');
         if (result.snapshot.frames.length > 0 && s.panelMode === 'collapsed') {
           s.setPanelMode('default');
         }
-
         if (focusIntentEnabled && result.snapshot.frames.length > 0) {
           const controller = new AbortController();
           getIntentSummary(result.snapshot.frames, controller.signal)
             .then((intentResult) => setLlmHighlightedFrameIds(intentResult.coreFrameIds))
-            .catch(() => {}); // Silent fallback - degrades to deterministic-only
+            .catch(() => {});
         }
-      })
-      .catch(() => {
+      } catch {
         // Extraction failed silently — non-critical
-      })
-      .finally(() => {
+      } finally {
         useExtractionPanelStore.getState().setExtracting(false);
-      });
+      }
+    };
+
+    // Queue: if extraction is in flight, mark pending and wait
+    if (extractionInFlightRef.current) {
+      pendingExtractionRef.current = true;
+      return;
+    }
+
+    const run = async () => {
+      await runExtraction();
+      // After finishing, check if another extraction was requested while we were running
+      while (pendingExtractionRef.current) {
+        pendingExtractionRef.current = false;
+        await runExtraction();
+      }
+      extractionInFlightRef.current = null;
+    };
+
+    extractionInFlightRef.current = run();
   }, [resolvedConversationId, turnsSavedCounter, focusIntentEnabled, setLlmHighlightedFrameIds]);
 
   // Send firstMessage on mount (once only)
@@ -322,8 +341,8 @@ export function ChatWorkspace({
         <div className="mx-auto max-w-3xl px-4">
           <ChatInput
             onSend={handleSend}
-            disabled={isStreaming || isLoading}
-            placeholder="Message... (Enter to send, Shift+Enter for new line)"
+            disabled={isStreaming || isLoading || isExtracting}
+            placeholder={isExtracting ? "Updating knowledge tree..." : "Message... (Enter to send, Shift+Enter for new line)"}
           />
         </div>
       </div>

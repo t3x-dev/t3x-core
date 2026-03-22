@@ -15,7 +15,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
 
 /**
- * SQL to create the api_keys table (defined in schema-v4.ts but not
+ * SQL to create the api_keys table (defined in schema-frames.ts but not
  * in CREATE_TABLES_SQL used by the test setup).
  */
 const CREATE_API_KEYS_TABLE_SQL = `
