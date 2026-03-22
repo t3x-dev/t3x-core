@@ -13,6 +13,8 @@ import { useSessionStore } from '@/store/sessionStore';
 import { ChatHeader } from './ChatHeader';
 import { ChatInput } from './ChatInput';
 import { ChatMessage } from './ChatMessage';
+import { DriftPopup } from './DriftPopup';
+import { listTopics } from '@/lib/api/topics';
 
 interface ChatWorkspaceProps {
   conversationId: string;
@@ -156,6 +158,21 @@ export function ChatWorkspace({
     }
   }, [conversationId, resolvedConversationId, resolvedProjectId]);
 
+  // Load topics when conversation changes
+  useEffect(() => {
+    if (!resolvedConversationId) return;
+    listTopics(resolvedConversationId)
+      .then((topics) => {
+        const store = useExtractionPanelStore.getState();
+        store.setTopics(topics);
+        if (topics.length > 0 && !store.activeTopicId) {
+          const active = topics.find((t) => t.status === 'active') ?? topics[0];
+          store.setActiveTopicId(active.id);
+        }
+      })
+      .catch(() => {});
+  }, [resolvedConversationId]);
+
   // Auto-scroll to bottom on new messages or streaming content
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -178,7 +195,15 @@ export function ChatWorkspace({
       const store = useExtractionPanelStore.getState();
       store.setExtracting(true);
       try {
-        const result = await extractFrames(convId);
+        const topicId = store.activeTopicId ?? undefined;
+        const result = await extractFrames(convId, undefined, topicId);
+
+        // Check for drift detection before applying delta
+        if (result.status === 'drift_detected' && result.drift_info) {
+          useExtractionPanelStore.getState().setDriftDetected(result.drift_info);
+          return;
+        }
+
         const s = useExtractionPanelStore.getState();
         s.applyDelta(result.delta, 'llm_extraction');
         if (result.snapshot.frames.length > 0 && s.panelMode === 'collapsed') {
@@ -247,13 +272,16 @@ export function ChatWorkspace({
   );
 
   return (
-    <div className={cn('flex flex-col h-full min-h-0', className)}>
+    <div className={cn('relative flex flex-col h-full min-h-0', className)}>
       {/* Header */}
       <ChatHeader
         conversationId={resolvedConversationId ?? null}
         selectedModel={selectedModel}
         onModelChange={handleModelChange}
       />
+
+      {/* Drift detection popup */}
+      <DriftPopup />
 
       {/* Message list */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden">

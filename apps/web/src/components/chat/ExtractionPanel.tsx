@@ -12,6 +12,7 @@ import { CommitDropdown } from './CommitDropdown';
 import { FrameGraphMini } from './FrameGraphMini';
 import { FrameYAMLView } from './FrameYAMLView';
 import { PreviewPanel } from './PreviewPanel';
+import { TopicMap } from './TopicMap';
 
 // ── Panel widths ──
 
@@ -336,7 +337,7 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
           {panelMode === 'default' ? (
             <div className="flex flex-1 flex-col overflow-hidden">
               <div className="flex-1 overflow-hidden">
-                {activeView === 'graph' ? <FrameGraphMini /> : <FrameYAMLView />}
+                {activeView === 'graph' ? <TopicMap /> : <FrameYAMLView />}
               </div>
               <CommitDropdown />
             </div>
@@ -346,7 +347,7 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
               {/* Left: extraction content */}
               <div className="flex flex-1 flex-col overflow-hidden border-r border-[var(--stroke-default)]">
                 <div className="flex-1 overflow-hidden">
-                  {activeView === 'graph' ? <FrameGraphMini /> : <FrameYAMLView />}
+                  {activeView === 'graph' ? <TopicMap /> : <FrameYAMLView />}
                 </div>
                 <CommitDropdown />
               </div>

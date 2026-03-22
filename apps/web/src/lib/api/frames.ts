@@ -13,6 +13,12 @@ export interface FrameExtractResult {
   delta: Delta;
   snapshot: SemanticContent;
   delta_log_id: string;
+  status?: string;
+  drift_info?: {
+    current_topic: string;
+    new_topic: string;
+    confidence: number;
+  };
 }
 
 export interface GateCheckResult {
@@ -58,7 +64,9 @@ export type GateIssue = NonNullable<GateCheckResult['semantic']>['issues'][numbe
 
 export async function extractFrames(
   conversationId: string,
-  turnHashes?: string[]
+  turnHashes?: string[],
+  topicId?: string,
+  forceExtract?: boolean
 ): Promise<FrameExtractResult> {
   const res = await fetchWithTimeout(
     `${API_V1}/extract/frames`,
@@ -68,6 +76,8 @@ export async function extractFrames(
       body: JSON.stringify({
         conversation_id: conversationId,
         ...(turnHashes && { turn_hashes: turnHashes }),
+        ...(topicId && { topic_id: topicId }),
+        ...(forceExtract && { force_extract: forceExtract }),
       }),
     },
     60_000

@@ -9,6 +9,7 @@ import type {
 import { create } from 'zustand';
 import { createCommit, listCommits } from '@/lib/api/commits';
 import { createDelta } from '@/lib/api/frames';
+import type { Topic } from '@/lib/api/topics';
 
 // Debounce helper for hover interactions — prevents rapid-fire re-renders
 // when mouse sweeps across YAML rows
@@ -48,6 +49,20 @@ interface ExtractionPanelState {
   hydrateDeltaLog: (entries: DeltaLogEntry[]) => void;
   conversationId: string | null;
   setConversationId: (id: string | null) => void;
+
+  // Topic state
+  topics: Topic[];
+  activeTopicId: string | null;
+  // Drift state
+  driftDetected: boolean;
+  driftInfo: { current_topic: string; new_topic: string; confidence: number } | null;
+  // Topic actions
+  setTopics: (topics: Topic[]) => void;
+  setActiveTopicId: (topicId: string | null) => void;
+  addTopic: (topic: Topic) => void;
+  // Drift actions
+  setDriftDetected: (info: { current_topic: string; new_topic: string; confidence: number }) => void;
+  clearDrift: () => void;
 
   // Hover linking between YAML ↔ chat messages
   hoveredFrameId: string | null; // YAML row hovered → highlight source turn
@@ -91,6 +106,10 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
   lastDeltaChanges: [],
   removedFrames: [],
   conversationId: null,
+  topics: [],
+  activeTopicId: null,
+  driftDetected: false,
+  driftInfo: null,
   hoveredFrameId: null,
   hoveredSlotKey: null,
   hoveredTurnHash: null,
@@ -227,6 +246,11 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
     set({ llmHighlightedFrameIds: Object.fromEntries(ids.map((id) => [id, true])) }),
   hydrateDeltaLog: (entries) => set({ deltaLog: entries }),
   setConversationId: (id) => set({ conversationId: id }),
+  setTopics: (topics) => set({ topics }),
+  setActiveTopicId: (topicId) => set({ activeTopicId: topicId }),
+  addTopic: (topic) => set((state) => ({ topics: [...state.topics, topic] })),
+  setDriftDetected: (info) => set({ driftDetected: true, driftInfo: info }),
+  clearDrift: () => set({ driftDetected: false, driftInfo: null }),
   setHoveredFrameId: (id, slotKey) => {
     if (hoverFrameTimer) clearTimeout(hoverFrameTimer);
     if (id === null) {
