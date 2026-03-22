@@ -112,6 +112,8 @@ export function ChatWorkspace({
 
   // Track whether inheritance hydration has been done (prevents re-hydration loop)
   const inheritedRef = useRef(false);
+  // Lock conversation input after a commit has been made from it
+  const [isConversationCommitted, setIsConversationCommitted] = useState(false);
 
   // Sync active conversation + session into stores; load existing draft
   useEffect(() => {
@@ -199,6 +201,10 @@ export function ChatWorkspace({
           }
           if (deltas && deltas.length > 0) {
             store.hydrateDeltaLog(deltas);
+            // Lock input if a commit was made from this conversation
+            if (deltas.some((d: { source?: string }) => d.source === 'commit_marker')) {
+              setIsConversationCommitted(true);
+            }
           }
           if (topicsList && topicsList.length > 0) {
             store.setTopics(topicsList);
@@ -464,8 +470,10 @@ export function ChatWorkspace({
         <div className="mx-auto max-w-3xl px-4">
           <ChatInput
             onSend={handleSend}
-            disabled={isStreaming || isLoading || isExtracting}
-            placeholder="Message... (Enter to send, Shift+Enter for new line)"
+            disabled={isStreaming || isLoading || isExtracting || isConversationCommitted}
+            placeholder={isConversationCommitted
+              ? "This conversation is locked — a commit was made from it"
+              : "Message... (Enter to send, Shift+Enter for new line)"}
           />
         </div>
       </div>
