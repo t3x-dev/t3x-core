@@ -112,6 +112,7 @@ export {
 export {
   type CreateTopicInput,
   createTopic,
+  deleteTopic,
   getTopicById,
   listTopicsByConversation,
   updateTopic,

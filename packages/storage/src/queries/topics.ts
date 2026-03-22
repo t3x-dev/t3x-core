@@ -56,3 +56,11 @@ export async function getTopicById(
   const [result] = await db.select().from(topics).where(eq(topics.id, topicId));
   return result;
 }
+
+export async function deleteTopic(
+  db: AnyDB,
+  topicId: string
+): Promise<TopicRecord | undefined> {
+  const [result] = await db.delete(topics).where(eq(topics.id, topicId)).returning();
+  return result;
+}

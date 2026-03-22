@@ -54,3 +54,11 @@ export async function updateTopicApi(
   );
   return handleResponse<Topic>(res);
 }
+
+export async function deleteTopicApi(topicId: string): Promise<void> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/topics/${encodeURIComponent(topicId)}`,
+    { method: 'DELETE' }
+  );
+  await handleResponse<null>(res);
+}

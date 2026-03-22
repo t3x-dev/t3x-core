@@ -108,7 +108,6 @@ export function ChatWorkspace({
   useEffect(() => {
     const convId = resolvedConversationId ?? conversationId;
     useChatStore.getState().setActiveConversation(convId, resolvedProjectId || null);
-    useExtractionPanelStore.getState().resetDraft();
     useExtractionPanelStore.getState().setConversationId(convId === 'new' ? null : convId);
     if (resolvedProjectId) {
       useSessionStore.getState().setLastSession(resolvedProjectId, convId);
@@ -140,36 +139,35 @@ export function ChatWorkspace({
     // Draft loading moved to activeTopicId effect below
   }, [conversationId, resolvedConversationId, resolvedProjectId]);
 
-  // Load topics when conversation changes
-  useEffect(() => {
-    if (!resolvedConversationId) return;
-    listTopics(resolvedConversationId)
-      .then((topics) => {
-        const store = useExtractionPanelStore.getState();
-        store.setTopics(topics);
-        if (topics.length > 0 && !store.activeTopicId) {
-          const active = topics.find((t) => t.status === 'active') ?? topics[0];
-          store.setActiveTopicId(active.id);
-        }
-      })
-      .catch(() => {});
-  }, [resolvedConversationId]);
-
-  // Load draft + deltas for ALL topics (combined YAML view)
+  // Load topics + draft + deltas when conversation changes
   const activeTopicId = useExtractionPanelStore((s) => s.activeTopicId);
   useEffect(() => {
     const convId = resolvedConversationId;
     if (!convId || convId === 'new') return;
+
+    // Load everything in parallel
     Promise.all([
+      listTopics(convId),
       getSemanticDraft(convId),
       listDeltas(convId),
     ])
-      .then(([draft, deltas]) => {
+      .then(([topics, draft, deltas]) => {
         const store = useExtractionPanelStore.getState();
+
+        // Set topics
+        store.setTopics(topics ?? []);
+        if (topics && topics.length > 0 && !store.activeTopicId) {
+          const active = topics.find((t: any) => t.status === 'active') ?? topics[0];
+          store.setActiveTopicId(active.id);
+        }
+
+        // Set draft
         store.setDraft(draft ?? { frames: [], relations: [] });
         if (draft && draft.frames.length > 0 && store.panelMode === 'collapsed') {
           store.setPanelMode('default');
         }
+
+        // Set delta log
         store.hydrateDeltaLog(deltas ?? []);
       })
       .catch(() => {});

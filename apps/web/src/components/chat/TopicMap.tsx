@@ -1,8 +1,8 @@
 'use client';
 
-import { FileText, FolderOpen, Plus } from 'lucide-react';
+import { FileText, FolderOpen, Plus, X } from 'lucide-react';
 import { useCallback } from 'react';
-import { createTopicApi } from '@/lib/api/topics';
+import { createTopicApi, deleteTopicApi } from '@/lib/api/topics';
 import { cn } from '@/lib/utils';
 import { useExtractionPanelStore } from '@/store/extractionPanelStore';
 
@@ -10,15 +10,42 @@ export function TopicMap() {
   const topics = useExtractionPanelStore((s) => s.topics);
   const activeTopicId = useExtractionPanelStore((s) => s.activeTopicId);
   const setActiveTopicId = useExtractionPanelStore((s) => s.setActiveTopicId);
+  const setTopics = useExtractionPanelStore((s) => s.setTopics);
   const addTopic = useExtractionPanelStore((s) => s.addTopic);
+  const draft = useExtractionPanelStore((s) => s.draft);
   const conversationId = useExtractionPanelStore((s) => s.conversationId);
   const projectId = useExtractionPanelStore((s) => s.projectId);
 
   const handleClickTopic = useCallback(
-    (topicId: string) => {
+    (topicId: string, topicName: string) => {
       setActiveTopicId(topicId);
+
+      // Scroll YAML to the root frame matching this topic name
+      // Find frame whose type matches the topic name
+      const rootFrame = draft.frames.find((f) => f.type === topicName);
+      if (rootFrame) {
+        const el = document.querySelector(`[data-frame-id="${rootFrame.id}"]`);
+        el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
     },
-    [setActiveTopicId]
+    [setActiveTopicId, draft.frames]
+  );
+
+  const handleDeleteTopic = useCallback(
+    async (e: React.MouseEvent, topicId: string) => {
+      e.stopPropagation();
+      try {
+        await deleteTopicApi(topicId);
+        setTopics(topics.filter((t) => t.id !== topicId));
+        if (activeTopicId === topicId) {
+          const remaining = topics.filter((t) => t.id !== topicId);
+          setActiveTopicId(remaining.length > 0 ? remaining[0].id : null);
+        }
+      } catch {
+        // Failed to delete
+      }
+    },
+    [topics, activeTopicId, setTopics, setActiveTopicId]
   );
 
   const handleNewTopic = useCallback(async () => {
@@ -34,7 +61,7 @@ export function TopicMap() {
 
   if (topics.length === 0) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-3 p-4">
+      <div className="flex flex-col items-center justify-center gap-2 py-4 px-4">
         <p className="text-xs text-[var(--text-tertiary)]">No topics yet</p>
         <p className="text-xs text-[var(--text-tertiary)]">Start chatting to create your first topic tree</p>
       </div>
@@ -51,30 +78,32 @@ export function TopicMap() {
       </div>
 
       {topics.map((topic) => (
-        <button
+        <div
           key={topic.id}
-          type="button"
-          onClick={() => handleClickTopic(topic.id)}
           className={cn(
-            'flex items-center gap-2 rounded px-2 py-1.5 text-left transition-colors w-full',
+            'group flex items-center gap-2 rounded px-2 py-1.5 text-left transition-colors w-full cursor-pointer',
             topic.id === activeTopicId
               ? 'bg-[var(--accent-commit)]/10 text-[var(--accent-commit)]'
-              : topic.status === 'collapsed'
-                ? 'text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)]'
-                : 'text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]'
+              : 'text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]'
           )}
+          onClick={() => handleClickTopic(topic.id, topic.name)}
         >
           <FileText className={cn(
             'h-3.5 w-3.5 shrink-0',
             topic.id === activeTopicId ? 'text-[var(--accent-commit)]' : 'text-[var(--text-tertiary)]'
           )} />
-          <span className="text-xs truncate">
+          <span className="text-xs truncate flex-1">
             {topic.name.replace(/_/g, ' ')}
           </span>
-          {topic.status === 'collapsed' && (
-            <span className="text-[9px] text-[var(--text-tertiary)] ml-auto shrink-0">collapsed</span>
-          )}
-        </button>
+          <button
+            type="button"
+            onClick={(e) => handleDeleteTopic(e, topic.id)}
+            className="opacity-0 group-hover:opacity-100 shrink-0 rounded p-0.5 text-[var(--text-tertiary)] hover:text-red-400 hover:bg-red-400/10 transition-all"
+            title="Remove topic"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </div>
       ))}
 
       <button

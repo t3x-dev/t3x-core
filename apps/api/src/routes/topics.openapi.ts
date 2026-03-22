@@ -1,6 +1,7 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
   createTopic,
+  deleteTopic,
   listTopicsByConversation,
   updateTopic,
 } from '@t3x-dev/storage';
@@ -143,4 +144,29 @@ topicRoutes.openapi(updateTopicRoute, async (c) => {
       created_at: result.createdAt.toISOString(),
     },
   });
+});
+
+// Delete topic
+const deleteTopicRoute = createRoute({
+  method: 'delete',
+  path: '/v1/topics/{topic_id}',
+  tags: ['Topics'],
+  summary: 'Delete a topic',
+  request: {
+    params: z.object({ topic_id: z.string() }),
+  },
+  responses: {
+    200: {
+      content: { 'application/json': { schema: z.object({ success: z.literal(true), data: z.null() }) } },
+      description: 'Topic deleted',
+    },
+  },
+});
+
+topicRoutes.openapi(deleteTopicRoute, async (c) => {
+  const db = await getDB();
+  const topicId = c.req.param('topic_id');
+  const result = await deleteTopic(db, topicId);
+  if (!result) return errorResponse(c, 'NOT_FOUND', 'Topic not found');
+  return c.json({ success: true as const, data: null });
 });

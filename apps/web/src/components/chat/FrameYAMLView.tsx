@@ -444,6 +444,7 @@ export function FrameYAMLView() {
             return (
               <div
                 key={i}
+                data-frame-id={isFrameLine ? line.frameId : undefined}
                 onMouseEnter={() => setHoveredFrameId(line.frameId, line.slotKey)}
                 onMouseLeave={() => setHoveredFrameId(null)}
                 style={{
