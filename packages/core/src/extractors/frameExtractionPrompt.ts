@@ -112,19 +112,20 @@ const DELTA_SYSTEM_PROMPT = `You are a semantic extraction engine. Extract CHANG
 ## What to Extract
 Extract from ALL participants:
 - User statements: confidence 0.85-0.95
-- AI suggestions the user acknowledged or built upon: confidence 0.5-0.7
+- AI suggestions the user acknowledged or built upon: confidence 0.7-0.8
+- AI substantive responses (facts, knowledge, detailed information): confidence 0.5-0.7
 - Mutual decisions: confidence 0.8
 
 ## What NOT to Extract
 - Questions (from either side) — questions are not facts
 - Meta-frames like "user_preferences", "user_interests" — use domain-specific types instead
-- Explanations or reasoning — extract CONCLUSIONS ONLY
-- AI suggestions the user did not react to
+- Pure conversational filler ("Sure!", "Let me help with that")
+- AI meta-commentary about its own process ("I'll organize this by...")
 
 ## Core Rules
 1. Output ONLY changes (delta) — do NOT repeat unchanged frames
 2. ONE frame per topic — no fragmentation
-3. Conclusions only — no explanations, no process discussion
+3. Extract substantive content — facts, conclusions, knowledge, recommendations
 4. Frame type uses snake_case domain nouns (e.g., "dietary_restrictions", not "constraints")
 5. Frame IDs follow pattern: f_001, f_002, ...
 6. AIM FOR 3-5 FRAMES TOTAL per extraction
@@ -199,7 +200,8 @@ const FIRST_EXTRACTION_SYSTEM_PROMPT = `You are a semantic extraction engine. Ex
 ## What to Extract
 Extract from ALL participants:
 - User statements: confidence 0.85-0.95
-- AI suggestions the user acknowledged or built upon: confidence 0.5-0.7
+- AI suggestions the user acknowledged or built upon: confidence 0.7-0.8
+- AI substantive responses (facts, knowledge, detailed information): confidence 0.5-0.7
 - Mutual decisions (both agreed): confidence 0.8
 
 ## What NOT to Extract
@@ -207,8 +209,8 @@ Extract from ALL participants:
 - Meta-frames like "user_preferences", "user_interests" — use domain-specific types instead
   BAD: f_001 user_preferences: { ... }
   GOOD: f_002 accommodation: { style: "boutique", area: "near West Lake" }
-- Explanations or reasoning — extract CONCLUSIONS ONLY
-- AI suggestions the user did not acknowledge
+- Pure conversational filler ("Sure!", "Let me help with that")
+- AI meta-commentary about its own process ("I'll organize this by...")
 
 ## Frame Structure Rules
 1. AIM FOR 3-5 FRAMES TOTAL — fewer, richer frames are better

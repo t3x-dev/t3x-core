@@ -118,6 +118,7 @@ function CanvasWorkspaceInner({
     onEdgesChange,
     onConnect,
     addPendingCommitFromCommit,
+    addConversationFromCommit,
     saveConversationConstraints,
     getPendingCommitEffectiveConstraints,
     updatePendingCommitConstraintOverrides,
@@ -246,12 +247,25 @@ function CanvasWorkspaceInner({
           key: 'add-unit',
           label: 'Create Unit',
           icon: <GitCommit size={14} />,
-          onClick: () => addPendingCommitFromCommit(modalNode.id),
+          onClick: async () => {
+            await addConversationFromCommit(modalNode.id);
+            // Find the newly created node (last node with staging status)
+            const nodes = useCanvasStore.getState().nodes;
+            const newNode = nodes.find(
+              (n) =>
+                n.data.kind === 'unit' &&
+                n.data.commitStatus === 'staging' &&
+                n.data.sourceCommitHash === modalNode.data.commitHash
+            );
+            if (newNode?.data.conversationId) {
+              router.push(`/chat/${newNode.data.conversationId}`);
+            }
+          },
         },
       ];
     }
     return undefined;
-  }, [modalNode, addPendingCommitFromCommit]);
+  }, [modalNode, addConversationFromCommit, router]);
 
   // Keyboard shortcuts (extracted hook)
   useCanvasKeyboardShortcuts({
@@ -348,15 +362,6 @@ function CanvasWorkspaceInner({
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
           onNodeClick={(_, node) => {
-            setHighlight((current) => {
-              // If clicking the same node, clear highlight
-              if (current?.mode === 'node' && current.nodeId === node.id) {
-                return null;
-              }
-              return { mode: 'node', nodeId: node.id };
-            });
-          }}
-          onNodeDoubleClick={(_, node) => {
             const data = node.data as import('@/types/nodes').CanvasNodeData;
             // Leaf nodes -> navigate to leaf detail page
             if (data.kind === 'leaf' && data.leafId && projectId) {
@@ -378,6 +383,7 @@ function CanvasWorkspaceInner({
               router.push(`/chat/${data.conversationId}`);
               return;
             }
+            // Staging units -> open modal
             openNodeModal(node.id, 'commit');
           }}
           onNodeContextMenu={handleNodeContextMenu}

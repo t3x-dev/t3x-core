@@ -1,9 +1,10 @@
 'use client';
 
 import { useParams, useSearchParams } from 'next/navigation';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChatWorkspace } from '@/components/chat/ChatWorkspace';
 import { ExtractionPanel } from '@/components/chat/ExtractionPanel';
+import { getConversation } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { useChatStore } from '@/store/chatStore';
 import { useExtractionPanelStore } from '@/store/extractionPanelStore';
@@ -14,6 +15,20 @@ export default function ConversationPage() {
   const firstMessage = searchParams.get('firstMessage');
   const activeProjectId = useChatStore((s) => s.activeProjectId);
   const panelMode = useExtractionPanelStore((s) => s.panelMode);
+
+  // Fetch parent commit hash for inheritance (when navigating from canvas "Create Unit")
+  const [inheritFromCommitHash, setInheritFromCommitHash] = useState<string | undefined>();
+  useEffect(() => {
+    if (conversationId && conversationId !== 'new') {
+      getConversation(conversationId)
+        .then((conv) => {
+          if (conv?.parent_commit_hash) {
+            setInheritFromCommitHash(conv.parent_commit_hash);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [conversationId]);
 
   // Resizable panel via drag handle
   const [panelWidth, setPanelWidth] = useState(320);
@@ -71,6 +86,8 @@ export default function ConversationPage() {
         projectId={activeProjectId ?? undefined}
         firstMessage={firstMessage ?? undefined}
         className="flex-1 min-w-0"
+        inheritFromCommitHash={inheritFromCommitHash}
+        onInheritComplete={() => setInheritFromCommitHash(undefined)}
       />
 
       {/* Drag handle (only when panel is expanded) */}

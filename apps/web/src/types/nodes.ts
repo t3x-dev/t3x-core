@@ -465,6 +465,8 @@ export interface CanvasNodeData {
   sourceUnitId?: string;
   // Source commit hash (parent commit for new commits)
   sourceCommitHash?: string;
+  // Parent commit hash to inherit frames from (cleared after hydration)
+  inheritFromCommitHash?: string;
   sourceTurnWindow?: {
     start_turn_hash: string;
     end_turn_hash: string;
