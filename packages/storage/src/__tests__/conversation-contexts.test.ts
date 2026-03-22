@@ -22,7 +22,7 @@ import {
 } from '../queries/conversation-contexts';
 import { insertConversation } from '../queries/conversations';
 import { insertProject } from '../queries/projects';
-import { conversationContexts } from '../schema-v4';
+import { conversationContexts } from '../schema-frames';
 import { createTestDB, testData } from './setup';
 
 describe('Conversation Contexts Storage', () => {

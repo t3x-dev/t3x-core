@@ -1,11 +1,71 @@
 'use client';
 
-import type { Frame, SlotValue } from '@t3x-dev/core';
+import type { Frame, Relation, SemanticContent, SlotValue } from '@t3x-dev/core';
 import { Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { parseDisplayYAML, toDisplayYAML } from '@/lib/liteYaml';
 import { RELEVANCE_THRESHOLD, type RelevanceContext, relevanceScore } from '@/lib/relevanceScore';
 import { useExtractionPanelStore } from '@/store/extractionPanelStore';
+
+// ── Client-side nesting from relations ──
+
+const NESTING_RELATIONS = new Set(['elaborates', 'conditions', 'depends', 'follows', 'causes', 'contrasts']);
+
+/**
+ * Build nested tree from flat frames + relations (client-side mirror of nesterAgent).
+ * Children become InlineFrame slot values in their parent.
+ */
+function nestFrames(content: SemanticContent): Frame[] {
+  if (content.relations.length === 0 || content.frames.length <= 1) {
+    return content.frames;
+  }
+
+  const frameMap = new Map<string, Frame>();
+  for (const frame of content.frames) {
+    frameMap.set(frame.id, frame);
+  }
+
+  const childrenMap = new Map<string, Array<{ frame: Frame; relationType: string }>>();
+  const childIds = new Set<string>();
+
+  for (const rel of content.relations) {
+    if (!NESTING_RELATIONS.has(rel.type)) continue;
+    if (!frameMap.has(rel.from) || !frameMap.has(rel.to)) continue;
+
+    const childFrame = frameMap.get(rel.from);
+    childIds.add(rel.from);
+    const children = childrenMap.get(rel.to) ?? [];
+    if (childFrame) {
+      children.push({ frame: childFrame, relationType: rel.type });
+      childrenMap.set(rel.to, children);
+    }
+  }
+
+  const rootFrames = content.frames.filter((f) => !childIds.has(f.id));
+  if (rootFrames.length === content.frames.length) return content.frames;
+
+  function nest(frame: Frame, visited: Set<string>): Frame {
+    visited.add(frame.id);
+    const children = childrenMap.get(frame.id) ?? [];
+    if (children.length === 0) return frame;
+
+    const newSlots: Record<string, SlotValue> = { ...frame.slots };
+    for (const { frame: childFrame } of children) {
+      if (visited.has(childFrame.id)) continue;
+      const nested = nest(childFrame, new Set(visited));
+      let slotKey = nested.type;
+      if (slotKey in newSlots) {
+        let suffix = 2;
+        while (`${slotKey}_${suffix}` in newSlots) suffix++;
+        slotKey = `${slotKey}_${suffix}`;
+      }
+      newSlots[slotKey] = { type: nested.type, slots: nested.slots };
+    }
+    return { ...frame, slots: newSlots };
+  }
+
+  return rootFrames.map((f) => nest(f, new Set()));
+}
 
 // ── YAML Rendering Helpers ──
 
@@ -90,24 +150,9 @@ function renderSlotLines(
     return;
   }
 
-  // Array
+  // Array — always use bullet points
   if (Array.isArray(value)) {
     const arr = value as SlotValue[];
-    // Short simple array: inline
-    const allSimple = arr.every((item) => typeof item === 'string' || typeof item === 'number');
-    if (allSimple && arr.length <= 5) {
-      lines.push({
-        text: `${pad}${key}: [${arr.map(formatValue).join(', ')}]`,
-        frameId,
-        slotKey,
-        changeType,
-        isAutoSelected,
-        isEmpty: false,
-      });
-      return;
-    }
-
-    // Multi-line array
     lines.push({
       text: `${pad}${key}:`,
       frameId,
@@ -253,12 +298,14 @@ export function FrameYAMLView() {
     };
   }, [deltaLog, draft.relations, confirmedFrameIds, llmHighlightedFrameIds]);
 
-  // Sort frames by relevance
+  // Apply client-side nesting from relations, then sort by relevance
+  const nestedFrames = useMemo(() => nestFrames(draft), [draft]);
+
   const sortedFrames = useMemo(() => {
-    return [...draft.frames].sort(
+    return [...nestedFrames].sort(
       (a, b) => relevanceScore(b, relevanceCtx).score - relevanceScore(a, relevanceCtx).score
     );
-  }, [draft.frames, relevanceCtx]);
+  }, [nestedFrames, relevanceCtx]);
 
   // Build per-line metadata for the YAML display
   // Each YAML line maps to a frame header or a slot line
@@ -443,6 +490,7 @@ export function FrameYAMLView() {
             return (
               <div
                 key={i}
+                data-frame-id={isFrameLine ? line.frameId : undefined}
                 onMouseEnter={() => setHoveredFrameId(line.frameId, line.slotKey)}
                 onMouseLeave={() => setHoveredFrameId(null)}
                 title={

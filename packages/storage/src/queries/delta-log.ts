@@ -5,9 +5,9 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { asc, eq } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
-import { type DeltaLogInsert, type DeltaLogRecord, deltaLog } from '../schema-v4';
+import { type DeltaLogInsert, type DeltaLogRecord, deltaLog } from '../schema-frames';
 
 // ============================================================
 // Types
@@ -27,6 +27,8 @@ export interface InsertDeltaLogInput {
   gateResultJson?: unknown;
   /** V2: extensible metadata */
   metadata?: unknown;
+  /** Topic ID for multi-topic conversations */
+  topicId?: string;
 }
 
 // ============================================================
@@ -52,6 +54,7 @@ export async function insertDeltaLogEntry(
     pipelineState: input.pipelineState ?? null,
     gateResultJson: input.gateResultJson ?? null,
     metadata: input.metadata ?? null,
+    topicId: input.topicId ?? null,
   };
 
   const [result] = await db.insert(deltaLog).values(row).returning();
@@ -89,4 +92,19 @@ export async function deleteDeltaLogEntry(
 ): Promise<DeltaLogRecord | undefined> {
   const [result] = await db.delete(deltaLog).where(eq(deltaLog.id, id)).returning();
   return result;
+}
+
+/**
+ * List delta log entries filtered by conversation AND topic.
+ */
+export async function listDeltaLogByTopic(
+  db: AnyDB,
+  conversationId: string,
+  topicId: string
+): Promise<DeltaLogRecord[]> {
+  return db
+    .select()
+    .from(deltaLog)
+    .where(and(eq(deltaLog.conversationId, conversationId), eq(deltaLog.topicId, topicId)))
+    .orderBy(asc(deltaLog.createdAt));
 }

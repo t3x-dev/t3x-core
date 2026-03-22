@@ -26,7 +26,7 @@ import {
   updatePinAssertions,
 } from '../queries/pins';
 import { insertProject } from '../queries/projects';
-import { pins } from '../schema-v4';
+import { pins } from '../schema-frames';
 import { createTestDB, testData } from './setup';
 
 describe('Pins Storage', () => {

@@ -27,10 +27,13 @@ import {
   type SlotQuotesMap,
 } from '@t3x-dev/core';
 import {
+  createTopic,
   findConversationById,
   findTurnsByConversation,
   insertDeltaLogEntry,
   listDeltaLogByConversation,
+  listDeltaLogByTopic,
+  listTopicsByConversation,
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { toDeltaLogEntries } from '../lib/delta-log-utils';
@@ -58,6 +61,8 @@ const FrameExtractRequest = z.object({
   conversation_id: z.string().min(1),
   turn_hashes: z.array(z.string().min(1)).optional(),
   drift_decision: DriftDecisionSchema.optional(),
+  topic_id: z.string().optional(),
+  force_extract: z.boolean().optional(),
 });
 
 const DeltaResponseSchema = z.object({
@@ -134,7 +139,7 @@ const extractFramesRoute = createRoute({
 // ============================================================
 
 frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
-  const { conversation_id, turn_hashes, drift_decision } = c.req.valid('json');
+  const { conversation_id, turn_hashes, drift_decision, topic_id, force_extract } = c.req.valid('json');
 
   try {
     const db = await getDB();
@@ -173,7 +178,10 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
     }
 
     // 3. Fetch existing delta log and build current snapshot
-    const deltaRecords = await listDeltaLogByConversation(db, conversation_id);
+    // When topic_id is provided, only load deltas for that topic
+    const deltaRecords = topic_id
+      ? await listDeltaLogByTopic(db, conversation_id, topic_id)
+      : await listDeltaLogByConversation(db, conversation_id);
     const currentSnapshot = buildDraft(toDeltaLogEntries(deltaRecords));
 
     // 4. Convert turns to FrameExtractionTurn format (include turn_hash for source tracking)
@@ -197,7 +205,7 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
     // Returns 'skipped' early only for ReadinessGate failures (content quality).
     // SessionStateManager 'wait'/'skip' are logged but do NOT block — the caller
     // explicitly requested extraction and we respect that intent.
-    if (!drift_decision) {
+    if (!drift_decision && !force_extract) {
       const sessionCtx = computeSessionContext(
         deltaRecords.map((d) => d.source),
         processedTurnCount ?? 0,
@@ -215,7 +223,7 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
     }
 
     // ── Step 2: ReadinessGate ──
-    if (!drift_decision) {
+    if (!drift_decision && !force_extract) {
       const isFirstExtraction = currentSnapshot.frames.length === 0;
       const readiness = checkReadiness(
         selectedTurns.map((t) => ({ role: t.role, content: t.content })),
@@ -497,7 +505,39 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
       // Ambiguity detection failure → continue without questions
     }
 
-    // 7. Insert delta into delta log
+    // 7. Auto-create topic on first extraction if none exists
+    let resolvedTopicId = topic_id;
+    if (!resolvedTopicId) {
+      const existingTopics = await listTopicsByConversation(db, conversation_id);
+      if (existingTopics.length === 0 && organizedSnapshot.frames.length > 0) {
+        const rootFrame = organizedSnapshot.frames[0];
+        const newTopic = await createTopic(db, {
+          conversationId: conversation_id,
+          projectId: conversation.projectId,
+          name: rootFrame.type,
+        });
+        resolvedTopicId = newTopic.id;
+      } else if (existingTopics.length === 1) {
+        resolvedTopicId = existingTopics[0].id;
+      }
+    }
+
+    // 7b. Check for drift_detected in extraction result
+    const extractionDelta = result.delta as { drift_detected?: boolean; changes: unknown[] };
+    if (extractionDelta.drift_detected && extractionDelta.changes.length === 0) {
+      return c.json({
+        success: true as const,
+        data: {
+          status: 'drift_detected' as const,
+          drift: {
+            old_topic: currentSnapshot.frames[0]?.type,
+          },
+          choices: ['keep_old', 'keep_new', 'keep_both_separate', 'keep_both_together'],
+        },
+      }, 200);
+    }
+
+    // 7c. Insert delta into delta log
     const record = await insertDeltaLogEntry(db, {
       conversationId: conversation_id,
       projectId: conversation.projectId,
@@ -505,6 +545,7 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
       delta: result.delta,
       pipelineState: 'completed',
       gateResultJson: gateResult ?? null,
+      topicId: resolvedTopicId,
     });
 
     // 8. Return delta + updated snapshot + delta_log_id

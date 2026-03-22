@@ -9,6 +9,7 @@ import type {
 import { create } from 'zustand';
 import { createCommit, listCommits } from '@/lib/api/commits';
 import { createDelta } from '@/lib/api/frames';
+import type { Topic } from '@/lib/api/topics';
 
 // Debounce helper for hover interactions — prevents rapid-fire re-renders
 // when mouse sweeps across YAML rows
@@ -64,6 +65,13 @@ interface ExtractionPanelState {
   advisoryQuestions: Array<{ id: string; type: string; frameId: string; slotKey?: string; question: string; currentValue?: unknown }>;
   setAdvisoryQuestions: (questions: Array<{ id: string; type: string; frameId: string; slotKey?: string; question: string; currentValue?: unknown }>) => void;
 
+  // Topics (multi-topic conversations)
+  topics: Topic[];
+  activeTopicId: string | null;
+  setTopics: (topics: Topic[]) => void;
+  setActiveTopicId: (id: string | null) => void;
+  addTopic: (topic: Topic) => void;
+
   // Hover linking between YAML ↔ chat messages
   hoveredFrameId: string | null; // YAML row hovered → highlight source turn
   hoveredSlotKey: string | null; // Specific slot hovered (for character-level highlight)
@@ -111,6 +119,8 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
   driftInfo: null,
   driftChoices: [],
   advisoryQuestions: [],
+  topics: [],
+  activeTopicId: null,
   hoveredFrameId: null,
   hoveredSlotKey: null,
   hoveredTurnHash: null,
@@ -247,6 +257,9 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
   setDriftDetected: (info, choices) => set({ driftDetected: true, driftInfo: info, driftChoices: choices }),
   clearDrift: () => set({ driftDetected: false, driftInfo: null, driftChoices: [] }),
   setAdvisoryQuestions: (questions) => set({ advisoryQuestions: questions }),
+  setTopics: (topics) => set({ topics }),
+  setActiveTopicId: (id) => set({ activeTopicId: id }),
+  addTopic: (topic) => set((s) => ({ topics: [...s.topics, topic] })),
   setLlmHighlightedFrameIds: (ids) =>
     set({ llmHighlightedFrameIds: Object.fromEntries(ids.map((id) => [id, true])) }),
   hydrateDeltaLog: (entries) => set({ deltaLog: entries }),

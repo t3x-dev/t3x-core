@@ -1062,6 +1062,9 @@ export const deltaLog = pgTable(
 
     /** Extensible metadata */
     metadata: jsonb('metadata'),
+
+    /** Topic ID for multi-topic conversations */
+    topicId: text('topic_id'),
   },
   (table) => ({
     convIdx: index('idx_delta_log_conv').on(table.conversationId, table.createdAt),
@@ -1071,6 +1074,50 @@ export const deltaLog = pgTable(
 
 export type DeltaLogRecord = typeof deltaLog.$inferSelect;
 export type DeltaLogInsert = typeof deltaLog.$inferInsert;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Topics: Multi-topic Conversations
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Tracks distinct topics within a conversation.
+ *
+ * Each extraction can target a specific topic. The topic name
+ * is auto-synced to the root frame type during extraction.
+ */
+export const topics = pgTable(
+  'topics',
+  {
+    /** Unique ID: "topic_" + nanoid(12) */
+    id: text('id').primaryKey(),
+
+    /** Conversation this topic belongs to */
+    conversationId: text('conversation_id')
+      .notNull()
+      .references(() => conversations.conversationId, { onDelete: 'cascade' }),
+
+    /** Project for easy querying */
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.projectId, { onDelete: 'cascade' }),
+
+    /** Topic display name (synced to root frame type) */
+    name: text('name').notNull(),
+
+    /** Status: active, archived */
+    status: text('status').notNull().default('active'),
+
+    /** When this topic was created */
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    convIdx: index('idx_topics_conv').on(table.conversationId),
+    projectIdx: index('idx_topics_project').on(table.projectId),
+  })
+);
+
+export type TopicRecord = typeof topics.$inferSelect;
+export type TopicInsert = typeof topics.$inferInsert;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Sentence Relations (Inter-sentence Relations)

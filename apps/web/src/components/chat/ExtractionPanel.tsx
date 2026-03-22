@@ -9,10 +9,10 @@ import { framesToSentences } from '@/lib/framesToSentences';
 import { cn } from '@/lib/utils';
 import { useExtractionPanelStore } from '@/store/extractionPanelStore';
 import { CommitDropdown } from './CommitDropdown';
-import { FrameGraphMini } from './FrameGraphMini';
 import { AdvisoryPanel } from './AdvisoryPanel';
 import { FrameYAMLView } from './FrameYAMLView';
 import { PreviewPanel } from './PreviewPanel';
+import { TopicMap } from './TopicMap';
 
 // ── Panel widths ──
 
@@ -63,35 +63,7 @@ function CollapsedRail({
   );
 }
 
-// ── View toggle tabs ──
 
-function ViewTabs({
-  activeView,
-  onChangeView,
-}: {
-  activeView: 'graph' | 'yaml';
-  onChangeView: (v: 'graph' | 'yaml') => void;
-}) {
-  return (
-    <div className="flex border-b border-[var(--stroke-default)]">
-      {(['graph', 'yaml'] as const).map((view) => (
-        <button
-          key={view}
-          type="button"
-          onClick={() => onChangeView(view)}
-          className={cn(
-            'flex-1 py-2 text-xs font-medium capitalize transition-colors',
-            activeView === view
-              ? 'border-b-2 border-[var(--accent-commit)] text-[var(--text-primary)]'
-              : 'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]'
-          )}
-        >
-          {view}
-        </button>
-      ))}
-    </div>
-  );
-}
 
 // ── Commit preview section ──
 
@@ -219,12 +191,10 @@ function CommitPreviewSection() {
 
 export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
   const panelMode = useExtractionPanelStore((s) => s.panelMode);
-  const activeView = useExtractionPanelStore((s) => s.activeView);
   const draft = useExtractionPanelStore((s) => s.draft);
   const isExtracting = useExtractionPanelStore((s) => s.isExtracting);
   const togglePanel = useExtractionPanelStore((s) => s.togglePanel);
   const setPanelMode = useExtractionPanelStore((s) => s.setPanelMode);
-  const setActiveView = useExtractionPanelStore((s) => s.setActiveView);
   const lastDeltaChanges = useExtractionPanelStore((s) => s.lastDeltaChanges);
   const focusIntentEnabled = useExtractionPanelStore((s) => s.focusIntentEnabled);
   const setFocusIntent = useExtractionPanelStore((s) => s.setFocusIntent);
@@ -307,8 +277,8 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
             </button>
           </div>
 
-          {/* View toggle */}
-          <ViewTabs activeView={activeView} onChangeView={setActiveView} />
+          {/* Topic list */}
+          <TopicMap />
 
           {/* Focus intent toggle */}
           <div className="px-3 py-1.5 border-b border-[var(--stroke-default)]">
@@ -337,7 +307,7 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
           {panelMode === 'default' ? (
             <div className="flex flex-1 flex-col overflow-hidden">
               <div className="flex-1 overflow-hidden">
-                {activeView === 'graph' ? <FrameGraphMini /> : <FrameYAMLView />}
+                <FrameYAMLView />
               </div>
               <AdvisoryPanel />
               <CommitDropdown />
@@ -348,7 +318,7 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
               {/* Left: extraction content */}
               <div className="flex flex-1 flex-col overflow-hidden border-r border-[var(--stroke-default)]">
                 <div className="flex-1 overflow-hidden">
-                  {activeView === 'graph' ? <FrameGraphMini /> : <FrameYAMLView />}
+                  <FrameYAMLView />
                 </div>
                 <AdvisoryPanel />
                 <CommitDropdown />
