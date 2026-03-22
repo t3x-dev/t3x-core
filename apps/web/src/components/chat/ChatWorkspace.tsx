@@ -1,10 +1,12 @@
 'use client';
 
+import type { Frame } from '@t3x-dev/core';
 import { AlertCircle, Loader2, MessageSquarePlus } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { DriftPopup } from '@/components/chat/DriftPopup';
 import { useAutoProject } from '@/hooks/useAutoProject';
 import { useConversationChat } from '@/hooks/useConversationChat';
+import { getCommitAsFrames } from '@/lib/api/commitUnified';
 import { extractFrames, getSemanticDraft, listDeltas } from '@/lib/api/frames';
 import { listTopics, updateTopicApi } from '@/lib/api/topics';
 import { getIntentSummary } from '@/lib/intentSummary';
@@ -23,6 +25,10 @@ interface ChatWorkspaceProps {
   className?: string;
   /** Called when a new conversation is created (e.g. from /chat/new). Overrides default URL update. */
   onConversationCreated?: (conversationId: string) => void;
+  /** Parent commit hash — if set, hydrate extraction panel with parent's frames */
+  inheritFromCommitHash?: string;
+  /** Callback to clear inheritFromCommitHash after hydration (prevents re-hydration on remount) */
+  onInheritComplete?: () => void;
 }
 
 export function ChatWorkspace({
@@ -31,6 +37,8 @@ export function ChatWorkspace({
   firstMessage,
   className,
   onConversationCreated: onConversationCreatedProp,
+  inheritFromCommitHash,
+  onInheritComplete,
 }: ChatWorkspaceProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const firstMessageSentRef = useRef(false);
@@ -114,8 +122,9 @@ export function ChatWorkspace({
 
     useExtractionPanelStore.getState().setProjectId(resolvedProjectId || null);
 
-    // Initialize commit state (load branch head)
-    if (resolvedProjectId) {
+    // Initialize commit state (load branch head) — skip when inheriting
+    // because inheritance sets lastCommitHash to the parent commit hash
+    if (resolvedProjectId && !inheritFromCommitHash) {
       useExtractionPanelStore.getState().initCommitState(resolvedProjectId);
     }
 
@@ -127,13 +136,46 @@ export function ChatWorkspace({
             if (conv?.project_id) {
               setResolvedProjectId(conv.project_id);
               useExtractionPanelStore.getState().setProjectId(conv.project_id);
-              useExtractionPanelStore.getState().initCommitState(conv.project_id);
+              if (!inheritFromCommitHash) {
+                useExtractionPanelStore.getState().initCommitState(conv.project_id);
+              }
               useChatStore.getState().setActiveConversation(convId, conv.project_id);
             }
           })
           .catch(() => {});
       });
     }
+
+    // Helper: hydrate extraction panel from parent commit
+    const hydrateFromParent = (hash: string) => {
+      getCommitAsFrames(hash)
+        .then((parentCommit) => {
+          const store = useExtractionPanelStore.getState();
+          const frames = (parentCommit.content?.frames as Frame[]) ?? [];
+          const relations = parentCommit.content?.relations ?? [];
+          if (frames.length > 0) {
+            store.setDraft({ frames, relations });
+            // Set parent as lastCommitHash so commit B gets correct parent_hashes
+            useExtractionPanelStore.setState({ lastCommitHash: hash });
+            // Mark all inherited frames as confirmed
+            const confirmed: Record<string, boolean> = {};
+            for (const f of frames) {
+              confirmed[f.id] = true;
+            }
+            useExtractionPanelStore.setState({ confirmedFrameIds: confirmed });
+            if (store.panelMode === 'collapsed') {
+              store.setPanelMode('default');
+            }
+          }
+          // Clear the flag to prevent re-hydration on remount
+          // This is critical: resetDraft() runs at the top of this effect,
+          // so without clearing, a re-render would wipe inherited frames
+          onInheritComplete?.();
+        })
+        .catch(() => {
+          // Parent fetch failed — fall back to empty panel
+        });
+    };
 
     // Load existing semantic draft + full delta history + topics for this conversation
     if (convId && convId !== 'new') {
@@ -145,6 +187,9 @@ export function ChatWorkspace({
             if (store.panelMode === 'collapsed') {
               store.setPanelMode('default');
             }
+          } else if (inheritFromCommitHash) {
+            // No existing draft — hydrate from parent commit
+            hydrateFromParent(inheritFromCommitHash);
           }
           if (deltas && deltas.length > 0) {
             store.hydrateDeltaLog(deltas);
@@ -161,8 +206,18 @@ export function ChatWorkspace({
         .catch(() => {
           // Draft/delta/topics load failed — non-critical
         });
+    } else if (inheritFromCommitHash) {
+      // New conversation with inheritance — hydrate from parent commit
+      useExtractionPanelStore.getState().setProjectId(resolvedProjectId || null);
+      hydrateFromParent(inheritFromCommitHash);
     }
-  }, [conversationId, resolvedConversationId, resolvedProjectId]);
+  }, [
+    conversationId,
+    resolvedConversationId,
+    resolvedProjectId,
+    inheritFromCommitHash,
+    onInheritComplete,
+  ]);
 
   // Auto-scroll to bottom on new messages or streaming content
   useEffect(() => {
@@ -185,7 +240,12 @@ export function ChatWorkspace({
     store.setExtracting(true);
 
     const activeTopicId = store.activeTopicId;
-    extractFrames(convId, undefined, undefined, activeTopicId ? { topicId: activeTopicId } : undefined)
+    extractFrames(
+      convId,
+      undefined,
+      undefined,
+      activeTopicId ? { topicId: activeTopicId } : undefined
+    )
       .then((result) => {
         const s = useExtractionPanelStore.getState();
 
@@ -217,32 +277,40 @@ export function ChatWorkspace({
 
         // Store gate issues for frame annotation (Step 5)
         if (result.gate_result?.semantic?.issues) {
-          const issuesByFrame: Record<string, { severity: 'error' | 'warning' | 'info'; description: string }[]> = {};
+          const issuesByFrame: Record<
+            string,
+            { severity: 'error' | 'warning' | 'info'; description: string }[]
+          > = {};
           for (const issue of result.gate_result.semantic.issues) {
             if (issue.frame_id) {
               if (!issuesByFrame[issue.frame_id]) issuesByFrame[issue.frame_id] = [];
-              issuesByFrame[issue.frame_id].push({ severity: issue.severity, description: issue.description });
+              issuesByFrame[issue.frame_id].push({
+                severity: issue.severity,
+                description: issue.description,
+              });
             }
           }
           s.setGateIssues(issuesByFrame);
         }
 
         // Reload topics after extraction (new topic may have been auto-created)
-        listTopics(convId).then((topicsList) => {
-          const s2 = useExtractionPanelStore.getState();
-          s2.setTopics(topicsList);
-          // Auto-sync topic name with root frame type
-          if (result.snapshot && result.snapshot.frames.length > 0 && topicsList.length > 0) {
-            const rootType = result.snapshot.frames[0].type;
-            const currentTopic = topicsList.find((t) => t.id === s2.activeTopicId);
-            if (currentTopic && currentTopic.name !== rootType) {
-              updateTopicApi(currentTopic.id, { name: rootType }).catch(() => {});
-              s2.setTopics(topicsList.map((t) =>
-                t.id === currentTopic.id ? { ...t, name: rootType } : t
-              ));
+        listTopics(convId)
+          .then((topicsList) => {
+            const s2 = useExtractionPanelStore.getState();
+            s2.setTopics(topicsList);
+            // Auto-sync topic name with root frame type
+            if (result.snapshot && result.snapshot.frames.length > 0 && topicsList.length > 0) {
+              const rootType = result.snapshot.frames[0].type;
+              const currentTopic = topicsList.find((t) => t.id === s2.activeTopicId);
+              if (currentTopic && currentTopic.name !== rootType) {
+                updateTopicApi(currentTopic.id, { name: rootType }).catch(() => {});
+                s2.setTopics(
+                  topicsList.map((t) => (t.id === currentTopic.id ? { ...t, name: rootType } : t))
+                );
+              }
             }
-          }
-        }).catch(() => {});
+          })
+          .catch(() => {});
 
         if (focusIntentEnabled && result.snapshot && result.snapshot.frames.length > 0) {
           const controller = new AbortController();
