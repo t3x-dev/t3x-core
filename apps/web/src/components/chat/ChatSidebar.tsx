@@ -9,22 +9,104 @@ import {
   MessageSquare,
   Plus,
   Settings,
+  Trash2,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { listConversations } from '@/lib/api/conversations';
-import { listProjects } from '@/lib/api/projects';
+import { deleteConversation, listConversations } from '@/lib/api/conversations';
+import { deleteProject, listProjects } from '@/lib/api/projects';
 import type { Conversation, Project } from '@/lib/api/types';
 import { glass } from '@/lib/theme';
 import { formatTimeAgo } from '@/lib/timeUtils';
 import { cn } from '@/lib/utils';
 import { useChatStore } from '@/store/chatStore';
 
-// T3X Logo - same as existing Sidebar
+// ── Right-click Context Menu (portal-based, never intercepts left click) ──
+
+interface ContextMenuItem {
+  label: string;
+  icon?: React.ReactNode;
+  danger?: boolean;
+  onClick: () => void;
+}
+
+interface ContextMenuState {
+  x: number;
+  y: number;
+  items: ContextMenuItem[];
+}
+
+function useContextMenu() {
+  const [menu, setMenu] = useState<ContextMenuState | null>(null);
+
+  const open = useCallback((e: React.MouseEvent, items: ContextMenuItem[]) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setMenu({ x: e.clientX, y: e.clientY, items });
+  }, []);
+
+  const close = useCallback(() => setMenu(null), []);
+
+  return { menu, open, close };
+}
+
+function ContextMenuPortal({ menu, onClose }: { menu: ContextMenuState; onClose: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        onClose();
+      }
+    }
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose();
+    }
+    document.addEventListener('mousedown', handleClick);
+    document.addEventListener('keydown', handleKey);
+    return () => {
+      document.removeEventListener('mousedown', handleClick);
+      document.removeEventListener('keydown', handleKey);
+    };
+  }, [onClose]);
+
+  return createPortal(
+    <div
+      ref={ref}
+      className="fixed z-[100] min-w-[140px] rounded-lg border border-[var(--stroke-default)] bg-[var(--surface-panel)] p-1 shadow-lg"
+      style={{ left: menu.x, top: menu.y }}
+    >
+      {menu.items.map((item) => (
+        <button
+          key={item.label}
+          type="button"
+          className={cn(
+            'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors',
+            item.danger
+              ? 'text-red-500 hover:bg-red-500/10'
+              : 'text-[var(--text-primary)] hover:bg-[var(--hover-bg)]'
+          )}
+          onClick={() => {
+            onClose();
+            item.onClick();
+          }}
+        >
+          {item.icon}
+          {item.label}
+        </button>
+      ))}
+    </div>,
+    document.body
+  );
+}
+
+// ── T3X Logo ──
+
 function LogoIcon() {
   return (
     <svg
@@ -59,14 +141,17 @@ function LogoIcon() {
   );
 }
 
+// ── Conversation Item ──
+
 interface ConversationItemProps {
   conversation: Conversation;
   isActive: boolean;
   collapsed: boolean;
   onClick: () => void;
+  onContextMenu: (e: React.MouseEvent) => void;
 }
 
-function ConversationItem({ conversation, isActive, collapsed, onClick }: ConversationItemProps) {
+function ConversationItem({ conversation, isActive, collapsed, onClick, onContextMenu }: ConversationItemProps) {
   const title = conversation.title ?? conversation.conversation_id.slice(0, 40);
   const timeAgo = formatTimeAgo(conversation.created_at);
 
@@ -98,7 +183,12 @@ function ConversationItem({ conversation, isActive, collapsed, onClick }: Conver
   );
 
   const button = (
-    <button type="button" className={isActive ? activeClass : inactiveClass} onClick={onClick}>
+    <button
+      type="button"
+      className={isActive ? activeClass : inactiveClass}
+      onClick={onClick}
+      onContextMenu={onContextMenu}
+    >
       {inner}
     </button>
   );
@@ -115,6 +205,8 @@ function ConversationItem({ conversation, isActive, collapsed, onClick }: Conver
   );
 }
 
+// ── Project Folder ──
+
 interface ProjectFolderProps {
   project: Project;
   conversations: Conversation[];
@@ -124,6 +216,8 @@ interface ProjectFolderProps {
   onToggleExpand: () => void;
   onConversationClick: (convId: string) => void;
   onCanvasClick: () => void;
+  onProjectContextMenu: (e: React.MouseEvent) => void;
+  onConversationContextMenu: (e: React.MouseEvent, convId: string) => void;
 }
 
 function ProjectFolder({
@@ -135,11 +229,14 @@ function ProjectFolder({
   onToggleExpand,
   onConversationClick,
   onCanvasClick,
+  onProjectContextMenu,
+  onConversationContextMenu,
 }: ProjectFolderProps) {
   const folderButton = (
     <button
       type="button"
       onClick={onToggleExpand}
+      onContextMenu={onProjectContextMenu}
       className={cn(
         'flex items-center gap-2 rounded-xl transition-all duration-[var(--motion-base)] ease-[var(--ease-out-soft)]',
         'text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]',
@@ -199,6 +296,7 @@ function ProjectFolder({
               isActive={activeConversationId === conv.conversation_id}
               collapsed={false}
               onClick={() => onConversationClick(conv.conversation_id)}
+              onContextMenu={(e) => onConversationContextMenu(e, conv.conversation_id)}
             />
           ))}
 
@@ -212,6 +310,8 @@ function ProjectFolder({
     </div>
   );
 }
+
+// ── Main Sidebar ──
 
 export function ChatSidebar() {
   const router = useRouter();
@@ -230,6 +330,8 @@ export function ChatSidebar() {
   const [projectConversations, setProjectConversations] = useState<Record<string, Conversation[]>>(
     {}
   );
+
+  const { menu, open: openMenu, close: closeMenu } = useContextMenu();
 
   // Fetch projects on mount
   useEffect(() => {
@@ -271,6 +373,52 @@ export function ChatSidebar() {
 
   function handleCanvasClick(projectId: string) {
     router.push(`/project/${projectId}`);
+  }
+
+  async function handleDeleteProject(projectId: string) {
+    if (!window.confirm('Are you sure you want to delete this project? This cannot be undone.')) {
+      return;
+    }
+    try {
+      await deleteProject(projectId);
+      window.location.reload();
+    } catch {
+      // silently fail
+    }
+  }
+
+  async function handleDeleteConversation(_projectId: string, convId: string) {
+    if (!window.confirm('Are you sure you want to delete this conversation?')) {
+      return;
+    }
+    try {
+      await deleteConversation(convId);
+      window.location.reload();
+    } catch {
+      // silently fail
+    }
+  }
+
+  function handleProjectContextMenu(e: React.MouseEvent, projectId: string) {
+    openMenu(e, [
+      {
+        label: 'Delete Project',
+        icon: <Trash2 className="h-3.5 w-3.5" />,
+        danger: true,
+        onClick: () => handleDeleteProject(projectId),
+      },
+    ]);
+  }
+
+  function handleConversationContextMenu(e: React.MouseEvent, projectId: string, convId: string) {
+    openMenu(e, [
+      {
+        label: 'Delete Conversation',
+        icon: <Trash2 className="h-3.5 w-3.5" />,
+        danger: true,
+        onClick: () => handleDeleteConversation(projectId, convId),
+      },
+    ]);
   }
 
   return (
@@ -355,6 +503,10 @@ export function ChatSidebar() {
                   handleConversationClick(convId, project.project_id)
                 }
                 onCanvasClick={() => handleCanvasClick(project.project_id)}
+                onProjectContextMenu={(e) => handleProjectContextMenu(e, project.project_id)}
+                onConversationContextMenu={(e, convId) =>
+                  handleConversationContextMenu(e, project.project_id, convId)
+                }
               />
             ))}
 
@@ -428,6 +580,9 @@ export function ChatSidebar() {
           </Tooltip>
         </div>
       </aside>
+
+      {/* Context menu portal */}
+      {menu && <ContextMenuPortal menu={menu} onClose={closeMenu} />}
     </TooltipProvider>
   );
 }

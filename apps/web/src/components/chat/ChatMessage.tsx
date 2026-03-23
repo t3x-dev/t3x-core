@@ -1,7 +1,7 @@
 'use client';
 
 import { User } from 'lucide-react';
-import { useMemo } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { cn } from '@/lib/utils';
@@ -90,7 +90,35 @@ export function ChatMessage({
   const hoveredFrameId = useExtractionPanelStore((s) => s.hoveredFrameId);
   const hoveredSlotKey = useExtractionPanelStore((s) => s.hoveredSlotKey);
   const draft = useExtractionPanelStore((s) => s.draft);
-  const setHoveredTurnHash = useExtractionPanelStore((s) => s.setHoveredTurnHash);
+  const setHoveredTurn = useExtractionPanelStore((s) => s.setHoveredTurn);
+  const userTextRef = useRef<HTMLDivElement>(null);
+
+  // Compute character offset from mouse position (user messages only)
+  const handleUserMouseMove = useCallback(
+    (e: React.MouseEvent) => {
+      if (!turnHash || !userTextRef.current) return;
+      // caretRangeFromPoint returns a Range at the mouse cursor position
+      const range = document.caretRangeFromPoint(e.clientX, e.clientY);
+      if (!range || !userTextRef.current.contains(range.startContainer)) {
+        setHoveredTurn(turnHash);
+        return;
+      }
+      // Walk text nodes to compute absolute character offset
+      const walker = document.createTreeWalker(userTextRef.current, NodeFilter.SHOW_TEXT);
+      let offset = 0;
+      let node: Node | null = walker.nextNode();
+      while (node) {
+        if (node === range.startContainer) {
+          offset += range.startOffset;
+          break;
+        }
+        offset += (node.textContent?.length ?? 0);
+        node = walker.nextNode();
+      }
+      setHoveredTurn(turnHash, offset);
+    },
+    [turnHash, setHoveredTurn]
+  );
 
   // Compute highlight ranges for this message based on hovered frame/slot
   const highlightRanges = useMemo(() => {
@@ -171,8 +199,8 @@ export function ChatMessage({
       style={{
         background: isWholeMessageHighlight ? 'rgba(96, 165, 250, 0.08)' : 'transparent',
       }}
-      onMouseEnter={() => turnHash && setHoveredTurnHash(turnHash)}
-      onMouseLeave={() => setHoveredTurnHash(null)}
+      onMouseEnter={() => turnHash && setHoveredTurn(turnHash)}
+      onMouseLeave={() => setHoveredTurn(null)}
     >
       <div className="mx-auto max-w-3xl px-4">
         <div className="flex gap-3">
@@ -195,7 +223,11 @@ export function ChatMessage({
             </div>
 
             {isUser ? (
-              <div className="text-sm leading-relaxed text-[var(--text-primary)] whitespace-pre-wrap">
+              <div
+                ref={userTextRef}
+                onMouseMove={handleUserMouseMove}
+                className="text-sm leading-relaxed text-[var(--text-primary)] whitespace-pre-wrap"
+              >
                 {hasCharHighlights ? (
                   <HighlightedText text={content} ranges={highlightRanges} />
                 ) : (
