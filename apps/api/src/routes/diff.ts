@@ -6,19 +6,13 @@
  */
 
 import {
-  calculateDiffStats,
   createCachedEmbeddingProvider,
   createDiffEngine,
   createGoogleAIEmbeddingProvider,
   type DiffSegment,
-  DiffType,
-  diffCommits,
   EmbeddingProviderError,
   type FrameDiff,
   frameDiff,
-  framesToTextSegments,
-  type SegmentDiff,
-  type WordDiffSegment,
 } from '@t3x-dev/core';
 import { findSegmentEmbeddingsByTurn, findTurnByHash, getCommitUnified } from '@t3x-dev/storage';
 import { Hono } from 'hono';
@@ -155,44 +149,20 @@ diffRoutes.post('/v1/diff/two-way', async (c) => {
     const targetCommit = await getCommitUnified(db, body.target_commit_hash);
 
     if (baseCommit && targetCommit) {
-      // Use framesToTextSegments to convert frames to {id, text}[] for diffCommits
-      const commitDiff = diffCommits(
-        framesToTextSegments(baseCommit.content),
-        framesToTextSegments(targetCommit.content)
-      );
+      const diff: FrameDiff = frameDiff(baseCommit.content, targetCommit.content);
 
-      // Convert CommitDiff → response format for frontend compatibility
-      const segmentDiffs: (SegmentDiff & { wordDiff?: WordDiffSegment[] })[] = [];
-      for (const s of commitDiff.identical) {
-        segmentDiffs.push({ segmentId: s.id, text: s.text, diffType: DiffType.SAME });
-      }
-      for (const pair of commitDiff.similar) {
-        segmentDiffs.push({
-          segmentId: pair.source.id,
-          text: pair.source.text,
-          diffType: DiffType.MODIFIED,
-          similarity: pair.similarity,
-          matchedSegmentId: pair.target.id,
-          matchedText: pair.target.text,
-          wordDiff: pair.wordDiff,
-        });
-      }
-      for (const s of commitDiff.onlyInSource) {
-        segmentDiffs.push({ segmentId: s.id, text: s.text, diffType: DiffType.REMOVED });
-      }
-      for (const s of commitDiff.onlyInTarget) {
-        segmentDiffs.push({ segmentId: s.id, text: s.text, diffType: DiffType.ADDED });
-      }
+      const commitMeta = (commit: typeof baseCommit) => ({
+        hash: commit.hash,
+        message: commit.message ?? null,
+        author: commit.author,
+        committed_at: commit.committed_at,
+        branch: commit.branch,
+      });
 
       return jsonSuccess(c, {
-        baseId: body.base_commit_hash,
-        targetId: body.target_commit_hash,
-        segmentDiffs,
-        threshold: 0.3, // Jaccard threshold
-        stats: calculateDiffStats(segmentDiffs),
-        method: 'jaccard',
-        usedCache: false,
-        cacheStats: null,
+        diff,
+        base: commitMeta(baseCommit),
+        target: commitMeta(targetCommit),
       });
     } else {
       if (!baseCommit) {

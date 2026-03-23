@@ -23,17 +23,7 @@ vi.mock('@t3x-dev/core', () => ({
   createDiffEngine: vi.fn(),
   createGoogleAIEmbeddingProvider: vi.fn(),
   createCachedEmbeddingProvider: vi.fn(),
-  diffCommits: vi.fn(),
   frameDiff: vi.fn(),
-  framesToTextSegments: vi.fn(
-    (content: { frames: Array<{ id: string; type: string; slots: Record<string, string> }> }) =>
-      (content?.frames ?? []).map((f: { id: string; slots: Record<string, string> }) => ({
-        id: f.id,
-        text: f.slots?.text ?? '',
-      }))
-  ),
-  calculateDiffStats: vi.fn(() => ({ same: 0, modified: 0, added: 0, removed: 0 })),
-  DiffType: { SAME: 'same', MODIFIED: 'modified', ADDED: 'added', REMOVED: 'removed' },
   EmbeddingProviderError: class extends Error {
     constructor(msg: string) {
       super(msg);
@@ -82,35 +72,49 @@ describe('Diff Routes', () => {
 
     it('returns success for V4 commit hash mode', async () => {
       const { getCommitUnified } = await import('@t3x-dev/storage');
-      const { diffCommits } = await import('@t3x-dev/core');
+      const { frameDiff } = await import('@t3x-dev/core');
+
+      const baseCommit = {
+        hash: 'sha256:base',
+        message: 'base commit',
+        author: { type: 'human', id: 'user1', name: 'User' },
+        committed_at: '2024-01-01T00:00:00Z',
+        branch: 'main',
+        content: {
+          frames: [{ id: 'f_001', type: 'legacy_sentence', slots: { text: 'Hello world' } }],
+          relations: [],
+        },
+      };
+      const targetCommit = {
+        hash: 'sha256:target',
+        message: 'target commit',
+        author: { type: 'human', id: 'user1', name: 'User' },
+        committed_at: '2024-01-02T00:00:00Z',
+        branch: 'main',
+        content: {
+          frames: [{ id: 'f_002', type: 'legacy_sentence', slots: { text: 'Hello there' } }],
+          relations: [],
+        },
+      };
 
       (getCommitUnified as ReturnType<typeof vi.fn>)
-        .mockResolvedValueOnce({
-          content: {
-            frames: [{ id: 'f_001', type: 'legacy_sentence', slots: { text: 'Hello world' } }],
-            relations: [],
-          },
-        })
-        .mockResolvedValueOnce({
-          content: {
-            frames: [{ id: 'f_002', type: 'legacy_sentence', slots: { text: 'Hello there' } }],
-            relations: [],
-          },
-        });
+        .mockResolvedValueOnce(baseCommit)
+        .mockResolvedValueOnce(targetCommit);
 
-      (diffCommits as ReturnType<typeof vi.fn>).mockReturnValue({
+      const mockFrameDiffResult = {
         identical: [],
         similar: [
           {
-            source: { id: 's1', text: 'Hello world' },
-            target: { id: 's2', text: 'Hello there' },
+            base: { id: 'f_001', type: 'legacy_sentence', slots: { text: 'Hello world' } },
+            target: { id: 'f_002', type: 'legacy_sentence', slots: { text: 'Hello there' } },
             similarity: 0.7,
-            wordDiff: [],
+            word_diff: [],
           },
         ],
-        onlyInSource: [],
-        onlyInTarget: [],
-      });
+        only_in_base: [],
+        only_in_target: [],
+      };
+      (frameDiff as ReturnType<typeof vi.fn>).mockReturnValue(mockFrameDiffResult);
 
       const res = await app.request('/v1/diff/two-way', {
         method: 'POST',
@@ -124,7 +128,9 @@ describe('Diff Routes', () => {
       expect(res.status).toBe(200);
       const data = await res.json();
       expect(data.success).toBe(true);
-      expect(data.data.method).toBe('jaccard');
+      expect(data.data.diff).toEqual(mockFrameDiffResult);
+      expect(data.data.base.hash).toBe('sha256:base');
+      expect(data.data.target.hash).toBe('sha256:target');
     });
 
     it('falls back to sentence splitting when rings_json is empty (turn hash mode)', async () => {
