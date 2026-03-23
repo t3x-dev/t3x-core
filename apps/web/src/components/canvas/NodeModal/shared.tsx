@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button';
 import { PinButton } from '@/components/ui/PinButton';
 import { PinDropdownSelector } from '@/components/ui/PinDropdownSelector';
 import { useTerminology } from '@/hooks/useTerminology';
-import { framesToSentences } from '@/lib/framesToSentences';
 import { cn } from '@/lib/utils';
 import { usePinsStore } from '@/store/pinsStore';
 import type { CommitDisplay, CommitSourceRef, EmbeddedLeaf } from '@/types/nodes';
@@ -241,7 +240,20 @@ export function CommitFullHeader({
 export function CommitSourceContent({ commit }: { commit: CommitDisplay }) {
   // Derive sentences from frames for display and source context tracing
   const sentences = commit.content?.frames
-    ? framesToSentences(commit.content as import('@t3x-dev/core').SemanticContent)
+    ? (commit.content as import('@t3x-dev/core').SemanticContent).frames.map((frame) => {
+        const id = frame.id.startsWith('s_') ? frame.id : `s_${frame.id.replace('f_', '')}`;
+        const text = `[${frame.type}] ${Object.entries(frame.slots).map(([k, v]) => `${k}: ${typeof v === 'string' ? v : String(v)}`).join('; ')}`;
+        const confidence = frame.confidence ?? 1.0;
+        let source_ref: { conversation_id?: string; turn_hash?: string; start_char?: number; end_char?: number } | undefined;
+        if (frame.slot_sources) {
+          const firstSource = Object.values(frame.slot_sources)[0];
+          const turnHash = firstSource?.turn_hash ?? firstSource?.turn;
+          if (firstSource && turnHash && firstSource.start_char != null && firstSource.end_char != null) {
+            source_ref = { turn_hash: turnHash, start_char: firstSource.start_char, end_char: firstSource.end_char };
+          }
+        }
+        return { id, text, confidence, source_ref };
+      })
     : [];
 
   const sourceRefs = commit.sources ?? commit.source_refs ?? undefined;

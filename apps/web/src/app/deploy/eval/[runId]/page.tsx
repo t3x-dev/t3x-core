@@ -52,7 +52,6 @@ import {
   type SentenceSourceRef,
   updateEngineRun,
 } from '@/lib/api';
-import { framesToSentences } from '@/lib/framesToSentences';
 import { exportRunAsJSON, exportRunAsMarkdown } from '@/lib/exportReport';
 import { createRetuneSession } from '@/lib/retune';
 import { cn } from '@/lib/utils';
@@ -283,9 +282,19 @@ export default function RunDetailPage() {
     if (!leaf?.constraints || !commit?.content) return map;
 
     // Derive sentences from frames for source_ref lookup
-    const sentences = framesToSentences(
-      commit.content as import('@t3x-dev/core').SemanticContent
-    );
+    const content = commit.content as import('@t3x-dev/core').SemanticContent;
+    const sentences = content.frames.map((frame) => {
+      const id = frame.id.startsWith('s_') ? frame.id : `s_${frame.id.replace('f_', '')}`;
+      let source_ref: { conversation_id?: string; turn_hash?: string; start_char?: number; end_char?: number } | undefined;
+      if (frame.slot_sources) {
+        const firstSource = Object.values(frame.slot_sources)[0];
+        const turnHash = firstSource?.turn_hash ?? firstSource?.turn;
+        if (firstSource && turnHash && firstSource.start_char != null && firstSource.end_char != null) {
+          source_ref = { turn_hash: turnHash, start_char: firstSource.start_char, end_char: firstSource.end_char };
+        }
+      }
+      return { id, source_ref };
+    });
 
     // Index sentences by ID for fast lookup, mapping to SentenceSourceRef
     const sentenceMap = new Map<string, SentenceSourceRef>();

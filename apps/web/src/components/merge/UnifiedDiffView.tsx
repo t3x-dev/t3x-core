@@ -20,7 +20,6 @@ import { EmptyStateInline } from '@/components/ui/empty-state';
 import { useTerminology } from '@/hooks/useTerminology';
 import type { ApiCommit, TurnContextData } from '@/lib/api';
 import { fetchTurnContextCached, getApiCommit } from '@/lib/api';
-import { framesToSentences } from '@/lib/framesToSentences';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
 import type { Merge2WayResult, MergeCandidate, MergeSimilarPair, Sentence } from '@/types/merge';
 import { MergeConflictView } from './MergeConflictView';
@@ -293,21 +292,25 @@ export function UnifiedDiffView({
   // Convert ApiCommit frames to Sentence type for positional view
   const sourceSentences = useMemo(() => {
     if (!sourceCommit?.content?.frames) return undefined;
-    const sentences = framesToSentences(
-      sourceCommit.content as import('@t3x-dev/core').SemanticContent
-    );
-    return sentences.map((s) => ({
-      id: s.id,
-      text: s.text,
-      confidence: s.confidence,
-      source: s.source_ref
-        ? {
-            turn_hash: s.source_ref.turn_hash ?? '',
-            start_char: s.source_ref.start_char ?? 0,
-            end_char: s.source_ref.end_char ?? 0,
-          }
-        : undefined,
-    }));
+    const content = sourceCommit.content as import('@t3x-dev/core').SemanticContent;
+    return content.frames.map((frame) => {
+      const id = frame.id.startsWith('s_') ? frame.id : `s_${frame.id.replace('f_', '')}`;
+      const text = `[${frame.type}] ${Object.entries(frame.slots).map(([k, v]) => `${k}: ${typeof v === 'string' ? v : String(v)}`).join('; ')}`;
+      const confidence = frame.confidence ?? 1.0;
+      let source: Sentence['source'] | undefined;
+      if (frame.slot_sources) {
+        const firstSource = Object.values(frame.slot_sources)[0];
+        const turnHash = firstSource?.turn_hash ?? firstSource?.turn;
+        if (firstSource && turnHash && firstSource.start_char != null && firstSource.end_char != null) {
+          source = {
+            turn_hash: turnHash,
+            start_char: firstSource.start_char,
+            end_char: firstSource.end_char,
+          };
+        }
+      }
+      return { id, text, confidence, source };
+    });
   }, [sourceCommit]);
 
   // Build positional lines (only when in positional mode)

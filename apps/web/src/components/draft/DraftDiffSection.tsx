@@ -5,6 +5,10 @@
  *
  * Shown when draft has a parent_commit_hash.
  * Fetches parent commit once, then recomputes diff locally on sentence changes.
+ *
+ * TODO: Migrate to FrameYAMLDiff once draft workspace moves from sentence-based
+ * to frame-based (SemanticContent). Currently the draft store uses DraftSentence[]
+ * which has no frame structure, so frameDiff() cannot be used here yet.
  */
 
 import { Equal, Minus, Pencil, Plus } from 'lucide-react';
@@ -12,7 +16,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { CollapsibleSection } from '@/components/shared/CollapsibleSection';
 import { Badge } from '@/components/ui/badge';
 import { getApiCommit } from '@/lib/api';
-import { framesToSentences } from '@/lib/framesToSentences';
 import type { DiffableSentence, DiffCache } from '@/lib/diffUtils';
 import { type CommitDiff, incrementalDiffCommits, type WordDiffSegment } from '@/lib/diffUtils';
 import { cn } from '@/lib/utils';
@@ -51,10 +54,11 @@ export function DraftDiffSection() {
     getApiCommit(parentHash)
       .then((parentCommit) => {
         if (cancelled) return;
-        const derived = framesToSentences(
-          parentCommit.content as import('@t3x-dev/core').SemanticContent
-        );
-        const sentences = derived.map((s) => ({ id: s.id, text: s.text }));
+        const content = parentCommit.content as import('@t3x-dev/core').SemanticContent;
+        const sentences = content.frames.map((frame) => ({
+          id: frame.id.startsWith('s_') ? frame.id : `s_${frame.id.replace('f_', '')}`,
+          text: `[${frame.type}] ${Object.entries(frame.slots).map(([k, v]) => `${k}: ${typeof v === 'string' ? v : String(v)}`).join('; ')}`,
+        }));
         setParentSentences(sentences);
         fetchedHashRef.current = parentHash;
       })
