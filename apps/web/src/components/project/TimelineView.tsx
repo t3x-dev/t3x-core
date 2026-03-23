@@ -1,6 +1,7 @@
 'use client';
 
 import { GitBranch, GitCommit, GitMerge, MessageSquare } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useMemo } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { useTerminology } from '@/hooks/useTerminology';
@@ -16,12 +17,16 @@ interface TimelineEntry {
   timestamp?: string;
   branch?: string;
   hash?: string;
+  fullHash?: string;
   sentenceCount?: number;
+  conversationId?: string;
+  commitStatus?: string;
 }
 
-export function TimelineView({ projectId: _projectId }: { projectId: string }) {
+export function TimelineView({ projectId }: { projectId: string }) {
   const nodes = useCanvasStore((s) => s.nodes);
   const { t } = useTerminology();
+  const router = useRouter();
 
   const entries = useMemo(() => {
     const items: TimelineEntry[] = [];
@@ -35,12 +40,14 @@ export function TimelineView({ projectId: _projectId }: { projectId: string }) {
       const isBranch = d.branchType === 'branch';
 
       if (!isCommitted) {
-        // Staging node = conversation
+        // Staging/pending = active conversation
         items.push({
           id: node.id,
           type: 'conversation',
           title: d.title || 'Untitled Conversation',
           timestamp: d.timestamp,
+          conversationId: d.conversationId,
+          commitStatus: d.commitStatus,
         });
       } else {
         // Committed node
@@ -49,17 +56,22 @@ export function TimelineView({ projectId: _projectId }: { projectId: string }) {
           id: node.id,
           type: isMerge ? 'merge' : isBranch ? 'branch' : 'commit',
           title: d.title || 'Untitled',
-          subtitle: isCommitted ? t('committed') : t('pending'),
+          subtitle: t('committed'),
           timestamp: d.timestamp,
           branch: isBranch ? (d.branchName as string) || 'branch' : 'main',
           hash: d.commitHash?.slice(0, 8),
+          fullHash: d.commitHash,
           sentenceCount: commitData?.sentences?.length,
         });
       }
     }
 
-    // Sort by timestamp descending (newest first)
+    // Sort: conversations first (in progress), then by timestamp descending
     items.sort((a, b) => {
+      // Active conversations always on top
+      if (a.type === 'conversation' && b.type !== 'conversation') return -1;
+      if (a.type !== 'conversation' && b.type === 'conversation') return 1;
+
       if (!a.timestamp && !b.timestamp) return 0;
       if (!a.timestamp) return 1;
       if (!b.timestamp) return -1;
@@ -68,6 +80,16 @@ export function TimelineView({ projectId: _projectId }: { projectId: string }) {
 
     return items;
   }, [nodes, t]);
+
+  const handleClick = (entry: TimelineEntry) => {
+    if (entry.type === 'conversation' && entry.conversationId) {
+      // STAGING → chat page
+      router.push(`/project/${projectId}/conversation/${entry.conversationId}`);
+    } else if (entry.fullHash) {
+      // Committed → commit detail page
+      router.push(`/project/${projectId}/commit/${encodeURIComponent(entry.fullHash)}`);
+    }
+  };
 
   if (entries.length === 0) {
     return (
@@ -85,11 +107,15 @@ export function TimelineView({ projectId: _projectId }: { projectId: string }) {
           <div className="absolute left-5 top-0 bottom-0 w-px bg-[var(--stroke-divider)]" />
 
           {entries.map((entry) => (
-            <div key={entry.id} className="relative flex gap-4 pb-6">
+            <div
+              key={entry.id}
+              className="relative flex gap-4 pb-6 cursor-pointer group"
+              onClick={() => handleClick(entry)}
+            >
               {/* Timeline dot */}
               <div
                 className={cn(
-                  'relative z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2',
+                  'relative z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 transition-transform group-hover:scale-110',
                   entry.type === 'conversation' &&
                     'border-[var(--accent-conversation)] bg-[var(--accent-conversation)]/10',
                   entry.type === 'commit' &&
@@ -115,17 +141,49 @@ export function TimelineView({ projectId: _projectId }: { projectId: string }) {
               </div>
 
               {/* Content card */}
-              <div className="flex-1 rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-4">
+              <div
+                className={cn(
+                  'flex-1 rounded-lg border p-4 transition-all',
+                  'group-hover:shadow-[var(--fx-shadow-sm)]',
+                  entry.type === 'conversation'
+                    ? 'border-[var(--accent-conversation)]/30 bg-[var(--accent-conversation)]/5 group-hover:border-[var(--accent-conversation)]/50'
+                    : 'border-[var(--stroke-divider)] bg-[var(--surface-card)] group-hover:border-[var(--stroke-strong)]'
+                )}
+              >
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <p className="text-sm font-medium text-[var(--text-primary)]">{entry.title}</p>
-                    {entry.hash && (
-                      <code className="text-xs text-[var(--text-tertiary)] font-mono">
-                        {entry.hash}
-                      </code>
-                    )}
+                    <div className="flex items-center gap-2 mt-0.5">
+                      {entry.hash && (
+                        <code className="text-xs text-[var(--text-tertiary)] font-mono">
+                          {entry.hash}
+                        </code>
+                      )}
+                      {entry.sentenceCount !== undefined && entry.sentenceCount > 0 && (
+                        <span className="text-xs text-[var(--text-tertiary)]">
+                          {entry.sentenceCount} sentence{entry.sentenceCount !== 1 ? 's' : ''}
+                        </span>
+                      )}
+                      {entry.timestamp && (
+                        <span className="text-[10px] text-[var(--text-tertiary)]">
+                          {formatTimelineDate(entry.timestamp)}
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
+                    {entry.type === 'conversation' && (
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          'text-[10px]',
+                          toneAccent.conversation.text,
+                          toneAccent.conversation.border
+                        )}
+                      >
+                        In Progress
+                      </Badge>
+                    )}
                     {entry.branch && (
                       <Badge
                         variant="outline"
@@ -140,21 +198,15 @@ export function TimelineView({ projectId: _projectId }: { projectId: string }) {
                         {entry.branch}
                       </Badge>
                     )}
-                    {entry.subtitle && (
-                      <span className="text-xs text-[var(--text-tertiary)]">{entry.subtitle}</span>
-                    )}
                   </div>
                 </div>
-                {entry.sentenceCount !== undefined && entry.sentenceCount > 0 && (
-                  <p className="mt-1 text-xs text-[var(--text-tertiary)]">
-                    {entry.sentenceCount} sentence{entry.sentenceCount !== 1 ? 's' : ''}
-                  </p>
-                )}
-                {entry.timestamp && (
-                  <p className="mt-2 text-[10px] text-[var(--text-tertiary)]">
-                    {formatTimelineDate(entry.timestamp)}
-                  </p>
-                )}
+
+                {/* Action hint */}
+                <div className="mt-2 text-[10px] text-[var(--text-tertiary)] opacity-0 group-hover:opacity-100 transition-opacity">
+                  {entry.type === 'conversation'
+                    ? 'Click to continue chat →'
+                    : 'Click to view details →'}
+                </div>
               </div>
             </div>
           ))}
