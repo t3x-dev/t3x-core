@@ -502,7 +502,7 @@ export const unitToNode = (
   conv: api.Conversation,
   commit: api.Commit | null, // null for staging units (no commit yet)
   index: number,
-  originalCommit?: api.SentenceCommit // Original sentence-based commit for source context display
+  originalCommit?: api.ApiCommit // Original frame-based commit for source context display
 ): Node<CanvasNodeData> => {
   // Use saved position from commit if available, otherwise from conversation, otherwise calculate
   const position =
@@ -572,29 +572,25 @@ export const unitToNode = (
       anchors: commit?.anchors
         ? (api.parseApiCommitAnchors(commit.anchors) ?? undefined)
         : undefined,
-      // V4 commit data for source context display
+      // Commit data for source context display (frame-based)
       commit: originalCommit
         ? {
             hash: originalCommit.hash,
-            schema: 't3x/commit/v4' as const,
+            schema: originalCommit.schema,
             author: {
               type: originalCommit.author.type,
               name: originalCommit.author.name,
               id: originalCommit.author.id,
             },
             committed_at: originalCommit.committed_at,
-            content: {
-              sentences: originalCommit.content.sentences.map((s) => ({
-                id: s.id,
-                text: s.text,
-                source_ref: s.source_ref,
-              })),
-            },
-            message: originalCommit.message ?? undefined,
-            branch: originalCommit.branch ?? undefined,
-            source_refs: originalCommit.source_refs ?? undefined,
-            merge_summary: originalCommit.merge_summary ?? undefined,
-            semantic: originalCommit.semantic ?? undefined,
+            content: originalCommit.content,
+            message: originalCommit.message,
+            branch: originalCommit.branch,
+            sources: originalCommit.sources ?? null,
+            // Map sources → source_refs for backward-compat with older canvas components
+            source_refs: originalCommit.sources ?? undefined,
+            merge_summary: undefined,
+            semantic: originalCommit.content as import('@t3x-dev/core').SemanticContent | undefined,
           }
         : undefined,
     },

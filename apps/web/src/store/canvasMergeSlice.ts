@@ -223,12 +223,13 @@ export const createMergeSlice: StateCreator<CanvasState, [], [], MergeSlice> = (
           // V4 commit data including merge summary
           commit: {
             hash: mergeCommit.hash,
-            schema: 't3x/commit/v4' as const,
+            schema: 't3x/commit/5' as const,
             author: { type: 'human' as const, ...mergeCommit.author },
             committed_at: mergeCommit.committed_at,
-            content: { sentences: mergeCommit.content.sentences },
-            message: mergeCommit.message ?? undefined,
-            branch: mergeCommit.branch ?? undefined,
+            content: { frames: [], relations: [] },
+            message: mergeCommit.message ?? null,
+            branch: mergeCommit.branch ?? 'main',
+            sources: null,
             merge_summary: mergeCommit.merge_summary,
           },
         },

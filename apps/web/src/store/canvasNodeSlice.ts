@@ -30,10 +30,10 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
     }
 
     try {
-      // Fetch conversations, sentence commits, and leaves in parallel
-      const [convResponse, sentenceCommits, projectLeaves] = await Promise.all([
+      // Fetch conversations, commits, and leaves in parallel
+      const [convResponse, apiCommits, projectLeaves] = await Promise.all([
         api.listConversations(projectId, 100, 0),
-        api.listSentenceCommits(projectId, undefined, 100, 0),
+        api.listCommits(projectId, undefined, 100),
         api.listLeavesByProject(projectId).catch((err) => {
           console.warn('[canvasStore] Failed to load leaves:', err);
           return [] as api.Leaf[];
@@ -45,51 +45,35 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
 
       const conversations = convResponse.conversations;
 
-      // Convert sentence commits to V2-compatible format for unitToNode
-      const commits: api.Commit[] = sentenceCommits.map(
-        (v4) =>
+      // Convert ApiCommit to V2-compatible format for unitToNode
+      const commits: api.Commit[] = apiCommits.map(
+        (v5) =>
           ({
-            commit_hash: v4.hash,
-            project_id: v4.project_id || projectId,
-            branch: v4.branch || 'main',
-            message: v4.message,
-            parent_hashes: v4.parents,
-            // V4: derive turn_window from sentences[].source_ref for conversation association
-            turn_window: v4.content.sentences[0]?.source_ref
-              ? {
-                  start_turn_hash: v4.content.sentences[0].source_ref.turn_hash,
-                  end_turn_hash:
-                    v4.content.sentences[v4.content.sentences.length - 1]?.source_ref?.turn_hash ||
-                    v4.content.sentences[0].source_ref.turn_hash,
-                }
-              : null,
-            facet_snapshot: null, // V4 uses sentences only, constraints in Leaves
+            commit_hash: v5.hash,
+            project_id: v5.project_id || projectId,
+            branch: v5.branch || 'main',
+            message: v5.message,
+            parent_hashes: v5.parents,
+            // v5: no turn_window in frame-based commits; use sources for conversation association
+            turn_window: null,
+            facet_snapshot: null, // frame-based commits use frames, not facet_snapshot
             pipeline_config: null,
             draft_id: null,
             draft_text_hash: null,
             signature: null,
-            source_excerpt: v4.content.sentences.map((s) => s.text), // Convert sentences to source_excerpt
-            must_have: null, // V4 doesn't have constraints at commit level
+            source_excerpt: null, // frames don't have a flat sentence list for excerpts
+            must_have: null,
             mustnt_have: null,
-            position_x: v4.position_x ?? null,
-            position_y: v4.position_y ?? null,
-            // Convert V4 source_refs (uses "id") to V2 format (uses "conversation_id")
+            position_x: v5.position_x ?? null,
+            position_y: v5.position_y ?? null,
+            // Convert v5 sources (uses "id") to V2 format (uses "conversation_id")
             source_refs:
-              v4.source_refs?.map((ref) => ({
+              v5.sources?.map((ref) => ({
                 type: ref.type === 'leaf' ? 'commit' : ref.type,
                 conversation_id: ref.id,
               })) ?? null,
             anchors: null,
-            created_at: v4.created_at,
-            // Store original V4 data for merge compatibility
-            sourceTurnWindow: v4.content.sentences[0]?.source_ref
-              ? {
-                  start_turn_hash: v4.content.sentences[0].source_ref.turn_hash,
-                  end_turn_hash:
-                    v4.content.sentences[v4.content.sentences.length - 1]?.source_ref?.turn_hash ||
-                    v4.content.sentences[0].source_ref.turn_hash,
-                }
-              : undefined,
+            created_at: v5.committed_at,
           }) as api.Commit
       );
 
@@ -155,10 +139,10 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
         }
       });
 
-      // Build a map: commit_hash -> original sentence commit data (for source context display)
-      const sentenceCommitMap = new Map<string, api.SentenceCommit>();
-      sentenceCommits.forEach((v4) => {
-        sentenceCommitMap.set(v4.hash, v4);
+      // Build a map: commit_hash -> original ApiCommit data (for source context display)
+      const sentenceCommitMap = new Map<string, api.ApiCommit>();
+      apiCommits.forEach((v5) => {
+        sentenceCommitMap.set(v5.hash, v5);
       });
 
       // Build maps for conversation → commits (one conversation can have multiple commits)
