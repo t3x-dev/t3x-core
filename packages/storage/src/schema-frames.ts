@@ -1008,10 +1008,12 @@ export type NotificationInsert = typeof notifications.$inferInsert;
 /**
  * Append-only log of semantic deltas produced during extraction and editing.
  *
- * Three sources:
- * - `llm_extraction`: Deltas from LLM-based semantic extraction (has turn_hash)
- * - `user_graph_edit`: Deltas from user edits in the graph UI
- * - `user_yaml_edit`: Deltas from user edits in YAML mode
+ * Sources:
+ * - `pipeline`: Deltas from LLM-based semantic extraction (has turn_hash)
+ * - `manual`: Deltas from user edits (graph UI or YAML mode)
+ * - `answer`: Deltas from user answers to advisory/drift questions
+ * - `collapse`: Deltas that collapse old frames (drift choice: keep new)
+ * - `commit_marker`: Marker entry when a commit is created
  *
  * @see docs/plans/core-engine/04-delta-protocol.md
  */
@@ -1031,10 +1033,10 @@ export const deltaLog = pgTable(
       .notNull()
       .references(() => projects.projectId, { onDelete: 'cascade' }),
 
-    /** Delta source: 'llm_extraction' | 'user_graph_edit' | 'user_yaml_edit' */
+    /** Delta source: 'pipeline' | 'manual' | 'answer' | 'collapse' | 'commit_marker' */
     source: text('source').notNull(),
 
-    /** Turn hash (only for llm_extraction source) */
+    /** Turn hash (only for pipeline source) */
     turnHash: text('turn_hash'),
 
     /** The Delta content (JSONB) */
@@ -1043,7 +1045,7 @@ export const deltaLog = pgTable(
     /** Commit hash — set when this delta is included in a commit, or for commit_marker entries */
     commitHash: text('commit_hash'),
 
-    /** Which model produced this extraction (for llm_extraction source) */
+    /** Which model produced this extraction (for pipeline source) */
     model: text('model'),
 
     /** When this delta was recorded */

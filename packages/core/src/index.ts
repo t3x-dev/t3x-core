@@ -180,13 +180,19 @@ export {
   type DiffCheckResult,
   type DriftDecision,
   type DriftResult,
+  type ExtractionCompletedEvent,
+  PipelineEventEmitter,
+  type PipelineEventMap,
   type PipelineDecision,
   type PipelineOrchestratorContext,
   type PreFilterResult,
+  type QuestionGeneratedEvent,
   type ReadinessBlockReason,
   type ReadinessResult,
   type SessionContext,
+  type TopicChangedEvent,
   type UserAnswer,
+  pipelineEmitter,
 } from './pipeline';
 // Hash / Merkle Tree (#14)
 export {

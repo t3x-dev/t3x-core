@@ -23,6 +23,7 @@ import {
   fuzzyLocate,
   GateRunner,
   type LLMCallLogger,
+  pipelineEmitter,
   preFilterDrift,
   type SlotQuotesMap,
 } from '@t3x-dev/core';
@@ -500,6 +501,10 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
       });
       if (!ambiguityResult.clean) {
         advisoryQuestions = ambiguityResult.questions;
+        pipelineEmitter.emit('question.generated', {
+          conversationId: conversation_id,
+          questions: ambiguityResult.questions,
+        });
       }
     } catch {
       // Ambiguity detection failure → continue without questions
@@ -523,8 +528,13 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
     }
 
     // 7b. Check for drift_detected in extraction result
-    const extractionDelta = result.delta as { drift_detected?: boolean; changes: unknown[] };
+    const extractionDelta = result.delta as { drift_detected?: boolean; changes: unknown[]; new_topic?: string };
     if (extractionDelta.drift_detected && extractionDelta.changes.length === 0) {
+      pipelineEmitter.emit('topic.changed', {
+        conversationId: conversation_id,
+        oldTopic: currentSnapshot.frames[0]?.type,
+        newTopic: extractionDelta.new_topic ?? 'unknown',
+      });
       return c.json({
         success: true as const,
         data: {
@@ -545,6 +555,16 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
       delta: result.delta,
       pipelineState: 'completed',
       gateResultJson: gateResult ?? null,
+      topicId: resolvedTopicId,
+    });
+
+    // ── Step 7: Emit extraction.completed event ──
+    pipelineEmitter.emit('extraction.completed', {
+      conversationId: conversation_id,
+      projectId: conversation.projectId,
+      deltaLogId: record.id,
+      delta: result.delta,
+      snapshot: organizedSnapshot,
       topicId: resolvedTopicId,
     });
 

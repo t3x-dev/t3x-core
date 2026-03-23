@@ -26,3 +26,12 @@ export type {
   SessionContext,
   UserAnswer,
 } from './types';
+// Step 7: EventEmitter
+export {
+  PipelineEventEmitter,
+  pipelineEmitter,
+  type ExtractionCompletedEvent,
+  type PipelineEventMap,
+  type QuestionGeneratedEvent,
+  type TopicChangedEvent,
+} from './eventEmitter';

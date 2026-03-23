@@ -43,7 +43,7 @@ const DeltaIdParam = z.object({
   deltaId: z.string().min(1),
 });
 
-const DeltaSourceSchema = z.enum(['llm_extraction', 'user_graph_edit', 'user_yaml_edit']);
+const DeltaSourceSchema = z.enum(['pipeline', 'manual', 'answer', 'collapse', 'commit_marker']);
 
 const FrameChangeSchema = z
   .object({
