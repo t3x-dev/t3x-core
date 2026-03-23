@@ -146,13 +146,13 @@ describe('buildDraft', () => {
     const log: DeltaLogEntry[] = [
       {
         id: 'd1',
-        source: 'llm_extraction',
+        source: 'pipeline',
         created_at: '2026-01-01T00:00:00Z',
         delta: { changes: [{ action: 'add', frame: { id: 'f_001', type: 'x', slots: { a: 1 } } }] },
       },
       {
         id: 'd2',
-        source: 'user_graph_edit',
+        source: 'manual',
         created_at: '2026-01-01T00:01:00Z',
         delta: { changes: [{ action: 'update', target: 'f_001', slots: { a: 99 } }] },
       },

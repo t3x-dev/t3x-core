@@ -44,7 +44,7 @@ describe('Delta Log Storage', () => {
       const entry = await insertDeltaLogEntry(db, {
         conversationId: testConversationId,
         projectId: testProjectId,
-        source: 'llm_extraction',
+        source: 'pipeline',
         turnHash: 'sha256:abc123',
         delta,
       });
@@ -54,7 +54,7 @@ describe('Delta Log Storage', () => {
       expect(entry.id.length).toBe(15); // "dl_" + 12 chars
       expect(entry.conversationId).toBe(testConversationId);
       expect(entry.projectId).toBe(testProjectId);
-      expect(entry.source).toBe('llm_extraction');
+      expect(entry.source).toBe('pipeline');
       expect(entry.turnHash).toBe('sha256:abc123');
       expect(entry.delta).toEqual(delta);
       expect(entry.createdAt).toBeDefined();
@@ -70,25 +70,25 @@ describe('Delta Log Storage', () => {
       const entry = await insertDeltaLogEntry(db, {
         conversationId: testConversationId,
         projectId: testProjectId,
-        source: 'user_graph_edit',
+        source: 'manual',
         delta: { removed_relations: [{ id: 'r1' }] },
       });
 
       expect(entry.turnHash).toBeNull();
-      expect(entry.source).toBe('user_graph_edit');
+      expect(entry.source).toBe('manual');
     });
 
     it('generates unique IDs with dl_ prefix', async () => {
       const entry1 = await insertDeltaLogEntry(db, {
         conversationId: testConversationId,
         projectId: testProjectId,
-        source: 'user_yaml_edit',
+        source: 'manual',
         delta: { a: 1 },
       });
       const entry2 = await insertDeltaLogEntry(db, {
         conversationId: testConversationId,
         projectId: testProjectId,
-        source: 'user_yaml_edit',
+        source: 'manual',
         delta: { b: 2 },
       });
 
@@ -98,7 +98,7 @@ describe('Delta Log Storage', () => {
     });
 
     it('preserves source field correctly', async () => {
-      for (const source of ['llm_extraction', 'user_graph_edit', 'user_yaml_edit']) {
+      for (const source of ['pipeline', 'manual', 'answer', 'collapse']) {
         const entry = await insertDeltaLogEntry(db, {
           conversationId: testConversationId,
           projectId: testProjectId,
@@ -134,21 +134,21 @@ describe('Delta Log Storage', () => {
       await insertDeltaLogEntry(db, {
         conversationId: conv2.conversationId,
         projectId: testProjectId,
-        source: 'llm_extraction',
+        source: 'pipeline',
         delta: { order: 1 },
       });
       await sleep(10);
       await insertDeltaLogEntry(db, {
         conversationId: conv2.conversationId,
         projectId: testProjectId,
-        source: 'user_graph_edit',
+        source: 'manual',
         delta: { order: 2 },
       });
       await sleep(10);
       await insertDeltaLogEntry(db, {
         conversationId: conv2.conversationId,
         projectId: testProjectId,
-        source: 'user_yaml_edit',
+        source: 'manual',
         delta: { order: 3 },
       });
 
@@ -185,7 +185,7 @@ describe('Delta Log Storage', () => {
       const entry = await insertDeltaLogEntry(db, {
         conversationId: testConversationId,
         projectId: testProjectId,
-        source: 'user_graph_edit',
+        source: 'manual',
         delta: { to_delete: true },
       });
 

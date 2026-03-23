@@ -9,10 +9,11 @@ interface FrameHistoryPopoverProps {
 }
 
 const SOURCE_LABELS: Record<string, string> = {
-  llm_extraction: 'AI',
-  user_graph_edit: 'Edit',
-  user_yaml_edit: 'YAML',
-  user_chat: 'Chat',
+  pipeline: 'AI',
+  manual: 'Manual',
+  answer: 'Answer',
+  collapse: 'Collapse',
+  commit_marker: 'Commit',
 };
 
 function formatTime(iso: string): string {

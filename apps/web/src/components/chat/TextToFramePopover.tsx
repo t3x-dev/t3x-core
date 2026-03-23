@@ -56,7 +56,7 @@ export function TextToFramePopover({ selectedText, position, onClose }: TextToFr
         },
       ],
     };
-    useExtractionPanelStore.getState().applyDelta(delta, 'user_graph_edit');
+    useExtractionPanelStore.getState().applyDelta(delta, 'manual');
     onClose();
   };
 

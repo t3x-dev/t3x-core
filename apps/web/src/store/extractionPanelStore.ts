@@ -204,7 +204,7 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
 
     // Persist user edits to database (LLM extraction is already saved by the API)
     const convId = get().conversationId;
-    if (convId && source !== 'llm_extraction') {
+    if (convId && source !== 'pipeline') {
       createDelta(convId, delta, source).catch(() => {
         // Persist failed — non-critical, store has the data
       });
@@ -330,7 +330,7 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
           sources: conversationId
             ? [{ type: 'conversation', id: conversationId, title: conversationTitle ?? undefined }]
             : undefined,
-          provenance: { method: 'llm_extraction' },
+          provenance: { method: 'pipeline' },
         }
       );
 

@@ -251,7 +251,7 @@ export function FrameYAMLView() {
       delta.changes.length > 0 ||
       (delta.new_relations?.length ?? 0) > 0 ||
       (delta.remove_relations?.length ?? 0) > 0;
-    if (hasChanges) applyDelta(delta, 'user_yaml_edit');
+    if (hasChanges) applyDelta(delta, 'manual');
     setIsEditing(false);
   }, [editValue, draft, applyDelta]);
 
