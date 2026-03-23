@@ -338,6 +338,7 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
 
     // 6b. Resolve slot quotes into character offsets using fuzzyLocate
     const slotQuotes: SlotQuotesMap = result.slotQuotes ?? new Map();
+    console.info(`[slot-sources] slotQuotes from LLM: ${slotQuotes.size} changes have quotes`);
 
     if (slotQuotes.size > 0) {
       // Build turn content lookup: try all turns for each quote
@@ -352,6 +353,7 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
         if (!quotes) continue;
 
         const change = result.delta.changes[i];
+        console.info(`[slot-sources] change[${i}] action=${change.action} slots=[${Object.keys(quotes).join(', ')}]`);
         const slotSources: Record<
           string,
           { turn: string; turn_hash?: string; start_char: number; end_char: number; quote?: string }
@@ -364,6 +366,7 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
           for (const turnInfo of turnInfoList) {
             const located = fuzzyLocate(turnInfo.content, quote);
             if (located && located.score >= 0.6) {
+              console.info(`[slot-sources]   ${slotKey}: matched in ${turnInfo.tag} score=${located.score.toFixed(2)} [${located.start}:${located.end}]`);
               slotSources[slotKey] = {
                 turn: turnInfo.tag,
                 turn_hash: turnInfo.turnHash,
@@ -376,12 +379,20 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
           }
         }
 
+        console.info(`[slot-sources] change[${i}] resolved ${Object.keys(slotSources).length}/${Object.keys(quotes).length} slots`);
+
         if (Object.keys(slotSources).length > 0) {
           if (change.action === 'add') {
             change.frame.slot_sources = slotSources;
+          } else if (change.action === 'update') {
+            // Merge new slot_sources into the existing frame in the snapshot
+            const targetFrame = result.snapshot.frames.find(
+              (f: { id: string }) => f.id === change.target
+            );
+            if (targetFrame) {
+              targetFrame.slot_sources = { ...targetFrame.slot_sources, ...slotSources };
+            }
           }
-          // For updates, attach slot_sources to the frame in the snapshot
-          // (the delta itself doesn't carry slot_sources, but we update the snapshot)
         }
       }
     }
