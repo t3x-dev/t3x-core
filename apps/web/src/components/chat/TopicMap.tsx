@@ -129,7 +129,7 @@ export function TopicMap() {
               }}
               placeholder="Topic name..."
               className="flex-1 rounded border border-[var(--stroke-default)] bg-[var(--surface-panel)] px-1.5 py-0.5 text-[11px] text-[var(--text-primary)] outline-none focus:border-[var(--accent-commit)]"
-              autoFocus
+              ref={(el) => el?.focus()}
             />
             <button
               type="button"

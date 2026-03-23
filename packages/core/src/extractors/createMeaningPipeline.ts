@@ -12,8 +12,10 @@ import {
   dedupCheckerAgent,
   nesterAgent,
   outputRegulatorAgent,
+  regressionCheckerAgent,
   reviewerAgent,
   slotPolisherAgent,
+  sourceTraceValidatorAgent,
   structuralValidatorAgent,
   topicEvolverAgent,
   topicNamerAgent,
@@ -33,7 +35,9 @@ import { MeaningPipeline } from './meaningPipeline';
  * 7. reviewer (LLM) — quality gate: review structure, flag issues, auto-fix
  * 8. coverage_checker (LLM) — verify all user points are captured, auto-add missing
  * 9. contradiction_checker (LLM) — detect and remove content contradicting user statements
- * 10. structural_validator (CODE) — validate structural integrity after all agents
+ * 10. regression_checker (CODE) — detect significant content loss vs previous snapshot
+ * 11. structural_validator (CODE) — validate structural integrity after all agents
+ * 12. source_trace_validator (CODE) — validate source references point to real turns
  *
  * After each step, a snapshot is saved for human review.
  */
@@ -48,5 +52,7 @@ export function createMeaningPipeline(provider: LLMProvider): MeaningPipeline {
     .register(reviewerAgent) // LLM: quality gate
     .register(coverageCheckerAgent) // LLM: check coverage
     .register(contradictionCheckerAgent) // LLM: check contradictions
-    .register(structuralValidatorAgent); // CODE: structural integrity (Step 5)
+    .register(regressionCheckerAgent) // CODE: content loss detection (Step 5)
+    .register(structuralValidatorAgent) // CODE: structural integrity (Step 5)
+    .register(sourceTraceValidatorAgent); // CODE: source traceability (Step 5)
 }

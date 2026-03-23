@@ -15,9 +15,11 @@ export { dedupCheckerAgent } from './dedupCheckerAgent';
 export { nesterAgent } from './nesterAgent';
 // Code agents (deterministic, run first)
 export { outputRegulatorAgent } from './outputRegulatorAgent';
+export { regressionCheckerAgent } from './regressionCheckerAgent';
 export { reviewerAgent } from './reviewerAgent';
 export { slotPolisherAgent } from './slotPolisherAgent';
 // Step 5 validators (deterministic, run last)
+export { sourceTraceValidatorAgent } from './sourceTraceValidatorAgent';
 export { structuralValidatorAgent } from './structuralValidatorAgent';
 export { topicEvolverAgent } from './topicEvolverAgent';
 export { topicNamerAgent } from './topicNamerAgent';
