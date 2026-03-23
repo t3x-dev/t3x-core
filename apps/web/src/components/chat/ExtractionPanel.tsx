@@ -321,7 +321,6 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
                   <FrameYAMLView />
                 </div>
                 <AdvisoryPanel />
-                <CommitDropdown />
               </div>
 
               {/* Right: Preview + Commit */}
