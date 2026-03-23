@@ -292,6 +292,29 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
         });
       });
 
+      // Build edges: staging conversation → parent commit
+      // When a user "continues" from a committed node, a new STAGING conversation
+      // is created with parent_commit_hash. We need to show this link on the canvas.
+      for (const conv of conversations) {
+        if (conv.parent_commit_hash && !convsWithCommits.has(conv.conversation_id)) {
+          // This is a staging conversation that has a parent commit
+          const parentExists = commitHashes.has(conv.parent_commit_hash);
+          const childNodeId = conv.conversation_id;
+          const childExists = nodeIdSet.has(childNodeId);
+          if (parentExists && childExists) {
+            edges.push({
+              id: `staging-${conv.parent_commit_hash}-${childNodeId}`,
+              source: conv.parent_commit_hash,
+              target: childNodeId,
+              type: edgeType,
+              animated: true,
+              style: { ...edgeStyle, strokeDasharray: '5 5' },
+              data: { edgeType: 'evolve' },
+            });
+          }
+        }
+      }
+
       // Load editing drafts and create draft nodes + conversation→draft edges
       try {
         const editingDrafts = await api.listWorkbenchDrafts(projectId, 'editing');

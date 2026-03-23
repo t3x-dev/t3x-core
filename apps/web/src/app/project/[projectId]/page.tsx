@@ -6,7 +6,6 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ErrorMessage, LoadingSpinner } from '@/components/ApiStatus';
 import { CanvasWorkspace } from '@/components/canvas';
-import { ListView } from '@/components/project/ListView';
 import { TimelineView } from '@/components/project/TimelineView';
 import { ViewSwitcher } from '@/components/project/ViewSwitcher';
 import { StatusBadge } from '@/components/shared/StatusBadge';
@@ -44,7 +43,7 @@ function ProjectDetailPageContent() {
   const defaultView = useSettingsStore((s) => s.defaultView);
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     const urlView = searchParams.get('view');
-    if (urlView === 'timeline' || urlView === 'list') return urlView;
+    if (urlView === 'timeline') return urlView;
     return defaultView;
   });
 
@@ -242,7 +241,7 @@ function ProjectDetailPageContent() {
           onViewportChange={handleViewportChange}
           viewSwitcher={<ViewSwitcher value={viewMode} onChange={setViewMode} />}
         />
-      ) : mode === 'editor' && (viewMode === 'timeline' || viewMode === 'list') ? (
+      ) : mode === 'editor' && viewMode === 'timeline' ? (
         <div className="flex h-full flex-col">
           <header className="flex h-12 shrink-0 items-center justify-between border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-4">
             <h2 className="text-sm font-semibold text-[var(--text-primary)]">{project.name}</h2>
@@ -257,11 +256,7 @@ function ProjectDetailPageContent() {
               </Link>
             </div>
           </header>
-          {viewMode === 'timeline' ? (
-            <TimelineView projectId={projectId} />
-          ) : (
-            <ListView projectId={projectId} />
-          )}
+          <TimelineView projectId={projectId} />
         </div>
       ) : (
         <div className="relative flex h-full flex-col">

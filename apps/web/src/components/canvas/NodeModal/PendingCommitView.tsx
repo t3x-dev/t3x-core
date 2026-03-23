@@ -103,20 +103,22 @@ export function PendingCommitView({
             </Badge>
           </div>
           <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={state.handleOpenAsDraft}
-              disabled={state.openingAsDraft}
-              className="gap-1.5"
-            >
-              {state.openingAsDraft ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
+            {(node.data as CanvasNodeData).conversationId && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const d = node.data as CanvasNodeData;
+                  if (d.projectId && d.conversationId) {
+                    window.location.href = `/chat/${d.conversationId}`;
+                  }
+                }}
+                className="gap-1.5"
+              >
                 <ExternalLink className="h-3.5 w-3.5" />
-              )}
-              Open as Draft
-            </Button>
+                Continue Chat
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="icon"

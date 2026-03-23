@@ -11,8 +11,9 @@ import { LeafWorkspaceFooter } from '@/components/leaf/LeafWorkspaceFooter';
 import { LeafWorkspaceHeader } from '@/components/leaf/LeafWorkspaceHeader';
 import { LearnFromEditSuggestion } from '@/components/leaf/LearnFromEditSuggestion';
 import { LearnFromEditsPanel } from '@/components/leaf/LearnFromEditsPanel';
-import { SentenceSourcePanel } from '@/components/leaf/SentenceSourcePanel';
+import { QualityPanel } from '@/components/leaf/QualityPanel';
 import { SuggestConstraintsDialog } from '@/components/leaf/SuggestConstraintsDialog';
+import { YAMLTreePanel } from '@/components/leaf/YAMLTreePanel';
 import { KeyboardHintBar } from '@/components/shared/KeyboardHintBar';
 import { useKeyboardNavigation } from '@/hooks/useKeyboardNavigation';
 import { useLeafPageData } from '@/hooks/useLeafPageData';
@@ -284,23 +285,24 @@ export default function LeafDetailPage() {
         </div>
       )}
 
-      {/* ── Body: Three-Zone Layout ── */}
+      {/* ── Body: Dual-Mode Layout ── */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Left: Source Panel */}
-        <SentenceSourcePanel
-          sentences={sentences}
-          constraints={leaf.constraints}
-          mode={mode}
-          sentenceCoverage={sentenceCoverage}
-          sentenceConfidence={sentenceConfidence}
-          saving={saving}
-          collapsed={sourcePanelCollapsed}
-          onToggle={() => setSourcePanelCollapsed(!sourcePanelCollapsed)}
-          onAddConstraintFromSource={handleAddConstraintFromSource}
-          onHoverSentence={setHoveredSentenceId}
-          hoveredSentenceId={hoveredSentenceId}
-          activeSentenceId={activeSentenceId}
-        />
+        {/* Left: YAML Tree (always visible in both modes) */}
+        {!sourcePanelCollapsed && (
+          <YAMLTreePanel
+            sentences={sentences}
+            mode={mode}
+            constraints={leaf.constraints}
+            assertions={leaf.assertions ?? undefined}
+            saving={saving}
+            sentenceConfidence={sentenceConfidence}
+            commitHash={leaf.commit_hash}
+            projectId={projectId}
+            onAddConstraintFromSource={handleAddConstraintFromSource}
+            highlightedConstraintId={hoveredSentenceId}
+            onHoverSentence={setHoveredSentenceId}
+          />
+        )}
 
         {/* Center: Main Area */}
         <div className="flex flex-1 flex-col overflow-hidden">
@@ -337,40 +339,6 @@ export default function LeafDetailPage() {
             {leaf.output && (
               <LeafExtractToDraft leafId={leafId} projectId={projectId} outputText={leaf.output} />
             )}
-
-            {/* Display mode: Lineage Summary */}
-            {mode === 'display' && leaf.output && (
-              <div className="mt-4 rounded-lg border border-[var(--stroke-default)] bg-[var(--surface-card)] p-4">
-                <div className="text-[11px] font-semibold text-[var(--text-tertiary)] uppercase tracking-wider mb-3">
-                  Lineage Summary
-                </div>
-                <div className="flex flex-col gap-2 text-xs text-[var(--text-secondary)]">
-                  <div className="flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-conversation)]" />
-                    Source: {sentences.length} sentences from commit{' '}
-                    {leaf.commit_hash.replace('sha256:', '').slice(0, 7)}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[var(--status-success)]" />
-                    Coverage: {reflectedCount} reflected, {sentences.length - reflectedCount} not
-                    used
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-leaf)]" />
-                    Constraints:{' '}
-                    {leaf.assertions
-                      ? `${leaf.assertions.filter((a) => a.passed).length}/${leaf.assertions.length} passed`
-                      : 'none'}
-                  </div>
-                  {leaf.generated_at && (
-                    <div className="flex items-center gap-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-[var(--text-tertiary)]" />
-                      Generated: {new Date(leaf.generated_at).toLocaleString()}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
           </div>
 
           {/* Composer Dock (Generate mode only) */}
@@ -400,7 +368,7 @@ export default function LeafDetailPage() {
             />
           )}
 
-          {/* Learn constraints from user output edits (Item 17) */}
+          {/* Learn constraints from user output edits */}
           <LearnFromEditsPanel
             leafId={leafId}
             hasOutput={!!leaf.output}
@@ -410,20 +378,30 @@ export default function LeafDetailPage() {
           />
         </div>
 
-        {/* Right: Inspector Rail */}
-        <LeafInspector
-          leaf={leaf}
-          mode={mode}
-          saving={saving}
-          collapsed={inspectorCollapsed}
-          onRemoveConstraint={handleRemoveConstraint}
-          onAddConstraint={handleAddConstraint}
-          onExport={handleExport}
-          selectedAssertionIds={selectedAssertionIds}
-          toggleAssertion={toggleAssertion}
-          onRetune={onRetune}
-          retuning={retuning}
-        />
+        {/* Right: Mode-dependent panel */}
+        {mode === 'generate' ? (
+          <LeafInspector
+            leaf={leaf}
+            mode={mode}
+            saving={saving}
+            collapsed={inspectorCollapsed}
+            onRemoveConstraint={handleRemoveConstraint}
+            onAddConstraint={handleAddConstraint}
+            onExport={handleExport}
+            selectedAssertionIds={selectedAssertionIds}
+            toggleAssertion={toggleAssertion}
+            onRetune={onRetune}
+            retuning={retuning}
+          />
+        ) : (
+          <QualityPanel
+            assertions={leaf.assertions ?? []}
+            constraints={leaf.constraints}
+            generatedAt={leaf.generated_at ?? undefined}
+            onHighlightConstraint={setHoveredSentenceId}
+            onExport={handleExport}
+          />
+        )}
       </div>
 
       {/* ── Footer ── */}

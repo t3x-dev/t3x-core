@@ -1,6 +1,6 @@
 'use client';
 
-import { Clock, LayoutGrid, List } from 'lucide-react';
+import { Clock, LayoutGrid } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
@@ -12,9 +12,8 @@ interface ViewSwitcherProps {
 }
 
 const views: { value: ViewMode; icon: typeof LayoutGrid; label: string; disabled?: boolean }[] = [
-  { value: 'canvas', icon: LayoutGrid, label: 'Canvas' },
   { value: 'timeline', icon: Clock, label: 'Timeline' },
-  { value: 'list', icon: List, label: 'List' },
+  { value: 'canvas', icon: LayoutGrid, label: 'Canvas' },
 ];
 
 export function ViewSwitcher({ value, onChange }: ViewSwitcherProps) {
