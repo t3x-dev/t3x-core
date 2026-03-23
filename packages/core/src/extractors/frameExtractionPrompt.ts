@@ -197,49 +197,78 @@ const FIRST_EXTRACTION_SYSTEM_PROMPT = `You are a semantic extraction engine. Ex
 - Subtopics become child frames connected to the root via "elaborates" relations
 - The root frame type IS the topic name (e.g., "hangzhou_trip", "product_requirements")
 
-## What to Extract
-Extract from ALL participants:
-- User statements: confidence 0.85-0.95
-- AI suggestions the user acknowledged or built upon: confidence 0.7-0.8
-- AI substantive responses (facts, knowledge, detailed information): confidence 0.5-0.7
-- Mutual decisions (both agreed): confidence 0.8
+## Three-Tier Extraction Rule (STRICT)
+
+| Tier | Condition | Action | Confidence |
+|------|-----------|--------|------------|
+| MUST extract | User explicitly stated a fact | Extract it | 0.85-0.95 |
+| MAY extract | AI suggestion that user explicitly confirmed/adopted | Extract it | 0.5-0.7 |
+| MUST NOT extract | AI suggestion/advice user never responded to | Do NOT extract | — |
+
+Key distinction: The user must have EXPLICITLY confirmed or adopted an AI suggestion for it to be extractable. Silence or moving to a different topic does NOT count as confirmation.
 
 ## What NOT to Extract
 - Questions (from either side) — questions are not facts
 - Meta-frames like "user_preferences", "user_interests" — use domain-specific types instead
-  BAD: f_001 user_preferences: { ... }
-  GOOD: f_002 accommodation: { style: "boutique", area: "near West Lake" }
 - Pure conversational filler ("Sure!", "Let me help with that")
 - AI meta-commentary about its own process ("I'll organize this by...")
+- AI suggestions, recommendations, or knowledge the user did NOT confirm
+
+## slot_quotes Hard Binding (MANDATORY)
+Every slot MUST have a corresponding entry in "slot_quotes" with VERBATIM text copied from the conversation.
+- If you cannot quote the exact source text for a slot → DO NOT create that slot
+- slot_quotes values must be actual substrings from the conversation, not paraphrased
+- This is a hard constraint — zero exceptions
+
+## Slot Nesting Limit: Maximum 1 Level
+- ALLOWED: simple values ("Portland"), numbers (80000), arrays of strings
+- ALLOWED: arrays of 1-level objects ([{ "type": "peanut" }])
+- FORBIDDEN: nested objects ({ budget: { materials: [...] } }) — 2+ levels deep
+- If a subtopic has more than 2-3 slots → it MUST be a separate frame with "elaborates" relation
+
+## Frame Count: 3-8 Frames (Hard Limit)
+- Fewer than 3 = subtopics not properly split out from root
+- More than 8 = over-fragmentation
+- Each frame should have 1-4 flat slots
 
 ## Frame Structure Rules
-1. AIM FOR 3-5 FRAMES TOTAL — fewer, richer frames are better
-2. ONE frame per topic — no fragmentation
+1. Frame type uses snake_case domain nouns (NOT generic labels)
+2. Frame IDs start from f_001
 3. LISTS OF SIMILAR ITEMS = ONE FRAME with array slots
-4. Frame type uses snake_case domain nouns (NOT generic labels)
-5. Frame IDs start from f_001
 
-## ABSOLUTE PROHIBITION: No Fabrication
-- Every slot value MUST trace to actual conversation text
-- Include slot_quotes for traceability
-- Do NOT invent names, prices, numbers, or details not mentioned
-- Do NOT infer quantities or amounts not stated
+## BAD vs GOOD Examples
 
-## GOOD vs BAD Examples
+BAD — extracting AI suggestions as user facts:
+  User: "I want to open a coffee shop in Portland"
+  AI: "I recommend partnering with Stumptown for beans and using birch plywood for interiors"
+  User: "What about the budget?"
 
-BAD (meta-frames, over-extraction):
-  f_001 user_preferences: { accommodation: "boutique", interests: ["tea"] }
-  f_002 user_interests: { items: ["tea culture", "hiking"] }
-  f_003 itinerary: { day_1: "Lingyin Temple", day_2: "..." }
+  WRONG extraction:
+    suppliers: ["Stumptown"]          ← user never confirmed this
+    materials: ["birch plywood"]      ← AI invented, user never said this
+    design_aesthetic: "Scandinavian"  ← AI suggested, user never confirmed
 
-GOOD (domain-specific, topic tree):
-  f_001 hangzhou_trip: { destination: "Hangzhou", duration: "3 days", group_size: 3 }
-  f_002 accommodation: { style: "boutique hotel", area: "near West Lake" }
-  f_003 dietary_restrictions: { allergies: [{ type: "peanut", applies_to: "friend" }] }
+BAD — one giant nested frame (FORBIDDEN):
+  f_001 coffee_shop:
+    slots: {
+      location: "Portland",
+      budget: 80000,
+      budget_breakdown: { equipment: 30000, renovation: 20000 },
+      design: { aesthetic: "Scandinavian", materials: ["birch", "pine"] },
+      staffing: { baristas: 3, manager: 1, hourly_wage_range: "$15-18" }
+    }
+
+GOOD — multiple flat frames + relations:
+  f_001 coffee_shop: { location: "Portland", budget: 80000 }
+  f_002 budget_allocation: { equipment: 30000, renovation: 20000 }
+  f_003 design_concept: { aesthetic: "Scandinavian" }
+  f_004 staffing_plan: { baristas: 3, manager: 1 }
   relations: [
     { from: "f_002", to: "f_001", type: "elaborates" },
-    { from: "f_003", to: "f_001", type: "elaborates" }
+    { from: "f_003", to: "f_001", type: "elaborates" },
+    { from: "f_004", to: "f_001", type: "elaborates" }
   ]
+  (Note: each frame has flat slots, no nesting beyond 1 level)
 
 ## Source Tracking
 - Set "source" field to turn tag (e.g., "T1", "T2")
@@ -247,28 +276,25 @@ GOOD (domain-specific, topic tree):
 
 ## Confidence Scoring
 - User's explicit statements: 0.85-0.95
-- Mutual decisions: 0.8
-- AI suggestions user acknowledged: 0.5-0.7
+- Mutual decisions (both agreed): 0.8
+- AI suggestions user explicitly confirmed: 0.5-0.7
 
 ## Relation Types (6 only): causes, conditions, contrasts, follows, depends, elaborates
 Use "elaborates" for all subtopic relationships.
-
-## Source Quoting
-For EACH slot, include "slot_quotes" mapping slot keys to EXACT verbatim text from conversation.
 
 ## JSON Output Format
 \`\`\`json
 {
   "frames": [
     {
-      "id": "f_001", "type": "hangzhou_trip", "source": "T1", "confidence": 0.9,
-      "slots": { "destination": "Hangzhou", "duration": "3 days", "group_size": 3 },
-      "slot_quotes": { "destination": "planning a 3-day trip to Hangzhou" }
+      "id": "f_001", "type": "coffee_shop", "source": "T1", "confidence": 0.9,
+      "slots": { "location": "Portland", "budget": 80000 },
+      "slot_quotes": { "location": "coffee shop in downtown Portland", "budget": "my budget is around $80,000" }
     },
     {
-      "id": "f_002", "type": "dietary_restrictions", "source": "T4", "confidence": 0.9,
-      "slots": { "allergies": [{ "type": "peanut", "applies_to": "friend" }] },
-      "slot_quotes": { "allergies": "One friend is allergic to peanuts" }
+      "id": "f_002", "type": "design_concept", "source": "T3", "confidence": 0.85,
+      "slots": { "aesthetic": "Scandinavian" },
+      "slot_quotes": { "aesthetic": "I want a Scandinavian aesthetic" }
     }
   ],
   "relations": [
