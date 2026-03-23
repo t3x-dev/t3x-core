@@ -6,7 +6,7 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { createRelationExtractor, framesToTextSegments } from '@t3x-dev/core';
+import { createRelationExtractor } from '@t3x-dev/core';
 import {
   deleteRelationsByCommit,
   findRelationsByCommit,
@@ -165,7 +165,12 @@ relationsRoutes.openapi(extractRelationsRoute, async (c) => {
         'No LLM provider configured. Set ANTHROPIC_API_KEY or another provider key.'
       );
     }
-    const sentences = framesToTextSegments(commit.content);
+    const sentences = commit.content.frames.map((frame) => ({
+      id: frame.id,
+      text: `[${frame.type}] ${Object.entries(frame.slots)
+        .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : String(v)}`)
+        .join('; ')}`,
+    }));
     const { provider: trackedProvider, usage: trackedUsage } = wrapWithUsageTracking(provider);
     const extractor = createRelationExtractor(trackedProvider);
     const result = await extractor.extract(sentences);

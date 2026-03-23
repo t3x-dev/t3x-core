@@ -15,7 +15,6 @@
 import {
   buildConversationContext,
   type ConversationData,
-  framesToTextSegments,
   getModelInfo,
   type SentenceCommit,
 } from '@t3x-dev/core';
@@ -391,14 +390,15 @@ conversationRoutes.get('/v1/conversations/:id/memory', async (c) => {
       const unified = await getCommitUnified(db, currentBranch.headCommitHash);
       if (unified) {
         // Convert unified Commit to V4-compatible shape for buildConversationContext
-        const segments = framesToTextSegments(unified.content);
         currentCommit = {
           ...unified,
           schema: 't3x/commit/v4' as const,
           content: {
-            sentences: segments.map((seg) => ({
-              id: seg.id,
-              text: seg.text,
+            sentences: unified.content.frames.map((frame) => ({
+              id: frame.id,
+              text: `[${frame.type}] ${Object.entries(frame.slots)
+                .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : String(v)}`)
+                .join('; ')}`,
               confidence: 1,
             })),
           },
@@ -488,14 +488,15 @@ conversationRoutes.get('/v1/conversations/:id/context-export', async (c) => {
       const unified = await getCommitUnified(db, currentBranch.headCommitHash);
       if (unified) {
         // Convert unified Commit to V4-compatible shape for buildConversationContext
-        const segments = framesToTextSegments(unified.content);
         currentCommit = {
           ...unified,
           schema: 't3x/commit/v4' as const,
           content: {
-            sentences: segments.map((seg) => ({
-              id: seg.id,
-              text: seg.text,
+            sentences: unified.content.frames.map((frame) => ({
+              id: frame.id,
+              text: `[${frame.type}] ${Object.entries(frame.slots)
+                .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : String(v)}`)
+                .join('; ')}`,
               confidence: 1,
             })),
           },

@@ -14,7 +14,6 @@ import type { Commit } from '@t3x-dev/core';
 import {
   AllProvidersFailedError,
   collectLessons,
-  framesToTextSegments,
   GenerationError,
   type GenerationMode,
   isGenerationConfigured,
@@ -69,15 +68,16 @@ export const leavesGenerationRoutes = new OpenAPIHono({
  * Needed because generateLeafOutput / modeGenerate expect SentenceCommit.
  */
 function toSentenceCommit(commit: Commit): SentenceCommit {
-  const segments = framesToTextSegments(commit.content);
   return {
     ...commit,
     schema: 't3x/commit/v4' as const,
     content: {
-      sentences: segments.map((seg) => ({
-        id: seg.id,
-        text: seg.text,
-        confidence: 1,
+      sentences: commit.content.frames.map((frame) => ({
+        id: frame.id,
+        text: `[${frame.type}] ${Object.entries(frame.slots)
+          .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : String(v)}`)
+          .join('; ')}`,
+        confidence: frame.confidence ?? 1,
       })),
     },
   } as SentenceCommit;
