@@ -375,7 +375,7 @@ function CanvasWorkspaceInner({
             }
             // Conversation or staging units -> navigate to chat to continue conversation
             if (data.conversationId && projectId) {
-              router.push(`/project/${projectId}/conversation/${data.conversationId}`);
+              router.push(`/chat/${data.conversationId}`);
               return;
             }
             // Fallback: open modal for nodes without conversation

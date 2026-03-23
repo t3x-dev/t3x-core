@@ -110,7 +110,7 @@ export function PendingCommitView({
                 onClick={() => {
                   const d = node.data as CanvasNodeData;
                   if (d.projectId && d.conversationId) {
-                    window.location.href = `/project/${d.projectId}/conversation/${d.conversationId}`;
+                    window.location.href = `/chat/${d.conversationId}`;
                   }
                 }}
                 className="gap-1.5"

@@ -84,7 +84,7 @@ export function TimelineView({ projectId }: { projectId: string }) {
   const handleClick = (entry: TimelineEntry) => {
     if (entry.type === 'conversation' && entry.conversationId) {
       // STAGING → chat page
-      router.push(`/project/${projectId}/conversation/${entry.conversationId}`);
+      router.push(`/chat/${entry.conversationId}`);
     } else if (entry.fullHash) {
       // Committed → commit detail page
       router.push(`/project/${projectId}/commit/${encodeURIComponent(entry.fullHash)}`);
