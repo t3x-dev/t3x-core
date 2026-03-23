@@ -128,11 +128,13 @@ export const NodeLeavesSection = memo(function NodeLeavesSection({
                     key={leaf.id}
                     data-node-type="leaf"
                     className="group/leaf flex items-center gap-1"
+                    onClick={(e) => e.stopPropagation()}
                     onContextMenu={(e) => leafContextMenuHandler?.(e, leaf.id, nodeId)}
                   >
                     {leafHref ? (
                       <Link
                         href={leafHref}
+                        onClick={(e) => e.stopPropagation()}
                         className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-[var(--hover-bg)] transition-colors cursor-pointer flex-1 min-w-0"
                       >
                         {leafContent}
