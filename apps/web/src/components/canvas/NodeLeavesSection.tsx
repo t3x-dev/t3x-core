@@ -48,7 +48,10 @@ export const NodeLeavesSection = memo(function NodeLeavesSection({
     <div className="border-t border-[var(--stroke-divider)]">
       <button
         className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-[var(--hover-bg)] transition-colors"
-        onClick={() => setLeavesExpanded((prev) => !prev)}
+        onClick={(e) => {
+          e.stopPropagation();
+          setLeavesExpanded((prev) => !prev);
+        }}
         type="button"
       >
         <span className="text-[10px] font-medium text-[var(--text-tertiary)] uppercase tracking-wider">
