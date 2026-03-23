@@ -311,3 +311,33 @@ export interface ConflictReport {
 export async function checkConflicts(_commitHash: string): Promise<ConflictReport> {
   return { conflicts: [], checked_count: 0 };
 }
+
+// ============================================================================
+// ApiCommit helper functions (frame-based)
+// ============================================================================
+
+import type { SemanticContent } from '@t3x-dev/core';
+
+/**
+ * Extract SemanticContent from an ApiCommit.
+ * Returns the frame-based content, or a default empty SemanticContent if missing.
+ */
+export function getSemanticContent(commit: ApiCommit): SemanticContent {
+  return (commit.content ?? { frames: [], relations: [] }) as SemanticContent;
+}
+
+/**
+ * Generate summary text from frames for display purposes (export, insights).
+ * Converts frame structure to human-readable text representation.
+ */
+export function frameSummaryText(commit: ApiCommit): string {
+  const content = getSemanticContent(commit);
+  return content.frames
+    .map((f) => {
+      const slots = Object.entries(f.slots ?? {})
+        .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`)
+        .join(', ');
+      return `${f.type}: ${slots}`;
+    })
+    .join('. ');
+}
