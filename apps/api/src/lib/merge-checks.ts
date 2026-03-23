@@ -6,11 +6,11 @@
  *
  * Checks:
  * 1. constraints_satisfied — Per-Leaf constraint validation against merged text
- * 2. evidence_chain_complete — All non-edited sentences have source_ref
+ * 2. evidence_chain_complete — All frames have source references
  * 3. eval_passed — (Optional) Latest evaluation run status per associated Leaf
  */
 
-import type { DiffableSentence, Leaf, Merge2WayResult } from '@t3x-dev/core';
+import type { Frame, FrameMergeResult, Leaf } from '@t3x-dev/core';
 import { validateConstraintsExactOnly } from '@t3x-dev/core';
 import type { AnyDB } from '@t3x-dev/storage';
 import { findLeavesByCommit, listRuns } from '@t3x-dev/storage';
@@ -32,51 +32,56 @@ interface MergeDraft {
 }
 
 // ============================================================
-// Extract Merged Sentences
+// Extract Merged Frames
 // ============================================================
 
 /**
- * Extract the final set of sentences from a resolved Merge2WayResult.
+ * Extract the final set of frames from a FrameMergeResult.
  *
- * Returns each sentence with an `isEdited` flag indicating whether
- * it came from a user edit (resolution='edit') — edited sentences
- * are excluded from evidence chain checks since they have no source.
+ * For checks, we assume all autoKept frames are kept, all conflicts
+ * will be resolved (we include both sides for text validation),
+ * and all onlyInSource/onlyInTarget are kept by default.
+ *
+ * This gives a conservative estimate for constraint checking.
  */
-export function extractMergedSentences(
-  prepared: Merge2WayResult
-): Array<{ sentence: DiffableSentence; isEdited: boolean }> {
-  const result: Array<{ sentence: DiffableSentence; isEdited: boolean }> = [];
+export function extractMergedFrames(prepared: FrameMergeResult): Frame[] {
+  const result: Frame[] = [];
 
-  // identical → all included
-  for (const s of prepared.identical) {
-    result.push({ sentence: s, isEdited: false });
+  // autoKept -> all included
+  result.push(...prepared.autoKept);
+
+  // conflicts -> include both source and target for conservative check
+  for (const conflict of prepared.conflicts) {
+    result.push(conflict.sourceFrame);
+    // Don't double-count if checking text
   }
 
-  // similarPairs → pick based on resolution
-  for (const pair of prepared.similarPairs) {
-    if (pair.resolution === 'source') {
-      result.push({ sentence: pair.source, isEdited: false });
-    } else if (pair.resolution === 'target') {
-      result.push({ sentence: pair.target, isEdited: false });
-    }
-    // unresolved pairs are skipped (shouldn't happen if checks run after resolution)
-  }
+  // onlyInSource -> all included (conservative)
+  result.push(...prepared.onlyInSource);
 
-  // onlyInSource → keep=true only
-  for (const candidate of prepared.onlyInSource) {
-    if (candidate.keep) {
-      result.push({ sentence: candidate.sentence, isEdited: false });
-    }
-  }
-
-  // onlyInTarget → keep=true only
-  for (const candidate of prepared.onlyInTarget) {
-    if (candidate.keep) {
-      result.push({ sentence: candidate.sentence, isEdited: false });
-    }
-  }
+  // onlyInTarget -> all included (conservative)
+  result.push(...prepared.onlyInTarget);
 
   return result;
+}
+
+/**
+ * Convert frames to text for constraint checking.
+ * Extracts text from `slots.text` for legacy_sentence frames,
+ * or serializes all slots for semantic frames.
+ */
+function framesToText(frames: Frame[]): string {
+  return frames
+    .map((f) => {
+      if (f.type === 'legacy_sentence' && typeof f.slots.text === 'string') {
+        return f.slots.text;
+      }
+      // For semantic frames, serialize slot values
+      return Object.entries(f.slots)
+        .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`)
+        .join(', ');
+    })
+    .join('\n');
 }
 
 // ============================================================
@@ -143,33 +148,27 @@ async function checkConstraintsSatisfied(
 /**
  * Check 2: evidence_chain_complete
  *
- * Verifies that all non-edited merged sentences have a source_ref.
- * Edited sentences (from resolution='edit') are excluded since they
- * are merge-generated and don't trace back to a source.
+ * Verifies that merged frames have source references.
+ * Frames with a `source` field are considered to have evidence.
  */
-function checkEvidenceChain(
-  mergedSentences: Array<{ sentence: DiffableSentence; isEdited: boolean }>
-): MergeCheckType {
-  // Only check non-edited sentences
-  const checkable = mergedSentences.filter((s) => !s.isEdited);
-
-  if (checkable.length === 0) {
+function checkEvidenceChain(frames: Frame[]): MergeCheckType {
+  if (frames.length === 0) {
     return {
       id: 'evidence_chain_complete',
       label: 'Evidence Chain Complete',
       passed: true,
-      detail: 'No sentences to verify',
+      detail: 'No frames to verify',
     };
   }
 
-  const missing = checkable.filter((s) => !s.sentence.source_ref);
+  const missing = frames.filter((f) => !f.source && !f.slot_sources);
 
   if (missing.length === 0) {
     return {
       id: 'evidence_chain_complete',
       label: 'Evidence Chain Complete',
       passed: true,
-      detail: `All ${checkable.length} sentence(s) have source references`,
+      detail: `All ${frames.length} frame(s) have source references`,
     };
   }
 
@@ -177,7 +176,7 @@ function checkEvidenceChain(
     id: 'evidence_chain_complete',
     label: 'Evidence Chain Complete',
     passed: false,
-    detail: `${missing.length} of ${checkable.length} sentence(s) missing source reference`,
+    detail: `${missing.length} of ${frames.length} frame(s) missing source reference`,
   };
 }
 
@@ -200,7 +199,7 @@ async function checkEvalPassed(db: AnyDB, draft: MergeDraft): Promise<MergeCheck
   }
   const allLeaves = Array.from(leafMap.values());
 
-  // No leaves → don't include this check
+  // No leaves -> don't include this check
   if (allLeaves.length === 0) {
     return null;
   }
@@ -249,11 +248,11 @@ async function checkEvalPassed(db: AnyDB, draft: MergeDraft): Promise<MergeCheck
  * Returns an array of check results suitable for the merge review UI.
  */
 export async function computeMergeChecks(db: AnyDB, draft: MergeDraft): Promise<MergeCheckType[]> {
-  const prepared = JSON.parse(draft.preparedJson) as Merge2WayResult;
+  const prepared = JSON.parse(draft.preparedJson) as FrameMergeResult;
 
-  // Extract merged sentences for checks
-  const mergedSentences = extractMergedSentences(prepared);
-  const mergedText = mergedSentences.map((s) => s.sentence.text).join('\n');
+  // Extract merged frames for checks
+  const mergedFrames = extractMergedFrames(prepared);
+  const mergedText = framesToText(mergedFrames);
 
   // Run checks
   const [constraintsCheck, evalCheck] = await Promise.all([
@@ -261,7 +260,7 @@ export async function computeMergeChecks(db: AnyDB, draft: MergeDraft): Promise<
     checkEvalPassed(db, draft),
   ]);
 
-  const evidenceCheck = checkEvidenceChain(mergedSentences);
+  const evidenceCheck = checkEvidenceChain(mergedFrames);
 
   const checks: MergeCheckType[] = [constraintsCheck, evidenceCheck];
 

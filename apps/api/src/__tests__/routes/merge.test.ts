@@ -2,6 +2,7 @@
  * Merge API Routes Tests
  *
  * Tests for POST /v1/merge/prepare and POST /v1/merge/execute
+ * Updated for frame-level merge (FrameMergeResult / FrameMergeDecision)
  */
 
 import type { AnyDB } from '@t3x-dev/storage';
@@ -48,15 +49,17 @@ describe('Merge Routes', () => {
   });
 
   // Helper to create test commits (frame-based format)
-  const createTestCommit = async (sentences: Array<{ id: string; text: string }>) => {
+  const createTestCommit = async (
+    frames: Array<{ id: string; type: string; slots: Record<string, unknown> }>
+  ) => {
     const commit = await createCommit(mockDB, {
       parents: [],
       author: { type: 'human', name: 'Test User' },
       content: {
-        frames: sentences.map((s) => ({
-          id: s.id,
-          type: 'legacy_sentence' as const,
-          slots: { text: s.text },
+        frames: frames.map((f) => ({
+          id: f.id,
+          type: f.type,
+          slots: f.slots,
         })),
         relations: [],
       },
@@ -67,65 +70,21 @@ describe('Merge Routes', () => {
     return commit;
   };
 
-  /**
-   * Helper to augment prepare result with fields required by execute Zod schema.
-   * The prepare route returns raw MergeCandidate (no constraints), but the execute
-   * route's Zod schema (CandidateSchema, SimilarPairSchema) requires them.
-   */
-  function augmentPreparedForExecute(prepared: ApiResponse): ApiResponse {
-    return {
-      ...prepared,
-      similarPairs: prepared.similarPairs.map((p: ApiResponse) => ({
-        ...p,
-        source: {
-          ...p.source,
-          source: p.source.source ?? { turn_hash: 'sha256:test', start_char: 0, end_char: 0 },
-        },
-        target: {
-          ...p.target,
-          source: p.target.source ?? { turn_hash: 'sha256:test', start_char: 0, end_char: 0 },
-        },
-        sourceConstraints: p.sourceConstraints ?? [],
-        targetConstraints: p.targetConstraints ?? [],
-      })),
-      onlyInSource: prepared.onlyInSource.map((c: ApiResponse) => ({
-        ...c,
-        sentence: {
-          ...c.sentence,
-          source: c.sentence?.source ?? { turn_hash: 'sha256:test', start_char: 0, end_char: 0 },
-        },
-        constraints: c.constraints ?? [],
-      })),
-      onlyInTarget: prepared.onlyInTarget.map((c: ApiResponse) => ({
-        ...c,
-        sentence: {
-          ...c.sentence,
-          source: c.sentence?.source ?? { turn_hash: 'sha256:test', start_char: 0, end_char: 0 },
-        },
-        constraints: c.constraints ?? [],
-      })),
-      identical: prepared.identical.map((s: ApiResponse) => ({
-        ...s,
-        source: s.source ?? { turn_hash: 'sha256:test', start_char: 0, end_char: 0 },
-      })),
-    };
-  }
-
   // ============================================================================
   // POST /v1/merge/prepare Tests
   // ============================================================================
 
   describe('POST /v1/merge/prepare', () => {
-    it('returns Merge2WayResult for valid commits', async () => {
-      // Setup: create two commits
+    it('returns FrameMergeResult for valid commits', async () => {
+      // Setup: create two commits with different frames
       const sourceCommit = await createTestCommit([
-        { id: 's1', text: 'Budget is $3000' },
-        { id: 's2', text: 'Use React framework' },
+        { id: 'f_001', type: 'budget', slots: { amount: '$3000' } },
+        { id: 'f_002', type: 'tech_stack', slots: { framework: 'React' } },
       ]);
 
       const targetCommit = await createTestCommit([
-        { id: 't1', text: 'Budget is $5000' },
-        { id: 't2', text: 'Use React framework' },
+        { id: 'f_001', type: 'budget', slots: { amount: '$5000' } },
+        { id: 'f_002', type: 'tech_stack', slots: { framework: 'React' } },
       ]);
 
       const res = await app.request('/v1/merge/prepare', {
@@ -140,16 +99,23 @@ describe('Merge Routes', () => {
       expect(res.status).toBe(200);
       const json: ApiResponse = await res.json();
       expect(json.success).toBe(true);
-      expect(json.data).toHaveProperty('identical');
-      expect(json.data).toHaveProperty('similarPairs');
+      expect(json.data).toHaveProperty('autoKept');
+      expect(json.data).toHaveProperty('conflicts');
       expect(json.data).toHaveProperty('onlyInSource');
       expect(json.data).toHaveProperty('onlyInTarget');
+      expect(json.data).toHaveProperty('relationsOnlyInSource');
+      expect(json.data).toHaveProperty('relationsOnlyInTarget');
+      expect(json.data).toHaveProperty('relationsInBoth');
     });
 
-    it('returns identical sentences', async () => {
-      const sourceCommit = await createTestCommit([{ id: 's1', text: 'Same sentence' }]);
+    it('returns autoKept for identical frames', async () => {
+      const sourceCommit = await createTestCommit([
+        { id: 'f_001', type: 'budget', slots: { amount: '$3000' } },
+      ]);
 
-      const targetCommit = await createTestCommit([{ id: 't1', text: 'Same sentence' }]);
+      const targetCommit = await createTestCommit([
+        { id: 'f_001', type: 'budget', slots: { amount: '$3000' } },
+      ]);
 
       const res = await app.request('/v1/merge/prepare', {
         method: 'POST',
@@ -162,15 +128,18 @@ describe('Merge Routes', () => {
 
       expect(res.status).toBe(200);
       const json: ApiResponse = await res.json();
-      expect(json.data.identical).toHaveLength(1);
-      // framesToTextSegments wraps text as "[legacy_sentence] text: ..."
-      expect(json.data.identical[0].text).toContain('Same sentence');
+      expect(json.data.autoKept).toHaveLength(1);
+      expect(json.data.autoKept[0].id).toBe('f_001');
     });
 
-    it('returns similar pairs for similar sentences', async () => {
-      const sourceCommit = await createTestCommit([{ id: 's1', text: 'Budget is $3000' }]);
+    it('returns conflicts for frames with different slots', async () => {
+      const sourceCommit = await createTestCommit([
+        { id: 'f_001', type: 'budget', slots: { amount: '$3000' } },
+      ]);
 
-      const targetCommit = await createTestCommit([{ id: 't1', text: 'Budget is $5000' }]);
+      const targetCommit = await createTestCommit([
+        { id: 'f_001', type: 'budget', slots: { amount: '$5000' } },
+      ]);
 
       const res = await app.request('/v1/merge/prepare', {
         method: 'POST',
@@ -183,14 +152,17 @@ describe('Merge Routes', () => {
 
       expect(res.status).toBe(200);
       const json: ApiResponse = await res.json();
-      expect(json.data.similarPairs.length).toBeGreaterThan(0);
-      expect(json.data.similarPairs[0]).toHaveProperty('source');
-      expect(json.data.similarPairs[0]).toHaveProperty('target');
-      expect(json.data.similarPairs[0]).toHaveProperty('wordDiff');
+      expect(json.data.conflicts.length).toBeGreaterThan(0);
+      expect(json.data.conflicts[0]).toHaveProperty('frameId');
+      expect(json.data.conflicts[0]).toHaveProperty('sourceFrame');
+      expect(json.data.conflicts[0]).toHaveProperty('targetFrame');
+      expect(json.data.conflicts[0]).toHaveProperty('slotConflicts');
     });
 
     it('returns 404 for missing source commit', async () => {
-      const targetCommit = await createTestCommit([{ id: 't1', text: 'Test' }]);
+      const targetCommit = await createTestCommit([
+        { id: 'f_001', type: 'test', slots: { text: 'Test' } },
+      ]);
 
       const res = await app.request('/v1/merge/prepare', {
         method: 'POST',
@@ -208,7 +180,9 @@ describe('Merge Routes', () => {
     });
 
     it('returns 404 for missing target commit', async () => {
-      const sourceCommit = await createTestCommit([{ id: 's1', text: 'Test' }]);
+      const sourceCommit = await createTestCommit([
+        { id: 'f_001', type: 'test', slots: { text: 'Test' } },
+      ]);
 
       const res = await app.request('/v1/merge/prepare', {
         method: 'POST',
@@ -232,9 +206,13 @@ describe('Merge Routes', () => {
 
   describe('POST /v1/merge/execute', () => {
     it('creates merge commit with 2 parents', async () => {
-      const sourceCommit = await createTestCommit([{ id: 's1', text: 'Source sentence' }]);
+      const sourceCommit = await createTestCommit([
+        { id: 'f_001', type: 'info', slots: { text: 'Source info' } },
+      ]);
 
-      const targetCommit = await createTestCommit([{ id: 't1', text: 'Target sentence' }]);
+      const targetCommit = await createTestCommit([
+        { id: 'f_002', type: 'info', slots: { text: 'Target info' } },
+      ]);
 
       // Prepare first
       const prepareRes = await app.request('/v1/merge/prepare', {
@@ -247,17 +225,21 @@ describe('Merge Routes', () => {
       });
 
       const prepareJson: ApiResponse = await prepareRes.json();
-      let prepared = prepareJson.data;
+      const prepared = prepareJson.data;
 
-      // Resolve all similarPairs (if any)
-      if (prepared.similarPairs.length > 0) {
-        for (const pair of prepared.similarPairs) {
-          pair.resolution = 'source';
-        }
+      // Build decisions: keep all frames from both sides
+      const decisions = {
+        conflictResolutions: {} as Record<string, string>,
+        keepFromSource: prepared.onlyInSource.map((f: ApiResponse) => f.id),
+        keepFromTarget: prepared.onlyInTarget.map((f: ApiResponse) => f.id),
+        keepRelationsFromSource: true,
+        keepRelationsFromTarget: true,
+      };
+
+      // Resolve any conflicts
+      for (const conflict of prepared.conflicts) {
+        decisions.conflictResolutions[conflict.frameId] = 'source';
       }
-
-      // Augment prepared data with fields required by execute Zod schema
-      prepared = augmentPreparedForExecute(prepared);
 
       // Execute merge
       const res = await app.request('/v1/merge/execute', {
@@ -267,6 +249,7 @@ describe('Merge Routes', () => {
           source_hash: sourceCommit.hash,
           target_hash: targetCommit.hash,
           prepared,
+          decisions,
           message: 'Merge test',
         }),
       });
@@ -280,27 +263,35 @@ describe('Merge Routes', () => {
       expect(json.data.parents[1]).toBe(targetCommit.hash);
     });
 
-    it('returns 400 for unresolved pairs', async () => {
-      const sourceCommit = await createTestCommit([{ id: 's1', text: 'Budget is $3000' }]);
+    it('returns 400 for unresolved conflicts', async () => {
+      const sourceCommit = await createTestCommit([
+        { id: 'f_001', type: 'budget', slots: { amount: '$3000' } },
+      ]);
 
-      const targetCommit = await createTestCommit([{ id: 't1', text: 'Budget is $5000' }]);
+      const targetCommit = await createTestCommit([
+        { id: 'f_001', type: 'budget', slots: { amount: '$5000' } },
+      ]);
 
-      // Build prepared data matching execute Zod schema
-      const dummySource = { turn_hash: 'sha256:test', start_char: 0, end_char: 0 };
-      const prepared = {
-        identical: [],
-        similarPairs: [
-          {
-            source: { id: 's1', text: 'Budget is $3000', source: dummySource },
-            target: { id: 't1', text: 'Budget is $5000', source: dummySource },
-            wordDiff: [],
-            sourceConstraints: [],
-            targetConstraints: [],
-            // resolution intentionally omitted — not resolved
-          },
-        ],
-        onlyInSource: [],
-        onlyInTarget: [],
+      // Prepare
+      const prepareRes = await app.request('/v1/merge/prepare', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          source_hash: sourceCommit.hash,
+          target_hash: targetCommit.hash,
+        }),
+      });
+
+      const prepareJson: ApiResponse = await prepareRes.json();
+      const prepared = prepareJson.data;
+
+      // Decisions with NO conflict resolutions
+      const decisions = {
+        conflictResolutions: {},
+        keepFromSource: [],
+        keepFromTarget: [],
+        keepRelationsFromSource: true,
+        keepRelationsFromTarget: true,
       };
 
       const res = await app.request('/v1/merge/execute', {
@@ -310,6 +301,7 @@ describe('Merge Routes', () => {
           source_hash: sourceCommit.hash,
           target_hash: targetCommit.hash,
           prepared,
+          decisions,
           message: 'Merge',
         }),
       });
@@ -317,27 +309,37 @@ describe('Merge Routes', () => {
       expect(res.status).toBe(400);
       const json: ApiResponse = await res.json();
       expect(json.success).toBe(false);
-      expect(json.error.code).toBe('UNRESOLVED_PAIRS');
+      expect(json.error.code).toBe('UNRESOLVED_CONFLICTS');
     });
 
     it('updates branch pointer when branch specified', async () => {
-      const sourceCommit = await createTestCommit([{ id: 's1', text: 'Test' }]);
+      const sourceCommit = await createTestCommit([
+        { id: 'f_001', type: 'info', slots: { text: 'Test' } },
+      ]);
 
-      const targetCommit = await createTestCommit([{ id: 't1', text: 'Test' }]);
+      const targetCommit = await createTestCommit([
+        { id: 'f_001', type: 'info', slots: { text: 'Test' } },
+      ]);
 
-      // Build prepared data matching execute Zod schema
-      const dummySource = { turn_hash: 'sha256:test', start_char: 0, end_char: 0 };
-      const prepared = {
-        identical: [
-          {
-            id: 's1',
-            text: '[legacy_sentence] text: Test',
-            source: dummySource,
-          },
-        ],
-        similarPairs: [],
-        onlyInSource: [],
-        onlyInTarget: [],
+      // Prepare
+      const prepareRes = await app.request('/v1/merge/prepare', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          source_hash: sourceCommit.hash,
+          target_hash: targetCommit.hash,
+        }),
+      });
+
+      const prepareJson: ApiResponse = await prepareRes.json();
+      const prepared = prepareJson.data;
+
+      const decisions = {
+        conflictResolutions: {},
+        keepFromSource: [],
+        keepFromTarget: [],
+        keepRelationsFromSource: true,
+        keepRelationsFromTarget: true,
       };
 
       const res = await app.request('/v1/merge/execute', {
@@ -347,6 +349,7 @@ describe('Merge Routes', () => {
           source_hash: sourceCommit.hash,
           target_hash: targetCommit.hash,
           prepared,
+          decisions,
           message: 'Merge',
           branch: 'main',
         }),
