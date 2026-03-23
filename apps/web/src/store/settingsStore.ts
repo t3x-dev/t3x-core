@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 export type UserExperience = 'general' | 'developer';
-export type ViewMode = 'canvas' | 'timeline' | 'list';
+export type ViewMode = 'canvas' | 'timeline';
 export type Density = 'compact' | 'comfortable';
 
 interface SettingsState {
@@ -23,7 +23,7 @@ export const useSettingsStore = create<SettingsState>()(
     (set) => ({
       developerMode: false,
       userExperience: 'general',
-      defaultView: 'canvas',
+      defaultView: 'timeline',
       density: 'comfortable',
 
       setDeveloperMode: (enabled) => set({ developerMode: enabled }),
