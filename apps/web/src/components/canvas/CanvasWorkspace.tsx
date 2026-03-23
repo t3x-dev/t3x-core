@@ -373,7 +373,12 @@ function CanvasWorkspaceInner({
               router.push(`/project/${projectId}/commit/${encodeURIComponent(data.commitHash)}`);
               return;
             }
-            // Staging/pending units -> open commit modal (has Save Knowledge flow)
+            // Staging/pending units -> navigate to chat page
+            if (data.conversationId) {
+              router.push(`/chat/${data.conversationId}`);
+              return;
+            }
+            // Fallback for nodes without conversation
             openNodeModal(node.id, 'commit');
           }}
           onNodeContextMenu={handleNodeContextMenu}
