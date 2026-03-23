@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { PinButton } from '@/components/ui/PinButton';
 import { PinDropdownSelector } from '@/components/ui/PinDropdownSelector';
 import { useTerminology } from '@/hooks/useTerminology';
+import { framesToSentences } from '@/lib/framesToSentences';
 import { cn } from '@/lib/utils';
 import { usePinsStore } from '@/store/pinsStore';
 import type { CommitDisplay, CommitSourceRef, EmbeddedLeaf } from '@/types/nodes';
@@ -235,32 +236,38 @@ export function CommitFullHeader({
 }
 
 /**
- * Renders the source context / sentence display for a commit, used inside tabs.
+ * Renders the source context / frame display for a commit, used inside tabs.
  */
 export function CommitSourceContent({ commit }: { commit: CommitDisplay }) {
-  const sentences = commit.content.sentences;
+  // Derive sentences from frames for display and source context tracing
+  const sentences = commit.content?.frames
+    ? framesToSentences(commit.content as import('@t3x-dev/core').SemanticContent)
+    : [];
 
-  const hasLeafSources = commit.source_refs?.some((r) => r.type === 'leaf');
-  const hasTurnSourceInfo = commit.content.sentences.some((s) => s.source_ref?.turn_hash);
+  const sourceRefs = commit.sources ?? commit.source_refs ?? undefined;
+  const hasLeafSources = sourceRefs?.some((r) => r.type === 'leaf');
+  const hasTurnSourceInfo = sentences.some((s) => s.source_ref?.turn_hash);
   const hasSourceInfo = hasTurnSourceInfo || hasLeafSources;
 
   if (hasSourceInfo) {
-    const mappedSentences = commit.content.sentences.map((s) => ({
+    const mappedSentences = sentences.map((s) => ({
       id: s.id,
       text: s.text,
       source: s.source_ref?.turn_hash
         ? {
             turn_hash: s.source_ref.turn_hash,
-            start_char: s.source_ref.start_char,
-            end_char: s.source_ref.end_char,
+            start_char: s.source_ref.start_char ?? 0,
+            end_char: s.source_ref.end_char ?? 0,
           }
         : undefined,
-      anchor_type: s.anchor_type,
     }));
 
-    const commitSourceRefs = commit.source_refs ?? undefined;
-
-    return <CommitSourceContext sentences={mappedSentences} sourceRefs={commitSourceRefs} />;
+    return (
+      <CommitSourceContext
+        sentences={mappedSentences}
+        sourceRefs={sourceRefs as Array<{ type: 'conversation' | 'leaf'; id: string; title?: string }>}
+      />
+    );
   }
 
   return (

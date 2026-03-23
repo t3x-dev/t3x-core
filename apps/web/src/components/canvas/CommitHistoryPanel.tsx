@@ -13,7 +13,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { useTerminology } from '@/hooks/useTerminology';
-import type { DiffResultRaw, SentenceCommit } from '@/lib/api';
+import type { ApiCommit, DiffResultRaw } from '@/lib/api';
 import * as api from '@/lib/api';
 import { cn } from '@/lib/utils';
 
@@ -47,7 +47,7 @@ function CommitHistoryRow({
   onClick,
   t,
 }: {
-  commit: SentenceCommit;
+  commit: ApiCommit;
   index: number;
   isHead: boolean;
   isRoot: boolean;
@@ -109,7 +109,7 @@ function CommitHistoryRow({
             <span>·</span>
             <span>{formatTime(commit.committed_at)}</span>
             <span>·</span>
-            <span>{commit.content?.sentences?.length ?? 0} sentences</span>
+            <span>{commit.content?.frames?.length ?? 0} frames</span>
           </div>
         </div>
       </div>
@@ -136,7 +136,7 @@ export function CommitHistoryPanel({
   projectId,
 }: CommitHistoryPanelProps) {
   const { t } = useTerminology();
-  const [history, setHistory] = useState<SentenceCommit[]>([]);
+  const [history, setHistory] = useState<ApiCommit[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedHash, setSelectedHash] = useState<string | null>(null);
@@ -164,7 +164,7 @@ export function CommitHistoryPanel({
     setError(null);
 
     api
-      .getCommitHistory(commitHash, 100)
+      .getApiCommitHistory(commitHash, 100)
       .then((data) => {
         if (!cancelled) setHistory(data);
       })

@@ -286,6 +286,22 @@ export async function updateCommitPosition(
   return toSentenceCommit(apiCommit);
 }
 
+/**
+ * Get commit ancestor chain as ApiCommit[].
+ */
+export async function getApiCommitHistory(commitHash: string, limit = 50): Promise<ApiCommit[]> {
+  try {
+    const query = buildQueryString({ limit });
+    const res = await fetchWithTimeout(
+      `${API_V1}/commits/${encodeURIComponent(commitHash)}/history?${query}`
+    );
+    const data = await handleResponse<{ commits: ApiCommit[]; truncated: boolean }>(res);
+    return data.commits;
+  } catch {
+    return [];
+  }
+}
+
 // ============================================================================
 // Conflict Detection
 // ============================================================================

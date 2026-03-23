@@ -11,8 +11,9 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useCountUp } from '@/hooks/useCountUp';
 import { useTerminology } from '@/hooks/useTerminology';
-import type { Project, SentenceCommit } from '@/lib/api';
-import { listProjects, listSentenceCommits } from '@/lib/api';
+import type { ApiCommit, Project } from '@/lib/api';
+import { frameSummaryText, getSemanticContent } from '@/lib/api/commits';
+import { listCommits, listProjects } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import type { SemanticEntry } from '@/types/semantic';
 
@@ -36,24 +37,29 @@ function formatTimeAgo(dateStr: string): string {
 }
 
 function commitToSemanticEntry(
-  commit: SentenceCommit,
+  commit: ApiCommit,
   projectName: string,
   commitLabel: string
 ): SemanticEntry {
+  const frames = getSemanticContent(commit).frames;
+  const summaryText = frameSummaryText(commit);
   return {
     id: commit.hash.slice(7, 19),
     title: commit.message || `${commitLabel} ${commit.hash.slice(7, 15)}`,
-    summary: commit.content.sentences.map((s) => s.text).join('. '),
+    summary: summaryText,
     author: commit.author?.name || commit.author?.type || 'unknown',
     stage: 'commit',
     status: 'validated',
     bridgePrompt: commit.branch || 'main',
     updatedAt: formatTimeAgo(commit.committed_at),
     tags: [projectName, commit.branch || 'main'],
-    evidenceCount: commit.content.sentences.length,
-    facets: commit.content.sentences
+    evidenceCount: frames.length,
+    facets: frames
       .slice(0, 3)
-      .map((s) => s.text.slice(0, 50) + (s.text.length > 50 ? '...' : '')),
+      .map((f) => {
+        const label = `${f.type}: ${Object.values(f.slots ?? {}).map((v) => typeof v === 'string' ? v : JSON.stringify(v)).join(', ')}`;
+        return label.slice(0, 50) + (label.length > 50 ? '...' : '');
+      }),
   };
 }
 
@@ -84,15 +90,14 @@ export default function InsightsPage() {
         }
 
         // Fetch commits for all projects in parallel (capped per project)
-        const allCommits: { commit: SentenceCommit; projectName: string }[] = [];
+        const allCommits: { commit: ApiCommit; projectName: string }[] = [];
         await Promise.all(
           projects.map(async (project: Project) => {
             try {
-              const commits = await listSentenceCommits(
+              const commits = await listCommits(
                 project.project_id,
                 undefined,
-                INSIGHTS_COMMITS_PER_PROJECT,
-                0
+                INSIGHTS_COMMITS_PER_PROJECT
               );
               for (const commit of commits) {
                 allCommits.push({ commit, projectName: project.name });
@@ -120,7 +125,7 @@ export default function InsightsPage() {
         const timelineItems = allCommits.slice(0, 10).map(({ commit, projectName }) => ({
           id: commit.hash.slice(7, 19),
           label: commit.message || `${commitLabel} on ${commit.branch || 'main'}`,
-          detail: `${commit.content.sentences.length} sentences in ${projectName}`,
+          detail: `${getSemanticContent(commit).frames.length} frames in ${projectName}`,
           time: formatTimeAgo(commit.committed_at),
           stage: 'commit' as const,
         }));

@@ -31,7 +31,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useTerminology } from '@/hooks/useTerminology';
-import type { SentenceCommit } from '@/lib/api';
+import type { ApiCommit } from '@/lib/api';
+import { getSemanticContent } from '@/lib/api/commits';
 import { type CommitExportFormat, exportCommit } from '@/lib/exportCommit';
 import { glass, toneAccent } from '@/lib/theme';
 import { cn } from '@/lib/utils';
@@ -121,7 +122,7 @@ export function CommittedCommitView({
   // Export commit
   const handleCommitExport = useCallback(
     async (format: CommitExportFormat) => {
-      const commit = data.commit as SentenceCommit | undefined;
+      const commit = data.commit as ApiCommit | undefined;
       if (!commit) return;
       await exportCommit(commit, format);
     },
@@ -380,9 +381,9 @@ export function CommittedCommitView({
                     <CommitFullHeader commit={commit} branchName={branchName} />
 
                     {/* Pinned Sources */}
-                    {commit.source_refs && commit.source_refs.length > 0 && (
+                    {commit.sources && commit.sources.length > 0 && (
                       <PinnedSourcesSection
-                        sourceRefs={commit.source_refs}
+                        sourceRefs={commit.sources as import('@/lib/api').CommitSourceRef[]}
                         projectId={commitProjectId}
                       />
                     )}
@@ -408,8 +409,7 @@ export function CommittedCommitView({
                         >
                           JSON
                         </TabsTrigger>
-                        {(commit as SentenceCommit)?.semantic &&
-                          (commit as SentenceCommit).semantic!.frames.length > 0 && (
+                        {commit && getSemanticContent(commit as ApiCommit).frames.length > 0 && (
                             <TabsTrigger
                               value="frame-graph"
                               className="rounded-none border-b-2 border-transparent data-[state=active]:border-[var(--accent-commit)] data-[state=active]:text-[var(--text-primary)] data-[state=active]:shadow-none text-[var(--text-tertiary)] text-xs px-3 py-2"
@@ -465,12 +465,11 @@ export function CommittedCommitView({
                         </pre>
                       </TabsContent>
 
-                      {(commit as SentenceCommit)?.semantic &&
-                        (commit as SentenceCommit).semantic!.frames.length > 0 && (
+                      {commit && getSemanticContent(commit as ApiCommit).frames.length > 0 && (
                           <TabsContent value="frame-graph">
                             <div className="h-[400px] border border-[var(--stroke-divider)] rounded-md overflow-hidden">
                               <FrameGraphView
-                                content={(commit as SentenceCommit).semantic!}
+                                content={getSemanticContent(commit as ApiCommit)}
                                 className="h-full w-full"
                               />
                             </div>
@@ -481,10 +480,10 @@ export function CommittedCommitView({
                         <RelationsTab
                           commitHash={data.commitHash || ''}
                           sentences={
-                            commit.content?.sentences
-                              ? commit.content.sentences.map((s: { id: string; text: string }) => ({
-                                  id: s.id,
-                                  text: s.text,
+                            commit.content?.frames
+                              ? (commit.content.frames as Array<{ id: string; type: string; slots: Record<string, unknown> }>).map((f) => ({
+                                  id: f.id,
+                                  text: `[${f.type}] ${Object.entries(f.slots ?? {}).map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`).join('; ')}`,
                                 }))
                               : []
                           }

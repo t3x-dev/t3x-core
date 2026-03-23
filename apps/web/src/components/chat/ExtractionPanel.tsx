@@ -5,7 +5,7 @@ import { GitCommit, LayoutGrid, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { framesToSentences } from '@/lib/framesToSentences';
+import type { Frame } from '@t3x-dev/core';
 import { cn } from '@/lib/utils';
 import { useExtractionPanelStore } from '@/store/extractionPanelStore';
 import { CommitDropdown } from './CommitDropdown';
@@ -81,11 +81,7 @@ function CommitPreviewSection() {
   const clearCommitError = useExtractionPanelStore((s) => s.clearCommitError);
 
   const [commitMessage, setCommitMessage] = useState('');
-  const deltaFrames = selectDeltaFrames();
-  const deltaSentences = framesToSentences(
-    { frames: deltaFrames, relations: [] },
-    conversationId ?? undefined
-  );
+  const deltaFrames: Frame[] = selectDeltaFrames();
 
   const handleConfirm = async () => {
     try {
@@ -113,25 +109,28 @@ function CommitPreviewSection() {
       <div className="flex items-center justify-between">
         <span className="text-xs font-semibold text-[var(--text-primary)]">Commit Preview</span>
         <span className="text-[10px] text-[var(--text-tertiary)]">
-          {deltaSentences.length} new sentence{deltaSentences.length !== 1 ? 's' : ''}
+          {deltaFrames.length} new frame{deltaFrames.length !== 1 ? 's' : ''}
         </span>
       </div>
 
       <div className="flex flex-col gap-1 max-h-40 overflow-y-auto">
-        {deltaSentences.length === 0 ? (
+        {deltaFrames.length === 0 ? (
           <div className="text-[11px] text-[var(--text-tertiary)] italic py-2">
             All frames already committed — up to date
           </div>
         ) : (
-          deltaSentences.map((s) => (
-            <div
-              key={s.id}
-              className="text-[11px] text-[var(--text-secondary)] rounded px-2 py-1 bg-[var(--hover-bg)]"
-            >
-              <span className="text-green-500 mr-1">+</span>
-              {s.text.length > 80 ? `${s.text.slice(0, 80)}...` : s.text}
-            </div>
-          ))
+          deltaFrames.map((f) => {
+            const summary = `[${f.type}] ${Object.entries(f.slots).map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`).join('; ')}`;
+            return (
+              <div
+                key={f.id}
+                className="text-[11px] text-[var(--text-secondary)] rounded px-2 py-1 bg-[var(--hover-bg)]"
+              >
+                <span className="text-green-500 mr-1">+</span>
+                {summary.length > 80 ? `${summary.slice(0, 80)}...` : summary}
+              </div>
+            );
+          })
         )}
       </div>
 
@@ -150,7 +149,7 @@ function CommitPreviewSection() {
         placeholder="Commit message (optional)"
         className="w-full rounded border border-[var(--stroke-default)] bg-[var(--surface-panel)] px-2 py-1.5 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--accent-commit)]"
         onKeyDown={(e) => {
-          if (e.key === 'Enter' && !isCommitting && deltaSentences.length > 0) handleConfirm();
+          if (e.key === 'Enter' && !isCommitting && deltaFrames.length > 0) handleConfirm();
           if (e.key === 'Escape') setPanelMode('default');
         }}
         disabled={isCommitting}
@@ -177,7 +176,7 @@ function CommitPreviewSection() {
         <button
           type="button"
           onClick={handleConfirm}
-          disabled={isCommitting || deltaSentences.length === 0}
+          disabled={isCommitting || deltaFrames.length === 0}
           className="flex-1 rounded bg-[var(--accent-commit)] px-2 py-1.5 text-xs text-white hover:opacity-90 disabled:opacity-40"
         >
           {isCommitting ? 'Committing...' : 'Confirm Commit'}

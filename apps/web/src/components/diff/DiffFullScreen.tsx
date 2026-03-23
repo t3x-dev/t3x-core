@@ -14,8 +14,9 @@ import { Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { useTerminology } from '@/hooks/useTerminology';
-import type { DiffResultRaw, SentenceCommit } from '@/lib/api';
-import { getSentenceCommit } from '@/lib/api';
+import type { ApiCommit, DiffResultRaw } from '@/lib/api';
+import { getApiCommit } from '@/lib/api';
+import { framesToSentences } from '@/lib/framesToSentences';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import { DiffHeader } from './DiffHeader';
@@ -58,8 +59,8 @@ export function DiffFullScreen({
   diffData,
   projectId,
 }: DiffFullScreenProps) {
-  const [baseCommit, setBaseCommit] = useState<SentenceCommit | null>(null);
-  const [targetCommit, setTargetCommit] = useState<SentenceCommit | null>(null);
+  const [baseCommit, setBaseCommit] = useState<ApiCommit | null>(null);
+  const [targetCommit, setTargetCommit] = useState<ApiCommit | null>(null);
   const [commitsLoading, setCommitsLoading] = useState(false);
   const { t } = useTerminology();
 
@@ -72,7 +73,7 @@ export function DiffFullScreen({
     let cancelled = false;
     setCommitsLoading(true);
 
-    Promise.all([getSentenceCommit(baseCommitHash), getSentenceCommit(targetCommitHash)])
+    Promise.all([getApiCommit(baseCommitHash), getApiCommit(targetCommitHash)])
       .then(([base, target]) => {
         if (!cancelled) {
           setBaseCommit(base);
@@ -148,8 +149,8 @@ export function DiffFullScreen({
           <DiffSideBySide
             ref={sideBySideRef}
             segmentDiffs={diffData.segmentDiffs}
-            baseSentences={baseCommit?.content.sentences ?? []}
-            targetSentences={targetCommit?.content.sentences ?? []}
+            baseSentences={baseCommit ? framesToSentences(baseCommit.content as import('@t3x-dev/core').SemanticContent).map((s) => ({ id: s.id, text: s.text, source_ref: s.source_ref ? { conversation_id: s.source_ref.conversation_id ?? '', turn_hash: s.source_ref.turn_hash ?? '', start_char: s.source_ref.start_char ?? 0, end_char: s.source_ref.end_char ?? 0 } : undefined })) : []}
+            targetSentences={targetCommit ? framesToSentences(targetCommit.content as import('@t3x-dev/core').SemanticContent).map((s) => ({ id: s.id, text: s.text, source_ref: s.source_ref ? { conversation_id: s.source_ref.conversation_id ?? '', turn_hash: s.source_ref.turn_hash ?? '', start_char: s.source_ref.start_char ?? 0, end_char: s.source_ref.end_char ?? 0 } : undefined })) : []}
             projectId={projectId}
             baseLabel={formatCommitLabel(baseCommit?.branch, baseCommitHash)}
             targetLabel={formatCommitLabel(targetCommit?.branch, targetCommitHash)}

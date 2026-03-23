@@ -18,8 +18,9 @@ import { DiffSourceContextModal } from '@/components/diff/DiffSourceContextModal
 import { Button } from '@/components/ui/button';
 import { EmptyStateInline } from '@/components/ui/empty-state';
 import { useTerminology } from '@/hooks/useTerminology';
-import type { SentenceCommit, TurnContextData } from '@/lib/api';
-import { fetchTurnContextCached, getSentenceCommit } from '@/lib/api';
+import type { ApiCommit, TurnContextData } from '@/lib/api';
+import { fetchTurnContextCached, getApiCommit } from '@/lib/api';
+import { framesToSentences } from '@/lib/framesToSentences';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
 import type { Merge2WayResult, MergeCandidate, MergeSimilarPair, Sentence } from '@/types/merge';
 import { MergeConflictView } from './MergeConflictView';
@@ -262,7 +263,7 @@ export function UnifiedDiffView({
   const setViewMode = onViewModeChange ?? setInternalViewMode;
 
   // Fetch source commit for positional mode
-  const [sourceCommit, setSourceCommit] = useState<SentenceCommit | null>(null);
+  const [sourceCommit, setSourceCommit] = useState<ApiCommit | null>(null);
   const [loadingCommit, setLoadingCommit] = useState(false);
 
   useEffect(() => {
@@ -273,7 +274,7 @@ export function UnifiedDiffView({
     let cancelled = false;
     setLoadingCommit(true);
 
-    getSentenceCommit(sourceHash)
+    getApiCommit(sourceHash)
       .then((commit) => {
         if (!cancelled) setSourceCommit(commit);
       })
@@ -289,18 +290,21 @@ export function UnifiedDiffView({
     };
   }, [viewMode, sourceHash, sourceCommit]);
 
-  // Convert SentenceCommit sentences to Sentence type
+  // Convert ApiCommit frames to Sentence type for positional view
   const sourceSentences = useMemo(() => {
-    if (!sourceCommit?.content?.sentences) return undefined;
-    return sourceCommit.content.sentences.map((s) => ({
+    if (!sourceCommit?.content?.frames) return undefined;
+    const sentences = framesToSentences(
+      sourceCommit.content as import('@t3x-dev/core').SemanticContent
+    );
+    return sentences.map((s) => ({
       id: s.id,
       text: s.text,
       confidence: s.confidence,
       source: s.source_ref
         ? {
-            turn_hash: s.source_ref.turn_hash,
-            start_char: s.source_ref.start_char,
-            end_char: s.source_ref.end_char,
+            turn_hash: s.source_ref.turn_hash ?? '',
+            start_char: s.source_ref.start_char ?? 0,
+            end_char: s.source_ref.end_char ?? 0,
           }
         : undefined,
     }));

@@ -11,7 +11,8 @@ import { Equal, Minus, Pencil, Plus } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CollapsibleSection } from '@/components/shared/CollapsibleSection';
 import { Badge } from '@/components/ui/badge';
-import { getSentenceCommit } from '@/lib/api';
+import { getApiCommit } from '@/lib/api';
+import { framesToSentences } from '@/lib/framesToSentences';
 import type { DiffableSentence, DiffCache } from '@/lib/diffUtils';
 import { type CommitDiff, incrementalDiffCommits, type WordDiffSegment } from '@/lib/diffUtils';
 import { cn } from '@/lib/utils';
@@ -47,13 +48,13 @@ export function DraftDiffSection() {
     setLoading(true);
     setError(null);
 
-    getSentenceCommit(parentHash)
+    getApiCommit(parentHash)
       .then((parentCommit) => {
         if (cancelled) return;
-        const sentences =
-          (parentCommit.content?.sentences as Array<{ id: string; text: string }> | undefined)?.map(
-            (s) => ({ id: s.id, text: s.text })
-          ) ?? [];
+        const derived = framesToSentences(
+          parentCommit.content as import('@t3x-dev/core').SemanticContent
+        );
+        const sentences = derived.map((s) => ({ id: s.id, text: s.text }));
         setParentSentences(sentences);
         fetchedHashRef.current = parentHash;
       })

@@ -64,6 +64,14 @@ export type CommitDisplay = Pick<
     kept_from_target: number;
     discarded: number;
     total_sentences: number;
+    release_note?: {
+      title: string;
+      summary: string;
+      sections: Array<{ heading: string; items: string[] }>;
+      timestamp?: string;
+      source_branch?: string;
+      target_branch?: string;
+    };
   } | null;
   semantic?: import('@t3x-dev/core').SemanticContent;
 };

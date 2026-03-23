@@ -18,8 +18,8 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { KeyboardHintBar } from '@/components/shared/KeyboardHintBar';
 import { useKeyboardNavigation } from '@/hooks/useKeyboardNavigation';
-import type { Branch, SentenceCommit } from '@/lib/api';
-import { diffRaw, listBranches, listSentenceCommits } from '@/lib/api';
+import type { ApiCommit, Branch } from '@/lib/api';
+import { diffRaw, listBranches, listCommits } from '@/lib/api';
 import { CommitHistoryRow } from './CommitHistoryRow';
 
 // ============================================================================
@@ -31,7 +31,7 @@ interface CommitHistoryPageProps {
 }
 
 interface CommitWithDiffStats {
-  commit: SentenceCommit;
+  commit: ApiCommit;
   diffStats?: {
     addedCount: number;
     modifiedCount: number;
@@ -75,7 +75,7 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
       setError(null);
       try {
         const branch = selectedBranch === 'all' ? undefined : selectedBranch;
-        const commitList = await listSentenceCommits(projectId, branch, 100, 0);
+        const commitList = await listCommits(projectId, branch, 100);
 
         if (cancelled) return;
 
