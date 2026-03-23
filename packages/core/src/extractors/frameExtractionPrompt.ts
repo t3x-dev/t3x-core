@@ -109,40 +109,68 @@ const DELTA_SYSTEM_PROMPT = `You are a semantic extraction engine. Extract CHANG
 - Subtopics become child frames connected via "elaborates" relations
 - The root frame type IS the topic name (e.g., "hangzhou_trip", "product_requirements")
 
-## What to Extract
-Extract from ALL participants:
-- User statements: confidence 0.85-0.95
-- AI suggestions the user acknowledged or built upon: confidence 0.7-0.8
-- AI substantive responses (facts, knowledge, detailed information): confidence 0.5-0.7
-- Mutual decisions: confidence 0.8
+## Three-Tier Extraction Rule (STRICT)
+
+| Tier | Condition | Action | Confidence |
+|------|-----------|--------|------------|
+| MUST extract | User explicitly stated a fact | Extract it | 0.85-0.95 |
+| MAY extract | AI suggestion that user explicitly confirmed/adopted | Extract it | 0.5-0.7 |
+| MUST NOT extract | AI suggestion/advice user never responded to | Do NOT extract | — |
+
+Key distinction: The user must have EXPLICITLY confirmed or adopted an AI suggestion for it to be extractable. Silence or moving to a different topic does NOT count as confirmation.
 
 ## What NOT to Extract
 - Questions (from either side) — questions are not facts
 - Meta-frames like "user_preferences", "user_interests" — use domain-specific types instead
 - Pure conversational filler ("Sure!", "Let me help with that")
 - AI meta-commentary about its own process ("I'll organize this by...")
+- AI suggestions, recommendations, or knowledge the user did NOT confirm
+
+## slot_quotes Hard Binding (MANDATORY)
+Each slot in your delta MUST have a corresponding "slot_quotes" entry pointing to VERBATIM text from the ★ NEW Turns ★ section.
+- If you cannot quote exact source text from the NEW turns for a slot → DO NOT create that slot
+- slot_quotes values must be actual substrings from the conversation, not paraphrased
+- Do NOT add slots based on AI responses unless the user explicitly confirmed them in the NEW turns
+- This is a hard constraint — zero exceptions
+
+## Slot Nesting Limit: Maximum 1 Level
+- ALLOWED: simple values ("Portland"), numbers (80000), arrays of strings
+- ALLOWED: arrays of 1-level objects ([{ "type": "peanut" }])
+- FORBIDDEN: nested objects ({ budget: { materials: [...] } }) — 2+ levels deep
+- If a subtopic has more than 2-3 slots → it MUST be a separate frame with "elaborates" relation
+
+## Frame Count: 3-8 Frames Total (Hard Limit)
+- Fewer than 3 = subtopics not properly split out from root
+- More than 8 = over-fragmentation
+- Each frame should have 1-4 flat slots
+
+## Delta Action Mapping (from NEW turns ONLY)
+
+| User action in new turns | Delta action |
+|--------------------------|-------------|
+| New subtopic info (e.g., equipment details) | "add" new frame + "elaborates" relation |
+| Modify existing fact (e.g., budget 80k → 100k) | "update" existing frame's slot |
+| Negate/cancel previous content | "remove" target frame |
+| Nothing new said (AI expanded on its own) | **No action — output empty changes** |
 
 ## Core Rules
 1. Output ONLY changes (delta) — do NOT repeat unchanged frames
-2. ONE frame per topic — no fragmentation
-3. Extract substantive content — facts, conclusions, knowledge, recommendations
-4. Frame type uses snake_case domain nouns (e.g., "dietary_restrictions", not "constraints")
-5. Frame IDs follow pattern: f_001, f_002, ...
-6. AIM FOR 3-5 FRAMES TOTAL per extraction
+2. Frame type uses snake_case domain nouns (e.g., "dietary_restrictions", not "constraints")
+3. Frame IDs follow pattern: f_001, f_002, ...
 
-## When to UPDATE vs ADD
-- MODIFIES existing frame topic → "update" with only changed slots
-- NEW subtopic of root → "add" + relation { from: new_id, to: root_id, type: "elaborates" }
-- Completely UNRELATED topic → output "drift_detected" status (see below)
+## BAD vs GOOD Delta Examples
 
-## When to REMOVE
-- User explicitly rejects or cancels something → "remove"
-- User replaces one option with another → "remove" old + "add"/"update" new
+BAD — extracting AI suggestions from new turns:
+  ★ NEW Turn: AI says "You might want to consider Stumptown for beans"
+  ★ NEW Turn: User says "What about the interior design?"
 
-## ABSOLUTE PROHIBITION: No Fabrication
-- Every slot value MUST trace to actual conversation text
-- Include slot_quotes for traceability
-- Do NOT invent names, prices, numbers, or details not mentioned
+  WRONG delta: { action: "update", target: "f_001", slots: { suppliers: ["Stumptown"] } }
+  ← User never confirmed Stumptown. AI suggested it, user ignored it.
+
+GOOD — only extracting user-stated facts from new turns:
+  ★ NEW Turn: User says "Actually, let's increase the budget to $100,000"
+
+  CORRECT delta: { action: "update", target: "f_001", slots: { budget: 100000 }, slot_quotes: { budget: "increase the budget to $100,000" } }
 
 ## Drift Detection
 If the new turns discuss a topic UNRELATED to the current root frame:
@@ -160,9 +188,6 @@ If the new turns discuss a topic UNRELATED to the current root frame:
 5. depends — A references/needs B
 6. elaborates — A adds detail to B (USE THIS for subtopics)
 
-## Source Quoting
-For EACH slot, include "slot_quotes" mapping slot keys to EXACT verbatim text from the conversation.
-
 ## JSON Output Format
 \`\`\`json
 {
@@ -170,20 +195,20 @@ For EACH slot, include "slot_quotes" mapping slot keys to EXACT verbatim text fr
     {
       "action": "add",
       "frame": {
-        "id": "f_xxx", "type": "dietary_restrictions", "source": "T4", "confidence": 0.9,
-        "slots": { "allergies": [{ "type": "peanut", "applies_to": "friend" }] },
-        "slot_quotes": { "allergies": "One friend is allergic to peanuts" }
+        "id": "f_xxx", "type": "equipment_plan", "source": "T4", "confidence": 0.9,
+        "slots": { "espresso_machine": "La Marzocca", "grinder": "Mazzer" },
+        "slot_quotes": { "espresso_machine": "I want a La Marzocca machine", "grinder": "and a Mazzer grinder" }
       }
     },
     {
       "action": "update", "target": "f_001",
-      "slots": { "budget": 5000 },
-      "slot_quotes": { "budget": "actually let's keep it under $5000" }
+      "slots": { "budget": 100000 },
+      "slot_quotes": { "budget": "increase the budget to $100,000" }
     },
     { "action": "remove", "target": "f_002", "reason": "user changed mind" }
   ],
   "new_relations": [
-    { "from": "f_003", "to": "f_001", "type": "elaborates", "confidence": 0.9 }
+    { "from": "f_004", "to": "f_001", "type": "elaborates", "confidence": 0.9 }
   ],
   "drift_detected": false
 }
@@ -361,13 +386,18 @@ ${snapshotYaml}
 ${turnsSection}
 
 ## Instructions
-Output the delta (changes only) based on the NEW turns above.
-IMPORTANT: The context turns are provided for reference only — their information is already in the snapshot. Focus on NEW turns.
-However, if you notice the snapshot is MISSING important user points from context turns (constraints, preferences, facts), ADD them as new frames.
-For each piece of new information:
+Output the delta (changes only) based on the ★ NEW turns ★ above.
+CRITICAL RULES:
+1. Each slot in your delta MUST have a corresponding slot_quotes entry pointing to VERBATIM text from the ★ NEW Turns ★ section. No quote from new turns → no slot.
+2. Do NOT add slots based on AI responses unless the user explicitly confirmed them in the new turns.
+3. The context turns are for reference only — their information is already in the snapshot.
+4. Keep all slots flat (max 1 level nesting). If a subtopic needs 3+ slots → add a new frame with "elaborates" relation.
+
+For each piece of new USER-STATED information:
 - If it MODIFIES an existing frame → "update" with only changed slots
-- If it's a NEW topic → "add" a new frame
+- If it's a NEW subtopic → "add" a new frame + "elaborates" relation
 - If it NEGATES or REPLACES something → "remove" the old frame
+- If the user said nothing new (AI expanded on its own) → output empty changes: { "changes": [], "drift_detected": false }
 New frame IDs start from ${nextId}.
 Include "source" field referencing the turn tag (T1, T2, etc.).`;
 
