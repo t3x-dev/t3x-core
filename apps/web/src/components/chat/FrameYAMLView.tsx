@@ -228,6 +228,7 @@ export function FrameYAMLView() {
   const isExtracting = useExtractionPanelStore((s) => s.isExtracting);
   const setHoveredFrameId = useExtractionPanelStore((s) => s.setHoveredFrameId);
   const hoveredTurnHash = useExtractionPanelStore((s) => s.hoveredTurnHash);
+  const hoveredCharOffset = useExtractionPanelStore((s) => s.hoveredCharOffset);
   const gateIssues = useExtractionPanelStore((s) => s.gateIssues);
 
   const [isEditing, setIsEditing] = useState(false);
@@ -444,15 +445,27 @@ export function FrameYAMLView() {
               ? !!confirmedFrameIds[line.frameId]
               : !!confirmedSlotKeys[line.frameId]?.[line.slotKey!];
 
-            // Check if this row's frame is highlighted by reverse hover (chat → YAML)
+            // Check if this row is highlighted by reverse hover (chat → YAML)
             const frame = draft.frames.find((f) => f.id === line.frameId);
             const isReverseHighlighted = (() => {
-              if (!hoveredTurnHash || !frame?.source) return false;
-              const source = frame.source;
-              // Match "T3" by checking if hoveredTurnHash is the Nth turn
-              // Match "T3:abc12345" by checking hash prefix
-              if (source.includes(':')) {
-                const hashPart = source.split(':')[1];
+              if (!hoveredTurnHash || !frame) return false;
+
+              // Slot-level precision: when charOffset is available, match specific slot
+              if (hoveredCharOffset != null && frame.slot_sources) {
+                for (const [slotKey, ref] of Object.entries(frame.slot_sources)) {
+                  const hashMatch = ref.turn_hash && hoveredTurnHash === ref.turn_hash;
+                  if (hashMatch && hoveredCharOffset >= ref.start_char && hoveredCharOffset < ref.end_char) {
+                    // Only highlight this specific slot row (or the frame header if slotKey is null)
+                    return line.slotKey === slotKey || (line.slotKey === null && line.text.includes(frame.type));
+                  }
+                }
+                return false;
+              }
+
+              // Fallback: whole-frame highlight via frame.source
+              if (!frame.source) return false;
+              if (frame.source.includes(':')) {
+                const hashPart = frame.source.split(':')[1];
                 return hoveredTurnHash.includes(hashPart);
               }
               return false;
