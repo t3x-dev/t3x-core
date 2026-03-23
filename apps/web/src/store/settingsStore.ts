@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 export type UserExperience = 'general' | 'developer';
-export type ViewMode = 'canvas' | 'timeline' | 'list';
+export type ViewMode = 'canvas' | 'timeline';
 export type Density = 'compact' | 'comfortable';
 
 interface SettingsState {
