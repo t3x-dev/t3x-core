@@ -394,7 +394,7 @@ export function ChatWorkspace({
 
       {/* Message list */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden">
-        {/* Parent conversation banner */}
+        {/* Parent conversation banner + Back to Canvas */}
         {parentConversationId && (
           <div className="w-full py-2 bg-[var(--accent-commit)]/5 border-b border-[var(--accent-commit)]/10">
             <div className="mx-auto max-w-3xl px-4 flex items-center gap-2 text-xs text-[var(--text-secondary)]">
@@ -405,6 +405,32 @@ export function ChatWorkspace({
                 className="text-[var(--accent-commit)] hover:underline font-medium"
               >
                 View parent conversation
+              </a>
+              {resolvedProjectId && (
+                <>
+                  <span className="text-[var(--text-tertiary)]">&middot;</span>
+                  <a
+                    href={`/project/${resolvedProjectId}?view=canvas`}
+                    className="text-[var(--accent-commit)] hover:underline font-medium"
+                  >
+                    Back to Canvas
+                  </a>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+        {/* Back to Canvas (when no parent but has project — e.g. direct chat from STAGING) */}
+        {!parentConversationId && resolvedProjectId && (
+          <div className="w-full py-2 bg-[var(--accent-conversation)]/5 border-b border-[var(--accent-conversation)]/10">
+            <div className="mx-auto max-w-3xl px-4 flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+              <GitCommit size={12} className="text-[var(--accent-conversation)]" />
+              <span>Conversation in progress</span>
+              <a
+                href={`/project/${resolvedProjectId}?view=canvas`}
+                className="text-[var(--accent-conversation)] hover:underline font-medium"
+              >
+                Back to Canvas to commit
               </a>
             </div>
           </div>
