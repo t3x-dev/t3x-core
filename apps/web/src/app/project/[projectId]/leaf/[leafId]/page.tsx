@@ -56,6 +56,7 @@ export default function LeafDetailPage() {
     loading,
     error,
     sentences,
+    semanticContent,
     saving,
     savingInstruction,
     savingModel,
@@ -290,17 +291,16 @@ export default function LeafDetailPage() {
         {/* Left: YAML Tree (always visible in both modes) */}
         {!sourcePanelCollapsed && (
           <YAMLTreePanel
-            sentences={sentences}
+            content={semanticContent ?? { frames: [], relations: [] }}
             mode={mode}
             constraints={leaf.constraints}
             assertions={leaf.assertions ?? undefined}
             saving={saving}
-            sentenceConfidence={sentenceConfidence}
             commitHash={leaf.commit_hash}
             projectId={projectId}
             onAddConstraintFromSource={handleAddConstraintFromSource}
             highlightedConstraintId={hoveredSentenceId}
-            onHoverSentence={setHoveredSentenceId}
+            onHoverFrame={setHoveredSentenceId}
           />
         )}
 
