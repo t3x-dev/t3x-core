@@ -1,8 +1,5 @@
 /**
  * Commits API (frame-based)
- *
- * Sentence-based types are kept as backward-compatible wrappers
- * that derive sentence data from frames via framesToSentences().
  */
 
 import { API_V1, buildQueryString, fetchWithTimeout, handleResponse } from './core';
@@ -27,7 +24,7 @@ export interface SentenceWithSourceInfo {
 
 // ============================================================================
 // Sentence-based commit types
-// Used by UI components that read sentence data derived from frames.
+// Used by diff display and other UI components.
 // ============================================================================
 
 /** Source reference for a sentence within a commit */
@@ -60,39 +57,6 @@ export interface CommitSourceRef {
   id: string;
   title?: string;
   assertion_lessons?: string[];
-}
-
-/**
- * SentenceCommit — A commit represented with sentence-based content.
- * New code should use ApiCommit directly.
- * Existing UI code can treat a frame-based commit as sentence-based by
- * deriving sentences from frames via framesToSentences().
- */
-export interface SentenceCommit {
-  hash: string;
-  schema: 't3x/commit/v4' | 't3x/commit/5';
-  parents: string[];
-  author: CommitAuthor;
-  committed_at: string;
-  content: {
-    sentences: CommitSentence[];
-  };
-  project_id: string | null;
-  message: string | null;
-  branch: string | null;
-  source_refs: CommitSourceRef[] | null;
-  merge_summary?: {
-    kept_identical: number;
-    resolved_conflicts: number;
-    kept_from_source: number;
-    kept_from_target: number;
-    discarded: number;
-    total_sentences: number;
-  } | null;
-  semantic?: import('@t3x-dev/core').SemanticContent;
-  position_x: number | null;
-  position_y: number | null;
-  created_at: string;
 }
 
 // ============================================================================
@@ -172,100 +136,6 @@ export async function createCommit(
   return handleResponse(res);
 }
 
-// ============================================================================
-// Sentence conversion — converts frame-based commits to sentence-based shape
-// ============================================================================
-
-import { framesToSentences } from '@/lib/framesToSentences';
-
-/**
- * Convert a frame-based commit to sentence-based shape.
- * Derives sentences from frames and maps `sources` to `source_refs`.
- */
-export function toSentenceCommit(commit: ApiCommit): SentenceCommit {
-  const sentences: CommitSentence[] = commit.content?.frames?.length
-    ? framesToSentences(commit.content as import('@t3x-dev/core').SemanticContent).map((s) => ({
-        id: s.id,
-        text: s.text,
-        confidence: s.confidence,
-        source_ref: s.source_ref
-          ? {
-              conversation_id: s.source_ref.conversation_id ?? '',
-              turn_hash: s.source_ref.turn_hash ?? '',
-              start_char: s.source_ref.start_char ?? 0,
-              end_char: s.source_ref.end_char ?? 0,
-            }
-          : undefined,
-      }))
-    : [];
-
-  return {
-    hash: commit.hash,
-    schema: commit.schema,
-    parents: commit.parents ?? [],
-    author: {
-      type: (commit.author.type === 'human' || commit.author.type === 'agent'
-        ? commit.author.type
-        : 'human') as 'human' | 'agent',
-      name: commit.author.name,
-      id: commit.author.id,
-    },
-    committed_at: commit.committed_at,
-    content: { sentences },
-    project_id: commit.project_id,
-    message: commit.message,
-    branch: commit.branch,
-    source_refs:
-      commit.sources?.map((s) => ({
-        type: (s.type === 'leaf' ? 'leaf' : 'conversation') as 'conversation' | 'leaf',
-        id: s.id,
-        title: s.title,
-      })) ?? null,
-    merge_summary: null,
-    semantic: commit.content as import('@t3x-dev/core').SemanticContent | undefined,
-    position_x: commit.position_x ?? null,
-    position_y: commit.position_y ?? null,
-    created_at: commit.committed_at,
-  };
-}
-
-/**
- * List commits as sentence-based shape.
- */
-export async function listSentenceCommits(
-  projectId: string,
-  branch?: string,
-  limit = 50,
-  _offset = 0
-): Promise<SentenceCommit[]> {
-  const commitList = await listCommits(projectId, branch, limit);
-  return commitList.map(toSentenceCommit);
-}
-
-/**
- * Get a single commit as sentence-based shape.
- */
-export async function getSentenceCommit(commitHash: string): Promise<SentenceCommit> {
-  const apiCommit = await getApiCommit(commitHash);
-  return toSentenceCommit(apiCommit);
-}
-
-/**
- * Get commit ancestor chain as sentence-based shape.
- */
-export async function getCommitHistory(commitHash: string, limit = 50): Promise<SentenceCommit[]> {
-  try {
-    const query = buildQueryString({ limit });
-    const res = await fetchWithTimeout(
-      `${API_V1}/commits/${encodeURIComponent(commitHash)}/history?${query}`
-    );
-    const data = await handleResponse<{ commits: ApiCommit[]; truncated: boolean }>(res);
-    return data.commits.map(toSentenceCommit);
-  } catch {
-    return [];
-  }
-}
-
 /**
  * Update commit canvas position.
  */
@@ -273,7 +143,7 @@ export async function updateCommitPosition(
   commitHash: string,
   positionX: number,
   positionY: number
-): Promise<SentenceCommit> {
+): Promise<ApiCommit> {
   const res = await fetchWithTimeout(
     `${API_V1}/commits/${encodeURIComponent(commitHash)}/position`,
     {
@@ -282,8 +152,7 @@ export async function updateCommitPosition(
       body: JSON.stringify({ position_x: positionX, position_y: positionY }),
     }
   );
-  const apiCommit = await handleResponse<ApiCommit>(res);
-  return toSentenceCommit(apiCommit);
+  return handleResponse<ApiCommit>(res);
 }
 
 /**
