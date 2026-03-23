@@ -201,7 +201,7 @@ export default function LeafDetailPage() {
             onClick={() => setSourcePanelCollapsed(!sourcePanelCollapsed)}
           >
             <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-conversation)]" />
-            Sentences {sentences.length}
+            Frames {sentences.length}
           </button>
           <button
             type="button"
@@ -220,7 +220,7 @@ export default function LeafDetailPage() {
           {/* Display mode: coverage summary */}
           {mode === 'display' && sentences.length > 0 && (
             <span className="text-xs font-medium text-[var(--status-success)] ml-2">
-              {reflectedCount}/{sentences.length} sentences reflected
+              {reflectedCount}/{sentences.length} frames reflected
             </span>
           )}
         </div>

@@ -153,7 +153,7 @@ export function AutopilotSettings({ projectId }: { projectId: string }) {
       {/* Min Sentences */}
       <div className="space-y-2">
         <Label htmlFor="min-sentences" className="text-sm text-[var(--text-primary)]">
-          Minimum Sentences
+          Minimum Frames
         </Label>
         <Input
           id="min-sentences"

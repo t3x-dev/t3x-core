@@ -280,7 +280,7 @@ export function CommittedCommitView({
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem onClick={() => handleCommitExport('clipboard')}>
                     <Copy className="mr-2 h-4 w-4" />
-                    Copy Sentences
+                    Copy Frames
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => handleCommitExport('markdown')}>
                     <FileText className="mr-2 h-4 w-4" />

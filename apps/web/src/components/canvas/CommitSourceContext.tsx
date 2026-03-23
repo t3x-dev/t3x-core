@@ -616,7 +616,7 @@ export function CommitSourceContext({
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <MessageSquare size={14} className="text-[var(--color-text-muted)]" />
-            <h3 className="font-semibold text-sm text-[var(--color-text-secondary)]">Sentences</h3>
+            <h3 className="font-semibold text-sm text-[var(--color-text-secondary)]">Frames</h3>
           </div>
           <span className="px-2 py-0.5 bg-[var(--hover-bg)] text-[var(--color-text-secondary)] text-xs rounded">
             Legacy format
@@ -662,7 +662,7 @@ export function CommitSourceContext({
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <XCircle size={14} className="text-[var(--color-text-muted)]" />
-            <h3 className="font-semibold text-sm text-[var(--color-text-secondary)]">Sentences</h3>
+            <h3 className="font-semibold text-sm text-[var(--color-text-secondary)]">Frames</h3>
           </div>
           <span className="px-2 py-0.5 bg-[var(--hover-bg)] text-[var(--color-text-secondary)] text-xs rounded">
             Source unavailable

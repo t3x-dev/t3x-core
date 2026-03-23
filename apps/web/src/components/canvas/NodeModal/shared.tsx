@@ -273,7 +273,7 @@ export function CommitSourceContent({ commit }: { commit: CommitDisplay }) {
   return (
     <div className="p-[var(--space-group)] bg-muted/50 rounded-lg border border-border">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="font-semibold text-sm text-foreground">Sentences</h3>
+        <h3 className="font-semibold text-sm text-foreground">Frames</h3>
         <span className="text-xs text-muted-foreground/70">{sentences.length} total</span>
       </div>
       <ul className="space-y-[var(--space-item)]">
