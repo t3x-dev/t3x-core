@@ -90,7 +90,7 @@ export function ChatMessage({
   const hoveredFrameId = useExtractionPanelStore((s) => s.hoveredFrameId);
   const hoveredSlotKey = useExtractionPanelStore((s) => s.hoveredSlotKey);
   const draft = useExtractionPanelStore((s) => s.draft);
-  const setHoveredTurnHash = useExtractionPanelStore((s) => s.setHoveredTurnHash);
+  const setHoveredTurn = useExtractionPanelStore((s) => s.setHoveredTurn);
 
   // Compute highlight ranges for this message based on hovered frame/slot
   const highlightRanges = useMemo(() => {
@@ -171,8 +171,8 @@ export function ChatMessage({
       style={{
         background: isWholeMessageHighlight ? 'rgba(96, 165, 250, 0.08)' : 'transparent',
       }}
-      onMouseEnter={() => turnHash && setHoveredTurnHash(turnHash)}
-      onMouseLeave={() => setHoveredTurnHash(null)}
+      onMouseEnter={() => turnHash && setHoveredTurn(turnHash)}
+      onMouseLeave={() => setHoveredTurn(null)}
     >
       <div className="mx-auto max-w-3xl px-4">
         <div className="flex gap-3">

@@ -76,8 +76,9 @@ interface ExtractionPanelState {
   hoveredFrameId: string | null; // YAML row hovered → highlight source turn
   hoveredSlotKey: string | null; // Specific slot hovered (for character-level highlight)
   hoveredTurnHash: string | null; // Chat message hovered → highlight YAML rows
+  hoveredCharOffset: number | null; // Character offset within hovered turn (for slot-level reverse highlight)
   setHoveredFrameId: (id: string | null, slotKey?: string | null) => void;
-  setHoveredTurnHash: (hash: string | null) => void;
+  setHoveredTurn: (hash: string | null, charOffset?: number | null) => void;
 
   // Commit tracking
   lastCommitHash: string | null;
@@ -124,6 +125,7 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
   hoveredFrameId: null,
   hoveredSlotKey: null,
   hoveredTurnHash: null,
+  hoveredCharOffset: null,
 
   // Commit tracking defaults
   lastCommitHash: null,
@@ -275,13 +277,13 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
       }, HOVER_DEBOUNCE_MS);
     }
   },
-  setHoveredTurnHash: (hash) => {
+  setHoveredTurn: (hash, charOffset) => {
     if (hoverTurnTimer) clearTimeout(hoverTurnTimer);
     if (hash === null) {
-      set({ hoveredTurnHash: null });
+      set({ hoveredTurnHash: null, hoveredCharOffset: null });
     } else {
       hoverTurnTimer = setTimeout(() => {
-        set({ hoveredTurnHash: hash });
+        set({ hoveredTurnHash: hash, hoveredCharOffset: charOffset ?? null });
       }, HOVER_DEBOUNCE_MS);
     }
   },
