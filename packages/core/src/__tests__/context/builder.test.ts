@@ -13,26 +13,21 @@ import {
   estimateTokens,
   filterActivePins,
 } from '../../context/builder';
-import type { ConversationContext, Leaf, Pin, SentenceCommit } from '../../types/v4';
+import type { ConversationContext, Leaf, Pin } from '../../types/v4';
+import type { SemanticContent } from '../../semantic/types';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Test Fixtures
 // ═══════════════════════════════════════════════════════════════════════════
 
-const mockCommit: SentenceCommit = {
-  hash: 'sha256:abc123',
-  schema: 't3x/commit/v4',
-  parents: [],
-  author: { type: 'human', name: 'Alice' },
-  committed_at: '2025-01-10T00:00:00Z',
-  content: {
-    sentences: [
-      { id: 's_1', text: 'We want to visit Tokyo in spring.' },
-      { id: 's_2', text: 'Budget is around $3000 per person.' },
-    ],
-  },
-  project_id: 'proj_test',
-  message: 'Initial travel plan',
+const mockKnowledge: SemanticContent = {
+  frames: [
+    { id: 'f_001', type: 'travel_plan', slots: { destination: 'Tokyo', season: 'spring' } },
+    { id: 'f_002', type: 'budget', slots: { amount: 3000, per: 'person' } },
+  ],
+  relations: [
+    { from: 'f_002', to: 'f_001', type: 'elaborates' as const },
+  ],
 };
 
 const mockConversation: ConversationData = {
@@ -178,15 +173,15 @@ describe('filterActivePins', () => {
 describe('buildConversationContext', () => {
   it('builds context with only commit when no pins', () => {
     const result = buildConversationContext({
-      currentCommit: mockCommit,
+      knowledge: mockKnowledge,
       projectPins: [],
       conversations: new Map(),
       leaves: new Map(),
     });
 
     expect(result.text).toContain('## Current Knowledge');
-    expect(result.text).toContain('We want to visit Tokyo in spring.');
-    expect(result.text).toContain('Budget is around $3000 per person.');
+    expect(result.text).toContain('travel_plan:');
+    expect(result.text).toContain('destination: Tokyo');
     expect(result.sources).toHaveLength(1);
     expect(result.sources[0].type).toBe('commit');
     expect(result.token_estimate).toBeGreaterThan(0);
@@ -197,7 +192,7 @@ describe('buildConversationContext', () => {
     conversations.set('conv_1', mockConversation);
 
     const result = buildConversationContext({
-      currentCommit: mockCommit,
+      knowledge: mockKnowledge,
       projectPins: [mockPins[0]], // Only conversation pin
       conversations,
       leaves: new Map(),
@@ -216,7 +211,7 @@ describe('buildConversationContext', () => {
     leaves.set('leaf_1', mockLeaf);
 
     const result = buildConversationContext({
-      currentCommit: mockCommit,
+      knowledge: mockKnowledge,
       projectPins: [mockPins[1]], // Only leaf pin
       conversations: new Map(),
       leaves,
@@ -240,7 +235,7 @@ describe('buildConversationContext', () => {
     };
 
     const result = buildConversationContext({
-      currentCommit: mockCommit,
+      knowledge: mockKnowledge,
       projectPins: [pinWithSelectedAssertions],
       conversations: new Map(),
       leaves,
@@ -263,7 +258,7 @@ describe('buildConversationContext', () => {
     };
 
     const result = buildConversationContext({
-      currentCommit: mockCommit,
+      knowledge: mockKnowledge,
       projectPins: mockPins,
       contextConfig,
       conversations,
@@ -275,9 +270,9 @@ describe('buildConversationContext', () => {
     expect(result.sources).toHaveLength(2); // commit + 1 conversation
   });
 
-  it('handles missing commit gracefully', () => {
+  it('handles missing knowledge gracefully', () => {
     const result = buildConversationContext({
-      currentCommit: undefined,
+      knowledge: undefined,
       projectPins: [],
       conversations: new Map(),
       leaves: new Map(),
@@ -290,7 +285,7 @@ describe('buildConversationContext', () => {
 
   it('skips missing conversation data', () => {
     const result = buildConversationContext({
-      currentCommit: mockCommit,
+      knowledge: mockKnowledge,
       projectPins: [mockPins[0]], // Conversation pin
       conversations: new Map(), // But no conversation data
       leaves: new Map(),
@@ -309,7 +304,7 @@ describe('buildConversationContext', () => {
     leaves.set('leaf_1', longOutputLeaf);
 
     const result = buildConversationContext({
-      currentCommit: mockCommit,
+      knowledge: mockKnowledge,
       projectPins: [mockPins[1]],
       conversations: new Map(),
       leaves,
@@ -325,29 +320,29 @@ describe('buildConversationContext', () => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe('buildLeafContext', () => {
-  it('builds context from commit sentences', () => {
-    const result = buildLeafContext(mockCommit);
+  it('builds context from semantic frames', () => {
+    const result = buildLeafContext(mockKnowledge);
 
     expect(result.text).toContain('## Knowledge');
-    expect(result.text).toContain('We want to visit Tokyo in spring.');
-    expect(result.text).toContain('Budget is around $3000 per person.');
+    expect(result.text).toContain('travel_plan:');
+    expect(result.text).toContain('destination: Tokyo');
     expect(result.sources).toHaveLength(1);
     expect(result.sources[0].type).toBe('commit');
-    expect(result.sources[0].id).toBe(mockCommit.hash);
+    expect(result.sources[0].id).toBe('knowledge');
   });
 
-  it('includes commit message in source', () => {
-    const result = buildLeafContext(mockCommit);
-    expect(result.sources[0].title).toBe('Initial travel plan');
+  it('includes knowledge title in source', () => {
+    const result = buildLeafContext(mockKnowledge);
+    expect(result.sources[0].title).toBe('Current knowledge');
   });
 
-  it('handles empty sentences array', () => {
-    const emptyCommit: SentenceCommit = {
-      ...mockCommit,
-      content: { sentences: [] },
+  it('handles empty frames array', () => {
+    const emptyKnowledge: SemanticContent = {
+      frames: [],
+      relations: [],
     };
 
-    const result = buildLeafContext(emptyCommit);
+    const result = buildLeafContext(emptyKnowledge);
     expect(result.text).toContain('## Knowledge');
     expect(result.sources).toHaveLength(1);
   });
