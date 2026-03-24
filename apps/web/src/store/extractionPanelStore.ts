@@ -468,6 +468,17 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
       // Apply the compress delta locally
       get().applyDelta(result.delta, 'compress');
 
+      // Patch the client-generated ID with the server's actual delta_log_id
+      // (applyDelta uses crypto.randomUUID(), but undo needs the real server ID)
+      set((s) => {
+        const log = [...s.deltaLog];
+        const last = log[log.length - 1];
+        if (last && last.source === 'compress') {
+          log[log.length - 1] = { ...last, id: result.delta_log_id };
+        }
+        return { deltaLog: log };
+      });
+
       set({
         isCompressing: false,
         compressResult: {
