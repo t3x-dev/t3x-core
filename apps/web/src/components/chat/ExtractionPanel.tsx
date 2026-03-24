@@ -5,13 +5,14 @@ import { GitCommit, LayoutGrid, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { framesToSentences } from '@/lib/framesToSentences';
+import type { Frame } from '@t3x-dev/core';
 import { cn } from '@/lib/utils';
 import { useExtractionPanelStore } from '@/store/extractionPanelStore';
 import { CommitDropdown } from './CommitDropdown';
-import { FrameGraphMini } from './FrameGraphMini';
+import { AdvisoryPanel } from './AdvisoryPanel';
 import { FrameYAMLView } from './FrameYAMLView';
 import { PreviewPanel } from './PreviewPanel';
+import { TopicMap } from './TopicMap';
 
 // ── Panel widths ──
 
@@ -62,35 +63,7 @@ function CollapsedRail({
   );
 }
 
-// ── View toggle tabs ──
 
-function ViewTabs({
-  activeView,
-  onChangeView,
-}: {
-  activeView: 'graph' | 'yaml';
-  onChangeView: (v: 'graph' | 'yaml') => void;
-}) {
-  return (
-    <div className="flex border-b border-[var(--stroke-default)]">
-      {(['graph', 'yaml'] as const).map((view) => (
-        <button
-          key={view}
-          type="button"
-          onClick={() => onChangeView(view)}
-          className={cn(
-            'flex-1 py-2 text-xs font-medium capitalize transition-colors',
-            activeView === view
-              ? 'border-b-2 border-[var(--accent-commit)] text-[var(--text-primary)]'
-              : 'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]'
-          )}
-        >
-          {view}
-        </button>
-      ))}
-    </div>
-  );
-}
 
 // ── Commit preview section ──
 
@@ -108,11 +81,7 @@ function CommitPreviewSection() {
   const clearCommitError = useExtractionPanelStore((s) => s.clearCommitError);
 
   const [commitMessage, setCommitMessage] = useState('');
-  const deltaFrames = selectDeltaFrames();
-  const deltaSentences = framesToSentences(
-    { frames: deltaFrames, relations: [] },
-    conversationId ?? undefined
-  );
+  const deltaFrames: Frame[] = selectDeltaFrames();
 
   const handleConfirm = async () => {
     try {
@@ -140,25 +109,28 @@ function CommitPreviewSection() {
       <div className="flex items-center justify-between">
         <span className="text-xs font-semibold text-[var(--text-primary)]">Commit Preview</span>
         <span className="text-[10px] text-[var(--text-tertiary)]">
-          {deltaSentences.length} new sentence{deltaSentences.length !== 1 ? 's' : ''}
+          {deltaFrames.length} new frame{deltaFrames.length !== 1 ? 's' : ''}
         </span>
       </div>
 
       <div className="flex flex-col gap-1 max-h-40 overflow-y-auto">
-        {deltaSentences.length === 0 ? (
+        {deltaFrames.length === 0 ? (
           <div className="text-[11px] text-[var(--text-tertiary)] italic py-2">
             All frames already committed — up to date
           </div>
         ) : (
-          deltaSentences.map((s) => (
-            <div
-              key={s.id}
-              className="text-[11px] text-[var(--text-secondary)] rounded px-2 py-1 bg-[var(--hover-bg)]"
-            >
-              <span className="text-green-500 mr-1">+</span>
-              {s.text.length > 80 ? `${s.text.slice(0, 80)}...` : s.text}
-            </div>
-          ))
+          deltaFrames.map((f) => {
+            const summary = `[${f.type}] ${Object.entries(f.slots).map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`).join('; ')}`;
+            return (
+              <div
+                key={f.id}
+                className="text-[11px] text-[var(--text-secondary)] rounded px-2 py-1 bg-[var(--hover-bg)]"
+              >
+                <span className="text-green-500 mr-1">+</span>
+                {summary.length > 80 ? `${summary.slice(0, 80)}...` : summary}
+              </div>
+            );
+          })
         )}
       </div>
 
@@ -177,7 +149,7 @@ function CommitPreviewSection() {
         placeholder="Commit message (optional)"
         className="w-full rounded border border-[var(--stroke-default)] bg-[var(--surface-panel)] px-2 py-1.5 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--accent-commit)]"
         onKeyDown={(e) => {
-          if (e.key === 'Enter' && !isCommitting && deltaSentences.length > 0) handleConfirm();
+          if (e.key === 'Enter' && !isCommitting && deltaFrames.length > 0) handleConfirm();
           if (e.key === 'Escape') setPanelMode('default');
         }}
         disabled={isCommitting}
@@ -204,7 +176,7 @@ function CommitPreviewSection() {
         <button
           type="button"
           onClick={handleConfirm}
-          disabled={isCommitting || deltaSentences.length === 0}
+          disabled={isCommitting || deltaFrames.length === 0}
           className="flex-1 rounded bg-[var(--accent-commit)] px-2 py-1.5 text-xs text-white hover:opacity-90 disabled:opacity-40"
         >
           {isCommitting ? 'Committing...' : 'Confirm Commit'}
@@ -218,12 +190,10 @@ function CommitPreviewSection() {
 
 export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
   const panelMode = useExtractionPanelStore((s) => s.panelMode);
-  const activeView = useExtractionPanelStore((s) => s.activeView);
   const draft = useExtractionPanelStore((s) => s.draft);
   const isExtracting = useExtractionPanelStore((s) => s.isExtracting);
   const togglePanel = useExtractionPanelStore((s) => s.togglePanel);
   const setPanelMode = useExtractionPanelStore((s) => s.setPanelMode);
-  const setActiveView = useExtractionPanelStore((s) => s.setActiveView);
   const lastDeltaChanges = useExtractionPanelStore((s) => s.lastDeltaChanges);
   const focusIntentEnabled = useExtractionPanelStore((s) => s.focusIntentEnabled);
   const setFocusIntent = useExtractionPanelStore((s) => s.setFocusIntent);
@@ -306,8 +276,8 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
             </button>
           </div>
 
-          {/* View toggle */}
-          <ViewTabs activeView={activeView} onChangeView={setActiveView} />
+          {/* Topic list */}
+          <TopicMap />
 
           {/* Focus intent toggle */}
           <div className="px-3 py-1.5 border-b border-[var(--stroke-default)]">
@@ -336,8 +306,9 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
           {panelMode === 'default' ? (
             <div className="flex flex-1 flex-col overflow-hidden">
               <div className="flex-1 overflow-hidden">
-                {activeView === 'graph' ? <FrameGraphMini /> : <FrameYAMLView />}
+                <FrameYAMLView />
               </div>
+              <AdvisoryPanel />
               <CommitDropdown />
             </div>
           ) : (
@@ -346,9 +317,9 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
               {/* Left: extraction content */}
               <div className="flex flex-1 flex-col overflow-hidden border-r border-[var(--stroke-default)]">
                 <div className="flex-1 overflow-hidden">
-                  {activeView === 'graph' ? <FrameGraphMini /> : <FrameYAMLView />}
+                  <FrameYAMLView />
                 </div>
-                <CommitDropdown />
+                <AdvisoryPanel />
               </div>
 
               {/* Right: Preview + Commit */}

@@ -16,6 +16,7 @@ import {
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { assertProjectAccess } from '../lib/project-access';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
 export const ingestRoutes = new OpenAPIHono({
@@ -145,11 +146,9 @@ ingestRoutes.openapi(ingestWebhookRoute, async (c) => {
   try {
     const db = await getDB();
 
-    // Verify project exists
-    const project = await findProjectById(db, projectId);
-    if (!project) {
-      return errorResponse(c, 'PROJECT_NOT_FOUND', `Project not found: ${projectId}`);
-    }
+    // Verify project exists and user has access
+    const project = await assertProjectAccess(c, db, projectId);
+    if (project instanceof Response) return project;
 
     let conversationId: string;
 

@@ -14,13 +14,13 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import type { MergeSummaryData, SlotValue } from '@t3x-dev/core';
 import {
-  executeMerge,
+  executeFrameMerge,
+  type FrameMergeDecision,
   type FrameMergeInput,
-  framesToTextSegments,
-  type Merge2WayResult,
-  prepareMerge,
+  type FrameMergeResult,
+  prepareFrameMerge,
+  type SemanticContent,
   suggestFrameMerge,
-  suggestMerge,
 } from '@t3x-dev/core';
 import {
   commitMergeDraft,
@@ -36,6 +36,7 @@ import {
 import { getAuthorFromContext } from '../lib/auth';
 import { getDB } from '../lib/db';
 import { computeMergeChecks } from '../lib/merge-checks';
+import { assertProjectAccess } from '../lib/project-access';
 import { getLLMProvider } from '../lib/provider-registry';
 import { getUserId, recordUsageFireAndForget, wrapWithUsageTracking } from '../lib/usage-tracking';
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
@@ -60,15 +61,16 @@ const prepareMergeRoute = createRoute({
   tags: ['Merge'],
   summary: 'Prepare a two-way merge',
   description: `
-Analyzes two commits and returns a merge preparation result.
+Analyzes two commits and returns a frame-level merge preparation result.
 
-This endpoint performs a two-way merge analysis (no common ancestor required) and returns:
-- **identical**: Sentences that are exactly the same in both commits
-- **similarPairs**: Pairs of similar sentences that require user resolution
-- **onlyInSource**: Sentences only present in the source commit
-- **onlyInTarget**: Sentences only present in the target commit
+This endpoint performs a frame merge analysis and returns:
+- **autoKept**: Frames identical in both commits (auto-kept)
+- **conflicts**: Frames modified differently in source and target (require user resolution)
+- **onlyInSource**: Frames only present in the source commit
+- **onlyInTarget**: Frames only present in the target commit
+- **relationsOnlyInSource/relationsOnlyInTarget/relationsInBoth**: Relation partitions
 
-The client must resolve all similarPairs (choose 'source' or 'target') and decide which onlyInSource/onlyInTarget sentences to keep before calling /execute.
+The client must resolve all conflicts and decide which onlyInSource/onlyInTarget frames to keep before calling /execute.
   `.trim(),
   request: {
     body: {
@@ -128,6 +130,12 @@ mergeRoutes.openapi(prepareMergeRoute, async (c) => {
       );
     }
 
+    // Verify project ownership via source commit
+    if (sourceCommit.project_id) {
+      const accessResult = await assertProjectAccess(c, db, sourceCommit.project_id);
+      if (accessResult instanceof Response) return accessResult;
+    }
+
     const targetCommit = await getCommitUnified(db, target_hash);
     if (!targetCommit) {
       return c.json(
@@ -142,11 +150,9 @@ mergeRoutes.openapi(prepareMergeRoute, async (c) => {
       );
     }
 
-    // Prepare merge using text segments extracted from frames
-    const prepared = prepareMerge(
-      framesToTextSegments(sourceCommit.content),
-      framesToTextSegments(targetCommit.content)
-    );
+    // Prepare frame-level merge (empty base = two-way mode)
+    const baseContent: SemanticContent = { frames: [], relations: [] };
+    const prepared = prepareFrameMerge(baseContent, sourceCommit.content, targetCommit.content);
 
     return c.json({ success: true as const, data: prepared }, 200);
   } catch (error) {
@@ -174,16 +180,15 @@ const executeMergeRoute = createRoute({
   tags: ['Merge'],
   summary: 'Execute a merge with user resolutions',
   description: `
-Executes a merge after the user has made all resolution decisions.
+Executes a frame merge after the user has made all resolution decisions.
 
 **Requirements:**
-- All \`similarPairs[].resolution\` must be set to either 'source' or 'target'
-- All \`onlyInSource[].keep\` and \`onlyInTarget[].keep\` must be set to true or false
+- \`prepared\`: The FrameMergeResult from the prepare step
+- \`decisions\`: FrameMergeDecision with conflict resolutions and keep lists
 
 **Result:**
 - Creates a new merge commit with 2 parents: [source_hash, target_hash]
-- Merged sentences get new IDs: 'm1', 'm2', ...
-- Merged constraints get new IDs: 'mc1', 'mc2', ...
+- Merged content is SemanticContent (frames + relations)
 - Optionally updates the branch pointer if \`branch\` is specified
 
 **Author Information:**
@@ -228,37 +233,19 @@ Executes a merge after the user has made all resolution decisions.
 });
 
 mergeRoutes.openapi(executeMergeRoute, async (c) => {
-  const { source_hash, target_hash, prepared, message, branch } = c.req.valid('json');
+  const { source_hash, target_hash, prepared, decisions, message, branch } = c.req.valid('json');
 
-  // Validate all similar pairs are resolved
-  const unresolved = prepared.similarPairs.filter((p) => !p.resolution);
-  if (unresolved.length > 0) {
+  // Validate all conflicts have resolutions
+  const unresolvedConflicts = prepared.conflicts.filter(
+    (conf: { frameId: string }) => !decisions.conflictResolutions[conf.frameId]
+  );
+  if (unresolvedConflicts.length > 0) {
     return c.json(
       {
         success: false as const,
         error: {
-          code: 'UNRESOLVED_PAIRS',
-          message: `${unresolved.length} similar pair(s) have no resolution`,
-        },
-      },
-      400
-    );
-  }
-
-  // Validate that all onlyInSource and onlyInTarget items have keep explicitly set
-  const undefinedKeepSource = prepared.onlyInSource.filter(
-    (item: { keep?: boolean }) => item.keep === undefined || item.keep === null
-  );
-  const undefinedKeepTarget = prepared.onlyInTarget.filter(
-    (item: { keep?: boolean }) => item.keep === undefined || item.keep === null
-  );
-  if (undefinedKeepSource.length > 0 || undefinedKeepTarget.length > 0) {
-    return c.json(
-      {
-        success: false as const,
-        error: {
-          code: 'INVALID_REQUEST',
-          message: `All onlyInSource and onlyInTarget items must have 'keep' explicitly set to true or false. Missing: ${undefinedKeepSource.length} source item(s), ${undefinedKeepTarget.length} target item(s)`,
+          code: 'UNRESOLVED_CONFLICTS',
+          message: `${unresolvedConflicts.length} conflict(s) have no resolution`,
         },
       },
       400
@@ -270,7 +257,7 @@ mergeRoutes.openapi(executeMergeRoute, async (c) => {
   const db = await getDB();
 
   try {
-    // Get project_id from source commit for executeMerge
+    // Get project_id from source commit
     const sourceCommit = await getCommitUnified(db, source_hash);
     if (!sourceCommit) {
       return c.json(
@@ -299,56 +286,38 @@ mergeRoutes.openapi(executeMergeRoute, async (c) => {
     }
     const projectId = sourceCommit.project_id;
 
-    // Execute merge - returns SentenceCommit
-    const mergeCommit = executeMerge(
-      prepared as Merge2WayResult,
-      source_hash,
-      target_hash,
-      author,
-      message,
-      projectId
+    // Execute frame merge - returns SemanticContent directly
+    const mergedContent = executeFrameMerge(
+      prepared as FrameMergeResult,
+      decisions as FrameMergeDecision
     );
 
-    // Set branch if provided
-    if (branch) {
-      mergeCommit.branch = branch;
-    }
-
-    // Compute merge summary from prepared data
-    const keptFromSource = prepared.onlyInSource.filter((c: { keep: boolean }) => c.keep).length;
-    const keptFromTarget = prepared.onlyInTarget.filter((c: { keep: boolean }) => c.keep).length;
-    const discardedSource = prepared.onlyInSource.filter((c: { keep: boolean }) => !c.keep).length;
-    const discardedTarget = prepared.onlyInTarget.filter((c: { keep: boolean }) => !c.keep).length;
+    // Compute merge summary
+    const keptFromSource = decisions.keepFromSource?.length ?? 0;
+    const keptFromTarget = decisions.keepFromTarget?.length ?? 0;
+    const discardedSource = prepared.onlyInSource.length - keptFromSource;
+    const discardedTarget = prepared.onlyInTarget.length - keptFromTarget;
     const mergeSummary: MergeSummaryData = {
-      kept_identical: prepared.identical.length,
-      resolved_conflicts: prepared.similarPairs.filter((p: { resolution?: string }) => p.resolution)
-        .length,
+      kept_identical: prepared.autoKept.length,
+      resolved_conflicts: prepared.conflicts.length,
       kept_from_source: keptFromSource,
       kept_from_target: keptFromTarget,
       discarded: discardedSource + discardedTarget,
-      total_sentences: mergeCommit.content.sentences.length,
+      total_sentences: mergedContent.frames.length,
     };
-
-    // Convert sentences to legacy_sentence frames
-    const frames = mergeCommit.content.sentences.map((s, i) => ({
-      id: s.id || `f_${String(i + 1).padStart(3, '0')}`,
-      type: 'legacy_sentence' as const,
-      slots: { text: s.text },
-      confidence: s.confidence,
-    }));
 
     // Save to storage as frame-based commit
     const savedCommit = await createCommit(db, {
-      parents: mergeCommit.parents,
+      parents: [source_hash, target_hash],
       author: {
-        type: mergeCommit.author.type as 'human' | 'agent' | 'system',
-        name: mergeCommit.author.name,
-        id: mergeCommit.author.id,
+        type: author.type as 'human' | 'agent' | 'system',
+        name: author.name,
+        id: author.id,
       },
-      content: { frames, relations: [] },
+      content: mergedContent,
       project_id: projectId,
-      message: mergeCommit.message,
-      branch: mergeCommit.branch,
+      message,
+      branch: branch || undefined,
       provenance: { method: 'merge' },
     });
 
@@ -361,7 +330,7 @@ mergeRoutes.openapi(executeMergeRoute, async (c) => {
     webhookDispatcher.dispatch(
       'merge.completed',
       {
-        commit_hash: savedCommit?.hash ?? mergeCommit.hash,
+        commit_hash: savedCommit.hash,
         project_id: projectId,
         source_hash,
         target_hash,
@@ -380,7 +349,19 @@ mergeRoutes.openapi(executeMergeRoute, async (c) => {
     });
 
     return c.json(
-      { success: true as const, data: { ...mergeCommit, merge_summary: mergeSummary } },
+      {
+        success: true as const,
+        data: {
+          hash: savedCommit.hash,
+          parents: [source_hash, target_hash],
+          author,
+          committed_at: new Date().toISOString(),
+          content: mergedContent,
+          message,
+          branch: branch || undefined,
+          merge_summary: mergeSummary,
+        },
+      },
       201
     );
   } catch (error) {
@@ -418,6 +399,15 @@ const UpdateDraftRequestSchema = z.object({
 const CommitDraftRequestSchema = z.object({
   message: z.string().min(1),
   branch: z.string().optional(),
+  decisions: z
+    .object({
+      conflictResolutions: z.record(z.string(), z.any()).default({}),
+      keepFromSource: z.array(z.string()).default([]),
+      keepFromTarget: z.array(z.string()).default([]),
+      keepRelationsFromSource: z.boolean().default(true),
+      keepRelationsFromTarget: z.boolean().default(true),
+    })
+    .optional(),
 });
 
 const DraftIdParamSchema = z.object({
@@ -501,11 +491,9 @@ mergeRoutes.openapi(createDraftRoute, async (c) => {
     );
   }
 
-  // Prepare merge using text segments extracted from frames
-  const prepared = prepareMerge(
-    framesToTextSegments(sourceCommit.content),
-    framesToTextSegments(targetCommit.content)
-  );
+  // Prepare frame-level merge (empty base = two-way mode)
+  const baseContent: SemanticContent = { frames: [], relations: [] };
+  const prepared = prepareFrameMerge(baseContent, sourceCommit.content, targetCommit.content);
 
   // Create draft
   const draft = await createMergeDraft(db, {
@@ -700,7 +688,7 @@ const commitDraftRoute = createRoute({
 
 mergeRoutes.openapi(commitDraftRoute, async (c) => {
   const { id } = c.req.valid('param');
-  const { message, branch } = c.req.valid('json');
+  const { message, branch, decisions: decisionsInput } = c.req.valid('json');
   const db = await getDB();
 
   const draft = await getMergeDraft(db, id);
@@ -727,82 +715,74 @@ mergeRoutes.openapi(commitDraftRoute, async (c) => {
     );
   }
 
-  const prepared = JSON.parse(draft.preparedJson) as Merge2WayResult;
+  const prepared = JSON.parse(draft.preparedJson) as FrameMergeResult;
 
-  // Validate all similar pairs are resolved
-  const unresolved = prepared.similarPairs.filter((p) => !p.resolution);
-  if (unresolved.length > 0) {
+  // For draft commit, decisions are embedded in the prepared data by the UI
+  // The UI saves decisions alongside prepared via PATCH /v1/merge/drafts/:id
+
+  const author = await getAuthorFromContext(c);
+
+  // Build decisions: use explicit decisions if provided, otherwise derive from prepared
+  const mergeDecisions: FrameMergeDecision = decisionsInput ?? {
+    conflictResolutions: {},
+    keepFromSource: prepared.onlyInSource.map((f) => f.id),
+    keepFromTarget: prepared.onlyInTarget.map((f) => f.id),
+    keepRelationsFromSource: true,
+    keepRelationsFromTarget: true,
+  };
+
+  // Validate all conflicts have resolutions
+  const unresolvedConflicts = prepared.conflicts.filter(
+    (conf) => !mergeDecisions.conflictResolutions[conf.frameId]
+  );
+  if (unresolvedConflicts.length > 0) {
     return c.json(
       {
         success: false as const,
         error: {
-          code: 'UNRESOLVED_PAIRS',
-          message: `${unresolved.length} similar pair(s) have no resolution`,
+          code: 'UNRESOLVED_CONFLICTS',
+          message: `${unresolvedConflicts.length} conflict(s) have no resolution`,
         },
       },
       400
     );
   }
 
-  const author = await getAuthorFromContext(c);
-
   try {
-    // Execute merge - returns SentenceCommit
-    const mergeCommit = executeMerge(
-      prepared,
-      draft.sourceHash,
-      draft.targetHash,
-      author,
-      message,
-      draft.projectId
-    );
+    // Execute frame merge - returns SemanticContent directly
+    const mergedContent = executeFrameMerge(prepared, mergeDecisions);
 
-    // Set branch
     const targetBranch = branch || draft.targetBranch || 'main';
-    mergeCommit.branch = targetBranch;
 
-    // Compute merge summary from prepared data
-    const draftKeptSource = prepared.onlyInSource.filter((c: { keep: boolean }) => c.keep).length;
-    const draftKeptTarget = prepared.onlyInTarget.filter((c: { keep: boolean }) => c.keep).length;
-    const draftDiscardedSource = prepared.onlyInSource.filter(
-      (c: { keep: boolean }) => !c.keep
-    ).length;
-    const draftDiscardedTarget = prepared.onlyInTarget.filter(
-      (c: { keep: boolean }) => !c.keep
-    ).length;
+    // Compute merge summary
+    const keptFromSource = mergeDecisions.keepFromSource?.length ?? 0;
+    const keptFromTarget = mergeDecisions.keepFromTarget?.length ?? 0;
+    const discardedSource = prepared.onlyInSource.length - keptFromSource;
+    const discardedTarget = prepared.onlyInTarget.length - keptFromTarget;
     const draftMergeSummary: MergeSummaryData = {
-      kept_identical: prepared.identical.length,
-      resolved_conflicts: prepared.similarPairs.filter((p: { resolution?: string }) => p.resolution)
-        .length,
-      kept_from_source: draftKeptSource,
-      kept_from_target: draftKeptTarget,
-      discarded: draftDiscardedSource + draftDiscardedTarget,
-      total_sentences: mergeCommit.content.sentences.length,
+      kept_identical: prepared.autoKept.length,
+      resolved_conflicts: prepared.conflicts.length,
+      kept_from_source: keptFromSource,
+      kept_from_target: keptFromTarget,
+      discarded: discardedSource + discardedTarget,
+      total_sentences: mergedContent.frames.length,
     };
 
-    // Convert sentences to legacy_sentence frames
-    const draftFrames = mergeCommit.content.sentences.map((s, i) => ({
-      id: s.id || `f_${String(i + 1).padStart(3, '0')}`,
-      type: 'legacy_sentence' as const,
-      slots: { text: s.text },
-      confidence: s.confidence,
-    }));
-
     // Save commit + update branch head + mark draft committed atomically
-    let savedDraftCommitHash = mergeCommit.hash;
+    let savedDraftCommitHash = '';
     // biome-ignore lint/suspicious/noExplicitAny: AnyDB union doesn't expose .transaction() but all concrete types do
     await (db as any).transaction(async (tx: typeof db) => {
       const saved = await createCommit(tx, {
-        parents: mergeCommit.parents,
+        parents: [draft.sourceHash, draft.targetHash],
         author: {
-          type: mergeCommit.author.type as 'human' | 'agent' | 'system',
-          name: mergeCommit.author.name,
-          id: mergeCommit.author.id,
+          type: author.type as 'human' | 'agent' | 'system',
+          name: author.name,
+          id: author.id,
         },
-        content: { frames: draftFrames, relations: [] },
+        content: mergedContent,
         project_id: draft.projectId,
-        message: mergeCommit.message,
-        branch: mergeCommit.branch,
+        message,
+        branch: targetBranch,
         provenance: { method: 'merge' },
       });
       savedDraftCommitHash = saved.hash;
@@ -819,20 +799,32 @@ mergeRoutes.openapi(commitDraftRoute, async (c) => {
         branch: targetBranch,
         source_hash: draft.sourceHash,
         target_hash: draft.targetHash,
-        sentence_count: mergeCommit.content.sentences.length,
+        frame_count: mergedContent.frames.length,
       },
       draft.projectId
     );
     pushNotification({
       type: 'merge.completed',
       title: 'Merge Completed',
-      message: `Merged into ${targetBranch} with ${mergeCommit.content.sentences.length} sentence${mergeCommit.content.sentences.length === 1 ? '' : 's'}`,
+      message: `Merged into ${targetBranch} with ${mergedContent.frames.length} frame${mergedContent.frames.length === 1 ? '' : 's'}`,
       project_id: draft.projectId,
       ref_id: savedDraftCommitHash,
     });
 
     return c.json(
-      { success: true as const, data: { ...mergeCommit, merge_summary: draftMergeSummary } },
+      {
+        success: true as const,
+        data: {
+          hash: savedDraftCommitHash,
+          parents: [draft.sourceHash, draft.targetHash],
+          author,
+          committed_at: new Date().toISOString(),
+          content: mergedContent,
+          message,
+          branch: targetBranch,
+          merge_summary: draftMergeSummary,
+        },
+      },
       201
     );
   } catch (error) {
@@ -1020,12 +1012,12 @@ mergeRoutes.openapi(suggestRoute, async (c) => {
     );
   }
 
-  const prepared: Merge2WayResult = JSON.parse(draft.preparedJson);
-  if (idx < 0 || idx >= prepared.similarPairs.length) {
+  const prepared: FrameMergeResult = JSON.parse(draft.preparedJson);
+  if (idx < 0 || idx >= prepared.conflicts.length) {
     return c.json(
       {
         success: false as const,
-        error: { code: 'NOT_FOUND', message: `Pair index out of range: ${idx}` },
+        error: { code: 'NOT_FOUND', message: `Conflict index out of range: ${idx}` },
       },
       404
     );
@@ -1042,8 +1034,21 @@ mergeRoutes.openapi(suggestRoute, async (c) => {
     );
   }
 
+  // Convert frame conflict to FrameMergeInput for suggestFrameMerge
+  const conflict = prepared.conflicts[idx];
+  const conflictInput: FrameMergeInput = {
+    sourceFrame: {
+      type: conflict.sourceFrame.type,
+      slots: conflict.sourceFrame.slots as Record<string, SlotValue>,
+    },
+    targetFrame: {
+      type: conflict.targetFrame.type,
+      slots: conflict.targetFrame.slots as Record<string, SlotValue>,
+    },
+  };
+
   const { provider: trackedLlm, usage } = wrapWithUsageTracking(llm);
-  const { suggestion } = await suggestMerge(prepared.similarPairs[idx], trackedLlm);
+  const { suggestion } = await suggestFrameMerge(conflictInput, trackedLlm);
 
   // Record usage (fire-and-forget)
   if (usage.inputTokens || usage.outputTokens) {

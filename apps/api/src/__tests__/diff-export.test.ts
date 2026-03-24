@@ -89,7 +89,7 @@ describe('Diff Routes', () => {
   // POST /v1/diff/two-way (V4 commit path)
   // =========================================================================
   describe('POST /v1/diff/two-way', () => {
-    it('diffs V4 commits using Jaccard (no embedding needed)', async () => {
+    it('diffs V4 commits using frameDiff (frame-level)', async () => {
       const res = await app.request('/v1/diff/two-way', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -102,14 +102,16 @@ describe('Diff Routes', () => {
       expect(res.status).toBe(200);
       const data: ApiResponse = await res.json();
       expect(data.success).toBe(true);
-      expect(data.data.method).toBe('jaccard');
-      expect(data.data.segmentDiffs).toBeDefined();
-      expect(data.data.stats).toBeDefined();
+      // Now returns FrameDiff shape: { diff, base, target }
+      expect(data.data.diff).toBeDefined();
+      expect(data.data.base).toBeDefined();
+      expect(data.data.target).toBeDefined();
 
-      // Should find identical, modified, removed, added segments
-      const diffs = data.data.segmentDiffs;
-      const types = diffs.map((d: any) => d.diffType);
-      expect(types).toContain('same'); // "The deadline is next Friday"
+      // frameDiff matches by frame ID; base has s_1,s_2,s_3 and target has s_4,s_5,s_6
+      // Since IDs differ, all frames appear as onlyInSource / onlyInTarget
+      const { diff } = data.data;
+      expect(diff.onlyInSource).toHaveLength(3);
+      expect(diff.onlyInTarget).toHaveLength(3);
     });
 
     it('returns 400 for invalid JSON', async () => {

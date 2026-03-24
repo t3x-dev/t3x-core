@@ -7,6 +7,7 @@ import type { CommitDisplay } from '@/types/nodes';
 
 // Preview limits for UnitNode display
 export const PREVIEW_MAX_SENTENCES = 3;
+const PREVIEW_MAX_FRAMES = 3;
 
 /**
  * Author badge for commits (with type indicator)
@@ -32,26 +33,28 @@ export const AuthorBadge = memo(function AuthorBadge({
 });
 
 /**
- * Commit content section - shows sentences only (constraints are in Leaves)
+ * Commit content section - shows frames preview (constraints are in Leaves)
  * Header (title, branch, hash, status) is rendered by parent UnitNode
- *
- * Note: Sentences use source_ref (conversation_id + turn_hash) without
- * character positions, so we show a compact list with View full link.
  */
 export const CommitContentSection = memo(function CommitContentSection({
   commit,
   onViewFull,
   projectId: _projectId, // Reserved for future TruncatedCommitView integration
-  maxSentences = PREVIEW_MAX_SENTENCES,
+  maxSentences: _maxSentences = PREVIEW_MAX_SENTENCES,
 }: {
   commit: CommitDisplay;
   onViewFull?: () => void;
   projectId?: string;
   maxSentences?: number;
 }) {
-  const sentences = commit.content.sentences;
-  const displaySentences = sentences.slice(0, maxSentences);
-  const remainingSentences = sentences.length - maxSentences;
+  const frames = commit.content?.frames ?? [];
+  const displayFrames = frames.slice(0, PREVIEW_MAX_FRAMES) as Array<{
+    id: string;
+    type: string;
+    slots: Record<string, unknown>;
+    confidence?: number;
+  }>;
+  const remainingFrames = frames.length - PREVIEW_MAX_FRAMES;
 
   return (
     <div className="commit-v4-content mt-2 pt-2 border-t border-[var(--stroke-divider)]">
@@ -71,8 +74,8 @@ export const CommitContentSection = memo(function CommitContentSection({
         </span>
       </div>
 
-      {/* Frame Graph or Sentences (preview) */}
-      {commit.semantic ? (
+      {/* Frame Graph or Frames list (preview) */}
+      {commit.semantic && commit.semantic.frames.length > 0 ? (
         <div>
           <div className="text-[10px] font-medium text-[var(--text-tertiary)] uppercase tracking-wider mb-1">
             Frame Graph ({commit.semantic.frames.length} frames)
@@ -84,43 +87,48 @@ export const CommitContentSection = memo(function CommitContentSection({
       ) : (
         <div>
           <div className="text-[10px] font-medium text-[var(--text-tertiary)] uppercase tracking-wider">
-            Sentences ({sentences.length})
+            Frames ({frames.length})
           </div>
-          {sentences.length === 0 ? (
-            <p className="mt-1 text-xs text-[var(--text-tertiary)] italic">No sentences</p>
+          {frames.length === 0 ? (
+            <p className="mt-1 text-xs text-[var(--text-tertiary)] italic">No frames</p>
           ) : (
             <>
               <ul className="mt-1 space-y-0.5">
-                {displaySentences.map((s) => (
-                  <li
-                    key={s.id}
-                    className="flex items-start gap-1 text-xs text-[var(--text-secondary)]"
-                  >
-                    {s.confidence !== undefined && (
-                      <span
-                        className={cn(
-                          'inline-block w-1.5 h-1.5 rounded-full mt-1 shrink-0',
-                          s.confidence >= 0.8
-                            ? 'bg-[var(--status-success)]'
-                            : s.confidence >= 0.5
-                              ? 'bg-amber-500'
-                              : 'bg-[var(--status-error)]'
-                        )}
-                        title={`${Math.round(s.confidence * 100)}%`}
-                      />
-                    )}
-                    <span className="text-[var(--text-tertiary)] font-mono text-[11px] shrink-0">
-                      {s.id}
-                    </span>
-                    <span className="line-clamp-2">{s.text}</span>
-                  </li>
-                ))}
+                {displayFrames.map((f) => {
+                  const slotSummary = Object.entries(f.slots ?? {})
+                    .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`)
+                    .join('; ');
+                  return (
+                    <li
+                      key={f.id}
+                      className="flex items-start gap-1 text-xs text-[var(--text-secondary)]"
+                    >
+                      {f.confidence !== undefined && (
+                        <span
+                          className={cn(
+                            'inline-block w-1.5 h-1.5 rounded-full mt-1 shrink-0',
+                            f.confidence >= 0.8
+                              ? 'bg-[var(--status-success)]'
+                              : f.confidence >= 0.5
+                                ? 'bg-amber-500'
+                                : 'bg-[var(--status-error)]'
+                          )}
+                          title={`${Math.round(f.confidence * 100)}%`}
+                        />
+                      )}
+                      <span className="text-[var(--text-tertiary)] font-mono text-[11px] shrink-0">
+                        {f.type}
+                      </span>
+                      <span className="line-clamp-2">{slotSummary}</span>
+                    </li>
+                  );
+                })}
               </ul>
               {/* Footer with +N more and View full */}
               <div className="flex items-center justify-between mt-1.5 pt-1.5 border-t border-[var(--stroke-divider)]">
-                {remainingSentences > 0 ? (
+                {remainingFrames > 0 ? (
                   <span className="text-xs text-[var(--text-tertiary)]">
-                    +{remainingSentences} sentence{remainingSentences !== 1 ? 's' : ''}
+                    +{remainingFrames} frame{remainingFrames !== 1 ? 's' : ''}
                   </span>
                 ) : (
                   <span />

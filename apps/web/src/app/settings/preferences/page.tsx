@@ -1,6 +1,6 @@
 'use client';
 
-import { Code, Layout, Monitor, Moon, Rows3, Sun, Users } from 'lucide-react';
+import { Code, Layout, Monitor, Moon, Sun, Users } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -156,14 +156,6 @@ export default function PreferencesPage() {
             icon={<Monitor className="h-5 w-5" />}
             title="Timeline"
             description="Chronological view of commits and activity."
-          />
-          <OptionCard<ViewMode>
-            value="list"
-            current={defaultView}
-            onChange={setDefaultView}
-            icon={<Rows3 className="h-5 w-5" />}
-            title="List"
-            description="Compact table view for quick scanning."
           />
         </div>
       </section>

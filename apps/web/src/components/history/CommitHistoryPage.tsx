@@ -18,8 +18,8 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { KeyboardHintBar } from '@/components/shared/KeyboardHintBar';
 import { useKeyboardNavigation } from '@/hooks/useKeyboardNavigation';
-import type { Branch, SentenceCommit } from '@/lib/api';
-import { diffRaw, listBranches, listSentenceCommits } from '@/lib/api';
+import type { ApiCommit, Branch } from '@/lib/api';
+import { diffRaw, listBranches, listCommits } from '@/lib/api';
 import { CommitHistoryRow } from './CommitHistoryRow';
 
 // ============================================================================
@@ -31,7 +31,7 @@ interface CommitHistoryPageProps {
 }
 
 interface CommitWithDiffStats {
-  commit: SentenceCommit;
+  commit: ApiCommit;
   diffStats?: {
     addedCount: number;
     modifiedCount: number;
@@ -75,7 +75,7 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
       setError(null);
       try {
         const branch = selectedBranch === 'all' ? undefined : selectedBranch;
-        const commitList = await listSentenceCommits(projectId, branch, 100, 0);
+        const commitList = await listCommits(projectId, branch, 100);
 
         if (cancelled) return;
 
@@ -94,7 +94,7 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
           const batchResults = await Promise.all(
             batch.map(async (commit) => {
               let diffStats: CommitWithDiffStats['diffStats'] = null;
-              if (commit.parents.length === 1) {
+              if ((commit.parents ?? []).length === 1) {
                 try {
                   const diff = await diffRaw(commit.parents[0], commit.hash);
                   diffStats = {
@@ -106,8 +106,13 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
                   // Diff failure is non-critical
                 }
               }
-              const upgraded = upgradeLegacyCommit(commit as any);
-              const frameCount = upgraded.content.frames.length;
+              let frameCount = 0;
+              try {
+                const upgraded = upgradeLegacyCommit(commit as any);
+                frameCount = upgraded?.content?.frames?.length ?? 0;
+              } catch {
+                // Upgrade failure is non-critical — show 0 frames
+              }
               return { commit, diffStats, frameCount };
             })
           );
@@ -253,7 +258,7 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
                   author={item.commit.author}
                   committedAt={item.commit.committed_at}
                   branch={item.commit.branch}
-                  parentCount={item.commit.parents.length}
+                  parentCount={(item.commit.parents ?? []).length}
                   diffStats={item.diffStats}
                   frameCount={item.frameCount}
                   isFirst={index === 0}

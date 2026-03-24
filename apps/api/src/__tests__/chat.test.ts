@@ -89,7 +89,7 @@ describe('Chat Routes', () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: [{ role: 'user', content: 'Hello' }],
-          model: 'claude-sonnet-4-5-20250929',
+          model: 'claude-sonnet-4-20250514',
         }),
       });
       expect(res.status).toBe(400);

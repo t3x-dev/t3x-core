@@ -255,6 +255,8 @@ export const createCommitSlice: StateCreator<CanvasState, [], [], CommitSlice> =
         kind: 'unit',
         conversationId: conversation.conversation_id, // Full ID for API calls
         commitStatus: 'staging',
+        sourceCommitHash: parentCommitHash,
+        inheritFromCommitHash: parentCommitHash,
       },
     };
     const newEdge: Edge = {
@@ -340,6 +342,8 @@ export const createCommitSlice: StateCreator<CanvasState, [], [], CommitSlice> =
           baselineSummary: sourceExcerptText,
           // Inherit source commit info for creating child commits without conversation
           sourceCommitHash: source.data.commitHash,
+          // Inherit parent commit frames into extraction panel on mount
+          inheritFromCommitHash: source.data.commitHash,
           sourceTurnWindow: source.data.sourceTurnWindow,
           // New: pendingSource with structured text block AND sentences for V3
           pendingSource:

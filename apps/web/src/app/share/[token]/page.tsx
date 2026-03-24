@@ -627,7 +627,7 @@ function SharedCommitView({ commit }: { commit: CommitData }) {
         {sentences.length > 0 && frames.length === 0 && (
           <section>
             <h2 className="text-sm font-medium text-[var(--text-secondary)] mb-2">
-              Sentences ({sentences.length})
+              Frames ({sentences.length})
             </h2>
             <div className="space-y-2">
               {sentences.map((s) => (

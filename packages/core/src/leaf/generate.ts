@@ -55,12 +55,20 @@ function getProxyUrl(): string | undefined {
 async function fetchWithProxy(url: string, options: RequestInit): Promise<Response> {
   const proxyUrl = getProxyUrl();
   if (proxyUrl) {
-    const { ProxyAgent, fetch: undiciFetch } = await import('undici');
-    const response = await undiciFetch(url, {
-      ...options,
-      dispatcher: new ProxyAgent(proxyUrl),
-    } as Parameters<typeof undiciFetch>[1]);
-    return response as unknown as Response;
+    try {
+      const { ProxyAgent, fetch: undiciFetch } = await import('undici');
+      const response = await undiciFetch(url, {
+        ...options,
+        dispatcher: new ProxyAgent(proxyUrl),
+      } as Parameters<typeof undiciFetch>[1]);
+      return response as unknown as Response;
+    } catch (proxyErr) {
+      console.warn(
+        '[fetchWithProxy] Proxy fetch failed, falling back to direct:',
+        proxyErr instanceof Error ? proxyErr.message : String(proxyErr)
+      );
+      return fetch(url, options);
+    }
   }
   return fetch(url, options);
 }
@@ -113,6 +121,16 @@ interface AnthropicError {
 // Main Generation Function
 // ═══════════════════════════════════════════════════════════════════════════
 
+/** Default max tokens per leaf type */
+const TYPE_MAX_TOKENS: Record<string, number> = {
+  tweet: 256,
+  weibo: 512,
+  wechat: 2048,
+  article: 4096,
+  email: 2048,
+  slack: 1024,
+};
+
 /** Maximum number of generation attempts when constraints fail */
 const MAX_GENERATION_ATTEMPTS = 3;
 
@@ -131,7 +149,7 @@ export async function generateLeafOutput(options: GenerateOptions): Promise<Gene
   const {
     model = DEFAULT_MODEL,
     temperature = DEFAULT_TEMPERATURE,
-    maxTokens = 1024,
+    maxTokens = TYPE_MAX_TOKENS[options.leaf.type] ?? 1024,
     provider,
   } = options;
 
@@ -161,7 +179,10 @@ export async function generateLeafOutput(options: GenerateOptions): Promise<Gene
   let providerPrompt = `${systemPrompt}\n\n${userPrompt}`;
 
   // For legacy Anthropic path, use message history for multi-turn retry
-  const apiKey = !useProvider ? process.env.ANTHROPIC_API_KEY! : '';
+  const apiKey = !useProvider ? (process.env.ANTHROPIC_API_KEY ?? '') : '';
+  if (!useProvider && !apiKey) {
+    throw new GenerationError('ANTHROPIC_API_KEY is not set', 'NOT_CONFIGURED');
+  }
   const baseUrl = !useProvider
     ? (process.env.ANTHROPIC_BASE_URL ?? 'https://api.anthropic.com')
     : '';
@@ -265,8 +286,9 @@ export async function generateLeafOutput(options: GenerateOptions): Promise<Gene
     });
 
     if (useProvider) {
-      // Provider path — append feedback to the prompt
-      providerPrompt += `\n\nAssistant: ${lastOutput}\n\nUser: ${feedbackMessage}`;
+      // Provider path — use generateFromPrompt if available, else append
+      // Only append feedback (not re-sending all source material)
+      providerPrompt += `\n\nAssistant: ${lastOutput.length > 2000 ? lastOutput.slice(0, 2000) + '... (truncated)' : lastOutput}\n\nUser: ${feedbackMessage}`;
     } else {
       // Legacy path — add to message history
       messages.push({ role: 'assistant', content: lastOutput });
@@ -309,6 +331,8 @@ interface CallAPIResult {
  */
 async function callAnthropicAPI(options: CallAPIOptions): Promise<CallAPIResult> {
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
     const response = await fetchWithProxy(options.url, {
       method: 'POST',
       headers: {
@@ -323,7 +347,9 @@ async function callAnthropicAPI(options: CallAPIOptions): Promise<CallAPIResult>
         system: options.systemPrompt,
         messages: options.messages,
       }),
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
 
     const responseText = await response.text();
 

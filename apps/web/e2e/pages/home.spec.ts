@@ -27,7 +27,7 @@ test.describe('Home Page', () => {
 
     await page.goto('/');
     // Wait for nav instead of networkidle (#6)
-    const navigation = page.locator('nav').or(page.locator('[role="navigation"]')).first();
+    const navigation = page.locator('aside[aria-label="Chat navigation"]').first();
     await expect(navigation).toBeVisible({ timeout: 15000 });
 
     // Use shared filter for consistency (#11)
@@ -39,7 +39,7 @@ test.describe('Home Page', () => {
   test('Navigation bar is visible', async ({ page }) => {
     await page.goto('/');
 
-    const navigation = page.locator('nav').or(page.locator('[role="navigation"]')).first();
+    const navigation = page.locator('aside[aria-label="Chat navigation"]').first();
     await expect(navigation).toBeVisible({ timeout: 15000 });
   });
 
@@ -64,13 +64,18 @@ test.describe('Home Page', () => {
 
     await page.goto('/');
 
-    // Click on the project
+    // Click on the project in the sidebar to expand it
     const projectEntry = page.locator(`text=${projectName}`).first();
     await expect(projectEntry).toBeVisible({ timeout: 15000 });
     await projectEntry.click();
 
+    // Click "Canvas" link to navigate to project canvas
+    const canvasLink = page.locator('text=Canvas').first();
+    await expect(canvasLink).toBeVisible({ timeout: 5000 });
+    await canvasLink.click();
+
     // Should navigate to project canvas page
-    await page.waitForURL(/\/project\//, { timeout: 10000 });
+    await page.waitForURL(/\/project\//, { timeout: 15000 });
     expect(page.url()).toContain(projectId);
   });
 });

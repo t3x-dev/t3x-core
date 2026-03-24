@@ -15,7 +15,7 @@ import type { CreatePinInput, Pin, PinType } from '@t3x-dev/core';
 import { generatePinId } from '@t3x-dev/core';
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
-import { type PinRecord, pins } from '../schema-v4';
+import { type PinRecord, pins } from '../schema-frames';
 
 // ============================================================
 // Types

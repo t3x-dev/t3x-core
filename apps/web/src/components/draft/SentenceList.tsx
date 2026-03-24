@@ -64,7 +64,7 @@ export function SentenceList() {
     <section>
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-sm font-semibold text-foreground">
-          Sentences
+          Frames
           <span className="ml-1.5 text-muted-foreground font-normal">
             ({sentences.filter((s) => s.included).length}/{sentences.length} included)
           </span>

@@ -17,8 +17,8 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useTerminology } from '@/hooks/useTerminology';
-import type { LeafType, Project, SentenceCommit, Template } from '@/lib/api';
-import { createLeaf, listProjects, listSentenceCommits } from '@/lib/api';
+import type { ApiCommit, LeafType, Project, Template } from '@/lib/api';
+import { createLeaf, listCommits, listProjects } from '@/lib/api';
 
 interface UseTemplateDialogProps {
   template: Template | null;
@@ -30,7 +30,7 @@ export function UseTemplateDialog({ template, open, onOpenChange }: UseTemplateD
   const { t } = useTerminology();
   const router = useRouter();
   const [projects, setProjects] = useState<Project[]>([]);
-  const [commits, setCommits] = useState<SentenceCommit[]>([]);
+  const [commits, setCommits] = useState<ApiCommit[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState('');
   const [selectedCommitHash, setSelectedCommitHash] = useState('');
   const [title, setTitle] = useState('');
@@ -67,7 +67,7 @@ export function UseTemplateDialog({ template, open, onOpenChange }: UseTemplateD
     }
     let cancelled = false;
     setLoadingCommits(true);
-    listSentenceCommits(selectedProjectId)
+    listCommits(selectedProjectId)
       .then((c) => {
         if (!cancelled) {
           setCommits(c);
@@ -177,8 +177,8 @@ export function UseTemplateDialog({ template, open, onOpenChange }: UseTemplateD
               >
                 {commits.map((c) => (
                   <option key={c.hash} value={c.hash}>
-                    {c.message || c.hash.slice(7, 19)} ({c.content?.sentences?.length ?? 0}{' '}
-                    sentences)
+                    {c.message || c.hash.slice(7, 19)} ({c.content?.frames?.length ?? 0}{' '}
+                    frames)
                   </option>
                 ))}
               </select>

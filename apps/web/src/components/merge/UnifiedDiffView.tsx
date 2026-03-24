@@ -18,8 +18,8 @@ import { DiffSourceContextModal } from '@/components/diff/DiffSourceContextModal
 import { Button } from '@/components/ui/button';
 import { EmptyStateInline } from '@/components/ui/empty-state';
 import { useTerminology } from '@/hooks/useTerminology';
-import type { SentenceCommit, TurnContextData } from '@/lib/api';
-import { fetchTurnContextCached, getSentenceCommit } from '@/lib/api';
+import type { ApiCommit, TurnContextData } from '@/lib/api';
+import { fetchTurnContextCached, getApiCommit } from '@/lib/api';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
 import type { Merge2WayResult, MergeCandidate, MergeSimilarPair, Sentence } from '@/types/merge';
 import { MergeConflictView } from './MergeConflictView';
@@ -262,7 +262,7 @@ export function UnifiedDiffView({
   const setViewMode = onViewModeChange ?? setInternalViewMode;
 
   // Fetch source commit for positional mode
-  const [sourceCommit, setSourceCommit] = useState<SentenceCommit | null>(null);
+  const [sourceCommit, setSourceCommit] = useState<ApiCommit | null>(null);
   const [loadingCommit, setLoadingCommit] = useState(false);
 
   useEffect(() => {
@@ -273,7 +273,7 @@ export function UnifiedDiffView({
     let cancelled = false;
     setLoadingCommit(true);
 
-    getSentenceCommit(sourceHash)
+    getApiCommit(sourceHash)
       .then((commit) => {
         if (!cancelled) setSourceCommit(commit);
       })
@@ -289,21 +289,28 @@ export function UnifiedDiffView({
     };
   }, [viewMode, sourceHash, sourceCommit]);
 
-  // Convert SentenceCommit sentences to Sentence type
+  // Convert ApiCommit frames to Sentence type for positional view
   const sourceSentences = useMemo(() => {
-    if (!sourceCommit?.content?.sentences) return undefined;
-    return sourceCommit.content.sentences.map((s) => ({
-      id: s.id,
-      text: s.text,
-      confidence: s.confidence,
-      source: s.source_ref
-        ? {
-            turn_hash: s.source_ref.turn_hash,
-            start_char: s.source_ref.start_char,
-            end_char: s.source_ref.end_char,
-          }
-        : undefined,
-    }));
+    if (!sourceCommit?.content?.frames) return undefined;
+    const content = sourceCommit.content as import('@t3x-dev/core').SemanticContent;
+    return content.frames.map((frame) => {
+      const id = frame.id.startsWith('s_') ? frame.id : `s_${frame.id.replace('f_', '')}`;
+      const text = `[${frame.type}] ${Object.entries(frame.slots).map(([k, v]) => `${k}: ${typeof v === 'string' ? v : String(v)}`).join('; ')}`;
+      const confidence = frame.confidence ?? 1.0;
+      let source: Sentence['source'] | undefined;
+      if (frame.slot_sources) {
+        const firstSource = Object.values(frame.slot_sources)[0];
+        const turnHash = firstSource?.turn_hash ?? firstSource?.turn;
+        if (firstSource && turnHash && firstSource.start_char != null && firstSource.end_char != null) {
+          source = {
+            turn_hash: turnHash,
+            start_char: firstSource.start_char,
+            end_char: firstSource.end_char,
+          };
+        }
+      }
+      return { id, text, confidence, source };
+    });
   }, [sourceCommit]);
 
   // Build positional lines (only when in positional mode)

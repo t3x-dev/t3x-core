@@ -127,7 +127,7 @@ export function FrameYAMLEditor({ content, onDeltaCreated, className }: FrameYAM
     }
 
     // 5. Emit
-    onDeltaCreated(delta, 'user_yaml_edit');
+    onDeltaCreated(delta, 'manual');
   }, [text, onDeltaCreated]);
 
   const handleKeyDown = useCallback(

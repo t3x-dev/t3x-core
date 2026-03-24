@@ -8,7 +8,7 @@
 import type { SentenceRelation } from '@t3x-dev/core';
 import { eq } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
-import { type SentenceRelationRecord, sentenceRelations } from '../schema-v4';
+import { type SentenceRelationRecord, sentenceRelations } from '../schema-frames';
 
 interface RelationInput {
   id: string;

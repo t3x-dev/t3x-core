@@ -13,8 +13,10 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { useTerminology } from '@/hooks/useTerminology';
-import type { DiffResultRaw, SentenceCommit } from '@/lib/api';
+import type { FrameDiff } from '@t3x-dev/core';
+import type { ApiCommit } from '@/lib/api';
 import * as api from '@/lib/api';
+import { getFrameDiff } from '@/lib/api/frameDiff';
 import { cn } from '@/lib/utils';
 
 // Helper functions (module-scope so CommitHistoryRow can use them)
@@ -47,7 +49,7 @@ function CommitHistoryRow({
   onClick,
   t,
 }: {
-  commit: SentenceCommit;
+  commit: ApiCommit;
   index: number;
   isHead: boolean;
   isRoot: boolean;
@@ -109,7 +111,7 @@ function CommitHistoryRow({
             <span>·</span>
             <span>{formatTime(commit.committed_at)}</span>
             <span>·</span>
-            <span>{commit.content?.sentences?.length ?? 0} sentences</span>
+            <span>{commit.content?.frames?.length ?? 0} frames</span>
           </div>
         </div>
       </div>
@@ -136,7 +138,7 @@ export function CommitHistoryPanel({
   projectId,
 }: CommitHistoryPanelProps) {
   const { t } = useTerminology();
-  const [history, setHistory] = useState<SentenceCommit[]>([]);
+  const [history, setHistory] = useState<ApiCommit[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedHash, setSelectedHash] = useState<string | null>(null);
@@ -144,7 +146,7 @@ export function CommitHistoryPanel({
   // Diff state
   const [diffBaseHash, setDiffBaseHash] = useState<string | null>(null);
   const [diffTargetHash, setDiffTargetHash] = useState<string | null>(null);
-  const [diffData, setDiffData] = useState<DiffResultRaw | null>(null);
+  const [diffData, setDiffData] = useState<FrameDiff | null>(null);
   const [diffLoading, setDiffLoading] = useState(false);
   const [diffError, setDiffError] = useState<string | null>(null);
   const [showDiffFullScreen, setShowDiffFullScreen] = useState(false);
@@ -164,7 +166,7 @@ export function CommitHistoryPanel({
     setError(null);
 
     api
-      .getCommitHistory(commitHash, 100)
+      .getApiCommitHistory(commitHash, 100)
       .then((data) => {
         if (!cancelled) setHistory(data);
       })
@@ -205,8 +207,8 @@ export function CommitHistoryPanel({
       setDiffTargetHash(hash);
 
       try {
-        const raw = await api.diffRaw(parentHash, hash);
-        setDiffData(raw);
+        const response = await getFrameDiff(parentHash, hash);
+        setDiffData(response.diff);
       } catch (err) {
         setDiffError(err instanceof Error ? err.message : 'Failed to load diff');
       } finally {
@@ -335,24 +337,24 @@ export function CommitHistoryPanel({
 
                     {/* Stats summary */}
                     <div className="flex gap-3 text-xs">
-                      {diffData.stats.sameCount > 0 && (
+                      {diffData.identical.length > 0 && (
                         <span className="text-muted-foreground">
-                          {diffData.stats.sameCount} unchanged
+                          {diffData.identical.length} unchanged
                         </span>
                       )}
-                      {diffData.stats.addedCount > 0 && (
+                      {diffData.onlyInTarget.length > 0 && (
                         <span className="text-[var(--status-success)]">
-                          +{diffData.stats.addedCount} added
+                          +{diffData.onlyInTarget.length} added
                         </span>
                       )}
-                      {diffData.stats.removedCount > 0 && (
+                      {diffData.onlyInSource.length > 0 && (
                         <span className="text-[var(--status-error)]">
-                          -{diffData.stats.removedCount} removed
+                          -{diffData.onlyInSource.length} removed
                         </span>
                       )}
-                      {diffData.stats.modifiedCount > 0 && (
+                      {diffData.modified.length > 0 && (
                         <span className="text-[var(--status-warning)]">
-                          ~{diffData.stats.modifiedCount} modified
+                          ~{diffData.modified.length} modified
                         </span>
                       )}
                     </div>
@@ -365,14 +367,12 @@ export function CommitHistoryPanel({
       </Sheet>
 
       {/* Full-screen diff view */}
-      {showDiffFullScreen && diffData && diffBaseHash && diffTargetHash && (
+      {showDiffFullScreen && diffBaseHash && diffTargetHash && (
         <DiffFullScreen
           open={showDiffFullScreen}
           onClose={() => setShowDiffFullScreen(false)}
           baseCommitHash={diffBaseHash}
           targetCommitHash={diffTargetHash}
-          diffData={diffData}
-          projectId={projectId}
         />
       )}
     </>

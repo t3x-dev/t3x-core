@@ -149,8 +149,8 @@ export const createMergeSlice: StateCreator<CanvasState, [], [], MergeSlice> = (
         author: { type?: 'human' | 'agent'; name?: string };
         committed_at: string;
         content: {
-          sentences: Array<{ id: string; text: string }>;
-          constraints?: Array<{ type: string; value: string }>;
+          frames: Array<{ id: string; type: string; slots: Record<string, unknown> }>;
+          relations: Array<{ from: string; to: string; type: string }>;
         };
         message: string | null | undefined;
         branch: string | null | undefined;
@@ -195,7 +195,7 @@ export const createMergeSlice: StateCreator<CanvasState, [], [], MergeSlice> = (
           title:
             mergeCommit.message ||
             `${getTerminology('merge', useSettingsStore.getState().developerMode)} ${getTerminology('commit', useSettingsStore.getState().developerMode).toLowerCase()}`,
-          summary: `${mergeCommit.content.sentences.length} sentences`,
+          summary: `${mergeCommit.content.frames?.length ?? 0} frames`,
           status: 'committed',
           timestamp: mergeCommit.committed_at,
           tags: ['merge'],
@@ -211,24 +211,19 @@ export const createMergeSlice: StateCreator<CanvasState, [], [], MergeSlice> = (
               ? mergeCommit.branch || targetBranch
               : undefined,
           // Content
-          sourceExcerpt: mergeCommit.content.sentences.map((s) => s.text),
-          mustHave:
-            mergeCommit.content.constraints
-              ?.filter((c) => c.type === 'require')
-              .map((c) => c.value) ?? undefined,
-          mustntHave:
-            mergeCommit.content.constraints
-              ?.filter((c) => c.type === 'exclude')
-              .map((c) => c.value) ?? undefined,
+          sourceExcerpt: mergeCommit.content.frames?.map((f: any) => `[${f.type}] ${Object.entries(f.slots || {}).map(([k, v]: [string, any]) => `${k}: ${typeof v === 'string' ? v : String(v)}`).join('; ')}`) ?? [],
+          mustHave: undefined,
+          mustntHave: undefined,
           // V4 commit data including merge summary
           commit: {
             hash: mergeCommit.hash,
-            schema: 't3x/commit/v4' as const,
+            schema: 't3x/commit/5' as const,
             author: { type: 'human' as const, ...mergeCommit.author },
             committed_at: mergeCommit.committed_at,
-            content: { sentences: mergeCommit.content.sentences },
-            message: mergeCommit.message ?? undefined,
-            branch: mergeCommit.branch ?? undefined,
+            content: { frames: [], relations: [] },
+            message: mergeCommit.message ?? null,
+            branch: mergeCommit.branch ?? 'main',
+            sources: null,
             merge_summary: mergeCommit.merge_summary,
           },
         },

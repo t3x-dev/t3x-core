@@ -15,20 +15,25 @@ import {
 } from './canvasStoreUtils';
 
 export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (set, get) => ({
-  loadProjectData: async (projectId: string) => {
+  loadProjectData: async (projectId: string, options?: { merge?: boolean }) => {
     // Skip if already loading the same project
     const state = get();
     if (state.projectId === projectId && state.loading) {
       return;
     }
 
-    set({ loading: true, loadError: null, projectId });
+    // For merge mode (polling), don't show loading state
+    if (!options?.merge) {
+      set({ loading: true, loadError: null, projectId });
+    } else {
+      set({ projectId });
+    }
 
     try {
-      // Fetch conversations, sentence commits, and leaves in parallel
-      const [convResponse, sentenceCommits, projectLeaves] = await Promise.all([
+      // Fetch conversations, commits, and leaves in parallel
+      const [convResponse, apiCommits, projectLeaves] = await Promise.all([
         api.listConversations(projectId, 100, 0),
-        api.listSentenceCommits(projectId, undefined, 100, 0),
+        api.listCommits(projectId, undefined, 100),
         api.listLeavesByProject(projectId).catch((err) => {
           console.warn('[canvasStore] Failed to load leaves:', err);
           return [] as api.Leaf[];
@@ -40,51 +45,35 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
 
       const conversations = convResponse.conversations;
 
-      // Convert sentence commits to V2-compatible format for unitToNode
-      const commits: api.Commit[] = sentenceCommits.map(
-        (v4) =>
+      // Convert ApiCommit to V2-compatible format for unitToNode
+      const commits: api.Commit[] = apiCommits.map(
+        (v5) =>
           ({
-            commit_hash: v4.hash,
-            project_id: v4.project_id || projectId,
-            branch: v4.branch || 'main',
-            message: v4.message,
-            parent_hashes: v4.parents,
-            // V4: derive turn_window from sentences[].source_ref for conversation association
-            turn_window: v4.content.sentences[0]?.source_ref
-              ? {
-                  start_turn_hash: v4.content.sentences[0].source_ref.turn_hash,
-                  end_turn_hash:
-                    v4.content.sentences[v4.content.sentences.length - 1]?.source_ref?.turn_hash ||
-                    v4.content.sentences[0].source_ref.turn_hash,
-                }
-              : null,
-            facet_snapshot: null, // V4 uses sentences only, constraints in Leaves
+            commit_hash: v5.hash,
+            project_id: v5.project_id || projectId,
+            branch: v5.branch || 'main',
+            message: v5.message,
+            parent_hashes: v5.parents,
+            // v5: no turn_window in frame-based commits; use sources for conversation association
+            turn_window: null,
+            facet_snapshot: null, // frame-based commits use frames, not facet_snapshot
             pipeline_config: null,
             draft_id: null,
             draft_text_hash: null,
             signature: null,
-            source_excerpt: v4.content.sentences.map((s) => s.text), // Convert sentences to source_excerpt
-            must_have: null, // V4 doesn't have constraints at commit level
+            source_excerpt: null, // frames don't have a flat sentence list for excerpts
+            must_have: null,
             mustnt_have: null,
-            position_x: v4.position_x ?? null,
-            position_y: v4.position_y ?? null,
-            // Convert V4 source_refs (uses "id") to V2 format (uses "conversation_id")
+            position_x: v5.position_x ?? null,
+            position_y: v5.position_y ?? null,
+            // Convert v5 sources (uses "id") to V2 format (uses "conversation_id")
             source_refs:
-              v4.source_refs?.map((ref) => ({
+              v5.sources?.map((ref) => ({
                 type: ref.type === 'leaf' ? 'commit' : ref.type,
                 conversation_id: ref.id,
               })) ?? null,
             anchors: null,
-            created_at: v4.created_at,
-            // Store original V4 data for merge compatibility
-            sourceTurnWindow: v4.content.sentences[0]?.source_ref
-              ? {
-                  start_turn_hash: v4.content.sentences[0].source_ref.turn_hash,
-                  end_turn_hash:
-                    v4.content.sentences[v4.content.sentences.length - 1]?.source_ref?.turn_hash ||
-                    v4.content.sentences[0].source_ref.turn_hash,
-                }
-              : undefined,
+            created_at: v5.committed_at,
           }) as api.Commit
       );
 
@@ -150,52 +139,40 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
         }
       });
 
-      // Build a map: commit_hash -> original sentence commit data (for source context display)
-      const sentenceCommitMap = new Map<string, api.SentenceCommit>();
-      sentenceCommits.forEach((v4) => {
-        sentenceCommitMap.set(v4.hash, v4);
+      // Build a map: commit_hash -> original ApiCommit data (for source context display)
+      const sentenceCommitMap = new Map<string, api.ApiCommit>();
+      apiCommits.forEach((v5) => {
+        sentenceCommitMap.set(v5.hash, v5);
       });
 
-      // Build a map: conversation_id -> commit (for pairing into units)
-      const convToCommitMap = new Map<string, api.Commit>();
+      // Build maps for conversation → commits (one conversation can have multiple commits)
+      const convToCommitsMap = new Map<string, api.Commit[]>();
+      const commitsWithConv = new Set<string>();
       commits.forEach((commit) => {
         const convId = commitSourceConvMap.get(commit.commit_hash);
         if (convId) {
-          // Use the latest commit for each conversation
-          const existing = convToCommitMap.get(convId);
-          if (!existing || new Date(commit.created_at) > new Date(existing.created_at)) {
-            convToCommitMap.set(convId, commit);
-          }
+          commitsWithConv.add(commit.commit_hash);
+          const list = convToCommitsMap.get(convId) || [];
+          list.push(commit);
+          convToCommitsMap.set(convId, list);
         }
       });
 
-      // Create unit nodes from conversations (paired with commits if available)
-      // Units from conversations with commits (committed units)
+      // Create unit nodes:
+      // 1. Each commit becomes its own node (so parent→child edges can connect them)
+      // 2. Conversations without commits become staging nodes
       const commitedUnitNodes: Node<CanvasNodeData>[] = [];
-      // Units from conversations without commits (staging units)
       const stagingUnitNodes: Node<CanvasNodeData>[] = [];
 
       let nodeIndex = 0;
-      conversations.forEach((conv) => {
-        const commit = convToCommitMap.get(conv.conversation_id);
-        const originalCommit = commit ? sentenceCommitMap.get(commit.commit_hash) : undefined;
-        const node = unitToNode(conv, commit || null, nodeIndex++, originalCommit);
-        const existingPos = existingNodePositions.get(node.id);
-        if (existingPos) {
-          node.position = existingPos;
-        }
-        if (commit) {
-          commitedUnitNodes.push(node);
-        } else {
-          stagingUnitNodes.push(node);
-        }
-      });
 
-      // Orphan commits (not linked to any conversation) - create standalone units
-      const orphanCommits = commits.filter((c) => !commitSourceConvMap.has(c.commit_hash));
-      orphanCommits.forEach((commit) => {
-        // Create a minimal "virtual" conversation for the orphan commit
-        const virtualConv: api.Conversation = {
+      // Create a node for each committed unit (each commit is a separate node)
+      commits.forEach((commit) => {
+        const convId = commitSourceConvMap.get(commit.commit_hash);
+        const conv = convId ? conversations.find((c) => c.conversation_id === convId) : undefined;
+
+        // Use conversation if found, otherwise create virtual one
+        const displayConv: api.Conversation = conv || {
           conversation_id: `orphan-${commit.commit_hash.slice(0, 12)}`,
           project_id: projectId,
           title:
@@ -207,13 +184,27 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
           position_y: undefined,
           created_at: commit.created_at,
         };
+
         const originalCommit = sentenceCommitMap.get(commit.commit_hash);
-        const node = unitToNode(virtualConv, commit, nodeIndex++, originalCommit);
+        const node = unitToNode(displayConv, commit, nodeIndex++, originalCommit);
         const existingPos = existingNodePositions.get(node.id);
         if (existingPos) {
           node.position = existingPos;
         }
         commitedUnitNodes.push(node);
+      });
+
+      // Create staging nodes for conversations that have NO commits at all
+      const convsWithCommits = new Set(Array.from(convToCommitsMap.keys()));
+      conversations.forEach((conv) => {
+        if (!convsWithCommits.has(conv.conversation_id)) {
+          const node = unitToNode(conv, null, nodeIndex++);
+          const existingPos = existingNodePositions.get(node.id);
+          if (existingPos) {
+            node.position = existingPos;
+          }
+          stagingUnitNodes.push(node);
+        }
       });
 
       const nodes = [...commitedUnitNodes, ...stagingUnitNodes];
@@ -284,6 +275,29 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
           });
         });
       });
+
+      // Build edges: staging conversation → parent commit
+      // When a user "continues" from a committed node, a new STAGING conversation
+      // is created with parent_commit_hash. We need to show this link on the canvas.
+      for (const conv of conversations) {
+        if (conv.parent_commit_hash && !convsWithCommits.has(conv.conversation_id)) {
+          // This is a staging conversation that has a parent commit
+          const parentExists = commitHashes.has(conv.parent_commit_hash);
+          const childNodeId = conv.conversation_id;
+          const childExists = nodeIdSet.has(childNodeId);
+          if (parentExists && childExists) {
+            edges.push({
+              id: `staging-${conv.parent_commit_hash}-${childNodeId}`,
+              source: conv.parent_commit_hash,
+              target: childNodeId,
+              type: edgeType,
+              animated: true,
+              style: { ...edgeStyle, strokeDasharray: '5 5' },
+              data: { edgeType: 'evolve' },
+            });
+          }
+        }
+      }
 
       // Load editing drafts and create draft nodes + conversation→draft edges
       try {
@@ -375,14 +389,35 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
       const hasMainCommit = commits.some((c) => c.branch === 'main');
       const latestMainCommitId = resolveLatestMainUnitId(nodes);
 
-      set({
-        nodes,
-        edges,
-        hasMainCommit,
-        latestMainCommitId,
-        loading: false,
-        loadError: null,
-      });
+      if (options?.merge) {
+        // Incremental merge: add new nodes/edges, preserve existing positions and edges
+        const existing = get();
+        const existingNodeIds = new Set(existing.nodes.map((n) => n.id));
+        const existingEdgeIds = new Set(existing.edges.map((e) => e.id));
+
+        // Add only new nodes (preserve existing ones with their positions)
+        const newNodes = nodes.filter((n) => !existingNodeIds.has(n.id));
+        // Add only new edges (never remove existing edges)
+        const newEdges = edges.filter((e) => !existingEdgeIds.has(e.id));
+
+        if (newNodes.length > 0 || newEdges.length > 0) {
+          set({
+            nodes: [...existing.nodes, ...newNodes],
+            edges: [...existing.edges, ...newEdges],
+            hasMainCommit,
+            latestMainCommitId,
+          });
+        }
+      } else {
+        set({
+          nodes,
+          edges,
+          hasMainCommit,
+          latestMainCommitId,
+          loading: false,
+          loadError: null,
+        });
+      }
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       set({

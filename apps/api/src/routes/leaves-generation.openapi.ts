@@ -14,7 +14,6 @@ import type { Commit } from '@t3x-dev/core';
 import {
   AllProvidersFailedError,
   collectLessons,
-  framesToTextSegments,
   GenerationError,
   type GenerationMode,
   isGenerationConfigured,
@@ -35,6 +34,7 @@ import {
 import { getDB } from '../lib/db';
 import { getEmbedder, isSemanticValidationConfigured } from '../lib/embedder';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { assertProjectAccess } from '../lib/project-access';
 import {
   generateWithFallback,
   getLLMProvider,
@@ -68,15 +68,16 @@ export const leavesGenerationRoutes = new OpenAPIHono({
  * Needed because generateLeafOutput / modeGenerate expect SentenceCommit.
  */
 function toSentenceCommit(commit: Commit): SentenceCommit {
-  const segments = framesToTextSegments(commit.content);
   return {
     ...commit,
     schema: 't3x/commit/v4' as const,
     content: {
-      sentences: segments.map((seg) => ({
-        id: seg.id,
-        text: seg.text,
-        confidence: 1,
+      sentences: commit.content.frames.map((frame) => ({
+        id: frame.id,
+        text: `[${frame.type}] ${Object.entries(frame.slots)
+          .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : String(v)}`)
+          .join('; ')}`,
+        confidence: frame.confidence ?? 1,
       })),
     },
   } as SentenceCommit;
@@ -289,6 +290,10 @@ leavesGenerationRoutes.openapi(generateLeafRoute, async (c) => {
     if (!leaf) {
       return errorResponse(c, 'LEAF_NOT_FOUND', `Leaf not found: ${id}`);
     }
+
+    // Verify project access
+    const accessResult = await assertProjectAccess(c, db, leaf.project_id);
+    if (accessResult instanceof Response) return accessResult;
 
     // Get source commit by hash (unified, auto-upgrades V4)
     const unifiedCommit = await getCommitUnified(db, leaf.commit_hash);
@@ -534,6 +539,10 @@ leavesGenerationRoutes.openapi(validateLeafRoute, async (c) => {
       return errorResponse(c, 'LEAF_NOT_FOUND', `Leaf not found: ${id}`);
     }
 
+    // 1b. Verify project access
+    const accessResult = await assertProjectAccess(c, db, leaf.project_id);
+    if (accessResult instanceof Response) return accessResult;
+
     // 2. Check if output exists
     if (!leaf.output) {
       return errorResponse(c, 'NO_OUTPUT', 'Leaf has no generated output to validate');
@@ -625,6 +634,12 @@ leavesGenerationRoutes.openapi(batchGenerateRoute, async (c) => {
 
   try {
     const db = await getDB();
+
+    // 0. Verify project access
+    if (body.project_id) {
+      const accessResult = await assertProjectAccess(c, db, body.project_id);
+      if (accessResult instanceof Response) return accessResult;
+    }
 
     // 1. Verify commit exists (unified, auto-upgrades V4)
     const unifiedCommit = await getCommitUnified(db, decodedHash);

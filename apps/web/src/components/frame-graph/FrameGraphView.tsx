@@ -155,7 +155,7 @@ function FrameGraphInner({
       const delta: Delta = {
         changes: [{ action: 'update', target: frameId, slots: { [key]: value } }],
       };
-      onDeltaCreated(delta, 'user_graph_edit');
+      onDeltaCreated(delta, 'manual');
     },
     [onDeltaCreated]
   );
@@ -177,7 +177,7 @@ function FrameGraphInner({
           },
         ],
       };
-      onDeltaCreated(delta, 'user_graph_edit');
+      onDeltaCreated(delta, 'manual');
     },
     [onDeltaCreated, content.frames]
   );
@@ -200,7 +200,7 @@ function FrameGraphInner({
           },
         ],
       };
-      onDeltaCreated(delta, 'user_graph_edit');
+      onDeltaCreated(delta, 'manual');
     },
     [onDeltaCreated, content]
   );
@@ -223,7 +223,7 @@ function FrameGraphInner({
         const delta: Delta = {
           changes: [{ action: 'remove', target: selectedNodeId }],
         };
-        onDeltaCreated(delta, 'user_graph_edit');
+        onDeltaCreated(delta, 'manual');
         return;
       }
 
@@ -245,7 +245,7 @@ function FrameGraphInner({
             changes: [{ action: 'update', target: removeRelations[0].from, slots: {} }],
             remove_relations: removeRelations,
           };
-          onDeltaCreated(delta, 'user_graph_edit');
+          onDeltaCreated(delta, 'manual');
         }
       }
     },
@@ -284,7 +284,7 @@ function FrameGraphInner({
         changes: [{ action: 'update', target: pendingConnection.source, slots: {} }],
         new_relations: [{ from: pendingConnection.source, to: pendingConnection.target, type }],
       };
-      onDeltaCreated(delta, 'user_graph_edit');
+      onDeltaCreated(delta, 'manual');
       setPendingConnection(null);
     },
     [pendingConnection, onDeltaCreated]

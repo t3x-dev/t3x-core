@@ -43,12 +43,12 @@ import { PinButton } from '@/components/ui/PinButton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useKeyboardNavigation } from '@/hooks/useKeyboardNavigation';
 import {
+  type ApiCommit,
   type EngineRun,
+  getApiCommit,
   getEngineRun,
   getLeaf,
-  getSentenceCommit,
   type Leaf,
-  type SentenceCommit,
   type SentenceSourceRef,
   updateEngineRun,
 } from '@/lib/api';
@@ -219,7 +219,7 @@ export default function RunDetailPage() {
 
   const [run, setRun] = useState<EngineRun | null>(null);
   const [leaf, setLeaf] = useState<Leaf | null>(null);
-  const [commit, setCommit] = useState<SentenceCommit | null>(null);
+  const [commit, setCommit] = useState<ApiCommit | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('overview');
@@ -269,7 +269,7 @@ export default function RunDetailPage() {
   // Fetch commit data for lineage chain (assertion → constraint → sentence → source_ref)
   useEffect(() => {
     if (!leaf?.commit_hash) return;
-    getSentenceCommit(leaf.commit_hash)
+    getApiCommit(leaf.commit_hash)
       .then(setCommit)
       .catch(() => {
         // Commit fetch failure is non-fatal
@@ -279,12 +279,35 @@ export default function RunDetailPage() {
   // Build map: constraint_id → source_ref (for lineage links)
   const constraintSourceRefMap = useMemo(() => {
     const map = new Map<string, SentenceSourceRef>();
-    if (!leaf?.constraints || !commit?.content?.sentences) return map;
+    if (!leaf?.constraints || !commit?.content) return map;
 
-    // Index sentences by ID for fast lookup
-    const sentenceMap = new Map(
-      commit.content.sentences.filter((s) => s.source_ref).map((s) => [s.id, s.source_ref!])
-    );
+    // Derive sentences from frames for source_ref lookup
+    const content = commit.content as import('@t3x-dev/core').SemanticContent;
+    const sentences = content.frames.map((frame) => {
+      const id = frame.id.startsWith('s_') ? frame.id : `s_${frame.id.replace('f_', '')}`;
+      let source_ref: { conversation_id?: string; turn_hash?: string; start_char?: number; end_char?: number } | undefined;
+      if (frame.slot_sources) {
+        const firstSource = Object.values(frame.slot_sources)[0];
+        const turnHash = firstSource?.turn_hash ?? firstSource?.turn;
+        if (firstSource && turnHash && firstSource.start_char != null && firstSource.end_char != null) {
+          source_ref = { turn_hash: turnHash, start_char: firstSource.start_char, end_char: firstSource.end_char };
+        }
+      }
+      return { id, source_ref };
+    });
+
+    // Index sentences by ID for fast lookup, mapping to SentenceSourceRef
+    const sentenceMap = new Map<string, SentenceSourceRef>();
+    for (const s of sentences) {
+      if (s.source_ref?.conversation_id && s.source_ref?.turn_hash) {
+        sentenceMap.set(s.id, {
+          conversation_id: s.source_ref.conversation_id,
+          turn_hash: s.source_ref.turn_hash,
+          start_char: s.source_ref.start_char ?? 0,
+          end_char: s.source_ref.end_char ?? 0,
+        });
+      }
+    }
 
     // Map constraint → sentence → source_ref
     for (const constraint of leaf.constraints) {
@@ -297,7 +320,7 @@ export default function RunDetailPage() {
     }
 
     return map;
-  }, [leaf?.constraints, commit?.content?.sentences]);
+  }, [leaf?.constraints, commit?.content]);
 
   // Initialize selected assertions: default to failed ones from llmAssertions (parsed from result_json)
   const { llmAssertions: parsedAssertions } = run ? parseRunData(run) : { llmAssertions: [] };

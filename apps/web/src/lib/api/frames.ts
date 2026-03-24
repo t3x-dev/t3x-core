@@ -9,10 +9,35 @@ import { API_V1, fetchWithTimeout, handleResponse } from './core';
 
 export type { DeltaSource, DeltaLogEntry };
 
+export interface AdvisoryQuestion {
+  id: string;
+  type: 'vagueness' | 'structural';
+  frameId: string;
+  slotKey?: string;
+  question: string;
+  currentValue?: unknown;
+}
+
 export interface FrameExtractResult {
-  delta: Delta;
-  snapshot: SemanticContent;
-  delta_log_id: string;
+  delta?: Delta;
+  snapshot?: SemanticContent;
+  delta_log_id?: string;
+  status: 'completed' | 'drift_detected' | 'skipped';
+  drift?: { relation?: string; new_topic?: string; old_topic?: string };
+  choices?: string[];
+  gate_result?: GateCheckResult;
+  advisory_questions?: AdvisoryQuestion[];
+  reason?: string;
+}
+
+export interface FrameAnswerResult {
+  applied: boolean;
+  delta?: Delta;
+  snapshot?: SemanticContent;
+  delta_log_id?: string;
+  new_project_id?: string;
+  new_project_url?: string;
+  errors?: string[];
 }
 
 export interface GateCheckResult {
@@ -58,7 +83,9 @@ export type GateIssue = NonNullable<GateCheckResult['semantic']>['issues'][numbe
 
 export async function extractFrames(
   conversationId: string,
-  turnHashes?: string[]
+  turnHashes?: string[],
+  driftDecision?: { choice: string; relation?: string; new_topic?: string },
+  opts?: { topicId?: string; forceExtract?: boolean }
 ): Promise<FrameExtractResult> {
   const res = await fetchWithTimeout(
     `${API_V1}/extract/frames`,
@@ -68,6 +95,9 @@ export async function extractFrames(
       body: JSON.stringify({
         conversation_id: conversationId,
         ...(turnHashes && { turn_hashes: turnHashes }),
+        ...(driftDecision && { drift_decision: driftDecision }),
+        ...(opts?.topicId && { topic_id: opts.topicId }),
+        ...(opts?.forceExtract && { force_extract: opts.forceExtract }),
       }),
     },
     60_000
@@ -75,18 +105,48 @@ export async function extractFrames(
   return handleResponse<FrameExtractResult>(res);
 }
 
+export async function answerFrameQuestion(
+  conversationId: string,
+  answers: Array<{
+    question_id: string;
+    drift_choice?: string;
+    answer_text?: string;
+    selected_value?: unknown;
+  }>,
+  questionContext?: { type?: string; frame_id?: string; slot_key?: string },
+  driftContext?: { relation?: string; new_topic?: string }
+): Promise<FrameAnswerResult> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/extract/frames/answer`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        conversation_id: conversationId,
+        answers,
+        ...(questionContext && { question_context: questionContext }),
+        ...(driftContext && { drift_context: driftContext }),
+      }),
+    },
+    60_000
+  );
+  return handleResponse<FrameAnswerResult>(res);
+}
+
 // ── Delta Log CRUD ──
 
-export async function listDeltas(conversationId: string): Promise<DeltaLogEntry[]> {
+export async function listDeltas(conversationId: string, topicId?: string): Promise<DeltaLogEntry[]> {
+  const params = topicId ? `?topic_id=${encodeURIComponent(topicId)}` : '';
   const res = await fetchWithTimeout(
-    `${API_V1}/conversations/${encodeURIComponent(conversationId)}/deltas`
+    `${API_V1}/conversations/${encodeURIComponent(conversationId)}/deltas${params}`
   );
   return handleResponse<DeltaLogEntry[]>(res);
 }
 
-export async function getSemanticDraft(conversationId: string): Promise<SemanticContent> {
+export async function getSemanticDraft(conversationId: string, topicId?: string): Promise<SemanticContent> {
+  const params = topicId ? `?topic_id=${encodeURIComponent(topicId)}` : '';
   const res = await fetchWithTimeout(
-    `${API_V1}/conversations/${encodeURIComponent(conversationId)}/draft`
+    `${API_V1}/conversations/${encodeURIComponent(conversationId)}/draft${params}`
   );
   return handleResponse<SemanticContent>(res);
 }

@@ -13,13 +13,6 @@ export { BusinessGate, evaluateRule, parseGatesConfig } from './businessGate';
 export { applyDelta, buildDraft } from './delta';
 // Diff
 export { frameDiff } from './diff';
-// Frame-to-Text
-export {
-  type FrameTextSegment,
-  framesToNumberedText,
-  framesToTextSegments,
-  frameToText,
-} from './frameToText';
 // Gate (Gate 2 — Semantic)
 export {
   buildCoveragePrompt,

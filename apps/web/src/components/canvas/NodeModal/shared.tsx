@@ -235,38 +235,57 @@ export function CommitFullHeader({
 }
 
 /**
- * Renders the source context / sentence display for a commit, used inside tabs.
+ * Renders the source context / frame display for a commit, used inside tabs.
  */
 export function CommitSourceContent({ commit }: { commit: CommitDisplay }) {
-  const sentences = commit.content.sentences;
+  // Derive sentences from frames for display and source context tracing
+  const sentences = commit.content?.frames
+    ? (commit.content as import('@t3x-dev/core').SemanticContent).frames.map((frame) => {
+        const id = frame.id.startsWith('s_') ? frame.id : `s_${frame.id.replace('f_', '')}`;
+        const text = `[${frame.type}] ${Object.entries(frame.slots).map(([k, v]) => `${k}: ${typeof v === 'string' ? v : String(v)}`).join('; ')}`;
+        const confidence = frame.confidence ?? 1.0;
+        let source_ref: { conversation_id?: string; turn_hash?: string; start_char?: number; end_char?: number } | undefined;
+        if (frame.slot_sources) {
+          const firstSource = Object.values(frame.slot_sources)[0];
+          const turnHash = firstSource?.turn_hash ?? firstSource?.turn;
+          if (firstSource && turnHash && firstSource.start_char != null && firstSource.end_char != null) {
+            source_ref = { turn_hash: turnHash, start_char: firstSource.start_char, end_char: firstSource.end_char };
+          }
+        }
+        return { id, text, confidence, source_ref };
+      })
+    : [];
 
-  const hasLeafSources = commit.source_refs?.some((r) => r.type === 'leaf');
-  const hasTurnSourceInfo = commit.content.sentences.some((s) => s.source_ref?.turn_hash);
+  const sourceRefs = commit.sources ?? commit.source_refs ?? undefined;
+  const hasLeafSources = sourceRefs?.some((r) => r.type === 'leaf');
+  const hasTurnSourceInfo = sentences.some((s) => s.source_ref?.turn_hash);
   const hasSourceInfo = hasTurnSourceInfo || hasLeafSources;
 
   if (hasSourceInfo) {
-    const mappedSentences = commit.content.sentences.map((s) => ({
+    const mappedSentences = sentences.map((s) => ({
       id: s.id,
       text: s.text,
       source: s.source_ref?.turn_hash
         ? {
             turn_hash: s.source_ref.turn_hash,
-            start_char: s.source_ref.start_char,
-            end_char: s.source_ref.end_char,
+            start_char: s.source_ref.start_char ?? 0,
+            end_char: s.source_ref.end_char ?? 0,
           }
         : undefined,
-      anchor_type: s.anchor_type,
     }));
 
-    const commitSourceRefs = commit.source_refs ?? undefined;
-
-    return <CommitSourceContext sentences={mappedSentences} sourceRefs={commitSourceRefs} />;
+    return (
+      <CommitSourceContext
+        sentences={mappedSentences}
+        sourceRefs={sourceRefs as Array<{ type: 'conversation' | 'leaf'; id: string; title?: string }>}
+      />
+    );
   }
 
   return (
     <div className="p-[var(--space-group)] bg-muted/50 rounded-lg border border-border">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="font-semibold text-sm text-foreground">Sentences</h3>
+        <h3 className="font-semibold text-sm text-foreground">Frames</h3>
         <span className="text-xs text-muted-foreground/70">{sentences.length} total</span>
       </div>
       <ul className="space-y-[var(--space-item)]">

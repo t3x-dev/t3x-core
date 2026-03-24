@@ -52,7 +52,7 @@ test.describe('Draft Workbench', () => {
       },
     });
     const commitData = await commitResp.json();
-    commitHash = commitData.data.hash;
+    commitHash = commitData.data.commit.hash;
 
     // Create draft WITH goal
     const draftResp1 = await request.post(`${API_BASE}/drafts`, {

@@ -1,9 +1,10 @@
 'use client';
 
-import type { SlotValue } from '@t3x-dev/core';
+import type { Frame, SemanticContent, SlotValue } from '@t3x-dev/core';
 import { Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { parseDisplayYAML, toDisplayYAML } from '@/lib/liteYaml';
+import { nestFrames } from '@/lib/frameNesting';
 import { RELEVANCE_THRESHOLD, type RelevanceContext, relevanceScore } from '@/lib/relevanceScore';
 import { useExtractionPanelStore } from '@/store/extractionPanelStore';
 
@@ -16,6 +17,8 @@ interface YAMLLine {
   changeType: 'add' | 'update' | 'remove' | null;
   isAutoSelected: boolean;
   isEmpty: boolean;
+  isCollapsed?: boolean;
+  collapsedSlotCount?: number;
 }
 
 function formatValue(value: SlotValue): string {
@@ -88,24 +91,9 @@ function renderSlotLines(
     return;
   }
 
-  // Array
+  // Array — always use bullet points
   if (Array.isArray(value)) {
     const arr = value as SlotValue[];
-    // Short simple array: inline
-    const allSimple = arr.every((item) => typeof item === 'string' || typeof item === 'number');
-    if (allSimple && arr.length <= 5) {
-      lines.push({
-        text: `${pad}${key}: [${arr.map(formatValue).join(', ')}]`,
-        frameId,
-        slotKey,
-        changeType,
-        isAutoSelected,
-        isEmpty: false,
-      });
-      return;
-    }
-
-    // Multi-line array
     lines.push({
       text: `${pad}${key}:`,
       frameId,
@@ -181,9 +169,12 @@ export function FrameYAMLView() {
   const isExtracting = useExtractionPanelStore((s) => s.isExtracting);
   const setHoveredFrameId = useExtractionPanelStore((s) => s.setHoveredFrameId);
   const hoveredTurnHash = useExtractionPanelStore((s) => s.hoveredTurnHash);
+  const hoveredCharOffset = useExtractionPanelStore((s) => s.hoveredCharOffset);
+  const gateIssues = useExtractionPanelStore((s) => s.gateIssues);
 
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState('');
+  const [expandedCollapsed, setExpandedCollapsed] = useState<Record<string, boolean>>({});
 
   const yamlText = toDisplayYAML(draft);
 
@@ -202,7 +193,7 @@ export function FrameYAMLView() {
       delta.changes.length > 0 ||
       (delta.new_relations?.length ?? 0) > 0 ||
       (delta.remove_relations?.length ?? 0) > 0;
-    if (hasChanges) applyDelta(delta, 'user_yaml_edit');
+    if (hasChanges) applyDelta(delta, 'manual');
     setIsEditing(false);
   }, [editValue, draft, applyDelta]);
 
@@ -249,12 +240,14 @@ export function FrameYAMLView() {
     };
   }, [deltaLog, draft.relations, confirmedFrameIds, llmHighlightedFrameIds]);
 
-  // Sort frames by relevance
+  // Apply client-side nesting from relations, then sort by relevance
+  const nestedFrames = useMemo(() => nestFrames(draft), [draft]);
+
   const sortedFrames = useMemo(() => {
-    return [...draft.frames].sort(
+    return [...nestedFrames].sort(
       (a, b) => relevanceScore(b, relevanceCtx).score - relevanceScore(a, relevanceCtx).score
     );
-  }, [draft.frames, relevanceCtx]);
+  }, [nestedFrames, relevanceCtx]);
 
   // Build per-line metadata for the YAML display
   // Each YAML line maps to a frame header or a slot line
@@ -265,15 +258,36 @@ export function FrameYAMLView() {
       const change = changeMap.get(frame.id) ?? null;
       const score = relevanceScore(frame, relevanceCtx).score;
       const isAuto = score >= RELEVANCE_THRESHOLD;
+      const isFrameCollapsed = (frame as Frame & { status?: string }).status === 'collapsed';
+      const isExpanded = expandedCollapsed[frame.id];
 
-      // Frame header
+      if (isFrameCollapsed && !isExpanded) {
+        // Collapsed frame — single grey line with slot count
+        const slotCount = Object.keys(frame.slots).length;
+        lines.push({
+          text: `▶ ${frame.type} (${slotCount} slots)`,
+          frameId: frame.id,
+          slotKey: null,
+          changeType: null,
+          isAutoSelected: false,
+          isEmpty: false,
+          isCollapsed: true,
+          collapsedSlotCount: slotCount,
+        });
+        lines.push({ text: '', frameId: frame.id, slotKey: null, changeType: null, isAutoSelected: false, isEmpty: true });
+        continue;
+      }
+
+      // Frame header (normal or expanded-collapsed)
+      const headerPrefix = isFrameCollapsed && isExpanded ? '▼ ' : '';
       lines.push({
-        text: `${frame.type}:`,
+        text: `${headerPrefix}${frame.type}:`,
         frameId: frame.id,
         slotKey: null,
         changeType: change,
         isAutoSelected: isAuto,
         isEmpty: false,
+        isCollapsed: isFrameCollapsed,
       });
 
       // Slot lines — render nested structures as proper YAML
@@ -293,7 +307,7 @@ export function FrameYAMLView() {
     }
 
     return lines;
-  }, [sortedFrames, changeMap, relevanceCtx]);
+  }, [sortedFrames, changeMap, relevanceCtx, expandedCollapsed]);
 
   if (draft.frames.length === 0 && !isEditing) {
     return (
@@ -372,30 +386,52 @@ export function FrameYAMLView() {
               ? !!confirmedFrameIds[line.frameId]
               : !!confirmedSlotKeys[line.frameId]?.[line.slotKey!];
 
-            // Check if this row's frame is highlighted by reverse hover (chat → YAML)
+            // Check if this row is highlighted by reverse hover (chat → YAML)
             const frame = draft.frames.find((f) => f.id === line.frameId);
             const isReverseHighlighted = (() => {
-              if (!hoveredTurnHash || !frame?.source) return false;
-              const source = frame.source;
-              // Match "T3" by checking if hoveredTurnHash is the Nth turn
-              // Match "T3:abc12345" by checking hash prefix
-              if (source.includes(':')) {
-                const hashPart = source.split(':')[1];
+              if (!hoveredTurnHash || !frame) return false;
+
+              // Slot-level precision: when charOffset is available, match specific slot
+              if (hoveredCharOffset != null && frame.slot_sources) {
+                for (const [slotKey, ref] of Object.entries(frame.slot_sources)) {
+                  const hashMatch = ref.turn_hash && hoveredTurnHash === ref.turn_hash;
+                  if (hashMatch && hoveredCharOffset >= ref.start_char && hoveredCharOffset < ref.end_char) {
+                    // Only highlight this specific slot row (or the frame header if slotKey is null)
+                    return line.slotKey === slotKey || (line.slotKey === null && line.text.includes(frame.type));
+                  }
+                }
+                return false;
+              }
+
+              // Fallback: whole-frame highlight via frame.source
+              if (!frame.source) return false;
+              if (frame.source.includes(':')) {
+                const hashPart = frame.source.split(':')[1];
                 return hoveredTurnHash.includes(hashPart);
               }
               return false;
             })();
 
-            // Background: reverse-highlight > confirmed > auto-selected > transparent
-            const bg = isReverseHighlighted
-              ? 'rgba(96, 165, 250, 0.15)'
-              : isConfirmed
-                ? 'rgba(74, 222, 128, 0.1)'
-                : line.isAutoSelected
-                  ? 'rgba(96, 165, 250, 0.06)'
-                  : 'transparent';
+            // Collapsed frames get distinct grey background
+            const collapsedBg = 'rgba(128, 128, 128, 0.1)';
+
+            // Background: collapsed > reverse-highlight > confirmed > auto-selected > transparent
+            const bg = line.isCollapsed && line.slotKey === null
+              ? collapsedBg
+              : isReverseHighlighted
+                ? 'rgba(96, 165, 250, 0.15)'
+                : isConfirmed
+                  ? 'rgba(74, 222, 128, 0.1)'
+                  : line.isAutoSelected
+                    ? 'rgba(96, 165, 250, 0.06)'
+                    : 'transparent';
 
             const handleCheck = () => {
+              // Collapsed frame header — toggle expand
+              if (line.isCollapsed && isFrameLine) {
+                setExpandedCollapsed((prev) => ({ ...prev, [line.frameId]: !prev[line.frameId] }));
+                return;
+              }
               if (isFrameLine) {
                 isConfirmed ? unconfirmFrame(line.frameId) : confirmFrame(line.frameId);
               } else {
@@ -408,8 +444,14 @@ export function FrameYAMLView() {
             return (
               <div
                 key={i}
+                data-frame-id={isFrameLine ? line.frameId : undefined}
                 onMouseEnter={() => setHoveredFrameId(line.frameId, line.slotKey)}
                 onMouseLeave={() => setHoveredFrameId(null)}
+                title={
+                  isFrameLine && gateIssues[line.frameId]?.length
+                    ? gateIssues[line.frameId].map((i) => `[${i.severity}] ${i.description}`).join('\n')
+                    : undefined
+                }
                 style={{
                   display: 'flex',
                   alignItems: 'stretch',
@@ -417,6 +459,9 @@ export function FrameYAMLView() {
                   minHeight: 20,
                   transition: 'background 0.15s',
                   cursor: isFrameLine ? 'pointer' : undefined,
+                  borderLeft: isFrameLine && gateIssues[line.frameId]?.length
+                    ? `3px solid ${gateIssues[line.frameId].some((i) => i.severity === 'error') ? '#f87171' : '#facc15'}`
+                    : undefined,
                 }}
               >
                 {/* Checkbox column */}
@@ -460,8 +505,11 @@ export function FrameYAMLView() {
                     fontSize: 11,
                     lineHeight: '18px',
                     fontFamily: 'var(--font-mono, ui-monospace, monospace)',
-                    color: isFrameLine ? 'var(--text-primary)' : 'var(--text-secondary)',
-                    fontWeight: isFrameLine ? 600 : 400,
+                    color: line.isCollapsed
+                      ? 'var(--text-tertiary)'
+                      : isFrameLine ? 'var(--text-primary)' : 'var(--text-secondary)',
+                    fontWeight: line.isCollapsed ? 400 : isFrameLine ? 600 : 400,
+                    fontStyle: line.isCollapsed && line.slotKey === null && !expandedCollapsed[line.frameId] ? 'italic' : undefined,
                     whiteSpace: 'pre',
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',

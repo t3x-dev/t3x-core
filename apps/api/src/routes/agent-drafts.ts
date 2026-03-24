@@ -466,7 +466,7 @@ ${contextText}${constraints}`;
 
 const DEFAULT_LLM_CONFIG: LLMConfig = {
   provider: 'anthropic',
-  model: 'claude-sonnet-4-5-20250929',
+  model: 'claude-sonnet-4-20250514',
   temperature: 0.7,
   max_tokens: 4096,
 };

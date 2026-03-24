@@ -45,4 +45,4 @@ export * from './schema-metrics';
 export * from './schema-sentence-modifications';
 // Schema (leaves, pins, conversation_contexts + retired commits_v4 for migration)
 // @see docs/specification/semantic-layer-architecture.md
-export * from './schema-v4';
+export * from './schema-frames';

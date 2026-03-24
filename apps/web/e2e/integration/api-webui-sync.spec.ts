@@ -29,7 +29,7 @@ test.describe('API-WebUI Sync', () => {
   test('AS-01: Create reflects in UI', async ({ page, request }) => {
     // Load the home page first
     await page.goto('/');
-    const navigation = page.locator('nav').or(page.locator('[role="navigation"]')).first();
+    const navigation = page.locator('aside[aria-label="Chat navigation"]').first();
     await expect(navigation).toBeVisible({ timeout: 15000 });
 
     // Create a project via API while page is open
@@ -58,7 +58,7 @@ test.describe('API-WebUI Sync', () => {
 
     // Reload and verify removal
     await page.reload();
-    const navigation = page.locator('nav').or(page.locator('[role="navigation"]')).first();
+    const navigation = page.locator('aside[aria-label="Chat navigation"]').first();
     await expect(navigation).toBeVisible({ timeout: 15000 });
     await expect(projectEntry).toBeHidden({ timeout: 10000 });
   });
@@ -74,7 +74,7 @@ test.describe('API-WebUI Sync', () => {
 
     // Load page and verify all projects appear
     await page.goto('/');
-    const navigation = page.locator('nav').or(page.locator('[role="navigation"]')).first();
+    const navigation = page.locator('aside[aria-label="Chat navigation"]').first();
     await expect(navigation).toBeVisible({ timeout: 15000 });
 
     for (const name of names) {

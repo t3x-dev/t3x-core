@@ -26,8 +26,8 @@ export const gateRoutes = new OpenAPIHono({
 // ============================================================
 
 const TurnSchema = z.object({
-  role: z.string().min(1),
-  content: z.string().min(1),
+  role: z.string().min(1).max(20),
+  content: z.string().min(1).max(100_000),
 });
 
 const BusinessRuleSchema = z.object({

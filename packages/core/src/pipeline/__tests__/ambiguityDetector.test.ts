@@ -1,0 +1,200 @@
+import { describe, expect, it } from 'vitest';
+import { parseAmbiguityResponse } from '../ambiguityDetector';
+
+describe('parseAmbiguityResponse', () => {
+  const validIds = new Set(['f_001', 'f_002', 'f_003']);
+
+  it('returns clean for empty ambiguities array', () => {
+    const result = parseAmbiguityResponse('{"ambiguities": []}', validIds);
+    expect(result.clean).toBe(true);
+    expect(result.questions).toHaveLength(0);
+  });
+
+  it('parses valid vagueness detection', () => {
+    const result = parseAmbiguityResponse(
+      JSON.stringify({
+        ambiguities: [
+          {
+            type: 'vagueness',
+            frame_id: 'f_001',
+            slot_key: 'budget',
+            confidence: 0.9,
+            question: 'Budget is "5000左右". Do you have an exact number?',
+            current_value: '5000左右',
+          },
+        ],
+      }),
+      validIds
+    );
+    expect(result.clean).toBe(false);
+    expect(result.questions).toHaveLength(1);
+    expect(result.questions[0].type).toBe('vagueness');
+    expect(result.questions[0].frameId).toBe('f_001');
+    expect(result.questions[0].slotKey).toBe('budget');
+    expect(result.questions[0].currentValue).toBe('5000左右');
+    expect(result.questions[0].id).toMatch(/^aq_/);
+  });
+
+  it('parses valid structural detection', () => {
+    const result = parseAmbiguityResponse(
+      JSON.stringify({
+        ambiguities: [
+          {
+            type: 'structural',
+            frame_id: 'f_002',
+            confidence: 0.85,
+            question: 'Hotel booking could belong to Tokyo trip or Osaka trip',
+          },
+        ],
+      }),
+      validIds
+    );
+    expect(result.clean).toBe(false);
+    expect(result.questions[0].type).toBe('structural');
+    expect(result.questions[0].slotKey).toBeUndefined();
+  });
+
+  it('discards detections with confidence < 0.8', () => {
+    const result = parseAmbiguityResponse(
+      JSON.stringify({
+        ambiguities: [
+          {
+            type: 'vagueness',
+            frame_id: 'f_001',
+            slot_key: 'duration',
+            confidence: 0.6,
+            question: 'Duration seems vague',
+          },
+        ],
+      }),
+      validIds
+    );
+    expect(result.clean).toBe(true);
+    expect(result.questions).toHaveLength(0);
+  });
+
+  it('discards detections with invalid type', () => {
+    const result = parseAmbiguityResponse(
+      JSON.stringify({
+        ambiguities: [
+          {
+            type: 'contradiction',
+            frame_id: 'f_001',
+            confidence: 0.95,
+            question: 'Some contradiction',
+          },
+        ],
+      }),
+      validIds
+    );
+    expect(result.clean).toBe(true);
+  });
+
+  it('discards detections with non-existent frame_id', () => {
+    const result = parseAmbiguityResponse(
+      JSON.stringify({
+        ambiguities: [
+          {
+            type: 'vagueness',
+            frame_id: 'f_999',
+            confidence: 0.95,
+            question: 'Some vagueness',
+          },
+        ],
+      }),
+      validIds
+    );
+    expect(result.clean).toBe(true);
+  });
+
+  it('discards detections with empty question', () => {
+    const result = parseAmbiguityResponse(
+      JSON.stringify({
+        ambiguities: [
+          {
+            type: 'vagueness',
+            frame_id: 'f_001',
+            confidence: 0.95,
+            question: '',
+          },
+        ],
+      }),
+      validIds
+    );
+    expect(result.clean).toBe(true);
+  });
+
+  it('handles multiple ambiguities, keeps only valid ones', () => {
+    const result = parseAmbiguityResponse(
+      JSON.stringify({
+        ambiguities: [
+          { type: 'vagueness', frame_id: 'f_001', confidence: 0.9, question: 'Q1', slot_key: 'a' },
+          { type: 'invalid', frame_id: 'f_002', confidence: 0.9, question: 'Q2' },
+          { type: 'structural', frame_id: 'f_003', confidence: 0.85, question: 'Q3' },
+          { type: 'vagueness', frame_id: 'f_001', confidence: 0.5, question: 'Q4' },
+        ],
+      }),
+      validIds
+    );
+    expect(result.questions).toHaveLength(2);
+    expect(result.questions[0].question).toBe('Q1');
+    expect(result.questions[1].question).toBe('Q3');
+  });
+
+  it('returns clean on invalid JSON', () => {
+    const result = parseAmbiguityResponse('not json', validIds);
+    expect(result.clean).toBe(true);
+  });
+
+  it('returns clean on empty string', () => {
+    const result = parseAmbiguityResponse('', validIds);
+    expect(result.clean).toBe(true);
+  });
+
+  it('handles JSON wrapped in markdown code block', () => {
+    const result = parseAmbiguityResponse(
+      '```json\n{"ambiguities": [{"type":"vagueness","frame_id":"f_001","confidence":0.9,"question":"Q?","slot_key":"x"}]}\n```',
+      validIds
+    );
+    expect(result.questions).toHaveLength(1);
+  });
+
+  it('clamps confidence to 0-1', () => {
+    const result = parseAmbiguityResponse(
+      JSON.stringify({
+        ambiguities: [
+          { type: 'vagueness', frame_id: 'f_001', confidence: 1.5, question: 'Q?' },
+        ],
+      }),
+      validIds
+    );
+    // confidence clamped to 1.0, which is >= 0.8 → kept
+    expect(result.questions).toHaveLength(1);
+  });
+
+  it('defaults missing confidence to 0.5 (below threshold → discarded)', () => {
+    const result = parseAmbiguityResponse(
+      JSON.stringify({
+        ambiguities: [
+          { type: 'vagueness', frame_id: 'f_001', question: 'Q?' },
+        ],
+      }),
+      validIds
+    );
+    // Missing confidence defaults to 0.5, below 0.8 threshold → discarded
+    expect(result.clean).toBe(true);
+  });
+
+  it('generates unique IDs for each question', () => {
+    const result = parseAmbiguityResponse(
+      JSON.stringify({
+        ambiguities: [
+          { type: 'vagueness', frame_id: 'f_001', confidence: 0.9, question: 'Q1', slot_key: 'a' },
+          { type: 'vagueness', frame_id: 'f_002', confidence: 0.9, question: 'Q2', slot_key: 'b' },
+        ],
+      }),
+      validIds
+    );
+    expect(result.questions[0].id).not.toBe(result.questions[1].id);
+  });
+});

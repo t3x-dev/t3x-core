@@ -22,6 +22,7 @@ import {
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { assertProjectAccess } from '../lib/project-access';
 import { pinoLogger } from '../middleware/logger';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 import {
@@ -111,6 +112,10 @@ shareRoutes.openapi(createShareRoute, async (c) => {
     if (!projectId) {
       return errorResponse(c, 'SHARE_ENTITY_NOT_FOUND', `Entity not found: ${body.entity_id}`);
     }
+
+    // Verify project access
+    const accessResult = await assertProjectAccess(c, db, projectId);
+    if (accessResult instanceof Response) return accessResult;
 
     const shareToken = await createShareToken(db, {
       entity_type: body.entity_type,
@@ -247,6 +252,10 @@ shareRoutes.openapi(revokeShareRoute, async (c) => {
     if (!existing) {
       return errorResponse(c, 'SHARE_TOKEN_NOT_FOUND', `Share link not found: ${id}`);
     }
+
+    // Verify project access
+    const accessResult = await assertProjectAccess(c, db, existing.project_id);
+    if (accessResult instanceof Response) return accessResult;
 
     const revoked = await revokeShareToken(db, id);
     if (!revoked) {

@@ -36,38 +36,45 @@ export interface LeafNodeConfig {
 // ============================================
 
 // Import contract types from @t3x-dev/core (single source of truth)
-import type {
-  CommitAuthor,
-  CommitSourceRef,
-  Sentence,
-  SentenceCommit,
-  SentenceCommitContent,
-  SentenceSourceRef,
-} from '@t3x-dev/core';
+import type { CommitAuthor, CommitSourceRef, Sentence, SentenceSourceRef } from '@t3x-dev/core';
+import type { ApiCommit } from '@/lib/api/commits';
 
 // Re-export contract types for convenience
 export type { CommitAuthor, CommitSourceRef, Sentence, SentenceSourceRef };
 
 /**
  * Commit display data for canvas nodes.
- * Uses Pick to select only the fields needed for display from the contract type.
- * Maintains contract compliance while allowing UI-specific field selection.
+ * Based on ApiCommit (frame-based), with backward-compat fields for components
+ * that still read sentence-derived data.
  *
  * Note: parents field is intentionally omitted as it's not needed for display.
  */
 export type CommitDisplay = Pick<
-  SentenceCommit,
-  | 'hash'
-  | 'schema'
-  | 'author'
-  | 'committed_at'
-  | 'content'
-  | 'message'
-  | 'branch'
-  | 'source_refs'
-  | 'merge_summary'
-  | 'semantic'
->;
+  ApiCommit,
+  'hash' | 'schema' | 'author' | 'committed_at' | 'content' | 'message' | 'branch' | 'sources'
+> & {
+  position_x?: number;
+  position_y?: number;
+  /** Backward-compat: sentence-based view derived from frames (used by older canvas components) */
+  source_refs?: Array<{ type: string; id: string; title?: string }> | null;
+  merge_summary?: {
+    kept_identical: number;
+    resolved_conflicts: number;
+    kept_from_source: number;
+    kept_from_target: number;
+    discarded: number;
+    total_sentences: number;
+    release_note?: {
+      title: string;
+      summary: string;
+      sections: Array<{ heading: string; items: string[] }>;
+      timestamp?: string;
+      source_branch?: string;
+      target_branch?: string;
+    };
+  } | null;
+  semantic?: import('@t3x-dev/core').SemanticContent;
+};
 
 // ============================================
 // Embedded Leaf (inside UnitNode)
@@ -465,6 +472,8 @@ export interface CanvasNodeData {
   sourceUnitId?: string;
   // Source commit hash (parent commit for new commits)
   sourceCommitHash?: string;
+  // Parent commit hash to inherit frames from (cleared after hydration)
+  inheritFromCommitHash?: string;
   sourceTurnWindow?: {
     start_turn_hash: string;
     end_turn_hash: string;

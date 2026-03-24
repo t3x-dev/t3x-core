@@ -4,4 +4,5 @@
  * @see https://github.com/t3x-dev/T3X/issues/220
  */
 
-export { DiffDisplayView } from './DiffDisplayView';
+export { FrameYAMLDiff } from './FrameYAMLDiff';
+export type { FrameYAMLDiffProps } from './FrameYAMLDiff';

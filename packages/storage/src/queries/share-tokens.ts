@@ -9,7 +9,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import type { ShareToken } from '@t3x-dev/core';
 import { and, eq, gt, isNull, or } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
-import { type ShareTokenRecord, shareTokens } from '../schema-v4';
+import { type ShareTokenRecord, shareTokens } from '../schema-frames';
 
 // ============================================================
 // Constants

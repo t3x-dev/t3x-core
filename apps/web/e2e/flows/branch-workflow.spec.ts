@@ -32,6 +32,9 @@ test.describe('Branch Workflow', () => {
     const { projectId: id } = await createTestProject(request, `Branch E2E ${Date.now()}`);
     projectId = id;
 
+    // Create "main" branch explicitly (branches API requires explicit creation)
+    await createTestBranch(request, projectId, 'main').catch(() => {});
+
     // Create initial commit on main
     mainCommitHash = await createTestCommit(request, projectId, mainSentences, {
       branch: 'main',

@@ -99,7 +99,7 @@ const UnitNode = memo(function UnitNode(props: Props) {
 
   const { t } = useTerminology();
   const tone = useCanvasStore((state) => state.getCommitTone(id));
-  const addUnitFromUnit = useCanvasStore((state) => state.addUnitFromUnit);
+  const addConversationFromCommit = useCanvasStore((state) => state.addConversationFromCommit);
   const startMergeFromCommit = useCanvasStore((state) => state.createMergePendingCommit);
   const hasMainCommit = useCanvasStore((state) => state.hasMainCommit);
   const openLeafPanel = useCanvasStore((state) => state.openLeafPanel);
@@ -191,9 +191,20 @@ const UnitNode = memo(function UnitNode(props: Props) {
     };
   }, []);
 
-  const handleAddUnit = () => {
+  const handleAddUnit = async () => {
     try {
-      addUnitFromUnit(id);
+      await addConversationFromCommit(id);
+      // Find the newly created node and navigate to chat
+      const nodes = useCanvasStore.getState().nodes;
+      const newNode = nodes.find(
+        (n) =>
+          n.data.kind === 'unit' &&
+          n.data.commitStatus === 'staging' &&
+          n.data.sourceCommitHash === data.commitHash
+      );
+      if (newNode?.data.conversationId) {
+        router.push(`/chat/${newNode.data.conversationId}`);
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to create unit';
       notify?.(message, 'error');
@@ -280,10 +291,10 @@ const UnitNode = memo(function UnitNode(props: Props) {
   const nextStep = getNextStep();
 
   // B-8: Compute stats for collapsed view
-  const sentenceCount = isDraft
+  const frameCount = isDraft
     ? 0 // Draft shows its own summary in title area
     : data.commit
-      ? data.commit.content.sentences.length
+      ? (data.commit.content?.frames?.length ?? 0)
       : 0;
 
   // Constellation mode — render minified dot at low zoom
@@ -384,7 +395,7 @@ const UnitNode = memo(function UnitNode(props: Props) {
             : { transition: 'opacity 200ms ease' }),
         }}
         role="treeitem"
-        aria-label={`${data.title} — ${isDraft ? t('draft') : isStaging ? t('draft') : t('committed')} on ${branchLabel}${sentenceCount > 0 ? `, ${sentenceCount} sentences` : ''}`}
+        aria-label={`${data.title} — ${isDraft ? t('draft') : isStaging ? t('draft') : t('committed')} on ${branchLabel}${frameCount > 0 ? `, ${frameCount} frames` : ''}`}
         aria-selected={selected}
         data-node-type={isDraft ? 'draft' : isStaging ? 'conversation' : 'commit'}
         tabIndex={0}
@@ -447,11 +458,11 @@ const UnitNode = memo(function UnitNode(props: Props) {
                     </span>
                   </div>
                 )}
-                {sentenceCount > 0 && (
+                {frameCount > 0 && (
                   <div className="flex items-center gap-1.5">
                     <FileText size={10} className="text-[var(--text-tertiary)]" />
                     <span>
-                      {sentenceCount} sentence{sentenceCount !== 1 ? 's' : ''}
+                      {frameCount} frame{frameCount !== 1 ? 's' : ''}
                     </span>
                   </div>
                 )}
@@ -585,9 +596,9 @@ const UnitNode = memo(function UnitNode(props: Props) {
           )}
 
           {/* B-8: Stats line (always visible in collapsed view) */}
-          {sentenceCount > 0 && (
+          {frameCount > 0 && (
             <div className="text-xs text-[var(--text-secondary)] mb-[var(--space-item)]">
-              {sentenceCount} sentence{sentenceCount !== 1 ? 's' : ''}
+              {frameCount} frame{frameCount !== 1 ? 's' : ''}
             </div>
           )}
 

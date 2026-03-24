@@ -2,6 +2,7 @@
  * Merge Checks API Tests
  *
  * Tests for GET /v1/merge/drafts/:id/checks
+ * Updated for frame-level merge (FrameMergeResult)
  */
 
 import type { AnyDB } from '@t3x-dev/storage';
@@ -52,35 +53,34 @@ describe('GET /v1/merge/drafts/:id/checks', () => {
     testProjectId = project.projectId;
   });
 
-  // Helper: create a test commit (converts sentences to frames)
+  // Helper: create a test commit (frame-based)
   const createTestCommit = async (
-    sentences: Array<{
+    frames: Array<{
       id: string;
-      text: string;
-      source_ref?: {
-        conversation_id: string;
-        turn_hash: string;
-        start_char: number;
-        end_char: number;
-      };
+      type: string;
+      slots: Record<string, unknown>;
+      source?: string;
     }>
   ) => {
-    const frames = sentences.map((s) => ({
-      id: s.id,
-      type: 'legacy_sentence' as const,
-      slots: { text: s.text },
-    }));
     return createCommit(mockDB, {
       parents: [],
       author: { type: 'human' as const, name: 'Test User' },
-      content: { frames, relations: [] },
+      content: {
+        frames: frames.map((f) => ({
+          id: f.id,
+          type: f.type,
+          slots: f.slots,
+          source: f.source,
+        })),
+        relations: [],
+      },
       project_id: testProjectId,
       message: 'Test commit',
       branch: 'main',
     });
   };
 
-  // Helper: create a merge draft with prepared data
+  // Helper: create a merge draft with FrameMergeResult prepared data
   const createTestDraft = async (sourceHash: string, targetHash: string, prepared: unknown) => {
     return createMergeDraft(mockDB, {
       projectId: testProjectId,
@@ -110,14 +110,21 @@ describe('GET /v1/merge/drafts/:id/checks', () => {
   // ============================================================================
 
   it('returns passed constraints with "No constraints" when no leaves exist', async () => {
-    const source = await createTestCommit([{ id: 's1', text: 'Hello world' }]);
-    const target = await createTestCommit([{ id: 't1', text: 'Hello world' }]);
+    const source = await createTestCommit([
+      { id: 'f_001', type: 'info', slots: { text: 'Hello world' } },
+    ]);
+    const target = await createTestCommit([
+      { id: 'f_001', type: 'info', slots: { text: 'Hello world' } },
+    ]);
 
     const draft = await createTestDraft(source.hash, target.hash, {
-      identical: [{ id: 's1', text: 'Hello world' }],
-      similarPairs: [],
+      autoKept: [{ id: 'f_001', type: 'info', slots: { text: 'Hello world' } }],
+      conflicts: [],
       onlyInSource: [],
       onlyInTarget: [],
+      relationsOnlyInSource: [],
+      relationsOnlyInTarget: [],
+      relationsInBoth: [],
     });
 
     const res = await app.request(`/v1/merge/drafts/${draft.draftId}/checks`, { method: 'GET' });
@@ -150,9 +157,15 @@ describe('GET /v1/merge/drafts/:id/checks', () => {
 
   it('returns passed when all leaf constraints are satisfied', async () => {
     const source = await createTestCommit([
-      { id: 's1', text: 'We use React framework for the frontend' },
+      {
+        id: 'f_001',
+        type: 'tech_stack',
+        slots: { text: 'We use React framework for the frontend' },
+      },
     ]);
-    const target = await createTestCommit([{ id: 't1', text: 'Budget is $5000 per month' }]);
+    const target = await createTestCommit([
+      { id: 'f_002', type: 'budget', slots: { text: 'Budget is $5000 per month' } },
+    ]);
 
     // Create a leaf on source commit with a 'require' constraint
     await createLeaf(mockDB, {
@@ -171,12 +184,19 @@ describe('GET /v1/merge/drafts/:id/checks', () => {
     });
 
     const draft = await createTestDraft(source.hash, target.hash, {
-      identical: [],
-      similarPairs: [],
+      autoKept: [],
+      conflicts: [],
       onlyInSource: [
-        { sentence: { id: 's1', text: 'We use React framework for the frontend' }, keep: true },
+        {
+          id: 'f_001',
+          type: 'tech_stack',
+          slots: { text: 'We use React framework for the frontend' },
+        },
       ],
-      onlyInTarget: [{ sentence: { id: 't1', text: 'Budget is $5000 per month' }, keep: true }],
+      onlyInTarget: [{ id: 'f_002', type: 'budget', slots: { text: 'Budget is $5000 per month' } }],
+      relationsOnlyInSource: [],
+      relationsOnlyInTarget: [],
+      relationsInBoth: [],
     });
 
     const res = await app.request(`/v1/merge/drafts/${draft.draftId}/checks`, { method: 'GET' });
@@ -194,8 +214,12 @@ describe('GET /v1/merge/drafts/:id/checks', () => {
   // ============================================================================
 
   it('returns failed when leaf constraints are not satisfied', async () => {
-    const source = await createTestCommit([{ id: 's1', text: 'We use Vue framework' }]);
-    const target = await createTestCommit([{ id: 't1', text: 'Budget is $5000' }]);
+    const source = await createTestCommit([
+      { id: 'f_001', type: 'tech_stack', slots: { text: 'We use Vue framework' } },
+    ]);
+    const target = await createTestCommit([
+      { id: 'f_002', type: 'budget', slots: { text: 'Budget is $5000' } },
+    ]);
 
     // Leaf requires "React" but merged text has "Vue"
     await createLeaf(mockDB, {
@@ -214,10 +238,13 @@ describe('GET /v1/merge/drafts/:id/checks', () => {
     });
 
     const draft = await createTestDraft(source.hash, target.hash, {
-      identical: [],
-      similarPairs: [],
-      onlyInSource: [{ sentence: { id: 's1', text: 'We use Vue framework' }, keep: true }],
-      onlyInTarget: [{ sentence: { id: 't1', text: 'Budget is $5000' }, keep: true }],
+      autoKept: [],
+      conflicts: [],
+      onlyInSource: [{ id: 'f_001', type: 'tech_stack', slots: { text: 'We use Vue framework' } }],
+      onlyInTarget: [{ id: 'f_002', type: 'budget', slots: { text: 'Budget is $5000' } }],
+      relationsOnlyInSource: [],
+      relationsOnlyInTarget: [],
+      relationsInBoth: [],
     });
 
     const res = await app.request(`/v1/merge/drafts/${draft.draftId}/checks`, { method: 'GET' });
@@ -233,29 +260,48 @@ describe('GET /v1/merge/drafts/:id/checks', () => {
   });
 
   // ============================================================================
-  // Evidence chain — all sentences have source_ref
+  // Evidence chain — all frames have source
   // ============================================================================
 
-  it('returns passed evidence chain when all sentences have source_ref', async () => {
-    const sourceRef = {
-      conversation_id: 'conv_test',
-      turn_hash: 'sha256:abc',
-      start_char: 0,
-      end_char: 10,
-    };
-
+  it('returns passed evidence chain when all frames have source', async () => {
     const source = await createTestCommit([
-      { id: 's1', text: 'Hello world', source_ref: sourceRef },
+      { id: 'f_001', type: 'info', slots: { text: 'Evidence source text' }, source: 'T1' },
     ]);
     const target = await createTestCommit([
-      { id: 't1', text: 'Hello world', source_ref: sourceRef },
+      { id: 'f_001', type: 'info', slots: { text: 'Evidence target text' }, source: 'T1' },
     ]);
 
     const draft = await createTestDraft(source.hash, target.hash, {
-      identical: [{ id: 's1', text: 'Hello world', source_ref: sourceRef }],
-      similarPairs: [],
+      autoKept: [],
+      conflicts: [
+        {
+          frameId: 'f_001',
+          sourceFrame: {
+            id: 'f_001',
+            type: 'info',
+            slots: { text: 'Evidence source text' },
+            source: 'T1',
+          },
+          targetFrame: {
+            id: 'f_001',
+            type: 'info',
+            slots: { text: 'Evidence target text' },
+            source: 'T1',
+          },
+          slotConflicts: [
+            {
+              key: 'text',
+              sourceValue: 'Evidence source text',
+              targetValue: 'Evidence target text',
+            },
+          ],
+        },
+      ],
       onlyInSource: [],
       onlyInTarget: [],
+      relationsOnlyInSource: [],
+      relationsOnlyInTarget: [],
+      relationsInBoth: [],
     });
 
     const res = await app.request(`/v1/merge/drafts/${draft.draftId}/checks`, { method: 'GET' });
@@ -266,22 +312,29 @@ describe('GET /v1/merge/drafts/:id/checks', () => {
 
     const evidenceCheck = checks.find((c: ApiResponse) => c.id === 'evidence_chain_complete');
     expect(evidenceCheck.passed).toBe(true);
-    expect(evidenceCheck.detail).toContain('1 sentence(s) have source references');
+    expect(evidenceCheck.detail).toContain('1 frame(s) have source references');
   });
 
   // ============================================================================
-  // Evidence chain — missing source_ref
+  // Evidence chain — missing source
   // ============================================================================
 
-  it('returns failed evidence chain when sentences lack source_ref', async () => {
-    const source = await createTestCommit([{ id: 's1', text: 'No source ref sentence' }]);
-    const target = await createTestCommit([{ id: 't1', text: 'Another sentence' }]);
+  it('returns failed evidence chain when frames lack source', async () => {
+    const source = await createTestCommit([
+      { id: 'f_001', type: 'info', slots: { text: 'No source ref' } },
+    ]);
+    const target = await createTestCommit([
+      { id: 'f_002', type: 'info', slots: { text: 'Another frame' } },
+    ]);
 
     const draft = await createTestDraft(source.hash, target.hash, {
-      identical: [],
-      similarPairs: [],
-      onlyInSource: [{ sentence: { id: 's1', text: 'No source ref sentence' }, keep: true }],
-      onlyInTarget: [{ sentence: { id: 't1', text: 'Another sentence' }, keep: true }],
+      autoKept: [],
+      conflicts: [],
+      onlyInSource: [{ id: 'f_001', type: 'info', slots: { text: 'No source ref' } }],
+      onlyInTarget: [{ id: 'f_002', type: 'info', slots: { text: 'Another frame' } }],
+      relationsOnlyInSource: [],
+      relationsOnlyInTarget: [],
+      relationsInBoth: [],
     });
 
     const res = await app.request(`/v1/merge/drafts/${draft.draftId}/checks`, { method: 'GET' });
@@ -296,18 +349,26 @@ describe('GET /v1/merge/drafts/:id/checks', () => {
   });
 
   // ============================================================================
-  // Empty merge (no sentences)
+  // Empty merge (no frames)
   // ============================================================================
 
-  it('handles empty merge with no sentences', async () => {
-    const source = await createTestCommit([{ id: 's1', text: 'Will be discarded' }]);
-    const target = await createTestCommit([{ id: 't1', text: 'Also discarded' }]);
+  it('handles empty merge with no frames', async () => {
+    const source = await createTestCommit([
+      { id: 'f_001', type: 'info', slots: { text: 'Will be discarded' } },
+    ]);
+    const target = await createTestCommit([
+      { id: 'f_002', type: 'info', slots: { text: 'Also discarded' } },
+    ]);
 
+    // Empty merge: no autoKept, no conflicts, no onlyIn*
     const draft = await createTestDraft(source.hash, target.hash, {
-      identical: [],
-      similarPairs: [],
-      onlyInSource: [{ sentence: { id: 's1', text: 'Will be discarded' }, keep: false }],
-      onlyInTarget: [{ sentence: { id: 't1', text: 'Also discarded' }, keep: false }],
+      autoKept: [],
+      conflicts: [],
+      onlyInSource: [],
+      onlyInTarget: [],
+      relationsOnlyInSource: [],
+      relationsOnlyInTarget: [],
+      relationsInBoth: [],
     });
 
     const res = await app.request(`/v1/merge/drafts/${draft.draftId}/checks`, { method: 'GET' });
@@ -316,10 +377,10 @@ describe('GET /v1/merge/drafts/:id/checks', () => {
     const json: ApiResponse = await res.json();
     const checks = json.data;
 
-    // Evidence chain should pass with "No sentences to verify"
+    // Evidence chain should pass with "No frames to verify"
     const evidenceCheck = checks.find((c: ApiResponse) => c.id === 'evidence_chain_complete');
     expect(evidenceCheck.passed).toBe(true);
-    expect(evidenceCheck.detail).toBe('No sentences to verify');
+    expect(evidenceCheck.detail).toBe('No frames to verify');
   });
 
   // ============================================================================
@@ -327,8 +388,12 @@ describe('GET /v1/merge/drafts/:id/checks', () => {
   // ============================================================================
 
   it('validates constraints independently for multiple leaves', async () => {
-    const source = await createTestCommit([{ id: 's1', text: 'React is used for UI development' }]);
-    const target = await createTestCommit([{ id: 't1', text: 'Budget is $5000 for the project' }]);
+    const source = await createTestCommit([
+      { id: 'f_001', type: 'tech_stack', slots: { text: 'React is used for UI development' } },
+    ]);
+    const target = await createTestCommit([
+      { id: 'f_002', type: 'budget', slots: { text: 'Budget is $5000 for the project' } },
+    ]);
 
     // Source leaf: requires "React" — will pass
     await createLeaf(mockDB, {
@@ -363,14 +428,17 @@ describe('GET /v1/merge/drafts/:id/checks', () => {
     });
 
     const draft = await createTestDraft(source.hash, target.hash, {
-      identical: [],
-      similarPairs: [],
+      autoKept: [],
+      conflicts: [],
       onlyInSource: [
-        { sentence: { id: 's1', text: 'React is used for UI development' }, keep: true },
+        { id: 'f_001', type: 'tech_stack', slots: { text: 'React is used for UI development' } },
       ],
       onlyInTarget: [
-        { sentence: { id: 't1', text: 'Budget is $5000 for the project' }, keep: true },
+        { id: 'f_002', type: 'budget', slots: { text: 'Budget is $5000 for the project' } },
       ],
+      relationsOnlyInSource: [],
+      relationsOnlyInTarget: [],
+      relationsInBoth: [],
     });
 
     const res = await app.request(`/v1/merge/drafts/${draft.draftId}/checks`, { method: 'GET' });
@@ -392,8 +460,12 @@ describe('GET /v1/merge/drafts/:id/checks', () => {
   // ============================================================================
 
   it('returns eval_passed check when leaves have evaluation runs', async () => {
-    const source = await createTestCommit([{ id: 's1', text: 'Test sentence' }]);
-    const target = await createTestCommit([{ id: 't1', text: 'Test sentence' }]);
+    const source = await createTestCommit([
+      { id: 'f_001', type: 'info', slots: { text: 'Eval source content' } },
+    ]);
+    const target = await createTestCommit([
+      { id: 'f_001', type: 'info', slots: { text: 'Eval target content' } },
+    ]);
 
     const leaf = await createLeaf(mockDB, {
       commit_hash: source.hash,
@@ -411,10 +483,22 @@ describe('GET /v1/merge/drafts/:id/checks', () => {
     });
 
     const draft = await createTestDraft(source.hash, target.hash, {
-      identical: [{ id: 's1', text: 'Test sentence' }],
-      similarPairs: [],
+      autoKept: [],
+      conflicts: [
+        {
+          frameId: 'f_001',
+          sourceFrame: { id: 'f_001', type: 'info', slots: { text: 'Eval source content' } },
+          targetFrame: { id: 'f_001', type: 'info', slots: { text: 'Eval target content' } },
+          slotConflicts: [
+            { key: 'text', sourceValue: 'Eval source content', targetValue: 'Eval target content' },
+          ],
+        },
+      ],
       onlyInSource: [],
       onlyInTarget: [],
+      relationsOnlyInSource: [],
+      relationsOnlyInTarget: [],
+      relationsInBoth: [],
     });
 
     const res = await app.request(`/v1/merge/drafts/${draft.draftId}/checks`, { method: 'GET' });
@@ -434,8 +518,12 @@ describe('GET /v1/merge/drafts/:id/checks', () => {
   // ============================================================================
 
   it('returns eval_passed=true when leaves exist but no runs', async () => {
-    const source = await createTestCommit([{ id: 's1', text: 'Test sentence' }]);
-    const target = await createTestCommit([{ id: 't1', text: 'Test sentence' }]);
+    const source = await createTestCommit([
+      { id: 'f_001', type: 'info', slots: { text: 'No runs source' } },
+    ]);
+    const target = await createTestCommit([
+      { id: 'f_001', type: 'info', slots: { text: 'No runs target' } },
+    ]);
 
     await createLeaf(mockDB, {
       commit_hash: source.hash,
@@ -445,10 +533,22 @@ describe('GET /v1/merge/drafts/:id/checks', () => {
     });
 
     const draft = await createTestDraft(source.hash, target.hash, {
-      identical: [{ id: 's1', text: 'Test sentence' }],
-      similarPairs: [],
+      autoKept: [],
+      conflicts: [
+        {
+          frameId: 'f_001',
+          sourceFrame: { id: 'f_001', type: 'info', slots: { text: 'No runs source' } },
+          targetFrame: { id: 'f_001', type: 'info', slots: { text: 'No runs target' } },
+          slotConflicts: [
+            { key: 'text', sourceValue: 'No runs source', targetValue: 'No runs target' },
+          ],
+        },
+      ],
       onlyInSource: [],
       onlyInTarget: [],
+      relationsOnlyInSource: [],
+      relationsOnlyInTarget: [],
+      relationsInBoth: [],
     });
 
     const res = await app.request(`/v1/merge/drafts/${draft.draftId}/checks`, { method: 'GET' });
@@ -464,36 +564,32 @@ describe('GET /v1/merge/drafts/:id/checks', () => {
   });
 
   // ============================================================================
-  // Similar pairs with resolution
+  // Conflicts with resolution
   // ============================================================================
 
-  it('correctly extracts sentences from resolved similar pairs', async () => {
-    const sourceRef = {
-      conversation_id: 'conv_test',
-      turn_hash: 'sha256:abc',
-      start_char: 0,
-      end_char: 20,
-    };
-
+  it('correctly includes conflict frames in merged text for checks', async () => {
     const source = await createTestCommit([
-      { id: 's1', text: 'Budget is $3000', source_ref: sourceRef },
+      { id: 'f_001', type: 'budget', slots: { amount: '$3000' }, source: 'T1' },
     ]);
     const target = await createTestCommit([
-      { id: 't1', text: 'Budget is $5000', source_ref: sourceRef },
+      { id: 'f_001', type: 'budget', slots: { amount: '$5000' }, source: 'T2' },
     ]);
 
     const draft = await createTestDraft(source.hash, target.hash, {
-      identical: [],
-      similarPairs: [
+      autoKept: [],
+      conflicts: [
         {
-          source: { id: 's1', text: 'Budget is $3000', source_ref: sourceRef },
-          target: { id: 't1', text: 'Budget is $5000', source_ref: sourceRef },
-          wordDiff: [],
-          resolution: 'target',
+          frameId: 'f_001',
+          sourceFrame: { id: 'f_001', type: 'budget', slots: { amount: '$3000' }, source: 'T1' },
+          targetFrame: { id: 'f_001', type: 'budget', slots: { amount: '$5000' }, source: 'T2' },
+          slotConflicts: [{ key: 'amount', sourceValue: '$3000', targetValue: '$5000' }],
         },
       ],
       onlyInSource: [],
       onlyInTarget: [],
+      relationsOnlyInSource: [],
+      relationsOnlyInTarget: [],
+      relationsInBoth: [],
     });
 
     const res = await app.request(`/v1/merge/drafts/${draft.draftId}/checks`, { method: 'GET' });
@@ -502,7 +598,7 @@ describe('GET /v1/merge/drafts/:id/checks', () => {
     const json: ApiResponse = await res.json();
     const checks = json.data;
 
-    // Evidence chain should pass (resolved target has source_ref)
+    // Evidence chain should pass (source frame has source)
     const evidenceCheck = checks.find((c: ApiResponse) => c.id === 'evidence_chain_complete');
     expect(evidenceCheck.passed).toBe(true);
   });

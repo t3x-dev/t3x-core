@@ -5,6 +5,8 @@
  * The LLM extracts structured knowledge sentences from conversation turns.
  */
 
+import { escapePromptContent, estimateTokenCount } from '../llm/sanitize';
+
 export interface TurnInput {
   conversation_id: string;
   turn_hash: string;
@@ -27,7 +29,7 @@ export interface LLMExtractionOptions {
 export function buildExtractionPrompt(
   turns: TurnInput[],
   options?: LLMExtractionOptions
-): { systemPrompt: string; userPrompt: string } {
+): { systemPrompt: string; userPrompt: string; estimatedTokens: number } {
   const maxSentences = options?.maxSentences ?? 30;
   const languageHint = options?.language ? `\nExtract sentences in ${options.language}.` : '';
 
@@ -54,7 +56,11 @@ Return a JSON array of objects. Each object has:
 ## Output
 Return ONLY the JSON array. No markdown fences, no explanation, no preamble.`;
 
-  const userPrompt = turns.map((t, i) => `[Turn ${i}] [${t.role}]: ${t.content}`).join('\n');
+  const userPrompt = turns
+    .map((t, i) => `[Turn ${i}] [${t.role}]:\n${escapePromptContent(t.content, 'turn_content')}`)
+    .join('\n\n');
 
-  return { systemPrompt, userPrompt };
+  const estimatedTokens = estimateTokenCount(systemPrompt) + estimateTokenCount(userPrompt);
+
+  return { systemPrompt, userPrompt, estimatedTokens };
 }

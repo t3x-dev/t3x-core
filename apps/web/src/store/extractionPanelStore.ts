@@ -9,6 +9,7 @@ import type {
 import { create } from 'zustand';
 import { createCommit, listCommits } from '@/lib/api/commits';
 import { createDelta } from '@/lib/api/frames';
+import type { Topic } from '@/lib/api/topics';
 
 // Debounce helper for hover interactions — prevents rapid-fire re-renders
 // when mouse sweeps across YAML rows
@@ -49,12 +50,35 @@ interface ExtractionPanelState {
   conversationId: string | null;
   setConversationId: (id: string | null) => void;
 
+  // Gate result (Step 5 — frame quality annotation)
+  gateIssues: Record<string, { severity: 'error' | 'warning' | 'info'; description: string }[]>;
+  setGateIssues: (issues: Record<string, { severity: 'error' | 'warning' | 'info'; description: string }[]>) => void;
+
+  // Drift detection (Step 3)
+  driftDetected: boolean;
+  driftInfo: { relation?: string; new_topic?: string; old_topic?: string } | null;
+  driftChoices: string[];
+  setDriftDetected: (info: { relation?: string; new_topic?: string; old_topic?: string }, choices: string[]) => void;
+  clearDrift: () => void;
+
+  // Advisory questions (Step 6)
+  advisoryQuestions: Array<{ id: string; type: string; frameId: string; slotKey?: string; question: string; currentValue?: unknown }>;
+  setAdvisoryQuestions: (questions: Array<{ id: string; type: string; frameId: string; slotKey?: string; question: string; currentValue?: unknown }>) => void;
+
+  // Topics (multi-topic conversations)
+  topics: Topic[];
+  activeTopicId: string | null;
+  setTopics: (topics: Topic[]) => void;
+  setActiveTopicId: (id: string | null) => void;
+  addTopic: (topic: Topic) => void;
+
   // Hover linking between YAML ↔ chat messages
   hoveredFrameId: string | null; // YAML row hovered → highlight source turn
   hoveredSlotKey: string | null; // Specific slot hovered (for character-level highlight)
   hoveredTurnHash: string | null; // Chat message hovered → highlight YAML rows
+  hoveredCharOffset: number | null; // Character offset within hovered turn (for slot-level reverse highlight)
   setHoveredFrameId: (id: string | null, slotKey?: string | null) => void;
-  setHoveredTurnHash: (hash: string | null) => void;
+  setHoveredTurn: (hash: string | null, charOffset?: number | null) => void;
 
   // Commit tracking
   lastCommitHash: string | null;
@@ -91,9 +115,17 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
   lastDeltaChanges: [],
   removedFrames: [],
   conversationId: null,
+  gateIssues: {},
+  driftDetected: false,
+  driftInfo: null,
+  driftChoices: [],
+  advisoryQuestions: [],
+  topics: [],
+  activeTopicId: null,
   hoveredFrameId: null,
   hoveredSlotKey: null,
   hoveredTurnHash: null,
+  hoveredCharOffset: null,
 
   // Commit tracking defaults
   lastCommitHash: null,
@@ -174,7 +206,7 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
 
     // Persist user edits to database (LLM extraction is already saved by the API)
     const convId = get().conversationId;
-    if (convId && source !== 'llm_extraction') {
+    if (convId && source !== 'pipeline') {
       createDelta(convId, delta, source).catch(() => {
         // Persist failed — non-critical, store has the data
       });
@@ -223,6 +255,13 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
       };
     }),
   setFocusIntent: (enabled) => set({ focusIntentEnabled: enabled }),
+  setGateIssues: (issues) => set({ gateIssues: issues }),
+  setDriftDetected: (info, choices) => set({ driftDetected: true, driftInfo: info, driftChoices: choices }),
+  clearDrift: () => set({ driftDetected: false, driftInfo: null, driftChoices: [] }),
+  setAdvisoryQuestions: (questions) => set({ advisoryQuestions: questions }),
+  setTopics: (topics) => set({ topics }),
+  setActiveTopicId: (id) => set({ activeTopicId: id }),
+  addTopic: (topic) => set((s) => ({ topics: [...s.topics, topic] })),
   setLlmHighlightedFrameIds: (ids) =>
     set({ llmHighlightedFrameIds: Object.fromEntries(ids.map((id) => [id, true])) }),
   hydrateDeltaLog: (entries) => set({ deltaLog: entries }),
@@ -238,13 +277,13 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
       }, HOVER_DEBOUNCE_MS);
     }
   },
-  setHoveredTurnHash: (hash) => {
+  setHoveredTurn: (hash, charOffset) => {
     if (hoverTurnTimer) clearTimeout(hoverTurnTimer);
     if (hash === null) {
-      set({ hoveredTurnHash: null });
+      set({ hoveredTurnHash: null, hoveredCharOffset: null });
     } else {
       hoverTurnTimer = setTimeout(() => {
-        set({ hoveredTurnHash: hash });
+        set({ hoveredTurnHash: hash, hoveredCharOffset: charOffset ?? null });
       }, HOVER_DEBOUNCE_MS);
     }
   },
@@ -293,7 +332,7 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
           sources: conversationId
             ? [{ type: 'conversation', id: conversationId, title: conversationTitle ?? undefined }]
             : undefined,
-          provenance: { method: 'llm_extraction' },
+          provenance: { method: 'pipeline' },
         }
       );
 

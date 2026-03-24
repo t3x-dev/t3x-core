@@ -39,6 +39,7 @@ import {
   exportRoutes,
   extractionFeedbackRoutes,
   extractRoutes,
+  frameAnswerRoutes,
   frameExtractRoutes,
   gateRoutes,
   healthRoutes,
@@ -48,6 +49,7 @@ import {
   runnerRoutes,
   runsRoutes,
   statusRoutes,
+  topicsRoutes,
   turnRoutes,
 } from './routes';
 import { apiKeysRoutes } from './routes/api-keys.openapi';
@@ -149,6 +151,7 @@ export function createApp(options?: CreateAppOptions): Hono {
   api.route('/', draftsRoutes);
   api.route('/', extractRoutes);
   api.route('/', frameExtractRoutes); // /v1/extract/frames
+  api.route('/', frameAnswerRoutes); // /v1/extract/frames/answer
   api.route('/', gateRoutes); // /v1/gate/check
   api.route('/', deltaLogRoutes); // /v1/conversations/:conversationId/deltas
   api.route('/', runsRoutes);
@@ -170,6 +173,7 @@ export function createApp(options?: CreateAppOptions): Hono {
   api.route('/', autopilotRoutes);
   api.route('/', relationsRoutes);
   api.route('/', extractionFeedbackRoutes);
+  api.route('/', topicsRoutes);
 
   // Auth /me route (always available — works with any auth provider)
   api.route('/', authMeRoutes);

@@ -1,7 +1,8 @@
 'use client';
 
+import { fuzzyLocate } from '@t3x-dev/core';
 import { RefreshCw, Square } from 'lucide-react';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { chatStream } from '@/lib/api/chat';
 import { cn } from '@/lib/utils';
 import { useExtractionPanelStore } from '@/store/extractionPanelStore';
@@ -40,10 +41,68 @@ const LEAF_TYPES: { value: LeafType; label: string; systemHint: string }[] = [
   },
 ];
 
+// ── Highlighted output (inline) ──
+
+function HighlightedOutput({
+  text,
+  ranges,
+}: {
+  text: string;
+  ranges: Array<{ start: number; end: number }>;
+}) {
+  if (ranges.length === 0) return <>{text}</>;
+
+  const sorted = [...ranges].sort((a, b) => a.start - b.start);
+  const merged: Array<{ start: number; end: number }> = [];
+  for (const r of sorted) {
+    const last = merged[merged.length - 1];
+    if (last && r.start <= last.end) {
+      last.end = Math.max(last.end, r.end);
+    } else {
+      merged.push({ ...r });
+    }
+  }
+
+  const parts: Array<{ text: string; highlighted: boolean }> = [];
+  let cursor = 0;
+  for (const r of merged) {
+    const start = Math.max(0, r.start);
+    const end = Math.min(text.length, r.end);
+    if (cursor < start) parts.push({ text: text.slice(cursor, start), highlighted: false });
+    parts.push({ text: text.slice(start, end), highlighted: true });
+    cursor = end;
+  }
+  if (cursor < text.length) parts.push({ text: text.slice(cursor), highlighted: false });
+
+  return (
+    <>
+      {parts.map((p, i) =>
+        p.highlighted ? (
+          <mark
+            key={i}
+            style={{
+              background: 'rgba(96, 165, 250, 0.25)',
+              borderRadius: 2,
+              padding: '1px 0',
+              color: 'inherit',
+            }}
+          >
+            {p.text}
+          </mark>
+        ) : (
+          <span key={i}>{p.text}</span>
+        )
+      )}
+    </>
+  );
+}
+
 // ── Component ──
 
 export function PreviewPanel({ className }: PreviewPanelProps) {
   const draft = useExtractionPanelStore((s) => s.draft);
+  const hoveredFrameId = useExtractionPanelStore((s) => s.hoveredFrameId);
+  const hoveredSlotKey = useExtractionPanelStore((s) => s.hoveredSlotKey);
 
   const [selectedType, setSelectedType] = useState<LeafType>('tweet');
   const [prompt, setPrompt] = useState('');
@@ -52,6 +111,18 @@ export function PreviewPanel({ className }: PreviewPanelProps) {
   const abortRef = useRef<AbortController | null>(null);
 
   const frameCount = draft.frames.length;
+
+  // Compute highlight ranges in generated output based on hovered YAML slot
+  const outputHighlightRanges = useMemo(() => {
+    if (!generatedOutput || !hoveredFrameId || !hoveredSlotKey) return [];
+    const frame = draft.frames.find((f) => f.id === hoveredFrameId);
+    if (!frame) return [];
+    const slotValue = frame.slots[hoveredSlotKey];
+    if (!slotValue || typeof slotValue !== 'string') return [];
+    const located = fuzzyLocate(generatedOutput, slotValue);
+    if (!located || located.score < 0.6) return [];
+    return [{ start: located.start, end: located.end }];
+  }, [generatedOutput, hoveredFrameId, hoveredSlotKey, draft.frames]);
 
   // Build context string from extracted frames
   const buildContext = useCallback(() => {
@@ -194,7 +265,11 @@ export function PreviewPanel({ className }: PreviewPanelProps) {
 
         {generatedOutput ? (
           <pre className="flex-1 overflow-auto whitespace-pre-wrap rounded border border-[var(--stroke-default)] bg-[var(--surface-panel)] p-2 text-[11px] leading-relaxed text-[var(--text-primary)]">
-            {generatedOutput}
+            {outputHighlightRanges.length > 0 ? (
+              <HighlightedOutput text={generatedOutput} ranges={outputHighlightRanges} />
+            ) : (
+              generatedOutput
+            )}
             {isLoading && (
               <span className="inline-block w-1.5 h-3 ml-0.5 bg-[var(--accent-commit)] rounded-sm animate-pulse" />
             )}

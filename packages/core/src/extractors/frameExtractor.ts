@@ -55,7 +55,9 @@ function extractSlotQuotes(rawJson: unknown): SlotQuotesMap {
 
   for (let i = 0; i < changes.length; i++) {
     const change = changes[i];
-    // For delta format: changes[i].frame.slot_quotes or changes[i].slot_quotes
+    // Handles both formats:
+    // - Delta: changes[i].frame.slot_quotes (add action) or changes[i].slot_quotes (update action)
+    // - First extraction: frames[i].slot_quotes (flat, no .frame wrapper)
     const quotes = (change.frame as Record<string, unknown>)?.slot_quotes ?? change.slot_quotes;
     if (quotes && typeof quotes === 'object') {
       map.set(i, quotes as Record<string, string>);
@@ -65,12 +67,8 @@ function extractSlotQuotes(rawJson: unknown): SlotQuotesMap {
       }
       delete change.slot_quotes;
     }
-    // For first-extraction format: frames[i].slot_quotes
-    if (change.slot_quotes) {
-      map.set(i, change.slot_quotes as Record<string, string>);
-      delete change.slot_quotes;
-    }
   }
+  console.info(`[slot-sources] extractSlotQuotes: ${map.size} changes have quotes`);
   return map;
 }
 

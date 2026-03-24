@@ -1,161 +1,139 @@
 /**
  * Merge Schemas for API validation and OpenAPI spec
  *
- * Schemas for two-way merge operations
+ * Schemas for frame-level merge operations (FrameMergeResult / FrameMergeDecision)
  */
 import { z } from '@hono/zod-openapi';
 
 // ============================================================================
-// Base Schemas
+// Base Schemas (Frame-level)
 // ============================================================================
 
 /**
- * Sentence schema
+ * Slot value schema (recursive: string | number | boolean | ref | inline | array)
+ * Kept loose (z.any()) for flexibility — core types enforce structure.
  */
-export const SentenceSchema = z.object({
-  id: z.string().openapi({
-    description: 'Unique sentence identifier',
-    example: 's1',
-  }),
-  text: z.string().openapi({
-    description: 'Sentence text content',
-    example: 'Budget is $3000',
-  }),
-  confidence: z.number().min(0).max(1).optional().openapi({
-    description: 'Confidence score (0-1), optional',
-    example: 1,
-  }),
-  source: z
-    .object({
-      conversation_id: z.string().optional().openapi({
-        description: 'Source conversation ID for lineage tracing',
-        example: 'conv_abc123',
-      }),
-      turn_hash: z.string().openapi({
-        description: 'Source turn hash',
-        example: 'sha256:abc123...',
-      }),
-      start_char: z.number().openapi({
-        description: 'Start character position in turn',
-        example: 0,
-      }),
-      end_char: z.number().openapi({
-        description: 'End character position in turn',
-        example: 17,
-      }),
-    })
-    .openapi({
-      description: 'Source reference for the sentence',
-    }),
-});
+const SlotValueSchema = z.any();
 
 /**
- * Constraint schema
- * Matches @t3x-dev/core Constraint type (RequireConstraint | ExcludeConstraint)
+ * Frame schema — matches @t3x-dev/core Frame
  */
-export const ConstraintSchema = z.object({
-  id: z.string().openapi({
-    description: 'Constraint identifier',
-    example: 'c1',
+export const FrameSchema = z.object({
+  id: z.string().openapi({ description: 'Frame ID (e.g. f_001)', example: 'f_001' }),
+  type: z.string().openapi({ description: 'Semantic type', example: 'budget' }),
+  slots: z.record(z.string(), SlotValueSchema).openapi({
+    description: 'Key-value slots',
+    example: { amount: '$3000', currency: 'USD' },
   }),
-  type: z.enum(['require', 'exclude']).openapi({
-    description: 'Constraint type',
-    example: 'require',
+  source: z.string().optional().openapi({ description: 'Source turn reference' }),
+  confidence: z.number().min(0).max(1).optional().openapi({ description: 'Confidence 0-1' }),
+  slot_sources: z.record(z.string(), z.any()).optional().openapi({
+    description: 'Per-slot source references',
   }),
-  value: z.string().openapi({
-    description: 'Constraint value',
-    example: 'React',
-  }),
-  match: z.enum(['exact', 'semantic']).openapi({
-    description: 'Match type',
-    example: 'exact',
-  }),
-  source_sentence_id: z.string().optional().openapi({
-    description: 'Source sentence ID (for require constraints)',
-    example: 's1',
-  }),
-  suggested: z.boolean().optional().openapi({
-    description: 'Whether this is a suggested constraint (for require)',
-    example: false,
-  }),
-  reason: z.string().optional().openapi({
-    description: 'Reason for exclusion (for exclude constraints)',
-    example: 'Outdated information',
+  status: z.enum(['active', 'collapsed']).optional().openapi({
+    description: 'Frame display status',
   }),
 });
 
 /**
- * Word diff element schema
- * Matches @t3x-dev/core WordDiffSegment type
+ * Relation schema — matches @t3x-dev/core Relation
  */
-export const WordDiffSchema = z.object({
-  type: z.enum(['unchanged', 'removed', 'added']).openapi({
-    description: 'Type of diff element',
-    example: 'unchanged',
-  }),
-  text: z.string().openapi({
-    description: 'Word or phrase',
-    example: 'Budget is',
+export const RelationSchema = z.object({
+  from: z.string().openapi({ description: 'Source frame ID' }),
+  to: z.string().openapi({ description: 'Target frame ID' }),
+  type: z
+    .enum(['causes', 'conditions', 'contrasts', 'elaborates', 'follows', 'depends'])
+    .openapi({ description: 'Relation type' }),
+  confidence: z.number().optional().openapi({ description: 'Confidence 0-1' }),
+});
+
+/**
+ * SlotConflict schema
+ */
+export const SlotConflictSchema = z.object({
+  key: z.string().openapi({ description: 'Conflicting slot key' }),
+  baseValue: SlotValueSchema.optional(),
+  sourceValue: SlotValueSchema.optional(),
+  targetValue: SlotValueSchema.optional(),
+});
+
+/**
+ * Frame conflict schema (for merge preparation)
+ */
+export const FrameConflictSchema = z.object({
+  frameId: z.string().openapi({ description: 'ID of the conflicting frame' }),
+  baseFrame: FrameSchema.optional().openapi({ description: 'Base frame (if three-way)' }),
+  sourceFrame: FrameSchema.openapi({ description: 'Source version of the frame' }),
+  targetFrame: FrameSchema.openapi({ description: 'Target version of the frame' }),
+  slotConflicts: z.array(SlotConflictSchema).openapi({
+    description: 'Slot-level conflicts between source and target',
   }),
 });
 
 /**
- * Similar pair schema (for merge preparation)
+ * FrameMergeResult schema (output of prepareFrameMerge)
  */
-export const SimilarPairSchema = z.object({
-  source: SentenceSchema.openapi({
-    description: 'Source sentence',
+export const FrameMergeResultSchema = z.object({
+  autoKept: z.array(FrameSchema).openapi({
+    description: 'Frames identical in both commits (auto-kept)',
   }),
-  target: SentenceSchema.openapi({
-    description: 'Target sentence',
+  conflicts: z.array(FrameConflictSchema).openapi({
+    description: 'Frames modified differently in source and target',
   }),
-  wordDiff: z.array(WordDiffSchema).openapi({
-    description: 'Word-level differences between source and target',
+  onlyInSource: z.array(FrameSchema).openapi({
+    description: 'Frames only present in source commit',
   }),
-  resolution: z.enum(['source', 'target']).optional().openapi({
-    description: 'User resolution choice (required for execute)',
-    example: 'source',
+  onlyInTarget: z.array(FrameSchema).openapi({
+    description: 'Frames only present in target commit',
   }),
-  sourceConstraints: z.array(ConstraintSchema).openapi({
-    description: 'Constraints from source sentence',
+  relationsOnlyInSource: z.array(RelationSchema).openapi({
+    description: 'Relations only in source',
   }),
-  targetConstraints: z.array(ConstraintSchema).openapi({
-    description: 'Constraints from target sentence',
+  relationsOnlyInTarget: z.array(RelationSchema).openapi({
+    description: 'Relations only in target',
+  }),
+  relationsInBoth: z.array(RelationSchema).openapi({
+    description: 'Relations present in both',
   }),
 });
 
 /**
- * Only-in-source/target candidate schema
+ * MergeResolution schema — how to resolve a single conflict
  */
-export const CandidateSchema = z.object({
-  sentence: SentenceSchema.openapi({
-    description: 'The candidate sentence',
+const MergeResolutionSchema = z.union([
+  z.literal('source'),
+  z.literal('target'),
+  z.literal('both'),
+  z.object({ edit: FrameSchema }),
+]);
+
+/**
+ * FrameMergeDecision schema (user decisions for executeFrameMerge)
+ */
+export const FrameMergeDecisionSchema = z.object({
+  conflictResolutions: z.record(z.string(), MergeResolutionSchema).openapi({
+    description: 'How to resolve each conflicted frame (frameId -> resolution)',
   }),
-  constraints: z.array(ConstraintSchema).openapi({
-    description: 'Associated constraints',
+  keepFromSource: z.array(z.string()).openapi({
+    description: 'Frame IDs from onlyInSource to keep',
   }),
-  keep: z.boolean().openapi({
-    description: 'Whether to keep this sentence in merge (required for execute)',
-    example: true,
+  keepFromTarget: z.array(z.string()).openapi({
+    description: 'Frame IDs from onlyInTarget to keep',
+  }),
+  keepRelationsFromSource: z.boolean().openapi({
+    description: 'Whether to keep source-only relations',
+  }),
+  keepRelationsFromTarget: z.boolean().openapi({
+    description: 'Whether to keep target-only relations',
   }),
 });
 
 /**
- * Merge2WayResult schema (output of prepare, input of execute)
+ * SemanticContent schema (frames + relations)
  */
-export const Merge2WayResultSchema = z.object({
-  identical: z.array(SentenceSchema).openapi({
-    description: 'Sentences that are identical in both commits',
-  }),
-  similarPairs: z.array(SimilarPairSchema).openapi({
-    description: 'Pairs of similar sentences requiring user resolution',
-  }),
-  onlyInSource: z.array(CandidateSchema).openapi({
-    description: 'Sentences only present in source commit',
-  }),
-  onlyInTarget: z.array(CandidateSchema).openapi({
-    description: 'Sentences only present in target commit',
-  }),
+export const SemanticContentSchema = z.object({
+  frames: z.array(FrameSchema),
+  relations: z.array(RelationSchema),
 });
 
 // ============================================================================
@@ -188,8 +166,11 @@ export const ExecuteMergeRequestSchema = z.object({
     description: 'Target commit hash',
     example: 'sha256:def456...',
   }),
-  prepared: Merge2WayResultSchema.openapi({
-    description: 'Merge preparation result with all resolutions filled in',
+  prepared: FrameMergeResultSchema.openapi({
+    description: 'Frame merge preparation result from the prepare step',
+  }),
+  decisions: FrameMergeDecisionSchema.openapi({
+    description: 'User decisions for resolving conflicts and keeping frames',
   }),
   message: z.string().openapi({
     description: 'Merge commit message',
@@ -224,18 +205,6 @@ export const CommitAuthorSchema = z.object({
 });
 
 /**
- * Commit content schema
- */
-export const CommitContentSchema = z.object({
-  sentences: z.array(SentenceSchema).openapi({
-    description: 'Sentences in the commit',
-  }),
-  constraints: z.array(ConstraintSchema).optional().openapi({
-    description: 'Constraints in the commit',
-  }),
-});
-
-/**
  * Merge commit schema (response from execute)
  */
 export const MergeCommitSchema = z.object({
@@ -243,23 +212,19 @@ export const MergeCommitSchema = z.object({
     description: 'Commit hash (sha256:...)',
     example: 'sha256:merge789...',
   }),
-  schema: z.string().openapi({
-    description: 'Commit schema version',
-    example: 't3x/commit/v4',
-  }),
   parents: z.array(z.string()).openapi({
     description: 'Parent commit hashes [source, target]',
     example: ['sha256:abc123...', 'sha256:def456...'],
   }),
-  author: CommitAuthorSchema.openapi({
+  author: z.any().openapi({
     description: 'Commit author',
   }),
   committed_at: z.string().openapi({
     description: 'Commit timestamp (ISO 8601)',
     example: '2024-01-15T10:30:00.000Z',
   }),
-  content: CommitContentSchema.openapi({
-    description: 'Commit content (merged sentences and constraints)',
+  content: SemanticContentSchema.openapi({
+    description: 'Merged semantic content (frames + relations)',
   }),
   message: z.string().openapi({
     description: 'Commit message',
@@ -269,12 +234,15 @@ export const MergeCommitSchema = z.object({
     description: 'Branch name',
     example: 'main',
   }),
+  merge_summary: z.any().optional().openapi({
+    description: 'Merge summary statistics',
+  }),
 });
 
 /**
  * Prepare merge response data schema
  */
-export const PrepareMergeResponseSchema = Merge2WayResultSchema;
+export const PrepareMergeResponseSchema = FrameMergeResultSchema;
 
 /**
  * Execute merge response data schema

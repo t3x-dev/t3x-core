@@ -323,11 +323,11 @@ function getLeafAssertions(leaf: Leaf): Assertion[] {
 }
 
 /**
- * Extract conversation_id from commit's source_refs.
- * SentenceCommit has source_refs with type='conversation' entries.
+ * Extract conversation_id from commit's sources.
+ * ApiCommit has sources with type='conversation' entries.
  */
 function extractConversationId(item: CommitWithLeaves): string | null {
-  const ref = item.commit.source_refs?.find((r) => r.type === 'conversation');
+  const ref = item.commit.sources?.find((r) => r.type === 'conversation');
   return ref?.id ?? null;
 }
 

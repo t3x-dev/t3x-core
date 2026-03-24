@@ -1,15 +1,17 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { Constraint, Leaf, SentenceCommit } from '@/lib/api';
+import type { ApiCommit, Constraint, Leaf } from '@/lib/api';
 import {
   ApiError,
   generateLeafOutput,
+  getApiCommit,
   getLeaf,
-  getSentenceCommit,
+  getSemanticContent,
   updateLeaf,
   validateLeafOutput,
 } from '@/lib/api';
+import type { SemanticContent } from '@t3x-dev/core';
 import { type ExportFormat, exportLeaf } from '@/lib/export';
 import { createRetuneSession } from '@/lib/retune';
 import { usePinsStore } from '@/store/pinsStore';
@@ -90,7 +92,8 @@ export interface UseLeafPageDataReturn {
   leaf: Leaf | null;
   loading: boolean;
   error: Error | null;
-  commitData: SentenceCommit | null;
+  commitData: ApiCommit | null;
+  semanticContent: SemanticContent | null;
   commitLoadError: boolean;
   sentences: SentenceWithSource[];
 
@@ -171,7 +174,7 @@ export function useLeafPageData(projectId: string, leafId: string): UseLeafPageD
     type: 'success' | 'error';
     text: string;
   } | null>(null);
-  const [commitData, setCommitData] = useState<SentenceCommit | null>(null);
+  const [commitData, setCommitData] = useState<ApiCommit | null>(null);
   const [commitLoadError, setCommitLoadError] = useState(false);
   const [savingInstruction, setSavingInstruction] = useState(false);
   const [savingModel, setSavingModel] = useState(false);
@@ -322,38 +325,38 @@ export function useLeafPageData(projectId: string, leafId: string): UseLeafPageD
   // Load parent commit data for source content display
   useEffect(() => {
     if (!leaf?.commit_hash) return;
-    getSentenceCommit(leaf.commit_hash)
+    getApiCommit(leaf.commit_hash)
       .then(setCommitData)
       .catch(() => {
         setCommitLoadError(true);
       });
   }, [leaf?.commit_hash]);
 
+  // Derive SemanticContent from ApiCommit
+  const semanticContent = useMemo(
+    () => (commitData ? getSemanticContent(commitData) : null),
+    [commitData]
+  );
+
   // Memoize sentences to prevent unnecessary re-renders in LeafConstraintSourceContext
   const sentences = useMemo((): SentenceWithSource[] => {
-    if (!commitData) return [];
-    return commitData.content.sentences.map((s) => ({
-      id: s.id,
-      text: s.text,
-      source: s.source_ref
-        ? {
-            turn_hash: s.source_ref.turn_hash,
-            start_char: s.source_ref.start_char,
-            end_char: s.source_ref.end_char,
-          }
-        : undefined,
+    if (!semanticContent) return [];
+    return semanticContent.frames.map((f) => ({
+      id: f.id,
+      text: `[${f.type}] ${Object.entries(f.slots).map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`).join('; ')}`,
+      source: undefined, // frame source tracing handled differently
     }));
-  }, [commitData]);
+  }, [semanticContent]);
 
   // Memoize confidence scores from commit data
   const sentenceConfidence = useMemo((): Map<string, number> => {
-    if (!commitData) return new Map();
+    if (!semanticContent) return new Map();
     const m = new Map<string, number>();
-    for (const s of commitData.content.sentences) {
-      if (s.confidence != null) m.set(s.id, s.confidence);
+    for (const f of semanticContent.frames) {
+      if (f.confidence != null) m.set(f.id, f.confidence);
     }
     return m;
-  }, [commitData]);
+  }, [semanticContent]);
 
   // Compute sentence coverage (for Display Mode)
   const sentenceCoverage = useMemo(
@@ -585,6 +588,7 @@ export function useLeafPageData(projectId: string, leafId: string): UseLeafPageD
     commitData,
     commitLoadError,
     sentences,
+    semanticContent,
 
     // Saving states
     saving,

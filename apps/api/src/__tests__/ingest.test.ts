@@ -117,7 +117,7 @@ describe('POST /v1/projects/{projectId}/ingest/webhook', () => {
 
     const data: ApiResponse = await res.json();
     expect(data.success).toBe(false);
-    expect(data.error.code).toBe('PROJECT_NOT_FOUND');
+    expect(data.error.code).toBe('NOT_FOUND');
   });
 
   // =========================================================================

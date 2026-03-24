@@ -164,6 +164,9 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
     toggleKeepSourceFrame,
     toggleKeepTargetFrame,
     allFrameConflictsResolved,
+    // Frame-aware getters
+    getFrameMergeChecks,
+    getPreviewFrames,
   } = useMergeWorkspaceStore();
 
   const prefersReducedMotion = useReducedMotion();
@@ -178,7 +181,7 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
   const [frameLoading, setFrameLoading] = useState(false);
   const [frameError, setFrameError] = useState<string | null>(null);
   const [activeFrameId, setActiveFrameId] = useState<string | null>(null);
-  const [commitMergeLoading, setCommitMergeLoading] = useState(false);
+  const [_commitMergeLoading, setCommitMergeLoading] = useState(false);
 
   // Semantic data for Frame mode (legacy FrameMergeSection fallback)
   const [semanticData, setSemanticData] = useState<{
@@ -443,6 +446,15 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
   // Frame merge can-commit check
   const frameCanCommit = isFrameMode && allFrameConflictsResolved() && message.trim().length > 0;
 
+  // Frame merge review dialog handler
+  const handleFrameOpenReview = useCallback(() => {
+    setShowReviewDialog(true);
+  }, []);
+
+  const handleFrameConfirmMerge = useCallback(async () => {
+    await handleFrameCommitMerge();
+  }, [handleFrameCommitMerge]);
+
   // Loading state for frame data
   if (frameLoading) {
     return (
@@ -465,6 +477,8 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
       ? reducedMotion.fullScreenEnter
       : fullScreenEnter;
 
+    const framePreviewFrames = getPreviewFrames();
+
     return (
       <motion.div
         variants={containerVariants}
@@ -472,6 +486,21 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
         animate="animate"
         className="relative flex h-screen flex-col bg-[var(--surface-app)]"
       >
+        {/* Merge Review Dialog (frame mode) */}
+        <MergeReviewDialog
+          open={showReviewDialog}
+          onClose={() => setShowReviewDialog(false)}
+          onConfirm={handleFrameConfirmMerge}
+          checks={getFrameMergeChecks()}
+          message={message}
+          sourceBranch={sourceBranch || 'source'}
+          targetBranch={targetBranch || 'main'}
+          sentenceCount={framePreviewFrames.length}
+          summary={null}
+          serverChecksLoading={false}
+          onBackToCanvas={handleCloseOrNavigate}
+        />
+
         {/* Action Bar */}
         <MergeActionBar
           projectId={projectId}
@@ -482,299 +511,295 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
           message={message}
           onMessageChange={setMessage}
           onSave={saveDraft}
-          onCommit={handleFrameCommitMerge}
+          onCommit={handleFrameOpenReview}
           onCancel={handleCancel}
           canCommit={frameCanCommit}
           onClose={onClose}
         />
 
         {/* Main Content — 3-column layout */}
-        <div className="flex-1 overflow-hidden flex">
-          {/* Left: MergeNavigator (200px) */}
-          <MergeNavigator
-            mergeResult={frameMergeResult}
-            resolutions={frameResolutions}
-            keepSource={keepSourceFrames}
-            keepTarget={keepTargetFrames}
-            activeFrameId={activeFrameId}
-            onSelectFrame={setActiveFrameId}
-            onToggleKeepSource={toggleKeepSourceFrame}
-            onToggleKeepTarget={toggleKeepTargetFrame}
-          />
+        <div className="flex-1 overflow-hidden flex flex-col">
+          <div className="flex-1 overflow-hidden flex">
+            {/* Left: MergeNavigator (200px) */}
+            <MergeNavigator
+              mergeResult={frameMergeResult}
+              resolutions={frameResolutions}
+              keepSource={keepSourceFrames}
+              keepTarget={keepTargetFrames}
+              activeFrameId={activeFrameId}
+              onSelectFrame={setActiveFrameId}
+              onToggleKeepSource={toggleKeepSourceFrame}
+              onToggleKeepTarget={toggleKeepTargetFrame}
+            />
 
-          {/* Center: Conflict cards + auto-kept */}
-          <div ref={scrollContainerRef} className="flex-1 overflow-auto p-[var(--space-page)]">
-            {frameError && (
-              <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-400">
-                {frameError}
-              </div>
-            )}
-
-            {/* Conflicts */}
-            {frameMergeResult.conflicts.length > 0 && (
-              <div className="mb-6">
-                <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--diff-removed-accent)]">
-                  Conflicts ({frameMergeResult.conflicts.length})
-                </h3>
-                <div className="space-y-3">
-                  {frameMergeResult.conflicts.map((conflict) => (
-                    <div key={conflict.frameId} id={`merge-frame-${conflict.frameId}`}>
-                      <FrameConflictCard
-                        conflict={conflict}
-                        resolution={frameResolutions.get(conflict.frameId) ?? null}
-                        onResolve={(res) => resolveFrameConflict(conflict.frameId, res)}
-                        isActive={activeFrameId === conflict.frameId}
-                        onSelect={() => setActiveFrameId(conflict.frameId)}
-                      />
-                    </div>
-                  ))}
+            {/* Center: Conflict cards + auto-kept */}
+            <div ref={scrollContainerRef} className="flex-1 overflow-auto p-[var(--space-page)]">
+              {frameError && (
+                <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-400">
+                  {frameError}
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* Auto-kept frames */}
-            {frameMergeResult.autoKept.length > 0 && (
-              <div className="mb-6">
-                <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--diff-added-accent)]">
-                  Auto-kept ({frameMergeResult.autoKept.length})
-                </h3>
-                <div className="space-y-2">
-                  {frameMergeResult.autoKept.map((frame) => (
-                    <div
-                      key={frame.id}
-                      className="rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-3 opacity-50"
-                    >
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="rounded bg-[var(--surface-app)] px-1.5 py-0.5 font-mono text-[11px] font-medium text-[var(--text-secondary)] border border-[var(--stroke-divider)]">
-                          {frame.type}
-                        </span>
-                        <span className="font-mono text-[10px] text-[var(--text-tertiary)]">
-                          {frame.id}
-                        </span>
+              {/* Conflicts */}
+              {frameMergeResult.conflicts.length > 0 && (
+                <div className="mb-6">
+                  <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--diff-removed-accent)]">
+                    Conflicts ({frameMergeResult.conflicts.length})
+                  </h3>
+                  <div className="space-y-3">
+                    {frameMergeResult.conflicts.map((conflict) => (
+                      <div key={conflict.frameId} id={`merge-frame-${conflict.frameId}`}>
+                        <FrameConflictCard
+                          conflict={conflict}
+                          resolution={frameResolutions.get(conflict.frameId) ?? null}
+                          onResolve={(res) => resolveFrameConflict(conflict.frameId, res)}
+                          isActive={activeFrameId === conflict.frameId}
+                          onSelect={() => setActiveFrameId(conflict.frameId)}
+                        />
                       </div>
-                      <div className="px-2 font-mono text-[11px] text-[var(--text-tertiary)]">
-                        {Object.entries(frame.slots).map(([key, value]) => (
-                          <div key={key} className="leading-relaxed">
-                            <span style={{ color: '#7aa2f7' }}>{key}</span>
-                            <span style={{ color: '#89ddff' }}>: </span>
-                            <span style={{ color: '#9ece6a' }}>
-                              {typeof value === 'string' ? `"${value}"` : JSON.stringify(value)}
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Auto-kept frames */}
+              {frameMergeResult.autoKept.length > 0 && (
+                <div className="mb-6">
+                  <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--diff-added-accent)]">
+                    Auto-kept ({frameMergeResult.autoKept.length})
+                  </h3>
+                  <div className="space-y-2">
+                    {frameMergeResult.autoKept.map((frame) => (
+                      <div
+                        key={frame.id}
+                        className="rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-3 opacity-50"
+                      >
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="rounded bg-[var(--surface-app)] px-1.5 py-0.5 font-mono text-[11px] font-medium text-[var(--text-secondary)] border border-[var(--stroke-divider)]">
+                            {frame.type}
+                          </span>
+                          <span className="font-mono text-[10px] text-[var(--text-tertiary)]">
+                            {frame.id}
+                          </span>
+                        </div>
+                        <div className="px-2 font-mono text-[11px] text-[var(--text-tertiary)]">
+                          {Object.entries(frame.slots).map(([key, value]) => (
+                            <div key={key} className="leading-relaxed">
+                              <span style={{ color: '#7aa2f7' }}>{key}</span>
+                              <span style={{ color: '#89ddff' }}>: </span>
+                              <span style={{ color: '#9ece6a' }}>
+                                {typeof value === 'string' ? `"${value}"` : JSON.stringify(value)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Source-only frames */}
+              {frameMergeResult.onlyInSource.length > 0 && (
+                <div className="mb-6">
+                  <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--accent-commit)]">
+                    Source only ({frameMergeResult.onlyInSource.length})
+                  </h3>
+                  <div className="space-y-2">
+                    {frameMergeResult.onlyInSource.map((frame) => {
+                      const isKept = keepSourceFrames.has(frame.id);
+                      return (
+                        <div
+                          key={frame.id}
+                          className={`rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-3 transition-opacity ${
+                            isKept ? '' : 'opacity-40'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 mb-1">
+                            <input
+                              type="checkbox"
+                              checked={isKept}
+                              onChange={() => toggleKeepSourceFrame(frame.id)}
+                              className="h-3.5 w-3.5 cursor-pointer accent-[var(--accent-commit)]"
+                            />
+                            <span className="rounded bg-[var(--surface-app)] px-1.5 py-0.5 font-mono text-[11px] font-medium text-[var(--text-secondary)] border border-[var(--stroke-divider)]">
+                              {frame.type}
+                            </span>
+                            <span className="font-mono text-[10px] text-[var(--text-tertiary)]">
+                              {frame.id}
                             </span>
                           </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
+                          <div className="px-2 font-mono text-[11px] text-[var(--text-tertiary)]">
+                            {Object.entries(frame.slots).map(([key, value]) => (
+                              <div key={key} className="leading-relaxed">
+                                <span style={{ color: '#7aa2f7' }}>{key}</span>
+                                <span style={{ color: '#89ddff' }}>: </span>
+                                <span style={{ color: '#9ece6a' }}>
+                                  {typeof value === 'string' ? `"${value}"` : JSON.stringify(value)}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            )}
-
-            {/* Source-only frames */}
-            {frameMergeResult.onlyInSource.length > 0 && (
-              <div className="mb-6">
-                <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--accent-commit)]">
-                  Source only ({frameMergeResult.onlyInSource.length})
-                </h3>
-                <div className="space-y-2">
-                  {frameMergeResult.onlyInSource.map((frame) => {
-                    const isKept = keepSourceFrames.has(frame.id);
-                    return (
-                      <div
-                        key={frame.id}
-                        className={`rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-3 transition-opacity ${
-                          isKept ? '' : 'opacity-40'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2 mb-1">
-                          <input
-                            type="checkbox"
-                            checked={isKept}
-                            onChange={() => toggleKeepSourceFrame(frame.id)}
-                            className="h-3.5 w-3.5 cursor-pointer accent-[var(--accent-commit)]"
-                          />
-                          <span className="rounded bg-[var(--surface-app)] px-1.5 py-0.5 font-mono text-[11px] font-medium text-[var(--text-secondary)] border border-[var(--stroke-divider)]">
-                            {frame.type}
-                          </span>
-                          <span className="font-mono text-[10px] text-[var(--text-tertiary)]">
-                            {frame.id}
-                          </span>
-                        </div>
-                        <div className="px-2 font-mono text-[11px] text-[var(--text-tertiary)]">
-                          {Object.entries(frame.slots).map(([key, value]) => (
-                            <div key={key} className="leading-relaxed">
-                              <span style={{ color: '#7aa2f7' }}>{key}</span>
-                              <span style={{ color: '#89ddff' }}>: </span>
-                              <span style={{ color: '#9ece6a' }}>
-                                {typeof value === 'string' ? `"${value}"` : JSON.stringify(value)}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Target-only frames */}
-            {frameMergeResult.onlyInTarget.length > 0 && (
-              <div className="mb-6">
-                <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--accent-commit)]">
-                  Target only ({frameMergeResult.onlyInTarget.length})
-                </h3>
-                <div className="space-y-2">
-                  {frameMergeResult.onlyInTarget.map((frame) => {
-                    const isKept = keepTargetFrames.has(frame.id);
-                    return (
-                      <div
-                        key={frame.id}
-                        className={`rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-3 transition-opacity ${
-                          isKept ? '' : 'opacity-40'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2 mb-1">
-                          <input
-                            type="checkbox"
-                            checked={isKept}
-                            onChange={() => toggleKeepTargetFrame(frame.id)}
-                            className="h-3.5 w-3.5 cursor-pointer accent-[var(--accent-commit)]"
-                          />
-                          <span className="rounded bg-[var(--surface-app)] px-1.5 py-0.5 font-mono text-[11px] font-medium text-[var(--text-secondary)] border border-[var(--stroke-divider)]">
-                            {frame.type}
-                          </span>
-                          <span className="font-mono text-[10px] text-[var(--text-tertiary)]">
-                            {frame.id}
-                          </span>
-                        </div>
-                        <div className="px-2 font-mono text-[11px] text-[var(--text-tertiary)]">
-                          {Object.entries(frame.slots).map(([key, value]) => (
-                            <div key={key} className="leading-relaxed">
-                              <span style={{ color: '#7aa2f7' }}>{key}</span>
-                              <span style={{ color: '#89ddff' }}>: </span>
-                              <span style={{ color: '#9ece6a' }}>
-                                {typeof value === 'string' ? `"${value}"` : JSON.stringify(value)}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* No conflicts state */}
-            {frameMergeResult.conflicts.length === 0 &&
-              frameMergeResult.autoKept.length === 0 &&
-              frameMergeResult.onlyInSource.length === 0 &&
-              frameMergeResult.onlyInTarget.length === 0 && (
-                <EmptyState
-                  icon={GitMerge}
-                  title="Nothing to merge"
-                  description="Both branches have identical frame content."
-                  customIcon={<MergeIllustration />}
-                />
               )}
+
+              {/* Target-only frames */}
+              {frameMergeResult.onlyInTarget.length > 0 && (
+                <div className="mb-6">
+                  <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--accent-commit)]">
+                    Target only ({frameMergeResult.onlyInTarget.length})
+                  </h3>
+                  <div className="space-y-2">
+                    {frameMergeResult.onlyInTarget.map((frame) => {
+                      const isKept = keepTargetFrames.has(frame.id);
+                      return (
+                        <div
+                          key={frame.id}
+                          className={`rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-3 transition-opacity ${
+                            isKept ? '' : 'opacity-40'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 mb-1">
+                            <input
+                              type="checkbox"
+                              checked={isKept}
+                              onChange={() => toggleKeepTargetFrame(frame.id)}
+                              className="h-3.5 w-3.5 cursor-pointer accent-[var(--accent-commit)]"
+                            />
+                            <span className="rounded bg-[var(--surface-app)] px-1.5 py-0.5 font-mono text-[11px] font-medium text-[var(--text-secondary)] border border-[var(--stroke-divider)]">
+                              {frame.type}
+                            </span>
+                            <span className="font-mono text-[10px] text-[var(--text-tertiary)]">
+                              {frame.id}
+                            </span>
+                          </div>
+                          <div className="px-2 font-mono text-[11px] text-[var(--text-tertiary)]">
+                            {Object.entries(frame.slots).map(([key, value]) => (
+                              <div key={key} className="leading-relaxed">
+                                <span style={{ color: '#7aa2f7' }}>{key}</span>
+                                <span style={{ color: '#89ddff' }}>: </span>
+                                <span style={{ color: '#9ece6a' }}>
+                                  {typeof value === 'string' ? `"${value}"` : JSON.stringify(value)}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* No conflicts state */}
+              {frameMergeResult.conflicts.length === 0 &&
+                frameMergeResult.autoKept.length === 0 &&
+                frameMergeResult.onlyInSource.length === 0 &&
+                frameMergeResult.onlyInTarget.length === 0 && (
+                  <EmptyState
+                    icon={GitMerge}
+                    title="Nothing to merge"
+                    description="Both branches have identical frame content."
+                    customIcon={<MergeIllustration />}
+                  />
+                )}
+            </div>
+
+            {/* Right: Merge context panel (280px) */}
+            <div className="hidden lg:flex w-[280px] shrink-0 flex-col border-l border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-4 overflow-y-auto">
+              {/* Source / Target info */}
+              <div className="mb-4">
+                <h4 className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)] mb-2">
+                  Merge Info
+                </h4>
+                <div className="space-y-1.5 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-[var(--text-tertiary)]">Source</span>
+                    <span className="font-mono text-[var(--text-secondary)] truncate ml-2 max-w-[160px]">
+                      {sourceBranch || sourceHash?.slice(0, 12) || '?'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-[var(--text-tertiary)]">Target</span>
+                    <span className="font-mono text-[var(--text-secondary)] truncate ml-2 max-w-[160px]">
+                      {targetBranch || targetHash?.slice(0, 12) || '?'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Validation summary */}
+              <div className="mb-4">
+                <h4 className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)] mb-2">
+                  Validation
+                </h4>
+                <div className="space-y-1 text-xs">
+                  <div className="flex items-center gap-1.5">
+                    <span
+                      className={`h-1.5 w-1.5 rounded-full ${
+                        frameUnresolvedCount === 0
+                          ? 'bg-[var(--diff-added-accent)]'
+                          : 'bg-[var(--diff-removed-accent)]'
+                      }`}
+                    />
+                    <span className="text-[var(--text-secondary)]">
+                      {frameUnresolvedCount === 0
+                        ? 'All conflicts resolved'
+                        : `${frameUnresolvedCount} unresolved`}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span
+                      className={`h-1.5 w-1.5 rounded-full ${
+                        message.trim()
+                          ? 'bg-[var(--diff-added-accent)]'
+                          : 'bg-[var(--diff-removed-accent)]'
+                      }`}
+                    />
+                    <span className="text-[var(--text-secondary)]">
+                      {message.trim() ? 'Message provided' : 'Message required'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Frame count summary */}
+              <div className="mb-4">
+                <h4 className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)] mb-2">
+                  Summary
+                </h4>
+                <div className="space-y-1 text-xs text-[var(--text-secondary)]">
+                  <div className="flex justify-between">
+                    <span>Auto-kept</span>
+                    <span className="font-mono">{frameMergeResult.autoKept.length}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Conflicts</span>
+                    <span className="font-mono">{frameMergeResult.conflicts.length}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Source only</span>
+                    <span className="font-mono">{frameMergeResult.onlyInSource.length}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Target only</span>
+                    <span className="font-mono">{frameMergeResult.onlyInTarget.length}</span>
+                  </div>
+                  <div className="flex justify-between pt-1 border-t border-[var(--stroke-divider)]">
+                    <span className="font-medium">Preview total</span>
+                    <span className="font-mono font-medium">{framePreviewFrames.length}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
-          {/* Right: Merge context panel (280px) */}
-          <div className="hidden lg:flex w-[280px] shrink-0 flex-col border-l border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-4 overflow-y-auto">
-            {/* Source / Target info */}
-            <div className="mb-4">
-              <h4 className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)] mb-2">
-                Merge Info
-              </h4>
-              <div className="space-y-1.5 text-xs">
-                <div className="flex justify-between">
-                  <span className="text-[var(--text-tertiary)]">Source</span>
-                  <span className="font-mono text-[var(--text-secondary)] truncate ml-2 max-w-[160px]">
-                    {sourceBranch || sourceHash?.slice(0, 12) || '?'}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-[var(--text-tertiary)]">Target</span>
-                  <span className="font-mono text-[var(--text-secondary)] truncate ml-2 max-w-[160px]">
-                    {targetBranch || targetHash?.slice(0, 12) || '?'}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Validation summary */}
-            <div className="mb-4">
-              <h4 className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)] mb-2">
-                Validation
-              </h4>
-              <div className="space-y-1 text-xs">
-                <div className="flex items-center gap-1.5">
-                  <span
-                    className={`h-1.5 w-1.5 rounded-full ${
-                      frameUnresolvedCount === 0
-                        ? 'bg-[var(--diff-added-accent)]'
-                        : 'bg-[var(--diff-removed-accent)]'
-                    }`}
-                  />
-                  <span className="text-[var(--text-secondary)]">
-                    {frameUnresolvedCount === 0
-                      ? 'All conflicts resolved'
-                      : `${frameUnresolvedCount} unresolved`}
-                  </span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span
-                    className={`h-1.5 w-1.5 rounded-full ${
-                      message.trim()
-                        ? 'bg-[var(--diff-added-accent)]'
-                        : 'bg-[var(--diff-removed-accent)]'
-                    }`}
-                  />
-                  <span className="text-[var(--text-secondary)]">
-                    {message.trim() ? 'Message provided' : 'Message required'}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Commit message */}
-            <div className="mb-4">
-              <label
-                htmlFor="frame-merge-message"
-                className="block text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)] mb-1.5"
-              >
-                Commit Message
-              </label>
-              <textarea
-                id="frame-merge-message"
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                placeholder="Describe this merge..."
-                rows={3}
-                className="w-full rounded border border-[var(--stroke-divider)] bg-[var(--surface-app)] p-2 text-xs text-[var(--text-primary)] placeholder-[var(--text-tertiary)] resize-none focus:outline-none focus:ring-1 focus:ring-[var(--accent-commit)]"
-              />
-            </div>
-
-            {/* Commit button */}
-            <button
-              type="button"
-              onClick={handleFrameCommitMerge}
-              disabled={!frameCanCommit || commitMergeLoading}
-              className="w-full rounded-lg px-4 py-2.5 text-sm font-medium text-white transition-colors bg-[var(--accent-commit)] hover:bg-[var(--accent-commit)]/90 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            >
-              {commitMergeLoading ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Committing...
-                </>
-              ) : (
-                <>
-                  <GitMerge className="h-4 w-4" />
-                  Commit Merge
-                </>
-              )}
-            </button>
-          </div>
+          {/* Preview Panel */}
+          <MergePreview expanded={previewExpanded} onToggle={togglePreview} />
         </div>
       </motion.div>
     );

@@ -172,12 +172,9 @@ describe('Comparisons Routes', () => {
       expect(data.length).toBeGreaterThanOrEqual(2);
     });
 
-    it('returns empty list for unknown project', async () => {
+    it('returns 404 for unknown project (access control)', async () => {
       const res = await app.request('/v1/comparisons?project_id=proj_nonexistent');
-      expect(res.status).toBe(200);
-      const json: ApiResponse = await res.json();
-      expect(json.success).toBe(true);
-      expect((json.data as unknown[]).length).toBe(0);
+      expect(res.status).toBe(404);
     });
 
     it('returns all comparisons when no project_id filter', async () => {

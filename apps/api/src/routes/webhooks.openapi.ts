@@ -369,7 +369,7 @@ webhooksRoutes.openapi(testWebhookRoute, async (c) => {
       success: true as const,
       data: { status: response.status, ok: response.ok },
     });
-  } catch (_err) {
+  } catch (err) {
     const message = err instanceof Error ? err.message : 'Test failed';
     return errorResponse(c, 'INTERNAL_ERROR', message);
   }

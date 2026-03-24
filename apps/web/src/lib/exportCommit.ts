@@ -1,5 +1,5 @@
 /**
- * Export Utilities for SentenceCommit Data
+ * Export Utilities for ApiCommit Data
  *
  * Provides functions to export commit data in various formats:
  * - Copy to clipboard
@@ -7,15 +7,17 @@
  * - Export as JSON (excludes position data)
  */
 
-import type { SentenceCommit } from './api';
+import type { ApiCommit } from './api';
+import { frameSummaryText, getSemanticContent } from './api/commits';
 import { copyToClipboard, downloadAsFile, type ExportResult } from './export';
 
 // ============================================================================
 // Markdown Export
 // ============================================================================
 
-export function formatCommitAsMarkdown(commit: SentenceCommit): string {
+export function formatCommitAsMarkdown(commit: ApiCommit): string {
   const lines: string[] = [];
+  const frames = getSemanticContent(commit).frames;
 
   lines.push(`# Commit: ${commit.message || commit.hash.slice(0, 12)}`);
   lines.push('');
@@ -34,41 +36,27 @@ export function formatCommitAsMarkdown(commit: SentenceCommit): string {
   lines.push('');
 
   // Source References
-  if (commit.source_refs && commit.source_refs.length > 0) {
+  if (commit.sources && commit.sources.length > 0) {
     lines.push('## Sources');
     lines.push('');
-    for (const ref of commit.source_refs) {
+    for (const ref of commit.sources) {
       lines.push(`- **${ref.type}**: ${ref.title || ref.id}`);
-      if (ref.assertion_lessons && ref.assertion_lessons.length > 0) {
-        for (const lesson of ref.assertion_lessons) {
-          lines.push(`  - Lesson: ${lesson}`);
-        }
-      }
     }
     lines.push('');
   }
 
-  // Merge Summary
-  if (commit.merge_summary) {
-    const ms = commit.merge_summary;
-    lines.push('## Merge Summary');
-    lines.push('');
-    lines.push(`- Kept identical: ${ms.kept_identical}`);
-    lines.push(`- Resolved conflicts: ${ms.resolved_conflicts}`);
-    lines.push(`- Kept from source: ${ms.kept_from_source}`);
-    lines.push(`- Kept from target: ${ms.kept_from_target}`);
-    lines.push(`- Discarded: ${ms.discarded}`);
-    lines.push(`- Total sentences: ${ms.total_sentences}`);
-    lines.push('');
-  }
-
-  // Sentences
-  lines.push(`## Sentences (${commit.content.sentences.length})`);
+  // Frames
+  lines.push(`## Frames (${frames.length})`);
   lines.push('');
-  for (const sentence of commit.content.sentences) {
+  for (const frame of frames) {
+    const slots = Object.entries(frame.slots ?? {})
+      .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`)
+      .join(', ');
     const confidence =
-      sentence.confidence !== undefined ? ` *(${(sentence.confidence * 100).toFixed(0)}%)*` : '';
-    lines.push(`- ${sentence.text}${confidence}`);
+      frame.confidence !== undefined && frame.confidence < 1
+        ? ` *(${(frame.confidence * 100).toFixed(0)}%)*`
+        : '';
+    lines.push(`- ${frame.type}: ${slots}${confidence}`);
   }
   lines.push('');
 
@@ -82,7 +70,7 @@ export function formatCommitAsMarkdown(commit: SentenceCommit): string {
 // JSON Export
 // ============================================================================
 
-export function formatCommitAsJSON(commit: SentenceCommit): string {
+export function formatCommitAsJSON(commit: ApiCommit): string {
   const { position_x: _x, position_y: _y, ...exportData } = commit;
   return JSON.stringify(exportData, null, 2);
 }
@@ -91,19 +79,19 @@ export function formatCommitAsJSON(commit: SentenceCommit): string {
 // File Download
 // ============================================================================
 
-export function downloadCommitAsMarkdown(commit: SentenceCommit): void {
+export function downloadCommitAsMarkdown(commit: ApiCommit): void {
   const content = formatCommitAsMarkdown(commit);
   const filename = getCommitFilename(commit, 'md');
   downloadAsFile(content, filename, 'text/markdown');
 }
 
-export function downloadCommitAsJSON(commit: SentenceCommit): void {
+export function downloadCommitAsJSON(commit: ApiCommit): void {
   const content = formatCommitAsJSON(commit);
   const filename = getCommitFilename(commit, 'json');
   downloadAsFile(content, filename, 'application/json');
 }
 
-function getCommitFilename(commit: SentenceCommit, extension: string): string {
+function getCommitFilename(commit: ApiCommit, extension: string): string {
   const label = commit.message || commit.hash.slice(0, 12);
   const sanitized = label.replace(/[^a-zA-Z0-9-_]/g, '_').slice(0, 50);
   const date = new Date().toISOString().slice(0, 10);
@@ -117,19 +105,19 @@ function getCommitFilename(commit: SentenceCommit, extension: string): string {
 export type CommitExportFormat = 'clipboard' | 'markdown' | 'json';
 
 export async function exportCommit(
-  commit: SentenceCommit,
+  commit: ApiCommit,
   format: CommitExportFormat
 ): Promise<ExportResult> {
   try {
     switch (format) {
       case 'clipboard': {
-        const text = commit.content.sentences.map((s) => s.text).join('\n');
+        const text = frameSummaryText(commit);
         if (!text) {
-          return { success: false, message: 'No sentences to copy' };
+          return { success: false, message: 'No frames to copy' };
         }
         const copied = await copyToClipboard(text);
         return copied
-          ? { success: true, message: 'Sentences copied to clipboard' }
+          ? { success: true, message: 'Frames copied to clipboard' }
           : { success: false, message: 'Failed to copy to clipboard' };
       }
       case 'markdown': {

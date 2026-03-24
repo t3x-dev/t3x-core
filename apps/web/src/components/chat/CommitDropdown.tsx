@@ -36,9 +36,9 @@ export function CommitDropdown() {
   const hasDelta = deltaCount > 0;
 
   const handleCommit = useCallback(() => {
-    if (!hasDelta) return;
+    if (!hasDelta && !hasFrames) return;
     setShowMessageInput(true);
-  }, [hasDelta]);
+  }, [hasDelta, hasFrames]);
 
   const handleConfirmCommit = useCallback(async () => {
     try {
@@ -96,7 +96,7 @@ export function CommitDropdown() {
             size="sm"
             className="flex-1 bg-[var(--accent-commit)] text-xs text-white hover:opacity-90"
             onClick={handleConfirmCommit}
-            disabled={isCommitting || !hasDelta}
+            disabled={isCommitting || (!hasDelta && !hasFrames)}
           >
             {isCommitting ? 'Committing...' : 'Confirm'}
           </Button>
@@ -113,18 +113,18 @@ export function CommitDropdown() {
       <div className="flex flex-1 rounded-md overflow-hidden">
         <Button
           size="sm"
-          disabled={!hasDelta || isCommitting}
+          disabled={(!hasDelta && !hasFrames) || isCommitting}
           onClick={handleCommit}
           className="flex-1 rounded-r-none bg-[var(--accent-commit)] text-xs text-white hover:opacity-90 disabled:opacity-40"
         >
-          {hasDelta ? `Commit (${deltaCount})` : hasFrames ? 'Up to date' : 'Commit'}
+          {hasDelta ? `Commit (${deltaCount})` : hasFrames ? 'Commit current' : 'Commit'}
         </Button>
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
               size="sm"
-              disabled={!hasDelta || isCommitting}
+              disabled={(!hasDelta && !hasFrames) || isCommitting}
               className="rounded-l-none border-l border-white/20 bg-[var(--accent-commit)] px-2 text-white hover:opacity-90 disabled:opacity-40"
             >
               <ChevronDown className="h-3 w-3" />

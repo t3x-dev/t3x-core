@@ -4,13 +4,13 @@
  * CRUD operations for webhooks table using Drizzle ORM.
  * Webhooks subscribe to T3X events and receive POST callbacks.
  *
- * @see packages/storage/src/schema-v4.ts – webhooks table
+ * @see packages/storage/src/schema-frames.ts – webhooks table
  */
 
 import { randomUUID } from 'node:crypto';
 import { and, eq, isNull, or } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
-import { type WebhookRecord, webhooks } from '../schema-v4';
+import { type WebhookRecord, webhooks } from '../schema-frames';
 
 // ============================================================
 // Constants
