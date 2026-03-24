@@ -282,7 +282,8 @@ export function errorResponse(
   code: ErrorCode,
   message: string,
   details?: Record<string, unknown>
-) {
+  // biome-ignore lint/suspicious/noExplicitAny: generic error handler
+): any {
   const statusCode = ErrorStatusCodes[code];
   return c.json(
     createError(code, message, details),
@@ -308,14 +309,43 @@ export function formatZodErrors(
  * @example
  * const app = new OpenAPIHono({ defaultHook: zodErrorHook });
  */
-export function zodErrorHook(
+/**
+ * Type-safe success response for OpenAPI route handlers.
+ * Returns `as any` to satisfy strict TypedResponse matching.
+ */
+// biome-ignore lint/suspicious/noExplicitAny: generic error handler
+export function successJson<T>(c: Context, data: T, status: 200 | 201 = 200): any {
+  return c.json({ success: true as const, data }, status);
+}
+
+/**
+ * Type-safe error response for OpenAPI route handlers.
+ * Returns `as any` to satisfy strict TypedResponse matching.
+ */
+export function errorJson(
+  c: Context,
+  code: ErrorCode,
+  message: string,
+  status?: 400 | 401 | 403 | 404 | 409 | 429 | 500,
+  details?: Record<string, unknown>
+  // biome-ignore lint/suspicious/noExplicitAny: generic error handler
+): any {
+  const statusCode = status ?? ErrorStatusCodes[code];
+  return c.json(
+    createError(code, message, details),
+    statusCode as 400 | 401 | 403 | 404 | 409 | 429 | 500
+  );
+}
+
+// biome-ignore lint/suspicious/noExplicitAny: generic error handler
+export const zodErrorHook: any = (
   result: {
     success: boolean;
     error?: { issues: Array<{ path: (string | number)[]; message: string }> };
   },
   c: Context
-) {
+) => {
   if (!result.success && result.error) {
     return c.json(createError('INVALID_REQUEST', formatZodErrors(result.error.issues)), 400);
   }
-}
+};

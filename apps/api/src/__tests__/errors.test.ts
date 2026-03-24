@@ -242,6 +242,7 @@ describe('zodErrorHook', () => {
     const result = zodErrorHook({ success: true }, mockContext);
 
     expect(result).toBeUndefined();
-    expect(mockContext.json).not.toHaveBeenCalled();
+    // biome-ignore lint/suspicious/noExplicitAny: test mock access
+    expect((mockContext as any).json).not.toHaveBeenCalled();
   });
 });

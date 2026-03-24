@@ -11,8 +11,8 @@
  * @see https://github.com/t3x-dev/t3x-core/issues/617
  */
 
-import type { LLMProvider } from '../llm/types';
 import { escapePromptContent } from '../llm/sanitize';
+import type { LLMProvider } from '../llm/types';
 import { FRAME_RELATION_TYPES, type FrameRelationType } from '../semantic/types';
 import type { DriftResult } from './types';
 
@@ -66,9 +66,7 @@ export async function detectDrift(
 
   try {
     // Build user prompt with escaped content
-    const turnsText = recentTurns
-      .map((t) => `[${t.role}]: ${t.content}`)
-      .join('\n');
+    const turnsText = recentTurns.map((t) => `[${t.role}]: ${t.content}`).join('\n');
 
     const userPrompt = `Current topic: "${currentTopicName}"
 Existing frame types: ${existingFrameTypes.join(', ')}
@@ -108,9 +106,7 @@ export function parseDriftResponse(raw: string): DriftResult {
 
     // Validate confidence
     const confidence =
-      typeof parsed.confidence === 'number'
-        ? Math.max(0, Math.min(1, parsed.confidence))
-        : 0.5;
+      typeof parsed.confidence === 'number' ? Math.max(0, Math.min(1, parsed.confidence)) : 0.5;
 
     // If same_topic or low confidence → no drift
     if (parsed.same_topic !== false || confidence < CONFIDENCE_THRESHOLD) {
@@ -120,7 +116,8 @@ export function parseDriftResponse(raw: string): DriftResult {
     // Validate relation type
     let relationType: FrameRelationType | undefined;
     if (typeof parsed.relation === 'string' && VALID_RELATIONS.has(parsed.relation)) {
-      relationType = parsed.relation === 'none' ? undefined : (parsed.relation as FrameRelationType);
+      relationType =
+        parsed.relation === 'none' ? undefined : (parsed.relation as FrameRelationType);
     }
 
     // Validate new_topic name

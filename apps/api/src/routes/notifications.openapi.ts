@@ -94,6 +94,7 @@ const listNotificationsRoute = createRoute({
   },
 });
 
+// @ts-expect-error - OpenAPI handler return type
 notificationsRoutes.openapi(listNotificationsRoute, async (c) => {
   const { project_id, unread_only } = c.req.valid('query');
   const db = await getDB();

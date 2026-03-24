@@ -1,13 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createMeaningPipeline } from '../../../extractors/createMeaningPipeline';
-import type { MeaningAgent, PipelineContext } from '../../../extractors/meaningPipeline';
+import type { MeaningAgent } from '../../../extractors/meaningPipeline';
 import { MeaningPipeline } from '../../../extractors/meaningPipeline';
-import {
-  createContentWithDuplicates,
-  createSemanticContent,
-  createTypicalContent,
-  resetFrameIds,
-} from '../../factories';
+import { createTypicalContent, resetFrameIds } from '../../factories';
 import { StubLLMProvider } from '../../stubs';
 
 let provider: StubLLMProvider;

@@ -2,7 +2,7 @@
  * Claude LLM Provider Tests
  */
 
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { LLMProviderError } from '../../llm/types';
 import { ClaudeProvider, createClaudeProvider } from '../../providers/llm/claude';

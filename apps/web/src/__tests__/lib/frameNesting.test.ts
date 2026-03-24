@@ -1,6 +1,6 @@
+import type { SemanticContent } from '@t3x-dev/core';
 import { describe, expect, it } from 'vitest';
 import { nestFrames } from '@/lib/frameNesting';
-import type { SemanticContent } from '@t3x-dev/core';
 
 describe('nestFrames', () => {
   it('returns frames as-is when no relations', () => {

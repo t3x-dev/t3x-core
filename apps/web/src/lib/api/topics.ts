@@ -22,10 +22,7 @@ export async function listTopics(conversationId: string): Promise<Topic[]> {
   return handleResponse<Topic[]>(res);
 }
 
-export async function createTopicApi(
-  conversationId: string,
-  name: string
-): Promise<Topic> {
+export async function createTopicApi(conversationId: string, name: string): Promise<Topic> {
   const res = await fetchWithTimeout(
     `${API_V1}/conversations/${encodeURIComponent(conversationId)}/topics`,
     {
@@ -41,21 +38,17 @@ export async function updateTopicApi(
   topicId: string,
   update: { name?: string; status?: string }
 ): Promise<Topic> {
-  const res = await fetchWithTimeout(
-    `${API_V1}/topics/${encodeURIComponent(topicId)}`,
-    {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(update),
-    }
-  );
+  const res = await fetchWithTimeout(`${API_V1}/topics/${encodeURIComponent(topicId)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(update),
+  });
   return handleResponse<Topic>(res);
 }
 
 export async function deleteTopicApi(topicId: string): Promise<void> {
-  const res = await fetchWithTimeout(
-    `${API_V1}/topics/${encodeURIComponent(topicId)}`,
-    { method: 'DELETE' }
-  );
+  const res = await fetchWithTimeout(`${API_V1}/topics/${encodeURIComponent(topicId)}`, {
+    method: 'DELETE',
+  });
   await handleResponse<unknown>(res);
 }

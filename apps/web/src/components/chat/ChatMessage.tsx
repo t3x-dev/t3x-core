@@ -4,12 +4,12 @@ import { Pencil, RefreshCw, User } from 'lucide-react';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import type { Citation } from '@/lib/api/chat';
+import { cn } from '@/lib/utils';
+import { useExtractionPanelStore } from '@/store/extractionPanelStore';
 import { CitationChips } from './CitationChips';
 import { CodeBlock } from './CodeBlock';
 import { ThinkingSection } from './ThinkingSection';
-import { cn } from '@/lib/utils';
-import type { Citation } from '@/lib/api/chat';
-import { useExtractionPanelStore } from '@/store/extractionPanelStore';
 
 interface ChatMessageProps {
   sender: 'user' | 'assistant';
@@ -128,7 +128,7 @@ export function ChatMessage({
           offset += range.startOffset;
           break;
         }
-        offset += (node.textContent?.length ?? 0);
+        offset += node.textContent?.length ?? 0;
         node = walker.nextNode();
       }
       setHoveredTurn(turnHash, offset);
@@ -245,7 +245,10 @@ export function ChatMessage({
                   <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute -top-1 right-0">
                     <button
                       type="button"
-                      onClick={() => { setEditContent(content); setIsEditing(true); }}
+                      onClick={() => {
+                        setEditContent(content);
+                        setIsEditing(true);
+                      }}
                       className="p-1 rounded text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] transition-colors"
                       title="Edit message"
                     >
@@ -260,7 +263,6 @@ export function ChatMessage({
                       onChange={(e) => setEditContent(e.target.value)}
                       className="w-full p-2 rounded border border-[var(--border-primary)] bg-[var(--bg-primary)] text-sm text-[var(--text-primary)] resize-none focus:outline-none focus:ring-1 focus:ring-[var(--accent-commit)]"
                       rows={3}
-                      autoFocus
                     />
                     <div className="flex gap-2 justify-end">
                       <button
@@ -272,7 +274,10 @@ export function ChatMessage({
                       </button>
                       <button
                         type="button"
-                        onClick={() => { onEdit?.(editContent); setIsEditing(false); }}
+                        onClick={() => {
+                          onEdit?.(editContent);
+                          setIsEditing(false);
+                        }}
                         className="px-2 py-1 text-xs rounded bg-[var(--accent-commit)] text-white hover:opacity-90"
                       >
                         Save & Resend
@@ -295,69 +300,69 @@ export function ChatMessage({
               </div>
             ) : (
               <>
-              {thinkingContent && (
-                <ThinkingSection content={thinkingContent} isStreaming={isThinking} />
-              )}
-              <div
-                className={cn(
-                  'prose-chat text-sm leading-relaxed text-[var(--text-primary)]',
-                  isStreaming && 'streaming-text'
+                {thinkingContent && (
+                  <ThinkingSection content={thinkingContent} isStreaming={isThinking} />
                 )}
-              >
-                {hasCharHighlights ? (
-                  // For assistant messages with highlights, render as plain text with highlights
-                  // (Markdown rendering would change character offsets)
-                  <div className="whitespace-pre-wrap">
-                    <HighlightedText text={content} ranges={highlightRanges} />
-                  </div>
-                ) : (
-                  <>
-                    <Markdown
-                    remarkPlugins={[remarkGfm]}
-                    components={{
-                      code({ className, children }) {
-                        const lang = className?.replace('language-', '');
-                        const codeStr = String(children);
-                        if (lang || codeStr.includes('\n')) {
-                          return <CodeBlock language={lang}>{codeStr}</CodeBlock>;
-                        }
-                        return (
-                          <code className="px-1 py-0.5 rounded bg-[var(--bg-tertiary)] text-[0.8125rem] font-mono">
-                            {children}
-                          </code>
-                        );
-                      },
-                    }}
-                  >
-                    {content}
-                  </Markdown>
-                    {isStreaming && (
-                      <span
-                        className="inline-block w-0.5 h-[1.1em] ml-0.5 -mb-0.5 rounded-sm"
-                        style={{
-                          background: 'var(--accent-commit)',
-                          animation: 'blink 1s step-end infinite',
+                <div
+                  className={cn(
+                    'prose-chat text-sm leading-relaxed text-[var(--text-primary)]',
+                    isStreaming && 'streaming-text'
+                  )}
+                >
+                  {hasCharHighlights ? (
+                    // For assistant messages with highlights, render as plain text with highlights
+                    // (Markdown rendering would change character offsets)
+                    <div className="whitespace-pre-wrap">
+                      <HighlightedText text={content} ranges={highlightRanges} />
+                    </div>
+                  ) : (
+                    <>
+                      <Markdown
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          code({ className, children }) {
+                            const lang = className?.replace('language-', '');
+                            const codeStr = String(children);
+                            if (lang || codeStr.includes('\n')) {
+                              return <CodeBlock language={lang}>{codeStr}</CodeBlock>;
+                            }
+                            return (
+                              <code className="px-1 py-0.5 rounded bg-[var(--bg-tertiary)] text-[0.8125rem] font-mono">
+                                {children}
+                              </code>
+                            );
+                          },
                         }}
-                      />
-                    )}
-                  </>
-                )}
-                {!isUser && !isStreaming && citations && citations.length > 0 && (
-                  <CitationChips citations={citations} />
-                )}
-              </div>
-              {!isUser && !isStreaming && onRegenerate && (
-                <div className="opacity-0 group-hover:opacity-100 transition-opacity mt-1">
-                  <button
-                    type="button"
-                    onClick={onRegenerate}
-                    className="p-1 rounded text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] transition-colors"
-                    title="Regenerate response"
-                  >
-                    <RefreshCw className="h-3.5 w-3.5" />
-                  </button>
+                      >
+                        {content}
+                      </Markdown>
+                      {isStreaming && (
+                        <span
+                          className="inline-block w-0.5 h-[1.1em] ml-0.5 -mb-0.5 rounded-sm"
+                          style={{
+                            background: 'var(--accent-commit)',
+                            animation: 'blink 1s step-end infinite',
+                          }}
+                        />
+                      )}
+                    </>
+                  )}
+                  {!isUser && !isStreaming && citations && citations.length > 0 && (
+                    <CitationChips citations={citations} />
+                  )}
                 </div>
-              )}
+                {!isUser && !isStreaming && onRegenerate && (
+                  <div className="opacity-0 group-hover:opacity-100 transition-opacity mt-1">
+                    <button
+                      type="button"
+                      onClick={onRegenerate}
+                      className="p-1 rounded text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] transition-colors"
+                      title="Regenerate response"
+                    >
+                      <RefreshCw className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                )}
               </>
             )}
           </div>

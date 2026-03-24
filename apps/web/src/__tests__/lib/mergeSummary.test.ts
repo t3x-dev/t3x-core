@@ -12,7 +12,7 @@ import type { ExtendedResolutionData } from '@/store/mergeWorkspaceStore';
 // ---------------------------------------------------------------------------
 
 function makeSentence(id: string, text: string): DiffableSentence {
-  return { id, text, confidence: 0.9 };
+  return { id, text };
 }
 
 function makeEmptyPrepared(): Merge2WayResult {

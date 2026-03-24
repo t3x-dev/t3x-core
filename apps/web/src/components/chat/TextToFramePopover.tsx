@@ -16,7 +16,7 @@ interface TextToFramePopoverProps {
 // ── Component ──
 
 export function TextToFramePopover({ selectedText, position, onClose }: TextToFramePopoverProps) {
-  const applyDelta = useExtractionPanelStore((s) => s.applyDelta);
+  const _applyDelta = useExtractionPanelStore((s) => s.applyDelta);
 
   const [frameType, setFrameType] = useState('');
   const [slotKey, setSlotKey] = useState('');

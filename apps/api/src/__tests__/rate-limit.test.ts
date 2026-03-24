@@ -30,7 +30,8 @@ function createL2TestApp() {
   app.use('*', async (c, next) => {
     const keyId = c.req.header('X-Test-Key-Id');
     if (keyId) {
-      c.set('apiKey', { id: keyId, name: 'Test Key' });
+      // biome-ignore lint/suspicious/noExplicitAny: test mock access
+      (c as any).set('apiKey', { id: keyId, name: 'Test Key' });
     }
     return next();
   });

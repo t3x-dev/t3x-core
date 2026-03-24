@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import type { SemanticContent } from '../../semantic/types';
-import { checkDiffCompatibility } from '../diffCompatibilityCheck';
 import { structuralValidatorAgent } from '../../extractors/agents/structuralValidatorAgent';
 import type { PipelineContext } from '../../extractors/meaningPipeline';
+import type { SemanticContent } from '../../semantic/types';
+import { checkDiffCompatibility } from '../diffCompatibilityCheck';
 
 // ── Helper ──
 

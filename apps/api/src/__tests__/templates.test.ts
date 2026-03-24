@@ -302,6 +302,7 @@ describe('Templates Routes', () => {
 
       // Seed again (the adapter already seeded once during setup)
       const { seedBuiltinTemplates } = await import('@t3x-dev/storage/seed/templates');
+      // biome-ignore lint/suspicious/noExplicitAny: test helper
       await seedBuiltinTemplates(mockDB as any);
 
       // List templates after

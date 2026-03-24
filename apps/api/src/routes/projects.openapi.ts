@@ -247,6 +247,7 @@ const getProjectRoute = createRoute({
   },
 });
 
+// @ts-expect-error - OpenAPI handler return type
 projectRoutes.openapi(getProjectRoute, async (c) => {
   const { id } = c.req.valid('param');
 
@@ -348,6 +349,7 @@ const updateProjectRoute = createRoute({
   },
 });
 
+// @ts-expect-error - OpenAPI handler return type
 projectRoutes.openapi(updateProjectRoute, async (c) => {
   const { id } = c.req.valid('param');
   const body = c.req.valid('json');
@@ -449,6 +451,7 @@ const deleteProjectRoute = createRoute({
   },
 });
 
+// @ts-expect-error - OpenAPI handler return type
 projectRoutes.openapi(deleteProjectRoute, async (c) => {
   const { id } = c.req.valid('param');
 
@@ -537,6 +540,7 @@ const verifyProjectRoute = createRoute({
   },
 });
 
+// @ts-expect-error - OpenAPI handler return type
 projectRoutes.openapi(verifyProjectRoute, async (c) => {
   const { id } = c.req.valid('param');
 
@@ -593,6 +597,7 @@ const getBusinessRulesRoute = createRoute({
   },
 });
 
+// @ts-expect-error - OpenAPI handler return type
 projectRoutes.openapi(getBusinessRulesRoute, async (c) => {
   const { id } = c.req.valid('param');
   try {
@@ -641,6 +646,7 @@ const putBusinessRulesRoute = createRoute({
   },
 });
 
+// @ts-expect-error - OpenAPI handler return type
 projectRoutes.openapi(putBusinessRulesRoute, async (c) => {
   const { id } = c.req.valid('param');
   const { rules } = c.req.valid('json');

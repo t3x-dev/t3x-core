@@ -133,10 +133,10 @@ diffRoutes.post('/v1/diff/two-way', async (c) => {
   }
 
   const threshold = body.threshold ?? 0.7;
-  let baseId: string;
-  let baseSegments: DiffSegment[];
-  let targetId: string;
-  let targetSegments: DiffSegment[];
+  let baseId = '';
+  let baseSegments: DiffSegment[] = [];
+  let targetId = '';
+  let targetSegments: DiffSegment[] = [];
   let usedCache = false;
   let baseTurnHashForCache: string | undefined;
   let targetTurnHashForCache: string | undefined;

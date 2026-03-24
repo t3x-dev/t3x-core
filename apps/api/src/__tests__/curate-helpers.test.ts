@@ -204,6 +204,7 @@ describe('extractChunksFromTurns', () => {
             ring3: {
               segments: [
                 { text: 'Hello world.', startChar: 0, endChar: 12 },
+                // biome-ignore lint/suspicious/noExplicitAny: test helper
                 { text: 'Invalid', startChar: undefined, endChar: undefined } as any,
               ],
             },
@@ -225,6 +226,7 @@ describe('extractChunksFromTurns', () => {
           rings: {
             ring3: {
               segments: [
+                // biome-ignore lint/suspicious/noExplicitAny: test helper
                 { startChar: 0, endChar: 12 } as any, // Missing text
               ],
             },
@@ -571,7 +573,8 @@ describe('extractChunksFromTurns', () => {
         },
       ];
 
-      const result = extractChunksFromTurns(turns, computeHash);
+      // biome-ignore lint/suspicious/noExplicitAny: test type cast
+      const result = extractChunksFromTurns(turns as any, computeHash);
 
       // null is not authoritative, should fall back to anchor_candidates
       expect(result.anchorCandidates).toHaveLength(1);
@@ -625,6 +628,7 @@ describe('extractChunksFromTurns', () => {
                   // Missing startChar/endChar
                   confidence: 0.9,
                   source: 'token' as const,
+                  // biome-ignore lint/suspicious/noExplicitAny: test helper
                 } as any,
               ],
             },

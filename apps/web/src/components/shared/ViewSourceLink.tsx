@@ -35,7 +35,7 @@ export interface ViewSourceLinkProps {
  * Build the conversation URL with highlight parameters
  */
 export function buildSourceUrl(
-  projectId: string,
+  _projectId: string,
   conversationId: string,
   turnHash: string,
   startChar?: number,

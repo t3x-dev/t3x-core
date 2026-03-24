@@ -20,7 +20,6 @@ import {
   isTokenInAnchorCandidate,
   isTokenInConfirmedAnchor,
   needsSpaceAfter,
-  type TokenState,
 } from './SelectableTextBlockUtils';
 
 // Render conversation content with turn groups

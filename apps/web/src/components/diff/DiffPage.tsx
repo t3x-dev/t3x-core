@@ -462,23 +462,22 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
             <RelationChangesBlock diff={diff} />
 
             {/* Merge button */}
-            <>
-              <div className="border-t border-[var(--stroke-divider)]" />
-              <button
-                type="button"
-                className="w-full rounded-md border border-[var(--accent-commit)]/30 bg-[var(--accent-commit)]/8 px-3 py-2 text-[12px] font-medium text-[var(--accent-commit)] hover:bg-[var(--accent-commit)]/15 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                onClick={handleStartMerge}
-                disabled={mergeLoading}
-              >
-                {mergeLoading ? (
-                  <Loader2 className="inline-block h-3.5 w-3.5 mr-1.5 -mt-0.5 animate-spin" />
-                ) : (
-                  <GitBranch className="inline-block h-3.5 w-3.5 mr-1.5 -mt-0.5" />
-                )}
-                {mergeLoading ? 'Creating merge...' : 'Start Merge'}
-              </button>
-              {mergeError && <p className="text-[10px] text-red-400 mt-1">{mergeError}</p>}
-            </>
+
+            <div className="border-t border-[var(--stroke-divider)]" />
+            <button
+              type="button"
+              className="w-full rounded-md border border-[var(--accent-commit)]/30 bg-[var(--accent-commit)]/8 px-3 py-2 text-[12px] font-medium text-[var(--accent-commit)] hover:bg-[var(--accent-commit)]/15 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              onClick={handleStartMerge}
+              disabled={mergeLoading}
+            >
+              {mergeLoading ? (
+                <Loader2 className="inline-block h-3.5 w-3.5 mr-1.5 -mt-0.5 animate-spin" />
+              ) : (
+                <GitBranch className="inline-block h-3.5 w-3.5 mr-1.5 -mt-0.5" />
+              )}
+              {mergeLoading ? 'Creating merge...' : 'Start Merge'}
+            </button>
+            {mergeError && <p className="text-[10px] text-red-400 mt-1">{mergeError}</p>}
           </div>
         </aside>
       </div>

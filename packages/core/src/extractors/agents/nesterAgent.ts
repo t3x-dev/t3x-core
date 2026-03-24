@@ -10,7 +10,7 @@
  */
 
 import type { LLMProvider } from '../../llm/types';
-import type { Frame, Relation, SemanticContent, SlotValue } from '../../semantic/types';
+import type { Frame, SemanticContent, SlotValue } from '../../semantic/types';
 import type { MeaningAgent, PipelineContext } from '../meaningPipeline';
 
 /** Relations that indicate parent-child nesting */

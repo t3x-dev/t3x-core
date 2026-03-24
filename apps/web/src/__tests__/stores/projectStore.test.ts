@@ -260,6 +260,8 @@ describe('Project Store', () => {
             status: 'active',
             nodes: 0,
             drafts: 0,
+            commitsCount: 0,
+            branchesCount: 0,
           },
         ],
       });
@@ -329,6 +331,8 @@ describe('Project Store', () => {
             status: 'draft',
             nodes: 0,
             drafts: 0,
+            commitsCount: 0,
+            branchesCount: 0,
           },
         ],
       });
@@ -353,6 +357,8 @@ describe('Project Store', () => {
             status: 'active',
             nodes: 5,
             drafts: 2,
+            commitsCount: 0,
+            branchesCount: 0,
           },
         ],
       });

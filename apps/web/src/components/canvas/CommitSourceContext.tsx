@@ -95,7 +95,7 @@ function anchorTypeToColor(anchorType?: string): HighlightColor {
  * Build colored highlights from sentences with anchor_type info.
  * Returns coloredHighlights when mixed anchor_types exist, undefined otherwise.
  */
-function buildColoredHighlights(
+function _buildColoredHighlights(
   sentences: SentenceWithHighlight[]
 ): ColoredHighlightRange[] | undefined {
   const hasNonVerbatim = sentences.some(

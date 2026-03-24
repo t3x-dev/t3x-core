@@ -42,7 +42,9 @@ export function TopicMap() {
         await deleteTopicApi(topicId);
         setTopics(topics.filter((t) => t.id !== topicId));
         if (activeTopicId === topicId) {
-          setActiveTopicId(topics.length > 1 ? topics.find((t) => t.id !== topicId)?.id ?? null : null);
+          setActiveTopicId(
+            topics.length > 1 ? (topics.find((t) => t.id !== topicId)?.id ?? null) : null
+          );
         }
       } catch {
         // Silent failure

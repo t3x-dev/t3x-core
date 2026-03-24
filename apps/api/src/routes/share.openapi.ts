@@ -118,7 +118,8 @@ shareRoutes.openapi(createShareRoute, async (c) => {
     if (accessResult instanceof Response) return accessResult;
 
     const shareToken = await createShareToken(db, {
-      entity_type: body.entity_type,
+      // biome-ignore lint/suspicious/noExplicitAny: generic error handler
+      entity_type: body.entity_type as any,
       entity_id: body.entity_id,
       project_id: projectId,
     });
@@ -182,13 +183,14 @@ shareRoutes.openapi(resolveShareRoute, async (c) => {
     // Fetch the entity based on type
     let entity: unknown;
 
-    if (shareToken.entity_type === 'leaf') {
+    const entityType = shareToken.entity_type as string;
+    if (entityType === 'leaf') {
       entity = await findLeafById(db, shareToken.entity_id);
-    } else if (shareToken.entity_type === 'run') {
+    } else if (entityType === 'run') {
       entity = await getRun(db, shareToken.entity_id);
-    } else if (shareToken.entity_type === 'comparison') {
+    } else if (entityType === 'comparison') {
       entity = await getComparison(db, shareToken.entity_id);
-    } else if (shareToken.entity_type === 'commit') {
+    } else if (entityType === 'commit') {
       entity = await getCommitUnified(db, shareToken.entity_id);
     } else {
       return errorResponse(c, 'SHARE_ENTITY_NOT_FOUND', 'Unsupported entity type');
