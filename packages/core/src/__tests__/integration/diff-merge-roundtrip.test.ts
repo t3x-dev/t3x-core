@@ -138,3 +138,73 @@ describe('diff-merge roundtrip integration', () => {
     expect(diffVsTarget.onlyInTarget.some((f) => f.id === 'f_004')).toBe(true);
   });
 });
+
+describe('topic and root_frame_id diff', () => {
+  it('detects topic change', () => {
+    const source: SemanticContent = {
+      topic: 'Japan Travel',
+      root_frame_id: 'f_001',
+      frames: [{ id: 'f_001', type: 'plan', slots: { goal: 'travel' } }],
+      relations: [],
+    };
+    const target: SemanticContent = {
+      topic: 'Japan Extended Itinerary',
+      root_frame_id: 'f_001',
+      frames: [{ id: 'f_001', type: 'plan', slots: { goal: 'travel' } }],
+      relations: [],
+    };
+    const diff = frameDiff(source, target);
+    expect(diff.topicChanged).toEqual({ oldTopic: 'Japan Travel', newTopic: 'Japan Extended Itinerary' });
+    expect(diff.rootChanged).toBeUndefined();
+  });
+
+  it('detects root_frame_id change', () => {
+    const source: SemanticContent = {
+      topic: 'Planning',
+      root_frame_id: 'f_001',
+      frames: [
+        { id: 'f_001', type: 'plan', slots: { a: 1 } },
+        { id: 'f_002', type: 'budget', slots: { b: 2 } },
+      ],
+      relations: [],
+    };
+    const target: SemanticContent = {
+      topic: 'Planning',
+      root_frame_id: 'f_002',
+      frames: [
+        { id: 'f_001', type: 'plan', slots: { a: 1 } },
+        { id: 'f_002', type: 'budget', slots: { b: 2 } },
+      ],
+      relations: [],
+    };
+    const diff = frameDiff(source, target);
+    expect(diff.rootChanged).toEqual({ oldRoot: 'f_001', newRoot: 'f_002' });
+    expect(diff.topicChanged).toBeUndefined();
+  });
+
+  it('returns undefined when topic/root unchanged', () => {
+    const content: SemanticContent = {
+      topic: 'Same',
+      root_frame_id: 'f_001',
+      frames: [{ id: 'f_001', type: 'plan', slots: { a: 1 } }],
+      relations: [],
+    };
+    const diff = frameDiff(content, content);
+    expect(diff.topicChanged).toBeUndefined();
+    expect(diff.rootChanged).toBeUndefined();
+  });
+
+  it('handles undefined to defined topic', () => {
+    const source: SemanticContent = {
+      frames: [{ id: 'f_001', type: 'plan', slots: { a: 1 } }],
+      relations: [],
+    };
+    const target: SemanticContent = {
+      topic: 'New Topic',
+      frames: [{ id: 'f_001', type: 'plan', slots: { a: 1 } }],
+      relations: [],
+    };
+    const diff = frameDiff(source, target);
+    expect(diff.topicChanged).toEqual({ oldTopic: undefined, newTopic: 'New Topic' });
+  });
+});
