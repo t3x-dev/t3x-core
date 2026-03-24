@@ -23,6 +23,9 @@ import type { CommitMeta, FrameDiffResponse } from '@/lib/api/frameDiff';
 import { getFrameDiff } from '@/lib/api/frameDiff';
 import { PAGE_ANIMATION_STYLES } from '@/lib/pageAnimations';
 import { useProjectStore } from '@/store/projectStore';
+import { DiffTreeOverview } from './DiffTreeOverview';
+import { DiffYAMLSplitView } from './DiffYAMLSplitView';
+import { DiffYAMLUnifiedView } from './DiffYAMLUnifiedView';
 import { FrameDiffCard } from './FrameDiffCard';
 import { FrameDiffIndex } from './FrameDiffIndex';
 
@@ -197,6 +200,8 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
   const [activeTab, setActiveTab] = useState<TabId>('diff');
   const [activeFrameId, setActiveFrameId] = useState<string | null>(null);
   const [showIdentical, setShowIdentical] = useState(false);
+  const [viewMode, setViewMode] = useState<'split' | 'unified'>('split');
+  const [baseCommit, setBaseCommit] = useState<Commit | null>(null);
 
   // Project name for breadcrumb
   const getProject = useProjectStore((s) => s.getProject);
@@ -208,11 +213,12 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
     setLoading(true);
     setError(null);
 
-    Promise.all([getFrameDiff(baseHash, targetHash), getCommitAsFrames(targetHash)])
-      .then(([diffResp, commit]) => {
+    Promise.all([getFrameDiff(baseHash, targetHash), getCommitAsFrames(targetHash), getCommitAsFrames(baseHash)])
+      .then(([diffResp, tgtCommit, baseCommitData]) => {
         if (cancelled) return;
         setDiffResponse(diffResp);
-        setTargetCommit(commit);
+        setTargetCommit(tgtCommit);
+        setBaseCommit(baseCommitData);
       })
       .catch((err) => {
         if (cancelled) return;
@@ -376,12 +382,29 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
           {/* Tab content */}
           <div className="flex-1 overflow-auto">
             {activeTab === 'diff' && (
-              <DiffTabContent
-                diff={diff}
-                activeFrameId={activeFrameId}
-                onSelectFrame={handleSelectFrame}
-                showIdentical={showIdentical}
-              />
+              <div className="flex flex-col flex-1 overflow-hidden">
+                {/* View mode toggle */}
+                <div className="flex items-center justify-end px-4 py-1.5 border-b border-[var(--stroke-divider)]">
+                  <div className="flex rounded-md border border-[var(--stroke-divider)] bg-[rgba(255,255,255,0.04)] p-0.5">
+                    <button type="button" onClick={() => setViewMode('split')}
+                      className={`px-3 py-0.5 rounded text-[11px] font-semibold transition-colors ${viewMode === 'split' ? 'bg-[rgba(255,255,255,0.1)] text-[var(--text-primary)]' : 'text-[var(--text-tertiary)]'}`}>
+                      Split
+                    </button>
+                    <button type="button" onClick={() => setViewMode('unified')}
+                      className={`px-3 py-0.5 rounded text-[11px] font-semibold transition-colors ${viewMode === 'unified' ? 'bg-[rgba(255,255,255,0.1)] text-[var(--text-primary)]' : 'text-[var(--text-tertiary)]'}`}>
+                      Unified
+                    </button>
+                  </div>
+                </div>
+                {/* Diff content */}
+                <div className="flex-1 overflow-auto">
+                  {viewMode === 'split' ? (
+                    <DiffYAMLSplitView diff={diff} activeFrameId={activeFrameId} onSelectFrame={handleSelectFrame} showIdentical={showIdentical} />
+                  ) : (
+                    <DiffYAMLUnifiedView diff={diff} activeFrameId={activeFrameId} onSelectFrame={handleSelectFrame} showIdentical={showIdentical} />
+                  )}
+                </div>
+              </div>
             )}
 
             {activeTab === 'graph' && targetCommit?.content && (
@@ -418,6 +441,18 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
               meta={diffResponse.target}
               accentColor="var(--diff-added-accent)"
             />
+
+            {/* Tree overview */}
+            {baseCommit?.content && targetCommit?.content && (
+              <>
+                <div className="border-t border-[var(--stroke-divider)]" />
+                <DiffTreeOverview
+                  diff={diff}
+                  baseContent={baseCommit.content}
+                  targetContent={targetCommit.content}
+                />
+              </>
+            )}
 
             <div className="border-t border-[var(--stroke-divider)]" />
 
