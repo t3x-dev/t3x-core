@@ -39,6 +39,41 @@ function EmptyPlaceholderLines({ count }: { count: number }) {
 
 // ── Pane content renderer ──
 
+/** Compute how many content lines a frame takes on a given side */
+function computeFrameHeight(af: AlignedFrame, side: 'left' | 'right', diff: FrameDiff): number {
+  const frame = side === 'left' ? af.leftFrame : af.rightFrame;
+  if (!frame) {
+    // Placeholder side: count from the other side
+    const otherFrame = side === 'left' ? af.rightFrame : af.leftFrame;
+    if (!otherFrame) return 0;
+    const removedSlots = af.slotDiffs?.filter(sd => sd.type === 'removed').length ?? 0;
+    return frameLineCount(otherFrame, removedSlots);
+  }
+
+  if (af.type === 'modified' && af.leftFrame && af.rightFrame) {
+    // Aligned rendering: 1 header + number of aligned slot keys
+    const alignedSlots = buildAlignedSlotKeys(af.leftFrame, af.rightFrame);
+    return 1 + alignedSlots.length;
+  }
+
+  const removedSlots = af.slotDiffs?.filter(sd => sd.type === 'removed').length ?? 0;
+  return frameLineCount(frame, removedSlots);
+}
+
+function computeFrameHeightsMap(aligned: AlignedFrame[], diff: FrameDiff): Map<string, { left: number; right: number; max: number; relCount: number }> {
+  const map = new Map<string, { left: number; right: number; max: number; relCount: number }>();
+  for (const af of aligned) {
+    const left = computeFrameHeight(af, 'left', diff);
+    const right = computeFrameHeight(af, 'right', diff);
+    const relCount = getFrameRelations(af.frameId, diff).length;
+    // Relations may differ per side in the future, but for now same count
+    const leftTotal = left + relCount;
+    const rightTotal = right + relCount;
+    map.set(af.frameId, { left: leftTotal, right: rightTotal, max: Math.max(leftTotal, rightTotal), relCount });
+  }
+  return map;
+}
+
 function PaneContent({
   aligned,
   side,
@@ -46,6 +81,7 @@ function PaneContent({
   activeFrameId,
   onSelectFrame,
   showIdentical,
+  heightsMap,
 }: {
   aligned: AlignedFrame[];
   side: 'left' | 'right';
@@ -53,6 +89,7 @@ function PaneContent({
   activeFrameId: string | null;
   onSelectFrame: (id: string) => void;
   showIdentical: boolean;
+  heightsMap: Map<string, { left: number; right: number; max: number; relCount: number }>;
 }) {
   let lineNum = 1;
 
@@ -179,13 +216,20 @@ function PaneContent({
         {content}
         {/* Relation annotations */}
         {isPlaceholder ? (
-          // Render empty placeholders for relations too, to keep alignment
           <EmptyPlaceholderLines count={relationCount} />
         ) : (
           relations.map((rel, i) => (
             <RelationAnnotation key={`${af.frameId}-rel-${i}`} rel={rel} />
           ))
         )}
+        {/* Padding to align with the other side */}
+        {(() => {
+          const h = heightsMap.get(af.frameId);
+          if (!h) return null;
+          const myHeight = side === 'left' ? h.left : h.right;
+          const padCount = h.max - myHeight;
+          return padCount > 0 ? <EmptyPlaceholderLines count={padCount} /> : null;
+        })()}
       </div>
     );
   };
@@ -239,6 +283,7 @@ export function DiffYAMLSplitView({
   }, []);
 
   const aligned = buildAlignedFrames(diff);
+  const heightsMap = computeFrameHeightsMap(aligned, diff);
 
   return (
     <div
@@ -259,6 +304,7 @@ export function DiffYAMLSplitView({
           activeFrameId={activeFrameId}
           onSelectFrame={onSelectFrame}
           showIdentical={showIdentical}
+          heightsMap={heightsMap}
         />
       </div>
 
@@ -275,6 +321,7 @@ export function DiffYAMLSplitView({
           activeFrameId={activeFrameId}
           onSelectFrame={onSelectFrame}
           showIdentical={showIdentical}
+          heightsMap={heightsMap}
         />
       </div>
     </div>
