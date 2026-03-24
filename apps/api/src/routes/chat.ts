@@ -205,6 +205,8 @@ chatRoutes.post('/v1/chat', async (c) => {
     temperature?: number;
     max_tokens?: number;
     project_id?: string;
+    web_search?: boolean;
+    thinking?: boolean;
   } | null = null;
 
   try {
@@ -288,6 +290,8 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
     temperature?: number;
     max_tokens?: number;
     project_id?: string;
+    web_search?: boolean;
+    thinking?: boolean;
   } | null = null;
 
   try {
@@ -343,6 +347,7 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
             'Content-Type': 'application/json',
             'x-api-key': apiKey,
             'anthropic-version': '2023-06-01',
+            ...(body.web_search && { 'anthropic-beta': 'web-search-2025-03-05' }),
           },
           body: JSON.stringify({
             model,
@@ -350,6 +355,7 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
             temperature,
             stream: true,
             ...(systemMessage && { system: systemMessage.content }),
+            ...(body.web_search && { tools: [{ type: 'web_search_20250305' }] }),
             messages: otherMessages.map((m) => ({
               role: m.role,
               content: m.content,
@@ -377,6 +383,8 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
         let resolvedModel = model;
         const usage: { input_tokens?: number; output_tokens?: number } = {};
         let receivedMessageStop = false;
+        const citations: Array<{ url: string; title: string }> = [];
+        let currentBlockType = '';
 
         while (true) {
           const { done, value } = await reader.read();
@@ -411,29 +419,38 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
             }
 
             if (eventType === 'message_start') {
-              // Extract model and initial usage from message_start
               const msg = parsed.message as Record<string, unknown> | undefined;
               if (msg?.model) resolvedModel = msg.model as string;
               if (msg?.usage) {
                 const u = msg.usage as Record<string, number>;
                 usage.input_tokens = u.input_tokens;
               }
+            } else if (eventType === 'content_block_start') {
+              const contentBlock = parsed.content_block as Record<string, unknown> | undefined;
+              currentBlockType = (contentBlock?.type as string) ?? '';
+              // Emit searching indicator when web search starts
+              if (currentBlockType === 'server_tool_use' && contentBlock?.name === 'web_search') {
+                const input = contentBlock?.input as Record<string, unknown> | undefined;
+                controller.enqueue(
+                  encodeSseEvent(JSON.stringify({ type: 'searching', query: input?.query ?? '' }))
+                );
+              }
+            } else if (eventType === 'content_block_stop') {
+              currentBlockType = '';
             } else if (eventType === 'content_block_delta') {
-              // Extract text delta and emit as token
               const delta = parsed.delta as Record<string, unknown> | undefined;
               if (delta?.type === 'text_delta' && typeof delta.text === 'string') {
                 controller.enqueue(
                   encodeSseEvent(JSON.stringify({ type: 'token', content: delta.text }))
                 );
               }
+              // Skip other delta types (web_search_tool_result, etc.)
             } else if (eventType === 'message_delta') {
-              // Extract final usage from message_delta
               const u = parsed.usage as Record<string, number> | undefined;
               if (u?.output_tokens) {
                 usage.output_tokens = u.output_tokens;
               }
             } else if (eventType === 'message_stop') {
-              // Stream complete — emit done
               receivedMessageStop = true;
               controller.enqueue(
                 encodeSseEvent(
@@ -441,12 +458,12 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
                     type: 'done',
                     model: resolvedModel,
                     usage,
+                    ...(citations.length > 0 && { citations }),
                   })
                 )
               );
               controller.enqueue(encodeSseEvent('[DONE]'));
             }
-            // Ignore other event types (content_block_start, content_block_stop, ping)
           }
         }
 
@@ -459,6 +476,7 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
                 type: 'done',
                 model: resolvedModel,
                 usage,
+                ...(citations.length > 0 && { citations }),
               })
             )
           );
