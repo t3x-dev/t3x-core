@@ -47,6 +47,26 @@ import {
 
 export const conversationRoutes = new OpenAPIHono({ defaultHook: zodErrorHook });
 
+// Handle JSON parse errors (invalid JSON body)
+conversationRoutes.onError((err, c) => {
+	const message = err.message || '';
+	if (
+		err instanceof SyntaxError ||
+		message.includes('JSON') ||
+		message.includes('Unexpected token') ||
+		message.includes('not valid JSON')
+	) {
+		return c.json(
+			{ success: false as const, error: { code: 'INVALID_JSON', message: 'Invalid JSON body' } },
+			400,
+		);
+	}
+	return c.json(
+		{ success: false as const, error: { code: 'INTERNAL_ERROR', message: message || 'Internal server error' } },
+		500,
+	);
+});
+
 // ─── Shared schemas ──────────────────────────────────────────────────────────
 
 const ConversationSchema = z.object({
