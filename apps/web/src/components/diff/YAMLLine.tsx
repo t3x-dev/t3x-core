@@ -20,7 +20,7 @@ export function YAMLLine({ lineNumber, status, children }: YAMLLineProps) {
   return (
     <div
       className={cn(
-        'diff-yaml-line flex items-stretch font-mono text-[11.5px] leading-[21px]',
+        'diff-yaml-line flex items-stretch font-mono text-[11.5px] leading-[21px] min-h-[21px]',
         status === 'unchanged' && 'opacity-[0.45] hover:opacity-80',
         isEmpty && 'diff-yaml-empty',
       )}
