@@ -9,6 +9,7 @@
  */
 
 import { escapeConstraintValue } from '../llm/sanitize';
+import { serializeFramesForPrompt } from '../semantic/serialize';
 import type { AnyLeafType, Constraint } from '../types/v4';
 import type { BuildPromptOptions, BuiltPrompt, LeafTemplate } from './types';
 
@@ -118,7 +119,7 @@ export function buildSystemPrompt(leafType: AnyLeafType): string {
   return `You are a content generation assistant. Your task is to create high-quality content based on the provided knowledge and constraints.
 
 Key principles:
-1. Use ONLY the provided sentences as your source material
+1. Use ONLY the provided knowledge as your source material
 2. Follow ALL constraints exactly - they are non-negotiable
 3. Adapt the content to the specified format
 4. Maintain accuracy and do not add information not present in the source
@@ -137,11 +138,10 @@ ${getTypeInstructions(leafType)}`;
  * @returns Built prompt with system prompt, user prompt, and metadata
  */
 export function buildLeafPrompt(options: BuildPromptOptions): BuiltPrompt {
-  const { commit, leaf, additionalInstructions } = options;
+  const { knowledge, leaf, additionalInstructions } = options;
 
-  // Extract sentences from commit
-  const sentences = commit.content.sentences;
-  const sentenceTexts = sentences.map((s, i) => `${i + 1}. ${s.text}`).join('\n');
+  // Serialize frames to text
+  const knowledgeText = serializeFramesForPrompt(knowledge);
 
   // Format constraints
   const { requires, excludes } = formatConstraints(leaf.constraints);
@@ -154,10 +154,10 @@ export function buildLeafPrompt(options: BuildPromptOptions): BuiltPrompt {
   // Build user prompt
   const userPromptParts: string[] = [];
 
-  // Add source sentences
+  // Add source knowledge
   userPromptParts.push('## Source Knowledge\n');
-  userPromptParts.push('Use the following sentences as your source material:\n');
-  userPromptParts.push(sentenceTexts);
+  userPromptParts.push('Use the following knowledge as your source material:\n');
+  userPromptParts.push(knowledgeText);
   userPromptParts.push('');
 
   // Add constraints if any
@@ -213,7 +213,7 @@ export function buildLeafPrompt(options: BuildPromptOptions): BuiltPrompt {
     systemPrompt,
     userPrompt,
     metadata: {
-      sentenceCount: sentences.length,
+      frameCount: knowledge.frames.length,
       requireCount,
       excludeCount,
     },
@@ -254,13 +254,13 @@ export interface BuildPromptWithTemplateOptions extends BuildPromptOptions {
 export async function buildLeafPromptWithTemplate(
   options: BuildPromptWithTemplateOptions
 ): Promise<BuiltPrompt> {
-  const { commit, leaf, additionalInstructions, template: customTemplate } = options;
+  const { knowledge, leaf, additionalInstructions, template: customTemplate } = options;
 
   const { renderTemplate } = await getTemplateModule();
 
   // Render using template system
   const rendered = renderTemplate({
-    commit,
+    knowledge,
     leaf,
     additionalInstructions,
     template: customTemplate,
@@ -273,7 +273,7 @@ export async function buildLeafPromptWithTemplate(
     systemPrompt: rendered.systemPrompt,
     userPrompt: rendered.userPrompt,
     metadata: {
-      sentenceCount: commit.content.sentences.length,
+      frameCount: knowledge.frames.length,
       requireCount: requires.length,
       excludeCount: excludes.length,
     },

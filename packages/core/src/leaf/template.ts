@@ -12,7 +12,9 @@
  * @see docs/plans/parallel-dev-guidelines.md
  */
 
-import type { AnyLeafType, Constraint, Leaf, SentenceCommit } from '../types/v4';
+import type { SemanticContent } from '../semantic/types';
+import { serializeFramesForPrompt } from '../semantic/serialize';
+import type { AnyLeafType, Constraint, Leaf } from '../types/v4';
 import { isGenerationLeaf } from '../types/v4';
 import { formatConstraints, getTypeInstructions } from './build-prompt';
 import { getDefaultTemplate } from './templates';
@@ -29,23 +31,26 @@ import { TEMPLATE_VARIABLE_NAMES } from './types';
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Build template context from commit and leaf data.
+ * Build template context from semantic knowledge and leaf data.
  *
- * @param commit - The commit containing sentences
+ * @param knowledge - The semantic content (frames + relations)
  * @param leaf - The leaf containing constraints and config
  * @param additionalInstructions - Optional additional instructions
  * @returns Template context with all variable values
  */
 export function buildTemplateContext(
-  commit: SentenceCommit,
+  knowledge: SemanticContent,
   leaf: Leaf,
   additionalInstructions?: string
 ): TemplateContext {
-  // Extract sentences
-  const sentences = commit.content.sentences.map((s) => s.text);
-  const formattedSentences = commit.content.sentences
-    .map((s, i) => `${i + 1}. ${s.text}`)
-    .join('\n');
+  // Build knowledge items and formatted knowledge
+  const knowledgeItems = knowledge.frames.map(
+    (f) =>
+      `${f.type}: ${Object.entries(f.slots)
+        .map(([k, v]) => `${k}=${typeof v === 'string' ? v : JSON.stringify(v)}`)
+        .join(', ')}`
+  );
+  const formattedKnowledge = serializeFramesForPrompt(knowledge);
 
   // Format constraints
   const { requires, excludes } = formatConstraintsForTemplate(leaf.constraints);
@@ -55,8 +60,8 @@ export function buildTemplateContext(
   const typeInstructions = getTypeInstructions(leaf.type, leaf.config);
 
   return {
-    sentences,
-    formattedSentences,
+    knowledge: knowledgeItems,
+    formattedKnowledge,
     requires,
     excludes,
     formattedConstraints,
@@ -190,10 +195,10 @@ function getContextValue(
   variableName: string
 ): string | string[] | undefined {
   switch (variableName) {
-    case 'sentences':
-      return context.sentences;
-    case 'formattedSentences':
-      return context.formattedSentences;
+    case 'knowledge':
+      return context.knowledge;
+    case 'formattedKnowledge':
+      return context.formattedKnowledge;
     case 'requires':
       return context.requires;
     case 'excludes':
@@ -221,8 +226,8 @@ function getContextValue(
  * Options for rendering a template.
  */
 export interface RenderTemplateOptions {
-  /** The commit containing sentences */
-  commit: SentenceCommit;
+  /** The semantic knowledge (frames + relations) */
+  knowledge: SemanticContent;
 
   /** The leaf containing constraints and config */
   leaf: Leaf;
@@ -244,13 +249,13 @@ export interface RenderTemplateOptions {
  * @returns Rendered template with system and user prompts
  */
 export function renderTemplate(options: RenderTemplateOptions): RenderedTemplate {
-  const { commit, leaf, additionalInstructions, template: customTemplate } = options;
+  const { knowledge, leaf, additionalInstructions, template: customTemplate } = options;
 
   // Select template: custom template > leaf config template_id > default
   const template = selectTemplate(leaf.type, customTemplate, leaf.config?.template_id as string);
 
   // Build context
-  const context = buildTemplateContext(commit, leaf, additionalInstructions);
+  const context = buildTemplateContext(knowledge, leaf, additionalInstructions);
 
   // Render prompts
   const systemPrompt = renderTemplateString(template.systemPrompt, context);
@@ -356,8 +361,8 @@ export function validateTemplateSyntax(template: string): {
 export function previewTemplate(template: LeafTemplate, leafType: AnyLeafType): RenderedTemplate {
   // Create sample context
   const sampleContext: TemplateContext = {
-    sentences: ['Sample sentence 1.', 'Sample sentence 2.', 'Sample sentence 3.'],
-    formattedSentences: '1. Sample sentence 1.\n2. Sample sentence 2.\n3. Sample sentence 3.',
+    knowledge: ['user_preference: theme=dark mode', 'language: primary=English', 'goal: task=complete project'],
+    formattedKnowledge: 'user_preference:\n  theme: dark mode\nlanguage:\n  primary: English\ngoal:\n  task: complete project',
     requires: ['- MUST include EXACTLY: "sample requirement"'],
     excludes: ['- MUST NOT include exactly: "sample exclusion"'],
     formattedConstraints: `## Constraints

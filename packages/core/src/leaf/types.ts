@@ -14,13 +14,13 @@
 
 import type { LLMProvider } from '../llm/types';
 import type { EmbeddingProvider } from '../providers/embedding/base';
+import type { SemanticContent } from '../semantic/types';
 import type {
   AnyLeafType,
   Assertion,
   Constraint,
   Leaf,
   LeafType,
-  SentenceCommit,
 } from '../types/v4';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -31,8 +31,8 @@ import type {
  * Options for building a prompt from commit and leaf data.
  */
 export interface BuildPromptOptions {
-  /** The commit containing sentences (knowledge) */
-  commit: SentenceCommit;
+  /** The semantic knowledge (frames + relations) */
+  knowledge: SemanticContent;
 
   /** The leaf containing constraints and config */
   leaf: Leaf;
@@ -56,7 +56,7 @@ export interface BuiltPrompt {
 
   /** Metadata about the prompt content */
   metadata: {
-    sentenceCount: number;
+    frameCount: number;
     requireCount: number;
     excludeCount: number;
   };
@@ -211,8 +211,8 @@ export const DEFAULT_TEMPERATURE = 0.7;
  * These are the built-in variables that can be used in templates.
  */
 export const TEMPLATE_VARIABLE_NAMES = [
-  'sentences', // 原始句子数组
-  'formattedSentences', // 格式化后的句子（带编号）
+  'knowledge', // 原始知识条目数组
+  'formattedKnowledge', // 格式化后的知识（YAML-like）
   'requires', // require 约束数组
   'excludes', // exclude 约束数组
   'formattedConstraints', // 格式化后的约束文本
@@ -274,11 +274,11 @@ export interface LeafTemplate {
  * Contains all values that can be substituted into template variables.
  */
 export interface TemplateContext {
-  /** Raw sentence texts (原始句子文本列表) */
-  sentences: string[];
+  /** Raw knowledge item texts (原始知识条目文本列表) */
+  knowledge: string[];
 
-  /** Formatted sentences with numbering (格式化后的句子，带编号) */
-  formattedSentences: string;
+  /** Formatted knowledge in YAML-like format (格式化后的知识) */
+  formattedKnowledge: string;
 
   /** Formatted require constraints (必须包含的约束列表) */
   requires: string[];
@@ -324,15 +324,15 @@ export interface RenderedTemplate {
  * Used for documentation and validation.
  */
 export const TEMPLATE_VARIABLES: Record<TemplateVariableName, TemplateVariable> = {
-  sentences: {
-    name: 'sentences',
-    description: 'Raw array of sentence texts from the commit (来源句子的原始文本数组)',
+  knowledge: {
+    name: 'knowledge',
+    description: 'Raw array of knowledge item texts from the commit (来源知识条目的原始文本数组)',
     required: false,
     defaultValue: '',
   },
-  formattedSentences: {
-    name: 'formattedSentences',
-    description: 'Numbered list of sentences for display (格式化的编号句子列表)',
+  formattedKnowledge: {
+    name: 'formattedKnowledge',
+    description: 'YAML-like formatted knowledge for display (格式化的YAML知识列表)',
     required: true,
   },
   requires: {

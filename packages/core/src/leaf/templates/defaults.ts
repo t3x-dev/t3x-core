@@ -21,7 +21,7 @@ export const tweetDefaultTemplate: LeafTemplate = {
   systemPrompt: `You are a content generation assistant. Your task is to create high-quality content based on the provided knowledge and constraints.
 
 Key principles:
-1. Use ONLY the provided sentences as your source material
+1. Use ONLY the provided knowledge as your source material
 2. Follow ALL constraints exactly - they are non-negotiable
 3. Adapt the content to the specified format
 4. Maintain accuracy and do not add information not present in the source
@@ -33,8 +33,8 @@ Format: Twitter/X post
 - No formal greetings or sign-offs`,
   userPrompt: `## Source Knowledge
 
-Use the following sentences as your source material:
-{{formattedSentences}}
+Use the following knowledge as your source material:
+{{formattedKnowledge}}
 
 {{formattedConstraints}}
 {{#leafTitle}}
@@ -52,8 +52,8 @@ Title/Purpose: {{leafTitle}}
 Generate the tweet content based on the above source knowledge and constraints.`,
   variables: [
     {
-      name: 'formattedSentences',
-      description: 'Numbered list of source sentences',
+      name: 'formattedKnowledge',
+      description: 'YAML-like formatted knowledge',
       required: true,
     },
     {
@@ -84,7 +84,7 @@ export const articleDefaultTemplate: LeafTemplate = {
   systemPrompt: `You are a content generation assistant. Your task is to create high-quality content based on the provided knowledge and constraints.
 
 Key principles:
-1. Use ONLY the provided sentences as your source material
+1. Use ONLY the provided knowledge as your source material
 2. Follow ALL constraints exactly - they are non-negotiable
 3. Adapt the content to the specified format
 4. Maintain accuracy and do not add information not present in the source
@@ -97,8 +97,8 @@ Format: Article/Blog post
 - Include introduction and conclusion`,
   userPrompt: `## Source Knowledge
 
-Use the following sentences as your source material:
-{{formattedSentences}}
+Use the following knowledge as your source material:
+{{formattedKnowledge}}
 
 {{formattedConstraints}}
 {{#leafTitle}}
@@ -116,8 +116,8 @@ Title/Purpose: {{leafTitle}}
 Generate the article content based on the above source knowledge and constraints.`,
   variables: [
     {
-      name: 'formattedSentences',
-      description: 'Numbered list of source sentences',
+      name: 'formattedKnowledge',
+      description: 'YAML-like formatted knowledge',
       required: true,
     },
     {
@@ -148,7 +148,7 @@ export const emailDefaultTemplate: LeafTemplate = {
   systemPrompt: `You are a content generation assistant. Your task is to create high-quality content based on the provided knowledge and constraints.
 
 Key principles:
-1. Use ONLY the provided sentences as your source material
+1. Use ONLY the provided knowledge as your source material
 2. Follow ALL constraints exactly - they are non-negotiable
 3. Adapt the content to the specified format
 4. Maintain accuracy and do not add information not present in the source
@@ -160,8 +160,8 @@ Format: Email
 - Be concise but complete`,
   userPrompt: `## Source Knowledge
 
-Use the following sentences as your source material:
-{{formattedSentences}}
+Use the following knowledge as your source material:
+{{formattedKnowledge}}
 
 {{formattedConstraints}}
 {{#leafTitle}}
@@ -179,8 +179,8 @@ Title/Purpose: {{leafTitle}}
 Generate the email content based on the above source knowledge and constraints.`,
   variables: [
     {
-      name: 'formattedSentences',
-      description: 'Numbered list of source sentences',
+      name: 'formattedKnowledge',
+      description: 'YAML-like formatted knowledge',
       required: true,
     },
     {
@@ -211,7 +211,7 @@ export const weiboDefaultTemplate: LeafTemplate = {
   systemPrompt: `You are a content generation assistant. Your task is to create high-quality content based on the provided knowledge and constraints.
 
 Key principles:
-1. Use ONLY the provided sentences as your source material
+1. Use ONLY the provided knowledge as your source material
 2. Follow ALL constraints exactly - they are non-negotiable
 3. Adapt the content to the specified format
 4. Maintain accuracy and do not add information not present in the source
@@ -223,8 +223,8 @@ Format: Weibo post (微博)
 - Adapt tone for Chinese social media culture`,
   userPrompt: `## 来源知识
 
-请基于以下句子作为素材：
-{{formattedSentences}}
+请基于以下知识作为素材：
+{{formattedKnowledge}}
 
 {{formattedConstraints}}
 {{#leafTitle}}
@@ -241,7 +241,7 @@ Format: Weibo post (微博)
 
 根据以上来源知识和约束条件，生成微博内容。`,
   variables: [
-    { name: 'formattedSentences', description: '编号的来源句子列表', required: true },
+    { name: 'formattedKnowledge', description: 'YAML格式化的来源知识', required: true },
     {
       name: 'formattedConstraints',
       description: '格式化的约束部分',
@@ -265,7 +265,7 @@ export const wechatDefaultTemplate: LeafTemplate = {
   systemPrompt: `You are a content generation assistant. Your task is to create high-quality content based on the provided knowledge and constraints.
 
 Key principles:
-1. Use ONLY the provided sentences as your source material
+1. Use ONLY the provided knowledge as your source material
 2. Follow ALL constraints exactly - they are non-negotiable
 3. Adapt the content to the specified format
 4. Maintain accuracy and do not add information not present in the source
@@ -277,8 +277,8 @@ Format: WeChat article/message (微信)
 - Can be longer form if needed`,
   userPrompt: `## 来源知识
 
-请基于以下句子作为素材：
-{{formattedSentences}}
+请基于以下知识作为素材：
+{{formattedKnowledge}}
 
 {{formattedConstraints}}
 {{#leafTitle}}
@@ -295,7 +295,7 @@ Format: WeChat article/message (微信)
 
 根据以上来源知识和约束条件，生成微信内容。`,
   variables: [
-    { name: 'formattedSentences', description: '编号的来源句子列表', required: true },
+    { name: 'formattedKnowledge', description: 'YAML格式化的来源知识', required: true },
     {
       name: 'formattedConstraints',
       description: '格式化的约束部分',
@@ -319,7 +319,7 @@ export const slackDefaultTemplate: LeafTemplate = {
   systemPrompt: `You are a content generation assistant. Your task is to create high-quality content based on the provided knowledge and constraints.
 
 Key principles:
-1. Use ONLY the provided sentences as your source material
+1. Use ONLY the provided knowledge as your source material
 2. Follow ALL constraints exactly - they are non-negotiable
 3. Adapt the content to the specified format
 4. Maintain accuracy and do not add information not present in the source
@@ -331,8 +331,8 @@ Format: Slack message
 - Avoid overly formal language`,
   userPrompt: `## Source Knowledge
 
-Use the following sentences as your source material:
-{{formattedSentences}}
+Use the following knowledge as your source material:
+{{formattedKnowledge}}
 
 {{formattedConstraints}}
 {{#leafTitle}}
@@ -350,8 +350,8 @@ Title/Purpose: {{leafTitle}}
 Generate the Slack message based on the above source knowledge and constraints.`,
   variables: [
     {
-      name: 'formattedSentences',
-      description: 'Numbered list of source sentences',
+      name: 'formattedKnowledge',
+      description: 'YAML-like formatted knowledge',
       required: true,
     },
     {
