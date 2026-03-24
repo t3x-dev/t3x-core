@@ -20,7 +20,7 @@ vi.mock('../lib/db', () => ({
   closeDB: vi.fn(() => Promise.resolve()),
 }));
 
-import { conversationRoutes } from '../routes/conversations';
+import { conversationRoutes } from '../routes/conversations.openapi';
 
 describe('Conversations Routes', () => {
   let cleanup: () => Promise<void>;

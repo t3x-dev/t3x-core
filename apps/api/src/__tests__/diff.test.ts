@@ -32,7 +32,7 @@ vi.mock('@t3x-dev/core', () => ({
   },
 }));
 
-import { diffRoutes } from '../routes/diff';
+import { diffRoutes } from '../routes/diff.openapi';
 
 const app = new Hono();
 app.route('/', diffRoutes);

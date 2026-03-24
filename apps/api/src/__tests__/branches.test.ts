@@ -18,7 +18,7 @@ vi.mock('../lib/db', () => ({
   closeDB: vi.fn(() => Promise.resolve()),
 }));
 
-import { branchRoutes } from '../routes/branches';
+import { branchRoutes } from '../routes/branches.openapi';
 
 describe('Branches Routes', () => {
   let cleanup: () => Promise<void>;
@@ -129,7 +129,7 @@ describe('Branches Routes', () => {
         body: JSON.stringify({ project_id: testProjectId, name: 'feature-test' }),
       });
 
-      expect(res.status).toBe(400);
+      expect(res.status).toBe(409);
       const data: ApiResponse = await res.json();
       expect(data.error.code).toBe('CONFLICT');
     });

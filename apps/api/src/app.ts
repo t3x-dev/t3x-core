@@ -221,6 +221,7 @@ export function createApp(options?: CreateAppOptions): Hono {
       { name: 'Export', description: 'Export operations' },
       { name: 'Chat', description: 'LLM chat operations' },
       { name: 'Runner', description: 'Grey-box agent evaluation' },
+      { name: 'Deploy Agents', description: 'Deploy agent management (register, run, evaluate)' },
       { name: 'Auth', description: 'Authentication callbacks (OAuth user creation)' },
       { name: 'API Keys', description: 'API key management (create, list, revoke)' },
       { name: 'Share', description: 'Share link management (create, resolve, revoke)' },

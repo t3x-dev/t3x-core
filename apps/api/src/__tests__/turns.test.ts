@@ -18,7 +18,7 @@ vi.mock('../lib/db', () => ({
   closeDB: vi.fn(() => Promise.resolve()),
 }));
 
-import { turnRoutes } from '../routes/turns';
+import { turnRoutes } from '../routes/turns.openapi';
 
 describe('Turns Routes', () => {
   let cleanup: () => Promise<void>;
