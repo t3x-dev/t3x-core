@@ -201,7 +201,8 @@ const switchBranchRoute = createRoute({
   path: '/v1/branches/switch',
   tags: ['Branches'],
   summary: 'Switch branch',
-  description: 'Switches the active branch for a project. Optionally creates the branch if it does not exist.',
+  description:
+    'Switches the active branch for a project. Optionally creates the branch if it does not exist.',
   request: {
     body: {
       content: {

@@ -38,13 +38,16 @@ statusRoutes.openapi(statusRoute, async (c) => {
   try {
     const db = await getDB();
     const projects = await findProjects(db, { limit: 1, offset: 0 });
-    return c.json({ success: true as const, data: {
-      status: 'ok',
-      version: '1.0.0',
-      uptime: uptimeSeconds,
-      database: 'connected',
-      projects_count: projects.length > 0 ? 'available' : 'empty',
-    } });
+    return c.json({
+      success: true as const,
+      data: {
+        status: 'ok',
+        version: '1.0.0',
+        uptime: uptimeSeconds,
+        database: 'connected',
+        projects_count: projects.length > 0 ? 'available' : 'empty',
+      },
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return errorResponse(c, 'INTERNAL_ERROR', message);

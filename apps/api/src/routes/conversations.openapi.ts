@@ -12,6 +12,7 @@
  * GET    /v1/conversations/:id/context-export - Export context as JSON/Markdown file
  */
 
+import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
   buildConversationContext,
   type ConversationData,
@@ -34,7 +35,6 @@ import {
   setConversationContext,
   updateConversation,
 } from '@t3x-dev/storage';
-import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { formatContextForExport } from '../lib/context-formatter';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
@@ -397,7 +397,10 @@ conversationRoutes.openapi(updateConversationRoute, async (c) => {
   // Validate model against catalog if provided
   if (body.model != null && !getModelInfo(body.model)) {
     return c.json(
-      { success: false as const, error: { code: 'INVALID_MODEL', message: `Unknown model: ${body.model}` } },
+      {
+        success: false as const,
+        error: { code: 'INVALID_MODEL', message: `Unknown model: ${body.model}` },
+      },
       400
     );
   }
@@ -481,7 +484,10 @@ conversationRoutes.openapi(deleteConversationRoute, async (c) => {
       return errorResponse(c, 'NOT_FOUND', `Conversation ${conversationId} not found`);
     }
 
-    return c.json({ success: true as const, data: { deleted: true as const, conversation_id: conversationId } }, 200);
+    return c.json(
+      { success: true as const, data: { deleted: true as const, conversation_id: conversationId } },
+      200
+    );
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return errorResponse(c, 'DELETE_FAILED', message);
@@ -545,10 +551,7 @@ conversationRoutes.openapi(getContextRoute, async (c) => {
     return c.json({ success: true as const, data: context }, 200);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
-    return c.json(
-      { success: false as const, error: { code: 'GET_CONTEXT_FAILED', message } },
-      500
-    );
+    return c.json({ success: false as const, error: { code: 'GET_CONTEXT_FAILED', message } }, 500);
   }
 });
 
@@ -615,10 +618,7 @@ conversationRoutes.openapi(updateContextRoute, async (c) => {
     return c.json({ success: true as const, data: context }, 200);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
-    return c.json(
-      { success: false as const, error: { code: 'SET_CONTEXT_FAILED', message } },
-      500
-    );
+    return c.json({ success: false as const, error: { code: 'SET_CONTEXT_FAILED', message } }, 500);
   }
 });
 
@@ -737,10 +737,7 @@ conversationRoutes.openapi(getMemoryRoute, async (c) => {
     return c.json({ success: true as const, data: builtContext }, 200);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
-    return c.json(
-      { success: false as const, error: { code: 'GET_MEMORY_FAILED', message } },
-      500
-    );
+    return c.json({ success: false as const, error: { code: 'GET_MEMORY_FAILED', message } }, 500);
   }
 });
 
@@ -767,7 +764,10 @@ conversationRoutes.get('/v1/conversations/:id/context-export', async (c) => {
     const conversation = await findConversationById(db, conversationId);
     if (!conversation) {
       return c.json(
-        { success: false as const, error: { code: 'NOT_FOUND', message: `Conversation ${conversationId} not found` } },
+        {
+          success: false as const,
+          error: { code: 'NOT_FOUND', message: `Conversation ${conversationId} not found` },
+        },
         404
       );
     }
@@ -856,9 +856,6 @@ conversationRoutes.get('/v1/conversations/:id/context-export', async (c) => {
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
-    return c.json(
-      { success: false as const, error: { code: 'EXPORT_FAILED', message } },
-      500
-    );
+    return c.json({ success: false as const, error: { code: 'EXPORT_FAILED', message } }, 500);
   }
 });

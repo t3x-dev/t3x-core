@@ -9,6 +9,7 @@
  * - Cosine similarity threshold (controlled by slider)
  */
 
+import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
   type AnchorCandidate,
   type AnchorSource,
@@ -19,7 +20,6 @@ import {
   sha256,
 } from '@t3x-dev/core';
 import { findConversationById, findTurnsByConversation } from '@t3x-dev/storage';
-import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { ProxyAgent, fetch as undiciFetch } from 'undici';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';

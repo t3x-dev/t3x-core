@@ -284,8 +284,13 @@ const getTurnContextRoute = createRoute({
  * Omit `cursor` for legacy offset/limit mode.
  */
 turnRoutes.openapi(listTurnsRoute, async (c) => {
-  const { conversation_id: conversationId, limit: rawLimit, offset: rawOffset, order: rawOrder, cursor } =
-    c.req.valid('query');
+  const {
+    conversation_id: conversationId,
+    limit: rawLimit,
+    offset: rawOffset,
+    order: rawOrder,
+    cursor,
+  } = c.req.valid('query');
 
   const limit = Math.min(Math.max(rawLimit ?? 100, 1), 1000);
   const offset = Math.max(rawOffset ?? 0, 0);
@@ -378,11 +383,7 @@ turnRoutes.openapi(createTurnRoute, async (c) => {
 
   const validRoles = ['user', 'assistant', 'system', 'tool'];
   if (!validRoles.includes(body.role)) {
-    return errorResponse(
-      c,
-      'INVALID_REQUEST',
-      `role must be one of: ${validRoles.join(', ')}`
-    );
+    return errorResponse(c, 'INVALID_REQUEST', `role must be one of: ${validRoles.join(', ')}`);
   }
 
   try {
@@ -495,7 +496,10 @@ turnRoutes.openapi(getTurnChainRoute, async (c) => {
       created_at: t.createdAt.toISOString(),
     }));
 
-    return c.json({ success: true as const, data: { chain: apiChain, end_turn_hash: turnHash } }, 200);
+    return c.json(
+      { success: true as const, data: { chain: apiChain, end_turn_hash: turnHash } },
+      200
+    );
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return errorResponse(c, 'GET_FAILED', message);
@@ -516,8 +520,12 @@ turnRoutes.openapi(getTurnChainRoute, async (c) => {
  */
 turnRoutes.openapi(getTurnContextRoute, async (c) => {
   const turnHash = decodeURIComponent(c.req.valid('param').hash);
-  const { before: rawBefore, after: rawAfter, highlight_start: highlightStart, highlight_end: highlightEnd } =
-    c.req.valid('query');
+  const {
+    before: rawBefore,
+    after: rawAfter,
+    highlight_start: highlightStart,
+    highlight_end: highlightEnd,
+  } = c.req.valid('query');
   const before = rawBefore ?? 2;
   const after = rawAfter ?? 2;
 

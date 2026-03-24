@@ -53,14 +53,20 @@ const readyRoute = createRoute({
 
 healthRoutes.openapi(healthRoute, (c) => {
   const uptimeSeconds = Math.floor((Date.now() - startTime) / 1000);
-  return c.json({ success: true as const, data: { status: 'ok' as const, version: '1.0.0', uptime: uptimeSeconds } });
+  return c.json({
+    success: true as const,
+    data: { status: 'ok' as const, version: '1.0.0', uptime: uptimeSeconds },
+  });
 });
 
 healthRoutes.openapi(readyRoute, async (c) => {
   try {
     const db = await getDB();
     await findProjects(db, { limit: 1, offset: 0 });
-    return c.json({ success: true as const, data: { status: 'ready' as const, checks: { database: 'ok' as const } } });
+    return c.json({
+      success: true as const,
+      data: { status: 'ready' as const, checks: { database: 'ok' as const } },
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Database check failed';
     return c.json({ success: false as const, error: { code: 'NOT_READY', message } }, 503);

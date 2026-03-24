@@ -160,19 +160,42 @@ const twoWayRoute = createRoute({
   responses: {
     200: {
       description: 'Two-way diff result',
-      content: { 'application/json': { schema: z.object({ success: z.literal(true), data: z.any() }) } },
+      content: {
+        'application/json': { schema: z.object({ success: z.literal(true), data: z.any() }) },
+      },
     },
     400: {
       description: 'Bad request',
-      content: { 'application/json': { schema: z.object({ success: z.literal(false), error: z.object({ code: z.string(), message: z.string() }) }) } },
+      content: {
+        'application/json': {
+          schema: z.object({
+            success: z.literal(false),
+            error: z.object({ code: z.string(), message: z.string() }),
+          }),
+        },
+      },
     },
     404: {
       description: 'Not found',
-      content: { 'application/json': { schema: z.object({ success: z.literal(false), error: z.object({ code: z.string(), message: z.string() }) }) } },
+      content: {
+        'application/json': {
+          schema: z.object({
+            success: z.literal(false),
+            error: z.object({ code: z.string(), message: z.string() }),
+          }),
+        },
+      },
     },
     500: {
       description: 'Server error',
-      content: { 'application/json': { schema: z.object({ success: z.literal(false), error: z.object({ code: z.string(), message: z.string() }) }) } },
+      content: {
+        'application/json': {
+          schema: z.object({
+            success: z.literal(false),
+            error: z.object({ code: z.string(), message: z.string() }),
+          }),
+        },
+      },
     },
   },
 });
@@ -190,19 +213,42 @@ const threeWayRoute = createRoute({
   responses: {
     200: {
       description: 'Three-way diff result',
-      content: { 'application/json': { schema: z.object({ success: z.literal(true), data: z.any() }) } },
+      content: {
+        'application/json': { schema: z.object({ success: z.literal(true), data: z.any() }) },
+      },
     },
     400: {
       description: 'Bad request',
-      content: { 'application/json': { schema: z.object({ success: z.literal(false), error: z.object({ code: z.string(), message: z.string() }) }) } },
+      content: {
+        'application/json': {
+          schema: z.object({
+            success: z.literal(false),
+            error: z.object({ code: z.string(), message: z.string() }),
+          }),
+        },
+      },
     },
     404: {
       description: 'Not found',
-      content: { 'application/json': { schema: z.object({ success: z.literal(false), error: z.object({ code: z.string(), message: z.string() }) }) } },
+      content: {
+        'application/json': {
+          schema: z.object({
+            success: z.literal(false),
+            error: z.object({ code: z.string(), message: z.string() }),
+          }),
+        },
+      },
     },
     500: {
       description: 'Server error',
-      content: { 'application/json': { schema: z.object({ success: z.literal(false), error: z.object({ code: z.string(), message: z.string() }) }) } },
+      content: {
+        'application/json': {
+          schema: z.object({
+            success: z.literal(false),
+            error: z.object({ code: z.string(), message: z.string() }),
+          }),
+        },
+      },
     },
   },
 });
@@ -220,15 +266,31 @@ const frameRoute = createRoute({
   responses: {
     200: {
       description: 'Frame diff result',
-      content: { 'application/json': { schema: z.object({ success: z.literal(true), data: z.any() }) } },
+      content: {
+        'application/json': { schema: z.object({ success: z.literal(true), data: z.any() }) },
+      },
     },
     400: {
       description: 'Bad request',
-      content: { 'application/json': { schema: z.object({ success: z.literal(false), error: z.object({ code: z.string(), message: z.string() }) }) } },
+      content: {
+        'application/json': {
+          schema: z.object({
+            success: z.literal(false),
+            error: z.object({ code: z.string(), message: z.string() }),
+          }),
+        },
+      },
     },
     404: {
       description: 'Not found',
-      content: { 'application/json': { schema: z.object({ success: z.literal(false), error: z.object({ code: z.string(), message: z.string() }) }) } },
+      content: {
+        'application/json': {
+          schema: z.object({
+            success: z.literal(false),
+            error: z.object({ code: z.string(), message: z.string() }),
+          }),
+        },
+      },
     },
   },
 });
@@ -246,9 +308,18 @@ diffRoutes.onError((err, c) => {
     message.includes('Unexpected token') ||
     message.includes('not valid JSON')
   ) {
-    return c.json({ success: false as const, error: { code: 'INVALID_JSON', message: 'Invalid JSON body' } }, 400);
+    return c.json(
+      { success: false as const, error: { code: 'INVALID_JSON', message: 'Invalid JSON body' } },
+      400
+    );
   }
-  return c.json({ success: false as const, error: { code: 'INTERNAL_ERROR', message: message || 'Internal server error' } }, 500);
+  return c.json(
+    {
+      success: false as const,
+      error: { code: 'INTERNAL_ERROR', message: message || 'Internal server error' },
+    },
+    500
+  );
 });
 
 /**
@@ -284,7 +355,13 @@ diffRoutes.openapi(twoWayRoute, async (c) => {
         branch: commit.branch,
       });
 
-      return c.json({ success: true as const, data: { diff, base: commitMeta(baseCommit), target: commitMeta(targetCommit) } }, 200);
+      return c.json(
+        {
+          success: true as const,
+          data: { diff, base: commitMeta(baseCommit), target: commitMeta(targetCommit) },
+        },
+        200
+      );
     } else {
       if (!baseCommit) {
         return errorResponse(c, 'NOT_FOUND', `Base commit ${body.base_commit_hash} not found`);
@@ -302,12 +379,18 @@ diffRoutes.openapi(twoWayRoute, async (c) => {
     if (!baseResult.ok) {
       const code = getErrorCode(baseResult.error);
       const status = getErrorStatus(baseResult.error);
-      return c.json({ success: false as const, error: { code, message: baseResult.message } }, status);
+      return c.json(
+        { success: false as const, error: { code, message: baseResult.message } },
+        status
+      );
     }
     if (!targetResult.ok) {
       const code = getErrorCode(targetResult.error);
       const status = getErrorStatus(targetResult.error);
-      return c.json({ success: false as const, error: { code, message: targetResult.message } }, status);
+      return c.json(
+        { success: false as const, error: { code, message: targetResult.message } },
+        status
+      );
     }
 
     baseId = baseResult.id;
@@ -335,7 +418,13 @@ diffRoutes.openapi(twoWayRoute, async (c) => {
   // Check API key
   const googleApiKey = process.env.GOOGLE_AI_STUDIO_KEY;
   if (!googleApiKey) {
-    return c.json({ success: false as const, error: { code: 'EMBEDDING_UNAVAILABLE', message: 'GOOGLE_AI_STUDIO_KEY not configured' } }, 500);
+    return c.json(
+      {
+        success: false as const,
+        error: { code: 'EMBEDDING_UNAVAILABLE', message: 'GOOGLE_AI_STUDIO_KEY not configured' },
+      },
+      500
+    );
   }
 
   try {
@@ -366,12 +455,27 @@ diffRoutes.openapi(twoWayRoute, async (c) => {
     const diffEngine = createDiffEngine(embeddingProvider, { threshold });
     const result = await diffEngine.diffTwoWay(baseId, baseSegments, targetId, targetSegments);
 
-    return c.json({ success: true as const, data: { ...result, method: 'embedding', usedCache, cacheStats } }, 200);
+    return c.json(
+      { success: true as const, data: { ...result, method: 'embedding', usedCache, cacheStats } },
+      200
+    );
   } catch (error) {
     if (error instanceof EmbeddingProviderError) {
-      return c.json({ success: false as const, error: { code: 'EMBEDDING_UNAVAILABLE', message: (error as Error).message } }, 500);
+      return c.json(
+        {
+          success: false as const,
+          error: { code: 'EMBEDDING_UNAVAILABLE', message: (error as Error).message },
+        },
+        500
+      );
     }
-    return c.json({ success: false as const, error: { code: 'DIFF_FAILED', message: (error as Error).message } }, 500);
+    return c.json(
+      {
+        success: false as const,
+        error: { code: 'DIFF_FAILED', message: (error as Error).message },
+      },
+      500
+    );
   }
 });
 
@@ -406,7 +510,10 @@ diffRoutes.openapi(threeWayRoute, async (c) => {
       if (!result.ok) {
         const code = getErrorCode(result.error);
         const status = getErrorStatus(result.error);
-        return c.json({ success: false as const, error: { code, message: `${name}: ${result.message}` } }, status);
+        return c.json(
+          { success: false as const, error: { code, message: `${name}: ${result.message}` } },
+          status
+        );
       }
     }
 
@@ -437,7 +544,13 @@ diffRoutes.openapi(threeWayRoute, async (c) => {
   // Check API key
   const googleApiKey = process.env.GOOGLE_AI_STUDIO_KEY;
   if (!googleApiKey) {
-    return c.json({ success: false as const, error: { code: 'EMBEDDING_UNAVAILABLE', message: 'GOOGLE_AI_STUDIO_KEY not configured' } }, 500);
+    return c.json(
+      {
+        success: false as const,
+        error: { code: 'EMBEDDING_UNAVAILABLE', message: 'GOOGLE_AI_STUDIO_KEY not configured' },
+      },
+      500
+    );
   }
 
   try {
@@ -480,12 +593,27 @@ diffRoutes.openapi(threeWayRoute, async (c) => {
       targetSegments
     );
 
-    return c.json({ success: true as const, data: { ...result, method: 'embedding', usedCache, cacheStats } }, 200);
+    return c.json(
+      { success: true as const, data: { ...result, method: 'embedding', usedCache, cacheStats } },
+      200
+    );
   } catch (error) {
     if (error instanceof EmbeddingProviderError) {
-      return c.json({ success: false as const, error: { code: 'EMBEDDING_UNAVAILABLE', message: (error as Error).message } }, 500);
+      return c.json(
+        {
+          success: false as const,
+          error: { code: 'EMBEDDING_UNAVAILABLE', message: (error as Error).message },
+        },
+        500
+      );
     }
-    return c.json({ success: false as const, error: { code: 'DIFF_FAILED', message: (error as Error).message } }, 500);
+    return c.json(
+      {
+        success: false as const,
+        error: { code: 'DIFF_FAILED', message: (error as Error).message },
+      },
+      500
+    );
   }
 });
 
@@ -527,5 +655,11 @@ diffRoutes.openapi(frameRoute, async (c) => {
     branch: commit.branch,
   });
 
-  return c.json({ success: true as const, data: { diff, base: commitMeta(baseCommit), target: commitMeta(targetCommit) } }, 200);
+  return c.json(
+    {
+      success: true as const,
+      data: { diff, base: commitMeta(baseCommit), target: commitMeta(targetCommit) },
+    },
+    200
+  );
 });

@@ -362,7 +362,13 @@ chatRoutes.openapi(chatRoute, async (c) => {
   const apiKey = getApiKey(provider);
   if (!apiKey) {
     return c.json(
-      { success: false as const, error: { code: 'PROVIDER_ERROR', message: `API key not configured for provider: ${provider}` } },
+      {
+        success: false as const,
+        error: {
+          code: 'PROVIDER_ERROR',
+          message: `API key not configured for provider: ${provider}`,
+        },
+      },
       400
     ) as any;
   }
@@ -399,7 +405,10 @@ chatRoutes.openapi(chatRoute, async (c) => {
       return c.json({ success: true as const, data: result }, 200) as any;
     } else {
       return c.json(
-        { success: false as const, error: { code: 'PROVIDER_ERROR', message: `Provider ${provider} not implemented` } },
+        {
+          success: false as const,
+          error: { code: 'PROVIDER_ERROR', message: `Provider ${provider} not implemented` },
+        },
         400
       ) as any;
     }
@@ -465,7 +474,13 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
   const apiKey = getApiKey(provider);
   if (!apiKey) {
     return c.json(
-      { success: false as const, error: { code: 'PROVIDER_ERROR', message: `API key not configured for provider: ${provider}` } },
+      {
+        success: false as const,
+        error: {
+          code: 'PROVIDER_ERROR',
+          message: `API key not configured for provider: ${provider}`,
+        },
+      },
       400
     );
   }
@@ -476,7 +491,10 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
 
   if (provider !== 'claude' && provider !== 'anthropic') {
     return c.json(
-      { success: false as const, error: { code: 'PROVIDER_ERROR', message: `Provider ${provider} not implemented` } },
+      {
+        success: false as const,
+        error: { code: 'PROVIDER_ERROR', message: `Provider ${provider} not implemented` },
+      },
       400
     );
   }
@@ -692,5 +710,8 @@ chatRoutes.openapi(providersRoute, (c) => {
     availableProviders.push('openai');
   }
 
-  return c.json({ success: true as const, data: { providers: availableProviders, default: 'claude' } }, 200) as any;
+  return c.json(
+    { success: true as const, data: { providers: availableProviders, default: 'claude' } },
+    200
+  ) as any;
 });
