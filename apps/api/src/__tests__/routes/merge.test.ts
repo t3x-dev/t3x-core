@@ -49,9 +49,11 @@ describe('Merge Routes', () => {
   });
 
   // Helper to create test commits (frame-based format)
+  let commitCounter = 0;
   const createTestCommit = async (
     frames: Array<{ id: string; type: string; slots: Record<string, unknown> }>
   ) => {
+    commitCounter++;
     const commit = await createCommit(mockDB, {
       parents: [],
       author: { type: 'human', name: 'Test User' },
@@ -64,7 +66,7 @@ describe('Merge Routes', () => {
         relations: [],
       },
       project_id: testProjectId,
-      message: 'Test commit',
+      message: `Test commit ${commitCounter}`,
       branch: 'main',
     });
     return commit;
