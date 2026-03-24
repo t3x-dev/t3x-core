@@ -181,6 +181,30 @@ export async function deleteDelta(conversationId: string, deltaId: string): Prom
   await handleResponse<unknown>(res);
 }
 
+// ── Compression ──
+
+export interface CompressResult {
+  delta: Delta;
+  metadata: {
+    compress_summary: string;
+    frames_before: number;
+    frames_after: number;
+    merged_count: number;
+    removed_count: number;
+    removed_frame_ids: string[];
+  };
+  delta_log_id: string;
+}
+
+export async function compressFrames(conversationId: string): Promise<CompressResult> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/conversations/${encodeURIComponent(conversationId)}/compress`,
+    { method: 'POST', headers: { 'Content-Type': 'application/json' } },
+    60_000
+  );
+  return handleResponse<CompressResult>(res);
+}
+
 // ── Gate Check ──
 
 export async function gateCheck(
