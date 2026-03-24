@@ -1,0 +1,125 @@
+// apps/api/src/schemas/integration-contracts.ts
+import { z } from '@hono/zod-openapi';
+
+// ============================================================
+// Extract
+// ============================================================
+
+export const ExtractRequest = z
+  .object({
+    project_id: z.string().min(1).describe('Project ID'),
+    text: z.string().min(1).describe('Raw conversation text to extract from'),
+    conversation_id: z
+      .string()
+      .optional()
+      .describe('Omit for one-shot, include for incremental extraction'),
+    source: z.string().optional().describe('Source label (e.g. "slack", "email")'),
+  })
+  .openapi('ExtractRequest');
+
+export const ExtractSentence = z
+  .object({
+    id: z.string(),
+    text: z.string(),
+    confidence: z.number(),
+    source_ref: z
+      .object({
+        conversation_id: z.string(),
+        turn_hash: z.string(),
+        start_char: z.number(),
+        end_char: z.number(),
+      })
+      .optional(),
+  })
+  .openapi('ExtractSentence');
+
+export const DriftItem = z
+  .object({
+    sentence_id: z.string(),
+    before: z.string(),
+    after: z.string(),
+  })
+  .openapi('DriftItem');
+
+export const ExtractResponse = z
+  .object({
+    conversation_id: z.string(),
+    draft_id: z.string(),
+    sentences: z.array(ExtractSentence),
+    yaml: z.string().optional(),
+    drift: z.array(DriftItem).optional(),
+  })
+  .openapi('ExtractResponse');
+
+// ============================================================
+// Check
+// ============================================================
+
+export const CheckRequest = z
+  .object({
+    project_id: z.string().min(1).describe('Project ID'),
+    text: z.string().min(1).describe('Text to validate against constraints'),
+    leaf_ids: z
+      .array(z.string())
+      .optional()
+      .describe('Check specific leaves only (default: all project leaves)'),
+  })
+  .openapi('CheckRequest');
+
+export const CheckViolation = z
+  .object({
+    leaf_id: z.string(),
+    constraint_id: z.string(),
+    type: z.enum(['require', 'exclude']),
+    value: z.string(),
+    reason: z.string().optional(),
+  })
+  .openapi('CheckViolation');
+
+export const CheckResponse = z
+  .object({
+    passed: z.boolean(),
+    violations: z.array(CheckViolation),
+  })
+  .openapi('CheckResponse');
+
+// ============================================================
+// Context (Show)
+// ============================================================
+
+export const ContextQuery = z
+  .object({
+    branch: z.string().optional().default('main').describe('Branch name (default: main)'),
+    format: z.enum(['json', 'yaml']).optional().default('json').describe('Response format'),
+  })
+  .openapi('ContextQuery');
+
+export const ContextResponse = z
+  .object({
+    commit_hash: z.string().nullable(),
+    branch: z.string(),
+    sentences: z.array(ExtractSentence),
+    yaml: z.string().optional(),
+  })
+  .openapi('ContextResponse');
+
+// ============================================================
+// Commit from Draft
+// ============================================================
+
+export const CommitFromDraftRequest = z
+  .object({
+    project_id: z.string().min(1).describe('Project ID'),
+    draft_id: z.string().min(1).describe('Draft ID from extract'),
+    message: z.string().optional().describe('Commit message'),
+    branch: z.string().optional().default('main').describe('Branch to commit on'),
+  })
+  .openapi('CommitFromDraftRequest');
+
+export const CommitFromDraftResponse = z
+  .object({
+    commit_hash: z.string(),
+    sentence_count: z.number(),
+    branch: z.string(),
+  })
+  .openapi('CommitFromDraftResponse');
