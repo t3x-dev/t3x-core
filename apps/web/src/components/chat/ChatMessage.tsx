@@ -270,7 +270,13 @@ export function ChatMessage({
                     {content}
                   </Markdown>
                     {isStreaming && (
-                      <span className="inline-block w-1.5 h-4 ml-0.5 -mb-0.5 bg-[var(--accent-commit)] rounded-sm animate-pulse" />
+                      <span
+                        className="inline-block w-0.5 h-[1.1em] ml-0.5 -mb-0.5 rounded-sm"
+                        style={{
+                          background: 'var(--accent-commit)',
+                          animation: 'blink 1s step-end infinite',
+                        }}
+                      />
                     )}
                   </>
                 )}

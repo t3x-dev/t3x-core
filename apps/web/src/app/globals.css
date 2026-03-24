@@ -1012,16 +1012,39 @@ a {
 }
 
 /* Smooth streaming cursor animation */
-.streaming-text {
-  animation: none;
+@keyframes fadeInBlock {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-@keyframes blink-cursor {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0;
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.streaming-text p,
+.streaming-text pre,
+.streaming-text ul,
+.streaming-text ol,
+.streaming-text blockquote,
+.streaming-text table {
+  animation: fadeInBlock 150ms ease-out both;
+}
+
+/* Respect reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  .streaming-text p,
+  .streaming-text pre,
+  .streaming-text ul,
+  .streaming-text ol,
+  .streaming-text blockquote,
+  .streaming-text table {
+    animation: none;
   }
 }
