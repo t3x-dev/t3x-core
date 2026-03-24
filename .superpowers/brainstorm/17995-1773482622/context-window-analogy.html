@@ -1,0 +1,91 @@
+<h2>The "Context Window" Model for Semantic Extraction</h2>
+<p class="subtitle">Like how an LLM uses full context but weights recent turns — T3X should show the current understanding while preserving the full history</p>
+
+<div class="mockup" style="margin-bottom:24px">
+  <div class="mockup-header">How it works: The Living Snapshot + History</div>
+  <div class="mockup-body" style="padding:20px">
+    <div style="display:flex;gap:24px">
+      <!-- Left: conversation turns -->
+      <div style="flex:1">
+        <div class="label">Conversation</div>
+        <div style="padding:8px 12px;border-radius:6px;background:var(--hover-bg);margin:4px 0;font-size:13px">
+          <strong>Turn 1:</strong> "I want to plan a trip to Japan in April, budget $5000"
+        </div>
+        <div style="padding:8px 12px;border-radius:6px;background:var(--hover-bg);margin:4px 0;font-size:13px">
+          <strong>Turn 2:</strong> "We're vegetarian, prefer ryokan in Kyoto"
+        </div>
+        <div style="padding:8px 12px;border-radius:6px;background:var(--hover-bg);margin:4px 0;font-size:13px">
+          <strong>Turn 3:</strong> "Actually, change budget to $7000 and add Osaka"
+        </div>
+        <div style="padding:8px 12px;border-radius:6px;border:2px solid var(--accent-commit);margin:4px 0;font-size:13px">
+          <strong>Turn 4 (latest):</strong> "Skip Kyoto, focus Tokyo + Osaka only"
+        </div>
+      </div>
+
+      <!-- Right: what the YAML shows -->
+      <div style="flex:1">
+        <div class="label">Current Snapshot (Graph/YAML)</div>
+        <pre style="font-size:12px;background:var(--surface-overlay);padding:12px;border-radius:6px;margin:4px 0;line-height:1.6"><span style="color:var(--text-secondary)"># What human wants RIGHT NOW</span>
+<span style="color:#4ade80">destination: [Tokyo, Osaka]</span>      <span style="color:var(--text-secondary)"># updated turn 4</span>
+<span style="color:var(--text-secondary)">budget: $7000</span>                    <span style="color:var(--text-secondary)"># updated turn 3</span>
+<span style="color:var(--text-secondary)">diet: vegetarian</span>                 <span style="color:var(--text-secondary)"># from turn 2</span>
+<span style="color:#facc15">~~kyoto_ryokan: removed~~</span>         <span style="color:var(--text-secondary)"># removed turn 4</span>
+<span style="color:#4ade80">osaka_street_food: new</span>           <span style="color:var(--text-secondary)"># added turn 4</span></pre>
+
+        <div class="label" style="margin-top:16px">Delta History (expandable)</div>
+        <div style="font-size:12px;background:var(--surface-overlay);padding:12px;border-radius:6px;margin:4px 0;opacity:0.7">
+          <div style="border-left:2px solid var(--text-secondary);padding-left:8px;margin:4px 0">Turn 1: +destination:Japan, +budget:$5000, +month:April</div>
+          <div style="border-left:2px solid var(--text-secondary);padding-left:8px;margin:4px 0">Turn 2: +diet:vegetarian, +accommodation:ryokan</div>
+          <div style="border-left:2px solid #facc15;padding-left:8px;margin:4px 0">Turn 3: ~budget:$5000→$7000, +destination:Osaka</div>
+          <div style="border-left:2px solid #f87171;padding-left:8px;margin:4px 0">Turn 4: -kyoto_ryokan, ~destination:[Tokyo,Osaka], +osaka_food</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="padding:16px;border-radius:8px;background:var(--hover-bg)">
+  <h3>The analogy:</h3>
+  <table style="width:100%;font-size:13px;border-collapse:collapse;margin-top:8px">
+    <tr style="border-bottom:1px solid var(--stroke-default)">
+      <td style="padding:8px;font-weight:600">LLM Context Window</td>
+      <td style="padding:8px;font-weight:600">T3X Extraction</td>
+    </tr>
+    <tr style="border-bottom:1px solid var(--stroke-default)">
+      <td style="padding:8px">Full conversation in context</td>
+      <td style="padding:8px">Delta log preserves every change</td>
+    </tr>
+    <tr style="border-bottom:1px solid var(--stroke-default)">
+      <td style="padding:8px">Answer reflects latest intent</td>
+      <td style="padding:8px">Snapshot shows current understanding</td>
+    </tr>
+    <tr style="border-bottom:1px solid var(--stroke-default)">
+      <td style="padding:8px">Earlier context still influences</td>
+      <td style="padding:8px">Old frames retained unless explicitly removed</td>
+    </tr>
+    <tr>
+      <td style="padding:8px">User can refer back to earlier turns</td>
+      <td style="padding:8px">Delta history lets user see/restore old decisions</td>
+    </tr>
+  </table>
+</div>
+
+<h2 style="margin-top:32px">Does this capture your thinking?</h2>
+<p class="subtitle">The graph/YAML always shows "what the human wants now" — but nothing is lost</p>
+
+<div class="options">
+  <div class="option" data-choice="yes" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Yes, this is exactly it</h3>
+      <p>Current snapshot + delta history. Show what changed visually. Move on to the next design question.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="more" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Close, but I want to refine further</h3>
+      <p>The direction is right but I have more thoughts on how the history/restore should work.</p>
+    </div>
+  </div>
+</div>

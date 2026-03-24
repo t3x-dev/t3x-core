@@ -1,0 +1,169 @@
+<h2>Source Review — Progressive Disclosure</h2>
+<p class="subtitle">Like GitHub diffs: scan quickly, drill in when serious. Three levels of detail.</p>
+
+<div class="mockup">
+  <div class="mockup-header">Level 1: Scan — Default YAML view with change indicators</div>
+  <div class="mockup-body" style="padding:12px; background:#0d1117;">
+    <div style="border-radius:8px; border:1px solid #1f2937; overflow:hidden; max-width:640px;">
+      <div style="display:flex; align-items:center; gap:8px; padding:6px 12px; background:#1e293b; border-bottom:1px solid #1f2937; font-size:11px;">
+        <span style="background:#1e3a5f; color:#60a5fa; padding:1px 8px; border-radius:4px; font-weight:600;">travel_plan</span>
+        <span style="font-family:monospace; color:#4b5563; font-size:9px;">f_1</span>
+        <span style="color:#f59e0b; font-size:9px; margin-left:auto;">2 slots changed</span>
+      </div>
+      <div style="padding:8px 14px; background:#0d1117; font-family:'JetBrains Mono',monospace; font-size:12px; line-height:1.9; color:#e5e7eb;">
+        <div><span style="color:#7aa2f7;">destination</span><span style="color:#89ddff;">:</span> <span style="color:#9ece6a;">Tokyo</span></div>
+        <div><span style="color:#7aa2f7;">duration</span><span style="color:#89ddff;">:</span> <span style="color:#ff9e64;">14 days</span></div>
+        <div style="background:#f59e0b08; margin:0 -14px; padding:0 14px; border-left:2px solid #f59e0b; cursor:pointer;"><span style="color:#7aa2f7;">budget</span><span style="color:#89ddff;">:</span> <span style="color:#ff9e64; text-decoration:line-through; opacity:0.5;">3000</span> <span style="color:#4b5563;">&rarr;</span> <span style="color:#ff9e64;">5000</span></div>
+        <div><span style="color:#7aa2f7;">style</span><span style="color:#89ddff;">:</span> <span style="color:#9ece6a;">cultural immersion</span></div>
+        <div style="background:#10b98108; margin:0 -14px; padding:0 14px; border-left:2px solid #10b981;"><span style="color:#7aa2f7;">priority</span><span style="color:#89ddff;">:</span> <span style="color:#9ece6a;">experiences over sightseeing</span> <span style="color:#10b981; font-size:9px;">new</span></div>
+      </div>
+    </div>
+    <div style="margin-top:8px; font-size:11px; color:#6b7280; font-family:system-ui;">
+      At a glance: yellow border = modified slot, green border = added slot. Old &rarr; new values inline. Quick scan done.
+    </div>
+  </div>
+</div>
+
+<div style="margin-top:20px;"></div>
+
+<div class="mockup">
+  <div class="mockup-header">Level 2: Hover — Quick source tooltip on any slot</div>
+  <div class="mockup-body" style="padding:12px; background:#0d1117;">
+    <div style="border-radius:8px; border:1px solid #1f2937; overflow:hidden; max-width:640px; position:relative;">
+      <div style="display:flex; align-items:center; gap:8px; padding:6px 12px; background:#1e293b; border-bottom:1px solid #1f2937; font-size:11px;">
+        <span style="background:#1e3a5f; color:#60a5fa; padding:1px 8px; border-radius:4px; font-weight:600;">travel_plan</span>
+        <span style="font-family:monospace; color:#4b5563; font-size:9px;">f_1</span>
+      </div>
+      <div style="padding:8px 14px; background:#0d1117; font-family:'JetBrains Mono',monospace; font-size:12px; line-height:1.9; color:#e5e7eb;">
+        <div><span style="color:#7aa2f7;">destination</span><span style="color:#89ddff;">:</span> <span style="color:#9ece6a;">Tokyo</span></div>
+        <div><span style="color:#7aa2f7;">duration</span><span style="color:#89ddff;">:</span> <span style="color:#ff9e64;">14 days</span></div>
+        <div style="background:#f59e0b15; margin:0 -14px; padding:0 14px; border-left:2px solid #f59e0b; border-radius:0; outline:1px solid #f59e0b40;"><span style="color:#7aa2f7;">budget</span><span style="color:#89ddff;">:</span> <span style="color:#ff9e64; text-decoration:line-through; opacity:0.5;">3000</span> <span style="color:#4b5563;">&rarr;</span> <span style="color:#ff9e64;">5000</span></div>
+        <div><span style="color:#7aa2f7;">style</span><span style="color:#89ddff;">:</span> <span style="color:#9ece6a;">cultural immersion</span></div>
+      </div>
+
+      <!-- Hover tooltip -->
+      <div style="position:absolute; right:16px; top:90px; width:280px; background:#1e293b; border:1px solid #f59e0b40; border-radius:8px; padding:10px; box-shadow:0 8px 24px rgba(0,0,0,0.4); z-index:10; font-family:system-ui;">
+        <div style="font-size:10px; color:#f59e0b; font-weight:600; margin-bottom:6px; display:flex; align-items:center; gap:4px;">
+          <span>&#916;</span> budget changed
+          <span style="margin-left:auto; color:#4b5563; font-size:9px;">click to expand</span>
+        </div>
+        <div style="display:flex; gap:8px; margin-bottom:6px;">
+          <div style="flex:1; background:#0d1117; border-radius:4px; padding:4px 6px; border-left:2px solid #ef4444;">
+            <div style="font-size:8px; color:#ef4444; margin-bottom:2px;">BEFORE</div>
+            <div style="font-size:11px; color:#e5e7eb; font-family:monospace;">3000</div>
+            <div style="font-size:9px; color:#6b7280; margin-top:2px;">Turn T2 &middot; user</div>
+          </div>
+          <div style="flex:1; background:#0d1117; border-radius:4px; padding:4px 6px; border-left:2px solid #10b981;">
+            <div style="font-size:8px; color:#10b981; margin-bottom:2px;">AFTER</div>
+            <div style="font-size:11px; color:#e5e7eb; font-family:monospace;">5000</div>
+            <div style="font-size:9px; color:#6b7280; margin-top:2px;">Turn T5 &middot; user</div>
+          </div>
+        </div>
+        <div style="font-size:10px; color:#9ca3af; line-height:1.4; border-top:1px solid #1f2937; padding-top:6px;">
+          "<span style="background:#f59e0b20;">increase the budget to $5000</span>, I want better experiences"
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:8px; font-size:11px; color:#6b7280; font-family:system-ui;">
+      Hover any slot: quick tooltip shows BEFORE / AFTER values with source turn. See the change without leaving context.
+    </div>
+  </div>
+</div>
+
+<div style="margin-top:20px;"></div>
+
+<div class="mockup">
+  <div class="mockup-header">Level 3: Click to Expand — Full source focus (like GitHub "expand context")</div>
+  <div class="mockup-body" style="padding:12px; background:#0d1117;">
+    <div style="border-radius:8px; border:1px solid #1f2937; overflow:hidden; max-width:640px;">
+      <div style="display:flex; align-items:center; gap:8px; padding:6px 12px; background:#1e293b; border-bottom:1px solid #1f2937; font-size:11px;">
+        <span style="background:#1e3a5f; color:#60a5fa; padding:1px 8px; border-radius:4px; font-weight:600;">travel_plan</span>
+        <span style="font-family:monospace; color:#4b5563; font-size:9px;">f_1</span>
+      </div>
+      <div style="padding:8px 14px; background:#0d1117; font-family:'JetBrains Mono',monospace; font-size:12px; line-height:1.9; color:#e5e7eb;">
+        <div><span style="color:#7aa2f7;">destination</span><span style="color:#89ddff;">:</span> <span style="color:#9ece6a;">Tokyo</span></div>
+        <div><span style="color:#7aa2f7;">duration</span><span style="color:#89ddff;">:</span> <span style="color:#ff9e64;">14 days</span></div>
+
+        <!-- Expanded change detail -->
+        <div style="margin:0 -14px; border-left:2px solid #f59e0b; background:#f59e0b05;">
+          <div style="padding:4px 14px; background:#f59e0b08;"><span style="color:#7aa2f7;">budget</span><span style="color:#89ddff;">:</span> <span style="color:#ff9e64; text-decoration:line-through; opacity:0.5;">3000</span> <span style="color:#4b5563;">&rarr;</span> <span style="color:#ff9e64;">5000</span></div>
+
+          <!-- Full source context, expanded inline -->
+          <div style="padding:8px 14px; font-family:system-ui; font-size:11px; border-top:1px solid #f59e0b20;">
+            <div style="display:flex; gap:12px; margin-bottom:8px;">
+              <!-- Previous value -->
+              <div style="flex:1;">
+                <div style="font-size:9px; font-weight:700; color:#ef4444; text-transform:uppercase; margin-bottom:4px;">Previous Value</div>
+                <div style="background:#0d1117; border-radius:6px; padding:8px; border:1px solid #1f2937;">
+                  <div style="display:flex; align-items:center; gap:6px; margin-bottom:6px;">
+                    <span style="background:#10b98120; color:#10b981; width:18px; height:18px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:8px;">U</span>
+                    <span style="color:#e5e7eb; font-size:10px; font-weight:500;">Turn T2</span>
+                    <span style="color:#4b5563; font-size:9px;">user &middot; 3h ago</span>
+                  </div>
+                  <div style="color:#d1d5db; line-height:1.5; font-size:11px;">
+                    "I'm thinking about a budget around <span style="background:#ef444420; padding:1px 3px; border-radius:2px; text-decoration:line-through;">$3000</span> for the whole trip, including flights and accommodation"
+                  </div>
+                </div>
+              </div>
+              <!-- Current value -->
+              <div style="flex:1;">
+                <div style="font-size:9px; font-weight:700; color:#10b981; text-transform:uppercase; margin-bottom:4px;">Current Value</div>
+                <div style="background:#0d1117; border-radius:6px; padding:8px; border:1px solid #1f2937;">
+                  <div style="display:flex; align-items:center; gap:6px; margin-bottom:6px;">
+                    <span style="background:#10b98120; color:#10b981; width:18px; height:18px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:8px;">U</span>
+                    <span style="color:#e5e7eb; font-size:10px; font-weight:500;">Turn T5</span>
+                    <span style="color:#4b5563; font-size:9px;">user &middot; 1h ago</span>
+                  </div>
+                  <div style="color:#d1d5db; line-height:1.5; font-size:11px;">
+                    "Actually, let's <span style="background:#10b98120; padding:1px 3px; border-radius:2px;">increase the budget to $5000</span>, I want better quality experiences over quantity"
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px; padding-top:4px; border-top:1px solid #1f2937;">
+              <span style="font-size:9px; color:#4b5563;">2 conversation turns apart</span>
+              <span style="margin-left:auto; font-size:9px; color:#3b82f6; cursor:pointer;">View in conversation &rsaquo;</span>
+              <span style="font-size:9px; color:#4b5563; cursor:pointer;">Collapse</span>
+            </div>
+          </div>
+        </div>
+
+        <div style="padding:0 14px;"><div style="line-height:1.9;"><span style="color:#7aa2f7;">style</span><span style="color:#89ddff;">:</span> <span style="color:#9ece6a;">cultural immersion</span></div></div>
+        <div style="padding:0 14px;"><div style="line-height:1.9; background:#10b98108; margin:0 -14px; padding:0 14px; border-left:2px solid #10b981;"><span style="color:#7aa2f7;">priority</span><span style="color:#89ddff;">:</span> <span style="color:#9ece6a;">experiences over sightseeing</span> <span style="color:#10b981; font-size:9px;">new</span></div></div>
+      </div>
+    </div>
+    <div style="margin-top:8px; font-size:11px; color:#6b7280; font-family:system-ui;">
+      Click a changed slot: full side-by-side source context expands inline. Previous value vs current value with conversation quotes highlighted. "View in conversation" links to the original chat. Collapse to return to scan mode.
+    </div>
+  </div>
+</div>
+
+<div style="margin-top:24px;">
+  <h3>The Three Levels</h3>
+  <table style="width:100%; border-collapse:collapse; font-size:13px; margin-top:12px;">
+    <tr style="border-bottom:1px solid #333;">
+      <th style="text-align:left; padding:8px; color:#82aaff;">Level</th>
+      <th style="text-align:left; padding:8px; color:#82aaff;">Trigger</th>
+      <th style="text-align:left; padding:8px; color:#82aaff;">Shows</th>
+      <th style="text-align:left; padding:8px; color:#82aaff;">User Intent</th>
+    </tr>
+    <tr style="border-bottom:1px solid #222;">
+      <td style="padding:8px; color:#9ece6a;">1. Scan</td>
+      <td style="padding:8px; color:#ccc;">Default</td>
+      <td style="padding:8px; color:#ccc;">Colored borders + inline old&rarr;new values</td>
+      <td style="padding:8px; color:#888;">"What changed?"</td>
+    </tr>
+    <tr style="border-bottom:1px solid #222;">
+      <td style="padding:8px; color:#f59e0b;">2. Hover</td>
+      <td style="padding:8px; color:#ccc;">Mouse over slot</td>
+      <td style="padding:8px; color:#ccc;">Tooltip: before/after + source turn + quote</td>
+      <td style="padding:8px; color:#888;">"Where did this come from?"</td>
+    </tr>
+    <tr>
+      <td style="padding:8px; color:#ef4444;">3. Expand</td>
+      <td style="padding:8px; color:#ccc;">Click slot</td>
+      <td style="padding:8px; color:#ccc;">Full side-by-side source context inline</td>
+      <td style="padding:8px; color:#888;">"Show me the evidence"</td>
+    </tr>
+  </table>
+</div>

@@ -14,8 +14,9 @@ import type {
   ConversationContext,
   Leaf,
   Pin,
-  SentenceCommit,
-} from '../types/v4';
+} from '../types';
+import type { SemanticContent } from '../semantic/types';
+import { serializeFramesForPrompt } from '../semantic/serialize';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Input Types
@@ -34,8 +35,8 @@ export interface ConversationData {
  * Input for building conversation context.
  */
 export interface ContextBuildInput {
-  /** Current commit (HEAD) - provides base knowledge */
-  currentCommit?: SentenceCommit;
+  /** Current knowledge (HEAD) - provides base knowledge as semantic frames */
+  knowledge?: SemanticContent;
 
   /** All project pins */
   projectPins: Pin[];
@@ -67,20 +68,13 @@ export function buildConversationContext(input: ContextBuildInput): BuiltContext
   let text = '';
 
   // ─────────────────────────────────────────────────────────────────────────
-  // BASE: Current commit sentences (always included, like git HEAD)
+  // BASE: Current knowledge frames (always included, like git HEAD)
   // ─────────────────────────────────────────────────────────────────────────
-  if (input.currentCommit) {
+  if (input.knowledge) {
     text += '## Current Knowledge\n\n';
-    for (const sentence of input.currentCommit.content.sentences) {
-      text += `• ${sentence.text}\n`;
-    }
-    text += '\n';
-
-    sources.push({
-      type: 'commit',
-      id: input.currentCommit.hash,
-      title: input.currentCommit.message,
-    });
+    text += serializeFramesForPrompt(input.knowledge);
+    text += '\n\n';
+    sources.push({ type: 'commit', id: 'knowledge', title: 'Current knowledge' });
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -174,17 +168,14 @@ export function buildConversationContext(input: ContextBuildInput): BuiltContext
 /**
  * Build context for leaf generation.
  *
- * Returns commit sentences (knowledge) - constraints are in leaf itself.
+ * Returns knowledge frames - constraints are in leaf itself.
  *
- * @param commit - The commit to build context from
- * @returns Built context with knowledge sentences
+ * @param knowledge - The semantic content to build context from
+ * @returns Built context with knowledge frames
  */
-export function buildLeafContext(commit: SentenceCommit): BuiltContext {
+export function buildLeafContext(knowledge: SemanticContent): BuiltContext {
   let text = '## Knowledge\n\n';
-
-  for (const sentence of commit.content.sentences) {
-    text += `• ${sentence.text}\n`;
-  }
+  text += serializeFramesForPrompt(knowledge);
 
   return {
     text,
@@ -192,8 +183,8 @@ export function buildLeafContext(commit: SentenceCommit): BuiltContext {
     sources: [
       {
         type: 'commit',
-        id: commit.hash,
-        title: commit.message,
+        id: 'knowledge',
+        title: 'Current knowledge',
       },
     ],
   };
@@ -207,10 +198,10 @@ export function buildLeafContext(commit: SentenceCommit): BuiltContext {
  * @param input - Partial context build input (no currentCommit required)
  * @returns Built context with pinned items only
  */
-export function buildMemoryFromPins(input: Omit<ContextBuildInput, 'currentCommit'>): BuiltContext {
+export function buildMemoryFromPins(input: Omit<ContextBuildInput, 'knowledge'>): BuiltContext {
   return buildConversationContext({
     ...input,
-    currentCommit: undefined,
+    knowledge: undefined,
   });
 }
 

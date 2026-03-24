@@ -100,25 +100,14 @@ export {
   type AnchorCandidate,
   type AnchorSource,
   type AnchorType,
-  // Incremental Extraction (LLM pipeline)
-  buildAdaptiveSection,
-  // LLM Extraction
-  buildExtractionPrompt,
   // Frame Extraction (Phase 2)
   buildFrameExtractionPrompt,
-  // Incremental Extraction (LLM pipeline)
-  buildIncrementalPrompt,
   // Relations
   buildRelationPrompt,
-  buildStyleSeed,
   computeAdaptiveConfig,
   computeAdaptiveThresholds,
-  createLLMExtractor,
   createMeaningPipeline,
   createRelationExtractor,
-  type ExtractedSentence,
-  type ExtractionItem,
-  ExtractionParseError,
   type FrameDeltaParseResult,
   type FrameExtractionInput,
   type FrameExtractionPromptResult,
@@ -134,37 +123,20 @@ export {
   type FrameWithSignals,
   type FuzzyLocateResult,
   fuzzyLocate,
-  type LLMExtractionOptions,
-  type LLMExtractionResult,
-  LLMExtractor,
   type MeaningAgent,
   MeaningPipeline,
-  type OverlapResult,
-  type OverlapStatus,
   type PipelineContext,
   type PipelineMode,
   type PipelineOptions,
   type PipelineResult,
-  parseExtractionResponse,
   parseFrameDelta,
-  parseIncrementalResponse,
   parseRelationResponse,
   type QualityMetrics,
   RelationExtractor,
   type RelationItem,
   RelationParseError,
-  type RouteResult,
-  resolveSourceRef,
-  routeProposal,
   type Segment,
   type SlotQuotesMap,
-  spToSentence,
-  type TurnInput,
-  type ValidationResult as ExtractionValidationResult,
-  type VerifiedProposal,
-  type VerifyOptions,
-  validateExtractedSentences,
-  verifyProposal,
 } from './extractors';
 // Hash / Merkle Tree (#14)
 export {
@@ -461,6 +433,7 @@ export {
   RelationSchema,
   SemanticContentSchema,
   SemanticGate,
+  serializeFramesForPrompt,
   SlotValueSchema,
   validateIntegrity,
 } from './semantic';
@@ -498,24 +471,14 @@ export {
   type CreateLeafHistoryInput,
   type CreateLeafInput,
   type CreatePinInput,
-  // Input types
-  type CreateSentenceCommitInput,
   DEPLOY_TYPES,
   type DeployType,
   type Draft,
   type DraftConstraint,
-  type DraftSentence,
-  type DraftSentenceOrigin,
   type DraftStatus,
-  // Evidence / Extraction (LLM Incremental)
-  type EvidenceAnchor,
   type ExcludeConstraint,
-  type ExtractionCursor,
-  type ExtractionProposal,
-  type ExtractionStats,
   // ID Prefixes
   ID_PREFIXES,
-  type IncrementalExtractionResult,
   isDeployLeaf,
   isGenerationLeaf,
   LEAF_TYPES,
@@ -524,28 +487,18 @@ export {
   // Leaf History
   type LeafHistory,
   type LeafType,
-  type LocatedEvidence,
   // Merge summary
   type MergeSummaryData,
   // Pin (source selection)
   type Pin,
   type PinType,
-  type ProjectExtractionConfig,
   RELATION_TYPES,
   type RelationExtractionResult,
   // Ring 4: Relations
   type RelationType,
   type RequireConstraint,
-  type SemanticPoint,
-  // Sentence
-  type Sentence,
-  // SentenceCommit (pure knowledge, no constraints)
-  type SentenceCommit,
-  type SentenceCommitContent,
   type SentenceRelation,
-  type SentenceSourceRef,
-  type SentenceWithEvidence,
   // Share Token
   type ShareToken,
   type User,
-} from './types/v4';
+} from './types';

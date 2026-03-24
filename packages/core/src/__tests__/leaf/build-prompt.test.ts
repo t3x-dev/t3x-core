@@ -11,24 +11,22 @@ import {
   formatConstraints,
   getTypeInstructions,
 } from '../../leaf/build-prompt';
-import type { Constraint, Leaf, SentenceCommit } from '../../types/v4';
+import type { SemanticContent } from '../../semantic/types';
+import type { Constraint, Leaf } from '../../types';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Test Fixtures
 // ═══════════════════════════════════════════════════════════════════════════
 
-const createTestCommit = (sentences: string[]): SentenceCommit => ({
-  hash: 'sha256:test-hash',
-  schema: 't3x/commit/v4',
-  parents: [],
-  author: { type: 'human', name: 'Test User' },
-  committed_at: new Date().toISOString(),
-  content: {
-    sentences: sentences.map((text, i) => ({
-      id: `s_${i}`,
-      text,
-    })),
-  },
+const createTestKnowledge = (
+  frames: Array<{ type: string; slots: Record<string, string> }>
+): SemanticContent => ({
+  frames: frames.map((f, i) => ({
+    id: `f_${String(i).padStart(3, '0')}`,
+    type: f.type,
+    slots: f.slots,
+  })),
+  relations: [],
 });
 
 const createTestLeaf = (
@@ -178,49 +176,53 @@ describe('buildSystemPrompt', () => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe('buildLeafPrompt', () => {
-  it('includes all sentences in prompt', () => {
-    const commit = createTestCommit([
-      'User prefers dark mode',
-      'User speaks English',
-      'User timezone is UTC+8',
+  it('includes all frame knowledge in prompt', () => {
+    const knowledge = createTestKnowledge([
+      { type: 'user_preference', slots: { theme: 'dark mode' } },
+      { type: 'language', slots: { primary: 'English' } },
+      { type: 'timezone', slots: { value: 'UTC+8' } },
     ]);
     const leaf = createTestLeaf('tweet');
 
-    const result = buildLeafPrompt({ commit, leaf });
+    const result = buildLeafPrompt({ knowledge, leaf });
 
-    expect(result.userPrompt).toContain('User prefers dark mode');
-    expect(result.userPrompt).toContain('User speaks English');
-    expect(result.userPrompt).toContain('User timezone is UTC+8');
-    expect(result.metadata.sentenceCount).toBe(3);
+    expect(result.userPrompt).toContain('user_preference');
+    expect(result.userPrompt).toContain('dark mode');
+    expect(result.userPrompt).toContain('language');
+    expect(result.userPrompt).toContain('English');
+    expect(result.userPrompt).toContain('timezone');
+    expect(result.metadata.frameCount).toBe(3);
   });
 
   it('includes type-specific instructions for tweet', () => {
-    const commit = createTestCommit(['Test sentence']);
+    const knowledge = createTestKnowledge([
+      { type: 'user_preference', slots: { theme: 'dark mode' } },
+    ]);
     const leaf = createTestLeaf('tweet');
 
-    const result = buildLeafPrompt({ commit, leaf });
+    const result = buildLeafPrompt({ knowledge, leaf });
 
     expect(result.systemPrompt).toContain('280 characters');
   });
 
   it('includes type-specific instructions for article', () => {
-    const commit = createTestCommit(['Test sentence']);
+    const knowledge = createTestKnowledge([{ type: 'topic', slots: { subject: 'AI' } }]);
     const leaf = createTestLeaf('article');
 
-    const result = buildLeafPrompt({ commit, leaf });
+    const result = buildLeafPrompt({ knowledge, leaf });
 
     expect(result.systemPrompt).toContain('headings');
     expect(result.systemPrompt).toContain('paragraphs');
   });
 
   it('includes REQUIRE constraints as "must include"', () => {
-    const commit = createTestCommit(['Test sentence']);
+    const knowledge = createTestKnowledge([{ type: 'topic', slots: { subject: 'AI' } }]);
     const constraints: Constraint[] = [
       { id: 'cst_1', type: 'require', match_mode: 'exact', value: 'dark mode' },
     ];
     const leaf = createTestLeaf('tweet', constraints);
 
-    const result = buildLeafPrompt({ commit, leaf });
+    const result = buildLeafPrompt({ knowledge, leaf });
 
     expect(result.userPrompt).toContain('MUST include');
     expect(result.userPrompt).toContain('dark mode');
@@ -228,13 +230,13 @@ describe('buildLeafPrompt', () => {
   });
 
   it('includes EXCLUDE constraints as "must not include"', () => {
-    const commit = createTestCommit(['Test sentence']);
+    const knowledge = createTestKnowledge([{ type: 'topic', slots: { subject: 'AI' } }]);
     const constraints: Constraint[] = [
       { id: 'cst_1', type: 'exclude', match_mode: 'exact', value: 'light mode' },
     ];
     const leaf = createTestLeaf('tweet', constraints);
 
-    const result = buildLeafPrompt({ commit, leaf });
+    const result = buildLeafPrompt({ knowledge, leaf });
 
     expect(result.userPrompt).toContain('MUST NOT include');
     expect(result.userPrompt).toContain('light mode');
@@ -242,18 +244,22 @@ describe('buildLeafPrompt', () => {
   });
 
   it('includes additional instructions when provided', () => {
-    const commit = createTestCommit(['Test sentence']);
+    const knowledge = createTestKnowledge([{ type: 'topic', slots: { subject: 'AI' } }]);
     const leaf = createTestLeaf('tweet');
     const additionalInstructions = 'Use a friendly tone and include emojis';
 
-    const result = buildLeafPrompt({ commit, leaf, additionalInstructions });
+    const result = buildLeafPrompt({ knowledge, leaf, additionalInstructions });
 
     expect(result.userPrompt).toContain('Additional Instructions');
     expect(result.userPrompt).toContain('Use a friendly tone and include emojis');
   });
 
   it('returns correct metadata counts', () => {
-    const commit = createTestCommit(['Sentence 1', 'Sentence 2', 'Sentence 3']);
+    const knowledge = createTestKnowledge([
+      { type: 'user_preference', slots: { theme: 'dark' } },
+      { type: 'language', slots: { primary: 'English' } },
+      { type: 'goal', slots: { task: 'write blog' } },
+    ]);
     const constraints: Constraint[] = [
       { id: 'cst_1', type: 'require', match_mode: 'exact', value: 'value1' },
       { id: 'cst_2', type: 'require', match_mode: 'semantic', value: 'value2' },
@@ -261,27 +267,27 @@ describe('buildLeafPrompt', () => {
     ];
     const leaf = createTestLeaf('article', constraints);
 
-    const result = buildLeafPrompt({ commit, leaf });
+    const result = buildLeafPrompt({ knowledge, leaf });
 
-    expect(result.metadata.sentenceCount).toBe(3);
+    expect(result.metadata.frameCount).toBe(3);
     expect(result.metadata.requireCount).toBe(2);
     expect(result.metadata.excludeCount).toBe(1);
   });
 
   it('includes leaf title when provided', () => {
-    const commit = createTestCommit(['Test sentence']);
+    const knowledge = createTestKnowledge([{ type: 'topic', slots: { subject: 'AI' } }]);
     const leaf = createTestLeaf('tweet', [], 'Welcome Tweet');
 
-    const result = buildLeafPrompt({ commit, leaf });
+    const result = buildLeafPrompt({ knowledge, leaf });
 
     expect(result.userPrompt).toContain('Welcome Tweet');
   });
 
   it('handles empty constraints gracefully', () => {
-    const commit = createTestCommit(['Test sentence']);
+    const knowledge = createTestKnowledge([{ type: 'topic', slots: { subject: 'AI' } }]);
     const leaf = createTestLeaf('tweet', []);
 
-    const result = buildLeafPrompt({ commit, leaf });
+    const result = buildLeafPrompt({ knowledge, leaf });
 
     expect(result.metadata.requireCount).toBe(0);
     expect(result.metadata.excludeCount).toBe(0);
@@ -291,15 +297,15 @@ describe('buildLeafPrompt', () => {
   });
 
   it('returns valid BuiltPrompt structure', () => {
-    const commit = createTestCommit(['Test']);
+    const knowledge = createTestKnowledge([{ type: 'topic', slots: { subject: 'test' } }]);
     const leaf = createTestLeaf('tweet');
 
-    const result = buildLeafPrompt({ commit, leaf });
+    const result = buildLeafPrompt({ knowledge, leaf });
 
     expect(result).toHaveProperty('systemPrompt');
     expect(result).toHaveProperty('userPrompt');
     expect(result).toHaveProperty('metadata');
-    expect(result.metadata).toHaveProperty('sentenceCount');
+    expect(result.metadata).toHaveProperty('frameCount');
     expect(result.metadata).toHaveProperty('requireCount');
     expect(result.metadata).toHaveProperty('excludeCount');
     expect(typeof result.systemPrompt).toBe('string');
@@ -307,14 +313,14 @@ describe('buildLeafPrompt', () => {
   });
 
   it('includes lessons learned when provided', () => {
-    const commit = createTestCommit(['Test sentence']);
+    const knowledge = createTestKnowledge([{ type: 'topic', slots: { subject: 'AI' } }]);
     const leaf = createTestLeaf('tweet');
     const lessons = [
       'Previous output was too formal for Twitter',
       'Include more hashtags for engagement',
     ];
 
-    const result = buildLeafPrompt({ commit, leaf, lessons });
+    const result = buildLeafPrompt({ knowledge, leaf, lessons });
 
     expect(result.userPrompt).toContain('Lessons Learned');
     expect(result.userPrompt).toContain('Previous output was too formal for Twitter');
@@ -322,10 +328,10 @@ describe('buildLeafPrompt', () => {
   });
 
   it('does not include lessons section when empty', () => {
-    const commit = createTestCommit(['Test sentence']);
+    const knowledge = createTestKnowledge([{ type: 'topic', slots: { subject: 'AI' } }]);
     const leaf = createTestLeaf('tweet');
 
-    const result = buildLeafPrompt({ commit, leaf, lessons: [] });
+    const result = buildLeafPrompt({ knowledge, leaf, lessons: [] });
 
     expect(result.userPrompt).not.toContain('Lessons Learned');
   });

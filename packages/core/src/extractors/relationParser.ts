@@ -7,7 +7,7 @@
  * on valid JSON.
  */
 
-import { RELATION_TYPES, type RelationType } from '../types/v4';
+import { RELATION_TYPES, type RelationType } from '../types';
 
 export interface RelationItem {
   source_id: string;

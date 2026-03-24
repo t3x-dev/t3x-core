@@ -1,0 +1,107 @@
+<h2>Confidence Styling: How should uncertain frames look?</h2>
+<p class="subtitle">When the LLM asks "Do you prefer X or Y?", any frames extracted are tentative — not confirmed facts. How should they appear differently?</p>
+
+<div class="mockup" style="margin-bottom:24px">
+  <div class="mockup-header">The scenario</div>
+  <div class="mockup-body" style="padding:16px;font-size:13px">
+    <div style="display:flex;gap:16px">
+      <div style="flex:1">
+        <div class="label">Chat</div>
+        <div style="padding:8px;border-radius:6px;background:var(--hover-bg);margin:4px 0;font-size:12px">
+          <strong>User:</strong> I want to plan a trip to Japan
+        </div>
+        <div style="padding:8px;border-radius:6px;background:var(--surface-overlay);margin:4px 0;font-size:12px">
+          <strong>LLM:</strong> Would you prefer <em>Tokyo for city life</em> or <em>Kyoto for temples</em>? And are you thinking <em>spring (cherry blossoms)</em> or <em>autumn (foliage)</em>?
+        </div>
+      </div>
+      <div style="flex:1">
+        <div class="label">What gets extracted</div>
+        <div style="font-size:12px;margin-top:4px">
+          <div style="padding:6px 8px;border-radius:4px;margin:2px 0;border:1px solid #4ade80">✓ destination: Japan <span style="color:var(--text-secondary)">(confidence: 1.0 — user stated)</span></div>
+          <div style="padding:6px 8px;border-radius:4px;margin:2px 0;border:1px dashed var(--text-secondary);opacity:0.6">? city: Tokyo or Kyoto <span style="color:var(--text-secondary)">(confidence: 0.3 — LLM question)</span></div>
+          <div style="padding:6px 8px;border-radius:4px;margin:2px 0;border:1px dashed var(--text-secondary);opacity:0.6">? season: spring or autumn <span style="color:var(--text-secondary)">(confidence: 0.3 — LLM question)</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h3>How should uncertain frames be styled?</h3>
+
+<div class="cards" style="margin-bottom:24px">
+  <div class="card" data-choice="a" onclick="toggleSelect(this)" style="flex:1">
+    <div class="card-image" style="padding:16px;display:flex;justify-content:center">
+      <!-- Dashed border style -->
+      <div style="display:flex;flex-direction:column;gap:8px;width:180px">
+        <div style="padding:10px;border-radius:8px;border:2px solid var(--stroke-default);font-size:12px">
+          <strong>destination</strong>
+          <div style="color:var(--text-secondary)">Japan</div>
+        </div>
+        <div style="padding:10px;border-radius:8px;border:2px dashed rgba(250,204,21,0.5);font-size:12px;opacity:0.6">
+          <strong>city</strong> <span style="font-size:10px;color:#facc15">?</span>
+          <div style="color:var(--text-secondary)">Tokyo or Kyoto</div>
+        </div>
+        <div style="padding:10px;border-radius:8px;border:2px dashed rgba(250,204,21,0.5);font-size:12px;opacity:0.6">
+          <strong>season</strong> <span style="font-size:10px;color:#facc15">?</span>
+          <div style="color:var(--text-secondary)">spring or autumn</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A: Dashed border + faded opacity</h3>
+      <p>Uncertain = dashed border, 60% opacity, "?" badge. Confirmed = solid border, full opacity.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)" style="flex:1">
+    <div class="card-image" style="padding:16px;display:flex;justify-content:center">
+      <!-- Ghost/blur style -->
+      <div style="display:flex;flex-direction:column;gap:8px;width:180px">
+        <div style="padding:10px;border-radius:8px;border:2px solid var(--stroke-default);font-size:12px">
+          <strong>destination</strong>
+          <div style="color:var(--text-secondary)">Japan</div>
+        </div>
+        <div style="padding:10px;border-radius:8px;border:1px solid var(--stroke-default);font-size:12px;opacity:0.4;filter:blur(0.5px);background:repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(128,128,128,0.03) 4px,rgba(128,128,128,0.03) 8px)">
+          <strong>city</strong>
+          <div style="color:var(--text-secondary)">Tokyo or Kyoto</div>
+        </div>
+        <div style="padding:10px;border-radius:8px;border:1px solid var(--stroke-default);font-size:12px;opacity:0.4;filter:blur(0.5px);background:repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(128,128,128,0.03) 4px,rgba(128,128,128,0.03) 8px)">
+          <strong>season</strong>
+          <div style="color:var(--text-secondary)">spring or autumn</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B: Ghost style (very faded)</h3>
+      <p>Uncertain = ghosted out, subtle hatching pattern. Reads as "not yet decided". Maybe too hidden?</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="c" onclick="toggleSelect(this)" style="flex:1">
+    <div class="card-image" style="padding:16px;display:flex;justify-content:center">
+      <!-- Dashed + interactive confirm -->
+      <div style="display:flex;flex-direction:column;gap:8px;width:200px">
+        <div style="padding:10px;border-radius:8px;border:2px solid var(--stroke-default);font-size:12px;display:flex;align-items:center;gap:8px">
+          <span style="color:#4ade80;font-size:14px">✓</span>
+          <div><strong>destination</strong><div style="color:var(--text-secondary)">Japan</div></div>
+        </div>
+        <div style="padding:10px;border-radius:8px;border:2px dashed rgba(250,204,21,0.5);font-size:12px;opacity:0.7;display:flex;align-items:center;gap:8px">
+          <span style="width:18px;height:18px;border-radius:4px;border:2px solid var(--text-secondary);display:inline-flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0;cursor:pointer"> </span>
+          <div><strong>city</strong><div style="color:var(--text-secondary)">Tokyo or Kyoto</div></div>
+        </div>
+        <div style="padding:10px;border-radius:8px;border:2px dashed rgba(250,204,21,0.5);font-size:12px;opacity:0.7;display:flex;align-items:center;gap:8px">
+          <span style="width:18px;height:18px;border-radius:4px;border:2px solid var(--text-secondary);display:inline-flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0;cursor:pointer"> </span>
+          <div><strong>season</strong><div style="color:var(--text-secondary)">spring or autumn</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C: Dashed + confirm checkbox (Recommended)</h3>
+      <p>Uncertain = dashed border + checkbox. User clicks to confirm → becomes solid with ✓. Ties directly into the "human confirm" signal from the relevance model.</p>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="padding:12px;border-radius:8px;background:var(--hover-bg);font-size:13px">
+  <strong>Note:</strong> When user confirms a frame (checks the box), confidence goes to 1.0 and it becomes a "confirmed" signal for the relevance scoring. This connects the confidence styling directly to the ranking system we designed earlier.
+</div>

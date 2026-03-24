@@ -1,0 +1,119 @@
+<h2>What gets shown vs. faded: The Relevance Model</h2>
+<p class="subtitle">Three signals determine if a frame is "front and center" or "still there but faded"</p>
+
+<div class="mockup" style="margin-bottom:24px">
+  <div class="mockup-header">The Three Signals</div>
+  <div class="mockup-body" style="padding:20px">
+    <div style="display:flex;gap:16px">
+      <div style="flex:1;padding:12px;border-radius:8px;background:var(--surface-overlay);text-align:center">
+        <div style="font-size:24px;margin-bottom:4px">🕐</div>
+        <div style="font-weight:600;font-size:13px">Recency</div>
+        <div style="font-size:11px;color:var(--text-secondary);margin-top:4px">When was this frame last touched?</div>
+        <div style="font-size:11px;margin-top:8px;padding:4px 8px;border-radius:4px;background:var(--hover-bg)">Deterministic</div>
+      </div>
+      <div style="flex:1;padding:12px;border-radius:8px;background:var(--surface-overlay);text-align:center">
+        <div style="font-size:24px;margin-bottom:4px">✅</div>
+        <div style="font-weight:600;font-size:13px">Human Confirm</div>
+        <div style="font-size:11px;color:var(--text-secondary);margin-top:4px">Did the user explicitly approve this?</div>
+        <div style="font-size:11px;margin-top:8px;padding:4px 8px;border-radius:4px;background:var(--hover-bg)">Deterministic</div>
+      </div>
+      <div style="flex:1;padding:12px;border-radius:8px;background:var(--surface-overlay);text-align:center">
+        <div style="font-size:24px;margin-bottom:4px">🤖</div>
+        <div style="font-weight:600;font-size:13px">LLM Relevance</div>
+        <div style="font-size:11px;color:var(--text-secondary);margin-top:4px">Does the LLM think this matters to user's goal?</div>
+        <div style="font-size:11px;margin-top:8px;padding:4px 8px;border-radius:4px;background:rgba(139,92,246,0.2);color:rgb(167,139,250)">Optional plugin</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mockup" style="margin-bottom:24px">
+  <div class="mockup-header">Example: 30-turn trip planning conversation → 25 frames</div>
+  <div class="mockup-body" style="padding:20px">
+    <div style="display:flex;gap:24px">
+      <!-- Without LLM -->
+      <div style="flex:1">
+        <div class="label">Deterministic only (toggle OFF)</div>
+        <div style="font-size:12px;margin-top:8px">
+          <div style="padding:8px;border-radius:6px;border:2px solid #4ade80;background:rgba(74,222,128,0.08);margin:4px 0">
+            <span style="font-size:10px;background:#4ade80;color:black;padding:1px 6px;border-radius:3px;float:right">recent + confirmed</span>
+            <strong>destination:</strong> Tokyo, Osaka
+          </div>
+          <div style="padding:8px;border-radius:6px;border:2px solid #4ade80;background:rgba(74,222,128,0.08);margin:4px 0">
+            <span style="font-size:10px;background:#4ade80;color:black;padding:1px 6px;border-radius:3px;float:right">recent</span>
+            <strong>osaka_food:</strong> street_food
+          </div>
+          <div style="padding:8px;border-radius:6px;border:2px solid #facc15;background:rgba(250,204,21,0.08);margin:4px 0">
+            <span style="font-size:10px;background:#facc15;color:black;padding:1px 6px;border-radius:3px;float:right">confirmed</span>
+            <strong>budget:</strong> $7000
+          </div>
+          <div style="padding:8px;border-radius:6px;border:1px solid var(--stroke-default);margin:4px 0;opacity:0.5">
+            <strong>diet:</strong> vegetarian
+          </div>
+          <div style="padding:8px;border-radius:6px;border:1px solid var(--stroke-default);margin:4px 0;opacity:0.5">
+            <strong>flight_pref:</strong> window_seat
+          </div>
+          <div style="padding:8px;border-radius:6px;border:1px solid var(--stroke-default);margin:4px 0;opacity:0.3">
+            <strong>currency_exchange:</strong> discussed
+          </div>
+          <div style="padding:8px;border-radius:6px;border:1px solid var(--stroke-default);margin:4px 0;opacity:0.3">
+            <strong>luggage_storage:</strong> asked
+          </div>
+          <div style="text-align:center;padding:8px;color:var(--text-secondary);font-size:11px">... +18 more faded frames</div>
+        </div>
+      </div>
+      <!-- With LLM -->
+      <div style="flex:1">
+        <div class="label">With LLM relevance (toggle ON)</div>
+        <div style="font-size:12px;margin-top:8px">
+          <div style="padding:8px;border-radius:6px;border:2px solid #4ade80;background:rgba(74,222,128,0.08);margin:4px 0">
+            <span style="font-size:10px;background:#4ade80;color:black;padding:1px 6px;border-radius:3px;float:right">recent + confirmed</span>
+            <strong>destination:</strong> Tokyo, Osaka
+          </div>
+          <div style="padding:8px;border-radius:6px;border:2px solid #4ade80;background:rgba(74,222,128,0.08);margin:4px 0">
+            <span style="font-size:10px;background:#4ade80;color:black;padding:1px 6px;border-radius:3px;float:right">recent</span>
+            <strong>osaka_food:</strong> street_food
+          </div>
+          <div style="padding:8px;border-radius:6px;border:2px solid #facc15;background:rgba(250,204,21,0.08);margin:4px 0">
+            <span style="font-size:10px;background:#facc15;color:black;padding:1px 6px;border-radius:3px;float:right">confirmed</span>
+            <strong>budget:</strong> $7000
+          </div>
+          <div style="padding:8px;border-radius:6px;border:2px solid rgb(167,139,250);background:rgba(139,92,246,0.08);margin:4px 0">
+            <span style="font-size:10px;background:rgb(139,92,246);color:white;padding:1px 6px;border-radius:3px;float:right">LLM: core intent</span>
+            <strong>diet:</strong> vegetarian
+          </div>
+          <div style="padding:8px;border-radius:6px;border:2px solid rgb(167,139,250);background:rgba(139,92,246,0.08);margin:4px 0">
+            <span style="font-size:10px;background:rgb(139,92,246);color:white;padding:1px 6px;border-radius:3px;float:right">LLM: safety critical</span>
+            <strong>shellfish_allergy:</strong> critical
+          </div>
+          <div style="padding:8px;border-radius:6px;border:1px solid var(--stroke-default);margin:4px 0;opacity:0.4">
+            <strong>flight_pref:</strong> window_seat
+          </div>
+          <div style="text-align:center;padding:8px;color:var(--text-secondary);font-size:11px">... +19 more faded frames</div>
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:16px;padding:12px;border-radius:8px;background:var(--hover-bg);font-size:12px">
+      <strong>Key difference:</strong> Without LLM, "diet: vegetarian" and "shellfish_allergy" fade because they're from turn 2 (old). With LLM, it recognizes these are <strong>core to the user's intent</strong> — diet shapes every restaurant choice, allergy is safety-critical. LLM re-highlights what the deterministic model would miss.
+    </div>
+  </div>
+</div>
+
+<h3>Does this match your thinking?</h3>
+
+<div class="options">
+  <div class="option" data-choice="yes" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Yes — deterministic base + LLM re-highlight</h3>
+      <p>Recency and human-confirm drive the default view. LLM toggle surfaces old-but-important frames that would otherwise fade. Move on to next question.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="refine" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Close but needs adjustment</h3>
+      <p>The concept is right but I want to refine how the LLM decides or how confirm works.</p>
+    </div>
+  </div>
+</div>

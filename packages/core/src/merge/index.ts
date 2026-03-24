@@ -6,7 +6,8 @@
  * V4 Changes:
  * - No constraint handling (constraints belong to Leaf)
  * - prepareMerge accepts DiffableSentence[] instead of CommitContent
- * - executeMerge returns SentenceCommit
+ * - executeMerge returns SemanticContent (frames + relations)
+ * - executeThreeWayMerge returns SemanticContent (frames + relations)
  */
 
 // Two-way merge functions

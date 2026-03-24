@@ -2,36 +2,28 @@
  * Execute Merge
  *
  * Executes a merge after user has made all decisions.
- * Creates a new SentenceCommit with 2 parents.
+ * Returns SemanticContent (frames + relations) ready for commit creation.
  *
- * 执行合并 - 在用户完成所有决策后创建新的合并 SentenceCommit
+ * 执行合并 - 在用户完成所有决策后返回合并后的 SemanticContent
  *
  * V4 Changes:
- * - Returns SentenceCommit
- * - Added projectId parameter
+ * - Returns SemanticContent instead of SentenceCommit
+ * - Commit wrapping (hash, parents, author) is handled by the storage layer
  * - No constraint handling (constraints belong to Leaf)
  */
 
 import { sha256 } from '../common/hash';
 import type { DiffableSentence } from '../diff/types';
-import { type CommitAuthor, ID_PREFIXES, type Sentence, type SentenceCommit } from '../types/v4';
+import type { Frame, SemanticContent } from '../semantic/types';
 import type { Merge2WayResult } from './types';
 
 /**
  * Execute a merge after user has made all decisions.
  * 在用户完成所有决策后执行合并
  *
- * V4 Changes:
- * - Returns SentenceCommit
- * - Added projectId parameter
- * - No constraint handling
- *
- * FROZEN - Do not modify without team agreement.
- *
- * Creates a new commit with:
- * - parents: [sourceHash, targetHash]
- * - content: merged sentences (no constraints - they belong to Leaf)
- * - New IDs: deterministic V4 format 's_' + sha256(parentHashes + originalId).slice(0,12)
+ * Returns SemanticContent with merged frames. Each DiffableSentence becomes
+ * a frame of type 'knowledge' with a 'text' slot. The caller is responsible
+ * for wrapping this in a commit (hash, parents, author, etc.) via the storage layer.
  *
  * @throws Error if any similarPair has no resolution
  *
@@ -40,25 +32,14 @@ import type { Merge2WayResult } from './types';
  * prepared.similarPairs[0].resolution = 'target';
  * prepared.onlyInSource[0].keep = false;
  *
- * executeMerge(
- *   prepared,
- *   'sha256:source123',
- *   'sha256:target456',
- *   { type: 'human', name: 'Alice' },
- *   'Merge feature-branch into main',
- *   'proj_abc123'
- * )
- * → SentenceCommit with parents: ['sha256:source123', 'sha256:target456']
+ * executeMerge(prepared, 'sha256:source123', 'sha256:target456')
+ * → SemanticContent { frames: [...], relations: [] }
  */
 export function executeMerge(
   prepared: Merge2WayResult,
   sourceCommitHash: string,
-  targetCommitHash: string,
-  author: CommitAuthor,
-  message: string,
-  projectId: string,
-  committedAt?: string
-): SentenceCommit {
+  targetCommitHash: string
+): SemanticContent {
   // Collect sentences with their sort position for order preservation
   // 收集句子及其排序位置，用于保持原始文档顺序
   const collected: Array<{
@@ -72,7 +53,6 @@ export function executeMerge(
   const getPosition = (s: DiffableSentence): number => s.position ?? Number.POSITIVE_INFINITY;
 
   // 1. Collect identical sentences (use source position)
-  // 收集完全相同的句子（使用 source 位置）
   for (const s of prepared.identical) {
     collected.push({
       sentence: s,
@@ -82,7 +62,6 @@ export function executeMerge(
   }
 
   // 2. Collect resolved similar pairs
-  // 收集已解决的相似句子对
   for (const pair of prepared.similarPairs) {
     if (!pair.resolution) {
       throw new Error(`Unresolved similar pair: "${pair.source.text}" vs "${pair.target.text}"`);
@@ -104,8 +83,7 @@ export function executeMerge(
     }
   }
 
-  // 3. Collect kept sentences from source-only (use source position)
-  // 收集保留的仅在 source 中的句子（使用 source 位置）
+  // 3. Collect kept sentences from source-only
   for (const candidate of prepared.onlyInSource) {
     if (candidate.keep) {
       collected.push({
@@ -116,10 +94,7 @@ export function executeMerge(
     }
   }
 
-  // 4. Collect kept sentences from target-only (use target position + offset)
-  // Target-only sentences get position + 0.5 offset so they appear after
-  // source sentences at the same integer position (interleaving)
-  // 收集保留的仅在 target 中的句子（位置 + 0.5 偏移，穿插排列）
+  // 4. Collect kept sentences from target-only (position + 0.5 offset for interleaving)
   for (const candidate of prepared.onlyInTarget) {
     if (candidate.keep) {
       collected.push({
@@ -131,7 +106,6 @@ export function executeMerge(
   }
 
   // Sort by position, with stable tie-breaking by insertion order
-  // 按位置排序，位置相同时按插入顺序（稳定排序）
   collected.sort((a, b) => {
     if (a.sortPosition !== b.sortPosition) {
       return a.sortPosition - b.sortPosition;
@@ -139,69 +113,21 @@ export function executeMerge(
     return a.insertionOrder - b.insertionOrder;
   });
 
-  // Convert to Sentence with deterministic V4 IDs
-  // 转换为 Sentence，使用确定性 V4 格式 ID
-  const sentences: Sentence[] = [];
-
-  for (const { sentence: s } of collected) {
+  // Convert each DiffableSentence to a Frame (type 'knowledge', text slot)
+  // Frame IDs are deterministic: f_ + sha256(sourceHash:targetHash:originalId).slice(0,12)
+  const frames: Frame[] = collected.map(({ sentence: s }) => {
     const hashInput = `${sourceCommitHash}:${targetCommitHash}:${s.id}`;
-    const newId = `${ID_PREFIXES.sentence}${sha256(hashInput).slice(0, 12)}`;
-    const sentence: Sentence = {
+    const newId = `f_${sha256(hashInput).slice(0, 12)}`;
+    const frame: Frame = {
       id: newId,
-      text: s.text,
+      type: 'knowledge',
+      slots: { text: s.text },
     };
-    // Preserve source_ref for source context display
     if (s.source_ref) {
-      sentence.source_ref = s.source_ref;
+      frame.source = s.source_ref.turn_hash;
     }
-    sentences.push(sentence);
-  }
+    return frame;
+  });
 
-  const timestamp = committedAt ?? new Date().toISOString();
-
-  // Build first-class data for hash computation
-  // 构建一等字段用于计算哈希
-  const firstClassData = {
-    schema: 't3x/commit/v4' as const,
-    parents: [sourceCommitHash, targetCommitHash],
-    author,
-    committed_at: timestamp,
-    content: {
-      sentences,
-    },
-  };
-
-  // Inline V4 hash computation (sha256 of first-class fields)
-  const hashableData = {
-    schema: firstClassData.schema,
-    parents: firstClassData.parents,
-    author: firstClassData.author,
-    committed_at: firstClassData.committed_at,
-    content: {
-      sentences: firstClassData.content.sentences.map((s) => ({
-        id: s.id,
-        text: s.text,
-        ...(s.confidence !== undefined ? { confidence: s.confidence } : {}),
-        ...(s.source_ref ? { source_ref: s.source_ref } : {}),
-      })),
-    },
-  };
-  const hash = `sha256:${sha256(hashableData)}`;
-
-  // Return SentenceCommit
-  // 返回 SentenceCommit
-  return {
-    hash,
-    schema: 't3x/commit/v4',
-    parents: [sourceCommitHash, targetCommitHash],
-    author,
-    committed_at: timestamp,
-    content: {
-      sentences,
-    },
-    project_id: projectId,
-    message,
-    // Note: branch should be set by caller based on merge target
-    // 注意：branch 应由调用者根据合并目标设置
-  };
+  return { frames, relations: [] };
 }

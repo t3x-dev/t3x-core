@@ -6,24 +6,19 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GenerationError, generateLeafOutput, isGenerationConfigured } from '../../leaf/generate';
-import type { Leaf, SentenceCommit } from '../../types/v4';
+import type { SemanticContent } from '../../semantic/types';
+import type { Leaf } from '../../types';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Test Fixtures
 // ═══════════════════════════════════════════════════════════════════════════
 
-const createTestCommit = (): SentenceCommit => ({
-  hash: 'sha256:test-hash',
-  schema: 't3x/commit/v4',
-  parents: [],
-  author: { type: 'human', name: 'Test User' },
-  committed_at: new Date().toISOString(),
-  content: {
-    sentences: [
-      { id: 's_1', text: 'User prefers dark mode' },
-      { id: 's_2', text: 'User speaks English' },
-    ],
-  },
+const createTestKnowledge = (): SemanticContent => ({
+  frames: [
+    { id: 'f_001', type: 'user_preference', slots: { theme: 'dark mode' } },
+    { id: 'f_002', type: 'language', slots: { primary: 'English' } },
+  ],
+  relations: [],
 });
 
 const createTestLeaf = (withConstraints = false): Leaf => ({
@@ -116,14 +111,14 @@ describe('generateLeafOutput', () => {
 
     await expect(
       generateLeafOutput({
-        commit: createTestCommit(),
+        knowledge: createTestKnowledge(),
         leaf: createTestLeaf(),
       })
     ).rejects.toThrow(GenerationError);
 
     await expect(
       generateLeafOutput({
-        commit: createTestCommit(),
+        knowledge: createTestKnowledge(),
         leaf: createTestLeaf(),
       })
     ).rejects.toMatchObject({
@@ -138,11 +133,10 @@ describe('generateLeafOutput', () => {
       text: () => Promise.resolve(JSON.stringify(mockResponse)),
     });
 
-    const commit = createTestCommit();
     const leaf = createTestLeaf(true);
 
     await generateLeafOutput({
-      commit,
+      knowledge: createTestKnowledge(),
       leaf,
       model: 'claude-sonnet-4-20250514',
       temperature: 0.8,
@@ -175,7 +169,7 @@ describe('generateLeafOutput', () => {
     });
 
     const result = await generateLeafOutput({
-      commit: createTestCommit(),
+      knowledge: createTestKnowledge(),
       leaf: createTestLeaf(),
     });
 
@@ -190,7 +184,7 @@ describe('generateLeafOutput', () => {
     });
 
     const result = await generateLeafOutput({
-      commit: createTestCommit(),
+      knowledge: createTestKnowledge(),
       leaf: createTestLeaf(),
     });
 
@@ -208,7 +202,7 @@ describe('generateLeafOutput', () => {
     });
 
     await generateLeafOutput({
-      commit: createTestCommit(),
+      knowledge: createTestKnowledge(),
       leaf: createTestLeaf(),
     });
 
@@ -224,7 +218,7 @@ describe('generateLeafOutput', () => {
     });
 
     await generateLeafOutput({
-      commit: createTestCommit(),
+      knowledge: createTestKnowledge(),
       leaf: createTestLeaf(),
     });
 
@@ -241,7 +235,7 @@ describe('generateLeafOutput', () => {
     });
 
     const result = await generateLeafOutput({
-      commit: createTestCommit(),
+      knowledge: createTestKnowledge(),
       leaf: createTestLeaf(),
     });
 
@@ -256,7 +250,7 @@ describe('generateLeafOutput', () => {
     });
 
     const result = await generateLeafOutput({
-      commit: createTestCommit(),
+      knowledge: createTestKnowledge(),
       leaf: createTestLeaf(),
     });
 
@@ -283,7 +277,7 @@ describe('generateLeafOutput', () => {
 
     await expect(
       generateLeafOutput({
-        commit: createTestCommit(),
+        knowledge: createTestKnowledge(),
         leaf: createTestLeaf(),
       })
     ).rejects.toMatchObject({
@@ -310,7 +304,7 @@ describe('generateLeafOutput', () => {
 
     await expect(
       generateLeafOutput({
-        commit: createTestCommit(),
+        knowledge: createTestKnowledge(),
         leaf: createTestLeaf(),
       })
     ).rejects.toMatchObject({
@@ -324,7 +318,7 @@ describe('generateLeafOutput', () => {
 
     await expect(
       generateLeafOutput({
-        commit: createTestCommit(),
+        knowledge: createTestKnowledge(),
         leaf: createTestLeaf(),
       })
     ).rejects.toMatchObject({
@@ -351,7 +345,7 @@ describe('generateLeafOutput', () => {
 
     await expect(
       generateLeafOutput({
-        commit: createTestCommit(),
+        knowledge: createTestKnowledge(),
         leaf: createTestLeaf(),
       })
     ).rejects.toMatchObject({
@@ -375,7 +369,7 @@ describe('generateLeafOutput', () => {
     });
 
     const result = await generateLeafOutput({
-      commit: createTestCommit(),
+      knowledge: createTestKnowledge(),
       leaf,
     });
 
@@ -403,7 +397,7 @@ describe('generateLeafOutput', () => {
     }
 
     const result = await generateLeafOutput({
-      commit: createTestCommit(),
+      knowledge: createTestKnowledge(),
       leaf,
     });
 
@@ -423,7 +417,7 @@ describe('generateLeafOutput', () => {
     });
 
     const result = await generateLeafOutput({
-      commit: createTestCommit(),
+      knowledge: createTestKnowledge(),
       leaf,
     });
 
@@ -446,7 +440,7 @@ describe('generateLeafOutput', () => {
     });
 
     await generateLeafOutput({
-      commit: createTestCommit(),
+      knowledge: createTestKnowledge(),
       leaf: createTestLeaf(),
     });
 

@@ -38,7 +38,6 @@ import {
   draftsRoutes,
   exportRoutes,
   extractionFeedbackRoutes,
-  extractRoutes,
   frameAnswerRoutes,
   frameCompressRoutes,
   frameExtractRoutes,
@@ -150,7 +149,6 @@ export function createApp(options?: CreateAppOptions): Hono {
   api.route('/', runnerRoutes);
   api.route('/', deployAgentRoutes);
   api.route('/', draftsRoutes);
-  api.route('/', extractRoutes);
   api.route('/', frameExtractRoutes); // /v1/extract/frames
   api.route('/', frameAnswerRoutes); // /v1/extract/frames/answer
   api.route('/', frameCompressRoutes); // /v1/conversations/:conversationId/compress

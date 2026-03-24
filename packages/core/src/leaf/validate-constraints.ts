@@ -21,8 +21,8 @@
 import { nanoid } from 'nanoid';
 import type { EmbeddingProvider } from '../providers/embedding/base';
 import { cosineSimilarity } from '../providers/embedding/base';
-import type { Assertion, Constraint } from '../types/v4';
-import { ID_PREFIXES } from '../types/v4';
+import type { Assertion, Constraint } from '../types';
+import { ID_PREFIXES } from '../types';
 import type { ConstraintCheckResult, ValidateOptions, ValidationResult } from './types';
 import { SEMANTIC_EXCLUDE_THRESHOLD, SEMANTIC_REQUIRE_THRESHOLD } from './types';
 

@@ -1,0 +1,193 @@
+<h2>Source Review Panel — Always Available</h2>
+<p class="subtitle">How should source context be accessed? The user must always know: where did this come from, and what changed?</p>
+
+<div class="cards">
+
+  <!-- Option A: Persistent Right Panel -->
+  <div class="card" data-choice="persistent-right" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#111827; border-radius:8px; overflow:hidden; font-family:system-ui; font-size:11px; color:#e5e7eb;">
+        <div style="display:flex; height:320px;">
+          <!-- Left: Frame list (narrow) -->
+          <div style="width:50px; background:#0f172a; border-right:1px solid #1f2937; padding:4px; font-size:8px; color:#4b5563;">
+            <div style="padding:3px; background:#3b82f610; border-radius:3px; margin-bottom:2px; color:#60a5fa;">f_1</div>
+            <div style="padding:3px; margin-bottom:2px;">f_2</div>
+            <div style="padding:3px;">f_3</div>
+          </div>
+
+          <!-- Center: YAML card -->
+          <div style="flex:1; padding:8px; overflow:hidden;">
+            <div style="border-radius:6px; border:1px solid #3b82f640; overflow:hidden;">
+              <div style="padding:4px 8px; background:#1e293b; font-size:9px; display:flex; gap:4px; align-items:center;">
+                <span style="background:#1e3a5f; color:#60a5fa; padding:0 4px; border-radius:2px;">travel_plan</span>
+                <span style="color:#4b5563;">f_1</span>
+              </div>
+              <div style="padding:6px 8px; background:#0d1117; font-family:monospace; font-size:10px; line-height:1.8;">
+                <div style="background:#3b82f608; margin:0 -8px; padding:0 8px; border-left:2px solid #3b82f6;"><span style="color:#7aa2f7;">destination</span><span style="color:#89ddff;">:</span> <span style="color:#9ece6a;">Tokyo</span> <span style="color:#3b82f6; font-size:8px;">&#8592; T3</span></div>
+                <div><span style="color:#7aa2f7;">duration</span><span style="color:#89ddff;">:</span> <span style="color:#ff9e64;">14 days</span></div>
+                <div style="background:#f59e0b08; margin:0 -8px; padding:0 8px; border-left:2px solid #f59e0b;"><span style="color:#7aa2f7;">budget</span><span style="color:#89ddff;">:</span> <span style="color:#ff9e64; text-decoration:line-through; opacity:0.5;">3000</span> <span style="color:#89ddff;">&rarr;</span> <span style="color:#ff9e64;">5000</span> <span style="color:#f59e0b; font-size:8px;">&#8592; T5</span></div>
+                <div><span style="color:#7aa2f7;">style</span><span style="color:#89ddff;">:</span> <span style="color:#9ece6a;">cultural immersion</span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right: Source panel (always visible) -->
+          <div style="width:200px; border-left:1px solid #1f2937; background:#0f172a; padding:8px; overflow-y:auto;">
+            <div style="font-size:8px; font-weight:700; text-transform:uppercase; color:#4b5563; margin-bottom:6px;">Source for: destination</div>
+            <div style="background:#111827; border-radius:4px; padding:6px; border:1px solid #1f2937; margin-bottom:6px;">
+              <div style="font-size:9px; color:#60a5fa; margin-bottom:2px;">Turn T3 &middot; assistant</div>
+              <div style="font-size:10px; color:#e5e7eb; padding:4px; background:#0d1117; border-radius:3px; border-left:2px solid #3b82f6; line-height:1.4;">
+                "I'd recommend <span style="background:#3b82f630; padding:0 2px; border-radius:2px;">Tokyo</span> as your primary destination for cultural..."
+              </div>
+            </div>
+
+            <div style="font-size:8px; font-weight:700; text-transform:uppercase; color:#f59e0b; margin-top:12px; margin-bottom:6px;">Changed: budget</div>
+            <div style="background:#111827; border-radius:4px; padding:6px; border:1px solid #f59e0b30; margin-bottom:4px;">
+              <div style="font-size:9px; color:#f59e0b; margin-bottom:2px;">Turn T5 &middot; user</div>
+              <div style="font-size:10px; color:#e5e7eb; padding:4px; background:#0d1117; border-radius:3px; border-left:2px solid #f59e0b; line-height:1.4;">
+                "Actually, let's increase the budget to <span style="background:#f59e0b30; padding:0 2px; border-radius:2px;">$5000</span>, I want better experiences"
+              </div>
+            </div>
+            <div style="font-size:9px; color:#6b7280; padding:2px 0;">
+              Previous: $3000 (Turn T2)
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A. Persistent Right Panel (Recommended)</h3>
+      <p>Source panel is <strong>always visible</strong>. Click a YAML slot &rarr; right panel shows source quote with highlighted text. Changed slots show both old and new source. Inline markers (&#8592; T3) on YAML lines hint at provenance.</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul><li>Source always one click away — no mode switch</li><li>See YAML + source simultaneously</li><li>Changed slots get special "Changed" header in source panel</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Uses screen width — less room for YAML on small screens</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Option B: Slide-in from right -->
+  <div class="card" data-choice="slide-in" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#111827; border-radius:8px; overflow:hidden; font-family:system-ui; font-size:11px; color:#e5e7eb; position:relative;">
+        <div style="display:flex; height:320px;">
+          <!-- Left: Frame list -->
+          <div style="width:50px; background:#0f172a; border-right:1px solid #1f2937; padding:4px; font-size:8px; color:#4b5563;">
+            <div style="padding:3px; background:#3b82f610; border-radius:3px; margin-bottom:2px; color:#60a5fa;">f_1</div>
+            <div style="padding:3px; margin-bottom:2px;">f_2</div>
+            <div style="padding:3px;">f_3</div>
+          </div>
+
+          <!-- Center: YAML (full width when panel closed) -->
+          <div style="flex:1; padding:8px;">
+            <div style="border-radius:6px; border:1px solid #1f2937; overflow:hidden;">
+              <div style="padding:4px 8px; background:#1e293b; font-size:9px; display:flex; gap:4px; align-items:center;">
+                <span style="background:#1e3a5f; color:#60a5fa; padding:0 4px; border-radius:2px;">travel_plan</span>
+                <span style="color:#4b5563;">f_1</span>
+                <span style="margin-left:auto; color:#3b82f6; font-size:8px; border:1px solid #3b82f640; padding:0 4px; border-radius:2px; cursor:pointer;">Sources &rsaquo;</span>
+              </div>
+              <div style="padding:6px 8px; background:#0d1117; font-family:monospace; font-size:10px; line-height:1.8;">
+                <div><span style="color:#7aa2f7;">destination</span><span style="color:#89ddff;">:</span> <span style="color:#9ece6a;">Tokyo</span></div>
+                <div><span style="color:#7aa2f7;">duration</span><span style="color:#89ddff;">:</span> <span style="color:#ff9e64;">14 days</span></div>
+                <div><span style="color:#7aa2f7;">budget</span><span style="color:#89ddff;">:</span> <span style="color:#ff9e64;">5000</span></div>
+                <div><span style="color:#7aa2f7;">style</span><span style="color:#89ddff;">:</span> <span style="color:#9ece6a;">cultural immersion</span></div>
+                <div><span style="color:#7aa2f7;">activities</span><span style="color:#89ddff;">:</span></div>
+                <div style="padding-left:12px;"><span style="color:#89ddff;">-</span> <span style="color:#9ece6a;">temple visits</span></div>
+                <div style="padding-left:12px;"><span style="color:#89ddff;">-</span> <span style="color:#9ece6a;">cooking classes</span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Slide-in overlay (partially visible) -->
+          <div style="position:absolute; right:0; top:0; bottom:0; width:220px; background:#0f172a; border-left:1px solid #3b82f640; box-shadow:-4px 0 16px rgba(0,0,0,0.3); padding:8px; z-index:10; transform:translateX(0);">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+              <span style="font-size:9px; font-weight:700; text-transform:uppercase; color:#60a5fa;">Sources</span>
+              <span style="color:#4b5563; font-size:10px; cursor:pointer;">&times;</span>
+            </div>
+
+            <div style="font-size:8px; font-weight:700; text-transform:uppercase; color:#4b5563; margin-bottom:4px;">All slots for f_1</div>
+
+            <div style="background:#111827; border-radius:4px; padding:6px; border:1px solid #1f2937; margin-bottom:6px;">
+              <div style="font-size:9px; color:#7aa2f7; margin-bottom:2px;">destination &middot; <span style="color:#60a5fa;">T3</span></div>
+              <div style="font-size:10px; color:#e5e7eb; padding:4px; background:#0d1117; border-radius:3px; border-left:2px solid #3b82f6; line-height:1.4;">
+                "recommend <span style="background:#3b82f630; padding:0 2px;">Tokyo</span> as your..."
+              </div>
+            </div>
+
+            <div style="background:#111827; border-radius:4px; padding:6px; border:1px solid #1f2937; margin-bottom:6px;">
+              <div style="font-size:9px; color:#7aa2f7; margin-bottom:2px;">style &middot; <span style="color:#10b981;">T1</span></div>
+              <div style="font-size:10px; color:#e5e7eb; padding:4px; background:#0d1117; border-radius:3px; border-left:2px solid #10b981; line-height:1.4;">
+                "More like <span style="background:#10b98130; padding:0 2px;">cultural immersion</span>"
+              </div>
+            </div>
+
+            <div style="background:#111827; border-radius:4px; padding:6px; border:1px solid #f59e0b30; margin-bottom:6px;">
+              <div style="font-size:9px; color:#7aa2f7; margin-bottom:2px;">budget &middot; <span style="color:#f59e0b;">T5 (changed)</span></div>
+              <div style="font-size:10px; color:#e5e7eb; padding:4px; background:#0d1117; border-radius:3px; border-left:2px solid #f59e0b; line-height:1.4;">
+                "increase budget to <span style="background:#f59e0b30; padding:0 2px;">$5000</span>"
+              </div>
+              <div style="font-size:9px; color:#6b7280; margin-top:2px;">Was: $3000 (T2)</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B. Slide-in Panel</h3>
+      <p>Source panel <strong>slides in from right</strong> when triggered (click slot or "Sources" button). Shows all slot sources for the active frame. Overlays the YAML partially. Dismiss with &times; or Esc.</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul><li>Full width for YAML when not reviewing sources</li><li>Focused source review mode</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Covers YAML content — can't see both fully</li><li>Extra click to open/close</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Option C: Inline expand -->
+  <div class="card" data-choice="inline-expand" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#111827; border-radius:8px; overflow:hidden; font-family:system-ui; font-size:11px; color:#e5e7eb;">
+        <div style="padding:8px;">
+          <div style="border-radius:6px; border:1px solid #1f2937; overflow:hidden;">
+            <div style="padding:4px 8px; background:#1e293b; font-size:9px; display:flex; gap:4px; align-items:center;">
+              <span style="background:#1e3a5f; color:#60a5fa; padding:0 4px; border-radius:2px;">travel_plan</span>
+              <span style="color:#4b5563;">f_1</span>
+            </div>
+            <div style="padding:6px 8px; background:#0d1117; font-family:monospace; font-size:10px; line-height:1.6;">
+              <div><span style="color:#7aa2f7;">destination</span><span style="color:#89ddff;">:</span> <span style="color:#9ece6a;">Tokyo</span></div>
+
+              <!-- Expanded source inline -->
+              <div style="margin:4px 0 4px 16px; background:#111827; border-radius:4px; padding:6px 8px; border:1px solid #3b82f630;">
+                <div style="font-size:9px; color:#60a5fa; margin-bottom:3px;">&#9432; Source: Turn T3 (assistant)</div>
+                <div style="font-size:10px; color:#d1d5db; line-height:1.4; border-left:2px solid #3b82f6; padding-left:6px;">
+                  "I'd recommend <span style="background:#3b82f630; padding:0 2px;">Tokyo</span> as your primary destination"
+                </div>
+              </div>
+
+              <div><span style="color:#7aa2f7;">duration</span><span style="color:#89ddff;">:</span> <span style="color:#ff9e64;">14 days</span></div>
+              <div style="background:#f59e0b08; margin:0 -8px; padding:0 8px; border-left:2px solid #f59e0b;"><span style="color:#7aa2f7;">budget</span><span style="color:#89ddff;">:</span> <span style="color:#ff9e64; text-decoration:line-through; opacity:0.5;">3000</span> <span style="color:#89ddff;">&rarr;</span> <span style="color:#ff9e64;">5000</span></div>
+
+              <!-- Expanded change source inline -->
+              <div style="margin:4px 0 4px 16px; background:#111827; border-radius:4px; padding:6px 8px; border:1px solid #f59e0b30;">
+                <div style="font-size:9px; color:#f59e0b; margin-bottom:3px;">&#916; Changed in Turn T5 (user)</div>
+                <div style="font-size:10px; color:#d1d5db; line-height:1.4; border-left:2px solid #f59e0b; padding-left:6px;">
+                  "let's increase budget to <span style="background:#f59e0b30; padding:0 2px;">$5000</span>, I want better experiences"
+                </div>
+                <div style="font-size:9px; color:#6b7280; margin-top:3px;">Previous: $3000 from Turn T2</div>
+              </div>
+
+              <div><span style="color:#7aa2f7;">style</span><span style="color:#89ddff;">:</span> <span style="color:#9ece6a;">cultural immersion</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C. Inline Expand</h3>
+      <p>Click any YAML slot &rarr; source quote expands <strong>inline below the slot</strong>, right in the YAML card. Changed slots show change provenance with old value. No separate panel.</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul><li>Source is right next to the data — zero context switch</li><li>Change provenance directly visible</li><li>Works on any screen size</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Expands card height — can push content down</li><li>Multiple expanded slots = long card</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+</div>

@@ -20,21 +20,6 @@ export {
   topicNamerAgent,
 } from './agents';
 export { createMeaningPipeline } from './createMeaningPipeline';
-export {
-  type ExtractionItem,
-  ExtractionParseError,
-  parseExtractionResponse,
-} from './extractionParser';
-// LLM Extraction
-export {
-  buildExtractionPrompt,
-  type LLMExtractionOptions,
-  type TurnInput,
-} from './extractionPrompt';
-export {
-  type ValidationResult,
-  validateExtractedSentences,
-} from './extractionValidator';
 export { type ParseResult as FrameDeltaParseResult, parseFrameDelta } from './frameDeltaParser';
 export {
   buildFrameExtractionPrompt,
@@ -59,17 +44,8 @@ export {
   type CompressResult,
   FrameCompressor,
 } from './frameCompressor';
-// Incremental Extraction (LLM pipeline)
-export { type FuzzyLocateResult, fuzzyLocate } from './fuzzyLocate';
-export { parseIncrementalResponse } from './incrementalParser';
-export { buildAdaptiveSection, buildIncrementalPrompt, buildStyleSeed } from './incrementalPrompt';
-export {
-  createLLMExtractor,
-  type ExtractedSentence,
-  type LLMExtractionResult,
-  LLMExtractor,
-} from './llmExtractor';
 // Meaning Pipeline (multi-agent orchestration)
+export { type FuzzyLocateResult, fuzzyLocate } from './fuzzyLocate';
 export {
   AgentRegistry,
   type MeaningAgent,
@@ -84,9 +60,6 @@ export {
 export { createRelationExtractor, RelationExtractor } from './relationExtractor';
 export { parseRelationResponse, type RelationItem, RelationParseError } from './relationParser';
 export { buildRelationPrompt } from './relationPrompt';
-export { type RouteResult, routeProposal } from './routeProposal';
-export { resolveSourceRef } from './sourceRefResolver';
-export { spToSentence } from './spToSentence';
 // Types
 export type {
   AnchorCandidate,
@@ -94,10 +67,3 @@ export type {
   AnchorType,
   Segment,
 } from './types';
-export {
-  type OverlapResult,
-  type OverlapStatus,
-  type VerifiedProposal,
-  type VerifyOptions,
-  verifyProposal,
-} from './verifyProposal';

@@ -36,11 +36,27 @@ export interface LeafNodeConfig {
 // ============================================
 
 // Import contract types from @t3x-dev/core (single source of truth)
-import type { CommitAuthor, CommitSourceRef, Sentence, SentenceSourceRef } from '@t3x-dev/core';
+import type { CommitAuthor, CommitSourceRef } from '@t3x-dev/core';
 import type { ApiCommit } from '@/lib/api/commits';
 
+// Legacy sentence types — kept locally for web components still using sentence-based display.
+// Core has moved to frame-native SemanticContent; web migration is a separate effort.
+export interface SentenceSourceRef {
+  conversation_id: string;
+  turn_hash: string;
+  start_char: number;
+  end_char: number;
+}
+
+export interface Sentence {
+  id: string;
+  text: string;
+  confidence?: number;
+  source_ref?: SentenceSourceRef;
+}
+
 // Re-export contract types for convenience
-export type { CommitAuthor, CommitSourceRef, Sentence, SentenceSourceRef };
+export type { CommitAuthor, CommitSourceRef };
 
 /**
  * Commit display data for canvas nodes.

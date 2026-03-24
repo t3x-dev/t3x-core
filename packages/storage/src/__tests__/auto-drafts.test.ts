@@ -4,7 +4,6 @@
  * Tests for auto-draft creation, lookup by conversation, and promotion.
  */
 
-import type { DraftSentence } from '@t3x-dev/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
 import {
@@ -18,7 +17,7 @@ import {
 import { insertProject } from '../queries/projects';
 import { createTestDB, testData } from './setup';
 
-function makeSentences(texts: string[]): DraftSentence[] {
+function makeSentences(texts: string[]): unknown[] {
   return texts.map((text, i) => ({
     id: `ds_auto_${i}`,
     text,

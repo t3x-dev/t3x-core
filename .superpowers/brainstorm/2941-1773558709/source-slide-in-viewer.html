@@ -1,0 +1,224 @@
+<h2>Level 3: Click to Expand — Slide-in Source Viewer</h2>
+<p class="subtitle">Click a slot &rarr; slide-in panel shows original conversation, auto-scrolled to the referenced turn with the exact text highlighted. User can scroll freely to see surrounding context.</p>
+
+<div class="mockup">
+  <div class="mockup-header">Full Page — YAML card (left) + Slide-in Source Viewer (right)</div>
+  <div class="mockup-body" style="padding:0; background:#0d1117; font-family:system-ui; font-size:12px; color:#e5e7eb;">
+    <div style="display:flex; height:520px;">
+
+      <!-- LEFT: YAML card (dimmed slightly, narrowed) -->
+      <div style="width:340px; overflow-y:auto; padding:12px; background:#0d1117; border-right:1px solid #1f2937;">
+        <div style="border-radius:8px; border:1px solid #1f2937; overflow:hidden;">
+          <div style="display:flex; align-items:center; gap:8px; padding:6px 12px; background:#1e293b; border-bottom:1px solid #1f2937; font-size:11px;">
+            <span style="background:#1e3a5f; color:#60a5fa; padding:1px 8px; border-radius:4px; font-weight:600;">travel_plan</span>
+            <span style="font-family:monospace; color:#4b5563; font-size:9px;">f_1</span>
+          </div>
+          <div style="padding:8px 12px; background:#0d1117; font-family:'JetBrains Mono',monospace; font-size:11px; line-height:1.9;">
+            <div><span style="color:#7aa2f7;">destination</span><span style="color:#89ddff;">:</span> <span style="color:#9ece6a;">Tokyo</span></div>
+            <div><span style="color:#7aa2f7;">duration</span><span style="color:#89ddff;">:</span> <span style="color:#ff9e64;">14 days</span></div>
+            <!-- Active slot - highlighted -->
+            <div style="background:#f59e0b15; margin:0 -12px; padding:0 12px; border-left:2px solid #f59e0b; outline:1px solid #f59e0b40; border-radius:0;">
+              <span style="color:#7aa2f7;">budget</span><span style="color:#89ddff;">:</span> <span style="color:#ff9e64; text-decoration:line-through; opacity:0.5;">3000</span> <span style="color:#4b5563;">&rarr;</span> <span style="color:#ff9e64;">5000</span>
+              <span style="float:right; color:#f59e0b; font-size:8px; margin-top:3px;">&#9666; viewing source</span>
+            </div>
+            <div><span style="color:#7aa2f7;">style</span><span style="color:#89ddff;">:</span> <span style="color:#9ece6a;">cultural immersion</span></div>
+            <div style="background:#10b98108; margin:0 -12px; padding:0 12px; border-left:2px solid #10b981;"><span style="color:#7aa2f7;">priority</span><span style="color:#89ddff;">:</span> <span style="color:#9ece6a;">experiences over sightseeing</span></div>
+            <div><span style="color:#7aa2f7;">activities</span><span style="color:#89ddff;">:</span></div>
+            <div style="padding-left:14px;"><span style="color:#89ddff;">-</span> <span style="color:#9ece6a;">temple visits</span></div>
+            <div style="padding-left:14px;"><span style="color:#89ddff;">-</span> <span style="color:#9ece6a;">cooking classes</span></div>
+          </div>
+        </div>
+
+        <!-- Other frame cards below (dimmed) -->
+        <div style="border-radius:8px; border:1px solid #1f2937; overflow:hidden; margin-top:10px; opacity:0.4;">
+          <div style="display:flex; align-items:center; gap:8px; padding:6px 12px; background:#1e293b; font-size:11px;">
+            <span style="background:#1e3a5f; color:#60a5fa; padding:1px 8px; border-radius:4px; font-weight:600;">accommodation</span>
+            <span style="font-family:monospace; color:#4b5563; font-size:9px;">f_2</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT: Slide-in Source Viewer -->
+      <div style="flex:1; display:flex; flex-direction:column; background:#111827; animation:slideIn 0.2s ease-out;">
+
+        <!-- Viewer header -->
+        <div style="display:flex; align-items:center; gap:8px; padding:8px 16px; background:#1e293b; border-bottom:1px solid #1f2937; shrink:0;">
+          <div style="display:flex; align-items:center; gap:6px;">
+            <span style="color:#f59e0b; font-size:10px;">&#916;</span>
+            <span style="font-size:11px; font-weight:600; color:#e5e7eb;">budget</span>
+            <span style="color:#4b5563; font-size:10px;">changed</span>
+          </div>
+
+          <!-- Tab toggle: Previous / Current -->
+          <div style="display:flex; margin-left:auto; background:#0d1117; border-radius:6px; padding:2px; gap:2px;">
+            <span style="padding:3px 10px; border-radius:4px; font-size:10px; color:#6b7280; cursor:pointer;">Previous (T2)</span>
+            <span style="padding:3px 10px; border-radius:4px; font-size:10px; background:#f59e0b20; color:#f59e0b; font-weight:600;">Current (T5)</span>
+          </div>
+
+          <span style="color:#4b5563; font-size:14px; cursor:pointer; margin-left:8px; padding:2px 6px; border-radius:4px; hover:background:#1f2937;">&times;</span>
+        </div>
+
+        <!-- Slot value summary bar -->
+        <div style="display:flex; align-items:center; gap:12px; padding:6px 16px; background:#0d1117; border-bottom:1px solid #1f2937; font-size:10px;">
+          <div style="display:flex; align-items:center; gap:4px;">
+            <span style="color:#ef4444;">&#9679;</span>
+            <span style="color:#6b7280;">was:</span>
+            <span style="font-family:monospace; color:#ef4444; text-decoration:line-through;">3000</span>
+          </div>
+          <span style="color:#4b5563;">&rarr;</span>
+          <div style="display:flex; align-items:center; gap:4px;">
+            <span style="color:#10b981;">&#9679;</span>
+            <span style="color:#6b7280;">now:</span>
+            <span style="font-family:monospace; color:#10b981;">5000</span>
+          </div>
+          <span style="margin-left:auto; color:#4b5563;">source: conv_abc &middot; Turn 5 of 8</span>
+        </div>
+
+        <!-- Conversation viewer (scrollable, auto-positioned to T5) -->
+        <div style="flex:1; overflow-y:auto; padding:16px;">
+
+          <!-- Earlier turns (scrollable above) -->
+          <div style="opacity:0.35; margin-bottom:12px;">
+            <div style="display:flex; gap:8px; margin-bottom:10px;">
+              <div style="width:24px; height:24px; border-radius:50%; background:#10b98120; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                <span style="color:#10b981; font-size:9px; font-weight:700;">U</span>
+              </div>
+              <div>
+                <div style="font-size:9px; color:#4b5563; margin-bottom:2px;">Turn T1 &middot; user &middot; 4h ago</div>
+                <div style="font-size:11px; color:#9ca3af; line-height:1.5;">I'm planning a trip to Japan, probably around 2 weeks. I really want to experience the culture, not just tourist spots.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- T2 - previous value source (dimmed but visible) -->
+          <div style="opacity:0.5; margin-bottom:12px; border-left:2px solid #ef444440; padding-left:12px;">
+            <div style="display:flex; gap:8px; margin-bottom:10px;">
+              <div style="width:24px; height:24px; border-radius:50%; background:#10b98120; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                <span style="color:#10b981; font-size:9px; font-weight:700;">U</span>
+              </div>
+              <div>
+                <div style="font-size:9px; color:#ef4444; margin-bottom:2px;">Turn T2 &middot; user &middot; 3h ago <span style="background:#ef444420; padding:0 4px; border-radius:2px;">previous value source</span></div>
+                <div style="font-size:11px; color:#9ca3af; line-height:1.5;">I'm thinking about a budget around <span style="background:#ef444425; padding:1px 3px; border-radius:2px; color:#fca5a5; text-decoration:line-through;">$3000</span> for the whole trip, including flights and accommodation. Want to keep it reasonable but still enjoy nice things.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- T3 -->
+          <div style="opacity:0.35; margin-bottom:12px;">
+            <div style="display:flex; gap:8px; margin-bottom:10px;">
+              <div style="width:24px; height:24px; border-radius:50%; background:#3b82f620; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                <span style="color:#60a5fa; font-size:9px; font-weight:700;">A</span>
+              </div>
+              <div>
+                <div style="font-size:9px; color:#4b5563; margin-bottom:2px;">Turn T3 &middot; assistant &middot; 3h ago</div>
+                <div style="font-size:11px; color:#9ca3af; line-height:1.5;">Great! With a $3000 budget for 2 weeks in Japan, I'd recommend focusing on Tokyo and one other city...</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- T4 -->
+          <div style="opacity:0.35; margin-bottom:12px;">
+            <div style="display:flex; gap:8px; margin-bottom:10px;">
+              <div style="width:24px; height:24px; border-radius:50%; background:#10b98120; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                <span style="color:#10b981; font-size:9px; font-weight:700;">U</span>
+              </div>
+              <div>
+                <div style="font-size:9px; color:#4b5563; margin-bottom:2px;">Turn T4 &middot; user &middot; 2h ago</div>
+                <div style="font-size:11px; color:#9ca3af; line-height:1.5;">Hmm, looking at ryokan prices, that might be tight. Let me reconsider...</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- T5 - CURRENT VALUE SOURCE (highlighted, auto-scrolled here) -->
+          <div style="margin-bottom:12px; border-left:2px solid #10b981; padding-left:12px; background:#10b98108; margin-left:-14px; padding:12px 12px 12px 14px; border-radius:0 8px 8px 0;">
+            <div style="display:flex; gap:8px;">
+              <div style="width:24px; height:24px; border-radius:50%; background:#10b98130; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                <span style="color:#10b981; font-size:9px; font-weight:700;">U</span>
+              </div>
+              <div style="flex:1;">
+                <div style="font-size:9px; color:#10b981; margin-bottom:4px; display:flex; align-items:center; gap:6px;">
+                  Turn T5 &middot; user &middot; 1h ago
+                  <span style="background:#10b98120; padding:1px 6px; border-radius:2px; font-weight:600;">current value source</span>
+                  <span style="margin-left:auto; font-size:8px; color:#4b5563;">&#9660; auto-scrolled</span>
+                </div>
+                <div style="font-size:12px; color:#e5e7eb; line-height:1.6;">
+                  Actually, let's <span style="background:#10b98125; padding:1px 4px; border-radius:3px; border-bottom:2px solid #10b981;">increase the budget to $5000</span>, I want better quality experiences over quantity. The ryokans I'm looking at are around $200/night and totally worth it.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- T6 - later turns (scrollable below) -->
+          <div style="opacity:0.35; margin-bottom:12px;">
+            <div style="display:flex; gap:8px;">
+              <div style="width:24px; height:24px; border-radius:50%; background:#3b82f620; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                <span style="color:#60a5fa; font-size:9px; font-weight:700;">A</span>
+              </div>
+              <div>
+                <div style="font-size:9px; color:#4b5563; margin-bottom:2px;">Turn T6 &middot; assistant &middot; 1h ago</div>
+                <div style="font-size:11px; color:#9ca3af; line-height:1.5;">With $5000 you'll have much more flexibility! Here's an updated plan with premium ryokan stays...</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Scroll indicator -->
+          <div style="text-align:center; padding:8px; color:#4b5563; font-size:10px;">
+            &darr; 2 more turns below
+          </div>
+
+        </div>
+
+        <!-- Bottom bar -->
+        <div style="display:flex; align-items:center; gap:8px; padding:8px 16px; background:#1e293b; border-top:1px solid #1f2937; font-size:10px;">
+          <span style="color:#4b5563;">conv_abc123 &middot; 8 turns &middot; "Japan trip planning"</span>
+          <span style="margin-left:auto; color:#3b82f6; cursor:pointer;">Open full conversation &rsaquo;</span>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div style="margin-top:24px;">
+  <h3>Interaction Design</h3>
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:12px;">
+    <div style="background:#1a1a2e; border-radius:8px; padding:16px; border:1px solid #2a2a4a;">
+      <h4 style="color:#10b981; margin:0 0 8px;">Auto-scroll Behavior</h4>
+      <ul style="color:#ccc; font-size:12px; line-height:1.8; padding-left:16px; margin:0;">
+        <li>Opens with conversation auto-scrolled to source turn</li>
+        <li>Source text highlighted with colored underline</li>
+        <li>User can freely scroll up/down for context</li>
+        <li>Previous value source also marked (dimmed, red border)</li>
+        <li>Non-source turns shown at 35% opacity</li>
+      </ul>
+    </div>
+    <div style="background:#1a1a2e; border-radius:8px; padding:16px; border:1px solid #2a2a4a;">
+      <h4 style="color:#f59e0b; margin:0 0 8px;">Tab Toggle: Previous / Current</h4>
+      <ul style="color:#ccc; font-size:12px; line-height:1.8; padding-left:16px; margin:0;">
+        <li>Toggle between viewing previous and current value source</li>
+        <li>Switching tab auto-scrolls to that turn</li>
+        <li>Both sources always visible when scrolling, but one is focused</li>
+        <li>For <strong>added</strong> slots: no "Previous" tab (only current)</li>
+        <li>For <strong>removed</strong> slots: no "Current" tab (only previous)</li>
+      </ul>
+    </div>
+    <div style="background:#1a1a2e; border-radius:8px; padding:16px; border:1px solid #2a2a4a;">
+      <h4 style="color:#60a5fa; margin:0 0 8px;">Clicking Other Slots</h4>
+      <ul style="color:#ccc; font-size:12px; line-height:1.8; padding-left:16px; margin:0;">
+        <li>Click another slot in YAML &rarr; viewer stays open, scrolls to new source</li>
+        <li>Header updates to show new slot name</li>
+        <li>Smooth transition, no close/reopen</li>
+        <li>Esc or &times; closes the viewer</li>
+      </ul>
+    </div>
+    <div style="background:#1a1a2e; border-radius:8px; padding:16px; border:1px solid #2a2a4a;">
+      <h4 style="color:#a78bfa; margin:0 0 8px;">Cross-conversation Sources</h4>
+      <ul style="color:#ccc; font-size:12px; line-height:1.8; padding-left:16px; margin:0;">
+        <li>If previous and current value come from different conversations, show conversation selector</li>
+        <li>Bottom bar shows which conversation is active</li>
+        <li>"Open full conversation" links to chat page</li>
+      </ul>
+    </div>
+  </div>
+</div>

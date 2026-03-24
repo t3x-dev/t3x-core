@@ -11,15 +11,12 @@
 
 import { createHash } from 'node:crypto';
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import type { SemanticPoint } from '@t3x-dev/core';
 import {
   generateLeafOutput,
   generateSentenceId,
   isGenerationConfigured,
-  spToSentence,
 } from '@t3x-dev/core';
 import {
-  ConflictError,
   commitDraft,
   createCommit,
   createLeaf,
@@ -33,7 +30,6 @@ import {
 import { getDB } from '../lib/db';
 import { getEmbedder } from '../lib/embedder';
 import { errorResponse, zodErrorHook } from '../lib/errors';
-import { getUserId, recordUsageFireAndForget } from '../lib/usage-tracking';
 import { pinoLogger } from '../middleware/logger';
 import { ErrorResponseSchema, IdParamSchema, SuccessResponseSchema } from '../schemas/common';
 import {
@@ -46,7 +42,6 @@ import {
   SuggestDraftResponse,
 } from '../schemas/contracts';
 import { toApiDraft } from './drafts-crud.openapi';
-import { extractSentencesFromConversation } from './extract.openapi';
 
 export const draftsWorkflowRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
@@ -460,8 +455,22 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
     }>;
 
     if (draft.extraction_mode === 'llm') {
-      // LLM mode: convert staged SemanticPoints to sentences
-      const activeSPs = ((draft.semantic_points ?? []) as SemanticPoint[]).filter(
+      // LLM mode: convert staged SemanticPoints directly to sentence-like records
+      const activeSPs = ((draft.semantic_points ?? []) as Array<{
+        id: string;
+        text: string;
+        confidence?: number;
+        zone: string;
+        status: string;
+        staged: boolean;
+        evidence?: Array<{
+          conversation_id?: string;
+          turn_hash?: string;
+          start_char?: number;
+          end_char?: number;
+          role?: string;
+        }>;
+      }>).filter(
         (sp) => sp.zone === 'ready' && sp.status !== 'undone' && sp.staged
       );
 
@@ -469,7 +478,20 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
         return errorResponse(c, 'INVALID_REQUEST', 'No staged semantic points to commit');
       }
 
-      sentences = activeSPs.map((sp) => spToSentence(sp));
+      sentences = activeSPs.map((sp) => {
+        const primary = sp.evidence?.find((e) => e.conversation_id && e.turn_hash);
+        return {
+          id: sp.id,
+          text: sp.text,
+          confidence: sp.confidence,
+          source_ref: primary ? {
+            conversation_id: primary.conversation_id!,
+            turn_hash: primary.turn_hash!,
+            start_char: primary.start_char ?? 0,
+            end_char: primary.end_char ?? sp.text.length,
+          } : undefined,
+        };
+      });
     } else {
       // Deterministic mode: existing DraftSentence flow
       const includedSentences = draft.sentences.filter((s) => s.included);
@@ -647,95 +669,13 @@ draftsWorkflowRoutes.openapi(forkDraftRoute, async (c) => {
 
 // POST /v1/drafts/:id/extract
 draftsWorkflowRoutes.openapi(extractDraftRoute, async (c) => {
-  const { id } = c.req.valid('param');
-  const body = c.req.valid('json');
-
-  try {
-    const db = await getDB();
-
-    // 1. Get draft
-    const draft = await findDraftById(db, id);
-    if (!draft) {
-      return errorResponse(c, 'NOT_FOUND', `Draft not found: ${id}`);
-    }
-
-    // 2. Validate state
-    if (draft.status !== 'editing') {
-      return errorResponse(
-        c,
-        'INVALID_REQUEST',
-        `Draft status is '${draft.status}', must be 'editing'`
-      );
-    }
-
-    // 3. Extract sentences (position offset = current sentence count)
-    const positionOffset = draft.sentences.length;
-    const result = await extractSentencesFromConversation(
-      body.conversation_id,
-      body.options,
-      positionOffset
-    );
-
-    // Record usage (fire-and-forget)
-    if (result.usage) {
-      recordUsageFireAndForget(db, {
-        user_id: getUserId(c) ?? undefined,
-        project_id: draft.project_id,
-        endpoint: 'draft_extract',
-        model: result.model,
-        input_tokens: result.usage.inputTokens,
-        output_tokens: result.usage.outputTokens,
-      });
-    }
-
-    if (result.sentences.length === 0) {
-      return c.json(
-        { success: true as const, data: { added_count: 0, draft: toApiDraft(draft) } },
-        200
-      );
-    }
-
-    // 4. Append extracted sentences to draft
-    const updatedSentences = [...draft.sentences, ...result.sentences];
-
-    const updatedDraft = await updateDraft(db, id, { sentences: updatedSentences }, draft.revision);
-
-    return c.json(
-      {
-        success: true as const,
-        data: {
-          added_count: result.sentences.length,
-          draft: toApiDraft(updatedDraft),
-        },
-      },
-      200
-    );
-  } catch (err) {
-    if (err instanceof Error && err.name === 'AllProvidersFailedError') {
-      return c.json(
-        {
-          success: false as const,
-          error: {
-            code: 'LLM_NOT_CONFIGURED',
-            message:
-              'No LLM provider is configured. Set ANTHROPIC_API_KEY or another provider key.',
-          },
-        },
-        503
-      );
-    }
-    if (err instanceof ConflictError) {
-      return c.json(
-        {
-          success: false as const,
-          error: { code: 'CONFLICT', message: err.message },
-        },
-        409
-      );
-    }
-    const message = err instanceof Error ? err.message : 'Unknown error';
-    return errorResponse(c, 'GENERATION_FAILED', message);
-  }
+  // Sentence extraction is deprecated (replaced by frame-based extraction).
+  // Use POST /v1/extract/frames + POST /v1/extract/incremental instead.
+  return errorResponse(
+    c,
+    'DEPRECATED',
+    'Sentence extraction from conversation has been replaced by frame-based extraction. Use /v1/extract/frames instead.'
+  );
 });
 
 // POST /v1/drafts/:id/suggest

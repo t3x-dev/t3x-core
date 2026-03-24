@@ -1,0 +1,48 @@
+<h2>Extraction Strategy: How should T3X treat conversation progression?</h2>
+<p class="subtitle">As a conversation progresses, the user's intent sharpens. How should the semantic model reflect this?</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Capture All, Highlight Recent</h3>
+      <p>Extract everything from every turn. The latest turn's frames get <strong>visual emphasis</strong> (bold border, "fresh" badge). Older frames fade slightly but remain visible. Nothing is lost.</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul><li>Complete semantic history</li><li>User can scroll back to see evolution</li><li>No information loss</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Panel gets cluttered over long conversations</li><li>Hard to see "what matters now"</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Capture All, Show Confirmed Only</h3>
+      <p>Extract everything into the delta log (full history preserved). But the <strong>graph/YAML only shows confirmed or latest-turn frames</strong>. Toggle to reveal "tentative" frames from earlier turns.</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul><li>Clean default view — shows user's current direction</li><li>Full history still accessible via toggle/filter</li><li>Maps to your "confirmed vs uncertain" idea</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Requires confidence/recency scoring logic</li><li>Toggle adds UI complexity</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Progressive Snapshot (Recommended)</h3>
+      <p>Capture all, but the extraction model is a <strong>living snapshot</strong> — each turn's delta updates the single current state. Added frames appear, updated frames change, removed frames disappear. The delta log preserves history. The graph always shows "where we are now."</p>
+      <p style="margin-top:8px;color:var(--text-secondary)">This is actually what T3X already does — the delta system adds/updates/removes frames. The missing piece is <strong>visual indicators</strong> showing what just changed (green=new, yellow=updated, strikethrough=removed) and <strong>confidence styling</strong> for uncertain frames.</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul><li>Already how the system works — minimal new logic</li><li>Graph always reflects current understanding</li><li>Delta log is the history layer</li><li>Confidence field already exists on Frame</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Need to decide what "just changed" means visually</li></ul></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:32px; padding:16px; border-radius:8px; background:var(--hover-bg);">
+  <h3>Your intuition mapped to these options:</h3>
+  <p style="margin-top:8px">"<em>Can the latest answer be the direction people want?</em>" → This is <strong>Option C</strong> — the snapshot always reflects the latest state.</p>
+  <p style="margin-top:4px">"<em>We still need to capture all</em>" → Yes — the <strong>delta log</strong> preserves every change. Nothing is lost.</p>
+  <p style="margin-top:4px">"<em>Just address confirmed or most recent</em>" → The graph shows current state. Confidence styling distinguishes confirmed (solid) from tentative (faded).</p>
+</div>

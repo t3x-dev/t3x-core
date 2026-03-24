@@ -1,0 +1,287 @@
+<h2>Commit Detail Page — Frame Layout</h2>
+<p class="subtitle">Adapting the existing 3-panel layout from sentences to YAML frame cards. Same structure, new content rendering.</p>
+
+<div class="mockup">
+  <div class="mockup-header">Commit Detail Page — /project/{id}/commit/{hash}</div>
+  <div class="mockup-body" style="padding:0; background:#111827; color:#e5e7eb; font-family:system-ui; font-size:12px;">
+
+    <!-- HEADER -->
+    <div style="display:flex; align-items:center; justify-content:space-between; padding:8px 16px; border-bottom:1px solid #1f2937; background:#0f172a;">
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span style="color:#6b7280;">&larr;</span>
+        <span style="color:#6b7280;">Travel Project</span>
+        <span style="color:#4b5563;">&rsaquo;</span>
+        <span style="color:#6b7280;">main</span>
+        <span style="color:#4b5563;">&rsaquo;</span>
+        <span style="font-family:monospace; color:#e5e7eb;">a9ff52</span>
+      </div>
+      <div style="display:flex; gap:6px;">
+        <span style="border:1px solid #374151; padding:2px 8px; border-radius:4px; font-size:10px;">View Canvas</span>
+        <span style="border:1px solid #374151; padding:2px 8px; border-radius:4px; font-size:10px;">View Diff</span>
+        <span style="border:1px solid #374151; padding:2px 8px; border-radius:4px; font-size:10px;">Export</span>
+      </div>
+    </div>
+
+    <!-- HERO -->
+    <div style="padding:10px 16px; border-bottom:1px solid #1f2937; background:#0f172a; display:flex; align-items:center; justify-content:space-between;">
+      <div>
+        <div style="font-size:14px; font-weight:600; color:#f3f4f6;">Extract travel preferences from planning session</div>
+        <div style="margin-top:4px; display:flex; align-items:center; gap:8px; font-size:11px; color:#6b7280;">
+          <span style="display:flex; align-items:center; gap:3px;"><span style="background:#3b82f620; color:#60a5fa; width:14px; height:14px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:8px;">E</span> ethan</span>
+          <span>&middot;</span>
+          <span>2 hours ago</span>
+          <span>&middot;</span>
+          <span style="background:#8b5cf620; color:#a78bfa; padding:1px 6px; border-radius:10px; font-size:9px;">main</span>
+          <span>&middot;</span>
+          <span style="font-family:monospace; font-size:10px; color:#4b5563;">a9ff5289...</span>
+        </div>
+      </div>
+      <div style="display:flex; gap:6px;">
+        <span style="border:1px solid #374151; padding:2px 8px; border-radius:10px; font-size:10px; color:#6b7280;">= 3</span>
+        <span style="border:1px solid #f59e0b40; background:#f59e0b10; padding:2px 8px; border-radius:10px; font-size:10px; color:#f59e0b;">~ 2</span>
+        <span style="border:1px solid #10b98140; background:#10b98110; padding:2px 8px; border-radius:10px; font-size:10px; color:#10b981;">+ 4</span>
+        <span style="border:1px solid #ef444440; background:#ef444410; padding:2px 8px; border-radius:10px; font-size:10px; color:#ef4444;">- 1</span>
+      </div>
+    </div>
+
+    <!-- LINEAGE BAR -->
+    <div style="padding:6px 16px; border-bottom:1px solid #1f2937; display:flex; align-items:center; gap:12px; font-size:10px; color:#6b7280; background:#0d1117;">
+      <span>Parent: <span style="font-family:monospace; color:#60a5fa;">dec06f</span></span>
+      <span style="color:#1f2937;">|</span>
+      <span>2 leaves</span>
+      <span style="color:#1f2937;">|</span>
+      <span>1 source</span>
+      <span style="color:#1f2937;">|</span>
+      <span style="font-family:monospace;">t3x/commit/5</span>
+      <span style="color:#1f2937;">|</span>
+      <span style="color:#4b5563;">6 frames &middot; 3 relations</span>
+      <span style="margin-left:auto; color:#4b5563;">j/k navigate &middot; o source &middot; esc deselect</span>
+    </div>
+
+    <!-- 3 PANEL LAYOUT -->
+    <div style="display:flex; height:420px;">
+
+      <!-- LEFT: Frame Index -->
+      <div style="width:180px; border-right:1px solid #1f2937; background:#0f172a; overflow-y:auto; padding:8px;">
+        <div style="font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:#4b5563; padding:4px 8px; margin-bottom:4px;">Frame Index</div>
+
+        <!-- Active frame -->
+        <div style="display:flex; align-items:center; gap:6px; padding:6px 8px; border-radius:6px; background:#3b82f610; border-left:2px solid #3b82f6;">
+          <span style="width:6px; height:6px; border-radius:50%; background:#10b981;"></span>
+          <div style="min-width:0; flex:1;">
+            <div style="font-family:monospace; font-size:9px; color:#60a5fa;">f_1</div>
+            <div style="font-size:10px; color:#e5e7eb; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">travel_plan</div>
+          </div>
+        </div>
+
+        <div style="display:flex; align-items:center; gap:6px; padding:6px 8px; border-radius:6px;">
+          <span style="width:6px; height:6px; border-radius:50%; background:#f59e0b;"></span>
+          <div style="min-width:0; flex:1;">
+            <div style="font-family:monospace; font-size:9px; color:#6b7280;">f_2</div>
+            <div style="font-size:10px; color:#9ca3af; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">accommodation</div>
+          </div>
+        </div>
+
+        <div style="display:flex; align-items:center; gap:6px; padding:6px 8px; border-radius:6px;">
+          <span style="width:6px; height:6px; border-radius:50%; background:#10b981;"></span>
+          <div style="min-width:0; flex:1;">
+            <div style="font-family:monospace; font-size:9px; color:#6b7280;">f_3</div>
+            <div style="font-size:10px; color:#9ca3af; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">budget_constraint</div>
+          </div>
+        </div>
+
+        <div style="display:flex; align-items:center; gap:6px; padding:6px 8px; border-radius:6px;">
+          <span style="width:6px; height:6px; border-radius:50%; background:#6b7280;"></span>
+          <div style="min-width:0; flex:1;">
+            <div style="font-family:monospace; font-size:9px; color:#6b7280;">f_4</div>
+            <div style="font-size:10px; color:#9ca3af; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">dining_preference</div>
+          </div>
+        </div>
+
+        <div style="display:flex; align-items:center; gap:6px; padding:6px 8px; border-radius:6px;">
+          <span style="width:6px; height:6px; border-radius:50%; background:#10b981;"></span>
+          <div style="min-width:0; flex:1;">
+            <div style="font-family:monospace; font-size:9px; color:#6b7280;">f_5</div>
+            <div style="font-size:10px; color:#9ca3af; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">transport_mode</div>
+          </div>
+        </div>
+
+        <div style="display:flex; align-items:center; gap:6px; padding:6px 8px; border-radius:6px;">
+          <span style="width:6px; height:6px; border-radius:50%; background:#ef4444;"></span>
+          <div style="min-width:0; flex:1;">
+            <div style="font-family:monospace; font-size:9px; color:#6b7280;">f_6</div>
+            <div style="font-size:10px; color:#9ca3af; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-decoration:line-through;">old_hotel_pref</div>
+          </div>
+        </div>
+
+        <!-- Leaves section -->
+        <div style="margin-top:12px; border-top:1px solid #1f2937; padding-top:8px;">
+          <div style="display:flex; align-items:center; justify-content:space-between; padding:0 8px; margin-bottom:4px;">
+            <span style="font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:#4b5563;">Leaves</span>
+            <span style="font-size:9px; color:#4b5563; border:1px solid #1f2937; padding:1px 4px; border-radius:3px;">+ Add</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:4px; padding:4px 8px; font-size:10px; color:#9ca3af;">
+            <span style="color:#10b981;">&#9679;</span> Twitter draft
+          </div>
+          <div style="display:flex; align-items:center; gap:4px; padding:4px 8px; font-size:10px; color:#9ca3af;">
+            <span style="color:#f59e0b;">&#9679;</span> Email summary
+          </div>
+        </div>
+      </div>
+
+      <!-- CENTER: YAML Frame Cards -->
+      <div style="flex:1; overflow-y:auto; padding:16px; background:#111827;">
+        <div style="max-width:640px; margin:0 auto;">
+
+          <!-- Frame Card 1 (active) -->
+          <div style="margin-bottom:12px; border-radius:8px; overflow:hidden; border:1px solid #3b82f640; box-shadow:0 0 0 1px #3b82f620;">
+            <!-- Frame header -->
+            <div style="display:flex; align-items:center; gap:8px; padding:6px 12px; background:#1e293b; border-bottom:1px solid #1f2937;">
+              <span style="background:#1e3a5f; color:#60a5fa; padding:1px 8px; border-radius:4px; font-size:10px; font-weight:600;">travel_plan</span>
+              <span style="font-family:monospace; font-size:9px; color:#4b5563;">f_1</span>
+              <span style="font-size:9px; color:#10b981; margin-left:auto;">+ added</span>
+              <span style="font-size:9px; color:#4b5563;">0.95</span>
+            </div>
+            <!-- YAML body -->
+            <div style="padding:10px 14px; background:#0d1117; font-family:'JetBrains Mono',monospace; font-size:12px; line-height:1.8;">
+              <div><span style="color:#7aa2f7;">destination</span><span style="color:#89ddff;">:</span> <span style="color:#9ece6a;">Tokyo</span></div>
+              <div><span style="color:#7aa2f7;">duration</span><span style="color:#89ddff;">:</span> <span style="color:#ff9e64;">14 days</span></div>
+              <div><span style="color:#7aa2f7;">budget</span><span style="color:#89ddff;">:</span> <span style="color:#ff9e64;">5000</span></div>
+              <div><span style="color:#7aa2f7;">style</span><span style="color:#89ddff;">:</span> <span style="color:#9ece6a;">cultural immersion</span></div>
+              <div><span style="color:#7aa2f7;">activities</span><span style="color:#89ddff;">:</span></div>
+              <div style="padding-left:16px;"><span style="color:#89ddff;">-</span> <span style="color:#9ece6a;">temple visits</span></div>
+              <div style="padding-left:16px;"><span style="color:#89ddff;">-</span> <span style="color:#9ece6a;">cooking classes</span></div>
+              <div style="padding-left:16px;"><span style="color:#89ddff;">-</span> <span style="color:#9ece6a;">tea ceremony</span></div>
+            </div>
+          </div>
+
+          <!-- Frame Card 2 (modified) -->
+          <div style="margin-bottom:12px; border-radius:8px; overflow:hidden; border:1px solid #1f2937;">
+            <div style="display:flex; align-items:center; gap:8px; padding:6px 12px; background:#1e293b; border-bottom:1px solid #1f2937;">
+              <span style="background:#1e3a5f; color:#60a5fa; padding:1px 8px; border-radius:4px; font-size:10px; font-weight:600;">accommodation</span>
+              <span style="font-family:monospace; font-size:9px; color:#4b5563;">f_2</span>
+              <span style="font-size:9px; color:#f59e0b; margin-left:auto;">~ modified</span>
+              <span style="font-size:9px; color:#4b5563;">0.88</span>
+            </div>
+            <div style="padding:10px 14px; background:#0d1117; font-family:'JetBrains Mono',monospace; font-size:12px; line-height:1.8;">
+              <div><span style="color:#7aa2f7;">type</span><span style="color:#89ddff;">:</span> <span style="color:#9ece6a;">ryokan</span></div>
+              <div style="background:#f59e0b10; margin:0 -14px; padding:0 14px;"><span style="color:#7aa2f7;">location</span><span style="color:#89ddff;">:</span> <span style="color:#9ece6a; text-decoration:line-through; opacity:0.5;">Shibuya</span> <span style="color:#89ddff;">&rarr;</span> <span style="color:#9ece6a;">Asakusa</span></div>
+              <div><span style="color:#7aa2f7;">max_per_night</span><span style="color:#89ddff;">:</span> <span style="color:#ff9e64;">200</span></div>
+              <div><span style="color:#7aa2f7;">requires</span><span style="color:#89ddff;">:</span></div>
+              <div style="padding-left:16px;"><span style="color:#89ddff;">-</span> <span style="color:#9ece6a;">private onsen</span></div>
+              <div style="padding-left:16px;"><span style="color:#89ddff;">-</span> <span style="color:#9ece6a;">traditional room</span></div>
+            </div>
+          </div>
+
+          <!-- Frame Card 3 (identical) -->
+          <div style="margin-bottom:12px; border-radius:8px; overflow:hidden; border:1px solid #1f2937; opacity:0.7;">
+            <div style="display:flex; align-items:center; gap:8px; padding:6px 12px; background:#1e293b; border-bottom:1px solid #1f2937;">
+              <span style="background:#1e3a5f; color:#60a5fa; padding:1px 8px; border-radius:4px; font-size:10px; font-weight:600;">budget_constraint</span>
+              <span style="font-family:monospace; font-size:9px; color:#4b5563;">f_3</span>
+              <span style="font-size:9px; color:#4b5563; margin-left:auto;">= identical</span>
+              <span style="font-size:9px; color:#4b5563;">0.92</span>
+            </div>
+            <div style="padding:10px 14px; background:#0d1117; font-family:'JetBrains Mono',monospace; font-size:12px; line-height:1.8;">
+              <div><span style="color:#7aa2f7;">total</span><span style="color:#89ddff;">:</span> <span style="color:#ff9e64;">5000</span></div>
+              <div><span style="color:#7aa2f7;">currency</span><span style="color:#89ddff;">:</span> <span style="color:#9ece6a;">USD</span></div>
+              <div><span style="color:#7aa2f7;">flexibility</span><span style="color:#89ddff;">:</span> <span style="color:#9ece6a;">moderate</span></div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- RIGHT: Context Panel -->
+      <div style="width:240px; border-left:1px solid #1f2937; background:#0f172a; overflow-y:auto; padding:12px;">
+        <div style="font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:#4b5563; margin-bottom:8px;">Source Context</div>
+
+        <div style="background:#111827; border-radius:6px; padding:8px; margin-bottom:8px; border:1px solid #1f2937;">
+          <div style="font-size:10px; color:#60a5fa; margin-bottom:4px;">Slot: destination</div>
+          <div style="font-size:10px; color:#9ca3af; margin-bottom:6px;">from Turn T3 (assistant)</div>
+          <div style="font-size:11px; color:#e5e7eb; padding:6px; background:#0d1117; border-radius:4px; border-left:2px solid #3b82f6; line-height:1.5;">
+            "Based on your interests, I'd recommend <span style="background:#3b82f630; padding:1px 2px; border-radius:2px;">Tokyo</span> as your primary destination..."
+          </div>
+        </div>
+
+        <div style="background:#111827; border-radius:6px; padding:8px; margin-bottom:8px; border:1px solid #1f2937;">
+          <div style="font-size:10px; color:#60a5fa; margin-bottom:4px;">Slot: style</div>
+          <div style="font-size:10px; color:#9ca3af; margin-bottom:6px;">from Turn T1 (user)</div>
+          <div style="font-size:11px; color:#e5e7eb; padding:6px; background:#0d1117; border-radius:4px; border-left:2px solid #10b981; line-height:1.5;">
+            "I want to really experience the culture, not just tourist spots. More like <span style="background:#10b98130; padding:1px 2px; border-radius:2px;">cultural immersion</span>"
+          </div>
+        </div>
+
+        <div style="margin-top:12px; border-top:1px solid #1f2937; padding-top:8px;">
+          <div style="font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:#4b5563; margin-bottom:8px;">Relations</div>
+          <div style="font-size:10px; color:#9ca3af; padding:4px 0; display:flex; align-items:center; gap:4px;">
+            <span style="font-family:monospace; color:#60a5fa;">f_1</span>
+            <span style="color:#f59e0b;">&rarr;</span>
+            <span style="color:#4b5563; font-size:9px;">conditions</span>
+            <span style="color:#f59e0b;">&rarr;</span>
+            <span style="font-family:monospace; color:#60a5fa;">f_3</span>
+          </div>
+          <div style="font-size:10px; color:#9ca3af; padding:4px 0; display:flex; align-items:center; gap:4px;">
+            <span style="font-family:monospace; color:#60a5fa;">f_1</span>
+            <span style="color:#f59e0b;">&rarr;</span>
+            <span style="color:#4b5563; font-size:9px;">elaborates</span>
+            <span style="color:#f59e0b;">&rarr;</span>
+            <span style="font-family:monospace; color:#60a5fa;">f_2</span>
+          </div>
+        </div>
+
+        <div style="margin-top:12px; border-top:1px solid #1f2937; padding-top:8px;">
+          <div style="font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:#4b5563; margin-bottom:8px;">Commit History</div>
+          <div style="font-size:10px; color:#9ca3af; padding:4px 0; display:flex; align-items:center; gap:6px;">
+            <span style="font-family:monospace; color:#60a5fa; font-size:9px;">a9ff52</span>
+            <span style="flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Extract travel prefs</span>
+          </div>
+          <div style="font-size:10px; color:#6b7280; padding:4px 0; display:flex; align-items:center; gap:6px;">
+            <span style="font-family:monospace; font-size:9px;">dec06f</span>
+            <span style="flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Initial extraction</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div style="margin-top:24px;">
+  <h3>Key Changes from Legacy</h3>
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:12px;">
+    <div style="background:#1a1a2e; border-radius:8px; padding:16px; border:1px solid #2a2a4a;">
+      <h4 style="color:#82aaff; margin:0 0 8px;">Left Sidebar</h4>
+      <ul style="color:#ccc; font-size:13px; line-height:1.8; padding-left:16px; margin:0;">
+        <li>"Sentence Index" &rarr; <strong>"Frame Index"</strong></li>
+        <li>Shows frame type name instead of text preview</li>
+        <li>Diff status dot (green/yellow/red/gray) same as before</li>
+        <li>Leaves & sources sections unchanged</li>
+      </ul>
+    </div>
+    <div style="background:#1a1a2e; border-radius:8px; padding:16px; border:1px solid #2a2a4a;">
+      <h4 style="color:#82aaff; margin:0 0 8px;">Center Panel</h4>
+      <ul style="color:#ccc; font-size:13px; line-height:1.8; padding-left:16px; margin:0;">
+        <li>Sentence cards &rarr; <strong>YAML frame cards</strong></li>
+        <li>Type badge + ID + diff status in header bar</li>
+        <li>Slot-level inline diff (highlight changed slots)</li>
+        <li>Hover slot &rarr; highlight source in right panel</li>
+      </ul>
+    </div>
+    <div style="background:#1a1a2e; border-radius:8px; padding:16px; border:1px solid #2a2a4a;">
+      <h4 style="color:#82aaff; margin:0 0 8px;">Right Panel</h4>
+      <ul style="color:#ccc; font-size:13px; line-height:1.8; padding-left:16px; margin:0;">
+        <li>Source context now shows <strong>per-slot</strong> sources</li>
+        <li>Relations section added (frame &rarr; relation &rarr; frame)</li>
+        <li>Commit history section unchanged</li>
+      </ul>
+    </div>
+    <div style="background:#1a1a2e; border-radius:8px; padding:16px; border:1px solid #2a2a4a;">
+      <h4 style="color:#82aaff; margin:0 0 8px;">Lineage Bar</h4>
+      <ul style="color:#ccc; font-size:13px; line-height:1.8; padding-left:16px; margin:0;">
+        <li>Shows <strong>frame count + relation count</strong></li>
+        <li>Schema version: <code>t3x/commit/5</code></li>
+        <li>Diff stats: per-frame (not per-sentence)</li>
+      </ul>
+    </div>
+  </div>
+</div>

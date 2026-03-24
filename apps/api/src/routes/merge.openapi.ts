@@ -662,7 +662,7 @@ const commitDraftRoute = createRoute({
   path: '/v1/merge/drafts/{id}/commit',
   tags: ['Merge'],
   summary: 'Commit a merge draft',
-  description: 'Finalizes the merge by creating a SentenceCommit.',
+  description: 'Finalizes the merge by creating a commit with the resolved content.',
   request: {
     params: DraftIdParamSchema,
     body: {
