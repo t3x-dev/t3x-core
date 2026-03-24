@@ -1,18 +1,22 @@
 'use client';
 
-import { Paperclip, Send } from 'lucide-react';
+import { Paperclip, Send, Square } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 interface ChatInputProps {
   onSend: (message: string) => void;
+  onStop?: () => void;
+  isStreaming?: boolean;
   disabled?: boolean;
   placeholder?: string;
 }
 
 export function ChatInput({
   onSend,
+  onStop,
+  isStreaming = false,
   disabled = false,
   placeholder = 'Message...',
 }: ChatInputProps) {
@@ -102,22 +106,38 @@ export function ChatInput({
         style={{ height: 'auto' }}
       />
 
-      {/* Send button */}
-      <Button
-        type="button"
-        size="icon"
-        onClick={handleSend}
-        disabled={isEmpty || disabled}
-        className={cn(
-          'h-8 w-8 shrink-0 rounded-lg',
-          'bg-[var(--accent-commit)] text-white',
-          'hover:opacity-90 transition-opacity duration-[var(--motion-base)]',
-          'disabled:opacity-30 disabled:cursor-not-allowed'
-        )}
-        aria-label="Send message"
-      >
-        <Send className="h-4 w-4" />
-      </Button>
+      {/* Send / Stop button */}
+      {isStreaming ? (
+        <Button
+          type="button"
+          size="icon"
+          onClick={onStop}
+          className={cn(
+            'h-8 w-8 shrink-0 rounded-lg',
+            'bg-red-500/10 text-red-500',
+            'hover:bg-red-500/20 transition-colors duration-[var(--motion-base)]'
+          )}
+          aria-label="Stop generation"
+        >
+          <Square className="h-4 w-4" />
+        </Button>
+      ) : (
+        <Button
+          type="button"
+          size="icon"
+          onClick={handleSend}
+          disabled={isEmpty || disabled}
+          className={cn(
+            'h-8 w-8 shrink-0 rounded-lg',
+            'bg-[var(--accent-commit)] text-white',
+            'hover:opacity-90 transition-opacity duration-[var(--motion-base)]',
+            'disabled:opacity-30 disabled:cursor-not-allowed'
+          )}
+          aria-label="Send message"
+        >
+          <Send className="h-4 w-4" />
+        </Button>
+      )}
     </div>
   );
 }

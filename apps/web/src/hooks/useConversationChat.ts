@@ -33,6 +33,7 @@ export interface UseConversationChatReturn {
   isLoadingMore: boolean;
   sendMessage: (messageOverride?: string) => void;
   loadMore: () => void;
+  stopGenerating: () => void;
   /** Incremented each time turns are persisted to the DB — use to trigger extraction */
   turnsSavedCounter: number;
 }
@@ -61,6 +62,7 @@ export function useConversationChat({
   const chatWarningTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tokenBufferRef = useRef('');
   const rafIdRef = useRef<number | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // ========== Refs ==========
   const conversationIdRef = useRef(conversationId);
@@ -228,6 +230,12 @@ export function useConversationChat({
     }
   }, [projectId, conversationId, chatOffset, chatHasMore, isLoadingMore]);
 
+  // ========== Stop generating ==========
+  const stopGenerating = useCallback(() => {
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
+  }, []);
+
   // ========== Send message ==========
   const sendMessage = useCallback(
     async (messageOverride?: string) => {
@@ -303,7 +311,13 @@ export function useConversationChat({
           rafIdRef.current = null;
         };
 
-        for await (const event of api.chatStream({ messages, provider, model })) {
+        const controller = new AbortController();
+        abortControllerRef.current = controller;
+
+        for await (const event of api.chatStream(
+          { messages, provider, model },
+          { signal: controller.signal }
+        )) {
           if (event.type === 'token' && event.content) {
             fullResponse += event.content;
             tokenBufferRef.current = fullResponse;
@@ -377,6 +391,25 @@ export function useConversationChat({
           saveTurns(1);
         }
       } catch (err) {
+        // Handle user-initiated abort gracefully
+        if (err instanceof DOMException && err.name === 'AbortError') {
+          // Keep partial response
+          const partial = tokenBufferRef.current;
+          if (partial) {
+            setChatMessages((prev) => [
+              ...prev,
+              {
+                id: `msg-${Date.now()}`,
+                role: 'assistant' as const,
+                content: partial,
+              },
+            ]);
+          }
+          setStreamingContent('');
+          setIsChatStreaming(false);
+          setIsChatLoading(false);
+          return;
+        }
         const error = err instanceof Error ? err : new Error(String(err));
         setChatError(error.message);
       } finally {
@@ -411,6 +444,7 @@ export function useConversationChat({
     isLoadingMore,
     sendMessage,
     loadMore,
+    stopGenerating,
     turnsSavedCounter,
   };
 }

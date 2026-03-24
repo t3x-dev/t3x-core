@@ -55,13 +55,15 @@ export async function chat(request: ChatRequest): Promise<ChatResponse> {
  * Streaming chat - returns async generator for SSE events
  */
 export async function* chatStream(
-  request: ChatRequest
+  request: ChatRequest,
+  options?: { signal?: AbortSignal }
 ): AsyncGenerator<ChatStreamEvent, void, unknown> {
   // Call API server directly
   const res = await fetch(`${API_V1}/chat/stream`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(request),
+    signal: options?.signal,
   });
 
   if (!res.ok) {

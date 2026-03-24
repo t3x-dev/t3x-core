@@ -72,6 +72,7 @@ export function ChatWorkspace({
     error,
     warning,
     sendMessage,
+    stopGenerating,
     turnsSavedCounter,
   } = useConversationChat({
     projectId: resolvedProjectId,
@@ -493,7 +494,9 @@ export function ChatWorkspace({
         <div className="mx-auto max-w-3xl px-4">
           <ChatInput
             onSend={handleSend}
-            disabled={isStreaming || isLoading || isExtracting || isConversationCommitted}
+            onStop={stopGenerating}
+            isStreaming={isStreaming}
+            disabled={isLoading || isExtracting || isConversationCommitted}
             placeholder={isConversationCommitted
               ? "This conversation is locked — a commit was made from it"
               : "Message... (Enter to send, Shift+Enter for new line)"}
