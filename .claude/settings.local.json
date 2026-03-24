@@ -282,7 +282,11 @@
       "Bash(gh issue:*)",
       "Bash(python3 -c \":*)",
       "Bash(pnpm:*)",
-      "Bash(find /Users/heliuqi/t3x/packages -type f \\\\\\(-name *v3* -o -name *v2* \\\\\\) ! -path */node_modules/* ! -path */dist/* ! -path */.next/*)"
+      "Bash(find /Users/heliuqi/t3x/packages -type f \\\\\\(-name *v3* -o -name *v2* \\\\\\) ! -path */node_modules/* ! -path */dist/* ! -path */.next/*)",
+      "Bash(git worktree:*)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(len\\(d[''''data''''][''''projects'''']\\), ''''projects''''\\)\")",
+      "Bash(/dev/null tail:*)",
+      "Bash(open:*)"
     ],
     "deny": [],
     "ask": []

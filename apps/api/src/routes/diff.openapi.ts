@@ -1,10 +1,12 @@
 /**
- * Diff Routes
+ * Diff Routes (OpenAPI)
  *
  * POST /v1/diff/two-way - Calculate two-way semantic diff
  * POST /v1/diff/three-way - Calculate three-way semantic diff
+ * POST /v1/diff/frame - Frame-based diff between two commits
  */
 
+import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
   createCachedEmbeddingProvider,
   createDiffEngine,
@@ -13,11 +15,11 @@ import {
   EmbeddingProviderError,
   type FrameDiff,
   frameDiff,
+  wordDiff,
 } from '@t3x-dev/core';
 import { findSegmentEmbeddingsByTurn, findTurnByHash, getCommitUnified } from '@t3x-dev/storage';
-import { Hono } from 'hono';
 import { getDB } from '../lib/db';
-import { jsonError, jsonSuccess } from '../lib/response';
+import { errorResponse, zodErrorHook } from '../lib/errors';
 
 // ============================================================================
 // Types
@@ -97,40 +99,235 @@ function getErrorCode(error: 'not_found' | 'no_rings' | 'corrupted'): string {
 }
 
 // ============================================================================
+// Schemas
+// ============================================================================
+
+const DiffSegmentSchema = z.object({
+  segmentId: z.string(),
+  text: z.string(),
+});
+
+const TwoWayBodySchema = z.object({
+  // Mode 1: commit hash
+  base_commit_hash: z.string().optional(),
+  target_commit_hash: z.string().optional(),
+  // Mode 2: turn hash
+  baseTurnHash: z.string().optional(),
+  targetTurnHash: z.string().optional(),
+  // Mode 3: direct segments (legacy)
+  baseId: z.string().optional(),
+  baseSegments: z.array(DiffSegmentSchema).optional(),
+  targetId: z.string().optional(),
+  targetSegments: z.array(DiffSegmentSchema).optional(),
+  // Common options
+  threshold: z.number().optional(),
+});
+
+const ThreeWayBodySchema = z.object({
+  // Mode 1: turn hash
+  baseTurnHash: z.string().optional(),
+  sourceTurnHash: z.string().optional(),
+  targetTurnHash: z.string().optional(),
+  // Mode 2: direct segments (legacy)
+  baseId: z.string().optional(),
+  baseSegments: z.array(DiffSegmentSchema).optional(),
+  sourceId: z.string().optional(),
+  sourceSegments: z.array(DiffSegmentSchema).optional(),
+  targetId: z.string().optional(),
+  targetSegments: z.array(DiffSegmentSchema).optional(),
+  // Common options
+  threshold: z.number().optional(),
+});
+
+const FrameBodySchema = z.object({
+  base_commit_hash: z.string().optional(),
+  target_commit_hash: z.string().optional(),
+});
+
+// ============================================================================
 // Routes
 // ============================================================================
 
-export const diffRoutes = new Hono();
+const twoWayRoute = createRoute({
+  method: 'post',
+  path: '/v1/diff/two-way',
+  tags: ['Diff'],
+  summary: 'Calculate two-way semantic diff',
+  request: {
+    body: {
+      content: { 'application/json': { schema: TwoWayBodySchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Two-way diff result',
+      content: {
+        'application/json': { schema: z.object({ success: z.literal(true), data: z.any() }) },
+      },
+    },
+    400: {
+      description: 'Bad request',
+      content: {
+        'application/json': {
+          schema: z.object({
+            success: z.literal(false),
+            error: z.object({ code: z.string(), message: z.string() }),
+          }),
+        },
+      },
+    },
+    404: {
+      description: 'Not found',
+      content: {
+        'application/json': {
+          schema: z.object({
+            success: z.literal(false),
+            error: z.object({ code: z.string(), message: z.string() }),
+          }),
+        },
+      },
+    },
+    500: {
+      description: 'Server error',
+      content: {
+        'application/json': {
+          schema: z.object({
+            success: z.literal(false),
+            error: z.object({ code: z.string(), message: z.string() }),
+          }),
+        },
+      },
+    },
+  },
+});
+
+const threeWayRoute = createRoute({
+  method: 'post',
+  path: '/v1/diff/three-way',
+  tags: ['Diff'],
+  summary: 'Calculate three-way semantic diff',
+  request: {
+    body: {
+      content: { 'application/json': { schema: ThreeWayBodySchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Three-way diff result',
+      content: {
+        'application/json': { schema: z.object({ success: z.literal(true), data: z.any() }) },
+      },
+    },
+    400: {
+      description: 'Bad request',
+      content: {
+        'application/json': {
+          schema: z.object({
+            success: z.literal(false),
+            error: z.object({ code: z.string(), message: z.string() }),
+          }),
+        },
+      },
+    },
+    404: {
+      description: 'Not found',
+      content: {
+        'application/json': {
+          schema: z.object({
+            success: z.literal(false),
+            error: z.object({ code: z.string(), message: z.string() }),
+          }),
+        },
+      },
+    },
+    500: {
+      description: 'Server error',
+      content: {
+        'application/json': {
+          schema: z.object({
+            success: z.literal(false),
+            error: z.object({ code: z.string(), message: z.string() }),
+          }),
+        },
+      },
+    },
+  },
+});
+
+const frameRoute = createRoute({
+  method: 'post',
+  path: '/v1/diff/frame',
+  tags: ['Diff'],
+  summary: 'Frame-based diff between two commits',
+  request: {
+    body: {
+      content: { 'application/json': { schema: FrameBodySchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Frame diff result',
+      content: {
+        'application/json': { schema: z.object({ success: z.literal(true), data: z.any() }) },
+      },
+    },
+    400: {
+      description: 'Bad request',
+      content: {
+        'application/json': {
+          schema: z.object({
+            success: z.literal(false),
+            error: z.object({ code: z.string(), message: z.string() }),
+          }),
+        },
+      },
+    },
+    404: {
+      description: 'Not found',
+      content: {
+        'application/json': {
+          schema: z.object({
+            success: z.literal(false),
+            error: z.object({ code: z.string(), message: z.string() }),
+          }),
+        },
+      },
+    },
+  },
+});
+
+export const diffRoutes = new OpenAPIHono({ defaultHook: zodErrorHook });
+
+// Handle JSON parse errors (invalid JSON body) and other errors
+diffRoutes.onError((err, c) => {
+  // Hono throws HTTPException or wraps SyntaxError for bad JSON
+  const message = err.message || '';
+  if (
+    err instanceof SyntaxError ||
+    message.includes('JSON') ||
+    message.includes('json') ||
+    message.includes('Unexpected token') ||
+    message.includes('not valid JSON')
+  ) {
+    return c.json(
+      { success: false as const, error: { code: 'INVALID_JSON', message: 'Invalid JSON body' } },
+      400
+    );
+  }
+  return c.json(
+    {
+      success: false as const,
+      error: { code: 'INTERNAL_ERROR', message: message || 'Internal server error' },
+    },
+    500
+  );
+});
 
 /**
  * POST /v1/diff/two-way - Calculate two-way semantic diff
  */
-diffRoutes.post('/v1/diff/two-way', async (c) => {
-  let body: {
-    // Mode 1: commit hash
-    base_commit_hash?: string;
-    target_commit_hash?: string;
-    // Mode 2: turn hash
-    baseTurnHash?: string;
-    targetTurnHash?: string;
-    // Mode 3: direct segments (legacy)
-    baseId?: string;
-    baseSegments?: DiffSegment[];
-    targetId?: string;
-    targetSegments?: DiffSegment[];
-    // Common options
-    threshold?: number;
-  } | null = null;
-
-  try {
-    body = await c.req.json();
-  } catch {
-    return jsonError(c, 'INVALID_JSON', 'Invalid JSON body', 400);
-  }
-
-  if (!body) {
-    return jsonError(c, 'INVALID_REQUEST', 'Request body is required', 400);
-  }
+diffRoutes.openapi(twoWayRoute, async (c) => {
+  const body = c.req.valid('json');
 
   const threshold = body.threshold ?? 0.7;
   let baseId = '';
@@ -149,7 +346,7 @@ diffRoutes.post('/v1/diff/two-way', async (c) => {
     const targetCommit = await getCommitUnified(db, body.target_commit_hash);
 
     if (baseCommit && targetCommit) {
-      const diff: FrameDiff = frameDiff(baseCommit.content, targetCommit.content);
+      const diff: FrameDiff = frameDiff(baseCommit.content, targetCommit.content, wordDiff);
 
       const commitMeta = (commit: typeof baseCommit) => ({
         hash: commit.hash,
@@ -159,17 +356,19 @@ diffRoutes.post('/v1/diff/two-way', async (c) => {
         branch: commit.branch,
       });
 
-      return jsonSuccess(c, {
-        diff,
-        base: commitMeta(baseCommit),
-        target: commitMeta(targetCommit),
-      });
+      return c.json(
+        {
+          success: true as const,
+          data: { diff, base: commitMeta(baseCommit), target: commitMeta(targetCommit) },
+        },
+        200
+      );
     } else {
       if (!baseCommit) {
-        return jsonError(c, 'NOT_FOUND', `Base commit ${body.base_commit_hash} not found`, 404);
+        return errorResponse(c, 'NOT_FOUND', `Base commit ${body.base_commit_hash} not found`);
       }
       if (!targetCommit) {
-        return jsonError(c, 'NOT_FOUND', `Target commit ${body.target_commit_hash} not found`, 404);
+        return errorResponse(c, 'NOT_FOUND', `Target commit ${body.target_commit_hash} not found`);
       }
     }
   }
@@ -179,19 +378,19 @@ diffRoutes.post('/v1/diff/two-way', async (c) => {
     const targetResult = await extractSegmentsFromTurn(db, body.targetTurnHash);
 
     if (!baseResult.ok) {
-      return jsonError(
-        c,
-        getErrorCode(baseResult.error),
-        baseResult.message,
-        getErrorStatus(baseResult.error)
+      const code = getErrorCode(baseResult.error);
+      const status = getErrorStatus(baseResult.error);
+      return c.json(
+        { success: false as const, error: { code, message: baseResult.message } },
+        status
       );
     }
     if (!targetResult.ok) {
-      return jsonError(
-        c,
-        getErrorCode(targetResult.error),
-        targetResult.message,
-        getErrorStatus(targetResult.error)
+      const code = getErrorCode(targetResult.error);
+      const status = getErrorStatus(targetResult.error);
+      return c.json(
+        { success: false as const, error: { code, message: targetResult.message } },
+        status
       );
     }
 
@@ -210,18 +409,23 @@ diffRoutes.post('/v1/diff/two-way', async (c) => {
     targetId = body.targetId;
     targetSegments = body.targetSegments ?? [];
   } else {
-    return jsonError(
+    return errorResponse(
       c,
       'INVALID_REQUEST',
-      'Provide either (base_commit_hash, target_commit_hash), (baseTurnHash, targetTurnHash), or (baseId, baseSegments, targetId, targetSegments)',
-      400
+      'Provide either (base_commit_hash, target_commit_hash), (baseTurnHash, targetTurnHash), or (baseId, baseSegments, targetId, targetSegments)'
     );
   }
 
   // Check API key
   const googleApiKey = process.env.GOOGLE_AI_STUDIO_KEY;
   if (!googleApiKey) {
-    return jsonError(c, 'EMBEDDING_UNAVAILABLE', 'GOOGLE_AI_STUDIO_KEY not configured', 500);
+    return c.json(
+      {
+        success: false as const,
+        error: { code: 'EMBEDDING_UNAVAILABLE', message: 'GOOGLE_AI_STUDIO_KEY not configured' },
+      },
+      500
+    );
   }
 
   try {
@@ -252,49 +456,35 @@ diffRoutes.post('/v1/diff/two-way', async (c) => {
     const diffEngine = createDiffEngine(embeddingProvider, { threshold });
     const result = await diffEngine.diffTwoWay(baseId, baseSegments, targetId, targetSegments);
 
-    return jsonSuccess(c, {
-      ...result,
-      method: 'embedding',
-      usedCache,
-      cacheStats,
-    });
+    return c.json(
+      { success: true as const, data: { ...result, method: 'embedding', usedCache, cacheStats } },
+      200
+    );
   } catch (error) {
     if (error instanceof EmbeddingProviderError) {
-      return jsonError(c, 'EMBEDDING_UNAVAILABLE', error.message, 500);
+      return c.json(
+        {
+          success: false as const,
+          error: { code: 'EMBEDDING_UNAVAILABLE', message: (error as Error).message },
+        },
+        500
+      );
     }
-    return jsonError(c, 'DIFF_FAILED', (error as Error).message, 500);
+    return c.json(
+      {
+        success: false as const,
+        error: { code: 'DIFF_FAILED', message: (error as Error).message },
+      },
+      500
+    );
   }
 });
 
 /**
  * POST /v1/diff/three-way - Calculate three-way semantic diff
  */
-diffRoutes.post('/v1/diff/three-way', async (c) => {
-  let body: {
-    // Mode 1: turn hash
-    baseTurnHash?: string;
-    sourceTurnHash?: string;
-    targetTurnHash?: string;
-    // Mode 2: direct segments (legacy)
-    baseId?: string;
-    baseSegments?: DiffSegment[];
-    sourceId?: string;
-    sourceSegments?: DiffSegment[];
-    targetId?: string;
-    targetSegments?: DiffSegment[];
-    // Common options
-    threshold?: number;
-  } | null = null;
-
-  try {
-    body = await c.req.json();
-  } catch {
-    return jsonError(c, 'INVALID_JSON', 'Invalid JSON body', 400);
-  }
-
-  if (!body) {
-    return jsonError(c, 'INVALID_REQUEST', 'Request body is required', 400);
-  }
+diffRoutes.openapi(threeWayRoute, async (c) => {
+  const body = c.req.valid('json');
 
   const threshold = body.threshold ?? 0.7;
   let baseId: string;
@@ -319,11 +509,11 @@ diffRoutes.post('/v1/diff/three-way', async (c) => {
       ['target', targetResult],
     ] as const) {
       if (!result.ok) {
-        return jsonError(
-          c,
-          getErrorCode(result.error),
-          `${name}: ${result.message}`,
-          getErrorStatus(result.error)
+        const code = getErrorCode(result.error);
+        const status = getErrorStatus(result.error);
+        return c.json(
+          { success: false as const, error: { code, message: `${name}: ${result.message}` } },
+          status
         );
       }
     }
@@ -345,18 +535,23 @@ diffRoutes.post('/v1/diff/three-way', async (c) => {
     targetId = body.targetId;
     targetSegments = body.targetSegments ?? [];
   } else {
-    return jsonError(
+    return errorResponse(
       c,
       'INVALID_REQUEST',
-      'Provide either (baseTurnHash, sourceTurnHash, targetTurnHash) or (baseId, sourceId, targetId with segments)',
-      400
+      'Provide either (baseTurnHash, sourceTurnHash, targetTurnHash) or (baseId, sourceId, targetId with segments)'
     );
   }
 
   // Check API key
   const googleApiKey = process.env.GOOGLE_AI_STUDIO_KEY;
   if (!googleApiKey) {
-    return jsonError(c, 'EMBEDDING_UNAVAILABLE', 'GOOGLE_AI_STUDIO_KEY not configured', 500);
+    return c.json(
+      {
+        success: false as const,
+        error: { code: 'EMBEDDING_UNAVAILABLE', message: 'GOOGLE_AI_STUDIO_KEY not configured' },
+      },
+      500
+    );
   }
 
   try {
@@ -399,45 +594,41 @@ diffRoutes.post('/v1/diff/three-way', async (c) => {
       targetSegments
     );
 
-    return jsonSuccess(c, {
-      ...result,
-      method: 'embedding',
-      usedCache,
-      cacheStats,
-    });
+    return c.json(
+      { success: true as const, data: { ...result, method: 'embedding', usedCache, cacheStats } },
+      200
+    );
   } catch (error) {
     if (error instanceof EmbeddingProviderError) {
-      return jsonError(c, 'EMBEDDING_UNAVAILABLE', error.message, 500);
+      return c.json(
+        {
+          success: false as const,
+          error: { code: 'EMBEDDING_UNAVAILABLE', message: (error as Error).message },
+        },
+        500
+      );
     }
-    return jsonError(c, 'DIFF_FAILED', (error as Error).message, 500);
+    return c.json(
+      {
+        success: false as const,
+        error: { code: 'DIFF_FAILED', message: (error as Error).message },
+      },
+      500
+    );
   }
 });
 
 /**
  * POST /v1/diff/frame — Frame-based diff between two commits
  */
-diffRoutes.post('/v1/diff/frame', async (c) => {
-  let body: {
-    base_commit_hash?: string;
-    target_commit_hash?: string;
-  } | null = null;
-
-  try {
-    body = await c.req.json();
-  } catch {
-    return jsonError(c, 'INVALID_JSON', 'Invalid JSON body', 400);
-  }
-
-  if (!body) {
-    return jsonError(c, 'INVALID_REQUEST', 'Request body is required', 400);
-  }
+diffRoutes.openapi(frameRoute, async (c) => {
+  const body = c.req.valid('json');
 
   if (!body.base_commit_hash || !body.target_commit_hash) {
-    return jsonError(
+    return errorResponse(
       c,
       'INVALID_REQUEST',
-      'Both base_commit_hash and target_commit_hash are required',
-      400
+      'Both base_commit_hash and target_commit_hash are required'
     );
   }
 
@@ -449,13 +640,13 @@ diffRoutes.post('/v1/diff/frame', async (c) => {
   ]);
 
   if (!baseCommit) {
-    return jsonError(c, 'NOT_FOUND', `Base commit ${body.base_commit_hash} not found`, 404);
+    return errorResponse(c, 'NOT_FOUND', `Base commit ${body.base_commit_hash} not found`);
   }
   if (!targetCommit) {
-    return jsonError(c, 'NOT_FOUND', `Target commit ${body.target_commit_hash} not found`, 404);
+    return errorResponse(c, 'NOT_FOUND', `Target commit ${body.target_commit_hash} not found`);
   }
 
-  const diff: FrameDiff = frameDiff(baseCommit.content, targetCommit.content);
+  const diff: FrameDiff = frameDiff(baseCommit.content, targetCommit.content, wordDiff);
 
   const commitMeta = (commit: typeof baseCommit) => ({
     hash: commit.hash,
@@ -465,9 +656,11 @@ diffRoutes.post('/v1/diff/frame', async (c) => {
     branch: commit.branch,
   });
 
-  return jsonSuccess(c, {
-    diff,
-    base: commitMeta(baseCommit),
-    target: commitMeta(targetCommit),
-  });
+  return c.json(
+    {
+      success: true as const,
+      data: { diff, base: commitMeta(baseCommit), target: commitMeta(targetCommit) },
+    },
+    200
+  );
 });

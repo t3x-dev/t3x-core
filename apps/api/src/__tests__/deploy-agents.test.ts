@@ -22,7 +22,7 @@ vi.mock('../lib/db', () => ({
   closeDB: vi.fn(() => Promise.resolve()),
 }));
 
-import { deployAgentRoutes } from '../routes/deploy-agents';
+import { deployAgentRoutes } from '../routes/deploy-agents.openapi';
 
 describe('Deploy Agents Routes', () => {
   let cleanup: () => Promise<void>;

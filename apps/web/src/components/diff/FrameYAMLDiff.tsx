@@ -18,39 +18,13 @@ import type { Frame, FrameDiff, Relation, SlotDiff, SlotValue } from '@t3x-dev/c
 import { ChevronDown, ChevronRight, Equal, Minus, Pencil, Plus } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
+import { formatRelation, formatSlotValue, renderFrameSlots } from './DiffYAMLFormatters';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
 export interface FrameYAMLDiffProps {
   diff: FrameDiff;
   className?: string;
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function formatSlotValue(value: SlotValue | undefined): string {
-  if (value === undefined) return '(none)';
-  if (typeof value === 'string') return `"${value}"`;
-  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
-  if (typeof value === 'object' && value !== null && 'ref' in value) {
-    return `*${(value as { ref: string }).ref}`;
-  }
-  if (Array.isArray(value)) {
-    return `[${(value as SlotValue[]).map(formatSlotValue).join(', ')}]`;
-  }
-  return JSON.stringify(value);
-}
-
-function renderFrameSlots(frame: Frame): string[] {
-  const lines: string[] = [];
-  for (const [key, value] of Object.entries(frame.slots)) {
-    lines.push(`  ${key}: ${formatSlotValue(value)}`);
-  }
-  return lines;
-}
-
-function formatRelation(r: Relation): string {
-  return `${r.from} -[${r.type}]-> ${r.to}${r.confidence != null ? ` (${Math.round(r.confidence * 100)}%)` : ''}`;
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────

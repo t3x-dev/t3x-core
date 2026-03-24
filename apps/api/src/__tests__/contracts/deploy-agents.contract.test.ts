@@ -34,7 +34,7 @@ vi.mock('../../lib/db', () => ({
 }));
 
 // Import routes after mocking
-import { deployAgentRoutes } from '../../routes/deploy-agents';
+import { deployAgentRoutes } from '../../routes/deploy-agents.openapi';
 
 describe('Deploy Agents API Contract', () => {
   let cleanup: () => Promise<void>;

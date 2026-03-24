@@ -42,7 +42,7 @@ afterAll(() => {
   }
 });
 
-import { chatRoutes } from '../routes/chat';
+import { chatRoutes } from '../routes/chat.openapi';
 
 const app = new Hono();
 app.route('/', chatRoutes);
