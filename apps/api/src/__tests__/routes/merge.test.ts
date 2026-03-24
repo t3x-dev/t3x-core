@@ -56,7 +56,7 @@ describe('Merge Routes', () => {
     commitCounter++;
     const commit = await createCommit(mockDB, {
       parents: [],
-      author: { type: 'human', name: 'Test User' },
+      author: { type: 'human', name: `Test User ${commitCounter}` },
       content: {
         frames: frames.map((f) => ({
           id: f.id,

@@ -6,7 +6,7 @@
 
 import { sha256 } from '@t3x-dev/core';
 import { describe, expect, it } from 'vitest';
-import { extractChunksFromTurns } from '../routes/curate';
+import { extractChunksFromTurns } from '../routes/curate.openapi';
 
 describe('extractChunksFromTurns', () => {
   const computeHash = sha256;

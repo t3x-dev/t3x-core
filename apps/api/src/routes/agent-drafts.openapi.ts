@@ -1,11 +1,12 @@
 /**
  * Agent Drafts Routes (with LLM generation)
  *
- * POST  /v1/agent/drafts - Create draft with LLM generation
- * GET   /v1/agent/drafts/:id - Get draft
- * PATCH /v1/agent/drafts/:id - Update draft with feedback
+ * POST  /v1/agent/drafts       - Create draft with LLM generation
+ * GET   /v1/agent/drafts/{id}  - Get draft
+ * PATCH /v1/agent/drafts/{id}  - Update draft with feedback
  */
 
+import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import type { SemanticContent } from '@t3x-dev/core';
 import { buildDraft, createClaudeProvider, LLMProviderError } from '@t3x-dev/core';
 import {
@@ -17,12 +18,12 @@ import {
   listDeltaLogByConversation,
   updateAgentDraft,
 } from '@t3x-dev/storage';
-import { Hono } from 'hono';
 import { getDB } from '../lib/db';
 import { toDeltaLogEntries } from '../lib/delta-log-utils';
+import { errorResponse, zodErrorHook } from '../lib/errors';
 import { getLLMProvider } from '../lib/provider-registry';
-import { jsonError, jsonSuccess } from '../lib/response';
 import { getUserId, recordUsageFireAndForget } from '../lib/usage-tracking';
+import { ErrorResponseSchema, IdParamSchema, SuccessResponseSchema } from '../schemas/common';
 
 // ============================================================================
 // Types
@@ -472,53 +473,112 @@ const DEFAULT_LLM_CONFIG: LLMConfig = {
 };
 
 // ============================================================================
+// OpenAPI Schemas
+// ============================================================================
+
+const LLMConfigSchema = z.object({
+  provider: z.string(),
+  model: z.string(),
+  temperature: z.number(),
+  max_tokens: z.number().int(),
+});
+
+const DraftValidationSchema = z.object({
+  passed: z.boolean(),
+  missing_keywords: z.array(z.string()),
+  forbidden_keywords: z.array(z.string()),
+});
+
+const DraftResponseSchema = z.object({
+  draft_id: z.string(),
+  project_id: z.string(),
+  conversation_id: z.string(),
+  lifecycle_status: z.enum(['ephemeral', 'adopted', 'superseded']),
+  validation_status: z.enum(['pending', 'passed', 'failed']),
+  base_commit_hash: z.string().nullable(),
+  turn_anchor_hash: z.string().nullable(),
+  bridge_id: z.string(),
+  intent: z.string(),
+  text: z.string().nullable(),
+  must_have: z.array(z.string()),
+  mustnt_have: z.array(z.string()),
+  validation: DraftValidationSchema.nullable(),
+  llm_config: LLMConfigSchema.nullable(),
+  created_at: z.string(),
+  completed_at: z.string().nullable(),
+  warnings: z.array(z.string()).optional(),
+});
+
+const CreateAgentDraftRequestSchema = z.object({
+  project_id: z.string().min(1),
+  conversation_id: z.string().min(1),
+  bridge_id: z.string().min(1),
+  intent: z.string().min(1),
+  base_commit_hash: z.string().optional(),
+  turn_anchor_hash: z.string().optional(),
+  llm_config: LLMConfigSchema.partial().optional(),
+  selected_text: z.string().optional(),
+  cosine: z.number().optional(),
+  keep_ratio: z.number().optional(),
+});
+
+const PatchAgentDraftRequestSchema = z.object({
+  feedback: z.string().optional(),
+  append_must_have: z.array(z.string()).optional(),
+});
+
+// ============================================================================
 // Routes
 // ============================================================================
 
-export const agentDraftRoutes = new Hono();
+export const agentDraftRoutes = new OpenAPIHono({ defaultHook: zodErrorHook });
 
-/**
- * POST /v1/agent/drafts - Create draft with LLM generation
- */
-agentDraftRoutes.post('/v1/agent/drafts', async (c) => {
-  let body: {
-    project_id?: string;
-    conversation_id?: string;
-    bridge_id?: string;
-    intent?: string;
-    base_commit_hash?: string;
-    turn_anchor_hash?: string;
-    llm_config?: Partial<LLMConfig>;
-    /** Optional: pre-selected text from curate preview. If provided, use this instead of full conversation. */
-    selected_text?: string;
-    /** Curate parameters for debugging/review */
-    cosine?: number;
-    keep_ratio?: number;
-  } | null = null;
+// POST /v1/agent/drafts
+const createAgentDraftRoute = createRoute({
+  method: 'post',
+  path: '/v1/agent/drafts',
+  tags: ['Drafts'],
+  summary: 'Create draft with LLM generation',
+  request: {
+    body: {
+      content: { 'application/json': { schema: CreateAgentDraftRequestSchema } },
+    },
+  },
+  responses: {
+    201: {
+      description: 'Draft created',
+      content: { 'application/json': { schema: SuccessResponseSchema(DraftResponseSchema) } },
+    },
+    400: {
+      description: 'Invalid request',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    404: {
+      description: 'Not found',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    500: {
+      description: 'Server error',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
 
-  try {
-    body = await c.req.json();
-  } catch {
-    return jsonError(c, 'INVALID_JSON', 'Invalid JSON body', 400);
-  }
-
-  if (!body?.project_id || !body?.conversation_id || !body?.bridge_id || !body?.intent) {
-    return jsonError(
-      c,
-      'INVALID_REQUEST',
-      'project_id, conversation_id, bridge_id, and intent are required',
-      400
-    );
-  }
+agentDraftRoutes.openapi(createAgentDraftRoute, async (c) => {
+  const body = c.req.valid('json');
 
   // Get LLM provider from registry (preferred) or fall back to direct Anthropic
   let llmProviderInstance = await getLLMProvider();
   const anthropicApiKey = process.env.ANTHROPIC_API_KEY;
   if (!llmProviderInstance && !anthropicApiKey) {
-    return jsonError(
-      c,
-      'PROVIDER_ERROR',
-      'No LLM provider configured. Set ANTHROPIC_API_KEY or configure a provider.',
+    return c.json(
+      {
+        success: false as const,
+        error: {
+          code: 'PROVIDER_ERROR',
+          message: 'No LLM provider configured. Set ANTHROPIC_API_KEY or configure a provider.',
+        },
+      },
       400
     );
   }
@@ -529,13 +589,13 @@ agentDraftRoutes.post('/v1/agent/drafts', async (c) => {
     // Verify project exists
     const project = await findProjectById(db, body.project_id);
     if (!project) {
-      return jsonError(c, 'NOT_FOUND', `Project ${body.project_id} not found`, 404);
+      return errorResponse(c, 'NOT_FOUND', `Project ${body.project_id} not found`);
     }
 
     // Verify conversation exists
     const conversation = await findConversationById(db, body.conversation_id);
     if (!conversation) {
-      return jsonError(c, 'NOT_FOUND', `Conversation ${body.conversation_id} not found`, 404);
+      return errorResponse(c, 'NOT_FOUND', `Conversation ${body.conversation_id} not found`);
     }
 
     // Get conversation turns (or use pre-selected text if provided)
@@ -625,7 +685,7 @@ agentDraftRoutes.post('/v1/agent/drafts', async (c) => {
       text: generatedText,
     });
 
-    const response: DraftResponse = {
+    const data: DraftResponse = {
       draft_id: draft.draftId,
       project_id: body.project_id,
       conversation_id: body.conversation_id,
@@ -642,32 +702,65 @@ agentDraftRoutes.post('/v1/agent/drafts', async (c) => {
       llm_config: llmConfig,
       created_at: draft.createdAt.toISOString(),
       completed_at: draft.completedAt?.toISOString() ?? null,
-      // Include warnings if any fallbacks were used
       ...(warnings.length > 0 ? { warnings } : {}),
     };
 
-    return jsonSuccess(c, response, 201);
+    return c.json({ success: true as const, data }, 201);
   } catch (err) {
     if (err instanceof LLMProviderError) {
-      return jsonError(c, 'LLM_ERROR', err.message, 500);
+      return c.json(
+        {
+          success: false as const,
+          error: { code: 'LLM_ERROR', message: err.message },
+        },
+        500
+      );
     }
     const message = err instanceof Error ? err.message : 'Unknown error';
-    return jsonError(c, 'DRAFT_CREATE_FAILED', message, 500);
+    return c.json(
+      {
+        success: false as const,
+        error: { code: 'DRAFT_CREATE_FAILED', message },
+      },
+      500
+    );
   }
 });
 
-/**
- * GET /v1/agent/drafts/:id - Get draft
- */
-agentDraftRoutes.get('/v1/agent/drafts/:id', async (c) => {
-  const draftId = c.req.param('id');
+// GET /v1/agent/drafts/{id}
+const getAgentDraftRoute = createRoute({
+  method: 'get',
+  path: '/v1/agent/drafts/{id}',
+  tags: ['Drafts'],
+  summary: 'Get draft by ID',
+  request: {
+    params: IdParamSchema,
+  },
+  responses: {
+    200: {
+      description: 'Draft found',
+      content: { 'application/json': { schema: SuccessResponseSchema(DraftResponseSchema) } },
+    },
+    404: {
+      description: 'Draft not found',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    500: {
+      description: 'Server error',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+agentDraftRoutes.openapi(getAgentDraftRoute, async (c) => {
+  const { id: draftId } = c.req.valid('param');
 
   try {
     const db = await getDB();
     const draft = await findAgentDraftById(db, draftId);
 
     if (!draft) {
-      return jsonError(c, 'NOT_FOUND', `Draft ${draftId} not found`, 404);
+      return errorResponse(c, 'NOT_FOUND', `Draft ${draftId} not found`);
     }
 
     // Parse JSON fields
@@ -680,7 +773,7 @@ agentDraftRoutes.get('/v1/agent/drafts/:id', async (c) => {
     const validation = draft.text ? validateDraft(draft.text, mustHave, mustntHave) : null;
     const validationStatus = !draft.text ? 'pending' : validation?.passed ? 'passed' : 'failed';
 
-    const response: DraftResponse = {
+    const data: DraftResponse = {
       draft_id: draft.draftId,
       project_id: draft.projectId,
       conversation_id: draft.conversationId,
@@ -699,33 +792,57 @@ agentDraftRoutes.get('/v1/agent/drafts/:id', async (c) => {
       completed_at: draft.completedAt?.toISOString() ?? null,
     };
 
-    return jsonSuccess(c, response);
+    return c.json({ success: true as const, data }, 200);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
-    return jsonError(c, 'DRAFT_GET_FAILED', message, 500);
+    return c.json(
+      {
+        success: false as const,
+        error: { code: 'DRAFT_GET_FAILED', message },
+      },
+      500
+    );
   }
 });
 
-/**
- * PATCH /v1/agent/drafts/:id - Update draft with feedback
- */
-agentDraftRoutes.patch('/v1/agent/drafts/:id', async (c) => {
-  const draftId = c.req.param('id');
+// PATCH /v1/agent/drafts/{id}
+const patchAgentDraftRoute = createRoute({
+  method: 'patch',
+  path: '/v1/agent/drafts/{id}',
+  tags: ['Drafts'],
+  summary: 'Update draft with feedback',
+  request: {
+    params: IdParamSchema,
+    body: {
+      content: { 'application/json': { schema: PatchAgentDraftRequestSchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Draft updated',
+      content: { 'application/json': { schema: SuccessResponseSchema(DraftResponseSchema) } },
+    },
+    404: {
+      description: 'Draft not found',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    500: {
+      description: 'Server error',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
 
-  let body: { feedback?: string; append_must_have?: string[] } | null = null;
-
-  try {
-    body = await c.req.json();
-  } catch {
-    return jsonError(c, 'INVALID_JSON', 'Invalid JSON body', 400);
-  }
+agentDraftRoutes.openapi(patchAgentDraftRoute, async (c) => {
+  const { id: draftId } = c.req.valid('param');
+  const body = c.req.valid('json');
 
   try {
     const db = await getDB();
     const draft = await findAgentDraftById(db, draftId);
 
     if (!draft) {
-      return jsonError(c, 'NOT_FOUND', `Draft ${draftId} not found`, 404);
+      return errorResponse(c, 'NOT_FOUND', `Draft ${draftId} not found`);
     }
 
     // Parse existing data
@@ -771,7 +888,13 @@ agentDraftRoutes.patch('/v1/agent/drafts/:id', async (c) => {
     if (!patchProvider) {
       const patchApiKey = process.env.ANTHROPIC_API_KEY;
       if (!patchApiKey) {
-        return jsonError(c, 'PROVIDER_ERROR', 'No LLM provider configured', 500);
+        return c.json(
+          {
+            success: false as const,
+            error: { code: 'PROVIDER_ERROR', message: 'No LLM provider configured' },
+          },
+          500
+        );
       }
       patchProvider = createClaudeProvider({
         apiKey: patchApiKey,
@@ -809,7 +932,7 @@ agentDraftRoutes.patch('/v1/agent/drafts/:id', async (c) => {
       completedAt,
     });
 
-    const response: DraftResponse = {
+    const data: DraftResponse = {
       draft_id: draftId,
       project_id: draft.projectId,
       conversation_id: draft.conversationId,
@@ -828,12 +951,24 @@ agentDraftRoutes.patch('/v1/agent/drafts/:id', async (c) => {
       completed_at: completedAt.toISOString(),
     };
 
-    return jsonSuccess(c, response);
+    return c.json({ success: true as const, data }, 200);
   } catch (err) {
     if (err instanceof LLMProviderError) {
-      return jsonError(c, 'LLM_ERROR', err.message, 500);
+      return c.json(
+        {
+          success: false as const,
+          error: { code: 'LLM_ERROR', message: err.message },
+        },
+        500
+      );
     }
     const message = err instanceof Error ? err.message : 'Unknown error';
-    return jsonError(c, 'DRAFT_UPDATE_FAILED', message, 500);
+    return c.json(
+      {
+        success: false as const,
+        error: { code: 'DRAFT_UPDATE_FAILED', message },
+      },
+      500
+    );
   }
 });

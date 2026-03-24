@@ -22,7 +22,7 @@ vi.mock('../lib/db', () => ({
 }));
 
 // Import routes after mocking
-import { conversationRoutes } from '../routes/conversations';
+import { conversationRoutes } from '../routes/conversations.openapi';
 
 describe('Conversation Context Routes', () => {
   let cleanup: () => Promise<void>;
