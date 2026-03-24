@@ -1,10 +1,18 @@
 'use client';
 
+/**
+ * MergeFrameRow — Focused Diff card for a single frame.
+ *
+ * Instead of side-by-side panes, each conflicting slot is rendered as:
+ *   key:  source_value  →  target_value
+ *
+ * Only differing slots are shown prominently. Identical slots are collapsed.
+ * onlyIn slots are marked with +/- indicators.
+ */
+
 import type { Frame, SlotConflict, SlotValue } from '@t3x-dev/core';
-import { YAML_COLORS } from '@/components/diff/DiffYAMLFormatters';
-import { buildAlignedSlotKeys } from '@/components/diff/DiffYAMLUtils';
+import { useState } from 'react';
 import { SlotValueSpan } from '@/components/diff/YAMLFrameRenderer';
-import { YAMLLine } from '@/components/diff/YAMLLine';
 import { cn } from '@/lib/utils';
 import type { FrameResolution } from './FrameConflictCard';
 
@@ -19,94 +27,183 @@ export interface MergeFrameRowProps {
   resolution?: FrameResolution | null;
   isKept?: boolean;
   onToggleKeep?: () => void;
-  /** Anchor ID for navigator jump-to */
   anchorId?: string;
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// ── Diff row: source_value → target_value ────────────────────────────────────
 
-/** Render a single slot value as a span, matching YAML_COLORS style */
-function SlotLine({
+function DiffSlotRow({
   slotKey,
-  value,
-  lineNumber,
-  highlight,
+  sourceValue,
+  targetValue,
+  type,
 }: {
   slotKey: string;
-  value: SlotValue | undefined;
-  lineNumber: number;
-  highlight?: 'source' | 'target' | 'modified' | null;
+  sourceValue?: SlotValue;
+  targetValue?: SlotValue;
+  type: 'changed' | 'only-source' | 'only-target';
 }) {
-  const status =
-    highlight === 'source'
-      ? 'source'
-      : highlight === 'target'
-        ? 'target'
-        : highlight === 'modified'
-          ? 'modified'
-          : 'unchanged';
-
-  const wordClass =
-    highlight === 'source' ? 'word-source' : highlight === 'target' ? 'word-target' : undefined;
-
   return (
-    <YAMLLine lineNumber={lineNumber} status={status}>
-      {'    '}
-      <span style={{ color: YAML_COLORS.key }}>{slotKey}</span>
-      <span style={{ color: YAML_COLORS.bracket }}>: </span>
-      {value !== undefined ? (
-        wordClass ? (
-          <span className={wordClass}>
-            <SlotValueSpan value={value} />
-          </span>
-        ) : (
-          <SlotValueSpan value={value} />
-        )
-      ) : (
-        <span style={{ color: YAML_COLORS.comment }}>(none)</span>
+    <div
+      className={cn(
+        'flex items-baseline gap-0 py-[3px] px-4 min-h-[28px] font-mono text-[12px] leading-[20px]',
+        'border-b border-[rgba(255,255,255,0.02)] hover:bg-[var(--hover-bg)]'
       )}
-    </YAMLLine>
+    >
+      {/* +/- marker for only-in */}
+      {type === 'only-source' && (
+        <span className="w-4 shrink-0 text-center text-[14px] font-bold text-[var(--removed-accent,#f47067)]">
+          &minus;
+        </span>
+      )}
+      {type === 'only-target' && (
+        <span className="w-4 shrink-0 text-center text-[14px] font-bold text-[var(--added-accent,#3fb950)]">
+          +
+        </span>
+      )}
+      {type === 'changed' && <span className="w-4 shrink-0" />}
+
+      {/* Slot key */}
+      <span
+        className={cn(
+          'w-[130px] min-w-[130px] shrink-0 text-right pr-3 font-medium',
+          type === 'only-source' && 'text-[var(--merge-source-accent)]',
+          type === 'only-target' && 'text-[var(--merge-target-accent)]',
+          type === 'changed' && 'text-[var(--text-tertiary)]'
+        )}
+      >
+        {slotKey}
+      </span>
+
+      {/* Source value */}
+      <span
+        className={cn(
+          'flex-1 min-w-0 py-[2px] px-2',
+          type === 'changed' && 'bg-[var(--merge-source-bg)] rounded',
+          type === 'only-source' && 'text-[var(--merge-source-accent)] opacity-80'
+        )}
+      >
+        {sourceValue !== undefined ? (
+          type === 'changed' ? (
+            <span className="word-source">
+              <SlotValueSpan value={sourceValue} />
+            </span>
+          ) : (
+            <SlotValueSpan value={sourceValue} />
+          )
+        ) : (
+          <span className="opacity-20 italic">&mdash;</span>
+        )}
+      </span>
+
+      {/* Arrow */}
+      <span
+        className={cn(
+          'w-7 shrink-0 text-center text-[14px]',
+          type === 'changed'
+            ? 'text-[var(--text-secondary)] opacity-100'
+            : 'text-[var(--text-tertiary)] opacity-20'
+        )}
+      >
+        {type === 'changed' ? '\u2192' : ''}
+      </span>
+
+      {/* Target value */}
+      <span
+        className={cn(
+          'flex-1 min-w-0 py-[2px] px-2',
+          type === 'changed' && 'bg-[var(--merge-target-bg)] rounded',
+          type === 'only-target' && 'text-[var(--merge-target-accent)] opacity-80'
+        )}
+      >
+        {targetValue !== undefined ? (
+          type === 'changed' ? (
+            <span className="word-target">
+              <SlotValueSpan value={targetValue} />
+            </span>
+          ) : (
+            <SlotValueSpan value={targetValue} />
+          )
+        ) : (
+          <span className="opacity-20 italic">&mdash;</span>
+        )}
+      </span>
+    </div>
   );
 }
 
-/** Frame type header line */
-function FrameTypeHeader({
-  frame,
-  lineNumber,
-  status,
+// ── Column labels ────────────────────────────────────────────────────────────
+
+function ColumnLabels() {
+  return (
+    <div className="flex items-baseline px-4 py-1 text-[9px] font-semibold uppercase tracking-[0.8px] opacity-40">
+      <span className="w-4 shrink-0" />
+      <span className="w-[130px] min-w-[130px] shrink-0" />
+      <span className="flex-1 px-2 text-[var(--merge-source-accent)] opacity-80">source</span>
+      <span className="w-7 shrink-0" />
+      <span className="flex-1 px-2 text-[var(--merge-target-accent)] opacity-80">target</span>
+    </div>
+  );
+}
+
+// ── Identical slots collapse ─────────────────────────────────────────────────
+
+function IdenticalCollapse({
+  keys,
+  allSlots,
 }: {
-  frame: Frame;
-  lineNumber: number;
-  status: 'unchanged' | 'modified' | 'added' | 'removed' | 'source' | 'target';
+  keys: string[];
+  allSlots: Record<string, SlotValue>;
 }) {
+  const [expanded, setExpanded] = useState(false);
+
+  if (keys.length === 0) return null;
+
   return (
-    <YAMLLine lineNumber={lineNumber} status={status}>
-      <span style={{ color: YAML_COLORS.type, fontWeight: 600 }}>{frame.type}</span>
-      <span style={{ color: YAML_COLORS.bracket }}>:</span>
-    </YAMLLine>
+    <>
+      <div
+        className="flex items-center gap-1.5 px-4 py-[4px] text-[10px] text-[var(--text-tertiary)] cursor-pointer border-t border-[var(--stroke-divider)] hover:bg-[var(--hover-bg)]"
+        onClick={() => setExpanded(!expanded)}
+      >
+        <span className={cn('transition-transform inline-block', expanded && 'rotate-90')}>
+          &rsaquo;
+        </span>
+        <span>
+          {keys.length} identical <span className="opacity-40">({keys.join(', ')})</span>
+        </span>
+      </div>
+      {expanded &&
+        keys.map((key) => (
+          <div
+            key={key}
+            className="flex px-4 py-[2px] font-mono text-[11px] text-[var(--text-tertiary)] opacity-50"
+          >
+            <span className="w-4 shrink-0" />
+            <span className="w-[130px] min-w-[130px] shrink-0 text-right pr-3">{key}</span>
+            <span className="flex-1">
+              <SlotValueSpan value={allSlots[key]} />
+            </span>
+          </div>
+        ))}
+    </>
   );
 }
 
-/** Empty placeholder line (hatched) for the missing side */
-function EmptyPlaceholderLine() {
-  return (
-    <YAMLLine lineNumber={undefined} status="empty">
-      {null}
-    </YAMLLine>
-  );
-}
+// ── Card header ──────────────────────────────────────────────────────────────
 
-// ── Frame separator header ────────────────────────────────────────────────────
-
-interface SeparatorProps {
+function CardHeader({
+  type,
+  frameId,
+  frameType,
+  isKept,
+  onToggleKeep,
+}: {
   type: MergeFrameRowProps['type'];
   frameId: string;
   frameType?: string;
   isKept?: boolean;
   onToggleKeep?: () => void;
-}
-
-function MergeFrameSeparator({ type, frameId, frameType, isKept, onToggleKeep }: SeparatorProps) {
+}) {
   const label =
     type === 'conflict'
       ? 'CONFLICT'
@@ -115,6 +212,15 @@ function MergeFrameSeparator({ type, frameId, frameType, isKept, onToggleKeep }:
         : type === 'onlyInTarget'
           ? 'TARGET ONLY'
           : 'AUTO-KEPT';
+
+  const borderColor =
+    type === 'conflict'
+      ? 'var(--merge-conflict-accent)'
+      : type === 'onlyInSource'
+        ? 'var(--merge-source-accent)'
+        : type === 'onlyInTarget'
+          ? 'var(--merge-target-accent)'
+          : 'var(--text-tertiary)';
 
   const labelColor =
     type === 'conflict'
@@ -125,265 +231,76 @@ function MergeFrameSeparator({ type, frameId, frameType, isKept, onToggleKeep }:
           ? 'text-[var(--merge-target-accent)]'
           : 'text-[var(--text-tertiary)]';
 
-  const isConflict = type === 'conflict';
+  const bgClass =
+    type === 'conflict'
+      ? 'bg-[var(--merge-conflict-bg)]'
+      : type === 'onlyInSource'
+        ? 'bg-[var(--merge-source-bg)]'
+        : type === 'onlyInTarget'
+          ? 'bg-[var(--merge-target-bg)]'
+          : '';
 
   return (
     <div
       className={cn(
-        'relative flex items-center gap-[6px] text-[9px] font-medium uppercase tracking-[0.6px] select-none py-[4px] px-3',
-        isConflict && 'bg-[var(--merge-conflict-bg)]',
+        'flex items-center gap-2 px-4 py-[8px] border-b border-[var(--stroke-divider)]',
+        bgClass
       )}
+      style={{ borderLeft: `3px solid ${borderColor}` }}
     >
-      {/* Left accent bar for conflicts */}
-      {isConflict && (
-        <span className="absolute left-0 top-0 bottom-0 w-[3px] bg-[var(--merge-conflict-accent)] opacity-60" />
+      <span className={cn('text-[9px] font-bold uppercase tracking-[0.5px]', labelColor)}>
+        {label}
+      </span>
+      {frameType && (
+        <span className="font-mono text-[12px] font-semibold text-[var(--text-primary)]">
+          {frameType}:
+        </span>
       )}
-      <span className={cn('text-[9px] font-bold tracking-[0.4px]', labelColor)}>{label}</span>
-      {frameType && <span className="text-[var(--text-secondary)] font-semibold">{frameType}</span>}
-      <span className="font-mono opacity-40 text-[8px] text-[var(--text-tertiary)]">{frameId}</span>
-      {/* Divider */}
-      <span className="flex-1 h-px bg-[var(--stroke-divider)] opacity-50" />
-      {/* Keep/discard toggle for onlyIn types */}
+      <span className="font-mono text-[10px] text-[var(--text-tertiary)]">{frameId}</span>
+      <span className="flex-1" />
       {(type === 'onlyInSource' || type === 'onlyInTarget') && onToggleKeep && (
         <button
           type="button"
           onClick={onToggleKeep}
           className={cn(
-            'text-[9px] font-medium px-1.5 py-0.5 rounded border transition-colors',
+            'text-[10px] font-semibold px-2.5 py-[2px] rounded border transition-colors cursor-pointer',
             isKept
-              ? 'border-[var(--merge-source-accent)]/50 text-[var(--merge-source-accent)] bg-[var(--merge-source-bg)]'
-              : 'border-[var(--stroke-divider)] text-[var(--text-tertiary)] hover:border-[var(--stroke-default)] hover:text-[var(--text-secondary)]'
+              ? 'border-[rgba(63,185,80,0.3)] bg-[rgba(63,185,80,0.06)] text-[var(--added-accent,#3fb950)]'
+              : 'border-[var(--stroke-divider)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]'
           )}
         >
-          {isKept ? 'Keep' : 'Discard'}
+          {isKept ? '\u2713 Keep' : 'Discard'}
         </button>
       )}
     </div>
   );
 }
 
-// ── Conflict frame renderer ───────────────────────────────────────────────────
+// ── OnlyIn card content ──────────────────────────────────────────────────────
 
-function ConflictPanes({
-  sourceFrame,
-  targetFrame,
-  slotConflicts,
-  resolution,
-}: {
-  sourceFrame: Frame;
-  targetFrame: Frame;
-  slotConflicts: SlotConflict[];
-  resolution?: FrameResolution | null;
-}) {
-  const conflictKeySet = new Set(slotConflicts.map((sc) => sc.key));
-  const alignedSlots = buildAlignedSlotKeys(sourceFrame, targetFrame);
-
-  // Determine chosen/unchosen state
-  const isResolved = resolution !== null && resolution !== undefined;
-  const chosenSide =
-    resolution?.type === 'source' ? 'source'
-    : resolution?.type === 'target' ? 'target'
-    : resolution?.type === 'both' ? 'both'
-    : null;
-
-  let leftLine = 1;
-  let rightLine = 1;
-
-  const leftRows: React.ReactNode[] = [];
-  const rightRows: React.ReactNode[] = [];
-
-  // Frame type header
-  leftRows.push(
-    <FrameTypeHeader
-      key="hdr-left"
-      frame={sourceFrame}
-      lineNumber={leftLine++}
-      status="unchanged"
-    />
-  );
-  rightRows.push(
-    <FrameTypeHeader
-      key="hdr-right"
-      frame={targetFrame}
-      lineNumber={rightLine++}
-      status="unchanged"
-    />
-  );
-
-  for (const { key, inLeft, inRight } of alignedSlots) {
-    const isConflicting = conflictKeySet.has(key);
-    const leftValue = inLeft ? sourceFrame.slots[key] : undefined;
-    const rightValue = inRight ? targetFrame.slots[key] : undefined;
-
-    if (inLeft) {
-      leftRows.push(
-        <SlotLine
-          key={`left-${key}`}
-          slotKey={key}
-          value={leftValue}
-          lineNumber={leftLine++}
-          highlight={isConflicting ? 'source' : null}
-        />
-      );
-    } else {
-      leftRows.push(<EmptyPlaceholderLine key={`left-empty-${key}`} />);
-    }
-
-    if (inRight) {
-      rightRows.push(
-        <SlotLine
-          key={`right-${key}`}
-          slotKey={key}
-          value={rightValue}
-          lineNumber={rightLine++}
-          highlight={isConflicting ? 'target' : null}
-        />
-      );
-    } else {
-      rightRows.push(<EmptyPlaceholderLine key={`right-empty-${key}`} />);
-    }
-  }
-
-  const leftIsChosen = chosenSide === 'source' || chosenSide === 'both';
-  const rightIsChosen = chosenSide === 'target' || chosenSide === 'both';
-  const leftDimmed = isResolved && !leftIsChosen;
-  const rightDimmed = isResolved && !rightIsChosen;
-
+function OnlyInContent({ frame }: { frame: Frame }) {
   return (
-    <div className="flex">
-      {/* Left pane — source */}
-      <div
-        className={cn(
-          'flex-1 min-w-0 border-r-2 border-r-[var(--stroke-pane-border)] relative transition-opacity duration-200',
-        )}
-        style={{
-          background: 'var(--merge-source-pane)',
-          opacity: leftDimmed ? 0.2 : 1,
-        }}
-        data-merge-side="source"
-      >
-        {/* Chosen indicator — blue left bar */}
-        {leftIsChosen && (
-          <span className="absolute left-0 top-0 bottom-0 w-[3px]" style={{ background: 'var(--merge-source-accent)' }} />
-        )}
-        {leftRows}
-      </div>
-
-      {/* Right pane — target */}
-      <div
-        className={cn(
-          'flex-1 min-w-0 relative transition-opacity duration-200',
-        )}
-        style={{
-          background: 'var(--merge-target-pane)',
-          opacity: rightDimmed ? 0.2 : 1,
-        }}
-        data-merge-side="target"
-      >
-        {/* Chosen indicator — teal left bar */}
-        {rightIsChosen && (
-          <span className="absolute left-0 top-0 bottom-0 w-[3px]" style={{ background: 'var(--merge-target-accent)' }} />
-        )}
-        {rightRows}
-      </div>
+    <div className="px-4 py-1.5">
+      {Object.entries(frame.slots).map(([key, value]) => (
+        <div key={key} className="flex gap-2 py-[2px] font-mono text-[12px]">
+          <span className="text-[var(--text-tertiary)] min-w-[100px] text-right">{key}:</span>
+          <span className="text-[var(--text-secondary)]">
+            <SlotValueSpan value={value} />
+          </span>
+        </div>
+      ))}
     </div>
   );
 }
 
-// ── OnlyIn frame renderer ─────────────────────────────────────────────────────
-
-function OnlyInPanes({ side, frame }: { side: 'source' | 'target'; frame: Frame }) {
-  const slotCount = Object.keys(frame.slots).length;
-  // +1 for frame type header
-  const totalLines = 1 + slotCount;
-
-  let lineNum = 1;
-  const contentRows: React.ReactNode[] = [];
-  contentRows.push(
-    <FrameTypeHeader key="hdr" frame={frame} lineNumber={lineNum++} status={side} />
-  );
-
-  for (const [key, value] of Object.entries(frame.slots)) {
-    contentRows.push(
-      <SlotLine key={key} slotKey={key} value={value} lineNumber={lineNum++} highlight={side} />
-    );
-  }
-
-  // Placeholder lines for the other side
-  const placeholders = Array.from({ length: totalLines }, (_, i) => (
-    <EmptyPlaceholderLine key={`ph-${i}`} />
-  ));
-
-  const leftContent = side === 'source' ? contentRows : placeholders;
-  const rightContent = side === 'target' ? contentRows : placeholders;
-
-  return (
-    <div className="flex">
-      <div
-        className="flex-1 min-w-0 border-r-2 border-r-[var(--stroke-pane-border)]"
-        style={{ background: 'var(--merge-source-pane)' }}
-        data-merge-side="source"
-      >
-        {leftContent}
-      </div>
-      <div
-        className="flex-1 min-w-0"
-        style={{ background: 'var(--merge-target-pane)' }}
-        data-merge-side="target"
-      >
-        {rightContent}
-      </div>
-    </div>
-  );
-}
-
-// ── AutoKept frame renderer ───────────────────────────────────────────────────
-
-function AutoKeptPanes({ frame }: { frame: Frame }) {
-  const slots = Object.entries(frame.slots);
-
-  function buildRows(prefix: string) {
-    let lineNum = 1;
-    const rows: React.ReactNode[] = [
-      <FrameTypeHeader
-        key={`${prefix}-hdr`}
-        frame={frame}
-        lineNumber={lineNum++}
-        status="unchanged"
-      />,
-    ];
-    for (const [key, value] of slots) {
-      rows.push(
-        <SlotLine
-          key={`${prefix}-${key}`}
-          slotKey={key}
-          value={value}
-          lineNumber={lineNum++}
-          highlight={null}
-        />
-      );
-    }
-    return rows;
-  }
-
-  return (
-    <div className="flex opacity-[0.48]">
-      <div className="flex-1 min-w-0 border-r-2 border-r-[var(--stroke-pane-border)]">
-        {buildRows('l')}
-      </div>
-      <div className="flex-1 min-w-0">{buildRows('r')}</div>
-    </div>
-  );
-}
-
-// ── Main component ────────────────────────────────────────────────────────────
+// ── Main component ───────────────────────────────────────────────────────────
 
 export function MergeFrameRow({
   type,
   frameId,
   sourceFrame,
   targetFrame,
-  slotConflicts,
+  slotConflicts = [],
   resolution,
   isKept,
   onToggleKeep,
@@ -391,34 +308,87 @@ export function MergeFrameRow({
 }: MergeFrameRowProps) {
   const displayFrame = sourceFrame ?? targetFrame;
 
-  return (
-    <div id={anchorId} className="frame-row border-b border-[var(--stroke-divider)]">
-      {/* Frame separator / header */}
-      <MergeFrameSeparator
-        type={type}
-        frameId={frameId}
-        frameType={displayFrame?.type}
-        isKept={isKept}
-        onToggleKeep={onToggleKeep}
-      />
+  if (type === 'conflict' && sourceFrame && targetFrame) {
+    const conflictKeySet = new Set(slotConflicts.map((sc) => sc.key));
+    const allSourceKeys = Object.keys(sourceFrame.slots);
+    const allTargetKeys = Object.keys(targetFrame.slots);
+    const allKeys = [...new Set([...allSourceKeys, ...allTargetKeys])];
 
-      {/* Pane content */}
-      {type === 'conflict' && sourceFrame && targetFrame && (
-        <ConflictPanes
-          sourceFrame={sourceFrame}
-          targetFrame={targetFrame}
-          slotConflicts={slotConflicts ?? []}
-          resolution={resolution}
+    const changedRows: {
+      key: string;
+      sv?: SlotValue;
+      tv?: SlotValue;
+      type: 'changed' | 'only-source' | 'only-target';
+    }[] = [];
+    const identicalKeys: string[] = [];
+
+    for (const key of allKeys) {
+      const inSource = key in sourceFrame.slots;
+      const inTarget = key in targetFrame.slots;
+      const isConflicting = conflictKeySet.has(key);
+
+      if (isConflicting) {
+        changedRows.push({
+          key,
+          sv: inSource ? sourceFrame.slots[key] : undefined,
+          tv: inTarget ? targetFrame.slots[key] : undefined,
+          type: inSource && inTarget ? 'changed' : inSource ? 'only-source' : 'only-target',
+        });
+      } else if (inSource && inTarget) {
+        identicalKeys.push(key);
+      }
+    }
+
+    return (
+      <div
+        id={anchorId}
+        className="bg-[var(--surface-card)] border border-[var(--stroke-divider)] rounded-[10px] overflow-hidden"
+      >
+        <CardHeader type="conflict" frameId={frameId} frameType={displayFrame?.type} />
+        <ColumnLabels />
+        {changedRows.map((row) => (
+          <DiffSlotRow
+            key={row.key}
+            slotKey={row.key}
+            sourceValue={row.sv}
+            targetValue={row.tv}
+            type={row.type}
+          />
+        ))}
+        <IdenticalCollapse keys={identicalKeys} allSlots={sourceFrame.slots} />
+      </div>
+    );
+  }
+
+  if ((type === 'onlyInSource' || type === 'onlyInTarget') && displayFrame) {
+    return (
+      <div
+        id={anchorId}
+        className="bg-[var(--surface-card)] border border-[var(--stroke-divider)] rounded-[10px] overflow-hidden"
+      >
+        <CardHeader
+          type={type}
+          frameId={frameId}
+          frameType={displayFrame.type}
+          isKept={isKept}
+          onToggleKeep={onToggleKeep}
         />
-      )}
+        <OnlyInContent frame={displayFrame} />
+      </div>
+    );
+  }
 
-      {type === 'onlyInSource' && sourceFrame && <OnlyInPanes side="source" frame={sourceFrame} />}
+  if (type === 'autoKept' && displayFrame) {
+    return (
+      <div
+        id={anchorId}
+        className="bg-[var(--surface-card)] border border-[var(--stroke-divider)] rounded-[10px] overflow-hidden opacity-50"
+      >
+        <CardHeader type="autoKept" frameId={frameId} frameType={displayFrame.type} />
+        <OnlyInContent frame={displayFrame} />
+      </div>
+    );
+  }
 
-      {type === 'onlyInTarget' && targetFrame && <OnlyInPanes side="target" frame={targetFrame} />}
-
-      {type === 'autoKept' && (sourceFrame ?? targetFrame) && (
-        <AutoKeptPanes frame={(sourceFrame ?? targetFrame)!} />
-      )}
-    </div>
-  );
+  return null;
 }
