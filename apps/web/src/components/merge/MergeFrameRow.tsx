@@ -125,10 +125,21 @@ function MergeFrameSeparator({ type, frameId, frameType, isKept, onToggleKeep }:
           ? 'text-[var(--merge-target-accent)]'
           : 'text-[var(--text-tertiary)]';
 
+  const isConflict = type === 'conflict';
+
   return (
-    <div className="flex items-center gap-[5px] text-[9px] font-medium uppercase tracking-[0.6px] select-none pt-[5px] pb-[2px] px-3">
-      <span className={cn('text-[8px] font-semibold tracking-[0.3px]', labelColor)}>{label}</span>
-      {frameType && <span className="text-[var(--text-secondary)]">{frameType}</span>}
+    <div
+      className={cn(
+        'relative flex items-center gap-[6px] text-[9px] font-medium uppercase tracking-[0.6px] select-none py-[4px] px-3',
+        isConflict && 'bg-[var(--merge-conflict-bg)]',
+      )}
+    >
+      {/* Left accent bar for conflicts */}
+      {isConflict && (
+        <span className="absolute left-0 top-0 bottom-0 w-[3px] bg-[var(--merge-conflict-accent)] opacity-60" />
+      )}
+      <span className={cn('text-[9px] font-bold tracking-[0.4px]', labelColor)}>{label}</span>
+      {frameType && <span className="text-[var(--text-secondary)] font-semibold">{frameType}</span>}
       <span className="font-mono opacity-40 text-[8px] text-[var(--text-tertiary)]">{frameId}</span>
       {/* Divider */}
       <span className="flex-1 h-px bg-[var(--stroke-divider)] opacity-50" />
@@ -237,22 +248,18 @@ function ConflictPanes({
           'flex-1 min-w-0 border-r-2 border-r-[var(--stroke-pane-border)]',
           unchosenLeft && 'opacity-[var(--merge-unchosen-opacity)]'
         )}
+        style={{ background: 'var(--merge-source-pane)' }}
         data-merge-side="source"
       >
-        <div className="px-0 py-0 text-[9px] font-semibold uppercase tracking-wider text-[var(--merge-source-accent)] pl-[calc(36px+4px+10px)] pb-[2px] pt-[2px] border-b border-[var(--stroke-divider)] opacity-70">
-          Source
-        </div>
         {leftRows}
       </div>
 
       {/* Right pane — target */}
       <div
         className={cn('flex-1 min-w-0', unchosenRight && 'opacity-[var(--merge-unchosen-opacity)]')}
+        style={{ background: 'var(--merge-target-pane)' }}
         data-merge-side="target"
       >
-        <div className="px-0 py-0 text-[9px] font-semibold uppercase tracking-wider text-[var(--merge-target-accent)] pl-[calc(36px+4px+10px)] pb-[2px] pt-[2px] border-b border-[var(--stroke-divider)] opacity-70">
-          Target
-        </div>
         {rightRows}
       </div>
     </div>
@@ -290,11 +297,16 @@ function OnlyInPanes({ side, frame }: { side: 'source' | 'target'; frame: Frame 
     <div className="flex">
       <div
         className="flex-1 min-w-0 border-r-2 border-r-[var(--stroke-pane-border)]"
+        style={{ background: 'var(--merge-source-pane)' }}
         data-merge-side="source"
       >
         {leftContent}
       </div>
-      <div className="flex-1 min-w-0" data-merge-side="target">
+      <div
+        className="flex-1 min-w-0"
+        style={{ background: 'var(--merge-target-pane)' }}
+        data-merge-side="target"
+      >
         {rightContent}
       </div>
     </div>

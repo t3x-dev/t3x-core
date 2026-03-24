@@ -163,30 +163,44 @@ export function MergeYAMLTreeView({
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* ── Column headers ── */}
       <div className="flex shrink-0 border-b border-[var(--stroke-divider)]">
-        {/* Source header */}
-        <div className="flex flex-1 items-center justify-between px-4 h-[34px] text-[11px] font-semibold text-[var(--text-tertiary)] uppercase tracking-[0.8px] bg-[var(--surface-panel)] border-r-2 border-r-[var(--stroke-pane-border)]">
-          <span className="flex items-center gap-1">
+        {/* Source header — blue accent bottom border */}
+        <div
+          className="flex flex-1 items-center justify-between px-4 h-[36px] text-[11px] font-semibold uppercase tracking-[0.8px] border-r-2 border-r-[var(--stroke-pane-border)]"
+          style={{
+            background: 'var(--merge-source-pane)',
+            borderBottom: '2px solid var(--merge-source-accent)',
+            color: 'var(--merge-source-accent)',
+          }}
+        >
+          <span className="flex items-center gap-1.5">
             <span
-              className="inline-block w-[6px] h-[6px] rounded-full"
+              className="inline-block w-[7px] h-[7px] rounded-full"
               style={{ background: 'var(--merge-source-accent)' }}
             />
             Source
           </span>
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded font-mono text-[10px] font-medium border border-[var(--stroke-divider)] bg-[rgba(255,255,255,0.03)] text-[var(--text-secondary)] normal-case tracking-normal">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded font-mono text-[10px] font-medium border border-[var(--merge-source-accent)]/20 bg-[var(--merge-source-bg)] text-[var(--text-secondary)] normal-case tracking-normal">
             {sourceBranch} @ {sourceHash.slice(0, 7)}
           </span>
         </div>
 
-        {/* Target header */}
-        <div className="flex flex-1 items-center justify-between px-4 h-[34px] text-[11px] font-semibold text-[var(--text-tertiary)] uppercase tracking-[0.8px] bg-[var(--surface-panel)]">
-          <span className="flex items-center gap-1">
+        {/* Target header — teal accent bottom border */}
+        <div
+          className="flex flex-1 items-center justify-between px-4 h-[36px] text-[11px] font-semibold uppercase tracking-[0.8px]"
+          style={{
+            background: 'var(--merge-target-pane)',
+            borderBottom: '2px solid var(--merge-target-accent)',
+            color: 'var(--merge-target-accent)',
+          }}
+        >
+          <span className="flex items-center gap-1.5">
             <span
-              className="inline-block w-[6px] h-[6px] rounded-full"
+              className="inline-block w-[7px] h-[7px] rounded-full"
               style={{ background: 'var(--merge-target-accent)' }}
             />
             Target
           </span>
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded font-mono text-[10px] font-medium border border-[var(--stroke-divider)] bg-[rgba(255,255,255,0.03)] text-[var(--text-secondary)] normal-case tracking-normal">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded font-mono text-[10px] font-medium border border-[var(--merge-target-accent)]/20 bg-[var(--merge-target-bg)] text-[var(--text-secondary)] normal-case tracking-normal">
             {targetBranch} @ {targetHash.slice(0, 7)}
           </span>
         </div>

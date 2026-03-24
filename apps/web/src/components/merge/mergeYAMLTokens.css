@@ -1,28 +1,34 @@
 /* Merge-specific tokens — neutral dual-color scheme
    Source = blue, Target = teal — equally weighted, no value judgment */
 
-/* Light mode defaults (matches preview/merge-yaml-tree-v3.html) */
+/* Light mode defaults — boosted opacity for white backgrounds */
 :root {
-  --merge-source-bg: rgba(9, 105, 218, 0.08);
+  --merge-source-bg: rgba(9, 105, 218, 0.14);
   --merge-source-accent: #0969da;
-  --merge-source-word: rgba(9, 105, 218, 0.18);
-  --merge-target-bg: rgba(26, 127, 55, 0.08);
+  --merge-source-word: rgba(9, 105, 218, 0.30);
+  --merge-source-pane: rgba(9, 105, 218, 0.03);
+  --merge-target-bg: rgba(26, 127, 55, 0.12);
   --merge-target-accent: #1a7f37;
-  --merge-target-word: rgba(26, 127, 55, 0.18);
+  --merge-target-word: rgba(26, 127, 55, 0.28);
+  --merge-target-pane: rgba(26, 127, 55, 0.03);
   --merge-conflict-accent: #9a6700;
-  --merge-unchosen-opacity: 0.2;
+  --merge-conflict-bg: rgba(154, 103, 0, 0.06);
+  --merge-unchosen-opacity: 0.18;
 }
 
 /* Dark mode overrides */
 .dark {
-  --merge-source-bg: rgba(88, 166, 255, 0.1);
+  --merge-source-bg: rgba(88, 166, 255, 0.15);
   --merge-source-accent: #58a6ff;
-  --merge-source-word: rgba(88, 166, 255, 0.25);
-  --merge-target-bg: rgba(125, 211, 175, 0.1);
+  --merge-source-word: rgba(88, 166, 255, 0.35);
+  --merge-source-pane: rgba(88, 166, 255, 0.03);
+  --merge-target-bg: rgba(125, 211, 175, 0.12);
   --merge-target-accent: #7dd3af;
-  --merge-target-word: rgba(125, 211, 175, 0.25);
+  --merge-target-word: rgba(125, 211, 175, 0.30);
+  --merge-target-pane: rgba(125, 211, 175, 0.03);
   --merge-conflict-accent: #d29922;
-  --merge-unchosen-opacity: 0.2;
+  --merge-conflict-bg: rgba(210, 153, 34, 0.06);
+  --merge-unchosen-opacity: 0.18;
 }
 
 /* Word-level highlights — soft: bold + subtle bg, NO strikethrough */
