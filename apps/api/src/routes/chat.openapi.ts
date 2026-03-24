@@ -1,16 +1,18 @@
 /**
- * Chat Routes
+ * Chat Routes (OpenAPI)
  *
- * POST /v1/chat - Non-streaming chat
- * GET  /v1/chat/providers - List available providers
+ * POST /v1/chat         — Non-streaming chat (OpenAPI route)
+ * POST /v1/chat/stream  — Streaming SSE (plain Hono handler — OpenAPI can't describe SSE)
+ * GET  /v1/chat/providers — List available providers (OpenAPI route)
  */
 
+import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { recordUsage } from '@t3x-dev/storage';
-import { Hono } from 'hono';
 import { ProxyAgent, fetch as undiciFetch } from 'undici';
 import { getDB } from '../lib/db';
-import { jsonError, jsonSuccess } from '../lib/response';
+import { errorResponse, zodErrorHook } from '../lib/errors';
 import { pinoLogger } from '../middleware/logger';
+import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
 // Create proxy-aware fetch. Always uses ProxyAgent when proxy is configured.
 function getProxyFetch() {
@@ -237,17 +239,98 @@ async function callClaudeNonStreaming(
 }
 
 // ============================================================================
+// OpenAPI Schemas
+// ============================================================================
+
+const ChatRequestBodySchema = z.object({
+  messages: z.array(z.unknown()).min(1).max(100),
+  provider: z.string().optional(),
+  model: z.string().optional(),
+  temperature: z.number().optional(),
+  max_tokens: z.number().optional(),
+  project_id: z.string().optional(),
+  web_search: z.boolean().optional(),
+  thinking: z.boolean().optional(),
+});
+
+const ChatResponseDataSchema = z.object({
+  content: z.string(),
+  model: z.string(),
+  usage: z
+    .object({
+      input_tokens: z.number().optional(),
+      output_tokens: z.number().optional(),
+    })
+    .optional(),
+  finish_reason: z.string().optional(),
+});
+
+const ProvidersResponseDataSchema = z.object({
+  providers: z.array(z.string()),
+  default: z.string(),
+});
+
+// ============================================================================
 // Routes
 // ============================================================================
 
-export const chatRoutes = new Hono();
+export const chatRoutes = new OpenAPIHono({ defaultHook: zodErrorHook });
 
-/**
- * POST /v1/chat - Non-streaming chat
- */
-chatRoutes.post('/v1/chat', async (c) => {
-  let body: {
-    messages?: ChatMessage[];
+// -----------------------------------------------------------------------
+// OpenAPI route definitions
+// -----------------------------------------------------------------------
+
+const chatRoute = createRoute({
+  method: 'post',
+  path: '/v1/chat',
+  tags: ['Chat'],
+  summary: 'Non-streaming chat',
+  description: 'Send messages to an AI provider and receive a complete response.',
+  request: {
+    body: {
+      content: { 'application/json': { schema: ChatRequestBodySchema } },
+      required: true,
+    },
+  },
+  responses: {
+    200: {
+      description: 'Chat response',
+      content: { 'application/json': { schema: SuccessResponseSchema(ChatResponseDataSchema) } },
+    },
+    400: {
+      description: 'Invalid request or provider error',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    500: {
+      description: 'Chat error',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+const providersRoute = createRoute({
+  method: 'get',
+  path: '/v1/chat/providers',
+  tags: ['Chat'],
+  summary: 'List available providers',
+  description: 'Returns the list of configured AI providers.',
+  responses: {
+    200: {
+      description: 'Provider list',
+      content: {
+        'application/json': { schema: SuccessResponseSchema(ProvidersResponseDataSchema) },
+      },
+    },
+  },
+});
+
+// -----------------------------------------------------------------------
+// POST /v1/chat — Non-streaming chat (OpenAPI handler)
+// -----------------------------------------------------------------------
+
+chatRoutes.openapi(chatRoute, async (c) => {
+  const body = c.req.valid('json') as {
+    messages?: unknown[];
     provider?: string;
     model?: string;
     temperature?: number;
@@ -255,23 +338,16 @@ chatRoutes.post('/v1/chat', async (c) => {
     project_id?: string;
     web_search?: boolean;
     thinking?: boolean;
-  } | null = null;
+  };
 
-  try {
-    body = await c.req.json();
-  } catch {
-    return jsonError(c, 'INVALID_JSON', 'Invalid JSON body', 400);
-  }
-  if (!body) return jsonError(c, 'INVALID_JSON', 'Invalid JSON body', 400);
-
-  const messages = body.messages;
+  const messages = body.messages as ChatMessage[] | undefined;
   if (!Array.isArray(messages) || messages.length === 0 || messages.length > 100) {
-    return jsonError(c, 'INVALID_REQUEST', 'messages must be an array of 1-100 items', 400);
+    return errorResponse(c, 'INVALID_REQUEST', 'messages must be an array of 1-100 items') as any;
   }
 
   const msgError = validateMessages(messages);
   if (msgError) {
-    return jsonError(c, 'INVALID_REQUEST', msgError, 400);
+    return errorResponse(c, 'INVALID_REQUEST', msgError) as any;
   }
 
   // Determine provider
@@ -285,7 +361,10 @@ chatRoutes.post('/v1/chat', async (c) => {
 
   const apiKey = getApiKey(provider);
   if (!apiKey) {
-    return jsonError(c, 'PROVIDER_ERROR', `API key not configured for provider: ${provider}`, 400);
+    return c.json(
+      { success: false as const, error: { code: 'PROVIDER_ERROR', message: `API key not configured for provider: ${provider}` } },
+      400
+    ) as any;
   }
 
   const model = body.model ?? PROVIDER_DEFAULTS[provider]?.model ?? 'claude-sonnet-4-20250514';
@@ -317,23 +396,27 @@ chatRoutes.post('/v1/chat', async (c) => {
           .catch((err) => pinoLogger.warn({ err }, 'Failed to record chat usage'));
       }
 
-      return jsonSuccess(c, result);
+      return c.json({ success: true as const, data: result }, 200) as any;
     } else {
-      return jsonError(c, 'PROVIDER_ERROR', `Provider ${provider} not implemented`, 400);
+      return c.json(
+        { success: false as const, error: { code: 'PROVIDER_ERROR', message: `Provider ${provider} not implemented` } },
+        400
+      ) as any;
     }
   } catch (err) {
     pinoLogger.error({ err }, 'Chat error');
-    return jsonError(c, 'CHAT_ERROR', sanitizeError(err), 500);
+    return c.json(
+      { success: false as const, error: { code: 'CHAT_ERROR', message: sanitizeError(err) } },
+      500
+    ) as any;
   }
 });
 
-/**
- * POST /v1/chat/stream - Streaming chat (SSE)
- *
- * Uses true streaming: calls Anthropic's API with stream=true and
- * re-emits token chunks as they arrive, so the user sees text
- * incrementally instead of waiting for the full response.
- */
+// -----------------------------------------------------------------------
+// POST /v1/chat/stream — Streaming SSE (plain Hono handler)
+// OpenAPI cannot describe SSE, so this stays as a plain .post() handler.
+// -----------------------------------------------------------------------
+
 chatRoutes.post('/v1/chat/stream', async (c) => {
   let body: {
     messages?: ChatMessage[];
@@ -349,18 +432,25 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
   try {
     body = await c.req.json();
   } catch {
-    return jsonError(c, 'INVALID_JSON', 'Invalid JSON body', 400);
+    return c.json(
+      { success: false as const, error: { code: 'INVALID_JSON', message: 'Invalid JSON body' } },
+      400
+    );
   }
-  if (!body) return jsonError(c, 'INVALID_JSON', 'Invalid JSON body', 400);
+  if (!body)
+    return c.json(
+      { success: false as const, error: { code: 'INVALID_JSON', message: 'Invalid JSON body' } },
+      400
+    );
 
   const messages = body.messages;
   if (!Array.isArray(messages) || messages.length === 0 || messages.length > 100) {
-    return jsonError(c, 'INVALID_REQUEST', 'messages must be an array of 1-100 items', 400);
+    return errorResponse(c, 'INVALID_REQUEST', 'messages must be an array of 1-100 items');
   }
 
   const msgError = validateMessages(messages);
   if (msgError) {
-    return jsonError(c, 'INVALID_REQUEST', msgError, 400);
+    return errorResponse(c, 'INVALID_REQUEST', msgError);
   }
 
   // Determine provider
@@ -374,7 +464,10 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
 
   const apiKey = getApiKey(provider);
   if (!apiKey) {
-    return jsonError(c, 'PROVIDER_ERROR', `API key not configured for provider: ${provider}`, 400);
+    return c.json(
+      { success: false as const, error: { code: 'PROVIDER_ERROR', message: `API key not configured for provider: ${provider}` } },
+      400
+    );
   }
 
   const model = body.model ?? PROVIDER_DEFAULTS[provider]?.model ?? 'claude-sonnet-4-20250514';
@@ -382,7 +475,10 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
   const maxTokens = Math.min(Math.max(parseInt(String(body.max_tokens), 10) || 4096, 1), 16384);
 
   if (provider !== 'claude' && provider !== 'anthropic') {
-    return jsonError(c, 'PROVIDER_ERROR', `Provider ${provider} not implemented`, 400);
+    return c.json(
+      { success: false as const, error: { code: 'PROVIDER_ERROR', message: `Provider ${provider} not implemented` } },
+      400
+    );
   }
 
   const useThinking = body.thinking && (provider === 'claude' || provider === 'anthropic');
@@ -584,10 +680,11 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
   });
 });
 
-/**
- * GET /v1/chat/providers - List available providers
- */
-chatRoutes.get('/v1/chat/providers', (c) => {
+// -----------------------------------------------------------------------
+// GET /v1/chat/providers — List available providers (OpenAPI handler)
+// -----------------------------------------------------------------------
+
+chatRoutes.openapi(providersRoute, (c) => {
   const availableProviders: string[] = ['claude'];
 
   // Check if OpenAI is configured
@@ -595,8 +692,5 @@ chatRoutes.get('/v1/chat/providers', (c) => {
     availableProviders.push('openai');
   }
 
-  return jsonSuccess(c, {
-    providers: availableProviders,
-    default: 'claude',
-  });
+  return c.json({ success: true as const, data: { providers: availableProviders, default: 'claude' } }, 200) as any;
 });

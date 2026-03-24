@@ -24,11 +24,11 @@ vi.mock('../../lib/db', () => ({
   closeDB: vi.fn(() => Promise.resolve()),
 }));
 
-import { deployAgentRoutes } from '../../routes/deploy-agents';
+import { deployAgentRoutes } from '../../routes/deploy-agents.openapi';
 import { projectRoutes } from '../../routes/projects.openapi';
 // Import all route modules
 import { runsRoutes } from '../../routes/runs.openapi';
-import { statusRoutes } from '../../routes/status';
+import { statusRoutes } from '../../routes/status.openapi';
 
 describe('Critical Routes Smoke Tests', () => {
   let cleanup: () => Promise<void>;

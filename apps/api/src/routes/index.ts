@@ -2,9 +2,9 @@
  * Route exports
  */
 
-export { agentDraftRoutes } from './agent-drafts';
+export { agentDraftRoutes } from './agent-drafts.openapi';
 export { branchRoutes } from './branches.openapi';
-export { chatRoutes } from './chat';
+export { chatRoutes } from './chat.openapi';
 export { commitRoutes } from './commits.openapi';
 export { conversationRoutes } from './conversations.openapi';
 export { curateRoutes } from './curate.openapi';
@@ -25,7 +25,7 @@ export { pinsRoutes } from './pins.openapi';
 export { projectRoutes } from './projects.openapi';
 export { providersRoutes } from './providers.openapi';
 export { relationsRoutes } from './relations.openapi';
-export { runnerRoutes } from './runner';
+export { runnerRoutes } from './runner.openapi';
 export { runsRoutes } from './runs.openapi';
 export { statusRoutes } from './status.openapi';
 export { topicsRoutes } from './topics.openapi';
