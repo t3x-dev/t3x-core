@@ -68,7 +68,7 @@ export function MergeToolbarRow({ resolution, onResolve, hasSlotConflicts }: Mer
       className={cn(
         'relative flex items-center justify-center gap-1.5 px-4 py-[5px]',
         'border-t border-b border-[var(--stroke-divider)]',
-        'bg-[var(--surface-elevated)]'
+        isResolved ? 'bg-[rgba(63,185,80,0.04)]' : 'bg-[var(--surface-elevated)]'
       )}
     >
       {/* Left-edge amber accent bar — disappears when resolved */}

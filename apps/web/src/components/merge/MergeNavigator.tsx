@@ -162,7 +162,8 @@ export function MergeNavigator({
         <>
           <SectionHeader label="Conflicts" count={mergeResult.conflicts.length} color="conflict" />
           {mergeResult.conflicts.map((conflict, idx) => {
-            const isResolved = resolutions.has(conflict.frameId);
+            const resolution = resolutions.get(conflict.frameId);
+            const isResolved = !!resolution;
             const isActive = activeFrameId === conflict.frameId;
             // Find relations that link this conflict to the next conflict item
             const nextConflict = mergeResult.conflicts[idx + 1];
@@ -199,8 +200,28 @@ export function MergeNavigator({
                     <div className="truncate text-[11px] font-medium">
                       {formatFrameType(conflict.sourceFrame.type)}
                     </div>
-                    <div className="truncate font-mono text-[10px] text-[var(--text-tertiary)]">
-                      {conflict.frameId}
+                    <div className="flex items-center gap-1 truncate font-mono text-[10px] text-[var(--text-tertiary)]">
+                      <span>{conflict.frameId}</span>
+                      {isResolved && resolution && (
+                        <span
+                          className="rounded px-1 py-px text-[8px] font-semibold uppercase"
+                          style={{
+                            color:
+                              resolution.type === 'source' ? 'var(--merge-source-accent)'
+                              : resolution.type === 'target' ? 'var(--merge-target-accent)'
+                              : 'var(--accent-commit)',
+                            background:
+                              resolution.type === 'source' ? 'var(--merge-source-bg)'
+                              : resolution.type === 'target' ? 'var(--merge-target-bg)'
+                              : 'rgba(88,166,255,0.08)',
+                          }}
+                        >
+                          {resolution.type === 'source' ? '← src'
+                           : resolution.type === 'target' ? 'tgt →'
+                           : resolution.type === 'both' ? 'both'
+                           : 'slots'}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </button>

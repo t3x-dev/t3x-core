@@ -178,9 +178,13 @@ function ConflictPanes({
   const conflictKeySet = new Set(slotConflicts.map((sc) => sc.key));
   const alignedSlots = buildAlignedSlotKeys(sourceFrame, targetFrame);
 
-  // Determine unchosen side based on resolution
-  const unchosenLeft = resolution?.type === 'target';
-  const unchosenRight = resolution?.type === 'source';
+  // Determine chosen/unchosen state
+  const isResolved = resolution !== null && resolution !== undefined;
+  const chosenSide =
+    resolution?.type === 'source' ? 'source'
+    : resolution?.type === 'target' ? 'target'
+    : resolution?.type === 'both' ? 'both'
+    : null;
 
   let leftLine = 1;
   let rightLine = 1;
@@ -240,26 +244,46 @@ function ConflictPanes({
     }
   }
 
+  const leftIsChosen = chosenSide === 'source' || chosenSide === 'both';
+  const rightIsChosen = chosenSide === 'target' || chosenSide === 'both';
+  const leftDimmed = isResolved && !leftIsChosen;
+  const rightDimmed = isResolved && !rightIsChosen;
+
   return (
     <div className="flex">
       {/* Left pane — source */}
       <div
         className={cn(
-          'flex-1 min-w-0 border-r-2 border-r-[var(--stroke-pane-border)]',
-          unchosenLeft && 'opacity-[var(--merge-unchosen-opacity)]'
+          'flex-1 min-w-0 border-r-2 border-r-[var(--stroke-pane-border)] relative transition-opacity duration-200',
         )}
-        style={{ background: 'var(--merge-source-pane)' }}
+        style={{
+          background: 'var(--merge-source-pane)',
+          opacity: leftDimmed ? 0.2 : 1,
+        }}
         data-merge-side="source"
       >
+        {/* Chosen indicator — blue left bar */}
+        {leftIsChosen && (
+          <span className="absolute left-0 top-0 bottom-0 w-[3px]" style={{ background: 'var(--merge-source-accent)' }} />
+        )}
         {leftRows}
       </div>
 
       {/* Right pane — target */}
       <div
-        className={cn('flex-1 min-w-0', unchosenRight && 'opacity-[var(--merge-unchosen-opacity)]')}
-        style={{ background: 'var(--merge-target-pane)' }}
+        className={cn(
+          'flex-1 min-w-0 relative transition-opacity duration-200',
+        )}
+        style={{
+          background: 'var(--merge-target-pane)',
+          opacity: rightDimmed ? 0.2 : 1,
+        }}
         data-merge-side="target"
       >
+        {/* Chosen indicator — teal left bar */}
+        {rightIsChosen && (
+          <span className="absolute left-0 top-0 bottom-0 w-[3px]" style={{ background: 'var(--merge-target-accent)' }} />
+        )}
         {rightRows}
       </div>
     </div>
