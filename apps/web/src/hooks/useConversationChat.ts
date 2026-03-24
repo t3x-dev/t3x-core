@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as api from '@/lib/api';
+import { useChatSessionStore } from '@/store/chatSessionStore';
+import type { Citation } from '@/lib/api/chat';
 
 // Chat page size for pagination
 const CHAT_PAGE_SIZE = 100;
@@ -36,6 +38,8 @@ export interface UseConversationChatReturn {
   stopGenerating: () => void;
   /** Incremented each time turns are persisted to the DB — use to trigger extraction */
   turnsSavedCounter: number;
+  searchQuery: string | null;
+  citations: Citation[];
 }
 
 export function useConversationChat({
@@ -59,6 +63,8 @@ export function useConversationChat({
   const [chatError, setChatError] = useState<string | null>(null);
   const [chatWarning, setChatWarning] = useState<string | null>(null);
   const [turnsSavedCounter, setTurnsSavedCounter] = useState(0);
+  const [searchQuery, setSearchQuery] = useState<string | null>(null);
+  const [citations, setCitations] = useState<Citation[]>([]);
   const chatWarningTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tokenBufferRef = useRef('');
   const rafIdRef = useRef<number | null>(null);
@@ -236,6 +242,8 @@ export function useConversationChat({
     abortControllerRef.current = null;
   }, []);
 
+  const webSearchEnabled = useChatSessionStore((s) => s.webSearchEnabled);
+
   // ========== Send message ==========
   const sendMessage = useCallback(
     async (messageOverride?: string) => {
@@ -246,6 +254,8 @@ export function useConversationChat({
       setChatInput('');
       setChatError(null);
       setChatWarning(null);
+      setSearchQuery(null);
+      setCitations([]);
 
       // Capture current messages BEFORE adding new user message to state.
       // This prevents the duplicate user message bug: if we read chatMessagesRef
@@ -315,17 +325,24 @@ export function useConversationChat({
         abortControllerRef.current = controller;
 
         for await (const event of api.chatStream(
-          { messages, provider, model },
+          { messages, provider, model, web_search: webSearchEnabled },
           { signal: controller.signal }
         )) {
           if (event.type === 'token' && event.content) {
+            setSearchQuery(null);  // Clear search indicator once text starts
             fullResponse += event.content;
             tokenBufferRef.current = fullResponse;
             // Throttle: schedule render on next animation frame
             if (rafIdRef.current === null) {
               rafIdRef.current = requestAnimationFrame(flushBuffer);
             }
+          } else if (event.type === 'searching') {
+            setSearchQuery(event.query ?? null);
           } else if (event.type === 'done') {
+            setSearchQuery(null);
+            if (event.citations?.length) {
+              setCitations(event.citations);
+            }
             // Cancel pending RAF and do final render
             if (rafIdRef.current !== null) {
               cancelAnimationFrame(rafIdRef.current);
@@ -428,6 +445,7 @@ export function useConversationChat({
       onConversationCreated,
       onTurnsSaved,
       showWarning,
+      webSearchEnabled,
     ]
   );
 
@@ -446,5 +464,7 @@ export function useConversationChat({
     loadMore,
     stopGenerating,
     turnsSavedCounter,
+    searchQuery,
+    citations,
   };
 }

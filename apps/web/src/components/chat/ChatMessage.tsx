@@ -4,8 +4,10 @@ import { User } from 'lucide-react';
 import { useCallback, useMemo, useRef } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { CitationChips } from './CitationChips';
 import { CodeBlock } from './CodeBlock';
 import { cn } from '@/lib/utils';
+import type { Citation } from '@/lib/api/chat';
 import { useExtractionPanelStore } from '@/store/extractionPanelStore';
 
 interface ChatMessageProps {
@@ -14,6 +16,7 @@ interface ChatMessageProps {
   turnHash?: string;
   turnIndex?: number;
   isStreaming?: boolean;
+  citations?: Citation[];
 }
 
 /**
@@ -85,6 +88,7 @@ export function ChatMessage({
   turnHash,
   turnIndex,
   isStreaming,
+  citations,
 }: ChatMessageProps) {
   const isUser = sender === 'user';
 
@@ -279,6 +283,9 @@ export function ChatMessage({
                       />
                     )}
                   </>
+                )}
+                {!isUser && !isStreaming && citations && citations.length > 0 && (
+                  <CitationChips citations={citations} />
                 )}
               </div>
             )}

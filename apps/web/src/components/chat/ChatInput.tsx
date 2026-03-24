@@ -1,9 +1,10 @@
 'use client';
 
-import { Paperclip, Send, Square } from 'lucide-react';
+import { Globe, Paperclip, Send, Square } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { useChatSessionStore } from '@/store/chatSessionStore';
 
 interface ChatInputProps {
   onSend: (message: string) => void;
@@ -11,6 +12,7 @@ interface ChatInputProps {
   isStreaming?: boolean;
   disabled?: boolean;
   placeholder?: string;
+  provider?: string;
 }
 
 export function ChatInput({
@@ -19,7 +21,10 @@ export function ChatInput({
   isStreaming = false,
   disabled = false,
   placeholder = 'Message...',
+  provider,
 }: ChatInputProps) {
+  const webSearchEnabled = useChatSessionStore((s) => s.webSearchEnabled);
+  const toggleWebSearch = useChatSessionStore((s) => s.toggleWebSearch);
   const [value, setValue] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -87,6 +92,25 @@ export function ChatInput({
       >
         <Paperclip className="h-4 w-4" />
       </Button>
+
+      {/* Web search toggle — Claude only */}
+      {(!provider || provider === 'claude' || provider === 'anthropic') && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          onClick={toggleWebSearch}
+          className={cn(
+            'h-8 w-8 shrink-0 rounded-lg transition-colors duration-[var(--motion-base)]',
+            webSearchEnabled
+              ? 'bg-[var(--accent-commit)]/15 text-[var(--accent-commit)]'
+              : 'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]'
+          )}
+          aria-label="Toggle web search"
+        >
+          <Globe className="h-4 w-4" />
+        </Button>
+      )}
 
       {/* Textarea */}
       <textarea

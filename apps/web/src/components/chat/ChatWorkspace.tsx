@@ -74,6 +74,8 @@ export function ChatWorkspace({
     sendMessage,
     stopGenerating,
     turnsSavedCounter,
+    searchQuery,
+    citations,
   } = useConversationChat({
     projectId: resolvedProjectId,
     conversationId: resolvedConversationId,
@@ -432,8 +434,21 @@ export function ChatWorkspace({
                 content={msg.content}
                 turnHash={msg.id}
                 turnIndex={i + 1}
+                citations={
+                  msg.role === 'assistant' && i === messages.length - 1
+                    ? citations
+                    : undefined
+                }
               />
             ))}
+
+            {/* Search indicator */}
+            {searchQuery && (
+              <div className="mx-auto max-w-3xl px-4 py-2 text-xs text-[var(--text-tertiary)] flex items-center gap-2">
+                <span className="animate-spin h-3 w-3 border border-[var(--text-tertiary)] border-t-transparent rounded-full" />
+                Searching: {searchQuery}
+              </div>
+            )}
 
             {/* Streaming response */}
             {isStreaming && streamingContent && (
@@ -496,6 +511,7 @@ export function ChatWorkspace({
             onSend={handleSend}
             onStop={stopGenerating}
             isStreaming={isStreaming}
+            provider={selectedProvider}
             disabled={isLoading || isExtracting || isConversationCommitted}
             placeholder={isConversationCommitted
               ? "This conversation is locked — a commit was made from it"

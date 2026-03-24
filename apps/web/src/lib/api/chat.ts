@@ -9,12 +9,19 @@ export interface ChatMessage {
   content: string;
 }
 
+export interface Citation {
+  url: string;
+  title: string;
+}
+
 export interface ChatRequest {
   messages: ChatMessage[];
   provider?: string;
   model?: string;
   temperature?: number;
   max_tokens?: number;
+  web_search?: boolean;
+  thinking?: boolean;
 }
 
 export interface ChatResponse {
@@ -28,11 +35,13 @@ export interface ChatResponse {
 }
 
 export interface ChatStreamEvent {
-  type: 'token' | 'done' | 'error';
+  type: 'token' | 'done' | 'error' | 'searching' | 'thinking';
   content?: string;
   model?: string;
   message?: string;
   usage?: { input_tokens?: number; output_tokens?: number };
+  query?: string;
+  citations?: Citation[];
 }
 
 /**
