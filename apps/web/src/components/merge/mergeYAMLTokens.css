@@ -1,48 +1,50 @@
 /* Merge-specific tokens — neutral dual-color scheme
    Source = blue, Target = teal — equally weighted, no value judgment */
 
-/* Light mode — strong enough to be clearly visible on white */
+/* Light mode — SOLID colors like diff uses (#dafbe1, #ffebe9, #fff8c5) */
 :root {
-  --merge-source-bg: rgba(9, 105, 218, 0.12);
-  --merge-source-accent: #0550ae;
-  --merge-source-word: rgba(9, 105, 218, 0.22);
-  --merge-source-pane: rgba(9, 105, 218, 0.04);
-  --merge-target-bg: rgba(26, 127, 55, 0.12);
-  --merge-target-accent: #116329;
-  --merge-target-word: rgba(26, 127, 55, 0.22);
-  --merge-target-pane: rgba(26, 127, 55, 0.04);
-  --merge-conflict-accent: #9a6700;
-  --merge-conflict-bg: rgba(154, 103, 0, 0.08);
+  --merge-source-bg: #dbeafe;
+  --merge-source-accent: #2563eb;
+  --merge-source-word: #bfdbfe;
+  --merge-source-pane: #f0f5ff;
+  --merge-target-bg: #dcfce7;
+  --merge-target-accent: #16a34a;
+  --merge-target-word: #bbf7d0;
+  --merge-target-pane: #f0fdf4;
+  --merge-conflict-accent: #d97706;
+  --merge-conflict-bg: #fef3c7;
   --merge-unchosen-opacity: 0.15;
 }
 
-/* Dark mode */
+/* Dark mode — rgba for dark backgrounds */
 .dark {
-  --merge-source-bg: rgba(88, 166, 255, 0.18);
-  --merge-source-accent: #58a6ff;
-  --merge-source-word: rgba(88, 166, 255, 0.40);
-  --merge-source-pane: rgba(88, 166, 255, 0.04);
-  --merge-target-bg: rgba(125, 211, 175, 0.15);
-  --merge-target-accent: #7dd3af;
-  --merge-target-word: rgba(125, 211, 175, 0.35);
-  --merge-target-pane: rgba(125, 211, 175, 0.04);
-  --merge-conflict-accent: #d29922;
-  --merge-conflict-bg: rgba(210, 153, 34, 0.08);
+  --merge-source-bg: rgba(37, 99, 235, 0.18);
+  --merge-source-accent: #60a5fa;
+  --merge-source-word: rgba(37, 99, 235, 0.35);
+  --merge-source-pane: rgba(37, 99, 235, 0.04);
+  --merge-target-bg: rgba(22, 163, 74, 0.15);
+  --merge-target-accent: #4ade80;
+  --merge-target-word: rgba(22, 163, 74, 0.30);
+  --merge-target-pane: rgba(22, 163, 74, 0.04);
+  --merge-conflict-accent: #fbbf24;
+  --merge-conflict-bg: rgba(251, 191, 36, 0.08);
   --merge-unchosen-opacity: 0.15;
 }
 
-/* Word-level highlights — bold + colored bg + outline ring */
+/* Word-level highlights — solid bg + accent ring, like diff's word-added/word-removed */
 .word-source {
   background: var(--merge-source-word);
   border-radius: 3px;
   padding: 1px 4px;
-  font-weight: 600;
+  font-weight: 700;
   box-shadow: 0 0 0 1px var(--merge-source-accent);
+  color: var(--merge-source-accent);
 }
 .word-target {
   background: var(--merge-target-word);
   border-radius: 3px;
   padding: 1px 4px;
-  font-weight: 600;
+  font-weight: 700;
   box-shadow: 0 0 0 1px var(--merge-target-accent);
+  color: var(--merge-target-accent);
 }
