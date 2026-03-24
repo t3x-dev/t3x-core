@@ -1,6 +1,8 @@
 /**
  * CLI Utilities
  */
+
+import { createClient, type T3xClient } from '@t3x-dev/api-client';
 import chalk from 'chalk';
 import ora from 'ora';
 import { table } from 'table';
@@ -74,4 +76,34 @@ export function truncate(str: string, maxLength: number): string {
  */
 export function getApiUrl(): string {
   return process.env.T3X_API_URL || 'http://localhost:8000/api';
+}
+
+/**
+ * Get API key from environment
+ */
+export function getApiKey(): string | undefined {
+  return process.env.T3X_API_KEY;
+}
+
+/**
+ * Create an API client with optional Bearer token auth
+ */
+export function getClientWithAuth(): T3xClient {
+  const headers: Record<string, string> = {};
+  const apiKey = getApiKey();
+  if (apiKey) {
+    headers.Authorization = `Bearer ${apiKey}`;
+  }
+  return createClient({ baseUrl: getApiUrl(), headers });
+}
+
+/**
+ * Read all of stdin to a string
+ */
+export async function readStdin(): Promise<string> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of process.stdin) {
+    chunks.push(chunk as Buffer);
+  }
+  return Buffer.concat(chunks).toString('utf-8').trim();
 }
