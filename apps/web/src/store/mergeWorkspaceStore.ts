@@ -5,7 +5,7 @@
  * Handles draft persistence, auto-save, and user decisions.
  */
 
-import type { FrameMergeResult } from '@t3x-dev/core';
+import type { Frame, FrameMergeResult } from '@t3x-dev/core';
 import { create } from 'zustand';
 import type { FrameResolution } from '@/components/merge/FrameConflictCard';
 import { getTerminology, type TermKey } from '@/hooks/useTerminology';
@@ -146,6 +146,16 @@ interface MergeWorkspaceState {
   canCommit: () => boolean;
   getPreviewSentences: () => Sentence[];
   getMergeChecks: () => MergeCheck[];
+
+  // Frame-aware computed getters
+  /** Returns the number of unresolved frame conflicts (0 if not in frame mode) */
+  getFrameUnresolvedCount: () => number;
+  /** Whether the merge can be committed (works for both frame and sentence mode) */
+  canCommitAny: () => boolean;
+  /** Returns merge checks for frame mode */
+  getFrameMergeChecks: () => MergeCheck[];
+  /** Returns preview frames for the merged result */
+  getPreviewFrames: () => Frame[];
 }
 
 /**
@@ -245,9 +255,29 @@ function transformSentence(apiSentence: ApiSentence): Sentence {
 }
 
 /**
- * Transform prepared merge result from API format to frontend format
+ * Detect whether API-returned prepared data is frame-based (new) or sentence-based (legacy).
  */
-function transformPrepared(apiPrepared: Record<string, unknown>): Merge2WayResult {
+function isFrameBasedPrepared(apiPrepared: Record<string, unknown>): boolean {
+  return 'autoKept' in apiPrepared || 'conflicts' in apiPrepared;
+}
+
+/**
+ * Transform prepared merge result from API format to frontend format.
+ * Returns { frameMergeResult } for frame-based data, { prepared } for legacy sentence-based data.
+ */
+function transformPreparedAuto(apiPrepared: Record<string, unknown>): {
+  prepared: Merge2WayResult | null;
+  frameMergeResult: FrameMergeResult | null;
+} {
+  if (isFrameBasedPrepared(apiPrepared)) {
+    // Frame-based format from new API
+    return {
+      prepared: null,
+      frameMergeResult: apiPrepared as unknown as FrameMergeResult,
+    };
+  }
+
+  // Legacy sentence-based format
   const prepared = apiPrepared as {
     identical: ApiSentence[];
     similarPairs: Array<{
@@ -261,21 +291,24 @@ function transformPrepared(apiPrepared: Record<string, unknown>): Merge2WayResul
   };
 
   return {
-    identical: prepared.identical.map(transformSentence),
-    similarPairs: prepared.similarPairs.map((pair) => ({
-      source: transformSentence(pair.source),
-      target: transformSentence(pair.target),
-      wordDiff: pair.wordDiff as Merge2WayResult['similarPairs'][0]['wordDiff'],
-      resolution: pair.resolution,
-    })),
-    onlyInSource: prepared.onlyInSource.map((item) => ({
-      sentence: transformSentence(item.sentence),
-      keep: item.keep,
-    })),
-    onlyInTarget: prepared.onlyInTarget.map((item) => ({
-      sentence: transformSentence(item.sentence),
-      keep: item.keep,
-    })),
+    prepared: {
+      identical: prepared.identical.map(transformSentence),
+      similarPairs: prepared.similarPairs.map((pair) => ({
+        source: transformSentence(pair.source),
+        target: transformSentence(pair.target),
+        wordDiff: pair.wordDiff as Merge2WayResult['similarPairs'][0]['wordDiff'],
+        resolution: pair.resolution,
+      })),
+      onlyInSource: prepared.onlyInSource.map((item) => ({
+        sentence: transformSentence(item.sentence),
+        keep: item.keep,
+      })),
+      onlyInTarget: prepared.onlyInTarget.map((item) => ({
+        sentence: transformSentence(item.sentence),
+        keep: item.keep,
+      })),
+    },
+    frameMergeResult: null,
   };
 }
 
@@ -287,10 +320,14 @@ function apiDraftToInternal(apiDraft: Record<string, unknown>): {
   targetHash: string;
   sourceBranch: string | null;
   targetBranch: string | null;
-  prepared: Merge2WayResult;
+  prepared: Merge2WayResult | null;
+  frameMergeResult: FrameMergeResult | null;
   status: MergeDraft['status'];
   message: string | null;
 } {
+  const { prepared, frameMergeResult } = transformPreparedAuto(
+    apiDraft.prepared as Record<string, unknown>
+  );
   return {
     draftId: apiDraft.draftId as string,
     projectId: apiDraft.projectId as string,
@@ -298,7 +335,8 @@ function apiDraftToInternal(apiDraft: Record<string, unknown>): {
     targetHash: apiDraft.targetHash as string,
     sourceBranch: (apiDraft.sourceBranch as string) || null,
     targetBranch: (apiDraft.targetBranch as string) || null,
-    prepared: transformPrepared(apiDraft.prepared as Record<string, unknown>),
+    prepared,
+    frameMergeResult,
     status: apiDraft.status as MergeDraft['status'],
     message: (apiDraft.message as string) || null,
   };
@@ -361,6 +399,7 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
         sourceBranch: draft.sourceBranch,
         targetBranch: draft.targetBranch,
         prepared: draft.prepared,
+        frameMergeResult: draft.frameMergeResult,
         status: draft.status,
         message: draft.message || '',
         loading: false,
@@ -403,6 +442,7 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
         sourceBranch: draft.sourceBranch,
         targetBranch: draft.targetBranch,
         prepared: draft.prepared,
+        frameMergeResult: draft.frameMergeResult,
         status: draft.status,
         message: '',
         loading: false,
@@ -892,5 +932,147 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
     }
 
     return null;
+  },
+
+  // ============================================================================
+  // Frame-Aware Computed Getters
+  // ============================================================================
+
+  getFrameUnresolvedCount: () => {
+    const { frameMergeResult, frameResolutions } = get();
+    if (!frameMergeResult) return 0;
+    return frameMergeResult.conflicts.filter((c) => !frameResolutions.has(c.frameId)).length;
+  },
+
+  canCommitAny: () => {
+    const { frameMergeResult, message } = get();
+    if (!message.trim()) return false;
+
+    // Frame mode
+    if (frameMergeResult) {
+      return get().allFrameConflictsResolved();
+    }
+
+    // Sentence mode fallback
+    return get().canCommit();
+  },
+
+  getFrameMergeChecks: (): MergeCheck[] => {
+    const { frameMergeResult, message, targetBranch } = get();
+    const dev = useSettingsStore.getState().developerMode;
+    const tm = (key: TermKey) => getTerminology(key, dev);
+
+    if (!frameMergeResult) return get().getMergeChecks();
+
+    const unresolvedCount = get().getFrameUnresolvedCount();
+    const previewFrames = get().getPreviewFrames();
+
+    const checks: MergeCheck[] = [
+      {
+        id: 'resolved',
+        label: 'All conflicts resolved',
+        passed: unresolvedCount === 0,
+        detail: unresolvedCount > 0 ? `${unresolvedCount} unresolved` : undefined,
+        source: 'frontend',
+      },
+      {
+        id: 'message',
+        label: `${tm('merge')} message provided`,
+        passed: message.trim().length > 0,
+        source: 'frontend',
+      },
+      {
+        id: 'frames',
+        label: 'Result has frames',
+        passed: previewFrames.length > 0,
+        detail: previewFrames.length > 0 ? `${previewFrames.length} frames` : 'No frames in result',
+        source: 'frontend',
+      },
+      {
+        id: 'target_branch',
+        label: `Target ${tm('branch').toLowerCase()} identified`,
+        passed: !!targetBranch,
+        detail: targetBranch || undefined,
+        source: 'frontend',
+      },
+      {
+        id: 'preview_computed',
+        label: 'Preview computed',
+        passed: true,
+        detail: `${frameMergeResult.autoKept.length} auto-kept, ${frameMergeResult.conflicts.length} conflicts, ${frameMergeResult.onlyInSource.length + frameMergeResult.onlyInTarget.length} unique`,
+        source: 'frontend',
+      },
+    ];
+
+    return checks;
+  },
+
+  getPreviewFrames: (): Frame[] => {
+    const { frameMergeResult, frameResolutions, keepSourceFrames, keepTargetFrames } = get();
+    if (!frameMergeResult) return [];
+
+    const frames: Frame[] = [];
+
+    // Auto-kept
+    frames.push(...frameMergeResult.autoKept);
+
+    // Resolved conflicts
+    for (const conflict of frameMergeResult.conflicts) {
+      const resolution = frameResolutions.get(conflict.frameId);
+      if (!resolution) continue;
+
+      switch (resolution.type) {
+        case 'source':
+          frames.push(conflict.sourceFrame);
+          break;
+        case 'target':
+          frames.push(conflict.targetFrame);
+          break;
+        case 'both':
+          frames.push(conflict.sourceFrame);
+          frames.push(conflict.targetFrame);
+          break;
+        case 'per-slot': {
+          const mergedSlots: Record<string, unknown> = {};
+          const allKeys = new Set([
+            ...Object.keys(conflict.sourceFrame.slots),
+            ...Object.keys(conflict.targetFrame.slots),
+          ]);
+          const conflictKeySet = new Set(conflict.slotConflicts.map((sc) => sc.key));
+          for (const key of allKeys) {
+            if (conflictKeySet.has(key)) {
+              const choice = resolution.slotChoices[key];
+              mergedSlots[key] =
+                choice === 'source'
+                  ? conflict.sourceFrame.slots[key]
+                  : conflict.targetFrame.slots[key];
+            } else {
+              mergedSlots[key] = conflict.sourceFrame.slots[key] ?? conflict.targetFrame.slots[key];
+            }
+          }
+          frames.push({
+            ...conflict.sourceFrame,
+            slots: mergedSlots as Frame['slots'],
+          });
+          break;
+        }
+      }
+    }
+
+    // Source-only (kept)
+    for (const frame of frameMergeResult.onlyInSource) {
+      if (keepSourceFrames.has(frame.id)) {
+        frames.push(frame);
+      }
+    }
+
+    // Target-only (kept)
+    for (const frame of frameMergeResult.onlyInTarget) {
+      if (keepTargetFrames.has(frame.id)) {
+        frames.push(frame);
+      }
+    }
+
+    return frames;
   },
 }));
