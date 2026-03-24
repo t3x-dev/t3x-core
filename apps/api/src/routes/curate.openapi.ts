@@ -19,10 +19,10 @@ import {
   sha256,
 } from '@t3x-dev/core';
 import { findConversationById, findTurnsByConversation } from '@t3x-dev/storage';
-import { Hono } from 'hono';
+import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { ProxyAgent, fetch as undiciFetch } from 'undici';
 import { getDB } from '../lib/db';
-import { jsonError, jsonSuccess } from '../lib/response';
+import { errorResponse, zodErrorHook } from '../lib/errors';
 
 /**
  * Create a proxy-aware fetch function
@@ -570,35 +570,100 @@ function clamp01(value: number): number {
 }
 
 // ============================================================================
+// OpenAPI Schemas
+// ============================================================================
+
+const CuratePreviewRequestSchema = z.object({
+  project_id: z.string(),
+  source_conversation_id: z.string().optional(),
+  bridge_id: z.enum(['prose', 'plan', 'story', 'summary', 'refine', 'explain', 'clarify']),
+  intent: z.string(),
+  cosine: z.number(),
+  unit_title: z.string().optional(),
+  user_message: z.string().optional(),
+  source_text: z.string().optional(),
+});
+
+// ============================================================================
 // Routes
 // ============================================================================
 
-export const curateRoutes = new Hono();
+export const curateRoutes = new OpenAPIHono({ defaultHook: zodErrorHook });
+
+const curatePreviewRoute = createRoute({
+  method: 'post',
+  path: '/v1/curate/preview',
+  tags: ['Chat'],
+  summary: 'Get curated preview',
+  description:
+    'Calculate which text chunks to select based on cosine similarity to intent. Supports Ring3 segments from conversation turns or fallback regex splitting.',
+  request: {
+    body: {
+      content: { 'application/json': { schema: CuratePreviewRequestSchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Curate preview result',
+      content: {
+        'application/json': {
+          schema: z.object({ success: z.literal(true), data: z.any() }),
+        },
+      },
+    },
+    400: {
+      description: 'Invalid request or data validation error',
+      content: {
+        'application/json': {
+          schema: z.object({
+            success: z.literal(false),
+            error: z.object({ code: z.string(), message: z.string() }),
+          }),
+        },
+      },
+    },
+    404: {
+      description: 'Conversation not found',
+      content: {
+        'application/json': {
+          schema: z.object({
+            success: z.literal(false),
+            error: z.object({ code: z.string(), message: z.string() }),
+          }),
+        },
+      },
+    },
+    500: {
+      description: 'Server error',
+      content: {
+        'application/json': {
+          schema: z.object({
+            success: z.literal(false),
+            error: z.object({ code: z.string(), message: z.string() }),
+          }),
+        },
+      },
+    },
+  },
+});
 
 /**
  * POST /v1/curate/preview - Get curated preview based on cosine similarity
  */
-curateRoutes.post('/v1/curate/preview', async (c) => {
-  let body: CuratePreviewRequest | null = null;
-
-  try {
-    body = await c.req.json();
-  } catch {
-    return jsonError(c, 'INVALID_JSON', 'Invalid JSON body', 400);
-  }
+curateRoutes.openapi(curatePreviewRoute, async (c) => {
+  const body = c.req.valid('json') as CuratePreviewRequest;
 
   // source_conversation_id is optional if source_text is provided
-  if (!body?.project_id || !body?.bridge_id || !body?.intent) {
-    return jsonError(c, 'INVALID_REQUEST', 'project_id, bridge_id, and intent are required', 400);
+  if (!body.project_id || !body.bridge_id || !body.intent) {
+    return errorResponse(c, 'INVALID_REQUEST', 'project_id, bridge_id, and intent are required');
   }
 
   // Either source_conversation_id or source_text must be provided
-  if (!body?.source_conversation_id && !body?.source_text) {
-    return jsonError(
+  if (!body.source_conversation_id && !body.source_text) {
+    return errorResponse(
       c,
       'INVALID_REQUEST',
-      'Either source_conversation_id or source_text is required',
-      400
+      'Either source_conversation_id or source_text is required'
     );
   }
 
@@ -613,11 +678,10 @@ curateRoutes.post('/v1/curate/preview', async (c) => {
     'clarify',
   ];
   if (!validBridges.includes(body.bridge_id as BridgeTemplate)) {
-    return jsonError(
+    return errorResponse(
       c,
       'INVALID_REQUEST',
-      `Invalid bridge_id. Must be one of: ${validBridges.join(', ')}`,
-      400
+      `Invalid bridge_id. Must be one of: ${validBridges.join(', ')}`
     );
   }
 
@@ -627,10 +691,14 @@ curateRoutes.post('/v1/curate/preview', async (c) => {
   // Check for embedding API key
   const googleApiKey = process.env.GOOGLE_AI_STUDIO_KEY;
   if (!googleApiKey) {
-    return jsonError(
-      c,
-      'PROVIDER_ERROR',
-      'Google AI Studio API key not configured (GOOGLE_AI_STUDIO_KEY)',
+    return c.json(
+      {
+        success: false as const,
+        error: {
+          code: 'PROVIDER_ERROR',
+          message: 'Google AI Studio API key not configured (GOOGLE_AI_STUDIO_KEY)',
+        },
+      },
       400
     );
   }
@@ -648,11 +716,10 @@ curateRoutes.post('/v1/curate/preview', async (c) => {
     if (body.source_conversation_id) {
       const conversation = await findConversationById(db, body.source_conversation_id);
       if (!conversation) {
-        return jsonError(
+        return errorResponse(
           c,
           'NOT_FOUND',
-          `Conversation ${body.source_conversation_id} not found`,
-          404
+          `Conversation ${body.source_conversation_id} not found`
         );
       }
 
@@ -700,38 +767,43 @@ curateRoutes.post('/v1/curate/preview', async (c) => {
       );
     } else {
       // This should not happen due to validation above, but handle gracefully
-      return jsonError(
+      return errorResponse(
         c,
         'INVALID_REQUEST',
-        'Either source_conversation_id or source_text is required',
-        400
+        'Either source_conversation_id or source_text is required'
       );
     }
 
     if (!sourceText || sourceText.trim().length === 0) {
-      return jsonError(c, 'INVALID_REQUEST', 'No source text available', 400);
+      return errorResponse(c, 'INVALID_REQUEST', 'No source text available');
     }
 
     // 1) Chunks already extracted above
     if (chunks.length === 0) {
       // Consistent response structure even with empty chunks
-      return jsonSuccess<CuratePreviewResponse>(c, {
-        algorithm_version: 'curate_v1.2',
-        keep_ratio: 1,
-        chunks: [],
-        selected_spans: [],
-        source_text: sourceText,
-        input_text_hash: sha256(sourceText),
-        anchor_candidates: allAnchorCandidates.map((ac) => ({
-          text: ac.text,
-          type: ac.type,
-          start_char: ac.startChar,
-          end_char: ac.endChar,
-          confidence: ac.confidence,
-          source: ac.source,
-        })),
-        warnings: extractionWarnings.length > 0 ? extractionWarnings : undefined,
-      });
+      return c.json(
+        {
+          success: true as const,
+          data: {
+            algorithm_version: 'curate_v1.2',
+            keep_ratio: 1,
+            chunks: [],
+            selected_spans: [],
+            source_text: sourceText,
+            input_text_hash: sha256(sourceText),
+            anchor_candidates: allAnchorCandidates.map((ac) => ({
+              text: ac.text,
+              type: ac.type,
+              start_char: ac.startChar,
+              end_char: ac.endChar,
+              confidence: ac.confidence,
+              source: ac.source,
+            })),
+            warnings: extractionWarnings.length > 0 ? extractionWarnings : undefined,
+          } satisfies CuratePreviewResponse,
+        },
+        200
+      );
     }
 
     // 2) Create embedding provider with proxy support
@@ -852,17 +924,29 @@ curateRoutes.post('/v1/curate/preview', async (c) => {
       ...(extractionWarnings.length > 0 ? { warnings: extractionWarnings } : {}),
     };
 
-    return jsonSuccess(c, response);
+    return c.json({ success: true as const, data: response }, 200);
   } catch (err) {
     if (err instanceof EmbeddingProviderError) {
-      return jsonError(c, 'EMBEDDING_ERROR', err.message, 500);
+      return c.json(
+        { success: false as const, error: { code: 'EMBEDDING_ERROR', message: err.message } },
+        500
+      );
     }
     // Data validation errors are client errors (400), not server errors (500)
     if (err instanceof DataValidationError) {
-      return jsonError(c, 'DATA_VALIDATION_ERROR', err.message, 400);
+      return c.json(
+        {
+          success: false as const,
+          error: { code: 'DATA_VALIDATION_ERROR', message: err.message },
+        },
+        400
+      );
     }
     const message = err instanceof Error ? err.message : 'Unknown error';
-    return jsonError(c, 'CURATE_PREVIEW_FAILED', message, 500);
+    return c.json(
+      { success: false as const, error: { code: 'CURATE_PREVIEW_FAILED', message } },
+      500
+    );
   }
 });
 
