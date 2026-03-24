@@ -14,7 +14,7 @@ import type {
   ConversationContext,
   Leaf,
   Pin,
-} from '../types/v4';
+} from '../types';
 import type { SemanticContent } from '../semantic/types';
 import { serializeFramesForPrompt } from '../semantic/serialize';
 

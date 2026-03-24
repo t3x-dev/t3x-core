@@ -494,4 +494,4 @@ export {
   // Share Token
   type ShareToken,
   type User,
-} from './types/v4';
+} from './types';

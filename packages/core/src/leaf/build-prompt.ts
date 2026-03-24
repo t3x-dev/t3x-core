@@ -10,7 +10,7 @@
 
 import { escapeConstraintValue } from '../llm/sanitize';
 import { serializeFramesForPrompt } from '../semantic/serialize';
-import type { AnyLeafType, Constraint } from '../types/v4';
+import type { AnyLeafType, Constraint } from '../types';
 import type { BuildPromptOptions, BuiltPrompt, LeafTemplate } from './types';
 
 // ═══════════════════════════════════════════════════════════════════════════

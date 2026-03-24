@@ -16,7 +16,7 @@ import {
   validateRequireSemantic,
 } from '../../leaf/validate-constraints';
 import type { EmbeddingProvider } from '../../providers/embedding/base';
-import type { Constraint } from '../../types/v4';
+import type { Constraint } from '../../types';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Test Fixtures

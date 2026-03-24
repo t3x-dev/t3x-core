@@ -374,7 +374,7 @@ Generate the Slack message based on the above source knowledge and constraints.`
 // Default Templates Registry
 // ═══════════════════════════════════════════════════════════════════════════
 
-import type { LeafType } from '../../types/v4';
+import type { LeafType } from '../../types';
 
 /**
  * Map of leaf types to their default templates.

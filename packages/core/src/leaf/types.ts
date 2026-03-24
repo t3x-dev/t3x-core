@@ -21,7 +21,7 @@ import type {
   Constraint,
   Leaf,
   LeafType,
-} from '../types/v4';
+} from '../types';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Generation Types (GEN-* uses)

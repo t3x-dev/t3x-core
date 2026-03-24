@@ -12,7 +12,7 @@ import {
   getTypeInstructions,
 } from '../../leaf/build-prompt';
 import type { SemanticContent } from '../../semantic/types';
-import type { Constraint, Leaf } from '../../types/v4';
+import type { Constraint, Leaf } from '../../types';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Test Fixtures

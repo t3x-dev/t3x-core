@@ -14,8 +14,8 @@
 
 import type { SemanticContent } from '../semantic/types';
 import { serializeFramesForPrompt } from '../semantic/serialize';
-import type { AnyLeafType, Constraint, Leaf } from '../types/v4';
-import { isGenerationLeaf } from '../types/v4';
+import type { AnyLeafType, Constraint, Leaf } from '../types';
+import { isGenerationLeaf } from '../types';
 import { formatConstraints, getTypeInstructions } from './build-prompt';
 import { getDefaultTemplate } from './templates';
 import type {

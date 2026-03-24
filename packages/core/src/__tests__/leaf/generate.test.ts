@@ -7,7 +7,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GenerationError, generateLeafOutput, isGenerationConfigured } from '../../leaf/generate';
 import type { SemanticContent } from '../../semantic/types';
-import type { Leaf } from '../../types/v4';
+import type { Leaf } from '../../types';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Test Fixtures

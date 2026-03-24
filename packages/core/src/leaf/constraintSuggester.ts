@@ -9,8 +9,8 @@
 import type { LLMProvider } from '../llm/types';
 import type { SemanticContent } from '../semantic/types';
 import { serializeFramesForPrompt } from '../semantic/serialize';
-import type { AnyLeafType, Constraint } from '../types/v4';
-import { ID_PREFIXES } from '../types/v4';
+import type { AnyLeafType, Constraint } from '../types';
+import { ID_PREFIXES } from '../types';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Types

@@ -13,7 +13,7 @@ import {
   estimateTokens,
   filterActivePins,
 } from '../../context/builder';
-import type { ConversationContext, Leaf, Pin } from '../../types/v4';
+import type { ConversationContext, Leaf, Pin } from '../../types';
 import type { SemanticContent } from '../../semantic/types';
 
 // ═══════════════════════════════════════════════════════════════════════════

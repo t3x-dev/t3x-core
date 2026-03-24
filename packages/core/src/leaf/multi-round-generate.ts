@@ -16,7 +16,7 @@
 
 import type { LLMProvider } from '../llm/types';
 import type { SemanticContent } from '../semantic/types';
-import type { Leaf } from '../types/v4';
+import type { Leaf } from '../types';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Types
