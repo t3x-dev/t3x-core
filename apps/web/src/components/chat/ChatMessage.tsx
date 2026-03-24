@@ -6,6 +6,7 @@ import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { CitationChips } from './CitationChips';
 import { CodeBlock } from './CodeBlock';
+import { ThinkingSection } from './ThinkingSection';
 import { cn } from '@/lib/utils';
 import type { Citation } from '@/lib/api/chat';
 import { useExtractionPanelStore } from '@/store/extractionPanelStore';
@@ -17,6 +18,8 @@ interface ChatMessageProps {
   turnIndex?: number;
   isStreaming?: boolean;
   citations?: Citation[];
+  thinkingContent?: string;
+  isThinking?: boolean;
 }
 
 /**
@@ -89,6 +92,8 @@ export function ChatMessage({
   turnIndex,
   isStreaming,
   citations,
+  thinkingContent,
+  isThinking,
 }: ChatMessageProps) {
   const isUser = sender === 'user';
 
@@ -240,6 +245,10 @@ export function ChatMessage({
                 )}
               </div>
             ) : (
+              <>
+              {thinkingContent && (
+                <ThinkingSection content={thinkingContent} isStreaming={isThinking} />
+              )}
               <div
                 className={cn(
                   'prose-chat text-sm leading-relaxed text-[var(--text-primary)]',
@@ -288,6 +297,7 @@ export function ChatMessage({
                   <CitationChips citations={citations} />
                 )}
               </div>
+              </>
             )}
           </div>
         </div>

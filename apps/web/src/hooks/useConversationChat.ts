@@ -40,6 +40,8 @@ export interface UseConversationChatReturn {
   turnsSavedCounter: number;
   searchQuery: string | null;
   citations: Citation[];
+  thinkingContent: string;
+  isThinking: boolean;
 }
 
 export function useConversationChat({
@@ -65,6 +67,8 @@ export function useConversationChat({
   const [turnsSavedCounter, setTurnsSavedCounter] = useState(0);
   const [searchQuery, setSearchQuery] = useState<string | null>(null);
   const [citations, setCitations] = useState<Citation[]>([]);
+  const [thinkingContent, setThinkingContent] = useState('');
+  const [isThinking, setIsThinking] = useState(false);
   const chatWarningTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tokenBufferRef = useRef('');
   const rafIdRef = useRef<number | null>(null);
@@ -243,6 +247,7 @@ export function useConversationChat({
   }, []);
 
   const webSearchEnabled = useChatSessionStore((s) => s.webSearchEnabled);
+  const thinkingEnabled = useChatSessionStore((s) => s.thinkingEnabled);
 
   // ========== Send message ==========
   const sendMessage = useCallback(
@@ -256,6 +261,8 @@ export function useConversationChat({
       setChatWarning(null);
       setSearchQuery(null);
       setCitations([]);
+      setThinkingContent('');
+      setIsThinking(false);
 
       // Capture current messages BEFORE adding new user message to state.
       // This prevents the duplicate user message bug: if we read chatMessagesRef
@@ -325,17 +332,21 @@ export function useConversationChat({
         abortControllerRef.current = controller;
 
         for await (const event of api.chatStream(
-          { messages, provider, model, web_search: webSearchEnabled },
+          { messages, provider, model, web_search: webSearchEnabled, thinking: thinkingEnabled },
           { signal: controller.signal }
         )) {
           if (event.type === 'token' && event.content) {
             setSearchQuery(null);  // Clear search indicator once text starts
+            setIsThinking(false);
             fullResponse += event.content;
             tokenBufferRef.current = fullResponse;
             // Throttle: schedule render on next animation frame
             if (rafIdRef.current === null) {
               rafIdRef.current = requestAnimationFrame(flushBuffer);
             }
+          } else if (event.type === 'thinking') {
+            setIsThinking(true);
+            setThinkingContent((prev) => prev + (event.content ?? ''));
           } else if (event.type === 'searching') {
             setSearchQuery(event.query ?? null);
           } else if (event.type === 'done') {
@@ -446,6 +457,7 @@ export function useConversationChat({
       onTurnsSaved,
       showWarning,
       webSearchEnabled,
+      thinkingEnabled,
     ]
   );
 
@@ -466,5 +478,7 @@ export function useConversationChat({
     turnsSavedCounter,
     searchQuery,
     citations,
+    thinkingContent,
+    isThinking,
   };
 }

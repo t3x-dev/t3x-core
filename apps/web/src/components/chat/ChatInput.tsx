@@ -1,6 +1,6 @@
 'use client';
 
-import { Globe, Paperclip, Send, Square } from 'lucide-react';
+import { Brain, Globe, Paperclip, Send, Square } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -25,6 +25,8 @@ export function ChatInput({
 }: ChatInputProps) {
   const webSearchEnabled = useChatSessionStore((s) => s.webSearchEnabled);
   const toggleWebSearch = useChatSessionStore((s) => s.toggleWebSearch);
+  const thinkingEnabled = useChatSessionStore((s) => s.thinkingEnabled);
+  const toggleThinking = useChatSessionStore((s) => s.toggleThinking);
   const [value, setValue] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -109,6 +111,25 @@ export function ChatInput({
           aria-label="Toggle web search"
         >
           <Globe className="h-4 w-4" />
+        </Button>
+      )}
+
+      {/* Extended thinking toggle — Claude only */}
+      {(!provider || provider === 'claude' || provider === 'anthropic') && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          onClick={toggleThinking}
+          className={cn(
+            'h-8 w-8 shrink-0 rounded-lg transition-colors duration-[var(--motion-base)]',
+            thinkingEnabled
+              ? 'bg-[var(--accent-commit)]/15 text-[var(--accent-commit)]'
+              : 'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]'
+          )}
+          aria-label="Toggle extended thinking"
+        >
+          <Brain className="h-4 w-4" />
         </Button>
       )}
 

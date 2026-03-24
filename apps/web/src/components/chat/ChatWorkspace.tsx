@@ -76,6 +76,8 @@ export function ChatWorkspace({
     turnsSavedCounter,
     searchQuery,
     citations,
+    thinkingContent,
+    isThinking,
   } = useConversationChat({
     projectId: resolvedProjectId,
     conversationId: resolvedConversationId,
@@ -452,7 +454,13 @@ export function ChatWorkspace({
 
             {/* Streaming response */}
             {isStreaming && streamingContent && (
-              <ChatMessage sender="assistant" content={streamingContent} isStreaming />
+              <ChatMessage
+                sender="assistant"
+                content={streamingContent}
+                isStreaming
+                thinkingContent={thinkingContent}
+                isThinking={isThinking}
+              />
             )}
 
             {/* Waiting indicator */}
