@@ -121,24 +121,24 @@ function PaneContent({
 
         const value = side === 'left' ? af.leftFrame.slots[as.key] : af.rightFrame.slots[as.key];
 
-        // Determine line status + value rendering
-        // For changed slots: left=removed, right=added (so user sees red→green)
+        // Line status: both sides stay 'modified' (subtle amber) for changed slots
+        // The VALUE itself gets colored, not the whole line
         let lineStatus: 'added' | 'removed' | 'modified' | 'unchanged' = 'unchanged';
         if (sd) {
           if (sd.type === 'added') lineStatus = 'added';
           else if (sd.type === 'removed') lineStatus = 'removed';
-          else lineStatus = side === 'left' ? 'removed' : 'added'; // changed: left=old(red), right=new(green)
+          else lineStatus = 'modified'; // both sides get subtle amber line
         }
 
-        // Value highlight: for changed slots without wordDiff, wrap value in highlight span
+        // Value rendering: highlight the changed VALUE, not the line
         let valueNode: React.ReactNode;
         if (sd?.wordDiff) {
           valueNode = <WordDiffSpan wordDiff={sd.wordDiff} />;
         } else if (sd?.type === 'changed') {
-          // Highlight the entire value as removed (left) or added (right)
+          // Left side = old value (red highlight), Right side = new value (green highlight)
           const hlClass = side === 'left'
-            ? 'bg-[var(--dy-removed-word)] text-[var(--dy-removed-accent)] rounded-sm px-[2px] font-medium'
-            : 'bg-[var(--dy-added-word)] text-[var(--dy-added-accent)] rounded-sm px-[2px] font-medium';
+            ? 'bg-[var(--dy-removed-word)] rounded-sm px-[3px] py-[1px] font-medium'
+            : 'bg-[var(--dy-added-word)] rounded-sm px-[3px] py-[1px] font-medium';
           valueNode = <span className={hlClass}><SlotValueSpan value={value} /></span>;
         } else {
           valueNode = <SlotValueSpan value={value} />;
