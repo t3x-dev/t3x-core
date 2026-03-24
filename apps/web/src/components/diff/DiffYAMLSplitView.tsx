@@ -2,7 +2,7 @@
 
 import { useCallback, useRef } from 'react';
 import type { FrameDiff } from '@t3x-dev/core';
-import { buildAlignedFrames, type AlignedFrame } from './DiffYAMLUtils';
+import { buildAlignedFrames, buildAlignedSlotKeys, type AlignedFrame } from './DiffYAMLUtils';
 import {
   useDYTheme,
   FrameSeparator,
@@ -10,8 +10,9 @@ import {
   IdenticalCollapseBar,
   getFrameRelations,
 } from './DiffYAMLShared';
-import { YAMLFrameRenderer, frameLineCount } from './YAMLFrameRenderer';
+import { YAMLFrameRenderer, frameLineCount, SlotValueSpan, WordDiffSpan } from './YAMLFrameRenderer';
 import { YAMLLine } from './YAMLLine';
+import { YAML_COLORS } from './DiffYAMLFormatters';
 
 // ── Props ──
 
@@ -95,17 +96,56 @@ function PaneContent({
     let content: React.ReactNode;
     if (isPlaceholder) {
       content = <EmptyPlaceholderLines count={placeholderCount} />;
-      // Don't advance line numbers for placeholders
+    } else if (af.type === 'modified' && af.leftFrame && af.rightFrame) {
+      // ── Modified frame: aligned slot-by-slot rendering ──
+      const slotDiffMap = new Map((af.slotDiffs ?? []).map(sd => [sd.key, sd]));
+      const alignedSlots = buildAlignedSlotKeys(af.leftFrame, af.rightFrame);
+
+      const lines: React.ReactNode[] = [];
+      // Frame type header
+      lines.push(
+        <YAMLLine key="header" lineNumber={lineNum++} status="modified">
+          <span style={{ color: YAML_COLORS.type, fontWeight: 600 }}>{frame!.type}</span>
+          <span style={{ color: YAML_COLORS.bracket }}>:</span>
+        </YAMLLine>
+      );
+
+      for (const as of alignedSlots) {
+        const sd = slotDiffMap.get(as.key);
+        const inThisSide = side === 'left' ? as.inLeft : as.inRight;
+
+        if (!inThisSide) {
+          // This slot doesn't exist on this side — empty placeholder
+          lines.push(<YAMLLine key={`empty-${as.key}`} lineNumber={undefined} status="empty">{null}</YAMLLine>);
+          continue;
+        }
+
+        const value = side === 'left' ? af.leftFrame.slots[as.key] : af.rightFrame.slots[as.key];
+        const slotStatus = sd
+          ? (sd.type === 'added' ? 'added' : sd.type === 'removed' ? 'removed' : 'modified')
+          : 'unchanged';
+
+        lines.push(
+          <YAMLLine key={`slot-${as.key}`} lineNumber={lineNum++} status={slotStatus as any}>
+            {'    '}
+            <span style={{ color: YAML_COLORS.key }}>{as.key}</span>
+            <span style={{ color: YAML_COLORS.bracket }}>: </span>
+            {sd?.wordDiff ? <WordDiffSpan wordDiff={sd.wordDiff} /> : <SlotValueSpan value={value} />}
+          </YAMLLine>
+        );
+      }
+
+      content = <>{lines}</>;
     } else if (hasFrame) {
       content = (
         <YAMLFrameRenderer
-          frame={frame}
+          frame={frame!}
           frameStatus={af.type}
           slotDiffs={af.type === 'modified' ? af.slotDiffs : undefined}
           startLine={startLine}
         />
       );
-      lineNum += frameLineCount(frame, removedSlotCount);
+      lineNum += frameLineCount(frame!, removedSlotCount);
     } else {
       content = null;
     }

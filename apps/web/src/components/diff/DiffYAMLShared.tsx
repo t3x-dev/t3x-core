@@ -10,13 +10,13 @@ import type { AlignedFrame } from './DiffYAMLUtils';
 
 export const DY_CSS_VARS_LIGHT: React.CSSProperties = {
   '--dy-surface': '#ffffff',
-  '--dy-added-bg': 'rgba(46,160,67,0.28)',
+  '--dy-added-bg': '#dafbe1',
   '--dy-added-accent': '#1a7f37',
-  '--dy-added-word': 'rgba(46,160,67,0.40)',
-  '--dy-removed-bg': 'rgba(248,81,73,0.22)',
+  '--dy-added-word': '#acf2bd',
+  '--dy-removed-bg': '#ffebe9',
   '--dy-removed-accent': '#cf222e',
-  '--dy-removed-word': 'rgba(248,81,73,0.35)',
-  '--dy-modified-bg': 'rgba(210,153,34,0.22)',
+  '--dy-removed-word': '#ffc1ba',
+  '--dy-modified-bg': '#fff8c5',
   '--dy-modified-accent': '#9a6700',
   '--dy-text-primary': '#1f2328',
   '--dy-text-secondary': '#656d76',

@@ -145,6 +145,42 @@ export function buildFrameTree(
 }
 
 /**
+ * Compute merged slot key order for side-by-side alignment.
+ * Returns keys in order: shared keys (preserving target order), then removed-only, then added-only.
+ */
+export interface AlignedSlot {
+	key: string;
+	inLeft: boolean;
+	inRight: boolean;
+}
+
+export function buildAlignedSlotKeys(
+	leftFrame: Frame,
+	rightFrame: Frame,
+): AlignedSlot[] {
+	const leftKeys = Object.keys(leftFrame.slots);
+	const rightKeys = Object.keys(rightFrame.slots);
+	const rightSet = new Set(rightKeys);
+	const leftSet = new Set(leftKeys);
+
+	const result: AlignedSlot[] = [];
+
+	// First: keys in right frame order (target is primary narrative)
+	for (const key of rightKeys) {
+		result.push({ key, inLeft: leftSet.has(key), inRight: true });
+	}
+
+	// Then: keys only in left (removed slots), preserving left order
+	for (const key of leftKeys) {
+		if (!rightSet.has(key)) {
+			result.push({ key, inLeft: true, inRight: false });
+		}
+	}
+
+	return result;
+}
+
+/**
  * Build a diff status map from FrameDiff for use with buildFrameTree.
  */
 export function buildDiffStatusMap(
