@@ -1,0 +1,48 @@
+/* Merge-specific tokens — neutral dual-color scheme
+   Source = blue, Target = teal — equally weighted, no value judgment */
+
+/* Light mode defaults */
+:root {
+  --merge-source-bg: rgba(88, 166, 255, 0.10);
+  --merge-source-accent: #1d6fe8;
+  --merge-source-word: rgba(88, 166, 255, 0.25);
+  --merge-target-bg: rgba(20, 184, 140, 0.10);
+  --merge-target-accent: #0f9471;
+  --merge-target-word: rgba(20, 184, 140, 0.25);
+  --merge-conflict-accent: #b45309;
+  --merge-unchosen-opacity: 0.20;
+}
+
+/* Dark mode overrides */
+.dark {
+  --merge-source-bg: rgba(88, 166, 255, 0.10);
+  --merge-source-accent: #58a6ff;
+  --merge-source-word: rgba(88, 166, 255, 0.25);
+  --merge-target-bg: rgba(125, 211, 175, 0.10);
+  --merge-target-accent: #7dd3af;
+  --merge-target-word: rgba(125, 211, 175, 0.25);
+  --merge-conflict-accent: #d29922;
+  --merge-unchosen-opacity: 0.20;
+}
+
+/* Merge line styles */
+.line-source .yaml-content,
+[data-merge-side="source"] .yaml-content { background: var(--merge-source-bg); }
+.line-target .yaml-content,
+[data-merge-side="target"] .yaml-content { background: var(--merge-target-bg); }
+.line-source .gutter { color: var(--merge-source-accent); opacity: 0.5; }
+.line-target .gutter { color: var(--merge-target-accent); opacity: 0.5; }
+
+/* Word-level highlights — soft: bold + subtle bg, NO strikethrough */
+.word-source {
+  background: var(--merge-source-word);
+  border-radius: 3px;
+  padding: 1px 3px;
+  font-weight: 600;
+}
+.word-target {
+  background: var(--merge-target-word);
+  border-radius: 3px;
+  padding: 1px 3px;
+  font-weight: 600;
+}

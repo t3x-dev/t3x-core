@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import '../components/merge/mergeYAMLTokens.css';
 
 @custom-variant dark (&:is(.dark *));
 
