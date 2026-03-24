@@ -2,6 +2,7 @@
 
 import type { Frame, SlotValue } from '@t3x-dev/core';
 import { Loader2 } from 'lucide-react';
+import { FrameHistoryPopover } from './FrameHistoryPopover';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { nestFrames } from '@/lib/frameNesting';
 import { parseDisplayYAML, toDisplayYAML } from '@/lib/liteYaml';
@@ -461,6 +462,7 @@ export function FrameYAMLView() {
             return (
               <div
                 key={i}
+                className="group/yaml-line"
                 data-frame-id={isFrameLine ? line.frameId : undefined}
                 onMouseEnter={() => setHoveredFrameId(line.frameId, line.slotKey)}
                 onMouseLeave={() => setHoveredFrameId(null)}
@@ -553,6 +555,15 @@ export function FrameYAMLView() {
                     </span>
                   )}
                   {line.text}
+                  {isFrameLine && (
+                    <span
+                      className="opacity-0 group-hover/yaml-line:opacity-100 transition-opacity ml-1"
+                      onClick={(e) => e.stopPropagation()}
+                      onKeyDown={() => {}}
+                    >
+                      <FrameHistoryPopover frameId={line.frameId} />
+                    </span>
+                  )}
                 </pre>
               </div>
             );

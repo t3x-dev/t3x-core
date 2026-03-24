@@ -33,6 +33,19 @@ interface ExtractionPanelState {
   lastDeltaChanges: FrameChange[];
   removedFrames: Frame[];
 
+  // Compression
+  isCompressing: boolean;
+  compressResult: {
+    summary: string;
+    framesBefore: number;
+    framesAfter: number;
+    mergedCount: number;
+    removedCount: number;
+    removedFrameIds: string[];
+    deltaLogId: string;
+  } | null;
+  showCompressBanner: boolean;
+
   setPanelMode: (mode: PanelMode) => void;
   setActiveView: (view: ActiveView) => void;
   togglePanel: () => void;
@@ -119,6 +132,11 @@ interface ExtractionPanelState {
   setConversationTitle: (title: string | null) => void;
   initCommitState: (projectId: string) => Promise<void>;
   clearCommitError: () => void;
+
+  // Compression actions
+  startCompress: () => Promise<void>;
+  undoCompression: () => Promise<void>;
+  dismissCompressBanner: () => void;
 }
 
 const emptyContent: SemanticContent = { frames: [], relations: [] };
@@ -158,6 +176,10 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
   isCommitting: false,
   commitError: null,
 
+  isCompressing: false,
+  compressResult: null,
+  showCompressBanner: false,
+
   setPanelMode: (mode) => set({ panelMode: mode }),
   setActiveView: (view) => set({ activeView: view }),
 
@@ -194,6 +216,9 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
             set((s) => ({ removedFrames: [...s.removedFrames, removed] }));
           }
           frames = frames.filter((f) => f.id !== change.target);
+          // Auto-clean orphaned relations (match core applyDelta behavior)
+          const removedId = change.target;
+          relations = relations.filter((r) => r.from !== removedId && r.to !== removedId);
           break;
         }
       }
@@ -225,9 +250,9 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
       lastDeltaChanges: delta.changes,
     });
 
-    // Persist user edits to database (LLM extraction is already saved by the API)
+    // Persist user edits to database (LLM extraction and compression are already saved by the API)
     const convId = get().conversationId;
-    if (convId && source !== 'pipeline') {
+    if (convId && source !== 'pipeline' && source !== 'compress') {
       createDelta(convId, delta, source).catch(() => {
         // Persist failed — non-critical, store has the data
       });
@@ -425,4 +450,76 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
       // Silent fallback — treat as no prior commits
     }
   },
+
+  startCompress: async () => {
+    const convId = get().conversationId;
+    if (!convId) return;
+
+    set({ isCompressing: true });
+    try {
+      const { compressFrames } = await import('@/lib/api/frames');
+      const result = await compressFrames(convId);
+
+      if (result.delta.changes.length === 0) {
+        set({ isCompressing: false });
+        return;
+      }
+
+      // Apply the compress delta locally
+      get().applyDelta(result.delta, 'compress');
+
+      // Patch the client-generated ID with the server's actual delta_log_id
+      // (applyDelta uses crypto.randomUUID(), but undo needs the real server ID)
+      set((s) => {
+        const log = [...s.deltaLog];
+        const last = log[log.length - 1];
+        if (last && last.source === 'compress') {
+          log[log.length - 1] = { ...last, id: result.delta_log_id };
+        }
+        return { deltaLog: log };
+      });
+
+      set({
+        isCompressing: false,
+        compressResult: {
+          summary: result.metadata.compress_summary,
+          framesBefore: result.metadata.frames_before,
+          framesAfter: result.metadata.frames_after,
+          mergedCount: result.metadata.merged_count,
+          removedCount: result.metadata.removed_count,
+          removedFrameIds: result.metadata.removed_frame_ids,
+          deltaLogId: result.delta_log_id,
+        },
+        showCompressBanner: true,
+      });
+    } catch {
+      set({ isCompressing: false });
+    }
+  },
+
+  undoCompression: async () => {
+    const { deltaLog, conversationId } = get();
+    const compressDelta = [...deltaLog].reverse().find((d) => d.source === 'compress');
+    if (!compressDelta || !conversationId) return;
+
+    try {
+      const { deleteDelta, getSemanticDraft } = await import('@/lib/api/frames');
+      await deleteDelta(conversationId, compressDelta.id);
+
+      // Rebuild from server (most reliable)
+      const newDraft = await getSemanticDraft(conversationId);
+      const newLog = deltaLog.filter((d) => d.id !== compressDelta.id);
+
+      set({
+        draft: newDraft,
+        deltaLog: newLog,
+        compressResult: null,
+        showCompressBanner: false,
+      });
+    } catch {
+      // Undo failed — non-critical
+    }
+  },
+
+  dismissCompressBanner: () => set({ showCompressBanner: false }),
 }));

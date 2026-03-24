@@ -196,6 +196,14 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
   const lastDeltaChanges = useExtractionPanelStore((s) => s.lastDeltaChanges);
   const focusIntentEnabled = useExtractionPanelStore((s) => s.focusIntentEnabled);
   const setFocusIntent = useExtractionPanelStore((s) => s.setFocusIntent);
+  const isCompressing = useExtractionPanelStore((s) => s.isCompressing);
+  const compressResult = useExtractionPanelStore((s) => s.compressResult);
+  const showCompressBanner = useExtractionPanelStore((s) => s.showCompressBanner);
+  const startCompress = useExtractionPanelStore((s) => s.startCompress);
+  const undoCompression = useExtractionPanelStore((s) => s.undoCompression);
+  const dismissCompressBanner = useExtractionPanelStore((s) => s.dismissCompressBanner);
+  const deltaLog = useExtractionPanelStore((s) => s.deltaLog);
+  const hasCompressDelta = deltaLog.some((d) => d.source === 'compress');
 
   const frameCount = draft.frames.length;
   const added = lastDeltaChanges.filter((c) => c.action === 'add').length;
@@ -236,13 +244,13 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
           {/* Panel header */}
           <div className="flex items-center justify-between border-b border-[var(--stroke-default)] px-3 py-2">
             <div className="flex items-center gap-1.5">
-              {isExtracting ? (
+              {isExtracting || isCompressing ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin text-[var(--accent-commit)]" />
               ) : (
                 <GitCommit className="h-3.5 w-3.5 text-[var(--accent-commit)]" />
               )}
               <span className="text-xs font-semibold text-[var(--text-primary)]">
-                {isExtracting ? 'Extracting...' : 'Frames'}
+                {isCompressing ? 'Compressing...' : isExtracting ? 'Extracting...' : 'Frames'}
               </span>
               {frameCount > 0 && !isExtracting && (
                 <span className="rounded-full bg-[var(--hover-bg)] px-1.5 py-0.5 text-[10px] text-[var(--text-secondary)]">
@@ -264,6 +272,29 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
                   {removed > 0 && <span style={{ color: '#f87171' }}> -{removed}</span>}
                 </span>
               )}
+              {/* Compress button */}
+              {frameCount >= 3 && !isExtracting && !isCompressing && (
+                <button
+                  type="button"
+                  onClick={startCompress}
+                  className="rounded p-0.5 text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]"
+                  title="Compress frames"
+                  style={{ fontSize: 12 }}
+                >
+                  🗜️
+                </button>
+              )}
+              {/* Compressed indicator */}
+              {hasCompressDelta && !isCompressing && (
+                <button
+                  type="button"
+                  onClick={undoCompression}
+                  className="rounded px-1.5 py-0.5 text-[10px] text-blue-400 hover:bg-blue-500/10"
+                  title="Click to undo compression"
+                >
+                  Compressed
+                </button>
+              )}
             </div>
             <button
               type="button"
@@ -274,6 +305,43 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
               ×
             </button>
           </div>
+
+          {/* Compress result banner */}
+          {showCompressBanner && compressResult && (
+            <div
+              style={{
+                padding: '8px 12px',
+                background: 'rgba(96, 165, 250, 0.08)',
+                borderBottom: '1px solid var(--stroke-default)',
+                fontSize: 11,
+                color: 'var(--text-secondary)',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
+                <div>
+                  <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                    Compressed {compressResult.framesBefore} → {compressResult.framesAfter} frames
+                  </div>
+                  <div style={{ marginTop: 2 }}>{compressResult.summary}</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={dismissCompressBanner}
+                  className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)]"
+                  style={{ fontSize: 14, lineHeight: 1, padding: 2 }}
+                >
+                  ×
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={undoCompression}
+                className="mt-1 rounded px-2 py-0.5 text-[10px] text-blue-400 hover:bg-blue-500/10"
+              >
+                Undo
+              </button>
+            </div>
+          )}
 
           {/* Topic list */}
           <TopicMap />

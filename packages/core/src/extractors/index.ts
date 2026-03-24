@@ -48,6 +48,17 @@ export {
   FrameExtractor,
   type SlotQuotesMap,
 } from './frameExtractor';
+// Frame Compression
+export {
+  buildCompressPrompt,
+  type CompressInput,
+  type FrameWithSignals,
+} from './compressPrompt';
+export {
+  type CompressMetadata,
+  type CompressResult,
+  FrameCompressor,
+} from './frameCompressor';
 // Incremental Extraction (LLM pipeline)
 export { type FuzzyLocateResult, fuzzyLocate } from './fuzzyLocate';
 export { parseIncrementalResponse } from './incrementalParser';

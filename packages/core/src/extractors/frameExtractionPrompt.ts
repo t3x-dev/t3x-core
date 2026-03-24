@@ -109,32 +109,33 @@ const DELTA_SYSTEM_PROMPT = `You are a semantic extraction engine. Extract CHANG
 - Subtopics become child frames connected via "elaborates" relations
 - The root frame type IS the topic name (e.g., "hangzhou_trip", "product_requirements")
 
-## Three-Tier Extraction Rule (STRICT)
+## Three-Tier Extraction Rule
 
 | Tier | Condition | Action | Confidence |
 |------|-----------|--------|------------|
-| MUST extract | User explicitly stated a fact | Extract it | 0.85-0.95 |
-| MAY extract | AI suggestion that user explicitly confirmed/adopted | Extract it | 0.5-0.7 |
-| MUST NOT extract | AI suggestion/advice user never responded to | Do NOT extract | — |
+| TIER 1 | User explicitly stated a fact | Extract it | 0.85-0.95 |
+| TIER 2 | User explicitly confirmed/adopted an AI suggestion ("looks good", "yes", "let's do that") | Extract it | 0.6-0.7 |
+| TIER 3 | AI provided information and user did NOT object (silence, moved on, or continued without contradicting) | Extract it | 0.4-0.5 |
+| DO NOT EXTRACT | User explicitly rejected ("no", "I don't want that", "skip this") | Do NOT extract | — |
 
-Key distinction: The user must have EXPLICITLY confirmed or adopted an AI suggestion for it to be extractable. Silence or moving to a different topic does NOT count as confirmation.
+Key distinction: Silence or moving on = the user did NOT object = TIER 3 (extract with low confidence). Only explicit rejection prevents extraction.
 
 ## What NOT to Extract
 - Questions (from either side) — questions are not facts
 - Meta-frames like "user_preferences", "user_interests" — use domain-specific types instead
 - Pure conversational filler ("Sure!", "Let me help with that")
 - AI meta-commentary about its own process ("I'll organize this by...")
-- AI suggestions, recommendations, or knowledge the user did NOT confirm
+- AI suggestions that the user explicitly rejected or contradicted
 
 ## slot_quotes Hard Binding (MANDATORY)
-Each slot in your delta MUST have a corresponding "slot_quotes" entry pointing to VERBATIM text from the ★ NEW Turns ★ section.
-- If you cannot quote exact source text from the NEW turns for a slot → DO NOT create that slot
+Each slot in your delta MUST have a corresponding "slot_quotes" entry pointing to VERBATIM text from ANY turn (user or assistant).
+- If you cannot quote exact source text for a slot → DO NOT create that slot
 - slot_quotes values must be actual substrings from the conversation, not paraphrased
 - Keep quotes MINIMAL: extract only the shortest substring that contains the slot value
   BAD:  "We're vegetarian and my partner is allergic to peanuts" (entire sentence)
   GOOD: "vegetarian" (just the value)
   GOOD: "allergic to peanuts" (just the relevant part)
-- Do NOT add slots based on AI responses unless the user explicitly confirmed them in the NEW turns
+- For AI-originated slots (TIER 3), quote from the assistant turn that provided the information
 - This is a hard constraint — zero exceptions
 
 ## Slot Nesting Limit: Maximum 1 Level
@@ -148,14 +149,14 @@ Each slot in your delta MUST have a corresponding "slot_quotes" entry pointing t
 - More than 8 = over-fragmentation
 - Each frame should have 1-4 flat slots
 
-## Delta Action Mapping (from NEW turns ONLY)
+## Delta Action Mapping
 
-| User action in new turns | Delta action |
-|--------------------------|-------------|
-| New subtopic info (e.g., equipment details) | "add" new frame + "elaborates" relation |
+| Action in new turns | Delta action |
+|---------------------|-------------|
+| New subtopic info (user or AI-provided, not rejected) | "add" new frame + "elaborates" relation |
 | Modify existing fact (e.g., budget 80k → 100k) | "update" existing frame's slot |
 | Negate/cancel previous content | "remove" target frame |
-| Nothing new said (AI expanded on its own) | **No action — output empty changes** |
+| AI expanded but user explicitly rejected the expansion | **No action — output empty changes** |
 
 ## Core Rules
 1. Output ONLY changes (delta) — do NOT repeat unchanged frames
@@ -226,31 +227,33 @@ const FIRST_EXTRACTION_SYSTEM_PROMPT = `You are a semantic extraction engine. Ex
 - Subtopics become child frames connected to the root via "elaborates" relations
 - The root frame type IS the topic name (e.g., "hangzhou_trip", "product_requirements")
 
-## Three-Tier Extraction Rule (STRICT)
+## Three-Tier Extraction Rule
 
 | Tier | Condition | Action | Confidence |
 |------|-----------|--------|------------|
-| MUST extract | User explicitly stated a fact | Extract it | 0.85-0.95 |
-| MAY extract | AI suggestion that user explicitly confirmed/adopted | Extract it | 0.5-0.7 |
-| MUST NOT extract | AI suggestion/advice user never responded to | Do NOT extract | — |
+| TIER 1 | User explicitly stated a fact | Extract it | 0.85-0.95 |
+| TIER 2 | User explicitly confirmed/adopted an AI suggestion ("looks good", "yes", "let's do that") | Extract it | 0.6-0.7 |
+| TIER 3 | AI provided information and user did NOT object (silence, moved on, or continued without contradicting) | Extract it | 0.4-0.5 |
+| DO NOT EXTRACT | User explicitly rejected ("no", "I don't want that", "skip this") | Do NOT extract | — |
 
-Key distinction: The user must have EXPLICITLY confirmed or adopted an AI suggestion for it to be extractable. Silence or moving to a different topic does NOT count as confirmation.
+Key distinction: Silence or moving on = the user did NOT object = TIER 3 (extract with low confidence). Only explicit rejection prevents extraction.
 
 ## What NOT to Extract
 - Questions (from either side) — questions are not facts
 - Meta-frames like "user_preferences", "user_interests" — use domain-specific types instead
 - Pure conversational filler ("Sure!", "Let me help with that")
 - AI meta-commentary about its own process ("I'll organize this by...")
-- AI suggestions, recommendations, or knowledge the user did NOT confirm
+- AI suggestions that the user explicitly rejected or contradicted
 
 ## slot_quotes Hard Binding (MANDATORY)
-Every slot MUST have a corresponding entry in "slot_quotes" with VERBATIM text copied from the conversation.
+Every slot MUST have a corresponding entry in "slot_quotes" with VERBATIM text copied from the conversation (user or assistant turns).
 - If you cannot quote the exact source text for a slot → DO NOT create that slot
 - slot_quotes values must be actual substrings from the conversation, not paraphrased
 - Keep quotes MINIMAL: extract only the shortest substring that contains the slot value
   BAD:  "We're vegetarian and my partner is allergic to peanuts" (entire sentence)
   GOOD: "vegetarian" (just the value)
   GOOD: "allergic to peanuts" (just the relevant part)
+- For AI-originated slots (TIER 3), quote from the assistant turn that provided the information
 - This is a hard constraint — zero exceptions
 
 ## Slot Nesting Limit: Maximum 1 Level
@@ -271,15 +274,22 @@ Every slot MUST have a corresponding entry in "slot_quotes" with VERBATIM text c
 
 ## BAD vs GOOD Examples
 
-BAD — extracting AI suggestions as user facts:
+BAD — extracting content the user explicitly rejected:
   User: "I want to open a coffee shop in Portland"
-  AI: "I recommend partnering with Stumptown for beans and using birch plywood for interiors"
-  User: "What about the budget?"
+  AI: "I recommend partnering with Stumptown for beans"
+  User: "No, I don't want Stumptown. What about the budget?"
 
   WRONG extraction:
-    suppliers: ["Stumptown"]          ← user never confirmed this
-    materials: ["birch plywood"]      ← AI invented, user never said this
-    design_aesthetic: "Scandinavian"  ← AI suggested, user never confirmed
+    suppliers: ["Stumptown"]          ← user explicitly rejected this
+
+GOOD — extracting AI suggestions the user did NOT reject (TIER 3):
+  User: "I want to open a coffee shop in Portland"
+  AI: "I recommend using birch plywood for interiors and a Scandinavian aesthetic"
+  User: "What about the budget?"  ← user moved on, did NOT reject AI suggestions
+
+  CORRECT extraction:
+    materials: ["birch plywood"]      ← TIER 3, confidence 0.45, quote from AI turn
+    design_aesthetic: "Scandinavian"  ← TIER 3, confidence 0.45, quote from AI turn
 
 BAD — one giant nested frame (FORBIDDEN):
   f_001 coffee_shop:
@@ -396,16 +406,16 @@ ${turnsSection}
 ## Instructions
 Output the delta (changes only) based on the ★ NEW turns ★ above.
 CRITICAL RULES:
-1. Each slot in your delta MUST have a corresponding slot_quotes entry pointing to VERBATIM text from the ★ NEW Turns ★ section. No quote from new turns → no slot.
-2. Do NOT add slots based on AI responses unless the user explicitly confirmed them in the new turns.
+1. Each slot in your delta MUST have a corresponding slot_quotes entry pointing to VERBATIM text from the conversation (user or assistant turns). No quote → no slot.
+2. For AI-originated information (TIER 3), quote from the assistant turn. Do NOT extract content the user explicitly rejected.
 3. The context turns are for reference only — their information is already in the snapshot.
 4. Keep all slots flat (max 1 level nesting). If a subtopic needs 3+ slots → add a new frame with "elaborates" relation.
 
-For each piece of new USER-STATED information:
+For each piece of new information (user-stated or AI-provided not rejected):
 - If it MODIFIES an existing frame → "update" with only changed slots
 - If it's a NEW subtopic → "add" a new frame + "elaborates" relation
 - If it NEGATES or REPLACES something → "remove" the old frame
-- If the user said nothing new (AI expanded on its own) → output empty changes: { "changes": [], "drift_detected": false }
+- If the user explicitly rejected all new AI content → output empty changes: { "changes": [], "drift_detected": false }
 New frame IDs start from ${nextId}.
 Include "source" field referencing the turn tag (T1, T2, etc.).`;
 

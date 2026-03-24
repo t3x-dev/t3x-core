@@ -107,20 +107,20 @@ export function ChatMessage({
   const hoveredSlotKey = useExtractionPanelStore((s) => s.hoveredSlotKey);
   const draft = useExtractionPanelStore((s) => s.draft);
   const setHoveredTurn = useExtractionPanelStore((s) => s.setHoveredTurn);
-  const userTextRef = useRef<HTMLDivElement>(null);
+  const textRef = useRef<HTMLDivElement>(null);
 
-  // Compute character offset from mouse position (user messages only)
-  const handleUserMouseMove = useCallback(
+  // Compute character offset from mouse position (user and assistant messages)
+  const handleMouseMove = useCallback(
     (e: React.MouseEvent) => {
-      if (!turnHash || !userTextRef.current) return;
+      if (!turnHash || !textRef.current) return;
       // caretRangeFromPoint returns a Range at the mouse cursor position
       const range = document.caretRangeFromPoint(e.clientX, e.clientY);
-      if (!range || !userTextRef.current.contains(range.startContainer)) {
+      if (!range || !textRef.current.contains(range.startContainer)) {
         setHoveredTurn(turnHash);
         return;
       }
       // Walk text nodes to compute absolute character offset
-      const walker = document.createTreeWalker(userTextRef.current, NodeFilter.SHOW_TEXT);
+      const walker = document.createTreeWalker(textRef.current, NodeFilter.SHOW_TEXT);
       let offset = 0;
       let node: Node | null = walker.nextNode();
       while (node) {
@@ -286,8 +286,8 @@ export function ChatMessage({
                   </div>
                 ) : (
                   <div
-                    ref={userTextRef}
-                    onMouseMove={handleUserMouseMove}
+                    ref={textRef}
+                    onMouseMove={handleMouseMove}
                     className="text-sm leading-relaxed text-[var(--text-primary)] whitespace-pre-wrap"
                   >
                     {hasCharHighlights ? (
@@ -304,6 +304,8 @@ export function ChatMessage({
                   <ThinkingSection content={thinkingContent} isStreaming={isThinking} />
                 )}
                 <div
+                  ref={textRef}
+                  onMouseMove={handleMouseMove}
                   className={cn(
                     'prose-chat text-sm leading-relaxed text-[var(--text-primary)]',
                     isStreaming && 'streaming-text'

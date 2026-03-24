@@ -125,6 +125,13 @@ export {
   type FrameExtractionResult,
   type FrameExtractionTurn,
   FrameExtractor,
+  // Frame Compression
+  buildCompressPrompt,
+  type CompressInput,
+  type CompressMetadata,
+  type CompressResult,
+  FrameCompressor,
+  type FrameWithSignals,
   type FuzzyLocateResult,
   fuzzyLocate,
   type LLMExtractionOptions,
