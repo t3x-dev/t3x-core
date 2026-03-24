@@ -3,13 +3,13 @@
  */
 
 export { agentDraftRoutes } from './agent-drafts';
-export { branchRoutes } from './branches';
+export { branchRoutes } from './branches.openapi';
 export { chatRoutes } from './chat';
 export { commitRoutes } from './commits.openapi';
 export { conversationRoutes } from './conversations';
 export { curateRoutes } from './curate';
 export { deltaLogRoutes } from './delta-log.openapi';
-export { deployAgentRoutes } from './deploy-agents';
+export { deployAgentRoutes } from './deploy-agents.openapi';
 export { diffRoutes } from './diff';
 export { draftsRoutes } from './drafts.openapi';
 export { exportRoutes } from './export.openapi';
