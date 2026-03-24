@@ -137,6 +137,28 @@ describe('SemanticContentSchema', () => {
     expect(result.success).toBe(false);
   });
 
+  it('accepts topic and root_frame_id', () => {
+    const result = SemanticContentSchema.safeParse({
+      topic: 'Japan Travel Planning',
+      root_frame_id: 'f_001',
+      frames: [{ id: 'f_001', type: 'plan', slots: { goal: 'travel' } }],
+      relations: [],
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.topic).toBe('Japan Travel Planning');
+      expect(result.data.root_frame_id).toBe('f_001');
+    }
+  });
+
+  it('accepts SemanticContent without topic (backward compat)', () => {
+    const result = SemanticContentSchema.safeParse({
+      frames: [{ id: 'f_001', type: 'plan', slots: { goal: 'travel' } }],
+      relations: [],
+    });
+    expect(result.success).toBe(true);
+  });
+
   it('rejects empty frames array', () => {
     const result = SemanticContentSchema.safeParse({
       frames: [],
