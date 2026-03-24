@@ -34,8 +34,6 @@ export interface MergeYAMLTreeViewProps {
   targetBranch: string;
   sourceHash: string;
   targetHash: string;
-  activeFrameId: string | null;
-  onSelectFrame: (id: string) => void;
 }
 
 // ── Relation annotation row (spans both panes) ──────────────────────────────
@@ -134,8 +132,6 @@ export function MergeYAMLTreeView({
   targetBranch,
   sourceHash,
   targetHash,
-  activeFrameId,
-  onSelectFrame,
 }: MergeYAMLTreeViewProps) {
   const [autoKeptExpanded, setAutoKeptExpanded] = useState(false);
 
@@ -216,7 +212,6 @@ export function MergeYAMLTreeView({
                 anchorId={`merge-frame-${frameId}`}
               />
               <MergeToolbarRow
-                frameId={frameId}
                 resolution={resolution}
                 onResolve={(res) => onResolveConflict(frameId, res)}
                 hasSlotConflicts={conflict.slotConflicts.length > 0}

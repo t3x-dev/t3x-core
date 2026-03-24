@@ -1,15 +1,15 @@
 /* Merge-specific tokens — neutral dual-color scheme
    Source = blue, Target = teal — equally weighted, no value judgment */
 
-/* Light mode defaults */
+/* Light mode defaults (matches preview/merge-yaml-tree-v3.html) */
 :root {
-  --merge-source-bg: rgba(88, 166, 255, 0.1);
-  --merge-source-accent: #1d6fe8;
-  --merge-source-word: rgba(88, 166, 255, 0.25);
-  --merge-target-bg: rgba(20, 184, 140, 0.1);
-  --merge-target-accent: #0f9471;
-  --merge-target-word: rgba(20, 184, 140, 0.25);
-  --merge-conflict-accent: #b45309;
+  --merge-source-bg: rgba(9, 105, 218, 0.08);
+  --merge-source-accent: #0969da;
+  --merge-source-word: rgba(9, 105, 218, 0.18);
+  --merge-target-bg: rgba(26, 127, 55, 0.08);
+  --merge-target-accent: #1a7f37;
+  --merge-target-word: rgba(26, 127, 55, 0.18);
+  --merge-conflict-accent: #9a6700;
   --merge-unchosen-opacity: 0.2;
 }
 
@@ -23,24 +23,6 @@
   --merge-target-word: rgba(125, 211, 175, 0.25);
   --merge-conflict-accent: #d29922;
   --merge-unchosen-opacity: 0.2;
-}
-
-/* Merge line styles */
-.line-source .yaml-content,
-[data-merge-side="source"] .yaml-content {
-  background: var(--merge-source-bg);
-}
-.line-target .yaml-content,
-[data-merge-side="target"] .yaml-content {
-  background: var(--merge-target-bg);
-}
-.line-source .gutter {
-  color: var(--merge-source-accent);
-  opacity: 0.5;
-}
-.line-target .gutter {
-  color: var(--merge-target-accent);
-  opacity: 0.5;
 }
 
 /* Word-level highlights — soft: bold + subtle bg, NO strikethrough */

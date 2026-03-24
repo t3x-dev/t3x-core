@@ -38,11 +38,13 @@ function SlotLine({
   highlight?: 'source' | 'target' | 'modified' | null;
 }) {
   const status =
-    highlight === 'source' || highlight === 'target'
-      ? 'modified'
-      : highlight === 'modified'
-        ? 'modified'
-        : 'unchanged';
+    highlight === 'source'
+      ? 'source'
+      : highlight === 'target'
+        ? 'target'
+        : highlight === 'modified'
+          ? 'modified'
+          : 'unchanged';
 
   const wordClass =
     highlight === 'source' ? 'word-source' : highlight === 'target' ? 'word-target' : undefined;
@@ -75,7 +77,7 @@ function FrameTypeHeader({
 }: {
   frame: Frame;
   lineNumber: number;
-  status: 'unchanged' | 'modified' | 'added' | 'removed';
+  status: 'unchanged' | 'modified' | 'added' | 'removed' | 'source' | 'target';
 }) {
   return (
     <YAMLLine lineNumber={lineNumber} status={status}>
@@ -260,7 +262,6 @@ function ConflictPanes({
 // ── OnlyIn frame renderer ─────────────────────────────────────────────────────
 
 function OnlyInPanes({ side, frame }: { side: 'source' | 'target'; frame: Frame }) {
-  const lineClass = side === 'source' ? 'line-source' : 'line-target';
   const slotCount = Object.keys(frame.slots).length;
   // +1 for frame type header
   const totalLines = 1 + slotCount;
@@ -268,19 +269,12 @@ function OnlyInPanes({ side, frame }: { side: 'source' | 'target'; frame: Frame 
   let lineNum = 1;
   const contentRows: React.ReactNode[] = [];
   contentRows.push(
-    <FrameTypeHeader
-      key="hdr"
-      frame={frame}
-      lineNumber={lineNum++}
-      status={side === 'source' ? 'removed' : 'added'}
-    />
+    <FrameTypeHeader key="hdr" frame={frame} lineNumber={lineNum++} status={side} />
   );
 
   for (const [key, value] of Object.entries(frame.slots)) {
     contentRows.push(
-      <div key={key} className={lineClass}>
-        <SlotLine slotKey={key} value={value} lineNumber={lineNum++} highlight={null} />
-      </div>
+      <SlotLine key={key} slotKey={key} value={value} lineNumber={lineNum++} highlight={side} />
     );
   }
 
@@ -310,20 +304,38 @@ function OnlyInPanes({ side, frame }: { side: 'source' | 'target'; frame: Frame 
 // ── AutoKept frame renderer ───────────────────────────────────────────────────
 
 function AutoKeptPanes({ frame }: { frame: Frame }) {
-  let lineNum = 1;
-  const rows: React.ReactNode[] = [
-    <FrameTypeHeader key="hdr" frame={frame} lineNumber={lineNum++} status="unchanged" />,
-  ];
-  for (const [key, value] of Object.entries(frame.slots)) {
-    rows.push(
-      <SlotLine key={key} slotKey={key} value={value} lineNumber={lineNum++} highlight={null} />
-    );
+  const slots = Object.entries(frame.slots);
+
+  function buildRows(prefix: string) {
+    let lineNum = 1;
+    const rows: React.ReactNode[] = [
+      <FrameTypeHeader
+        key={`${prefix}-hdr`}
+        frame={frame}
+        lineNumber={lineNum++}
+        status="unchanged"
+      />,
+    ];
+    for (const [key, value] of slots) {
+      rows.push(
+        <SlotLine
+          key={`${prefix}-${key}`}
+          slotKey={key}
+          value={value}
+          lineNumber={lineNum++}
+          highlight={null}
+        />
+      );
+    }
+    return rows;
   }
 
   return (
     <div className="flex opacity-[0.48]">
-      <div className="flex-1 min-w-0 border-r-2 border-r-[var(--stroke-pane-border)]">{rows}</div>
-      <div className="flex-1 min-w-0">{rows}</div>
+      <div className="flex-1 min-w-0 border-r-2 border-r-[var(--stroke-pane-border)]">
+        {buildRows('l')}
+      </div>
+      <div className="flex-1 min-w-0">{buildRows('r')}</div>
     </div>
   );
 }

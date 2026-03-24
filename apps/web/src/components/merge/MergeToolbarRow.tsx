@@ -22,7 +22,6 @@ import type { FrameResolution } from './FrameConflictCard';
 // ============================================================================
 
 export interface MergeToolbarRowProps {
-  frameId: string;
   resolution: FrameResolution | null;
   onResolve: (resolution: FrameResolution) => void;
   hasSlotConflicts: boolean;
@@ -128,13 +127,13 @@ export function MergeToolbarRow({ resolution, onResolve, hasSlotConflicts }: Mer
         <SideDot side="target" />
       </button>
 
-      {/* Separator */}
-      <span
-        className="inline-block w-px h-4 shrink-0"
-        style={{ background: 'var(--stroke-divider)' }}
-      />
-
-      {/* Fine-tune button — only when per-slot conflicts exist */}
+      {/* Separator + Fine-tune button — only when per-slot conflicts exist */}
+      {hasSlotConflicts && (
+        <span
+          className="inline-block w-px h-4 shrink-0"
+          style={{ background: 'var(--stroke-divider)' }}
+        />
+      )}
       {hasSlotConflicts && (
         <button
           type="button"

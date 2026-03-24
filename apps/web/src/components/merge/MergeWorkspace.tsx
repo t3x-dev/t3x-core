@@ -586,8 +586,6 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
               targetBranch={targetBranch || 'main'}
               sourceHash={sourceHash || ''}
               targetHash={targetHash || ''}
-              activeFrameId={activeFrameId}
-              onSelectFrame={setActiveFrameId}
             />
           </div>
 

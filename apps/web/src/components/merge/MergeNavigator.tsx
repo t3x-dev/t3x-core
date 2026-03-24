@@ -61,12 +61,13 @@ function SectionHeader({
 }: {
   label: string;
   count: number;
-  color: 'red' | 'green' | 'blue' | 'default';
+  color: 'conflict' | 'source' | 'target' | 'identical' | 'default';
 }) {
   const colorClass = {
-    red: 'text-[var(--diff-removed-accent)]',
-    green: 'text-[var(--diff-added-accent)]',
-    blue: 'text-[var(--accent-commit)]',
+    conflict: 'text-[var(--merge-conflict-accent)]',
+    source: 'text-[var(--merge-source-accent)]',
+    target: 'text-[var(--merge-target-accent)]',
+    identical: 'text-[var(--text-tertiary)]',
     default: 'text-[var(--text-tertiary)]',
   }[color];
 
@@ -159,7 +160,7 @@ export function MergeNavigator({
       {/* Conflicts */}
       {mergeResult.conflicts.length > 0 && (
         <>
-          <SectionHeader label="Conflicts" count={mergeResult.conflicts.length} color="red" />
+          <SectionHeader label="Conflicts" count={mergeResult.conflicts.length} color="conflict" />
           {mergeResult.conflicts.map((conflict, idx) => {
             const isResolved = resolutions.has(conflict.frameId);
             const isActive = activeFrameId === conflict.frameId;
@@ -225,7 +226,7 @@ export function MergeNavigator({
       {/* Auto-kept */}
       {mergeResult.autoKept.length > 0 && (
         <>
-          <SectionHeader label="Auto-kept" count={mergeResult.autoKept.length} color="green" />
+          <SectionHeader label="Auto-kept" count={mergeResult.autoKept.length} color="identical" />
           {mergeResult.autoKept.map((frame) => (
             <div
               key={frame.id}
@@ -246,7 +247,11 @@ export function MergeNavigator({
       {/* Source only */}
       {mergeResult.onlyInSource.length > 0 && (
         <>
-          <SectionHeader label="Source only" count={mergeResult.onlyInSource.length} color="blue" />
+          <SectionHeader
+            label="Source only"
+            count={mergeResult.onlyInSource.length}
+            color="source"
+          />
           {mergeResult.onlyInSource.map((frame) => {
             const isKept = keepSource.has(frame.id);
             return (
@@ -275,7 +280,11 @@ export function MergeNavigator({
       {/* Target only */}
       {mergeResult.onlyInTarget.length > 0 && (
         <>
-          <SectionHeader label="Target only" count={mergeResult.onlyInTarget.length} color="blue" />
+          <SectionHeader
+            label="Target only"
+            count={mergeResult.onlyInTarget.length}
+            color="target"
+          />
           {mergeResult.onlyInTarget.map((frame) => {
             const isKept = keepTarget.has(frame.id);
             return (
