@@ -14,6 +14,7 @@ import { registerExtractCommands } from './commands/extract.js';
 import { registerLeafCommands } from './commands/leaves.js';
 import { registerProjectCommands } from './commands/projects.js';
 import { registerShareCommands } from './commands/share.js';
+import { registerShowCommands } from './commands/show.js';
 import { registerStatusCommands } from './commands/status.js';
 
 const program = new Command();
@@ -35,6 +36,7 @@ registerShareCommands(program);
 registerGateCommands(program);
 registerExportCommands(program);
 registerImportCommands(program);
+registerShowCommands(program);
 
 // Parse arguments
 program.parse();
