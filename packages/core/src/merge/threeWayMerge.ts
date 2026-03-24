@@ -21,7 +21,7 @@ import { sha256 } from '../common/hash';
 import { diffCommits } from '../diff/diffCommits';
 import { wordDiff } from '../diff/lcs';
 import type { DiffableSentence, WordDiffSegment } from '../diff/types';
-import { type CommitAuthor, ID_PREFIXES, type Sentence, type SentenceCommit } from '../types/v4';
+import type { Frame, SemanticContent } from '../semantic/types';
 
 // ============================================================================
 // Types
@@ -326,16 +326,13 @@ export function prepareThreeWayMerge(
  * Execute a three-way merge after all conflicts have been resolved.
  *
  * Takes a ThreeWayMergeResult with resolved conflicts and produces
- * a final SentenceCommit with deterministic sentence IDs.
+ * SemanticContent (frames + relations) ready for commit creation.
+ * Commit wrapping (hash, parents, author, etc.) is handled by the storage layer.
  *
  * @param result - The three-way merge result with all conflicts resolved
- * @param sourceCommitHash - Hash of the source commit
- * @param targetCommitHash - Hash of the target commit
- * @param author - Author of the merge commit
- * @param message - Merge commit message
- * @param projectId - Project ID
- * @param committedAt - Optional fixed timestamp (for deterministic tests)
- * @returns SentenceCommit with merged content
+ * @param sourceCommitHash - Hash of the source commit (used for deterministic frame IDs)
+ * @param targetCommitHash - Hash of the target commit (used for deterministic frame IDs)
+ * @returns SemanticContent with merged frames and empty relations
  *
  * @throws Error if any conflict is unresolved
  * @throws Error if a conflict with resolution 'edit' has no editedText
@@ -343,21 +340,13 @@ export function prepareThreeWayMerge(
  * @example
  * const result = prepareThreeWayMerge(base, source, target);
  * result.conflicts[0].resolution = 'source';
- * const commit = executeThreeWayMerge(
- *   result, 'sha256:src', 'sha256:tgt',
- *   { type: 'human', name: 'Alice' },
- *   'Merge feature into main', 'proj_123'
- * );
+ * const content = executeThreeWayMerge(result, 'sha256:src', 'sha256:tgt');
  */
 export function executeThreeWayMerge(
   result: ThreeWayMergeResult,
   sourceCommitHash: string,
-  targetCommitHash: string,
-  author: CommitAuthor,
-  message: string,
-  projectId: string,
-  committedAt?: string
-): SentenceCommit {
+  targetCommitHash: string
+): SemanticContent {
   // Validate: all conflicts must be resolved
   for (const conflict of result.conflicts) {
     if (!conflict.resolution) {
@@ -477,63 +466,21 @@ export function executeThreeWayMerge(
     return a.insertionOrder - b.insertionOrder;
   });
 
-  // Convert to Sentence with deterministic V4 IDs
-  const sentences: Sentence[] = [];
-
-  for (const { sentence: s } of collected) {
+  // Convert each DiffableSentence to a Frame (type 'knowledge', text slot)
+  // Frame IDs are deterministic: f_ + sha256(sourceHash:targetHash:originalId).slice(0,12)
+  const frames: Frame[] = collected.map(({ sentence: s }) => {
     const hashInput = `${sourceCommitHash}:${targetCommitHash}:${s.id}`;
-    const newId = `${ID_PREFIXES.sentence}${sha256(hashInput).slice(0, 12)}`;
-    const sentence: Sentence = {
+    const newId = `f_${sha256(hashInput).slice(0, 12)}`;
+    const frame: Frame = {
       id: newId,
-      text: s.text,
+      type: 'knowledge',
+      slots: { text: s.text },
     };
-    // Preserve source_ref for source context display
     if (s.source_ref) {
-      sentence.source_ref = s.source_ref;
+      frame.source = s.source_ref.turn_hash;
     }
-    sentences.push(sentence);
-  }
+    return frame;
+  });
 
-  const timestamp = committedAt ?? new Date().toISOString();
-
-  // Build first-class data for hash computation
-  const firstClassData = {
-    schema: 't3x/commit/v4' as const,
-    parents: [sourceCommitHash, targetCommitHash],
-    author,
-    committed_at: timestamp,
-    content: {
-      sentences,
-    },
-  };
-
-  // Inline V4 hash computation (sha256 of first-class fields)
-  const hashableData = {
-    schema: firstClassData.schema,
-    parents: firstClassData.parents,
-    author: firstClassData.author,
-    committed_at: firstClassData.committed_at,
-    content: {
-      sentences: firstClassData.content.sentences.map((s) => ({
-        id: s.id,
-        text: s.text,
-        ...(s.confidence !== undefined ? { confidence: s.confidence } : {}),
-        ...(s.source_ref ? { source_ref: s.source_ref } : {}),
-      })),
-    },
-  };
-  const hash = `sha256:${sha256(hashableData)}`;
-
-  return {
-    hash,
-    schema: 't3x/commit/v4',
-    parents: [sourceCommitHash, targetCommitHash],
-    author,
-    committed_at: timestamp,
-    content: {
-      sentences,
-    },
-    project_id: projectId,
-    message,
-  };
+  return { frames, relations: [] };
 }

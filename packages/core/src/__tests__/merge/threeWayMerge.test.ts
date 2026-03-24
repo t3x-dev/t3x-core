@@ -10,16 +10,12 @@
 import { describe, expect, it } from 'vitest';
 import type { DiffableSentence } from '../../diff/types';
 import { executeThreeWayMerge, prepareThreeWayMerge } from '../../merge/threeWayMerge';
-import type { CommitAuthor } from '../../types/v4';
 
 // ============================================================================
 // Test Helpers
 // ============================================================================
 
 const sent = (id: string, text: string): DiffableSentence => ({ id, text });
-
-const author: CommitAuthor = { type: 'human', name: 'Test User' };
-const projectId = 'proj_test3way';
 
 // ============================================================================
 // prepareThreeWayMerge Tests
@@ -431,6 +427,8 @@ describe('prepareThreeWayMerge', () => {
 
 // ============================================================================
 // executeThreeWayMerge Tests
+// executeThreeWayMerge now returns SemanticContent (frames + relations).
+// Commit wrapping (hash, parents, author) is handled by the storage layer.
 // ============================================================================
 
 describe('executeThreeWayMerge', () => {
@@ -438,69 +436,50 @@ describe('executeThreeWayMerge', () => {
   // Basic execution
   // -------------------------------------------------------------------------
   describe('basic execution', () => {
-    it('creates SentenceCommit with correct schema and parents', () => {
+    it('returns SemanticContent with frames and relations', () => {
       const result = prepareThreeWayMerge(
         [sent('b1', 'Same text')],
         [sent('s1', 'Same text')],
         [sent('t1', 'Same text')]
       );
 
-      const commit = executeThreeWayMerge(
-        result,
-        'sha256:src',
-        'sha256:tgt',
-        author,
-        'Three-way merge',
-        projectId
-      );
+      const content = executeThreeWayMerge(result, 'sha256:src', 'sha256:tgt');
 
-      expect(commit.schema).toBe('t3x/commit/v4');
-      expect(commit.parents).toEqual(['sha256:src', 'sha256:tgt']);
-      expect(commit.author).toEqual(author);
-      expect(commit.message).toBe('Three-way merge');
-      expect(commit.project_id).toBe(projectId);
-      expect(commit.hash).toMatch(/^sha256:/);
+      expect(content).toHaveProperty('frames');
+      expect(content).toHaveProperty('relations');
+      expect(Array.isArray(content.frames)).toBe(true);
+      expect(Array.isArray(content.relations)).toBe(true);
     });
 
-    it('includes unchanged and auto-merged sentences', () => {
+    it('includes unchanged and auto-merged sentences as frames', () => {
       const result = prepareThreeWayMerge(
         [sent('b1', 'Unchanged text'), sent('b2', 'Budget is $3000 for the project')],
         [sent('s1', 'Unchanged text'), sent('s2', 'Budget is $3500 for the project')],
         [sent('t1', 'Unchanged text'), sent('t2', 'Budget is $3000 for the project')]
       );
 
-      const commit = executeThreeWayMerge(
-        result,
-        'sha256:src',
-        'sha256:tgt',
-        author,
-        'Merge',
-        projectId
-      );
+      const content = executeThreeWayMerge(result, 'sha256:src', 'sha256:tgt');
 
-      const texts = commit.content.sentences.map((s) => s.text);
+      const texts = content.frames.map((f) => f.slots.text);
       expect(texts).toContain('Unchanged text');
       expect(texts).toContain('Budget is $3500 for the project');
-      expect(commit.content.sentences).toHaveLength(2);
+      expect(content.frames).toHaveLength(2);
     });
 
-    it('generates deterministic s_ prefixed IDs', () => {
+    it('generates deterministic f_ prefixed IDs', () => {
       const result = prepareThreeWayMerge(
         [sent('b1', 'Test')],
         [sent('s1', 'Test')],
         [sent('t1', 'Test')]
       );
 
-      const commit = executeThreeWayMerge(
-        result,
-        'sha256:src',
-        'sha256:tgt',
-        author,
-        'Merge',
-        projectId
-      );
+      const content = executeThreeWayMerge(result, 'sha256:src', 'sha256:tgt');
 
-      expect(commit.content.sentences[0].id).toMatch(/^s_[a-f0-9]{12}$/);
+      expect(content.frames[0].id).toMatch(/^f_/);
+
+      // Deterministic: same inputs → same ID
+      const content2 = executeThreeWayMerge(result, 'sha256:src', 'sha256:tgt');
+      expect(content.frames[0].id).toBe(content2.frames[0].id);
     });
   });
 
@@ -516,7 +495,7 @@ describe('executeThreeWayMerge', () => {
       );
 
       expect(() =>
-        executeThreeWayMerge(result, 'sha256:src', 'sha256:tgt', author, 'Merge', projectId)
+        executeThreeWayMerge(result, 'sha256:src', 'sha256:tgt')
       ).toThrow('Unresolved conflict');
     });
 
@@ -528,16 +507,9 @@ describe('executeThreeWayMerge', () => {
       );
       result.conflicts[0].resolution = 'source';
 
-      const commit = executeThreeWayMerge(
-        result,
-        'sha256:src',
-        'sha256:tgt',
-        author,
-        'Merge',
-        projectId
-      );
+      const content = executeThreeWayMerge(result, 'sha256:src', 'sha256:tgt');
 
-      expect(commit.content.sentences[0].text).toBe('Budget is $3500 for the project');
+      expect(content.frames[0].slots.text).toBe('Budget is $3500 for the project');
     });
 
     it('includes target sentence when conflict resolved as target', () => {
@@ -548,16 +520,9 @@ describe('executeThreeWayMerge', () => {
       );
       result.conflicts[0].resolution = 'target';
 
-      const commit = executeThreeWayMerge(
-        result,
-        'sha256:src',
-        'sha256:tgt',
-        author,
-        'Merge',
-        projectId
-      );
+      const content = executeThreeWayMerge(result, 'sha256:src', 'sha256:tgt');
 
-      expect(commit.content.sentences[0].text).toBe('Budget is $4000 for the project');
+      expect(content.frames[0].slots.text).toBe('Budget is $4000 for the project');
     });
 
     it('includes both sentences when conflict resolved as both', () => {
@@ -568,19 +533,12 @@ describe('executeThreeWayMerge', () => {
       );
       result.conflicts[0].resolution = 'both';
 
-      const commit = executeThreeWayMerge(
-        result,
-        'sha256:src',
-        'sha256:tgt',
-        author,
-        'Merge',
-        projectId
-      );
+      const content = executeThreeWayMerge(result, 'sha256:src', 'sha256:tgt');
 
-      const texts = commit.content.sentences.map((s) => s.text);
+      const texts = content.frames.map((f) => f.slots.text);
       expect(texts).toContain('Budget is $3500 for the project');
       expect(texts).toContain('Budget is $4000 for the project');
-      expect(commit.content.sentences).toHaveLength(2);
+      expect(content.frames).toHaveLength(2);
     });
 
     it('uses editedText when conflict resolved as edit', () => {
@@ -592,16 +550,9 @@ describe('executeThreeWayMerge', () => {
       result.conflicts[0].resolution = 'edit';
       result.conflicts[0].editedText = 'Budget is $3750 for the project';
 
-      const commit = executeThreeWayMerge(
-        result,
-        'sha256:src',
-        'sha256:tgt',
-        author,
-        'Merge',
-        projectId
-      );
+      const content = executeThreeWayMerge(result, 'sha256:src', 'sha256:tgt');
 
-      expect(commit.content.sentences[0].text).toBe('Budget is $3750 for the project');
+      expect(content.frames[0].slots.text).toBe('Budget is $3750 for the project');
     });
 
     it('throws when edit resolution has no editedText', () => {
@@ -614,7 +565,7 @@ describe('executeThreeWayMerge', () => {
       // No editedText set
 
       expect(() =>
-        executeThreeWayMerge(result, 'sha256:src', 'sha256:tgt', author, 'Merge', projectId)
+        executeThreeWayMerge(result, 'sha256:src', 'sha256:tgt')
       ).toThrow('no editedText provided');
     });
 
@@ -626,17 +577,10 @@ describe('executeThreeWayMerge', () => {
       const result = prepareThreeWayMerge(base, source, target);
       result.conflicts[0].resolution = 'source'; // Keep deletion
 
-      const commit = executeThreeWayMerge(
-        result,
-        'sha256:src',
-        'sha256:tgt',
-        author,
-        'Merge',
-        projectId
-      );
+      const content = executeThreeWayMerge(result, 'sha256:src', 'sha256:tgt');
 
-      // source is null (deleted), so no sentence is added
-      expect(commit.content.sentences).toHaveLength(0);
+      // source is null (deleted), so no frame is added
+      expect(content.frames).toHaveLength(0);
     });
 
     it('handles delete_vs_modify conflict resolved as target (keep modified)', () => {
@@ -647,17 +591,10 @@ describe('executeThreeWayMerge', () => {
       const result = prepareThreeWayMerge(base, source, target);
       result.conflicts[0].resolution = 'target'; // Keep modified version
 
-      const commit = executeThreeWayMerge(
-        result,
-        'sha256:src',
-        'sha256:tgt',
-        author,
-        'Merge',
-        projectId
-      );
+      const content = executeThreeWayMerge(result, 'sha256:src', 'sha256:tgt');
 
-      expect(commit.content.sentences).toHaveLength(1);
-      expect(commit.content.sentences[0].text).toBe('The quick brown fox leaps over the lazy dog');
+      expect(content.frames).toHaveLength(1);
+      expect(content.frames[0].slots.text).toBe('The quick brown fox leaps over the lazy dog');
     });
   });
 
@@ -665,22 +602,15 @@ describe('executeThreeWayMerge', () => {
   // Additions in execute
   // -------------------------------------------------------------------------
   describe('additions', () => {
-    it('includes additions from both sides in the merged commit', () => {
+    it('includes additions from both sides in merged frames', () => {
       const base = [sent('b1', 'Original sentence')];
       const source = [sent('s1', 'Original sentence'), sent('s2', 'Added by source')];
       const target = [sent('t1', 'Original sentence'), sent('t2', 'Added by target')];
 
       const result = prepareThreeWayMerge(base, source, target);
-      const commit = executeThreeWayMerge(
-        result,
-        'sha256:src',
-        'sha256:tgt',
-        author,
-        'Merge',
-        projectId
-      );
+      const content = executeThreeWayMerge(result, 'sha256:src', 'sha256:tgt');
 
-      const texts = commit.content.sentences.map((s) => s.text);
+      const texts = content.frames.map((f) => f.slots.text);
       expect(texts).toContain('Original sentence');
       expect(texts).toContain('Added by source');
       expect(texts).toContain('Added by target');
@@ -691,7 +621,7 @@ describe('executeThreeWayMerge', () => {
   // source_ref preservation
   // -------------------------------------------------------------------------
   describe('source_ref preservation', () => {
-    it('preserves source_ref through three-way merge', () => {
+    it('preserves source turn_hash on frame.source', () => {
       const sourceRef = {
         conversation_id: 'conv_1',
         turn_hash: 'sha256:abc',
@@ -704,16 +634,9 @@ describe('executeThreeWayMerge', () => {
       const target = [{ id: 't1', text: 'With ref', source_ref: sourceRef }];
 
       const result = prepareThreeWayMerge(base, source, target);
-      const commit = executeThreeWayMerge(
-        result,
-        'sha256:src',
-        'sha256:tgt',
-        author,
-        'Merge',
-        projectId
-      );
+      const content = executeThreeWayMerge(result, 'sha256:src', 'sha256:tgt');
 
-      expect(commit.content.sentences[0].source_ref).toEqual(sourceRef);
+      expect(content.frames[0].source).toBe('sha256:abc');
     });
   });
 
@@ -721,7 +644,7 @@ describe('executeThreeWayMerge', () => {
   // Full three-way merge end-to-end
   // -------------------------------------------------------------------------
   describe('end-to-end', () => {
-    it('clean merge produces expected output', () => {
+    it('clean merge produces expected frame output', () => {
       const base = [
         sent('b1', 'Budget is $3000 allocated'),
         sent('b2', 'Meeting on Monday morning'),
@@ -738,52 +661,31 @@ describe('executeThreeWayMerge', () => {
       const result = prepareThreeWayMerge(base, source, target);
       expect(result.status).toBe('clean');
 
-      const commit = executeThreeWayMerge(
-        result,
-        'sha256:src',
-        'sha256:tgt',
-        author,
-        'Merge branches',
-        projectId,
-        '2024-01-01T00:00:00.000Z'
-      );
+      const content = executeThreeWayMerge(result, 'sha256:src', 'sha256:tgt');
 
-      const texts = commit.content.sentences.map((s) => s.text);
+      const texts = content.frames.map((f) => f.slots.text);
       expect(texts).toContain('Budget is $3500 allocated');
       expect(texts).toContain('Meeting on Tuesday morning');
-      expect(commit.content.sentences).toHaveLength(2);
+      expect(content.frames).toHaveLength(2);
 
-      // Verify hash is deterministic
-      const commit2 = executeThreeWayMerge(
-        result,
-        'sha256:src',
-        'sha256:tgt',
-        author,
-        'Merge branches',
-        projectId,
-        '2024-01-01T00:00:00.000Z'
-      );
-      expect(commit.hash).toBe(commit2.hash);
+      // Verify determinism
+      const content2 = executeThreeWayMerge(result, 'sha256:src', 'sha256:tgt');
+      expect(content.frames[0].id).toBe(content2.frames[0].id);
     });
 
-    it('V4 commit has no constraints in content', () => {
+    it('frames have knowledge type and text slot, no constraints', () => {
       const result = prepareThreeWayMerge(
         [sent('b1', 'Test')],
         [sent('s1', 'Test')],
         [sent('t1', 'Test')]
       );
 
-      const commit = executeThreeWayMerge(
-        result,
-        'sha256:src',
-        'sha256:tgt',
-        author,
-        'Merge',
-        projectId
-      );
+      const content = executeThreeWayMerge(result, 'sha256:src', 'sha256:tgt');
 
-      expect(commit.content).toHaveProperty('sentences');
-      expect(commit.content).not.toHaveProperty('constraints');
+      expect(content.frames[0].type).toBe('knowledge');
+      expect(content.frames[0].slots).toHaveProperty('text');
+      expect(content).not.toHaveProperty('constraints');
+      expect(content.relations).toEqual([]);
     });
   });
 });

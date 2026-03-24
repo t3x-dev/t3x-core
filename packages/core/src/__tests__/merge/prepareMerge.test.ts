@@ -5,29 +5,19 @@
  *
  * V4 Changes:
  * - prepareMerge accepts DiffableSentence[] instead of CommitContent
- * - executeMerge returns SentenceCommit
+ * - executeMerge returns SemanticContent (frames + relations)
  * - No constraint handling (constraints belong to Leaf)
  */
 
-import { describe, expect, test, vi } from 'vitest';
-import { sha256 } from '../../common/hash';
+import { describe, expect, test } from 'vitest';
 import type { DiffableSentence } from '../../diff/types';
 import { executeMerge, prepareMerge } from '../../merge';
-import type { CommitAuthor } from '../../types/v4';
 
 // Test helpers - V4 uses DiffableSentence (only id + text)
 const createSentence = (id: string, text: string): DiffableSentence => ({
   id,
   text,
 });
-
-// V4 author format
-const author: CommitAuthor = {
-  type: 'human',
-  name: 'Test User',
-};
-
-const projectId = 'proj_test123';
 
 // ============================================================================
 // prepareMerge Tests
@@ -155,7 +145,7 @@ describe('prepareMerge', () => {
 // ============================================================================
 
 describe('executeMerge', () => {
-  test('creates commit with 2 parents', () => {
+  test('returns SemanticContent with frames and relations arrays', () => {
     const prepared = {
       identical: [],
       similarPairs: [],
@@ -163,12 +153,12 @@ describe('executeMerge', () => {
       onlyInTarget: [],
     };
 
-    const result = executeMerge(prepared, 'sha256:aaa', 'sha256:bbb', author, 'Merge', projectId);
+    const result = executeMerge(prepared, 'sha256:aaa', 'sha256:bbb');
 
-    expect(result.parents).toEqual(['sha256:aaa', 'sha256:bbb']);
-    expect(result.schema).toBe('t3x/commit/v4');
-    expect(result.hash).toMatch(/^sha256:/);
-    expect(result.project_id).toBe(projectId);
+    expect(result).toHaveProperty('frames');
+    expect(result).toHaveProperty('relations');
+    expect(Array.isArray(result.frames)).toBe(true);
+    expect(Array.isArray(result.relations)).toBe(true);
   });
 
   test('throws on unresolved similar pair', () => {
@@ -186,9 +176,7 @@ describe('executeMerge', () => {
       onlyInTarget: [],
     };
 
-    expect(() => executeMerge(prepared, 'a', 'b', author, 'Merge', projectId)).toThrow(
-      'Unresolved similar pair'
-    );
+    expect(() => executeMerge(prepared, 'a', 'b')).toThrow('Unresolved similar pair');
   });
 
   test('includes source sentence when resolution is source', () => {
@@ -206,9 +194,9 @@ describe('executeMerge', () => {
       onlyInTarget: [],
     };
 
-    const result = executeMerge(prepared, 'a', 'b', author, 'Merge', projectId);
+    const result = executeMerge(prepared, 'a', 'b');
 
-    expect(result.content.sentences[0].text).toBe('Budget is $3000');
+    expect(result.frames[0].slots.text).toBe('Budget is $3000');
   });
 
   test('includes target sentence when resolution is target', () => {
@@ -226,9 +214,9 @@ describe('executeMerge', () => {
       onlyInTarget: [],
     };
 
-    const result = executeMerge(prepared, 'a', 'b', author, 'Merge', projectId);
+    const result = executeMerge(prepared, 'a', 'b');
 
-    expect(result.content.sentences[0].text).toBe('Budget is $3500');
+    expect(result.frames[0].slots.text).toBe('Budget is $3500');
   });
 
   test('excludes sentences with keep: false', () => {
@@ -244,9 +232,9 @@ describe('executeMerge', () => {
       onlyInTarget: [],
     };
 
-    const result = executeMerge(prepared, 'a', 'b', author, 'Merge', projectId);
+    const result = executeMerge(prepared, 'a', 'b');
 
-    expect(result.content.sentences).toHaveLength(0);
+    expect(result.frames).toHaveLength(0);
   });
 
   test('includes sentences with keep: true', () => {
@@ -262,13 +250,13 @@ describe('executeMerge', () => {
       onlyInTarget: [],
     };
 
-    const result = executeMerge(prepared, 'a', 'b', author, 'Merge', projectId);
+    const result = executeMerge(prepared, 'a', 'b');
 
-    expect(result.content.sentences).toHaveLength(1);
-    expect(result.content.sentences[0].text).toBe('Keep me');
+    expect(result.frames).toHaveLength(1);
+    expect(result.frames[0].slots.text).toBe('Keep me');
   });
 
-  test('regenerates sentence IDs with deterministic V4 format', () => {
+  test('generates deterministic f_ prefixed frame IDs', () => {
     const prepared = {
       identical: [createSentence('old-id-1', 'Keep me')],
       similarPairs: [],
@@ -276,39 +264,17 @@ describe('executeMerge', () => {
       onlyInTarget: [],
     };
 
-    const result = executeMerge(prepared, 'a', 'b', author, 'Merge', projectId);
+    const result = executeMerge(prepared, 'a', 'b');
 
-    // Verify V4 format: s_ prefix + 12 hex chars
-    expect(result.content.sentences[0].id).toMatch(/^s_[a-f0-9]{12}$/);
+    // Verify f_ prefix
+    expect(result.frames[0].id).toMatch(/^f_/);
 
     // Verify deterministic: same inputs → same ID
-    const expectedId = `s_${sha256('a:b:old-id-1').slice(0, 12)}`;
-    expect(result.content.sentences[0].id).toBe(expectedId);
+    const result2 = executeMerge(prepared, 'a', 'b');
+    expect(result.frames[0].id).toBe(result2.frames[0].id);
   });
 
-  test('merge commit hash is deterministic (same inputs → same hash)', () => {
-    const prepared = {
-      identical: [createSentence('s1', 'Same content')],
-      similarPairs: [],
-      onlyInSource: [],
-      onlyInTarget: [],
-    };
-
-    // Mock Date to ensure same timestamp
-    const fixedTimestamp = new Date('2024-01-01T00:00:00.000Z').getTime();
-    vi.setSystemTime(fixedTimestamp);
-
-    try {
-      const result1 = executeMerge(prepared, 'a', 'b', author, 'Merge', projectId);
-      const result2 = executeMerge(prepared, 'a', 'b', author, 'Merge', projectId);
-
-      expect(result1.hash).toBe(result2.hash);
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  test('includes identical sentences in merged content', () => {
+  test('includes identical sentences as frames', () => {
     const prepared = {
       identical: [createSentence('s1', 'Identical 1'), createSentence('s2', 'Identical 2')],
       similarPairs: [],
@@ -316,28 +282,14 @@ describe('executeMerge', () => {
       onlyInTarget: [],
     };
 
-    const result = executeMerge(prepared, 'a', 'b', author, 'Merge', projectId);
+    const result = executeMerge(prepared, 'a', 'b');
 
-    expect(result.content.sentences).toHaveLength(2);
-    expect(result.content.sentences[0].text).toBe('Identical 1');
-    expect(result.content.sentences[1].text).toBe('Identical 2');
+    expect(result.frames).toHaveLength(2);
+    expect(result.frames[0].slots.text).toBe('Identical 1');
+    expect(result.frames[1].slots.text).toBe('Identical 2');
   });
 
-  test('sets message and author correctly', () => {
-    const prepared = {
-      identical: [],
-      similarPairs: [],
-      onlyInSource: [],
-      onlyInTarget: [],
-    };
-
-    const result = executeMerge(prepared, 'a', 'b', author, 'Merge feature into main', projectId);
-
-    expect(result.message).toBe('Merge feature into main');
-    expect(result.author).toEqual(author);
-  });
-
-  test('V4 commit has no constraints in content', () => {
+  test('frames have type knowledge and text slot', () => {
     const prepared = {
       identical: [createSentence('s1', 'Test sentence')],
       similarPairs: [],
@@ -345,10 +297,10 @@ describe('executeMerge', () => {
       onlyInTarget: [],
     };
 
-    const result = executeMerge(prepared, 'a', 'b', author, 'Merge', projectId);
+    const result = executeMerge(prepared, 'a', 'b');
 
-    // SentenceCommit content has only sentences, no constraints
-    expect(result.content).toHaveProperty('sentences');
-    expect(result.content).not.toHaveProperty('constraints');
+    expect(result.frames[0].type).toBe('knowledge');
+    expect(result.frames[0].slots).toHaveProperty('text');
+    expect(result.frames).not.toHaveProperty('constraints');
   });
 });
