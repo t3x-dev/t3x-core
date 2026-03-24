@@ -196,7 +196,7 @@ async function callClaudeNonStreaming(
     },
     body: JSON.stringify({
       model,
-      max_tokens: maxTokens,
+      max_tokens: options?.thinking ? Math.max(maxTokens, 16384) : maxTokens,
       ...(options?.thinking
         ? { thinking: { type: 'enabled', budget_tokens: 10000 } }
         : { temperature }
@@ -402,14 +402,14 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
           },
           body: JSON.stringify({
             model,
-            max_tokens: maxTokens,
+            max_tokens: useThinking ? Math.max(maxTokens, 16384) : maxTokens,
             ...(useThinking
               ? { thinking: { type: 'enabled', budget_tokens: 10000 } }
               : { temperature }
             ),
             stream: true,
             ...(systemMessage && { system: systemMessage.content }),
-            ...(body.web_search && { tools: [{ type: 'web_search_20250305' }] }),
+            ...(body.web_search && { tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 3 }] }),
             messages: otherMessages.map((m) => ({
               role: m.role,
               content: m.content,
