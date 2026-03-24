@@ -4,7 +4,7 @@
 
 import { Hono } from 'hono';
 import { describe, expect, it } from 'vitest';
-import { healthRoutes } from '../routes/health';
+import { healthRoutes } from '../routes/health.openapi';
 
 // biome-ignore lint/suspicious/noExplicitAny: test helper
 type ApiResponse = any;

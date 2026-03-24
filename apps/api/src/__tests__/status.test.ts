@@ -20,7 +20,7 @@ vi.mock('../lib/db', () => ({
 }));
 
 // Import routes after mocking
-import { statusRoutes } from '../routes/status';
+import { statusRoutes } from '../routes/status.openapi';
 
 describe('Status Routes', () => {
   let cleanup: () => Promise<void>;
