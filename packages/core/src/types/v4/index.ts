@@ -4,23 +4,15 @@
  * This is the SINGLE SOURCE OF TRUTH for V4 types.
  * All layers (storage, api, web) must import from here.
  *
- * Key changes from V3:
- * - SentenceCommit: sentences only, NO constraints
- * - Leaf: owns constraints, validation, output
- * - Pin: source selection mechanism for commit + conversation context
- *
  * @see docs/specification/semantic-layer-architecture.md
  * @see docs/specification/memory-pin-system-design.md
  */
-
-import type { SemanticContent } from '../../semantic/types';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ID Prefixes (for consistent ID generation)
 // ═══════════════════════════════════════════════════════════════════════════
 
 export const ID_PREFIXES = {
-  sentence: 's_',
   constraint: 'cst_',
   assertion: 'ast_',
   leaf: 'leaf_',
@@ -29,147 +21,12 @@ export const ID_PREFIXES = {
   api_key: 'ak_',
   share_token: 'share_',
   draft: 'draft_',
-  draft_sentence: 'ds_',
   draft_constraint: 'dc_',
-  semantic_point: 'sp_',
   relation: 'rel_',
 } as const;
 
 /** Prefix for raw API key values (visible once at creation) */
 export const API_KEY_VALUE_PREFIX = 't3xk_';
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Sentence (Knowledge Unit)
-// ═══════════════════════════════════════════════════════════════════════════
-
-/**
- * A sentence represents a single piece of knowledge extracted from conversations.
- */
-export interface Sentence {
-  /** Unique ID, format: "s_" + nanoid(12) */
-  id: string;
-
-  /** The actual sentence text */
-  text: string;
-
-  /** Extraction confidence score, 0-1 */
-  confidence?: number;
-
-  /** Where this sentence came from */
-  source_ref?: SentenceSourceRef;
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // Second-class fields (NOT in hash calculation)
-  // ─────────────────────────────────────────────────────────────────────────
-
-  /**
-   * The commit hash where this sentence was originally created.
-   * Set when a sentence is inherited from a parent commit.
-   * Undefined for sentences created directly in this commit.
-   *
-   * Second-class field: Does NOT participate in hash calculation.
-   * This preserves determinism while enabling inheritance tracking.
-   */
-  inherited_from?: string;
-
-  /**
-   * How the evidence anchor relates to the source text.
-   * - verbatim: exact quote from the source
-   * - paraphrase: meaning preserved but rewording applied
-   * - inference: derived from source through reasoning
-   *
-   * Second-class field: Does NOT participate in hash calculation.
-   */
-  anchor_type?: 'verbatim' | 'paraphrase' | 'inference';
-}
-
-export interface SentenceSourceRef {
-  conversation_id: string;
-  turn_hash: string;
-  /** Character offset where the sentence starts in the turn content */
-  start_char: number;
-  /** Character offset where the sentence ends in the turn content */
-  end_char: number;
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// SentenceCommit (Pure Knowledge, NO Constraints)
-// ═══════════════════════════════════════════════════════════════════════════
-
-/**
- * SentenceCommit is a pure knowledge container.
- *
- * Key difference from V3: NO constraints in content.
- * Constraints now belong to Leaf (application layer).
- */
-export interface SentenceCommit {
-  // ─────────────────────────────────────────────────────────────────────────
-  // First-class fields (participate in hash calculation)
-  // ─────────────────────────────────────────────────────────────────────────
-
-  /** Content hash, format: "sha256:" + hex */
-  hash: string;
-
-  /** Schema version identifier */
-  schema: 't3x/commit/v4';
-
-  /** Parent commit hashes (DAG for branching/merging) */
-  parents: string[];
-
-  /** Who created this commit */
-  author: CommitAuthor;
-
-  /** When the commit was created, ISO8601 */
-  committed_at: string;
-
-  /** The actual content - ONLY sentences, no constraints */
-  content: SentenceCommitContent;
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // Second-class fields (NOT in hash calculation)
-  // ─────────────────────────────────────────────────────────────────────────
-
-  /** Associated project */
-  project_id?: string;
-
-  /** Human-readable commit message */
-  message?: string;
-
-  /** Branch name */
-  branch?: string;
-
-  /** Source references (pinned items that contributed to this commit) */
-  source_refs?: CommitSourceRef[];
-
-  /**
-   * Semantic frame content (frames + relations).
-   * Nullable — old commits have undefined.
-   * Second-class field: does NOT participate in hash calculation.
-   */
-  semantic?: SemanticContent;
-
-  /** Canvas position X */
-  position_x?: number;
-
-  /** Canvas position Y */
-  position_y?: number;
-
-  /** Merkle tree root hash of commit sentences */
-  merkle_root?: string;
-
-  /** Database record creation timestamp, ISO8601 */
-  created_at?: string;
-
-  /** Merge summary statistics (only present on merge commits) */
-  merge_summary?: MergeSummaryData;
-}
-
-export interface SentenceCommitContent {
-  /** The knowledge - array of sentences */
-  sentences: Sentence[];
-
-  // NOTE: No constraints here! They belong to Leaf now.
-}
 
 export interface CommitAuthor {
   type: 'human' | 'agent';
@@ -580,41 +437,6 @@ export interface MergeSummaryData {
   };
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Helper Types
-// ═══════════════════════════════════════════════════════════════════════════
-
-/**
- * First-class fields of SentenceCommit that participate in hash calculation.
- *
- * Used by computeCommitHash() to ensure only these fields are hashed.
- *
- * NOT included (second-class):
- * - project_id, message, branch, source_refs, position_x, position_y, created_at
- */
-export type SentenceCommitFirstClass = Pick<
-  SentenceCommit,
-  'schema' | 'parents' | 'author' | 'committed_at' | 'content'
->;
-
-/**
- * Input for creating a new SentenceCommit.
- */
-export interface CreateSentenceCommitInput {
-  parents?: string[];
-  author: CommitAuthor;
-  sentences: Sentence[];
-  project_id: string;
-  message?: string;
-  branch?: string;
-  source_refs?: CommitSourceRef[];
-  position_x?: number;
-  position_y?: number;
-  merge_summary?: MergeSummaryData;
-  /** Semantic frame content (frames + relations). Second-class, not in hash. */
-  semantic?: SemanticContent;
-}
-
 /**
  * Input for creating a new Leaf.
  */
@@ -637,71 +459,6 @@ export interface CreatePinInput {
   ref_id: string;
   selected_assertion_ids?: string[];
   pinned_by?: string;
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Merge V4 Types (Sentence-only merge, NO constraints)
-// ═══════════════════════════════════════════════════════════════════════════
-
-/**
- * V4 merge operates on sentences only.
- * Constraints belong to Leaf, not Commit, so merge doesn't handle them.
- */
-
-/**
- * Word-level diff segment for UI display.
- */
-export interface WordDiffSegment {
-  type: 'unchanged' | 'added' | 'removed';
-  text: string;
-}
-
-/**
- * A pair of similar sentences from source and target commits.
- * User must choose which one to keep.
- */
-export interface MergeSimilarPair {
-  /** Source sentence */
-  source: Sentence;
-
-  /** Target sentence */
-  target: Sentence;
-
-  /** Word-level diff for UI display */
-  word_diff: WordDiffSegment[];
-
-  /** User's resolution: pick source or target */
-  resolution?: 'source' | 'target';
-}
-
-/**
- * A sentence that exists in only one commit (source or target).
- * User can choose to keep or discard it.
- */
-export interface MergeCandidate {
-  /** The unique sentence */
-  sentence: Sentence;
-
-  /** Whether to keep in merged result (default: true) */
-  keep: boolean;
-}
-
-/**
- * Result of preparing a V4 merge.
- * Contains all information needed for user to make merge decisions.
- */
-export interface MergeResult {
-  /** Sentences identical in both commits - auto-kept */
-  identical: Sentence[];
-
-  /** Similar pairs requiring user decision */
-  similar_pairs: MergeSimilarPair[];
-
-  /** Sentences only in source commit */
-  only_in_source: MergeCandidate[];
-
-  /** Sentences only in target commit */
-  only_in_target: MergeCandidate[];
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -848,45 +605,6 @@ export interface ShareToken {
 export type DraftStatus = 'editing' | 'committed' | 'abandoned' | 'auto';
 
 /**
- * Distinguishes how a sentence entered the Draft (RFC §13 Issue A).
- */
-export type DraftSentenceOrigin =
-  | { type: 'extracted'; segment_id: string; confidence: number }
-  | { type: 'selected' }
-  | { type: 'manual' };
-
-/**
- * A sentence within a Draft. Uses ds_ prefix IDs.
- * Converted to SentenceCommit Sentence (s_) on commit.
- */
-export interface DraftSentence {
-  /** Unique ID, format: "ds_" + nanoid(12) */
-  id: string;
-
-  /** The sentence text */
-  text: string;
-
-  /** How the sentence was added */
-  origin: DraftSentenceOrigin;
-
-  /** Source reference (only for extracted/selected, manual has none) */
-  source?: {
-    conversation_id: string;
-    conversation_title?: string;
-    turn_hash: string;
-    role: string;
-    start_char: number;
-    end_char: number;
-  };
-
-  /** Display order position */
-  position: number;
-
-  /** Whether included in the final commit */
-  included: boolean;
-}
-
-/**
  * A constraint within a Draft. Uses dc_ prefix IDs.
  * Converted to Leaf Constraint (cst_) on commit.
  */
@@ -928,8 +646,8 @@ export interface Draft {
   /** Source draft ID if forked from a committed draft (RFC §13 Issue B) */
   forked_from?: string;
 
-  /** Editable sentences */
-  sentences: DraftSentence[];
+  /** Editable sentences (DraftSentence records, typed as unknown[] until Task 6 cleanup) */
+  sentences: unknown[];
 
   /** Editable constraints */
   constraints: DraftConstraint[];
@@ -970,11 +688,11 @@ export interface Draft {
   /** LLM extraction mode. Undefined or 'deterministic' uses existing DraftSentence flow. */
   extraction_mode?: 'deterministic' | 'llm';
 
-  /** SemanticPoints (only when extraction_mode === 'llm') */
-  semantic_points?: SemanticPoint[];
+  /** SemanticPoints (only when extraction_mode === 'llm'; typed as unknown[] until Task 6 cleanup) */
+  semantic_points?: unknown[];
 
-  /** Per-conversation extraction cursor (only when extraction_mode === 'llm') */
-  extraction_cursor?: ExtractionCursor;
+  /** Per-conversation extraction cursor (only when extraction_mode === 'llm'; typed as unknown until Task 6 cleanup) */
+  extraction_cursor?: unknown;
 }
 
 /**
@@ -987,129 +705,6 @@ export interface CreateDraftInput {
   parent_commit_hash?: string;
   target_branch?: string;
   preview_type?: string;
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// LLM Incremental Extraction Types
-// ═══════════════════════════════════════════════════════════════════════════
-
-/**
- * Evidence anchor linking a SemanticPoint to a specific location in a conversation turn.
- * Multiple evidence anchors per SemanticPoint (many-to-many).
- */
-export interface LocatedEvidence {
-  conversation_id: string;
-  turn_hash: string;
-  quoted_text: string;
-  start_char: number;
-  end_char: number;
-  match_score: number;
-  role: 'primary' | 'supporting';
-  relevance: string;
-  enabled: boolean;
-}
-
-/**
- * A SemanticPoint is the fundamental unit in LLM-extracted drafts.
- * Replaces DraftSentence when extraction_mode === 'llm'.
- */
-export interface SemanticPoint {
-  /** Unique ID, format: "sp_" + nanoid(12) */
-  id: string;
-  text: string;
-  extraction_mode: 'deterministic' | 'llm_extracted' | 'manual';
-  inference_type?: 'direct' | 'paraphrase' | 'cross_turn' | 'implicit';
-  status: 'inherited' | 'auto_landed' | 'reviewed' | 'modified' | 'reinforced' | 'undone';
-  zone: 'ready' | 'review';
-  routing_reason?: string;
-  inherited_from?: string;
-  evidence: LocatedEvidence[];
-  confidence?: number;
-  /** True when evidence covers <60% of primary turn content */
-  low_coverage?: boolean;
-  position: number;
-  staged: boolean;
-}
-
-/**
- * Tracks per-conversation extraction progress.
- * Enables delta-in: only process turns after the cursor.
- */
-export interface ExtractionCursor {
-  cursors: Record<
-    string,
-    {
-      last_processed_turn: string;
-      processed_at: string;
-    }
-  >;
-}
-
-/**
- * LLM output proposal before verification and routing.
- */
-export interface ExtractionProposal {
-  type: 'new' | 'modify' | 'reinforce';
-  target_sp_id?: string;
-  text: string;
-  confidence: number;
-  inference_type: 'direct' | 'paraphrase' | 'cross_turn' | 'implicit';
-  reasoning: string;
-  evidence: EvidenceAnchor[];
-}
-
-/**
- * Raw evidence anchor from LLM output (before location verification).
- */
-export interface EvidenceAnchor {
-  conversation_id: string;
-  turn_hash: string;
-  quoted_text: string;
-  role: 'primary' | 'supporting';
-  relevance: string;
-}
-
-/**
- * Extended Sentence with multi-evidence support for LLM-extracted commits.
- */
-export interface SentenceWithEvidence extends Sentence {
-  supporting_refs?: SentenceSourceRef[];
-}
-
-/**
- * Result of incremental extraction pipeline.
- */
-export interface IncrementalExtractionResult {
-  readyPoints: SemanticPoint[];
-  reviewPoints: SemanticPoint[];
-  newCursor: ExtractionCursor;
-  stats: ExtractionStats;
-  usage: { inputTokens: number; outputTokens: number };
-}
-
-/**
- * Statistics from an extraction run.
- */
-export interface ExtractionStats {
-  total_turns: number;
-  new_turns: number;
-  proposals: number;
-  auto_landed: number;
-  needs_review: number;
-  rejected: number;
-}
-
-/**
- * Project-level extraction configuration.
- * Stored in projects table settings JSON.
- */
-export interface ProjectExtractionConfig {
-  auto_landing_enabled: boolean;
-  confidence_thresholds?: {
-    direct?: number;
-    paraphrase?: number;
-    cross_turn?: number;
-  };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

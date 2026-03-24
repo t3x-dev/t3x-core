@@ -464,24 +464,14 @@ export {
   type CreateLeafHistoryInput,
   type CreateLeafInput,
   type CreatePinInput,
-  // Input types
-  type CreateSentenceCommitInput,
   DEPLOY_TYPES,
   type DeployType,
   type Draft,
   type DraftConstraint,
-  type DraftSentence,
-  type DraftSentenceOrigin,
   type DraftStatus,
-  // Evidence / Extraction (LLM Incremental)
-  type EvidenceAnchor,
   type ExcludeConstraint,
-  type ExtractionCursor,
-  type ExtractionProposal,
-  type ExtractionStats,
   // ID Prefixes
   ID_PREFIXES,
-  type IncrementalExtractionResult,
   isDeployLeaf,
   isGenerationLeaf,
   LEAF_TYPES,
@@ -490,27 +480,17 @@ export {
   // Leaf History
   type LeafHistory,
   type LeafType,
-  type LocatedEvidence,
   // Merge summary
   type MergeSummaryData,
   // Pin (source selection)
   type Pin,
   type PinType,
-  type ProjectExtractionConfig,
   RELATION_TYPES,
   type RelationExtractionResult,
   // Ring 4: Relations
   type RelationType,
   type RequireConstraint,
-  type SemanticPoint,
-  // Sentence
-  type Sentence,
-  // SentenceCommit (pure knowledge, no constraints)
-  type SentenceCommit,
-  type SentenceCommitContent,
   type SentenceRelation,
-  type SentenceSourceRef,
-  type SentenceWithEvidence,
   // Share Token
   type ShareToken,
   type User,
