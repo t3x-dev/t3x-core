@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>T3X Leaf — Dual Mode v2 (YAML Tree always visible)</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0a0a0a; color: #e5e5e5; }
+  .glass { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); }
+  .glass-hover:hover { background: rgba(255,255,255,0.08); }
+  .accent { color: #34d399; }
+  .accent-bg { background: #34d399; color: #0a0a0a; }
+  .section-label { font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: #737373; font-weight: 600; }
+  .badge { font-size: 11px; padding: 2px 8px; border-radius: 9999px; font-weight: 500; }
+  .mode-btn { padding: 6px 16px; font-size: 13px; font-weight: 600; border-radius: 8px; cursor: pointer; transition: all 0.2s; }
+  .mode-active { background: #34d399; color: #0a0a0a; }
+  .mode-inactive { background: rgba(255,255,255,0.06); color: #a3a3a3; }
+  .mode-inactive:hover { background: rgba(255,255,255,0.1); }
+  .assertion-pass { border-left: 2px solid #34d399; }
+  .assertion-fail { border-left: 2px solid #ef4444; }
+  /* highlight link between YAML and assertion */
+  .yaml-highlight { background: rgba(52,211,153,0.08); border-color: rgba(52,211,153,0.4) !important; }
+  .yaml-highlight-fail { background: rgba(239,68,68,0.08); border-color: rgba(239,68,68,0.4) !important; }
+</style>
+</head>
+<body class="min-h-screen p-4">
+
+<div class="max-w-[1400px] mx-auto">
+
+  <!-- Explanation bar -->
+  <div class="text-center mb-4 text-xs text-neutral-600">
+    YAML Tree is always visible on the left. Mode switch changes Center + Right columns only. Click to toggle.
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- SHARED HEADER -->
+  <!-- ============================================================ -->
+  <div class="glass rounded-t-xl p-4 border-b border-neutral-800">
+    <div class="flex items-center gap-2 text-sm text-neutral-500 mb-1">
+      <a href="#" class="hover:text-emerald-400">Home</a><span>/</span>
+      <a href="#" class="hover:text-emerald-400">OpenWRT VPN Setup</a><span>/</span>
+      <a href="#" class="hover:text-emerald-400">Commit bfac1d5</a><span>/</span>
+      <span class="text-neutral-300">Twitter</span>
+      <span class="badge bg-blue-500/20 text-blue-400 ml-1">TWEET</span>
+    </div>
+    <div class="flex items-center justify-between">
+      <h1 class="text-lg font-semibold">Twitter &middot; 3/23/2026</h1>
+      <div class="flex items-center gap-2">
+        <button id="btn-gen" class="mode-btn mode-active" onclick="showMode('generate')">Generate</button>
+        <button id="btn-disp" class="mode-btn mode-inactive" onclick="showMode('display')">Display</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- 3-COLUMN BODY -->
+  <!-- ============================================================ -->
+  <div class="glass rounded-b-xl flex" style="min-height:600px">
+
+    <!-- ======================================================== -->
+    <!-- LEFT: YAML TREE (always visible, both modes) -->
+    <!-- ======================================================== -->
+    <div class="w-[300px] border-r border-neutral-800 p-3 overflow-y-auto flex-shrink-0">
+      <div class="flex items-center justify-between mb-3">
+        <div class="flex items-center gap-2">
+          <span class="section-label">Source YAML</span>
+          <span class="badge bg-neutral-800 text-neutral-400">9</span>
+        </div>
+        <a href="#" class="text-xs text-emerald-400 hover:underline">View Commit &rarr;</a>
+      </div>
+
+      <div class="space-y-1.5" id="yaml-tree">
+        <!-- Frame 1 -->
+        <div id="frame-1" class="rounded-lg p-2.5 glass-hover cursor-pointer border border-transparent hover:border-emerald-500/30 transition-all" data-frame="openwrt_vpn_setup">
+          <div class="flex items-center justify-between">
+            <span class="text-emerald-400 text-xs font-bold">openwrt_vpn_setup</span>
+            <span class="text-neutral-600 text-xs">90%</span>
+          </div>
+          <div class="mt-1 text-neutral-400 text-xs pl-3 space-y-0.5 font-mono">
+            <div><span class="text-neutral-600">purpose:</span> vpn</div>
+            <div><span class="text-neutral-600">firmware:</span> openwrt</div>
+            <div><span class="text-neutral-600">component:</span> sub router</div>
+          </div>
+          <!-- Generate mode actions -->
+          <div class="gen-only mt-1.5 flex gap-1">
+            <button class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20">Require</button>
+            <button class="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 hover:bg-red-500/20">Exclude</button>
+          </div>
+          <!-- Display mode indicator -->
+          <div class="disp-only mt-1.5 hidden">
+            <span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400">&#10003; 1 assertion passed</span>
+          </div>
+        </div>
+
+        <!-- Frame 2 -->
+        <div id="frame-2" class="rounded-lg p-2.5 glass-hover cursor-pointer border border-transparent hover:border-emerald-500/30 transition-all" data-frame="initial_setup_steps">
+          <div class="flex items-center justify-between">
+            <span class="text-emerald-400 text-xs font-bold">initial_setup_steps</span>
+            <span class="text-neutral-600 text-xs">60%</span>
+          </div>
+          <div class="mt-1 text-neutral-400 text-xs pl-3 space-y-0.5 font-mono">
+            <div><span class="text-neutral-600">steps:</span> flash, connect, web UI, password</div>
+            <div><span class="text-neutral-600">default_ip:</span> 192.168.1.1</div>
+          </div>
+          <div class="gen-only mt-1.5 flex gap-1">
+            <button class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20">Require</button>
+            <button class="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 hover:bg-red-500/20">Exclude</button>
+          </div>
+          <div class="disp-only mt-1.5 hidden">
+            <span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400">&#10003; semantic match</span>
+          </div>
+        </div>
+
+        <!-- Frame 3 -->
+        <div id="frame-3" class="rounded-lg p-2.5 glass-hover cursor-pointer border border-transparent hover:border-emerald-500/30 transition-all" data-frame="network_configuration">
+          <div class="flex items-center justify-between">
+            <span class="text-emerald-400 text-xs font-bold">network_configuration</span>
+            <span class="text-neutral-600 text-xs">60%</span>
+          </div>
+          <div class="mt-1 text-neutral-400 text-xs pl-3 space-y-0.5 font-mono">
+            <div><span class="text-neutral-600">mode:</span> router mode</div>
+            <div><span class="text-neutral-600">lan_subnet:</span> 192.168.2.1/24</div>
+          </div>
+          <div class="gen-only mt-1.5 flex gap-1">
+            <button class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20">Require</button>
+            <button class="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 hover:bg-red-500/20">Exclude</button>
+          </div>
+          <div class="disp-only mt-1.5 hidden"></div>
+        </div>
+
+        <!-- Frame 4 (will highlight red in display mode) -->
+        <div id="frame-4" class="rounded-lg p-2.5 glass-hover cursor-pointer border border-transparent hover:border-emerald-500/30 transition-all" data-frame="vpn_client_options">
+          <div class="flex items-center justify-between">
+            <span class="text-emerald-400 text-xs font-bold">vpn_client_options</span>
+            <span class="text-neutral-600 text-xs">60%</span>
+          </div>
+          <div class="mt-1 text-neutral-400 text-xs pl-3 space-y-0.5 font-mono">
+            <div><span class="text-neutral-600">recommended:</span> <strong class="text-emerald-300">wireguard</strong></div>
+            <div><span class="text-neutral-600">openvpn_pkg:</span> luci-app-openvpn</div>
+            <div><span class="text-neutral-600">wireguard_pkg:</span> luci-app-wireguard</div>
+          </div>
+          <div class="gen-only mt-1.5 flex gap-1">
+            <button class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold ring-1 ring-emerald-500/30">Require</button>
+            <button class="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 hover:bg-red-500/20">Exclude</button>
+          </div>
+          <div class="disp-only mt-1.5 hidden">
+            <span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400">&#10003; require "wireguard"</span>
+          </div>
+        </div>
+
+        <!-- Frame 5 (fail highlight in display) -->
+        <div id="frame-5" class="rounded-lg p-2.5 glass-hover cursor-pointer border border-transparent hover:border-emerald-500/30 transition-all" data-frame="security_tips">
+          <div class="flex items-center justify-between">
+            <span class="text-emerald-400 text-xs font-bold">security_tips</span>
+            <span class="text-neutral-600 text-xs">70%</span>
+          </div>
+          <div class="mt-1 text-neutral-400 text-xs pl-3 space-y-0.5 font-mono">
+            <div><span class="text-neutral-600">always_update:</span> true</div>
+            <div><span class="text-neutral-600">change_default_pw:</span> true</div>
+            <div><span class="text-neutral-600">firmware:</span> keep updated</div>
+          </div>
+          <div class="gen-only mt-1.5 flex gap-1">
+            <button class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20">Require</button>
+            <button class="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 hover:bg-red-500/20">Exclude</button>
+          </div>
+          <div class="disp-only mt-1.5 hidden">
+            <span class="text-[10px] px-1.5 py-0.5 rounded bg-red-500/15 text-red-400">&#10007; contains "firmware" (jargon)</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- CENTER: Changes based on mode -->
+    <!-- ======================================================== -->
+    <div class="flex-1 border-r border-neutral-800 flex flex-col">
+
+      <!-- GENERATE: Composer -->
+      <div id="center-generate" class="p-5 flex flex-col flex-1">
+        <span class="section-label mb-3">Compose</span>
+
+        <div class="glass rounded-lg p-3 mb-4 flex-1">
+          <label class="text-xs text-neutral-500 block mb-1">Instructions (optional)</label>
+          <textarea class="w-full bg-transparent text-sm text-neutral-300 resize-none outline-none" rows="6" placeholder="Write a concise tweet about setting up VPN on an OpenWRT sub router. Focus on WireGuard as the recommended option...">Write a concise tweet about setting up VPN on an OpenWRT sub router. Focus on WireGuard as the recommended option.</textarea>
+        </div>
+
+        <div class="space-y-3">
+          <div class="flex items-center gap-3">
+            <div class="flex-1">
+              <label class="text-xs text-neutral-500 block mb-1">Model</label>
+              <div class="glass rounded-lg px-3 py-2 text-sm flex items-center justify-between cursor-pointer glass-hover">
+                <span>Claude Sonnet 4</span>
+                <svg class="w-3 h-3 text-neutral-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+              </div>
+            </div>
+            <div class="w-24">
+              <label class="text-xs text-neutral-500 block mb-1">Temp</label>
+              <div class="glass rounded-lg px-3 py-2 text-sm text-center">0.7</div>
+            </div>
+          </div>
+          <button class="w-full accent-bg rounded-lg py-2.5 text-sm font-bold">Generate</button>
+        </div>
+      </div>
+
+      <!-- DISPLAY: Output -->
+      <div id="center-display" class="p-5 flex flex-col flex-1 hidden">
+        <div class="flex items-center justify-between mb-3">
+          <span class="section-label">Generated Output</span>
+          <div class="flex items-center gap-2">
+            <span class="badge bg-emerald-500/20 text-emerald-400">Run #3</span>
+            <span class="text-xs text-neutral-500">14:45 &middot; Sonnet 4 &middot; 0.7</span>
+          </div>
+        </div>
+
+        <div class="glass rounded-xl p-5 flex-1 mb-4">
+          <p class="text-sm leading-relaxed text-neutral-200">
+            Setting up a VPN on your OpenWRT sub router is surprisingly easy with <span class="underline decoration-emerald-500/50 decoration-2 underline-offset-2">WireGuard</span>. Flash the <span class="underline decoration-red-500/50 decoration-2 underline-offset-2">firmware</span>, connect via ethernet to 192.168.1.1, and configure your network in router mode.
+          </p>
+          <p class="text-sm leading-relaxed text-neutral-200 mt-3">
+            WireGuard outperforms OpenVPN in speed and simplicity. Pro tip: always update and change the default admin password before going live.
+          </p>
+          <p class="text-sm leading-relaxed text-neutral-400 mt-3">
+            #OpenWRT #WireGuard #VPN #HomeNetwork
+          </p>
+          <div class="mt-4 text-right text-xs text-neutral-600">271 / 280 chars</div>
+        </div>
+
+        <div class="flex items-center gap-3">
+          <button class="glass rounded-lg px-4 py-2 text-sm glass-hover" onclick="showMode('generate')">
+            Re-generate
+          </button>
+          <button class="glass rounded-lg px-4 py-2 text-sm glass-hover">Edit</button>
+          <button class="glass rounded-lg px-4 py-2 text-sm glass-hover">Export</button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- RIGHT: Changes based on mode -->
+    <!-- ======================================================== -->
+    <div class="w-[260px] p-3 overflow-y-auto flex-shrink-0">
+
+      <!-- GENERATE: Constraints -->
+      <div id="right-generate">
+        <span class="section-label block mb-2">Constraints</span>
+        <button class="w-full glass rounded-lg py-2 text-sm accent glass-hover mb-3">+ Add constraint</button>
+
+        <div class="glass rounded-lg p-2.5 mb-2 text-xs">
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-emerald-400 font-bold">REQUIRE</span>
+            <button class="text-neutral-600 hover:text-red-400 text-sm">&times;</button>
+          </div>
+          <div class="text-neutral-300">exact: "wireguard"</div>
+          <div class="text-neutral-600 mt-0.5 text-[10px]">source: vpn_client_options.recommended</div>
+        </div>
+
+        <div class="glass rounded-lg p-2.5 mb-2 text-xs">
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-emerald-400 font-bold">REQUIRE</span>
+            <button class="text-neutral-600 hover:text-red-400 text-sm">&times;</button>
+          </div>
+          <div class="text-neutral-300">semantic: "setup steps"</div>
+          <div class="text-neutral-600 mt-0.5 text-[10px]">source: initial_setup_steps</div>
+        </div>
+
+        <div class="glass rounded-lg p-2.5 mb-2 text-xs">
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-red-400 font-bold">EXCLUDE</span>
+            <button class="text-neutral-600 hover:text-red-400 text-sm">&times;</button>
+          </div>
+          <div class="text-neutral-300">semantic: "complex technical jargon"</div>
+        </div>
+
+        <div class="text-xs text-neutral-600 text-center py-6 mt-2">
+          Click Require / Exclude on<br/>YAML frames to add constraints
+        </div>
+      </div>
+
+      <!-- DISPLAY: Quality Panel -->
+      <div id="right-display" class="hidden">
+
+        <!-- Score -->
+        <div class="glass rounded-lg p-4 mb-4 text-center">
+          <div class="text-3xl font-bold accent">66%</div>
+          <div class="text-xs text-neutral-500 mt-1">2 of 3 constraints passed</div>
+        </div>
+
+        <!-- Assertions -->
+        <span class="section-label block mb-2">Assertions</span>
+        <div class="space-y-1.5 mb-4">
+          <div class="glass rounded-lg p-2.5 text-xs assertion-pass cursor-pointer glass-hover" onmouseenter="highlightFrame('frame-4','pass')" onmouseleave="clearHighlight('frame-4')">
+            <div class="flex items-center gap-2">
+              <span class="text-emerald-400 text-sm">&#10003;</span>
+              <div class="flex-1">
+                <div class="text-neutral-300">require: "wireguard"</div>
+                <div class="text-neutral-600 text-[10px] mt-0.5">vpn_client_options.recommended</div>
+              </div>
+              <span class="text-emerald-500">pass</span>
+            </div>
+          </div>
+
+          <div class="glass rounded-lg p-2.5 text-xs assertion-pass cursor-pointer glass-hover" onmouseenter="highlightFrame('frame-2','pass')" onmouseleave="clearHighlight('frame-2')">
+            <div class="flex items-center gap-2">
+              <span class="text-emerald-400 text-sm">&#10003;</span>
+              <div class="flex-1">
+                <div class="text-neutral-300">require: setup steps</div>
+                <div class="text-neutral-600 text-[10px] mt-0.5">initial_setup_steps (semantic)</div>
+              </div>
+              <span class="text-emerald-500">pass</span>
+            </div>
+          </div>
+
+          <div class="glass rounded-lg p-2.5 text-xs assertion-fail cursor-pointer glass-hover" onmouseenter="highlightFrame('frame-5','fail')" onmouseleave="clearHighlight('frame-5')">
+            <div class="flex items-center gap-2">
+              <span class="text-red-400 text-sm">&#10007;</span>
+              <div class="flex-1">
+                <div class="text-neutral-300">exclude: technical jargon</div>
+                <div class="text-red-400 text-[10px] mt-0.5">found "firmware" in output</div>
+              </div>
+              <span class="text-red-400">fail</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- CI History -->
+        <span class="section-label block mb-2">CI History</span>
+        <div class="space-y-1 mb-4">
+          <div class="glass rounded-lg px-3 py-2 flex items-center justify-between text-xs cursor-pointer glass-hover border-l-2 border-amber-500">
+            <div>
+              <span class="text-neutral-300 font-medium">Run #3</span>
+              <span class="text-neutral-600 ml-1">now</span>
+            </div>
+            <span class="text-amber-400 font-medium">2/3</span>
+          </div>
+          <div class="glass rounded-lg px-3 py-2 flex items-center justify-between text-xs cursor-pointer glass-hover">
+            <div>
+              <span class="text-neutral-300 font-medium">Run #2</span>
+              <span class="text-neutral-600 ml-1">14:30</span>
+            </div>
+            <span class="text-red-400">1/3</span>
+          </div>
+          <div class="glass rounded-lg px-3 py-2 flex items-center justify-between text-xs cursor-pointer glass-hover">
+            <div>
+              <span class="text-neutral-300 font-medium">Run #1</span>
+              <span class="text-neutral-600 ml-1">14:15</span>
+            </div>
+            <span class="text-emerald-400">3/3</span>
+          </div>
+        </div>
+
+        <!-- Deploy -->
+        <span class="section-label block mb-2">Deploy & Share</span>
+        <div class="space-y-1">
+          <button class="w-full glass rounded-lg px-3 py-2 text-xs text-left glass-hover">Copy to clipboard</button>
+          <button class="w-full glass rounded-lg px-3 py-2 text-xs text-left glass-hover">Share via API</button>
+          <button class="w-full glass rounded-lg px-3 py-2 text-xs text-left glass-hover">Export Markdown</button>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+</div>
+
+<script>
+function showMode(mode) {
+  // Center panels
+  document.getElementById('center-generate').classList.toggle('hidden', mode !== 'generate');
+  document.getElementById('center-display').classList.toggle('hidden', mode !== 'display');
+
+  // Right panels
+  document.getElementById('right-generate').classList.toggle('hidden', mode !== 'generate');
+  document.getElementById('right-display').classList.toggle('hidden', mode !== 'display');
+
+  // Buttons
+  document.getElementById('btn-gen').className = 'mode-btn ' + (mode === 'generate' ? 'mode-active' : 'mode-inactive');
+  document.getElementById('btn-disp').className = 'mode-btn ' + (mode === 'display' ? 'mode-active' : 'mode-inactive');
+
+  // YAML tree: toggle Require/Exclude buttons vs assertion badges
+  document.querySelectorAll('.gen-only').forEach(el => el.classList.toggle('hidden', mode !== 'generate'));
+  document.querySelectorAll('.disp-only').forEach(el => el.classList.toggle('hidden', mode !== 'display'));
+
+  // Display mode: highlight frames with assertion results
+  if (mode === 'display') {
+    document.getElementById('frame-4').classList.add('yaml-highlight');
+    document.getElementById('frame-2').classList.add('yaml-highlight');
+    document.getElementById('frame-5').classList.add('yaml-highlight-fail');
+  } else {
+    document.querySelectorAll('.yaml-highlight, .yaml-highlight-fail').forEach(el => {
+      el.classList.remove('yaml-highlight', 'yaml-highlight-fail');
+    });
+  }
+}
+
+// Hover assertion → highlight corresponding YAML frame
+function highlightFrame(id, type) {
+  const el = document.getElementById(id);
+  el.classList.add(type === 'pass' ? 'yaml-highlight' : 'yaml-highlight-fail');
+  el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function clearHighlight(id) {
+  // In display mode, keep the static highlights
+  // Only remove hover-added ones if they weren't already highlighted
+}
+</script>
+</body>
+</html>
