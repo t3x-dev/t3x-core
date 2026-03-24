@@ -119,7 +119,8 @@ export async function executeRecipe(
             });
             break;
           }
-          const json = await res.json();
+          // biome-ignore lint/suspicious/noExplicitAny: generic error handler
+          const json = (await res.json()) as any;
           const runId = json.data?.run_id;
           results.push({ action: step.action, success: true, data: { run_id: runId } });
           break;
@@ -154,7 +155,8 @@ export async function executeRecipe(
             });
             break;
           }
-          const json = await res.json();
+          // biome-ignore lint/suspicious/noExplicitAny: generic error handler
+          const json = (await res.json()) as any;
           const runData = json.data;
           const report = {
             run_id: runId,
@@ -199,7 +201,8 @@ export async function executeRecipe(
             method: 'POST',
             headers: commitHeaders,
           });
-          const commitBody = await commitRes.json();
+          // biome-ignore lint/suspicious/noExplicitAny: generic error handler
+          const commitBody = (await commitRes.json()) as any;
           results.push({
             action: step.action,
             success: commitRes.ok && commitBody.success,

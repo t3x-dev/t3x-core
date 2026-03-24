@@ -162,9 +162,7 @@ describe('parseAmbiguityResponse', () => {
   it('clamps confidence to 0-1', () => {
     const result = parseAmbiguityResponse(
       JSON.stringify({
-        ambiguities: [
-          { type: 'vagueness', frame_id: 'f_001', confidence: 1.5, question: 'Q?' },
-        ],
+        ambiguities: [{ type: 'vagueness', frame_id: 'f_001', confidence: 1.5, question: 'Q?' }],
       }),
       validIds
     );
@@ -175,9 +173,7 @@ describe('parseAmbiguityResponse', () => {
   it('defaults missing confidence to 0.5 (below threshold → discarded)', () => {
     const result = parseAmbiguityResponse(
       JSON.stringify({
-        ambiguities: [
-          { type: 'vagueness', frame_id: 'f_001', question: 'Q?' },
-        ],
+        ambiguities: [{ type: 'vagueness', frame_id: 'f_001', question: 'Q?' }],
       }),
       validIds
     );

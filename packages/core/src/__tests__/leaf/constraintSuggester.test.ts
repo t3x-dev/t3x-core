@@ -11,7 +11,6 @@
 
 import { describe, expect, it, vi } from 'vitest';
 import { suggestConstraints, suggestionsToConstraints } from '../../leaf/constraintSuggester';
-import type { ValidateOptions } from '../../leaf/types';
 import { SEMANTIC_EXCLUDE_THRESHOLD, SEMANTIC_REQUIRE_THRESHOLD } from '../../leaf/types';
 import {
   validateConstraints,

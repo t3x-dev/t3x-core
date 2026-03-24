@@ -10,6 +10,7 @@ import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
 
+// biome-ignore lint/suspicious/noExplicitAny: test helper
 type ApiResponse = any;
 
 let mockDB: AnyDB;

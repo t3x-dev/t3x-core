@@ -1,7 +1,8 @@
 'use client';
 
+import type { FrameDiff } from '@t3x-dev/core';
 import { Bot, GitCommit, GitCompare, History, Loader2, User } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { DiffFullScreen } from '@/components/diff/DiffFullScreen';
 import { VirtualList } from '@/components/shared/VirtualList';
 import { EmptyStateInline } from '@/components/ui/empty-state';
@@ -13,7 +14,6 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { useTerminology } from '@/hooks/useTerminology';
-import type { FrameDiff } from '@t3x-dev/core';
 import type { ApiCommit } from '@/lib/api';
 import * as api from '@/lib/api';
 import { getFrameDiff } from '@/lib/api/frameDiff';

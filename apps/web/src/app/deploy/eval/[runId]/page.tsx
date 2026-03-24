@@ -285,12 +285,23 @@ export default function RunDetailPage() {
     const content = commit.content as import('@t3x-dev/core').SemanticContent;
     const sentences = content.frames.map((frame) => {
       const id = frame.id.startsWith('s_') ? frame.id : `s_${frame.id.replace('f_', '')}`;
-      let source_ref: { conversation_id?: string; turn_hash?: string; start_char?: number; end_char?: number } | undefined;
+      let source_ref:
+        | { conversation_id?: string; turn_hash?: string; start_char?: number; end_char?: number }
+        | undefined;
       if (frame.slot_sources) {
         const firstSource = Object.values(frame.slot_sources)[0];
         const turnHash = firstSource?.turn_hash ?? firstSource?.turn;
-        if (firstSource && turnHash && firstSource.start_char != null && firstSource.end_char != null) {
-          source_ref = { turn_hash: turnHash, start_char: firstSource.start_char, end_char: firstSource.end_char };
+        if (
+          firstSource &&
+          turnHash &&
+          firstSource.start_char != null &&
+          firstSource.end_char != null
+        ) {
+          source_ref = {
+            turn_hash: turnHash,
+            start_char: firstSource.start_char,
+            end_char: firstSource.end_char,
+          };
         }
       }
       return { id, source_ref };

@@ -51,7 +51,7 @@ const OapiFrameSchema = z.object({
     .min(1)
     .regex(/^[a-z][a-z0-9_]*$/),
   slots: z
-    .record(OapiSlotValueSchema)
+    .record(z.string(), OapiSlotValueSchema)
     .refine((s) => Object.keys(s).length >= 1, { message: 'Frame must have at least one slot' })
     .refine((s) => Object.keys(s).length <= 100, {
       message: 'Frame cannot have more than 100 slots',
@@ -877,6 +877,7 @@ export const SemanticPointSchema = z.object({
 
 export const ExtractionCursorSchema = z.object({
   cursors: z.record(
+    z.string(),
     z.object({
       last_processed_turn: z.string(),
       processed_at: z.string(),

@@ -6,7 +6,7 @@ import { Hono } from 'hono';
 import { describe, expect, it } from 'vitest';
 import { healthRoutes } from '../routes/health';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// biome-ignore lint/suspicious/noExplicitAny: test helper
 type ApiResponse = any;
 
 describe('Health Route', () => {

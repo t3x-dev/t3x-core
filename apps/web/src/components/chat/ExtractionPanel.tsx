@@ -1,15 +1,14 @@
 'use client';
 
+import type { Frame } from '@t3x-dev/core';
 import { motion } from 'framer-motion';
 import { GitCommit, LayoutGrid, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import type { Frame } from '@t3x-dev/core';
-import { cn } from '@/lib/utils';
 import { useExtractionPanelStore } from '@/store/extractionPanelStore';
-import { CommitDropdown } from './CommitDropdown';
 import { AdvisoryPanel } from './AdvisoryPanel';
+import { CommitDropdown } from './CommitDropdown';
 import { FrameYAMLView } from './FrameYAMLView';
 import { PreviewPanel } from './PreviewPanel';
 import { TopicMap } from './TopicMap';
@@ -63,13 +62,11 @@ function CollapsedRail({
   );
 }
 
-
-
 // ── Commit preview section ──
 
 function CommitPreviewSection() {
   const router = useRouter();
-  const conversationId = useExtractionPanelStore((s) => s.conversationId);
+  const _conversationId = useExtractionPanelStore((s) => s.conversationId);
   const projectId = useExtractionPanelStore((s) => s.projectId);
   const lastCommitHash = useExtractionPanelStore((s) => s.lastCommitHash);
   const commitBranch = useExtractionPanelStore((s) => s.commitBranch);
@@ -120,7 +117,9 @@ function CommitPreviewSection() {
           </div>
         ) : (
           deltaFrames.map((f) => {
-            const summary = `[${f.type}] ${Object.entries(f.slots).map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`).join('; ')}`;
+            const summary = `[${f.type}] ${Object.entries(f.slots)
+              .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`)
+              .join('; ')}`;
             return (
               <div
                 key={f.id}
@@ -193,7 +192,7 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
   const draft = useExtractionPanelStore((s) => s.draft);
   const isExtracting = useExtractionPanelStore((s) => s.isExtracting);
   const togglePanel = useExtractionPanelStore((s) => s.togglePanel);
-  const setPanelMode = useExtractionPanelStore((s) => s.setPanelMode);
+  const _setPanelMode = useExtractionPanelStore((s) => s.setPanelMode);
   const lastDeltaChanges = useExtractionPanelStore((s) => s.lastDeltaChanges);
   const focusIntentEnabled = useExtractionPanelStore((s) => s.focusIntentEnabled);
   const setFocusIntent = useExtractionPanelStore((s) => s.setFocusIntent);

@@ -11,7 +11,7 @@ import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from '../setup';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// biome-ignore lint/suspicious/noExplicitAny: test helper
 type ApiResponse = any;
 
 // Mock the database module before importing routes
@@ -62,7 +62,8 @@ describe('Merge Routes', () => {
           id: f.id,
           type: f.type,
           slots: f.slots,
-        })),
+          // biome-ignore lint/suspicious/noExplicitAny: test type cast
+        })) as any,
         relations: [],
       },
       project_id: testProjectId,

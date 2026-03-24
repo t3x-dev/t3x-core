@@ -23,7 +23,11 @@ describe('checkReadiness', () => {
   it('counts only user turns for character threshold', () => {
     const turns = [
       { role: 'user', content: 'ok' },
-      { role: 'assistant', content: 'This is a very long assistant response with lots of detail and information about many topics.' },
+      {
+        role: 'assistant',
+        content:
+          'This is a very long assistant response with lots of detail and information about many topics.',
+      },
     ];
     const result = checkReadiness(turns, true);
     expect(result).toEqual({ pass: false, reason: 'too_short' });
@@ -32,17 +36,13 @@ describe('checkReadiness', () => {
   // ── Rule 3: cold_start ──
 
   it('blocks first extraction with only 1 turn', () => {
-    const turns = [
-      { role: 'user', content: 'I want to plan a trip to Hangzhou for 3 days' },
-    ];
+    const turns = [{ role: 'user', content: 'I want to plan a trip to Hangzhou for 3 days' }];
     const result = checkReadiness(turns, true);
     expect(result).toEqual({ pass: false, reason: 'cold_start' });
   });
 
   it('allows single turn on non-first extraction', () => {
-    const turns = [
-      { role: 'user', content: 'Actually change the budget to 5000 yuan' },
-    ];
+    const turns = [{ role: 'user', content: 'Actually change the budget to 5000 yuan' }];
     const result = checkReadiness(turns, false);
     expect(result).toEqual({ pass: true });
   });
@@ -52,7 +52,11 @@ describe('checkReadiness', () => {
   it('blocks when all user turns are English greetings', () => {
     const turns = [
       { role: 'user', content: 'hello' },
-      { role: 'assistant', content: 'Hi there! What can I help you with today? I can assist with travel planning, cooking, and more.' },
+      {
+        role: 'assistant',
+        content:
+          'Hi there! What can I help you with today? I can assist with travel planning, cooking, and more.',
+      },
       { role: 'user', content: 'hey' },
       { role: 'assistant', content: 'Hello again! Would you like to discuss something specific?' },
     ];
@@ -61,7 +65,7 @@ describe('checkReadiness', () => {
   });
 
   it('blocks when all user turns are Chinese greetings', () => {
-    const turns = [
+    const _turns = [
       { role: 'user', content: '你好！这是一个很长的问候语啊哈' },
       { role: 'assistant', content: 'Hello!' },
       { role: 'user', content: '早上好' },

@@ -417,7 +417,7 @@ conversationRoutes.get('/v1/conversations/:id/memory', async (c) => {
       const conv = await findConversationById(db, pin.ref_id);
       if (!conv) continue;
 
-      const turns = await findTurnsByConversation(db, pin.ref_id, { limit: 50 });
+      const turns = await findTurnsByConversation(db, { conversationId: pin.ref_id, limit: 50 });
       conversations.set(pin.ref_id, {
         id: conv.conversationId,
         title: conv.title ?? 'Untitled',
@@ -514,7 +514,7 @@ conversationRoutes.get('/v1/conversations/:id/context-export', async (c) => {
       const conv = await findConversationById(db, pin.ref_id);
       if (!conv) continue;
 
-      const turns = await findTurnsByConversation(db, pin.ref_id, { limit: 50 });
+      const turns = await findTurnsByConversation(db, { conversationId: pin.ref_id, limit: 50 });
       conversations.set(pin.ref_id, {
         id: conv.conversationId,
         title: conv.title ?? 'Untitled',

@@ -27,7 +27,7 @@ describe('SentenceCard - Inherited Locking', () => {
 
   test('default inherited is false', () => {
     const sentence = makeSentence();
-    const props = { sentence };
+    const props: { sentence: DraftSentence; inherited?: boolean } = { sentence };
     expect(props.inherited ?? false).toBe(false);
   });
 

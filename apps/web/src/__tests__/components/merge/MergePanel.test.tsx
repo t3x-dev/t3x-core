@@ -29,6 +29,7 @@ describe('MergePanel', () => {
 
   test('returns null when no merge state', () => {
     // Mock useCanvasStore to return no merge state
+    // biome-ignore lint/suspicious/noExplicitAny: test helper
     (useCanvasStore as unknown as ReturnType<typeof vi.fn>).mockImplementation((selector: any) => {
       if (typeof selector === 'function') {
         return selector({

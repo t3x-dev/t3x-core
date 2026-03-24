@@ -135,7 +135,10 @@ export async function answerFrameQuestion(
 
 // ── Delta Log CRUD ──
 
-export async function listDeltas(conversationId: string, topicId?: string): Promise<DeltaLogEntry[]> {
+export async function listDeltas(
+  conversationId: string,
+  topicId?: string
+): Promise<DeltaLogEntry[]> {
   const params = topicId ? `?topic_id=${encodeURIComponent(topicId)}` : '';
   const res = await fetchWithTimeout(
     `${API_V1}/conversations/${encodeURIComponent(conversationId)}/deltas${params}`
@@ -143,7 +146,10 @@ export async function listDeltas(conversationId: string, topicId?: string): Prom
   return handleResponse<DeltaLogEntry[]>(res);
 }
 
-export async function getSemanticDraft(conversationId: string, topicId?: string): Promise<SemanticContent> {
+export async function getSemanticDraft(
+  conversationId: string,
+  topicId?: string
+): Promise<SemanticContent> {
   const params = topicId ? `?topic_id=${encodeURIComponent(topicId)}` : '';
   const res = await fetchWithTimeout(
     `${API_V1}/conversations/${encodeURIComponent(conversationId)}/draft${params}`

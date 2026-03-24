@@ -57,7 +57,9 @@ export function DraftDiffSection() {
         const content = parentCommit.content as import('@t3x-dev/core').SemanticContent;
         const sentences = content.frames.map((frame) => ({
           id: frame.id.startsWith('s_') ? frame.id : `s_${frame.id.replace('f_', '')}`,
-          text: `[${frame.type}] ${Object.entries(frame.slots).map(([k, v]) => `${k}: ${typeof v === 'string' ? v : String(v)}`).join('; ')}`,
+          text: `[${frame.type}] ${Object.entries(frame.slots)
+            .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : String(v)}`)
+            .join('; ')}`,
         }));
         setParentSentences(sentences);
         fetchedHashRef.current = parentHash;

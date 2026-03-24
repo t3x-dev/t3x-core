@@ -11,6 +11,7 @@ import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
 
+// biome-ignore lint/suspicious/noExplicitAny: test helper
 type ApiResponse = any;
 
 let mockDB: AnyDB;
@@ -52,7 +53,8 @@ describe('Diff Routes', () => {
           id: s.id,
           type: 'legacy_sentence' as const,
           slots: { text: s.text },
-          confidence: s.confidence,
+          // biome-ignore lint/suspicious/noExplicitAny: test mock access
+          confidence: (s as any).confidence ?? 1,
         })),
         relations: [],
       },
@@ -72,7 +74,8 @@ describe('Diff Routes', () => {
           id: s.id,
           type: 'legacy_sentence' as const,
           slots: { text: s.text },
-          confidence: s.confidence,
+          // biome-ignore lint/suspicious/noExplicitAny: test mock access
+          confidence: (s as any).confidence ?? 1,
         })),
         relations: [],
       },

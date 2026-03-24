@@ -151,7 +151,13 @@ interface ConversationItemProps {
   onContextMenu: (e: React.MouseEvent) => void;
 }
 
-function ConversationItem({ conversation, isActive, collapsed, onClick, onContextMenu }: ConversationItemProps) {
+function ConversationItem({
+  conversation,
+  isActive,
+  collapsed,
+  onClick,
+  onContextMenu,
+}: ConversationItemProps) {
   const title = conversation.title ?? conversation.conversation_id.slice(0, 40);
   const timeAgo = formatTimeAgo(conversation.created_at);
 

@@ -275,7 +275,8 @@ describe('Draft Workbench Features', () => {
         id: 'mock-embedder',
         encode: vi.fn(),
       };
-      mockGetEmbedder.mockReturnValue(mockEmb);
+      // biome-ignore lint/suspicious/noExplicitAny: mock embedder type
+      mockGetEmbedder.mockReturnValue(mockEmb as any);
 
       const res = await app.request(`/v1/drafts/${draftId}/suggest`, {
         method: 'POST',
@@ -324,7 +325,8 @@ describe('Draft Workbench Features', () => {
         id: 'fail-embedder',
         encode: vi.fn().mockRejectedValue(new Error('Embedding service unavailable')),
       };
-      mockGetEmbedder.mockReturnValue(failingEmbedder);
+      // biome-ignore lint/suspicious/noExplicitAny: mock embedder type
+      mockGetEmbedder.mockReturnValue(failingEmbedder as any);
 
       // Suppress console.warn from the handler
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});

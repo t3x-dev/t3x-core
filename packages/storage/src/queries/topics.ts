@@ -66,10 +66,7 @@ export async function updateTopic(
 /**
  * Get a single topic by ID.
  */
-export async function getTopicById(
-  db: AnyDB,
-  id: string
-): Promise<TopicRecord | undefined> {
+export async function getTopicById(db: AnyDB, id: string): Promise<TopicRecord | undefined> {
   const [result] = await db.select().from(topics).where(eq(topics.id, id));
   return result;
 }
@@ -77,10 +74,7 @@ export async function getTopicById(
 /**
  * Delete a topic by ID.
  */
-export async function deleteTopic(
-  db: AnyDB,
-  id: string
-): Promise<TopicRecord | undefined> {
+export async function deleteTopic(db: AnyDB, id: string): Promise<TopicRecord | undefined> {
   const [result] = await db.delete(topics).where(eq(topics.id, id)).returning();
   return result;
 }

@@ -1,6 +1,6 @@
 import type { Node, NodeProps } from '@xyflow/react';
 import { Handle, NodeToolbar, Position } from '@xyflow/react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { motion } from 'framer-motion';
 import {
   ArrowRight,
   CheckCircle,
@@ -249,7 +249,7 @@ const UnitNode = memo(function UnitNode(props: Props) {
   }, []);
 
   // Navigate to leaf detail page
-  const getLeafHref = (leaf: EmbeddedLeaf): string | undefined => {
+  const _getLeafHref = (leaf: EmbeddedLeaf): string | undefined => {
     if (!projectId || !leaf.id) return undefined;
     return `/project/${projectId}/leaf/${leaf.id}`;
   };

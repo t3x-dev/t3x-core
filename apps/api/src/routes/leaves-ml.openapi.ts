@@ -435,31 +435,24 @@ leavesMLRoutes.openapi(suggestConstraintsRoute, async (c) => {
 
     const registry = await getProviderRegistry();
     const trackedUsage = { inputTokens: 0, outputTokens: 0 };
-    const result = await registry.tryWithFallback(
-      'generation',
-      async (provider: {
-        id: string;
-        generate: (prompt: string, options?: Record<string, unknown>) => Promise<string>;
-      }) => {
-        const { provider: tracked, usage } = wrapWithUsageTracking(
-          provider as Parameters<typeof wrapWithUsageTracking>[0]
-        );
-        trackedUsage.inputTokens = 0;
-        trackedUsage.outputTokens = 0;
-        const r = await suggestConstraints(
-          tracked as Parameters<typeof suggestConstraints>[0],
-          sentences,
-          leaf.type,
-          {
-            maxSuggestions: body.max_suggestions,
-            instructions: body.instructions,
-          }
-        );
-        trackedUsage.inputTokens = usage.inputTokens;
-        trackedUsage.outputTokens = usage.outputTokens;
-        return r;
-      }
-    );
+    // biome-ignore lint/suspicious/noExplicitAny: generic error handler
+    const result = await registry.tryWithFallback('generation', async (provider: any) => {
+      const { provider: tracked, usage } = wrapWithUsageTracking(provider);
+      trackedUsage.inputTokens = 0;
+      trackedUsage.outputTokens = 0;
+      const r = await suggestConstraints(
+        tracked as Parameters<typeof suggestConstraints>[0],
+        sentences,
+        leaf.type,
+        {
+          maxSuggestions: body.max_suggestions,
+          instructions: body.instructions,
+        }
+      );
+      trackedUsage.inputTokens = usage.inputTokens;
+      trackedUsage.outputTokens = usage.outputTokens;
+      return r;
+    });
 
     // Record usage (fire-and-forget)
     if (trackedUsage.inputTokens || trackedUsage.outputTokens) {
@@ -878,7 +871,8 @@ leavesMLRoutes.openapi(compareModelsRoute, async (c) => {
           const result = await generateLeafOutput({
             commit,
             leaf,
-            provider: resolved.provider,
+            // biome-ignore lint/suspicious/noExplicitAny: generic error handler
+            provider: resolved.provider as any,
             additionalInstructions,
           });
 

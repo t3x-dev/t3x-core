@@ -49,7 +49,7 @@ import { relativeTime, shortHash } from '@/lib/formatters';
 import { PAGE_ANIMATION_STYLES } from '@/lib/pageAnimations';
 import { useCommitDetailStore } from '@/store/commitDetailStore';
 import { useProjectStore } from '@/store/projectStore';
-import { CopyButton, DotIndicator, useCountUp } from './CommitDetailHelpers';
+import { CopyButton, useCountUp } from './CommitDetailHelpers';
 import { CommitFrameIndex } from './CommitFrameIndex';
 import { CommitOperationsSidebar } from './CommitOperationsSidebar';
 import { ProvenanceGraph } from './CommitProvenanceGraph';
@@ -71,12 +71,12 @@ interface CommitDetailPageProps {
 
 export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProps) {
   const router = useRouter();
-  const notify = useProjectStore((state) => state.notifyCallback);
+  const _notify = useProjectStore((state) => state.notifyCallback);
 
   // ── Data state ────────────────────────────────────
   const [commit, setCommitLocal] = useState<Commit | null>(null);
   const [leaves, setLeaves] = useState<Leaf[]>([]);
-  const [commitHistory, setCommitHistory] = useState<Commit[]>([]);
+  const [_commitHistory, setCommitHistory] = useState<Commit[]>([]);
   const [projectName, setProjectName] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

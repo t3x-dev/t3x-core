@@ -244,8 +244,8 @@ describe('verifyProposal', () => {
 describe('overlap detection (L2)', () => {
   // Vectors: identical → cosine 1.0, orthogonal → cosine 0.0
   const vecA = [1, 0, 0];
-  const vecSimilar = [0.98, 0.1, 0.1]; // cosine ~0.97
-  const vecModerate = [0.7, 0.7, 0.1]; // cosine ~0.70
+  const _vecSimilar = [0.98, 0.1, 0.1]; // cosine ~0.97
+  const _vecModerate = [0.7, 0.7, 0.1]; // cosine ~0.70
   const vecDifferent = [0, 0, 1]; // cosine 0.0
 
   function makeMockEmbedder(returnVec: number[]): EmbeddingProvider {

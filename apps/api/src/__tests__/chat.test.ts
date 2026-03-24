@@ -3,7 +3,7 @@
  */
 
 import { Hono } from 'hono';
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 // Mock undici for proxy support
 vi.mock('undici', () => ({

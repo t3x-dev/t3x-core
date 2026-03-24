@@ -55,5 +55,5 @@ export async function assertProjectAccess(c: Context, db: AnyDB, projectId: stri
  */
 export function getUserId(c: Context): string | undefined {
   const apiKey = c.get('apiKey') as ApiKey | undefined;
-  return apiKey?.user_id;
+  return apiKey?.user_id ?? undefined;
 }

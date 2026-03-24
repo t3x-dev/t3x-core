@@ -52,18 +52,39 @@ interface ExtractionPanelState {
 
   // Gate result (Step 5 — frame quality annotation)
   gateIssues: Record<string, { severity: 'error' | 'warning' | 'info'; description: string }[]>;
-  setGateIssues: (issues: Record<string, { severity: 'error' | 'warning' | 'info'; description: string }[]>) => void;
+  setGateIssues: (
+    issues: Record<string, { severity: 'error' | 'warning' | 'info'; description: string }[]>
+  ) => void;
 
   // Drift detection (Step 3)
   driftDetected: boolean;
   driftInfo: { relation?: string; new_topic?: string; old_topic?: string } | null;
   driftChoices: string[];
-  setDriftDetected: (info: { relation?: string; new_topic?: string; old_topic?: string }, choices: string[]) => void;
+  setDriftDetected: (
+    info: { relation?: string; new_topic?: string; old_topic?: string },
+    choices: string[]
+  ) => void;
   clearDrift: () => void;
 
   // Advisory questions (Step 6)
-  advisoryQuestions: Array<{ id: string; type: string; frameId: string; slotKey?: string; question: string; currentValue?: unknown }>;
-  setAdvisoryQuestions: (questions: Array<{ id: string; type: string; frameId: string; slotKey?: string; question: string; currentValue?: unknown }>) => void;
+  advisoryQuestions: Array<{
+    id: string;
+    type: string;
+    frameId: string;
+    slotKey?: string;
+    question: string;
+    currentValue?: unknown;
+  }>;
+  setAdvisoryQuestions: (
+    questions: Array<{
+      id: string;
+      type: string;
+      frameId: string;
+      slotKey?: string;
+      question: string;
+      currentValue?: unknown;
+    }>
+  ) => void;
 
   // Topics (multi-topic conversations)
   topics: Topic[];
@@ -256,7 +277,8 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
     }),
   setFocusIntent: (enabled) => set({ focusIntentEnabled: enabled }),
   setGateIssues: (issues) => set({ gateIssues: issues }),
-  setDriftDetected: (info, choices) => set({ driftDetected: true, driftInfo: info, driftChoices: choices }),
+  setDriftDetected: (info, choices) =>
+    set({ driftDetected: true, driftInfo: info, driftChoices: choices }),
   clearDrift: () => set({ driftDetected: false, driftInfo: null, driftChoices: [] }),
   setAdvisoryQuestions: (questions) => set({ advisoryQuestions: questions }),
   setTopics: (topics) => set({ topics }),

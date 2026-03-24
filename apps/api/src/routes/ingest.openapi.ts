@@ -8,12 +8,7 @@
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { type ContentBlock, textFromBlocks } from '@t3x-dev/core';
-import {
-  findConversationById,
-  findProjectById,
-  insertConversation,
-  insertTurn,
-} from '@t3x-dev/storage';
+import { findConversationById, insertConversation, insertTurn } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { assertProjectAccess } from '../lib/project-access';

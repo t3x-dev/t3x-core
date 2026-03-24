@@ -158,6 +158,7 @@ const updateRolesRoute = createRoute({
   },
 });
 
+// @ts-expect-error - OpenAPI handler return type
 providersRoutes.openapi(updateRolesRoute, async (c) => {
   const body = c.req.valid('json');
   const registry = await getProviderRegistry();
@@ -222,6 +223,7 @@ const testProviderRoute = createRoute({
   },
 });
 
+// @ts-expect-error - OpenAPI handler return type
 providersRoutes.openapi(testProviderRoute, async (c) => {
   const { id } = c.req.valid('param');
   const registry = await getProviderRegistry();
@@ -333,6 +335,7 @@ const updateConfigRoute = createRoute({
   },
 });
 
+// @ts-expect-error - OpenAPI handler return type
 providersRoutes.openapi(updateConfigRoute, async (c) => {
   const body = c.req.valid('json');
   const registry = await getProviderRegistry();

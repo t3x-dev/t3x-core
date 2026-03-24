@@ -16,7 +16,14 @@ vi.mock('undici', () => ({
 
 // Save and clear env vars
 const savedEnv: Record<string, string | undefined> = {};
-const envKeys = ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'HTTPS_PROXY', 'https_proxy', 'HTTP_PROXY', 'http_proxy'];
+const envKeys = [
+  'ANTHROPIC_API_KEY',
+  'OPENAI_API_KEY',
+  'HTTPS_PROXY',
+  'https_proxy',
+  'HTTP_PROXY',
+  'http_proxy',
+];
 
 beforeAll(() => {
   for (const key of envKeys) {
@@ -76,16 +83,18 @@ describe('Chat Multimodal Validation', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          messages: [{
-            role: 'user',
-            content: [
-              {
-                type: 'image',
-                source: { type: 'base64', media_type: 'image/jpeg', data: 'abc123' },
-              },
-              { type: 'text', text: 'What is in this image?' },
-            ],
-          }],
+          messages: [
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'image',
+                  source: { type: 'base64', media_type: 'image/jpeg', data: 'abc123' },
+                },
+                { type: 'text', text: 'What is in this image?' },
+              ],
+            },
+          ],
         }),
       });
       // Should pass validation — 400 is from missing API key, not validation
@@ -111,15 +120,17 @@ describe('Chat Multimodal Validation', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          messages: [{
-            role: 'user',
-            content: [
-              {
-                type: 'image',
-                source: { type: 'base64', media_type: 'image/jpeg', data: 'abc' },
-              },
-            ],
-          }],
+          messages: [
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'image',
+                  source: { type: 'base64', media_type: 'image/jpeg', data: 'abc' },
+                },
+              ],
+            },
+          ],
         }),
       });
       expect(res.status).toBe(400);
@@ -132,16 +143,18 @@ describe('Chat Multimodal Validation', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          messages: [{
-            role: 'user',
-            content: [
-              {
-                type: 'image',
-                source: { type: 'base64', media_type: 'image/bmp', data: 'abc' },
-              },
-              { type: 'text', text: 'Hello' },
-            ],
-          }],
+          messages: [
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'image',
+                  source: { type: 'base64', media_type: 'image/bmp', data: 'abc' },
+                },
+                { type: 'text', text: 'Hello' },
+              ],
+            },
+          ],
         }),
       });
       expect(res.status).toBe(400);
@@ -154,16 +167,18 @@ describe('Chat Multimodal Validation', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          messages: [{
-            role: 'user',
-            content: [
-              {
-                type: 'image',
-                source: { type: 'url', media_type: 'image/jpeg', data: 'https://...' },
-              },
-              { type: 'text', text: 'Hello' },
-            ],
-          }],
+          messages: [
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'image',
+                  source: { type: 'url', media_type: 'image/jpeg', data: 'https://...' },
+                },
+                { type: 'text', text: 'Hello' },
+              ],
+            },
+          ],
         }),
       });
       expect(res.status).toBe(400);
@@ -176,13 +191,15 @@ describe('Chat Multimodal Validation', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          messages: [{
-            role: 'user',
-            content: [
-              { type: 'video', data: 'something' },
-              { type: 'text', text: 'Hello' },
-            ],
-          }],
+          messages: [
+            {
+              role: 'user',
+              content: [
+                { type: 'video', data: 'something' },
+                { type: 'text', text: 'Hello' },
+              ],
+            },
+          ],
         }),
       });
       expect(res.status).toBe(400);
@@ -209,13 +226,15 @@ describe('Chat Multimodal Validation', () => {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            messages: [{
-              role: 'user',
-              content: [
-                { type: 'image', source: { type: 'base64', media_type: mediaType, data: 'abc' } },
-                { type: 'text', text: 'Describe' },
-              ],
-            }],
+            messages: [
+              {
+                role: 'user',
+                content: [
+                  { type: 'image', source: { type: 'base64', media_type: mediaType, data: 'abc' } },
+                  { type: 'text', text: 'Describe' },
+                ],
+              },
+            ],
           }),
         });
         const data = await res.json();
@@ -288,13 +307,15 @@ describe('Chat Stream with web_search and thinking params', () => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        messages: [{
-          role: 'user',
-          content: [
-            { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'abc' } },
-            { type: 'text', text: 'What is this?' },
-          ],
-        }],
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'abc' } },
+              { type: 'text', text: 'What is this?' },
+            ],
+          },
+        ],
       }),
     });
     const data = await res.json();

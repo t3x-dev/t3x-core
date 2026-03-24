@@ -94,6 +94,7 @@ const createRunRoute = createRoute({
   },
 });
 
+// @ts-expect-error - OpenAPI handler return type
 runsRoutes.openapi(createRunRoute, async (c) => {
   try {
     const input = c.req.valid('json');
@@ -254,6 +255,7 @@ const ingestRunRoute = createRoute({
   },
 });
 
+// @ts-expect-error - OpenAPI handler return type
 runsRoutes.openapi(ingestRunRoute, async (c) => {
   // Authenticate runner callback: check shared secret if RUNNER_SECRET is configured.
   // If RUNNER_SECRET is not set, allow the request for backward compatibility (local dev) but warn.

@@ -12,8 +12,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useCountUp } from '@/hooks/useCountUp';
 import { useTerminology } from '@/hooks/useTerminology';
 import type { ApiCommit, Project } from '@/lib/api';
-import { frameSummaryText, getSemanticContent } from '@/lib/api/commits';
 import { listCommits, listProjects } from '@/lib/api';
+import { frameSummaryText, getSemanticContent } from '@/lib/api/commits';
 import { cn } from '@/lib/utils';
 import type { SemanticEntry } from '@/types/semantic';
 
@@ -54,12 +54,12 @@ function commitToSemanticEntry(
     updatedAt: formatTimeAgo(commit.committed_at),
     tags: [projectName, commit.branch || 'main'],
     evidenceCount: frames.length,
-    facets: frames
-      .slice(0, 3)
-      .map((f) => {
-        const label = `${f.type}: ${Object.values(f.slots ?? {}).map((v) => typeof v === 'string' ? v : JSON.stringify(v)).join(', ')}`;
-        return label.slice(0, 50) + (label.length > 50 ? '...' : '');
-      }),
+    facets: frames.slice(0, 3).map((f) => {
+      const label = `${f.type}: ${Object.values(f.slots ?? {})
+        .map((v) => (typeof v === 'string' ? v : JSON.stringify(v)))
+        .join(', ')}`;
+      return label.slice(0, 50) + (label.length > 50 ? '...' : '');
+    }),
   };
 }
 

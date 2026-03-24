@@ -37,7 +37,13 @@ function createAppWithUser(userId?: string) {
   const app = new Hono();
   if (userId) {
     app.use('*', async (c, next) => {
-      c.set('apiKey', { id: 'ak_test', user_id: userId, key_prefix: 'test', name: 'test' });
+      // biome-ignore lint/suspicious/noExplicitAny: test mock access
+      (c as any).set('apiKey', {
+        id: 'ak_test',
+        user_id: userId,
+        key_prefix: 'test',
+        name: 'test',
+      });
       return next();
     });
   }

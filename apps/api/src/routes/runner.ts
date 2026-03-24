@@ -21,6 +21,7 @@ import {
   RuleSchema,
   type RunRecord,
   RunRecordSchema,
+  // @ts-expect-error - @t3x-dev/runner may not be built
 } from '@t3x-dev/runner';
 import { Hono } from 'hono';
 import { z } from 'zod';

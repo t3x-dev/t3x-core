@@ -54,7 +54,7 @@ function ProjectDetailPageContent() {
   const nodes = useCanvasStore((state) => state.nodes);
 
   // Detect node types for QuickStart checklist
-  const nodeTypes = useMemo(() => {
+  const _nodeTypes = useMemo(() => {
     const types = new Set(nodes.map((n) => n.type));
     return {
       hasConversation: types.has('conversation'),
@@ -228,7 +228,7 @@ function ProjectDetailPageContent() {
     );
   }
 
-  const canvasReady = !canvasLoading && !canvasError && !!project;
+  const _canvasReady = !canvasLoading && !canvasError && !!project;
 
   return (
     <div className="flex h-full flex-col">

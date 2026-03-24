@@ -16,8 +16,8 @@
  */
 
 import { nanoid } from 'nanoid';
-import type { LLMProvider } from '../llm/types';
 import { escapePromptContent } from '../llm/sanitize';
+import type { LLMProvider } from '../llm/types';
 import type { SemanticContent } from '../semantic/types';
 import type { AdvisoryQuestion } from './types';
 
@@ -111,10 +111,7 @@ export async function detectAmbiguity(
 /**
  * Parse and validate LLM ambiguity detection response.
  */
-export function parseAmbiguityResponse(
-  raw: string,
-  validFrameIds: Set<string>
-): AmbiguityResult {
+export function parseAmbiguityResponse(raw: string, validFrameIds: Set<string>): AmbiguityResult {
   try {
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
     if (!jsonMatch) return NO_AMBIGUITY;

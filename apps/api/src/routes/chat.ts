@@ -199,8 +199,7 @@ async function callClaudeNonStreaming(
       max_tokens: options?.thinking ? Math.max(maxTokens, 16384) : maxTokens,
       ...(options?.thinking
         ? { thinking: { type: 'enabled', budget_tokens: 10000 } }
-        : { temperature }
-      ),
+        : { temperature }),
       ...(systemMessage && { system: systemMessage.content }),
       messages: otherMessages.map((m) => ({
         role: m.role,
@@ -263,8 +262,9 @@ chatRoutes.post('/v1/chat', async (c) => {
   } catch {
     return jsonError(c, 'INVALID_JSON', 'Invalid JSON body', 400);
   }
+  if (!body) return jsonError(c, 'INVALID_JSON', 'Invalid JSON body', 400);
 
-  const messages = body?.messages;
+  const messages = body.messages;
   if (!Array.isArray(messages) || messages.length === 0 || messages.length > 100) {
     return jsonError(c, 'INVALID_REQUEST', 'messages must be an array of 1-100 items', 400);
   }
@@ -295,11 +295,14 @@ chatRoutes.post('/v1/chat', async (c) => {
   try {
     // Currently only Claude is implemented
     if (provider === 'claude' || provider === 'anthropic') {
-      const result = await callClaudeNonStreaming(messages, model, apiKey, temperature, maxTokens, { thinking: body.thinking });
+      const result = await callClaudeNonStreaming(messages, model, apiKey, temperature, maxTokens, {
+        thinking: body.thinking,
+      });
 
       // Record token usage (fire-and-forget, only if project_id provided)
       if (body?.project_id && result.usage) {
-        const apiKeyCtx = c.get('apiKey') as { user_id?: string } | undefined;
+        // biome-ignore lint/suspicious/noExplicitAny: generic error handler
+        const apiKeyCtx = (c as any).get('apiKey') as { user_id?: string } | undefined;
         getDB()
           .then((db) =>
             recordUsage(db, {
@@ -348,8 +351,9 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
   } catch {
     return jsonError(c, 'INVALID_JSON', 'Invalid JSON body', 400);
   }
+  if (!body) return jsonError(c, 'INVALID_JSON', 'Invalid JSON body', 400);
 
-  const messages = body?.messages;
+  const messages = body.messages;
   if (!Array.isArray(messages) || messages.length === 0 || messages.length > 100) {
     return jsonError(c, 'INVALID_REQUEST', 'messages must be an array of 1-100 items', 400);
   }
@@ -390,6 +394,8 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
   const stream = new ReadableStream({
     async start(controller) {
       let anthropicResponse: Response | undefined;
+      let resolvedModel = model;
+      const usage: { input_tokens?: number; output_tokens?: number } = {};
       try {
         const proxyFetch = getProxyFetch();
         anthropicResponse = (await proxyFetch('https://api.anthropic.com/v1/messages', {
@@ -405,11 +411,12 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
             max_tokens: useThinking ? Math.max(maxTokens, 16384) : maxTokens,
             ...(useThinking
               ? { thinking: { type: 'enabled', budget_tokens: 10000 } }
-              : { temperature }
-            ),
+              : { temperature }),
             stream: true,
             ...(systemMessage && { system: systemMessage.content }),
-            ...(body.web_search && { tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 3 }] }),
+            ...(body.web_search && {
+              tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 3 }],
+            }),
             messages: otherMessages.map((m) => ({
               role: m.role,
               content: m.content,
@@ -434,8 +441,7 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
 
         const decoder = new TextDecoder();
         let buffer = '';
-        let resolvedModel = model;
-        const usage: { input_tokens?: number; output_tokens?: number } = {};
+        resolvedModel = model;
         let receivedMessageStop = false;
         const citations: Array<{ url: string; title: string }> = [];
         let currentBlockType = '';
@@ -549,7 +555,8 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
       } finally {
         // Record token usage (fire-and-forget, only if project_id provided)
         if (body?.project_id && (usage.input_tokens || usage.output_tokens)) {
-          const apiKeyCtx = c.get('apiKey') as { user_id?: string } | undefined;
+          // biome-ignore lint/suspicious/noExplicitAny: generic error handler
+          const apiKeyCtx = (c as any).get('apiKey') as { user_id?: string } | undefined;
           getDB()
             .then((db) =>
               recordUsage(db, {
