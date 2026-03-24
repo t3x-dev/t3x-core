@@ -132,7 +132,7 @@ function UnifiedFrameContent({
     for (const [key, value] of Object.entries(frame.slots)) {
       lines.push(
         <UnifiedLine key={`slot-${key}`} rightNum={rightLineRef.current++} status="added">
-          {'  '}
+          {'    '}
           <span style={{ color: YAML_COLORS.key }}>{key}</span>
           <span style={{ color: YAML_COLORS.bracket }}>: </span>
           <SlotValueSpan value={value} />
@@ -151,7 +151,7 @@ function UnifiedFrameContent({
     for (const [key, value] of Object.entries(frame.slots)) {
       lines.push(
         <UnifiedLine key={`slot-${key}`} leftNum={leftLineRef.current++} status="removed">
-          {'  '}
+          {'    '}
           <span className="line-through opacity-60" style={{ color: YAML_COLORS.key }}>{key}</span>
           <span style={{ color: YAML_COLORS.bracket }}>: </span>
           <span className="line-through opacity-60">
@@ -172,7 +172,7 @@ function UnifiedFrameContent({
     for (const [key, value] of Object.entries(frame.slots)) {
       lines.push(
         <UnifiedLine key={`slot-${key}`} leftNum={leftLineRef.current++} rightNum={rightLineRef.current++} status="unchanged">
-          {'  '}
+          {'    '}
           <span style={{ color: YAML_COLORS.key }}>{key}</span>
           <span style={{ color: YAML_COLORS.bracket }}>: </span>
           <SlotValueSpan value={value} />
@@ -204,7 +204,7 @@ function UnifiedFrameContent({
         // Unchanged slot: single line, both gutters
         lines.push(
           <UnifiedLine key={`slot-${key}`} leftNum={leftLineRef.current++} rightNum={rightLineRef.current++} status="unchanged">
-            {'  '}
+            {'    '}
             <span style={{ color: YAML_COLORS.key }}>{key}</span>
             <span style={{ color: YAML_COLORS.bracket }}>: </span>
             <SlotValueSpan value={value} />
@@ -214,7 +214,7 @@ function UnifiedFrameContent({
         // Added slot: right gutter only, green
         lines.push(
           <UnifiedLine key={`slot-add-${key}`} rightNum={rightLineRef.current++} status="added">
-            {'  '}
+            {'    '}
             <span style={{ color: YAML_COLORS.key }}>{key}</span>
             <span style={{ color: YAML_COLORS.bracket }}>: </span>
             <SlotValueSpan value={value} />
@@ -224,7 +224,7 @@ function UnifiedFrameContent({
         // Modified slot: removed line (left gutter) then added line (right gutter)
         lines.push(
           <UnifiedLine key={`slot-rem-${key}`} leftNum={leftLineRef.current++} status="removed">
-            {'  '}
+            {'    '}
             <span style={{ color: YAML_COLORS.key }}>{key}</span>
             <span style={{ color: YAML_COLORS.bracket }}>: </span>
             {sd.wordDiff ? (
@@ -238,7 +238,7 @@ function UnifiedFrameContent({
         );
         lines.push(
           <UnifiedLine key={`slot-add-${key}`} rightNum={rightLineRef.current++} status="added">
-            {'  '}
+            {'    '}
             <span style={{ color: YAML_COLORS.key }}>{key}</span>
             <span style={{ color: YAML_COLORS.bracket }}>: </span>
             {sd.wordDiff ? (
@@ -256,7 +256,7 @@ function UnifiedFrameContent({
     for (const sd of removedSlots) {
       lines.push(
         <UnifiedLine key={`slot-del-${sd.key}`} leftNum={leftLineRef.current++} status="removed">
-          {'  '}
+          {'    '}
           <span className="line-through opacity-60" style={{ color: YAML_COLORS.key }}>{sd.key}</span>
           <span style={{ color: YAML_COLORS.bracket }}>: </span>
           <span className="line-through opacity-60">

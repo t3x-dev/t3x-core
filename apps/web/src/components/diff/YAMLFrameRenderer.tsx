@@ -97,7 +97,7 @@ export function YAMLFrameRenderer({ frame, frameStatus, slotDiffs, startLine }: 
 
         return (
           <YAMLLine key={key} lineNumber={lineNum++} status={status}>
-            {'  '}
+            {'    '}
             <span style={{ color: YAML_COLORS.key }}>{key}</span>
             <span style={{ color: YAML_COLORS.bracket }}>: </span>
             {sd?.wordDiff ? (
@@ -112,7 +112,7 @@ export function YAMLFrameRenderer({ frame, frameStatus, slotDiffs, startLine }: 
       {/* Removed slots (only in source, not in this frame) */}
       {frameStatus === 'modified' && removedSlots.map((sd) => (
         <YAMLLine key={`removed-${sd.key}`} lineNumber={lineNum++} status="removed">
-          {'  '}
+          {'    '}
           <span style={{ color: YAML_COLORS.key }} className="line-through opacity-60">{sd.key}</span>
           <span style={{ color: YAML_COLORS.bracket }}>: </span>
           <span className="line-through opacity-60">
