@@ -16,9 +16,6 @@ import type {
   CreateDraftInput,
   Draft,
   DraftConstraint,
-  DraftSentence,
-  ExtractionCursor,
-  SemanticPoint,
 } from '@t3x-dev/core';
 import { generateDraftId } from '@t3x-dev/core';
 import { and, desc, eq } from 'drizzle-orm';
@@ -68,14 +65,14 @@ export interface ListDraftOptions {
 export interface UpdateDraftInput {
   title?: string;
   goal?: string;
-  sentences?: DraftSentence[];
+  sentences?: unknown[];
   constraints?: DraftConstraint[];
   instructions?: string;
   preview_type?: string;
   target_branch?: string;
   extraction_mode?: 'deterministic' | 'llm';
-  semantic_points?: SemanticPoint[];
-  extraction_cursor?: ExtractionCursor;
+  semantic_points?: unknown[];
+  extraction_cursor?: unknown;
 }
 
 // ============================================================
@@ -93,7 +90,7 @@ function rowToDraft(row: DraftRecord): Draft {
     goal: row.goal ?? undefined,
     parent_commit_hash: row.parentCommitHash ?? undefined,
     forked_from: row.forkedFrom ?? undefined,
-    sentences: (row.sentencesJson ?? []) as DraftSentence[],
+    sentences: (row.sentencesJson ?? []) as unknown[],
     constraints: (row.constraintsJson ?? []) as DraftConstraint[],
     instructions: row.instructions ?? undefined,
     preview_type: row.previewType ?? undefined,
@@ -107,8 +104,8 @@ function rowToDraft(row: DraftRecord): Draft {
     created_at: row.createdAt.toISOString(),
     updated_at: row.updatedAt.toISOString(),
     extraction_mode: (row.extractionMode as Draft['extraction_mode']) ?? undefined,
-    semantic_points: (row.semanticPointsJson ?? undefined) as SemanticPoint[] | undefined,
-    extraction_cursor: (row.extractionCursorJson ?? undefined) as ExtractionCursor | undefined,
+    semantic_points: (row.semanticPointsJson ?? undefined) as unknown[] | undefined,
+    extraction_cursor: (row.extractionCursorJson ?? undefined) as unknown | undefined,
   };
 }
 
@@ -366,7 +363,7 @@ export async function insertAutoDraft(
     project_id: string;
     conversation_id: string;
     title: string;
-    sentences: DraftSentence[];
+    sentences: unknown[];
     parent_commit_hash?: string;
     target_branch?: string;
   }

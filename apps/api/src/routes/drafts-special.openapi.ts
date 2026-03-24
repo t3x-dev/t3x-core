@@ -8,23 +8,18 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import type { SemanticPoint } from '@t3x-dev/core';
 import {
   ConflictError,
-  findConversationById,
   findDraftById,
-  insertAutoDraft,
   insertExtractionFeedback,
   promoteDraft,
   updateDraft,
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
-import { getUserId, recordUsageFireAndForget } from '../lib/usage-tracking';
 import { ErrorResponseSchema, IdParamSchema, SuccessResponseSchema } from '../schemas/common';
 import { DraftResponse, ReviewActionRequest, ReviewActionResponse } from '../schemas/contracts';
 import { toApiDraft } from './drafts-crud.openapi';
-import { extractSentencesFromConversation } from './extract.openapi';
 
 export const draftsSpecialRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
@@ -144,75 +139,13 @@ const reviewActionRoute = createRoute({
 
 // POST /v1/drafts/auto
 draftsSpecialRoutes.openapi(createAutoDraftRoute, async (c) => {
-  const body = c.req.valid('json');
-
-  try {
-    const db = await getDB();
-
-    // 0. Validate that conversation_id belongs to the given project_id
-    const conversation = await findConversationById(db, body.conversation_id);
-    if (!conversation) {
-      return errorResponse(
-        c,
-        'CONVERSATION_NOT_FOUND',
-        `Conversation not found: ${body.conversation_id}`
-      );
-    }
-    if (conversation.projectId !== body.project_id) {
-      return errorResponse(
-        c,
-        'INVALID_REQUEST',
-        `Conversation ${body.conversation_id} does not belong to project ${body.project_id}`
-      );
-    }
-
-    // 1. Extract sentences from conversation
-    const result = await extractSentencesFromConversation(body.conversation_id, body.options);
-
-    // Record usage (fire-and-forget)
-    if (result.usage) {
-      recordUsageFireAndForget(db, {
-        user_id: getUserId(c) ?? undefined,
-        project_id: body.project_id,
-        endpoint: 'draft_auto_extract',
-        model: result.model,
-        input_tokens: result.usage.inputTokens,
-        output_tokens: result.usage.outputTokens,
-      });
-    }
-
-    if (result.sentences.length === 0) {
-      return errorResponse(c, 'INVALID_REQUEST', 'No sentences extracted from conversation');
-    }
-
-    // 2. Create auto-draft
-    const draft = await insertAutoDraft(db, {
-      project_id: body.project_id,
-      conversation_id: body.conversation_id,
-      title: `Auto-draft from ${body.conversation_id.slice(0, 16)}`,
-      sentences: result.sentences,
-      parent_commit_hash: body.parent_commit_hash,
-      target_branch: body.target_branch,
-    });
-
-    return c.json({ success: true as const, data: toApiDraft(draft) }, 201);
-  } catch (err) {
-    if (err instanceof Error && err.name === 'AllProvidersFailedError') {
-      return c.json(
-        {
-          success: false as const,
-          error: {
-            code: 'LLM_NOT_CONFIGURED',
-            message:
-              'No LLM provider is configured. Set ANTHROPIC_API_KEY or another provider key.',
-          },
-        },
-        503
-      );
-    }
-    const message = err instanceof Error ? err.message : 'Unknown error';
-    return errorResponse(c, 'CREATE_FAILED', message);
-  }
+  // Auto-draft creation via sentence extraction is deprecated.
+  // Use frame-based extraction via /v1/extract/frames instead.
+  return errorResponse(
+    c,
+    'DEPRECATED',
+    'Auto-draft creation via sentence extraction has been replaced by frame-based extraction. Use /v1/extract/frames instead.'
+  );
 });
 
 // POST /v1/drafts/:id/promote
@@ -248,7 +181,18 @@ draftsSpecialRoutes.openapi(reviewActionRoute, async (c) => {
     const draft = await findDraftById(db, draftId);
     if (!draft) return errorResponse(c, 'NOT_FOUND', 'Draft not found');
 
-    const sps = [...((draft.semantic_points ?? []) as SemanticPoint[])];
+    // SemanticPoint type is no longer exported; use structural typing
+    const sps = [...((draft.semantic_points ?? []) as Array<{
+      id: string;
+      text: string;
+      confidence?: number;
+      zone: string;
+      status: string;
+      staged: boolean;
+      inference_type?: string;
+      low_coverage?: boolean;
+      [key: string]: unknown;
+    }>)];
     const idx = sps.findIndex((sp) => sp.id === sp_id);
     if (idx === -1) return errorResponse(c, 'NOT_FOUND', 'Semantic point not found');
 

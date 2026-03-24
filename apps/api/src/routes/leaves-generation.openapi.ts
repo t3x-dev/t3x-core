@@ -10,7 +10,6 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import type { Commit } from '@t3x-dev/core';
 import {
   AllProvidersFailedError,
   collectLessons,
@@ -18,7 +17,6 @@ import {
   type GenerationMode,
   isGenerationConfigured,
   modeGenerate,
-  type SentenceCommit,
   validateConstraints,
   validateConstraintsExactOnly,
 } from '@t3x-dev/core';
@@ -58,30 +56,6 @@ import { pushNotification } from './notifications.openapi';
 export const leavesGenerationRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
 });
-
-// ============================================================
-// Helpers
-// ============================================================
-
-/**
- * Convert a unified Commit to a sentence-based SentenceCommit shape.
- * Needed because generateLeafOutput / modeGenerate expect SentenceCommit.
- */
-function toSentenceCommit(commit: Commit): SentenceCommit {
-  return {
-    ...commit,
-    schema: 't3x/commit/v4' as const,
-    content: {
-      sentences: commit.content.frames.map((frame) => ({
-        id: frame.id,
-        text: `[${frame.type}] ${Object.entries(frame.slots)
-          .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : String(v)}`)
-          .join('; ')}`,
-        confidence: frame.confidence ?? 1,
-      })),
-    },
-  } as SentenceCommit;
-}
 
 // ============================================================
 // Route Definitions
@@ -300,7 +274,7 @@ leavesGenerationRoutes.openapi(generateLeafRoute, async (c) => {
     if (!unifiedCommit) {
       return errorResponse(c, 'COMMIT_NOT_FOUND', `Source commit not found: ${leaf.commit_hash}`);
     }
-    const commit = toSentenceCommit(unifiedCommit);
+    const knowledge = unifiedCommit.content;
 
     // Collect lessons from historical leaves on the same commit (#4 feedback loop)
     const historicalLeaves = await findLeavesByCommit(db, leaf.commit_hash);
@@ -326,7 +300,7 @@ leavesGenerationRoutes.openapi(generateLeafRoute, async (c) => {
       const reg = await getProviderRegistry();
       multiRoundResult = await reg.tryWithFallback('generation', async (provider) => {
         const mrResult = await modeGenerate({
-          commit,
+          knowledge,
           leaf,
           // biome-ignore lint/suspicious/noExplicitAny: generic error handler
           provider: provider as any,
@@ -382,7 +356,7 @@ leavesGenerationRoutes.openapi(generateLeafRoute, async (c) => {
     } else {
       // Generate with automatic provider fallback (existing single-round path)
       const result = await generateWithFallback({
-        commit,
+        knowledge,
         leaf,
         lessons: lessons.length > 0 ? lessons : undefined,
         additionalInstructions:
@@ -649,7 +623,7 @@ leavesGenerationRoutes.openapi(batchGenerateRoute, async (c) => {
     if (!unifiedCommit) {
       return errorResponse(c, 'COMMIT_NOT_FOUND', `Commit not found: ${decodedHash}`);
     }
-    const commit = toSentenceCommit(unifiedCommit);
+    const batchKnowledge = unifiedCommit.content;
 
     // 2. Check generation configuration if generation is needed
     const needsGeneration = !body.skip_generation;
@@ -666,7 +640,7 @@ leavesGenerationRoutes.openapi(batchGenerateRoute, async (c) => {
       try {
         // 3a. Create leaf (auto-generate title from commit message if not provided)
         const leafTitle =
-          leafConfig.title || `${commit.message || decodedHash.slice(0, 16)} — ${leafConfig.type}`;
+          leafConfig.title || `${unifiedCommit.message || decodedHash.slice(0, 16)} — ${leafConfig.type}`;
         const leaf = await createLeaf(db, {
           commit_hash: decodedHash,
           type: leafConfig.type,
@@ -685,7 +659,7 @@ leavesGenerationRoutes.openapi(batchGenerateRoute, async (c) => {
             const batchLessons = collectLessons(batchHistLeaves);
 
             const result = await generateWithFallback({
-              commit,
+              knowledge: batchKnowledge,
               leaf,
               lessons: batchLessons.length > 0 ? batchLessons : undefined,
               additionalInstructions:

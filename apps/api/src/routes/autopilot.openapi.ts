@@ -15,8 +15,6 @@ import {
   DEFAULT_AUTOPILOT_CONFIG,
   evaluateAutoCommit,
   mergeAutopilotConfig,
-  type SemanticPoint,
-  spToSentence,
 } from '@t3x-dev/core';
 import {
   commitDraft,
@@ -345,7 +343,15 @@ autopilotRoutes.openapi(autoCommitRoute, async (c) => {
     const config = mergeAutopilotConfig(storedConfig ?? undefined);
 
     // 5. Build candidates from semantic points
-    const sps = (draft.semantic_points ?? []) as SemanticPoint[];
+    // SemanticPoint type is no longer exported; use structural typing
+    const sps = (draft.semantic_points ?? []) as Array<{
+      id: string;
+      text: string;
+      confidence?: number;
+      zone: string;
+      status: string;
+      staged: boolean;
+    }>;
     const candidates = sps.map((sp) => ({
       id: sp.id,
       text: sp.text,
@@ -372,10 +378,9 @@ autopilotRoutes.openapi(autoCommitRoute, async (c) => {
       );
     }
 
-    // 7. Convert qualifying SPs to sentences
+    // 7. Convert qualifying SPs directly to frames (no intermediate sentence step)
     const qualifyingIds = new Set(plan.sentences.map((s) => s.id));
     const qualifyingSPs = sps.filter((sp) => qualifyingIds.has(sp.id));
-    const sentences = qualifyingSPs.map((sp) => spToSentence(sp));
 
     // 8. Atomically claim the draft (status WHERE guard prevents double-commit)
     //    Must run BEFORE createCommit to avoid orphan commits on race.
@@ -391,18 +396,18 @@ autopilotRoutes.openapi(autoCommitRoute, async (c) => {
     }
 
     // 9. Create commit (only the winner of step 8 reaches here)
-    const autoFrames = sentences.map((s, i) => ({
-      id: s.id || `f_${String(i + 1).padStart(3, '0')}`,
+    const autoFrames = qualifyingSPs.map((sp, i) => ({
+      id: sp.id || `f_${String(i + 1).padStart(3, '0')}`,
       type: 'legacy_sentence' as const,
-      slots: { text: s.text },
-      confidence: s.confidence,
+      slots: { text: sp.text },
+      confidence: sp.confidence,
     }));
     const commit = await createCommit(db, {
       parents: draft.parent_commit_hash ? [draft.parent_commit_hash] : [],
       author: { type: 'agent' as const, name: 'autopilot' },
       content: { frames: autoFrames, relations: [] },
       project_id: draft.project_id,
-      message: `Auto-commit: ${sentences.length} sentence(s)`,
+      message: `Auto-commit: ${qualifyingSPs.length} sentence(s)`,
       branch: config.target_branch,
       provenance: { method: 'human_curation' },
     });
@@ -418,7 +423,7 @@ autopilotRoutes.openapi(autoCommitRoute, async (c) => {
       project_id: draft.project_id,
       type: 'commit.created',
       title: 'Auto-commit completed',
-      message: `Autopilot committed ${sentences.length} sentence(s) from draft "${draft.title}"`,
+      message: `Autopilot committed ${qualifyingSPs.length} sentence(s) from draft "${draft.title}"`,
       ref_id: commit.hash,
     });
 
@@ -428,7 +433,7 @@ autopilotRoutes.openapi(autoCommitRoute, async (c) => {
       {
         commit_hash: commit.hash,
         project_id: draft.project_id,
-        sentences_count: sentences.length,
+        sentences_count: qualifyingSPs.length,
         source: 'autopilot',
       },
       draft.project_id
@@ -444,7 +449,7 @@ autopilotRoutes.openapi(autoCommitRoute, async (c) => {
             branch: commit.branch ?? undefined,
             committed_at: commit.committed_at,
           },
-          sentences_committed: sentences.length,
+          sentences_committed: qualifyingSPs.length,
           sentences_skipped: plan.skipped.length,
           skipped: plan.skipped,
         },
