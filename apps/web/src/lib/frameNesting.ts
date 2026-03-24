@@ -52,7 +52,7 @@ export function nestFrames(content: SemanticContent): Frame[] {
         while (`${slotKey}_${suffix}` in newSlots) suffix++;
         slotKey = `${slotKey}_${suffix}`;
       }
-      newSlots[slotKey] = { type: nested.type, slots: nested.slots };
+      newSlots[slotKey] = { type: nested.type, slots: nested.slots, _sourceFrameId: childFrame.id };
     }
     return { ...frame, slots: newSlots };
   }
