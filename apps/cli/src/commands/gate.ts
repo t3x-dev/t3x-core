@@ -268,6 +268,7 @@ export function registerGateCommands(program: Command): void {
     .option('--structure-only', 'Only run Gate 1 (structure check)')
     .option('--ci', 'Non-interactive mode (plain output, exit codes)')
     .option('--fail-on <level>', 'Failure threshold: "error" (default) or "warning"', 'error')
+    .option('--json', 'Output as JSON')
     .action(
       async (
         commitHash: string | undefined,
@@ -275,6 +276,7 @@ export function registerGateCommands(program: Command): void {
           structureOnly?: boolean;
           ci?: boolean;
           failOn?: string;
+          json?: boolean;
         }
       ) => {
         if (!commitHash) {
@@ -290,7 +292,7 @@ export function registerGateCommands(program: Command): void {
           ? ['structure']
           : ['structure', 'semantic', 'business'];
 
-        const spinner = ciMode ? null : createSpinner('Running gate checks...');
+        const spinner = ciMode || options.json ? null : createSpinner('Running gate checks...');
         spinner?.start();
 
         const startTime = Date.now();
@@ -306,14 +308,20 @@ export function registerGateCommands(program: Command): void {
 
           spinner?.stop();
 
-          // 3. Print results
+          // 3. JSON output mode
+          if (options.json) {
+            console.log(JSON.stringify(result, null, 2));
+            process.exit(result.passed ? 0 : 1);
+          }
+
+          // 4. Print results
           printResults(result, ciMode);
 
           if (!ciMode) {
             console.log(chalk.dim(`Completed in ${formatMs(elapsed)}`));
           }
 
-          // 4. Exit code for CI mode
+          // 5. Exit code for CI mode
           if (ciMode) {
             const hasWarnings = result.business?.results.some(
               (r) => !r.passed && r.severity === 'warning'

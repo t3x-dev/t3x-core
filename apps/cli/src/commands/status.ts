@@ -12,7 +12,8 @@ export function registerStatusCommands(program: Command): void {
   program
     .command('health')
     .description('Check API health')
-    .action(async () => {
+    .option('--json', 'Output as JSON')
+    .action(async (options) => {
       const spinner = createSpinner('Checking health...');
       spinner.start();
 
@@ -21,6 +22,11 @@ export function registerStatusCommands(program: Command): void {
         const health = await client.health();
 
         spinner.stop();
+
+        if (options.json) {
+          console.log(JSON.stringify(health, null, 2));
+          return;
+        }
 
         const statusColor = health.status === 'ok' ? chalk.green : chalk.red;
         console.log();
@@ -49,7 +55,8 @@ export function registerStatusCommands(program: Command): void {
   program
     .command('status')
     .description('Get API status')
-    .action(async () => {
+    .option('--json', 'Output as JSON')
+    .action(async (options) => {
       const spinner = createSpinner('Fetching status...');
       spinner.start();
 
@@ -58,6 +65,11 @@ export function registerStatusCommands(program: Command): void {
         const status = await client.status();
 
         spinner.stop();
+
+        if (options.json) {
+          console.log(JSON.stringify(status, null, 2));
+          return;
+        }
 
         console.log();
         console.log(`Version: ${status.version}`);

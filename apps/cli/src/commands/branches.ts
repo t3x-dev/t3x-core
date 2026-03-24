@@ -15,6 +15,7 @@ export function registerBranchCommands(program: Command): void {
     .alias('ls')
     .description('List branches')
     .requiredOption('-p, --project <id>', 'Project ID')
+    .option('--json', 'Output as JSON')
     .action(async (options) => {
       const spinner = createSpinner('Fetching branches...');
       spinner.start();
@@ -24,6 +25,11 @@ export function registerBranchCommands(program: Command): void {
         const result = await client.listBranches(options.project);
 
         spinner.stop();
+
+        if (options.json) {
+          console.log(JSON.stringify(result, null, 2));
+          return;
+        }
 
         if (result.branches.length === 0) {
           console.log('No branches found.');
@@ -100,6 +106,7 @@ export function registerBranchCommands(program: Command): void {
     .command('current')
     .description('Show current branch')
     .requiredOption('-p, --project <id>', 'Project ID')
+    .option('--json', 'Output as JSON')
     .action(async (options) => {
       const spinner = createSpinner('Fetching current branch...');
       spinner.start();
@@ -109,6 +116,11 @@ export function registerBranchCommands(program: Command): void {
         const branch = await client.getCurrentBranch(options.project);
 
         spinner.stop();
+
+        if (options.json) {
+          console.log(JSON.stringify(branch, null, 2));
+          return;
+        }
 
         console.log();
         console.log(`Current branch: ${branch.name}`);

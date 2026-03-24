@@ -18,6 +18,7 @@ export function registerCommitCommands(program: Command): void {
     .option('-b, --branch <name>', 'Filter by branch')
     .option('-l, --limit <number>', 'Maximum number of commits', '50')
     .option('-o, --offset <number>', 'Offset for pagination', '0')
+    .option('--json', 'Output as JSON')
     .action(async (options) => {
       const spinner = createSpinner('Fetching commits...');
       spinner.start();
@@ -30,6 +31,11 @@ export function registerCommitCommands(program: Command): void {
         });
 
         spinner.stop();
+
+        if (options.json) {
+          console.log(JSON.stringify(result, null, 2));
+          return;
+        }
 
         if (result.commits.length === 0) {
           console.log('No commits found.');
@@ -56,7 +62,8 @@ export function registerCommitCommands(program: Command): void {
   commits
     .command('show <hash>')
     .description('Show commit details')
-    .action(async (hash: string) => {
+    .option('--json', 'Output as JSON')
+    .action(async (hash: string, options) => {
       const spinner = createSpinner('Fetching commit...');
       spinner.start();
 
@@ -65,6 +72,11 @@ export function registerCommitCommands(program: Command): void {
         const commit = await client.getCommit(hash);
 
         spinner.stop();
+
+        if (options.json) {
+          console.log(JSON.stringify(commit, null, 2));
+          return;
+        }
 
         console.log();
         console.log(`Commit: ${commit.commit_hash}`);

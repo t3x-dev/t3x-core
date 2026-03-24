@@ -16,6 +16,7 @@ export function registerProjectCommands(program: Command): void {
     .description('List all projects')
     .option('-l, --limit <number>', 'Maximum number of projects', '100')
     .option('-o, --offset <number>', 'Offset for pagination', '0')
+    .option('--json', 'Output as JSON')
     .action(async (options) => {
       const spinner = createSpinner('Fetching projects...');
       spinner.start();
@@ -28,6 +29,11 @@ export function registerProjectCommands(program: Command): void {
         });
 
         spinner.stop();
+
+        if (options.json) {
+          console.log(JSON.stringify(result, null, 2));
+          return;
+        }
 
         if (result.projects.length === 0) {
           console.log('No projects found.');
@@ -49,7 +55,8 @@ export function registerProjectCommands(program: Command): void {
   projects
     .command('get <id>')
     .description('Get project details')
-    .action(async (id: string) => {
+    .option('--json', 'Output as JSON')
+    .action(async (id: string, options) => {
       const spinner = createSpinner('Fetching project...');
       spinner.start();
 
@@ -58,6 +65,11 @@ export function registerProjectCommands(program: Command): void {
         const project = await client.getProject(id);
 
         spinner.stop();
+
+        if (options.json) {
+          console.log(JSON.stringify(project, null, 2));
+          return;
+        }
 
         console.log();
         console.log(`Project: ${project.name}`);
@@ -81,7 +93,8 @@ export function registerProjectCommands(program: Command): void {
   projects
     .command('create <name>')
     .description('Create a new project')
-    .action(async (name: string) => {
+    .option('--json', 'Output as JSON')
+    .action(async (name: string, options) => {
       const spinner = createSpinner('Creating project...');
       spinner.start();
 
@@ -90,6 +103,12 @@ export function registerProjectCommands(program: Command): void {
         const project = await client.createProject({ name });
 
         spinner.stop();
+
+        if (options.json) {
+          console.log(JSON.stringify(project, null, 2));
+          return;
+        }
+
         success(`Project created: ${project.project_id}`);
       } catch (err) {
         spinner.stop();
