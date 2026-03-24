@@ -26,7 +26,6 @@ import { useProjectStore } from '@/store/projectStore';
 import { DiffTreeOverview } from './DiffTreeOverview';
 import { DiffYAMLSplitView } from './DiffYAMLSplitView';
 import { DiffYAMLUnifiedView } from './DiffYAMLUnifiedView';
-import { FrameDiffCard } from './FrameDiffCard';
 import { FrameDiffIndex } from './FrameDiffIndex';
 
 // ============================================================================
@@ -483,87 +482,6 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
           </div>
         </aside>
       </div>
-    </div>
-  );
-}
-
-// ============================================================================
-// DiffTabContent — renders frame diff cards in order
-// ============================================================================
-
-function DiffTabContent({
-  diff,
-  activeFrameId,
-  onSelectFrame,
-  showIdentical,
-}: {
-  diff: FrameDiff;
-  activeFrameId: string | null;
-  onSelectFrame: (id: string) => void;
-  showIdentical: boolean;
-}) {
-  return (
-    <div className="space-y-3 p-[var(--space-page)]">
-      {/* Modified frames first */}
-      {diff.modified.map(({ frameId, targetFrame, sourceFrame, slotDiffs }) => (
-        <div key={frameId} id={`diff-frame-${frameId}`}>
-          <FrameDiffCard
-            type="modified"
-            frame={targetFrame}
-            sourceFrame={sourceFrame}
-            slotDiffs={slotDiffs}
-            isActive={activeFrameId === frameId}
-            onSelect={() => onSelectFrame(frameId)}
-          />
-        </div>
-      ))}
-
-      {/* Added frames */}
-      {diff.onlyInTarget.map((frame) => (
-        <div key={frame.id} id={`diff-frame-${frame.id}`}>
-          <FrameDiffCard
-            type="added"
-            frame={frame}
-            isActive={activeFrameId === frame.id}
-            onSelect={() => onSelectFrame(frame.id)}
-          />
-        </div>
-      ))}
-
-      {/* Removed frames */}
-      {diff.onlyInSource.map((frame) => (
-        <div key={frame.id} id={`diff-frame-${frame.id}`}>
-          <FrameDiffCard
-            type="removed"
-            frame={frame}
-            isActive={activeFrameId === frame.id}
-            onSelect={() => onSelectFrame(frame.id)}
-          />
-        </div>
-      ))}
-
-      {/* Identical frames (only if toggled on) */}
-      {showIdentical &&
-        diff.identical.map((frame) => (
-          <div key={frame.id} id={`diff-frame-${frame.id}`}>
-            <FrameDiffCard
-              type="identical"
-              frame={frame}
-              isActive={activeFrameId === frame.id}
-              onSelect={() => onSelectFrame(frame.id)}
-            />
-          </div>
-        ))}
-
-      {/* Empty state */}
-      {diff.modified.length === 0 &&
-        diff.onlyInTarget.length === 0 &&
-        diff.onlyInSource.length === 0 &&
-        diff.identical.length === 0 && (
-          <div className="flex items-center justify-center py-20 text-[var(--text-tertiary)] text-sm">
-            No frame differences found.
-          </div>
-        )}
     </div>
   );
 }

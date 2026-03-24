@@ -14,7 +14,7 @@ interface YAMLFrameRendererProps {
   startLine: number;
 }
 
-function SlotValueSpan({ value }: { value: SlotValue }) {
+export function SlotValueSpan({ value }: { value: SlotValue }) {
   if (typeof value === 'string') {
     return <span style={{ color: YAML_COLORS.string }}>&quot;{value}&quot;</span>;
   }
@@ -44,7 +44,7 @@ function SlotValueSpan({ value }: { value: SlotValue }) {
   return <span style={{ color: YAML_COLORS.bracket }}>{JSON.stringify(value)}</span>;
 }
 
-function WordDiffSpan({ wordDiff }: { wordDiff: Array<{ type: 'unchanged' | 'added' | 'removed'; text: string }> }) {
+export function WordDiffSpan({ wordDiff }: { wordDiff: Array<{ type: 'unchanged' | 'added' | 'removed'; text: string }> }) {
   return (
     <>
       {wordDiff.map((seg, i) => {

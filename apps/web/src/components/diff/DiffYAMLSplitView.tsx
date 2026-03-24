@@ -1,25 +1,17 @@
 'use client';
 
 import { useCallback, useRef } from 'react';
-import type { FrameDiff, Relation } from '@t3x-dev/core';
-import { cn } from '@/lib/utils';
+import type { FrameDiff } from '@t3x-dev/core';
 import { buildAlignedFrames, type AlignedFrame } from './DiffYAMLUtils';
+import {
+  DY_CSS_VARS,
+  FrameSeparator,
+  RelationAnnotation,
+  IdenticalCollapseBar,
+  getFrameRelations,
+} from './DiffYAMLShared';
 import { YAMLFrameRenderer, frameLineCount } from './YAMLFrameRenderer';
 import { YAMLLine } from './YAMLLine';
-
-// ── Relation color map ──
-const REL_COLORS: Record<string, string> = {
-  causes: '#ff9e64',
-  conditions: '#e3b341',
-  contrasts: '#f85149',
-  elaborates: '#58a6ff',
-  follows: '#7d8590',
-  depends: '#d2a8ff',
-};
-
-function relColor(type: string): string {
-  return REL_COLORS[type] ?? '#7d8590';
-}
 
 // ── Props ──
 
@@ -28,146 +20,6 @@ interface DiffYAMLSplitViewProps {
   activeFrameId: string | null;
   onSelectFrame: (id: string) => void;
   showIdentical: boolean;
-}
-
-// ── Relation helpers ──
-
-interface FrameRelation {
-  relation: Relation;
-  status: 'added' | 'removed' | 'kept';
-  /** The "other" frame id (relative to the frame we're annotating) */
-  otherId: string;
-  /** Arrow direction: 'in' means other -> this frame, 'out' means this frame -> other */
-  direction: 'in' | 'out';
-}
-
-/**
- * Gather relations relevant to a given frame, annotated with diff status.
- */
-function getFrameRelations(
-  frameId: string,
-  diff: FrameDiff,
-): FrameRelation[] {
-  const results: FrameRelation[] = [];
-  const addedSet = new Set(diff.relationsAdded.map(r => `${r.from}:${r.to}:${r.type}`));
-  const removedSet = new Set(diff.relationsRemoved.map(r => `${r.from}:${r.to}:${r.type}`));
-
-  // Collect all relations touching this frame
-  const allRelations = [
-    ...diff.relationsAdded,
-    ...diff.relationsRemoved,
-  ];
-
-  // Also collect "kept" relations: present in both source and target.
-  // These are relations NOT in added or removed. We need to find them from frames.
-  // Since FrameDiff doesn't explicitly list kept relations, we infer from added/removed.
-  // For now, we only show added and removed relation annotations.
-  // But the preview shows "kept" relations too. We'll collect all unique relation keys
-  // and determine status.
-
-  // Build a map of all relations we know about
-  const seen = new Set<string>();
-
-  for (const r of diff.relationsAdded) {
-    const key = `${r.from}:${r.to}:${r.type}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    if (r.from === frameId) {
-      results.push({ relation: r, status: 'added', otherId: r.to, direction: 'out' });
-    } else if (r.to === frameId) {
-      results.push({ relation: r, status: 'added', otherId: r.from, direction: 'in' });
-    }
-  }
-
-  for (const r of diff.relationsRemoved) {
-    const key = `${r.from}:${r.to}:${r.type}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    if (r.from === frameId) {
-      results.push({ relation: r, status: 'removed', otherId: r.to, direction: 'out' });
-    } else if (r.to === frameId) {
-      results.push({ relation: r, status: 'removed', otherId: r.from, direction: 'in' });
-    }
-  }
-
-  return results;
-}
-
-// ── Frame separator ──
-
-function FrameSeparator({
-  aligned,
-  onClick,
-  isActive,
-}: {
-  aligned: AlignedFrame;
-  onClick: () => void;
-  isActive: boolean;
-}) {
-  const statusLabel = aligned.type === 'modified' ? '~mod'
-    : aligned.type === 'added' ? '+new'
-    : aligned.type === 'removed' ? '-del'
-    : '=';
-
-  const statusClass = aligned.type === 'modified' ? 'text-[var(--dy-modified-accent)]'
-    : aligned.type === 'added' ? 'text-[var(--dy-added-accent)]'
-    : aligned.type === 'removed' ? 'text-[var(--dy-removed-accent)]'
-    : 'text-[var(--text-tertiary)]';
-
-  const frame = aligned.leftFrame ?? aligned.rightFrame;
-  const frameType = frame?.type ?? aligned.frameId;
-
-  return (
-    <div
-      id={`diff-frame-${aligned.frameId}`}
-      className={cn(
-        'flex items-center gap-[5px] text-[9px] font-medium uppercase tracking-[0.6px] select-none cursor-pointer',
-        'pt-[5px] pb-[2px] opacity-60 hover:opacity-100',
-        'text-[var(--text-tertiary)]',
-        isActive && 'opacity-100 bg-[var(--hover-bg)]',
-      )}
-      style={{ paddingLeft: 'calc(36px + 4px + 10px)' }}
-      onClick={onClick}
-    >
-      <span className={cn('text-[8px] font-semibold tracking-[0.3px]', statusClass)}>
-        {statusLabel}
-      </span>
-      <span>{frameType}</span>
-      <span className="font-mono opacity-40 text-[8px]">{aligned.frameId}</span>
-      {/* Divider line */}
-      <span className="flex-1 h-px bg-[var(--stroke-divider)] opacity-50" />
-    </div>
-  );
-}
-
-// ── Relation annotation line ──
-
-function RelationAnnotation({ rel }: { rel: FrameRelation }) {
-  const statusClass = rel.status === 'added' ? 'text-[var(--dy-added-accent)]'
-    : rel.status === 'removed' ? 'text-[var(--dy-removed-accent)] line-through opacity-50'
-    : 'text-[var(--text-tertiary)] opacity-40';
-
-  const arrow = rel.direction === 'in' ? '\u2190' : '\u2192';
-
-  return (
-    <div
-      className={cn(
-        'flex items-center gap-1 font-mono text-[10px] min-h-[18px]',
-        statusClass,
-      )}
-      style={{ paddingLeft: 'calc(36px + 4px + 10px)', paddingRight: '10px' }}
-    >
-      <span className="inline-flex items-center gap-[3px] px-1 rounded-sm text-[9px]">
-        <span
-          className="w-1 h-1 rounded-full shrink-0"
-          style={{ background: relColor(rel.relation.type) }}
-        />
-      </span>
-      <span className="opacity-40">{arrow}</span>
-      <span>{rel.otherId}</span>
-      <span className="opacity-30 text-[9px]">{rel.relation.type}</span>
-    </div>
-  );
 }
 
 // ── Empty placeholder lines ──
@@ -181,32 +33,6 @@ function EmptyPlaceholderLines({ count }: { count: number }) {
         </YAMLLine>
       ))}
     </>
-  );
-}
-
-// ── Identical frames collapse bar ──
-
-function IdenticalCollapseBar({
-  frames,
-  onClick,
-}: {
-  frames: AlignedFrame[];
-  onClick: () => void;
-}) {
-  if (frames.length === 0) return null;
-  const names = frames
-    .map(f => (f.leftFrame ?? f.rightFrame)?.type ?? f.frameId)
-    .join(', ');
-  return (
-    <div
-      className="flex items-center gap-[5px] font-mono text-[10px] text-[var(--text-tertiary)] cursor-pointer select-none opacity-50 hover:opacity-80 hover:bg-[var(--hover-bg)]"
-      style={{ padding: '3px 10px 3px calc(36px + 4px + 10px)' }}
-      onClick={onClick}
-    >
-      <span>\u25B6</span>
-      <span>{frames.length} identical frame{frames.length > 1 ? 's' : ''}</span>
-      <span className="opacity-50">({names})</span>
-    </div>
   );
 }
 
@@ -357,18 +183,7 @@ export function DiffYAMLSplitView({
   return (
     <div
       className="flex flex-1 overflow-hidden"
-      style={{
-        // CSS custom properties for diff colors
-        '--dy-surface': '#0d1117',
-        '--dy-added-bg': 'rgba(46,160,67,0.15)',
-        '--dy-added-accent': '#3fb950',
-        '--dy-added-word': 'rgba(46,160,67,0.45)',
-        '--dy-removed-bg': 'rgba(248,81,73,0.15)',
-        '--dy-removed-accent': '#f85149',
-        '--dy-removed-word': 'rgba(248,81,73,0.40)',
-        '--dy-modified-bg': 'rgba(210,153,34,0.10)',
-        '--dy-modified-accent': '#d29922',
-      } as React.CSSProperties}
+      style={DY_CSS_VARS}
     >
       {/* Left pane (base) */}
       <div
