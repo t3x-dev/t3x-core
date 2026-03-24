@@ -130,6 +130,10 @@ Key distinction: The user must have EXPLICITLY confirmed or adopted an AI sugges
 Each slot in your delta MUST have a corresponding "slot_quotes" entry pointing to VERBATIM text from the ★ NEW Turns ★ section.
 - If you cannot quote exact source text from the NEW turns for a slot → DO NOT create that slot
 - slot_quotes values must be actual substrings from the conversation, not paraphrased
+- Keep quotes MINIMAL: extract only the shortest substring that contains the slot value
+  BAD:  "We're vegetarian and my partner is allergic to peanuts" (entire sentence)
+  GOOD: "vegetarian" (just the value)
+  GOOD: "allergic to peanuts" (just the relevant part)
 - Do NOT add slots based on AI responses unless the user explicitly confirmed them in the NEW turns
 - This is a hard constraint — zero exceptions
 
@@ -243,6 +247,10 @@ Key distinction: The user must have EXPLICITLY confirmed or adopted an AI sugges
 Every slot MUST have a corresponding entry in "slot_quotes" with VERBATIM text copied from the conversation.
 - If you cannot quote the exact source text for a slot → DO NOT create that slot
 - slot_quotes values must be actual substrings from the conversation, not paraphrased
+- Keep quotes MINIMAL: extract only the shortest substring that contains the slot value
+  BAD:  "We're vegetarian and my partner is allergic to peanuts" (entire sentence)
+  GOOD: "vegetarian" (just the value)
+  GOOD: "allergic to peanuts" (just the relevant part)
 - This is a hard constraint — zero exceptions
 
 ## Slot Nesting Limit: Maximum 1 Level
