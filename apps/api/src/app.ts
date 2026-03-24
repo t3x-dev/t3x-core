@@ -57,6 +57,7 @@ import { authLocalRoutes } from './routes/auth-local.openapi';
 import { authMeRoutes } from './routes/auth-me.openapi';
 import { autopilotRoutes } from './routes/autopilot.openapi';
 import { comparisonsRoutes } from './routes/comparisons.openapi';
+import { checkRoutes } from './routes/check.openapi';
 import { contextRoutes } from './routes/context.openapi';
 import { importRoutes } from './routes/import.openapi';
 import { ingestRoutes } from './routes/ingest.openapi';
@@ -172,6 +173,7 @@ export function createApp(options?: CreateAppOptions): Hono {
   api.route('/', knowledgeGraphRoutes);
   api.route('/', llmRoutes);
   api.route('/', autopilotRoutes);
+  api.route('/', checkRoutes);
   api.route('/', contextRoutes);
   api.route('/', relationsRoutes);
   api.route('/', extractionFeedbackRoutes);
