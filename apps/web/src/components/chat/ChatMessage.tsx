@@ -1,7 +1,7 @@
 'use client';
 
-import { User } from 'lucide-react';
-import { useCallback, useMemo, useRef } from 'react';
+import { Pencil, RefreshCw, User } from 'lucide-react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { CitationChips } from './CitationChips';
@@ -20,6 +20,8 @@ interface ChatMessageProps {
   citations?: Citation[];
   thinkingContent?: string;
   isThinking?: boolean;
+  onRegenerate?: () => void;
+  onEdit?: (newContent: string) => void;
 }
 
 /**
@@ -94,8 +96,12 @@ export function ChatMessage({
   citations,
   thinkingContent,
   isThinking,
+  onRegenerate,
+  onEdit,
 }: ChatMessageProps) {
   const isUser = sender === 'user';
+  const [isEditing, setIsEditing] = useState(false);
+  const [editContent, setEditContent] = useState('');
 
   const hoveredFrameId = useExtractionPanelStore((s) => s.hoveredFrameId);
   const hoveredSlotKey = useExtractionPanelStore((s) => s.hoveredSlotKey);
@@ -233,15 +239,58 @@ export function ChatMessage({
             </div>
 
             {isUser ? (
-              <div
-                ref={userTextRef}
-                onMouseMove={handleUserMouseMove}
-                className="text-sm leading-relaxed text-[var(--text-primary)] whitespace-pre-wrap"
-              >
-                {hasCharHighlights ? (
-                  <HighlightedText text={content} ranges={highlightRanges} />
+              <div className="relative">
+                {/* Edit button - top right on hover */}
+                {!isStreaming && onEdit && !isEditing && (
+                  <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute -top-1 right-0">
+                    <button
+                      type="button"
+                      onClick={() => { setEditContent(content); setIsEditing(true); }}
+                      className="p-1 rounded text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] transition-colors"
+                      title="Edit message"
+                    >
+                      <Pencil className="h-3 w-3" />
+                    </button>
+                  </div>
+                )}
+                {isEditing ? (
+                  <div className="flex flex-col gap-2">
+                    <textarea
+                      value={editContent}
+                      onChange={(e) => setEditContent(e.target.value)}
+                      className="w-full p-2 rounded border border-[var(--border-primary)] bg-[var(--bg-primary)] text-sm text-[var(--text-primary)] resize-none focus:outline-none focus:ring-1 focus:ring-[var(--accent-commit)]"
+                      rows={3}
+                      autoFocus
+                    />
+                    <div className="flex gap-2 justify-end">
+                      <button
+                        type="button"
+                        onClick={() => setIsEditing(false)}
+                        className="px-2 py-1 text-xs rounded text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)]"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { onEdit?.(editContent); setIsEditing(false); }}
+                        className="px-2 py-1 text-xs rounded bg-[var(--accent-commit)] text-white hover:opacity-90"
+                      >
+                        Save & Resend
+                      </button>
+                    </div>
+                  </div>
                 ) : (
-                  content
+                  <div
+                    ref={userTextRef}
+                    onMouseMove={handleUserMouseMove}
+                    className="text-sm leading-relaxed text-[var(--text-primary)] whitespace-pre-wrap"
+                  >
+                    {hasCharHighlights ? (
+                      <HighlightedText text={content} ranges={highlightRanges} />
+                    ) : (
+                      content
+                    )}
+                  </div>
                 )}
               </div>
             ) : (
@@ -297,6 +346,18 @@ export function ChatMessage({
                   <CitationChips citations={citations} />
                 )}
               </div>
+              {!isUser && !isStreaming && onRegenerate && (
+                <div className="opacity-0 group-hover:opacity-100 transition-opacity mt-1">
+                  <button
+                    type="button"
+                    onClick={onRegenerate}
+                    className="p-1 rounded text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] transition-colors"
+                    title="Regenerate response"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
               </>
             )}
           </div>

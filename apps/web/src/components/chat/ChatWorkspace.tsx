@@ -15,6 +15,7 @@ import { useChatStore } from '@/store/chatStore';
 import { useExtractionPanelStore } from '@/store/extractionPanelStore';
 import { useSessionStore } from '@/store/sessionStore';
 import { ChatHeader } from './ChatHeader';
+import type { AttachedImage } from './ChatInput';
 import { ChatInput } from './ChatInput';
 import { ChatMessage } from './ChatMessage';
 
@@ -72,6 +73,8 @@ export function ChatWorkspace({
     error,
     warning,
     sendMessage,
+    regenerate,
+    editAndResend,
     stopGenerating,
     turnsSavedCounter,
     searchQuery,
@@ -373,13 +376,13 @@ export function ChatWorkspace({
   }, [firstMessage, isLoading, isNewChat, resolvedProjectId, ensureProject, sendMessage]);
 
   const handleSend = useCallback(
-    async (message: string) => {
+    async (message: string, images?: AttachedImage[]) => {
       if (!resolvedProjectId) {
         pendingMessageRef.current = message;
         const projId = await ensureProject(message);
         setResolvedProjectId(projId);
       } else {
-        sendMessage(message);
+        sendMessage(message, images ? { images } : undefined);
       }
     },
     [resolvedProjectId, ensureProject, sendMessage]
@@ -436,6 +439,8 @@ export function ChatWorkspace({
                 content={msg.content}
                 turnHash={msg.id}
                 turnIndex={i + 1}
+                onRegenerate={msg.role === 'assistant' ? () => regenerate(i) : undefined}
+                onEdit={msg.role === 'user' ? (newContent: string) => editAndResend(i, newContent) : undefined}
                 citations={
                   msg.role === 'assistant' && i === messages.length - 1
                     ? citations

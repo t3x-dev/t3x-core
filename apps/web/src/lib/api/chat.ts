@@ -4,9 +4,19 @@
 
 import { API_V1, ApiError, fetchWithTimeout, handleResponse } from './core';
 
+export interface ContentBlock {
+  type: 'text' | 'image';
+  text?: string;
+  source?: {
+    type: 'base64';
+    media_type: string;
+    data: string;
+  };
+}
+
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
-  content: string;
+  content: string | ContentBlock[];
 }
 
 export interface Citation {
