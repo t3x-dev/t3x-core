@@ -241,7 +241,7 @@ export function MergeReviewDialog({
               >
                 <span className="flex items-center gap-1.5">
                   <span className="inline-block h-2 w-2 rounded-full bg-[var(--diff-added-accent)]" />
-                  {animatedCount} sentences unified
+                  {animatedCount} items unified
                 </span>
               </motion.div>
 

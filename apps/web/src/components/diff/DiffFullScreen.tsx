@@ -1,38 +1,24 @@
 'use client';
 
 /**
- * DiffFullScreen - Full-screen side-by-side diff overlay
+ * DiffFullScreen - Full-screen frame-based diff overlay
  *
- * Displays a complete diff between two commits with:
- * - Left/Right side-by-side comparison
- * - Word-level diff highlighting for modified sentences
- * - Source context tracing (click pin icon to see inline context via SourceContextView)
- * - Stats bar with section jumping
+ * Displays a complete diff between two commits using FrameYAMLDiff:
+ * - Frame-level slot diffs with YAML-like display
+ * - Commit metadata header
  */
 
+import type { FrameDiff } from '@t3x-dev/core';
 import { Loader2 } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { useTerminology } from '@/hooks/useTerminology';
-import type { ApiCommit, DiffResultRaw } from '@/lib/api';
-import { getApiCommit } from '@/lib/api';
-import { framesToSentences } from '@/lib/framesToSentences';
+import type { CommitMeta } from '@/lib/api/frameDiff';
+import { getFrameDiff } from '@/lib/api/frameDiff';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import { DiffHeader } from './DiffHeader';
-import type { DiffSideBySideHandle } from './DiffSideBySide';
-import { DiffSideBySide } from './DiffSideBySide';
-import { DiffStatsBar } from './DiffStatsBar';
-
-// ============================================================================
-// Helpers
-// ============================================================================
-
-/** Format column label: "branch @ shortHash" or just shortHash */
-function formatCommitLabel(branch: string | null | undefined, hash: string): string {
-  const shortHash = hash.replace('sha256:', '').slice(0, 7);
-  return branch ? `${branch} @ ${shortHash}` : shortHash;
-}
+import { FrameYAMLDiff } from './FrameYAMLDiff';
 
 // ============================================================================
 // Types
@@ -43,7 +29,8 @@ interface DiffFullScreenProps {
   onClose: () => void;
   baseCommitHash: string;
   targetCommitHash: string;
-  diffData: DiffResultRaw;
+  /** @deprecated Ignored — diff is now computed server-side via /v1/diff/frame */
+  diffData?: unknown;
   projectId?: string;
 }
 
@@ -56,39 +43,35 @@ export function DiffFullScreen({
   onClose,
   baseCommitHash,
   targetCommitHash,
-  diffData,
-  projectId,
 }: DiffFullScreenProps) {
-  const [baseCommit, setBaseCommit] = useState<ApiCommit | null>(null);
-  const [targetCommit, setTargetCommit] = useState<ApiCommit | null>(null);
-  const [commitsLoading, setCommitsLoading] = useState(false);
+  const [frameDiffResult, setFrameDiffResult] = useState<FrameDiff | null>(null);
+  const [baseMeta, setBaseMeta] = useState<CommitMeta | null>(null);
+  const [targetMeta, setTargetMeta] = useState<CommitMeta | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const { t } = useTerminology();
 
-  const sideBySideRef = useRef<DiffSideBySideHandle>(null);
-
-  // Load commit data for source_ref tracing
+  // Fetch frame diff from API
   useEffect(() => {
     if (!open) return;
 
     let cancelled = false;
-    setCommitsLoading(true);
+    setLoading(true);
+    setError(null);
 
-    Promise.all([getApiCommit(baseCommitHash), getApiCommit(targetCommitHash)])
-      .then(([base, target]) => {
-        if (!cancelled) {
-          setBaseCommit(base);
-          setTargetCommit(target);
-        }
+    getFrameDiff(baseCommitHash, targetCommitHash)
+      .then((response) => {
+        if (cancelled) return;
+        setFrameDiffResult(response.diff);
+        setBaseMeta(response.base);
+        setTargetMeta(response.target);
       })
-      .catch(() => {
-        // Commits may not load (e.g., V3 commits), graceful degradation
-        if (!cancelled) {
-          setBaseCommit(null);
-          setTargetCommit(null);
-        }
+      .catch((err) => {
+        if (cancelled) return;
+        setError(err instanceof Error ? err.message : 'Failed to load diff');
       })
       .finally(() => {
-        if (!cancelled) setCommitsLoading(false);
+        if (!cancelled) setLoading(false);
       });
 
     return () => {
@@ -98,13 +81,11 @@ export function DiffFullScreen({
 
   const handleClose = useCallback(() => {
     onClose();
-    setBaseCommit(null);
-    setTargetCommit(null);
+    setFrameDiffResult(null);
+    setBaseMeta(null);
+    setTargetMeta(null);
+    setError(null);
   }, [onClose]);
-
-  const handleJump = useCallback((section: string) => {
-    sideBySideRef.current?.jumpToSection(section);
-  }, []);
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && handleClose()}>
@@ -118,44 +99,32 @@ export function DiffFullScreen({
         <DiffHeader
           baseCommit={{
             hash: baseCommitHash,
-            message: baseCommit?.message,
-            branch: baseCommit?.branch,
+            message: baseMeta?.message,
+            branch: baseMeta?.branch,
           }}
           targetCommit={{
             hash: targetCommitHash,
-            message: targetCommit?.message,
-            branch: targetCommit?.branch,
+            message: targetMeta?.message,
+            branch: targetMeta?.branch,
           }}
           onClose={handleClose}
         />
 
-        {/* Stats Bar */}
-        <DiffStatsBar
-          identical={diffData.stats.sameCount}
-          equivalent={diffData.stats.equivalentCount ?? 0}
-          modified={diffData.stats.modifiedCount}
-          added={diffData.stats.addedCount}
-          removed={diffData.stats.removedCount}
-          onJump={handleJump}
-        />
-
         {/* Main Content */}
-        {commitsLoading ? (
+        {loading ? (
           <div className="flex-1 flex items-center justify-center">
             <Loader2 className="h-6 w-6 animate-spin text-[var(--text-tertiary)]" />
             <span className="ml-2 text-[var(--text-tertiary)]">{t('loading')}</span>
           </div>
-        ) : (
-          <DiffSideBySide
-            ref={sideBySideRef}
-            segmentDiffs={diffData.segmentDiffs}
-            baseSentences={baseCommit ? framesToSentences(baseCommit.content as import('@t3x-dev/core').SemanticContent).map((s) => ({ id: s.id, text: s.text, source_ref: s.source_ref ? { conversation_id: s.source_ref.conversation_id ?? '', turn_hash: s.source_ref.turn_hash ?? '', start_char: s.source_ref.start_char ?? 0, end_char: s.source_ref.end_char ?? 0 } : undefined })) : []}
-            targetSentences={targetCommit ? framesToSentences(targetCommit.content as import('@t3x-dev/core').SemanticContent).map((s) => ({ id: s.id, text: s.text, source_ref: s.source_ref ? { conversation_id: s.source_ref.conversation_id ?? '', turn_hash: s.source_ref.turn_hash ?? '', start_char: s.source_ref.start_char ?? 0, end_char: s.source_ref.end_char ?? 0 } : undefined })) : []}
-            projectId={projectId}
-            baseLabel={formatCommitLabel(baseCommit?.branch, baseCommitHash)}
-            targetLabel={formatCommitLabel(targetCommit?.branch, targetCommitHash)}
-          />
-        )}
+        ) : error ? (
+          <div className="flex-1 flex items-center justify-center">
+            <span className="text-[var(--status-error)] text-sm">{error}</span>
+          </div>
+        ) : frameDiffResult ? (
+          <div className="flex-1 overflow-auto p-4">
+            <FrameYAMLDiff diff={frameDiffResult} />
+          </div>
+        ) : null}
       </DialogContent>
     </Dialog>
   );
