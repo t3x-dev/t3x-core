@@ -90,6 +90,8 @@ export interface Relation {
 // ── SemanticContent (a commit's semantic payload) ──
 
 export interface SemanticContent {
+  topic?: string;
+  root_frame_id?: string;
   frames: Frame[];
   relations: Relation[];
 }
@@ -184,6 +186,10 @@ export interface FrameDiff {
   /** Relation changes */
   relationsAdded: Relation[];
   relationsRemoved: Relation[];
+  /** Topic changed between source and target */
+  topicChanged?: { oldTopic?: string; newTopic?: string };
+  /** Root frame ID changed between source and target */
+  rootChanged?: { oldRoot?: string; newRoot?: string };
 }
 
 // ── Merge ──
