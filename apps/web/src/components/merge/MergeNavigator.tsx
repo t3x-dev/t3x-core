@@ -12,7 +12,7 @@
  */
 
 import type { FrameMergeResult } from '@t3x-dev/core';
-import { Check, Circle } from 'lucide-react';
+import { Check, Circle, ChevronDown } from 'lucide-react';
 
 // ============================================================================
 // Types
@@ -24,6 +24,12 @@ type FrameResolution =
   | { type: 'both' }
   | { type: 'per-slot'; slotChoices: Record<string, 'source' | 'target'> };
 
+interface RelationAnnotation {
+  source: string;
+  target: string;
+  type: string;
+}
+
 interface MergeNavigatorProps {
   mergeResult: FrameMergeResult;
   resolutions: Map<string, FrameResolution>;
@@ -33,6 +39,8 @@ interface MergeNavigatorProps {
   onSelectFrame: (id: string) => void;
   onToggleKeepSource: (frameId: string) => void;
   onToggleKeepTarget: (frameId: string) => void;
+  onJumpToNextUnresolved?: () => void;
+  relations?: RelationAnnotation[];
 }
 
 // ============================================================================
@@ -85,6 +93,8 @@ export function MergeNavigator({
   onSelectFrame,
   onToggleKeepSource,
   onToggleKeepTarget,
+  onJumpToNextUnresolved,
+  relations = [],
 }: MergeNavigatorProps) {
   const totalConflicts = mergeResult.conflicts.length;
   const resolvedCountActual = mergeResult.conflicts.filter((c) =>
@@ -105,31 +115,44 @@ export function MergeNavigator({
   return (
     <aside className="hidden w-[200px] shrink-0 flex-col overflow-y-auto border-r border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-2 md:flex">
       {/* Progress */}
-      <div className="mb-3 px-2">
-        <div className="mb-1 flex items-center justify-between">
-          <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--text-tertiary)]">
-            Progress
-          </span>
-          <span
-            className={`font-mono text-[10px] font-medium ${
-              resolvedCountActual === totalConflicts && totalConflicts > 0
-                ? 'text-[var(--diff-added-accent)]'
-                : 'text-[var(--text-secondary)]'
-            }`}
-          >
-            {resolvedCountActual}/{totalConflicts}
-          </span>
+      <div className="mb-2 border-b border-[var(--stroke-divider)] px-3 pb-3 pt-2">
+        <div className="mb-1 text-[10px] font-semibold uppercase tracking-widest text-[var(--text-tertiary)]">
+          Progress
         </div>
-        <div className="h-1.5 overflow-hidden rounded-full bg-[var(--stroke-divider)]">
+        <div className="h-[3px] overflow-hidden rounded-full bg-[var(--stroke-divider)]">
           <div
-            className={`h-full rounded-full transition-all duration-300 ${
-              progress === 100 ? 'bg-[var(--diff-added-accent)]' : 'bg-[var(--accent-commit)]'
-            }`}
+            className="h-full rounded-full bg-[var(--diff-added-accent)] transition-all duration-300"
             style={{ width: `${progress}%` }}
           />
         </div>
-        {totalConflicts === 0 && (
-          <div className="mt-1 text-[10px] text-[var(--diff-added-accent)]">No conflicts</div>
+        <div className="mt-1.5 font-mono text-[10px] text-[var(--text-tertiary)]">
+          {totalConflicts === 0 ? (
+            <span className="text-[var(--diff-added-accent)]">No conflicts</span>
+          ) : (
+            <span
+              className={
+                resolvedCountActual === totalConflicts
+                  ? 'text-[var(--diff-added-accent)]'
+                  : 'text-[var(--text-tertiary)]'
+              }
+            >
+              {resolvedCountActual} / {totalConflicts} conflicts resolved
+            </span>
+          )}
+        </div>
+        {/* Jump to next unresolved button — hidden when all resolved */}
+        {onJumpToNextUnresolved && resolvedCountActual < totalConflicts && (
+          <button
+            type="button"
+            onClick={onJumpToNextUnresolved}
+            className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-[5px] border border-[var(--merge-conflict-accent)]/30 bg-[var(--merge-conflict-accent)]/6 px-0 py-1.5 text-[10px] font-semibold text-[var(--merge-conflict-accent)] transition-colors hover:bg-[var(--merge-conflict-accent)]/12"
+          >
+            <ChevronDown size={10} />
+            Next unresolved
+            <span className="rounded border border-white/8 bg-white/6 px-1 font-mono text-[9px] text-[var(--text-tertiary)]">
+              J
+            </span>
+          </button>
         )}
       </div>
 
@@ -137,40 +160,63 @@ export function MergeNavigator({
       {mergeResult.conflicts.length > 0 && (
         <>
           <SectionHeader label="Conflicts" count={mergeResult.conflicts.length} color="red" />
-          {mergeResult.conflicts.map((conflict) => {
+          {mergeResult.conflicts.map((conflict, idx) => {
             const isResolved = resolutions.has(conflict.frameId);
             const isActive = activeFrameId === conflict.frameId;
+            // Find relations that link this conflict to the next conflict item
+            const nextConflict = mergeResult.conflicts[idx + 1];
+            const relationsToNext = nextConflict
+              ? relations.filter(
+                  (r) =>
+                    (r.source === conflict.frameId && r.target === nextConflict.frameId) ||
+                    (r.source === nextConflict.frameId && r.target === conflict.frameId)
+                )
+              : [];
             return (
-              <button
-                key={conflict.frameId}
-                type="button"
-                onClick={() => handleFrameClick(conflict.frameId)}
-                className={`group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-all duration-200 ${
-                  isActive
-                    ? 'bg-[var(--accent-commit)]/8 text-[var(--text-primary)] ring-1 ring-[var(--accent-commit)]/20'
-                    : 'text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-secondary)]'
-                }`}
-              >
-                {isResolved ? (
-                  <Check
-                    size={8}
-                    className="shrink-0 rounded-full text-[var(--diff-added-accent)]"
-                  />
-                ) : (
-                  <Circle
-                    size={8}
-                    className="shrink-0 fill-[var(--diff-removed-accent)] text-[var(--diff-removed-accent)]"
-                  />
-                )}
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-[11px] font-medium">
-                    {formatFrameType(conflict.sourceFrame.type)}
+              <div key={conflict.frameId}>
+                <button
+                  type="button"
+                  onClick={() => handleFrameClick(conflict.frameId)}
+                  className={`group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-all duration-200 ${
+                    isActive
+                      ? 'bg-[var(--accent-commit)]/8 text-[var(--text-primary)] ring-1 ring-[var(--accent-commit)]/20'
+                      : 'text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-secondary)]'
+                  }`}
+                >
+                  {isResolved ? (
+                    <Check
+                      size={8}
+                      className="shrink-0 rounded-full text-[var(--diff-added-accent)]"
+                    />
+                  ) : (
+                    <Circle
+                      size={8}
+                      className="shrink-0 fill-[var(--merge-conflict-accent)] text-[var(--merge-conflict-accent)]"
+                    />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[11px] font-medium">
+                      {formatFrameType(conflict.sourceFrame.type)}
+                    </div>
+                    <div className="truncate font-mono text-[10px] text-[var(--text-tertiary)]">
+                      {conflict.frameId}
+                    </div>
                   </div>
-                  <div className="truncate font-mono text-[10px] text-[var(--text-tertiary)]">
-                    {conflict.frameId}
+                </button>
+                {/* Relation annotations between this and the next conflict */}
+                {relationsToNext.map((rel, rIdx) => (
+                  <div
+                    key={`${rel.source}-${rel.target}-${rIdx}`}
+                    className="flex items-center gap-1.5 py-0.5 pl-7 pr-2 font-mono text-[9px] text-[var(--text-tertiary)]"
+                    title={`${rel.source} ${rel.type} ${rel.target}`}
+                  >
+                    <span className="opacity-60">↳</span>
+                    <span className="truncate opacity-60">
+                      {rel.type} {rel.source === conflict.frameId ? rel.target : rel.source}
+                    </span>
                   </div>
-                </div>
-              </button>
+                ))}
+              </div>
             );
           })}
         </>
@@ -209,7 +255,7 @@ export function MergeNavigator({
                   type="checkbox"
                   checked={isKept}
                   onChange={() => onToggleKeepSource(frame.id)}
-                  className="h-3 w-3 shrink-0 cursor-pointer accent-[var(--accent-commit)]"
+                  className="h-3 w-3 shrink-0 cursor-pointer accent-[var(--merge-source-accent)]"
                   title={isKept ? 'Discard from source' : 'Keep from source'}
                 />
                 <div className={`min-w-0 flex-1 ${isKept ? '' : 'opacity-40'}`}>
@@ -238,7 +284,7 @@ export function MergeNavigator({
                   type="checkbox"
                   checked={isKept}
                   onChange={() => onToggleKeepTarget(frame.id)}
-                  className="h-3 w-3 shrink-0 cursor-pointer accent-[var(--accent-commit)]"
+                  className="h-3 w-3 shrink-0 cursor-pointer accent-[var(--merge-target-accent)]"
                   title={isKept ? 'Discard from target' : 'Keep from target'}
                 />
                 <div className={`min-w-0 flex-1 ${isKept ? '' : 'opacity-40'}`}>
