@@ -17,6 +17,10 @@ export const WebhookEventEnum = z.enum([
   'leaf.generated',
   'run.completed',
   'run.failed',
+  'extraction.drift',
+  'extraction.review_needed',
+  'draft.ready',
+  'check.failed',
   '*',
 ]);
 
