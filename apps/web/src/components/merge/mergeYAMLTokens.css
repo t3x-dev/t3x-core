@@ -3,35 +3,45 @@
 
 /* Light mode defaults */
 :root {
-  --merge-source-bg: rgba(88, 166, 255, 0.10);
+  --merge-source-bg: rgba(88, 166, 255, 0.1);
   --merge-source-accent: #1d6fe8;
   --merge-source-word: rgba(88, 166, 255, 0.25);
-  --merge-target-bg: rgba(20, 184, 140, 0.10);
+  --merge-target-bg: rgba(20, 184, 140, 0.1);
   --merge-target-accent: #0f9471;
   --merge-target-word: rgba(20, 184, 140, 0.25);
   --merge-conflict-accent: #b45309;
-  --merge-unchosen-opacity: 0.20;
+  --merge-unchosen-opacity: 0.2;
 }
 
 /* Dark mode overrides */
 .dark {
-  --merge-source-bg: rgba(88, 166, 255, 0.10);
+  --merge-source-bg: rgba(88, 166, 255, 0.1);
   --merge-source-accent: #58a6ff;
   --merge-source-word: rgba(88, 166, 255, 0.25);
-  --merge-target-bg: rgba(125, 211, 175, 0.10);
+  --merge-target-bg: rgba(125, 211, 175, 0.1);
   --merge-target-accent: #7dd3af;
   --merge-target-word: rgba(125, 211, 175, 0.25);
   --merge-conflict-accent: #d29922;
-  --merge-unchosen-opacity: 0.20;
+  --merge-unchosen-opacity: 0.2;
 }
 
 /* Merge line styles */
 .line-source .yaml-content,
-[data-merge-side="source"] .yaml-content { background: var(--merge-source-bg); }
+[data-merge-side="source"] .yaml-content {
+  background: var(--merge-source-bg);
+}
 .line-target .yaml-content,
-[data-merge-side="target"] .yaml-content { background: var(--merge-target-bg); }
-.line-source .gutter { color: var(--merge-source-accent); opacity: 0.5; }
-.line-target .gutter { color: var(--merge-target-accent); opacity: 0.5; }
+[data-merge-side="target"] .yaml-content {
+  background: var(--merge-target-bg);
+}
+.line-source .gutter {
+  color: var(--merge-source-accent);
+  opacity: 0.5;
+}
+.line-target .gutter {
+  color: var(--merge-target-accent);
+  opacity: 0.5;
+}
 
 /* Word-level highlights — soft: bold + subtle bg, NO strikethrough */
 .word-source {

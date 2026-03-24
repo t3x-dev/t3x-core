@@ -37,10 +37,7 @@ function SideDot({ side }: { side: 'source' | 'target' }) {
     <span
       className="inline-block w-[6px] h-[6px] rounded-full shrink-0"
       style={{
-        background:
-          side === 'source'
-            ? 'var(--merge-source-accent)'
-            : 'var(--merge-target-accent)',
+        background: side === 'source' ? 'var(--merge-source-accent)' : 'var(--merge-target-accent)',
       }}
     />
   );
@@ -50,11 +47,7 @@ function SideDot({ side }: { side: 'source' | 'target' }) {
 // MergeToolbarRow
 // ============================================================================
 
-export function MergeToolbarRow({
-  resolution,
-  onResolve,
-  hasSlotConflicts,
-}: MergeToolbarRowProps) {
+export function MergeToolbarRow({ resolution, onResolve, hasSlotConflicts }: MergeToolbarRowProps) {
   const isResolved = resolution !== null;
 
   function handleSource() {

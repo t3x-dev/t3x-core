@@ -12,7 +12,7 @@
  */
 
 import type { FrameMergeResult } from '@t3x-dev/core';
-import { Check, Circle, ChevronDown } from 'lucide-react';
+import { Check, ChevronDown, Circle } from 'lucide-react';
 
 // ============================================================================
 // Types

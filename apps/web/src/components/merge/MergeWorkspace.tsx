@@ -33,9 +33,9 @@ import { FrameMergeSection } from './FrameMergeSection';
 import { MergeActionBar } from './MergeActionBar';
 import { MergeNavigator } from './MergeNavigator';
 import { MergeNavSidebar } from './MergeNavSidebar';
-import { MergeYAMLTreeView } from './MergeYAMLTreeView';
 import { MergePreview } from './MergePreview';
 import { MergeReviewDialog } from './MergeReviewDialog';
+import { MergeYAMLTreeView } from './MergeYAMLTreeView';
 import type { ViewMode } from './UnifiedDiffView';
 import { UnifiedDiffView } from './UnifiedDiffView';
 
@@ -314,12 +314,11 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
   // Jump to next unresolved conflict (frame mode)
   const handleJumpToNextUnresolved = useCallback(() => {
     if (!frameMergeResult) return;
-    const unresolved = frameMergeResult.conflicts.find(
-      (c) => !frameResolutions.has(c.frameId)
-    );
+    const unresolved = frameMergeResult.conflicts.find((c) => !frameResolutions.has(c.frameId));
     if (unresolved) {
       setActiveFrameId(unresolved.frameId);
-      document.getElementById(`merge-frame-${unresolved.frameId}`)
+      document
+        .getElementById(`merge-frame-${unresolved.frameId}`)
         ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   }, [frameMergeResult, frameResolutions]);

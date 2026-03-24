@@ -13,12 +13,12 @@
  *     Auto-kept → collapsible section
  */
 
-import { useState, useMemo } from 'react';
 import type { FrameMergeResult, Relation } from '@t3x-dev/core';
+import { useMemo, useState } from 'react';
+import { cn } from '@/lib/utils';
+import type { FrameResolution } from './FrameConflictCard';
 import { MergeFrameRow } from './MergeFrameRow';
 import { MergeToolbarRow } from './MergeToolbarRow';
-import type { FrameResolution } from './FrameConflictCard';
-import { cn } from '@/lib/utils';
 
 // ── Props ────────────────────────────────────────────────────────────────────
 
@@ -42,15 +42,16 @@ export interface MergeYAMLTreeViewProps {
 
 function RelationRow({ relation, status }: { relation: Relation; status: 'added' | 'kept' }) {
   const arrow = '\u2192'; // →
-  const colorClass = status === 'added'
-    ? 'text-[var(--merge-target-accent)]'
-    : 'text-[var(--text-tertiary)] opacity-40';
+  const colorClass =
+    status === 'added'
+      ? 'text-[var(--merge-target-accent)]'
+      : 'text-[var(--text-tertiary)] opacity-40';
 
   const content = (
     <div
       className={cn(
         'flex items-center gap-1.5 font-mono text-[10px] min-h-[18px] py-0.5',
-        colorClass,
+        colorClass
       )}
       style={{ paddingLeft: 'calc(36px + 4px + 10px)', paddingRight: '10px' }}
     >
@@ -73,9 +74,7 @@ function RelationRow({ relation, status }: { relation: Relation; status: 'added'
       <div className="flex-1 min-w-0 border-r-2 border-r-[var(--stroke-pane-border)]">
         {content}
       </div>
-      <div className="flex-1 min-w-0">
-        {content}
-      </div>
+      <div className="flex-1 min-w-0">{content}</div>
     </div>
   );
 }
@@ -96,19 +95,25 @@ function AutoKeptCollapseBar({
   return (
     <div className="flex cursor-pointer select-none" onClick={onToggle}>
       <div className="flex-1 min-w-0 border-r-2 border-r-[var(--stroke-pane-border)]">
-        <div className="flex items-center gap-1.5 font-mono text-[10px] text-[var(--text-tertiary)] py-[3px] px-3 hover:bg-[var(--hover-bg)]"
+        <div
+          className="flex items-center gap-1.5 font-mono text-[10px] text-[var(--text-tertiary)] py-[3px] px-3 hover:bg-[var(--hover-bg)]"
           style={{ paddingLeft: 'calc(36px + 4px + 10px)' }}
         >
           <span className={cn('transition-transform', expanded && 'rotate-90')}>{'\u203A'}</span>
-          <span>{count} identical frame{count > 1 ? 's' : ''} auto-kept</span>
+          <span>
+            {count} identical frame{count > 1 ? 's' : ''} auto-kept
+          </span>
         </div>
       </div>
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5 font-mono text-[10px] text-[var(--text-tertiary)] py-[3px] px-3 hover:bg-[var(--hover-bg)]"
+        <div
+          className="flex items-center gap-1.5 font-mono text-[10px] text-[var(--text-tertiary)] py-[3px] px-3 hover:bg-[var(--hover-bg)]"
           style={{ paddingLeft: 'calc(36px + 4px + 10px)' }}
         >
           <span className={cn('transition-transform', expanded && 'rotate-90')}>{'\u203A'}</span>
-          <span>{count} identical frame{count > 1 ? 's' : ''} auto-kept</span>
+          <span>
+            {count} identical frame{count > 1 ? 's' : ''} auto-kept
+          </span>
         </div>
       </div>
     </div>
@@ -223,7 +228,7 @@ export function MergeYAMLTreeView({
                   relation={rel}
                   status={
                     mergeResult.relationsOnlyInTarget.some(
-                      (r) => r.from === rel.from && r.to === rel.to && r.type === rel.type,
+                      (r) => r.from === rel.from && r.to === rel.to && r.type === rel.type
                     )
                       ? 'added'
                       : 'kept'
@@ -252,7 +257,7 @@ export function MergeYAMLTreeView({
         {mergeResult.onlyInTarget.map((frame) => {
           // Check for new relations involving this frame
           const newRels = mergeResult.relationsOnlyInTarget.filter(
-            (r) => r.from === frame.id || r.to === frame.id,
+            (r) => r.from === frame.id || r.to === frame.id
           );
 
           return (

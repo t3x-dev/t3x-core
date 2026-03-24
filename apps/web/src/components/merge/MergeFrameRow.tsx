@@ -1,11 +1,11 @@
 'use client';
 
 import type { Frame, SlotConflict, SlotValue } from '@t3x-dev/core';
-import { cn } from '@/lib/utils';
-import { YAMLLine } from '@/components/diff/YAMLLine';
-import { SlotValueSpan } from '@/components/diff/YAMLFrameRenderer';
-import { buildAlignedSlotKeys } from '@/components/diff/DiffYAMLUtils';
 import { YAML_COLORS } from '@/components/diff/DiffYAMLFormatters';
+import { buildAlignedSlotKeys } from '@/components/diff/DiffYAMLUtils';
+import { SlotValueSpan } from '@/components/diff/YAMLFrameRenderer';
+import { YAMLLine } from '@/components/diff/YAMLLine';
+import { cn } from '@/lib/utils';
 import type { FrameResolution } from './FrameConflictCard';
 
 // ── Props ────────────────────────────────────────────────────────────────────
@@ -45,11 +45,7 @@ function SlotLine({
         : 'unchanged';
 
   const wordClass =
-    highlight === 'source'
-      ? 'word-source'
-      : highlight === 'target'
-        ? 'word-target'
-        : undefined;
+    highlight === 'source' ? 'word-source' : highlight === 'target' ? 'word-target' : undefined;
 
   return (
     <YAMLLine lineNumber={lineNumber} status={status}>
@@ -91,7 +87,11 @@ function FrameTypeHeader({
 
 /** Empty placeholder line (hatched) for the missing side */
 function EmptyPlaceholderLine() {
-  return <YAMLLine lineNumber={undefined} status="empty">{null}</YAMLLine>;
+  return (
+    <YAMLLine lineNumber={undefined} status="empty">
+      {null}
+    </YAMLLine>
+  );
 }
 
 // ── Frame separator header ────────────────────────────────────────────────────
@@ -139,7 +139,7 @@ function MergeFrameSeparator({ type, frameId, frameType, isKept, onToggleKeep }:
             'text-[9px] font-medium px-1.5 py-0.5 rounded border transition-colors',
             isKept
               ? 'border-[var(--merge-source-accent)]/50 text-[var(--merge-source-accent)] bg-[var(--merge-source-bg)]'
-              : 'border-[var(--stroke-divider)] text-[var(--text-tertiary)] hover:border-[var(--stroke-default)] hover:text-[var(--text-secondary)]',
+              : 'border-[var(--stroke-divider)] text-[var(--text-tertiary)] hover:border-[var(--stroke-default)] hover:text-[var(--text-secondary)]'
           )}
         >
           {isKept ? 'Keep' : 'Discard'}
@@ -166,10 +166,8 @@ function ConflictPanes({
   const alignedSlots = buildAlignedSlotKeys(sourceFrame, targetFrame);
 
   // Determine unchosen side based on resolution
-  const unchosenLeft =
-    resolution?.type === 'target' ? true : false;
-  const unchosenRight =
-    resolution?.type === 'source' ? true : false;
+  const unchosenLeft = resolution?.type === 'target';
+  const unchosenRight = resolution?.type === 'source';
 
   let leftLine = 1;
   let rightLine = 1;
@@ -179,10 +177,20 @@ function ConflictPanes({
 
   // Frame type header
   leftRows.push(
-    <FrameTypeHeader key="hdr-left" frame={sourceFrame} lineNumber={leftLine++} status="unchanged" />,
+    <FrameTypeHeader
+      key="hdr-left"
+      frame={sourceFrame}
+      lineNumber={leftLine++}
+      status="unchanged"
+    />
   );
   rightRows.push(
-    <FrameTypeHeader key="hdr-right" frame={targetFrame} lineNumber={rightLine++} status="unchanged" />,
+    <FrameTypeHeader
+      key="hdr-right"
+      frame={targetFrame}
+      lineNumber={rightLine++}
+      status="unchanged"
+    />
   );
 
   for (const { key, inLeft, inRight } of alignedSlots) {
@@ -198,7 +206,7 @@ function ConflictPanes({
           value={leftValue}
           lineNumber={leftLine++}
           highlight={isConflicting ? 'source' : null}
-        />,
+        />
       );
     } else {
       leftRows.push(<EmptyPlaceholderLine key={`left-empty-${key}`} />);
@@ -212,7 +220,7 @@ function ConflictPanes({
           value={rightValue}
           lineNumber={rightLine++}
           highlight={isConflicting ? 'target' : null}
-        />,
+        />
       );
     } else {
       rightRows.push(<EmptyPlaceholderLine key={`right-empty-${key}`} />);
@@ -225,7 +233,7 @@ function ConflictPanes({
       <div
         className={cn(
           'flex-1 min-w-0 border-r-2 border-r-[var(--stroke-pane-border)]',
-          unchosenLeft && 'opacity-[var(--merge-unchosen-opacity)]',
+          unchosenLeft && 'opacity-[var(--merge-unchosen-opacity)]'
         )}
         data-merge-side="source"
       >
@@ -237,10 +245,7 @@ function ConflictPanes({
 
       {/* Right pane — target */}
       <div
-        className={cn(
-          'flex-1 min-w-0',
-          unchosenRight && 'opacity-[var(--merge-unchosen-opacity)]',
-        )}
+        className={cn('flex-1 min-w-0', unchosenRight && 'opacity-[var(--merge-unchosen-opacity)]')}
         data-merge-side="target"
       >
         <div className="px-0 py-0 text-[9px] font-semibold uppercase tracking-wider text-[var(--merge-target-accent)] pl-[calc(36px+4px+10px)] pb-[2px] pt-[2px] border-b border-[var(--stroke-divider)] opacity-70">
@@ -254,13 +259,7 @@ function ConflictPanes({
 
 // ── OnlyIn frame renderer ─────────────────────────────────────────────────────
 
-function OnlyInPanes({
-  side,
-  frame,
-}: {
-  side: 'source' | 'target';
-  frame: Frame;
-}) {
+function OnlyInPanes({ side, frame }: { side: 'source' | 'target'; frame: Frame }) {
   const lineClass = side === 'source' ? 'line-source' : 'line-target';
   const slotCount = Object.keys(frame.slots).length;
   // +1 for frame type header
@@ -274,19 +273,14 @@ function OnlyInPanes({
       frame={frame}
       lineNumber={lineNum++}
       status={side === 'source' ? 'removed' : 'added'}
-    />,
+    />
   );
 
   for (const [key, value] of Object.entries(frame.slots)) {
     contentRows.push(
       <div key={key} className={lineClass}>
-        <SlotLine
-          slotKey={key}
-          value={value}
-          lineNumber={lineNum++}
-          highlight={null}
-        />
-      </div>,
+        <SlotLine slotKey={key} value={value} lineNumber={lineNum++} highlight={null} />
+      </div>
     );
   }
 
@@ -300,7 +294,10 @@ function OnlyInPanes({
 
   return (
     <div className="flex">
-      <div className="flex-1 min-w-0 border-r-2 border-r-[var(--stroke-pane-border)]" data-merge-side="source">
+      <div
+        className="flex-1 min-w-0 border-r-2 border-r-[var(--stroke-pane-border)]"
+        data-merge-side="source"
+      >
         {leftContent}
       </div>
       <div className="flex-1 min-w-0" data-merge-side="target">
@@ -319,7 +316,7 @@ function AutoKeptPanes({ frame }: { frame: Frame }) {
   ];
   for (const [key, value] of Object.entries(frame.slots)) {
     rows.push(
-      <SlotLine key={key} slotKey={key} value={value} lineNumber={lineNum++} highlight={null} />,
+      <SlotLine key={key} slotKey={key} value={value} lineNumber={lineNum++} highlight={null} />
     );
   }
 
@@ -347,10 +344,7 @@ export function MergeFrameRow({
   const displayFrame = sourceFrame ?? targetFrame;
 
   return (
-    <div
-      id={anchorId}
-      className="frame-row border-b border-[var(--stroke-divider)]"
-    >
+    <div id={anchorId} className="frame-row border-b border-[var(--stroke-divider)]">
       {/* Frame separator / header */}
       <MergeFrameSeparator
         type={type}
@@ -370,13 +364,9 @@ export function MergeFrameRow({
         />
       )}
 
-      {type === 'onlyInSource' && sourceFrame && (
-        <OnlyInPanes side="source" frame={sourceFrame} />
-      )}
+      {type === 'onlyInSource' && sourceFrame && <OnlyInPanes side="source" frame={sourceFrame} />}
 
-      {type === 'onlyInTarget' && targetFrame && (
-        <OnlyInPanes side="target" frame={targetFrame} />
-      )}
+      {type === 'onlyInTarget' && targetFrame && <OnlyInPanes side="target" frame={targetFrame} />}
 
       {type === 'autoKept' && (sourceFrame ?? targetFrame) && (
         <AutoKeptPanes frame={(sourceFrame ?? targetFrame)!} />
