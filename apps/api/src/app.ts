@@ -57,6 +57,7 @@ import { authLocalRoutes } from './routes/auth-local.openapi';
 import { authMeRoutes } from './routes/auth-me.openapi';
 import { autopilotRoutes } from './routes/autopilot.openapi';
 import { checkRoutes } from './routes/check.openapi';
+import { commitFromDraftRoutes } from './routes/commit-from-draft.openapi';
 import { comparisonsRoutes } from './routes/comparisons.openapi';
 import { contextRoutes } from './routes/context.openapi';
 import { extractRoutes as integrationExtractRoutes } from './routes/extract.openapi';
@@ -177,6 +178,7 @@ export function createApp(options?: CreateAppOptions): Hono {
   api.route('/', checkRoutes);
   api.route('/', contextRoutes);
   api.route('/', integrationExtractRoutes);
+  api.route('/', commitFromDraftRoutes);
   api.route('/', relationsRoutes);
   api.route('/', extractionFeedbackRoutes);
   api.route('/', topicsRoutes);
