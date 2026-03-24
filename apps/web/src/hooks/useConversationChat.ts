@@ -59,12 +59,23 @@ export function useConversationChat({
   const [chatWarning, setChatWarning] = useState<string | null>(null);
   const [turnsSavedCounter, setTurnsSavedCounter] = useState(0);
   const chatWarningTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tokenBufferRef = useRef('');
+  const rafIdRef = useRef<number | null>(null);
 
   // ========== Refs ==========
   const conversationIdRef = useRef(conversationId);
   const chatMessagesRef = useRef(chatMessages);
   const prevConversationIdRef = useRef<string | undefined>(undefined);
   const loadMoreAbortRef = useRef<AbortController | null>(null);
+
+  // ========== RAF cleanup ==========
+  useEffect(() => {
+    return () => {
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current);
+      }
+    };
+  }, []);
 
   // ========== Helpers ==========
   const showWarning = useCallback((msg: string) => {
@@ -283,12 +294,30 @@ export function useConversationChat({
         // Use streaming chat
         let fullResponse = '';
         let addedFinalMessage = false;
+        tokenBufferRef.current = '';
+
+        const flushBuffer = () => {
+          if (tokenBufferRef.current) {
+            setStreamingContent(tokenBufferRef.current);
+          }
+          rafIdRef.current = null;
+        };
 
         for await (const event of api.chatStream({ messages, provider, model })) {
           if (event.type === 'token' && event.content) {
             fullResponse += event.content;
-            setStreamingContent(fullResponse);
+            tokenBufferRef.current = fullResponse;
+            // Throttle: schedule render on next animation frame
+            if (rafIdRef.current === null) {
+              rafIdRef.current = requestAnimationFrame(flushBuffer);
+            }
           } else if (event.type === 'done') {
+            // Cancel pending RAF and do final render
+            if (rafIdRef.current !== null) {
+              cancelAnimationFrame(rafIdRef.current);
+              rafIdRef.current = null;
+            }
+
             // Update fullResponse with done event content if available
             if (event.content) {
               fullResponse = event.content;
