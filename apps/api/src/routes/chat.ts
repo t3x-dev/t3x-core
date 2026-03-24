@@ -42,19 +42,54 @@ function getProxyFetch() {
 const ALLOWED_ROLES = new Set(['system', 'user', 'assistant']);
 const MAX_MESSAGE_CONTENT_LENGTH = 128_000;
 
+const VALID_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
+
 function validateMessages(messages: unknown[]): string | null {
   for (let i = 0; i < messages.length; i++) {
     const msg = messages[i] as Record<string, unknown>;
     if (!msg || typeof msg !== 'object') return `messages[${i}]: must be an object`;
-    if (typeof msg.role !== 'string' || !ALLOWED_ROLES.has(msg.role)) {
+    if (typeof msg.role !== 'string' || !ALLOWED_ROLES.has(msg.role))
       return `messages[${i}]: invalid role "${String(msg.role)}"`;
+
+    // String content (existing format)
+    if (typeof msg.content === 'string') {
+      if (msg.content.length === 0) return `messages[${i}]: content must be non-empty`;
+      if (msg.content.length > MAX_MESSAGE_CONTENT_LENGTH)
+        return `messages[${i}]: content exceeds max length`;
+      continue;
     }
-    if (typeof msg.content !== 'string' || msg.content.length === 0) {
-      return `messages[${i}]: content must be a non-empty string`;
+
+    // Array content (multimodal)
+    if (Array.isArray(msg.content)) {
+      if (msg.content.length === 0) return `messages[${i}]: content array must be non-empty`;
+      let hasText = false;
+      for (let j = 0; j < msg.content.length; j++) {
+        const block = msg.content[j] as Record<string, unknown>;
+        if (!block || typeof block !== 'object')
+          return `messages[${i}].content[${j}]: invalid block`;
+        if (block.type === 'text') {
+          if (typeof block.text !== 'string' || !block.text)
+            return `messages[${i}].content[${j}]: text block must have text`;
+          if (block.text.length > MAX_MESSAGE_CONTENT_LENGTH)
+            return `messages[${i}].content[${j}]: text exceeds max length`;
+          hasText = true;
+        } else if (block.type === 'image') {
+          const source = block.source as Record<string, unknown> | undefined;
+          if (!source || source.type !== 'base64')
+            return `messages[${i}].content[${j}]: image must use base64 source`;
+          if (!VALID_IMAGE_TYPES.has(source.media_type as string))
+            return `messages[${i}].content[${j}]: invalid image type`;
+          if (typeof source.data !== 'string' || !source.data)
+            return `messages[${i}].content[${j}]: image data required`;
+        } else {
+          return `messages[${i}].content[${j}]: unknown block type "${String(block.type)}"`;
+        }
+      }
+      if (!hasText) return `messages[${i}]: at least one text block required`;
+      continue;
     }
-    if (msg.content.length > MAX_MESSAGE_CONTENT_LENGTH) {
-      return `messages[${i}]: content exceeds ${MAX_MESSAGE_CONTENT_LENGTH} characters`;
-    }
+
+    return `messages[${i}]: content must be string or array`;
   }
   return null;
 }
@@ -76,9 +111,19 @@ function sanitizeError(err: unknown): string {
 // Types
 // ============================================================================
 
+interface ContentBlock {
+  type: 'text' | 'image';
+  text?: string;
+  source?: {
+    type: 'base64';
+    media_type: string;
+    data: string;
+  };
+}
+
 interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
-  content: string;
+  content: string | ContentBlock[];
 }
 
 interface ChatResponse {
