@@ -139,6 +139,130 @@ describe('diff-merge roundtrip integration', () => {
   });
 });
 
+describe('topic merge', () => {
+  const baseContent: SemanticContent = {
+    topic: 'Original Topic',
+    root_frame_id: 'f_001',
+    frames: [{ id: 'f_001', type: 'plan', slots: { a: 1 } }],
+    relations: [],
+  };
+
+  it('auto-resolves when only source changes topic', () => {
+    const source: SemanticContent = { ...baseContent, topic: 'Source Topic' };
+    const target: SemanticContent = { ...baseContent };
+    const result = prepareFrameMerge(baseContent, source, target);
+    expect(result.topicConflict).toBeUndefined();
+    expect(result.resolvedTopic).toBe('Source Topic');
+  });
+
+  it('auto-resolves when only target changes topic', () => {
+    const source: SemanticContent = { ...baseContent };
+    const target: SemanticContent = { ...baseContent, topic: 'Target Topic' };
+    const result = prepareFrameMerge(baseContent, source, target);
+    expect(result.topicConflict).toBeUndefined();
+    expect(result.resolvedTopic).toBe('Target Topic');
+  });
+
+  it('detects topic conflict when both sides change differently', () => {
+    const source: SemanticContent = { ...baseContent, topic: 'Source Topic' };
+    const target: SemanticContent = { ...baseContent, topic: 'Target Topic' };
+    const result = prepareFrameMerge(baseContent, source, target);
+    expect(result.topicConflict).toEqual({
+      base: 'Original Topic',
+      source: 'Source Topic',
+      target: 'Target Topic',
+    });
+  });
+
+  it('auto-resolves when both sides change topic identically', () => {
+    const source: SemanticContent = { ...baseContent, topic: 'Same New Topic' };
+    const target: SemanticContent = { ...baseContent, topic: 'Same New Topic' };
+    const result = prepareFrameMerge(baseContent, source, target);
+    expect(result.topicConflict).toBeUndefined();
+    expect(result.resolvedTopic).toBe('Same New Topic');
+  });
+
+  it('auto-resolves when only source changes root_frame_id', () => {
+    const source: SemanticContent = { ...baseContent, root_frame_id: 'f_002' };
+    const target: SemanticContent = { ...baseContent };
+    const result = prepareFrameMerge(baseContent, source, target);
+    expect(result.rootConflict).toBeUndefined();
+    expect(result.resolvedRoot).toBe('f_002');
+  });
+
+  it('detects root conflict when both sides change differently', () => {
+    const source: SemanticContent = { ...baseContent, root_frame_id: 'f_002' };
+    const target: SemanticContent = { ...baseContent, root_frame_id: 'f_003' };
+    const result = prepareFrameMerge(baseContent, source, target);
+    expect(result.rootConflict).toEqual({
+      base: 'f_001',
+      source: 'f_002',
+      target: 'f_003',
+    });
+  });
+
+  it('executeFrameMerge applies topic decision', () => {
+    const source: SemanticContent = { ...baseContent, topic: 'Source Topic' };
+    const target: SemanticContent = { ...baseContent, topic: 'Target Topic' };
+    const prepared = prepareFrameMerge(baseContent, source, target);
+    const merged = executeFrameMerge(prepared, {
+      conflictResolutions: {},
+      keepFromSource: [],
+      keepFromTarget: [],
+      keepRelationsFromSource: true,
+      keepRelationsFromTarget: true,
+      topicChoice: 'target',
+    });
+    expect(merged.topic).toBe('Target Topic');
+  });
+
+  it('executeFrameMerge applies topic edit', () => {
+    const source: SemanticContent = { ...baseContent, topic: 'Source Topic' };
+    const target: SemanticContent = { ...baseContent, topic: 'Target Topic' };
+    const prepared = prepareFrameMerge(baseContent, source, target);
+    const merged = executeFrameMerge(prepared, {
+      conflictResolutions: {},
+      keepFromSource: [],
+      keepFromTarget: [],
+      keepRelationsFromSource: true,
+      keepRelationsFromTarget: true,
+      topicChoice: 'edit',
+      topicEdit: 'Custom Topic',
+    });
+    expect(merged.topic).toBe('Custom Topic');
+  });
+
+  it('executeFrameMerge applies root decision', () => {
+    const source: SemanticContent = { ...baseContent, root_frame_id: 'f_002' };
+    const target: SemanticContent = { ...baseContent, root_frame_id: 'f_003' };
+    const prepared = prepareFrameMerge(baseContent, source, target);
+    const merged = executeFrameMerge(prepared, {
+      conflictResolutions: {},
+      keepFromSource: [],
+      keepFromTarget: [],
+      keepRelationsFromSource: true,
+      keepRelationsFromTarget: true,
+      rootChoice: 'source',
+    });
+    expect(merged.root_frame_id).toBe('f_002');
+  });
+
+  it('executeFrameMerge preserves auto-resolved topic and root', () => {
+    const source: SemanticContent = { ...baseContent, topic: 'New Topic' };
+    const target: SemanticContent = { ...baseContent };
+    const prepared = prepareFrameMerge(baseContent, source, target);
+    const merged = executeFrameMerge(prepared, {
+      conflictResolutions: {},
+      keepFromSource: [],
+      keepFromTarget: [],
+      keepRelationsFromSource: true,
+      keepRelationsFromTarget: true,
+    });
+    expect(merged.topic).toBe('New Topic');
+    expect(merged.root_frame_id).toBe('f_001');
+  });
+});
+
 describe('topic and root_frame_id diff', () => {
   it('detects topic change', () => {
     const source: SemanticContent = {

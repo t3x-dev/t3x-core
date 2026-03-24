@@ -218,6 +218,11 @@ export interface FrameMergeDecision {
   keepRelationsFromSource: boolean;
   /** Keep target-only relations */
   keepRelationsFromTarget: boolean;
+  /** How to resolve topic conflict */
+  topicChoice?: 'source' | 'target' | 'edit';
+  topicEdit?: string;
+  /** How to resolve root conflict */
+  rootChoice?: 'source' | 'target';
 }
 
 export interface FrameMergeResult {
@@ -239,6 +244,14 @@ export interface FrameMergeResult {
   relationsOnlyInSource: Relation[];
   relationsOnlyInTarget: Relation[];
   relationsInBoth: Relation[];
+  /** Auto-resolved topic (when only one side changed) */
+  resolvedTopic?: string;
+  /** Topic conflict (both sides changed differently) */
+  topicConflict?: { base?: string; source?: string; target?: string };
+  /** Auto-resolved root (when only one side changed) */
+  resolvedRoot?: string;
+  /** Root conflict (both sides changed differently) */
+  rootConflict?: { base?: string; source?: string; target?: string };
 }
 
 /** Word diff function interface — injected, not imported */
