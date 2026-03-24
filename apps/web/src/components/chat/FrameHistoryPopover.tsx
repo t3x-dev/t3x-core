@@ -14,6 +14,7 @@ const SOURCE_LABELS: Record<string, string> = {
   answer: 'Answer',
   collapse: 'Collapse',
   commit_marker: 'Commit',
+  compress: 'Compress',
 };
 
 function formatTime(iso: string): string {
