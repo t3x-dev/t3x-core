@@ -4,6 +4,7 @@ import { User } from 'lucide-react';
 import { useCallback, useMemo, useRef } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { CodeBlock } from './CodeBlock';
 import { cn } from '@/lib/utils';
 import { useExtractionPanelStore } from '@/store/extractionPanelStore';
 
@@ -249,7 +250,25 @@ export function ChatMessage({
                   </div>
                 ) : (
                   <>
-                    <Markdown remarkPlugins={[remarkGfm]}>{content}</Markdown>
+                    <Markdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      code({ className, children }) {
+                        const lang = className?.replace('language-', '');
+                        const codeStr = String(children);
+                        if (lang || codeStr.includes('\n')) {
+                          return <CodeBlock language={lang}>{codeStr}</CodeBlock>;
+                        }
+                        return (
+                          <code className="px-1 py-0.5 rounded bg-[var(--bg-tertiary)] text-[0.8125rem] font-mono">
+                            {children}
+                          </code>
+                        );
+                      },
+                    }}
+                  >
+                    {content}
+                  </Markdown>
                     {isStreaming && (
                       <span className="inline-block w-1.5 h-4 ml-0.5 -mb-0.5 bg-[var(--accent-commit)] rounded-sm animate-pulse" />
                     )}
