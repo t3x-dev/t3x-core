@@ -81,6 +81,7 @@ describe('LeafDetailPage', () => {
     generated_at: '2024-01-15T10:00:00Z',
     assertions: mockAssertions,
     project_id: 'proj_123',
+    runner_assertions: null,
     created_at: '2024-01-01T00:00:00Z',
     created_by: null,
   };
@@ -172,7 +173,6 @@ describe('LeafDetailPage', () => {
       'email',
       'article',
       'slack',
-      'eval',
     ];
 
     expect(validTypes).toContain(mockLeaf.type);

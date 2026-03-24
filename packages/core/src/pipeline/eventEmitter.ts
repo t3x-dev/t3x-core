@@ -46,10 +46,7 @@ export class PipelineEventEmitter {
   private listeners = new Map<string, Set<Listener<unknown>>>();
 
   /** Subscribe to an event */
-  on<K extends keyof PipelineEventMap>(
-    event: K,
-    listener: Listener<PipelineEventMap[K]>,
-  ): void {
+  on<K extends keyof PipelineEventMap>(event: K, listener: Listener<PipelineEventMap[K]>): void {
     if (!this.listeners.has(event)) {
       this.listeners.set(event, new Set());
     }
@@ -57,18 +54,12 @@ export class PipelineEventEmitter {
   }
 
   /** Unsubscribe from an event */
-  off<K extends keyof PipelineEventMap>(
-    event: K,
-    listener: Listener<PipelineEventMap[K]>,
-  ): void {
+  off<K extends keyof PipelineEventMap>(event: K, listener: Listener<PipelineEventMap[K]>): void {
     this.listeners.get(event)?.delete(listener as Listener<unknown>);
   }
 
   /** Emit an event (fire-and-forget, does not block caller) */
-  emit<K extends keyof PipelineEventMap>(
-    event: K,
-    payload: PipelineEventMap[K],
-  ): void {
+  emit<K extends keyof PipelineEventMap>(event: K, payload: PipelineEventMap[K]): void {
     const set = this.listeners.get(event);
     if (!set || set.size === 0) return;
     for (const fn of set) {

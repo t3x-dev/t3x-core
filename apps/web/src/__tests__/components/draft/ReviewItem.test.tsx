@@ -48,14 +48,14 @@ describe('ReviewItem', () => {
   });
 
   test('NEW item has no currentText', () => {
-    const point = makePoint();
+    const _point = makePoint();
     const currentText = undefined;
     const isModify = !!currentText;
     expect(isModify).toBe(false);
   });
 
   test('MODIFY item has currentText', () => {
-    const point = makePoint({ text: 'Updated budget is $3500' });
+    const _point = makePoint({ text: 'Updated budget is $3500' });
     const currentText = 'Budget is $3000';
     const isModify = !!currentText;
     expect(isModify).toBe(true);

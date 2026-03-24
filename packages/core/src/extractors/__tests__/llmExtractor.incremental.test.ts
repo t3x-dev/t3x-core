@@ -57,7 +57,7 @@ describe('LLMExtractor.extractIncremental', () => {
     });
 
     expect(result.readyPoints.length + result.reviewPoints.length).toBeGreaterThan(0);
-    expect(result.newCursor.cursors['conv_1']).toBeDefined();
+    expect(result.newCursor.cursors.conv_1).toBeDefined();
     expect(result.stats.proposals).toBe(1);
   });
 

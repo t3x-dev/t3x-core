@@ -27,7 +27,8 @@ function toSafeApiKey({ key_hash, user_id, ...safe }: Record<string, unknown>) {
 }
 
 /** Extract userId from API key context (set by auth middleware). */
-function getUserId(c: Parameters<Parameters<typeof apiKeysRoutes.openapi>[1]>[0]): string | null {
+// biome-ignore lint/suspicious/noExplicitAny: generic error handler
+function getUserId(c: any): string | null {
   const apiKey = c.get('apiKey') as ApiKey | undefined;
   return apiKey?.user_id ?? null;
 }

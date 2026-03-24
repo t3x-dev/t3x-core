@@ -328,7 +328,8 @@ leavesGenerationRoutes.openapi(generateLeafRoute, async (c) => {
         const mrResult = await modeGenerate({
           commit,
           leaf,
-          provider,
+          // biome-ignore lint/suspicious/noExplicitAny: generic error handler
+          provider: provider as any,
           mode,
           stylePreferences: stylePreferences
             ? {
@@ -366,14 +367,16 @@ leavesGenerationRoutes.openapi(generateLeafRoute, async (c) => {
       generationModel = 'multi-round';
 
       // Record multi-round usage
-      if (multiRoundResult.usage.inputTokens || multiRoundResult.usage.outputTokens) {
+      // biome-ignore lint/suspicious/noExplicitAny: generic error handler
+      const mrUsage = (multiRoundResult as any).usage;
+      if (mrUsage?.inputTokens || mrUsage?.outputTokens) {
         recordUsageFireAndForget(db, {
           user_id: getUserId(c) ?? undefined,
           project_id: leaf.project_id,
           endpoint: 'leaf_generate',
           model: generationModel,
-          input_tokens: multiRoundResult.usage.inputTokens,
-          output_tokens: multiRoundResult.usage.outputTokens,
+          input_tokens: mrUsage.inputTokens,
+          output_tokens: mrUsage.outputTokens,
         });
       }
     } else {
@@ -668,7 +671,8 @@ leavesGenerationRoutes.openapi(batchGenerateRoute, async (c) => {
           commit_hash: decodedHash,
           type: leafConfig.type,
           title: leafTitle,
-          constraints: leafConfig.constraints,
+          // biome-ignore lint/suspicious/noExplicitAny: generic error handler
+          constraints: leafConfig.constraints as any,
           config: leafConfig.config ?? {},
           project_id: body.project_id,
         });

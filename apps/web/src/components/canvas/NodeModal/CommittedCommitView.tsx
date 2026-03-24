@@ -410,13 +410,13 @@ export function CommittedCommitView({
                           JSON
                         </TabsTrigger>
                         {commit && getSemanticContent(commit as ApiCommit).frames.length > 0 && (
-                            <TabsTrigger
-                              value="frame-graph"
-                              className="rounded-none border-b-2 border-transparent data-[state=active]:border-[var(--accent-commit)] data-[state=active]:text-[var(--text-primary)] data-[state=active]:shadow-none text-[var(--text-tertiary)] text-xs px-3 py-2"
-                            >
-                              Frame Graph
-                            </TabsTrigger>
-                          )}
+                          <TabsTrigger
+                            value="frame-graph"
+                            className="rounded-none border-b-2 border-transparent data-[state=active]:border-[var(--accent-commit)] data-[state=active]:text-[var(--text-primary)] data-[state=active]:shadow-none text-[var(--text-tertiary)] text-xs px-3 py-2"
+                          >
+                            Frame Graph
+                          </TabsTrigger>
+                        )}
                         <TabsTrigger
                           value="relations"
                           className="rounded-none border-b-2 border-transparent data-[state=active]:border-[var(--accent-commit)] data-[state=active]:text-[var(--text-primary)] data-[state=active]:shadow-none text-[var(--text-tertiary)] text-xs px-3 py-2"
@@ -466,24 +466,35 @@ export function CommittedCommitView({
                       </TabsContent>
 
                       {commit && getSemanticContent(commit as ApiCommit).frames.length > 0 && (
-                          <TabsContent value="frame-graph">
-                            <div className="h-[400px] border border-[var(--stroke-divider)] rounded-md overflow-hidden">
-                              <FrameGraphView
-                                content={getSemanticContent(commit as ApiCommit)}
-                                className="h-full w-full"
-                              />
-                            </div>
-                          </TabsContent>
-                        )}
+                        <TabsContent value="frame-graph">
+                          <div className="h-[400px] border border-[var(--stroke-divider)] rounded-md overflow-hidden">
+                            <FrameGraphView
+                              content={getSemanticContent(commit as ApiCommit)}
+                              className="h-full w-full"
+                            />
+                          </div>
+                        </TabsContent>
+                      )}
 
                       <TabsContent value="relations">
                         <RelationsTab
                           commitHash={data.commitHash || ''}
                           sentences={
                             commit.content?.frames
-                              ? (commit.content.frames as Array<{ id: string; type: string; slots: Record<string, unknown> }>).map((f) => ({
+                              ? (
+                                  commit.content.frames as Array<{
+                                    id: string;
+                                    type: string;
+                                    slots: Record<string, unknown>;
+                                  }>
+                                ).map((f) => ({
                                   id: f.id,
-                                  text: `[${f.type}] ${Object.entries(f.slots ?? {}).map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`).join('; ')}`,
+                                  text: `[${f.type}] ${Object.entries(f.slots ?? {})
+                                    .map(
+                                      ([k, v]) =>
+                                        `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`
+                                    )
+                                    .join('; ')}`,
                                 }))
                               : []
                           }

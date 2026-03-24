@@ -295,13 +295,20 @@ export function UnifiedDiffView({
     const content = sourceCommit.content as import('@t3x-dev/core').SemanticContent;
     return content.frames.map((frame) => {
       const id = frame.id.startsWith('s_') ? frame.id : `s_${frame.id.replace('f_', '')}`;
-      const text = `[${frame.type}] ${Object.entries(frame.slots).map(([k, v]) => `${k}: ${typeof v === 'string' ? v : String(v)}`).join('; ')}`;
+      const text = `[${frame.type}] ${Object.entries(frame.slots)
+        .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : String(v)}`)
+        .join('; ')}`;
       const confidence = frame.confidence ?? 1.0;
       let source: Sentence['source'] | undefined;
       if (frame.slot_sources) {
         const firstSource = Object.values(frame.slot_sources)[0];
         const turnHash = firstSource?.turn_hash ?? firstSource?.turn;
-        if (firstSource && turnHash && firstSource.start_char != null && firstSource.end_char != null) {
+        if (
+          firstSource &&
+          turnHash &&
+          firstSource.start_char != null &&
+          firstSource.end_char != null
+        ) {
           source = {
             turn_hash: turnHash,
             start_char: firstSource.start_char,

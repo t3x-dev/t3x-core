@@ -8,7 +8,10 @@ import { useExtractionPanelStore } from '@/store/extractionPanelStore';
 const CHOICE_LABELS: Record<string, { label: string; description: string }> = {
   keep_old: { label: 'Keep Current', description: 'Ignore the new topic, YAML unchanged' },
   keep_new: { label: 'Switch Topic', description: 'Fold current frames, start fresh tree' },
-  keep_both_separate: { label: 'New Project', description: 'Create a separate project for the new topic' },
+  keep_both_separate: {
+    label: 'New Project',
+    description: 'Create a separate project for the new topic',
+  },
   keep_both_together: { label: 'Add to Tree', description: 'Add new topic as linked sub-tree' },
 };
 
@@ -56,9 +59,15 @@ export function DriftPopup() {
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2">
           <GitBranch className="h-4 w-4 text-[var(--accent-commit)]" />
-          <span className="text-sm font-medium text-[var(--text-primary)]">Topic drift detected</span>
+          <span className="text-sm font-medium text-[var(--text-primary)]">
+            Topic drift detected
+          </span>
         </div>
-        <button type="button" onClick={clearDrift} className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)]">
+        <button
+          type="button"
+          onClick={clearDrift}
+          className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)]"
+        >
           <X className="h-4 w-4" />
         </button>
       </div>

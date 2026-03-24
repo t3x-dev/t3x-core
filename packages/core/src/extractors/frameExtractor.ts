@@ -82,7 +82,7 @@ export type { FrameExtractionInput, FrameExtractionTurn };
  * Call generateStructured with one retry on validation failure.
  * The retry appends the error message to guide the model.
  */
-async function callGenerateStructured(
+async function _callGenerateStructured(
   provider: Required<Pick<LLMProvider, 'generateStructured'>>,
   prompt: LLMPrompt,
   options: LLMGenerateOptions

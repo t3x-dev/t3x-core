@@ -42,7 +42,6 @@ describe('Export Utilities', () => {
         constraint_id: 'cst_1',
         passed: true,
         details: 'Keyword found in output',
-        lesson: null,
       } as Assertion,
       {
         id: 'ast_2',
@@ -52,8 +51,10 @@ describe('Export Utilities', () => {
         lesson: 'Avoid using this phrase',
       } as Assertion,
     ],
+    runner_assertions: null,
     generated_at: '2025-01-15T10:00:00.000Z',
     created_at: '2025-01-15T09:00:00.000Z',
+    created_by: null,
   };
 
   const leafWithoutOutput: Leaf = {
@@ -124,7 +125,6 @@ describe('Export Utilities', () => {
             constraint_id: 'cst_1',
             passed: true,
             details: 'Passed',
-            lesson: null,
           } as Assertion,
         ],
       };

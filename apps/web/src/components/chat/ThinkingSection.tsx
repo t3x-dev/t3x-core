@@ -20,11 +20,7 @@ export function ThinkingSection({ content, isStreaming }: ThinkingSectionProps) 
         onClick={() => setExpanded(!expanded)}
         className="flex items-center gap-1 text-xs text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] transition-colors"
       >
-        {expanded ? (
-          <ChevronDown className="h-3 w-3" />
-        ) : (
-          <ChevronRight className="h-3 w-3" />
-        )}
+        {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
         {isStreaming ? 'Thinking...' : 'Thought process'}
       </button>
       {expanded && (

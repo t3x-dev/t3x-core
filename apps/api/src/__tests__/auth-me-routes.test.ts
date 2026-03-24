@@ -39,12 +39,12 @@ CREATE TABLE IF NOT EXISTS accounts (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_accounts_provider ON accounts(provider, provider_account_id);
 `;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// biome-ignore lint/suspicious/noExplicitAny: test helper
 type ApiResponse = any;
 
 // Mock the database module before importing routes
 let mockDB: AnyDB;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// biome-ignore lint/suspicious/noExplicitAny: test helper
 let testSql: any;
 
 vi.mock('../lib/db', () => ({
@@ -64,7 +64,8 @@ describe('Auth Me Routes', () => {
     const app = new Hono();
     app.use('*', async (c, next) => {
       if (userId) {
-        c.set('apiKey', {
+        // biome-ignore lint/suspicious/noExplicitAny: test mock access
+        (c as any).set('apiKey', {
           user_id: userId,
           id: 'ak_test',
           key_prefix: 'test',

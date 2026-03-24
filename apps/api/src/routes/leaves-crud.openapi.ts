@@ -331,7 +331,8 @@ leavesCrudRoutes.openapi(createLeafRoute, async (c) => {
       commit_hash: body.commit_hash,
       type: body.type,
       title,
-      constraints: body.constraints,
+      // biome-ignore lint/suspicious/noExplicitAny: generic error handler
+      constraints: body.constraints as any,
       config: body.config ?? {},
       project_id: body.project_id,
     });
@@ -389,7 +390,12 @@ leavesCrudRoutes.openapi(listLeavesByCommitRoute, async (c) => {
 
     // Cursor-based pagination mode
     if (cursor !== undefined) {
-      const result = await findLeavesByCommit(db, decodedHash, { type, cursor, limit });
+      const result = await findLeavesByCommit(db, decodedHash, {
+        // biome-ignore lint/suspicious/noExplicitAny: generic error handler
+        type: type as any,
+        cursor: cursor as string,
+        limit,
+      });
       return c.json(
         {
           success: true as const,
@@ -404,7 +410,8 @@ leavesCrudRoutes.openapi(listLeavesByCommitRoute, async (c) => {
     }
 
     // Legacy offset/limit mode
-    const leaves = await findLeavesByCommit(db, decodedHash, { type, limit, offset });
+    // biome-ignore lint/suspicious/noExplicitAny: generic error handler
+    const leaves = await findLeavesByCommit(db, decodedHash, { type: type as any, limit, offset });
 
     return c.json({ success: true as const, data: leaves.map(toApiLeaf) }, 200);
   } catch (err) {
@@ -423,7 +430,12 @@ leavesCrudRoutes.openapi(listLeavesByProjectRoute, async (c) => {
 
     // Cursor-based pagination mode
     if (cursor !== undefined) {
-      const result = await findLeavesByProject(db, projectId, { type, cursor, limit });
+      const result = await findLeavesByProject(db, projectId, {
+        // biome-ignore lint/suspicious/noExplicitAny: generic error handler
+        type: type as any,
+        cursor: cursor as string,
+        limit,
+      });
       return c.json(
         {
           success: true as const,
@@ -438,7 +450,8 @@ leavesCrudRoutes.openapi(listLeavesByProjectRoute, async (c) => {
     }
 
     // Legacy offset/limit mode
-    const leaves = await findLeavesByProject(db, projectId, { type, limit, offset });
+    // biome-ignore lint/suspicious/noExplicitAny: generic error handler
+    const leaves = await findLeavesByProject(db, projectId, { type: type as any, limit, offset });
 
     return c.json({ success: true as const, data: leaves.map(toApiLeaf) }, 200);
   } catch (err) {
@@ -463,8 +476,8 @@ leavesCrudRoutes.openapi(updateLeafRoute, async (c) => {
         insertLeafOutputEdit(db, {
           leaf_id: id,
           project_id: existing.project_id,
-          original_output: existing.output,
-          modified_output: body.output,
+          original_output: existing.output!,
+          modified_output: body.output!,
         }).catch((err) => {
           pinoLogger.warn({ err, leafId: id }, 'failed to track leaf output edit');
         });
@@ -474,9 +487,10 @@ leavesCrudRoutes.openapi(updateLeafRoute, async (c) => {
     // Use atomic update to wrap all changes in a transaction
     const leaf = await updateLeafAtomic(db, id, {
       title: body.title,
-      constraints: body.constraints,
+      // biome-ignore lint/suspicious/noExplicitAny: generic error handler
+      constraints: body.constraints as any,
       config: body.config,
-      output: body.output,
+      output: body.output ?? undefined,
     });
 
     if (!leaf) {

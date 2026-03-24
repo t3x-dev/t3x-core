@@ -83,11 +83,13 @@ const FrameExtractResponse = SuccessResponseSchema(
     snapshot: SnapshotResponseSchema.optional(),
     delta_log_id: z.string().optional(),
     status: z.enum(['completed', 'drift_detected', 'skipped']),
-    drift: z.object({
-      relation: z.string().optional(),
-      new_topic: z.string().optional(),
-      old_topic: z.string().optional(),
-    }).optional(),
+    drift: z
+      .object({
+        relation: z.string().optional(),
+        new_topic: z.string().optional(),
+        old_topic: z.string().optional(),
+      })
+      .optional(),
     choices: z.array(z.string()).optional(),
     gate_result: z.any().optional(),
     advisory_questions: z.array(z.any()).optional(),
@@ -140,7 +142,8 @@ const extractFramesRoute = createRoute({
 // ============================================================
 
 frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
-  const { conversation_id, turn_hashes, drift_decision, topic_id, force_extract } = c.req.valid('json');
+  const { conversation_id, turn_hashes, drift_decision, topic_id, force_extract } =
+    c.req.valid('json');
 
   try {
     const db = await getDB();
@@ -214,10 +217,13 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
       );
       const decision = decideAction(sessionCtx);
       if (decision === 'wait') {
-        return c.json({
-          success: true as const,
-          data: { status: 'skipped' as const, reason: 'wait' },
-        }, 200);
+        return c.json(
+          {
+            success: true as const,
+            data: { status: 'skipped' as const, reason: 'wait' },
+          },
+          200
+        );
       }
       // 'skip' (no new turns) is advisory — log but don't block
       // The API caller may have valid reasons to re-extract
@@ -231,10 +237,13 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
         isFirstExtraction
       );
       if (!readiness.pass) {
-        return c.json({
-          success: true as const,
-          data: { status: 'skipped' as const, reason: readiness.reason },
-        }, 200);
+        return c.json(
+          {
+            success: true as const,
+            data: { status: 'skipped' as const, reason: readiness.reason },
+          },
+          200
+        );
       }
     }
 
@@ -271,22 +280,26 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
                   content: t.content,
                 }));
                 const topicName = currentSnapshot.frames[0]?.type ?? 'unknown';
-                return detectDrift(provider, topicName, frameTypes, recentTurns);
+                // biome-ignore lint/suspicious/noExplicitAny: generic error handler
+                return detectDrift(provider as any, topicName, frameTypes, recentTurns);
               });
 
               if (driftResult.drifted) {
-                return c.json({
-                  success: true as const,
-                  data: {
-                    status: 'drift_detected' as const,
-                    drift: {
-                      relation: driftResult.relationType,
-                      new_topic: driftResult.newTopicName,
-                      old_topic: currentSnapshot.frames[0]?.type,
+                return c.json(
+                  {
+                    success: true as const,
+                    data: {
+                      status: 'drift_detected' as const,
+                      drift: {
+                        relation: driftResult.relationType,
+                        new_topic: driftResult.newTopicName,
+                        old_topic: currentSnapshot.frames[0]?.type,
+                      },
+                      choices: ['keep_old', 'keep_new', 'keep_both_separate', 'keep_both_together'],
                     },
-                    choices: ['keep_old', 'keep_new', 'keep_both_separate', 'keep_both_together'],
                   },
-                }, 200);
+                  200
+                );
               }
             } catch {
               // Drift detection failure → continue with extraction (fail-safe)
@@ -301,7 +314,8 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
     const trackedUsage = { inputTokens: 0, outputTokens: 0 };
     let trackedModel = 'unknown';
     const result = await reg.tryWithFallback('generation', (provider) => {
-      const { provider: tracked, usage } = wrapWithUsageTracking(provider);
+      // biome-ignore lint/suspicious/noExplicitAny: generic error handler
+      const { provider: tracked, usage } = wrapWithUsageTracking(provider as any);
       trackedUsage.inputTokens = 0;
       trackedUsage.outputTokens = 0;
       trackedModel = tracked.id;
@@ -353,7 +367,9 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
         if (!quotes) continue;
 
         const change = result.delta.changes[i];
-        console.info(`[slot-sources] change[${i}] action=${change.action} slots=[${Object.keys(quotes).join(', ')}]`);
+        console.info(
+          `[slot-sources] change[${i}] action=${change.action} slots=[${Object.keys(quotes).join(', ')}]`
+        );
         const slotSources: Record<
           string,
           { turn: string; turn_hash?: string; start_char: number; end_char: number; quote?: string }
@@ -366,7 +382,9 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
           for (const turnInfo of turnInfoList) {
             const located = fuzzyLocate(turnInfo.content, quote);
             if (located && located.score >= 0.6) {
-              console.info(`[slot-sources]   ${slotKey}: matched in ${turnInfo.tag} score=${located.score.toFixed(2)} [${located.start}:${located.end}]`);
+              console.info(
+                `[slot-sources]   ${slotKey}: matched in ${turnInfo.tag} score=${located.score.toFixed(2)} [${located.start}:${located.end}]`
+              );
               slotSources[slotKey] = {
                 turn: turnInfo.tag,
                 turn_hash: turnInfo.turnHash,
@@ -379,7 +397,9 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
           }
         }
 
-        console.info(`[slot-sources] change[${i}] resolved ${Object.keys(slotSources).length}/${Object.keys(quotes).length} slots`);
+        console.info(
+          `[slot-sources] change[${i}] resolved ${Object.keys(slotSources).length}/${Object.keys(quotes).length} slots`
+        );
 
         if (Object.keys(slotSources).length > 0) {
           if (change.action === 'add') {
@@ -415,7 +435,8 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
       const pipelineResult = await pipelineReg.tryWithFallback(
         'generation',
         async (pipelineProvider) => {
-          const pipeline = createMeaningPipeline(pipelineProvider);
+          // biome-ignore lint/suspicious/noExplicitAny: generic error handler
+          const pipeline = createMeaningPipeline(pipelineProvider as any);
           const isIncremental = currentSnapshot.frames.length > 0;
           return pipeline.run(
             result.snapshot,
@@ -484,10 +505,17 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
       gateResult = gr;
 
       if (!gr.structure.passed) {
-        return errorResponse(c, 'GATE_STRUCTURE_FAILED', `Structural validation failed: ${JSON.stringify(gr.structure.checks)}`);
+        return errorResponse(
+          c,
+          // biome-ignore lint/suspicious/noExplicitAny: generic error handler
+          'EXTRACTION_FAILED' as any,
+          `Structural validation failed: ${JSON.stringify(gr.structure.checks)}`
+        );
       }
     } catch (gateErr) {
-      console.warn(`[gate] Gate check error: ${gateErr instanceof Error ? gateErr.message : String(gateErr)}`);
+      console.warn(
+        `[gate] Gate check error: ${gateErr instanceof Error ? gateErr.message : String(gateErr)}`
+      );
       // Gate failure is non-fatal for extraction — continue
     }
 
@@ -508,7 +536,8 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
           role: t.role,
           content: t.content,
         }));
-        return detectAmbiguity(ambProvider, organizedSnapshot, recentTurns);
+        // biome-ignore lint/suspicious/noExplicitAny: generic error handler
+        return detectAmbiguity(ambProvider as any, organizedSnapshot, recentTurns);
       });
       if (!ambiguityResult.clean) {
         advisoryQuestions = ambiguityResult.questions;
@@ -539,23 +568,30 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
     }
 
     // 7b. Check for drift_detected in extraction result
-    const extractionDelta = result.delta as { drift_detected?: boolean; changes: unknown[]; new_topic?: string };
+    const extractionDelta = result.delta as {
+      drift_detected?: boolean;
+      changes: unknown[];
+      new_topic?: string;
+    };
     if (extractionDelta.drift_detected && extractionDelta.changes.length === 0) {
       pipelineEmitter.emit('topic.changed', {
         conversationId: conversation_id,
         oldTopic: currentSnapshot.frames[0]?.type,
         newTopic: extractionDelta.new_topic ?? 'unknown',
       });
-      return c.json({
-        success: true as const,
-        data: {
-          status: 'drift_detected' as const,
-          drift: {
-            old_topic: currentSnapshot.frames[0]?.type,
+      return c.json(
+        {
+          success: true as const,
+          data: {
+            status: 'drift_detected' as const,
+            drift: {
+              old_topic: currentSnapshot.frames[0]?.type,
+            },
+            choices: ['keep_old', 'keep_new', 'keep_both_separate', 'keep_both_together'],
           },
-          choices: ['keep_old', 'keep_new', 'keep_both_separate', 'keep_both_together'],
         },
-      }, 200);
+        200
+      );
     }
 
     // 7c. Insert delta into delta log

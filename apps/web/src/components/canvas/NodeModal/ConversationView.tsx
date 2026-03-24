@@ -3,12 +3,11 @@
 import type { Node } from '@xyflow/react';
 import { Check, Clock, GitCommit, Link2, Settings, X } from 'lucide-react';
 import { useParams } from 'next/navigation';
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ChatWorkspace } from '@/components/chat/ChatWorkspace';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { useConversationChat } from '@/hooks/useConversationChat';
 import { useTerminology } from '@/hooks/useTerminology';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';

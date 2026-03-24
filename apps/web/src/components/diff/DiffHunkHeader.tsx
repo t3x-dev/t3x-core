@@ -1,7 +1,6 @@
 'use client';
 
 import { ChevronDown, ChevronRight } from 'lucide-react';
-import { cn } from '@/lib/utils';
 
 /**
  * DiffHunkHeader — collapsible header for diff sections (GitHub @@ style).

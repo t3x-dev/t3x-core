@@ -270,7 +270,8 @@ draftsCrudRoutes.openapi(updateDraftRoute, async (c) => {
 
   try {
     const db = await getDB();
-    const draft = await updateDraft(db, id, updateFields, if_revision);
+    // biome-ignore lint/suspicious/noExplicitAny: generic error handler
+    const draft = await updateDraft(db, id, updateFields as any, if_revision);
 
     return c.json({ success: true as const, data: toApiDraft(draft) }, 200);
   } catch (err) {

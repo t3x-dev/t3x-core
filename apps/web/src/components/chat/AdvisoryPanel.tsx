@@ -73,7 +73,11 @@ export function AdvisoryPanel() {
               <div className="flex-1 min-w-0">
                 <div className="text-[10px] text-[var(--text-tertiary)] mb-0.5">
                   {q.type === 'vagueness' ? 'Vague value' : 'Structure'}
-                  {q.slotKey && <span className="ml-1 font-mono">{q.frameId}.{q.slotKey}</span>}
+                  {q.slotKey && (
+                    <span className="ml-1 font-mono">
+                      {q.frameId}.{q.slotKey}
+                    </span>
+                  )}
                 </div>
                 <div className="text-xs text-[var(--text-secondary)]">{q.question}</div>
                 {q.currentValue !== undefined && (

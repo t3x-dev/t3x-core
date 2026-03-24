@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { preFilterDrift } from '../driftPreFilter';
 import { parseDriftResponse } from '../driftDetector';
+import { preFilterDrift } from '../driftPreFilter';
 
 // ══════════════════════════════════════════════════════
 // Pre-Filter Tests
@@ -150,9 +150,7 @@ describe('parseDriftResponse', () => {
   });
 
   it('handles missing confidence field', () => {
-    const result = parseDriftResponse(
-      '{"same_topic": true, "relation": "none", "new_topic": ""}'
-    );
+    const result = parseDriftResponse('{"same_topic": true, "relation": "none", "new_topic": ""}');
     expect(result.drifted).toBe(false);
     // Missing confidence defaults to 0.5, but same_topic=true → no drift anyway
   });

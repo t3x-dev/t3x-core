@@ -1,13 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type {
-  Capability,
-  LLMGenerateOptions,
-  LLMPrompt,
-  LLMResult,
-  ModelInfo,
-  ProviderName,
-  StructuredResult,
-} from '../../llm/types';
+import type { LLMGenerateOptions, LLMPrompt, ModelInfo, ProviderName } from '../../llm/types';
 
 describe('LLM extended types', () => {
   it('ProviderName accepts valid values', () => {

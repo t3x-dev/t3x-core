@@ -125,7 +125,7 @@ describe('ContextPanel', () => {
 
   test('active pins calculation with null selection (all pins)', () => {
     const store = usePinsStore();
-    const contextConfig = { selected_pin_ids: null };
+    const contextConfig: { selected_pin_ids: string[] | null } = { selected_pin_ids: null };
 
     // When selected_pin_ids is null, all pins are active
     const activePins =

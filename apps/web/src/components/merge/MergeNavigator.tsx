@@ -11,7 +11,7 @@
  * 5. Target only: toggle keep/discard per frame
  */
 
-import type { Frame, FrameMergeResult } from '@t3x-dev/core';
+import type { FrameMergeResult } from '@t3x-dev/core';
 import { Check, Circle } from 'lucide-react';
 
 // ============================================================================

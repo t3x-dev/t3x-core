@@ -24,15 +24,10 @@ import dotenv from 'dotenv';
 
 dotenv.config({ path: path.resolve(process.cwd(), '../../.env') });
 
-import { buildDraft, type Frame, type Relation, type SemanticContent } from '@t3x-dev/core';
-import {
-  insertConversation,
-  insertProject,
-  insertTurn,
-} from '@t3x-dev/storage';
+import type { Frame, SemanticContent } from '@t3x-dev/core';
+import { insertConversation, insertProject, insertTurn } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { closeDB, getDB } from '../lib/db';
-import { toDeltaLogEntries } from '../lib/delta-log-utils';
 // Import the actual route (uses real DB + real LLM via provider-registry)
 import { frameExtractRoutes } from '../routes/frame-extract.openapi';
 
@@ -495,6 +490,7 @@ async function runScenario(app: Hono, scenario: Scenario): Promise<void> {
 
   const body1 = (await res1.json()) as {
     success: boolean;
+    // biome-ignore lint/suspicious/noExplicitAny: test helper
     data: { delta: any; snapshot: SemanticContent; delta_log_id: string };
   };
   console.log(
@@ -502,6 +498,7 @@ async function runScenario(app: Hono, scenario: Scenario): Promise<void> {
   );
 
   let secondSnapshot: SemanticContent | undefined;
+  // biome-ignore lint/suspicious/noExplicitAny: test helper
   let secondDelta: any;
   let secondDurationMs: number | undefined;
 
@@ -532,6 +529,7 @@ async function runScenario(app: Hono, scenario: Scenario): Promise<void> {
     } else {
       const body2 = (await res2.json()) as {
         success: boolean;
+        // biome-ignore lint/suspicious/noExplicitAny: test helper
         data: { delta: any; snapshot: SemanticContent; delta_log_id: string };
       };
       secondSnapshot = body2.data.snapshot;

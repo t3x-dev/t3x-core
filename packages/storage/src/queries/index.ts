@@ -386,14 +386,6 @@ export {
   type ListTemplatesOptions,
   listTemplates,
 } from './templates';
-// Topics (multi-topic conversations)
-export {
-  createTopic,
-  deleteTopic,
-  getTopicById,
-  listTopicsByConversation,
-  updateTopic,
-} from './topics';
 // Token Usage (LLM token metering)
 export {
   estimateCost,
@@ -409,6 +401,14 @@ export {
   type UsageTotal,
   type UsageTotalOptions,
 } from './token-usage';
+// Topics (multi-topic conversations)
+export {
+  createTopic,
+  deleteTopic,
+  getTopicById,
+  listTopicsByConversation,
+  updateTopic,
+} from './topics';
 // Turns
 export {
   type CreateTurnInput,

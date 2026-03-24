@@ -74,7 +74,7 @@ describe('EvidenceDisplay', () => {
     expect(paraphrase.anchor_type).toBe('paraphrase');
     expect(inference.anchor_type).toBe('inference');
     expect(verbatim.anchor_type).toBe('verbatim');
-    expect((noType as Record<string, unknown>).anchor_type).toBeUndefined();
+    expect((noType as unknown as Record<string, unknown>).anchor_type).toBeUndefined();
   });
 
   test('defaultExpanded prop controls initial state', () => {

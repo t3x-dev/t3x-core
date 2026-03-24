@@ -17,7 +17,7 @@ function toSnakeCase(str: string): string {
 function normalizeFrameId(id: string): string {
   const num = id.replace(/^f_/, '');
   const n = parseInt(num, 10);
-  if (isNaN(n)) return id;
+  if (Number.isNaN(n)) return id;
   return `f_${String(n).padStart(3, '0')}`;
 }
 

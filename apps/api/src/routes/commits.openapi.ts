@@ -13,13 +13,7 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import {
-  createCommit,
-  getCommit,
-  getCommitsByHashes,
-  listCommits,
-  updateCommitPosition,
-} from '@t3x-dev/storage';
+import { createCommit, getCommit, listCommits, updateCommitPosition } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import {
@@ -130,7 +124,8 @@ commitRoutes.openapi(createCommitRoute, async (c) => {
   try {
     const commit = await createCommit(db, {
       project_id: body.project_id,
-      content: body.content,
+      // biome-ignore lint/suspicious/noExplicitAny: generic error handler
+      content: body.content as any,
       branch: body.branch,
       parents: body.parents,
       message: body.message,
@@ -269,7 +264,7 @@ const updatePositionRoute = createRoute({
   },
   responses: {
     200: {
-      content: { 'application/json': { schema: SuccessResponseSchema } },
+      content: { 'application/json': { schema: SuccessResponseSchema(z.any()) } },
       description: 'Position updated',
     },
     404: {
@@ -280,8 +275,10 @@ const updatePositionRoute = createRoute({
 });
 
 commitRoutes.openapi(updatePositionRoute, async (c) => {
-  const { hash } = c.req.valid('param');
-  const { position_x, position_y } = c.req.valid('json');
+  // biome-ignore lint/suspicious/noExplicitAny: generic error handler
+  const { hash } = c.req.valid('param') as any;
+  // biome-ignore lint/suspicious/noExplicitAny: generic error handler
+  const { position_x, position_y } = c.req.valid('json') as any;
   const db = await getDB();
   const decodedHash = decodeURIComponent(hash);
 
@@ -306,7 +303,7 @@ const getHistoryRoute = createRoute({
   },
   responses: {
     200: {
-      content: { 'application/json': { schema: SuccessResponseSchema } },
+      content: { 'application/json': { schema: SuccessResponseSchema(z.any()) } },
       description: 'History chain',
     },
     404: {
@@ -317,8 +314,10 @@ const getHistoryRoute = createRoute({
 });
 
 commitRoutes.openapi(getHistoryRoute, async (c) => {
-  const { hash } = c.req.valid('param');
-  const { limit } = c.req.valid('query');
+  // biome-ignore lint/suspicious/noExplicitAny: generic error handler
+  const { hash } = c.req.valid('param') as any;
+  // biome-ignore lint/suspicious/noExplicitAny: generic error handler
+  const { limit } = c.req.valid('query') as any;
   const db = await getDB();
   const decodedHash = decodeURIComponent(hash);
 

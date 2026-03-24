@@ -260,7 +260,7 @@ export function LeafSelector({
         </div>
 
         {/* Leaf Output Preview */}
-        {selectedLeaf && selectedLeaf.output && (
+        {selectedLeaf?.output && (
           <div className="space-y-1.5">
             <span className="flex items-center gap-1.5 text-sm font-medium">
               <FileText className="h-3.5 w-3.5" />

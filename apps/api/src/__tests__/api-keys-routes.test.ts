@@ -34,12 +34,12 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys(key_hash);
 CREATE INDEX IF NOT EXISTS idx_api_keys_project ON api_keys(project_id);
 `;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// biome-ignore lint/suspicious/noExplicitAny: test helper
 type ApiResponse = any;
 
 // Mock the database module before importing routes
 let mockDB: AnyDB;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// biome-ignore lint/suspicious/noExplicitAny: test helper
 let testSql: any;
 
 vi.mock('../lib/db', () => ({

@@ -36,9 +36,9 @@ describe('pinsStore', () => {
           project_id: 'proj_1',
           type: 'conversation' as const,
           ref_id: 'conv_1',
-          selected_assertion_ids: null,
+          selected_assertion_ids: undefined,
           pinned_at: '2024-01-01T00:00:00Z',
-          pinned_by: null,
+          pinned_by: undefined,
         },
       ];
 
@@ -112,9 +112,9 @@ describe('pinsStore', () => {
         project_id: 'proj_1',
         type: 'conversation' as const,
         ref_id: 'conv_1',
-        selected_assertion_ids: null,
+        selected_assertion_ids: undefined,
         pinned_at: '2024-01-01T00:00:00Z',
-        pinned_by: null,
+        pinned_by: undefined,
       };
 
       vi.mocked(api.createPinApi).mockResolvedValue(newPin);
@@ -134,9 +134,9 @@ describe('pinsStore', () => {
             project_id: 'proj_1',
             type: 'conversation',
             ref_id: 'conv_1',
-            selected_assertion_ids: null,
+            selected_assertion_ids: undefined,
             pinned_at: '2024-01-01T00:00:00Z',
-            pinned_by: null,
+            pinned_by: undefined,
           },
         ],
       });
@@ -157,9 +157,9 @@ describe('pinsStore', () => {
             project_id: 'proj_1',
             type: 'conversation',
             ref_id: 'conv_1',
-            selected_assertion_ids: null,
+            selected_assertion_ids: undefined,
             pinned_at: '2024-01-01T00:00:00Z',
-            pinned_by: null,
+            pinned_by: undefined,
           },
         ],
       });
@@ -178,9 +178,9 @@ describe('pinsStore', () => {
         project_id: 'proj_1',
         type: 'conversation' as const,
         ref_id: 'conv_1',
-        selected_assertion_ids: null,
+        selected_assertion_ids: undefined,
         pinned_at: '2024-01-01T00:00:00Z',
-        pinned_by: null,
+        pinned_by: undefined,
       };
 
       usePinsStore.setState({ pins: [pin] });
@@ -200,9 +200,9 @@ describe('pinsStore', () => {
         project_id: 'proj_1',
         type: 'leaf' as const,
         ref_id: 'leaf_1',
-        selected_assertion_ids: null,
+        selected_assertion_ids: undefined,
         pinned_at: '2024-01-01T00:00:00Z',
-        pinned_by: null,
+        pinned_by: undefined,
       };
 
       const updatedPin = {
@@ -230,9 +230,9 @@ describe('pinsStore', () => {
             project_id: 'proj_1',
             type: 'conversation',
             ref_id: 'conv_1',
-            selected_assertion_ids: null,
+            selected_assertion_ids: undefined,
             pinned_at: '2024-01-01T00:00:00Z',
-            pinned_by: null,
+            pinned_by: undefined,
           },
         ],
       });
@@ -248,9 +248,9 @@ describe('pinsStore', () => {
         project_id: 'proj_1',
         type: 'leaf' as const,
         ref_id: 'leaf_1',
-        selected_assertion_ids: null,
+        selected_assertion_ids: undefined,
         pinned_at: '2024-01-01T00:00:00Z',
-        pinned_by: null,
+        pinned_by: undefined,
       };
 
       usePinsStore.setState({ pins: [pin] });

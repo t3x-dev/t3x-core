@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 // Store original env
 const originalEnv = { ...process.env };

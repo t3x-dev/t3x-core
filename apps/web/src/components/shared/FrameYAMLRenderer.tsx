@@ -244,7 +244,7 @@ export function FrameYAMLRenderer({
   }
 
   // Group lines by frame for action rendering
-  const frameIds = [...new Set(frames.map((f) => f.id))];
+  const _frameIds = [...new Set(frames.map((f) => f.id))];
 
   // Track which frames we've rendered actions for
   const renderedActionFrames = new Set<string>();
@@ -264,8 +264,7 @@ export function FrameYAMLRenderer({
         // Blank separator
         if (line.isEmpty) {
           // After blank, render frame actions for this frame (once)
-          const shouldRenderActions =
-            renderFrameActions && !renderedActionFrames.has(line.frameId);
+          const shouldRenderActions = renderFrameActions && !renderedActionFrames.has(line.frameId);
           if (shouldRenderActions) {
             renderedActionFrames.add(line.frameId);
             const frame = frames.find((f) => f.id === line.frameId);
@@ -273,10 +272,7 @@ export function FrameYAMLRenderer({
             if (actions) {
               return (
                 <div key={i}>
-                  <div
-                    data-frame-actions={line.frameId}
-                    style={{ padding: '2px 8px 4px 8px' }}
-                  >
+                  <div data-frame-actions={line.frameId} style={{ padding: '2px 8px 4px 8px' }}>
                     {actions}
                   </div>
                   <div style={{ height: 4 }} />
@@ -292,9 +288,8 @@ export function FrameYAMLRenderer({
         const confidence = line.isFrameHeader ? (meta?.confidence ?? null) : null;
         const isHighlighted = highlightFrameId != null && highlightFrameId === line.frameId;
 
-        const borderLeft = line.isFrameHeader && changeType
-          ? changeTypeBorder[changeType]
-          : undefined;
+        const borderLeft =
+          line.isFrameHeader && changeType ? changeTypeBorder[changeType] : undefined;
 
         const bg = isHighlighted ? 'rgba(96, 165, 250, 0.1)' : 'transparent';
 

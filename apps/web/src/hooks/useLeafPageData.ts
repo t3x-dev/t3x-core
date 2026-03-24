@@ -1,5 +1,6 @@
 'use client';
 
+import type { SemanticContent } from '@t3x-dev/core';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ApiCommit, Constraint, Leaf } from '@/lib/api';
 import {
@@ -11,7 +12,6 @@ import {
   updateLeaf,
   validateLeafOutput,
 } from '@/lib/api';
-import type { SemanticContent } from '@t3x-dev/core';
 import { type ExportFormat, exportLeaf } from '@/lib/export';
 import { createRetuneSession } from '@/lib/retune';
 import { usePinsStore } from '@/store/pinsStore';
@@ -343,7 +343,9 @@ export function useLeafPageData(projectId: string, leafId: string): UseLeafPageD
     if (!semanticContent) return [];
     return semanticContent.frames.map((f) => ({
       id: f.id,
-      text: `[${f.type}] ${Object.entries(f.slots).map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`).join('; ')}`,
+      text: `[${f.type}] ${Object.entries(f.slots)
+        .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`)
+        .join('; ')}`,
       source: undefined, // frame source tracing handled differently
     }));
   }, [semanticContent]);

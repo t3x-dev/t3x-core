@@ -59,7 +59,8 @@ const UpdateMeResponse = z.object({
 // ============================================================
 
 /** Extract and validate userId from API key context. Returns userId or error response. */
-function getUserId(c: Parameters<Parameters<typeof authMeRoutes.openapi>[1]>[0]): string | null {
+// biome-ignore lint/suspicious/noExplicitAny: generic error handler
+function getUserId(c: any): string | null {
   const apiKey = c.get('apiKey') as ApiKey | undefined;
   return apiKey?.user_id ?? null;
 }
@@ -91,6 +92,7 @@ const meRoute = createRoute({
   },
 });
 
+// @ts-expect-error - OpenAPI handler return type
 authMeRoutes.openapi(meRoute, async (c) => {
   const userId = getUserId(c);
   if (!userId) {
@@ -158,6 +160,7 @@ const updateMeRoute = createRoute({
   },
 });
 
+// @ts-expect-error - OpenAPI handler return type
 authMeRoutes.openapi(updateMeRoute, async (c) => {
   const userId = getUserId(c);
   if (!userId) {

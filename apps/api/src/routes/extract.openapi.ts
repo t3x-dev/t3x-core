@@ -163,7 +163,8 @@ export async function extractSentencesFromConversation(
   const reg = await getProviderRegistry();
   const trackedUsage = { inputTokens: 0, outputTokens: 0 };
   const result = await reg.tryWithFallback('generation', (provider) => {
-    const { provider: tracked, usage } = wrapWithUsageTracking(provider);
+    // biome-ignore lint/suspicious/noExplicitAny: generic error handler
+    const { provider: tracked, usage } = wrapWithUsageTracking(provider as any);
     trackedUsage.inputTokens = 0;
     trackedUsage.outputTokens = 0;
     const promise = createLLMExtractor(tracked).extract(turnInputs, {
@@ -311,7 +312,8 @@ export async function extractSentencesFromLeafOutput(
   const reg = await getProviderRegistry();
   const trackedUsage = { inputTokens: 0, outputTokens: 0 };
   const result = await reg.tryWithFallback('generation', (provider) => {
-    const { provider: tracked, usage } = wrapWithUsageTracking(provider);
+    // biome-ignore lint/suspicious/noExplicitAny: generic error handler
+    const { provider: tracked, usage } = wrapWithUsageTracking(provider as any);
     trackedUsage.inputTokens = 0;
     trackedUsage.outputTokens = 0;
     return createLLMExtractor(tracked)
@@ -436,7 +438,8 @@ extractRoutes.openapi(incrementalExtractRoute, async (c) => {
     const trackedUsage = { inputTokens: 0, outputTokens: 0 };
     let trackedModel = 'unknown';
     const result = await reg.tryWithFallback('generation', (provider) => {
-      const { provider: tracked, usage } = wrapWithUsageTracking(provider);
+      // biome-ignore lint/suspicious/noExplicitAny: generic error handler
+      const { provider: tracked, usage } = wrapWithUsageTracking(provider as any);
       trackedUsage.inputTokens = 0;
       trackedUsage.outputTokens = 0;
       trackedModel = tracked.id;

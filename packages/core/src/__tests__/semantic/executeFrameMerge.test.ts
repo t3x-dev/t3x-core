@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { executeFrameMerge, prepareFrameMerge } from '../../semantic/merge';
-import type { FrameMergeDecision, SemanticContent } from '../../semantic/types';
+import type { SemanticContent } from '../../semantic/types';
 
 const f = (id: string, type: string, slots: Record<string, unknown>) => ({ id, type, slots });
 

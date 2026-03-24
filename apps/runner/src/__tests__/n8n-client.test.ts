@@ -109,6 +109,7 @@ describe('N8nClient', () => {
       const client = new N8nClient({ apiUrl: 'http://n8n:5678/api/v1', apiKey: 'key' });
       await client.getExecution('1');
 
+      // biome-ignore lint/suspicious/noExplicitAny: test helper
       const url = (globalThis.fetch as any).mock.calls[0][0];
       expect(url).toBe('http://n8n:5678/api/v1/executions/1?includeData=true');
       // Should NOT be http://n8n:5678/api/v1/api/v1/executions/1
@@ -128,6 +129,7 @@ describe('N8nClient', () => {
 
       try {
         await client.getExecution('999');
+        // biome-ignore lint/suspicious/noExplicitAny: test helper
       } catch (e: any) {
         expect(e.statusCode).toBe(404);
         expect(e.apiError).toBeDefined();
