@@ -134,7 +134,8 @@ async function callClaudeNonStreaming(
   model: string,
   apiKey: string,
   temperature: number,
-  maxTokens: number
+  maxTokens: number,
+  options?: { thinking?: boolean }
 ): Promise<ChatResponse> {
   // Extract system message if present
   const systemMessage = messages.find((m) => m.role === 'system');
@@ -151,7 +152,10 @@ async function callClaudeNonStreaming(
     body: JSON.stringify({
       model,
       max_tokens: maxTokens,
-      temperature,
+      ...(options?.thinking
+        ? { thinking: { type: 'enabled', budget_tokens: 10000 } }
+        : { temperature }
+      ),
       ...(systemMessage && { system: systemMessage.content }),
       messages: otherMessages.map((m) => ({
         role: m.role,
@@ -246,7 +250,7 @@ chatRoutes.post('/v1/chat', async (c) => {
   try {
     // Currently only Claude is implemented
     if (provider === 'claude' || provider === 'anthropic') {
-      const result = await callClaudeNonStreaming(messages, model, apiKey, temperature, maxTokens);
+      const result = await callClaudeNonStreaming(messages, model, apiKey, temperature, maxTokens, { thinking: body.thinking });
 
       // Record token usage (fire-and-forget, only if project_id provided)
       if (body?.project_id && result.usage) {
@@ -332,6 +336,8 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
     return jsonError(c, 'PROVIDER_ERROR', `Provider ${provider} not implemented`, 400);
   }
 
+  const useThinking = body.thinking && (provider === 'claude' || provider === 'anthropic');
+
   // Extract system message if present
   const systemMessage = messages.find((m) => m.role === 'system');
   const otherMessages = messages.filter((m) => m.role !== 'system');
@@ -352,7 +358,10 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
           body: JSON.stringify({
             model,
             max_tokens: maxTokens,
-            temperature,
+            ...(useThinking
+              ? { thinking: { type: 'enabled', budget_tokens: 10000 } }
+              : { temperature }
+            ),
             stream: true,
             ...(systemMessage && { system: systemMessage.content }),
             ...(body.web_search && { tools: [{ type: 'web_search_20250305' }] }),
@@ -443,8 +452,11 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
                 controller.enqueue(
                   encodeSseEvent(JSON.stringify({ type: 'token', content: delta.text }))
                 );
+              } else if (delta?.type === 'thinking_delta' && typeof delta.thinking === 'string') {
+                controller.enqueue(
+                  encodeSseEvent(JSON.stringify({ type: 'thinking', content: delta.thinking }))
+                );
               }
-              // Skip other delta types (web_search_tool_result, etc.)
             } else if (eventType === 'message_delta') {
               const u = parsed.usage as Record<string, number> | undefined;
               if (u?.output_tokens) {
