@@ -15,6 +15,7 @@ import {
   EmbeddingProviderError,
   type FrameDiff,
   frameDiff,
+  wordDiff,
 } from '@t3x-dev/core';
 import { findSegmentEmbeddingsByTurn, findTurnByHash, getCommitUnified } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
@@ -345,7 +346,7 @@ diffRoutes.openapi(twoWayRoute, async (c) => {
     const targetCommit = await getCommitUnified(db, body.target_commit_hash);
 
     if (baseCommit && targetCommit) {
-      const diff: FrameDiff = frameDiff(baseCommit.content, targetCommit.content);
+      const diff: FrameDiff = frameDiff(baseCommit.content, targetCommit.content, wordDiff);
 
       const commitMeta = (commit: typeof baseCommit) => ({
         hash: commit.hash,
@@ -645,7 +646,7 @@ diffRoutes.openapi(frameRoute, async (c) => {
     return errorResponse(c, 'NOT_FOUND', `Target commit ${body.target_commit_hash} not found`);
   }
 
-  const diff: FrameDiff = frameDiff(baseCommit.content, targetCommit.content);
+  const diff: FrameDiff = frameDiff(baseCommit.content, targetCommit.content, wordDiff);
 
   const commitMeta = (commit: typeof baseCommit) => ({
     hash: commit.hash,

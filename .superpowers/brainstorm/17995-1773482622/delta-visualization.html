@@ -1,0 +1,85 @@
+<h2>Delta Visualization: How should per-turn changes appear?</h2>
+<p class="subtitle">After each turn, the extraction produces adds, updates, and removes. How should these be shown?</p>
+
+<div class="split" style="margin-bottom:32px">
+  <div class="mockup">
+    <div class="mockup-header">Graph View — After Turn 4</div>
+    <div class="mockup-body" style="padding:16px;min-height:280px">
+      <!-- Simulated graph nodes -->
+      <div style="display:flex;flex-direction:column;gap:12px;align-items:center">
+        <div style="padding:10px 16px;border-radius:8px;border:2px solid #4ade80;background:rgba(74,222,128,0.08);font-size:12px;width:180px">
+          <div style="font-weight:600;color:#4ade80">+ osaka_food</div>
+          <div style="color:var(--text-secondary);font-size:11px">street_food, takoyaki</div>
+          <div style="font-size:10px;color:#4ade80;margin-top:4px">NEW this turn</div>
+        </div>
+        <div style="padding:10px 16px;border-radius:8px;border:2px solid #facc15;background:rgba(250,204,21,0.08);font-size:12px;width:180px">
+          <div style="font-weight:600;color:#facc15">~ destination</div>
+          <div style="color:var(--text-secondary);font-size:11px"><s>Japan, Kyoto</s> → Tokyo, Osaka</div>
+          <div style="font-size:10px;color:#facc15;margin-top:4px">UPDATED this turn</div>
+        </div>
+        <div style="padding:10px 16px;border-radius:8px;border:1px solid var(--stroke-default);font-size:12px;width:180px;opacity:0.7">
+          <div style="font-weight:600">budget</div>
+          <div style="color:var(--text-secondary);font-size:11px">$7000</div>
+        </div>
+        <div style="padding:10px 16px;border-radius:8px;border:1px solid var(--stroke-default);font-size:12px;width:180px;opacity:0.7">
+          <div style="font-weight:600">diet</div>
+          <div style="color:var(--text-secondary);font-size:11px">vegetarian</div>
+        </div>
+        <div style="padding:10px 16px;border-radius:8px;border:2px dashed #f87171;background:rgba(248,113,113,0.05);font-size:12px;width:180px;opacity:0.5">
+          <div style="font-weight:600;color:#f87171;text-decoration:line-through">- kyoto_ryokan</div>
+          <div style="font-size:10px;color:#f87171;margin-top:4px">REMOVED this turn</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-header">YAML View — After Turn 4</div>
+    <div class="mockup-body" style="padding:16px;min-height:280px">
+      <pre style="font-size:11px;line-height:1.8;background:transparent;margin:0"><span style="background:rgba(74,222,128,0.15);display:inline-block;width:100%;padding:0 4px;border-left:3px solid #4ade80">+ osaka_food:                    # NEW</span>
+<span style="background:rgba(74,222,128,0.15);display:inline-block;width:100%;padding:0 4px;border-left:3px solid #4ade80">    type: street_food</span>
+<span style="background:rgba(74,222,128,0.15);display:inline-block;width:100%;padding:0 4px;border-left:3px solid #4ade80">    items: [takoyaki, okonomiyaki]</span>
+<span style="display:inline-block;width:100%;padding:0 4px"> </span>
+<span style="background:rgba(250,204,21,0.15);display:inline-block;width:100%;padding:0 4px;border-left:3px solid #facc15">~ destination:                   # UPDATED</span>
+<span style="background:rgba(250,204,21,0.15);display:inline-block;width:100%;padding:0 4px;border-left:3px solid #facc15">    cities: [Tokyo, Osaka]</span>
+<span style="display:inline-block;width:100%;padding:0 4px"> </span>
+<span style="display:inline-block;width:100%;padding:0 4px;opacity:0.6">  budget:</span>
+<span style="display:inline-block;width:100%;padding:0 4px;opacity:0.6">    amount: $7000</span>
+<span style="display:inline-block;width:100%;padding:0 4px"> </span>
+<span style="display:inline-block;width:100%;padding:0 4px;opacity:0.6">  diet:</span>
+<span style="display:inline-block;width:100%;padding:0 4px;opacity:0.6">    type: vegetarian</span>
+<span style="display:inline-block;width:100%;padding:0 4px"> </span>
+<span style="background:rgba(248,113,113,0.15);display:inline-block;width:100%;padding:0 4px;border-left:3px solid #f87171;text-decoration:line-through;opacity:0.5">- kyoto_ryokan:                  # REMOVED</span></pre>
+    </div>
+  </div>
+</div>
+
+<h3>Design question: How long should change indicators persist?</h3>
+<p class="subtitle">After the user sees "this frame was added this turn", when does it go back to normal?</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Until next turn</h3>
+      <p>Change indicators (green/yellow/red) stay visible until the next extraction happens. Then they clear and new changes get highlighted.</p>
+      <p style="font-size:12px;color:var(--text-secondary)">Simple, predictable. User always sees what just changed.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Fade after 5 seconds</h3>
+      <p>Change indicators animate in, then fade to normal after a few seconds. Clean view returns automatically.</p>
+      <p style="font-size:12px;color:var(--text-secondary)">Less visual noise, but user might miss changes if not watching.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Until next turn + toggle to review (Recommended)</h3>
+      <p>Indicators persist until next turn. Plus a small <strong>"Changes" badge</strong> in the panel header (e.g., "+2 ~1 -1") that the user can click to re-highlight all changes from the last turn.</p>
+      <p style="font-size:12px;color:var(--text-secondary)">Best of both — always visible when fresh, reviewable on demand.</p>
+    </div>
+  </div>
+</div>

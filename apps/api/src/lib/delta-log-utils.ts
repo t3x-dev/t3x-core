@@ -14,6 +14,7 @@ interface DeltaLogRecord {
   turnHash: string | null;
   delta: unknown;
   createdAt: Date | string;
+  metadata?: unknown;
 }
 
 /**
@@ -27,6 +28,7 @@ export function toDeltaLogEntry(record: DeltaLogRecord): DeltaLogEntry {
     delta: record.delta as DeltaLogEntry['delta'],
     created_at:
       record.createdAt instanceof Date ? record.createdAt.toISOString() : record.createdAt,
+    metadata: (record.metadata as Record<string, unknown>) ?? undefined,
   };
 }
 

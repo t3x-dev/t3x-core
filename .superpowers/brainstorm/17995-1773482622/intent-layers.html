@@ -1,0 +1,113 @@
+<h2>The Problem: Capture Everything vs. Show What Matters</h2>
+<p class="subtitle">T3X captures all the semantic points — but humans want to see "what do I want right now?", not a giant dump of every detail discussed.</p>
+
+<div class="mockup" style="margin-bottom:24px">
+  <div class="mockup-header">The pain: 30-turn conversation produces 40+ frames</div>
+  <div class="mockup-body" style="padding:20px">
+    <div style="display:flex;gap:24px">
+      <div style="flex:1">
+        <div class="label" style="color:#f87171">What T3X shows now</div>
+        <pre style="font-size:11px;background:var(--surface-overlay);padding:12px;border-radius:6px;line-height:1.5;max-height:200px;overflow-y:auto">trip_destination: Japan
+budget: $7000
+month: April
+diet: vegetarian
+accommodation_tokyo: hotel
+osaka_food: street_food
+flight_preference: window_seat
+no_group_tours: true
+temple_interest: true
+no_theme_parks: true
+shellfish_allergy: true
+partner_name: mentioned
+currency_exchange: discussed
+train_pass: JR_pass
+airport: Narita
+hotel_brand: Park_Hotel
+restaurant_1: T's_TanTan
+restaurant_2: Ain_Soph
+ryokan_removed: was_Yoshida
+checkout_time: discussed
+luggage_storage: asked
+weather_april: cherry_blossom
+... (20 more frames)</pre>
+        <p style="font-size:12px;color:#f87171;margin-top:8px">Human: "Why are you showing me 40 things? What do I actually want?"</p>
+      </div>
+      <div style="flex:1">
+        <div class="label" style="color:#4ade80">What human actually wants to see</div>
+        <pre style="font-size:11px;background:var(--surface-overlay);padding:12px;border-radius:6px;line-height:1.5;max-height:200px;overflow-y:auto"><strong style="color:#4ade80">🎯 Current Intent (5 key decisions)</strong>
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Trip: Tokyo + Osaka, April
+Budget: $7000 for two
+Diet: Vegetarian, no shellfish
+Style: Independent travel, temples
+Accommodation: Hotel (Tokyo), flexible (Osaka)
+
+<span style="opacity:0.5">📋 Supporting Details (tap to expand)
+  → 15 items: restaurants, logistics, preferences...</span>
+
+<span style="opacity:0.3">📜 History (tap to expand)
+  → Kyoto was removed in turn 4
+  → Budget changed from $5000 in turn 3
+  → ...</span></pre>
+        <p style="font-size:12px;color:#4ade80;margin-top:8px">Human: "Yes! This is what I decided. And I can dig deeper if I need to."</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2>Three approaches to solve this</h2>
+<p class="subtitle">How do we show "current intent" without losing detail?</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>UI Layering (no algorithm change)</h3>
+      <p>Keep all frames, but use <strong>collapsible tiers</strong> in the UI:</p>
+      <ul style="font-size:13px;margin-top:8px">
+        <li><strong>Tier 1 — Key Decisions:</strong> Frames updated or confirmed in recent turns (high confidence, recently touched)</li>
+        <li><strong>Tier 2 — Supporting Details:</strong> Older frames, lower confidence, logistics</li>
+        <li><strong>Tier 3 — History:</strong> Removed/superseded frames (collapsed by default)</li>
+      </ul>
+      <p style="margin-top:8px;font-size:12px;color:var(--text-secondary)">Sorting heuristic: recency × confidence × change_count. No LLM needed.</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul><li>Pure UI — no core changes</li><li>Deterministic, fast</li><li>User controls what to expand</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Heuristic may not match what "matters"</li><li>Can't truly summarize intent</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>LLM Summary Layer (optional plugin)</h3>
+      <p>After each extraction, optionally ask the LLM: <strong>"Given all these frames, what are the user's top 3-5 current intentions?"</strong> Display this as a summary card above the detailed frames.</p>
+      <ul style="font-size:13px;margin-top:8px">
+        <li><strong>Summary Card:</strong> LLM-generated "Current Intent" (3-5 bullet points)</li>
+        <li><strong>Below:</strong> Full frame list (same as today, scrollable)</li>
+        <li>Summary regenerates after each turn or on demand</li>
+      </ul>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul><li>Truly understands what matters (semantic, not heuristic)</li><li>Natural language — easy for humans</li><li>Aligns with T3X's "LLM as optional plugin" philosophy</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Extra LLM call per turn (cost, latency)</li><li>Non-deterministic — summary may vary</li><li>Core must stay deterministic (summary is display-only)</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Both: UI Tiers + Optional LLM Summary (Recommended)</h3>
+      <p>Combine A and B. The <strong>deterministic tier system</strong> always works (no LLM needed). When an LLM is available, it generates a <strong>summary card</strong> that replaces the heuristic Tier 1.</p>
+      <ul style="font-size:13px;margin-top:8px">
+        <li><strong>Without LLM:</strong> Tier 1 = recently changed frames (sorted by recency × confidence)</li>
+        <li><strong>With LLM:</strong> Tier 1 = "Current Intent" summary card (3-5 natural language bullets)</li>
+        <li><strong>Always:</strong> Tier 2 = all frames (expandable), Tier 3 = history (collapsed)</li>
+      </ul>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul><li>Works without LLM (deterministic fallback)</li><li>Better with LLM (semantic understanding)</li><li>Matches T3X philosophy: core deterministic, LLM optional</li><li>Layered UI keeps it clean</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>More implementation work</li><li>Need to design summary prompt carefully</li></ul></div>
+      </div>
+    </div>
+  </div>
+</div>

@@ -94,6 +94,43 @@ export function prepareFrameMerge(
   const relationsOnlyInSource = source.relations.filter((r) => !tgtRelKeys.has(relKey(r)));
   const relationsOnlyInTarget = target.relations.filter((r) => !srcRelKeys.has(relKey(r)));
 
+  // Topic resolution
+  let resolvedTopic = base.topic;
+  let topicConflict: FrameMergeResult['topicConflict'];
+  const srcTopic = source.topic;
+  const tgtTopic = target.topic;
+  const baseTopic = base.topic;
+
+  if (srcTopic !== baseTopic && tgtTopic === baseTopic) {
+    resolvedTopic = srcTopic;
+  } else if (tgtTopic !== baseTopic && srcTopic === baseTopic) {
+    resolvedTopic = tgtTopic;
+  } else if (srcTopic !== baseTopic && tgtTopic !== baseTopic && srcTopic !== tgtTopic) {
+    topicConflict = { base: baseTopic, source: srcTopic, target: tgtTopic };
+    resolvedTopic = undefined;
+  } else if (srcTopic !== baseTopic && srcTopic === tgtTopic) {
+    // Both changed identically
+    resolvedTopic = srcTopic;
+  }
+
+  // Root frame ID resolution
+  let resolvedRoot = base.root_frame_id;
+  let rootConflict: FrameMergeResult['rootConflict'];
+  const srcRoot = source.root_frame_id;
+  const tgtRoot = target.root_frame_id;
+  const baseRoot = base.root_frame_id;
+
+  if (srcRoot !== baseRoot && tgtRoot === baseRoot) {
+    resolvedRoot = srcRoot;
+  } else if (tgtRoot !== baseRoot && srcRoot === baseRoot) {
+    resolvedRoot = tgtRoot;
+  } else if (srcRoot !== baseRoot && tgtRoot !== baseRoot && srcRoot !== tgtRoot) {
+    rootConflict = { base: baseRoot, source: srcRoot, target: tgtRoot };
+    resolvedRoot = undefined;
+  } else if (srcRoot !== baseRoot && srcRoot === tgtRoot) {
+    resolvedRoot = srcRoot;
+  }
+
   return {
     autoKept,
     conflicts,
@@ -102,6 +139,10 @@ export function prepareFrameMerge(
     relationsOnlyInSource,
     relationsOnlyInTarget,
     relationsInBoth,
+    resolvedTopic,
+    topicConflict,
+    resolvedRoot,
+    rootConflict,
   };
 }
 
@@ -226,5 +267,22 @@ export function executeFrameMerge(
     relations.push(...prepared.relationsOnlyInTarget);
   }
 
-  return { frames, relations };
+  // 6. Resolve topic
+  let finalTopic = prepared.resolvedTopic;
+  if (prepared.topicConflict && decisions.topicChoice) {
+    if (decisions.topicChoice === 'source') finalTopic = prepared.topicConflict.source;
+    else if (decisions.topicChoice === 'target') finalTopic = prepared.topicConflict.target;
+    else if (decisions.topicChoice === 'edit') finalTopic = decisions.topicEdit;
+  }
+
+  // 7. Resolve root frame ID
+  let finalRoot = prepared.resolvedRoot;
+  if (prepared.rootConflict && decisions.rootChoice) {
+    finalRoot =
+      decisions.rootChoice === 'source'
+        ? prepared.rootConflict.source
+        : prepared.rootConflict.target;
+  }
+
+  return { topic: finalTopic, root_frame_id: finalRoot, frames, relations };
 }

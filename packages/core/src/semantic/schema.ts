@@ -72,6 +72,8 @@ export const RelationSchema = z.object({
  * (e.g. buildDraft result), use the SemanticContent TypeScript type directly.
  */
 export const SemanticContentSchema = z.object({
+  topic: z.string().optional(),
+  root_frame_id: z.string().optional(),
   frames: z.array(FrameSchema).min(1).max(1000),
   relations: z.array(RelationSchema).max(5000),
 });

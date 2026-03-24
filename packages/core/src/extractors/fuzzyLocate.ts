@@ -270,7 +270,7 @@ function slidingLevenshtein(content: string, quote: string): FuzzyLocateResult |
       if (score > bestScore) {
         bestScore = score;
         bestStart = i;
-        bestEnd = i + wLen;
+        bestEnd = wLen > qLen ? i + qLen : i + wLen;
       }
     }
   }

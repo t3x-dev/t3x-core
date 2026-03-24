@@ -2,6 +2,7 @@
 
 import type { Frame, SlotValue } from '@t3x-dev/core';
 import { Loader2 } from 'lucide-react';
+import { FrameHistoryPopover } from './FrameHistoryPopover';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { nestFrames } from '@/lib/frameNesting';
 import { parseDisplayYAML, toDisplayYAML } from '@/lib/liteYaml';
@@ -76,17 +77,18 @@ function renderSlotLines(
     'type' in value &&
     'slots' in value
   ) {
-    const inlineFrame = value as { type: string; slots: Record<string, SlotValue> };
+    const inlineFrame = value as { type: string; slots: Record<string, SlotValue>; _sourceFrameId?: string };
+    const childFrameId = inlineFrame._sourceFrameId ?? frameId;
     lines.push({
       text: `${pad}${key}:`,
-      frameId,
-      slotKey,
+      frameId: childFrameId,
+      slotKey: null,
       changeType,
       isAutoSelected,
       isEmpty: false,
     });
     for (const [k, v] of Object.entries(inlineFrame.slots)) {
-      renderSlotLines(lines, k, v, indent + 1, frameId, slotKey, changeType, isAutoSelected);
+      renderSlotLines(lines, k, v, indent + 1, childFrameId, k, changeType, isAutoSelected);
     }
     return;
   }
@@ -114,17 +116,18 @@ function renderSlotLines(
         });
       } else if (typeof item === 'object' && item !== null && 'type' in item && 'slots' in item) {
         // InlineFrame in array
-        const inlineFrame = item as { type: string; slots: Record<string, SlotValue> };
+        const inlineFrame = item as { type: string; slots: Record<string, SlotValue>; _sourceFrameId?: string };
+        const childFrameId = inlineFrame._sourceFrameId ?? frameId;
         lines.push({
           text: `${pad}  - ${inlineFrame.type}:`,
-          frameId,
-          slotKey,
+          frameId: childFrameId,
+          slotKey: null,
           changeType,
           isAutoSelected,
           isEmpty: false,
         });
         for (const [k, v] of Object.entries(inlineFrame.slots)) {
-          renderSlotLines(lines, k, v, indent + 2, frameId, slotKey, changeType, isAutoSelected);
+          renderSlotLines(lines, k, v, indent + 2, childFrameId, k, changeType, isAutoSelected);
         }
       } else {
         lines.push({
@@ -459,6 +462,7 @@ export function FrameYAMLView() {
             return (
               <div
                 key={i}
+                className="group/yaml-line"
                 data-frame-id={isFrameLine ? line.frameId : undefined}
                 onMouseEnter={() => setHoveredFrameId(line.frameId, line.slotKey)}
                 onMouseLeave={() => setHoveredFrameId(null)}
@@ -551,6 +555,15 @@ export function FrameYAMLView() {
                     </span>
                   )}
                   {line.text}
+                  {isFrameLine && (
+                    <span
+                      className="opacity-0 group-hover/yaml-line:opacity-100 transition-opacity ml-1"
+                      onClick={(e) => e.stopPropagation()}
+                      onKeyDown={() => {}}
+                    >
+                      <FrameHistoryPopover frameId={line.frameId} />
+                    </span>
+                  )}
                 </pre>
               </div>
             );

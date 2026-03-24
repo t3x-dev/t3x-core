@@ -90,6 +90,8 @@ export interface Relation {
 // ── SemanticContent (a commit's semantic payload) ──
 
 export interface SemanticContent {
+  topic?: string;
+  root_frame_id?: string;
   frames: Frame[];
   relations: Relation[];
 }
@@ -109,7 +111,7 @@ export interface Delta {
 
 // ── Delta Log ──
 
-export type DeltaSource = 'pipeline' | 'manual' | 'answer' | 'collapse' | 'commit_marker';
+export type DeltaSource = 'pipeline' | 'manual' | 'answer' | 'collapse' | 'commit_marker' | 'compress';
 
 export interface DeltaLogEntry {
   id: string;
@@ -179,6 +181,10 @@ export interface FrameDiff {
   /** Relation changes */
   relationsAdded: Relation[];
   relationsRemoved: Relation[];
+  /** Topic changed between source and target */
+  topicChanged?: { oldTopic?: string; newTopic?: string };
+  /** Root frame ID changed between source and target */
+  rootChanged?: { oldRoot?: string; newRoot?: string };
 }
 
 // ── Merge ──
@@ -207,6 +213,11 @@ export interface FrameMergeDecision {
   keepRelationsFromSource: boolean;
   /** Keep target-only relations */
   keepRelationsFromTarget: boolean;
+  /** How to resolve topic conflict */
+  topicChoice?: 'source' | 'target' | 'edit';
+  topicEdit?: string;
+  /** How to resolve root conflict */
+  rootChoice?: 'source' | 'target';
 }
 
 export interface FrameMergeResult {
@@ -228,6 +239,14 @@ export interface FrameMergeResult {
   relationsOnlyInSource: Relation[];
   relationsOnlyInTarget: Relation[];
   relationsInBoth: Relation[];
+  /** Auto-resolved topic (when only one side changed) */
+  resolvedTopic?: string;
+  /** Topic conflict (both sides changed differently) */
+  topicConflict?: { base?: string; source?: string; target?: string };
+  /** Auto-resolved root (when only one side changed) */
+  resolvedRoot?: string;
+  /** Root conflict (both sides changed differently) */
+  rootConflict?: { base?: string; source?: string; target?: string };
 }
 
 /** Word diff function interface — injected, not imported */

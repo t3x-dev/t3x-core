@@ -33,6 +33,17 @@ export {
   FrameExtractor,
   type SlotQuotesMap,
 } from './frameExtractor';
+// Frame Compression
+export {
+  buildCompressPrompt,
+  type CompressInput,
+  type FrameWithSignals,
+} from './compressPrompt';
+export {
+  type CompressMetadata,
+  type CompressResult,
+  FrameCompressor,
+} from './frameCompressor';
 // Meaning Pipeline (multi-agent orchestration)
 export { type FuzzyLocateResult, fuzzyLocate } from './fuzzyLocate';
 export {
