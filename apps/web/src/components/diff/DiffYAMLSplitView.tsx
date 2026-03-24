@@ -115,22 +115,41 @@ function PaneContent({
         const inThisSide = side === 'left' ? as.inLeft : as.inRight;
 
         if (!inThisSide) {
-          // This slot doesn't exist on this side — empty placeholder
           lines.push(<YAMLLine key={`empty-${as.key}`} lineNumber={undefined} status="empty">{null}</YAMLLine>);
           continue;
         }
 
         const value = side === 'left' ? af.leftFrame.slots[as.key] : af.rightFrame.slots[as.key];
-        const slotStatus = sd
-          ? (sd.type === 'added' ? 'added' : sd.type === 'removed' ? 'removed' : 'modified')
-          : 'unchanged';
+
+        // Determine line status + value rendering
+        // For changed slots: left=removed, right=added (so user sees red→green)
+        let lineStatus: 'added' | 'removed' | 'modified' | 'unchanged' = 'unchanged';
+        if (sd) {
+          if (sd.type === 'added') lineStatus = 'added';
+          else if (sd.type === 'removed') lineStatus = 'removed';
+          else lineStatus = side === 'left' ? 'removed' : 'added'; // changed: left=old(red), right=new(green)
+        }
+
+        // Value highlight: for changed slots without wordDiff, wrap value in highlight span
+        let valueNode: React.ReactNode;
+        if (sd?.wordDiff) {
+          valueNode = <WordDiffSpan wordDiff={sd.wordDiff} />;
+        } else if (sd?.type === 'changed') {
+          // Highlight the entire value as removed (left) or added (right)
+          const hlClass = side === 'left'
+            ? 'bg-[var(--dy-removed-word)] text-[var(--dy-removed-accent)] rounded-sm px-[2px] font-medium'
+            : 'bg-[var(--dy-added-word)] text-[var(--dy-added-accent)] rounded-sm px-[2px] font-medium';
+          valueNode = <span className={hlClass}><SlotValueSpan value={value} /></span>;
+        } else {
+          valueNode = <SlotValueSpan value={value} />;
+        }
 
         lines.push(
-          <YAMLLine key={`slot-${as.key}`} lineNumber={lineNum++} status={slotStatus as any}>
+          <YAMLLine key={`slot-${as.key}`} lineNumber={lineNum++} status={lineStatus}>
             {'    '}
             <span style={{ color: YAML_COLORS.key }}>{as.key}</span>
             <span style={{ color: YAML_COLORS.bracket }}>: </span>
-            {sd?.wordDiff ? <WordDiffSpan wordDiff={sd.wordDiff} /> : <SlotValueSpan value={value} />}
+            {valueNode}
           </YAMLLine>
         );
       }
