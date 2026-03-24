@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as api from '@/lib/api';
+import type { AttachedImage } from '@/components/chat/ChatInput';
+import { useChatSessionStore } from '@/store/chatSessionStore';
+import type { Citation } from '@/lib/api/chat';
 
 // Chat page size for pagination
 const CHAT_PAGE_SIZE = 100;
@@ -8,6 +11,12 @@ export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+}
+
+interface SendMessageOptions {
+  historyOverride?: Array<{ role: string; content: string }>;
+  skipMemoryFetch?: boolean;
+  images?: AttachedImage[];
 }
 
 export interface UseConversationChatOptions {
@@ -31,10 +40,17 @@ export interface UseConversationChatReturn {
   warning: string | null;
   hasMore: boolean;
   isLoadingMore: boolean;
-  sendMessage: (messageOverride?: string) => void;
+  sendMessage: (messageOverride?: string, options?: SendMessageOptions) => void;
+  regenerate: (messageIndex: number) => void;
+  editAndResend: (messageIndex: number, newContent: string) => void;
   loadMore: () => void;
+  stopGenerating: () => void;
   /** Incremented each time turns are persisted to the DB — use to trigger extraction */
   turnsSavedCounter: number;
+  searchQuery: string | null;
+  citations: Citation[];
+  thinkingContent: string;
+  isThinking: boolean;
 }
 
 export function useConversationChat({
@@ -58,13 +74,29 @@ export function useConversationChat({
   const [chatError, setChatError] = useState<string | null>(null);
   const [chatWarning, setChatWarning] = useState<string | null>(null);
   const [turnsSavedCounter, setTurnsSavedCounter] = useState(0);
+  const [searchQuery, setSearchQuery] = useState<string | null>(null);
+  const [citations, setCitations] = useState<Citation[]>([]);
+  const [thinkingContent, setThinkingContent] = useState('');
+  const [isThinking, setIsThinking] = useState(false);
   const chatWarningTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tokenBufferRef = useRef('');
+  const rafIdRef = useRef<number | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // ========== Refs ==========
   const conversationIdRef = useRef(conversationId);
   const chatMessagesRef = useRef(chatMessages);
   const prevConversationIdRef = useRef<string | undefined>(undefined);
   const loadMoreAbortRef = useRef<AbortController | null>(null);
+
+  // ========== RAF cleanup ==========
+  useEffect(() => {
+    return () => {
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current);
+      }
+    };
+  }, []);
 
   // ========== Helpers ==========
   const showWarning = useCallback((msg: string) => {
@@ -217,25 +249,60 @@ export function useConversationChat({
     }
   }, [projectId, conversationId, chatOffset, chatHasMore, isLoadingMore]);
 
+  // ========== Stop generating ==========
+  const stopGenerating = useCallback(() => {
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
+  }, []);
+
+  const webSearchEnabled = useChatSessionStore((s) => s.webSearchEnabled);
+  const thinkingEnabled = useChatSessionStore((s) => s.thinkingEnabled);
+
   // ========== Send message ==========
   const sendMessage = useCallback(
-    async (messageOverride?: string) => {
+    async (messageOverride?: string, options?: SendMessageOptions) => {
       const rawMessage = messageOverride ?? chatInput;
       if (!rawMessage.trim() || isChatStreaming || isChatLoading) return;
 
       const userMessage = rawMessage.trim();
+
+      // Build content for API (may include image blocks)
+      const images = options?.images;
+      let apiContent: string | api.ContentBlock[];
+      if (images?.length) {
+        apiContent = [
+          ...images.map((img) => ({
+            type: 'image' as const,
+            source: {
+              type: 'base64' as const,
+              media_type: img.mediaType,
+              data: img.base64,
+            },
+          })),
+          { type: 'text' as const, text: userMessage },
+        ];
+      } else {
+        apiContent = userMessage;
+      }
+
       setChatInput('');
       setChatError(null);
       setChatWarning(null);
+      setSearchQuery(null);
+      setCitations([]);
+      setThinkingContent('');
+      setIsThinking(false);
 
-      // Capture current messages BEFORE adding new user message to state.
-      // This prevents the duplicate user message bug: if we read chatMessagesRef
-      // AFTER the setState + await, the ref might already include the new message
-      // (due to useEffect syncing), causing it to appear twice in the API call.
-      const previousMessages = chatMessagesRef.current.map((msg) => ({
-        role: msg.role as 'user' | 'assistant',
-        content: msg.content,
-      }));
+      // Use historyOverride if provided, otherwise capture current messages
+      const previousMessages = options?.historyOverride
+        ? options.historyOverride.map((msg) => ({
+            role: msg.role as 'user' | 'assistant',
+            content: msg.content,
+          }))
+        : chatMessagesRef.current.map((msg) => ({
+            role: msg.role as 'user' | 'assistant',
+            content: msg.content,
+          }));
 
       // Add user message to chat
       const newUserMessage: ChatMessage = {
@@ -260,7 +327,7 @@ export function useConversationChat({
 
         // Fetch pin-based memory context
         let memoryContext = '';
-        if (convId) {
+        if (!options?.skipMemoryFetch && convId) {
           try {
             const ctx = await api.getConversationMemory(convId);
             if (ctx.text) {
@@ -277,18 +344,53 @@ export function useConversationChat({
           // Inject pin memory as system message (if available)
           ...(memoryContext ? [{ role: 'system' as const, content: memoryContext }] : []),
           ...previousMessages,
-          { role: 'user' as const, content: userMessage },
+          { role: 'user' as const, content: apiContent },
         ];
 
         // Use streaming chat
         let fullResponse = '';
         let addedFinalMessage = false;
+        tokenBufferRef.current = '';
 
-        for await (const event of api.chatStream({ messages, provider, model })) {
+        const flushBuffer = () => {
+          if (tokenBufferRef.current) {
+            setStreamingContent(tokenBufferRef.current);
+          }
+          rafIdRef.current = null;
+        };
+
+        const controller = new AbortController();
+        abortControllerRef.current = controller;
+
+        for await (const event of api.chatStream(
+          { messages, provider, model, web_search: webSearchEnabled, thinking: thinkingEnabled },
+          { signal: controller.signal }
+        )) {
           if (event.type === 'token' && event.content) {
+            setSearchQuery(null);  // Clear search indicator once text starts
+            setIsThinking(false);
             fullResponse += event.content;
-            setStreamingContent(fullResponse);
+            tokenBufferRef.current = fullResponse;
+            // Throttle: schedule render on next animation frame
+            if (rafIdRef.current === null) {
+              rafIdRef.current = requestAnimationFrame(flushBuffer);
+            }
+          } else if (event.type === 'thinking') {
+            setIsThinking(true);
+            setThinkingContent((prev) => prev + (event.content ?? ''));
+          } else if (event.type === 'searching') {
+            setSearchQuery(event.query ?? null);
           } else if (event.type === 'done') {
+            setSearchQuery(null);
+            if (event.citations?.length) {
+              setCitations(event.citations);
+            }
+            // Cancel pending RAF and do final render
+            if (rafIdRef.current !== null) {
+              cancelAnimationFrame(rafIdRef.current);
+              rafIdRef.current = null;
+            }
+
             // Update fullResponse with done event content if available
             if (event.content) {
               fullResponse = event.content;
@@ -348,6 +450,25 @@ export function useConversationChat({
           saveTurns(1);
         }
       } catch (err) {
+        // Handle user-initiated abort gracefully
+        if (err instanceof DOMException && err.name === 'AbortError') {
+          // Keep partial response
+          const partial = tokenBufferRef.current;
+          if (partial) {
+            setChatMessages((prev) => [
+              ...prev,
+              {
+                id: `msg-${Date.now()}`,
+                role: 'assistant' as const,
+                content: partial,
+              },
+            ]);
+          }
+          setStreamingContent('');
+          setIsChatStreaming(false);
+          setIsChatLoading(false);
+          return;
+        }
         const error = err instanceof Error ? err : new Error(String(err));
         setChatError(error.message);
       } finally {
@@ -366,7 +487,43 @@ export function useConversationChat({
       onConversationCreated,
       onTurnsSaved,
       showWarning,
+      webSearchEnabled,
+      thinkingEnabled,
     ]
+  );
+
+  const regenerate = useCallback(
+    async (messageIndex: number) => {
+      const currentMessages = chatMessagesRef.current;
+      const historyUpToPoint = currentMessages.slice(0, messageIndex);
+      setChatMessages(historyUpToPoint);
+      chatMessagesRef.current = historyUpToPoint;
+
+      const lastUserMsg = historyUpToPoint[historyUpToPoint.length - 1];
+      if (!lastUserMsg || lastUserMsg.role !== 'user') return;
+
+      await sendMessage(lastUserMsg.content, {
+        historyOverride: historyUpToPoint
+          .slice(0, -1)
+          .map((m) => ({ role: m.role, content: m.content })),
+        skipMemoryFetch: true,
+      });
+    },
+    [sendMessage]
+  );
+
+  const editAndResend = useCallback(
+    async (messageIndex: number, newContent: string) => {
+      const currentMessages = chatMessagesRef.current;
+      const historyUpToPoint = currentMessages.slice(0, messageIndex);
+      setChatMessages(historyUpToPoint);
+      chatMessagesRef.current = historyUpToPoint;
+
+      await sendMessage(newContent, {
+        historyOverride: historyUpToPoint.map((m) => ({ role: m.role, content: m.content })),
+      });
+    },
+    [sendMessage]
   );
 
   return {
@@ -381,7 +538,14 @@ export function useConversationChat({
     hasMore: chatHasMore,
     isLoadingMore,
     sendMessage,
+    regenerate,
+    editAndResend,
     loadMore,
+    stopGenerating,
     turnsSavedCounter,
+    searchQuery,
+    citations,
+    thinkingContent,
+    isThinking,
   };
 }

@@ -42,19 +42,54 @@ function getProxyFetch() {
 const ALLOWED_ROLES = new Set(['system', 'user', 'assistant']);
 const MAX_MESSAGE_CONTENT_LENGTH = 128_000;
 
+const VALID_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
+
 function validateMessages(messages: unknown[]): string | null {
   for (let i = 0; i < messages.length; i++) {
     const msg = messages[i] as Record<string, unknown>;
     if (!msg || typeof msg !== 'object') return `messages[${i}]: must be an object`;
-    if (typeof msg.role !== 'string' || !ALLOWED_ROLES.has(msg.role)) {
+    if (typeof msg.role !== 'string' || !ALLOWED_ROLES.has(msg.role))
       return `messages[${i}]: invalid role "${String(msg.role)}"`;
+
+    // String content (existing format)
+    if (typeof msg.content === 'string') {
+      if (msg.content.length === 0) return `messages[${i}]: content must be non-empty`;
+      if (msg.content.length > MAX_MESSAGE_CONTENT_LENGTH)
+        return `messages[${i}]: content exceeds max length`;
+      continue;
     }
-    if (typeof msg.content !== 'string' || msg.content.length === 0) {
-      return `messages[${i}]: content must be a non-empty string`;
+
+    // Array content (multimodal)
+    if (Array.isArray(msg.content)) {
+      if (msg.content.length === 0) return `messages[${i}]: content array must be non-empty`;
+      let hasText = false;
+      for (let j = 0; j < msg.content.length; j++) {
+        const block = msg.content[j] as Record<string, unknown>;
+        if (!block || typeof block !== 'object')
+          return `messages[${i}].content[${j}]: invalid block`;
+        if (block.type === 'text') {
+          if (typeof block.text !== 'string' || !block.text)
+            return `messages[${i}].content[${j}]: text block must have text`;
+          if (block.text.length > MAX_MESSAGE_CONTENT_LENGTH)
+            return `messages[${i}].content[${j}]: text exceeds max length`;
+          hasText = true;
+        } else if (block.type === 'image') {
+          const source = block.source as Record<string, unknown> | undefined;
+          if (!source || source.type !== 'base64')
+            return `messages[${i}].content[${j}]: image must use base64 source`;
+          if (!VALID_IMAGE_TYPES.has(source.media_type as string))
+            return `messages[${i}].content[${j}]: invalid image type`;
+          if (typeof source.data !== 'string' || !source.data)
+            return `messages[${i}].content[${j}]: image data required`;
+        } else {
+          return `messages[${i}].content[${j}]: unknown block type "${String(block.type)}"`;
+        }
+      }
+      if (!hasText) return `messages[${i}]: at least one text block required`;
+      continue;
     }
-    if (msg.content.length > MAX_MESSAGE_CONTENT_LENGTH) {
-      return `messages[${i}]: content exceeds ${MAX_MESSAGE_CONTENT_LENGTH} characters`;
-    }
+
+    return `messages[${i}]: content must be string or array`;
   }
   return null;
 }
@@ -76,9 +111,19 @@ function sanitizeError(err: unknown): string {
 // Types
 // ============================================================================
 
+interface ContentBlock {
+  type: 'text' | 'image';
+  text?: string;
+  source?: {
+    type: 'base64';
+    media_type: string;
+    data: string;
+  };
+}
+
 interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
-  content: string;
+  content: string | ContentBlock[];
 }
 
 interface ChatResponse {
@@ -134,7 +179,8 @@ async function callClaudeNonStreaming(
   model: string,
   apiKey: string,
   temperature: number,
-  maxTokens: number
+  maxTokens: number,
+  options?: { thinking?: boolean }
 ): Promise<ChatResponse> {
   // Extract system message if present
   const systemMessage = messages.find((m) => m.role === 'system');
@@ -150,8 +196,11 @@ async function callClaudeNonStreaming(
     },
     body: JSON.stringify({
       model,
-      max_tokens: maxTokens,
-      temperature,
+      max_tokens: options?.thinking ? Math.max(maxTokens, 16384) : maxTokens,
+      ...(options?.thinking
+        ? { thinking: { type: 'enabled', budget_tokens: 10000 } }
+        : { temperature }
+      ),
       ...(systemMessage && { system: systemMessage.content }),
       messages: otherMessages.map((m) => ({
         role: m.role,
@@ -205,6 +254,8 @@ chatRoutes.post('/v1/chat', async (c) => {
     temperature?: number;
     max_tokens?: number;
     project_id?: string;
+    web_search?: boolean;
+    thinking?: boolean;
   } | null = null;
 
   try {
@@ -244,7 +295,7 @@ chatRoutes.post('/v1/chat', async (c) => {
   try {
     // Currently only Claude is implemented
     if (provider === 'claude' || provider === 'anthropic') {
-      const result = await callClaudeNonStreaming(messages, model, apiKey, temperature, maxTokens);
+      const result = await callClaudeNonStreaming(messages, model, apiKey, temperature, maxTokens, { thinking: body.thinking });
 
       // Record token usage (fire-and-forget, only if project_id provided)
       if (body?.project_id && result.usage) {
@@ -288,6 +339,8 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
     temperature?: number;
     max_tokens?: number;
     project_id?: string;
+    web_search?: boolean;
+    thinking?: boolean;
   } | null = null;
 
   try {
@@ -328,6 +381,8 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
     return jsonError(c, 'PROVIDER_ERROR', `Provider ${provider} not implemented`, 400);
   }
 
+  const useThinking = body.thinking && (provider === 'claude' || provider === 'anthropic');
+
   // Extract system message if present
   const systemMessage = messages.find((m) => m.role === 'system');
   const otherMessages = messages.filter((m) => m.role !== 'system');
@@ -343,13 +398,18 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
             'Content-Type': 'application/json',
             'x-api-key': apiKey,
             'anthropic-version': '2023-06-01',
+            ...(body.web_search && { 'anthropic-beta': 'web-search-2025-03-05' }),
           },
           body: JSON.stringify({
             model,
-            max_tokens: maxTokens,
-            temperature,
+            max_tokens: useThinking ? Math.max(maxTokens, 16384) : maxTokens,
+            ...(useThinking
+              ? { thinking: { type: 'enabled', budget_tokens: 10000 } }
+              : { temperature }
+            ),
             stream: true,
             ...(systemMessage && { system: systemMessage.content }),
+            ...(body.web_search && { tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 3 }] }),
             messages: otherMessages.map((m) => ({
               role: m.role,
               content: m.content,
@@ -377,6 +437,8 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
         let resolvedModel = model;
         const usage: { input_tokens?: number; output_tokens?: number } = {};
         let receivedMessageStop = false;
+        const citations: Array<{ url: string; title: string }> = [];
+        let currentBlockType = '';
 
         while (true) {
           const { done, value } = await reader.read();
@@ -411,29 +473,41 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
             }
 
             if (eventType === 'message_start') {
-              // Extract model and initial usage from message_start
               const msg = parsed.message as Record<string, unknown> | undefined;
               if (msg?.model) resolvedModel = msg.model as string;
               if (msg?.usage) {
                 const u = msg.usage as Record<string, number>;
                 usage.input_tokens = u.input_tokens;
               }
+            } else if (eventType === 'content_block_start') {
+              const contentBlock = parsed.content_block as Record<string, unknown> | undefined;
+              currentBlockType = (contentBlock?.type as string) ?? '';
+              // Emit searching indicator when web search starts
+              if (currentBlockType === 'server_tool_use' && contentBlock?.name === 'web_search') {
+                const input = contentBlock?.input as Record<string, unknown> | undefined;
+                controller.enqueue(
+                  encodeSseEvent(JSON.stringify({ type: 'searching', query: input?.query ?? '' }))
+                );
+              }
+            } else if (eventType === 'content_block_stop') {
+              currentBlockType = '';
             } else if (eventType === 'content_block_delta') {
-              // Extract text delta and emit as token
               const delta = parsed.delta as Record<string, unknown> | undefined;
               if (delta?.type === 'text_delta' && typeof delta.text === 'string') {
                 controller.enqueue(
                   encodeSseEvent(JSON.stringify({ type: 'token', content: delta.text }))
                 );
+              } else if (delta?.type === 'thinking_delta' && typeof delta.thinking === 'string') {
+                controller.enqueue(
+                  encodeSseEvent(JSON.stringify({ type: 'thinking', content: delta.thinking }))
+                );
               }
             } else if (eventType === 'message_delta') {
-              // Extract final usage from message_delta
               const u = parsed.usage as Record<string, number> | undefined;
               if (u?.output_tokens) {
                 usage.output_tokens = u.output_tokens;
               }
             } else if (eventType === 'message_stop') {
-              // Stream complete — emit done
               receivedMessageStop = true;
               controller.enqueue(
                 encodeSseEvent(
@@ -441,12 +515,12 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
                     type: 'done',
                     model: resolvedModel,
                     usage,
+                    ...(citations.length > 0 && { citations }),
                   })
                 )
               );
               controller.enqueue(encodeSseEvent('[DONE]'));
             }
-            // Ignore other event types (content_block_start, content_block_stop, ping)
           }
         }
 
@@ -459,6 +533,7 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
                 type: 'done',
                 model: resolvedModel,
                 usage,
+                ...(citations.length > 0 && { citations }),
               })
             )
           );

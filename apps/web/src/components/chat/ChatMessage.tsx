@@ -1,10 +1,14 @@
 'use client';
 
-import { User } from 'lucide-react';
-import { useCallback, useMemo, useRef } from 'react';
+import { Pencil, RefreshCw, User } from 'lucide-react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { CitationChips } from './CitationChips';
+import { CodeBlock } from './CodeBlock';
+import { ThinkingSection } from './ThinkingSection';
 import { cn } from '@/lib/utils';
+import type { Citation } from '@/lib/api/chat';
 import { useExtractionPanelStore } from '@/store/extractionPanelStore';
 
 interface ChatMessageProps {
@@ -13,6 +17,11 @@ interface ChatMessageProps {
   turnHash?: string;
   turnIndex?: number;
   isStreaming?: boolean;
+  citations?: Citation[];
+  thinkingContent?: string;
+  isThinking?: boolean;
+  onRegenerate?: () => void;
+  onEdit?: (newContent: string) => void;
 }
 
 /**
@@ -84,8 +93,15 @@ export function ChatMessage({
   turnHash,
   turnIndex,
   isStreaming,
+  citations,
+  thinkingContent,
+  isThinking,
+  onRegenerate,
+  onEdit,
 }: ChatMessageProps) {
   const isUser = sender === 'user';
+  const [isEditing, setIsEditing] = useState(false);
+  const [editContent, setEditContent] = useState('');
 
   const hoveredFrameId = useExtractionPanelStore((s) => s.hoveredFrameId);
   const hoveredSlotKey = useExtractionPanelStore((s) => s.hoveredSlotKey);
@@ -223,18 +239,65 @@ export function ChatMessage({
             </div>
 
             {isUser ? (
-              <div
-                ref={userTextRef}
-                onMouseMove={handleUserMouseMove}
-                className="text-sm leading-relaxed text-[var(--text-primary)] whitespace-pre-wrap"
-              >
-                {hasCharHighlights ? (
-                  <HighlightedText text={content} ranges={highlightRanges} />
+              <div className="relative">
+                {/* Edit button - top right on hover */}
+                {!isStreaming && onEdit && !isEditing && (
+                  <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute -top-1 right-0">
+                    <button
+                      type="button"
+                      onClick={() => { setEditContent(content); setIsEditing(true); }}
+                      className="p-1 rounded text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] transition-colors"
+                      title="Edit message"
+                    >
+                      <Pencil className="h-3 w-3" />
+                    </button>
+                  </div>
+                )}
+                {isEditing ? (
+                  <div className="flex flex-col gap-2">
+                    <textarea
+                      value={editContent}
+                      onChange={(e) => setEditContent(e.target.value)}
+                      className="w-full p-2 rounded border border-[var(--border-primary)] bg-[var(--bg-primary)] text-sm text-[var(--text-primary)] resize-none focus:outline-none focus:ring-1 focus:ring-[var(--accent-commit)]"
+                      rows={3}
+                      autoFocus
+                    />
+                    <div className="flex gap-2 justify-end">
+                      <button
+                        type="button"
+                        onClick={() => setIsEditing(false)}
+                        className="px-2 py-1 text-xs rounded text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)]"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { onEdit?.(editContent); setIsEditing(false); }}
+                        className="px-2 py-1 text-xs rounded bg-[var(--accent-commit)] text-white hover:opacity-90"
+                      >
+                        Save & Resend
+                      </button>
+                    </div>
+                  </div>
                 ) : (
-                  content
+                  <div
+                    ref={userTextRef}
+                    onMouseMove={handleUserMouseMove}
+                    className="text-sm leading-relaxed text-[var(--text-primary)] whitespace-pre-wrap"
+                  >
+                    {hasCharHighlights ? (
+                      <HighlightedText text={content} ranges={highlightRanges} />
+                    ) : (
+                      content
+                    )}
+                  </div>
                 )}
               </div>
             ) : (
+              <>
+              {thinkingContent && (
+                <ThinkingSection content={thinkingContent} isStreaming={isThinking} />
+              )}
               <div
                 className={cn(
                   'prose-chat text-sm leading-relaxed text-[var(--text-primary)]',
@@ -249,13 +312,53 @@ export function ChatMessage({
                   </div>
                 ) : (
                   <>
-                    <Markdown remarkPlugins={[remarkGfm]}>{content}</Markdown>
+                    <Markdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      code({ className, children }) {
+                        const lang = className?.replace('language-', '');
+                        const codeStr = String(children);
+                        if (lang || codeStr.includes('\n')) {
+                          return <CodeBlock language={lang}>{codeStr}</CodeBlock>;
+                        }
+                        return (
+                          <code className="px-1 py-0.5 rounded bg-[var(--bg-tertiary)] text-[0.8125rem] font-mono">
+                            {children}
+                          </code>
+                        );
+                      },
+                    }}
+                  >
+                    {content}
+                  </Markdown>
                     {isStreaming && (
-                      <span className="inline-block w-1.5 h-4 ml-0.5 -mb-0.5 bg-[var(--accent-commit)] rounded-sm animate-pulse" />
+                      <span
+                        className="inline-block w-0.5 h-[1.1em] ml-0.5 -mb-0.5 rounded-sm"
+                        style={{
+                          background: 'var(--accent-commit)',
+                          animation: 'blink 1s step-end infinite',
+                        }}
+                      />
                     )}
                   </>
                 )}
+                {!isUser && !isStreaming && citations && citations.length > 0 && (
+                  <CitationChips citations={citations} />
+                )}
               </div>
+              {!isUser && !isStreaming && onRegenerate && (
+                <div className="opacity-0 group-hover:opacity-100 transition-opacity mt-1">
+                  <button
+                    type="button"
+                    onClick={onRegenerate}
+                    className="p-1 rounded text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] transition-colors"
+                    title="Regenerate response"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
+              </>
             )}
           </div>
         </div>

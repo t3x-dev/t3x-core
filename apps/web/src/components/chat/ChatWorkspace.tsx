@@ -15,6 +15,7 @@ import { useChatStore } from '@/store/chatStore';
 import { useExtractionPanelStore } from '@/store/extractionPanelStore';
 import { useSessionStore } from '@/store/sessionStore';
 import { ChatHeader } from './ChatHeader';
+import type { AttachedImage } from './ChatInput';
 import { ChatInput } from './ChatInput';
 import { ChatMessage } from './ChatMessage';
 
@@ -72,7 +73,14 @@ export function ChatWorkspace({
     error,
     warning,
     sendMessage,
+    regenerate,
+    editAndResend,
+    stopGenerating,
     turnsSavedCounter,
+    searchQuery,
+    citations,
+    thinkingContent,
+    isThinking,
   } = useConversationChat({
     projectId: resolvedProjectId,
     conversationId: resolvedConversationId,
@@ -368,13 +376,13 @@ export function ChatWorkspace({
   }, [firstMessage, isLoading, isNewChat, resolvedProjectId, ensureProject, sendMessage]);
 
   const handleSend = useCallback(
-    async (message: string) => {
+    async (message: string, images?: AttachedImage[]) => {
       if (!resolvedProjectId) {
         pendingMessageRef.current = message;
         const projId = await ensureProject(message);
         setResolvedProjectId(projId);
       } else {
-        sendMessage(message);
+        sendMessage(message, images ? { images } : undefined);
       }
     },
     [resolvedProjectId, ensureProject, sendMessage]
@@ -431,12 +439,33 @@ export function ChatWorkspace({
                 content={msg.content}
                 turnHash={msg.id}
                 turnIndex={i + 1}
+                onRegenerate={msg.role === 'assistant' ? () => regenerate(i) : undefined}
+                onEdit={msg.role === 'user' ? (newContent: string) => editAndResend(i, newContent) : undefined}
+                citations={
+                  msg.role === 'assistant' && i === messages.length - 1
+                    ? citations
+                    : undefined
+                }
               />
             ))}
 
+            {/* Search indicator */}
+            {searchQuery && (
+              <div className="mx-auto max-w-3xl px-4 py-2 text-xs text-[var(--text-tertiary)] flex items-center gap-2">
+                <span className="animate-spin h-3 w-3 border border-[var(--text-tertiary)] border-t-transparent rounded-full" />
+                Searching: {searchQuery}
+              </div>
+            )}
+
             {/* Streaming response */}
             {isStreaming && streamingContent && (
-              <ChatMessage sender="assistant" content={streamingContent} isStreaming />
+              <ChatMessage
+                sender="assistant"
+                content={streamingContent}
+                isStreaming
+                thinkingContent={thinkingContent}
+                isThinking={isThinking}
+              />
             )}
 
             {/* Waiting indicator */}
@@ -493,7 +522,10 @@ export function ChatWorkspace({
         <div className="mx-auto max-w-3xl px-4">
           <ChatInput
             onSend={handleSend}
-            disabled={isStreaming || isLoading || isExtracting || isConversationCommitted}
+            onStop={stopGenerating}
+            isStreaming={isStreaming}
+            provider={selectedProvider}
+            disabled={isLoading || isExtracting || isConversationCommitted}
             placeholder={isConversationCommitted
               ? "This conversation is locked — a commit was made from it"
               : "Message... (Enter to send, Shift+Enter for new line)"}
