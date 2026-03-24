@@ -4,7 +4,7 @@ import { useCallback, useRef } from 'react';
 import type { FrameDiff } from '@t3x-dev/core';
 import { buildAlignedFrames, type AlignedFrame } from './DiffYAMLUtils';
 import {
-  DY_CSS_VARS,
+  useDYTheme,
   FrameSeparator,
   RelationAnnotation,
   IdenticalCollapseBar,
@@ -160,6 +160,7 @@ export function DiffYAMLSplitView({
   onSelectFrame,
   showIdentical,
 }: DiffYAMLSplitViewProps) {
+  const dyTheme = useDYTheme();
   const leftRef = useRef<HTMLDivElement>(null);
   const rightRef = useRef<HTMLDivElement>(null);
   const syncingRef = useRef(false);
@@ -183,7 +184,7 @@ export function DiffYAMLSplitView({
   return (
     <div
       className="flex flex-1 overflow-hidden"
-      style={DY_CSS_VARS}
+      style={dyTheme}
     >
       {/* Left pane (base) */}
       <div

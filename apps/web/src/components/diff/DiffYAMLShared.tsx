@@ -1,12 +1,29 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import type { FrameDiff, Relation } from '@t3x-dev/core';
 import { cn } from '@/lib/utils';
 import type { AlignedFrame } from './DiffYAMLUtils';
 
 // ── CSS custom properties for diff colors ──
+// Light mode values (default); dark mode overridden via .dark class in globals.css
 
-export const DY_CSS_VARS: React.CSSProperties = {
+export const DY_CSS_VARS_LIGHT: React.CSSProperties = {
+  '--dy-surface': '#ffffff',
+  '--dy-added-bg': 'rgba(46,160,67,0.18)',
+  '--dy-added-accent': '#1a7f37',
+  '--dy-added-word': 'rgba(46,160,67,0.35)',
+  '--dy-removed-bg': 'rgba(248,81,73,0.15)',
+  '--dy-removed-accent': '#cf222e',
+  '--dy-removed-word': 'rgba(248,81,73,0.30)',
+  '--dy-modified-bg': 'rgba(210,153,34,0.14)',
+  '--dy-modified-accent': '#9a6700',
+  '--dy-text-primary': '#1f2328',
+  '--dy-text-secondary': '#656d76',
+  '--dy-text-tertiary': '#8b949e',
+} as React.CSSProperties;
+
+export const DY_CSS_VARS_DARK: React.CSSProperties = {
   '--dy-surface': '#0d1117',
   '--dy-added-bg': 'rgba(46,160,67,0.15)',
   '--dy-added-accent': '#3fb950',
@@ -16,7 +33,23 @@ export const DY_CSS_VARS: React.CSSProperties = {
   '--dy-removed-word': 'rgba(248,81,73,0.40)',
   '--dy-modified-bg': 'rgba(210,153,34,0.10)',
   '--dy-modified-accent': '#d29922',
+  '--dy-text-primary': '#e6edf3',
+  '--dy-text-secondary': '#b1bac4',
+  '--dy-text-tertiary': '#7d8590',
 } as React.CSSProperties;
+
+/** Hook: returns the correct CSS vars based on dark/light mode */
+export function useDYTheme(): React.CSSProperties {
+  const [isDark, setIsDark] = useState(false);
+  useEffect(() => {
+    const check = () => setIsDark(document.documentElement.classList.contains('dark'));
+    check();
+    const observer = new MutationObserver(check);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
+  return isDark ? DY_CSS_VARS_DARK : DY_CSS_VARS_LIGHT;
+}
 
 // ── Relation color map ──
 

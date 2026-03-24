@@ -6,7 +6,7 @@ import { buildAlignedFrames, type AlignedFrame } from './DiffYAMLUtils';
 import { YAML_COLORS, formatSlotValue } from './DiffYAMLFormatters';
 import { frameLineCount, SlotValueSpan, WordDiffSpan } from './YAMLFrameRenderer';
 import {
-  DY_CSS_VARS,
+  useDYTheme,
   FrameSeparator,
   RelationAnnotation,
   IdenticalCollapseBar,
@@ -288,6 +288,7 @@ export function DiffYAMLUnifiedView({
   onSelectFrame,
   showIdentical,
 }: DiffYAMLUnifiedViewProps) {
+  const dyTheme = useDYTheme();
   const aligned = buildAlignedFrames(diff);
   const nonIdentical = aligned.filter(a => a.type !== 'identical');
   const identicalFrames = aligned.filter(a => a.type === 'identical');
@@ -316,7 +317,7 @@ export function DiffYAMLUnifiedView({
   return (
     <div
       className="flex-1 overflow-y-auto"
-      style={DY_CSS_VARS}
+      style={dyTheme}
     >
       {nonIdentical.map(renderFrame)}
       {showIdentical
