@@ -257,7 +257,8 @@ function transformSentence(apiSentence: ApiSentence): Sentence {
 /**
  * Detect whether API-returned prepared data is frame-based (new) or sentence-based (legacy).
  */
-function isFrameBasedPrepared(apiPrepared: Record<string, unknown>): boolean {
+function isFrameBasedPrepared(apiPrepared: Record<string, unknown> | null | undefined): boolean {
+  if (!apiPrepared || typeof apiPrepared !== 'object') return false;
   return 'autoKept' in apiPrepared || 'conflicts' in apiPrepared;
 }
 
@@ -265,10 +266,13 @@ function isFrameBasedPrepared(apiPrepared: Record<string, unknown>): boolean {
  * Transform prepared merge result from API format to frontend format.
  * Returns { frameMergeResult } for frame-based data, { prepared } for legacy sentence-based data.
  */
-function transformPreparedAuto(apiPrepared: Record<string, unknown>): {
+function transformPreparedAuto(apiPrepared: Record<string, unknown> | null | undefined): {
   prepared: Merge2WayResult | null;
   frameMergeResult: FrameMergeResult | null;
 } {
+  if (!apiPrepared) {
+    return { prepared: null, frameMergeResult: null };
+  }
   if (isFrameBasedPrepared(apiPrepared)) {
     // Frame-based format from new API
     return {
