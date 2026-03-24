@@ -71,17 +71,26 @@ function IdenticalSection({ frames }: { frames: Frame[] }) {
       >
         {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
         <Equal size={12} />
-        <span>{frames.length} identical frame{frames.length !== 1 ? 's' : ''}</span>
+        <span>
+          {frames.length} identical frame{frames.length !== 1 ? 's' : ''}
+        </span>
       </button>
       {expanded && (
         <div className="mt-1 opacity-50">
           {frames.map((frame) => (
             <div key={frame.id} className="px-2 py-0.5">
-              <pre className="m-0 text-[11px] leading-[18px]" style={{ color: 'var(--text-tertiary)' }}>
+              <pre
+                className="m-0 text-[11px] leading-[18px]"
+                style={{ color: 'var(--text-tertiary)' }}
+              >
                 {frame.type}: <span style={{ fontSize: 9, opacity: 0.7 }}>({frame.id})</span>
               </pre>
               {renderFrameSlots(frame).map((line, i) => (
-                <pre key={i} className="m-0 text-[11px] leading-[18px]" style={{ color: 'var(--text-tertiary)' }}>
+                <pre
+                  key={i}
+                  className="m-0 text-[11px] leading-[18px]"
+                  style={{ color: 'var(--text-tertiary)' }}
+                >
                   {line}
                 </pre>
               ))}
@@ -105,7 +114,8 @@ function SlotDiffLine({ slotDiff }: { slotDiff: SlotDiff }) {
         style={{ background: 'color-mix(in srgb, var(--status-success) 10%, transparent)' }}
       >
         <pre className="m-0 text-[11px] leading-[18px]" style={{ color: 'var(--status-success)' }}>
-          {pad}<span className="font-semibold">+</span> {key}: {formatSlotValue(newValue)}
+          {pad}
+          <span className="font-semibold">+</span> {key}: {formatSlotValue(newValue)}
         </pre>
       </div>
     );
@@ -117,8 +127,12 @@ function SlotDiffLine({ slotDiff }: { slotDiff: SlotDiff }) {
         className="px-2 py-0.5 rounded-sm"
         style={{ background: 'color-mix(in srgb, var(--status-error) 10%, transparent)' }}
       >
-        <pre className="m-0 text-[11px] leading-[18px] line-through" style={{ color: 'var(--status-error)' }}>
-          {pad}<span className="font-semibold">-</span> {key}: {formatSlotValue(oldValue)}
+        <pre
+          className="m-0 text-[11px] leading-[18px] line-through"
+          style={{ color: 'var(--status-error)' }}
+        >
+          {pad}
+          <span className="font-semibold">-</span> {key}: {formatSlotValue(oldValue)}
         </pre>
       </div>
     );
@@ -132,13 +146,14 @@ function SlotDiffLine({ slotDiff }: { slotDiff: SlotDiff }) {
         style={{ background: 'color-mix(in srgb, var(--text-tertiary) 5%, transparent)' }}
       >
         <pre className="m-0 text-[11px] leading-[18px]" style={{ color: 'var(--text-secondary)' }}>
-          {pad}<span style={{ color: 'var(--text-tertiary)' }}>~</span> {key}:{' '}
+          {pad}
+          <span style={{ color: 'var(--text-tertiary)' }}>~</span> {key}:{' '}
           {wordDiff.map((seg, i) => (
             <span
               key={`${seg.type}-${i}`}
               className={cn(
                 seg.type === 'added' && 'font-semibold',
-                seg.type === 'removed' && 'line-through',
+                seg.type === 'removed' && 'line-through'
               )}
               style={{
                 color:
@@ -172,25 +187,20 @@ function SlotDiffLine({ slotDiff }: { slotDiff: SlotDiff }) {
       style={{ background: 'color-mix(in srgb, var(--text-tertiary) 5%, transparent)' }}
     >
       <pre className="m-0 text-[11px] leading-[18px]" style={{ color: 'var(--text-secondary)' }}>
-        {pad}<span style={{ color: 'var(--text-tertiary)' }}>~</span> {key}:{' '}
+        {pad}
+        <span style={{ color: 'var(--text-tertiary)' }}>~</span> {key}:{' '}
         <span className="line-through" style={{ color: 'var(--status-error)', opacity: 0.8 }}>
           {formatSlotValue(oldValue)}
         </span>
         <span style={{ color: 'var(--text-tertiary)' }}>{' → '}</span>
-        <span style={{ color: 'var(--status-success)' }}>
-          {formatSlotValue(newValue)}
-        </span>
+        <span style={{ color: 'var(--status-success)' }}>{formatSlotValue(newValue)}</span>
       </pre>
     </div>
   );
 }
 
 /** A modified frame: header + slot diffs */
-function ModifiedFrameBlock({
-  entry,
-}: {
-  entry: FrameDiff['modified'][number];
-}) {
+function ModifiedFrameBlock({ entry }: { entry: FrameDiff['modified'][number] }) {
   const { sourceFrame, targetFrame, slotDiffs } = entry;
 
   return (
@@ -201,7 +211,10 @@ function ModifiedFrameBlock({
       {/* Frame header */}
       <div className="flex items-center gap-1.5 px-2 py-1">
         <Pencil size={12} style={{ color: 'var(--diff-modified-accent, var(--text-tertiary))' }} />
-        <pre className="m-0 text-[11px] leading-[18px] font-semibold" style={{ color: 'var(--text-primary)' }}>
+        <pre
+          className="m-0 text-[11px] leading-[18px] font-semibold"
+          style={{ color: 'var(--text-primary)' }}
+        >
           {sourceFrame.type}:
         </pre>
         <span className="text-[9px]" style={{ color: 'var(--text-tertiary)' }}>
@@ -219,8 +232,12 @@ function ModifiedFrameBlock({
         .filter(([key]) => !slotDiffs.some((sd) => sd.key === key))
         .map(([key, value]) => (
           <div key={key} className="px-2 py-0.5 opacity-40">
-            <pre className="m-0 text-[11px] leading-[18px]" style={{ color: 'var(--text-tertiary)' }}>
-              {'  '}{key}: {formatSlotValue(value)}
+            <pre
+              className="m-0 text-[11px] leading-[18px]"
+              style={{ color: 'var(--text-tertiary)' }}
+            >
+              {'  '}
+              {key}: {formatSlotValue(value)}
             </pre>
           </div>
         ))}
@@ -240,16 +257,25 @@ function RemovedFrameBlock({ frame }: { frame: Frame }) {
     >
       <div className="flex items-center gap-1.5 px-2 py-1">
         <Minus size={12} style={{ color: 'var(--status-error)' }} />
-        <pre className="m-0 text-[11px] leading-[18px] font-semibold line-through" style={{ color: 'var(--status-error)' }}>
+        <pre
+          className="m-0 text-[11px] leading-[18px] font-semibold line-through"
+          style={{ color: 'var(--status-error)' }}
+        >
           {frame.type}:
         </pre>
-        <span className="text-[9px] line-through" style={{ color: 'var(--status-error)', opacity: 0.7 }}>
+        <span
+          className="text-[9px] line-through"
+          style={{ color: 'var(--status-error)', opacity: 0.7 }}
+        >
           ({frame.id})
         </span>
       </div>
       {renderFrameSlots(frame).map((line, i) => (
         <div key={i} className="px-2 py-0.5">
-          <pre className="m-0 text-[11px] leading-[18px] line-through" style={{ color: 'var(--status-error)', opacity: 0.75 }}>
+          <pre
+            className="m-0 text-[11px] leading-[18px] line-through"
+            style={{ color: 'var(--status-error)', opacity: 0.75 }}
+          >
             {line}
           </pre>
         </div>
@@ -270,7 +296,10 @@ function AddedFrameBlock({ frame }: { frame: Frame }) {
     >
       <div className="flex items-center gap-1.5 px-2 py-1">
         <Plus size={12} style={{ color: 'var(--status-success)' }} />
-        <pre className="m-0 text-[11px] leading-[18px] font-semibold" style={{ color: 'var(--status-success)' }}>
+        <pre
+          className="m-0 text-[11px] leading-[18px] font-semibold"
+          style={{ color: 'var(--status-success)' }}
+        >
           {frame.type}:
         </pre>
         <span className="text-[9px]" style={{ color: 'var(--status-success)', opacity: 0.7 }}>
@@ -279,7 +308,10 @@ function AddedFrameBlock({ frame }: { frame: Frame }) {
       </div>
       {renderFrameSlots(frame).map((line, i) => (
         <div key={i} className="px-2 py-0.5">
-          <pre className="m-0 text-[11px] leading-[18px]" style={{ color: 'var(--status-success)' }}>
+          <pre
+            className="m-0 text-[11px] leading-[18px]"
+            style={{ color: 'var(--status-success)' }}
+          >
             {line}
           </pre>
         </div>
@@ -289,18 +321,15 @@ function AddedFrameBlock({ frame }: { frame: Frame }) {
 }
 
 /** Relation changes section */
-function RelationChanges({
-  added,
-  removed,
-}: {
-  added: Relation[];
-  removed: Relation[];
-}) {
+function RelationChanges({ added, removed }: { added: Relation[]; removed: Relation[] }) {
   if (added.length === 0 && removed.length === 0) return null;
 
   return (
     <div className="mt-3 pt-2" style={{ borderTop: '1px solid var(--stroke-divider)' }}>
-      <div className="text-[10px] font-medium uppercase tracking-wider mb-1 px-2" style={{ color: 'var(--text-tertiary)' }}>
+      <div
+        className="text-[10px] font-medium uppercase tracking-wider mb-1 px-2"
+        style={{ color: 'var(--text-tertiary)' }}
+      >
         Relation changes
       </div>
       {removed.map((r, i) => (
@@ -309,7 +338,10 @@ function RelationChanges({
           className="px-2 py-0.5 rounded-sm"
           style={{ background: 'color-mix(in srgb, var(--status-error) 8%, transparent)' }}
         >
-          <pre className="m-0 text-[11px] leading-[18px] line-through" style={{ color: 'var(--status-error)' }}>
+          <pre
+            className="m-0 text-[11px] leading-[18px] line-through"
+            style={{ color: 'var(--status-error)' }}
+          >
             - {formatRelation(r)}
           </pre>
         </div>
@@ -320,7 +352,10 @@ function RelationChanges({
           className="px-2 py-0.5 rounded-sm"
           style={{ background: 'color-mix(in srgb, var(--status-success) 8%, transparent)' }}
         >
-          <pre className="m-0 text-[11px] leading-[18px]" style={{ color: 'var(--status-success)' }}>
+          <pre
+            className="m-0 text-[11px] leading-[18px]"
+            style={{ color: 'var(--status-success)' }}
+          >
             + {formatRelation(r)}
           </pre>
         </div>
@@ -350,18 +385,15 @@ function DiffStatsBadge({ diff }: { diff: FrameDiff }) {
         </span>
       )}
       {diff.onlyInSource.length > 0 && (
-        <span style={{ color: 'var(--status-error)' }}>
-          -{diff.onlyInSource.length} removed
-        </span>
+        <span style={{ color: 'var(--status-error)' }}>-{diff.onlyInSource.length} removed</span>
       )}
       {diff.onlyInTarget.length > 0 && (
-        <span style={{ color: 'var(--status-success)' }}>
-          +{diff.onlyInTarget.length} added
-        </span>
+        <span style={{ color: 'var(--status-success)' }}>+{diff.onlyInTarget.length} added</span>
       )}
       {(diff.relationsAdded.length > 0 || diff.relationsRemoved.length > 0) && (
         <span style={{ color: 'var(--text-tertiary)' }}>
-          {diff.relationsAdded.length + diff.relationsRemoved.length} relation change{diff.relationsAdded.length + diff.relationsRemoved.length !== 1 ? 's' : ''}
+          {diff.relationsAdded.length + diff.relationsRemoved.length} relation change
+          {diff.relationsAdded.length + diff.relationsRemoved.length !== 1 ? 's' : ''}
         </span>
       )}
     </div>
@@ -383,7 +415,10 @@ export function FrameYAMLDiff({ diff, className }: FrameYAMLDiffProps) {
     return (
       <div
         className={cn('text-center py-8 text-sm', className)}
-        style={{ color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono, ui-monospace, monospace)' }}
+        style={{
+          color: 'var(--text-tertiary)',
+          fontFamily: 'var(--font-mono, ui-monospace, monospace)',
+        }}
       >
         No differences detected.
       </div>
@@ -402,10 +437,7 @@ export function FrameYAMLDiff({ diff, className }: FrameYAMLDiffProps) {
       {/* Stats */}
       <DiffStatsBadge diff={diff} />
 
-      <div
-        className="px-1 pb-2"
-        style={{ borderTop: '1px solid var(--stroke-divider)' }}
-      >
+      <div className="px-1 pb-2" style={{ borderTop: '1px solid var(--stroke-divider)' }}>
         {/* Modified frames */}
         {diff.modified.map((entry) => (
           <ModifiedFrameBlock key={entry.frameId} entry={entry} />

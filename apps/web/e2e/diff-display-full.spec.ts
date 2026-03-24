@@ -16,8 +16,8 @@ test.describe('DiffDisplayView Full E2E', () => {
   let projectName: string;
   let conversation1Id: string;
   let conversation2Id: string;
-  let turn1Hash: string;
-  let turn2Hash: string;
+  let _turn1Hash: string;
+  let _turn2Hash: string;
   let commit1Hash: string;
   let commit2Hash: string;
 
@@ -53,7 +53,7 @@ test.describe('DiffDisplayView Full E2E', () => {
     });
     const turn1Data = await turn1Res.json();
     expect(turn1Data.success).toBe(true);
-    turn1Hash = turn1Data.data.turn_hash;
+    _turn1Hash = turn1Data.data.turn_hash;
 
     // 4. Create SECOND conversation for commit 2
     const conv2Res = await request.post(`${API_BASE}/conversations`, {
@@ -78,7 +78,7 @@ test.describe('DiffDisplayView Full E2E', () => {
     });
     const turn2Data = await turn2Res.json();
     expect(turn2Data.success).toBe(true);
-    turn2Hash = turn2Data.data.turn_hash;
+    _turn2Hash = turn2Data.data.turn_hash;
 
     // 6. Create first commit with frames
     const commit1Res = await request.post(`${API_BASE}/commits`, {

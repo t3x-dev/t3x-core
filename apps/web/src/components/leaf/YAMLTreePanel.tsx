@@ -11,7 +11,7 @@
 import type { SemanticContent } from '@t3x-dev/core';
 import { ExternalLink } from 'lucide-react';
 import Link from 'next/link';
-import { useCallback, useMemo, type ReactNode } from 'react';
+import { type ReactNode, useCallback, useMemo } from 'react';
 import { FrameYAMLRenderer } from '@/components/shared/FrameYAMLRenderer';
 import type { WorkspaceMode } from '@/hooks/useLeafPageData';
 import type { Assertion, Constraint } from '@/lib/api/leaves';
@@ -66,7 +66,9 @@ export function YAMLTreePanel({
     if ('source_frame' in constraint && constraint.source_frame) {
       // Find frame by type match
       const frame = content.frames.find(
-        (f) => f.type === (constraint as { source_frame?: { frame_type?: string } }).source_frame?.frame_type
+        (f) =>
+          f.type ===
+          (constraint as { source_frame?: { frame_type?: string } }).source_frame?.frame_type
       );
       return frame?.id ?? null;
     }

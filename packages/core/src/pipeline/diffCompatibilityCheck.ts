@@ -28,10 +28,7 @@ export interface DiffCheckResult {
  * @param delta - Delta to check
  * @returns compatible: true if apply + validate both succeed
  */
-export function checkDiffCompatibility(
-  snapshot: SemanticContent,
-  delta: Delta
-): DiffCheckResult {
+export function checkDiffCompatibility(snapshot: SemanticContent, delta: Delta): DiffCheckResult {
   const errors: string[] = [];
 
   // 1. Try applying the delta

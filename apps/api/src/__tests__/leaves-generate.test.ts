@@ -10,7 +10,7 @@ import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// biome-ignore lint/suspicious/noExplicitAny: test helper
 type ApiResponse = any;
 
 // Hoist the mocks
@@ -101,7 +101,8 @@ describe('POST /v1/leaves/:id/generate', () => {
           id: s.id,
           type: 'legacy_sentence' as const,
           slots: { text: s.text },
-          confidence: s.confidence,
+          // biome-ignore lint/suspicious/noExplicitAny: test mock access
+          confidence: (s as any).confidence ?? 1,
         })),
         relations: [],
       },

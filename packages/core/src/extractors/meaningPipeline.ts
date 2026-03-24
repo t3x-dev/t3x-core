@@ -16,7 +16,7 @@
  */
 
 import type { LLMCallLogger, LLMProvider } from '../llm/types';
-import type { Frame, Relation, SemanticContent, SlotValue } from '../semantic/types';
+import type { SemanticContent, SlotValue } from '../semantic/types';
 import type { FrameExtractionTurn } from './frameExtractionPrompt';
 
 // ── Pipeline Mode ──

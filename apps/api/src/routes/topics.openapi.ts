@@ -15,7 +15,6 @@ import {
   createTopic,
   deleteTopic,
   findConversationById,
-  getTopicById,
   listTopicsByConversation,
   updateTopic,
 } from '@t3x-dev/storage';
@@ -187,7 +186,11 @@ topicsRoutes.openapi(listTopicsRoute, async (c) => {
     const db = await getDB();
     const conversation = await findConversationById(db, conversationId);
     if (!conversation) {
-      return errorResponse(c, 'CONVERSATION_NOT_FOUND', `Conversation not found: ${conversationId}`);
+      return errorResponse(
+        c,
+        'CONVERSATION_NOT_FOUND',
+        `Conversation not found: ${conversationId}`
+      );
     }
     const records = await listTopicsByConversation(db, conversationId);
     return c.json({ success: true as const, data: records.map(toApiTopic) }, 200);
@@ -204,7 +207,11 @@ topicsRoutes.openapi(createTopicRoute, async (c) => {
     const db = await getDB();
     const conversation = await findConversationById(db, conversationId);
     if (!conversation) {
-      return errorResponse(c, 'CONVERSATION_NOT_FOUND', `Conversation not found: ${conversationId}`);
+      return errorResponse(
+        c,
+        'CONVERSATION_NOT_FOUND',
+        `Conversation not found: ${conversationId}`
+      );
     }
     const record = await createTopic(db, {
       conversationId,

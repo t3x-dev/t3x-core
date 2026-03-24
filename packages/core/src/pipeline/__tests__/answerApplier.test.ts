@@ -167,13 +167,19 @@ describe('applyAnswer', () => {
   });
 
   it('returns error for keep_both_separate (needs API orchestration)', () => {
-    const result = applyAnswer(baseSnapshot, { question_id: 'q1', drift_choice: 'keep_both_separate' });
+    const result = applyAnswer(baseSnapshot, {
+      question_id: 'q1',
+      drift_choice: 'keep_both_separate',
+    });
     expect(result.applied).toBe(false);
     expect(result.errors![0]).toContain('API-layer orchestration');
   });
 
   it('returns error for keep_both_together (needs API orchestration)', () => {
-    const result = applyAnswer(baseSnapshot, { question_id: 'q1', drift_choice: 'keep_both_together' });
+    const result = applyAnswer(baseSnapshot, {
+      question_id: 'q1',
+      drift_choice: 'keep_both_together',
+    });
     expect(result.applied).toBe(false);
     expect(result.errors![0]).toContain('API-layer orchestration');
   });
@@ -219,13 +225,7 @@ describe('applyAnswer', () => {
   });
 
   it('fails vagueness answer without value', () => {
-    const result = applyAnswer(
-      baseSnapshot,
-      { question_id: 'q1' },
-      'vagueness',
-      'f_001',
-      'budget'
-    );
+    const result = applyAnswer(baseSnapshot, { question_id: 'q1' }, 'vagueness', 'f_001', 'budget');
     expect(result.applied).toBe(false);
     expect(result.errors![0]).toContain('No value');
   });

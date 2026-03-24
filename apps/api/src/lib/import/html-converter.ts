@@ -6,9 +6,12 @@
  * - convertHtmlToMarkdown(): Document import — direct Turndown (content already clean)
  */
 
+/// <reference lib="dom" />
 import { Readability } from '@mozilla/readability';
+// @ts-expect-error - jsdom has no type declarations
 import { JSDOM } from 'jsdom';
 import TurndownService from 'turndown';
+// @ts-expect-error - turndown-plugin-gfm has no type declarations
 import { gfm } from 'turndown-plugin-gfm';
 
 /** OG/meta metadata extracted from HTML pages */

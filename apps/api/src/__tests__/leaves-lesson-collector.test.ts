@@ -103,7 +103,8 @@ describe('POST /v1/leaves/:id/generate — lesson collector wiring', () => {
           id: s.id,
           type: 'legacy_sentence' as const,
           slots: { text: s.text },
-          confidence: s.confidence,
+          // biome-ignore lint/suspicious/noExplicitAny: test mock access
+          confidence: (s as any).confidence ?? 1,
         })),
         relations: [],
       },
@@ -271,7 +272,8 @@ describe('POST /v1/leaves/:id/generate — lesson collector wiring', () => {
           id: s.id,
           type: 'legacy_sentence' as const,
           slots: { text: s.text },
-          confidence: s.confidence,
+          // biome-ignore lint/suspicious/noExplicitAny: test mock access
+          confidence: (s as any).confidence ?? 1,
         })),
         relations: [],
       },
@@ -329,7 +331,8 @@ describe('POST /v1/leaves/:id/generate — lesson collector wiring', () => {
       commit_hash: testCommitHash,
       type: 'weibo',
       title: 'Weibo with Context',
-      constraints: [{ type: 'require', match_mode: 'exact', value: 'concise' }],
+      // biome-ignore lint/suspicious/noExplicitAny: test type cast
+      constraints: [{ type: 'require', match_mode: 'exact', value: 'concise' }] as any,
       project_id: testProjectId,
     });
 

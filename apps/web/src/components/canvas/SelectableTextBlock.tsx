@@ -7,12 +7,10 @@ import type {
   KeywordMarker,
   SourceTextBlock,
   TextSelection,
-  TextToken,
 } from '@/types/nodes';
 import {
   addSelection,
   cleanupKeywords,
-  isTokenInExcludeSelection,
   isTokenInIncludeSelection,
   toggleKeyword,
 } from '@/utils/tokenizer';
@@ -23,7 +21,6 @@ import {
   isTokenInAnchorCandidate,
   isTokenInConfirmedAnchor,
   needsSpaceAfter,
-  type TokenState,
 } from './SelectableTextBlockUtils';
 
 interface SelectableTextBlockProps {

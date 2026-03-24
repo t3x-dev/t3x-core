@@ -24,7 +24,7 @@ const { chromium } = require('@playwright/test');
     try {
       await page.goto('http://localhost:3000' + path, { waitUntil: 'networkidle', timeout: 15000 });
       await page.waitForTimeout(3000);
-    } catch (e) {
+    } catch (_e) {
       console.log('TIMEOUT: ' + name + ' (screenshotting anyway)');
     }
     await page.screenshot({ path: '/tmp/t3x-assessment/' + name + '.png' });
@@ -65,7 +65,7 @@ const { chromium } = require('@playwright/test');
         timeout: 15000,
       });
       await p.waitForTimeout(2000);
-    } catch (e) {}
+    } catch (_e) {}
     await p.screenshot({ path: '/tmp/t3x-assessment/07-conversation.png' });
     console.log('OK: conversation');
     await p.close();

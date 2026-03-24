@@ -12,7 +12,7 @@
  */
 
 import type { LLMProvider } from '../../llm/types';
-import type { Frame, SlotValue } from '../../semantic/types';
+import type { SlotValue } from '../../semantic/types';
 import type { MeaningAgent, PipelineContext } from '../meaningPipeline';
 
 const SYSTEM_PROMPT = `You review a structured meaning document for quality. Check:

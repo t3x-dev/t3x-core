@@ -169,7 +169,8 @@ export function ChatWorkspace({
       getCommitAsFrames(hash)
         .then((parentCommit) => {
           // Extract parent conversation ID for "View parent" link
-          const sources = (parentCommit as { sources?: Array<{ type?: string; id?: string }> }).sources;
+          const sources = (parentCommit as { sources?: Array<{ type?: string; id?: string }> })
+            .sources;
           const parentConvSource = sources?.find((s) => s.type === 'conversation');
           if (parentConvSource?.id) {
             setParentConversationId(parentConvSource.id);
@@ -440,11 +441,13 @@ export function ChatWorkspace({
                 turnHash={msg.id}
                 turnIndex={i + 1}
                 onRegenerate={msg.role === 'assistant' ? () => regenerate(i) : undefined}
-                onEdit={msg.role === 'user' ? (newContent: string) => editAndResend(i, newContent) : undefined}
-                citations={
-                  msg.role === 'assistant' && i === messages.length - 1
-                    ? citations
+                onEdit={
+                  msg.role === 'user'
+                    ? (newContent: string) => editAndResend(i, newContent)
                     : undefined
+                }
+                citations={
+                  msg.role === 'assistant' && i === messages.length - 1 ? citations : undefined
                 }
               />
             ))}
@@ -526,9 +529,11 @@ export function ChatWorkspace({
             isStreaming={isStreaming}
             provider={selectedProvider}
             disabled={isLoading || isExtracting || isConversationCommitted}
-            placeholder={isConversationCommitted
-              ? "This conversation is locked — a commit was made from it"
-              : "Message... (Enter to send, Shift+Enter for new line)"}
+            placeholder={
+              isConversationCommitted
+                ? 'This conversation is locked — a commit was made from it'
+                : 'Message... (Enter to send, Shift+Enter for new line)'
+            }
           />
         </div>
       </div>

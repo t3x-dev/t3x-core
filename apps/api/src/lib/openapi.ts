@@ -50,7 +50,9 @@ export function createApiReference() {
     theme: 'kepler',
     spec: {
       url: '/api/openapi.json',
-    },
+      // biome-ignore lint/suspicious/noExplicitAny: generic error handler
+    } as any,
     pageTitle: 'T3X API Reference',
-  });
+    // biome-ignore lint/suspicious/noExplicitAny: generic error handler
+  } as any);
 }

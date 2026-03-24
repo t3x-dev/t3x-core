@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import * as api from '@/lib/api';
 import type { AttachedImage } from '@/components/chat/ChatInput';
-import { useChatSessionStore } from '@/store/chatSessionStore';
+import * as api from '@/lib/api';
 import type { Citation } from '@/lib/api/chat';
+import { useChatSessionStore } from '@/store/chatSessionStore';
 
 // Chat page size for pagination
 const CHAT_PAGE_SIZE = 100;
@@ -367,7 +367,7 @@ export function useConversationChat({
           { signal: controller.signal }
         )) {
           if (event.type === 'token' && event.content) {
-            setSearchQuery(null);  // Clear search indicator once text starts
+            setSearchQuery(null); // Clear search indicator once text starts
             setIsThinking(false);
             fullResponse += event.content;
             tokenBufferRef.current = fullResponse;

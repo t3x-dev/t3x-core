@@ -121,7 +121,7 @@ describe('frameDiff', () => {
       frames: [f('f_001', 'x', { text: 'The slow brown fox jumps over the happy dog' })],
       relations: [],
     };
-    const mockWordDiff = (x: string, y: string) => [{ type: 'unchanged' as const, text: 'stub' }];
+    const mockWordDiff = (_x: string, _y: string) => [{ type: 'unchanged' as const, text: 'stub' }];
     const result = frameDiff(a, b, mockWordDiff);
     expect(result.modified[0].slotDiffs[0].wordDiff).toBeDefined();
   });
@@ -129,7 +129,7 @@ describe('frameDiff', () => {
   it('does not inject word diff for short strings', () => {
     const a: SemanticContent = { frames: [f('f_001', 'x', { city: 'Paris' })], relations: [] };
     const b: SemanticContent = { frames: [f('f_001', 'x', { city: 'Tokyo' })], relations: [] };
-    const mockWordDiff = (x: string, y: string) => [{ type: 'unchanged' as const, text: 'stub' }];
+    const mockWordDiff = (_x: string, _y: string) => [{ type: 'unchanged' as const, text: 'stub' }];
     const result = frameDiff(a, b, mockWordDiff);
     expect(result.modified[0].slotDiffs[0].wordDiff).toBeUndefined();
   });

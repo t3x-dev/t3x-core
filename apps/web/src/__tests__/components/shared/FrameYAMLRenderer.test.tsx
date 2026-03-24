@@ -4,13 +4,12 @@
  * Tests for the pure YAML rendering component that renders Frame trees.
  */
 
-import { describe, expect, test, vi } from 'vitest';
 import type { Frame } from '@t3x-dev/core';
+import { describe, expect, test, vi } from 'vitest';
 import {
+  buildYAMLLines,
   FrameYAMLRenderer,
   type FrameYAMLRendererProps,
-  buildYAMLLines,
-  type YAMLLine,
 } from '@/components/shared/FrameYAMLRenderer';
 
 // ── Helper: minimal frames ──────────────────────────────────────────────────
@@ -146,9 +145,7 @@ describe('buildYAMLLines', () => {
   });
 
   test('blank separator line is added after each frame', () => {
-    const frames: Frame[] = [
-      makeFrame({ id: 'f_001', type: 'frame_one', slots: { key: 'val' } }),
-    ];
+    const frames: Frame[] = [makeFrame({ id: 'f_001', type: 'frame_one', slots: { key: 'val' } })];
     const lines = buildYAMLLines(frames);
 
     const emptyLine = lines.find((l) => l.isEmpty);
@@ -194,10 +191,10 @@ describe('FrameYAMLRendererProps interface', () => {
     const frames: Frame[] = [makeFrame({ id: 'f_001', type: 'goal', slots: {} })];
     const props: FrameYAMLRendererProps = {
       frames,
-      renderFrameActions: (frameId, frameType) => null,
+      renderFrameActions: (_frameId, _frameType) => null,
       highlightFrameId: 'f_001',
-      getFrameMeta: (frameId) => ({ confidence: 0.9, changeType: 'add' }),
-      onHoverFrame: (frameId) => {},
+      getFrameMeta: (_frameId) => ({ confidence: 0.9, changeType: 'add' }),
+      onHoverFrame: (_frameId) => {},
       className: 'my-class',
     };
     expect(props.frames).toHaveLength(1);

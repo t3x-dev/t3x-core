@@ -211,7 +211,13 @@ export const createMergeSlice: StateCreator<CanvasState, [], [], MergeSlice> = (
               ? mergeCommit.branch || targetBranch
               : undefined,
           // Content
-          sourceExcerpt: mergeCommit.content.frames?.map((f: any) => `[${f.type}] ${Object.entries(f.slots || {}).map(([k, v]: [string, any]) => `${k}: ${typeof v === 'string' ? v : String(v)}`).join('; ')}`) ?? [],
+          sourceExcerpt:
+            mergeCommit.content.frames?.map(
+              (f: any) =>
+                `[${f.type}] ${Object.entries(f.slots || {})
+                  .map(([k, v]: [string, any]) => `${k}: ${typeof v === 'string' ? v : String(v)}`)
+                  .join('; ')}`
+            ) ?? [],
           mustHave: undefined,
           mustntHave: undefined,
           // V4 commit data including merge summary

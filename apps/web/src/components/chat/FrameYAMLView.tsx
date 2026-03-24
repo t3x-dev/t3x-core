@@ -1,10 +1,10 @@
 'use client';
 
-import type { Frame, SemanticContent, SlotValue } from '@t3x-dev/core';
+import type { Frame, SlotValue } from '@t3x-dev/core';
 import { Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { parseDisplayYAML, toDisplayYAML } from '@/lib/liteYaml';
 import { nestFrames } from '@/lib/frameNesting';
+import { parseDisplayYAML, toDisplayYAML } from '@/lib/liteYaml';
 import { RELEVANCE_THRESHOLD, type RelevanceContext, relevanceScore } from '@/lib/relevanceScore';
 import { useExtractionPanelStore } from '@/store/extractionPanelStore';
 
@@ -274,7 +274,14 @@ export function FrameYAMLView() {
           isCollapsed: true,
           collapsedSlotCount: slotCount,
         });
-        lines.push({ text: '', frameId: frame.id, slotKey: null, changeType: null, isAutoSelected: false, isEmpty: true });
+        lines.push({
+          text: '',
+          frameId: frame.id,
+          slotKey: null,
+          changeType: null,
+          isAutoSelected: false,
+          isEmpty: true,
+        });
         continue;
       }
 
@@ -395,9 +402,16 @@ export function FrameYAMLView() {
               if (hoveredCharOffset != null && frame.slot_sources) {
                 for (const [slotKey, ref] of Object.entries(frame.slot_sources)) {
                   const hashMatch = ref.turn_hash && hoveredTurnHash === ref.turn_hash;
-                  if (hashMatch && hoveredCharOffset >= ref.start_char && hoveredCharOffset < ref.end_char) {
+                  if (
+                    hashMatch &&
+                    hoveredCharOffset >= ref.start_char &&
+                    hoveredCharOffset < ref.end_char
+                  ) {
                     // Only highlight this specific slot row (or the frame header if slotKey is null)
-                    return line.slotKey === slotKey || (line.slotKey === null && line.text.includes(frame.type));
+                    return (
+                      line.slotKey === slotKey ||
+                      (line.slotKey === null && line.text.includes(frame.type))
+                    );
                   }
                 }
                 return false;
@@ -416,15 +430,16 @@ export function FrameYAMLView() {
             const collapsedBg = 'rgba(128, 128, 128, 0.1)';
 
             // Background: collapsed > reverse-highlight > confirmed > auto-selected > transparent
-            const bg = line.isCollapsed && line.slotKey === null
-              ? collapsedBg
-              : isReverseHighlighted
-                ? 'rgba(96, 165, 250, 0.15)'
-                : isConfirmed
-                  ? 'rgba(74, 222, 128, 0.1)'
-                  : line.isAutoSelected
-                    ? 'rgba(96, 165, 250, 0.06)'
-                    : 'transparent';
+            const bg =
+              line.isCollapsed && line.slotKey === null
+                ? collapsedBg
+                : isReverseHighlighted
+                  ? 'rgba(96, 165, 250, 0.15)'
+                  : isConfirmed
+                    ? 'rgba(74, 222, 128, 0.1)'
+                    : line.isAutoSelected
+                      ? 'rgba(96, 165, 250, 0.06)'
+                      : 'transparent';
 
             const handleCheck = () => {
               // Collapsed frame header — toggle expand
@@ -449,7 +464,9 @@ export function FrameYAMLView() {
                 onMouseLeave={() => setHoveredFrameId(null)}
                 title={
                   isFrameLine && gateIssues[line.frameId]?.length
-                    ? gateIssues[line.frameId].map((i) => `[${i.severity}] ${i.description}`).join('\n')
+                    ? gateIssues[line.frameId]
+                        .map((i) => `[${i.severity}] ${i.description}`)
+                        .join('\n')
                     : undefined
                 }
                 style={{
@@ -459,9 +476,10 @@ export function FrameYAMLView() {
                   minHeight: 20,
                   transition: 'background 0.15s',
                   cursor: isFrameLine ? 'pointer' : undefined,
-                  borderLeft: isFrameLine && gateIssues[line.frameId]?.length
-                    ? `3px solid ${gateIssues[line.frameId].some((i) => i.severity === 'error') ? '#f87171' : '#facc15'}`
-                    : undefined,
+                  borderLeft:
+                    isFrameLine && gateIssues[line.frameId]?.length
+                      ? `3px solid ${gateIssues[line.frameId].some((i) => i.severity === 'error') ? '#f87171' : '#facc15'}`
+                      : undefined,
                 }}
               >
                 {/* Checkbox column */}
@@ -507,9 +525,14 @@ export function FrameYAMLView() {
                     fontFamily: 'var(--font-mono, ui-monospace, monospace)',
                     color: line.isCollapsed
                       ? 'var(--text-tertiary)'
-                      : isFrameLine ? 'var(--text-primary)' : 'var(--text-secondary)',
+                      : isFrameLine
+                        ? 'var(--text-primary)'
+                        : 'var(--text-secondary)',
                     fontWeight: line.isCollapsed ? 400 : isFrameLine ? 600 : 400,
-                    fontStyle: line.isCollapsed && line.slotKey === null && !expandedCollapsed[line.frameId] ? 'italic' : undefined,
+                    fontStyle:
+                      line.isCollapsed && line.slotKey === null && !expandedCollapsed[line.frameId]
+                        ? 'italic'
+                        : undefined,
                     whiteSpace: 'pre',
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',

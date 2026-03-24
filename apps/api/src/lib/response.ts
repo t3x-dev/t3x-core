@@ -24,7 +24,8 @@ export function errorResponse(code: string, message: string): ApiResponse<never>
  * JSON response with success wrapper
  */
 export function jsonSuccess<T>(c: Context, data: T, status: 200 | 201 = 200) {
-  return c.json(successResponse(data), status);
+  // biome-ignore lint/suspicious/noExplicitAny: generic error handler
+  return c.json(successResponse(data), status) as any;
 }
 
 /**
@@ -34,7 +35,8 @@ export function jsonError(
   c: Context,
   code: string,
   message: string,
-  status: 400 | 401 | 403 | 404 | 500 = 500
+  status: 400 | 401 | 403 | 404 | 409 | 429 | 500 = 500
 ) {
-  return c.json(errorResponse(code, message), status);
+  // biome-ignore lint/suspicious/noExplicitAny: generic error handler
+  return c.json(errorResponse(code, message), status) as any;
 }

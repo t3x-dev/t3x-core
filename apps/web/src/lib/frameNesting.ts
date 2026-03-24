@@ -2,7 +2,14 @@ import type { Frame, SemanticContent, SlotValue } from '@t3x-dev/core';
 
 // ── Client-side nesting from relations ──
 
-const NESTING_RELATIONS = new Set(['elaborates', 'conditions', 'depends', 'follows', 'causes', 'contrasts']);
+const NESTING_RELATIONS = new Set([
+  'elaborates',
+  'conditions',
+  'depends',
+  'follows',
+  'causes',
+  'contrasts',
+]);
 
 /**
  * Build nested tree from flat frames + relations (client-side mirror of nesterAgent).

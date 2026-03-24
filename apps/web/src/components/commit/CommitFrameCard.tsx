@@ -225,7 +225,7 @@ function SlotRow({ slotKey, value, status, oldValue, isHovered, onHover, onClick
 // Status label helpers
 // ============================================================================
 
-const diffStatusLabels: Record<FrameDiffStatus, string> = {
+const _diffStatusLabels: Record<FrameDiffStatus, string> = {
   added: '+ added',
   removed: '- removed',
   modified: '~ modified',

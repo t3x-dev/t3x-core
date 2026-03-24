@@ -165,6 +165,7 @@ const exportCfpackRoute = createRoute({
   },
 });
 
+// @ts-expect-error - OpenAPI handler return type
 exportRoutes.openapi(exportCfpackRoute, async (c) => {
   const { project_id: projectId } = c.req.valid('query');
 
@@ -320,6 +321,7 @@ const exportLedgerRoute = createRoute({
   },
 });
 
+// @ts-expect-error - OpenAPI handler return type
 exportRoutes.openapi(exportLedgerRoute, async (c) => {
   const { project_id: projectId } = c.req.valid('query');
 

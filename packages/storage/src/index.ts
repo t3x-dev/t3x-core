@@ -37,12 +37,12 @@ export * from './schema';
 export * from './schema-commits';
 // Extraction Feedback Schema (Anchoring L4)
 export * from './schema-extraction-feedback';
+// Schema (leaves, pins, conversation_contexts + retired commits_v4 for migration)
+// @see docs/specification/semantic-layer-architecture.md
+export * from './schema-frames';
 // Knowledge Conflicts Schema (conflict detection persistence)
 export * from './schema-knowledge-conflicts';
 // Observable Metrics Schema (event tracking)
 export * from './schema-metrics';
 // Sentence Modifications Schema (audit trail)
 export * from './schema-sentence-modifications';
-// Schema (leaves, pins, conversation_contexts + retired commits_v4 for migration)
-// @see docs/specification/semantic-layer-architecture.md
-export * from './schema-frames';

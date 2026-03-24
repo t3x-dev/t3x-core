@@ -242,14 +242,27 @@ export function CommitSourceContent({ commit }: { commit: CommitDisplay }) {
   const sentences = commit.content?.frames
     ? (commit.content as import('@t3x-dev/core').SemanticContent).frames.map((frame) => {
         const id = frame.id.startsWith('s_') ? frame.id : `s_${frame.id.replace('f_', '')}`;
-        const text = `[${frame.type}] ${Object.entries(frame.slots).map(([k, v]) => `${k}: ${typeof v === 'string' ? v : String(v)}`).join('; ')}`;
+        const text = `[${frame.type}] ${Object.entries(frame.slots)
+          .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : String(v)}`)
+          .join('; ')}`;
         const confidence = frame.confidence ?? 1.0;
-        let source_ref: { conversation_id?: string; turn_hash?: string; start_char?: number; end_char?: number } | undefined;
+        let source_ref:
+          | { conversation_id?: string; turn_hash?: string; start_char?: number; end_char?: number }
+          | undefined;
         if (frame.slot_sources) {
           const firstSource = Object.values(frame.slot_sources)[0];
           const turnHash = firstSource?.turn_hash ?? firstSource?.turn;
-          if (firstSource && turnHash && firstSource.start_char != null && firstSource.end_char != null) {
-            source_ref = { turn_hash: turnHash, start_char: firstSource.start_char, end_char: firstSource.end_char };
+          if (
+            firstSource &&
+            turnHash &&
+            firstSource.start_char != null &&
+            firstSource.end_char != null
+          ) {
+            source_ref = {
+              turn_hash: turnHash,
+              start_char: firstSource.start_char,
+              end_char: firstSource.end_char,
+            };
           }
         }
         return { id, text, confidence, source_ref };
@@ -277,7 +290,9 @@ export function CommitSourceContent({ commit }: { commit: CommitDisplay }) {
     return (
       <CommitSourceContext
         sentences={mappedSentences}
-        sourceRefs={sourceRefs as Array<{ type: 'conversation' | 'leaf'; id: string; title?: string }>}
+        sourceRefs={
+          sourceRefs as Array<{ type: 'conversation' | 'leaf'; id: string; title?: string }>
+        }
       />
     );
   }

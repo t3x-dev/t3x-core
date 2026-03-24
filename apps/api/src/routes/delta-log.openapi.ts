@@ -161,7 +161,8 @@ const listDeltasRoute = createRoute({
   path: '/v1/conversations/{conversationId}/deltas',
   tags: ['Delta Log'],
   summary: 'List deltas for a conversation',
-  description: 'Returns all delta log entries for a conversation, ordered by created_at ASC. Optionally filter by topic_id.',
+  description:
+    'Returns all delta log entries for a conversation, ordered by created_at ASC. Optionally filter by topic_id.',
   request: {
     params: ConversationIdParam,
     query: TopicIdQuery,

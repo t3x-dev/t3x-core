@@ -45,8 +45,8 @@ interface LoadedTurn {
  * "source"  = identical / not changed
  */
 function resolveChangeStatus(
-  slotKey: string,
-  activeTab: 'previous' | 'current',
+  _slotKey: string,
+  _activeTab: 'previous' | 'current',
   diffStatus: string
 ): 'changed' | 'added' | 'source' {
   if (diffStatus === 'added') return 'added';

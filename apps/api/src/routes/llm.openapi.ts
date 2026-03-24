@@ -8,7 +8,7 @@ const PROVIDER_LABELS: Record<ProviderName, string> = {
   google: 'Google',
 };
 
-const PROVIDER_ENV_KEYS: Record<ProviderName, string> = {
+const _PROVIDER_ENV_KEYS: Record<ProviderName, string> = {
   anthropic: 'ANTHROPIC_API_KEY',
   openai: 'OPENAI_API_KEY',
   google: 'GOOGLE_AI_STUDIO_KEY',
