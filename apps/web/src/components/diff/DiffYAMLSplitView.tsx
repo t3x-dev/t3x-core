@@ -1,18 +1,23 @@
 'use client';
 
-import { useCallback, useRef } from 'react';
 import type { FrameDiff } from '@t3x-dev/core';
-import { buildAlignedFrames, buildAlignedSlotKeys, type AlignedFrame } from './DiffYAMLUtils';
-import {
-  useDYTheme,
-  FrameSeparator,
-  RelationAnnotation,
-  IdenticalCollapseBar,
-  getFrameRelations,
-} from './DiffYAMLShared';
-import { YAMLFrameRenderer, frameLineCount, SlotValueSpan, WordDiffSpan } from './YAMLFrameRenderer';
-import { YAMLLine } from './YAMLLine';
+import { useCallback, useRef } from 'react';
 import { YAML_COLORS } from './DiffYAMLFormatters';
+import {
+  FrameSeparator,
+  getFrameRelations,
+  IdenticalCollapseBar,
+  RelationAnnotation,
+  useDYTheme,
+} from './DiffYAMLShared';
+import { type AlignedFrame, buildAlignedFrames, buildAlignedSlotKeys } from './DiffYAMLUtils';
+import {
+  frameLineCount,
+  SlotValueSpan,
+  WordDiffSpan,
+  YAMLFrameRenderer,
+} from './YAMLFrameRenderer';
+import { YAMLLine } from './YAMLLine';
 
 // ── Props ──
 
@@ -46,7 +51,7 @@ function computeFrameHeight(af: AlignedFrame, side: 'left' | 'right', diff: Fram
     // Placeholder side: count from the other side
     const otherFrame = side === 'left' ? af.rightFrame : af.leftFrame;
     if (!otherFrame) return 0;
-    const removedSlots = af.slotDiffs?.filter(sd => sd.type === 'removed').length ?? 0;
+    const removedSlots = af.slotDiffs?.filter((sd) => sd.type === 'removed').length ?? 0;
     return frameLineCount(otherFrame, removedSlots);
   }
 
@@ -56,11 +61,14 @@ function computeFrameHeight(af: AlignedFrame, side: 'left' | 'right', diff: Fram
     return 1 + alignedSlots.length;
   }
 
-  const removedSlots = af.slotDiffs?.filter(sd => sd.type === 'removed').length ?? 0;
+  const removedSlots = af.slotDiffs?.filter((sd) => sd.type === 'removed').length ?? 0;
   return frameLineCount(frame, removedSlots);
 }
 
-function computeFrameHeightsMap(aligned: AlignedFrame[], diff: FrameDiff): Map<string, { left: number; right: number; max: number; relCount: number }> {
+function computeFrameHeightsMap(
+  aligned: AlignedFrame[],
+  diff: FrameDiff
+): Map<string, { left: number; right: number; max: number; relCount: number }> {
   const map = new Map<string, { left: number; right: number; max: number; relCount: number }>();
   for (const af of aligned) {
     const left = computeFrameHeight(af, 'left', diff);
@@ -69,7 +77,12 @@ function computeFrameHeightsMap(aligned: AlignedFrame[], diff: FrameDiff): Map<s
     // Relations may differ per side in the future, but for now same count
     const leftTotal = left + relCount;
     const rightTotal = right + relCount;
-    map.set(af.frameId, { left: leftTotal, right: rightTotal, max: Math.max(leftTotal, rightTotal), relCount });
+    map.set(af.frameId, {
+      left: leftTotal,
+      right: rightTotal,
+      max: Math.max(leftTotal, rightTotal),
+      relCount,
+    });
   }
   return map;
 }
@@ -94,8 +107,8 @@ function PaneContent({
   let lineNum = 1;
 
   // Separate identical frames for potential collapsing
-  const nonIdentical = aligned.filter(a => a.type !== 'identical');
-  const identicalFrames = aligned.filter(a => a.type === 'identical');
+  const nonIdentical = aligned.filter((a) => a.type !== 'identical');
+  const identicalFrames = aligned.filter((a) => a.type === 'identical');
 
   const renderFrame = (af: AlignedFrame) => {
     const frame = side === 'left' ? af.leftFrame : af.rightFrame;
@@ -103,23 +116,19 @@ function PaneContent({
 
     // For added frames, left pane shows placeholder; for removed, right pane shows placeholder
     const isPlaceholder =
-      (af.type === 'added' && side === 'left') ||
-      (af.type === 'removed' && side === 'right');
+      (af.type === 'added' && side === 'left') || (af.type === 'removed' && side === 'right');
 
     // Calculate removed slot count for line counting
     const removedSlotCount =
       af.type === 'modified' && af.slotDiffs
-        ? af.slotDiffs.filter(sd => sd.type === 'removed').length
+        ? af.slotDiffs.filter((sd) => sd.type === 'removed').length
         : 0;
 
     // Get the frame to count lines from (the "real" side)
-    const realFrame = af.type === 'added' ? af.rightFrame
-      : af.type === 'removed' ? af.leftFrame
-      : frame;
+    const realFrame =
+      af.type === 'added' ? af.rightFrame : af.type === 'removed' ? af.leftFrame : frame;
 
-    const placeholderCount = realFrame
-      ? frameLineCount(realFrame, removedSlotCount)
-      : 0;
+    const placeholderCount = realFrame ? frameLineCount(realFrame, removedSlotCount) : 0;
 
     // Gather relation annotations for this frame
     const relations = getFrameRelations(af.frameId, diff);
@@ -135,7 +144,7 @@ function PaneContent({
       content = <EmptyPlaceholderLines count={placeholderCount} />;
     } else if (af.type === 'modified' && af.leftFrame && af.rightFrame) {
       // ── Modified frame: aligned slot-by-slot rendering ──
-      const slotDiffMap = new Map((af.slotDiffs ?? []).map(sd => [sd.key, sd]));
+      const slotDiffMap = new Map((af.slotDiffs ?? []).map((sd) => [sd.key, sd]));
       const alignedSlots = buildAlignedSlotKeys(af.leftFrame, af.rightFrame);
 
       const lines: React.ReactNode[] = [];
@@ -152,7 +161,11 @@ function PaneContent({
         const inThisSide = side === 'left' ? as.inLeft : as.inRight;
 
         if (!inThisSide) {
-          lines.push(<YAMLLine key={`empty-${as.key}`} lineNumber={undefined} status="empty">{null}</YAMLLine>);
+          lines.push(
+            <YAMLLine key={`empty-${as.key}`} lineNumber={undefined} status="empty">
+              {null}
+            </YAMLLine>
+          );
           continue;
         }
 
@@ -173,10 +186,15 @@ function PaneContent({
           valueNode = <WordDiffSpan wordDiff={sd.wordDiff} />;
         } else if (sd?.type === 'changed') {
           // Left side = old value (red highlight), Right side = new value (green highlight)
-          const hlClass = side === 'left'
-            ? 'bg-[var(--dy-removed-word)] rounded-sm px-[3px] py-[1px] font-medium'
-            : 'bg-[var(--dy-added-word)] rounded-sm px-[3px] py-[1px] font-medium';
-          valueNode = <span className={hlClass}><SlotValueSpan value={value} /></span>;
+          const hlClass =
+            side === 'left'
+              ? 'bg-[var(--dy-removed-word)] rounded-sm px-[3px] py-[1px] font-medium'
+              : 'bg-[var(--dy-added-word)] rounded-sm px-[3px] py-[1px] font-medium';
+          valueNode = (
+            <span className={hlClass}>
+              <SlotValueSpan value={value} />
+            </span>
+          );
         } else {
           valueNode = <SlotValueSpan value={value} />;
         }
@@ -218,9 +236,7 @@ function PaneContent({
         {isPlaceholder ? (
           <EmptyPlaceholderLines count={relationCount} />
         ) : (
-          relations.map((rel, i) => (
-            <RelationAnnotation key={`${af.frameId}-rel-${i}`} rel={rel} />
-          ))
+          relations.map((rel, i) => <RelationAnnotation key={`${af.frameId}-rel-${i}`} rel={rel} />)
         )}
         {/* Padding to align with the other side */}
         {(() => {
@@ -237,20 +253,19 @@ function PaneContent({
   return (
     <>
       {nonIdentical.map(renderFrame)}
-      {showIdentical
-        ? identicalFrames.map(renderFrame)
-        : (
-          <IdenticalCollapseBar
-            frames={identicalFrames}
-            onClick={() => {
-              // If there are identical frames, select the first one to trigger showing
-              if (identicalFrames.length > 0) {
-                onSelectFrame(identicalFrames[0].frameId);
-              }
-            }}
-          />
-        )
-      }
+      {showIdentical ? (
+        identicalFrames.map(renderFrame)
+      ) : (
+        <IdenticalCollapseBar
+          frames={identicalFrames}
+          onClick={() => {
+            // If there are identical frames, select the first one to trigger showing
+            if (identicalFrames.length > 0) {
+              onSelectFrame(identicalFrames[0].frameId);
+            }
+          }}
+        />
+      )}
     </>
   );
 }
@@ -286,10 +301,7 @@ export function DiffYAMLSplitView({
   const heightsMap = computeFrameHeightsMap(aligned, diff);
 
   return (
-    <div
-      className="flex flex-1 overflow-hidden"
-      style={dyTheme}
-    >
+    <div className="flex flex-1 overflow-hidden" style={dyTheme}>
       {/* Left pane (base) */}
       <div
         ref={leftRef}
@@ -309,11 +321,7 @@ export function DiffYAMLSplitView({
       </div>
 
       {/* Right pane (target) */}
-      <div
-        ref={rightRef}
-        className="flex-1 overflow-y-auto"
-        onScroll={() => handleScroll('right')}
-      >
+      <div ref={rightRef} className="flex-1 overflow-y-auto" onScroll={() => handleScroll('right')}>
         <PaneContent
           aligned={aligned}
           side="right"

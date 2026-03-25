@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { formatSlotValue, renderFrameSlots, formatRelation } from '../DiffYAMLFormatters';
+import { describe, expect, it } from 'vitest';
+import { formatRelation, formatSlotValue, renderFrameSlots } from '../DiffYAMLFormatters';
 
 describe('formatSlotValue', () => {
   it('formats string', () => expect(formatSlotValue('hello')).toBe('"hello"'));

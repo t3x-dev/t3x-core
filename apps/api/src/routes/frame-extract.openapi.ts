@@ -15,9 +15,11 @@ import {
   checkReadiness,
   computeSessionContext,
   createMeaningPipeline,
+  DEFAULT_STYLE,
   decideAction,
   detectAmbiguity,
   detectDrift,
+  type ExtractionStyleConfig,
   type FrameExtractionTurn,
   FrameExtractor,
   fuzzyLocate,
@@ -30,7 +32,9 @@ import {
 import {
   createTopic,
   findConversationById,
+  findProjectById,
   findTurnsByConversation,
+  findUserById,
   insertDeltaLogEntry,
   listDeltaLogByConversation,
   listDeltaLogByTopic,
@@ -44,6 +48,7 @@ import { assertProjectAccess } from '../lib/project-access';
 import { getProviderRegistry } from '../lib/provider-registry';
 import { getUserId, recordUsageFireAndForget, wrapWithUsageTracking } from '../lib/usage-tracking';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
+import { ExtractionStyleSchema } from '../schemas/contracts';
 
 export const frameExtractRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
@@ -182,21 +187,44 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
       return errorResponse(c, 'INVALID_REQUEST', 'None of the specified turn_hashes were found');
     }
 
-    // 3. Fetch existing delta log and build current snapshot
+    // 3. Resolve extraction style: project → user → default
+    //    Validate JSONB values against schema to guard against malformed data.
+    const projectRecord = await findProjectById(db, conversation.projectId);
+    let resolvedStyle: ExtractionStyleConfig = DEFAULT_STYLE;
+    if (projectRecord?.extractionStyle) {
+      const parsed = ExtractionStyleSchema.safeParse(projectRecord.extractionStyle);
+      if (parsed.success) {
+        resolvedStyle = parsed.data;
+      }
+    }
+    if (resolvedStyle === DEFAULT_STYLE && !projectRecord?.extractionStyle) {
+      const userId = getUserId(c);
+      if (userId) {
+        const user = await findUserById(db, userId);
+        if (user?.default_extraction_style) {
+          const parsed = ExtractionStyleSchema.safeParse(user.default_extraction_style);
+          if (parsed.success) {
+            resolvedStyle = parsed.data;
+          }
+        }
+      }
+    }
+
+    // 4. Fetch existing delta log and build current snapshot
     // When topic_id is provided, only load deltas for that topic
     const deltaRecords = topic_id
       ? await listDeltaLogByTopic(db, conversation_id, topic_id)
       : await listDeltaLogByConversation(db, conversation_id);
     const currentSnapshot = buildDraft(toDeltaLogEntries(deltaRecords));
 
-    // 4. Convert turns to FrameExtractionTurn format (include turn_hash for source tracking)
+    // 5. Convert turns to FrameExtractionTurn format (include turn_hash for source tracking)
     const extractionTurns: FrameExtractionTurn[] = selectedTurns.map((t) => ({
       role: t.role as FrameExtractionTurn['role'],
       content: t.content,
       turn_hash: t.turnHash,
     }));
 
-    // 4b. Calculate processedTurnCount — how many turns were present at the last extraction
+    // 5b. Calculate processedTurnCount — how many turns were present at the last extraction
     let processedTurnCount: number | undefined;
     if (deltaRecords.length > 0 && currentSnapshot.frames.length > 0) {
       const lastDelta = deltaRecords[deltaRecords.length - 1];
@@ -310,7 +338,7 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
       }
     }
 
-    // 5. Call FrameExtractor via provider registry with fallback (usage tracked)
+    // 6. Call FrameExtractor via provider registry with fallback (usage tracked)
     const reg = await getProviderRegistry();
     const trackedUsage = { inputTokens: 0, outputTokens: 0 };
     let trackedModel = 'unknown';
@@ -322,11 +350,14 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
       trackedModel = tracked.id;
       const extractor = new FrameExtractor(tracked);
       return extractor
-        .extract({
-          turns: extractionTurns,
-          snapshot: currentSnapshot.frames.length > 0 ? currentSnapshot : undefined,
-          processedTurnCount,
-        })
+        .extract(
+          {
+            turns: extractionTurns,
+            snapshot: currentSnapshot.frames.length > 0 ? currentSnapshot : undefined,
+            processedTurnCount,
+          },
+          resolvedStyle
+        )
         .then((r) => {
           trackedUsage.inputTokens = usage.inputTokens;
           trackedUsage.outputTokens = usage.outputTokens;
@@ -334,7 +365,7 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
         });
     });
 
-    // 6. Check extraction result
+    // 7. Check extraction result
     if (!result.ok) {
       return errorResponse(c, 'EXTRACTION_FAILED', result.error);
     }
@@ -351,7 +382,7 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
       });
     }
 
-    // 6b. Resolve slot quotes into character offsets using fuzzyLocate
+    // 7b. Resolve slot quotes into character offsets using fuzzyLocate
     const slotQuotes: SlotQuotesMap = result.slotQuotes ?? new Map();
     console.info(`[slot-sources] slotQuotes from LLM: ${slotQuotes.size} changes have quotes`);
 
@@ -418,7 +449,7 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
       }
     }
 
-    // 6c. Run Meaning Pipeline — multi-agent post-processing
+    // 7c. Run Meaning Pipeline — multi-agent post-processing
     const debugPipeline = process.env.PIPELINE_DEBUG === 'true';
     const llmLogger: LLMCallLogger | undefined = debugPipeline
       ? (log) => {
@@ -492,7 +523,7 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
       // Pipeline is optional — flat frames are still valid
     }
 
-    // ── Step 5: VALIDATE — GateRunner + DiffCompatibilityCheck ──
+    // ── Step 6: VALIDATE — GateRunner + DiffCompatibilityCheck ──
     let gateResult: unknown;
     try {
       const gateRunner = new GateRunner();
@@ -528,7 +559,7 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
       }
     }
 
-    // ── Step 6: AmbiguityDetector (advisory-only) ──
+    // ── Step 7: AmbiguityDetector (advisory-only) ──
     let advisoryQuestions: unknown[] | undefined;
     try {
       const reg3 = await getProviderRegistry();
@@ -551,7 +582,7 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
       // Ambiguity detection failure → continue without questions
     }
 
-    // 7. Auto-create topic on first extraction if none exists
+    // 8. Auto-create topic on first extraction if none exists
     let resolvedTopicId = topic_id;
     if (!resolvedTopicId) {
       const existingTopics = await listTopicsByConversation(db, conversation_id);
@@ -568,7 +599,7 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
       }
     }
 
-    // 7b. Check for drift_detected in extraction result
+    // 8b. Check for drift_detected in extraction result
     const extractionDelta = result.delta as {
       drift_detected?: boolean;
       changes: unknown[];
@@ -595,7 +626,7 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
       );
     }
 
-    // 7c. Write delta_log + sync frames atomically
+    // 8c. Write delta_log + sync frames atomically
     const record = await (db as any).transaction(async (tx: any) => {
       const rec = await insertDeltaLogEntry(tx, {
         conversationId: conversation_id,
@@ -619,7 +650,7 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
       return rec;
     });
 
-    // ── Step 7: Emit extraction.completed event ──
+    // ── Step 8: Emit extraction.completed event ──
     pipelineEmitter.emit('extraction.completed', {
       conversationId: conversation_id,
       projectId: conversation.projectId,
@@ -629,7 +660,7 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
       topicId: resolvedTopicId,
     });
 
-    // 8. Return delta + updated snapshot + delta_log_id
+    // 9. Return delta + updated snapshot + delta_log_id
     return c.json(
       {
         success: true as const,

@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import type { FrameDiff, Relation } from '@t3x-dev/core';
+import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
 import type { AlignedFrame } from './DiffYAMLUtils';
 
@@ -80,10 +80,7 @@ export interface FrameRelation {
 /**
  * Gather relations relevant to a given frame, annotated with diff status.
  */
-export function getFrameRelations(
-  frameId: string,
-  diff: FrameDiff,
-): FrameRelation[] {
+export function getFrameRelations(frameId: string, diff: FrameDiff): FrameRelation[] {
   const results: FrameRelation[] = [];
   const seen = new Set<string>();
 
@@ -121,18 +118,18 @@ export function RelationAnnotation({
   rel: FrameRelation;
   paddingLeft?: string;
 }) {
-  const statusClass = rel.status === 'added' ? 'text-[var(--dy-added-accent)]'
-    : rel.status === 'removed' ? 'text-[var(--dy-removed-accent)] line-through opacity-50'
-    : 'text-[var(--text-tertiary)] opacity-40';
+  const statusClass =
+    rel.status === 'added'
+      ? 'text-[var(--dy-added-accent)]'
+      : rel.status === 'removed'
+        ? 'text-[var(--dy-removed-accent)] line-through opacity-50'
+        : 'text-[var(--text-tertiary)] opacity-40';
 
   const arrow = rel.direction === 'in' ? '\u2190' : '\u2192';
 
   return (
     <div
-      className={cn(
-        'flex items-center gap-1 font-mono text-[10px] min-h-[18px]',
-        statusClass,
-      )}
+      className={cn('flex items-center gap-1 font-mono text-[10px] min-h-[18px]', statusClass)}
       style={{ paddingLeft, paddingRight: '10px' }}
     >
       <span className="inline-flex items-center gap-[3px] px-1 rounded-sm text-[9px]">
@@ -161,15 +158,23 @@ export function FrameSeparator({
   isActive: boolean;
   paddingLeft?: string;
 }) {
-  const statusLabel = aligned.type === 'modified' ? '~mod'
-    : aligned.type === 'added' ? '+new'
-    : aligned.type === 'removed' ? '-del'
-    : '=';
+  const statusLabel =
+    aligned.type === 'modified'
+      ? '~mod'
+      : aligned.type === 'added'
+        ? '+new'
+        : aligned.type === 'removed'
+          ? '-del'
+          : '=';
 
-  const statusClass = aligned.type === 'modified' ? 'text-[var(--dy-modified-accent)]'
-    : aligned.type === 'added' ? 'text-[var(--dy-added-accent)]'
-    : aligned.type === 'removed' ? 'text-[var(--dy-removed-accent)]'
-    : 'text-[var(--text-tertiary)]';
+  const statusClass =
+    aligned.type === 'modified'
+      ? 'text-[var(--dy-modified-accent)]'
+      : aligned.type === 'added'
+        ? 'text-[var(--dy-added-accent)]'
+        : aligned.type === 'removed'
+          ? 'text-[var(--dy-removed-accent)]'
+          : 'text-[var(--text-tertiary)]';
 
   const frame = aligned.leftFrame ?? aligned.rightFrame;
   const frameType = frame?.type ?? aligned.frameId;
@@ -181,7 +186,7 @@ export function FrameSeparator({
         'flex items-center gap-[5px] text-[9px] font-medium uppercase tracking-[0.6px] select-none cursor-pointer',
         'pt-[5px] pb-[2px] opacity-60 hover:opacity-100',
         'text-[var(--text-tertiary)]',
-        isActive && 'opacity-100 bg-[var(--hover-bg)]',
+        isActive && 'opacity-100 bg-[var(--hover-bg)]'
       )}
       style={{ paddingLeft }}
       onClick={onClick}
@@ -209,9 +214,7 @@ export function IdenticalCollapseBar({
   paddingLeft?: string;
 }) {
   if (frames.length === 0) return null;
-  const names = frames
-    .map(f => (f.leftFrame ?? f.rightFrame)?.type ?? f.frameId)
-    .join(', ');
+  const names = frames.map((f) => (f.leftFrame ?? f.rightFrame)?.type ?? f.frameId).join(', ');
   return (
     <div
       className="flex items-center gap-[5px] font-mono text-[10px] text-[var(--text-tertiary)] cursor-pointer select-none opacity-50 hover:opacity-80 hover:bg-[var(--hover-bg)]"
@@ -219,7 +222,9 @@ export function IdenticalCollapseBar({
       onClick={onClick}
     >
       <span>{'\u25B6'}</span>
-      <span>{frames.length} identical frame{frames.length > 1 ? 's' : ''}</span>
+      <span>
+        {frames.length} identical frame{frames.length > 1 ? 's' : ''}
+      </span>
       <span className="opacity-50">({names})</span>
     </div>
   );

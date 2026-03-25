@@ -288,6 +288,7 @@ projectRoutes.openapi(getProjectRoute, async (c) => {
       commits_count: commitsCount || project.stats.commitsCount,
       branches_count: project.stats.branchesCount,
       drafts_count: project.stats.draftsCount,
+      extraction_style: project.extractionStyle ?? null,
     };
 
     return c.json({ success: true as const, data: apiProject }, 200);
@@ -383,6 +384,7 @@ projectRoutes.openapi(updateProjectRoute, async (c) => {
             : JSON.stringify(body.provider_config),
       defaultProvider: body.default_provider,
       defaultModel: body.default_model,
+      extractionStyle: body.extraction_style,
     });
 
     if (!project) {
@@ -403,6 +405,7 @@ projectRoutes.openapi(updateProjectRoute, async (c) => {
       provider_config: project.providerConfig ? JSON.parse(project.providerConfig) : null,
       default_provider: project.defaultProvider ?? null,
       default_model: project.defaultModel ?? null,
+      extraction_style: project.extractionStyle ?? null,
     };
 
     return c.json({ success: true as const, data: apiProject }, 200);

@@ -161,6 +161,12 @@ export async function updateProject(
     providerConfig?: string | null;
     defaultProvider?: string | null;
     defaultModel?: string | null;
+    extractionStyle?: {
+      granularity: 'concise' | 'balanced' | 'detailed';
+      quote_length: 'minimal' | 'contextual';
+      update_stance: 'conservative' | 'balanced' | 'aggressive';
+      tier3: 'skip' | 'extract';
+    } | null;
   }
 ): Promise<Project | null> {
   const updateData: Partial<NewProject> = {};
@@ -178,6 +184,9 @@ export async function updateProject(
   }
   if (updates.defaultModel !== undefined) {
     updateData.defaultModel = updates.defaultModel;
+  }
+  if (updates.extractionStyle !== undefined) {
+    updateData.extractionStyle = updates.extractionStyle;
   }
 
   const [updated] = await db

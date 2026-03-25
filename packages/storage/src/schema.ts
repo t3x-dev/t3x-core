@@ -66,6 +66,12 @@ export const projects = pgTable(
         }>
       >()
       .default([]),
+    extractionStyle: jsonb('extraction_style').$type<{
+      granularity: 'concise' | 'balanced' | 'detailed';
+      quote_length: 'minimal' | 'contextual';
+      update_stance: 'conservative' | 'balanced' | 'aggressive';
+      tier3: 'skip' | 'extract';
+    }>(),
   },
   (table) => [index('idx_projects_owner').on(table.ownerId)]
 );

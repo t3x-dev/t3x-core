@@ -8,6 +8,14 @@
  */
 
 import type { Frame, SemanticContent } from '../semantic/types';
+import {
+  DEFAULT_STYLE,
+  type ExtractionStyleConfig,
+  type Granularity,
+  type QuoteLength,
+  type Tier3Behavior,
+  type UpdateStance,
+} from './extractionStyleConfig';
 
 // ── Input Types ──
 
@@ -100,9 +108,99 @@ function formatTurns(turns: FrameExtractionTurn[]): string {
     .join('\n');
 }
 
-// ── System Prompts ──
+// ── Segment Functions ──
 
-const DELTA_SYSTEM_PROMPT = `You are a semantic extraction engine. Extract CHANGES (delta) from new conversation turns into a topic tree.
+/** Returns the TIER 3 row for the Three-Tier Extraction Rule table. */
+export function tier3Segment(t3: Tier3Behavior): string {
+  switch (t3) {
+    case 'extract':
+      return '| TIER 3 | AI provided information and user did NOT object (silence, moved on, or continued without contradicting) | Extract it | 0.4-0.5 |';
+    case 'skip':
+      return '| TIER 3 | AI provided information and user did NOT object (silence, moved on, or continued without contradicting) | Do NOT extract | — |';
+    default:
+      return tier3Segment('extract');
+  }
+}
+
+/** Returns the key distinction line that follows the Three-Tier table. */
+export function tier3KeyDistinction(t3: Tier3Behavior): string {
+  switch (t3) {
+    case 'extract':
+      return 'Key distinction: Silence or moving on = the user did NOT object = TIER 3 (extract with low confidence). Only explicit rejection prevents extraction.';
+    case 'skip':
+      return 'Key distinction: Only extract information the user explicitly stated (TIER 1) or explicitly confirmed (TIER 2). Do NOT extract unconfirmed AI suggestions.';
+    default:
+      return tier3KeyDistinction('extract');
+  }
+}
+
+/** Returns the Frame Count + Slots guidance based on granularity. */
+export function granularitySegment(g: Granularity): string {
+  switch (g) {
+    case 'concise':
+      return `## Frame Count: 3-5 Frames Total (Hard Limit)
+- Fewer than 3 = subtopics not properly split out from root
+- More than 5 = over-fragmentation. Merge related details into fewer frames.
+- Each frame should have 1-3 flat slots. Prefer fewer, high-confidence slots.`;
+    case 'balanced':
+      return `## Frame Count: 3-8 Frames Total (Hard Limit)
+- Fewer than 3 = subtopics not properly split out from root
+- More than 8 = over-fragmentation
+- Each frame should have 1-4 flat slots`;
+    case 'detailed':
+      return `## Frame Count: 5-12 Frames Total (Hard Limit)
+- Fewer than 5 = subtopics not properly split out from root
+- More than 12 = over-fragmentation. Prefer more frames over fewer.
+- Each frame should have 2-6 flat slots. Capture fine-grained detail.`;
+    default:
+      return granularitySegment('balanced');
+  }
+}
+
+/** Returns the quote length guidance for slot_quotes sections. */
+export function quoteLengthSegment(ql: QuoteLength): string {
+  switch (ql) {
+    case 'minimal':
+      return `- Keep quotes MINIMAL: extract only the shortest substring that contains the slot value
+  BAD:  "We're vegetarian and my partner is allergic to peanuts" (entire sentence)
+  GOOD: "vegetarian" (just the value)
+  GOOD: "allergic to peanuts" (just the relevant part)`;
+    case 'contextual':
+      return `- Include enough context in quotes to make the slot value unambiguous
+  BAD:  "vegetarian" (too short, loses context)
+  GOOD: "We're vegetarian" (includes context for clarity)
+  GOOD: "allergic to peanuts" (sufficient context)`;
+    default:
+      return quoteLengthSegment('minimal');
+  }
+}
+
+/** Returns an optional update stance section to append to the prompt. */
+export function updateStanceSegment(us: UpdateStance): string {
+  switch (us) {
+    case 'balanced':
+      return '';
+    case 'conservative':
+      return `
+## Update Stance: Conservative
+- Only update existing frames when the user EXPLICITLY provides new information
+- Prefer adding new frames over modifying existing ones
+- When in doubt, keep the existing frame unchanged`;
+    case 'aggressive':
+      return `
+## Update Stance: Aggressive
+- Actively update existing frames when new information is available
+- Merge related slots into existing frames when possible
+- Prefer updating existing frames over creating new ones for the same subtopic`;
+    default:
+      return '';
+  }
+}
+
+// ── System Prompt Builders ──
+
+function buildDeltaSystemPrompt(style: ExtractionStyleConfig): string {
+  return `You are a semantic extraction engine. Extract CHANGES (delta) from new conversation turns into a topic tree.
 
 ## Topic Tree Structure
 - Each extraction produces ONE root frame representing the main topic
@@ -115,10 +213,10 @@ const DELTA_SYSTEM_PROMPT = `You are a semantic extraction engine. Extract CHANG
 |------|-----------|--------|------------|
 | TIER 1 | User explicitly stated a fact | Extract it | 0.85-0.95 |
 | TIER 2 | User explicitly confirmed/adopted an AI suggestion ("looks good", "yes", "let's do that") | Extract it | 0.6-0.7 |
-| TIER 3 | AI provided information and user did NOT object (silence, moved on, or continued without contradicting) | Extract it | 0.4-0.5 |
+${tier3Segment(style.tier3)}
 | DO NOT EXTRACT | User explicitly rejected ("no", "I don't want that", "skip this") | Do NOT extract | — |
 
-Key distinction: Silence or moving on = the user did NOT object = TIER 3 (extract with low confidence). Only explicit rejection prevents extraction.
+${tier3KeyDistinction(style.tier3)}
 
 ## What NOT to Extract
 - Questions (from either side) — questions are not facts
@@ -131,10 +229,7 @@ Key distinction: Silence or moving on = the user did NOT object = TIER 3 (extrac
 Each slot in your delta MUST have a corresponding "slot_quotes" entry pointing to VERBATIM text from ANY turn (user or assistant).
 - If you cannot quote exact source text for a slot → DO NOT create that slot
 - slot_quotes values must be actual substrings from the conversation, not paraphrased
-- Keep quotes MINIMAL: extract only the shortest substring that contains the slot value
-  BAD:  "We're vegetarian and my partner is allergic to peanuts" (entire sentence)
-  GOOD: "vegetarian" (just the value)
-  GOOD: "allergic to peanuts" (just the relevant part)
+${quoteLengthSegment(style.quote_length)}
 - For AI-originated slots (TIER 3), quote from the assistant turn that provided the information
 - This is a hard constraint — zero exceptions
 
@@ -144,10 +239,7 @@ Each slot in your delta MUST have a corresponding "slot_quotes" entry pointing t
 - FORBIDDEN: nested objects ({ budget: { materials: [...] } }) — 2+ levels deep
 - If a subtopic has more than 2-3 slots → it MUST be a separate frame with "elaborates" relation
 
-## Frame Count: 3-8 Frames Total (Hard Limit)
-- Fewer than 3 = subtopics not properly split out from root
-- More than 8 = over-fragmentation
-- Each frame should have 1-4 flat slots
+${granularitySegment(style.granularity)}
 
 ## Delta Action Mapping
 
@@ -166,14 +258,14 @@ Each slot in your delta MUST have a corresponding "slot_quotes" entry pointing t
 ## BAD vs GOOD Delta Examples
 
 BAD — extracting AI suggestions from new turns:
-  ★ NEW Turn: AI says "You might want to consider Stumptown for beans"
-  ★ NEW Turn: User says "What about the interior design?"
+  \u2605 NEW Turn: AI says "You might want to consider Stumptown for beans"
+  \u2605 NEW Turn: User says "What about the interior design?"
 
   WRONG delta: { action: "update", target: "f_001", slots: { suppliers: ["Stumptown"] } }
-  ← User never confirmed Stumptown. AI suggested it, user ignored it.
+  \u2190 User never confirmed Stumptown. AI suggested it, user ignored it.
 
 GOOD — only extracting user-stated facts from new turns:
-  ★ NEW Turn: User says "Actually, let's increase the budget to $100,000"
+  \u2605 NEW Turn: User says "Actually, let's increase the budget to $100,000"
 
   CORRECT delta: { action: "update", target: "f_001", slots: { budget: 100000 }, slot_quotes: { budget: "increase the budget to $100,000" } }
 
@@ -191,7 +283,7 @@ If the new turns discuss a topic UNRELATED to the current root frame:
 3. contrasts — A conflicts with or replaces B
 4. follows — A happens after B (non-causal)
 5. depends — A references/needs B
-6. elaborates — A adds detail to B (USE THIS for subtopics)
+6. elaborates — A adds detail to B (USE THIS for subtopics)${updateStanceSegment(style.update_stance)}
 
 ## JSON Output Format
 \`\`\`json
@@ -219,8 +311,10 @@ If the new turns discuss a topic UNRELATED to the current root frame:
 }
 \`\`\`
 Output ONLY valid JSON. No markdown fences, no explanatory text.`;
+}
 
-const FIRST_EXTRACTION_SYSTEM_PROMPT = `You are a semantic extraction engine. Extract meaning from conversations into a topic tree.
+function buildFirstExtractionSystemPrompt(style: ExtractionStyleConfig): string {
+  return `You are a semantic extraction engine. Extract meaning from conversations into a topic tree.
 
 ## Topic Tree Structure
 - Produce ONE root frame representing the main topic of the conversation
@@ -233,10 +327,10 @@ const FIRST_EXTRACTION_SYSTEM_PROMPT = `You are a semantic extraction engine. Ex
 |------|-----------|--------|------------|
 | TIER 1 | User explicitly stated a fact | Extract it | 0.85-0.95 |
 | TIER 2 | User explicitly confirmed/adopted an AI suggestion ("looks good", "yes", "let's do that") | Extract it | 0.6-0.7 |
-| TIER 3 | AI provided information and user did NOT object (silence, moved on, or continued without contradicting) | Extract it | 0.4-0.5 |
+${tier3Segment(style.tier3)}
 | DO NOT EXTRACT | User explicitly rejected ("no", "I don't want that", "skip this") | Do NOT extract | — |
 
-Key distinction: Silence or moving on = the user did NOT object = TIER 3 (extract with low confidence). Only explicit rejection prevents extraction.
+${tier3KeyDistinction(style.tier3)}
 
 ## What NOT to Extract
 - Questions (from either side) — questions are not facts
@@ -249,10 +343,7 @@ Key distinction: Silence or moving on = the user did NOT object = TIER 3 (extrac
 Every slot MUST have a corresponding entry in "slot_quotes" with VERBATIM text copied from the conversation (user or assistant turns).
 - If you cannot quote the exact source text for a slot → DO NOT create that slot
 - slot_quotes values must be actual substrings from the conversation, not paraphrased
-- Keep quotes MINIMAL: extract only the shortest substring that contains the slot value
-  BAD:  "We're vegetarian and my partner is allergic to peanuts" (entire sentence)
-  GOOD: "vegetarian" (just the value)
-  GOOD: "allergic to peanuts" (just the relevant part)
+${quoteLengthSegment(style.quote_length)}
 - For AI-originated slots (TIER 3), quote from the assistant turn that provided the information
 - This is a hard constraint — zero exceptions
 
@@ -262,10 +353,7 @@ Every slot MUST have a corresponding entry in "slot_quotes" with VERBATIM text c
 - FORBIDDEN: nested objects ({ budget: { materials: [...] } }) — 2+ levels deep
 - If a subtopic has more than 2-3 slots → it MUST be a separate frame with "elaborates" relation
 
-## Frame Count: 3-8 Frames (Hard Limit)
-- Fewer than 3 = subtopics not properly split out from root
-- More than 8 = over-fragmentation
-- Each frame should have 1-4 flat slots
+${granularitySegment(style.granularity).replace(' Total', '')}
 
 ## Frame Structure Rules
 1. Frame type uses snake_case domain nouns (NOT generic labels)
@@ -280,16 +368,16 @@ BAD — extracting content the user explicitly rejected:
   User: "No, I don't want Stumptown. What about the budget?"
 
   WRONG extraction:
-    suppliers: ["Stumptown"]          ← user explicitly rejected this
+    suppliers: ["Stumptown"]          \u2190 user explicitly rejected this
 
 GOOD — extracting AI suggestions the user did NOT reject (TIER 3):
   User: "I want to open a coffee shop in Portland"
   AI: "I recommend using birch plywood for interiors and a Scandinavian aesthetic"
-  User: "What about the budget?"  ← user moved on, did NOT reject AI suggestions
+  User: "What about the budget?"  \u2190 user moved on, did NOT reject AI suggestions
 
   CORRECT extraction:
-    materials: ["birch plywood"]      ← TIER 3, confidence 0.45, quote from AI turn
-    design_aesthetic: "Scandinavian"  ← TIER 3, confidence 0.45, quote from AI turn
+    materials: ["birch plywood"]      \u2190 TIER 3, confidence 0.45, quote from AI turn
+    design_aesthetic: "Scandinavian"  \u2190 TIER 3, confidence 0.45, quote from AI turn
 
 BAD — one giant nested frame (FORBIDDEN):
   f_001 coffee_shop:
@@ -323,7 +411,7 @@ GOOD — multiple flat frames + relations:
 - AI suggestions user explicitly confirmed: 0.5-0.7
 
 ## Relation Types (6 only): causes, conditions, contrasts, follows, depends, elaborates
-Use "elaborates" for all subtopic relationships.
+Use "elaborates" for all subtopic relationships.${updateStanceSegment(style.update_stance)}
 
 ## JSON Output Format
 \`\`\`json
@@ -346,6 +434,7 @@ Use "elaborates" for all subtopic relationships.
 }
 \`\`\`
 Output ONLY valid JSON. No markdown fences, no explanatory text.`;
+}
 
 // ── Main Function ──
 
@@ -355,9 +444,14 @@ Output ONLY valid JSON. No markdown fences, no explanatory text.`;
  * When `snapshot` is provided, produces delta-mode prompts that ask the LLM
  * to output only changes relative to the existing snapshot.
  * When no snapshot, produces first-extraction prompts for full output.
+ *
+ * The optional `style` parameter controls extraction granularity, tier-3
+ * behavior, quote length, and update stance. Defaults to `DEFAULT_STYLE`
+ * (balanced preset) for backward compatibility.
  */
 export function buildFrameExtractionPrompt(
-  input: FrameExtractionInput
+  input: FrameExtractionInput,
+  style: ExtractionStyleConfig = DEFAULT_STYLE
 ): FrameExtractionPromptResult {
   const { turns, snapshot, processedTurnCount } = input;
 
@@ -419,7 +513,7 @@ For each piece of new information (user-stated or AI-provided not rejected):
 New frame IDs start from ${nextId}.
 Include "source" field referencing the turn tag (T1, T2, etc.).`;
 
-    return { systemPrompt: DELTA_SYSTEM_PROMPT, userPrompt };
+    return { systemPrompt: buildDeltaSystemPrompt(style), userPrompt };
   }
 
   // First extraction mode
@@ -432,5 +526,5 @@ ${turnsText}
 Extract all semantic frames and relations from this conversation.
 Include "source" field referencing the turn tag (T1, T2, etc.) for each frame.`;
 
-  return { systemPrompt: FIRST_EXTRACTION_SYSTEM_PROMPT, userPrompt };
+  return { systemPrompt: buildFirstExtractionSystemPrompt(style), userPrompt };
 }

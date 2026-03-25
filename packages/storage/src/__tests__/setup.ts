@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS users (
   email TEXT,
   name TEXT,
   avatar_url TEXT,
+  default_extraction_style JSONB,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_users_provider_unique ON users(provider, provider_id);
@@ -40,6 +41,7 @@ CREATE TABLE IF NOT EXISTS projects (
   default_model TEXT,
   autopilot_config JSONB,
   business_rules JSONB DEFAULT '[]',
+  extraction_style JSONB,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_projects_owner ON projects(owner_id);

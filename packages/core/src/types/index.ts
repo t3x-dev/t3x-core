@@ -494,6 +494,9 @@ export interface User {
 
   /** When the user was created, ISO8601 */
   created_at: string;
+
+  /** Default extraction style (null = system default) */
+  default_extraction_style?: Record<string, unknown> | null;
 }
 
 /**

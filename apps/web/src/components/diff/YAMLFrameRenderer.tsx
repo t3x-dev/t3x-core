@@ -44,23 +44,51 @@ export function SlotValueSpan({ value }: { value: SlotValue }) {
   return <span style={{ color: YAML_COLORS.bracket }}>{JSON.stringify(value)}</span>;
 }
 
-export function WordDiffSpan({ wordDiff }: { wordDiff: Array<{ type: 'unchanged' | 'added' | 'removed'; text: string }> }) {
+export function WordDiffSpan({
+  wordDiff,
+}: {
+  wordDiff: Array<{ type: 'unchanged' | 'added' | 'removed'; text: string }>;
+}) {
   return (
     <>
       {wordDiff.map((seg, i) => {
         if (seg.type === 'added') {
-          return <span key={i} className="bg-[var(--dy-added-word)] text-white rounded-sm px-[2px] font-medium">{seg.text}</span>;
+          return (
+            <span
+              key={i}
+              className="bg-[var(--dy-added-word)] text-white rounded-sm px-[2px] font-medium"
+            >
+              {seg.text}
+            </span>
+          );
         }
         if (seg.type === 'removed') {
-          return <span key={i} className="bg-[var(--dy-removed-word)] text-white rounded-sm px-[2px] line-through" style={{ textDecorationColor: 'rgba(255,255,255,0.4)' }}>{seg.text}</span>;
+          return (
+            <span
+              key={i}
+              className="bg-[var(--dy-removed-word)] text-white rounded-sm px-[2px] line-through"
+              style={{ textDecorationColor: 'rgba(255,255,255,0.4)' }}
+            >
+              {seg.text}
+            </span>
+          );
         }
-        return <span key={i} style={{ color: YAML_COLORS.string }}>{seg.text}</span>;
+        return (
+          <span key={i} style={{ color: YAML_COLORS.string }}>
+            {seg.text}
+          </span>
+        );
       })}
     </>
   );
 }
 
-export function YAMLFrameRenderer({ frame, frameStatus, slotDiffs, startLine }: YAMLFrameRendererProps) {
+export function YAMLFrameRenderer({
+  frame,
+  frameStatus,
+  slotDiffs,
+  startLine,
+}: YAMLFrameRendererProps) {
   const slotDiffMap = new Map<string, SlotDiff>();
   if (slotDiffs) {
     for (const sd of slotDiffs) slotDiffMap.set(sd.key, sd);
@@ -80,7 +108,7 @@ export function YAMLFrameRenderer({ frame, frameStatus, slotDiffs, startLine }: 
     return 'unchanged';
   };
 
-  const removedSlots = slotDiffs?.filter(sd => sd.type === 'removed') ?? [];
+  const removedSlots = slotDiffs?.filter((sd) => sd.type === 'removed') ?? [];
 
   return (
     <>
@@ -110,16 +138,19 @@ export function YAMLFrameRenderer({ frame, frameStatus, slotDiffs, startLine }: 
       })}
 
       {/* Removed slots (only in source, not in this frame) */}
-      {frameStatus === 'modified' && removedSlots.map((sd) => (
-        <YAMLLine key={`removed-${sd.key}`} lineNumber={lineNum++} status="removed">
-          {'    '}
-          <span style={{ color: YAML_COLORS.key }} className="line-through opacity-60">{sd.key}</span>
-          <span style={{ color: YAML_COLORS.bracket }}>: </span>
-          <span className="line-through opacity-60">
-            {sd.oldValue !== undefined ? formatSlotValue(sd.oldValue) : '(none)'}
-          </span>
-        </YAMLLine>
-      ))}
+      {frameStatus === 'modified' &&
+        removedSlots.map((sd) => (
+          <YAMLLine key={`removed-${sd.key}`} lineNumber={lineNum++} status="removed">
+            {'    '}
+            <span style={{ color: YAML_COLORS.key }} className="line-through opacity-60">
+              {sd.key}
+            </span>
+            <span style={{ color: YAML_COLORS.bracket }}>: </span>
+            <span className="line-through opacity-60">
+              {sd.oldValue !== undefined ? formatSlotValue(sd.oldValue) : '(none)'}
+            </span>
+          </YAMLLine>
+        ))}
     </>
   );
 }

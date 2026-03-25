@@ -13,6 +13,7 @@ import { findAccountsByUser, findUserById, updateUser } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { createError, zodErrorHook } from '../lib/errors';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
+import { ExtractionStyleSchema } from '../schemas/contracts';
 
 export const authMeRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
@@ -34,6 +35,7 @@ const AuthMeResponse = z.object({
   username: z.string().nullable(),
   email: z.string().nullable(),
   avatar_url: z.string().nullable(),
+  default_extraction_style: ExtractionStyleSchema.nullable().optional(),
   linked_accounts: z.array(LinkedAccountSchema),
 });
 
@@ -41,10 +43,15 @@ const UpdateMeBody = z
   .object({
     name: z.string().optional(),
     avatar_url: z.string().optional(),
+    default_extraction_style: ExtractionStyleSchema.nullable().optional(),
   })
-  .refine((d) => d.name !== undefined || d.avatar_url !== undefined, {
-    message: 'At least one field (name or avatar_url) must be provided',
-  });
+  .refine(
+    (d) =>
+      d.name !== undefined ||
+      d.avatar_url !== undefined ||
+      d.default_extraction_style !== undefined,
+    { message: 'At least one field must be provided' }
+  );
 
 const UpdateMeResponse = z.object({
   id: z.string(),
@@ -52,6 +59,7 @@ const UpdateMeResponse = z.object({
   username: z.string().nullable(),
   email: z.string().nullable(),
   avatar_url: z.string().nullable(),
+  default_extraction_style: ExtractionStyleSchema.nullable().optional(),
 });
 
 // ============================================================
@@ -120,6 +128,7 @@ authMeRoutes.openapi(meRoute, async (c) => {
       username: user.username,
       email: user.email,
       avatar_url: user.avatar_url,
+      default_extraction_style: user.default_extraction_style ?? null,
       linked_accounts,
     },
   });
@@ -172,6 +181,7 @@ authMeRoutes.openapi(updateMeRoute, async (c) => {
   const updated = await updateUser(db, userId, {
     name: body.name,
     avatar_url: body.avatar_url,
+    default_extraction_style: body.default_extraction_style,
   });
 
   if (!updated) {
@@ -186,6 +196,7 @@ authMeRoutes.openapi(updateMeRoute, async (c) => {
       username: updated.username,
       email: updated.email,
       avatar_url: updated.avatar_url,
+      default_extraction_style: updated.default_extraction_style ?? null,
     },
   });
 });

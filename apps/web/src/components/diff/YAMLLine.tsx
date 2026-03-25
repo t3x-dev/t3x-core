@@ -22,7 +22,7 @@ export function YAMLLine({ lineNumber, status, children }: YAMLLineProps) {
       className={cn(
         'diff-yaml-line flex items-stretch font-mono text-[11.5px] leading-[21px] min-h-[21px]',
         status === 'unchanged' && 'opacity-[0.45] hover:opacity-80',
-        isEmpty && 'diff-yaml-empty',
+        isEmpty && 'diff-yaml-empty'
       )}
     >
       {/* Gutter */}
@@ -32,7 +32,7 @@ export function YAMLLine({ lineNumber, status, children }: YAMLLineProps) {
           status === 'added' && 'text-[var(--dy-added-accent)] opacity-50',
           status === 'removed' && 'text-[var(--dy-removed-accent)] opacity-50',
           status === 'modified' && 'text-[var(--dy-modified-accent)] opacity-40',
-          (status === 'unchanged' || isEmpty) && 'text-[var(--text-tertiary)] opacity-50',
+          (status === 'unchanged' || isEmpty) && 'text-[var(--text-tertiary)] opacity-50'
         )}
       >
         {isEmpty ? '' : lineNumber}
@@ -44,7 +44,7 @@ export function YAMLLine({ lineNumber, status, children }: YAMLLineProps) {
           'w-1 min-w-1 shrink-0',
           status === 'added' && 'bg-[var(--dy-added-accent)]',
           status === 'removed' && 'bg-[var(--dy-removed-accent)]',
-          status === 'modified' && 'bg-[var(--dy-modified-accent)]',
+          status === 'modified' && 'bg-[var(--dy-modified-accent)]'
         )}
       />
 
@@ -54,11 +54,16 @@ export function YAMLLine({ lineNumber, status, children }: YAMLLineProps) {
           'flex-1 px-[10px] whitespace-pre overflow-hidden text-ellipsis',
           status === 'added' && 'bg-[var(--dy-added-bg)]',
           status === 'removed' && 'bg-[var(--dy-removed-bg)]',
-          status === 'modified' && 'bg-[var(--dy-modified-bg)]',
+          status === 'modified' && 'bg-[var(--dy-modified-bg)]'
         )}
-        style={isEmpty ? {
-          background: 'repeating-linear-gradient(-45deg, transparent, transparent 4px, rgba(255,255,255,0.015) 4px, rgba(255,255,255,0.015) 5px)',
-        } : undefined}
+        style={
+          isEmpty
+            ? {
+                background:
+                  'repeating-linear-gradient(-45deg, transparent, transparent 4px, rgba(255,255,255,0.015) 4px, rgba(255,255,255,0.015) 5px)',
+              }
+            : undefined
+        }
       >
         {isEmpty ? null : children}
       </div>

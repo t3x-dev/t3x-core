@@ -113,7 +113,13 @@ export interface Delta {
 
 // ── Delta Log ──
 
-export type DeltaSource = 'pipeline' | 'manual' | 'answer' | 'collapse' | 'commit_marker' | 'compress';
+export type DeltaSource =
+  | 'pipeline'
+  | 'manual'
+  | 'answer'
+  | 'collapse'
+  | 'commit_marker'
+  | 'compress';
 
 export interface DeltaLogEntry {
   id: string;

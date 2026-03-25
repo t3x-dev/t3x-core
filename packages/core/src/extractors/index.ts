@@ -19,11 +19,21 @@ export {
   topicEvolverAgent,
   topicNamerAgent,
 } from './agents';
+// Frame Compression
+export {
+  buildCompressPrompt,
+  type CompressInput,
+  type FrameWithSignals,
+} from './compressPrompt';
 export { createMeaningPipeline } from './createMeaningPipeline';
 export { type ParseResult as FrameDeltaParseResult, parseFrameDelta } from './frameDeltaParser';
 export {
   buildFrameExtractionPrompt,
   type FrameExtractionPromptResult,
+  granularitySegment,
+  quoteLengthSegment,
+  tier3Segment,
+  updateStanceSegment,
 } from './frameExtractionPrompt';
 // Frame Extraction (Phase 2)
 export {
@@ -34,11 +44,6 @@ export {
   type SlotQuotesMap,
 } from './frameExtractor';
 // Frame Compression
-export {
-  buildCompressPrompt,
-  type CompressInput,
-  type FrameWithSignals,
-} from './compressPrompt';
 export {
   type CompressMetadata,
   type CompressResult,

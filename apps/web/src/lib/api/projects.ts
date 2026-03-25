@@ -3,7 +3,7 @@
  */
 
 import { API_V1, buildQueryString, fetchWithTimeout, handleResponse } from './core';
-import type { Project, ProjectDetail, ProjectListData } from './types';
+import type { ExtractionStyleConfig, Project, ProjectDetail, ProjectListData } from './types';
 
 export async function listProjects(limit = 50, offset = 0): Promise<ProjectListData> {
   const query = buildQueryString({ limit, offset });
@@ -45,6 +45,7 @@ export interface UpdateProjectPayload {
   metadata?: Record<string, unknown>;
   default_provider?: string | null;
   default_model?: string | null;
+  extraction_style?: ExtractionStyleConfig | null;
 }
 
 export async function updateProject(
@@ -52,7 +53,7 @@ export async function updateProject(
   payload: UpdateProjectPayload
 ): Promise<Project> {
   const res = await fetchWithTimeout(`${API_V1}/projects/${encodeURIComponent(projectId)}`, {
-    method: 'PATCH',
+    method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
