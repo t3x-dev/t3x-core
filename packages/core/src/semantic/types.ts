@@ -69,15 +69,31 @@ export interface Frame {
   manual_edited?: boolean;
 }
 
+// ── Tree Node (tree-native representation) ──
+
+export interface TreeNode {
+  /** Node key name (e.g., "activity_plan") */
+  key: string;
+  /** Leaf slot values at this node */
+  slots: Record<string, SlotValue>;
+  /** Child nodes (internal only — not visible in YAML output or UI) */
+  children: TreeNode[];
+  /** Per-slot source quotes (dot-path keys, verbatim conversation text) */
+  slot_quotes?: Record<string, string>;
+  /** Source turn reference (e.g., "T3") */
+  source?: string;
+  /** Extraction confidence 0-1 */
+  confidence?: number;
+}
+
 // ── Relation ──
 
 export const FRAME_RELATION_TYPES = [
   'causes',
-  'conditions',
   'contrasts',
-  'elaborates',
   'follows',
   'depends',
+  'elaborates', // Legacy only — tree-native uses TreeNode.children instead
 ] as const;
 
 export type FrameRelationType = (typeof FRAME_RELATION_TYPES)[number];
@@ -93,9 +109,14 @@ export interface Relation {
 
 export interface SemanticContent {
   topic?: string;
-  root_frame_id?: string;
-  frames: Frame[];
+  /** YAML tree root — primary representation (absent in legacy data) */
+  tree?: TreeNode;
+  /** Cross-tree relations only; tree-native uses 4 types (no elaborates), legacy may have elaborates */
   relations: Relation[];
+  /** Always present. Tree-native: pre-computed flatten. Legacy: original flat frames. */
+  frames: Frame[];
+  /** @deprecated — kept for backward compat; tree-native derives root from tree.key */
+  root_frame_id?: string;
 }
 
 // ── Delta (incremental changes) ──

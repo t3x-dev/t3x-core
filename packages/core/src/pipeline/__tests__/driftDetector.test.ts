@@ -163,8 +163,8 @@ describe('parseDriftResponse', () => {
     expect(result.relationType).toBeUndefined();
   });
 
-  it('accepts all 6 valid relation types', () => {
-    for (const rel of ['causes', 'conditions', 'contrasts', 'elaborates', 'follows', 'depends']) {
+  it('accepts all 5 valid relation types', () => {
+    for (const rel of ['causes', 'contrasts', 'elaborates', 'follows', 'depends']) {
       const result = parseDriftResponse(
         `{"same_topic": false, "confidence": 0.9, "relation": "${rel}", "new_topic": "test"}`
       );
