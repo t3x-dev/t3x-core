@@ -174,6 +174,7 @@ export function FrameYAMLView() {
   const hoveredTurnHash = useExtractionPanelStore((s) => s.hoveredTurnHash);
   const hoveredCharOffset = useExtractionPanelStore((s) => s.hoveredCharOffset);
   const gateIssues = useExtractionPanelStore((s) => s.gateIssues);
+  const manualEditedFrameIds = useExtractionPanelStore((s) => s.manualEditedFrameIds);
 
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState('');
@@ -515,7 +516,11 @@ export function FrameYAMLView() {
                   style={{
                     width: 3,
                     flexShrink: 0,
-                    background: line.changeType ? deltaBarColors[line.changeType] : 'transparent',
+                    background: manualEditedFrameIds.has(line.frameId)
+                      ? '#60a5fa'  // blue — manual edit
+                      : line.changeType
+                        ? deltaBarColors[line.changeType]
+                        : 'transparent',
                   }}
                 />
 
@@ -555,6 +560,21 @@ export function FrameYAMLView() {
                     </span>
                   )}
                   {line.text}
+                  {line.slotKey === null && manualEditedFrameIds.has(line.frameId) && (
+                    <span
+                      style={{
+                        fontSize: 9,
+                        padding: '0 4px',
+                        borderRadius: 3,
+                        background: 'rgba(96, 165, 250, 0.15)',
+                        color: '#60a5fa',
+                        marginLeft: 4,
+                        fontWeight: 600,
+                      }}
+                    >
+                      manual
+                    </span>
+                  )}
                   {isFrameLine && (
                     <span
                       className="opacity-0 group-hover/yaml-line:opacity-100 transition-opacity ml-1"
