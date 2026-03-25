@@ -19,6 +19,12 @@ export {
   topicEvolverAgent,
   topicNamerAgent,
 } from './agents';
+// Frame Compression
+export {
+  buildCompressPrompt,
+  type CompressInput,
+  type FrameWithSignals,
+} from './compressPrompt';
 export { createMeaningPipeline } from './createMeaningPipeline';
 export {
   type ExtractionItem,
@@ -35,10 +41,19 @@ export {
   type ValidationResult,
   validateExtractedSentences,
 } from './extractionValidator';
+export {
+  type CompressMetadata,
+  type CompressResult,
+  FrameCompressor,
+} from './frameCompressor';
 export { type ParseResult as FrameDeltaParseResult, parseFrameDelta } from './frameDeltaParser';
 export {
   buildFrameExtractionPrompt,
   type FrameExtractionPromptResult,
+  granularitySegment,
+  quoteLengthSegment,
+  tier3Segment,
+  updateStanceSegment,
 } from './frameExtractionPrompt';
 // Frame Extraction (Phase 2)
 export {
@@ -48,17 +63,6 @@ export {
   FrameExtractor,
   type SlotQuotesMap,
 } from './frameExtractor';
-// Frame Compression
-export {
-  buildCompressPrompt,
-  type CompressInput,
-  type FrameWithSignals,
-} from './compressPrompt';
-export {
-  type CompressMetadata,
-  type CompressResult,
-  FrameCompressor,
-} from './frameCompressor';
 // Incremental Extraction (LLM pipeline)
 export { type FuzzyLocateResult, fuzzyLocate } from './fuzzyLocate';
 export { parseIncrementalResponse } from './incrementalParser';
