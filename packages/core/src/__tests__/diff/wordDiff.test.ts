@@ -268,8 +268,8 @@ describe('Performance', () => {
   it('50 sentences diff completes within 500ms', () => {
     // Note: Hungarian algorithm O(n³) is slower than greedy O(n²)
     // but guarantees globally optimal matching
-    const source: Sentence[] = [];
-    const target: Sentence[] = [];
+    const source: DiffableSentence[] = [];
+    const target: DiffableSentence[] = [];
 
     for (let i = 0; i < 50; i++) {
       source.push(createSentence(`s${i}`, `This is source sentence number ${i} with some content`));

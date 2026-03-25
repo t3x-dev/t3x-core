@@ -7,8 +7,10 @@
  */
 
 import type { LLMProvider } from '../llm/types';
-import type { AnyLeafType, Constraint, Sentence } from '../types/v4';
-import { ID_PREFIXES } from '../types/v4';
+import type { SemanticContent } from '../semantic/types';
+import { serializeFramesForPrompt } from '../semantic/serialize';
+import type { AnyLeafType, Constraint } from '../types';
+import { ID_PREFIXES } from '../types';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Types
@@ -40,7 +42,7 @@ export interface SuggestConstraintsOptions {
 // ═══════════════════════════════════════════════════════════════════════════
 
 function buildConstraintSuggestionPrompt(
-  sentences: Sentence[],
+  knowledge: SemanticContent,
   leafType: AnyLeafType,
   options?: SuggestConstraintsOptions
 ): string {
@@ -48,11 +50,11 @@ function buildConstraintSuggestionPrompt(
 
   const typeGuidance = getTypeGuidance(leafType);
 
-  const sentencesText = sentences.map((s, i) => `[${i}] ${s.text}`).join('\n');
+  const knowledgeText = serializeFramesForPrompt(knowledge);
 
   return `You are a constraint suggestion engine for a semantic version control system.
 
-Given a set of knowledge sentences and a target output type, suggest constraints that should be applied when generating output.
+Given a set of knowledge frames and a target output type, suggest constraints that should be applied when generating output.
 
 ## Output Type: ${leafType}
 ${typeGuidance}
@@ -66,7 +68,7 @@ ${typeGuidance}
 
 ## Guidelines
 
-- Suggest REQUIRE constraints for key facts, entities, and core points from the sentences
+- Suggest REQUIRE constraints for key facts, entities, and core points from the knowledge
 - Suggest EXCLUDE constraints for common pitfalls (e.g., exceeding character limits, including inappropriate content)
 - Prefer "semantic" match_mode for meaning-based constraints, "exact" for keywords/names
 - Each constraint should have a clear reason explaining why it matters
@@ -74,9 +76,9 @@ ${typeGuidance}
 - Suggest at most ${maxSuggestions} constraints
 ${options?.instructions ? `\n## Additional Instructions\n${options.instructions}` : ''}
 
-## Knowledge Sentences
+## Knowledge
 
-${sentencesText}
+${knowledgeText}
 
 ## Output Format
 
@@ -191,22 +193,22 @@ async function getNanoid(): Promise<(size: number) => string> {
  * Suggest constraints for a leaf based on commit sentences.
  *
  * @param provider - LLM provider to use for suggestion
- * @param sentences - Knowledge sentences from the commit
+ * @param knowledge - Semantic knowledge (frames + relations)
  * @param leafType - Type of the leaf (determines output format guidance)
  * @param options - Optional configuration
  * @returns Suggested constraints with confidence scores
  */
 export async function suggestConstraints(
   provider: LLMProvider,
-  sentences: Sentence[],
+  knowledge: SemanticContent,
   leafType: AnyLeafType,
   options?: SuggestConstraintsOptions
 ): Promise<ConstraintSuggestionResult> {
-  if (sentences.length === 0) {
+  if (knowledge.frames.length === 0) {
     return { suggestions: [], model: provider.id, usage: { inputTokens: 0, outputTokens: 0 } };
   }
 
-  const prompt = buildConstraintSuggestionPrompt(sentences, leafType, options);
+  const prompt = buildConstraintSuggestionPrompt(knowledge, leafType, options);
   const result = await provider.generate(prompt, { temperature: 0.3, maxTokens: 4096 });
   const suggestions = parseConstraintSuggestions(result.text);
 

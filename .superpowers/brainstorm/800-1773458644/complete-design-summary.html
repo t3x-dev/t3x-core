@@ -1,0 +1,165 @@
+<h2>Complete Design — Chat-First Onboarding</h2>
+<p class="subtitle">Full summary for approval before writing spec</p>
+
+<div class="section">
+  <h3>1. First-Time User Experience</h3>
+  <div style="background: #1a1a2e; border-radius: 12px; padding: 20px; border-left: 4px solid #7c3aed;">
+    <div style="display: flex; gap: 24px;">
+      <div style="flex: 1;">
+        <div style="color: #7c3aed; font-weight: 700; font-size: 13px; margin-bottom: 8px;">BEFORE (Current)</div>
+        <div style="font-size: 13px; color: #999; line-height: 1.8;">
+          Login → Welcome Modal → Experience Dialog → Projects Page (empty) → Create Project → Empty Canvas → Add Conversation → Chat → Extract → Commit
+        </div>
+        <div style="color: #ef4444; font-size: 12px; margin-top: 8px;">6 steps before value</div>
+      </div>
+      <div style="width: 1px; background: #333;"></div>
+      <div style="flex: 1;">
+        <div style="color: #4ade80; font-weight: 700; font-size: 13px; margin-bottom: 8px;">AFTER (New)</div>
+        <div style="font-size: 13px; color: #ddd; line-height: 1.8;">
+          Login → Chat box → Type anything → See extraction → Commit
+        </div>
+        <div style="color: #4ade80; font-size: 12px; margin-top: 8px;">1 step before value</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top: 24px;">
+  <h3>2. Landing Page (New User)</h3>
+  <div style="background: #1a1a2e; border-radius: 12px; padding: 20px;">
+    <div style="font-size: 13px; color: #bbb; line-height: 1.8;">
+      <ul style="margin: 0; padding-left: 18px;">
+        <li>Clean chat interface — no modals, no tour, no experience dialog</li>
+        <li>Minimal sidebar (collapsed or slim) with just "New Chat" and settings</li>
+        <li>Chat box with subtle ghost suggestions (optional, non-intrusive)</li>
+        <li>Upload (📎) and paste (📋) buttons next to input</li>
+        <li>Project auto-created from first message topic</li>
+      </ul>
+    </div>
+    <div style="margin-top: 12px; padding: 10px 14px; background: #111; border-radius: 8px; border: 1px solid #222; font-size: 12px; color: #555;">
+      <strong style="color: #888;">Removed:</strong> WelcomeModal, OnboardingDialog, GuidedTour, QuickStartChecklist — all replaced by the product teaching itself through use.
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top: 24px;">
+  <h3>3. Chat Workspace Layout</h3>
+  <div style="background: #1a1a2e; border-radius: 12px; padding: 20px;">
+    <div style="display: flex; gap: 16px; margin-bottom: 16px;">
+      <div style="flex: 0 0 140px; background: #0f0f1a; border-radius: 8px; padding: 12px; border: 1px solid #222; text-align: center;">
+        <div style="color: #f59e0b; font-weight: 600; font-size: 12px; margin-bottom: 4px;">Sidebar</div>
+        <div style="font-size: 11px; color: #666;">Project-grouped<br>conversations<br>+ New Chat</div>
+      </div>
+      <div style="flex: 1; background: #111118; border-radius: 8px; padding: 12px; border: 1px solid #222; text-align: center;">
+        <div style="color: #7c3aed; font-weight: 600; font-size: 12px; margin-bottom: 4px;">Chat Area</div>
+        <div style="font-size: 11px; color: #666;">ChatGPT-style conversation<br>Header shows: project name · branch · model<br>Purple highlights on extracted text</div>
+      </div>
+      <div style="flex: 0 0 200px; background: #0d0d18; border-radius: 8px; padding: 12px; border: 1px solid #222; text-align: center;">
+        <div style="color: #4ade80; font-weight: 600; font-size: 12px; margin-bottom: 4px;">Extraction Panel</div>
+        <div style="font-size: 11px; color: #666;">Graph (default) / YAML toggle<br>Foldable to thin rail<br>Commit action at bottom</div>
+      </div>
+    </div>
+    <div style="font-size: 12px; color: #888;">
+      <strong>Context awareness:</strong> Chat header always shows which project + branch the user is chatting toward. Extraction lands on that branch.
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top: 24px;">
+  <h3>4. Extraction Panel</h3>
+  <div style="background: #1a1a2e; border-radius: 12px; padding: 20px;">
+    <div style="display: flex; gap: 16px;">
+      <div style="flex: 1;">
+        <div style="color: #7c3aed; font-weight: 600; font-size: 13px; margin-bottom: 8px;">Graph View (Default)</div>
+        <ul style="font-size: 12px; color: #999; padding-left: 16px; margin: 0; line-height: 1.8;">
+          <li>Frame nodes with relation arrows</li>
+          <li>Auto-clustering by connected components</li>
+          <li>New frames highlighted in purple with "NEW" badge</li>
+          <li>Interactive: drag relations, double-click to add, right-click to delete</li>
+          <li>Click frame → highlights source in chat</li>
+          <li>Semantic-aware ELK layout (per scalability spec)</li>
+        </ul>
+      </div>
+      <div style="width: 1px; background: #333;"></div>
+      <div style="flex: 1;">
+        <div style="color: #f59e0b; font-weight: 600; font-size: 13px; margin-bottom: 8px;">YAML View (Toggle)</div>
+        <ul style="font-size: 12px; color: #999; padding-left: 16px; margin: 0; line-height: 1.8;">
+          <li>Lite YAML — no IDs, no confidence, no source refs</li>
+          <li>Frame types as top-level keys, slots as properties</li>
+          <li>Relations section at bottom</li>
+          <li>Directly editable — saves generate <code>user_yaml_edit</code> deltas</li>
+          <li>New frames highlighted with purple left border</li>
+          <li>Syntax-highlighted for readability</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top: 24px;">
+  <h3>5. Returning User Experience</h3>
+  <div style="background: #1a1a2e; border-radius: 12px; padding: 20px;">
+    <ul style="font-size: 13px; color: #bbb; padding-left: 18px; margin: 0; line-height: 2;">
+      <li><strong style="color: #ddd;">Session restore</strong> — app remembers last active project + conversation via cookie/localStorage. User lands directly in their working context.</li>
+      <li><strong style="color: #ddd;">Sidebar populated</strong> — shows their projects with conversations grouped inside. Recent conversations at top.</li>
+      <li><strong style="color: #ddd;">"New Chat" always accessible</strong> — top of sidebar, creates new conversation in current project or new project.</li>
+      <li><strong style="color: #ddd;">Canvas accessible per project</strong> — each project in sidebar has a "Canvas" entry to switch to the knowledge graph view.</li>
+    </ul>
+  </div>
+</div>
+
+<div class="section" style="margin-top: 24px;">
+  <h3>6. Canvas = Control Room</h3>
+  <div style="background: #1a1a2e; border-radius: 12px; padding: 20px;">
+    <div style="font-size: 13px; color: #bbb; line-height: 1.8;">
+      Canvas is no longer the entry point — it's the <strong style="color: #ddd;">management view</strong> you switch to when you need to:
+    </div>
+    <div style="display: flex; gap: 12px; margin-top: 12px; flex-wrap: wrap;">
+      <span style="background: #111; padding: 6px 12px; border-radius: 6px; font-size: 12px; color: #888; border: 1px solid #222;">See full knowledge lineage</span>
+      <span style="background: #111; padding: 6px 12px; border-radius: 6px; font-size: 12px; color: #888; border: 1px solid #222;">Branch & merge</span>
+      <span style="background: #111; padding: 6px 12px; border-radius: 6px; font-size: 12px; color: #888; border: 1px solid #222;">Run leaf assertions</span>
+      <span style="background: #111; padding: 6px 12px; border-radius: 6px; font-size: 12px; color: #888; border: 1px solid #222;">Review diffs</span>
+      <span style="background: #111; padding: 6px 12px; border-radius: 6px; font-size: 12px; color: #888; border: 1px solid #222;">Monitor runner status</span>
+      <span style="background: #111; padding: 6px 12px; border-radius: 6px; font-size: 12px; color: #888; border: 1px solid #222;">Compare commits</span>
+    </div>
+    <div style="margin-top: 12px; font-size: 12px; color: #666;">
+      Accessed via: sidebar "Canvas" link per project, or "📊 Canvas →" button in chat header.
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top: 24px;">
+  <h3>7. Input Sources (Current + Future)</h3>
+  <div style="background: #1a1a2e; border-radius: 12px; padding: 20px;">
+    <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+      <div style="flex: 1; min-width: 150px; background: #111; border-radius: 8px; padding: 12px; border: 1px solid #4ade80;">
+        <div style="color: #4ade80; font-size: 11px; font-weight: 600; margin-bottom: 4px;">NOW</div>
+        <div style="font-size: 13px; color: #ddd; margin-bottom: 2px;">💬 Live LLM Chat</div>
+        <div style="font-size: 11px; color: #666;">Chat with Claude/GPT inside T3X</div>
+      </div>
+      <div style="flex: 1; min-width: 150px; background: #111; border-radius: 8px; padding: 12px; border: 1px solid #4ade80;">
+        <div style="color: #4ade80; font-size: 11px; font-weight: 600; margin-bottom: 4px;">NOW</div>
+        <div style="font-size: 13px; color: #ddd; margin-bottom: 2px;">📋 Paste Text</div>
+        <div style="font-size: 11px; color: #666;">Meeting notes, docs, transcripts</div>
+      </div>
+      <div style="flex: 1; min-width: 150px; background: #111; border-radius: 8px; padding: 12px; border: 1px solid #4ade80;">
+        <div style="color: #4ade80; font-size: 11px; font-weight: 600; margin-bottom: 4px;">NOW</div>
+        <div style="font-size: 13px; color: #ddd; margin-bottom: 2px;">📎 Upload Files</div>
+        <div style="font-size: 11px; color: #666;">PDF, markdown, text, chat exports</div>
+      </div>
+      <div style="flex: 1; min-width: 150px; background: #111; border-radius: 8px; padding: 12px; border: 1px solid #333;">
+        <div style="color: #f59e0b; font-size: 11px; font-weight: 600; margin-bottom: 4px;">FUTURE</div>
+        <div style="font-size: 13px; color: #888; margin-bottom: 2px;">🔗 Integrations</div>
+        <div style="font-size: 11px; color: #555;">Slack, meeting recordings, audio</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top: 32px;">
+  <h3 style="color: #4ade80;">✓ Ready to Write Spec?</h3>
+  <div style="background: #1a1a2e; border-radius: 12px; padding: 20px; border: 1px solid #4ade80;">
+    <div style="font-size: 14px; color: #ddd; margin-bottom: 8px;">If this design looks good, I'll write it up as a formal spec document and we can move to implementation planning.</div>
+    <div style="font-size: 12px; color: #888;">The spec will cover: component changes, new components needed, state management updates, routing changes, migration plan from current onboarding, and what to remove.</div>
+  </div>
+</div>

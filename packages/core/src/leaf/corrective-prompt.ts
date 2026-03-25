@@ -7,7 +7,7 @@
  */
 
 import { escapeConstraintValue, escapePromptContent } from '../llm/sanitize';
-import type { Assertion, Constraint } from '../types/v4';
+import type { Assertion, Constraint } from '../types';
 
 export interface CorrectivePromptOptions {
   /** The output that failed validation */

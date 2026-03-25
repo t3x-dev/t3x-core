@@ -1,18 +1,19 @@
 /**
  * Extract Route Tests
  *
- * Tests for POST /v1/extract/sentences endpoint.
+ * Integration tests for POST /v1/extract endpoint.
  */
 
 import type { AnyDB } from '@t3x-dev/storage';
-import { insertConversation, insertProject, insertTurn } from '@t3x-dev/storage';
+import { insertProject } from '@t3x-dev/storage';
 import { Hono } from 'hono';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
 
 // biome-ignore lint/suspicious/noExplicitAny: test helper
 type ApiResponse = any;
 
+// Mock the database module before importing routes
 let mockDB: AnyDB;
 
 vi.mock('../lib/db', () => ({
@@ -20,21 +21,20 @@ vi.mock('../lib/db', () => ({
   closeDB: vi.fn(() => Promise.resolve()),
 }));
 
-// Mock provider registry
-const { mockGetProviderRegistry } = vi.hoisted(() => ({
-  mockGetProviderRegistry: vi.fn(),
+// Mock the webhook dispatcher
+const mockDispatch = vi.fn();
+vi.mock('../lib/webhook-dispatcher', () => ({
+  webhookDispatcher: {
+    dispatch: (...args: unknown[]) => mockDispatch(...args),
+  },
 }));
 
-vi.mock('../lib/provider-registry', () => ({
-  getProviderRegistry: mockGetProviderRegistry,
-}));
-
+// Import routes after mocking
 import { extractRoutes } from '../routes/extract.openapi';
 
 describe('Extract Routes', () => {
   let cleanup: () => Promise<void>;
   let testProjectId: string;
-  let testConversationId: string;
   const app = new Hono();
   app.route('/', extractRoutes);
 
@@ -43,138 +43,190 @@ describe('Extract Routes', () => {
     mockDB = setup.db;
     cleanup = setup.cleanup;
 
-    // Create test project + conversation + turns
-    const project = await insertProject(mockDB, testData.project({ name: 'Extract Test' }));
+    // Create test project
+    const project = await insertProject(mockDB, testData.project({ name: 'Extract Test Project' }));
     testProjectId = project.projectId;
-
-    const conv = await insertConversation(
-      mockDB,
-      testData.conversation(testProjectId, { title: 'Test Conv' })
-    );
-    testConversationId = conv.conversationId;
-
-    await insertTurn(mockDB, {
-      projectId: testProjectId,
-      conversationId: testConversationId,
-      role: 'user',
-      content: 'I want to visit Japan next spring for cherry blossoms.',
-    });
-
-    await insertTurn(mockDB, {
-      projectId: testProjectId,
-      conversationId: testConversationId,
-      role: 'assistant',
-      content: 'March to April is the best time for cherry blossoms in Japan.',
-    });
   });
 
   afterAll(async () => {
-    await cleanup?.();
+    await cleanup();
   });
 
-  it('extracts sentences from conversation', async () => {
-    const mockLlmResponse = JSON.stringify([
-      {
-        text: 'The user wants to visit Japan in spring for cherry blossoms.',
-        confidence: 0.95,
-        quote: 'visit Japan next spring for cherry blossoms',
-        turn_index: 0,
-      },
-      {
-        text: 'March to April is optimal for cherry blossom viewing in Japan.',
-        confidence: 0.9,
-        quote: 'March to April is the best time for cherry blossoms',
-        turn_index: 1,
-      },
-    ]);
+  beforeEach(() => {
+    mockDispatch.mockClear();
+  });
 
-    mockGetProviderRegistry.mockResolvedValue({
-      tryWithFallback: vi
-        .fn()
-        .mockImplementation(async (_role: string, fn: (provider: unknown) => Promise<unknown>) => {
-          const mockProvider = {
-            id: 'test-provider',
-            generate: vi.fn().mockResolvedValue({
-              text: mockLlmResponse,
-              usage: { inputTokens: 10, outputTokens: 5 },
-            }),
-            resolveConflict: vi.fn(),
-          };
-          return fn(mockProvider);
+  describe('POST /v1/extract', () => {
+    it('one-shot: creates conversation, extracts sentences, returns draft', async () => {
+      const res = await app.request('/v1/extract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_id: testProjectId,
+          text: 'The project deadline is next Friday. We need to hire two engineers. Budget is $50k.',
+          source: 'test-api',
         }),
+      });
+
+      expect(res.status).toBe(200);
+
+      const data: ApiResponse = await res.json();
+      expect(data.success).toBe(true);
+      expect(data.data.conversation_id).toBeTruthy();
+      expect(data.data.conversation_id).toMatch(/^conv_/);
+      expect(data.data.draft_id).toBeTruthy();
+      expect(data.data.sentences).toBeInstanceOf(Array);
+      expect(data.data.sentences.length).toBeGreaterThan(0);
+
+      // Each sentence should have id and text
+      for (const sentence of data.data.sentences) {
+        expect(sentence.id).toBeTruthy();
+        expect(sentence.text).toBeTruthy();
+        expect(typeof sentence.confidence).toBe('number');
+      }
     });
 
-    const res = await app.request('/v1/extract/sentences', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        project_id: testProjectId,
-        conversation_id: testConversationId,
-      }),
+    it('incremental: reuses conversation_id, appends turn', async () => {
+      // First extraction — creates conversation
+      const res1 = await app.request('/v1/extract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_id: testProjectId,
+          text: 'First message with some content.',
+        }),
+      });
+
+      expect(res1.status).toBe(200);
+      const data1: ApiResponse = await res1.json();
+      const conversationId = data1.data.conversation_id;
+
+      // Second extraction — reuses conversation
+      const res2 = await app.request('/v1/extract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_id: testProjectId,
+          text: 'Second message with additional details.',
+          conversation_id: conversationId,
+        }),
+      });
+
+      expect(res2.status).toBe(200);
+      const data2: ApiResponse = await res2.json();
+      expect(data2.success).toBe(true);
+      expect(data2.data.conversation_id).toBe(conversationId);
+      expect(data2.data.draft_id).toBeTruthy();
+      expect(data2.data.sentences.length).toBeGreaterThan(0);
     });
 
-    expect(res.status).toBe(200);
-    const body: ApiResponse = await res.json();
-    expect(body.success).toBe(true);
-    expect(body.data.sentences.length).toBeGreaterThan(0);
-    expect(body.data.model).toBe('test-provider');
-    expect(body.data.stats.total_turns).toBe(2);
-    expect(body.data.stats.extracted).toBeGreaterThan(0);
-  });
+    it('fires draft.ready webhook on successful extraction', async () => {
+      const res = await app.request('/v1/extract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_id: testProjectId,
+          text: 'Webhook test message with content.',
+        }),
+      });
 
-  it('returns 404 for empty conversation', async () => {
-    mockGetProviderRegistry.mockResolvedValue({
-      tryWithFallback: vi.fn().mockResolvedValue({
-        sentences: [],
-        model: 'test',
-      }),
+      expect(res.status).toBe(200);
+      const data: ApiResponse = await res.json();
+      expect(data.success).toBe(true);
+
+      // draft.ready webhook should have been dispatched
+      expect(mockDispatch).toHaveBeenCalledWith(
+        'draft.ready',
+        expect.objectContaining({
+          project_id: testProjectId,
+          draft_id: expect.any(String),
+          sentence_count: expect.any(Number),
+        }),
+        testProjectId
+      );
     });
 
-    const res = await app.request('/v1/extract/sentences', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        project_id: testProjectId,
-        conversation_id: 'conv_nonexistent',
-      }),
+    it('returns 400 for empty text (Zod validation)', async () => {
+      const res = await app.request('/v1/extract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_id: testProjectId,
+          text: '',
+        }),
+      });
+
+      // Zod min(1) validation should reject empty text
+      expect(res.status).toBe(400);
     });
 
-    expect(res.status).toBe(404);
-    const body: ApiResponse = await res.json();
-    expect(body.success).toBe(false);
-    expect(body.error.code).toBe('CONVERSATION_NOT_FOUND');
-  });
+    it('returns 404 for non-existent project', async () => {
+      const res = await app.request('/v1/extract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_id: 'proj_nonexistent',
+          text: 'Some text to extract.',
+        }),
+      });
 
-  it('returns 503 when LLM not configured', async () => {
-    const allProvidersError = new Error('No providers available');
-    allProvidersError.name = 'AllProvidersFailedError';
-
-    mockGetProviderRegistry.mockResolvedValue({
-      tryWithFallback: vi.fn().mockRejectedValue(allProvidersError),
+      expect(res.status).toBe(404);
+      const data: ApiResponse = await res.json();
+      expect(data.success).toBe(false);
     });
 
-    const res = await app.request('/v1/extract/sentences', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        project_id: testProjectId,
-        conversation_id: testConversationId,
-      }),
+    it('returns 404 for non-existent conversation_id', async () => {
+      const res = await app.request('/v1/extract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_id: testProjectId,
+          text: 'Some text.',
+          conversation_id: 'conv_nonexistent',
+        }),
+      });
+
+      expect(res.status).toBe(404);
+      const data: ApiResponse = await res.json();
+      expect(data.success).toBe(false);
     });
 
-    expect(res.status).toBe(503);
-    const body: ApiResponse = await res.json();
-    expect(body.success).toBe(false);
-    expect(body.error.code).toBe('LLM_NOT_CONFIGURED');
-  });
+    it('detects drift in incremental mode', async () => {
+      // First extraction
+      const res1 = await app.request('/v1/extract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_id: testProjectId,
+          text: 'The budget is $50k for the project.',
+        }),
+      });
+      const data1: ApiResponse = await res1.json();
+      const conversationId = data1.data.conversation_id;
 
-  it('returns 400 for missing required fields', async () => {
-    const res = await app.request('/v1/extract/sentences', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({}),
+      // Second extraction with changed content — adds new turn
+      const res2 = await app.request('/v1/extract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_id: testProjectId,
+          text: 'Actually the budget is $100k for the project.',
+          conversation_id: conversationId,
+        }),
+      });
+
+      expect(res2.status).toBe(200);
+      const data2: ApiResponse = await res2.json();
+      expect(data2.success).toBe(true);
+      // Drift may or may not be present depending on similarity — just check shape
+      if (data2.data.drift) {
+        expect(data2.data.drift).toBeInstanceOf(Array);
+        for (const item of data2.data.drift) {
+          expect(item.sentence_id).toBeTruthy();
+          expect(typeof item.before).toBe('string');
+          expect(typeof item.after).toBe('string');
+        }
+      }
     });
-
-    expect(res.status).toBe(400);
   });
 });

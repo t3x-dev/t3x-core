@@ -37,8 +37,10 @@ describe('Leaf Output Edits Storage', () => {
       branch: 'main',
       author: { type: 'human', id: 'test', name: 'Test User' },
       message: 'test commit',
-      sentences: [{ id: 's_001', text: 'Test sentence', confidence: 0.9 }],
-      parent_hashes: [],
+      content: {
+        frames: [{ id: 'f_001', type: 'test_knowledge', slots: { text: 'Test sentence' }, confidence: 0.9 }],
+        relations: [],
+      },
     });
 
     const leaf = await createLeaf(db, {

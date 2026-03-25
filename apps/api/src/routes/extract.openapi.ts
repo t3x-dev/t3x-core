@@ -1,514 +1,339 @@
 /**
- * Extract Routes
+ * Extract Route — Integration Layer "Extract" Verb
  *
- * LLM-based semantic extraction from conversation turns.
+ * Composite endpoint that takes raw text, creates a conversation + turn,
+ * runs sentence extraction, stores results as a draft, and optionally
+ * detects drift from previous extractions.
  *
  * Endpoints:
- * - POST /v1/extract/sentences - Extract structured knowledge sentences from a conversation
+ * - POST /v1/extract — Extract semantic sentences from raw text
  */
 
-import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
+import type { z } from '@hono/zod-openapi';
+import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import {
-  createLLMExtractor,
-  type ExtractionCursor,
-  generateDraftSentenceId,
-  type SemanticPoint,
-  type TurnInput,
-  validateExtractedSentences,
-} from '@t3x-dev/core';
-import { findDraftById, findTurnsByConversation, updateDraft } from '@t3x-dev/storage';
+  findConversationById,
+  findProjectById,
+  findTurnsByConversation,
+  insertConversation,
+  insertDraft,
+  insertTurn,
+  updateDraft,
+} from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
-import { assertProjectAccess } from '../lib/project-access';
-import { getProviderRegistry } from '../lib/provider-registry';
-import { getUserId, recordUsageFireAndForget, wrapWithUsageTracking } from '../lib/usage-tracking';
+import { webhookDispatcher } from '../lib/webhook-dispatcher';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 import {
-  DraftSentenceSchema,
-  IncrementalExtractRequest,
-  IncrementalExtractResponse,
-} from '../schemas/contracts';
+  ExtractRequest,
+  ExtractResponse,
+  type ExtractSentence,
+} from '../schemas/integration-contracts';
 
 export const extractRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
 });
 
 // ============================================================
-// Schemas
-// ============================================================
-
-const ExtractSentencesRequest = z.object({
-  project_id: z.string().min(1),
-  conversation_id: z.string().min(1),
-  options: z
-    .object({
-      max_sentences: z.number().int().min(1).max(100).optional(),
-      language: z.string().max(100).optional(),
-    })
-    .optional(),
-});
-
-const ExtractStatsSchema = z.object({
-  total_turns: z.number(),
-  extracted: z.number(),
-  with_source_ref: z.number(),
-  removed: z.number(),
-});
-
-const ExtractSentencesResponse = SuccessResponseSchema(
-  z.object({
-    sentences: z.array(DraftSentenceSchema),
-    model: z.string(),
-    stats: ExtractStatsSchema,
-  })
-);
-
-// ============================================================
-// Route Definitions
-// ============================================================
-
-const extractSentencesRoute = createRoute({
-  method: 'post',
-  path: '/v1/extract/sentences',
-  tags: ['Extract'],
-  summary: 'Extract knowledge sentences from a conversation using LLM',
-  request: {
-    body: {
-      content: { 'application/json': { schema: ExtractSentencesRequest } },
-    },
-  },
-  responses: {
-    200: {
-      description: 'Sentences extracted',
-      content: { 'application/json': { schema: ExtractSentencesResponse } },
-    },
-    400: {
-      description: 'Invalid request',
-      content: { 'application/json': { schema: ErrorResponseSchema } },
-    },
-    404: {
-      description: 'Conversation not found',
-      content: { 'application/json': { schema: ErrorResponseSchema } },
-    },
-    503: {
-      description: 'LLM provider not configured',
-      content: { 'application/json': { schema: ErrorResponseSchema } },
-    },
-    500: {
-      description: 'Server error',
-      content: { 'application/json': { schema: ErrorResponseSchema } },
-    },
-  },
-});
-
-// ============================================================
-// Shared extraction logic (reused by drafts/:id/extract)
-// ============================================================
-
-export interface ExtractionOutput {
-  sentences: Array<{
-    id: string;
-    text: string;
-    origin: { type: 'extracted'; segment_id: string; confidence: number };
-    source?: {
-      conversation_id: string;
-      turn_hash: string;
-      role: string;
-      start_char: number;
-      end_char: number;
-    };
-    position: number;
-    included: boolean;
-  }>;
-  model: string;
-  stats: {
-    total_turns: number;
-    extracted: number;
-    with_source_ref: number;
-    removed: number;
-  };
-  usage?: { inputTokens: number; outputTokens: number };
-}
-
-export async function extractSentencesFromConversation(
-  conversationId: string,
-  options?: { max_sentences?: number; language?: string },
-  positionOffset = 0
-): Promise<ExtractionOutput> {
-  const db = await getDB();
-
-  // 1. Fetch turns
-  const turns = await findTurnsByConversation(db, {
-    conversationId,
-    limit: 500,
-  });
-
-  if (turns.length === 0) {
-    return {
-      sentences: [],
-      model: 'none',
-      stats: { total_turns: 0, extracted: 0, with_source_ref: 0, removed: 0 },
-    };
-  }
-
-  // 2. Convert to TurnInput
-  const turnInputs: TurnInput[] = turns.map((t) => ({
-    conversation_id: t.conversationId,
-    turn_hash: t.turnHash,
-    role: t.role as TurnInput['role'],
-    content: t.content,
-  }));
-
-  // 3. Get LLM provider via registry fallback (with usage tracking)
-  const reg = await getProviderRegistry();
-  const trackedUsage = { inputTokens: 0, outputTokens: 0 };
-  const result = await reg.tryWithFallback('generation', (provider) => {
-    // biome-ignore lint/suspicious/noExplicitAny: generic error handler
-    const { provider: tracked, usage } = wrapWithUsageTracking(provider as any);
-    trackedUsage.inputTokens = 0;
-    trackedUsage.outputTokens = 0;
-    const promise = createLLMExtractor(tracked).extract(turnInputs, {
-      maxSentences: options?.max_sentences,
-      language: options?.language,
-    });
-    // Capture usage after extraction completes
-    return promise.then((r) => {
-      trackedUsage.inputTokens = usage.inputTokens;
-      trackedUsage.outputTokens = usage.outputTokens;
-      return r;
-    });
-  });
-
-  // 4. Validate
-  const { valid, removed } = validateExtractedSentences(result.sentences, turnInputs);
-
-  // 5. Convert to DraftSentence format
-  const draftSentences = valid.map((s, i) => {
-    const turn = turnInputs[s.turn_index];
-    return {
-      id: generateDraftSentenceId(),
-      text: s.text,
-      origin: {
-        type: 'extracted' as const,
-        segment_id: `llm_${i}`,
-        confidence: s.confidence,
-      },
-      source: s.source_ref
-        ? {
-            conversation_id: s.source_ref.conversation_id,
-            turn_hash: s.source_ref.turn_hash,
-            role: turn?.role ?? 'unknown',
-            start_char: s.source_ref.start_char,
-            end_char: s.source_ref.end_char,
-          }
-        : undefined,
-      position: positionOffset + i,
-      included: true,
-    };
-  });
-
-  return {
-    sentences: draftSentences,
-    model: result.model,
-    stats: {
-      total_turns: turns.length,
-      extracted: valid.length,
-      with_source_ref: valid.filter((s) => s.source_ref).length,
-      removed: removed.length,
-    },
-    usage: trackedUsage.inputTokens || trackedUsage.outputTokens ? trackedUsage : undefined,
-  };
-}
-
-// ============================================================
-// Route Handlers
-// ============================================================
-
-extractRoutes.openapi(extractSentencesRoute, async (c) => {
-  const body = c.req.valid('json');
-
-  // Verify project ownership before extraction
-  const db = await getDB();
-  const projectOrError = await assertProjectAccess(c, db, body.project_id);
-  if (projectOrError instanceof Response) return projectOrError;
-
-  try {
-    const result = await extractSentencesFromConversation(body.conversation_id, body.options);
-
-    if (result.stats.total_turns === 0) {
-      return errorResponse(
-        c,
-        'CONVERSATION_NOT_FOUND',
-        `No turns found for conversation: ${body.conversation_id}`
-      );
-    }
-
-    // Record usage (fire-and-forget)
-    if (result.usage) {
-      const db = await getDB();
-      recordUsageFireAndForget(db, {
-        user_id: getUserId(c) ?? undefined,
-        project_id: body.project_id,
-        endpoint: 'extract_sentences',
-        model: result.model,
-        input_tokens: result.usage.inputTokens,
-        output_tokens: result.usage.outputTokens,
-      });
-    }
-
-    return c.json(
-      {
-        success: true as const,
-        data: {
-          sentences: result.sentences,
-          model: result.model,
-          stats: result.stats,
-        },
-      },
-      200
-    );
-  } catch (err) {
-    if (err instanceof Error && err.name === 'AllProvidersFailedError') {
-      return c.json(
-        {
-          success: false as const,
-          error: {
-            code: 'LLM_NOT_CONFIGURED',
-            message:
-              'No LLM provider is configured. Set ANTHROPIC_API_KEY or another provider key.',
-          },
-        },
-        503
-      );
-    }
-    const message = err instanceof Error ? err.message : 'Unknown error';
-    return errorResponse(c, 'GENERATION_FAILED', message);
-  }
-});
-
-// ============================================================
-// Extract from Leaf Output (Upgrade #4: lesson feedback loop)
+// Helpers
 // ============================================================
 
 /**
- * Extract sentences from a leaf's output text.
- * Reuses the LLM extraction pipeline but treats the output as a single "turn".
+ * Split text into sentences using a simple regex heuristic.
+ *
+ * This is the pragmatic extraction approach (Option B). A full Ring-based
+ * pipeline can be wired in later without changing the API contract.
  */
-export async function extractSentencesFromLeafOutput(
-  leafId: string,
-  output: string,
-  options?: { max_sentences?: number }
-): Promise<ExtractionOutput> {
-  // Treat the leaf output as a single turn input
-  const turnInputs: TurnInput[] = [
-    {
-      conversation_id: `leaf:${leafId}`,
-      turn_hash: `leaf_output:${leafId}`,
-      role: 'assistant' as const,
-      content: output,
-    },
-  ];
+function extractSentencesFromText(
+  text: string,
+  conversationId: string,
+  turnHash: string
+): z.infer<typeof ExtractSentence>[] {
+  const sentences: z.infer<typeof ExtractSentence>[] = [];
+  const sentenceRegex = /[^.!?。！？]+[.!?。！？]+[\s]*/g;
 
-  const reg = await getProviderRegistry();
-  const trackedUsage = { inputTokens: 0, outputTokens: 0 };
-  const result = await reg.tryWithFallback('generation', (provider) => {
-    // biome-ignore lint/suspicious/noExplicitAny: generic error handler
-    const { provider: tracked, usage } = wrapWithUsageTracking(provider as any);
-    trackedUsage.inputTokens = 0;
-    trackedUsage.outputTokens = 0;
-    return createLLMExtractor(tracked)
-      .extract(turnInputs, {
-        maxSentences: options?.max_sentences ?? 20,
-      })
-      .then((r) => {
-        trackedUsage.inputTokens = usage.inputTokens;
-        trackedUsage.outputTokens = usage.outputTokens;
-        return r;
+  let match: RegExpExecArray | null;
+  let idx = 0;
+  let lastEnd = 0;
+
+  while ((match = sentenceRegex.exec(text)) !== null) {
+    const sentence = match[0].trim();
+    if (sentence.length > 0) {
+      sentences.push({
+        id: `s_${idx++}`,
+        text: sentence,
+        confidence: 1.0,
+        source_ref: {
+          conversation_id: conversationId,
+          turn_hash: turnHash,
+          start_char: match.index,
+          end_char: match.index + sentence.length,
+        },
       });
-  });
+      lastEnd = match.index + match[0].length;
+    }
+  }
 
-  const { valid, removed } = validateExtractedSentences(result.sentences, turnInputs);
+  // Handle remaining text (no sentence-ending punctuation)
+  if (lastEnd < text.length) {
+    const remaining = text.slice(lastEnd).trim();
+    if (remaining.length > 0) {
+      sentences.push({
+        id: `s_${idx}`,
+        text: remaining,
+        confidence: 1.0,
+        source_ref: {
+          conversation_id: conversationId,
+          turn_hash: turnHash,
+          start_char: lastEnd,
+          end_char: text.length,
+        },
+      });
+    }
+  }
 
-  const draftSentences = valid.map((s, i) => ({
-    id: generateDraftSentenceId(),
-    text: s.text,
-    origin: {
-      type: 'extracted' as const,
-      segment_id: `leaf_${i}`,
-      confidence: s.confidence,
-    },
-    source: s.source_ref
-      ? {
-          conversation_id: s.source_ref.conversation_id,
-          turn_hash: s.source_ref.turn_hash,
-          role: 'assistant',
-          start_char: s.source_ref.start_char,
-          end_char: s.source_ref.end_char,
-        }
-      : undefined,
-    position: i,
-    included: true,
-  }));
+  return sentences;
+}
 
-  return {
-    sentences: draftSentences,
-    model: result.model,
-    stats: {
-      total_turns: 1,
-      extracted: valid.length,
-      with_source_ref: valid.filter((s) => s.source_ref).length,
-      removed: removed.length,
-    },
-    usage: trackedUsage.inputTokens || trackedUsage.outputTokens ? trackedUsage : undefined,
-  };
+/**
+ * Serialize sentences to a YAML string.
+ */
+function sentencesToYaml(sentences: z.infer<typeof ExtractSentence>[]): string {
+  if (sentences.length === 0) return 'sentences: []\n';
+
+  const items = sentences
+    .map((s) => {
+      const escapedText = s.text.replace(/"/g, '\\"');
+      let entry = `  - id: ${s.id}\n    text: "${escapedText}"\n    confidence: ${s.confidence}`;
+      if (s.source_ref) {
+        entry += '\n    source_ref:';
+        entry += `\n      conversation_id: ${s.source_ref.conversation_id}`;
+        entry += `\n      turn_hash: ${s.source_ref.turn_hash}`;
+        entry += `\n      start_char: ${s.source_ref.start_char}`;
+        entry += `\n      end_char: ${s.source_ref.end_char}`;
+      }
+      return entry;
+    })
+    .join('\n');
+
+  return `sentences:\n${items}\n`;
+}
+
+/**
+ * Detect drift between previous and current extractions.
+ *
+ * Drift occurs when a sentence's text in the new extraction is similar to
+ * but different from a sentence in the previous extraction. Uses simple
+ * Jaccard word overlap to find matching pairs, then reports changed text.
+ */
+function detectDrift(
+  previousSentences: z.infer<typeof ExtractSentence>[],
+  currentSentences: z.infer<typeof ExtractSentence>[]
+): z.infer<typeof import('../schemas/integration-contracts').DriftItem>[] {
+  const drift: { sentence_id: string; before: string; after: string }[] = [];
+
+  for (const current of currentSentences) {
+    const currentWords = new Set(current.text.toLowerCase().split(/\s+/));
+
+    let bestMatch: (typeof previousSentences)[0] | null = null;
+    let bestJaccard = 0;
+
+    for (const prev of previousSentences) {
+      const prevWords = new Set(prev.text.toLowerCase().split(/\s+/));
+      const intersection = new Set([...currentWords].filter((w) => prevWords.has(w)));
+      const union = new Set([...currentWords, ...prevWords]);
+      const jaccard = union.size > 0 ? intersection.size / union.size : 0;
+
+      if (jaccard > bestJaccard) {
+        bestJaccard = jaccard;
+        bestMatch = prev;
+      }
+    }
+
+    // Similar enough to be the "same" sentence (Jaccard >= 0.3) but text changed
+    if (bestMatch && bestJaccard >= 0.3 && bestMatch.text !== current.text) {
+      drift.push({
+        sentence_id: current.id,
+        before: bestMatch.text,
+        after: current.text,
+      });
+    }
+  }
+
+  return drift;
 }
 
 // ============================================================
-// POST /v1/extract/incremental - Incremental LLM extraction
+// Route Definition
 // ============================================================
 
-const incrementalExtractRoute = createRoute({
+const postExtractRoute = createRoute({
   method: 'post',
-  path: '/v1/extract/incremental',
-  tags: ['Extract'],
-  summary: 'Run incremental LLM extraction on a conversation for a draft',
+  path: '/v1/extract',
+  tags: ['Integration'],
+  summary: 'Extract semantic sentences from raw text',
+  description:
+    'Composite endpoint: creates a conversation and turn from raw text, ' +
+    'extracts sentences, stores them as a draft, and optionally detects drift ' +
+    'from previous extractions in incremental mode.',
   request: {
     body: {
-      content: { 'application/json': { schema: IncrementalExtractRequest } },
+      content: {
+        'application/json': {
+          schema: ExtractRequest,
+        },
+      },
     },
   },
   responses: {
     200: {
-      description: 'Extraction completed',
-      content: { 'application/json': { schema: IncrementalExtractResponse } },
-    },
-    400: {
-      description: 'Invalid request',
-      content: { 'application/json': { schema: ErrorResponseSchema } },
+      description: 'Extraction result with sentences and draft',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(ExtractResponse),
+        },
+      },
     },
     404: {
-      description: 'Draft not found',
-      content: { 'application/json': { schema: ErrorResponseSchema } },
-    },
-    503: {
-      description: 'LLM provider not configured',
-      content: { 'application/json': { schema: ErrorResponseSchema } },
+      description: 'Project or conversation not found',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
     },
     500: {
       description: 'Server error',
-      content: { 'application/json': { schema: ErrorResponseSchema } },
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
     },
   },
 });
 
-extractRoutes.openapi(incrementalExtractRoute, async (c) => {
-  const { project_id, conversation_id, draft_id } = c.req.valid('json');
+// ============================================================
+// Route Handler
+// ============================================================
+
+extractRoutes.openapi(postExtractRoute, async (c) => {
+  const { project_id, text, conversation_id, source } = c.req.valid('json');
 
   try {
     const db = await getDB();
 
-    // 1. Load draft
-    const draft = await findDraftById(db, draft_id);
-    if (!draft) return errorResponse(c, 'NOT_FOUND', 'Draft not found');
-
-    // Validate project_id matches draft
-    if (draft.project_id !== project_id) {
-      return errorResponse(c, 'INVALID_REQUEST', 'Draft does not belong to the specified project');
+    // Step 1: Verify project exists
+    const project = await findProjectById(db, project_id);
+    if (!project) {
+      return errorResponse(c, 'NOT_FOUND', `Project ${project_id} not found`);
     }
 
-    // 2. Load conversation turns
-    const turns = await findTurnsByConversation(db, {
-      conversationId: conversation_id,
-      limit: 500,
-    });
+    // Step 2: Create or reuse conversation
+    let conversationId: string;
+    const previousSentences: z.infer<typeof ExtractSentence>[] = [];
 
-    if (turns.length === 0) {
-      return errorResponse(c, 'CONVERSATION_NOT_FOUND', 'No turns found');
-    }
+    if (conversation_id) {
+      // Incremental mode: verify conversation exists and belongs to project
+      const conversation = await findConversationById(db, conversation_id);
+      if (!conversation) {
+        return errorResponse(c, 'NOT_FOUND', `Conversation ${conversation_id} not found`);
+      }
+      if (conversation.projectId !== project_id) {
+        return errorResponse(
+          c,
+          'NOT_FOUND',
+          `Conversation ${conversation_id} not found in project ${project_id}`
+        );
+      }
+      conversationId = conversation_id;
 
-    const turnInputs: TurnInput[] = turns.map((t) => ({
-      conversation_id: t.conversationId,
-      turn_hash: t.turnHash,
-      role: t.role as TurnInput['role'],
-      content: t.content,
-    }));
-
-    // 3. Get LLM provider (with usage tracking)
-    const reg = await getProviderRegistry();
-    const trackedUsage = { inputTokens: 0, outputTokens: 0 };
-    let trackedModel = 'unknown';
-    const result = await reg.tryWithFallback('generation', (provider) => {
-      // biome-ignore lint/suspicious/noExplicitAny: generic error handler
-      const { provider: tracked, usage } = wrapWithUsageTracking(provider as any);
-      trackedUsage.inputTokens = 0;
-      trackedUsage.outputTokens = 0;
-      trackedModel = tracked.id;
-      const extractor = createLLMExtractor(tracked);
-      const existingSPs = (draft.semantic_points ?? []) as SemanticPoint[];
-      const cursor = (draft.extraction_cursor ?? { cursors: {} }) as ExtractionCursor;
-      return extractor.extractIncremental(turnInputs, existingSPs, cursor).then((r) => {
-        trackedUsage.inputTokens = usage.inputTokens;
-        trackedUsage.outputTokens = usage.outputTokens;
-        return r;
+      // Collect previous sentences for drift detection
+      // Extract sentences from all existing turns in the conversation
+      const existingTurns = await findTurnsByConversation(db, {
+        conversationId,
+        limit: 1000,
       });
+      for (const turn of existingTurns) {
+        const turnSentences = extractSentencesFromText(turn.content, conversationId, turn.turnHash);
+        previousSentences.push(...turnSentences);
+      }
+    } else {
+      // One-shot mode: create a new conversation
+      const title = source ? `API extract: ${source}` : 'API extract';
+      const conversation = await insertConversation(db, {
+        projectId: project_id,
+        title,
+      });
+      conversationId = conversation.conversationId;
+    }
+
+    // Step 3: Insert turn from raw text
+    const turn = await insertTurn(db, {
+      projectId: project_id,
+      conversationId,
+      role: 'user',
+      content: text,
     });
 
-    // Record usage (fire-and-forget)
-    if (trackedUsage.inputTokens || trackedUsage.outputTokens) {
-      recordUsageFireAndForget(db, {
-        user_id: getUserId(c) ?? undefined,
+    // Step 4: Run extraction (sentence splitting)
+    const sentences = extractSentencesFromText(text, conversationId, turn.turnHash);
+
+    // Step 5: Create a draft with extracted sentences
+    const draft = await insertDraft(db, {
+      project_id,
+      title: source ? `Extract: ${source}` : 'API extraction',
+    });
+
+    // Store sentences into the draft
+    await updateDraft(db, draft.id, { sentences: sentences }, draft.revision);
+
+    // Step 6: Detect drift (incremental mode only)
+    let drift: { sentence_id: string; before: string; after: string }[] | undefined;
+    if (conversation_id && previousSentences.length > 0) {
+      const driftItems = detectDrift(previousSentences, sentences);
+      if (driftItems.length > 0) {
+        drift = driftItems;
+      }
+    }
+
+    // Step 7: Fire webhooks
+    webhookDispatcher.dispatch(
+      'draft.ready',
+      {
         project_id,
-        endpoint: 'extract_incremental',
-        model: trackedModel,
-        input_tokens: trackedUsage.inputTokens,
-        output_tokens: trackedUsage.outputTokens,
-      });
-    }
-
-    // 4. Merge results into draft
-    const existingSPs = (draft.semantic_points ?? []) as SemanticPoint[];
-    const allSPs = [...existingSPs, ...result.readyPoints, ...result.reviewPoints];
-
-    await updateDraft(
-      db,
-      draft_id,
-      {
-        semantic_points: allSPs,
-        extraction_cursor: result.newCursor,
-        extraction_mode: 'llm',
+        draft_id: draft.id,
+        conversation_id: conversationId,
+        sentence_count: sentences.length,
       },
-      draft.revision
+      project_id
     );
 
-    return c.json(
-      {
-        success: true as const,
-        data: {
-          ready_points: result.readyPoints,
-          review_points: result.reviewPoints,
-          cursor: result.newCursor,
-          stats: result.stats,
-        },
-      },
-      200
-    );
-  } catch (err) {
-    if (err instanceof Error && err.name === 'AllProvidersFailedError') {
-      return c.json(
+    if (drift && drift.length > 0) {
+      webhookDispatcher.dispatch(
+        'extraction.drift',
         {
-          success: false as const,
-          error: {
-            code: 'LLM_NOT_CONFIGURED',
-            message:
-              'No LLM provider is configured. Set ANTHROPIC_API_KEY or another provider key.',
-          },
+          project_id,
+          conversation_id: conversationId,
+          drift_count: drift.length,
+          drift,
         },
-        503
+        project_id
       );
     }
+
+    // Step 8: Build response
+    const result: z.infer<typeof ExtractResponse> = {
+      conversation_id: conversationId,
+      draft_id: draft.id,
+      sentences,
+      yaml: sentencesToYaml(sentences),
+      drift,
+    };
+
+    return c.json({ success: true as const, data: result }, 200);
+  } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return errorResponse(c, 'EXTRACTION_FAILED', message);
   }
 });
-
-export default extractRoutes;

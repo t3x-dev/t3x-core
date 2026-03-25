@@ -11,7 +11,13 @@ import type {
   ChatInput,
   ChatProvider,
   ChatResponse,
+  CheckInput,
+  CheckResult,
   Commit,
+  CommitFromDraftInput,
+  CommitFromDraftResult,
+  ContextParams,
+  ContextResult,
   Conversation,
   CreateBranchInput,
   CreateCommitInput,
@@ -26,6 +32,8 @@ import type {
   Draft,
   ExportCfpackInput,
   ExportLedgerInput,
+  ExtractInput,
+  ExtractResult,
   GenerateLeafInput,
   HealthResponse,
   ImportUrlInput,
@@ -485,6 +493,31 @@ export class T3xClient {
       platform_data: platformData,
       conversation_ids: conversationIds,
     });
+  }
+
+  // ============================================
+  // Integration Verbs
+  // ============================================
+
+  async extract(input: ExtractInput): Promise<ExtractResult> {
+    return this.request<ExtractResult>('POST', '/v1/extract', input);
+  }
+
+  async check(input: CheckInput): Promise<CheckResult> {
+    return this.request<CheckResult>('POST', '/v1/check', input);
+  }
+
+  async context(projectId: string, params?: ContextParams): Promise<ContextResult> {
+    return this.request<ContextResult>(
+      'GET',
+      `/v1/projects/${projectId}/context`,
+      undefined,
+      params as Record<string, string | number | undefined>
+    );
+  }
+
+  async commitFromDraft(input: CommitFromDraftInput): Promise<CommitFromDraftResult> {
+    return this.request<CommitFromDraftResult>('POST', '/v1/commit', input);
   }
 
   // ============================================

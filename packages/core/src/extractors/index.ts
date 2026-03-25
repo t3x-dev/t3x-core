@@ -26,26 +26,6 @@ export {
   type FrameWithSignals,
 } from './compressPrompt';
 export { createMeaningPipeline } from './createMeaningPipeline';
-export {
-  type ExtractionItem,
-  ExtractionParseError,
-  parseExtractionResponse,
-} from './extractionParser';
-// LLM Extraction
-export {
-  buildExtractionPrompt,
-  type LLMExtractionOptions,
-  type TurnInput,
-} from './extractionPrompt';
-export {
-  type ValidationResult,
-  validateExtractedSentences,
-} from './extractionValidator';
-export {
-  type CompressMetadata,
-  type CompressResult,
-  FrameCompressor,
-} from './frameCompressor';
 export { type ParseResult as FrameDeltaParseResult, parseFrameDelta } from './frameDeltaParser';
 export {
   buildFrameExtractionPrompt,
@@ -63,17 +43,14 @@ export {
   FrameExtractor,
   type SlotQuotesMap,
 } from './frameExtractor';
-// Incremental Extraction (LLM pipeline)
-export { type FuzzyLocateResult, fuzzyLocate } from './fuzzyLocate';
-export { parseIncrementalResponse } from './incrementalParser';
-export { buildAdaptiveSection, buildIncrementalPrompt, buildStyleSeed } from './incrementalPrompt';
+// Frame Compression
 export {
-  createLLMExtractor,
-  type ExtractedSentence,
-  type LLMExtractionResult,
-  LLMExtractor,
-} from './llmExtractor';
+  type CompressMetadata,
+  type CompressResult,
+  FrameCompressor,
+} from './frameCompressor';
 // Meaning Pipeline (multi-agent orchestration)
+export { type FuzzyLocateResult, fuzzyLocate } from './fuzzyLocate';
 export {
   AgentRegistry,
   type MeaningAgent,
@@ -88,9 +65,6 @@ export {
 export { createRelationExtractor, RelationExtractor } from './relationExtractor';
 export { parseRelationResponse, type RelationItem, RelationParseError } from './relationParser';
 export { buildRelationPrompt } from './relationPrompt';
-export { type RouteResult, routeProposal } from './routeProposal';
-export { resolveSourceRef } from './sourceRefResolver';
-export { spToSentence } from './spToSentence';
 // Types
 export type {
   AnchorCandidate,
@@ -98,10 +72,3 @@ export type {
   AnchorType,
   Segment,
 } from './types';
-export {
-  type OverlapResult,
-  type OverlapStatus,
-  type VerifiedProposal,
-  type VerifyOptions,
-  verifyProposal,
-} from './verifyProposal';

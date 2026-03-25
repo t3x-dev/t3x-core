@@ -230,10 +230,10 @@ describe('POST /v1/leaves/:id/generate', () => {
     });
 
     expect(res.status).toBe(200);
-    // Verify generateLeafOutput was called with commit and leaf (per contract)
+    // Verify generateLeafOutput was called with knowledge (SemanticContent) and leaf
     expect(mockGenerateLeafOutput).toHaveBeenCalledWith(
       expect.objectContaining({
-        commit: expect.objectContaining({ hash: testCommitHash }),
+        knowledge: expect.objectContaining({ frames: expect.any(Array) }),
         leaf: expect.objectContaining({ id: testLeafId }),
       })
     );

@@ -8,7 +8,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { buildCorrectivePrompt } from '../../leaf/corrective-prompt';
-import type { Assertion, Constraint } from '../../types/v4';
+import type { Assertion, Constraint } from '../../types';
 
 const sampleConstraints: Constraint[] = [
   {

@@ -15,9 +15,11 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
   buildConversationContext,
+  buildDraft,
   type ConversationData,
   getModelInfo,
-  type SentenceCommit,
+  type SemanticContent,
+  serializeFramesForPrompt,
 } from '@t3x-dev/core';
 import {
   deleteConversation,
@@ -32,11 +34,13 @@ import {
   getConversationTurnCount,
   getLeavesByIds,
   insertConversation,
+  listDeltaLogByConversation,
   setConversationContext,
   updateConversation,
 } from '@t3x-dev/storage';
 import { formatContextForExport } from '../lib/context-formatter';
 import { getDB } from '../lib/db';
+import { toDeltaLogEntries } from '../lib/delta-log-utils';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import {
   CursorPageResponseSchema,
@@ -44,6 +48,44 @@ import {
   IdParamSchema,
   SuccessResponseSchema,
 } from '../schemas/common';
+
+/**
+ * Serialize a SemanticContent snapshot as YAML-like text for LLM context injection.
+ */
+function serializeSnapshotForContext(snapshot: SemanticContent): string {
+  const lines: string[] = ['## Extracted Knowledge (YAML Tree)\n'];
+
+  for (const frame of snapshot.frames) {
+    lines.push(`${frame.type}:`);
+    for (const [key, value] of Object.entries(frame.slots)) {
+      if (Array.isArray(value)) {
+        lines.push(`  ${key}:`);
+        for (const item of value) {
+          lines.push(`    - ${typeof item === 'object' ? JSON.stringify(item) : String(item)}`);
+        }
+      } else {
+        lines.push(
+          `  ${key}: ${typeof value === 'object' ? JSON.stringify(value) : String(value)}`
+        );
+      }
+    }
+    if (frame.confidence !== undefined) {
+      lines.push(`  # confidence: ${frame.confidence}`);
+    }
+  }
+
+  if (snapshot.relations.length > 0) {
+    lines.push('\nrelations:');
+    for (const rel of snapshot.relations) {
+      const fromFrame = snapshot.frames.find((f) => f.id === rel.from);
+      const toFrame = snapshot.frames.find((f) => f.id === rel.to);
+      lines.push(`  - ${fromFrame?.type ?? rel.from} → ${toFrame?.type ?? rel.to} (${rel.type})`);
+    }
+  }
+
+  lines.push('');
+  return lines.join('\n');
+}
 
 export const conversationRoutes = new OpenAPIHono({ defaultHook: zodErrorHook });
 
@@ -697,26 +739,25 @@ conversationRoutes.openapi(getMemoryRoute, async (c) => {
     // 3. Get project pins
     const projectPins = await findPinsByProject(db, conversation.projectId);
 
-    // 4. Get current commit from branch HEAD (reuse existing branch system)
-    let currentCommit: SentenceCommit | undefined;
-    const currentBranch = await findCurrentBranch(db, conversation.projectId);
-    if (currentBranch?.headCommitHash) {
-      const unified = await getCommitUnified(db, currentBranch.headCommitHash);
-      if (unified) {
-        // Convert unified Commit to V4-compatible shape for buildConversationContext
-        currentCommit = {
-          ...unified,
-          schema: 't3x/commit/v4' as const,
-          content: {
-            sentences: unified.content.frames.map((frame) => ({
-              id: frame.id,
-              text: `[${frame.type}] ${Object.entries(frame.slots)
-                .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : String(v)}`)
-                .join('; ')}`,
-              confidence: 1,
-            })),
-          },
-        } as SentenceCommit;
+    // 4. Build YAML knowledge from best available source:
+    //    - Delta log snapshot (working draft, most up-to-date)
+    //    - Committed frames (HEAD, fallback)
+    //    The YAML tree IS the knowledge — no flattening to sentences.
+    let yamlKnowledge = '';
+    const deltaRecords = await listDeltaLogByConversation(db, conversationId);
+    if (deltaRecords.length > 0) {
+      const snapshot = buildDraft(toDeltaLogEntries(deltaRecords));
+      if (snapshot.frames.length > 0) {
+        yamlKnowledge = serializeSnapshotForContext(snapshot);
+      }
+    }
+    if (!yamlKnowledge) {
+      const currentBranch = await findCurrentBranch(db, conversation.projectId);
+      if (currentBranch?.headCommitHash) {
+        const unified = await getCommitUnified(db, currentBranch.headCommitHash);
+        if (unified && unified.content.frames.length > 0) {
+          yamlKnowledge = serializeSnapshotForContext(unified.content);
+        }
       }
     }
 
@@ -725,7 +766,6 @@ conversationRoutes.openapi(getMemoryRoute, async (c) => {
     const conversationsMap = new Map<string, ConversationData>();
 
     for (const pin of conversationPins) {
-      // Skip if this is the current conversation (avoid circular reference)
       if (pin.ref_id === conversationId) continue;
 
       const conv = await findConversationById(db, pin.ref_id);
@@ -748,14 +788,20 @@ conversationRoutes.openapi(getMemoryRoute, async (c) => {
     const leafRecords = leafIds.length > 0 ? await getLeavesByIds(db, leafIds) : [];
     const leaves = new Map(leafRecords.map((leaf) => [leaf.id, leaf]));
 
-    // 7. Build context using Track A's buildConversationContext
+    // 7. Build context: YAML knowledge + pins (conversations, leaves)
     const builtContext = buildConversationContext({
-      currentCommit,
+      currentCommit: undefined,
       projectPins,
       contextConfig,
       conversations: conversationsMap,
       leaves,
     });
+
+    // Prepend YAML knowledge as the primary context
+    if (yamlKnowledge) {
+      builtContext.text = `## Current Knowledge\n\n${yamlKnowledge}\n${builtContext.text}`;
+      builtContext.token_estimate = Math.ceil(builtContext.text.length / 4);
+    }
 
     return c.json({ success: true as const, data: builtContext }, 200);
   } catch (err) {
@@ -801,26 +847,13 @@ conversationRoutes.get('/v1/conversations/:id/context-export', async (c) => {
     // 3. Get project pins
     const projectPins = await findPinsByProject(db, conversation.projectId);
 
-    // 4. Get current commit from branch HEAD
-    let currentCommit: SentenceCommit | undefined;
+    // 4. Get current knowledge from branch HEAD
+    let currentKnowledge: SemanticContent | undefined;
     const currentBranch = await findCurrentBranch(db, conversation.projectId);
     if (currentBranch?.headCommitHash) {
       const unified = await getCommitUnified(db, currentBranch.headCommitHash);
-      if (unified) {
-        // Convert unified Commit to V4-compatible shape for buildConversationContext
-        currentCommit = {
-          ...unified,
-          schema: 't3x/commit/v4' as const,
-          content: {
-            sentences: unified.content.frames.map((frame) => ({
-              id: frame.id,
-              text: `[${frame.type}] ${Object.entries(frame.slots)
-                .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : String(v)}`)
-                .join('; ')}`,
-              confidence: 1,
-            })),
-          },
-        } as SentenceCommit;
+      if (unified && unified.content.frames.length > 0) {
+        currentKnowledge = unified.content;
       }
     }
 
@@ -853,7 +886,7 @@ conversationRoutes.get('/v1/conversations/:id/context-export', async (c) => {
 
     // 7. Build context
     const builtContext = buildConversationContext({
-      currentCommit,
+      knowledge: currentKnowledge,
       projectPins,
       contextConfig,
       conversations: conversationsMap,

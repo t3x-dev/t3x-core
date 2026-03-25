@@ -15,7 +15,8 @@
  */
 
 import type { LLMProvider } from '../llm/types';
-import type { Leaf, SentenceCommit } from '../types/v4';
+import type { SemanticContent } from '../semantic/types';
+import type { Leaf } from '../types';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Types
@@ -40,7 +41,7 @@ export interface RoundResult {
 }
 
 export interface MultiRoundOptions {
-  commit: SentenceCommit;
+  knowledge: SemanticContent;
   leaf: Leaf;
   provider: LLMProvider;
   rounds: RoundConfig[];
@@ -62,7 +63,7 @@ export interface MultiRoundResult {
 
 /** Options for mode-based generation (higher-level API) */
 export interface ModeGenerateOptions {
-  commit: SentenceCommit;
+  knowledge: SemanticContent;
   leaf: Leaf;
   provider: LLMProvider;
   mode: GenerationMode;
@@ -324,7 +325,7 @@ export function validateConstraintsSimple(
  */
 export async function modeGenerate(options: ModeGenerateOptions): Promise<MultiRoundResult> {
   const {
-    commit,
+    knowledge,
     leaf,
     provider,
     mode,
@@ -333,7 +334,7 @@ export async function modeGenerate(options: ModeGenerateOptions): Promise<MultiR
     maxTokens = 1024,
   } = options;
 
-  const sentences = commit.content.sentences;
+  const sentences = knowledge.frames.map((f) => ({ text: Object.values(f.slots).join(' ') }));
   const constraints = (leaf.constraints ?? []) as Array<{
     id: string;
     type: 'require' | 'exclude';
@@ -461,7 +462,7 @@ export async function modeGenerate(options: ModeGenerateOptions): Promise<MultiR
  */
 export async function multiRoundGenerate(options: MultiRoundOptions): Promise<MultiRoundResult> {
   const {
-    commit,
+    knowledge,
     leaf,
     provider,
     rounds,
@@ -483,7 +484,7 @@ export async function multiRoundGenerate(options: MultiRoundOptions): Promise<Mu
 
   for (let i = 0; i < rounds.length; i++) {
     const round = rounds[i];
-    const prompt = buildRoundPrompt(commit, leaf, round, previousOutput, i);
+    const prompt = buildRoundPrompt(knowledge, leaf, round, previousOutput, i);
 
     const result = await provider.generate(prompt, { temperature, maxTokens });
     totalUsage.inputTokens += result.usage.inputTokens;
@@ -513,13 +514,15 @@ export async function multiRoundGenerate(options: MultiRoundOptions): Promise<Mu
 }
 
 function buildRoundPrompt(
-  commit: SentenceCommit,
+  knowledge: SemanticContent,
   leaf: Leaf,
   round: RoundConfig,
   previousOutput: string,
   roundIndex: number
 ): string {
-  const sentences = commit.content.sentences.map((s) => s.text).join('\n');
+  const sentences = knowledge.frames
+    .map((f) => `${f.type}: ${Object.values(f.slots).join(' ')}`)
+    .join('\n');
   const constraints = (leaf.constraints ?? []).map((c) => `[${c.type}] ${c.value}`).join('\n');
 
   const parts: string[] = [];

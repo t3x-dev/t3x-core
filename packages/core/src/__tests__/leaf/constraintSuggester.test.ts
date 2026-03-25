@@ -18,8 +18,8 @@ import {
   validateRequireSemantic,
 } from '../../leaf/validate-constraints';
 import type { LLMProvider } from '../../llm/types';
+import type { SemanticContent } from '../../semantic/types';
 import type { EmbeddingProvider } from '../../providers/embedding/base';
-import type { Sentence } from '../../types/v4';
 
 // ============================================================
 // Mock LLM Provider
@@ -37,23 +37,26 @@ function createMockProvider(response: string): LLMProvider {
   };
 }
 
-const sampleSentences: Sentence[] = [
-  {
-    id: 's_test001',
-    text: 'The user prefers budget-friendly travel options.',
-    confidence: 0.9,
-  },
-  {
-    id: 's_test002',
-    text: 'The user wants to visit Japan in spring for cherry blossoms.',
-    confidence: 0.95,
-  },
-  {
-    id: 's_test003',
-    text: 'The user is allergic to shellfish and cannot eat seafood.',
-    confidence: 0.85,
-  },
-];
+const sampleKnowledge: SemanticContent = {
+  frames: [
+    {
+      id: 'f_001',
+      type: 'travel_preference',
+      slots: { budget: 'budget-friendly', style: 'affordable' },
+    },
+    {
+      id: 'f_002',
+      type: 'destination',
+      slots: { place: 'Japan', season: 'spring', reason: 'cherry blossoms' },
+    },
+    {
+      id: 'f_003',
+      type: 'dietary_restriction',
+      slots: { allergy: 'shellfish', restriction: 'cannot eat seafood' },
+    },
+  ],
+  relations: [],
+};
 
 // ============================================================
 // suggestConstraints
@@ -86,7 +89,7 @@ describe('suggestConstraints', () => {
     ]);
 
     const provider = createMockProvider(mockResponse);
-    const result = await suggestConstraints(provider, sampleSentences, 'tweet');
+    const result = await suggestConstraints(provider, sampleKnowledge, 'tweet');
 
     expect(result.model).toBe('mock-provider');
     expect(result.suggestions).toHaveLength(3);
@@ -97,9 +100,9 @@ describe('suggestConstraints', () => {
     expect(provider.generate).toHaveBeenCalledOnce();
   });
 
-  it('handles empty sentences', async () => {
+  it('handles empty frames', async () => {
     const provider = createMockProvider('[]');
-    const result = await suggestConstraints(provider, [], 'email');
+    const result = await suggestConstraints(provider, { frames: [], relations: [] }, 'email');
 
     expect(result.suggestions).toHaveLength(0);
     expect(provider.generate).not.toHaveBeenCalled();
@@ -109,7 +112,7 @@ describe('suggestConstraints', () => {
     const mockResponse =
       '```json\n[{"type":"require","match_mode":"exact","value":"Japan","reason":"dest","confidence":0.9}]\n```';
     const provider = createMockProvider(mockResponse);
-    const result = await suggestConstraints(provider, sampleSentences, 'article');
+    const result = await suggestConstraints(provider, sampleKnowledge, 'article');
 
     expect(result.suggestions).toHaveLength(1);
     expect(result.suggestions[0].value).toBe('Japan');
@@ -117,7 +120,7 @@ describe('suggestConstraints', () => {
 
   it('handles invalid LLM response gracefully', async () => {
     const provider = createMockProvider('not valid json at all');
-    const result = await suggestConstraints(provider, sampleSentences, 'tweet');
+    const result = await suggestConstraints(provider, sampleKnowledge, 'tweet');
 
     expect(result.suggestions).toHaveLength(0);
   });
@@ -130,7 +133,7 @@ describe('suggestConstraints', () => {
     ]);
 
     const provider = createMockProvider(mockResponse);
-    const result = await suggestConstraints(provider, sampleSentences, 'tweet');
+    const result = await suggestConstraints(provider, sampleKnowledge, 'tweet');
 
     expect(result.suggestions).toHaveLength(1);
     expect(result.suggestions[0].value).toBe('Japan');
@@ -138,7 +141,7 @@ describe('suggestConstraints', () => {
 
   it('passes maxSuggestions option', async () => {
     const provider = createMockProvider('[]');
-    await suggestConstraints(provider, sampleSentences, 'email', { maxSuggestions: 5 });
+    await suggestConstraints(provider, sampleKnowledge, 'email', { maxSuggestions: 5 });
 
     const callArgs = (provider.generate as ReturnType<typeof vi.fn>).mock.calls[0];
     expect(callArgs[0]).toContain('5');
@@ -146,7 +149,7 @@ describe('suggestConstraints', () => {
 
   it('passes additional instructions', async () => {
     const provider = createMockProvider('[]');
-    await suggestConstraints(provider, sampleSentences, 'tweet', {
+    await suggestConstraints(provider, sampleKnowledge, 'tweet', {
       instructions: 'Focus on food-related constraints',
     });
 

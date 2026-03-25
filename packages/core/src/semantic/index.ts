@@ -71,3 +71,5 @@ export type {
 export { FRAME_RELATION_TYPES } from './types';
 // Validation
 export { checkRelationSanity, validateIntegrity } from './validate';
+// Serialization
+export { serializeFramesForPrompt } from './serialize';

@@ -12,11 +12,9 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import type { Commit } from '@t3x-dev/core';
 import {
   collectLessons,
   generateLeafOutput,
-  type SentenceCommit,
   suggestConstraints,
   suggestionsToConstraints,
 } from '@t3x-dev/core';
@@ -32,36 +30,11 @@ import { errorResponse, zodErrorHook } from '../lib/errors';
 import { getLLMProvider, getProviderRegistry } from '../lib/provider-registry';
 import { getUserId, recordUsageFireAndForget, wrapWithUsageTracking } from '../lib/usage-tracking';
 import { pinoLogger } from '../middleware/logger';
-import { extractSentencesFromLeafOutput } from '../routes/extract.openapi';
 import { ErrorResponseSchema, IdParamSchema, SuccessResponseSchema } from '../schemas/common';
 
 export const leavesMLRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
 });
-
-// ============================================================
-// Helpers
-// ============================================================
-
-/**
- * Convert a unified Commit to a sentence-based SentenceCommit shape.
- * Needed because generateLeafOutput / suggestConstraints expect SentenceCommit.
- */
-function toSentenceCommit(commit: Commit): SentenceCommit {
-  return {
-    ...commit,
-    schema: 't3x/commit/v4' as const,
-    content: {
-      sentences: commit.content.frames.map((frame) => ({
-        id: frame.id,
-        text: `[${frame.type}] ${Object.entries(frame.slots)
-          .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : String(v)}`)
-          .join('; ')}`,
-        confidence: frame.confidence ?? 1,
-      })),
-    },
-  } as SentenceCommit;
-}
 
 // ============================================================
 // Local Schemas
@@ -420,10 +393,9 @@ leavesMLRoutes.openapi(suggestConstraintsRoute, async (c) => {
     if (!unifiedCommit) {
       return errorResponse(c, 'NOT_FOUND', `Commit ${leaf.commit_hash} not found`);
     }
-    const commit = toSentenceCommit(unifiedCommit);
+    const knowledge = unifiedCommit.content;
 
-    const sentences = commit.content.sentences;
-    if (sentences.length === 0) {
+    if (knowledge.frames.length === 0) {
       return c.json(
         {
           success: true as const,
@@ -442,7 +414,7 @@ leavesMLRoutes.openapi(suggestConstraintsRoute, async (c) => {
       trackedUsage.outputTokens = 0;
       const r = await suggestConstraints(
         tracked as Parameters<typeof suggestConstraints>[0],
-        sentences,
+        knowledge,
         leaf.type,
         {
           maxSuggestions: body.max_suggestions,
@@ -501,63 +473,12 @@ leavesMLRoutes.openapi(suggestConstraintsRoute, async (c) => {
 
 // POST /v1/leaves/:id/extract-sentences
 leavesMLRoutes.openapi(extractFromLeafRoute, async (c) => {
-  const { id } = c.req.valid('param');
-  const body = c.req.valid('json');
-
-  try {
-    const db = await getDB();
-    const leaf = await findLeafById(db, id);
-    if (!leaf) {
-      return errorResponse(c, 'NOT_FOUND', `Leaf ${id} not found`);
-    }
-
-    if (!leaf.output) {
-      return errorResponse(c, 'NO_OUTPUT', `Leaf ${id} has no generated output to extract from`);
-    }
-
-    const result = await extractSentencesFromLeafOutput(id, leaf.output, {
-      max_sentences: body.max_sentences,
-    });
-
-    // Record usage (fire-and-forget)
-    if (result.usage) {
-      recordUsageFireAndForget(db, {
-        user_id: getUserId(c) ?? undefined,
-        project_id: leaf.project_id,
-        endpoint: 'leaf_extract_sentences',
-        model: result.model,
-        input_tokens: result.usage.inputTokens,
-        output_tokens: result.usage.outputTokens,
-      });
-    }
-
-    return c.json(
-      {
-        success: true as const,
-        data: {
-          sentences: result.sentences,
-          model: result.model,
-          stats: result.stats,
-        },
-      },
-      200
-    );
-  } catch (err) {
-    if (err instanceof Error && err.name === 'AllProvidersFailedError') {
-      return c.json(
-        {
-          success: false as const,
-          error: {
-            code: 'LLM_NOT_CONFIGURED',
-            message: 'No LLM provider is configured.',
-          },
-        },
-        503
-      );
-    }
-    const message = err instanceof Error ? err.message : 'Unknown error';
-    return errorResponse(c, 'GENERATION_FAILED', message);
-  }
+  // Sentence extraction from leaf output is deprecated (replaced by frame-based extraction).
+  return errorResponse(
+    c,
+    'DEPRECATED',
+    'Sentence extraction from leaf output has been replaced by frame-based extraction. Use /v1/extract/frames instead.'
+  );
 });
 
 // POST /v1/leaves/:id/learn-from-edits
@@ -742,7 +663,7 @@ leavesMLRoutes.openapi(reverseLearnRoute, async (c) => {
     if (!unifiedCommit) {
       return errorResponse(c, 'NOT_FOUND', `Commit ${leaf.commit_hash} not found`);
     }
-    const commit = toSentenceCommit(unifiedCommit);
+    const rlKnowledge = unifiedCommit.content;
 
     // Collect lessons from failed assertions on this leaf and siblings
     const allLeaves = await findLeavesByCommit(db, leaf.commit_hash);
@@ -779,7 +700,7 @@ leavesMLRoutes.openapi(reverseLearnRoute, async (c) => {
       .join('\n');
 
     const { provider: trackedLlm, usage: rlUsage } = wrapWithUsageTracking(llm);
-    const result = await suggestConstraints(trackedLlm, commit.content.sentences, leaf.type, {
+    const result = await suggestConstraints(trackedLlm, rlKnowledge, leaf.type, {
       maxSuggestions: body.max_suggestions,
       instructions: `The following lessons were learned from FAILED validations on previous outputs.
 Generate constraints that would PREVENT these failures:
@@ -844,7 +765,7 @@ leavesMLRoutes.openapi(compareModelsRoute, async (c) => {
     if (!unifiedCommit) {
       return errorResponse(c, 'COMMIT_NOT_FOUND', `Source commit not found: ${leaf.commit_hash}`);
     }
-    const commit = toSentenceCommit(unifiedCommit);
+    const compareKnowledge = unifiedCommit.content;
 
     const registry = await getProviderRegistry();
     const additionalInstructions =
@@ -869,7 +790,7 @@ leavesMLRoutes.openapi(compareModelsRoute, async (c) => {
 
         try {
           const result = await generateLeafOutput({
-            commit,
+            knowledge: compareKnowledge,
             leaf,
             // biome-ignore lint/suspicious/noExplicitAny: generic error handler
             provider: resolved.provider as any,

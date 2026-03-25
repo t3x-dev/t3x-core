@@ -401,3 +401,88 @@ export interface PlatformImportResult {
   total_conversations: number;
   total_turns: number;
 }
+
+// ============================================
+// Integration Verbs
+// ============================================
+
+// Extract
+export interface ExtractInput {
+  project_id: string;
+  text: string;
+  conversation_id?: string;
+  source?: string;
+}
+
+export interface ExtractSentence {
+  id: string;
+  text: string;
+  confidence: number;
+  source_ref?: {
+    conversation_id: string;
+    turn_hash: string;
+    start_char: number;
+    end_char: number;
+  };
+}
+
+export interface DriftItem {
+  sentence_id: string;
+  before: string;
+  after: string;
+}
+
+export interface ExtractResult {
+  conversation_id: string;
+  draft_id: string;
+  sentences: ExtractSentence[];
+  yaml?: string;
+  drift?: DriftItem[];
+}
+
+// Commit from Draft
+export interface CommitFromDraftInput {
+  project_id: string;
+  draft_id: string;
+  message?: string;
+  branch?: string;
+}
+
+export interface CommitFromDraftResult {
+  commit_hash: string;
+  sentence_count: number;
+  branch: string;
+}
+
+// Check
+export interface CheckInput {
+  project_id: string;
+  text: string;
+  leaf_ids?: string[];
+}
+
+export interface CheckViolation {
+  leaf_id: string;
+  constraint_id: string;
+  type: 'require' | 'exclude';
+  value: string;
+  reason?: string;
+}
+
+export interface CheckResult {
+  passed: boolean;
+  violations: CheckViolation[];
+}
+
+// Context
+export interface ContextParams {
+  branch?: string;
+  format?: 'json' | 'yaml';
+}
+
+export interface ContextResult {
+  commit_hash: string | null;
+  branch: string;
+  sentences: ExtractSentence[];
+  yaml?: string;
+}

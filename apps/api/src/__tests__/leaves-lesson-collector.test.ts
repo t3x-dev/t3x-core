@@ -65,11 +65,6 @@ vi.mock('../lib/embedder', () => ({
   isSemanticValidationConfigured: vi.fn(() => false),
 }));
 
-// Mock extract function
-vi.mock('../routes/extract.openapi', () => ({
-  extractSentencesFromLeafOutput: vi.fn(),
-}));
-
 // Import routes after all mocks are registered
 import { leavesRoutes } from '../routes/leaves.openapi';
 
@@ -357,7 +352,7 @@ describe('POST /v1/leaves/:id/generate — lesson collector wiring', () => {
     // Verify all three key fields are passed together
     expect(mockGenerateWithFallback).toHaveBeenCalledWith(
       expect.objectContaining({
-        commit: expect.objectContaining({ hash: testCommitHash }),
+        knowledge: expect.objectContaining({ frames: expect.any(Array) }),
         leaf: expect.objectContaining({ id: leaf.id }),
         lessons: fakeLessons,
       })

@@ -11,7 +11,6 @@ import {
   createGeminiProvider,
   createGoogleAIEmbeddingProvider,
   createGoogleCloudNLPProvider,
-  createLLMExtractor,
   createOllamaEmbeddingProvider,
   createOllamaProvider,
   createOpenAIEmbeddingProvider,
@@ -21,13 +20,10 @@ import {
   type GenerateOptions,
   type GenerateResult,
   generateLeafOutput,
-  type LLMExtractionOptions,
-  type LLMExtractionResult,
   type LLMProvider,
   type NLPProvider,
   type ProviderRegistry,
   type RegistryConfig,
-  type TurnInput,
 } from '@t3x-dev/core';
 import { findProjectById, getGlobalSetting, setGlobalSetting } from '@t3x-dev/storage';
 import { getDB } from './db';
@@ -319,16 +315,3 @@ export async function generateWithFallback(
   );
 }
 
-/**
- * Extract sentences from turns with automatic provider fallback.
- * Same fallback pattern as generateWithFallback.
- */
-export async function extractWithFallback(
-  turns: TurnInput[],
-  options?: LLMExtractionOptions
-): Promise<LLMExtractionResult> {
-  const reg = await getProviderRegistry();
-  return reg.tryWithFallback<LLMProvider, LLMExtractionResult>('generation', (provider) =>
-    createLLMExtractor(provider).extract(turns, options)
-  );
-}

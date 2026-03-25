@@ -21,25 +21,23 @@ import {
   getDefaultTemplate,
 } from '../../leaf/templates';
 import type { LeafTemplate, TemplateContext } from '../../leaf/types';
-import type { Constraint, Leaf, SentenceCommit } from '../../types/v4';
-import { LEAF_TYPES } from '../../types/v4';
+import type { SemanticContent } from '../../semantic/types';
+import type { Constraint, Leaf } from '../../types';
+import { LEAF_TYPES } from '../../types';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Test Fixtures
 // ═══════════════════════════════════════════════════════════════════════════
 
-const createTestCommit = (sentences: string[]): SentenceCommit => ({
-  hash: 'sha256:test-hash',
-  schema: 't3x/commit/v4',
-  parents: [],
-  author: { type: 'human', name: 'Test User' },
-  committed_at: new Date().toISOString(),
-  content: {
-    sentences: sentences.map((text, i) => ({
-      id: `s_${i}`,
-      text,
-    })),
-  },
+const createTestKnowledge = (
+  frames: Array<{ type: string; slots: Record<string, string> }>
+): SemanticContent => ({
+  frames: frames.map((f, i) => ({
+    id: `f_${String(i).padStart(3, '0')}`,
+    type: f.type,
+    slots: f.slots,
+  })),
+  relations: [],
 });
 
 const createTestLeaf = (
@@ -58,8 +56,8 @@ const createTestLeaf = (
 });
 
 const createTestContext = (): TemplateContext => ({
-  sentences: ['Sentence 1.', 'Sentence 2.'],
-  formattedSentences: '1. Sentence 1.\n2. Sentence 2.',
+  knowledge: ['user_preference: theme=dark mode', 'language: primary=English'],
+  formattedKnowledge: 'user_preference:\n  theme: dark mode\nlanguage:\n  primary: English',
   requires: ['- MUST include EXACTLY: "test value"'],
   excludes: ['- MUST NOT include exactly: "excluded value"'],
   formattedConstraints: `## Constraints
@@ -81,32 +79,42 @@ const createTestContext = (): TemplateContext => ({
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe('buildTemplateContext', () => {
-  it('extracts sentences from commit', () => {
-    const commit = createTestCommit(['First sentence.', 'Second sentence.']);
+  it('extracts knowledge items from frames', () => {
+    const knowledge = createTestKnowledge([
+      { type: 'user_preference', slots: { theme: 'dark mode' } },
+      { type: 'language', slots: { primary: 'English' } },
+    ]);
     const leaf = createTestLeaf('tweet');
 
-    const context = buildTemplateContext(commit, leaf);
+    const context = buildTemplateContext(knowledge, leaf);
 
-    expect(context.sentences).toEqual(['First sentence.', 'Second sentence.']);
+    expect(context.knowledge).toHaveLength(2);
+    expect(context.knowledge[0]).toContain('user_preference');
+    expect(context.knowledge[0]).toContain('dark mode');
+    expect(context.knowledge[1]).toContain('language');
+    expect(context.knowledge[1]).toContain('English');
   });
 
-  it('formats sentences with numbering', () => {
-    const commit = createTestCommit(['First.', 'Second.', 'Third.']);
+  it('formats knowledge as YAML-like text', () => {
+    const knowledge = createTestKnowledge([
+      { type: 'user_preference', slots: { theme: 'dark mode' } },
+    ]);
     const leaf = createTestLeaf('tweet');
 
-    const context = buildTemplateContext(commit, leaf);
+    const context = buildTemplateContext(knowledge, leaf);
 
-    expect(context.formattedSentences).toBe('1. First.\n2. Second.\n3. Third.');
+    expect(context.formattedKnowledge).toContain('user_preference:');
+    expect(context.formattedKnowledge).toContain('theme: dark mode');
   });
 
   it('formats require constraints', () => {
-    const commit = createTestCommit(['Test.']);
+    const knowledge = createTestKnowledge([{ type: 'topic', slots: { subject: 'AI' } }]);
     const constraints: Constraint[] = [
       { id: 'cst_1', type: 'require', match_mode: 'exact', value: 'dark mode' },
     ];
     const leaf = createTestLeaf('tweet', constraints);
 
-    const context = buildTemplateContext(commit, leaf);
+    const context = buildTemplateContext(knowledge, leaf);
 
     expect(context.requires).toHaveLength(1);
     expect(context.requires[0]).toContain('MUST include');
@@ -114,27 +122,27 @@ describe('buildTemplateContext', () => {
   });
 
   it('formats exclude constraints', () => {
-    const commit = createTestCommit(['Test.']);
+    const knowledge = createTestKnowledge([{ type: 'topic', slots: { subject: 'AI' } }]);
     const constraints: Constraint[] = [
       { id: 'cst_1', type: 'exclude', match_mode: 'exact', value: 'light mode' },
     ];
     const leaf = createTestLeaf('tweet', constraints);
 
-    const context = buildTemplateContext(commit, leaf);
+    const context = buildTemplateContext(knowledge, leaf);
 
     expect(context.excludes).toHaveLength(1);
     expect(context.excludes[0]).toContain('MUST NOT include');
   });
 
   it('builds formatted constraints section', () => {
-    const commit = createTestCommit(['Test.']);
+    const knowledge = createTestKnowledge([{ type: 'topic', slots: { subject: 'AI' } }]);
     const constraints: Constraint[] = [
       { id: 'cst_1', type: 'require', match_mode: 'exact', value: 'value1' },
       { id: 'cst_2', type: 'exclude', match_mode: 'exact', value: 'value2' },
     ];
     const leaf = createTestLeaf('tweet', constraints);
 
-    const context = buildTemplateContext(commit, leaf);
+    const context = buildTemplateContext(knowledge, leaf);
 
     expect(context.formattedConstraints).toContain('## Constraints');
     expect(context.formattedConstraints).toContain('### Required');
@@ -142,46 +150,46 @@ describe('buildTemplateContext', () => {
   });
 
   it('returns empty formattedConstraints when no constraints', () => {
-    const commit = createTestCommit(['Test.']);
+    const knowledge = createTestKnowledge([{ type: 'topic', slots: { subject: 'AI' } }]);
     const leaf = createTestLeaf('tweet', []);
 
-    const context = buildTemplateContext(commit, leaf);
+    const context = buildTemplateContext(knowledge, leaf);
 
     expect(context.formattedConstraints).toBe('');
   });
 
   it('includes leaf title', () => {
-    const commit = createTestCommit(['Test.']);
+    const knowledge = createTestKnowledge([{ type: 'topic', slots: { subject: 'AI' } }]);
     const leaf = createTestLeaf('tweet', [], 'My Title');
 
-    const context = buildTemplateContext(commit, leaf);
+    const context = buildTemplateContext(knowledge, leaf);
 
     expect(context.leafTitle).toBe('My Title');
   });
 
   it('includes leaf type', () => {
-    const commit = createTestCommit(['Test.']);
+    const knowledge = createTestKnowledge([{ type: 'topic', slots: { subject: 'AI' } }]);
     const leaf = createTestLeaf('article');
 
-    const context = buildTemplateContext(commit, leaf);
+    const context = buildTemplateContext(knowledge, leaf);
 
     expect(context.leafType).toBe('article');
   });
 
   it('includes additional instructions', () => {
-    const commit = createTestCommit(['Test.']);
+    const knowledge = createTestKnowledge([{ type: 'topic', slots: { subject: 'AI' } }]);
     const leaf = createTestLeaf('tweet');
 
-    const context = buildTemplateContext(commit, leaf, 'Extra instructions');
+    const context = buildTemplateContext(knowledge, leaf, 'Extra instructions');
 
     expect(context.additionalInstructions).toBe('Extra instructions');
   });
 
   it('includes type-specific instructions', () => {
-    const commit = createTestCommit(['Test.']);
+    const knowledge = createTestKnowledge([{ type: 'topic', slots: { subject: 'AI' } }]);
     const leaf = createTestLeaf('tweet');
 
-    const context = buildTemplateContext(commit, leaf);
+    const context = buildTemplateContext(knowledge, leaf);
 
     expect(context.typeInstructions).toContain('280 characters');
   });
@@ -211,13 +219,13 @@ describe('renderTemplateString', () => {
   });
 
   it('replaces array variables with joined string', () => {
-    const template = 'Sentences:\n{{sentences}}';
+    const template = 'Knowledge:\n{{knowledge}}';
     const context = createTestContext();
 
     const result = renderTemplateString(template, context);
 
-    expect(result).toContain('Sentence 1.');
-    expect(result).toContain('Sentence 2.');
+    expect(result).toContain('user_preference');
+    expect(result).toContain('language');
   });
 
   it('handles conditional blocks - shows when value exists', () => {
@@ -267,13 +275,13 @@ describe('renderTemplateString', () => {
     expect(result).toBe('Line 1\n\nLine 2');
   });
 
-  it('handles formattedSentences variable', () => {
-    const template = '{{formattedSentences}}';
+  it('handles formattedKnowledge variable', () => {
+    const template = '{{formattedKnowledge}}';
     const context = createTestContext();
 
     const result = renderTemplateString(template, context);
 
-    expect(result).toBe('1. Sentence 1.\n2. Sentence 2.');
+    expect(result).toBe('user_preference:\n  theme: dark mode\nlanguage:\n  primary: English');
   });
 
   it('handles formattedConstraints variable', () => {
@@ -405,7 +413,7 @@ describe('getDefaultTemplate', () => {
     expect(template.id).toBe('tweet_default');
     expect(template.type).toBe('tweet');
     expect(template.systemPrompt).toContain('280 characters');
-    expect(template.userPrompt).toContain('{{formattedSentences}}');
+    expect(template.userPrompt).toContain('{{formattedKnowledge}}');
   });
 
   it('returns article template with sections', () => {
@@ -480,18 +488,21 @@ describe('DEFAULT_TEMPLATES', () => {
 
 describe('renderTemplate', () => {
   it('renders template with default template for leaf type', () => {
-    const commit = createTestCommit(['Knowledge sentence.']);
+    const knowledge = createTestKnowledge([
+      { type: 'user_preference', slots: { theme: 'dark mode' } },
+    ]);
     const leaf = createTestLeaf('tweet');
 
-    const result = renderTemplate({ commit, leaf });
+    const result = renderTemplate({ knowledge, leaf });
 
     expect(result.templateId).toBe('tweet_default');
     expect(result.systemPrompt).toContain('280 characters');
-    expect(result.userPrompt).toContain('Knowledge sentence.');
+    expect(result.userPrompt).toContain('user_preference');
+    expect(result.userPrompt).toContain('dark mode');
   });
 
   it('renders template with custom template', () => {
-    const commit = createTestCommit(['Test.']);
+    const knowledge = createTestKnowledge([{ type: 'topic', slots: { subject: 'test' } }]);
     const leaf = createTestLeaf('tweet');
     const customTemplate: LeafTemplate = {
       id: 'custom_tweet',
@@ -499,11 +510,11 @@ describe('renderTemplate', () => {
       name: 'Custom Tweet',
       description: 'Custom template',
       systemPrompt: 'Custom system: {{typeInstructions}}',
-      userPrompt: 'Custom user: {{formattedSentences}}',
+      userPrompt: 'Custom user: {{formattedKnowledge}}',
       variables: [],
     };
 
-    const result = renderTemplate({ commit, leaf, template: customTemplate });
+    const result = renderTemplate({ knowledge, leaf, template: customTemplate });
 
     expect(result.templateId).toBe('custom_tweet');
     expect(result.systemPrompt).toContain('Custom system');
@@ -511,32 +522,32 @@ describe('renderTemplate', () => {
   });
 
   it('includes constraints in rendered prompt', () => {
-    const commit = createTestCommit(['Test.']);
+    const knowledge = createTestKnowledge([{ type: 'topic', slots: { subject: 'test' } }]);
     const constraints: Constraint[] = [
       { id: 'cst_1', type: 'require', match_mode: 'exact', value: 'must have' },
     ];
     const leaf = createTestLeaf('tweet', constraints);
 
-    const result = renderTemplate({ commit, leaf });
+    const result = renderTemplate({ knowledge, leaf });
 
     expect(result.userPrompt).toContain('must have');
   });
 
   it('includes leaf title when present', () => {
-    const commit = createTestCommit(['Test.']);
+    const knowledge = createTestKnowledge([{ type: 'topic', slots: { subject: 'test' } }]);
     const leaf = createTestLeaf('tweet', [], 'My Tweet Title');
 
-    const result = renderTemplate({ commit, leaf });
+    const result = renderTemplate({ knowledge, leaf });
 
     expect(result.userPrompt).toContain('My Tweet Title');
   });
 
   it('includes additional instructions', () => {
-    const commit = createTestCommit(['Test.']);
+    const knowledge = createTestKnowledge([{ type: 'topic', slots: { subject: 'test' } }]);
     const leaf = createTestLeaf('tweet');
 
     const result = renderTemplate({
-      commit,
+      knowledge,
       leaf,
       additionalInstructions: 'Be funny',
     });
@@ -545,12 +556,12 @@ describe('renderTemplate', () => {
   });
 
   it('tracks substituted variables', () => {
-    const commit = createTestCommit(['Test.']);
+    const knowledge = createTestKnowledge([{ type: 'topic', slots: { subject: 'test' } }]);
     const leaf = createTestLeaf('tweet');
 
-    const result = renderTemplate({ commit, leaf });
+    const result = renderTemplate({ knowledge, leaf });
 
-    expect(result.substitutedVariables).toContain('formattedSentences');
+    expect(result.substitutedVariables).toContain('formattedKnowledge');
   });
 });
 
@@ -569,12 +580,12 @@ describe('previewTemplate', () => {
     expect(preview.userPrompt).toBeDefined();
   });
 
-  it('includes sample sentences in preview', () => {
+  it('includes sample knowledge in preview', () => {
     const template = getDefaultTemplate('article');
 
     const preview = previewTemplate(template, 'article');
 
-    expect(preview.userPrompt).toContain('Sample sentence');
+    expect(preview.userPrompt).toContain('user_preference');
   });
 
   it('includes sample constraints in preview', () => {
@@ -592,18 +603,20 @@ describe('previewTemplate', () => {
 
 describe('buildLeafPromptWithTemplate', () => {
   it('builds prompt using template system', async () => {
-    const commit = createTestCommit(['User prefers dark mode.']);
+    const knowledge = createTestKnowledge([
+      { type: 'user_preference', slots: { theme: 'dark mode' } },
+    ]);
     const leaf = createTestLeaf('tweet');
 
-    const result = await buildLeafPromptWithTemplate({ commit, leaf });
+    const result = await buildLeafPromptWithTemplate({ knowledge, leaf });
 
     expect(result.systemPrompt).toContain('280 characters');
     expect(result.userPrompt).toContain('dark mode');
-    expect(result.metadata.sentenceCount).toBe(1);
+    expect(result.metadata.frameCount).toBe(1);
   });
 
   it('includes constraints in metadata', async () => {
-    const commit = createTestCommit(['Test.']);
+    const knowledge = createTestKnowledge([{ type: 'topic', slots: { subject: 'test' } }]);
     const constraints: Constraint[] = [
       { id: 'cst_1', type: 'require', match_mode: 'exact', value: 'v1' },
       { id: 'cst_2', type: 'require', match_mode: 'exact', value: 'v2' },
@@ -611,14 +624,14 @@ describe('buildLeafPromptWithTemplate', () => {
     ];
     const leaf = createTestLeaf('tweet', constraints);
 
-    const result = await buildLeafPromptWithTemplate({ commit, leaf });
+    const result = await buildLeafPromptWithTemplate({ knowledge, leaf });
 
     expect(result.metadata.requireCount).toBe(2);
     expect(result.metadata.excludeCount).toBe(1);
   });
 
   it('accepts custom template', async () => {
-    const commit = createTestCommit(['Test.']);
+    const knowledge = createTestKnowledge([{ type: 'topic', slots: { subject: 'test' } }]);
     const leaf = createTestLeaf('tweet');
     const customTemplate: LeafTemplate = {
       id: 'my_template',
@@ -626,12 +639,12 @@ describe('buildLeafPromptWithTemplate', () => {
       name: 'My Template',
       description: 'Test',
       systemPrompt: 'CUSTOM SYSTEM',
-      userPrompt: 'CUSTOM USER {{formattedSentences}}',
+      userPrompt: 'CUSTOM USER {{formattedKnowledge}}',
       variables: [],
     };
 
     const result = await buildLeafPromptWithTemplate({
-      commit,
+      knowledge,
       leaf,
       template: customTemplate,
     });
@@ -641,11 +654,11 @@ describe('buildLeafPromptWithTemplate', () => {
   });
 
   it('includes additional instructions', async () => {
-    const commit = createTestCommit(['Test.']);
+    const knowledge = createTestKnowledge([{ type: 'topic', slots: { subject: 'test' } }]);
     const leaf = createTestLeaf('tweet');
 
     const result = await buildLeafPromptWithTemplate({
-      commit,
+      knowledge,
       leaf,
       additionalInstructions: 'Extra guidance here',
     });
@@ -654,15 +667,15 @@ describe('buildLeafPromptWithTemplate', () => {
   });
 
   it('returns valid BuiltPrompt structure', async () => {
-    const commit = createTestCommit(['Test.']);
+    const knowledge = createTestKnowledge([{ type: 'topic', slots: { subject: 'test' } }]);
     const leaf = createTestLeaf('article');
 
-    const result = await buildLeafPromptWithTemplate({ commit, leaf });
+    const result = await buildLeafPromptWithTemplate({ knowledge, leaf });
 
     expect(result).toHaveProperty('systemPrompt');
     expect(result).toHaveProperty('userPrompt');
     expect(result).toHaveProperty('metadata');
-    expect(result.metadata).toHaveProperty('sentenceCount');
+    expect(result.metadata).toHaveProperty('frameCount');
     expect(result.metadata).toHaveProperty('requireCount');
     expect(result.metadata).toHaveProperty('excludeCount');
   });

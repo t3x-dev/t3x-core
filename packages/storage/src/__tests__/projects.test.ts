@@ -235,32 +235,26 @@ describe('Projects Storage', () => {
         text: 'Draft text',
       });
 
-      // Create 1 commit (V4 format)
+      // Create 1 commit (frame-based)
       await createCommit(
         db,
         {
-          hash: `sha256:test_${Date.now()}`,
           author: { type: 'human', name: 'Test User' },
-          committedAt: new Date(),
           content: {
-            sentences: [
+            frames: [
               {
-                id: 's_1',
-                text: 'Test sentence',
+                id: 'f_001',
+                type: 'test_knowledge',
+                slots: { text: 'Test sentence' },
                 confidence: 1.0,
-                source_ref: {
-                  conversation_id: conv1.conversationId,
-                  turn_hash: 'sha256:test',
-                  start_char: 0,
-                  end_char: 12,
-                },
               },
             ],
+            relations: [],
           },
-          projectId,
+          project_id: projectId,
           branch: 'main',
           message: 'Initial',
-        },
+        } as any,
         { strictParents: false }
       );
 

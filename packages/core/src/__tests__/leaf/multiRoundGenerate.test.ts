@@ -8,7 +8,8 @@ import {
   validateConstraintsSimple,
 } from '../../leaf/multi-round-generate';
 import type { LLMProvider } from '../../llm/types';
-import type { Leaf, SentenceCommit } from '../../types/v4';
+import type { SemanticContent } from '../../semantic/types';
+import type { Leaf } from '../../types';
 
 function makeMockLLM(responses: string[]): LLMProvider {
   let callIndex = 0;
@@ -25,21 +26,12 @@ function makeMockLLM(responses: string[]): LLMProvider {
   };
 }
 
-const commit: SentenceCommit = {
-  hash: 'sha256:test',
-  schema: 't3x/commit/v4',
-  parents: [],
-  author: { type: 'human', name: 'test' },
-  committed_at: new Date().toISOString(),
-  content: {
-    sentences: [
-      { id: 's_1', text: 'User prefers dark mode for coding.' },
-      { id: 's_2', text: 'OAuth 2.0 is the auth standard.' },
-    ],
-  },
-  project_id: 'proj_test',
-  message: 'test',
-  branch: 'main',
+const knowledge: SemanticContent = {
+  frames: [
+    { id: 'f_001', type: 'user_preference', slots: { theme: 'dark mode', context: 'coding' } },
+    { id: 'f_002', type: 'auth_standard', slots: { protocol: 'OAuth 2.0' } },
+  ],
+  relations: [],
 };
 
 const leaf: Leaf = {
@@ -68,7 +60,7 @@ describe('multiRoundGenerate', () => {
     ]);
 
     const result = await multiRoundGenerate({
-      commit,
+      knowledge,
       leaf,
       provider: llm,
       rounds: [
@@ -93,7 +85,7 @@ describe('multiRoundGenerate', () => {
     ]);
 
     const result = await multiRoundGenerate({
-      commit,
+      knowledge,
       leaf,
       provider: llm,
       rounds: [
@@ -112,7 +104,7 @@ describe('multiRoundGenerate', () => {
     const llm = makeMockLLM(['Single round dark mode output']);
 
     const result = await multiRoundGenerate({
-      commit,
+      knowledge,
       leaf,
       provider: llm,
       rounds: [{ name: 'generate', instruction: 'Write the tweet.' }],
@@ -137,7 +129,7 @@ describe('multiRoundGenerate', () => {
     };
 
     const result = await multiRoundGenerate({
-      commit,
+      knowledge,
       leaf,
       provider: llm,
       rounds: [
@@ -161,7 +153,7 @@ describe('multiRoundGenerate', () => {
     ]);
 
     const result = await multiRoundGenerate({
-      commit,
+      knowledge,
       leaf,
       provider: llm,
       rounds: [
@@ -432,7 +424,7 @@ describe('modeGenerate', () => {
     const llm = makeMockLLM(['Fast output with dark mode']);
 
     const result = await modeGenerate({
-      commit,
+      knowledge,
       leaf,
       provider: llm,
       mode: 'fast',
@@ -450,7 +442,7 @@ describe('modeGenerate', () => {
     const llm = makeMockLLM(['Draft without required value', 'Refined output with dark mode']);
 
     const result = await modeGenerate({
-      commit,
+      knowledge,
       leaf,
       provider: llm,
       mode: 'standard',
@@ -472,7 +464,7 @@ describe('modeGenerate', () => {
     ]);
 
     const result = await modeGenerate({
-      commit,
+      knowledge,
       leaf,
       provider: llm,
       mode: 'thorough',
@@ -494,7 +486,7 @@ describe('modeGenerate', () => {
     ]);
 
     const result = await modeGenerate({
-      commit,
+      knowledge,
       leaf,
       provider: llm,
       mode: 'standard',
@@ -523,7 +515,7 @@ describe('modeGenerate', () => {
     };
 
     const result = await modeGenerate({
-      commit,
+      knowledge,
       leaf,
       provider: llm,
       mode: 'thorough',
@@ -544,7 +536,7 @@ describe('modeGenerate', () => {
     const llm = makeMockLLM(['Output 1', 'Output 2']);
 
     const result = await modeGenerate({
-      commit,
+      knowledge,
       leaf: leafNoConstraints,
       provider: llm,
       mode: 'standard',

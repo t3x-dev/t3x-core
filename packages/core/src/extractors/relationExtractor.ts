@@ -9,7 +9,7 @@
 
 import { nanoid } from 'nanoid';
 import type { LLMProvider } from '../llm/types';
-import type { RelationExtractionResult, SentenceRelation } from '../types/v4';
+import type { RelationExtractionResult, SentenceRelation } from '../types';
 import { parseRelationResponse } from './relationParser';
 import { buildRelationPrompt } from './relationPrompt';
 
