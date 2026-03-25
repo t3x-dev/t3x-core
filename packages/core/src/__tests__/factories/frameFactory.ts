@@ -4,7 +4,8 @@
  * Create test frames, relations, and SemanticContent with sensible defaults.
  */
 
-import type { Frame, Relation, SemanticContent } from '../../semantic/types';
+import type { Frame, Relation, SemanticContent, TreeNode } from '../../semantic/types';
+import { flattenTree } from '../../semantic/tree';
 
 let counter = 0;
 
@@ -103,4 +104,53 @@ export function createContentWithRelations(): SemanticContent {
       createRelation('f_child2', 'f_parent', 'elaborates'),
     ]
   );
+}
+
+/** Create a simple depth-1 tree (concise mode) */
+export function createConciseTree(): TreeNode {
+  return {
+    key: 'travel_planning',
+    slots: { destination: 'Tokyo', duration: '2 weeks', budget: 5000 },
+    children: [],
+    confidence: 0.9,
+    source: 'T1',
+  };
+}
+
+/** Create a depth-2 tree (balanced mode) */
+export function createBalancedTree(): TreeNode {
+  return {
+    key: 'hangzhou_trip',
+    slots: { destination: 'Hangzhou', dates: 'May 1-3' },
+    children: [
+      { key: 'activity_plan', slots: { activities: ['West Lake', 'hiking'], duration: '2 days' }, children: [], source: 'T2', confidence: 0.85 },
+      { key: 'dining', slots: { cuisine: 'local Hangzhou cuisine', budget: 500 }, children: [], source: 'T3', confidence: 0.9 },
+    ],
+    source: 'T1',
+    confidence: 0.95,
+  };
+}
+
+/** Create a depth-3 tree (detailed mode) */
+export function createDetailedTree(): TreeNode {
+  return {
+    key: 'hangzhou_trip',
+    slots: { destination: 'Hangzhou' },
+    children: [
+      {
+        key: 'activity_plan',
+        slots: { count: 3 },
+        children: [
+          { key: 'gear', slots: { rain_jacket: true, hiking_boots: true }, children: [] },
+        ],
+      },
+      { key: 'dining', slots: { cuisine: 'local' }, children: [] },
+    ],
+  };
+}
+
+/** Create tree-native SemanticContent */
+export function createTreeNativeContent(tree?: TreeNode): SemanticContent {
+  const t = tree ?? createBalancedTree();
+  return { tree: t, frames: flattenTree(t), relations: [] };
 }

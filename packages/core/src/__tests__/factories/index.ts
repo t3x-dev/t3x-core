@@ -5,12 +5,16 @@
  */
 
 export {
+  createBalancedTree,
+  createConciseTree,
   createContentWithDuplicates,
   createContentWithRelations,
+  createDetailedTree,
   createFrame,
   createFrameWithSlots,
   createRelation,
   createSemanticContent,
+  createTreeNativeContent,
   createTypicalContent,
   resetFrameIds,
 } from './frameFactory';
