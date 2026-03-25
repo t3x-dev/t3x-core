@@ -65,6 +65,8 @@ export interface Frame {
   slot_sources?: Record<string, SlotSourceRef>;
   /** Frame display status: active (default) or collapsed (drift choice 2: keep new) */
   status?: 'active' | 'collapsed';
+  /** Whether user has manually edited this frame (reset on commit) */
+  manual_edited?: boolean;
 }
 
 // ── Relation ──
