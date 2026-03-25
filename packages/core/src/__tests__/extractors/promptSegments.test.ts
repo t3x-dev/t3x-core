@@ -10,23 +10,23 @@ describe('Prompt segment composition', () => {
   ];
 
   describe('granularity', () => {
-    it('concise: includes 3-5 frame range and 1-3 slots', () => {
+    it('concise: includes 1 Level and 3-5 slots', () => {
       const { systemPrompt } = buildFrameExtractionPrompt({ turns: baseTurns }, PRESETS.concise);
-      expect(systemPrompt).toContain('3-5');
-      expect(systemPrompt).toContain('1-3');
-      expect(systemPrompt).not.toContain('3-8');
+      expect(systemPrompt).toContain('1 Level');
+      expect(systemPrompt).toContain('3-5 slots');
+      expect(systemPrompt).not.toContain('2 Levels');
     });
 
-    it('balanced: includes 3-8 frame range and 1-4 slots (default)', () => {
+    it('balanced: includes 2 Levels and 1-4 slots (default)', () => {
       const { systemPrompt } = buildFrameExtractionPrompt({ turns: baseTurns }, PRESETS.balanced);
-      expect(systemPrompt).toContain('3-8');
-      expect(systemPrompt).toContain('1-4');
+      expect(systemPrompt).toContain('2 Levels');
+      expect(systemPrompt).toContain('1-4 slots');
     });
 
-    it('detailed: includes 5-12 frame range and 2-6 slots', () => {
+    it('detailed: includes 3 Levels and 1-3 slots for grandchildren', () => {
       const { systemPrompt } = buildFrameExtractionPrompt({ turns: baseTurns }, PRESETS.detailed);
-      expect(systemPrompt).toContain('5-12');
-      expect(systemPrompt).toContain('2-6');
+      expect(systemPrompt).toContain('3 Levels');
+      expect(systemPrompt).toContain('1-3 slots');
     });
   });
 
@@ -114,7 +114,8 @@ describe('Prompt segment composition', () => {
         { turns: baseTurns, snapshot },
         PRESETS.concise
       );
-      expect(systemPrompt).toContain('3-5');
+      // Tree depth content for concise
+      expect(systemPrompt).toContain('1 Level');
       expect(systemPrompt).toContain('Do NOT extract');
     });
   });
