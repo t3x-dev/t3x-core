@@ -10,7 +10,8 @@
 // Business Gate (Gate 3)
 export { BusinessGate, evaluateRule, parseGatesConfig } from './businessGate';
 // Delta
-export { applyDelta, buildDraft } from './delta';
+export { applyDelta, applyTreeDelta, buildDraft } from './delta';
+export type { TreeNativeChange, TreeNativeDelta } from './delta';
 // Diff
 export { frameDiff } from './diff';
 // Gate (Gate 2 — Semantic)
@@ -33,6 +34,8 @@ export {
   RelationSchema,
   SemanticContentSchema,
   SlotValueSchema,
+  TreeNodeSchema,
+  TreeNativeDeltaSchema,
 } from './schema';
 // Types
 export type {
@@ -68,7 +71,18 @@ export type {
   ValidationWarning,
   WordDiffFn,
 } from './types';
+export type { TreeNode } from './types';
 export { FRAME_RELATION_TYPES } from './types';
+// Tree (tree-native utilities)
+export {
+  buildSlotQuotesPath,
+  collectSlotQuotes,
+  flattenTree,
+  isTreeNative,
+  resolveSlotQuotesPath,
+  unflattenToTree,
+  validateTreeDepth,
+} from './tree';
 // Validation
 export { checkRelationSanity, validateIntegrity } from './validate';
 // Serialization
