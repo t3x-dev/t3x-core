@@ -203,9 +203,11 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
   const undoCompression = useExtractionPanelStore((s) => s.undoCompression);
   const dismissCompressBanner = useExtractionPanelStore((s) => s.dismissCompressBanner);
   const deltaLog = useExtractionPanelStore((s) => s.deltaLog);
+  const manualEditedFrameIds = useExtractionPanelStore((s) => s.manualEditedFrameIds);
   const hasCompressDelta = deltaLog.some((d) => d.source === 'compress');
 
   const frameCount = draft.frames.length;
+  const manualCount = manualEditedFrameIds.size;
   const added = lastDeltaChanges.filter((c) => c.action === 'add').length;
   const updated = lastDeltaChanges.filter((c) => c.action === 'update').length;
   const removed = lastDeltaChanges.filter((c) => c.action === 'remove').length;
@@ -270,6 +272,7 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
                   {added > 0 && <span style={{ color: '#4ade80' }}>+{added}</span>}
                   {updated > 0 && <span style={{ color: '#facc15' }}> ~{updated}</span>}
                   {removed > 0 && <span style={{ color: '#f87171' }}> -{removed}</span>}
+                  {manualCount > 0 && <span style={{ color: '#60a5fa' }}> ✎{manualCount}</span>}
                 </span>
               )}
               {/* Compress button */}
