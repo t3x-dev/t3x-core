@@ -166,6 +166,18 @@ export {
   validateExtractedSentences,
   verifyProposal,
 } from './extractors';
+// Extraction Style Config
+export {
+  DEFAULT_STYLE,
+  type ExtractionStyleConfig,
+  type Granularity,
+  matchPreset,
+  PRESETS,
+  type PresetName,
+  type QuoteLength,
+  type Tier3Behavior,
+  type UpdateStance,
+} from './extractors/extractionStyleConfig';
 // Hash / Merkle Tree (#14)
 export {
   buildMerkleTree,
