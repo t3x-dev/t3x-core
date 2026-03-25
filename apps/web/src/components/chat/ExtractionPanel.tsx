@@ -320,7 +320,9 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
                 color: 'var(--text-secondary)',
               }}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
+              <div
+                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}
+              >
                 <div>
                   <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
                     Compressed {compressResult.framesBefore} → {compressResult.framesAfter} frames

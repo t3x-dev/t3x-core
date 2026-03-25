@@ -606,9 +606,16 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
         gateResultJson: gateResult ?? null,
         topicId: resolvedTopicId,
       });
-      await syncDeltaToFrames(tx, conversation_id, conversation.projectId, result.delta, 'pipeline', {
-        topicId: resolvedTopicId,
-      });
+      await syncDeltaToFrames(
+        tx,
+        conversation_id,
+        conversation.projectId,
+        result.delta,
+        'pipeline',
+        {
+          topicId: resolvedTopicId,
+        }
+      );
       return rec;
     });
 

@@ -7,6 +7,7 @@
  */
 
 import type { Delta, DeltaSource, Frame, Relation, SemanticContent } from '@t3x-dev/core';
+import type { AnyDB } from '@t3x-dev/storage';
 import {
   deleteFrame,
   deleteFrameRelationByKey,
@@ -19,7 +20,6 @@ import {
   upsertFrame,
   upsertFrameRelation,
 } from '@t3x-dev/storage';
-import type { AnyDB } from '@t3x-dev/storage';
 
 /**
  * Apply a delta's changes to the frames table.

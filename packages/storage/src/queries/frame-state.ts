@@ -8,7 +8,12 @@
 import { randomUUID } from 'node:crypto';
 import { and, eq, isNull, or } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
-import type { FrameInsert, FrameRecord, FrameRelationInsert, FrameRelationRecord } from '../schema-frame-state';
+import type {
+  FrameInsert,
+  FrameRecord,
+  FrameRelationInsert,
+  FrameRelationRecord,
+} from '../schema-frame-state';
 import { frameRelations, frames } from '../schema-frame-state';
 
 // ── Types ──
@@ -167,7 +172,10 @@ export async function listFrameRelationsByConversation(
   return db.select().from(frameRelations).where(eq(frameRelations.conversationId, conversationId));
 }
 
-export async function deleteFrameRelationsByConversation(db: AnyDB, conversationId: string): Promise<void> {
+export async function deleteFrameRelationsByConversation(
+  db: AnyDB,
+  conversationId: string
+): Promise<void> {
   await db.delete(frameRelations).where(eq(frameRelations.conversationId, conversationId));
 }
 

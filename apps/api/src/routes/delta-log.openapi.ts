@@ -12,8 +12,8 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { buildDraft } from '@t3x-dev/core';
 import type { DeltaSource } from '@t3x-dev/core';
+import { buildDraft } from '@t3x-dev/core';
 import {
   deleteDeltaLogEntry,
   findConversationById,
@@ -25,7 +25,11 @@ import {
 import { getDB } from '../lib/db';
 import { toDeltaLogEntries } from '../lib/delta-log-utils';
 import { errorResponse, zodErrorHook } from '../lib/errors';
-import { readDraftFromFrames, rebuildFramesFromSnapshot, syncDeltaToFrames } from '../lib/frame-state-sync';
+import {
+  readDraftFromFrames,
+  rebuildFramesFromSnapshot,
+  syncDeltaToFrames,
+} from '../lib/frame-state-sync';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
 export const deltaLogRoutes = new OpenAPIHono({
@@ -45,7 +49,14 @@ const DeltaIdParam = z.object({
   deltaId: z.string().min(1),
 });
 
-const DeltaSourceSchema = z.enum(['pipeline', 'manual', 'answer', 'collapse', 'commit_marker', 'compress']);
+const DeltaSourceSchema = z.enum([
+  'pipeline',
+  'manual',
+  'answer',
+  'collapse',
+  'commit_marker',
+  'compress',
+]);
 
 const FrameChangeSchema = z
   .object({
@@ -274,7 +285,13 @@ deltaLogRoutes.openapi(createDeltaRoute, async (c) => {
         turnHash: body.turn_hash,
         delta: body.delta,
       });
-      await syncDeltaToFrames(tx, conversationId, conversation.projectId, body.delta, body.source as DeltaSource);
+      await syncDeltaToFrames(
+        tx,
+        conversationId,
+        conversation.projectId,
+        body.delta,
+        body.source as DeltaSource
+      );
       return rec;
     });
 

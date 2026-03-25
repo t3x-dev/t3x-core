@@ -2,12 +2,12 @@
 
 import type { Frame, SlotValue } from '@t3x-dev/core';
 import { Loader2 } from 'lucide-react';
-import { FrameHistoryPopover } from './FrameHistoryPopover';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { nestFrames } from '@/lib/frameNesting';
 import { parseDisplayYAML, toDisplayYAML } from '@/lib/liteYaml';
 import { RELEVANCE_THRESHOLD, type RelevanceContext, relevanceScore } from '@/lib/relevanceScore';
 import { useExtractionPanelStore } from '@/store/extractionPanelStore';
+import { FrameHistoryPopover } from './FrameHistoryPopover';
 
 // ── YAML Rendering Helpers ──
 
@@ -77,7 +77,11 @@ function renderSlotLines(
     'type' in value &&
     'slots' in value
   ) {
-    const inlineFrame = value as { type: string; slots: Record<string, SlotValue>; _sourceFrameId?: string };
+    const inlineFrame = value as {
+      type: string;
+      slots: Record<string, SlotValue>;
+      _sourceFrameId?: string;
+    };
     const childFrameId = inlineFrame._sourceFrameId ?? frameId;
     lines.push({
       text: `${pad}${key}:`,
@@ -116,7 +120,11 @@ function renderSlotLines(
         });
       } else if (typeof item === 'object' && item !== null && 'type' in item && 'slots' in item) {
         // InlineFrame in array
-        const inlineFrame = item as { type: string; slots: Record<string, SlotValue>; _sourceFrameId?: string };
+        const inlineFrame = item as {
+          type: string;
+          slots: Record<string, SlotValue>;
+          _sourceFrameId?: string;
+        };
         const childFrameId = inlineFrame._sourceFrameId ?? frameId;
         lines.push({
           text: `${pad}  - ${inlineFrame.type}:`,
@@ -517,7 +525,7 @@ export function FrameYAMLView() {
                     width: 3,
                     flexShrink: 0,
                     background: manualEditedFrameIds.has(line.frameId)
-                      ? '#60a5fa'  // blue — manual edit
+                      ? '#60a5fa' // blue — manual edit
                       : line.changeType
                         ? deltaBarColors[line.changeType]
                         : 'transparent',

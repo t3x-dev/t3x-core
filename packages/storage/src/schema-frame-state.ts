@@ -6,7 +6,16 @@
  */
 
 import { sql } from 'drizzle-orm';
-import { boolean, index, jsonb, pgTable, primaryKey, real, text, timestamp } from 'drizzle-orm/pg-core';
+import {
+  boolean,
+  index,
+  jsonb,
+  pgTable,
+  primaryKey,
+  real,
+  text,
+  timestamp,
+} from 'drizzle-orm/pg-core';
 import { conversations, projects } from './schema';
 
 // ── Frames ──
@@ -37,7 +46,9 @@ export const frames = pgTable(
     projectIdx: index('idx_frames_project').on(table.projectId),
     typeIdx: index('idx_frames_type').on(table.type),
     topicIdx: index('idx_frames_conv_topic').on(table.conversationId, table.topicId),
-    manualIdx: index('idx_frames_manual').on(table.conversationId, table.manualEdited).where(sql`manual_edited = true`),
+    manualIdx: index('idx_frames_manual')
+      .on(table.conversationId, table.manualEdited)
+      .where(sql`manual_edited = true`),
   })
 );
 
