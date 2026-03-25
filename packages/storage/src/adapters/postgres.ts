@@ -67,7 +67,7 @@ export async function closePostgresStorage(): Promise<void> {
 /**
  * Schema version — bump this number whenever you add migrations below.
  */
-const SCHEMA_VERSION = 30;
+const SCHEMA_VERSION = 31;
 
 /**
  * Initialize database schema (skips if already at current version)

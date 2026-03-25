@@ -117,6 +117,8 @@ export function tier3Segment(t3: Tier3Behavior): string {
       return '| TIER 3 | AI provided information and user did NOT object (silence, moved on, or continued without contradicting) | Extract it | 0.4-0.5 |';
     case 'skip':
       return '| TIER 3 | AI provided information and user did NOT object (silence, moved on, or continued without contradicting) | Do NOT extract | — |';
+    default:
+      return tier3Segment('extract');
   }
 }
 
@@ -127,6 +129,8 @@ export function tier3KeyDistinction(t3: Tier3Behavior): string {
       return 'Key distinction: Silence or moving on = the user did NOT object = TIER 3 (extract with low confidence). Only explicit rejection prevents extraction.';
     case 'skip':
       return 'Key distinction: Only extract information the user explicitly stated (TIER 1) or explicitly confirmed (TIER 2). Do NOT extract unconfirmed AI suggestions.';
+    default:
+      return tier3KeyDistinction('extract');
   }
 }
 
@@ -148,6 +152,8 @@ export function granularitySegment(g: Granularity): string {
 - Fewer than 5 = subtopics not properly split out from root
 - More than 12 = over-fragmentation. Prefer more frames over fewer.
 - Each frame should have 2-6 flat slots. Capture fine-grained detail.`;
+    default:
+      return granularitySegment('balanced');
   }
 }
 
@@ -164,6 +170,8 @@ export function quoteLengthSegment(ql: QuoteLength): string {
   BAD:  "vegetarian" (too short, loses context)
   GOOD: "We're vegetarian" (includes context for clarity)
   GOOD: "allergic to peanuts" (sufficient context)`;
+    default:
+      return quoteLengthSegment('minimal');
   }
 }
 
@@ -184,6 +192,8 @@ export function updateStanceSegment(us: UpdateStance): string {
 - Actively update existing frames when new information is available
 - Merge related slots into existing frames when possible
 - Prefer updating existing frames over creating new ones for the same subtopic`;
+    default:
+      return '';
   }
 }
 

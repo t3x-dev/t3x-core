@@ -48,6 +48,7 @@ import { assertProjectAccess } from '../lib/project-access';
 import { getProviderRegistry } from '../lib/provider-registry';
 import { getUserId, recordUsageFireAndForget, wrapWithUsageTracking } from '../lib/usage-tracking';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
+import { ExtractionStyleSchema } from '../schemas/contracts';
 
 export const frameExtractRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
@@ -187,16 +188,24 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
     }
 
     // 3. Resolve extraction style: project → user → default
+    //    Validate JSONB values against schema to guard against malformed data.
     const projectRecord = await findProjectById(db, conversation.projectId);
     let resolvedStyle: ExtractionStyleConfig = DEFAULT_STYLE;
     if (projectRecord?.extractionStyle) {
-      resolvedStyle = projectRecord.extractionStyle as ExtractionStyleConfig;
-    } else {
+      const parsed = ExtractionStyleSchema.safeParse(projectRecord.extractionStyle);
+      if (parsed.success) {
+        resolvedStyle = parsed.data;
+      }
+    }
+    if (resolvedStyle === DEFAULT_STYLE && !projectRecord?.extractionStyle) {
       const userId = getUserId(c);
       if (userId) {
         const user = await findUserById(db, userId);
         if (user?.default_extraction_style) {
-          resolvedStyle = user.default_extraction_style as ExtractionStyleConfig;
+          const parsed = ExtractionStyleSchema.safeParse(user.default_extraction_style);
+          if (parsed.success) {
+            resolvedStyle = parsed.data;
+          }
         }
       }
     }
