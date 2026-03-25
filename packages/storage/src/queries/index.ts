@@ -151,6 +151,22 @@ export {
   insertExtractionFeedback,
   listExtractionFeedback,
 } from './extraction-feedback';
+// Frame State (source-of-truth for current frames)
+export {
+  clearManualEditedFlags,
+  deleteFrame,
+  deleteFrameRelationByKey,
+  deleteFrameRelationsByConversation,
+  deleteFrameRelationsByFrameId,
+  deleteFramesByConversation,
+  getFrameByKey,
+  listFrameRelationsByConversation,
+  listFramesByConversation,
+  type UpsertFrameInput,
+  type UpsertFrameRelationInput,
+  upsertFrame,
+  upsertFrameRelation,
+} from './frame-state';
 // Global Settings (key-value config store)
 export {
   deleteGlobalSetting,
