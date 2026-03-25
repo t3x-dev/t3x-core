@@ -277,11 +277,31 @@ export async function findOrCreateUser(db: AnyDB, input: CreateUserInput): Promi
 export async function updateUser(
   db: AnyDB,
   userId: string,
-  data: { name?: string; avatar_url?: string }
+  data: {
+    name?: string;
+    avatar_url?: string;
+    default_extraction_style?: {
+      granularity: 'concise' | 'balanced' | 'detailed';
+      quote_length: 'minimal' | 'contextual';
+      update_stance: 'conservative' | 'balanced' | 'aggressive';
+      tier3: 'skip' | 'extract';
+    } | null;
+  }
 ): Promise<User | null> {
-  const updates: Partial<{ name: string; avatarUrl: string }> = {};
+  const updates: Partial<{
+    name: string;
+    avatarUrl: string;
+    defaultExtractionStyle: {
+      granularity: 'concise' | 'balanced' | 'detailed';
+      quote_length: 'minimal' | 'contextual';
+      update_stance: 'conservative' | 'balanced' | 'aggressive';
+      tier3: 'skip' | 'extract';
+    } | null;
+  }> = {};
   if (data.name !== undefined) updates.name = data.name;
   if (data.avatar_url !== undefined) updates.avatarUrl = data.avatar_url;
+  if (data.default_extraction_style !== undefined)
+    updates.defaultExtractionStyle = data.default_extraction_style;
 
   if (Object.keys(updates).length === 0) return findUserById(db, userId);
 
@@ -344,6 +364,7 @@ function rowToUser(row: UserRecord): User {
     avatar_url: row.avatarUrl ?? null,
     username: row.username ?? null,
     created_at: row.createdAt.toISOString(),
+    default_extraction_style: row.defaultExtractionStyle ?? null,
   };
 }
 

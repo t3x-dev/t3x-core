@@ -62,6 +62,14 @@ export const users = pgTable('users', {
   /** Bcrypt password hash for local auth (null for OAuth-only users) */
   passwordHash: text('password_hash'),
 
+  /** User's default extraction style (null = system default) */
+  defaultExtractionStyle: jsonb('default_extraction_style').$type<{
+    granularity: 'concise' | 'balanced' | 'detailed';
+    quote_length: 'minimal' | 'contextual';
+    update_stance: 'conservative' | 'balanced' | 'aggressive';
+    tier3: 'skip' | 'extract';
+  }>(),
+
   /** Creation time */
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });

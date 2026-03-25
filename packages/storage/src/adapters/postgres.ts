@@ -781,6 +781,12 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username) WHERE username IS NOT NULL;
 
     -- ═══════════════════════════════════════════════════════════════
+    -- Extraction Style Settings (Task 4 — Slot Sources + Extraction Quality)
+    -- ═══════════════════════════════════════════════════════════════
+    ALTER TABLE projects ADD COLUMN IF NOT EXISTS extraction_style JSONB;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS default_extraction_style JSONB;
+
+    -- ═══════════════════════════════════════════════════════════════
     -- Frame-Based Commits (commits + frame_lineage)
     -- ═══════════════════════════════════════════════════════════════
 

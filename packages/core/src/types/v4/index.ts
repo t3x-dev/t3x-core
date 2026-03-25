@@ -737,6 +737,14 @@ export interface User {
 
   /** When the user was created, ISO8601 */
   created_at: string;
+
+  /** User's default extraction style (null = system default) */
+  default_extraction_style?: {
+    granularity: 'concise' | 'balanced' | 'detailed';
+    quote_length: 'minimal' | 'contextual';
+    update_stance: 'conservative' | 'balanced' | 'aggressive';
+    tier3: 'skip' | 'extract';
+  } | null;
 }
 
 /**
