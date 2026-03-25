@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
+import { PRESETS } from '@t3x-dev/core';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { ExtractionStylePanel } from '@/components/settings/ExtractionStylePanel';
-import { PRESETS } from '@t3x-dev/core';
 
 describe('ExtractionStylePanel', () => {
   const balanced = PRESETS.balanced;
@@ -86,7 +86,9 @@ describe('ExtractionStylePanel', () => {
 
   it('toggles between global and custom when toggle is clicked', () => {
     const onChange = vi.fn();
-    const { rerender } = render(<ExtractionStylePanel value={null} onChange={onChange} showGlobalToggle />);
+    const { rerender } = render(
+      <ExtractionStylePanel value={null} onChange={onChange} showGlobalToggle />
+    );
 
     // Initially using global (value is null)
     const toggle = screen.getByText('Use global default').previousSibling as HTMLElement;

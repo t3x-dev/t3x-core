@@ -2,8 +2,10 @@
  * API client types - aligned with @t3x-dev/storage schema
  */
 
+import type { ExtractionStyleConfig } from '@t3x-dev/core';
+
 // Re-export external types used by consumers
-export type { Pin } from '@t3x-dev/core';
+export type { ExtractionStyleConfig, Pin } from '@t3x-dev/core';
 export type {
   AnchorConstraint,
   AnchorType,
@@ -27,6 +29,7 @@ export interface Project {
   drafts_count?: number;
   default_provider?: string | null;
   default_model?: string | null;
+  extraction_style?: ExtractionStyleConfig | null;
   metadata?: Record<string, unknown>;
 }
 

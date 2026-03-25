@@ -1,8 +1,5 @@
 'use client';
 
-import { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
 import type {
   ExtractionStyleConfig,
   Granularity,
@@ -12,6 +9,9 @@ import type {
   UpdateStance,
 } from '@t3x-dev/core';
 import { matchPreset, PRESETS } from '@t3x-dev/core';
+import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 const PRESET_DESCRIPTIONS: Record<PresetName, string> = {
   concise: 'Fewer frames, only confirmed facts. Best for simple conversations.',
@@ -26,7 +26,11 @@ interface ExtractionStylePanelProps {
   showGlobalToggle?: boolean;
 }
 
-export function ExtractionStylePanel({ value, onChange, showGlobalToggle }: ExtractionStylePanelProps) {
+export function ExtractionStylePanel({
+  value,
+  onChange,
+  showGlobalToggle,
+}: ExtractionStylePanelProps) {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const useGlobal = showGlobalToggle && value === null;
   const current = value ?? PRESETS.balanced;
@@ -57,10 +61,12 @@ export function ExtractionStylePanel({ value, onChange, showGlobalToggle }: Extr
               useGlobal ? 'bg-[var(--accent-commit)]' : 'bg-[var(--stroke-divider)]'
             )}
           >
-            <span className={cn(
-              'inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform',
-              useGlobal ? 'translate-x-4' : 'translate-x-1'
-            )} />
+            <span
+              className={cn(
+                'inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform',
+                useGlobal ? 'translate-x-4' : 'translate-x-1'
+              )}
+            />
           </button>
           <span className="text-xs text-[var(--text-secondary)]">Use global default</span>
         </div>
@@ -80,7 +86,9 @@ export function ExtractionStylePanel({ value, onChange, showGlobalToggle }: Extr
             </Button>
           ))}
           {currentPreset === null && (
-            <Button variant="default" size="sm" disabled>Custom</Button>
+            <Button variant="default" size="sm" disabled>
+              Custom
+            </Button>
           )}
         </div>
         <p className="text-xs text-[var(--text-tertiary)] mb-3">
@@ -103,8 +111,13 @@ export function ExtractionStylePanel({ value, onChange, showGlobalToggle }: Extr
               <span className="text-xs text-[var(--text-secondary)]">Granularity</span>
               <div className="flex gap-1">
                 {(['concise', 'balanced', 'detailed'] as Granularity[]).map((v) => (
-                  <Button key={v} variant={current.granularity === v ? 'default' : 'outline'} size="sm"
-                    className="text-xs h-6 px-2" onClick={() => handleDimensionChange('granularity', v)}>
+                  <Button
+                    key={v}
+                    variant={current.granularity === v ? 'default' : 'outline'}
+                    size="sm"
+                    className="text-xs h-6 px-2"
+                    onClick={() => handleDimensionChange('granularity', v)}
+                  >
                     {v.charAt(0).toUpperCase() + v.slice(1)}
                   </Button>
                 ))}
@@ -115,8 +128,13 @@ export function ExtractionStylePanel({ value, onChange, showGlobalToggle }: Extr
               <span className="text-xs text-[var(--text-secondary)]">Quote Length</span>
               <div className="flex gap-1">
                 {(['minimal', 'contextual'] as QuoteLength[]).map((v) => (
-                  <Button key={v} variant={current.quote_length === v ? 'default' : 'outline'} size="sm"
-                    className="text-xs h-6 px-2" onClick={() => handleDimensionChange('quote_length', v)}>
+                  <Button
+                    key={v}
+                    variant={current.quote_length === v ? 'default' : 'outline'}
+                    size="sm"
+                    className="text-xs h-6 px-2"
+                    onClick={() => handleDimensionChange('quote_length', v)}
+                  >
                     {v.charAt(0).toUpperCase() + v.slice(1)}
                   </Button>
                 ))}
@@ -127,8 +145,13 @@ export function ExtractionStylePanel({ value, onChange, showGlobalToggle }: Extr
               <span className="text-xs text-[var(--text-secondary)]">Update Stance</span>
               <div className="flex gap-1">
                 {(['conservative', 'balanced', 'aggressive'] as UpdateStance[]).map((v) => (
-                  <Button key={v} variant={current.update_stance === v ? 'default' : 'outline'} size="sm"
-                    className="text-xs h-6 px-2" onClick={() => handleDimensionChange('update_stance', v)}>
+                  <Button
+                    key={v}
+                    variant={current.update_stance === v ? 'default' : 'outline'}
+                    size="sm"
+                    className="text-xs h-6 px-2"
+                    onClick={() => handleDimensionChange('update_stance', v)}
+                  >
                     {v.charAt(0).toUpperCase() + v.slice(1)}
                   </Button>
                 ))}
@@ -139,8 +162,13 @@ export function ExtractionStylePanel({ value, onChange, showGlobalToggle }: Extr
               <span className="text-xs text-[var(--text-secondary)]">AI Suggestions</span>
               <div className="flex gap-1">
                 {(['skip', 'extract'] as Tier3Behavior[]).map((v) => (
-                  <Button key={v} variant={current.tier3 === v ? 'default' : 'outline'} size="sm"
-                    className="text-xs h-6 px-2" onClick={() => handleDimensionChange('tier3', v)}>
+                  <Button
+                    key={v}
+                    variant={current.tier3 === v ? 'default' : 'outline'}
+                    size="sm"
+                    className="text-xs h-6 px-2"
+                    onClick={() => handleDimensionChange('tier3', v)}
+                  >
                     {v === 'skip' ? 'Skip' : 'Extract'}
                   </Button>
                 ))}
