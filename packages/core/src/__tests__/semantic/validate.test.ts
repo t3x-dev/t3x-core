@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { SemanticContent } from '../../semantic/types';
+import type { SemanticContent, TreeNode } from '../../semantic/types';
+import { flattenTree } from '../../semantic/tree';
 import { validateIntegrity } from '../../semantic/validate';
 
 const frame = (id: string, slots: Record<string, unknown> = { a: 1 }) => ({
@@ -160,5 +161,41 @@ describe('validateIntegrity', () => {
     };
     const result = validateIntegrity(content);
     expect(result.errors.some((e) => e.type === 'cycle')).toBe(true);
+  });
+});
+
+describe('validateIntegrity — tree-native', () => {
+  it('passes for valid tree-native content', () => {
+    const tree: TreeNode = {
+      key: 'trip',
+      slots: { dest: 'Tokyo' },
+      children: [{ key: 'budget', slots: { amount: 5000 }, children: [] }],
+    };
+    const content: SemanticContent = { tree, frames: flattenTree(tree), relations: [] };
+    const result = validateIntegrity(content);
+    expect(result.valid).toBe(true);
+  });
+
+  it('no orphan warnings for tree-native (tree structure is implicit hierarchy)', () => {
+    const tree: TreeNode = {
+      key: 'trip',
+      slots: { dest: 'Tokyo' },
+      children: [{ key: 'budget', slots: { amount: 5000 }, children: [] }],
+    };
+    const content: SemanticContent = { tree, frames: flattenTree(tree), relations: [] };
+    const result = validateIntegrity(content);
+    expect(result.warnings.filter((w) => w.type === 'orphan_frame')).toHaveLength(0);
+  });
+
+  it('validates cross-tree relation endpoints against frame IDs', () => {
+    const tree: TreeNode = { key: 'trip', slots: { dest: 'Tokyo' }, children: [] };
+    const content: SemanticContent = {
+      tree,
+      frames: flattenTree(tree),
+      relations: [{ from: 'trip', to: 'nonexistent', type: 'depends' }],
+    };
+    const result = validateIntegrity(content);
+    expect(result.valid).toBe(false);
+    expect(result.errors[0].type).toBe('broken_relation');
   });
 });
