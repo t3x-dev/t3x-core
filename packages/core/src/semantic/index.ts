@@ -82,6 +82,7 @@ export {
   resolveSlotQuotesPath,
   unflattenToTree,
   validateTreeDepth,
+  yamlObjectToTreeNode,
 } from './tree';
 // Validation
 export { checkRelationSanity, validateIntegrity } from './validate';

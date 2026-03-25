@@ -14,7 +14,7 @@ import * as yaml from 'js-yaml';
 import { normalizeFrameOutput } from '../llm/normalizer';
 import type { TreeNativeDelta } from '../semantic/delta';
 import { DeltaSchema, FrameSchema, TreeNativeDeltaSchema } from '../semantic/schema';
-import { flattenTree } from '../semantic/tree';
+import { flattenTree, yamlObjectToTreeNode } from '../semantic/tree';
 import type {
   Delta,
   Frame,
@@ -92,34 +92,6 @@ function isYamlTree(raw: string): boolean {
   }
 
   return true;
-}
-
-/**
- * Convert a YAML object to a TreeNode.
- * Top-level key = root node key.
- * At each level: scalar values and arrays = slots; object values = children.
- */
-function yamlToTreeNode(key: string, value: unknown): TreeNode {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    // Scalar or array at the top level — treat as a single-slot node
-    return { key, slots: { [key]: value as SlotValue }, children: [] };
-  }
-
-  const obj = value as Record<string, unknown>;
-  const slots: Record<string, SlotValue> = {};
-  const children: TreeNode[] = [];
-
-  for (const [k, v] of Object.entries(obj)) {
-    if (typeof v === 'object' && v !== null && !Array.isArray(v)) {
-      // Object value → child node
-      children.push(yamlToTreeNode(k, v));
-    } else {
-      // Scalar or array → slot
-      slots[k] = v as SlotValue;
-    }
-  }
-
-  return { key, slots, children };
 }
 
 /**
@@ -233,7 +205,7 @@ function parseYamlTree(raw: string): ParseResult {
   }
 
   const [rootKey, rootValue] = entries[0];
-  const tree = yamlToTreeNode(rootKey, rootValue);
+  const tree = yamlObjectToTreeNode(rootKey, rootValue);
 
   // Parse metadata (JSON after ---)
   let slotQuotes: Record<string, string> = {};
@@ -293,7 +265,7 @@ function treeNativeNodeToFrameChanges(
 ): FrameChange[] {
   const changes: FrameChange[] = [];
   for (const [key, value] of Object.entries(nodeObj)) {
-    const node = yamlToTreeNode(key, value);
+    const node = yamlObjectToTreeNode(key, value);
     const frames = flattenTree(node);
     // Prefix all frame IDs with parentPath
     for (const frame of frames) {

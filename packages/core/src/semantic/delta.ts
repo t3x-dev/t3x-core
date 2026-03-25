@@ -1,4 +1,4 @@
-import { flattenTree } from './tree';
+import { flattenTree, yamlObjectToTreeNode } from './tree';
 import type { Delta, DeltaLogEntry, Relation, SemanticContent, SlotValue, TreeNode } from './types';
 
 /**
@@ -158,8 +158,13 @@ export function applyTreeDelta(snapshot: SemanticContent, delta: TreeNativeDelta
       case 'remove': {
         if (!change.target_path) break;
         removeNodeByPath(tree, change.target_path);
+        const removedPath = change.target_path!;
         relations = relations.filter(
-          (r) => !r.from.startsWith(change.target_path!) && !r.to.startsWith(change.target_path!)
+          (r) =>
+            r.from !== removedPath &&
+            !r.from.startsWith(`${removedPath}/`) &&
+            r.to !== removedPath &&
+            !r.to.startsWith(`${removedPath}/`)
         );
         break;
       }
@@ -187,7 +192,7 @@ export function applyTreeDelta(snapshot: SemanticContent, delta: TreeNativeDelta
 function deepCloneTree(node: TreeNode): TreeNode {
   return {
     ...node,
-    slots: { ...node.slots },
+    slots: JSON.parse(JSON.stringify(node.slots)),
     children: node.children.map(deepCloneTree),
     ...(node.slot_quotes ? { slot_quotes: { ...node.slot_quotes } } : {}),
   };
@@ -222,27 +227,6 @@ function removeNodeByPath(root: TreeNode, path: string): boolean {
   if (idx === -1) return false;
   parent.children.splice(idx, 1);
   return true;
-}
-
-/**
- * Convert a YAML object to a TreeNode.
- * Handles nested objects as children nodes.
- */
-function yamlObjectToTreeNode(key: string, value: unknown): TreeNode {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    return { key, slots: { [key]: value as SlotValue }, children: [] };
-  }
-  const obj = value as Record<string, unknown>;
-  const slots: Record<string, SlotValue> = {};
-  const children: TreeNode[] = [];
-  for (const [k, v] of Object.entries(obj)) {
-    if (typeof v === 'object' && v !== null && !Array.isArray(v)) {
-      children.push(yamlObjectToTreeNode(k, v));
-    } else {
-      slots[k] = v as SlotValue;
-    }
-  }
-  return { key, slots, children };
 }
 
 /**

@@ -1,4 +1,4 @@
-import type { Frame, SemanticContent, TreeNode } from './types';
+import type { Frame, SemanticContent, SlotValue, TreeNode } from './types';
 
 /**
  * Detect whether a SemanticContent uses tree-native format.
@@ -174,4 +174,25 @@ function checkDepth(node: TreeNode, currentDepth: number, maxDepth: number): str
     if (err) return err;
   }
   return null;
+}
+
+/**
+ * Convert a YAML-parsed object to a TreeNode.
+ * At each level: scalar values and arrays = slots; object values = children.
+ */
+export function yamlObjectToTreeNode(key: string, value: unknown): TreeNode {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return { key, slots: { [key]: value as SlotValue }, children: [] };
+  }
+  const obj = value as Record<string, unknown>;
+  const slots: Record<string, SlotValue> = {};
+  const children: TreeNode[] = [];
+  for (const [k, v] of Object.entries(obj)) {
+    if (typeof v === 'object' && v !== null && !Array.isArray(v)) {
+      children.push(yamlObjectToTreeNode(k, v));
+    } else {
+      slots[k] = v as SlotValue;
+    }
+  }
+  return { key, slots, children };
 }
