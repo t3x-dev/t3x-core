@@ -12,6 +12,7 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
+import type { DeltaSource } from '@t3x-dev/core';
 import { buildDraft } from '@t3x-dev/core';
 import {
   deleteDeltaLogEntry,
@@ -24,6 +25,11 @@ import {
 import { getDB } from '../lib/db';
 import { toDeltaLogEntries } from '../lib/delta-log-utils';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import {
+  readDraftFromFrames,
+  rebuildFramesFromSnapshot,
+  syncDeltaToFrames,
+} from '../lib/frame-state-sync';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
 export const deltaLogRoutes = new OpenAPIHono({
@@ -43,7 +49,14 @@ const DeltaIdParam = z.object({
   deltaId: z.string().min(1),
 });
 
-const DeltaSourceSchema = z.enum(['pipeline', 'manual', 'answer', 'collapse', 'commit_marker', 'compress']);
+const DeltaSourceSchema = z.enum([
+  'pipeline',
+  'manual',
+  'answer',
+  'collapse',
+  'commit_marker',
+  'compress',
+]);
 
 const FrameChangeSchema = z
   .object({
@@ -263,12 +276,23 @@ deltaLogRoutes.openapi(createDeltaRoute, async (c) => {
       );
     }
 
-    const record = await insertDeltaLogEntry(db, {
-      conversationId,
-      projectId: conversation.projectId,
-      source: body.source,
-      turnHash: body.turn_hash,
-      delta: body.delta,
+    // Write delta_log + sync frames atomically
+    const record = await (db as any).transaction(async (tx: any) => {
+      const rec = await insertDeltaLogEntry(tx, {
+        conversationId,
+        projectId: conversation.projectId,
+        source: body.source,
+        turnHash: body.turn_hash,
+        delta: body.delta,
+      });
+      await syncDeltaToFrames(
+        tx,
+        conversationId,
+        conversation.projectId,
+        body.delta,
+        body.source as DeltaSource
+      );
+      return rec;
     });
 
     return c.json({ success: true as const, data: toApiDeltaEntry(record) }, 201);
@@ -323,12 +347,15 @@ deltaLogRoutes.openapi(getDraftRoute, async (c) => {
       );
     }
 
-    const records = topic_id
-      ? await listDeltaLogByTopic(db, conversationId, topic_id)
-      : await listDeltaLogByConversation(db, conversationId);
-
-    // Convert storage records to DeltaLogEntry format for buildDraft
-    const draft = buildDraft(toDeltaLogEntries(records));
+    // Read from frames table; fallback to delta replay for unmigrated conversations
+    let draft = await readDraftFromFrames(db, conversationId, topic_id);
+    if (draft.frames.length === 0) {
+      // Fallback: replay deltas (pre-migration conversations)
+      const records = topic_id
+        ? await listDeltaLogByTopic(db, conversationId, topic_id)
+        : await listDeltaLogByConversation(db, conversationId);
+      draft = buildDraft(toDeltaLogEntries(records));
+    }
 
     return c.json({ success: true as const, data: draft }, 200);
   } catch (err) {
@@ -350,7 +377,14 @@ deltaLogRoutes.openapi(deleteDeltaRoute, async (c) => {
       return errorResponse(c, 'NOT_FOUND', `Delta log entry not found: ${deltaId}`);
     }
 
-    await deleteDeltaLogEntry(db, deltaId);
+    // Undo: delete delta + rebuild frames atomically
+    await (db as any).transaction(async (tx: any) => {
+      await deleteDeltaLogEntry(tx, deltaId);
+      const remainingRecords = await listDeltaLogByConversation(tx, conversationId);
+      const remainingEntries = toDeltaLogEntries(remainingRecords);
+      const rebuilt = buildDraft(remainingEntries);
+      await rebuildFramesFromSnapshot(tx, conversationId, existing.projectId, rebuilt);
+    });
 
     return c.json({ success: true as const, data: null }, 200);
   } catch (err) {

@@ -114,6 +114,9 @@ interface ExtractionPanelState {
   setHoveredFrameId: (id: string | null, slotKey?: string | null) => void;
   setHoveredTurn: (hash: string | null, charOffset?: number | null) => void;
 
+  // Manual edit tracking
+  manualEditedFrameIds: Set<string>;
+
   // Commit tracking
   lastCommitHash: string | null;
   committedFrameIds: Record<string, boolean>;
@@ -165,6 +168,9 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
   hoveredSlotKey: null,
   hoveredTurnHash: null,
   hoveredCharOffset: null,
+
+  // Manual edit tracking
+  manualEditedFrameIds: new Set(),
 
   // Commit tracking defaults
   lastCommitHash: null,
@@ -250,6 +256,16 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
       lastDeltaChanges: delta.changes,
     });
 
+    // Track manual edits
+    if (source === 'manual') {
+      const ids = new Set(get().manualEditedFrameIds);
+      for (const change of delta.changes) {
+        if (change.action === 'add') ids.add(change.frame.id);
+        else if (change.action === 'update') ids.add(change.target);
+      }
+      set({ manualEditedFrameIds: ids });
+    }
+
     // Persist user edits to database (LLM extraction and compression are already saved by the API)
     const convId = get().conversationId;
     if (convId && source !== 'pipeline' && source !== 'compress') {
@@ -259,7 +275,14 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
     }
   },
 
-  setDraft: (content) => set({ draft: content }),
+  setDraft: (content) => {
+    // Extract manual-edited frame IDs from server response
+    const manualIds = new Set<string>();
+    for (const f of content.frames) {
+      if (f.manual_edited) manualIds.add(f.id);
+    }
+    set({ draft: content, manualEditedFrameIds: manualIds });
+  },
   resetDraft: () =>
     set({
       draft: emptyContent,
@@ -268,6 +291,7 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
       lastDeltaChanges: [],
       confirmedFrameIds: {},
       confirmedSlotKeys: {},
+      manualEditedFrameIds: new Set(),
     }),
   setExtracting: (extracting) => set({ isExtracting: extracting }),
 
@@ -411,6 +435,7 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
         committedFrameSnapshot: newSnapshot,
         isCommitting: false,
         panelMode: 'default',
+        manualEditedFrameIds: new Set(),
       });
 
       return { hash: result.commit.hash };

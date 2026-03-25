@@ -13,7 +13,13 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { createCommit, getCommit, listCommits, updateCommitPosition } from '@t3x-dev/storage';
+import {
+  clearManualEditedFlags,
+  createCommit,
+  getCommit,
+  listCommits,
+  updateCommitPosition,
+} from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import {
@@ -135,6 +141,15 @@ commitRoutes.openapi(createCommitRoute, async (c) => {
       sources: body.sources,
       provenance: body.provenance,
     });
+
+    // Clear manual_edited flags for all source conversations
+    if (body.sources) {
+      for (const src of body.sources) {
+        if (src.type === 'conversation' && src.id) {
+          await clearManualEditedFlags(db, src.id);
+        }
+      }
+    }
 
     return c.json({ success: true as const, data: { commit } }, 200);
   } catch (err) {

@@ -9,11 +9,7 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import {
-  buildDraft,
-  type FrameWithSignals,
-  FrameCompressor,
-} from '@t3x-dev/core';
+import { buildDraft, FrameCompressor, type FrameWithSignals } from '@t3x-dev/core';
 import {
   findConversationById,
   insertDeltaLogEntry,
@@ -22,6 +18,7 @@ import {
 import { getDB } from '../lib/db';
 import { toDeltaLogEntries } from '../lib/delta-log-utils';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { syncDeltaToFrames } from '../lib/frame-state-sync';
 import { assertProjectAccess } from '../lib/project-access';
 import { getProviderRegistry } from '../lib/provider-registry';
 import { getUserId, recordUsageFireAndForget, wrapWithUsageTracking } from '../lib/usage-tracking';
@@ -107,13 +104,23 @@ const compressFramesRoute = createRoute({
  */
 function computeFrameSignals(
   frameIds: string[],
-  deltaEntries: Array<{ source: string; delta: { changes: Array<{ action: string; target?: string; frame?: { id: string } }> } }>
+  deltaEntries: Array<{
+    source: string;
+    delta: { changes: Array<{ action: string; target?: string; frame?: { id: string } }> };
+  }>
 ): Map<string, { has_manual_edit: boolean; last_touched: number; mention_count: number }> {
-  const signals = new Map<string, { has_manual_edit: boolean; last_touched: number; mention_count: number }>();
+  const signals = new Map<
+    string,
+    { has_manual_edit: boolean; last_touched: number; mention_count: number }
+  >();
 
   // Initialize all frames
   for (const fid of frameIds) {
-    signals.set(fid, { has_manual_edit: false, last_touched: deltaEntries.length, mention_count: 0 });
+    signals.set(fid, {
+      has_manual_edit: false,
+      last_touched: deltaEntries.length,
+      mention_count: 0,
+    });
   }
 
   // Scan delta log from oldest to newest
@@ -193,7 +200,11 @@ frameCompressRoutes.openapi(compressFramesRoute, async (c) => {
 
     // 5. Attach signals to frames
     const framesWithSignals: FrameWithSignals[] = currentSnapshot.frames.map((f) => {
-      const sig = signalsMap.get(f.id) ?? { has_manual_edit: false, last_touched: 0, mention_count: 1 };
+      const sig = signalsMap.get(f.id) ?? {
+        has_manual_edit: false,
+        last_touched: 0,
+        mention_count: 1,
+      };
       return {
         ...f,
         has_manual_edit: sig.has_manual_edit,
@@ -251,14 +262,18 @@ frameCompressRoutes.openapi(compressFramesRoute, async (c) => {
       });
     }
 
-    // 9. Write compress delta to storage (includes metadata)
-    const record = await insertDeltaLogEntry(db, {
-      conversationId,
-      projectId: conversation.projectId,
-      source: 'compress',
-      delta: result.delta,
-      pipelineState: 'completed',
-      metadata: result.metadata,
+    // 9. Write delta_log + sync frames atomically
+    const record = await (db as any).transaction(async (tx: any) => {
+      const rec = await insertDeltaLogEntry(tx, {
+        conversationId,
+        projectId: conversation.projectId,
+        source: 'compress',
+        delta: result.delta,
+        pipelineState: 'completed',
+        metadata: result.metadata,
+      });
+      await syncDeltaToFrames(tx, conversationId, conversation.projectId, result.delta, 'compress');
+      return rec;
     });
 
     // 10. Return delta + metadata + delta_log_id

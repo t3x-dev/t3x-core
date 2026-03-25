@@ -2,12 +2,12 @@
 
 import type { Frame, SlotValue } from '@t3x-dev/core';
 import { Loader2 } from 'lucide-react';
-import { FrameHistoryPopover } from './FrameHistoryPopover';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { nestFrames } from '@/lib/frameNesting';
 import { parseDisplayYAML, toDisplayYAML } from '@/lib/liteYaml';
 import { RELEVANCE_THRESHOLD, type RelevanceContext, relevanceScore } from '@/lib/relevanceScore';
 import { useExtractionPanelStore } from '@/store/extractionPanelStore';
+import { FrameHistoryPopover } from './FrameHistoryPopover';
 
 // ── YAML Rendering Helpers ──
 
@@ -77,7 +77,11 @@ function renderSlotLines(
     'type' in value &&
     'slots' in value
   ) {
-    const inlineFrame = value as { type: string; slots: Record<string, SlotValue>; _sourceFrameId?: string };
+    const inlineFrame = value as {
+      type: string;
+      slots: Record<string, SlotValue>;
+      _sourceFrameId?: string;
+    };
     const childFrameId = inlineFrame._sourceFrameId ?? frameId;
     lines.push({
       text: `${pad}${key}:`,
@@ -116,7 +120,11 @@ function renderSlotLines(
         });
       } else if (typeof item === 'object' && item !== null && 'type' in item && 'slots' in item) {
         // InlineFrame in array
-        const inlineFrame = item as { type: string; slots: Record<string, SlotValue>; _sourceFrameId?: string };
+        const inlineFrame = item as {
+          type: string;
+          slots: Record<string, SlotValue>;
+          _sourceFrameId?: string;
+        };
         const childFrameId = inlineFrame._sourceFrameId ?? frameId;
         lines.push({
           text: `${pad}  - ${inlineFrame.type}:`,
@@ -174,6 +182,7 @@ export function FrameYAMLView() {
   const hoveredTurnHash = useExtractionPanelStore((s) => s.hoveredTurnHash);
   const hoveredCharOffset = useExtractionPanelStore((s) => s.hoveredCharOffset);
   const gateIssues = useExtractionPanelStore((s) => s.gateIssues);
+  const manualEditedFrameIds = useExtractionPanelStore((s) => s.manualEditedFrameIds);
 
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState('');
@@ -515,7 +524,11 @@ export function FrameYAMLView() {
                   style={{
                     width: 3,
                     flexShrink: 0,
-                    background: line.changeType ? deltaBarColors[line.changeType] : 'transparent',
+                    background: manualEditedFrameIds.has(line.frameId)
+                      ? '#60a5fa' // blue — manual edit
+                      : line.changeType
+                        ? deltaBarColors[line.changeType]
+                        : 'transparent',
                   }}
                 />
 
@@ -555,6 +568,21 @@ export function FrameYAMLView() {
                     </span>
                   )}
                   {line.text}
+                  {line.slotKey === null && manualEditedFrameIds.has(line.frameId) && (
+                    <span
+                      style={{
+                        fontSize: 9,
+                        padding: '0 4px',
+                        borderRadius: 3,
+                        background: 'rgba(96, 165, 250, 0.15)',
+                        color: '#60a5fa',
+                        marginLeft: 4,
+                        fontWeight: 600,
+                      }}
+                    >
+                      manual
+                    </span>
+                  )}
                   {isFrameLine && (
                     <span
                       className="opacity-0 group-hover/yaml-line:opacity-100 transition-opacity ml-1"
