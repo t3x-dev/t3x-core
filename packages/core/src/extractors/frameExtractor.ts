@@ -19,6 +19,7 @@ import { validateIntegrity } from '../semantic/validate';
 import { parseFrameDelta } from './frameDeltaParser';
 import type { FrameExtractionInput, FrameExtractionTurn } from './frameExtractionPrompt';
 import { buildFrameExtractionPrompt } from './frameExtractionPrompt';
+import type { ExtractionStyleConfig } from './extractionStyleConfig';
 
 // ── Constants ──
 
@@ -111,7 +112,7 @@ async function _callGenerateStructured(
 export class FrameExtractor {
   constructor(private readonly provider: LLMProvider) {}
 
-  async extract(input: FrameExtractionInput): Promise<FrameExtractionResult> {
+  async extract(input: FrameExtractionInput, style?: ExtractionStyleConfig): Promise<FrameExtractionResult> {
     const baseSnapshot: SemanticContent = input.snapshot ?? { frames: [], relations: [] };
     // ── Text generation path ──
     // Always use generate() (not generateStructured) so we can extract
@@ -121,7 +122,7 @@ export class FrameExtractor {
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       // 1. Build prompt
-      const { systemPrompt, userPrompt } = buildFrameExtractionPrompt(input);
+      const { systemPrompt, userPrompt } = buildFrameExtractionPrompt(input, style);
       const combinedPrompt = `${systemPrompt}\n\n---\n\n${userPrompt}`;
 
       // 2. Call LLM
