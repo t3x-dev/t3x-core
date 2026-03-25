@@ -598,6 +598,17 @@ export const GetConversationMemoryResponse = SuccessResponse(
 );
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Extraction Style Config
+// ═══════════════════════════════════════════════════════════════════════════
+
+export const ExtractionStyleSchema = z.object({
+  granularity: z.enum(['concise', 'balanced', 'detailed']),
+  quote_length: z.enum(['minimal', 'contextual']),
+  update_stance: z.enum(['conservative', 'balanced', 'aggressive']),
+  tier3: z.enum(['skip', 'extract']),
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Type Exports (for use in route handlers)
 // ═══════════════════════════════════════════════════════════════════════════
 

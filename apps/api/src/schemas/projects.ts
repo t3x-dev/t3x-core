@@ -5,6 +5,7 @@
  * Do NOT import from 'zod' directly as it may resolve to a different version.
  */
 import { z } from '@hono/zod-openapi';
+import { ExtractionStyleSchema } from './contracts';
 
 // Metadata schema - use z.any() to avoid Zod v4 compatibility issues with z.record(z.unknown())
 const MetadataSchema = z.record(z.string(), z.any()).nullable();
@@ -30,6 +31,7 @@ export const ProjectSchema = z.object({
   provider_config: ProviderConfigSchema.optional(),
   default_provider: z.string().nullable().optional(),
   default_model: z.string().nullable().optional(),
+  extraction_style: ExtractionStyleSchema.nullable().optional(),
 });
 
 // Project with stats
@@ -54,6 +56,7 @@ export const UpdateProjectSchema = z.object({
   provider_config: ProviderConfigSchema.optional(),
   default_provider: z.string().nullable().optional(),
   default_model: z.string().nullable().optional(),
+  extraction_style: ExtractionStyleSchema.nullable().optional(),
 });
 
 // Project with counts (for list view — lighter than full stats)
