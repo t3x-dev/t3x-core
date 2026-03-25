@@ -22,7 +22,9 @@ export function computeCommitHash(commit: CommitFirstClass): string {
     committed_at: commit.committed_at,
     content: {
       ...(commit.content.topic !== undefined ? { topic: commit.content.topic } : {}),
-      ...(commit.content.root_frame_id !== undefined ? { root_frame_id: commit.content.root_frame_id } : {}),
+      ...(commit.content.root_frame_id !== undefined
+        ? { root_frame_id: commit.content.root_frame_id }
+        : {}),
       frames: commit.content.frames.map((f) => ({
         id: f.id,
         type: f.type,

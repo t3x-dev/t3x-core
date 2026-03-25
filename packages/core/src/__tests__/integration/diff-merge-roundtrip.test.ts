@@ -278,7 +278,10 @@ describe('topic and root_frame_id diff', () => {
       relations: [],
     };
     const diff = frameDiff(source, target);
-    expect(diff.topicChanged).toEqual({ oldTopic: 'Japan Travel', newTopic: 'Japan Extended Itinerary' });
+    expect(diff.topicChanged).toEqual({
+      oldTopic: 'Japan Travel',
+      newTopic: 'Japan Extended Itinerary',
+    });
     expect(diff.rootChanged).toBeUndefined();
   });
 

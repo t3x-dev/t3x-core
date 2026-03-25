@@ -66,7 +66,9 @@ Output ONLY valid JSON (no markdown fences, no commentary):
 
 function serializeFrameWithSignals(frame: FrameWithSignals): string {
   const lines: string[] = [];
-  lines.push(`${frame.id}: # type=${frame.type}, confidence=${frame.confidence ?? 'unknown'}, has_manual_edit=${frame.has_manual_edit}, last_touched=${frame.last_touched}, mention_count=${frame.mention_count}`);
+  lines.push(
+    `${frame.id}: # type=${frame.type}, confidence=${frame.confidence ?? 'unknown'}, has_manual_edit=${frame.has_manual_edit}, last_touched=${frame.last_touched}, mention_count=${frame.mention_count}`
+  );
   for (const [key, value] of Object.entries(frame.slots)) {
     const display = typeof value === 'object' ? JSON.stringify(value) : String(value);
     lines.push(`  ${key}: ${display}`);

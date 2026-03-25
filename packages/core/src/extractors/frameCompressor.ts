@@ -22,7 +22,12 @@ export interface CompressMetadata {
 }
 
 export type CompressResult =
-  | { ok: true; delta: Delta; metadata: CompressMetadata; usage: { inputTokens: number; outputTokens: number } }
+  | {
+      ok: true;
+      delta: Delta;
+      metadata: CompressMetadata;
+      usage: { inputTokens: number; outputTokens: number };
+    }
   | { ok: false; error: string; usage: { inputTokens: number; outputTokens: number } };
 
 export class FrameCompressor {
@@ -42,7 +47,11 @@ export class FrameCompressor {
       raw = genResult.text;
       usage = genResult.usage;
     } catch (err) {
-      return { ok: false, error: `LLM error: ${err instanceof Error ? err.message : String(err)}`, usage };
+      return {
+        ok: false,
+        error: `LLM error: ${err instanceof Error ? err.message : String(err)}`,
+        usage,
+      };
     }
 
     // Parse JSON from response
@@ -71,7 +80,9 @@ export class FrameCompressor {
     // Build delta
     const delta: Delta = {
       changes: changes as Delta['changes'],
-      remove_relations: Array.isArray(parsed.remove_relations) ? parsed.remove_relations as Delta['remove_relations'] : undefined,
+      remove_relations: Array.isArray(parsed.remove_relations)
+        ? (parsed.remove_relations as Delta['remove_relations'])
+        : undefined,
     };
 
     // Build metadata from stats
@@ -83,7 +94,7 @@ export class FrameCompressor {
     const metadata: CompressMetadata = {
       compress_summary: (parsed.summary as string) ?? 'Compressed frames',
       frames_before: stats.before ?? input.frames.length,
-      frames_after: stats.after ?? (input.frames.length - removedFrameIds.length),
+      frames_after: stats.after ?? input.frames.length - removedFrameIds.length,
       merged_count: stats.merged ?? 0,
       removed_count: stats.removed ?? removedFrameIds.length,
       removed_frame_ids: removedFrameIds,

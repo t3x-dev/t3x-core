@@ -212,7 +212,11 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
     setLoading(true);
     setError(null);
 
-    Promise.all([getFrameDiff(baseHash, targetHash), getCommitAsFrames(targetHash), getCommitAsFrames(baseHash)])
+    Promise.all([
+      getFrameDiff(baseHash, targetHash),
+      getCommitAsFrames(targetHash),
+      getCommitAsFrames(baseHash),
+    ])
       .then(([diffResp, tgtCommit, baseCommitData]) => {
         if (cancelled) return;
         setDiffResponse(diffResp);
@@ -385,12 +389,18 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
                 {/* View mode toggle */}
                 <div className="flex items-center justify-end px-4 py-1.5 border-b border-[var(--stroke-divider)]">
                   <div className="flex rounded-md border border-[var(--stroke-divider)] bg-[rgba(255,255,255,0.04)] p-0.5">
-                    <button type="button" onClick={() => setViewMode('split')}
-                      className={`px-3 py-0.5 rounded text-[11px] font-semibold transition-colors ${viewMode === 'split' ? 'bg-[rgba(255,255,255,0.1)] text-[var(--text-primary)]' : 'text-[var(--text-tertiary)]'}`}>
+                    <button
+                      type="button"
+                      onClick={() => setViewMode('split')}
+                      className={`px-3 py-0.5 rounded text-[11px] font-semibold transition-colors ${viewMode === 'split' ? 'bg-[rgba(255,255,255,0.1)] text-[var(--text-primary)]' : 'text-[var(--text-tertiary)]'}`}
+                    >
                       Split
                     </button>
-                    <button type="button" onClick={() => setViewMode('unified')}
-                      className={`px-3 py-0.5 rounded text-[11px] font-semibold transition-colors ${viewMode === 'unified' ? 'bg-[rgba(255,255,255,0.1)] text-[var(--text-primary)]' : 'text-[var(--text-tertiary)]'}`}>
+                    <button
+                      type="button"
+                      onClick={() => setViewMode('unified')}
+                      className={`px-3 py-0.5 rounded text-[11px] font-semibold transition-colors ${viewMode === 'unified' ? 'bg-[rgba(255,255,255,0.1)] text-[var(--text-primary)]' : 'text-[var(--text-tertiary)]'}`}
+                    >
                       Unified
                     </button>
                   </div>
@@ -398,9 +408,19 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
                 {/* Diff content */}
                 <div className="flex-1 overflow-auto">
                   {viewMode === 'split' ? (
-                    <DiffYAMLSplitView diff={diff} activeFrameId={activeFrameId} onSelectFrame={handleSelectFrame} showIdentical={showIdentical} />
+                    <DiffYAMLSplitView
+                      diff={diff}
+                      activeFrameId={activeFrameId}
+                      onSelectFrame={handleSelectFrame}
+                      showIdentical={showIdentical}
+                    />
                   ) : (
-                    <DiffYAMLUnifiedView diff={diff} activeFrameId={activeFrameId} onSelectFrame={handleSelectFrame} showIdentical={showIdentical} />
+                    <DiffYAMLUnifiedView
+                      diff={diff}
+                      activeFrameId={activeFrameId}
+                      onSelectFrame={handleSelectFrame}
+                      showIdentical={showIdentical}
+                    />
                   )}
                 </div>
               </div>

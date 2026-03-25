@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { FrameCompressor } from '../../extractors/frameCompressor';
 import type { FrameWithSignals } from '../../extractors/compressPrompt';
+import { FrameCompressor } from '../../extractors/frameCompressor';
 import type { LLMProvider } from '../../llm/types';
 
 function makeMockProvider(jsonResponse: string): LLMProvider {
@@ -15,16 +15,31 @@ function makeMockProvider(jsonResponse: string): LLMProvider {
 
 const baseFrames: FrameWithSignals[] = [
   {
-    id: 'f_001', type: 'accommodation', slots: { type: 'hotel', area: 'central' },
-    confidence: 0.45, has_manual_edit: false, last_touched: 5, mention_count: 1,
+    id: 'f_001',
+    type: 'accommodation',
+    slots: { type: 'hotel', area: 'central' },
+    confidence: 0.45,
+    has_manual_edit: false,
+    last_touched: 5,
+    mention_count: 1,
   },
   {
-    id: 'f_002', type: 'accommodation', slots: { type: 'ryokan', area: 'Higashiyama' },
-    confidence: 0.65, has_manual_edit: false, last_touched: 3, mention_count: 2,
+    id: 'f_002',
+    type: 'accommodation',
+    slots: { type: 'ryokan', area: 'Higashiyama' },
+    confidence: 0.65,
+    has_manual_edit: false,
+    last_touched: 3,
+    mention_count: 2,
   },
   {
-    id: 'f_003', type: 'dietary', slots: { diet: 'vegetarian' },
-    confidence: 0.90, has_manual_edit: true, last_touched: 1, mention_count: 3,
+    id: 'f_003',
+    type: 'dietary',
+    slots: { diet: 'vegetarian' },
+    confidence: 0.9,
+    has_manual_edit: true,
+    last_touched: 1,
+    mention_count: 3,
   },
 ];
 
@@ -33,7 +48,11 @@ describe('FrameCompressor', () => {
     const llmOutput = JSON.stringify({
       changes: [
         { action: 'remove', target: 'f_001', reason: 'Merged into f_002' },
-        { action: 'update', target: 'f_002', slots: { type: 'ryokan + hotel', area: 'Higashiyama, central' } },
+        {
+          action: 'update',
+          target: 'f_002',
+          slots: { type: 'ryokan + hotel', area: 'Higashiyama, central' },
+        },
       ],
       remove_relations: [],
       summary: 'Merged 2 accommodation frames',
@@ -75,9 +94,7 @@ describe('FrameCompressor', () => {
 
   it('rejects delta with add actions', async () => {
     const llmOutput = JSON.stringify({
-      changes: [
-        { action: 'add', frame: { id: 'f_new', type: 'x', slots: {} } },
-      ],
+      changes: [{ action: 'add', frame: { id: 'f_new', type: 'x', slots: {} } }],
       remove_relations: [],
       summary: 'Bad output',
       stats: { before: 3, after: 4, merged: 0, removed: 0 },

@@ -1,13 +1,13 @@
-import type { Frame, FrameDiff, SemanticContent } from "@t3x-dev/core";
+import type { Frame, FrameDiff, SemanticContent } from '@t3x-dev/core';
 
 // ── Aligned frame list for split view ──
 
 export interface AlignedFrame {
-	frameId: string;
-	type: "modified" | "added" | "removed" | "identical";
-	leftFrame?: Frame;
-	rightFrame?: Frame;
-	slotDiffs?: FrameDiff["modified"][number]["slotDiffs"];
+  frameId: string;
+  type: 'modified' | 'added' | 'removed' | 'identical';
+  leftFrame?: Frame;
+  rightFrame?: Frame;
+  slotDiffs?: FrameDiff['modified'][number]['slotDiffs'];
 }
 
 /**
@@ -15,72 +15,70 @@ export interface AlignedFrame {
  * Order: modified → removed → added → identical.
  */
 export function buildAlignedFrames(diff: FrameDiff): AlignedFrame[] {
-	const aligned: AlignedFrame[] = [];
+  const aligned: AlignedFrame[] = [];
 
-	for (const mod of diff.modified) {
-		aligned.push({
-			frameId: mod.frameId,
-			type: "modified",
-			leftFrame: mod.sourceFrame,
-			rightFrame: mod.targetFrame,
-			slotDiffs: mod.slotDiffs,
-		});
-	}
+  for (const mod of diff.modified) {
+    aligned.push({
+      frameId: mod.frameId,
+      type: 'modified',
+      leftFrame: mod.sourceFrame,
+      rightFrame: mod.targetFrame,
+      slotDiffs: mod.slotDiffs,
+    });
+  }
 
-	for (const frame of diff.onlyInSource) {
-		aligned.push({ frameId: frame.id, type: "removed", leftFrame: frame });
-	}
+  for (const frame of diff.onlyInSource) {
+    aligned.push({ frameId: frame.id, type: 'removed', leftFrame: frame });
+  }
 
-	for (const frame of diff.onlyInTarget) {
-		aligned.push({ frameId: frame.id, type: "added", rightFrame: frame });
-	}
+  for (const frame of diff.onlyInTarget) {
+    aligned.push({ frameId: frame.id, type: 'added', rightFrame: frame });
+  }
 
-	for (const frame of diff.identical) {
-		aligned.push({
-			frameId: frame.id,
-			type: "identical",
-			leftFrame: frame,
-			rightFrame: frame,
-		});
-	}
+  for (const frame of diff.identical) {
+    aligned.push({
+      frameId: frame.id,
+      type: 'identical',
+      leftFrame: frame,
+      rightFrame: frame,
+    });
+  }
 
-	return aligned;
+  return aligned;
 }
 
 // ── Tree root derivation ──
 
 /** Derive logical root: explicit root_frame_id > most incoming edges > first frame */
-export function deriveRootFrameId(
-	content: SemanticContent,
-): string | undefined {
-	if (content.root_frame_id) return content.root_frame_id;
-	if (content.frames.length === 0) return undefined;
+export function deriveRootFrameId(content: SemanticContent): string | undefined {
+  if (content.root_frame_id) return content.root_frame_id;
+  if (content.frames.length === 0) return undefined;
 
-	const inDegree = new Map<string, number>();
-	for (const f of content.frames) inDegree.set(f.id, 0);
-	for (const r of content.relations) {
-		inDegree.set(r.to, (inDegree.get(r.to) ?? 0) + 1);
-	}
+  const inDegree = new Map<string, number>();
+  for (const f of content.frames) inDegree.set(f.id, 0);
+  for (const r of content.relations) {
+    inDegree.set(r.to, (inDegree.get(r.to) ?? 0) + 1);
+  }
 
-	let maxId = content.frames[0].id;
-	let maxDeg = 0;
-	for (const [id, deg] of inDegree) {
-		if (deg > maxDeg) {
-			maxDeg = deg;
-			maxId = id;
-		}
-	}
-	return maxId;
+  let maxId = content.frames[0].id;
+  let maxDeg = 0;
+  for (const [id, deg] of inDegree) {
+    if (deg > maxDeg) {
+      maxDeg = deg;
+      maxId = id;
+    }
+  }
+  return maxId;
 }
 
 // ── Tree structure for sidebar ──
 
 export interface TreeNode {
-	frameId: string;
-	frameType: string;
-	diffStatus: "modified" | "added" | "removed" | "identical";
-	relationToParent?: string;
-	children: TreeNode[];
+  frameId: string;
+  frameType: string;
+  diffStatus: 'modified' | 'added' | 'removed' | 'identical';
+  relationToParent?: string;
+  children: TreeNode[];
 }
 
 /**
@@ -88,60 +86,54 @@ export interface TreeNode {
  * Uses relations to determine parent-child hierarchy.
  */
 export function buildFrameTree(
-	content: SemanticContent,
-	diffStatusMap: Map<
-		string,
-		"modified" | "added" | "removed" | "identical"
-	>,
-	rootId?: string,
+  content: SemanticContent,
+  diffStatusMap: Map<string, 'modified' | 'added' | 'removed' | 'identical'>,
+  rootId?: string
 ): TreeNode[] {
-	const frameMap = new Map(content.frames.map((f) => [f.id, f]));
-	// Relations point FROM child TO parent (e.g., budget -[conditions]-> travel_plan)
-	// So r.to is the parent, r.from is the child
-	const childEdges = new Map<
-		string,
-		Array<{ childId: string; relType: string }>
-	>();
+  const frameMap = new Map(content.frames.map((f) => [f.id, f]));
+  // Relations point FROM child TO parent (e.g., budget -[conditions]-> travel_plan)
+  // So r.to is the parent, r.from is the child
+  const childEdges = new Map<string, Array<{ childId: string; relType: string }>>();
 
-	for (const r of content.relations) {
-		if (!childEdges.has(r.to)) childEdges.set(r.to, []);
-		childEdges.get(r.to)!.push({ childId: r.from, relType: r.type });
-	}
+  for (const r of content.relations) {
+    if (!childEdges.has(r.to)) childEdges.set(r.to, []);
+    childEdges.get(r.to)!.push({ childId: r.from, relType: r.type });
+  }
 
-	const visited = new Set<string>();
+  const visited = new Set<string>();
 
-	function buildNode(id: string, relToParent?: string): TreeNode | null {
-		if (visited.has(id) || !frameMap.has(id)) return null;
-		visited.add(id);
-		const frame = frameMap.get(id)!;
-		const children: TreeNode[] = [];
-		for (const edge of childEdges.get(id) ?? []) {
-			const child = buildNode(edge.childId, edge.relType);
-			if (child) children.push(child);
-		}
-		return {
-			frameId: id,
-			frameType: frame.type,
-			diffStatus: diffStatusMap.get(id) ?? "identical",
-			relationToParent: relToParent,
-			children,
-		};
-	}
+  function buildNode(id: string, relToParent?: string): TreeNode | null {
+    if (visited.has(id) || !frameMap.has(id)) return null;
+    visited.add(id);
+    const frame = frameMap.get(id)!;
+    const children: TreeNode[] = [];
+    for (const edge of childEdges.get(id) ?? []) {
+      const child = buildNode(edge.childId, edge.relType);
+      if (child) children.push(child);
+    }
+    return {
+      frameId: id,
+      frameType: frame.type,
+      diffStatus: diffStatusMap.get(id) ?? 'identical',
+      relationToParent: relToParent,
+      children,
+    };
+  }
 
-	const root = rootId ?? deriveRootFrameId(content);
-	const trees: TreeNode[] = [];
-	if (root) {
-		const node = buildNode(root);
-		if (node) trees.push(node);
-	}
-	// Add orphans (not visited by tree traversal)
-	for (const f of content.frames) {
-		if (!visited.has(f.id)) {
-			const node = buildNode(f.id);
-			if (node) trees.push(node);
-		}
-	}
-	return trees;
+  const root = rootId ?? deriveRootFrameId(content);
+  const trees: TreeNode[] = [];
+  if (root) {
+    const node = buildNode(root);
+    if (node) trees.push(node);
+  }
+  // Add orphans (not visited by tree traversal)
+  for (const f of content.frames) {
+    if (!visited.has(f.id)) {
+      const node = buildNode(f.id);
+      if (node) trees.push(node);
+    }
+  }
+  return trees;
 }
 
 /**
@@ -149,50 +141,44 @@ export function buildFrameTree(
  * Returns keys in order: shared keys (preserving target order), then removed-only, then added-only.
  */
 export interface AlignedSlot {
-	key: string;
-	inLeft: boolean;
-	inRight: boolean;
+  key: string;
+  inLeft: boolean;
+  inRight: boolean;
 }
 
-export function buildAlignedSlotKeys(
-	leftFrame: Frame,
-	rightFrame: Frame,
-): AlignedSlot[] {
-	const leftKeys = Object.keys(leftFrame.slots);
-	const rightKeys = Object.keys(rightFrame.slots);
-	const rightSet = new Set(rightKeys);
-	const leftSet = new Set(leftKeys);
+export function buildAlignedSlotKeys(leftFrame: Frame, rightFrame: Frame): AlignedSlot[] {
+  const leftKeys = Object.keys(leftFrame.slots);
+  const rightKeys = Object.keys(rightFrame.slots);
+  const rightSet = new Set(rightKeys);
+  const leftSet = new Set(leftKeys);
 
-	const result: AlignedSlot[] = [];
+  const result: AlignedSlot[] = [];
 
-	// First: keys in right frame order (target is primary narrative)
-	for (const key of rightKeys) {
-		result.push({ key, inLeft: leftSet.has(key), inRight: true });
-	}
+  // First: keys in right frame order (target is primary narrative)
+  for (const key of rightKeys) {
+    result.push({ key, inLeft: leftSet.has(key), inRight: true });
+  }
 
-	// Then: keys only in left (removed slots), preserving left order
-	for (const key of leftKeys) {
-		if (!rightSet.has(key)) {
-			result.push({ key, inLeft: true, inRight: false });
-		}
-	}
+  // Then: keys only in left (removed slots), preserving left order
+  for (const key of leftKeys) {
+    if (!rightSet.has(key)) {
+      result.push({ key, inLeft: true, inRight: false });
+    }
+  }
 
-	return result;
+  return result;
 }
 
 /**
  * Build a diff status map from FrameDiff for use with buildFrameTree.
  */
 export function buildDiffStatusMap(
-	diff: FrameDiff,
-): Map<string, "modified" | "added" | "removed" | "identical"> {
-	const map = new Map<
-		string,
-		"modified" | "added" | "removed" | "identical"
-	>();
-	for (const m of diff.modified) map.set(m.frameId, "modified");
-	for (const f of diff.onlyInSource) map.set(f.id, "removed");
-	for (const f of diff.onlyInTarget) map.set(f.id, "added");
-	for (const f of diff.identical) map.set(f.id, "identical");
-	return map;
+  diff: FrameDiff
+): Map<string, 'modified' | 'added' | 'removed' | 'identical'> {
+  const map = new Map<string, 'modified' | 'added' | 'removed' | 'identical'>();
+  for (const m of diff.modified) map.set(m.frameId, 'modified');
+  for (const f of diff.onlyInSource) map.set(f.id, 'removed');
+  for (const f of diff.onlyInTarget) map.set(f.id, 'added');
+  for (const f of diff.identical) map.set(f.id, 'identical');
+  return map;
 }

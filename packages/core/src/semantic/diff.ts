@@ -42,16 +42,23 @@ export function frameDiff(
   const relationsRemoved = source.relations.filter((r) => !tgtRelKeys.has(relKey(r)));
 
   const topicChanged =
-    source.topic !== target.topic
-      ? { oldTopic: source.topic, newTopic: target.topic }
-      : undefined;
+    source.topic !== target.topic ? { oldTopic: source.topic, newTopic: target.topic } : undefined;
 
   const rootChanged =
     source.root_frame_id !== target.root_frame_id
       ? { oldRoot: source.root_frame_id, newRoot: target.root_frame_id }
       : undefined;
 
-  return { identical, modified, onlyInSource, onlyInTarget, relationsAdded, relationsRemoved, topicChanged, rootChanged };
+  return {
+    identical,
+    modified,
+    onlyInSource,
+    onlyInTarget,
+    relationsAdded,
+    relationsRemoved,
+    topicChanged,
+    rootChanged,
+  };
 }
 
 function diffSlots(
