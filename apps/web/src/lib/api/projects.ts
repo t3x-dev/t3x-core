@@ -53,7 +53,7 @@ export async function updateProject(
   payload: UpdateProjectPayload
 ): Promise<Project> {
   const res = await fetchWithTimeout(`${API_V1}/projects/${encodeURIComponent(projectId)}`, {
-    method: 'PATCH',
+    method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });

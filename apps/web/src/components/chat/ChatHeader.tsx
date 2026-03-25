@@ -1,6 +1,6 @@
 'use client';
 
-import { GitBranch, LayoutDashboard } from 'lucide-react';
+import { GitBranch, LayoutDashboard, Settings } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { glass } from '@/lib/theme';
@@ -75,7 +75,7 @@ export function ChatHeader({
         </div>
       )}
 
-      {/* Right: Canvas link */}
+      {/* Right: Canvas link + Settings */}
       <Button
         type="button"
         variant="ghost"
@@ -92,6 +92,26 @@ export function ChatHeader({
       >
         <LayoutDashboard className="h-3.5 w-3.5" />
         <span>Canvas</span>
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        onClick={() => {
+          if (activeProjectId) {
+            router.push(`/project/${activeProjectId}/settings`);
+          }
+        }}
+        disabled={!activeProjectId}
+        className={cn(
+          'shrink-0 h-8 w-8 text-[var(--text-secondary)] rounded-lg',
+          'hover:text-[var(--text-primary)] hover:bg-[var(--hover-bg)]',
+          'transition-colors duration-[var(--motion-base)]',
+          'disabled:opacity-40 disabled:cursor-not-allowed'
+        )}
+        aria-label="Project Settings"
+      >
+        <Settings className="h-3.5 w-3.5" />
       </Button>
     </header>
   );
