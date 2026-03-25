@@ -39,6 +39,7 @@ import {
 import { getDB } from '../lib/db';
 import { toDeltaLogEntries } from '../lib/delta-log-utils';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { syncDeltaToFrames } from '../lib/frame-state-sync';
 import { assertProjectAccess } from '../lib/project-access';
 import { getProviderRegistry } from '../lib/provider-registry';
 import { getUserId, recordUsageFireAndForget, wrapWithUsageTracking } from '../lib/usage-tracking';
@@ -594,15 +595,21 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
       );
     }
 
-    // 7c. Insert delta into delta log
-    const record = await insertDeltaLogEntry(db, {
-      conversationId: conversation_id,
-      projectId: conversation.projectId,
-      source: 'pipeline',
-      delta: result.delta,
-      pipelineState: 'completed',
-      gateResultJson: gateResult ?? null,
-      topicId: resolvedTopicId,
+    // 7c. Write delta_log + sync frames atomically
+    const record = await (db as any).transaction(async (tx: any) => {
+      const rec = await insertDeltaLogEntry(tx, {
+        conversationId: conversation_id,
+        projectId: conversation.projectId,
+        source: 'pipeline',
+        delta: result.delta,
+        pipelineState: 'completed',
+        gateResultJson: gateResult ?? null,
+        topicId: resolvedTopicId,
+      });
+      await syncDeltaToFrames(tx, conversation_id, conversation.projectId, result.delta, 'pipeline', {
+        topicId: resolvedTopicId,
+      });
+      return rec;
     });
 
     // ── Step 7: Emit extraction.completed event ──
