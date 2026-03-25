@@ -3,9 +3,9 @@ import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_STYLE,
   type ExtractionStyleConfig,
+  matchPreset,
   PRESETS,
   type PresetName,
-  matchPreset,
 } from '../../extractors/extractionStyleConfig';
 
 describe('ExtractionStyleConfig', () => {

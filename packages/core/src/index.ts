@@ -102,6 +102,8 @@ export {
   type AnchorType,
   // Incremental Extraction (LLM pipeline)
   buildAdaptiveSection,
+  // Frame Compression
+  buildCompressPrompt,
   // LLM Extraction
   buildExtractionPrompt,
   // Frame Extraction (Phase 2)
@@ -111,6 +113,9 @@ export {
   // Relations
   buildRelationPrompt,
   buildStyleSeed,
+  type CompressInput,
+  type CompressMetadata,
+  type CompressResult,
   computeAdaptiveConfig,
   computeAdaptiveThresholds,
   createLLMExtractor,
@@ -119,18 +124,13 @@ export {
   type ExtractedSentence,
   type ExtractionItem,
   ExtractionParseError,
+  FrameCompressor,
   type FrameDeltaParseResult,
   type FrameExtractionInput,
   type FrameExtractionPromptResult,
   type FrameExtractionResult,
   type FrameExtractionTurn,
   FrameExtractor,
-  // Frame Compression
-  buildCompressPrompt,
-  type CompressInput,
-  type CompressMetadata,
-  type CompressResult,
-  FrameCompressor,
   type FrameWithSignals,
   type FuzzyLocateResult,
   fuzzyLocate,

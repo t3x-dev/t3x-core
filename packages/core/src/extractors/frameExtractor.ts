@@ -16,10 +16,10 @@ import { applyDelta } from '../semantic/delta';
 import { DeltaSchema } from '../semantic/schema';
 import type { Delta, SemanticContent } from '../semantic/types';
 import { validateIntegrity } from '../semantic/validate';
+import type { ExtractionStyleConfig } from './extractionStyleConfig';
 import { parseFrameDelta } from './frameDeltaParser';
 import type { FrameExtractionInput, FrameExtractionTurn } from './frameExtractionPrompt';
 import { buildFrameExtractionPrompt } from './frameExtractionPrompt';
-import type { ExtractionStyleConfig } from './extractionStyleConfig';
 
 // ── Constants ──
 
@@ -112,7 +112,10 @@ async function _callGenerateStructured(
 export class FrameExtractor {
   constructor(private readonly provider: LLMProvider) {}
 
-  async extract(input: FrameExtractionInput, style?: ExtractionStyleConfig): Promise<FrameExtractionResult> {
+  async extract(
+    input: FrameExtractionInput,
+    style?: ExtractionStyleConfig
+  ): Promise<FrameExtractionResult> {
     const baseSnapshot: SemanticContent = input.snapshot ?? { frames: [], relations: [] };
     // ── Text generation path ──
     // Always use generate() (not generateStructured) so we can extract
