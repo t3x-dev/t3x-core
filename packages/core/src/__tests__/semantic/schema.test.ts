@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DeltaSchema, FrameSchema, SemanticContentSchema } from '../../semantic/schema';
+import { DeltaSchema, FrameSchema, FrameRelationTypeSchema, SemanticContentSchema, TreeNativeDeltaSchema } from '../../semantic/schema';
 
 describe('FrameSchema', () => {
   it('accepts valid frame', () => {
@@ -13,7 +13,7 @@ describe('FrameSchema', () => {
 
   it('rejects invalid id format', () => {
     const result = FrameSchema.safeParse({
-      id: 'bad',
+      id: 'Bad-id',
       type: 'x',
       slots: { a: 1 },
     });
@@ -105,6 +105,33 @@ describe('FrameSchema', () => {
       slots: { a: 1 },
       confidence: 1.5,
     });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe('FrameSchema (path-based IDs)', () => {
+  it('accepts legacy f_NNN IDs', () => {
+    const result = FrameSchema.safeParse({ id: 'f_001', type: 'test', slots: { a: 1 } });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts path-based IDs', () => {
+    const result = FrameSchema.safeParse({ id: 'hangzhou_trip', type: 'hangzhou_trip', slots: { a: 1 } });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts nested path-based IDs', () => {
+    const result = FrameSchema.safeParse({ id: 'hangzhou_trip/activity_plan', type: 'activity_plan', slots: { a: 1 } });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts deep path-based IDs', () => {
+    const result = FrameSchema.safeParse({ id: 'trip/activities/gear', type: 'gear', slots: { a: 1 } });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects invalid path characters', () => {
+    const result = FrameSchema.safeParse({ id: 'Trip/Activity', type: 'test', slots: { a: 1 } });
     expect(result.success).toBe(false);
   });
 });
@@ -203,5 +230,59 @@ describe('DeltaSchema', () => {
       changes: [],
     });
     expect(result.success).toBe(false);
+  });
+});
+
+describe('FrameRelationTypeSchema', () => {
+  it('accepts depends', () => {
+    expect(FrameRelationTypeSchema.safeParse('depends').success).toBe(true);
+  });
+  it('accepts causes', () => {
+    expect(FrameRelationTypeSchema.safeParse('causes').success).toBe(true);
+  });
+  it('accepts follows', () => {
+    expect(FrameRelationTypeSchema.safeParse('follows').success).toBe(true);
+  });
+  it('accepts contrasts', () => {
+    expect(FrameRelationTypeSchema.safeParse('contrasts').success).toBe(true);
+  });
+  it('accepts elaborates (legacy)', () => {
+    expect(FrameRelationTypeSchema.safeParse('elaborates').success).toBe(true);
+  });
+  it('rejects conditions', () => {
+    expect(FrameRelationTypeSchema.safeParse('conditions').success).toBe(false);
+  });
+});
+
+describe('TreeNativeDeltaSchema', () => {
+  it('accepts add with parent_path and node', () => {
+    const result = TreeNativeDeltaSchema.safeParse({
+      changes: [{
+        action: 'add',
+        parent_path: 'hangzhou_trip',
+        node: { transportation: { mode: 'rail' } },
+        slot_quotes: { 'transportation.mode': 'take the rail' },
+      }],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts update with target_path', () => {
+    const result = TreeNativeDeltaSchema.safeParse({
+      changes: [{
+        action: 'update',
+        target_path: 'hangzhou_trip/dining',
+        slots: { budget: 800 },
+        slot_quotes: { 'dining.budget': 'budget to 800' },
+      }],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts remove with target_path', () => {
+    const result = TreeNativeDeltaSchema.safeParse({
+      changes: [{ action: 'remove', target_path: 'hangzhou_trip/shopping', reason: 'cancelled' }],
+    });
+    expect(result.success).toBe(true);
   });
 });

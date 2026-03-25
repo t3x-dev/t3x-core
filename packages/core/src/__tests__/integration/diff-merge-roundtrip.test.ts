@@ -18,7 +18,7 @@ describe('diff-merge roundtrip integration', () => {
       { id: 'f_002', type: 'budget', slots: { amount: 5000, currency: 'USD' } },
       { id: 'f_003', type: 'preference', slots: { food: 'sushi' } },
     ],
-    relations: [{ from: 'f_002', to: 'f_001', type: 'conditions' }],
+    relations: [{ from: 'f_002', to: 'f_001', type: 'depends' }],
   };
 
   // Source branch: changed budget + added activity
@@ -30,7 +30,7 @@ describe('diff-merge roundtrip integration', () => {
       { id: 'f_004', type: 'activity', slots: { name: 'temple visit' } }, // added
     ],
     relations: [
-      { from: 'f_002', to: 'f_001', type: 'conditions' },
+      { from: 'f_002', to: 'f_001', type: 'depends' },
       { from: 'f_004', to: 'f_001', type: 'elaborates' }, // new relation
     ],
   };
@@ -44,7 +44,7 @@ describe('diff-merge roundtrip integration', () => {
       { id: 'f_005', type: 'accommodation', slots: { type: 'ryokan' } }, // added
     ],
     relations: [
-      { from: 'f_002', to: 'f_001', type: 'conditions' },
+      { from: 'f_002', to: 'f_001', type: 'depends' },
       { from: 'f_005', to: 'f_001', type: 'elaborates' }, // new relation
     ],
   };

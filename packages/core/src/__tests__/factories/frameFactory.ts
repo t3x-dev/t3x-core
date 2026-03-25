@@ -45,7 +45,7 @@ export function createFrameWithSlots(
 export function createRelation(
   fromId: string,
   toId: string,
-  type: Relation['type'] = 'elaborates'
+  type: Relation['type'] = 'depends'
 ): Relation {
   return { from: fromId, to: toId, type };
 }

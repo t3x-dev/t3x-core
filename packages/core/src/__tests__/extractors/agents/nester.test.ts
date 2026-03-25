@@ -120,7 +120,7 @@ describe('nesterAgent', () => {
     // Cycle: f_2 → f_1, f_1 → f_2 (via different relation)
     const ctx = makeCtx(
       [f1, f2, f3],
-      [createRelation('f_2', 'f_1', 'elaborates'), createRelation('f_1', 'f_2', 'conditions')]
+      [createRelation('f_2', 'f_1', 'elaborates'), createRelation('f_1', 'f_2', 'depends')]
     );
 
     // Should not throw or infinite loop

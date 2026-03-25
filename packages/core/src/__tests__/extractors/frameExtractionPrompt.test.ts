@@ -29,7 +29,7 @@ const sampleSnapshot: SemanticContent = {
       confidence: 0.9,
     },
   ],
-  relations: [{ from: 'f_001', to: 'f_002', type: 'conditions', confidence: 0.85 }],
+  relations: [{ from: 'f_001', to: 'f_002', type: 'depends', confidence: 0.85 }],
 };
 
 describe('buildFrameExtractionPrompt', () => {
@@ -94,7 +94,7 @@ describe('buildFrameExtractionPrompt', () => {
         turns: sampleTurns,
         snapshot: sampleSnapshot,
       });
-      expect(result.userPrompt).toContain('conditions');
+      expect(result.userPrompt).toContain('depends');
       expect(result.userPrompt).toContain('f_001');
       expect(result.userPrompt).toContain('f_002');
     });
@@ -120,11 +120,10 @@ describe('buildFrameExtractionPrompt', () => {
     });
   });
 
-  describe('system prompt includes all 6 relation types', () => {
+  describe('system prompt includes all 5 relation types', () => {
     it('lists all relation types in both modes', () => {
       const relationTypes = [
         'causes',
-        'conditions',
         'contrasts',
         'elaborates',
         'follows',
