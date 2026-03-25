@@ -472,6 +472,44 @@ CREATE INDEX IF NOT EXISTS idx_ke_project ON knowledge_edges (project_id);
 CREATE INDEX IF NOT EXISTS idx_ke_source ON knowledge_edges (source_node_id);
 CREATE INDEX IF NOT EXISTS idx_ke_target ON knowledge_edges (target_node_id);
 
+-- Frames (source-of-truth for current frame state)
+CREATE TABLE IF NOT EXISTS frames (
+  conversation_id TEXT NOT NULL REFERENCES conversations(conversation_id) ON DELETE CASCADE,
+  frame_id TEXT NOT NULL,
+  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  topic_id TEXT,
+  type TEXT NOT NULL,
+  slots JSONB NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active',
+  confidence REAL,
+  source TEXT NOT NULL,
+  slot_sources JSONB,
+  manual_edited BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (conversation_id, frame_id)
+);
+CREATE INDEX IF NOT EXISTS idx_frames_project ON frames(project_id);
+CREATE INDEX IF NOT EXISTS idx_frames_type ON frames(type);
+CREATE INDEX IF NOT EXISTS idx_frames_conv_topic ON frames(conversation_id, topic_id);
+CREATE INDEX IF NOT EXISTS idx_frames_manual ON frames(conversation_id, manual_edited) WHERE manual_edited = TRUE;
+
+-- Frame Relations (source-of-truth for current relations)
+CREATE TABLE IF NOT EXISTS frame_relations (
+  id TEXT PRIMARY KEY,
+  conversation_id TEXT NOT NULL REFERENCES conversations(conversation_id) ON DELETE CASCADE,
+  topic_id TEXT,
+  from_frame_id TEXT NOT NULL,
+  to_frame_id TEXT NOT NULL,
+  type TEXT NOT NULL,
+  confidence REAL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_frel_conversation ON frame_relations(conversation_id);
+CREATE INDEX IF NOT EXISTS idx_frel_topic ON frame_relations(conversation_id, topic_id);
+CREATE INDEX IF NOT EXISTS idx_frel_from ON frame_relations(from_frame_id);
+CREATE INDEX IF NOT EXISTS idx_frel_to ON frame_relations(to_frame_id);
+
 `;
 
 /** SQL for pgvector sentence_vectors table (created separately, may fail if vector unavailable) */

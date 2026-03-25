@@ -40,6 +40,8 @@ export * from './schema-extraction-feedback';
 // Schema (leaves, pins, conversation_contexts + retired commits_v4 for migration)
 // @see docs/specification/semantic-layer-architecture.md
 export * from './schema-frames';
+// Frame State (source-of-truth for current frames)
+export * from './schema-frame-state';
 // Knowledge Conflicts Schema (conflict detection persistence)
 export * from './schema-knowledge-conflicts';
 // Observable Metrics Schema (event tracking)
