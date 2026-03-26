@@ -1,18 +1,27 @@
 /**
- * Hash computation for frame-based commits.
+ * Hash computation for tree-primary commits.
  *
  * First-class fields (in hash):
  *   schema, parents, author, committed_at,
- *   content.frames (id, type, slots, confidence),
- *   content.relations (from, to, type, confidence)
+ *   content.trees (key, slots, children — recursive),
+ *   content.relations (from, to, type)
  *
  * Second-class fields (NOT in hash):
- *   frame.source, frame.slot_sources,
- *   project_id, message, branch, sources, provenance, position
+ *   tree node source, slot_quotes, confidence,
+ *   project_id, message, branch, provenance, position
  */
 
 import { sha256 } from '../common/hash';
 import type { CommitFirstClass } from './types';
+import type { TreeNode } from '../semantic/types';
+
+function stripTree(node: TreeNode): { key: string; slots: Record<string, unknown>; children: ReturnType<typeof stripTree>[] } {
+  return {
+    key: node.key,
+    slots: node.slots,
+    children: node.children.map(stripTree),
+  };
+}
 
 export function computeCommitHash(commit: CommitFirstClass): string {
   const hashable = {
@@ -21,21 +30,11 @@ export function computeCommitHash(commit: CommitFirstClass): string {
     author: commit.author,
     committed_at: commit.committed_at,
     content: {
-      ...(commit.content.topic !== undefined ? { topic: commit.content.topic } : {}),
-      ...(commit.content.root_frame_id !== undefined
-        ? { root_frame_id: commit.content.root_frame_id }
-        : {}),
-      frames: commit.content.frames.map((f) => ({
-        id: f.id,
-        type: f.type,
-        slots: f.slots,
-        ...(f.confidence !== undefined ? { confidence: f.confidence } : {}),
-      })),
+      trees: commit.content.trees.map(stripTree),
       relations: commit.content.relations.map((r) => ({
         from: r.from,
         to: r.to,
         type: r.type,
-        ...(r.confidence !== undefined ? { confidence: r.confidence } : {}),
       })),
     },
   };
