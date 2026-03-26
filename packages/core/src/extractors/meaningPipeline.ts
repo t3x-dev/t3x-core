@@ -16,7 +16,7 @@
  */
 
 import type { LLMCallLogger, LLMProvider } from '../llm/types';
-import type { Frame, SemanticContent, SlotValue } from '../semantic/types';
+import type { FlatNode, SemanticContent, SlotValue } from '../semantic/types';
 import { flattenTrees } from '../semantic/tree';
 import type { ExtractionTurn } from './extractionPrompt';
 
@@ -206,7 +206,7 @@ export interface QualityMetrics {
 }
 
 function computeMetrics(content: SemanticContent): QualityMetrics {
-  const frames: Frame[] = flattenTrees(content.trees);
+  const frames: FlatNode[] = flattenTrees(content.trees);
   const typeCount = new Map<string, number>();
   let totalSlots = 0;
   let framesWithArrays = 0;

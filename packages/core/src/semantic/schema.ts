@@ -80,14 +80,14 @@ export const DeltaSchema = z.object({
 /** @internal Alias — tree-native delta IS the standard delta now. */
 export const TreeNativeDeltaSchema = DeltaSchema;
 
-// ── Internal: Frame Schema (for diff/merge validation only) ──
+// ── Internal: FlatNode Schema (for diff/merge validation only) ──
 
 /** @internal */
-export const FrameSchema = z.object({
+export const FlatNodeSchema = z.object({
   id: z.string(),
   type: z.string().min(1),
   slots: z.record(z.string(), SlotValueSchema)
-    .refine((s) => Object.keys(s).length >= 1, { message: 'Frame must have at least one slot' }),
+    .refine((s) => Object.keys(s).length >= 1, { message: 'FlatNode must have at least one slot' }),
   source: z.string().optional(),
   confidence: z.number().min(0).max(1).optional(),
 });

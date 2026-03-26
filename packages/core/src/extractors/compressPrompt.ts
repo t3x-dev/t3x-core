@@ -5,9 +5,9 @@
  * Input: frames with engagement signals → Output: Delta with remove/update actions.
  */
 
-import type { Frame, Relation } from '../semantic/types';
+import type { FlatNode, Relation } from '../semantic/types';
 
-export interface NodeWithSignals extends Frame {
+export interface NodeWithSignals extends FlatNode {
   has_manual_edit: boolean;
   last_touched: number;
   mention_count: number;

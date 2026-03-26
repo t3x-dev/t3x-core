@@ -12,7 +12,7 @@
  */
 
 import type { LLMProvider } from '../../llm/types';
-import type { Frame, SlotValue } from '../../semantic/types';
+import type { FlatNode, SlotValue } from '../../semantic/types';
 import { flattenTrees, unflattenToTrees } from '../../semantic/tree';
 import type { MeaningAgent, PipelineContext } from '../meaningPipeline';
 
@@ -58,9 +58,9 @@ export const reviewerAgent: MeaningAgent = {
   },
 
   async run(ctx: PipelineContext, provider: LLMProvider): Promise<PipelineContext> {
-    const frames: Frame[] = flattenTrees(ctx.content.trees);
+    const frames: FlatNode[] = flattenTrees(ctx.content.trees);
     const framesDescription = frames
-      .map((f: Frame) => {
+      .map((f: FlatNode) => {
         const slotsStr = JSON.stringify(f.slots, null, 1).slice(0, 300);
         return `${f.id} ${f.type}: ${slotsStr}`;
       })
@@ -115,7 +115,7 @@ Review this document:`;
         // Fix 2: Rename slots across all frames
         if (review.fixes.rename_slots) {
           const renames = review.fixes.rename_slots;
-          modifiedFrames = modifiedFrames.map((frame: Frame) => {
+          modifiedFrames = modifiedFrames.map((frame: FlatNode) => {
             const newSlots: Record<string, SlotValue> = {};
             for (const [key, value] of Object.entries(frame.slots)) {
               const newKey = renames[key] ?? key;
@@ -130,15 +130,15 @@ Review this document:`;
           for (const pair of review.fixes.merge_frames) {
             if (pair.length !== 2) continue;
             const [keepId, removeId] = pair;
-            const keepFrame = modifiedFrames.find((f: Frame) => f.id === keepId);
-            const removeFrame = modifiedFrames.find((f: Frame) => f.id === removeId);
+            const keepFrame = modifiedFrames.find((f: FlatNode) => f.id === keepId);
+            const removeFrame = modifiedFrames.find((f: FlatNode) => f.id === removeId);
             if (keepFrame && removeFrame) {
               for (const [key, value] of Object.entries(removeFrame.slots)) {
                 if (!(key in keepFrame.slots)) {
                   keepFrame.slots[key] = value;
                 }
               }
-              modifiedFrames = modifiedFrames.filter((f: Frame) => f.id !== removeId);
+              modifiedFrames = modifiedFrames.filter((f: FlatNode) => f.id !== removeId);
             }
           }
         }

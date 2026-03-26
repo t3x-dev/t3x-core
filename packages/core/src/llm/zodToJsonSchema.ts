@@ -1,7 +1,7 @@
 /**
  * Minimal Zod v4 to JSON Schema converter.
  *
- * Handles the subset of Zod types used in FrameSchema and DeltaSchema:
+ * Handles the subset of Zod types used in FlatNodeSchema and DeltaSchema:
  * object, string, number, boolean, array, enum, literal, union,
  * discriminatedUnion, record, lazy, optional, nullable, and refinements.
  *

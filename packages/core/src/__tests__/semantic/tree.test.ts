@@ -5,7 +5,7 @@ import {
   isTreeNative,
   unflattenToTree,
 } from '../../semantic/tree';
-import type { Frame, TreeNode } from '../../semantic/types';
+import type { FlatNode, TreeNode } from '../../semantic/types';
 
 describe('flattenTree', () => {
   it('flattens a single root node to one frame', () => {
@@ -94,7 +94,7 @@ describe('flattenTree', () => {
 
 describe('unflattenToTree', () => {
   it('reconstructs tree from flat frames', () => {
-    const frames: Frame[] = [
+    const frames: FlatNode[] = [
       { id: 'hangzhou_trip', type: 'hangzhou_trip', slots: { destination: 'Hangzhou' } },
       {
         id: 'hangzhou_trip/activity_plan',

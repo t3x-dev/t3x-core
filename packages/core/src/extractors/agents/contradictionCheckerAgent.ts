@@ -8,7 +8,7 @@
  */
 
 import type { LLMProvider } from '../../llm/types';
-import type { Frame } from '../../semantic/types';
+import type { FlatNode } from '../../semantic/types';
 import { flattenTrees, unflattenToTrees } from '../../semantic/tree';
 import type { MeaningAgent, PipelineContext } from '../meaningPipeline';
 
@@ -58,14 +58,14 @@ export const contradictionCheckerAgent: MeaningAgent = {
   },
 
   async run(ctx: PipelineContext, provider: LLMProvider): Promise<PipelineContext> {
-    const frames: Frame[] = flattenTrees(ctx.content.trees);
+    const frames: FlatNode[] = flattenTrees(ctx.content.trees);
     const userTurns = ctx.turns
       .filter((t) => t.role === 'user')
       .map((t, i) => `[U${i + 1}]: ${t.content}`)
       .join('\n');
 
     const framesDescription = frames
-      .map((f: Frame) => `${f.id} ${f.type}: ${JSON.stringify(f.slots, null, 1).slice(0, 400)}`)
+      .map((f: FlatNode) => `${f.id} ${f.type}: ${JSON.stringify(f.slots, null, 1).slice(0, 400)}`)
       .join('\n\n');
 
     const userPrompt = `## User Messages\n${userTurns}\n\n## Current Frames\n${framesDescription}\n\nCheck for contradictions:`;
@@ -96,14 +96,14 @@ export const contradictionCheckerAgent: MeaningAgent = {
 
       for (const c of parsed.contradictions) {
         if (c.action === 'remove_frame') {
-          modifiedFrames = modifiedFrames.filter((f: Frame) => f.id !== c.frame_id);
+          modifiedFrames = modifiedFrames.filter((f: FlatNode) => f.id !== c.frame_id);
         } else if (c.action === 'remove_slot') {
-          const frame = modifiedFrames.find((f: Frame) => f.id === c.frame_id);
+          const frame = modifiedFrames.find((f: FlatNode) => f.id === c.frame_id);
           if (frame && c.slot_key in frame.slots) {
             const { [c.slot_key]: _, ...remainingSlots } = frame.slots;
             frame.slots = remainingSlots;
             if (Object.keys(frame.slots).length === 0) {
-              modifiedFrames = modifiedFrames.filter((f: Frame) => f.id !== c.frame_id);
+              modifiedFrames = modifiedFrames.filter((f: FlatNode) => f.id !== c.frame_id);
             }
           }
         }

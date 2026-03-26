@@ -1,5 +1,5 @@
 import { flattenTrees } from './tree';
-import type { Frame, SemanticContent, SlotDiff, SlotValue, TreeDiff, WordDiffFn } from './types';
+import type { FlatNode, SemanticContent, SlotDiff, SlotValue, TreeDiff, WordDiffFn } from './types';
 import { deepEqual, relKey } from './utils';
 
 const WORD_DIFF_THRESHOLD = 5;
@@ -8,7 +8,7 @@ const WORD_DIFF_THRESHOLD = 5;
  * Compute a semantic diff between two SemanticContent snapshots.
  *
  * Internally flattens trees to frames for comparison, then returns
- * results using path strings (not Frame objects).
+ * results using path strings (not FlatNode objects).
  */
 export function diffCommits(
   source: SemanticContent,

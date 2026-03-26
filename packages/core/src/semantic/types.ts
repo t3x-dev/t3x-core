@@ -153,8 +153,8 @@ export interface SlotConflict {
 
 export type MergeResolution = 'source' | 'target' | 'both' | { edit: TreeNode };
 // Note: when user picks { edit: TreeNode }, the merge wrapper must convert
-// the edited TreeNode to Frame(s) via flattenTree() before passing to the
-// internal frame-based merge engine, then unflatten the result back.
+// the edited TreeNode to FlatNode(s) via flattenTree() before passing to the
+// internal FlatNode-based merge engine, then unflatten the result back.
 
 export interface MergeDecision {
   conflictResolutions: Record<string, MergeResolution>;
@@ -262,10 +262,10 @@ export interface CoverageResult {
   usage: { inputTokens: number; outputTokens: number };
 }
 
-// ── Internal: Frame (used only by diff/merge engine) ──
+// ── Internal: FlatNode (used only by diff/merge engine) ──
 
 /** @internal — not part of public API. Used by diff/merge algorithms. */
-export interface Frame {
+export interface FlatNode {
   id: string;
   type: string;
   slots: Record<string, SlotValue>;

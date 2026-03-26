@@ -18,7 +18,7 @@
 import { nanoid } from 'nanoid';
 import { escapePromptContent } from '../llm/sanitize';
 import type { LLMProvider } from '../llm/types';
-import type { Frame, SemanticContent } from '../semantic/types';
+import type { FlatNode, SemanticContent } from '../semantic/types';
 import { flattenTrees } from '../semantic/tree';
 import type { AdvisoryQuestion } from './types';
 
@@ -78,12 +78,12 @@ export async function detectAmbiguity(
   snapshot: SemanticContent,
   recentTurns: Array<{ role: string; content: string }>
 ): Promise<AmbiguityResult> {
-  const frames: Frame[] = flattenTrees(snapshot.trees);
+  const frames: FlatNode[] = flattenTrees(snapshot.trees);
   if (frames.length === 0) return NO_AMBIGUITY;
 
   try {
     const framesYaml = frames
-      .map((f: Frame) => {
+      .map((f: FlatNode) => {
         const slots = Object.entries(f.slots)
           .map(([k, v]) => `    ${k}: ${JSON.stringify(v)}`)
           .join('\n');
@@ -103,7 +103,7 @@ export async function detectAmbiguity(
       maxTokens: 500,
     });
 
-    const validFrameIds = new Set(frames.map((f: Frame) => f.id));
+    const validFrameIds = new Set(frames.map((f: FlatNode) => f.id));
     return parseAmbiguityResponse(result.text, validFrameIds);
   } catch {
     return NO_AMBIGUITY;

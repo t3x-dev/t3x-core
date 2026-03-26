@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   DeltaSchema,
-  FrameSchema,
+  FlatNodeSchema,
   RelationTypeSchema,
   SemanticContentSchema,
   TreeNodeSchema,
@@ -87,9 +87,9 @@ describe('TreeNodeSchema', () => {
   });
 });
 
-describe('FrameSchema (internal)', () => {
+describe('FlatNodeSchema (internal)', () => {
   it('accepts valid frame', () => {
-    const result = FrameSchema.safeParse({
+    const result = FlatNodeSchema.safeParse({
       id: 'f_001',
       type: 'travel_plan',
       slots: { destination: 'Paris', budget: 5000 },
@@ -98,7 +98,7 @@ describe('FrameSchema (internal)', () => {
   });
 
   it('accepts path-based IDs', () => {
-    const result = FrameSchema.safeParse({
+    const result = FlatNodeSchema.safeParse({
       id: 'hangzhou_trip/activity_plan',
       type: 'activity_plan',
       slots: { a: 1 },
@@ -107,7 +107,7 @@ describe('FrameSchema (internal)', () => {
   });
 
   it('rejects empty slots', () => {
-    const result = FrameSchema.safeParse({
+    const result = FlatNodeSchema.safeParse({
       id: 'f_001',
       type: 'x',
       slots: {},
@@ -116,7 +116,7 @@ describe('FrameSchema (internal)', () => {
   });
 
   it('accepts optional confidence', () => {
-    const result = FrameSchema.safeParse({
+    const result = FlatNodeSchema.safeParse({
       id: 'f_001',
       type: 'x',
       slots: { a: 1 },
@@ -126,7 +126,7 @@ describe('FrameSchema (internal)', () => {
   });
 
   it('rejects confidence > 1', () => {
-    const result = FrameSchema.safeParse({
+    const result = FlatNodeSchema.safeParse({
       id: 'f_001',
       type: 'x',
       slots: { a: 1 },

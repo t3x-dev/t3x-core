@@ -1,6 +1,6 @@
 import { flattenTree, flattenTrees, unflattenToTrees } from './tree';
 import type {
-  Frame,
+  FlatNode,
   MergeDecision,
   MergeResolution,
   MergeResult,
@@ -122,7 +122,7 @@ export function executeMerge(
   const srcMap = new Map(sourceFrames.map((f) => [f.id, f]));
   const tgtMap = new Map(targetFrames.map((f) => [f.id, f]));
 
-  const resultFrames: Frame[] = [];
+  const resultFrames: FlatNode[] = [];
 
   // 1. Auto-kept: pick the best version
   for (const path of prepared.autoKept) {
@@ -209,7 +209,7 @@ export function executeMerge(
 
 // ── Internal helpers ──
 
-function framesEqual(a: Frame, b: Frame): boolean {
+function framesEqual(a: FlatNode, b: FlatNode): boolean {
   if (a.type !== b.type) return false;
   const aKeys = Object.keys(a.slots);
   const bKeys = Object.keys(b.slots);
@@ -217,7 +217,7 @@ function framesEqual(a: Frame, b: Frame): boolean {
   return aKeys.every((k) => k in b.slots && deepEqual(a.slots[k], b.slots[k]));
 }
 
-function findSlotConflicts(base: Frame | undefined, src: Frame, tgt: Frame): SlotConflict[] {
+function findSlotConflicts(base: FlatNode | undefined, src: FlatNode, tgt: FlatNode): SlotConflict[] {
   const conflicts: SlotConflict[] = [];
   const allKeys = new Set([...Object.keys(src.slots), ...Object.keys(tgt.slots)]);
 
@@ -240,7 +240,7 @@ function findSlotConflicts(base: Frame | undefined, src: Frame, tgt: Frame): Slo
   return conflicts;
 }
 
-function mergeNonConflicting(base: Frame, src: Frame, tgt: Frame): Frame {
+function mergeNonConflicting(base: FlatNode, src: FlatNode, tgt: FlatNode): FlatNode {
   const slots: Record<string, SlotValue> = { ...base.slots };
   const allKeys = new Set([
     ...Object.keys(src.slots),

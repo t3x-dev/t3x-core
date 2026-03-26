@@ -1,5 +1,5 @@
 import type {
-  Frame,
+  FlatNode,
   SemanticContent,
   TreeNode,
   ValidationError,
@@ -146,7 +146,7 @@ function collectDuplicateKeys(
 export function checkRelationSanity(content: SemanticContent): ValidationWarning[] {
   const warnings: ValidationWarning[] = [];
   const frames = flattenTrees(content.trees);
-  const frameMap = new Map<string, Frame>();
+  const frameMap = new Map<string, FlatNode>();
   for (const frame of frames) {
     frameMap.set(frame.id, frame);
   }

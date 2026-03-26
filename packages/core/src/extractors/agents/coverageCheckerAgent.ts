@@ -11,7 +11,7 @@
  */
 
 import type { LLMProvider } from '../../llm/types';
-import type { Frame, SlotValue } from '../../semantic/types';
+import type { FlatNode, SlotValue } from '../../semantic/types';
 import { flattenTrees, unflattenToTrees } from '../../semantic/tree';
 import type { MeaningAgent, PipelineContext } from '../meaningPipeline';
 
@@ -69,12 +69,12 @@ If nothing is missing: { "coverage_score": 1.0, "missing_points": [] }
 Output ONLY JSON. No explanation.`;
 
 /** Find an existing frame by type */
-function findFrameByType(frames: Frame[], type: string): Frame | undefined {
+function findFrameByType(frames: FlatNode[], type: string): FlatNode | undefined {
   return frames.find((f) => f.type === type);
 }
 
 /** Generate the next frame ID */
-function nextFrameId(frames: Frame[]): string {
+function nextFrameId(frames: FlatNode[]): string {
   let max = 0;
   for (const f of frames) {
     const match = f.id.match(/^f_(\d+)$/);
@@ -127,9 +127,9 @@ export const coverageCheckerAgent: MeaningAgent = {
     }
 
     // ── Step 2: Compare points against frames (LLM sees both) ──
-    const frames: Frame[] = flattenTrees(ctx.content.trees);
+    const frames: FlatNode[] = flattenTrees(ctx.content.trees);
     const framesDescription = frames
-      .map((f: Frame) => `${f.id} ${f.type}: ${JSON.stringify(f.slots, null, 1).slice(0, 400)}`)
+      .map((f: FlatNode) => `${f.id} ${f.type}: ${JSON.stringify(f.slots, null, 1).slice(0, 400)}`)
       .join('\n\n');
 
     const pointsList = userPoints
@@ -192,7 +192,7 @@ export const coverageCheckerAgent: MeaningAgent = {
           // If slot already exists with a non-array value, don't overwrite
         } else {
           // Create new frame
-          const newFrame: Frame = {
+          const newFrame: FlatNode = {
             id: nextFrameId(modifiedFrames),
             type: point.frame_type,
             slots: { [point.slot_key]: point.slot_value },

@@ -1,10 +1,10 @@
 /**
- * Frame Test Factories
+ * Frame Test Factories (creates FlatNode instances for testing)
  *
  * Create test frames, trees, relations, and SemanticContent with sensible defaults.
  */
 
-import type { Frame, Relation, SemanticContent, TreeNode } from '../../semantic/types';
+import type { FlatNode, Relation, SemanticContent, TreeNode } from '../../semantic/types';
 import { flattenTree, flattenTrees, unflattenToTrees } from '../../semantic/tree';
 
 let counter = 0;
@@ -19,7 +19,7 @@ export function resetFrameIds(): void {
 }
 
 /** Create a single frame with defaults */
-export function createFrame(overrides: Partial<Frame> & { type: string }): Frame {
+export function createFrame(overrides: Partial<FlatNode> & { type: string }): FlatNode {
   return {
     id: overrides.id ?? nextId(),
     type: overrides.type,
@@ -33,7 +33,7 @@ export function createFrameWithSlots(
   type: string,
   slots: Record<string, string | number | boolean>,
   id?: string
-): Frame {
+): FlatNode {
   return {
     id: id ?? nextId(),
     type,
@@ -56,7 +56,7 @@ export function createRelation(
  * Converts frames to trees via unflattenToTrees for tree-primary format.
  */
 export function createSemanticContent(
-  frames: Frame[],
+  frames: FlatNode[],
   relations: Relation[] = []
 ): SemanticContent {
   const trees = unflattenToTrees(frames);

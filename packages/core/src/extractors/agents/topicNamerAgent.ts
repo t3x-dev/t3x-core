@@ -12,7 +12,7 @@
  */
 
 import type { LLMProvider } from '../../llm/types';
-import type { Frame } from '../../semantic/types';
+import type { FlatNode } from '../../semantic/types';
 import { flattenTrees, unflattenToTrees } from '../../semantic/tree';
 import type { MeaningAgent, PipelineContext } from '../meaningPipeline';
 
@@ -32,14 +32,14 @@ export const topicNamerAgent: MeaningAgent = {
 
   shouldRun(ctx: PipelineContext): boolean {
     // Run on first extraction or when we have 3+ frames without a topic
-    const frames: Frame[] = flattenTrees(ctx.content.trees);
+    const frames: FlatNode[] = flattenTrees(ctx.content.trees);
     return ctx.meta.isFirstExtraction || (frames.length >= 3 && !ctx.topicName);
   },
 
   async run(ctx: PipelineContext, provider: LLMProvider): Promise<PipelineContext> {
-    const frames: Frame[] = flattenTrees(ctx.content.trees);
+    const frames: FlatNode[] = flattenTrees(ctx.content.trees);
     const frameInfo = frames
-      .map((f: Frame) => {
+      .map((f: FlatNode) => {
         const topSlots = Object.entries(f.slots)
           .slice(0, 3)
           .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`)

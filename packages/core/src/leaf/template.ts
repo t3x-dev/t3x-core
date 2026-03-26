@@ -47,7 +47,7 @@ export function buildTemplateContext(
   // Build knowledge items and formatted knowledge
   const frames = flattenTrees(knowledge.trees);
   const knowledgeItems = frames.map(
-    (f: import('../semantic/types').Frame) =>
+    (f: import('../semantic/types').FlatNode) =>
       `${f.type}: ${Object.entries(f.slots)
         .map(([k, v]) => `${k}=${typeof v === 'string' ? v : JSON.stringify(v)}`)
         .join(', ')}`

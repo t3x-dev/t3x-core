@@ -16,7 +16,7 @@
  */
 
 import { applyDelta } from '../semantic/delta';
-import type { Delta, Frame, SemanticContent, TreeChange } from '../semantic/types';
+import type { Delta, FlatNode, SemanticContent, TreeChange } from '../semantic/types';
 import { flattenTrees } from '../semantic/tree';
 import { validateIntegrity } from '../semantic/validate';
 import type { UserAnswer } from './types';
@@ -42,8 +42,8 @@ export function applyVaguenessAnswer(
   slotKey: string,
   newValue: unknown
 ): AnswerApplyResult {
-  const frames: Frame[] = flattenTrees(snapshot.trees);
-  const frame = frames.find((f: Frame) => f.id === frameId);
+  const frames: FlatNode[] = flattenTrees(snapshot.trees);
+  const frame = frames.find((f: FlatNode) => f.id === frameId);
   if (!frame) {
     return { applied: false, errors: [`Frame ${frameId} not found`] };
   }
@@ -72,11 +72,11 @@ export function applyStructuralAnswer(
   frameId: string,
   newParentId: string
 ): AnswerApplyResult {
-  const frames: Frame[] = flattenTrees(snapshot.trees);
-  if (!frames.some((f: Frame) => f.id === frameId)) {
+  const frames: FlatNode[] = flattenTrees(snapshot.trees);
+  if (!frames.some((f: FlatNode) => f.id === frameId)) {
     return { applied: false, errors: [`Frame ${frameId} not found`] };
   }
-  if (!frames.some((f: Frame) => f.id === newParentId)) {
+  if (!frames.some((f: FlatNode) => f.id === newParentId)) {
     return { applied: false, errors: [`Parent frame ${newParentId} not found`] };
   }
   if (frameId === newParentId) {
@@ -110,7 +110,7 @@ export function applyStructuralAnswer(
  * their parent naturally in the UI.
  */
 export function generateCollapseDelta(snapshot: SemanticContent): Delta {
-  const frames: Frame[] = flattenTrees(snapshot.trees);
+  const frames: FlatNode[] = flattenTrees(snapshot.trees);
   if (frames.length === 0) {
     return { changes: [] };
   }
@@ -119,7 +119,7 @@ export function generateCollapseDelta(snapshot: SemanticContent): Delta {
   const childIds = new Set(
     snapshot.relations.filter((r) => r.type === 'depends').map((r) => r.to)
   );
-  const rootFrame = frames.find((f: Frame) => !childIds.has(f.id)) ?? frames[0];
+  const rootFrame = frames.find((f: FlatNode) => !childIds.has(f.id)) ?? frames[0];
 
   // Find direct children of root
   const directChildIds = new Set(
@@ -129,12 +129,12 @@ export function generateCollapseDelta(snapshot: SemanticContent): Delta {
   );
 
   // Generate update deltas for root + direct children
-  const framesToCollapse: Frame[] = [
+  const framesToCollapse: FlatNode[] = [
     rootFrame,
-    ...frames.filter((f: Frame) => directChildIds.has(f.id)),
+    ...frames.filter((f: FlatNode) => directChildIds.has(f.id)),
   ];
 
-  const changes: TreeChange[] = framesToCollapse.map((f: Frame) => ({
+  const changes: TreeChange[] = framesToCollapse.map((f: FlatNode) => ({
     action: 'update' as const,
     target_path: f.id,
     slots: { _status: 'collapsed' },

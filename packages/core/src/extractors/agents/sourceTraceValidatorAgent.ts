@@ -9,7 +9,7 @@
  */
 
 import type { LLMProvider } from '../../llm/types';
-import type { Frame } from '../../semantic/types';
+import type { FlatNode } from '../../semantic/types';
 import { flattenTrees } from '../../semantic/tree';
 import type { MeaningAgent, PipelineContext } from '../meaningPipeline';
 
@@ -35,7 +35,7 @@ export const sourceTraceValidatorAgent: MeaningAgent = {
       }
     }
 
-    const frames: Frame[] = flattenTrees(ctx.content.trees);
+    const frames: FlatNode[] = flattenTrees(ctx.content.trees);
     for (const frame of frames) {
       // 1. Check frame-level source field
       if (frame.source) {

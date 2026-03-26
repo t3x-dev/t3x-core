@@ -13,11 +13,11 @@
 import * as yaml from 'js-yaml';
 import { normalizeFrameOutput } from '../llm/normalizer';
 import type { TreeNativeDelta } from '../semantic/delta';
-import { DeltaSchema, FrameSchema, TreeNativeDeltaSchema } from '../semantic/schema';
+import { DeltaSchema, FlatNodeSchema, TreeNativeDeltaSchema } from '../semantic/schema';
 import { flattenTree, flattenTrees, yamlObjectToTreeNode } from '../semantic/tree';
 import type {
   Delta,
-  Frame,
+  FlatNode,
   Relation,
   SemanticContent,
   SlotValue,
@@ -28,8 +28,8 @@ import { deepEqual, relKey } from '../semantic/utils';
 
 // ── Legacy helper ──
 
-/** Convert a flat Frame to a TreeNode (for legacy LLM output compatibility). */
-function frameToTreeNode(frame: Frame): TreeNode {
+/** Convert a FlatNode to a TreeNode (for legacy LLM output compatibility). */
+function frameToTreeNode(frame: FlatNode): TreeNode {
   return {
     key: frame.type,
     slots: { ...frame.slots },
@@ -381,13 +381,13 @@ function parseTreeNativeDelta(parsed: Record<string, unknown>): ParseResult {
 // ── Full output → all-add delta (Legacy Case 2) ──
 
 function fullOutputToAllAdd(parsed: { frames: unknown[]; relations?: unknown[] }): ParseResult {
-  const frames: Frame[] = [];
+  const frames: FlatNode[] = [];
   for (const f of parsed.frames) {
-    const result = FrameSchema.safeParse(f);
+    const result = FlatNodeSchema.safeParse(f);
     if (!result.success) {
       return { ok: false, error: `Invalid frame in full output: ${result.error.message}` };
     }
-    frames.push(result.data as Frame);
+    frames.push(result.data as FlatNode);
   }
 
   if (frames.length === 0) {
@@ -418,23 +418,23 @@ function diffAgainstSnapshot(
   snapshot: SemanticContent
 ): ParseResult {
   // Validate incoming frames
-  const newFrames: Frame[] = [];
+  const newFrames: FlatNode[] = [];
   for (const f of parsed.frames) {
-    const result = FrameSchema.safeParse(f);
+    const result = FlatNodeSchema.safeParse(f);
     if (!result.success) {
       return { ok: false, error: `Invalid frame in full output: ${result.error.message}` };
     }
-    newFrames.push(result.data as Frame);
+    newFrames.push(result.data as FlatNode);
   }
 
   // Flatten snapshot trees to frames for comparison
   const snapshotFrames = flattenTrees(snapshot.trees);
-  const snapshotMap = new Map<string, Frame>();
+  const snapshotMap = new Map<string, FlatNode>();
   for (const f of snapshotFrames) {
     snapshotMap.set(f.id, f);
   }
 
-  const newMap = new Map<string, Frame>();
+  const newMap = new Map<string, FlatNode>();
   for (const f of newFrames) {
     newMap.set(f.id, f);
   }

@@ -11,7 +11,7 @@
  */
 
 import type { LLMProvider } from '../../llm/types';
-import type { Frame, SlotValue } from '../../semantic/types';
+import type { FlatNode, SlotValue } from '../../semantic/types';
 import { flattenTrees, unflattenToTrees } from '../../semantic/tree';
 import type { MeaningAgent, PipelineContext } from '../meaningPipeline';
 
@@ -40,8 +40,8 @@ export const slotPolisherAgent: MeaningAgent = {
   },
 
   async run(ctx: PipelineContext, provider: LLMProvider): Promise<PipelineContext> {
-    const frames: Frame[] = flattenTrees(ctx.content.trees);
-    const polishedFrames: Frame[] = [];
+    const frames: FlatNode[] = flattenTrees(ctx.content.trees);
+    const polishedFrames: FlatNode[] = [];
 
     for (const frame of frames) {
       try {

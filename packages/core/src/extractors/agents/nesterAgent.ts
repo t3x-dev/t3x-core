@@ -10,7 +10,7 @@
  */
 
 import type { LLMProvider } from '../../llm/types';
-import type { Frame, SemanticContent, SlotValue } from '../../semantic/types';
+import type { FlatNode, SemanticContent, SlotValue } from '../../semantic/types';
 import { flattenTrees, unflattenToTrees } from '../../semantic/tree';
 import type { MeaningAgent, PipelineContext } from '../meaningPipeline';
 
@@ -25,14 +25,14 @@ const NESTING_RELATIONS = new Set([
 ]);
 
 function buildNestedContent(content: SemanticContent): SemanticContent {
-  const frames: Frame[] = flattenTrees(content.trees);
-  const frameMap = new Map<string, Frame>();
+  const frames: FlatNode[] = flattenTrees(content.trees);
+  const frameMap = new Map<string, FlatNode>();
   for (const frame of frames) {
     frameMap.set(frame.id, frame);
   }
 
   // Build children map: parentId → [childFrame]
-  const childrenMap = new Map<string, Array<{ frame: Frame; relationType: string }>>();
+  const childrenMap = new Map<string, Array<{ frame: FlatNode; relationType: string }>>();
   const childIds = new Set<string>();
 
   for (const rel of content.relations) {
@@ -51,7 +51,7 @@ function buildNestedContent(content: SemanticContent): SemanticContent {
   }
 
   // Root frames: not a child of anyone
-  const rootFrames = frames.filter((f: Frame) => !childIds.has(f.id));
+  const rootFrames = frames.filter((f: FlatNode) => !childIds.has(f.id));
 
   // If only 1-2 frames and no children, nothing to nest
   if (rootFrames.length === frames.length || content.relations.length === 0) {
@@ -59,7 +59,7 @@ function buildNestedContent(content: SemanticContent): SemanticContent {
   }
 
   // Recursively nest children into parent's slots
-  function nestFrame(frame: Frame, visited: Set<string>): Frame {
+  function nestFrame(frame: FlatNode, visited: Set<string>): FlatNode {
     visited.add(frame.id);
     const children = childrenMap.get(frame.id) ?? [];
     if (children.length === 0) return frame;
@@ -92,7 +92,7 @@ function buildNestedContent(content: SemanticContent): SemanticContent {
     };
   }
 
-  const nestedFrames = rootFrames.map((f: Frame) => nestFrame(f, new Set()));
+  const nestedFrames = rootFrames.map((f: FlatNode) => nestFrame(f, new Set()));
 
   return {
     trees: unflattenToTrees(nestedFrames),

@@ -10,7 +10,7 @@
  */
 
 import type { LLMProvider } from '../../llm/types';
-import type { Frame } from '../../semantic/types';
+import type { FlatNode } from '../../semantic/types';
 import { flattenTrees, unflattenToTrees } from '../../semantic/tree';
 import type { MeaningAgent, PipelineContext } from '../meaningPipeline';
 
@@ -25,7 +25,7 @@ Output JSON: { "decision": "merge" | "keep_separate" | "contradicts", "merged_sl
 Output ONLY JSON. No explanation.`;
 
 /** Find candidate pairs that might be duplicates */
-function findCandidatePairs(frames: Frame[]): Array<[number, number]> {
+function findCandidatePairs(frames: FlatNode[]): Array<[number, number]> {
   const pairs: Array<[number, number]> = [];
 
   for (let i = 0; i < frames.length; i++) {
@@ -128,7 +128,7 @@ export const dedupCheckerAgent: MeaningAgent = {
     // Remove merged frames
     if (toRemove.size > 0) {
       ctx.content = {
-        trees: unflattenToTrees(frames.filter((_: Frame, idx: number) => !toRemove.has(idx))),
+        trees: unflattenToTrees(frames.filter((_: FlatNode, idx: number) => !toRemove.has(idx))),
         relations: ctx.content.relations,
       };
     }
