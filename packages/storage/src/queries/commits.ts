@@ -7,7 +7,7 @@
  * @see packages/core/src/commit/types.ts
  */
 
-import type { Author, Commit, Provenance, SemanticContent, Source } from '@t3x-dev/core';
+import type { Author, Commit, Provenance, SemanticContent } from '@t3x-dev/core';
 import { COMMIT_SCHEMA, computeCommitHash } from '@t3x-dev/core';
 
 export { computeCommitHash } from '@t3x-dev/core';
@@ -27,10 +27,7 @@ export interface CreateCommitInput {
   project_id: string;
   message?: string;
   branch?: string;
-  sources?: Source[];
   provenance?: Provenance;
-  position_x?: number;
-  position_y?: number;
 }
 
 export interface ListCommitsOptions {
@@ -76,10 +73,7 @@ export async function createCommit(db: AnyDB, input: CreateCommitInput): Promise
       projectId: input.project_id,
       message: input.message ?? null,
       branch,
-      sources: input.sources ?? null,
       provenance: input.provenance ?? null,
-      positionX: input.position_x ?? null,
-      positionY: input.position_y ?? null,
     })
     .returning();
 
@@ -211,9 +205,6 @@ function rowToCommit(row: CommitRecord): Commit {
     project_id: row.projectId ?? '',
     message: row.message ?? null,
     branch: row.branch ?? 'main',
-    sources: (row.sources as Source[] | null) ?? null,
     provenance: (row.provenance as Provenance | null) ?? null,
-    position_x: row.positionX ?? undefined,
-    position_y: row.positionY ?? undefined,
   };
 }
