@@ -90,6 +90,7 @@ export interface TreeNode {
 
 export const FRAME_RELATION_TYPES = [
   'causes',
+  'conditions',
   'contrasts',
   'follows',
   'depends',

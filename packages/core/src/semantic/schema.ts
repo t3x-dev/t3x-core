@@ -55,6 +55,7 @@ export const FrameSchema = z.object({
 
 export const FrameRelationTypeSchema = z.enum([
   'causes',
+  'conditions',
   'contrasts',
   'elaborates', // Legacy only — tree-native uses TreeNode.children instead
   'follows',
@@ -72,7 +73,10 @@ export const RelationSchema = z.object({
 
 export const TreeNodeSchema: z.ZodType<unknown> = z.lazy(() =>
   z.object({
-    key: z.string().min(1).regex(/^[a-z][a-z0-9_]*$/),
+    key: z
+      .string()
+      .min(1)
+      .regex(/^[a-z][a-z0-9_]*$/),
     slots: z.record(z.string(), SlotValueSchema),
     children: z.array(TreeNodeSchema),
     slot_quotes: z.record(z.string(), z.string()).optional(),
