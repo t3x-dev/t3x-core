@@ -208,14 +208,8 @@ test.describe('DiffDisplayView Integration', () => {
   // Test 4: UI loads project page
   // ─────────────────────────────────────────────────────────────────────────
   test('UI loads project page', async ({ page }) => {
-    // Visit homepage and wait for project list
-    await page.goto('/');
-    await page
-      .getByText(TEST_PROJECT_NAME, { exact: true })
-      .waitFor({ state: 'visible', timeout: 15000 });
-
-    // Click on the project
-    await page.getByText(TEST_PROJECT_NAME, { exact: true }).click();
+    // Navigate directly to project canvas view
+    await page.goto(`/project/${projectId}?view=canvas`);
 
     // Wait for canvas to appear
     const canvas = page.locator('.react-flow');

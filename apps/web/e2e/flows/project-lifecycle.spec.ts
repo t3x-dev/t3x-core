@@ -53,7 +53,7 @@ test.describe('Project Lifecycle', () => {
     const { projectId } = await createTestProject(request, generateProjectName('PL-03'));
     projectIdsToCleanup.push(projectId);
 
-    await page.goto(`/project/${projectId}`);
+    await page.goto(`/project/${projectId}?view=canvas`);
 
     // Canvas should load
     const canvas = page.locator('.react-flow');

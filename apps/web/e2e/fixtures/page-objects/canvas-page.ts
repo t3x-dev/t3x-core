@@ -13,7 +13,7 @@ export class CanvasPage {
   }
 
   async goto(projectId: string): Promise<void> {
-    await this.page.goto(`/project/${projectId}`);
+    await this.page.goto(`/project/${projectId}?view=canvas`);
   }
 
   async waitForLoad(timeout = 15000): Promise<void> {

@@ -9,9 +9,11 @@ export class MergePage {
 
   constructor(page: Page) {
     this.page = page;
-    // Matches both "Commit Merge" (default) and "Execute Merge" (developer mode)
+    // Matches all button text variants:
+    //   "Confirm"       — default mode (mergeConfirm default)
+    //   "Execute Merge" — developer mode (mergeConfirm developer)
     this.commitButton = page
-      .locator('button:has-text("Commit Merge")')
+      .locator('button:has-text("Confirm")')
       .or(page.locator('button:has-text("Execute Merge")'))
       .first();
     this.cancelButton = page.locator('button:has-text("Cancel")').first();
@@ -26,55 +28,67 @@ export class MergePage {
   }
 
   async waitForLoad(timeout = 15000): Promise<void> {
-    // #1: Removed networkidle — wait for concrete merge UI elements
-    // Match both "Commit Merge" (default) and "Execute Merge" (developer mode)
+    // Wait for the action bar commit button — present in both sentence and frame mode.
+    // Button text variants:
+    //   "Confirm"       — default mode (mergeConfirm default)
+    //   "Execute Merge" — developer mode (mergeConfirm developer)
     const workspace = this.page
-      .locator('button:has-text("Commit Merge")')
-      .or(this.page.locator('button:has-text("Execute Merge")'))
-      .or(this.page.locator('text=Conflicts'))
-      .or(this.page.locator('text=Identical'));
+      .locator('button:has-text("Confirm")')
+      .or(this.page.locator('button:has-text("Execute Merge")'));
     await expect(workspace.first()).toBeVisible({ timeout });
   }
 
   async getUnresolvedCount(): Promise<number> {
-    const badge = this.page.locator('text=/\\d+ unresolved/').first();
+    // Badge text variants:
+    //   "N unresolved"     — developer mode (t('unresolved') = "Unresolved")
+    //   "N needs decision" — default mode   (t('unresolved') = "Needs Decision")
+    const badge = this.page
+      .locator('text=/\\d+ unresolved/i')
+      .or(this.page.locator('text=/\\d+ needs decision/i'))
+      .first();
     const isVisible = await badge.isVisible();
     if (!isVisible) return 0;
     const text = await badge.textContent();
-    const match = text?.match(/(\d+) unresolved/);
+    const match = text?.match(/(\d+)/);
     return match ? parseInt(match[1], 10) : 0;
   }
 
   async hasConflictsSection(): Promise<boolean> {
-    return this.page
+    // Sentence mode (developer): button with "Conflicts"
+    // Frame mode: <h3> with text "Conflicts (N)"
+    // Sentence mode (default): button with "冲突"
+    const loc = this.page
       .locator('button:has-text("Conflicts")')
-      .first()
-      .isVisible({ timeout: 5000 })
-      .catch(() => false);
+      .or(this.page.locator('h3:has-text("Conflicts")'))
+      .or(this.page.locator('button:has-text("冲突")'));
+    return loc.first().isVisible({ timeout: 5000 }).catch(() => false);
   }
 
   async hasIdenticalSection(): Promise<boolean> {
-    return this.page
+    // Sentence mode (developer): button with "Identical"
+    // Frame mode: <h3> with text "Auto-kept (N)" (frame mode uses auto-kept instead of identical)
+    // Sentence mode (default): button with "未变化"
+    const loc = this.page
       .locator('button:has-text("Identical")')
-      .first()
-      .isVisible({ timeout: 5000 })
-      .catch(() => false);
+      .or(this.page.locator('h3:has-text("Auto-kept")'))
+      .or(this.page.locator('button:has-text("未变化")'));
+    return loc.first().isVisible({ timeout: 5000 }).catch(() => false);
   }
 
   async hasSourceOnlySection(): Promise<boolean> {
-    return this.page
+    // MergeNavSidebar: button "Source Only", MergeWorkspace: h3 "Source only (N)"
+    const loc = this.page
       .locator('button:has-text("Source Only")')
-      .first()
-      .isVisible()
-      .catch(() => false);
+      .or(this.page.locator('h3:has-text("Source only")'));
+    return loc.first().isVisible().catch(() => false);
   }
 
   async hasTargetOnlySection(): Promise<boolean> {
-    return this.page
+    // MergeNavSidebar: button "Target Only", MergeWorkspace: h3 "Target only (N)"
+    const loc = this.page
       .locator('button:has-text("Target Only")')
-      .first()
-      .isVisible()
-      .catch(() => false);
+      .or(this.page.locator('h3:has-text("Target only")'));
+    return loc.first().isVisible().catch(() => false);
   }
 
   /**

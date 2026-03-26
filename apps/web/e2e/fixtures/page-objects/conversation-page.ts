@@ -10,38 +10,37 @@ export class ConversationPage {
     this.contextPanel = page.locator('aside').filter({ hasText: 'Context' }).first();
   }
 
-  async goto(projectId: string, conversationId: string): Promise<void> {
-    await this.page.goto(`/project/${projectId}/conversation/${conversationId}`);
+  async goto(_projectId: string, conversationId: string): Promise<void> {
+    await this.page.goto(`/chat/${conversationId}`);
   }
 
   async gotoWithHighlight(
-    projectId: string,
+    _projectId: string,
     conversationId: string,
     turnHash: string,
     startChar: number,
     endChar: number
   ): Promise<void> {
-    const url = `/project/${projectId}/conversation/${conversationId}?turn=${turnHash}&highlight=${startChar}-${endChar}`;
+    const url = `/chat/${conversationId}?turn=${turnHash}&highlight=${startChar}-${endChar}`;
     await this.page.goto(url);
   }
 
-  /** #1, #14: Wait for actual turn role badges (User/Assistant) to appear. */
+  /** #1, #14: Wait for actual turn role labels (You/T3X) to appear. */
   async waitForLoad(timeout = 15000): Promise<void> {
     const turnBadge = this.page
-      .locator('text=User')
-      .or(this.page.locator('text=Assistant'))
-      .or(this.page.locator('text=System'));
+      .locator('text=You')
+      .or(this.page.locator('text=T3X'));
     await expect(turnBadge.first()).toBeVisible({ timeout });
   }
 
-  /** #9: Use role badge text instead of fragile Tailwind class selectors. */
+  /** #9: Use role label text instead of fragile Tailwind class selectors. */
   getTurnCards(): Locator {
-    return this.page.locator('text=User').or(this.page.locator('text=Assistant'));
+    return this.page.locator('text=You').or(this.page.locator('text=T3X'));
   }
 
   async getTurnCount(): Promise<number> {
-    const userTurns = this.page.locator('text=User');
-    const assistantTurns = this.page.locator('text=Assistant');
+    const userTurns = this.page.locator('text=You');
+    const assistantTurns = this.page.locator('text=T3X');
     return (await userTurns.count()) + (await assistantTurns.count());
   }
 

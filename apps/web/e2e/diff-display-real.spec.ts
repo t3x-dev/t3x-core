@@ -37,27 +37,8 @@ test.describe('DiffDisplayView Real UI Test', () => {
 
   test('Canvas page loads and shows commits', async ({ page }) => {
     test.skip(!projectId, 'No project with 2+ V3 commits found');
-    // Visit homepage and wait for project list to render
-    await page.goto('/');
-    await page
-      .getByText(projectName, { exact: true })
-      .waitFor({ state: 'visible', timeout: 15000 });
-
-    // Click on the project to navigate using exact text match
-    // Use a more specific selector that targets the project card
-    const projectCard = page
-      .locator(
-        `[data-testid="project-card"]:has-text("${projectName}"), a:has-text("${projectName}")`
-      )
-      .first();
-
-    // If that doesn't work, fall back to clicking any element with the exact project name
-    const isCardVisible = await projectCard.isVisible();
-    const clickTarget = isCardVisible ? projectCard : page.getByText(projectName, { exact: true });
-    await clickTarget.click();
-
-    // Wait for navigation and canvas to load
-    await page.waitForURL(/\/project\//, { timeout: 15000 });
+    // Navigate directly to project canvas view
+    await page.goto(`/project/${projectId}?view=canvas`);
     await page.locator('.react-flow').waitFor({ state: 'visible', timeout: 15000 });
 
     // Take screenshot
@@ -70,17 +51,8 @@ test.describe('DiffDisplayView Real UI Test', () => {
 
   test('Can open commit modal and see Compare section', async ({ page }) => {
     test.skip(!projectId, 'No project with 2+ V3 commits found');
-    // Visit homepage and wait for project list to render
-    await page.goto('/');
-    await page
-      .getByText(projectName, { exact: true })
-      .waitFor({ state: 'visible', timeout: 15000 });
-
-    // Click on the project using exact text match
-    await page.getByText(projectName, { exact: true }).click();
-
-    // Wait for navigation and canvas
-    await page.waitForURL(/\/project\//, { timeout: 15000 });
+    // Navigate directly to project canvas view
+    await page.goto(`/project/${projectId}?view=canvas`);
     await page.locator('.react-flow').waitFor({ state: 'visible', timeout: 30000 });
 
     // Wait for nodes to render inside the canvas
@@ -132,17 +104,8 @@ test.describe('DiffDisplayView Real UI Test', () => {
 
   test('Can run diff comparison', async ({ page }) => {
     test.skip(!projectId, 'No project with 2+ V3 commits found');
-    // Visit homepage and wait for project list to render
-    await page.goto('/');
-    await page
-      .getByText(projectName, { exact: true })
-      .waitFor({ state: 'visible', timeout: 15000 });
-
-    // Click on the project using exact text match
-    await page.getByText(projectName, { exact: true }).click();
-
-    // Wait for navigation and canvas
-    await page.waitForURL(/\/project\//, { timeout: 15000 });
+    // Navigate directly to project canvas view
+    await page.goto(`/project/${projectId}?view=canvas`);
     await page.locator('.react-flow').waitFor({ state: 'visible', timeout: 30000 });
 
     // Wait for nodes to render and click a commit node

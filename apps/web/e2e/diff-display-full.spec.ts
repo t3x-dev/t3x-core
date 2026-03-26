@@ -170,17 +170,8 @@ test.describe('DiffDisplayView Full E2E', () => {
   });
 
   test('Canvas loads with commits', async ({ page }) => {
-    // Visit homepage and wait for project list to render
-    await page.goto('/');
-    await page
-      .getByText(projectName, { exact: true })
-      .waitFor({ state: 'visible', timeout: 15000 });
-
-    // Click on project
-    await page.getByText(projectName, { exact: true }).click();
-
-    // Wait for canvas to render
-    await page.waitForURL(/\/project\//, { timeout: 15000 });
+    // Navigate directly to project canvas view
+    await page.goto(`/project/${projectId}?view=canvas`);
     await page.locator('.react-flow').waitFor({ state: 'visible', timeout: 15000 });
 
     // Wait for "Loading..." to disappear (sentences loaded)
@@ -216,12 +207,8 @@ test.describe('DiffDisplayView Full E2E', () => {
   });
 
   test('Can open commit modal with View full', async ({ page }) => {
-    // Navigate to project
-    await page.goto('/');
-    await page
-      .getByText(projectName, { exact: true })
-      .waitFor({ state: 'visible', timeout: 15000 });
-    await page.getByText(projectName, { exact: true }).click();
+    // Navigate directly to project canvas view
+    await page.goto(`/project/${projectId}?view=canvas`);
     await page.locator('.react-flow').waitFor({ state: 'visible', timeout: 15000 });
 
     // Wait for "Loading..." to disappear
@@ -270,12 +257,8 @@ test.describe('DiffDisplayView Full E2E', () => {
       }
     });
 
-    // Navigate to project
-    await page.goto('/');
-    await page
-      .getByText(projectName, { exact: true })
-      .waitFor({ state: 'visible', timeout: 15000 });
-    await page.getByText(projectName, { exact: true }).click();
+    // Navigate directly to project canvas view
+    await page.goto(`/project/${projectId}?view=canvas`);
     await page.locator('.react-flow').waitFor({ state: 'visible', timeout: 15000 });
 
     // Wait for "Loading..." to disappear
