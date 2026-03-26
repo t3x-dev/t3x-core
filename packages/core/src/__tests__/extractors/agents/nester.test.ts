@@ -63,7 +63,7 @@ describe('nesterAgent', () => {
     expect(nesterAgent.shouldRun(ctx)).toBe(true);
   });
 
-  it('nests child frames into parent slots as InlineFrame', async () => {
+  it('nests child frames into parent slots as nested object', async () => {
     resetFrameIds();
     // Use type as ID so that unflattenToTrees + flattenTrees roundtrips correctly
     const parent = createFrameWithSlots('travel_plan', { destination: 'Japan' }, 'travel_plan');
@@ -82,7 +82,7 @@ describe('nesterAgent', () => {
     expect(frames).toHaveLength(2);
     expect(frames[0].id).toBe('travel_plan');
 
-    // Child should be nested as InlineFrame slot
+    // Child should be nested as nested object slot
     const nestedSlot = frames[0].slots.activity as any;
     expect(nestedSlot).toBeDefined();
     expect(nestedSlot.type).toBe('activity');

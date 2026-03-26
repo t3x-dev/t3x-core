@@ -4,7 +4,7 @@ const MAX_DEPTH = 10;
 
 /**
  * Deep equality comparison for SlotValue types.
- * Handles string, number, boolean (defensive), SlotRef, InlineFrame, and arrays.
+ * Handles string, number, boolean (defensive), references, nested objects, and arrays.
  * Returns false if nesting exceeds MAX_DEPTH to prevent stack overflow.
  */
 export function deepEqual(a: SlotValue | undefined, b: SlotValue | undefined, depth = 0): boolean {

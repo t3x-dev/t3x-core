@@ -18,7 +18,6 @@ export function buildRelationPrompt(sentences: Array<{ id: string; text: string 
 - supports: S_target provides evidence, reasoning, or backing for S_source
 - contrasts: S_target contradicts, qualifies, or presents an alternative to S_source
 - causes: S_source leads to or results in S_target
-- elaborates: S_target expands, exemplifies, or adds detail to S_source
 - temporal_follows: S_target occurs after S_source in time
 - conditions: S_source is a prerequisite or condition for S_target
 - summarizes: S_target abstracts or concludes the content of S_source

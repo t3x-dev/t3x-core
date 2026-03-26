@@ -83,7 +83,7 @@ export function applyStructuralAnswer(
     return { applied: false, errors: ['Cannot set frame as its own parent'] };
   }
 
-  // Remove existing elaborates relations pointing TO this frame
+  // Remove existing depends relations pointing TO this frame
   const relationsToRemove = snapshot.relations.filter(
     (r) => r.to === frameId && r.type === 'depends'
   );

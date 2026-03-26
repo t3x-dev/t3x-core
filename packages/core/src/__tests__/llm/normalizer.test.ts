@@ -67,7 +67,7 @@ describe('normalizeLLMOutput', () => {
     expect(result.frames[0].type).toBe('travel_plan');
   });
 
-  it('coerces plain objects in slot arrays to InlineFrame', () => {
+  it('coerces plain objects in slot arrays to nested object format', () => {
     const input = {
       frames: [
         {
@@ -98,7 +98,7 @@ describe('normalizeLLMOutput', () => {
     expect(result.frames).toEqual([]);
   });
 
-  it('does not re-wrap objects already in InlineFrame format', () => {
+  it('does not re-wrap objects already in nested object format', () => {
     const input = {
       frames: [
         {

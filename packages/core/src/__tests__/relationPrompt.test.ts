@@ -20,12 +20,12 @@ describe('buildRelationPrompt', () => {
     expect(userPrompt).toBeDefined();
   });
 
-  it('system prompt includes all 7 relation types', () => {
+  it('system prompt includes all 6 relation types', () => {
     const { systemPrompt } = buildRelationPrompt(sentences);
     expect(systemPrompt).toContain('supports');
     expect(systemPrompt).toContain('contrasts');
     expect(systemPrompt).toContain('causes');
-    expect(systemPrompt).toContain('elaborates');
+    expect(systemPrompt).not.toContain('elaborates');
     expect(systemPrompt).toContain('temporal_follows');
     expect(systemPrompt).toContain('conditions');
     expect(systemPrompt).toContain('summarizes');

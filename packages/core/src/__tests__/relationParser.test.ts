@@ -56,7 +56,7 @@ describe('parseRelationResponse', () => {
       {
         source_id: 's_aaa',
         target_id: 's_aaa',
-        type: 'elaborates',
+        type: 'causes',
         confidence: 0.8,
         reasoning: 'self',
       },

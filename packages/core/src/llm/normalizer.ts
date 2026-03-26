@@ -31,7 +31,7 @@ function stripFrameExtras(frame: Record<string, unknown>): Record<string, unknow
 }
 
 /**
- * Coerce plain objects in arrays to InlineFrame format.
+ * Coerce plain objects in arrays to nested object format.
  * { name: "Tokyo" } becomes { type: "item", slots: { name: "Tokyo" } }
  */
 function coerceSlotValue(value: unknown): unknown {
@@ -40,13 +40,13 @@ function coerceSlotValue(value: unknown): unknown {
   }
   if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
     const obj = value as Record<string, unknown>;
-    // Already InlineFrame format
+    // Already nested object format
     if (typeof obj.type === 'string' && obj.slots && typeof obj.slots === 'object') {
       return { type: obj.type, slots: normalizeSlots(obj.slots as Record<string, unknown>) };
     }
-    // SlotRef format
+    // Reference format
     if (typeof obj.ref === 'string') return obj;
-    // Plain object — wrap as InlineFrame
+    // Plain object — wrap as nested object
     return { type: 'item', slots: normalizeSlots(obj) };
   }
   return value;

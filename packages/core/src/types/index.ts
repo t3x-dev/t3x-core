@@ -719,7 +719,6 @@ export const SENTENCE_RELATION_TYPES = [
   'supports',
   'contrasts',
   'causes',
-  'elaborates',
   'temporal_follows',
   'conditions',
   'summarizes',

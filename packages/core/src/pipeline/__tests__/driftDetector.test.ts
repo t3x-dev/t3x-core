@@ -128,7 +128,7 @@ describe('parseDriftResponse', () => {
 
   it('rejects invalid topic name pattern', () => {
     const result = parseDriftResponse(
-      '{"same_topic": false, "confidence": 0.9, "relation": "elaborates", "new_topic": "has spaces and !special"}'
+      '{"same_topic": false, "confidence": 0.9, "relation": "depends", "new_topic": "has spaces and !special"}'
     );
     expect(result.drifted).toBe(true);
     expect(result.newTopicName).toBeUndefined(); // invalid → stripped
@@ -136,7 +136,7 @@ describe('parseDriftResponse', () => {
 
   it('accepts CJK topic names', () => {
     const result = parseDriftResponse(
-      '{"same_topic": false, "confidence": 0.85, "relation": "elaborates", "new_topic": "杭帮菜技法"}'
+      '{"same_topic": false, "confidence": 0.85, "relation": "depends", "new_topic": "杭帮菜技法"}'
     );
     expect(result.drifted).toBe(true);
     expect(result.newTopicName).toBe('杭帮菜技法');
