@@ -151,8 +151,12 @@ export class FrameExtractor {
         if (jsonMatch) {
           const rawJson = JSON.parse(jsonMatch[0]);
           slotQuotes = extractSlotQuotes(rawJson);
-          // Re-stringify so parser gets clean JSON without slot_quotes
-          raw = JSON.stringify(rawJson);
+          // Only re-stringify when the JSON is the primary output (has changes/frames).
+          // For YAML tree responses, the JSON is just metadata after --- separator;
+          // replacing raw would destroy the YAML tree.
+          if ('changes' in rawJson || 'frames' in rawJson) {
+            raw = JSON.stringify(rawJson);
+          }
         }
       } catch {
         // JSON extraction failed — continue with original raw text

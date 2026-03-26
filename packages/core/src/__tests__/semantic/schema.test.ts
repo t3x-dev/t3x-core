@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { DeltaSchema, FrameSchema, FrameRelationTypeSchema, SemanticContentSchema, TreeNativeDeltaSchema } from '../../semantic/schema';
+import {
+  DeltaSchema,
+  FrameRelationTypeSchema,
+  FrameSchema,
+  SemanticContentSchema,
+  TreeNativeDeltaSchema,
+} from '../../semantic/schema';
 
 describe('FrameSchema', () => {
   it('accepts valid frame', () => {
@@ -116,17 +122,29 @@ describe('FrameSchema (path-based IDs)', () => {
   });
 
   it('accepts path-based IDs', () => {
-    const result = FrameSchema.safeParse({ id: 'hangzhou_trip', type: 'hangzhou_trip', slots: { a: 1 } });
+    const result = FrameSchema.safeParse({
+      id: 'hangzhou_trip',
+      type: 'hangzhou_trip',
+      slots: { a: 1 },
+    });
     expect(result.success).toBe(true);
   });
 
   it('accepts nested path-based IDs', () => {
-    const result = FrameSchema.safeParse({ id: 'hangzhou_trip/activity_plan', type: 'activity_plan', slots: { a: 1 } });
+    const result = FrameSchema.safeParse({
+      id: 'hangzhou_trip/activity_plan',
+      type: 'activity_plan',
+      slots: { a: 1 },
+    });
     expect(result.success).toBe(true);
   });
 
   it('accepts deep path-based IDs', () => {
-    const result = FrameSchema.safeParse({ id: 'trip/activities/gear', type: 'gear', slots: { a: 1 } });
+    const result = FrameSchema.safeParse({
+      id: 'trip/activities/gear',
+      type: 'gear',
+      slots: { a: 1 },
+    });
     expect(result.success).toBe(true);
   });
 
@@ -249,32 +267,36 @@ describe('FrameRelationTypeSchema', () => {
   it('accepts elaborates (legacy)', () => {
     expect(FrameRelationTypeSchema.safeParse('elaborates').success).toBe(true);
   });
-  it('rejects conditions', () => {
-    expect(FrameRelationTypeSchema.safeParse('conditions').success).toBe(false);
+  it('accepts conditions', () => {
+    expect(FrameRelationTypeSchema.safeParse('conditions').success).toBe(true);
   });
 });
 
 describe('TreeNativeDeltaSchema', () => {
   it('accepts add with parent_path and node', () => {
     const result = TreeNativeDeltaSchema.safeParse({
-      changes: [{
-        action: 'add',
-        parent_path: 'hangzhou_trip',
-        node: { transportation: { mode: 'rail' } },
-        slot_quotes: { 'transportation.mode': 'take the rail' },
-      }],
+      changes: [
+        {
+          action: 'add',
+          parent_path: 'hangzhou_trip',
+          node: { transportation: { mode: 'rail' } },
+          slot_quotes: { 'transportation.mode': 'take the rail' },
+        },
+      ],
     });
     expect(result.success).toBe(true);
   });
 
   it('accepts update with target_path', () => {
     const result = TreeNativeDeltaSchema.safeParse({
-      changes: [{
-        action: 'update',
-        target_path: 'hangzhou_trip/dining',
-        slots: { budget: 800 },
-        slot_quotes: { 'dining.budget': 'budget to 800' },
-      }],
+      changes: [
+        {
+          action: 'update',
+          target_path: 'hangzhou_trip/dining',
+          slots: { budget: 800 },
+          slot_quotes: { 'dining.budget': 'budget to 800' },
+        },
+      ],
     });
     expect(result.success).toBe(true);
   });
