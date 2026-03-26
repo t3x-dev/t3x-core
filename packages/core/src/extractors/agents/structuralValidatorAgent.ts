@@ -20,7 +20,7 @@ export const structuralValidatorAgent: MeaningAgent = {
   usesLLM: false,
 
   shouldRun(ctx: PipelineContext): boolean {
-    return ctx.content.frames.length > 0;
+    return ctx.content.trees.length > 0;
   },
 
   async run(ctx: PipelineContext, _provider: LLMProvider): Promise<PipelineContext> {

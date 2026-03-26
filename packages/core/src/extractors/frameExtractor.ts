@@ -116,7 +116,7 @@ export class FrameExtractor {
     input: FrameExtractionInput,
     style?: ExtractionStyleConfig
   ): Promise<FrameExtractionResult> {
-    const baseSnapshot: SemanticContent = input.snapshot ?? { frames: [], relations: [] };
+    const baseSnapshot: SemanticContent = input.snapshot ?? { trees: [], relations: [] };
     // ── Text generation path ──
     // Always use generate() (not generateStructured) so we can extract
     // slot_quotes from the raw JSON before Zod validation strips them.

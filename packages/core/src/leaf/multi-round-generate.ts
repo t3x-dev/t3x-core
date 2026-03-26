@@ -15,7 +15,8 @@
  */
 
 import type { LLMProvider } from '../llm/types';
-import type { SemanticContent } from '../semantic/types';
+import type { Frame, SemanticContent } from '../semantic/types';
+import { flattenTrees } from '../semantic/tree';
 import type { Leaf } from '../types';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -334,7 +335,8 @@ export async function modeGenerate(options: ModeGenerateOptions): Promise<MultiR
     maxTokens = 1024,
   } = options;
 
-  const sentences = knowledge.frames.map((f) => ({ text: Object.values(f.slots).join(' ') }));
+  const frames: Frame[] = flattenTrees(knowledge.trees);
+  const sentences = frames.map((f: Frame) => ({ text: Object.values(f.slots).join(' ') }));
   const constraints = (leaf.constraints ?? []) as Array<{
     id: string;
     type: 'require' | 'exclude';
@@ -520,8 +522,9 @@ function buildRoundPrompt(
   previousOutput: string,
   roundIndex: number
 ): string {
-  const sentences = knowledge.frames
-    .map((f) => `${f.type}: ${Object.values(f.slots).join(' ')}`)
+  const roundFrames: Frame[] = flattenTrees(knowledge.trees);
+  const sentences = roundFrames
+    .map((f: Frame) => `${f.type}: ${Object.values(f.slots).join(' ')}`)
     .join('\n');
   const constraints = (leaf.constraints ?? []).map((c) => `[${c.type}] ${c.value}`).join('\n');
 

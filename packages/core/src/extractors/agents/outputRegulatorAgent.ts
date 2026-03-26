@@ -14,6 +14,7 @@
 
 import type { LLMProvider } from '../../llm/types';
 import type { Frame, SlotValue } from '../../semantic/types';
+import { flattenTrees, unflattenToTrees } from '../../semantic/tree';
 import type { MeaningAgent, PipelineContext } from '../meaningPipeline';
 
 /**
@@ -75,11 +76,6 @@ function consolidateDuplicateTypes(frames: Frame[]): Frame[] {
       confidence: Math.min(...group.map((f) => f.confidence ?? 1)),
     };
 
-    // Preserve slot_sources from first frame
-    if (group[0].slot_sources) {
-      mergedFrame.slot_sources = group[0].slot_sources;
-    }
-
     result.push(mergedFrame);
   }
 
@@ -92,23 +88,23 @@ export const outputRegulatorAgent: MeaningAgent = {
   usesLLM: false,
 
   shouldRun(ctx: PipelineContext): boolean {
-    // Run if there are duplicate frame types
-    const types = ctx.content.frames.map((f) => f.type);
+    const frames: Frame[] = flattenTrees(ctx.content.trees);
+    const types = frames.map((f: Frame) => f.type);
     const uniqueTypes = new Set(types);
-    return uniqueTypes.size < types.length; // Has duplicates
+    return uniqueTypes.size < types.length;
   },
 
   async run(ctx: PipelineContext, _provider: LLMProvider): Promise<PipelineContext> {
-    const consolidated = consolidateDuplicateTypes(ctx.content.frames);
+    const frames: Frame[] = flattenTrees(ctx.content.trees);
+    const consolidated = consolidateDuplicateTypes(frames);
 
-    // Update relations: remove relations pointing to merged-away frames
     const remainingIds = new Set(consolidated.map((f) => f.id));
     const validRelations = ctx.content.relations.filter(
       (r) => remainingIds.has(r.from) && remainingIds.has(r.to)
     );
 
     ctx.content = {
-      frames: consolidated,
+      trees: unflattenToTrees(consolidated),
       relations: validRelations,
     };
 

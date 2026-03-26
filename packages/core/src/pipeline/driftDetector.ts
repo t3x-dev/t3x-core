@@ -13,14 +13,14 @@
 
 import { escapePromptContent } from '../llm/sanitize';
 import type { LLMProvider } from '../llm/types';
-import { FRAME_RELATION_TYPES, type FrameRelationType } from '../semantic/types';
+import { RELATION_TYPES, type RelationType } from '../semantic/types';
 import type { DriftResult } from './types';
 
 /** Confidence below this → default to same_topic */
 const CONFIDENCE_THRESHOLD = 0.7;
 
 /** Allowed relation values in LLM output (FRAME_RELATION_TYPES + 'none') */
-const VALID_RELATIONS = new Set<string>([...FRAME_RELATION_TYPES, 'none']);
+const VALID_RELATIONS = new Set<string>([...RELATION_TYPES, 'none']);
 
 /** Regex for validating new_topic output */
 const TOPIC_NAME_PATTERN = /^[a-zA-Z0-9_\u4e00-\u9fff]{1,100}$/;
@@ -114,10 +114,10 @@ export function parseDriftResponse(raw: string): DriftResult {
     }
 
     // Validate relation type
-    let relationType: FrameRelationType | undefined;
+    let relationType: RelationType | undefined;
     if (typeof parsed.relation === 'string' && VALID_RELATIONS.has(parsed.relation)) {
       relationType =
-        parsed.relation === 'none' ? undefined : (parsed.relation as FrameRelationType);
+        parsed.relation === 'none' ? undefined : (parsed.relation as RelationType);
     }
 
     // Validate new_topic name

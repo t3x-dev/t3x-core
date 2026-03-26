@@ -11,6 +11,7 @@
 
 import type { LLMProvider } from '../../llm/types';
 import type { Frame, SemanticContent, SlotValue } from '../../semantic/types';
+import { flattenTrees, unflattenToTrees } from '../../semantic/tree';
 import type { MeaningAgent, PipelineContext } from '../meaningPipeline';
 
 /** Relations that indicate parent-child nesting */
@@ -24,8 +25,9 @@ const NESTING_RELATIONS = new Set([
 ]);
 
 function buildNestedContent(content: SemanticContent): SemanticContent {
+  const frames: Frame[] = flattenTrees(content.trees);
   const frameMap = new Map<string, Frame>();
-  for (const frame of content.frames) {
+  for (const frame of frames) {
     frameMap.set(frame.id, frame);
   }
 
@@ -49,10 +51,10 @@ function buildNestedContent(content: SemanticContent): SemanticContent {
   }
 
   // Root frames: not a child of anyone
-  const rootFrames = content.frames.filter((f) => !childIds.has(f.id));
+  const rootFrames = frames.filter((f: Frame) => !childIds.has(f.id));
 
   // If only 1-2 frames and no children, nothing to nest
-  if (rootFrames.length === content.frames.length || content.relations.length === 0) {
+  if (rootFrames.length === frames.length || content.relations.length === 0) {
     return content;
   }
 
@@ -90,10 +92,10 @@ function buildNestedContent(content: SemanticContent): SemanticContent {
     };
   }
 
-  const nestedFrames = rootFrames.map((f) => nestFrame(f, new Set()));
+  const nestedFrames = rootFrames.map((f: Frame) => nestFrame(f, new Set()));
 
   return {
-    frames: nestedFrames,
+    trees: unflattenToTrees(nestedFrames),
     relations: [], // Relations are now expressed via nesting
   };
 }
@@ -105,7 +107,7 @@ export const nesterAgent: MeaningAgent = {
 
   shouldRun(ctx: PipelineContext): boolean {
     // Run if there are relations to nest and more than 2 frames
-    return ctx.content.relations.length > 0 && ctx.content.frames.length > 2;
+    return ctx.content.relations.length > 0 && ctx.content.trees.length > 0;
   },
 
   async run(ctx: PipelineContext, _provider: LLMProvider): Promise<PipelineContext> {

@@ -17,7 +17,7 @@ function makePipelineContext(content: SemanticContent): PipelineContext {
       mode: 'full',
       isFirstExtraction: true,
       turnCount: 2,
-      frameCount: content.frames.length,
+      frameCount: content.trees.length,
       completedAgents: [],
       agentErrors: [],
       totalUsage: { inputTokens: 0, outputTokens: 0 },
@@ -31,11 +31,11 @@ function makePipelineContext(content: SemanticContent): PipelineContext {
 describe('structuralValidatorAgent', () => {
   it('passes clean content without errors', async () => {
     const content: SemanticContent = {
-      frames: [
-        { id: 'f_001', type: 'travel_plan', slots: { destination: 'Hangzhou' } },
-        { id: 'f_002', type: 'budget', slots: { amount: 5000 } },
+      trees: [
+        { key: 'travel_plan', slots: { destination: 'Hangzhou' }, children: [] },
+        { key: 'budget', slots: { amount: 5000 }, children: [] },
       ],
-      relations: [{ from: 'f_001', to: 'f_002', type: 'elaborates' }],
+      relations: [{ from: 'travel_plan', to: 'budget', type: 'depends' }],
     };
     const ctx = makePipelineContext(content);
     const result = await structuralValidatorAgent.run(ctx, {} as any);
@@ -47,24 +47,24 @@ describe('structuralValidatorAgent', () => {
 
   it('records error for duplicate frame IDs', async () => {
     const content: SemanticContent = {
-      frames: [
-        { id: 'f_001', type: 'a', slots: { x: 1 } },
-        { id: 'f_001', type: 'b', slots: { y: 2 } },
+      trees: [
+        { key: 'a', slots: { x: 1 }, children: [] },
+        { key: 'a', slots: { y: 2 }, children: [] },
       ],
       relations: [],
     };
     const ctx = makePipelineContext(content);
     const result = await structuralValidatorAgent.run(ctx, {} as any);
     const errors = result.meta.agentErrors.filter(
-      (e) => e.agent === 'structural_validator' && e.error.includes('duplicate_id')
+      (e) => e.agent === 'structural_validator' && e.error.includes('duplicate_key')
     );
     expect(errors.length).toBeGreaterThan(0);
   });
 
   it('records error for broken relation endpoint', async () => {
     const content: SemanticContent = {
-      frames: [{ id: 'f_001', type: 'a', slots: { x: 1 } }],
-      relations: [{ from: 'f_001', to: 'f_999', type: 'elaborates' }],
+      trees: [{ key: 'a', slots: { x: 1 }, children: [] }],
+      relations: [{ from: 'a', to: 'f_999', type: 'depends' }],
     };
     const ctx = makePipelineContext(content);
     const result = await structuralValidatorAgent.run(ctx, {} as any);
@@ -74,23 +74,23 @@ describe('structuralValidatorAgent', () => {
     expect(errors.length).toBeGreaterThan(0);
   });
 
-  it('skips when no frames', () => {
-    const ctx = makePipelineContext({ frames: [], relations: [] });
+  it('skips when no trees', () => {
+    const ctx = makePipelineContext({ trees: [], relations: [] });
     expect(structuralValidatorAgent.shouldRun(ctx)).toBe(false);
   });
 
   it('does not modify content (non-destructive)', async () => {
     const content: SemanticContent = {
-      frames: [
-        { id: 'f_001', type: 'a', slots: { x: 1 } },
-        { id: 'f_001', type: 'b', slots: { y: 2 } },
+      trees: [
+        { key: 'a', slots: { x: 1 }, children: [] },
+        { key: 'a', slots: { y: 2 }, children: [] },
       ],
       relations: [],
     };
     const ctx = makePipelineContext(content);
     const result = await structuralValidatorAgent.run(ctx, {} as any);
     // Content unchanged — validator only reports, never modifies
-    expect(result.content.frames).toHaveLength(2);
+    expect(result.content.trees).toHaveLength(2);
   });
 });
 
@@ -99,11 +99,11 @@ describe('structuralValidatorAgent', () => {
 describe('checkDiffCompatibility', () => {
   it('returns compatible for clean add delta', () => {
     const snapshot: SemanticContent = {
-      frames: [{ id: 'f_001', type: 'a', slots: { x: 1 } }],
+      trees: [{ key: 'a', slots: { x: 1 }, children: [] }],
       relations: [],
     };
     const delta = {
-      changes: [{ action: 'add' as const, frame: { id: 'f_002', type: 'b', slots: { y: 2 } } }],
+      changes: [{ action: 'add' as const, parent_path: 'a', node: { key: 'b', slots: { y: 2 }, children: [] } }],
     };
     const result = checkDiffCompatibility(snapshot, delta);
     expect(result.compatible).toBe(true);
@@ -112,11 +112,11 @@ describe('checkDiffCompatibility', () => {
 
   it('returns compatible for clean update delta', () => {
     const snapshot: SemanticContent = {
-      frames: [{ id: 'f_001', type: 'a', slots: { x: 1 } }],
+      trees: [{ key: 'a', slots: { x: 1 }, children: [] }],
       relations: [],
     };
     const delta = {
-      changes: [{ action: 'update' as const, target: 'f_001', slots: { x: 2 } }],
+      changes: [{ action: 'update' as const, target_path: 'a', slots: { x: 2 } }],
     };
     const result = checkDiffCompatibility(snapshot, delta);
     expect(result.compatible).toBe(true);
@@ -124,14 +124,15 @@ describe('checkDiffCompatibility', () => {
 
   it('returns compatible for remove delta', () => {
     const snapshot: SemanticContent = {
-      frames: [
-        { id: 'f_001', type: 'a', slots: { x: 1 } },
-        { id: 'f_002', type: 'b', slots: { y: 2 } },
+      trees: [
+        { key: 'a', slots: { x: 1 }, children: [
+          { key: 'b', slots: { y: 2 }, children: [] },
+        ] },
       ],
-      relations: [{ from: 'f_001', to: 'f_002', type: 'elaborates' }],
+      relations: [],
     };
     const delta = {
-      changes: [{ action: 'remove' as const, target: 'f_002' }],
+      changes: [{ action: 'remove' as const, target_path: 'a/b' }],
     };
     const result = checkDiffCompatibility(snapshot, delta);
     expect(result.compatible).toBe(true);
@@ -139,28 +140,26 @@ describe('checkDiffCompatibility', () => {
 
   it('detects broken relation after delta apply', () => {
     const snapshot: SemanticContent = {
-      frames: [{ id: 'f_001', type: 'a', slots: { x: 1 } }],
+      trees: [{ key: 'a', slots: { x: 1 }, children: [] }],
       relations: [],
     };
     const delta = {
-      changes: [{ action: 'add' as const, frame: { id: 'f_002', type: 'b', slots: { y: 2 } } }],
-      new_relations: [{ from: 'f_002', to: 'f_999', type: 'elaborates' as const }],
+      changes: [{ action: 'add' as const, parent_path: 'a', node: { key: 'b', slots: { y: 2 }, children: [] } }],
+      new_relations: [{ from: 'b', to: 'f_999', type: 'depends' as const }],
     };
     const result = checkDiffCompatibility(snapshot, delta);
     expect(result.compatible).toBe(false);
     expect(result.errors.some((e) => e.includes('broken_relation'))).toBe(true);
   });
 
-  it('detects duplicate IDs after delta apply', () => {
+  it('detects self-relation after delta apply', () => {
     const snapshot: SemanticContent = {
-      frames: [{ id: 'f_001', type: 'a', slots: { x: 1 } }],
+      trees: [{ key: 'a', slots: { x: 1 }, children: [] }],
       relations: [],
     };
-    // applyDelta with existing ID does a merge, not a duplicate — so this won't fail
-    // Instead test with a new_relations self-reference
     const delta = {
-      changes: [{ action: 'add' as const, frame: { id: 'f_002', type: 'b', slots: { y: 2 } } }],
-      new_relations: [{ from: 'f_002', to: 'f_002', type: 'elaborates' as const }],
+      changes: [{ action: 'add' as const, parent_path: 'a', node: { key: 'b', slots: { y: 2 }, children: [] } }],
+      new_relations: [{ from: 'b', to: 'b', type: 'depends' as const }],
     };
     const result = checkDiffCompatibility(snapshot, delta);
     expect(result.compatible).toBe(false);
@@ -168,9 +167,9 @@ describe('checkDiffCompatibility', () => {
   });
 
   it('handles empty snapshot + add delta', () => {
-    const snapshot: SemanticContent = { frames: [], relations: [] };
+    const snapshot: SemanticContent = { trees: [], relations: [] };
     const delta = {
-      changes: [{ action: 'add' as const, frame: { id: 'f_001', type: 'a', slots: { x: 1 } } }],
+      changes: [{ action: 'add' as const, parent_path: '', node: { key: 'a', slots: { x: 1 }, children: [] } }],
     };
     const result = checkDiffCompatibility(snapshot, delta);
     expect(result.compatible).toBe(true);

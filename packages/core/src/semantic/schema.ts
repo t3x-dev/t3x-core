@@ -77,6 +77,9 @@ export const DeltaSchema = z.object({
   remove_relations: z.array(RelationSchema).optional(),
 });
 
+/** @internal Alias — tree-native delta IS the standard delta now. */
+export const TreeNativeDeltaSchema = DeltaSchema;
+
 // ── Internal: Frame Schema (for diff/merge validation only) ──
 
 /** @internal */

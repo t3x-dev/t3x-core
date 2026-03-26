@@ -16,7 +16,8 @@
  */
 
 import { applyDelta } from '../semantic/delta';
-import type { Delta, Frame, FrameChange, SemanticContent } from '../semantic/types';
+import type { Delta, Frame, SemanticContent, TreeChange } from '../semantic/types';
+import { flattenTrees } from '../semantic/tree';
 import { validateIntegrity } from '../semantic/validate';
 import type { UserAnswer } from './types';
 
@@ -41,7 +42,8 @@ export function applyVaguenessAnswer(
   slotKey: string,
   newValue: unknown
 ): AnswerApplyResult {
-  const frame = snapshot.frames.find((f) => f.id === frameId);
+  const frames: Frame[] = flattenTrees(snapshot.trees);
+  const frame = frames.find((f: Frame) => f.id === frameId);
   if (!frame) {
     return { applied: false, errors: [`Frame ${frameId} not found`] };
   }
@@ -53,7 +55,7 @@ export function applyVaguenessAnswer(
     typeof newValue === 'string' || typeof newValue === 'number' ? newValue : String(newValue);
 
   const delta: Delta = {
-    changes: [{ action: 'update', target: frameId, slots: { [slotKey]: resolvedValue } }],
+    changes: [{ action: 'update', target_path: frameId, slots: { [slotKey]: resolvedValue } }],
   };
 
   return applyAndValidate(snapshot, delta);
@@ -70,10 +72,11 @@ export function applyStructuralAnswer(
   frameId: string,
   newParentId: string
 ): AnswerApplyResult {
-  if (!snapshot.frames.some((f) => f.id === frameId)) {
+  const frames: Frame[] = flattenTrees(snapshot.trees);
+  if (!frames.some((f: Frame) => f.id === frameId)) {
     return { applied: false, errors: [`Frame ${frameId} not found`] };
   }
-  if (!snapshot.frames.some((f) => f.id === newParentId)) {
+  if (!frames.some((f: Frame) => f.id === newParentId)) {
     return { applied: false, errors: [`Parent frame ${newParentId} not found`] };
   }
   if (frameId === newParentId) {
@@ -82,7 +85,7 @@ export function applyStructuralAnswer(
 
   // Remove existing elaborates relations pointing TO this frame
   const relationsToRemove = snapshot.relations.filter(
-    (r) => r.to === frameId && r.type === 'elaborates'
+    (r) => r.to === frameId && r.type === 'depends'
   );
 
   const delta: Delta = {
@@ -91,7 +94,7 @@ export function applyStructuralAnswer(
       relationsToRemove.length > 0
         ? relationsToRemove.map((r) => ({ from: r.from, to: r.to, type: r.type }))
         : undefined,
-    new_relations: [{ from: newParentId, to: frameId, type: 'elaborates' }],
+    new_relations: [{ from: newParentId, to: frameId, type: 'depends' }],
   };
 
   return applyAndValidate(snapshot, delta);
@@ -107,32 +110,33 @@ export function applyStructuralAnswer(
  * their parent naturally in the UI.
  */
 export function generateCollapseDelta(snapshot: SemanticContent): Delta {
-  if (snapshot.frames.length === 0) {
+  const frames: Frame[] = flattenTrees(snapshot.trees);
+  if (frames.length === 0) {
     return { changes: [] };
   }
 
-  // Find root frame (first frame, or frame with no incoming elaborates)
+  // Find root frame (first frame, or frame with no incoming depends)
   const childIds = new Set(
-    snapshot.relations.filter((r) => r.type === 'elaborates').map((r) => r.to)
+    snapshot.relations.filter((r) => r.type === 'depends').map((r) => r.to)
   );
-  const rootFrame = snapshot.frames.find((f) => !childIds.has(f.id)) ?? snapshot.frames[0];
+  const rootFrame = frames.find((f: Frame) => !childIds.has(f.id)) ?? frames[0];
 
-  // Find direct children of root (frames that root elaborates TO)
+  // Find direct children of root
   const directChildIds = new Set(
     snapshot.relations
-      .filter((r) => r.from === rootFrame.id && r.type === 'elaborates')
+      .filter((r) => r.from === rootFrame.id && r.type === 'depends')
       .map((r) => r.to)
   );
 
   // Generate update deltas for root + direct children
   const framesToCollapse: Frame[] = [
     rootFrame,
-    ...snapshot.frames.filter((f) => directChildIds.has(f.id)),
+    ...frames.filter((f: Frame) => directChildIds.has(f.id)),
   ];
 
-  const changes: FrameChange[] = framesToCollapse.map((f) => ({
+  const changes: TreeChange[] = framesToCollapse.map((f: Frame) => ({
     action: 'update' as const,
-    target: f.id,
+    target_path: f.id,
     slots: { _status: 'collapsed' },
   }));
 

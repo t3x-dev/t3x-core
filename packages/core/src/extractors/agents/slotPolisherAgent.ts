@@ -12,6 +12,7 @@
 
 import type { LLMProvider } from '../../llm/types';
 import type { Frame, SlotValue } from '../../semantic/types';
+import { flattenTrees, unflattenToTrees } from '../../semantic/tree';
 import type { MeaningAgent, PipelineContext } from '../meaningPipeline';
 
 const SYSTEM_PROMPT = `You clean up YAML key names and values to be concise and readable.
@@ -35,14 +36,14 @@ export const slotPolisherAgent: MeaningAgent = {
 
   shouldRun(ctx: PipelineContext): boolean {
     if (ctx.meta.mode === 'incremental') return false;
-    return ctx.content.frames.length > 0;
+    return ctx.content.trees.length > 0;
   },
 
   async run(ctx: PipelineContext, provider: LLMProvider): Promise<PipelineContext> {
-    // Polish each root frame (don't go into nested InlineFrames — those get polished via parent)
+    const frames: Frame[] = flattenTrees(ctx.content.trees);
     const polishedFrames: Frame[] = [];
 
-    for (const frame of ctx.content.frames) {
+    for (const frame of frames) {
       try {
         const slotsJson = JSON.stringify(frame.slots, null, 2);
         const userPrompt = `Frame type: ${frame.type}\nSlots:\n${slotsJson}\n\nPolished:`;
@@ -70,7 +71,7 @@ export const slotPolisherAgent: MeaningAgent = {
       polishedFrames.push(frame);
     }
 
-    ctx.content = { ...ctx.content, frames: polishedFrames };
+    ctx.content = { trees: unflattenToTrees(polishedFrames), relations: ctx.content.relations };
     return ctx;
   },
 };

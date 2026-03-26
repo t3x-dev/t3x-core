@@ -7,7 +7,6 @@
  * - Delta mode (with snapshot): asks LLM for incremental changes only
  */
 
-import { isTreeNative } from '../semantic/tree';
 import type { SemanticContent, TreeNode } from '../semantic/types';
 import {
   DEFAULT_STYLE,
@@ -62,42 +61,13 @@ function serializeTreeForSnapshot(node: TreeNode, indent = 0): string {
  * Serialize a snapshot to a YAML-like readable text format.
  */
 function serializeSnapshot(snapshot: SemanticContent): string {
-  // Tree-native: serialize as YAML tree
-  if (isTreeNative(snapshot) && snapshot.tree) {
-    return serializeTreeForSnapshot(snapshot.tree);
-  }
-  // Legacy flat-frame serialization (existing code unchanged)
-  const lines: string[] = [];
-
-  lines.push('frames:');
-  for (const frame of snapshot.frames) {
-    lines.push(`  - id: ${frame.id}`);
-    lines.push(`    type: ${frame.type}`);
-    lines.push('    slots:');
-    for (const [key, value] of Object.entries(frame.slots)) {
-      lines.push(`      ${key}: ${JSON.stringify(value)}`);
-    }
-    if (frame.confidence !== undefined) {
-      lines.push(`    confidence: ${frame.confidence}`);
-    }
-    if (frame.source !== undefined) {
-      lines.push(`    source: ${frame.source}`);
-    }
+  // Serialize trees as YAML
+  if (snapshot.trees.length > 0) {
+    return snapshot.trees.map((tree) => serializeTreeForSnapshot(tree)).join('\n\n');
   }
 
-  if (snapshot.relations.length > 0) {
-    lines.push('relations:');
-    for (const rel of snapshot.relations) {
-      lines.push(`  - from: ${rel.from}`);
-      lines.push(`    to: ${rel.to}`);
-      lines.push(`    type: ${rel.type}`);
-      if (rel.confidence !== undefined) {
-        lines.push(`    confidence: ${rel.confidence}`);
-      }
-    }
-  }
-
-  return lines.join('\n');
+  // Empty content
+  return '';
 }
 
 /**

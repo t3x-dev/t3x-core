@@ -1,5 +1,8 @@
 import type { Delta, SemanticContent, SlotValue, TreeNode } from './types';
 
+/** @internal Alias — tree-native delta IS the standard Delta now. */
+export type TreeNativeDelta = Delta;
+
 /**
  * Apply a delta to a semantic snapshot, returning a new snapshot.
  * Pure function — does not mutate the input.
