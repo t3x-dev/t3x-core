@@ -1,56 +1,57 @@
 import type {
   Frame,
   SemanticContent,
-  SlotValue,
+  TreeNode,
   ValidationError,
   ValidationResult,
   ValidationWarning,
 } from './types';
-import { isTreeNative } from './tree';
+import { flattenTrees } from './tree';
 
 export function validateIntegrity(content: SemanticContent): ValidationResult {
   const errors: ValidationError[] = [];
   const warnings: ValidationWarning[] = [];
-  const frameIds = new Set(content.frames.map((f) => f.id));
 
-  // 1. Duplicate IDs
-  const idCounts = new Map<string, number>();
-  for (const frame of content.frames) {
-    idCounts.set(frame.id, (idCounts.get(frame.id) ?? 0) + 1);
+  // Flatten trees to frames for relation endpoint checks
+  const frames = flattenTrees(content.trees);
+  const frameIds = new Set(frames.map((f) => f.id));
+
+  // 1. Duplicate keys within same tree level
+  for (const tree of content.trees) {
+    collectDuplicateKeys(tree, '', errors);
   }
-  for (const [id, count] of idCounts) {
+  // Also check root-level tree key duplicates
+  const rootKeyCounts = new Map<string, number>();
+  for (const tree of content.trees) {
+    rootKeyCounts.set(tree.key, (rootKeyCounts.get(tree.key) ?? 0) + 1);
+  }
+  for (const [key, count] of rootKeyCounts) {
     if (count > 1) {
       errors.push({
-        type: 'duplicate_id',
-        message: `Frame ID "${id}" appears ${count} times`,
-        location: id,
+        type: 'duplicate_key',
+        message: `Root tree key "${key}" appears ${count} times`,
+        location: key,
       });
     }
   }
 
-  // 2. Broken refs in slots
-  for (const frame of content.frames) {
-    for (const [key, value] of Object.entries(frame.slots)) {
-      checkSlotRefs(value, `${frame.id}.${key}`, frameIds, errors, 0);
-    }
-  }
-
-  // 3. Relation endpoint checks
+  // 2. Relation endpoint checks (relation from/to use path IDs)
   for (const rel of content.relations) {
     if (!frameIds.has(rel.from)) {
       errors.push({
         type: 'broken_relation',
-        message: `Relation from "${rel.from}" — no such frame`,
+        message: `Relation from "${rel.from}" — no such node path`,
         location: `${rel.from}->${rel.to}`,
       });
     }
     if (!frameIds.has(rel.to)) {
       errors.push({
         type: 'broken_relation',
-        message: `Relation to "${rel.to}" — no such frame`,
+        message: `Relation to "${rel.to}" — no such node path`,
         location: `${rel.from}->${rel.to}`,
       });
     }
+    // 3. No self-relations
     if (rel.from === rel.to) {
       errors.push({
         type: 'self_relation',
@@ -85,30 +86,30 @@ export function validateIntegrity(content: SemanticContent): ValidationResult {
     }
   }
 
-  // 5. Orphan frames — skip for tree-native content (tree structure IS the hierarchy)
-  if (content.frames.length > 1 && !isTreeNative(content)) {
+  // 5. Orphan trees — only warn when multiple trees exist
+  if (content.trees.length > 1) {
     const connected = new Set<string>();
     for (const rel of content.relations) {
-      connected.add(rel.from);
-      connected.add(rel.to);
+      connected.add(rel.from.split('/')[0]);
+      connected.add(rel.to.split('/')[0]);
     }
-    for (const frame of content.frames) {
-      if (!connected.has(frame.id)) {
+    for (const tree of content.trees) {
+      if (!connected.has(tree.key)) {
         warnings.push({
-          type: 'orphan_frame',
-          message: `Frame "${frame.id}" has no relations`,
-          location: frame.id,
+          type: 'orphan_tree',
+          message: `Tree "${tree.key}" has no relations to other trees`,
+          location: tree.key,
         });
       }
     }
   }
 
   // 6. Low confidence
-  for (const frame of content.frames) {
+  for (const frame of frames) {
     if (frame.confidence !== undefined && frame.confidence < 0.5) {
       warnings.push({
         type: 'low_confidence',
-        message: `Frame "${frame.id}" confidence: ${frame.confidence}`,
+        message: `Node "${frame.id}" confidence: ${frame.confidence}`,
         location: frame.id,
       });
     }
@@ -117,60 +118,41 @@ export function validateIntegrity(content: SemanticContent): ValidationResult {
   return { valid: errors.length === 0, errors, warnings };
 }
 
-const MAX_SLOT_DEPTH = 10;
-
-function checkSlotRefs(
-  value: SlotValue,
-  path: string,
-  frameIds: Set<string>,
-  errors: ValidationError[],
-  depth: number
+/** Check for duplicate keys among siblings at each tree level */
+function collectDuplicateKeys(
+  node: TreeNode,
+  parentPath: string,
+  errors: ValidationError[]
 ): void {
-  if (depth > MAX_SLOT_DEPTH) {
-    errors.push({
-      type: 'broken_ref',
-      message: `"${path}" exceeds maximum nesting depth (${MAX_SLOT_DEPTH})`,
-      location: path,
-    });
-    return;
+  const childKeyCounts = new Map<string, number>();
+  for (const child of node.children) {
+    childKeyCounts.set(child.key, (childKeyCounts.get(child.key) ?? 0) + 1);
   }
-  if (value === null || value === undefined) return;
-  if (typeof value === 'string' || typeof value === 'number') return;
-  if (Array.isArray(value)) {
-    for (let i = 0; i < value.length; i++) {
-      checkSlotRefs(value[i], `${path}[${i}]`, frameIds, errors, depth + 1);
+  const nodePath = parentPath ? `${parentPath}/${node.key}` : node.key;
+  for (const [key, count] of childKeyCounts) {
+    if (count > 1) {
+      errors.push({
+        type: 'duplicate_key',
+        message: `Key "${key}" appears ${count} times under "${nodePath}"`,
+        location: `${nodePath}/${key}`,
+      });
     }
-    return;
   }
-  if (typeof value === 'object') {
-    if ('ref' in value && typeof (value as { ref: unknown }).ref === 'string') {
-      const ref = (value as { ref: string }).ref;
-      if (!frameIds.has(ref)) {
-        errors.push({
-          type: 'broken_ref',
-          message: `"${path}" references "${ref}" — no such frame`,
-          location: path,
-        });
-      }
-    }
-    if ('slots' in value && typeof (value as { slots: unknown }).slots === 'object') {
-      const slots = (value as { slots: Record<string, SlotValue> }).slots;
-      for (const [key, val] of Object.entries(slots)) {
-        checkSlotRefs(val, `${path}.${key}`, frameIds, errors, depth + 1);
-      }
-    }
+  for (const child of node.children) {
+    collectDuplicateKeys(child, nodePath, errors);
   }
 }
 
 export function checkRelationSanity(content: SemanticContent): ValidationWarning[] {
   const warnings: ValidationWarning[] = [];
+  const frames = flattenTrees(content.trees);
   const frameMap = new Map<string, Frame>();
-  for (const frame of content.frames) {
+  for (const frame of frames) {
     frameMap.set(frame.id, frame);
   }
 
   for (const rel of content.relations) {
-    // 1. Contrasts between frames of the same type
+    // 1. Contrasts between nodes of the same type
     if (rel.type === 'contrasts') {
       const fromFrame = frameMap.get(rel.from);
       const toFrame = frameMap.get(rel.to);
@@ -195,8 +177,8 @@ export function checkRelationSanity(content: SemanticContent): ValidationWarning
   for (const pair of contrastPairs) {
     if (causesPairs.has(pair)) {
       warnings.push({
-        type: 'contrast_causes_conflict',
-        message: `Both contrasts and causes between same frames — possible logical contradiction`,
+        type: 'same_type_contrast',
+        message: `Both contrasts and causes between same nodes — possible logical contradiction`,
         location: pair,
       });
     }

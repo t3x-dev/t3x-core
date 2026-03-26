@@ -8,6 +8,7 @@
  */
 
 import type { LLMProvider } from '../llm/types';
+import { serializeForPrompt } from './serialize';
 import type {
   CoverageResult,
   DimensionResult,
@@ -38,13 +39,13 @@ export function buildSemanticGatePrompt(
   turns: { role: string; content: string }[],
   content: SemanticContent
 ): { systemPrompt: string; userPrompt: string } {
-  const systemPrompt = `你是一个语义提取审查员。给你一段原始对话和从中提取的 Frame JSON。
+  const systemPrompt = `你是一个语义提取审查员。给你一段原始对话和从中提取的 Tree 结构。
 
 请从以下 5 个维度评分（0-1）并列出问题：
 
 ## 1. 完整性 (Completeness)
 对话中的重要意图、决定、事实、约束是否都被提取了？
-- 检查：对话中每一个实质性陈述是否有对应的 frame 或 slot
+- 检查：对话中每一个实质性陈述是否有对应的 tree node 或 slot
 - 不需要提取：寒暄、重复、过程性讨论
 
 ## 2. 准确性 (Accuracy)
@@ -53,20 +54,19 @@ export function buildSemanticGatePrompt(
 - 检查：推断性内容是否标注了较低的 confidence
 
 ## 3. 关系正确性 (Relations)
-frame 之间的关系类型是否正确？
+tree 之间的关系类型是否正确？
 - causes：A 真的导致了 B 吗？
 - conditions：A 真的是 B 的前提吗？
 - contrasts：A 和 B 真的矛盾/对立吗？
-- elaborates：B 真的是 A 的细节吗？
 - follows：A 真的在 B 之前发生吗？
 - depends：A 真的依赖 B 吗？
 
 ## 4. 粒度合理性 (Granularity)
-- 过度拆分：一个意图被拆成多个不必要的 frame？
-- 过度合并：多个不同意图被塞进一个 frame？
+- 过度拆分：一个意图被拆成多个不必要的 tree node？
+- 过度合并：多个不同意图被塞进一个 tree node？
 
 ## 5. 幻觉检测 (Hallucination)
-- frame 中有没有原文完全没提到的内容？
+- tree 中有没有原文完全没提到的内容？
 - 推断是否合理？过度推断？
 
 请严格按照以下 JSON 格式输出（不要包含其他内容）：
@@ -81,7 +81,7 @@ frame 之间的关系类型是否正确？
     "hallucination": { "score": 0.0, "details": "..." }
   },
   "issues": [
-    { "severity": "error|warning|info", "frame_id": "f_001", "dimension": "accuracy", "description": "...", "suggestion": "..." }
+    { "severity": "error|warning|info", "node_path": "budget/constraints", "dimension": "accuracy", "description": "...", "suggestion": "..." }
   ]
 }
 \`\`\``;
@@ -90,15 +90,7 @@ frame 之间的关系类型是否正确？
   const turnsText = turns.map((t) => `[${t.role}]: ${t.content}`).join('\n');
 
   // Format semantic content as readable YAML-like text
-  const framesText = content.frames
-    .map((f) => {
-      const slotsStr = Object.entries(f.slots)
-        .map(([k, v]) => `    ${k}: ${JSON.stringify(v)}`)
-        .join('\n');
-      const confStr = f.confidence !== undefined ? ` (confidence: ${f.confidence})` : '';
-      return `  - id: ${f.id}\n    type: ${f.type}${confStr}\n${slotsStr}`;
-    })
-    .join('\n');
+  const treesText = serializeForPrompt(content);
 
   const relationsText =
     content.relations.length > 0
@@ -108,8 +100,8 @@ frame 之间的关系类型是否正确？
   const userPrompt = `原始对话：
 ${turnsText}
 
-提取的 Frames：
-${framesText}
+提取的 Trees：
+${treesText}
 
 提取的 Relations：
 ${relationsText}
@@ -186,7 +178,8 @@ export function parseSemanticGateResponse(raw: string): Omit<SemanticGateResult,
             : 'accuracy';
           issues.push({
             severity,
-            frame_id: typeof issue.frame_id === 'string' ? issue.frame_id : undefined,
+            node_path: typeof issue.frame_id === 'string' ? issue.frame_id :
+              typeof issue.node_path === 'string' ? issue.node_path : undefined,
             dimension,
             description: issue.description,
             suggestion: typeof issue.suggestion === 'string' ? issue.suggestion : undefined,
@@ -241,9 +234,9 @@ export function buildCoveragePrompt(
   turns: { role: string; content: string }[],
   content: SemanticContent
 ): { systemPrompt: string; userPrompt: string } {
-  const systemPrompt = `你是一个语义提取覆盖度审查员。给你一段原始对话和从中提取的 Frame JSON。
+  const systemPrompt = `你是一个语义提取覆盖度审查员。给你一段原始对话和从中提取的 Tree 结构。
 
-你的任务：检查原始对话中是否有重要信息被遗漏，没有被任何 Frame 覆盖。
+你的任务：检查原始对话中是否有重要信息被遗漏，没有被任何 Tree node 覆盖。
 
 ## 判断标准
 - 重要信息：意图、决定、事实、约束、数字、时间、人名、具体需求
@@ -265,20 +258,13 @@ export function buildCoveragePrompt(
 
   const turnsText = turns.map((t) => `[${t.role}]: ${t.content}`).join('\n');
 
-  const framesText = content.frames
-    .map((f) => {
-      const slotsStr = Object.entries(f.slots)
-        .map(([k, v]) => `    ${k}: ${JSON.stringify(v)}`)
-        .join('\n');
-      return `  - id: ${f.id}\n    type: ${f.type}\n${slotsStr}`;
-    })
-    .join('\n');
+  const treesText = serializeForPrompt(content);
 
   const userPrompt = `原始对话：
 ${turnsText}
 
-提取的 Frames：
-${framesText}
+提取的 Trees：
+${treesText}
 
 请判断覆盖度并输出 JSON。`;
 

@@ -87,4 +87,4 @@ export {
 // Validation
 export { checkRelationSanity, validateIntegrity } from './validate';
 // Serialization
-export { serializeFramesForPrompt } from './serialize';
+export { serializeForPrompt, serializeFramesForPrompt } from './serialize';
