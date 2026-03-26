@@ -3,7 +3,7 @@ import {
   buildFrameExtractionPrompt,
   type FrameExtractionTurn,
 } from '../../extractors/frameExtractionPrompt';
-import type { SemanticContent } from '../../semantic/types';
+import type { SemanticContent, TreeNode } from '../../semantic/types';
 
 const sampleTurns: FrameExtractionTurn[] = [
   { role: 'user', content: 'I want to travel to Tokyo next month' },
@@ -29,7 +29,38 @@ const sampleSnapshot: SemanticContent = {
       confidence: 0.9,
     },
   ],
-  relations: [{ from: 'f_001', to: 'f_002', type: 'conditions', confidence: 0.85 }],
+  relations: [{ from: 'f_001', to: 'f_002', type: 'depends', confidence: 0.85 }],
+};
+
+const sampleTreeSnapshot: SemanticContent = {
+  tree: {
+    key: 'travel_plan',
+    slots: { destination: 'Tokyo', timeframe: 'next month' },
+    children: [
+      {
+        key: 'budget',
+        slots: { amount: 3000, currency: 'USD' },
+        children: [],
+        confidence: 0.9,
+      },
+    ],
+    confidence: 0.95,
+  },
+  frames: [
+    {
+      id: 'travel_plan',
+      type: 'travel_plan',
+      slots: { destination: 'Tokyo', timeframe: 'next month' },
+      confidence: 0.95,
+    },
+    {
+      id: 'travel_plan/budget',
+      type: 'budget',
+      slots: { amount: 3000, currency: 'USD' },
+      confidence: 0.9,
+    },
+  ],
+  relations: [],
 };
 
 describe('buildFrameExtractionPrompt', () => {
@@ -44,10 +75,10 @@ describe('buildFrameExtractionPrompt', () => {
   });
 
   describe('first extraction mode (no snapshot)', () => {
-    it('system prompt instructs full frame output', () => {
+    it('system prompt instructs YAML tree output', () => {
       const result = buildFrameExtractionPrompt({ turns: sampleTurns });
-      expect(result.systemPrompt).toContain('frames');
-      expect(result.systemPrompt).toContain('relations');
+      expect(result.systemPrompt).toContain('YAML');
+      expect(result.systemPrompt).toContain('topic tree');
       // Should NOT mention delta/changes in first extraction mode
       expect(result.systemPrompt).not.toContain('delta');
       expect(result.systemPrompt).not.toContain('changes');
@@ -61,10 +92,10 @@ describe('buildFrameExtractionPrompt', () => {
       expect(result.userPrompt).not.toContain('Snapshot');
     });
 
-    it('user prompt asks to extract all frames and relations', () => {
+    it('user prompt asks to extract into a YAML topic tree', () => {
       const result = buildFrameExtractionPrompt({ turns: sampleTurns });
-      expect(result.userPrompt).toContain('frames');
-      expect(result.userPrompt).toContain('relations');
+      expect(result.userPrompt).toContain('YAML');
+      expect(result.userPrompt).toContain('tree');
     });
   });
 
@@ -77,7 +108,7 @@ describe('buildFrameExtractionPrompt', () => {
       expect(result.systemPrompt).toContain('delta');
     });
 
-    it('includes snapshot in user prompt when provided', () => {
+    it('includes snapshot in user prompt when provided (legacy flat frames)', () => {
       const result = buildFrameExtractionPrompt({
         turns: sampleTurns,
         snapshot: sampleSnapshot,
@@ -89,52 +120,63 @@ describe('buildFrameExtractionPrompt', () => {
       expect(result.userPrompt).toContain('f_002');
     });
 
-    it('includes relations in snapshot section', () => {
+    it('includes relations in snapshot section (legacy)', () => {
       const result = buildFrameExtractionPrompt({
         turns: sampleTurns,
         snapshot: sampleSnapshot,
       });
-      expect(result.userPrompt).toContain('conditions');
+      expect(result.userPrompt).toContain('depends');
       expect(result.userPrompt).toContain('f_001');
       expect(result.userPrompt).toContain('f_002');
     });
 
-    it('includes max frame id hint for new frames', () => {
+    it('serializes tree-native snapshot as YAML tree', () => {
       const result = buildFrameExtractionPrompt({
         turns: sampleTurns,
-        snapshot: sampleSnapshot,
+        snapshot: sampleTreeSnapshot,
       });
-      // Max existing id is f_002 → next should be f_003
-      expect(result.userPrompt).toContain('f_003');
+      // Tree-native snapshot should show tree structure, not flat frames
+      expect(result.userPrompt).toContain('travel_plan:');
+      expect(result.userPrompt).toContain('budget:');
+      expect(result.userPrompt).toContain('"Tokyo"');
+      // Should not contain frame-style "- id:" prefix
+      expect(result.userPrompt).not.toContain('- id:');
     });
 
-    it('user prompt asks for delta output', () => {
+    it('user prompt asks for delta output with tree paths', () => {
       const result = buildFrameExtractionPrompt({
         turns: sampleTurns,
         snapshot: sampleSnapshot,
       });
       expect(result.userPrompt).toContain('delta');
+      // Tree-native path instructions
+      expect(result.userPrompt).toContain('parent_path');
+      expect(result.userPrompt).toContain('target_path');
       // Update/remove guidance in user prompt
       expect(result.userPrompt).toContain('update');
       expect(result.userPrompt).toContain('remove');
     });
+
+    it('system prompt contains parent_path and target_path', () => {
+      const result = buildFrameExtractionPrompt({
+        turns: sampleTurns,
+        snapshot: sampleSnapshot,
+      });
+      expect(result.systemPrompt).toContain('parent_path');
+      expect(result.systemPrompt).toContain('target_path');
+    });
   });
 
-  describe('system prompt includes all 6 relation types', () => {
-    it('lists all relation types in both modes', () => {
-      const relationTypes = [
-        'causes',
-        'conditions',
-        'contrasts',
-        'elaborates',
-        'follows',
-        'depends',
-      ];
+  describe('system prompt includes 4 cross-tree relation types', () => {
+    it('lists all 4 cross-tree relation types in both modes', () => {
+      const relationTypes = ['causes', 'contrasts', 'follows', 'depends'];
 
       const firstMode = buildFrameExtractionPrompt({ turns: sampleTurns });
       for (const rt of relationTypes) {
         expect(firstMode.systemPrompt).toContain(rt);
       }
+      // Should NOT contain "elaborates" in tree-native system prompts
+      expect(firstMode.systemPrompt).not.toContain('elaborates');
 
       const deltaMode = buildFrameExtractionPrompt({
         turns: sampleTurns,
@@ -143,35 +185,14 @@ describe('buildFrameExtractionPrompt', () => {
       for (const rt of relationTypes) {
         expect(deltaMode.systemPrompt).toContain(rt);
       }
+      expect(deltaMode.systemPrompt).not.toContain('elaborates');
     });
   });
 
-  describe('next frame ID calculation', () => {
-    it('calculates next id from max existing id', () => {
-      const snapshot: SemanticContent = {
-        frames: [
-          { id: 'f_010', type: 'test', slots: { a: 'b' } },
-          { id: 'f_005', type: 'test2', slots: { c: 'd' } },
-        ],
-        relations: [],
-      };
-      const result = buildFrameExtractionPrompt({ turns: sampleTurns, snapshot });
-      // Max is f_010, next should be f_011
-      expect(result.userPrompt).toContain('f_011');
-    });
-
-    it('handles empty frames in snapshot', () => {
-      const snapshot: SemanticContent = { frames: [], relations: [] };
-      const result = buildFrameExtractionPrompt({ turns: sampleTurns, snapshot });
-      // No frames → next should be f_001
-      expect(result.userPrompt).toContain('f_001');
-    });
-  });
-
-  describe('system prompt includes JSON output format', () => {
-    it('specifies JSON output in first extraction mode', () => {
+  describe('system prompt output format', () => {
+    it('specifies YAML output in first extraction mode', () => {
       const result = buildFrameExtractionPrompt({ turns: sampleTurns });
-      expect(result.systemPrompt).toContain('JSON');
+      expect(result.systemPrompt).toContain('YAML');
     });
 
     it('specifies JSON output in delta mode', () => {

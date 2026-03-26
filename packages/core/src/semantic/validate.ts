@@ -6,6 +6,7 @@ import type {
   ValidationResult,
   ValidationWarning,
 } from './types';
+import { isTreeNative } from './tree';
 
 export function validateIntegrity(content: SemanticContent): ValidationResult {
   const errors: ValidationError[] = [];
@@ -84,8 +85,8 @@ export function validateIntegrity(content: SemanticContent): ValidationResult {
     }
   }
 
-  // 5. Orphan frames (no relations, only warn if >1 frame)
-  if (content.frames.length > 1) {
+  // 5. Orphan frames — skip for tree-native content (tree structure IS the hierarchy)
+  if (content.frames.length > 1 && !isTreeNative(content)) {
     const connected = new Set<string>();
     for (const rel of content.relations) {
       connected.add(rel.from);

@@ -1,13 +1,14 @@
 /**
- * Frame Extraction Prompt Builder
+ * Tree Extraction Prompt Builder
  *
- * Constructs system + user prompts for LLM-based frame semantic extraction.
+ * Constructs system + user prompts for LLM-based tree-native semantic extraction.
  * Supports two modes:
- * - First extraction (no snapshot): asks LLM for full frames + relations output
+ * - First extraction (no snapshot): asks LLM for full YAML tree output
  * - Delta mode (with snapshot): asks LLM for incremental changes only
  */
 
-import type { Frame, SemanticContent } from '../semantic/types';
+import { isTreeNative } from '../semantic/tree';
+import type { SemanticContent, TreeNode } from '../semantic/types';
 import {
   DEFAULT_STYLE,
   type ExtractionStyleConfig,
@@ -17,12 +18,12 @@ import {
   type UpdateStance,
 } from './extractionStyleConfig';
 
-// ── Input Types ──
+// -- Input Types --
 
 export interface FrameExtractionTurn {
   role: 'user' | 'assistant' | 'system' | 'tool';
   content: string;
-  turn_hash?: string; // Source tracking — which turn this is
+  turn_hash?: string; // Source tracking -- which turn this is
 }
 
 export interface FrameExtractionInput {
@@ -32,36 +33,40 @@ export interface FrameExtractionInput {
   processedTurnCount?: number;
 }
 
-// ── Output Type ──
+// -- Output Type --
 
 export interface FrameExtractionPromptResult {
   systemPrompt: string;
   userPrompt: string;
 }
 
-// ── Internal Helpers ──
+// -- Internal Helpers --
 
 /**
- * Calculate the next frame ID from existing frames.
- * Frame IDs follow the pattern f_001, f_002, ...
+ * Serialize a TreeNode to a YAML-like readable text for the snapshot section.
  */
-function calcNextFrameId(frames: Frame[]): string {
-  if (frames.length === 0) return 'f_001';
-  let max = 0;
-  for (const f of frames) {
-    const match = f.id.match(/^f_(\d+)$/);
-    if (match) {
-      const num = Number.parseInt(match[1], 10);
-      if (num > max) max = num;
-    }
+function serializeTreeForSnapshot(node: TreeNode, indent = 0): string {
+  const pad = '  '.repeat(indent);
+  const lines: string[] = [];
+  lines.push(`${pad}${node.key}:`);
+  for (const [key, value] of Object.entries(node.slots)) {
+    lines.push(`${pad}  ${key}: ${JSON.stringify(value)}`);
   }
-  return `f_${String(max + 1).padStart(3, '0')}`;
+  for (const child of node.children) {
+    lines.push(serializeTreeForSnapshot(child, indent + 1));
+  }
+  return lines.join('\n');
 }
 
 /**
  * Serialize a snapshot to a YAML-like readable text format.
  */
 function serializeSnapshot(snapshot: SemanticContent): string {
+  // Tree-native: serialize as YAML tree
+  if (isTreeNative(snapshot) && snapshot.tree) {
+    return serializeTreeForSnapshot(snapshot.tree);
+  }
+  // Legacy flat-frame serialization (existing code unchanged)
   const lines: string[] = [];
 
   lines.push('frames:');
@@ -108,7 +113,7 @@ function formatTurns(turns: FrameExtractionTurn[]): string {
     .join('\n');
 }
 
-// ── Segment Functions ──
+// -- Segment Functions --
 
 /** Returns the TIER 3 row for the Three-Tier Extraction Rule table. */
 export function tier3Segment(t3: Tier3Behavior): string {
@@ -116,7 +121,7 @@ export function tier3Segment(t3: Tier3Behavior): string {
     case 'extract':
       return '| TIER 3 | AI provided information and user did NOT object (silence, moved on, or continued without contradicting) | Extract it | 0.4-0.5 |';
     case 'skip':
-      return '| TIER 3 | AI provided information and user did NOT object (silence, moved on, or continued without contradicting) | Do NOT extract | — |';
+      return '| TIER 3 | AI provided information and user did NOT object (silence, moved on, or continued without contradicting) | Do NOT extract | \u2014 |';
     default:
       return tier3Segment('extract');
   }
@@ -134,24 +139,24 @@ export function tier3KeyDistinction(t3: Tier3Behavior): string {
   }
 }
 
-/** Returns the Frame Count + Slots guidance based on granularity. */
+/** Returns the Tree Depth guidance based on granularity. */
 export function granularitySegment(g: Granularity): string {
   switch (g) {
     case 'concise':
-      return `## Frame Count: 3-5 Frames Total (Hard Limit)
-- Fewer than 3 = subtopics not properly split out from root
-- More than 5 = over-fragmentation. Merge related details into fewer frames.
-- Each frame should have 1-3 flat slots. Prefer fewer, high-confidence slots.`;
+      return `## Tree Depth: 1 Level (Root Only)
+- The tree has ONE level: the root node with flat slots only
+- Do NOT create child nodes \u2014 all information goes into root-level slots
+- 3-5 slots total. Prefer fewer, high-confidence slots.`;
     case 'balanced':
-      return `## Frame Count: 3-8 Frames Total (Hard Limit)
-- Fewer than 3 = subtopics not properly split out from root
-- More than 8 = over-fragmentation
-- Each frame should have 1-4 flat slots`;
+      return `## Tree Depth: 2 Levels (Root + Children)
+- The tree has at most TWO levels: root node and its direct children
+- Group related slots into child nodes when a subtopic has 2+ related slots
+- Root: 1-3 slots. Each child: 1-4 slots.`;
     case 'detailed':
-      return `## Frame Count: 5-12 Frames Total (Hard Limit)
-- Fewer than 5 = subtopics not properly split out from root
-- More than 12 = over-fragmentation. Prefer more frames over fewer.
-- Each frame should have 2-6 flat slots. Capture fine-grained detail.`;
+      return `## Tree Depth: 3 Levels (Root + Children + Grandchildren)
+- The tree has at most THREE levels: root, children, and grandchildren
+- Use grandchildren when a child node has a complex subtopic worth breaking out
+- Root: 1-3 slots. Children: 1-4 slots. Grandchildren: 1-3 slots.`;
     default:
       return granularitySegment('balanced');
   }
@@ -183,107 +188,74 @@ export function updateStanceSegment(us: UpdateStance): string {
     case 'conservative':
       return `
 ## Update Stance: Conservative
-- Only update existing frames when the user EXPLICITLY provides new information
-- Prefer adding new frames over modifying existing ones
-- When in doubt, keep the existing frame unchanged`;
+- Only update existing nodes when the user EXPLICITLY provides new information
+- Prefer adding new child nodes over modifying existing ones
+- When in doubt, keep the existing node unchanged`;
     case 'aggressive':
       return `
 ## Update Stance: Aggressive
-- Actively update existing frames when new information is available
-- Merge related slots into existing frames when possible
-- Prefer updating existing frames over creating new ones for the same subtopic`;
+- Actively update existing nodes when new information is available
+- Merge related slots into existing nodes when possible
+- Prefer updating existing nodes over creating new ones for the same subtopic`;
     default:
       return '';
   }
 }
 
-// ── System Prompt Builders ──
+// -- System Prompt Builders --
 
 function buildDeltaSystemPrompt(style: ExtractionStyleConfig): string {
-  return `You are a semantic extraction engine. Extract CHANGES (delta) from new conversation turns into a topic tree.
-
-## Topic Tree Structure
-- Each extraction produces ONE root frame representing the main topic
-- Subtopics become child frames connected via "elaborates" relations
-- The root frame type IS the topic name (e.g., "hangzhou_trip", "product_requirements")
+  return `You are a semantic extraction engine. Extract CHANGES (delta) from new conversation turns as updates to an existing topic tree.
 
 ## Three-Tier Extraction Rule
 
 | Tier | Condition | Action | Confidence |
 |------|-----------|--------|------------|
 | TIER 1 | User explicitly stated a fact | Extract it | 0.85-0.95 |
-| TIER 2 | User explicitly confirmed/adopted an AI suggestion ("looks good", "yes", "let's do that") | Extract it | 0.6-0.7 |
+| TIER 2 | User explicitly confirmed/adopted an AI suggestion | Extract it | 0.6-0.7 |
 ${tier3Segment(style.tier3)}
-| DO NOT EXTRACT | User explicitly rejected ("no", "I don't want that", "skip this") | Do NOT extract | — |
+| DO NOT EXTRACT | User explicitly rejected | Do NOT extract | \u2014 |
 
 ${tier3KeyDistinction(style.tier3)}
 
 ## What NOT to Extract
-- Questions (from either side) — questions are not facts
-- Meta-frames like "user_preferences", "user_interests" — use domain-specific types instead
-- Pure conversational filler ("Sure!", "Let me help with that")
-- AI meta-commentary about its own process ("I'll organize this by...")
-- AI suggestions that the user explicitly rejected or contradicted
+- Questions, conversational filler, AI meta-commentary
+- AI suggestions the user explicitly rejected
 
 ## slot_quotes Hard Binding (MANDATORY)
-Each slot in your delta MUST have a corresponding "slot_quotes" entry pointing to VERBATIM text from ANY turn (user or assistant).
-- If you cannot quote exact source text for a slot → DO NOT create that slot
-- slot_quotes values must be actual substrings from the conversation, not paraphrased
+Each slot in your delta MUST have a corresponding slot_quotes entry with VERBATIM text from the conversation.
 ${quoteLengthSegment(style.quote_length)}
-- For AI-originated slots (TIER 3), quote from the assistant turn that provided the information
-- This is a hard constraint — zero exceptions
-
-## Slot Nesting Limit: Maximum 1 Level
-- ALLOWED: simple values ("Portland"), numbers (80000), arrays of strings
-- ALLOWED: arrays of 1-level objects ([{ "type": "peanut" }])
-- FORBIDDEN: nested objects ({ budget: { materials: [...] } }) — 2+ levels deep
-- If a subtopic has more than 2-3 slots → it MUST be a separate frame with "elaborates" relation
+- slot_quotes keys use dot-path notation relative to tree root
+- If you cannot quote exact source text for a slot \u2192 DO NOT create that slot
 
 ${granularitySegment(style.granularity)}
 
-## Delta Action Mapping
+## Delta Actions
 
-| Action in new turns | Delta action |
-|---------------------|-------------|
-| New subtopic info (user or AI-provided, not rejected) | "add" new frame + "elaborates" relation |
-| Modify existing fact (e.g., budget 80k → 100k) | "update" existing frame's slot |
-| Negate/cancel previous content | "remove" target frame |
-| AI expanded but user explicitly rejected the expansion | **No action — output empty changes** |
+| Action | When | Fields |
+|--------|------|--------|
+| add | New subtopic info | parent_path, node (YAML object), slot_quotes |
+| update | Modify existing fact | target_path, slots (changed values only), slot_quotes |
+| remove | Negate/cancel content | target_path, reason |
+
+## FORBIDDEN Operations
+- Moving nodes (changes tree structure)
+- Merging nodes (combines subtrees)
+- Splitting nodes (divides a node)
+- Renaming nodes (changes the node key)
+
+If new info doesn't fit an existing node \u2192 add a new child at the nearest suitable parent.
 
 ## Core Rules
-1. Output ONLY changes (delta) — do NOT repeat unchanged frames
-2. Frame type uses snake_case domain nouns (e.g., "dietary_restrictions", not "constraints")
-3. Frame IDs follow pattern: f_001, f_002, ...
-
-## BAD vs GOOD Delta Examples
-
-BAD — extracting AI suggestions from new turns:
-  \u2605 NEW Turn: AI says "You might want to consider Stumptown for beans"
-  \u2605 NEW Turn: User says "What about the interior design?"
-
-  WRONG delta: { action: "update", target: "f_001", slots: { suppliers: ["Stumptown"] } }
-  \u2190 User never confirmed Stumptown. AI suggested it, user ignored it.
-
-GOOD — only extracting user-stated facts from new turns:
-  \u2605 NEW Turn: User says "Actually, let's increase the budget to $100,000"
-
-  CORRECT delta: { action: "update", target: "f_001", slots: { budget: 100000 }, slot_quotes: { budget: "increase the budget to $100,000" } }
+1. Output ONLY changes (delta) \u2014 do NOT repeat unchanged tree nodes
+2. Node keys use snake_case (e.g., "dietary_restrictions")
+3. Paths use / separator (e.g., "hangzhou_trip/dining")
 
 ## Drift Detection
-If the new turns discuss a topic UNRELATED to the current root frame:
+If new turns discuss a topic UNRELATED to the current tree:
 - Output: { "changes": [], "drift_detected": true }
-- Do NOT extract anything — let the caller decide how to handle the new topic
 
-## Source Tracking
-- Set "source" field to turn tag (e.g., "T3")
-
-## Relation Types (6 only)
-1. causes — A causes B
-2. conditions — A is a precondition for B
-3. contrasts — A conflicts with or replaces B
-4. follows — A happens after B (non-causal)
-5. depends — A references/needs B
-6. elaborates — A adds detail to B (USE THIS for subtopics)${updateStanceSegment(style.update_stance)}
+## Cross-Tree Relation Types (4 only): causes, contrasts, follows, depends${updateStanceSegment(style.update_stance)}
 
 ## JSON Output Format
 \`\`\`json
@@ -291,21 +263,31 @@ If the new turns discuss a topic UNRELATED to the current root frame:
   "changes": [
     {
       "action": "add",
-      "frame": {
-        "id": "f_xxx", "type": "equipment_plan", "source": "T4", "confidence": 0.9,
-        "slots": { "espresso_machine": "La Marzocca", "grinder": "Mazzer" },
-        "slot_quotes": { "espresso_machine": "I want a La Marzocca machine", "grinder": "and a Mazzer grinder" }
-      }
+      "parent_path": "hangzhou_trip",
+      "node": {
+        "transportation": {
+          "mode": "high-speed rail",
+          "duration": "1.5 hours"
+        }
+      },
+      "slot_quotes": {
+        "transportation.mode": "take the high-speed rail",
+        "transportation.duration": "about an hour and a half"
+      },
+      "source": "T4",
+      "confidence": 0.9
     },
     {
-      "action": "update", "target": "f_001",
-      "slots": { "budget": 100000 },
-      "slot_quotes": { "budget": "increase the budget to $100,000" }
+      "action": "update",
+      "target_path": "hangzhou_trip/dining",
+      "slots": { "budget": 800 },
+      "slot_quotes": { "dining.budget": "increase the budget to 800" }
     },
-    { "action": "remove", "target": "f_002", "reason": "user changed mind" }
-  ],
-  "new_relations": [
-    { "from": "f_004", "to": "f_001", "type": "elaborates", "confidence": 0.9 }
+    {
+      "action": "remove",
+      "target_path": "hangzhou_trip/shopping",
+      "reason": "user cancelled shopping plan"
+    }
   ],
   "drift_detected": false
 }
@@ -314,132 +296,116 @@ Output ONLY valid JSON. No markdown fences, no explanatory text.`;
 }
 
 function buildFirstExtractionSystemPrompt(style: ExtractionStyleConfig): string {
-  return `You are a semantic extraction engine. Extract meaning from conversations into a topic tree.
+  return `You are a semantic extraction engine. Extract meaning from conversations into a YAML topic tree.
 
-## Topic Tree Structure
-- Produce ONE root frame representing the main topic of the conversation
-- Subtopics become child frames connected to the root via "elaborates" relations
-- The root frame type IS the topic name (e.g., "hangzhou_trip", "product_requirements")
+## YAML Tree Structure
+- Produce ONE root node named after the main topic (snake_case)
+- The root key IS the topic name (e.g., hangzhou_trip, product_requirements)
+- Child nodes represent subtopics (object values under the root)
+- Leaf values (strings, numbers, booleans, arrays) are slot values
+- Object values at any level are child nodes, NOT slot values
 
 ## Three-Tier Extraction Rule
 
 | Tier | Condition | Action | Confidence |
 |------|-----------|--------|------------|
 | TIER 1 | User explicitly stated a fact | Extract it | 0.85-0.95 |
-| TIER 2 | User explicitly confirmed/adopted an AI suggestion ("looks good", "yes", "let's do that") | Extract it | 0.6-0.7 |
+| TIER 2 | User explicitly confirmed/adopted an AI suggestion | Extract it | 0.6-0.7 |
 ${tier3Segment(style.tier3)}
-| DO NOT EXTRACT | User explicitly rejected ("no", "I don't want that", "skip this") | Do NOT extract | — |
+| DO NOT EXTRACT | User explicitly rejected | Do NOT extract | \u2014 |
 
 ${tier3KeyDistinction(style.tier3)}
 
 ## What NOT to Extract
-- Questions (from either side) — questions are not facts
-- Meta-frames like "user_preferences", "user_interests" — use domain-specific types instead
-- Pure conversational filler ("Sure!", "Let me help with that")
-- AI meta-commentary about its own process ("I'll organize this by...")
-- AI suggestions that the user explicitly rejected or contradicted
+- Questions (from either side) \u2014 questions are not facts
+- Meta-frames like "user_preferences" \u2014 use domain-specific types instead
+- Pure conversational filler
+- AI meta-commentary about its own process
+- AI suggestions the user explicitly rejected
 
 ## slot_quotes Hard Binding (MANDATORY)
-Every slot MUST have a corresponding entry in "slot_quotes" with VERBATIM text copied from the conversation (user or assistant turns).
-- If you cannot quote the exact source text for a slot → DO NOT create that slot
-- slot_quotes values must be actual substrings from the conversation, not paraphrased
+After the YAML tree, output a separate slot_quotes JSON mapping.
+Each slot MUST have a corresponding entry with VERBATIM text from the conversation.
 ${quoteLengthSegment(style.quote_length)}
-- For AI-originated slots (TIER 3), quote from the assistant turn that provided the information
-- This is a hard constraint — zero exceptions
+- slot_quotes keys use dot-path notation (e.g., "activity_plan.activities")
+- Root-level slots have no prefix (e.g., "destination")
+- If you cannot quote exact source text for a slot \u2192 DO NOT create that slot
 
-## Slot Nesting Limit: Maximum 1 Level
-- ALLOWED: simple values ("Portland"), numbers (80000), arrays of strings
-- ALLOWED: arrays of 1-level objects ([{ "type": "peanut" }])
-- FORBIDDEN: nested objects ({ budget: { materials: [...] } }) — 2+ levels deep
-- If a subtopic has more than 2-3 slots → it MUST be a separate frame with "elaborates" relation
-
-${granularitySegment(style.granularity).replace(' Total', '')}
-
-## Frame Structure Rules
-1. Frame type uses snake_case domain nouns (NOT generic labels)
-2. Frame IDs start from f_001
-3. LISTS OF SIMILAR ITEMS = ONE FRAME with array slots
+${granularitySegment(style.granularity)}
 
 ## BAD vs GOOD Examples
 
-BAD — extracting content the user explicitly rejected:
-  User: "I want to open a coffee shop in Portland"
-  AI: "I recommend partnering with Stumptown for beans"
-  User: "No, I don't want Stumptown. What about the budget?"
+BAD \u2014 one giant flat structure:
+  trip:
+    location: "Portland"
+    budget: 80000
+    equipment_cost: 30000
+    renovation_cost: 20000
+    design_aesthetic: "Scandinavian"
+    baristas: 3
 
-  WRONG extraction:
-    suppliers: ["Stumptown"]          \u2190 user explicitly rejected this
-
-GOOD — extracting AI suggestions the user did NOT reject (TIER 3):
-  User: "I want to open a coffee shop in Portland"
-  AI: "I recommend using birch plywood for interiors and a Scandinavian aesthetic"
-  User: "What about the budget?"  \u2190 user moved on, did NOT reject AI suggestions
-
-  CORRECT extraction:
-    materials: ["birch plywood"]      \u2190 TIER 3, confidence 0.45, quote from AI turn
-    design_aesthetic: "Scandinavian"  \u2190 TIER 3, confidence 0.45, quote from AI turn
-
-BAD — one giant nested frame (FORBIDDEN):
-  f_001 coffee_shop:
-    slots: {
-      location: "Portland",
-      budget: 80000,
-      budget_breakdown: { equipment: 30000, renovation: 20000 },
-      design: { aesthetic: "Scandinavian", materials: ["birch", "pine"] },
-      staffing: { baristas: 3, manager: 1, hourly_wage_range: "$15-18" }
-    }
-
-GOOD — multiple flat frames + relations:
-  f_001 coffee_shop: { location: "Portland", budget: 80000 }
-  f_002 budget_allocation: { equipment: 30000, renovation: 20000 }
-  f_003 design_concept: { aesthetic: "Scandinavian" }
-  f_004 staffing_plan: { baristas: 3, manager: 1 }
-  relations: [
-    { from: "f_002", to: "f_001", type: "elaborates" },
-    { from: "f_003", to: "f_001", type: "elaborates" },
-    { from: "f_004", to: "f_001", type: "elaborates" }
-  ]
-  (Note: each frame has flat slots, no nesting beyond 1 level)
+GOOD \u2014 tree with subtopics as children (balanced depth 2):
+  coffee_shop:
+    location: "Portland"
+    budget: 80000
+    budget_allocation:
+      equipment: 30000
+      renovation: 20000
+    design_concept:
+      aesthetic: "Scandinavian"
+    staffing_plan:
+      baristas: 3
+      manager: 1
 
 ## Source Tracking
-- Set "source" field to turn tag (e.g., "T1", "T2")
-- For frames derived from multiple turns, use the most recent turn
+- Include "source" as a special comment or metadata for each node referencing the turn tag (T1, T2, etc.)
 
-## Confidence Scoring
-- User's explicit statements: 0.85-0.95
-- Mutual decisions (both agreed): 0.8
-- AI suggestions user explicitly confirmed: 0.5-0.7
+## Cross-Tree Relation Types (4 only): causes, contrasts, follows, depends
+- These are ONLY for relationships between DIFFERENT topic trees
+- Within a single tree, nesting IS the relationship \u2014 no explicit relations needed${updateStanceSegment(style.update_stance)}
 
-## Relation Types (6 only): causes, conditions, contrasts, follows, depends, elaborates
-Use "elaborates" for all subtopic relationships.${updateStanceSegment(style.update_stance)}
+## Output Format
+First output the YAML tree, then a --- separator, then slot_quotes as JSON:
 
-## JSON Output Format
-\`\`\`json
+\`\`\`
+hangzhou_trip:
+  destination: "Hangzhou"
+  dates: "May 1-3"
+  activity_plan:
+    activities: ["West Lake", "hiking"]
+    duration: "2 days"
+  dining:
+    cuisine: "local Hangzhou cuisine"
+    budget: 500
+---
 {
-  "frames": [
-    {
-      "id": "f_001", "type": "coffee_shop", "source": "T1", "confidence": 0.9,
-      "slots": { "location": "Portland", "budget": 80000 },
-      "slot_quotes": { "location": "coffee shop in downtown Portland", "budget": "my budget is around $80,000" }
-    },
-    {
-      "id": "f_002", "type": "design_concept", "source": "T3", "confidence": 0.85,
-      "slots": { "aesthetic": "Scandinavian" },
-      "slot_quotes": { "aesthetic": "I want a Scandinavian aesthetic" }
-    }
-  ],
-  "relations": [
-    { "from": "f_002", "to": "f_001", "type": "elaborates", "confidence": 0.9 }
-  ]
+  "slot_quotes": {
+    "destination": "going to Hangzhou",
+    "dates": "May 1st to 3rd",
+    "activity_plan.activities": "visit West Lake and go hiking",
+    "activity_plan.duration": "spend two days on activities",
+    "dining.cuisine": "try local Hangzhou food",
+    "dining.budget": "around 500 for meals"
+  },
+  "source_map": {
+    "hangzhou_trip": "T1",
+    "activity_plan": "T2",
+    "dining": "T3"
+  },
+  "confidence_map": {
+    "hangzhou_trip": 0.95,
+    "activity_plan": 0.85,
+    "dining": 0.9
+  }
 }
 \`\`\`
-Output ONLY valid JSON. No markdown fences, no explanatory text.`;
+Output the YAML tree first (no fences), then --- on its own line, then the JSON block (no fences). No other text.`;
 }
 
-// ── Main Function ──
+// -- Main Function --
 
 /**
- * Build system + user prompts for frame semantic extraction.
+ * Build system + user prompts for semantic extraction.
  *
  * When `snapshot` is provided, produces delta-mode prompts that ask the LLM
  * to output only changes relative to the existing snapshot.
@@ -457,7 +423,6 @@ export function buildFrameExtractionPrompt(
 
   if (snapshot) {
     // Delta mode
-    const nextId = calcNextFrameId(snapshot.frames);
     const snapshotYaml = serializeSnapshot(snapshot);
 
     // Split turns into context (already processed) and new (to extract from)
@@ -481,13 +446,13 @@ export function buildFrameExtractionPrompt(
               })
               .join('\n')
           : formatTurns(newTurns);
-      turnsSection = `## Context Turns (already in snapshot — do NOT re-extract these)
+      turnsSection = `## Context Turns (already in snapshot \u2014 do NOT re-extract these)
 ${contextText}
 
-## ★ NEW Turns (extract delta from THESE) ★
+## \u2605 NEW Turns (extract delta from THESE) \u2605
 ${newText}`;
     } else {
-      // No split info — treat all as new (backward compatible)
+      // No split info -- treat all as new (backward compatible)
       turnsSection = `## New Conversation Turns
 ${formatTurns(turns)}`;
     }
@@ -498,19 +463,18 @@ ${snapshotYaml}
 ${turnsSection}
 
 ## Instructions
-Output the delta (changes only) based on the ★ NEW turns ★ above.
+Output the delta (changes only) based on the \u2605 NEW turns \u2605 above.
 CRITICAL RULES:
-1. Each slot in your delta MUST have a corresponding slot_quotes entry pointing to VERBATIM text from the conversation (user or assistant turns). No quote → no slot.
+1. Each slot in your delta MUST have a corresponding slot_quotes entry pointing to VERBATIM text from the conversation. No quote \u2192 no slot.
 2. For AI-originated information (TIER 3), quote from the assistant turn. Do NOT extract content the user explicitly rejected.
-3. The context turns are for reference only — their information is already in the snapshot.
-4. Keep all slots flat (max 1 level nesting). If a subtopic needs 3+ slots → add a new frame with "elaborates" relation.
+3. The context turns are for reference only \u2014 their information is already in the snapshot.
+4. Use tree paths with / separator for parent_path and target_path.
 
-For each piece of new information (user-stated or AI-provided not rejected):
-- If it MODIFIES an existing frame → "update" with only changed slots
-- If it's a NEW subtopic → "add" a new frame + "elaborates" relation
-- If it NEGATES or REPLACES something → "remove" the old frame
-- If the user explicitly rejected all new AI content → output empty changes: { "changes": [], "drift_detected": false }
-New frame IDs start from ${nextId}.
+For each piece of new information:
+- If it MODIFIES an existing node's slot \u2192 "update" with target_path and changed slots
+- If it's a NEW subtopic \u2192 "add" with parent_path and new node
+- If it NEGATES or REPLACES something \u2192 "remove" with target_path
+- If the user explicitly rejected all new AI content \u2192 output empty changes: { "changes": [], "drift_detected": false }
 Include "source" field referencing the turn tag (T1, T2, etc.).`;
 
     return { systemPrompt: buildDeltaSystemPrompt(style), userPrompt };
@@ -523,8 +487,8 @@ Include "source" field referencing the turn tag (T1, T2, etc.).`;
 ${turnsText}
 
 ## Instructions
-Extract all semantic frames and relations from this conversation.
-Include "source" field referencing the turn tag (T1, T2, etc.) for each frame.`;
+Extract the semantic meaning from this conversation into a YAML topic tree.
+Include "source" referencing the turn tag (T1, T2, etc.) for each node.`;
 
   return { systemPrompt: buildFirstExtractionSystemPrompt(style), userPrompt };
 }

@@ -45,7 +45,7 @@ describe('extraction-to-commit integration', () => {
       ],
       relations: [
         { from: 'f_002', to: 'f_001', type: 'elaborates' },
-        { from: 'f_003', to: 'f_001', type: 'conditions' },
+        { from: 'f_003', to: 'f_001', type: 'depends' },
       ],
     };
 

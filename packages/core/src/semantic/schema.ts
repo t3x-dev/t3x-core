@@ -1,5 +1,10 @@
 import { z } from 'zod';
 
+// ── ID Patterns ──
+
+/** Accepts both legacy f_NNN IDs and path-based IDs (e.g., hangzhou_trip/activity_plan) */
+const FRAME_ID_PATTERN = /^(f_\d{3,}|[a-z][a-z0-9_]*(\/[a-z][a-z0-9_]*)*)$/;
+
 // ── Slot Values (recursive) ──
 
 const SlotRefSchema = z.object({ ref: z.string() });
@@ -31,7 +36,7 @@ export const SlotValueSchema: z.ZodType<unknown> = z.lazy(() =>
 // ── Frame ──
 
 export const FrameSchema = z.object({
-  id: z.string().regex(/^f_\d{3,}$/),
+  id: z.string().regex(FRAME_ID_PATTERN),
   type: z
     .string()
     .min(1)
@@ -50,9 +55,8 @@ export const FrameSchema = z.object({
 
 export const FrameRelationTypeSchema = z.enum([
   'causes',
-  'conditions',
   'contrasts',
-  'elaborates',
+  'elaborates', // Legacy only — tree-native uses TreeNode.children instead
   'follows',
   'depends',
 ]);
@@ -64,6 +68,19 @@ export const RelationSchema = z.object({
   confidence: z.number().min(0).max(1).optional(),
 });
 
+// ── Tree Node ──
+
+export const TreeNodeSchema: z.ZodType<unknown> = z.lazy(() =>
+  z.object({
+    key: z.string().min(1).regex(/^[a-z][a-z0-9_]*$/),
+    slots: z.record(z.string(), SlotValueSchema),
+    children: z.array(TreeNodeSchema),
+    slot_quotes: z.record(z.string(), z.string()).optional(),
+    source: z.string().optional(),
+    confidence: z.number().min(0).max(1).optional(),
+  })
+);
+
 // ── SemanticContent ──
 
 /**
@@ -74,31 +91,64 @@ export const RelationSchema = z.object({
 export const SemanticContentSchema = z.object({
   topic: z.string().optional(),
   root_frame_id: z.string().optional(),
+  tree: z.lazy(() => TreeNodeSchema).optional(),
   frames: z.array(FrameSchema).min(1).max(1000),
   relations: z.array(RelationSchema).max(5000),
 });
 
 // ── Delta ──
 
-const FrameChangeSchema = z.discriminatedUnion('action', [
+// NOTE: LegacyFrameChangeSchema uses FRAME_ID_PATTERN (accepts both f_NNN and path-based IDs)
+// because the legacy applyDelta code path may be invoked with flattened tree-native frames
+// that have path-based IDs. This is intentional.
+const LegacyFrameChangeSchema = z.discriminatedUnion('action', [
   z.object({
     action: z.literal('add'),
     frame: FrameSchema,
   }),
   z.object({
     action: z.literal('update'),
-    target: z.string().regex(/^f_\d{3,}$/),
+    target: z.string().regex(FRAME_ID_PATTERN),
     slots: z.record(z.string(), SlotValueSchema.nullable()),
   }),
   z.object({
     action: z.literal('remove'),
-    target: z.string().regex(/^f_\d{3,}$/),
+    target: z.string().regex(FRAME_ID_PATTERN),
     reason: z.string().optional(),
   }),
 ]);
 
 export const DeltaSchema = z.object({
-  changes: z.array(FrameChangeSchema).min(1),
+  changes: z.array(LegacyFrameChangeSchema).min(1),
+  new_relations: z.array(RelationSchema).optional(),
+  remove_relations: z.array(RelationSchema).optional(),
+});
+
+// ── Tree-Native Delta ──
+
+const TreeNativeChangeSchema = z.discriminatedUnion('action', [
+  z.object({
+    action: z.literal('add'),
+    parent_path: z.string(),
+    node: z.record(z.string(), z.unknown()),
+    slot_quotes: z.record(z.string(), z.string()).optional(),
+  }),
+  z.object({
+    action: z.literal('update'),
+    target_path: z.string(),
+    slots: z.record(z.string(), SlotValueSchema.nullable()),
+    slot_quotes: z.record(z.string(), z.string()).optional(),
+  }),
+  z.object({
+    action: z.literal('remove'),
+    target_path: z.string(),
+    reason: z.string().optional(),
+  }),
+]);
+
+export const TreeNativeDeltaSchema = z.object({
+  changes: z.array(TreeNativeChangeSchema).min(1),
+  drift_detected: z.boolean().optional(),
   new_relations: z.array(RelationSchema).optional(),
   remove_relations: z.array(RelationSchema).optional(),
 });
