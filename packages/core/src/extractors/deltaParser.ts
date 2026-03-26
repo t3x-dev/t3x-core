@@ -11,10 +11,10 @@
  */
 
 import * as yaml from 'js-yaml';
-import { normalizeFrameOutput } from '../llm/normalizer';
+import { normalizeLLMOutput } from '../llm/normalizer';
 import type { TreeNativeDelta } from '../semantic/delta';
 import { DeltaSchema, FlatNodeSchema, TreeNativeDeltaSchema } from '../semantic/schema';
-import { flattenTree, flattenTrees, yamlObjectToTreeNode } from '../semantic/tree';
+import { flattenTree, flattenTrees, yamlToTree } from '../semantic/tree';
 import type {
   Delta,
   FlatNode,
@@ -218,7 +218,7 @@ function parseYamlTree(raw: string): ParseResult {
   }
 
   const [rootKey, rootValue] = entries[0];
-  const tree = yamlObjectToTreeNode(rootKey, rootValue);
+  const tree = yamlToTree(rootKey, rootValue);
 
   // Parse metadata (JSON after ---)
   let slotQuotes: Record<string, string> = {};
@@ -279,7 +279,7 @@ function treeNativeNodeToTreeChanges(
 ): TreeChange[] {
   const changes: TreeChange[] = [];
   for (const [key, value] of Object.entries(nodeObj)) {
-    const node = yamlObjectToTreeNode(key, value);
+    const node = yamlToTree(key, value);
     changes.push({ action: 'add' as const, parent_path: parentPath, node });
   }
   return changes;
@@ -554,7 +554,7 @@ export function parseDelta(raw: string, snapshot?: SemanticContent): ParseResult
     }
 
     // Legacy delta: normalize before schema validation
-    parsed = normalizeFrameOutput(parsed);
+    parsed = normalizeLLMOutput(parsed);
     const result = DeltaSchema.safeParse(parsed);
     if (!result.success) {
       return { ok: false, error: `Delta validation failed: ${result.error.message}` };
@@ -563,7 +563,7 @@ export function parseDelta(raw: string, snapshot?: SemanticContent): ParseResult
   }
 
   // Normalize before schema validation (coerces plain objects in slot arrays, etc.)
-  parsed = normalizeFrameOutput(parsed);
+  parsed = normalizeLLMOutput(parsed);
 
   // Step 5: If has 'frames': legacy full output path
   if ('frames' in parsed && Array.isArray(parsed.frames)) {

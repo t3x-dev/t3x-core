@@ -205,7 +205,7 @@ export {
   type LLMResult,
   MODEL_CATALOG,
   type ModelInfo,
-  normalizeFrameOutput,
+  normalizeLLMOutput,
   type ProviderName,
   type StructuredResult,
 } from './llm';
@@ -377,7 +377,7 @@ export {
   unflattenToTrees,
   validateIntegrity,
   validateTreeDepth,
-  yamlObjectToTreeNode,
+  yamlToTree,
 } from './semantic';
 
 // Semantic types (re-exported for convenience)

@@ -52,7 +52,7 @@ export {
   unflattenToTree,
   unflattenToTrees,
   validateTreeDepth,
-  yamlObjectToTreeNode,
+  yamlToTree,
 } from './tree';
 
 // ── Types ──

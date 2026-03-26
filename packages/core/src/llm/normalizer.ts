@@ -78,7 +78,7 @@ function normalizeFrame(frame: Record<string, unknown>): Record<string, unknown>
  * Normalize raw LLM output for frame extraction.
  * Handles both full output ({ frames, relations }) and delta ({ changes }).
  */
-export function normalizeFrameOutput(input: Record<string, unknown>): Record<string, unknown> {
+export function normalizeLLMOutput(input: Record<string, unknown>): Record<string, unknown> {
   const result = { ...input };
 
   if (Array.isArray(result.frames)) {
