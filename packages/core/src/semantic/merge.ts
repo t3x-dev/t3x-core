@@ -1,29 +1,40 @@
+import { flattenTree, flattenTrees, unflattenToTrees } from './tree';
 import type {
   Frame,
-  FrameMergeDecision,
-  FrameMergeResult,
+  MergeDecision,
   MergeResolution,
+  MergeResult,
   SemanticContent,
   SlotConflict,
   SlotValue,
 } from './types';
 import { deepEqual, relKey } from './utils';
 
-export function prepareFrameMerge(
+/**
+ * Prepare a three-way merge by analyzing base, source, and target.
+ *
+ * Internally flattens all three to frames for comparison, then returns
+ * results using path strings.
+ */
+export function prepareMerge(
   base: SemanticContent,
   source: SemanticContent,
   target: SemanticContent
-): FrameMergeResult {
-  const baseMap = new Map(base.frames.map((f) => [f.id, f]));
-  const srcMap = new Map(source.frames.map((f) => [f.id, f]));
-  const tgtMap = new Map(target.frames.map((f) => [f.id, f]));
+): MergeResult {
+  const baseFrames = flattenTrees(base.trees);
+  const sourceFrames = flattenTrees(source.trees);
+  const targetFrames = flattenTrees(target.trees);
+
+  const baseMap = new Map(baseFrames.map((f) => [f.id, f]));
+  const srcMap = new Map(sourceFrames.map((f) => [f.id, f]));
+  const tgtMap = new Map(targetFrames.map((f) => [f.id, f]));
 
   const allIds = new Set([...srcMap.keys(), ...tgtMap.keys()]);
 
-  const autoKept: Frame[] = [];
-  const conflicts: FrameMergeResult['conflicts'] = [];
-  const onlyInSource: Frame[] = [];
-  const onlyInTarget: Frame[] = [];
+  const autoKept: string[] = [];
+  const conflicts: MergeResult['conflicts'] = [];
+  const onlyInSource: string[] = [];
+  const onlyInTarget: string[] = [];
 
   for (const id of allIds) {
     const srcFrame = srcMap.get(id);
@@ -31,29 +42,23 @@ export function prepareFrameMerge(
     const baseFrame = baseMap.get(id);
 
     if (srcFrame && !tgtFrame) {
-      onlyInSource.push(srcFrame);
+      onlyInSource.push(id);
       continue;
     }
     if (!srcFrame && tgtFrame) {
-      onlyInTarget.push(tgtFrame);
+      onlyInTarget.push(id);
       continue;
     }
     if (!srcFrame || !tgtFrame) continue;
 
     if (framesEqual(srcFrame, tgtFrame)) {
-      autoKept.push(srcFrame);
+      autoKept.push(id);
       continue;
     }
 
     if (!baseFrame) {
       const slotConflicts = findSlotConflicts(undefined, srcFrame, tgtFrame);
-      conflicts.push({
-        frameId: id,
-        baseFrame: undefined,
-        sourceFrame: srcFrame,
-        targetFrame: tgtFrame,
-        slotConflicts,
-      });
+      conflicts.push({ path: id, slotConflicts });
       continue;
     }
 
@@ -61,29 +66,21 @@ export function prepareFrameMerge(
     const tgtChanged = !framesEqual(baseFrame, tgtFrame);
 
     if (!srcChanged && !tgtChanged) {
-      autoKept.push(srcFrame);
+      autoKept.push(id);
     } else if (srcChanged && !tgtChanged) {
-      autoKept.push(srcFrame);
+      autoKept.push(id);
     } else if (!srcChanged && tgtChanged) {
-      autoKept.push(tgtFrame);
+      autoKept.push(id);
     } else {
       const slotConflicts = findSlotConflicts(baseFrame, srcFrame, tgtFrame);
-      // If both sides changed the type differently, treat as a conflict
       const typeConflict =
         srcFrame.type !== tgtFrame.type &&
         srcFrame.type !== baseFrame.type &&
         tgtFrame.type !== baseFrame.type;
       if (slotConflicts.length === 0 && !typeConflict) {
-        const merged = mergeNonConflicting(baseFrame, srcFrame, tgtFrame);
-        autoKept.push(merged);
+        autoKept.push(id);
       } else {
-        conflicts.push({
-          frameId: id,
-          baseFrame,
-          sourceFrame: srcFrame,
-          targetFrame: tgtFrame,
-          slotConflicts,
-        });
+        conflicts.push({ path: id, slotConflicts });
       }
     }
   }
@@ -94,43 +91,6 @@ export function prepareFrameMerge(
   const relationsOnlyInSource = source.relations.filter((r) => !tgtRelKeys.has(relKey(r)));
   const relationsOnlyInTarget = target.relations.filter((r) => !srcRelKeys.has(relKey(r)));
 
-  // Topic resolution
-  let resolvedTopic = base.topic;
-  let topicConflict: FrameMergeResult['topicConflict'];
-  const srcTopic = source.topic;
-  const tgtTopic = target.topic;
-  const baseTopic = base.topic;
-
-  if (srcTopic !== baseTopic && tgtTopic === baseTopic) {
-    resolvedTopic = srcTopic;
-  } else if (tgtTopic !== baseTopic && srcTopic === baseTopic) {
-    resolvedTopic = tgtTopic;
-  } else if (srcTopic !== baseTopic && tgtTopic !== baseTopic && srcTopic !== tgtTopic) {
-    topicConflict = { base: baseTopic, source: srcTopic, target: tgtTopic };
-    resolvedTopic = undefined;
-  } else if (srcTopic !== baseTopic && srcTopic === tgtTopic) {
-    // Both changed identically
-    resolvedTopic = srcTopic;
-  }
-
-  // Root frame ID resolution
-  let resolvedRoot = base.root_frame_id;
-  let rootConflict: FrameMergeResult['rootConflict'];
-  const srcRoot = source.root_frame_id;
-  const tgtRoot = target.root_frame_id;
-  const baseRoot = base.root_frame_id;
-
-  if (srcRoot !== baseRoot && tgtRoot === baseRoot) {
-    resolvedRoot = srcRoot;
-  } else if (tgtRoot !== baseRoot && srcRoot === baseRoot) {
-    resolvedRoot = tgtRoot;
-  } else if (srcRoot !== baseRoot && tgtRoot !== baseRoot && srcRoot !== tgtRoot) {
-    rootConflict = { base: baseRoot, source: srcRoot, target: tgtRoot };
-    resolvedRoot = undefined;
-  } else if (srcRoot !== baseRoot && srcRoot === tgtRoot) {
-    resolvedRoot = srcRoot;
-  }
-
   return {
     autoKept,
     conflicts,
@@ -139,12 +99,115 @@ export function prepareFrameMerge(
     relationsOnlyInSource,
     relationsOnlyInTarget,
     relationsInBoth,
-    resolvedTopic,
-    topicConflict,
-    resolvedRoot,
-    rootConflict,
   };
 }
+
+/**
+ * Execute a merge by applying user decisions to a prepared merge result.
+ *
+ * Returns the merged SemanticContent with trees reconstructed from frames.
+ */
+export function executeMerge(
+  base: SemanticContent,
+  source: SemanticContent,
+  target: SemanticContent,
+  prepared: MergeResult,
+  decisions: MergeDecision
+): SemanticContent {
+  const baseFrames = flattenTrees(base.trees);
+  const sourceFrames = flattenTrees(source.trees);
+  const targetFrames = flattenTrees(target.trees);
+
+  const baseMap = new Map(baseFrames.map((f) => [f.id, f]));
+  const srcMap = new Map(sourceFrames.map((f) => [f.id, f]));
+  const tgtMap = new Map(targetFrames.map((f) => [f.id, f]));
+
+  const resultFrames: Frame[] = [];
+
+  // 1. Auto-kept: pick the best version
+  for (const path of prepared.autoKept) {
+    const srcFrame = srcMap.get(path);
+    const tgtFrame = tgtMap.get(path);
+    const baseFrame = baseMap.get(path);
+
+    if (srcFrame && tgtFrame) {
+      if (framesEqual(srcFrame, tgtFrame)) {
+        resultFrames.push(srcFrame);
+      } else if (baseFrame) {
+        const srcChanged = !framesEqual(baseFrame, srcFrame);
+        const tgtChanged = !framesEqual(baseFrame, tgtFrame);
+        if (srcChanged && !tgtChanged) {
+          resultFrames.push(srcFrame);
+        } else if (!srcChanged && tgtChanged) {
+          resultFrames.push(tgtFrame);
+        } else {
+          // Both changed but no slot conflicts — merge non-conflicting
+          resultFrames.push(mergeNonConflicting(baseFrame, srcFrame, tgtFrame));
+        }
+      } else {
+        resultFrames.push(srcFrame);
+      }
+    } else if (srcFrame) {
+      resultFrames.push(srcFrame);
+    } else if (tgtFrame) {
+      resultFrames.push(tgtFrame);
+    }
+  }
+
+  // 2. Resolve conflicts based on user decisions
+  for (const conflict of prepared.conflicts) {
+    const resolution: MergeResolution | undefined = decisions.conflictResolutions[conflict.path];
+    const srcFrame = srcMap.get(conflict.path);
+    const tgtFrame = tgtMap.get(conflict.path);
+
+    if (!resolution || resolution === 'source') {
+      if (srcFrame) resultFrames.push(srcFrame);
+    } else if (resolution === 'target') {
+      if (tgtFrame) resultFrames.push(tgtFrame);
+    } else if (resolution === 'both') {
+      if (srcFrame) resultFrames.push(srcFrame);
+      if (tgtFrame) resultFrames.push(tgtFrame);
+    } else if (typeof resolution === 'object' && 'edit' in resolution) {
+      // Convert edited TreeNode to frames
+      const editedFrames = flattenTree(resolution.edit);
+      resultFrames.push(...editedFrames);
+    }
+  }
+
+  // 3. Keep selected source-only frames
+  const keepSrcSet = new Set(decisions.keepFromSource);
+  for (const path of prepared.onlyInSource) {
+    if (keepSrcSet.has(path)) {
+      const frame = srcMap.get(path);
+      if (frame) resultFrames.push(frame);
+    }
+  }
+
+  // 4. Keep selected target-only frames
+  const keepTgtSet = new Set(decisions.keepFromTarget);
+  for (const path of prepared.onlyInTarget) {
+    if (keepTgtSet.has(path)) {
+      const frame = tgtMap.get(path);
+      if (frame) resultFrames.push(frame);
+    }
+  }
+
+  // 5. Merge relations
+  const relations = [...prepared.relationsInBoth];
+  if (decisions.keepRelationsFromSource) {
+    relations.push(...prepared.relationsOnlyInSource);
+  }
+  if (decisions.keepRelationsFromTarget) {
+    relations.push(...prepared.relationsOnlyInTarget);
+  }
+
+  // 6. Reconstruct trees from merged frames
+  const trees = unflattenToTrees(resultFrames);
+
+  return { trees, relations };
+}
+
+// ── Internal helpers ──
 
 function framesEqual(a: Frame, b: Frame): boolean {
   if (a.type !== b.type) return false;
@@ -207,82 +270,6 @@ function mergeNonConflicting(base: Frame, src: Frame, tgt: Frame): Frame {
       }
     }
   }
-  // Use the changed side's type; if only target changed type, take target's
   const mergedType = tgt.type !== base.type && src.type === base.type ? tgt.type : src.type;
   return { ...src, type: mergedType, slots };
-}
-
-/**
- * Execute a frame merge by applying user decisions to a prepared merge result.
- *
- * Returns the merged SemanticContent ready to be committed.
- */
-export function executeFrameMerge(
-  prepared: FrameMergeResult,
-  decisions: FrameMergeDecision
-): SemanticContent {
-  const frames: Frame[] = [];
-
-  // 1. Auto-kept frames (no user decision needed)
-  frames.push(...prepared.autoKept);
-
-  // 2. Resolve conflicts based on user decisions
-  for (const conflict of prepared.conflicts) {
-    const resolution: MergeResolution | undefined = decisions.conflictResolutions[conflict.frameId];
-
-    if (!resolution || resolution === 'source') {
-      frames.push(conflict.sourceFrame);
-    } else if (resolution === 'target') {
-      frames.push(conflict.targetFrame);
-    } else if (resolution === 'both') {
-      frames.push(conflict.sourceFrame);
-      frames.push(conflict.targetFrame);
-    } else if (typeof resolution === 'object' && 'edit' in resolution) {
-      frames.push(resolution.edit);
-    }
-  }
-
-  // 3. Keep selected source-only frames
-  const keepSrcSet = new Set(decisions.keepFromSource);
-  for (const frame of prepared.onlyInSource) {
-    if (keepSrcSet.has(frame.id)) {
-      frames.push(frame);
-    }
-  }
-
-  // 4. Keep selected target-only frames
-  const keepTgtSet = new Set(decisions.keepFromTarget);
-  for (const frame of prepared.onlyInTarget) {
-    if (keepTgtSet.has(frame.id)) {
-      frames.push(frame);
-    }
-  }
-
-  // 5. Merge relations
-  const relations = [...prepared.relationsInBoth];
-  if (decisions.keepRelationsFromSource) {
-    relations.push(...prepared.relationsOnlyInSource);
-  }
-  if (decisions.keepRelationsFromTarget) {
-    relations.push(...prepared.relationsOnlyInTarget);
-  }
-
-  // 6. Resolve topic
-  let finalTopic = prepared.resolvedTopic;
-  if (prepared.topicConflict && decisions.topicChoice) {
-    if (decisions.topicChoice === 'source') finalTopic = prepared.topicConflict.source;
-    else if (decisions.topicChoice === 'target') finalTopic = prepared.topicConflict.target;
-    else if (decisions.topicChoice === 'edit') finalTopic = decisions.topicEdit;
-  }
-
-  // 7. Resolve root frame ID
-  let finalRoot = prepared.resolvedRoot;
-  if (prepared.rootConflict && decisions.rootChoice) {
-    finalRoot =
-      decisions.rootChoice === 'source'
-        ? prepared.rootConflict.source
-        : prepared.rootConflict.target;
-  }
-
-  return { topic: finalTopic, root_frame_id: finalRoot, frames, relations };
 }
