@@ -41,10 +41,14 @@ export interface SearchSentencesInput {
  * Search sentences across commits using hybrid (keyword + vector) search.
  */
 export async function searchSentences(input: SearchSentencesInput): Promise<SearchResult> {
-  const res = await fetchWithTimeout(`${API_V1}/search`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(input),
-  });
+  const res = await fetchWithTimeout(
+    `${API_V1}/search`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    },
+    30000
+  );
   return handleResponse<SearchResult>(res);
 }

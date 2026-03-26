@@ -25,7 +25,7 @@ export const searchRoutes = new OpenAPIHono({ defaultHook: zodErrorHook });
 // ── Schemas ──────────────────────────────────────────────────
 
 const SearchRequestSchema = z.object({
-  project_id: z.string().openapi({ description: 'Project to search in' }),
+  project_id: z.string().optional().openapi({ description: 'Project to search in (omit for all projects)' }),
   query: z.string().min(1).max(500).openapi({ description: 'Search query text' }),
   mode: z.enum(['hybrid', 'keyword', 'semantic']).default('hybrid').openapi({
     description:
@@ -99,8 +99,10 @@ searchRoutes.openapi(searchRoute, async (c) => {
 
   try {
     const db = await getDB();
-    const accessResult = await assertProjectAccess(c, db, project_id);
-    if (accessResult instanceof Response) return accessResult;
+    if (project_id) {
+      const accessResult = await assertProjectAccess(c, db, project_id);
+      if (accessResult instanceof Response) return accessResult;
+    }
 
     let effectiveMode = mode;
 

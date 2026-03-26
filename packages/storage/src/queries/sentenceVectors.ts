@@ -108,13 +108,14 @@ export async function upsertSentenceVectorsBatch(
  */
 export async function searchSimilarSentences(
   db: AnyDB,
-  projectId: string,
+  projectId: string | undefined,
   queryEmbedding: number[],
   limit: number,
   excludeCommitHash?: string
 ): Promise<SearchResult[]> {
   const vectorLiteral = `[${validateEmbedding(queryEmbedding).join(',')}]`;
 
+  const projectClause = projectId ? sql`project_id = ${projectId}` : sql`TRUE`;
   const excludeClause = excludeCommitHash ? sql`AND commit_hash != ${excludeCommitHash}` : sql``;
 
   const results = await (
@@ -123,7 +124,7 @@ export async function searchSimilarSentences(
     sql`SELECT id, project_id, commit_hash, text, model_id,
                1 - (embedding <=> ${vectorLiteral}::vector) AS similarity
         FROM sentence_vectors
-        WHERE project_id = ${projectId}
+        WHERE ${projectClause}
           ${excludeClause}
         ORDER BY embedding <=> ${vectorLiteral}::vector
         LIMIT ${limit}`
@@ -158,11 +159,13 @@ export interface KeywordSearchResult {
  */
 export async function searchByKeyword(
   db: AnyDB,
-  projectId: string,
+  projectId: string | undefined,
   query: string,
   limit: number
 ): Promise<KeywordSearchResult[]> {
   if (!query.trim()) return [];
+
+  const projectClause = projectId ? sql`project_id = ${projectId}` : sql`TRUE`;
 
   const results = await (
     db as unknown as { execute: (q: ReturnType<typeof sql>) => Promise<{ rows: unknown[] }> }
@@ -170,7 +173,7 @@ export async function searchByKeyword(
     sql`SELECT id, project_id, commit_hash, text,
                ts_rank(tsv, plainto_tsquery('simple', ${query})) AS keyword_score
         FROM sentence_vectors
-        WHERE project_id = ${projectId}
+        WHERE ${projectClause}
           AND tsv @@ plainto_tsquery('simple', ${query})
         ORDER BY keyword_score DESC
         LIMIT ${limit}`
@@ -259,7 +262,7 @@ export function rrfFusion(
  */
 export async function searchHybrid(
   db: AnyDB,
-  projectId: string,
+  projectId: string | undefined,
   query: string,
   queryEmbedding: number[],
   limit: number
