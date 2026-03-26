@@ -2,9 +2,10 @@ import type { Frame, SemanticContent, SlotValue, TreeNode } from './types';
 
 /**
  * Detect whether a SemanticContent uses tree-native format.
+ * @deprecated Always returns true now — SemanticContent always has trees[].
  */
-export function isTreeNative(content: SemanticContent): boolean {
-  return content.tree !== undefined;
+export function isTreeNative(_content: SemanticContent): boolean {
+  return true;
 }
 
 /**
@@ -17,6 +18,18 @@ export function isTreeNative(content: SemanticContent): boolean {
 export function flattenTree(tree: TreeNode): Frame[] {
   const frames: Frame[] = [];
   flattenNode(tree, '', frames);
+  return frames;
+}
+
+/**
+ * Flatten multiple trees into a single Frame[] array.
+ * Each tree produces frames with path-based IDs rooted at its key.
+ */
+export function flattenTrees(trees: TreeNode[]): Frame[] {
+  const frames: Frame[] = [];
+  for (const tree of trees) {
+    flattenNode(tree, '', frames);
+  }
   return frames;
 }
 
@@ -90,6 +103,33 @@ export function unflattenToTree(frames: Frame[]): TreeNode {
   }
 
   return rootNode;
+}
+
+/**
+ * Reconstruct multiple TreeNodes from a flat Frame[] array.
+ * Groups frames by their root path segment, then unflattens each group.
+ */
+export function unflattenToTrees(frames: Frame[]): TreeNode[] {
+  if (frames.length === 0) return [];
+
+  // Group frames by root path segment (first segment of the ID)
+  const groups = new Map<string, Frame[]>();
+  for (const frame of frames) {
+    const rootKey = frame.id.split('/')[0];
+    let group = groups.get(rootKey);
+    if (!group) {
+      group = [];
+      groups.set(rootKey, group);
+    }
+    group.push(frame);
+  }
+
+  // Unflatten each group into a tree
+  const trees: TreeNode[] = [];
+  for (const group of groups.values()) {
+    trees.push(unflattenToTree(group));
+  }
+  return trees;
 }
 
 /**
