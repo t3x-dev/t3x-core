@@ -95,59 +95,29 @@ test.describe('Branch Workflow', () => {
 
   // BR-06: Canvas shows branch commits (UI test)
   test('BR-06: Canvas shows branch commits', async ({ page }) => {
-    await page.goto(`http://localhost:3000/project/${projectId}`);
+    await page.goto(`/project/${projectId}?view=canvas`);
 
     // Wait for canvas to load
     const canvas = page.locator('.react-flow');
-    const canvasVisible = await canvas.isVisible({ timeout: 10000 }).catch(() => false);
-
-    if (!canvasVisible) {
-      test.skip(true, 'Canvas not rendered — skipping UI branch verification');
-      return;
-    }
+    await expect(canvas).toBeVisible({ timeout: 15000 });
 
     // Look for commit nodes — at least the main commit should appear
     const commitNode = page
       .locator(`[data-id="${mainCommitHash}"]`)
       .or(page.locator('text=Initial main commit'));
-    const nodeVisible = await commitNode
-      .first()
-      .isVisible({ timeout: 10000 })
-      .catch(() => false);
-
-    if (!nodeVisible) {
-      test.skip(true, 'Commit nodes not visible on canvas — skipping');
-      return;
-    }
-
-    expect(nodeVisible).toBe(true);
+    await expect(commitNode.first()).toBeVisible({ timeout: 15000 });
   });
 
   // BR-07: Commit detail shows branch badge (UI test)
   test('BR-07: Commit detail shows branch badge', async ({ page }) => {
-    await page.goto(`http://localhost:3000/project/${projectId}`);
+    await page.goto(`/project/${projectId}?view=canvas`);
 
     const canvas = page.locator('.react-flow');
-    const canvasVisible = await canvas.isVisible({ timeout: 10000 }).catch(() => false);
+    await expect(canvas).toBeVisible({ timeout: 15000 });
 
-    if (!canvasVisible) {
-      test.skip(true, 'Canvas not rendered — skipping branch badge check');
-      return;
-    }
-
-    // Try to find branch badge text on the canvas
-    const branchBadge = page.locator(`text=${featureBranchName}`);
-    const hasBadge = await branchBadge
-      .first()
-      .isVisible({ timeout: 5000 })
-      .catch(() => false);
-
-    if (!hasBadge) {
-      test.skip(true, 'Branch badge not displayed on canvas');
-      return;
-    }
-
-    expect(hasBadge).toBe(true);
+    // Try to find branch name text on the canvas (badge or node card)
+    const branchBadge = page.getByText(featureBranchName);
+    await expect(branchBadge.first()).toBeVisible({ timeout: 15000 });
   });
 
   // BR-08: Switch back to main
@@ -162,7 +132,7 @@ test.describe('Branch Workflow', () => {
   });
 
   // BR-09: Delete feature branch (via API — need to test if delete endpoint exists)
-  test('BR-09: Delete feature branch', async ({ request }) => {
+  test.fixme('BR-09: Delete feature branch', async ({ request }) => {
     // The branch API may not have a DELETE endpoint — check the response
     const response = await request.delete(
       `http://localhost:8000/api/v1/branches/${featureBranchId}`,
@@ -170,12 +140,6 @@ test.describe('Branch Workflow', () => {
         data: { project_id: projectId },
       }
     );
-
-    // If 404 or 405, the delete endpoint doesn't exist yet
-    if (response.status() === 404 || response.status() === 405) {
-      test.skip(true, 'Branch DELETE endpoint not implemented');
-      return;
-    }
 
     expect(response.ok()).toBe(true);
 
@@ -186,7 +150,7 @@ test.describe('Branch Workflow', () => {
   });
 
   // BR-10: Cannot delete current branch (error case)
-  test('BR-10: Cannot delete current branch', async ({ request }) => {
+  test.fixme('BR-10: Cannot delete current branch', async ({ request }) => {
     // Get current branch
     const current = await getCurrentBranch(request, projectId);
 
@@ -196,12 +160,6 @@ test.describe('Branch Workflow', () => {
         data: { project_id: projectId },
       }
     );
-
-    // If 404 or 405, the delete endpoint doesn't exist yet
-    if (response.status() === 404 || response.status() === 405) {
-      test.skip(true, 'Branch DELETE endpoint not implemented');
-      return;
-    }
 
     // Should get an error (400 or 409) when trying to delete current branch
     expect(response.ok()).toBe(false);

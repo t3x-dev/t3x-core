@@ -290,11 +290,11 @@ test.describe('DiffDisplayView Full E2E', () => {
         const pageText = await page.locator('body').innerText();
 
         if (!pageText.includes('Compare')) {
-          test.skip();
+          test.skip(true, 'Compare section not found in sidebar');
           return;
         }
       } else {
-        test.skip();
+        test.skip(true, 'SOURCES button not visible — cannot access Compare');
         return;
       }
     } else {

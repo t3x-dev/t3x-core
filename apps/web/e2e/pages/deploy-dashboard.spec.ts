@@ -89,7 +89,7 @@ test.describe('Deploy Dashboard', () => {
     }).toPass({ timeout: 10000 });
   });
 
-  // DD-04: Runs table displays rows
+  // DD-04: Runs table displays rows (Runner not available in this repo)
   test('DD-04: Runs table displayed', async ({ page }) => {
     const deploy = new DeployPage(page);
     await deploy.goto();
@@ -108,7 +108,7 @@ test.describe('Deploy Dashboard', () => {
     expect(hasTable || hasEmpty).toBe(true);
   });
 
-  // DD-05: Model filter exists
+  // DD-05: Model filter exists (Runner not available in this repo)
   test('DD-05: Model filter available', async ({ page }) => {
     const deploy = new DeployPage(page);
     await deploy.goto();

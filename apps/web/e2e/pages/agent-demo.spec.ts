@@ -16,8 +16,14 @@ import { isExpectedConsoleError } from '../fixtures/test-data-factory';
  */
 
 test.describe('Agent Demo', () => {
+  // Agent demo pages (/agent-demo/chat, /agent-demo/optimiser) are not built as
+  // Next.js routes in apps/web. The agent-demo is a standalone service on :9000.
+  // These tests need to be rewritten to test :9000 directly or the routes need
+  // to be added to apps/web.
+  test.describe.configure({ mode: 'serial' });
+
   // AD-01: Chat page loads
-  test('AD-01: Chat page loads', async ({ page }) => {
+  test.fixme('AD-01: Chat page loads', async ({ page }) => {
     await page.goto('/agent-demo/chat');
 
     // Check if page loads (may redirect or show error if not configured)
@@ -34,7 +40,7 @@ test.describe('Agent Demo', () => {
   });
 
   // AD-02: Send message
-  test('AD-02: Send message', async ({ page }) => {
+  test.fixme('AD-02: Send message', async ({ page }) => {
     await page.goto('/agent-demo/chat');
 
     const chatInput = page.locator('textarea[placeholder*="message" i]').first();
@@ -65,7 +71,7 @@ test.describe('Agent Demo', () => {
   });
 
   // AD-03: Rate message with stars
-  test('AD-03: Rate message', async ({ page }) => {
+  test.fixme('AD-03: Rate message', async ({ page }) => {
     await page.goto('/agent-demo/chat');
 
     const chatInput = page.locator('textarea[placeholder*="message" i]').first();
@@ -105,7 +111,7 @@ test.describe('Agent Demo', () => {
   });
 
   // AD-04: Optimiser page loads with three columns
-  test('AD-04: Optimiser page loads', async ({ page }) => {
+  test.fixme('AD-04: Optimiser page loads', async ({ page }) => {
     await page.goto('/agent-demo/optimiser');
 
     // Check if optimiser page loads
@@ -130,7 +136,7 @@ test.describe('Agent Demo', () => {
   });
 
   // AD-05: Commit detail modal opens
-  test('AD-05: Commit detail modal', async ({ page }) => {
+  test.fixme('AD-05: Commit detail modal', async ({ page }) => {
     await page.goto('/agent-demo/optimiser');
 
     const commitsSection = page.locator('text=Sandbox Commits').first();
@@ -172,7 +178,7 @@ test.describe('Agent Demo', () => {
   });
 
   // AD-06: Run optimisation button state
-  test('AD-06: Optimisation button', async ({ page }) => {
+  test.fixme('AD-06: Optimisation button', async ({ page }) => {
     await page.goto('/agent-demo/optimiser');
 
     const optimiserContent = page.locator('text=Sandbox Commits').first();
@@ -203,7 +209,7 @@ test.describe('Agent Demo', () => {
   });
 
   // AD-07: No unexpected console errors on chat page
-  test('AD-07: Chat page no console errors', async ({ page }) => {
+  test.fixme('AD-07: Chat page no console errors', async ({ page }) => {
     const errors: string[] = [];
     page.on('console', (msg) => {
       if (msg.type() === 'error') errors.push(msg.text());

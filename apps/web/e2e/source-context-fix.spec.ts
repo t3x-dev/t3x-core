@@ -59,7 +59,10 @@ test.describe('Source Context Fix Verification', () => {
     // Skip if curate API fails (requires Google AI Studio key for embedding)
     if (!curateRes.ok()) {
       const body = await curateRes.json().catch(() => ({}));
-      test.skip(true, `Curate API failed: ${body?.error?.code ?? curateRes.status()} — likely missing API key`);
+      test.skip(
+        true,
+        `Curate API failed: ${body?.error?.code ?? curateRes.status()} — likely missing API key`
+      );
     }
     const curateData = await curateRes.json();
 
