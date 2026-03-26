@@ -1,5 +1,5 @@
 /**
- * Frame Delta Parser
+ * Delta Parser
  *
  * Parses raw LLM text output and extracts valid Delta JSON.
  * Handles five cases:
@@ -523,7 +523,7 @@ function diffAgainstSnapshot(
 
 // ── Main export ──
 
-export function parseFrameDelta(raw: string, snapshot?: SemanticContent): ParseResult {
+export function parseDelta(raw: string, snapshot?: SemanticContent): ParseResult {
   // Step 1: Check if raw starts with word char (not { or [) → YAML tree path
   if (isYamlTree(raw)) {
     return parseYamlTree(raw);

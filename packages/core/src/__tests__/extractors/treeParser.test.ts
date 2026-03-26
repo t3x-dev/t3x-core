@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { parseFrameDelta } from '../../extractors/frameDeltaParser';
+import { parseDelta } from '../../extractors/deltaParser';
 import type { SemanticContent, TreeNode } from '../../semantic/types';
 import { flattenTree } from '../../semantic/tree';
 
-describe('parseFrameDelta — tree-native first extraction', () => {
+describe('parseDelta — tree-native first extraction', () => {
   it('parses YAML tree + slot_quotes into tree result', () => {
     const raw = `hangzhou_trip:
   destination: "Hangzhou"
@@ -20,7 +20,7 @@ describe('parseFrameDelta — tree-native first extraction', () => {
     "dining.budget": "around 500"
   }
 }`;
-    const result = parseFrameDelta(raw);
+    const result = parseDelta(raw);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.format).toBe('tree');
@@ -47,7 +47,7 @@ describe('parseFrameDelta — tree-native first extraction', () => {
     "duration": "staying two weeks"
   }
 }`;
-    const result = parseFrameDelta(raw);
+    const result = parseDelta(raw);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.format).toBe('tree');
@@ -67,7 +67,7 @@ describe('parseFrameDelta — tree-native first extraction', () => {
   "source_map": { "trip": "T1", "dining": "T2" },
   "confidence_map": { "trip": 0.95, "dining": 0.8 }
 }`;
-    const result = parseFrameDelta(raw);
+    const result = parseDelta(raw);
     expect(result.ok).toBe(true);
     if (!result.ok || result.format !== 'tree') return;
     expect(result.tree.source).toBe('T1');
@@ -80,14 +80,14 @@ describe('parseFrameDelta — tree-native first extraction', () => {
     const raw = `simple_plan:
   goal: "test"
   priority: "high"`;
-    const result = parseFrameDelta(raw);
+    const result = parseDelta(raw);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.format).toBe('tree');
   });
 });
 
-describe('parseFrameDelta — tree-native delta', () => {
+describe('parseDelta — tree-native delta', () => {
   const existingTree: TreeNode = {
     key: 'hangzhou_trip',
     slots: { destination: 'Hangzhou' },
@@ -115,7 +115,7 @@ describe('parseFrameDelta — tree-native delta', () => {
         },
       ],
     });
-    const result = parseFrameDelta(raw, snapshot);
+    const result = parseDelta(raw, snapshot);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.format).toBe('tree-delta');
@@ -134,17 +134,17 @@ describe('parseFrameDelta — tree-native delta', () => {
     // drift with empty changes should still parse (special handling)
     // TreeNativeDeltaSchema.changes.min(1) means empty changes fails normal validation.
     // For drift, the parser handles this specially — return ok with empty delta
-    const result = parseFrameDelta(raw, snapshot);
+    const result = parseDelta(raw, snapshot);
     expect(result.ok).toBeDefined(); // just check it doesn't crash
   });
 });
 
-describe('parseFrameDelta — legacy backward compat', () => {
+describe('parseDelta — legacy backward compat', () => {
   it('rejects legacy delta JSON with frame field (no longer supported)', () => {
     const raw = JSON.stringify({
       changes: [{ action: 'add', frame: { id: 'f_001', type: 'test', slots: { a: 1 } } }],
     });
-    const result = parseFrameDelta(raw);
+    const result = parseDelta(raw);
     // Legacy delta format with 'frame' field is not tree-native
     // and DeltaSchema no longer accepts it
     expect(result.ok).toBe(false);
@@ -155,7 +155,7 @@ describe('parseFrameDelta — legacy backward compat', () => {
       frames: [{ id: 'f_001', type: 'test', slots: { a: 1 }, confidence: 0.9 }],
       relations: [],
     });
-    const result = parseFrameDelta(raw);
+    const result = parseDelta(raw);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.format).toBe('legacy');

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { FrameExtractor } from '../../extractors/frameExtractor';
+import { Extractor } from '../../extractors/extractor';
 import type { LLMProvider } from '../../llm/types';
 import { flattenTrees } from '../../semantic/tree';
 import type { SemanticContent } from '../../semantic/types';
@@ -50,10 +50,10 @@ const existingSnapshot: SemanticContent = {
 
 // ── Tests ──
 
-describe('FrameExtractor', () => {
+describe('Extractor', () => {
   it('extracts delta from turns (no existing snapshot)', async () => {
     const provider = mockProvider([validDeltaOutput]);
-    const extractor = new FrameExtractor(provider);
+    const extractor = new Extractor(provider);
 
     const result = await extractor.extract({
       turns: [
@@ -80,7 +80,7 @@ describe('FrameExtractor', () => {
 
   it('applies delta to existing snapshot', async () => {
     const provider = mockProvider([validDeltaWithRelations]);
-    const extractor = new FrameExtractor(provider);
+    const extractor = new Extractor(provider);
 
     const result = await extractor.extract({
       turns: [{ role: 'user', content: 'My budget is 3000 dollars' }],
@@ -98,7 +98,7 @@ describe('FrameExtractor', () => {
 
   it('retries once on parse failure then succeeds', async () => {
     const provider = mockProvider(['this is garbage not json', validDeltaOutput]);
-    const extractor = new FrameExtractor(provider);
+    const extractor = new Extractor(provider);
 
     const result = await extractor.extract({
       turns: [{ role: 'user', content: 'I want to travel to Tokyo' }],
@@ -113,7 +113,7 @@ describe('FrameExtractor', () => {
 
   it('returns error after retries exhausted', async () => {
     const provider = mockProvider(['garbage one', 'garbage two']);
-    const extractor = new FrameExtractor(provider);
+    const extractor = new Extractor(provider);
 
     const result = await extractor.extract({
       turns: [{ role: 'user', content: 'hello' }],
@@ -140,7 +140,7 @@ describe('FrameExtractor', () => {
     });
 
     const provider = mockProvider([invalidValidation, validDeltaOutput]);
-    const extractor = new FrameExtractor(provider);
+    const extractor = new Extractor(provider);
 
     const result = await extractor.extract({
       turns: [{ role: 'user', content: 'I want to travel to Tokyo' }],

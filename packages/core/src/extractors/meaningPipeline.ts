@@ -18,7 +18,7 @@
 import type { LLMCallLogger, LLMProvider } from '../llm/types';
 import type { Frame, SemanticContent, SlotValue } from '../semantic/types';
 import { flattenTrees } from '../semantic/tree';
-import type { FrameExtractionTurn } from './frameExtractionPrompt';
+import type { ExtractionTurn } from './extractionPrompt';
 
 // ── Pipeline Mode ──
 
@@ -38,7 +38,7 @@ export interface PipelineOptions {
 
 export interface PipelineContext {
   /** Conversation turns */
-  turns: FrameExtractionTurn[];
+  turns: ExtractionTurn[];
   /** Current snapshot (before this extraction) */
   previousSnapshot: SemanticContent | undefined;
   /** Working content — agents modify this as pipeline progresses */
@@ -309,7 +309,7 @@ export class MeaningPipeline {
   /** Run the pipeline */
   async run(
     content: SemanticContent,
-    turns: FrameExtractionTurn[],
+    turns: ExtractionTurn[],
     previousSnapshot?: SemanticContent,
     options?: PipelineOptions
   ): Promise<PipelineResult> {

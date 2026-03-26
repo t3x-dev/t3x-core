@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { config } from 'dotenv';
 import { describe, expect, it } from 'vitest';
-import { FrameExtractor } from '../../extractors/frameExtractor';
+import { Extractor } from '../../extractors/extractor';
 import { ClaudeProvider } from '../../providers/llm/claude';
 import { SemanticContentSchema } from '../../semantic/schema';
 import { validateIntegrity } from '../../semantic/validate';
@@ -18,7 +18,7 @@ const apiKey = process.env.ANTHROPIC_API_KEY ?? '';
 
 // Lazily create provider/extractor only when API key is available
 const provider = apiKey ? new ClaudeProvider({ apiKey }) : undefined;
-const extractor = provider ? new FrameExtractor(provider) : undefined;
+const extractor = provider ? new Extractor(provider) : undefined;
 
 // ── Types ──
 

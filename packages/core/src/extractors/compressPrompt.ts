@@ -7,14 +7,14 @@
 
 import type { Frame, Relation } from '../semantic/types';
 
-export interface FrameWithSignals extends Frame {
+export interface NodeWithSignals extends Frame {
   has_manual_edit: boolean;
   last_touched: number;
   mention_count: number;
 }
 
 export interface CompressInput {
-  frames: FrameWithSignals[];
+  frames: NodeWithSignals[];
   relations: Relation[];
 }
 
@@ -64,7 +64,7 @@ Output ONLY valid JSON (no markdown fences, no commentary):
   "stats": { "before": <N>, "after": <N>, "merged": <N>, "removed": <N> }
 }`;
 
-function serializeFrameWithSignals(frame: FrameWithSignals): string {
+function serializeNodeWithSignals(frame: NodeWithSignals): string {
   const lines: string[] = [];
   lines.push(
     `${frame.id}: # type=${frame.type}, confidence=${frame.confidence ?? 'unknown'}, has_manual_edit=${frame.has_manual_edit}, last_touched=${frame.last_touched}, mention_count=${frame.mention_count}`
@@ -82,7 +82,7 @@ function serializeRelations(relations: Relation[]): string {
 }
 
 export function buildCompressPrompt(input: CompressInput): CompressPromptResult {
-  const framesYaml = input.frames.map(serializeFrameWithSignals).join('\n\n');
+  const framesYaml = input.frames.map(serializeNodeWithSignals).join('\n\n');
   const relationsText = serializeRelations(input.relations);
 
   const userPrompt = `Frames (${input.frames.length} total):

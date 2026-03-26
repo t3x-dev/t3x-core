@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseFrameDelta } from '../../extractors/frameDeltaParser';
+import { parseDelta } from '../../extractors/deltaParser';
 import type { SemanticContent } from '../../semantic/types';
 
 // ── Fixtures ──
@@ -61,11 +61,11 @@ const snapshot: SemanticContent = {
 
 // ── Tests ──
 
-describe('parseFrameDelta', () => {
+describe('parseDelta', () => {
   describe('Case 1: tree-native delta JSON with changes key', () => {
     it('parses valid delta JSON from code fences', () => {
       const raw = `Here is the delta:\n\`\`\`json\n${JSON.stringify(validTreeDelta)}\n\`\`\``;
-      const result = parseFrameDelta(raw);
+      const result = parseDelta(raw);
       expect(result.ok).toBe(true);
       if (result.ok) {
         expect(result.delta.changes).toHaveLength(1);
@@ -75,7 +75,7 @@ describe('parseFrameDelta', () => {
 
     it('parses delta JSON without code fences', () => {
       const raw = JSON.stringify(validTreeDelta);
-      const result = parseFrameDelta(raw);
+      const result = parseDelta(raw);
       expect(result.ok).toBe(true);
       if (result.ok) {
         expect(result.delta.changes).toHaveLength(1);
@@ -84,7 +84,7 @@ describe('parseFrameDelta', () => {
 
     it('parses delta with relations', () => {
       const raw = `\`\`\`json\n${JSON.stringify(validTreeDeltaWithRelations)}\n\`\`\``;
-      const result = parseFrameDelta(raw);
+      const result = parseDelta(raw);
       expect(result.ok).toBe(true);
       if (result.ok) {
         expect(result.delta.changes).toHaveLength(2);
@@ -100,7 +100,7 @@ describe('parseFrameDelta', () => {
         ],
       };
       const raw = JSON.stringify(delta);
-      const result = parseFrameDelta(raw);
+      const result = parseDelta(raw);
       expect(result.ok).toBe(true);
       if (result.ok) {
         expect(result.delta.changes).toHaveLength(2);
@@ -113,7 +113,7 @@ describe('parseFrameDelta', () => {
   describe('Case 2: full output, no snapshot (first extraction)', () => {
     it('converts full output to all-add delta', () => {
       const raw = JSON.stringify(fullOutputFrames);
-      const result = parseFrameDelta(raw);
+      const result = parseDelta(raw);
       expect(result.ok).toBe(true);
       if (result.ok) {
         expect(result.delta.changes).toHaveLength(2);
@@ -127,7 +127,7 @@ describe('parseFrameDelta', () => {
         frames: [{ id: 'f_001', type: 'note', slots: { text: 'hello' } }],
         relations: [],
       });
-      const result = parseFrameDelta(raw);
+      const result = parseDelta(raw);
       expect(result.ok).toBe(true);
       if (result.ok) {
         expect(result.delta.changes).toHaveLength(1);
@@ -147,7 +147,7 @@ describe('parseFrameDelta', () => {
         ],
         relations: [{ from: 'travel_plan', to: 'budget', type: 'depends' }],
       });
-      const result = parseFrameDelta(raw, snapshot);
+      const result = parseDelta(raw, snapshot);
       // All frames identical, no changes → error (empty delta)
       expect(result.ok).toBe(false);
     });
@@ -160,7 +160,7 @@ describe('parseFrameDelta', () => {
         ],
         relations: [{ from: 'travel_plan', to: 'budget', type: 'depends' }],
       });
-      const result = parseFrameDelta(raw, snapshot);
+      const result = parseDelta(raw, snapshot);
       expect(result.ok).toBe(true);
       if (result.ok) {
         expect(result.delta.changes).toHaveLength(1);
@@ -182,7 +182,7 @@ describe('parseFrameDelta', () => {
         ],
         relations: [{ from: 'travel_plan', to: 'budget', type: 'depends' }],
       });
-      const result = parseFrameDelta(raw, snapshot);
+      const result = parseDelta(raw, snapshot);
       expect(result.ok).toBe(true);
       if (result.ok) {
         expect(result.delta.changes).toHaveLength(1);
@@ -197,7 +197,7 @@ describe('parseFrameDelta', () => {
         ],
         relations: [],
       });
-      const result = parseFrameDelta(raw, snapshot);
+      const result = parseDelta(raw, snapshot);
       expect(result.ok).toBe(true);
       if (result.ok) {
         const removeChange = result.delta.changes.find((c) => c.action === 'remove');
@@ -216,7 +216,7 @@ describe('parseFrameDelta', () => {
         ],
         relations: [{ from: 'travel_plan', to: 'budget', type: 'causes' }], // changed from 'depends'
       });
-      const result = parseFrameDelta(raw, snapshot);
+      const result = parseDelta(raw, snapshot);
       expect(result.ok).toBe(true);
       if (result.ok) {
         expect(result.delta.new_relations).toHaveLength(1);
@@ -232,7 +232,7 @@ describe('parseFrameDelta', () => {
         ],
         relations: [{ from: 'travel_plan', to: 'budget', type: 'causes' }],
       });
-      const result = parseFrameDelta(raw, snapshot);
+      const result = parseDelta(raw, snapshot);
       expect(result.ok).toBe(false);
     });
 
@@ -251,7 +251,7 @@ describe('parseFrameDelta', () => {
         frames: [{ id: 'travel_plan', type: 'travel_plan', slots: { destination: 'Tokyo' } }],
         relations: [],
       });
-      const result = parseFrameDelta(raw, snapshotWithExtra);
+      const result = parseDelta(raw, snapshotWithExtra);
       expect(result.ok).toBe(true);
       if (result.ok) {
         expect(result.delta.changes).toHaveLength(1);
@@ -266,7 +266,7 @@ describe('parseFrameDelta', () => {
 
   describe('Error cases', () => {
     it('returns error for unparseable JSON', () => {
-      const result = parseFrameDelta('this is not json at all');
+      const result = parseDelta('this is not json at all');
       expect(result.ok).toBe(false);
       if (!result.ok) {
         expect(result.error).toContain('parse');
@@ -275,7 +275,7 @@ describe('parseFrameDelta', () => {
 
     it('returns error for invalid schema', () => {
       const raw = JSON.stringify({ changes: [{ action: 'invalid', target_path: 'bad' }] });
-      const result = parseFrameDelta(raw);
+      const result = parseDelta(raw);
       expect(result.ok).toBe(false);
       if (!result.ok) {
         expect(result.error).toBeTruthy();
@@ -284,13 +284,13 @@ describe('parseFrameDelta', () => {
 
     it('returns error for JSON with neither changes nor frames', () => {
       const raw = JSON.stringify({ something: 'else' });
-      const result = parseFrameDelta(raw);
+      const result = parseDelta(raw);
       expect(result.ok).toBe(false);
     });
 
     it('returns error for empty changes array', () => {
       const raw = JSON.stringify({ changes: [] });
-      const result = parseFrameDelta(raw);
+      const result = parseDelta(raw);
       expect(result.ok).toBe(false);
     });
   });
@@ -313,7 +313,7 @@ describe('parseFrameDelta', () => {
         relations: [],
       });
 
-      const result = parseFrameDelta(raw);
+      const result = parseDelta(raw);
       expect(result.ok).toBe(true);
     });
   });
@@ -321,13 +321,13 @@ describe('parseFrameDelta', () => {
   describe('JSON extraction edge cases', () => {
     it('extracts JSON with surrounding text', () => {
       const raw = `Sure! Here's the updated delta:\n\n${JSON.stringify(validTreeDelta)}\n\nLet me know if you need changes.`;
-      const result = parseFrameDelta(raw);
+      const result = parseDelta(raw);
       expect(result.ok).toBe(true);
     });
 
     it('handles code fence without json language tag', () => {
       const raw = `\`\`\`\n${JSON.stringify(validTreeDelta)}\n\`\`\``;
-      const result = parseFrameDelta(raw);
+      const result = parseDelta(raw);
       expect(result.ok).toBe(true);
     });
   });

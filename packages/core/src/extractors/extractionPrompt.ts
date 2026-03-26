@@ -19,14 +19,14 @@ import {
 
 // -- Input Types --
 
-export interface FrameExtractionTurn {
+export interface ExtractionTurn {
   role: 'user' | 'assistant' | 'system' | 'tool';
   content: string;
   turn_hash?: string; // Source tracking -- which turn this is
 }
 
-export interface FrameExtractionInput {
-  turns: FrameExtractionTurn[];
+export interface ExtractionInput {
+  turns: ExtractionTurn[];
   snapshot?: SemanticContent;
   /** Number of turns already processed by previous extractions (from the start). Used in delta mode to split context vs new turns. */
   processedTurnCount?: number;
@@ -34,7 +34,7 @@ export interface FrameExtractionInput {
 
 // -- Output Type --
 
-export interface FrameExtractionPromptResult {
+export interface ExtractionPromptResult {
   systemPrompt: string;
   userPrompt: string;
 }
@@ -74,7 +74,7 @@ function serializeSnapshot(snapshot: SemanticContent): string {
  * Format conversation turns for prompt inclusion.
  * Includes turn_hash as [T1], [T2], etc. for source tracking.
  */
-function formatTurns(turns: FrameExtractionTurn[]): string {
+function formatTurns(turns: ExtractionTurn[]): string {
   return turns
     .map((t, i) => {
       const tag = t.turn_hash ? `[T${i + 1}:${t.turn_hash.slice(0, 8)}]` : `[T${i + 1}]`;
@@ -385,10 +385,10 @@ Output the YAML tree first (no fences), then --- on its own line, then the JSON 
  * behavior, quote length, and update stance. Defaults to `DEFAULT_STYLE`
  * (balanced preset) for backward compatibility.
  */
-export function buildFrameExtractionPrompt(
-  input: FrameExtractionInput,
+export function buildExtractionPrompt(
+  input: ExtractionInput,
   style: ExtractionStyleConfig = DEFAULT_STYLE
-): FrameExtractionPromptResult {
+): ExtractionPromptResult {
   const { turns, snapshot, processedTurnCount } = input;
 
   if (snapshot) {
