@@ -1,38 +1,48 @@
-import type { Frame, FrameDiff, SemanticContent, SlotDiff, SlotValue, WordDiffFn } from './types';
+import { flattenTrees } from './tree';
+import type { Frame, SemanticContent, SlotDiff, SlotValue, TreeDiff, WordDiffFn } from './types';
 import { deepEqual, relKey } from './utils';
 
 const WORD_DIFF_THRESHOLD = 5;
 
-export function frameDiff(
+/**
+ * Compute a semantic diff between two SemanticContent snapshots.
+ *
+ * Internally flattens trees to frames for comparison, then returns
+ * results using path strings (not Frame objects).
+ */
+export function diffCommits(
   source: SemanticContent,
   target: SemanticContent,
   wordDiffFn?: WordDiffFn
-): FrameDiff {
-  const sourceMap = new Map(source.frames.map((f) => [f.id, f]));
-  const targetMap = new Map(target.frames.map((f) => [f.id, f]));
+): TreeDiff {
+  const sourceFrames = flattenTrees(source.trees);
+  const targetFrames = flattenTrees(target.trees);
 
-  const identical: Frame[] = [];
-  const modified: FrameDiff['modified'] = [];
-  const onlyInSource: Frame[] = [];
-  const onlyInTarget: Frame[] = [];
+  const sourceMap = new Map(sourceFrames.map((f) => [f.id, f]));
+  const targetMap = new Map(targetFrames.map((f) => [f.id, f]));
+
+  const identical: string[] = [];
+  const modified: TreeDiff['modified'] = [];
+  const onlyInSource: string[] = [];
+  const onlyInTarget: string[] = [];
 
   for (const [id, srcFrame] of sourceMap) {
     const tgtFrame = targetMap.get(id);
     if (!tgtFrame) {
-      onlyInSource.push(srcFrame);
+      onlyInSource.push(id);
       continue;
     }
     const slotDiffs = diffSlots(srcFrame.slots, tgtFrame.slots, wordDiffFn);
     if (slotDiffs.length === 0 && srcFrame.type === tgtFrame.type) {
-      identical.push(srcFrame);
+      identical.push(id);
     } else {
-      modified.push({ frameId: id, sourceFrame: srcFrame, targetFrame: tgtFrame, slotDiffs });
+      modified.push({ path: id, slotDiffs });
     }
   }
 
-  for (const [id, tgtFrame] of targetMap) {
+  for (const [id] of targetMap) {
     if (!sourceMap.has(id)) {
-      onlyInTarget.push(tgtFrame);
+      onlyInTarget.push(id);
     }
   }
 
@@ -41,14 +51,6 @@ export function frameDiff(
   const relationsAdded = target.relations.filter((r) => !srcRelKeys.has(relKey(r)));
   const relationsRemoved = source.relations.filter((r) => !tgtRelKeys.has(relKey(r)));
 
-  const topicChanged =
-    source.topic !== target.topic ? { oldTopic: source.topic, newTopic: target.topic } : undefined;
-
-  const rootChanged =
-    source.root_frame_id !== target.root_frame_id
-      ? { oldRoot: source.root_frame_id, newRoot: target.root_frame_id }
-      : undefined;
-
   return {
     identical,
     modified,
@@ -56,12 +58,13 @@ export function frameDiff(
     onlyInTarget,
     relationsAdded,
     relationsRemoved,
-    topicChanged,
-    rootChanged,
   };
 }
 
-function diffSlots(
+/**
+ * Compare slots between two frames and return differences.
+ */
+export function diffSlots(
   source: Record<string, SlotValue>,
   target: Record<string, SlotValue>,
   wordDiffFn?: WordDiffFn
