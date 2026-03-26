@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { topicEvolverAgent } from '../../../extractors/agents/topicEvolverAgent';
 import type { PipelineContext } from '../../../extractors/meaningPipeline';
 import { createFrameWithSlots, createSemanticContent, resetFrameIds } from '../../factories';
+import { flattenTrees } from '../../../semantic/tree';
 import { StubLLMProvider } from '../../stubs';
 
 function makeCtx(rootType: string, isFirst: boolean): PipelineContext {
@@ -43,9 +44,9 @@ describe('topicEvolverAgent', () => {
     expect(topicEvolverAgent.shouldRun(ctx)).toBe(true);
   });
 
-  it('shouldRun returns false when no frames', () => {
+  it('shouldRun returns false when no trees', () => {
     const ctx = makeCtx('travel_plan', false);
-    ctx.content.frames = [];
+    ctx.content.trees = [];
     expect(topicEvolverAgent.shouldRun(ctx)).toBe(false);
   });
 
@@ -56,7 +57,7 @@ describe('topicEvolverAgent', () => {
     const result = await topicEvolverAgent.run(ctx, provider);
 
     expect(result.topicName).toBe('tokyo_cultural_immersion');
-    expect(result.content.frames[0].type).toBe('tokyo_cultural_immersion');
+    expect(flattenTrees(result.content.trees)[0].type).toBe('tokyo_cultural_immersion');
   });
 
   it('keeps topic when LLM returns the same name', async () => {
@@ -67,7 +68,7 @@ describe('topicEvolverAgent', () => {
 
     // Same name → no change
     expect(result.topicName).toBe('travel_plan');
-    expect(result.content.frames[0].type).toBe('travel_plan');
+    expect(flattenTrees(result.content.trees)[0].type).toBe('travel_plan');
   });
 
   it('rejects names longer than 60 chars', async () => {
@@ -75,6 +76,6 @@ describe('topicEvolverAgent', () => {
     provider.enqueue('a'.repeat(61));
 
     const result = await topicEvolverAgent.run(ctx, provider);
-    expect(result.content.frames[0].type).toBe('travel_plan');
+    expect(flattenTrees(result.content.trees)[0].type).toBe('travel_plan');
   });
 });

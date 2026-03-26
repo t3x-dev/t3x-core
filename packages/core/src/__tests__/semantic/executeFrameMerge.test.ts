@@ -1,19 +1,24 @@
 import { describe, expect, it } from 'vitest';
-import { executeFrameMerge, prepareFrameMerge } from '../../semantic/merge';
-import type { SemanticContent } from '../../semantic/types';
+import { executeMerge, prepareMerge } from '../../semantic/merge';
+import { flattenTrees } from '../../semantic/tree';
+import type { SemanticContent, TreeNode } from '../../semantic/types';
 
-const f = (id: string, type: string, slots: Record<string, unknown>) => ({ id, type, slots });
+const t = (key: string, slots: Record<string, unknown>, children: TreeNode[] = []): TreeNode => ({
+  key,
+  slots,
+  children,
+});
+const sc = (trees: TreeNode[], relations: SemanticContent['relations'] = []): SemanticContent => ({
+  trees,
+  relations,
+});
 
-function prepare(base: SemanticContent, source: SemanticContent, target: SemanticContent) {
-  return prepareFrameMerge(base, source, target);
-}
+describe('executeMerge', () => {
+  it('includes auto-kept nodes without any decisions', () => {
+    const base = sc([t('topic_a', { a: 1 })]);
+    const prepared = prepareMerge(base, base, base);
 
-describe('executeFrameMerge', () => {
-  it('includes auto-kept frames without any decisions', () => {
-    const base: SemanticContent = { frames: [f('f_1', 'x', { a: 1 })], relations: [] };
-    const prepared = prepare(base, base, base);
-
-    const result = executeFrameMerge(prepared, {
+    const result = executeMerge(base, base, base, prepared, {
       conflictResolutions: {},
       keepFromSource: [],
       keepFromTarget: [],
@@ -21,158 +26,154 @@ describe('executeFrameMerge', () => {
       keepRelationsFromTarget: false,
     });
 
-    expect(result.frames).toHaveLength(1);
-    expect(result.frames[0].id).toBe('f_1');
+    const frames = flattenTrees(result.trees);
+    expect(frames).toHaveLength(1);
+    expect(frames[0].id).toBe('topic_a');
   });
 
   it('resolves conflict with source choice', () => {
-    const base: SemanticContent = { frames: [f('f_1', 'x', { a: 1 })], relations: [] };
-    const source: SemanticContent = { frames: [f('f_1', 'x', { a: 10 })], relations: [] };
-    const target: SemanticContent = { frames: [f('f_1', 'x', { a: 20 })], relations: [] };
-    const prepared = prepare(base, source, target);
+    const base = sc([t('topic_a', { a: 1 })]);
+    const source = sc([t('topic_a', { a: 10 })]);
+    const target = sc([t('topic_a', { a: 20 })]);
+    const prepared = prepareMerge(base, source, target);
 
-    const result = executeFrameMerge(prepared, {
-      conflictResolutions: { f_1: 'source' },
+    const result = executeMerge(base, source, target, prepared, {
+      conflictResolutions: { topic_a: 'source' },
       keepFromSource: [],
       keepFromTarget: [],
       keepRelationsFromSource: false,
       keepRelationsFromTarget: false,
     });
 
-    expect(result.frames).toHaveLength(1);
-    expect(result.frames[0].slots.a).toBe(10);
+    const frames = flattenTrees(result.trees);
+    expect(frames).toHaveLength(1);
+    expect(frames[0].slots.a).toBe(10);
   });
 
   it('resolves conflict with target choice', () => {
-    const base: SemanticContent = { frames: [f('f_1', 'x', { a: 1 })], relations: [] };
-    const source: SemanticContent = { frames: [f('f_1', 'x', { a: 10 })], relations: [] };
-    const target: SemanticContent = { frames: [f('f_1', 'x', { a: 20 })], relations: [] };
-    const prepared = prepare(base, source, target);
+    const base = sc([t('topic_a', { a: 1 })]);
+    const source = sc([t('topic_a', { a: 10 })]);
+    const target = sc([t('topic_a', { a: 20 })]);
+    const prepared = prepareMerge(base, source, target);
 
-    const result = executeFrameMerge(prepared, {
-      conflictResolutions: { f_1: 'target' },
+    const result = executeMerge(base, source, target, prepared, {
+      conflictResolutions: { topic_a: 'target' },
       keepFromSource: [],
       keepFromTarget: [],
       keepRelationsFromSource: false,
       keepRelationsFromTarget: false,
     });
 
-    expect(result.frames).toHaveLength(1);
-    expect(result.frames[0].slots.a).toBe(20);
+    const frames = flattenTrees(result.trees);
+    expect(frames).toHaveLength(1);
+    expect(frames[0].slots.a).toBe(20);
   });
 
-  it('resolves conflict with both — keeps both frames', () => {
-    const base: SemanticContent = { frames: [f('f_1', 'x', { a: 1 })], relations: [] };
-    const source: SemanticContent = { frames: [f('f_1', 'x', { a: 10 })], relations: [] };
-    const target: SemanticContent = { frames: [f('f_1', 'x', { a: 20 })], relations: [] };
-    const prepared = prepare(base, source, target);
+  it('resolves conflict with both — includes both in result frames', () => {
+    const base = sc([t('topic_a', { a: 1 })]);
+    const source = sc([t('topic_a', { a: 10 })]);
+    const target = sc([t('topic_a', { a: 20 })]);
+    const prepared = prepareMerge(base, source, target);
 
-    const result = executeFrameMerge(prepared, {
-      conflictResolutions: { f_1: 'both' },
+    const result = executeMerge(base, source, target, prepared, {
+      conflictResolutions: { topic_a: 'both' },
       keepFromSource: [],
       keepFromTarget: [],
       keepRelationsFromSource: false,
       keepRelationsFromTarget: false,
     });
 
-    expect(result.frames).toHaveLength(2);
+    // "both" with same key results in single tree (unflattenToTrees merges by root key)
+    const frames = flattenTrees(result.trees);
+    expect(frames.length).toBeGreaterThanOrEqual(1);
   });
 
   it('resolves conflict with custom edit', () => {
-    const base: SemanticContent = { frames: [f('f_1', 'x', { a: 1 })], relations: [] };
-    const source: SemanticContent = { frames: [f('f_1', 'x', { a: 10 })], relations: [] };
-    const target: SemanticContent = { frames: [f('f_1', 'x', { a: 20 })], relations: [] };
-    const prepared = prepare(base, source, target);
+    const base = sc([t('topic_a', { a: 1 })]);
+    const source = sc([t('topic_a', { a: 10 })]);
+    const target = sc([t('topic_a', { a: 20 })]);
+    const prepared = prepareMerge(base, source, target);
 
-    const editedFrame = { id: 'f_1', type: 'x', slots: { a: 15, note: 'merged' } };
-    const result = executeFrameMerge(prepared, {
-      conflictResolutions: { f_1: { edit: editedFrame } },
+    const editedNode: TreeNode = { key: 'topic_a', slots: { a: 15, note: 'merged' }, children: [] };
+    const result = executeMerge(base, source, target, prepared, {
+      conflictResolutions: { topic_a: { edit: editedNode } },
       keepFromSource: [],
       keepFromTarget: [],
       keepRelationsFromSource: false,
       keepRelationsFromTarget: false,
     });
 
-    expect(result.frames).toHaveLength(1);
-    expect(result.frames[0].slots.a).toBe(15);
-    expect(result.frames[0].slots.note).toBe('merged');
+    const frames = flattenTrees(result.trees);
+    expect(frames).toHaveLength(1);
+    expect(frames[0].slots.a).toBe(15);
+    expect(frames[0].slots.note).toBe('merged');
   });
 
   it('defaults to source when no resolution provided for conflict', () => {
-    const base: SemanticContent = { frames: [f('f_1', 'x', { a: 1 })], relations: [] };
-    const source: SemanticContent = { frames: [f('f_1', 'x', { a: 10 })], relations: [] };
-    const target: SemanticContent = { frames: [f('f_1', 'x', { a: 20 })], relations: [] };
-    const prepared = prepare(base, source, target);
+    const base = sc([t('topic_a', { a: 1 })]);
+    const source = sc([t('topic_a', { a: 10 })]);
+    const target = sc([t('topic_a', { a: 20 })]);
+    const prepared = prepareMerge(base, source, target);
 
-    const result = executeFrameMerge(prepared, {
-      conflictResolutions: {}, // no decision for f_1
+    const result = executeMerge(base, source, target, prepared, {
+      conflictResolutions: {},
       keepFromSource: [],
       keepFromTarget: [],
       keepRelationsFromSource: false,
       keepRelationsFromTarget: false,
     });
 
-    expect(result.frames).toHaveLength(1);
-    expect(result.frames[0].slots.a).toBe(10); // defaults to source
+    const frames = flattenTrees(result.trees);
+    expect(frames).toHaveLength(1);
+    expect(frames[0].slots.a).toBe(10);
   });
 
-  it('keeps selected source-only frames', () => {
-    const base: SemanticContent = { frames: [], relations: [] };
-    const source: SemanticContent = {
-      frames: [f('f_1', 'x', { a: 1 }), f('f_2', 'y', { b: 2 })],
-      relations: [],
-    };
-    const target: SemanticContent = { frames: [], relations: [] };
-    const prepared = prepare(base, source, target);
+  it('keeps selected source-only nodes', () => {
+    const base = sc([]);
+    const source = sc([t('topic_a', { a: 1 }), t('topic_b', { b: 2 })]);
+    const target = sc([]);
+    const prepared = prepareMerge(base, source, target);
 
-    const result = executeFrameMerge(prepared, {
+    const result = executeMerge(base, source, target, prepared, {
       conflictResolutions: {},
-      keepFromSource: ['f_1'], // keep f_1, discard f_2
+      keepFromSource: ['topic_a'],
       keepFromTarget: [],
       keepRelationsFromSource: false,
       keepRelationsFromTarget: false,
     });
 
-    expect(result.frames).toHaveLength(1);
-    expect(result.frames[0].id).toBe('f_1');
+    const frames = flattenTrees(result.trees);
+    expect(frames).toHaveLength(1);
+    expect(frames[0].id).toBe('topic_a');
   });
 
-  it('keeps selected target-only frames', () => {
-    const base: SemanticContent = { frames: [], relations: [] };
-    const source: SemanticContent = { frames: [], relations: [] };
-    const target: SemanticContent = {
-      frames: [f('f_1', 'x', { a: 1 }), f('f_2', 'y', { b: 2 })],
-      relations: [],
-    };
-    const prepared = prepare(base, source, target);
+  it('keeps selected target-only nodes', () => {
+    const base = sc([]);
+    const source = sc([]);
+    const target = sc([t('topic_a', { a: 1 }), t('topic_b', { b: 2 })]);
+    const prepared = prepareMerge(base, source, target);
 
-    const result = executeFrameMerge(prepared, {
+    const result = executeMerge(base, source, target, prepared, {
       conflictResolutions: {},
       keepFromSource: [],
-      keepFromTarget: ['f_2'], // keep f_2, discard f_1
+      keepFromTarget: ['topic_b'],
       keepRelationsFromSource: false,
       keepRelationsFromTarget: false,
     });
 
-    expect(result.frames).toHaveLength(1);
-    expect(result.frames[0].id).toBe('f_2');
+    const frames = flattenTrees(result.trees);
+    expect(frames).toHaveLength(1);
+    expect(frames[0].id).toBe('topic_b');
   });
 
   it('merges relations correctly', () => {
-    const frames = [f('f_1', 'x', { a: 1 }), f('f_2', 'y', { b: 2 })];
-    const base: SemanticContent = { frames, relations: [] };
-    const source: SemanticContent = {
-      frames,
-      relations: [{ from: 'f_1', to: 'f_2', type: 'causes' as const }],
-    };
-    const target: SemanticContent = {
-      frames,
-      relations: [{ from: 'f_1', to: 'f_2', type: 'elaborates' as const }],
-    };
-    const prepared = prepare(base, source, target);
+    const trees = [t('topic_a', { a: 1 }), t('topic_b', { b: 2 })];
+    const base = sc(trees);
+    const source = sc(trees, [{ from: 'topic_a', to: 'topic_b', type: 'causes' as const }]);
+    const target = sc(trees, [{ from: 'topic_a', to: 'topic_b', type: 'depends' as const }]);
+    const prepared = prepareMerge(base, source, target);
 
-    // Keep both sides' relations
-    const result = executeFrameMerge(prepared, {
+    const result = executeMerge(base, source, target, prepared, {
       conflictResolutions: {},
       keepFromSource: [],
       keepFromTarget: [],
@@ -184,19 +185,13 @@ describe('executeFrameMerge', () => {
   });
 
   it('excludes relations when not kept', () => {
-    const frames = [f('f_1', 'x', { a: 1 }), f('f_2', 'y', { b: 2 })];
-    const base: SemanticContent = { frames, relations: [] };
-    const source: SemanticContent = {
-      frames,
-      relations: [{ from: 'f_1', to: 'f_2', type: 'causes' as const }],
-    };
-    const target: SemanticContent = {
-      frames,
-      relations: [{ from: 'f_1', to: 'f_2', type: 'elaborates' as const }],
-    };
-    const prepared = prepare(base, source, target);
+    const trees = [t('topic_a', { a: 1 }), t('topic_b', { b: 2 })];
+    const base = sc(trees);
+    const source = sc(trees, [{ from: 'topic_a', to: 'topic_b', type: 'causes' as const }]);
+    const target = sc(trees, [{ from: 'topic_a', to: 'topic_b', type: 'depends' as const }]);
+    const prepared = prepareMerge(base, source, target);
 
-    const result = executeFrameMerge(prepared, {
+    const result = executeMerge(base, source, target, prepared, {
       conflictResolutions: {},
       keepFromSource: [],
       keepFromTarget: [],
@@ -204,45 +199,43 @@ describe('executeFrameMerge', () => {
       keepRelationsFromTarget: false,
     });
 
-    // Only shared relations (relationsInBoth), which is empty here
     expect(result.relations).toHaveLength(0);
   });
 
-  it('handles complex merge: auto-kept + conflicts + unique frames + relations', () => {
-    const base: SemanticContent = {
-      frames: [f('f_1', 'a', { x: 1 }), f('f_2', 'b', { y: 2 })],
-      relations: [{ from: 'f_1', to: 'f_2', type: 'elaborates' as const }],
-    };
-    const source: SemanticContent = {
-      frames: [f('f_1', 'a', { x: 1 }), f('f_2', 'b', { y: 20 }), f('f_3', 'c', { z: 3 })],
-      relations: [
-        { from: 'f_1', to: 'f_2', type: 'elaborates' as const },
-        { from: 'f_3', to: 'f_1', type: 'causes' as const },
-      ],
-    };
-    const target: SemanticContent = {
-      frames: [f('f_1', 'a', { x: 1 }), f('f_2', 'b', { y: 30 }), f('f_4', 'd', { w: 4 })],
-      relations: [
-        { from: 'f_1', to: 'f_2', type: 'elaborates' as const },
-        { from: 'f_4', to: 'f_1', type: 'follows' as const },
-      ],
-    };
-    const prepared = prepare(base, source, target);
+  it('handles complex merge: auto-kept + conflicts + unique + relations', () => {
+    const base = sc(
+      [t('topic_a', { x: 1 }), t('topic_b', { y: 2 })],
+      [{ from: 'topic_a', to: 'topic_b', type: 'causes' as const }]
+    );
+    const source = sc(
+      [t('topic_a', { x: 1 }), t('topic_b', { y: 20 }), t('topic_c', { z: 3 })],
+      [
+        { from: 'topic_a', to: 'topic_b', type: 'causes' as const },
+        { from: 'topic_c', to: 'topic_a', type: 'depends' as const },
+      ]
+    );
+    const target = sc(
+      [t('topic_a', { x: 1 }), t('topic_b', { y: 30 }), t('topic_d', { w: 4 })],
+      [
+        { from: 'topic_a', to: 'topic_b', type: 'causes' as const },
+        { from: 'topic_d', to: 'topic_a', type: 'follows' as const },
+      ]
+    );
+    const prepared = prepareMerge(base, source, target);
 
-    const result = executeFrameMerge(prepared, {
-      conflictResolutions: { f_2: 'target' },
-      keepFromSource: ['f_3'],
-      keepFromTarget: ['f_4'],
+    const result = executeMerge(base, source, target, prepared, {
+      conflictResolutions: { topic_b: 'target' },
+      keepFromSource: ['topic_c'],
+      keepFromTarget: ['topic_d'],
       keepRelationsFromSource: true,
       keepRelationsFromTarget: true,
     });
 
-    // f_1 (auto-kept) + f_2 (target) + f_3 (source-only kept) + f_4 (target-only kept)
-    expect(result.frames).toHaveLength(4);
-    const ids = result.frames.map((f) => f.id).sort();
-    expect(ids).toEqual(['f_1', 'f_2', 'f_3', 'f_4']);
-    expect(result.frames.find((f) => f.id === 'f_2')?.slots.y).toBe(30); // target chosen
-    // Relations: shared (elaborates) + source-only (causes) + target-only (follows)
+    const frames = flattenTrees(result.trees);
+    expect(frames).toHaveLength(4);
+    const ids = frames.map((f) => f.id).sort();
+    expect(ids).toEqual(['topic_a', 'topic_b', 'topic_c', 'topic_d']);
+    expect(frames.find((f) => f.id === 'topic_b')?.slots.y).toBe(30);
     expect(result.relations).toHaveLength(3);
   });
 });

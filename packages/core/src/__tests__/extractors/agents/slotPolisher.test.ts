@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { slotPolisherAgent } from '../../../extractors/agents/slotPolisherAgent';
 import type { PipelineContext } from '../../../extractors/meaningPipeline';
 import { createFrameWithSlots, createSemanticContent, resetFrameIds } from '../../factories';
+import { flattenTrees } from '../../../semantic/tree';
 import { StubLLMProvider } from '../../stubs';
 
 function makeCtx(
@@ -66,7 +67,7 @@ describe('slotPolisherAgent', () => {
 
     const result = await slotPolisherAgent.run(ctx, provider);
 
-    expect(result.content.frames[0].slots).toEqual({ season: 'spring', budget: 5000 });
+    expect(flattenTrees(result.content.trees)[0].slots).toEqual({ season: 'spring', budget: 5000 });
   });
 
   it('falls back to original frame when LLM returns invalid JSON', async () => {
@@ -76,7 +77,7 @@ describe('slotPolisherAgent', () => {
     provider.enqueue('not json');
 
     const result = await slotPolisherAgent.run(ctx, provider);
-    expect(result.content.frames[0].slots).toEqual({ dest: 'Tokyo' });
+    expect(flattenTrees(result.content.trees)[0].slots).toEqual({ dest: 'Tokyo' });
   });
 
   it('falls back when LLM returns empty slots', async () => {
@@ -86,7 +87,7 @@ describe('slotPolisherAgent', () => {
     provider.enqueue(JSON.stringify({ slots: {} }));
 
     const result = await slotPolisherAgent.run(ctx, provider);
-    expect(result.content.frames[0].slots).toEqual({ dest: 'Tokyo' });
+    expect(flattenTrees(result.content.trees)[0].slots).toEqual({ dest: 'Tokyo' });
   });
 
   it('polishes each frame independently', async () => {
@@ -101,8 +102,8 @@ describe('slotPolisherAgent', () => {
 
     const result = await slotPolisherAgent.run(ctx, provider);
 
-    expect(result.content.frames[0].slots).toEqual({ city: 'Tokyo' });
-    expect(result.content.frames[1].slots).toEqual({ amount: 5000 });
+    expect(flattenTrees(result.content.trees)[0].slots).toEqual({ city: 'Tokyo' });
+    expect(flattenTrees(result.content.trees)[1].slots).toEqual({ amount: 5000 });
     expect(provider.calls).toHaveLength(2);
   });
 
@@ -112,6 +113,6 @@ describe('slotPolisherAgent', () => {
     provider.enqueue(JSON.stringify({ slots: { foods: ['sushi', 'ramen'] } }));
 
     const result = await slotPolisherAgent.run(ctx, provider);
-    expect(result.content.frames[0].slots.foods).toEqual(['sushi', 'ramen']);
+    expect(flattenTrees(result.content.trees)[0].slots.foods).toEqual(['sushi', 'ramen']);
   });
 });

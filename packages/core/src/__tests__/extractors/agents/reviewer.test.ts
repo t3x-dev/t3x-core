@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { reviewerAgent } from '../../../extractors/agents/reviewerAgent';
 import type { PipelineContext } from '../../../extractors/meaningPipeline';
 import { createFrameWithSlots, createSemanticContent, resetFrameIds } from '../../factories';
+import { flattenTrees } from '../../../semantic/tree';
 import { StubLLMProvider } from '../../stubs';
 
 function makeCtx(frames: ReturnType<typeof createFrameWithSlots>[]): PipelineContext {
@@ -47,7 +48,7 @@ describe('reviewerAgent', () => {
     provider.enqueue(JSON.stringify({ status: 'approved', issues: [] }));
 
     const result = await reviewerAgent.run(ctx, provider);
-    expect(result.content.frames[0].type).toBe('japan_trip');
+    expect(flattenTrees(result.content.trees)[0].type).toBe('japan_trip');
   });
 
   it('renames root frame when reviewer suggests rename_root', async () => {
@@ -62,7 +63,7 @@ describe('reviewerAgent', () => {
     );
 
     const result = await reviewerAgent.run(ctx, provider);
-    expect(result.content.frames[0].type).toBe('japan_travel_plan');
+    expect(flattenTrees(result.content.trees)[0].type).toBe('japan_travel_plan');
     expect(result.topicName).toBe('japan_travel_plan');
   });
 
@@ -83,34 +84,36 @@ describe('reviewerAgent', () => {
     );
 
     const result = await reviewerAgent.run(ctx, provider);
-    expect(result.content.frames[0].slots.destination).toBe('Tokyo');
-    expect(result.content.frames[0].slots.duration).toBe('2w');
-    expect(result.content.frames[1].slots.destination).toBe('related');
-    expect(result.content.frames[1].slots.amount).toBe(5000);
+    expect(flattenTrees(result.content.trees)[0].slots.destination).toBe('Tokyo');
+    expect(flattenTrees(result.content.trees)[0].slots.duration).toBe('2w');
+    expect(flattenTrees(result.content.trees)[1].slots.destination).toBe('related');
+    expect(flattenTrees(result.content.trees)[1].slots.amount).toBe(5000);
     // Old keys should not exist
-    expect(result.content.frames[0].slots.dest).toBeUndefined();
+    expect(flattenTrees(result.content.trees)[0].slots.dest).toBeUndefined();
   });
 
   it('merges frames when reviewer suggests merge_frames', async () => {
+    // Use type as ID so frame IDs match after tree roundtrip
     const ctx = makeCtx([
-      createFrameWithSlots('pref', { food: 'sushi' }, 'f_1'),
-      createFrameWithSlots('pref', { drink: 'sake' }, 'f_2'),
-      createFrameWithSlots('budget', { amount: 5000 }, 'f_3'),
+      createFrameWithSlots('pref_a', { food: 'sushi' }, 'pref_a'),
+      createFrameWithSlots('pref_b', { drink: 'sake' }, 'pref_b'),
+      createFrameWithSlots('budget', { amount: 5000 }, 'budget'),
     ]);
 
     provider.enqueue(
       JSON.stringify({
         status: 'needs_fixes',
         issues: ['Duplicate preference frames'],
-        fixes: { merge_frames: [['f_1', 'f_2']] },
+        fixes: { merge_frames: [['pref_a', 'pref_b']] },
       })
     );
 
     const result = await reviewerAgent.run(ctx, provider);
-    // f_2 merged into f_1 and removed
-    expect(result.content.frames).toHaveLength(2);
-    expect(result.content.frames[0].slots.food).toBe('sushi');
-    expect(result.content.frames[0].slots.drink).toBe('sake');
+    const frames = flattenTrees(result.content.trees);
+    // pref_b merged into pref_a and removed
+    expect(frames).toHaveLength(2);
+    expect(frames[0].slots.food).toBe('sushi');
+    expect(frames[0].slots.drink).toBe('sake');
   });
 
   it('handles invalid JSON from LLM gracefully', async () => {
@@ -120,25 +123,26 @@ describe('reviewerAgent', () => {
 
     const result = await reviewerAgent.run(ctx, provider);
     // Should not throw, frames unchanged
-    expect(result.content.frames[0].type).toBe('a');
+    expect(flattenTrees(result.content.trees)[0].type).toBe('a');
   });
 
   it('does not overwrite existing slots during merge', async () => {
     const ctx = makeCtx([
-      createFrameWithSlots('pref', { food: 'sushi', shared: 'original' }, 'f_1'),
-      createFrameWithSlots('pref', { drink: 'sake', shared: 'duplicate' }, 'f_2'),
+      createFrameWithSlots('pref_a', { food: 'sushi', shared: 'original' }, 'pref_a'),
+      createFrameWithSlots('pref_b', { drink: 'sake', shared: 'duplicate' }, 'pref_b'),
     ]);
 
     provider.enqueue(
       JSON.stringify({
         status: 'needs_fixes',
-        fixes: { merge_frames: [['f_1', 'f_2']] },
+        fixes: { merge_frames: [['pref_a', 'pref_b']] },
       })
     );
 
     const result = await reviewerAgent.run(ctx, provider);
-    // 'shared' should keep f_1's value (not overwritten by f_2)
-    expect(result.content.frames[0].slots.shared).toBe('original');
-    expect(result.content.frames[0].slots.drink).toBe('sake');
+    const frames = flattenTrees(result.content.trees);
+    // 'shared' should keep pref_a's value (not overwritten by pref_b)
+    expect(frames[0].slots.shared).toBe('original');
+    expect(frames[0].slots.drink).toBe('sake');
   });
 });

@@ -84,11 +84,11 @@ describe('parseDriftResponse', () => {
 
   it('parses drift_detected response with valid relation', () => {
     const result = parseDriftResponse(
-      '{"same_topic": false, "confidence": 0.85, "relation": "elaborates", "new_topic": "cooking_techniques"}'
+      '{"same_topic": false, "confidence": 0.85, "relation": "causes", "new_topic": "cooking_techniques"}'
     );
     expect(result.drifted).toBe(true);
     expect(result.confidence).toBe(0.85);
-    expect(result.relationType).toBe('elaborates');
+    expect(result.relationType).toBe('causes');
     expect(result.newTopicName).toBe('cooking_techniques');
   });
 
@@ -164,7 +164,7 @@ describe('parseDriftResponse', () => {
   });
 
   it('accepts all 5 valid relation types', () => {
-    for (const rel of ['causes', 'contrasts', 'elaborates', 'follows', 'depends']) {
+    for (const rel of ['causes', 'conditions', 'contrasts', 'follows', 'depends']) {
       const result = parseDriftResponse(
         `{"same_topic": false, "confidence": 0.9, "relation": "${rel}", "new_topic": "test"}`
       );

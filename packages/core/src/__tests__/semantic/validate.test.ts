@@ -1,68 +1,48 @@
 import { describe, expect, it } from 'vitest';
 import type { SemanticContent, TreeNode } from '../../semantic/types';
-import { flattenTree } from '../../semantic/tree';
 import { validateIntegrity } from '../../semantic/validate';
 
-const frame = (id: string, slots: Record<string, unknown> = { a: 1 }) => ({
-  id,
-  type: 'test',
+const tree = (key: string, slots: Record<string, unknown> = { a: 1 }, children: TreeNode[] = []): TreeNode => ({
+  key,
   slots,
+  children,
 });
 
 describe('validateIntegrity', () => {
   it('passes for valid content', () => {
     const content: SemanticContent = {
-      frames: [frame('f_001'), frame('f_002')],
-      relations: [{ from: 'f_001', to: 'f_002', type: 'causes' }],
+      trees: [tree('topic_a'), tree('topic_b')],
+      relations: [{ from: 'topic_a', to: 'topic_b', type: 'causes' }],
     };
     const result = validateIntegrity(content);
     expect(result.valid).toBe(true);
     expect(result.errors).toHaveLength(0);
   });
 
-  it('detects duplicate frame ids', () => {
+  it('detects duplicate root tree keys', () => {
     const content: SemanticContent = {
-      frames: [frame('f_001'), frame('f_001')],
+      trees: [tree('topic_a'), tree('topic_a')],
       relations: [],
     };
     const result = validateIntegrity(content);
     expect(result.valid).toBe(false);
-    expect(result.errors[0].type).toBe('duplicate_id');
+    expect(result.errors[0].type).toBe('duplicate_key');
   });
 
-  it('detects broken ref in slot', () => {
+  it('detects duplicate child keys within a tree', () => {
     const content: SemanticContent = {
-      frames: [{ id: 'f_001', type: 'x', slots: { link: { ref: 'f_999' } } }],
+      trees: [tree('root', { a: 1 }, [tree('child'), tree('child')])],
       relations: [],
     };
     const result = validateIntegrity(content);
     expect(result.valid).toBe(false);
-    expect(result.errors[0].type).toBe('broken_ref');
-  });
-
-  it('detects broken ref inside nested InlineFrame', () => {
-    const content: SemanticContent = {
-      frames: [
-        {
-          id: 'f_001',
-          type: 'x',
-          slots: {
-            detail: { type: 'nested', slots: { link: { ref: 'f_999' } } },
-          },
-        },
-      ],
-      relations: [],
-    };
-    const result = validateIntegrity(content);
-    expect(result.valid).toBe(false);
-    expect(result.errors[0].type).toBe('broken_ref');
-    expect(result.errors[0].location).toContain('detail');
+    expect(result.errors[0].type).toBe('duplicate_key');
   });
 
   it('detects broken relation endpoint', () => {
     const content: SemanticContent = {
-      frames: [frame('f_001')],
-      relations: [{ from: 'f_001', to: 'f_999', type: 'causes' }],
+      trees: [tree('topic_a')],
+      relations: [{ from: 'topic_a', to: 'nonexistent', type: 'causes' }],
     };
     const result = validateIntegrity(content);
     expect(result.valid).toBe(false);
@@ -71,8 +51,8 @@ describe('validateIntegrity', () => {
 
   it('detects self-referencing relation', () => {
     const content: SemanticContent = {
-      frames: [frame('f_001')],
-      relations: [{ from: 'f_001', to: 'f_001', type: 'elaborates' }],
+      trees: [tree('topic_a')],
+      relations: [{ from: 'topic_a', to: 'topic_a', type: 'causes' }],
     };
     const result = validateIntegrity(content);
     expect(result.valid).toBe(false);
@@ -81,11 +61,11 @@ describe('validateIntegrity', () => {
 
   it('detects causal cycle', () => {
     const content: SemanticContent = {
-      frames: [frame('f_001'), frame('f_002'), frame('f_003')],
+      trees: [tree('a'), tree('b'), tree('c')],
       relations: [
-        { from: 'f_001', to: 'f_002', type: 'causes' },
-        { from: 'f_002', to: 'f_003', type: 'causes' },
-        { from: 'f_003', to: 'f_001', type: 'causes' },
+        { from: 'a', to: 'b', type: 'causes' },
+        { from: 'b', to: 'c', type: 'causes' },
+        { from: 'c', to: 'a', type: 'causes' },
       ],
     };
     const result = validateIntegrity(content);
@@ -93,40 +73,40 @@ describe('validateIntegrity', () => {
     expect(result.errors.some((e) => e.type === 'cycle')).toBe(true);
   });
 
-  it('warns on orphan frame', () => {
+  it('warns on orphan tree', () => {
     const content: SemanticContent = {
-      frames: [frame('f_001'), frame('f_002')],
+      trees: [tree('topic_a'), tree('topic_b')],
       relations: [],
     };
     const result = validateIntegrity(content);
     expect(result.valid).toBe(true);
-    expect(result.warnings.some((w) => w.type === 'orphan_frame')).toBe(true);
+    expect(result.warnings.some((w) => w.type === 'orphan_tree')).toBe(true);
   });
 
   it('warns on low confidence', () => {
     const content: SemanticContent = {
-      frames: [{ id: 'f_001', type: 'x', slots: { a: 1 }, confidence: 0.3 }],
+      trees: [{ key: 'topic_a', slots: { a: 1 }, children: [], confidence: 0.3 }],
       relations: [],
     };
     const result = validateIntegrity(content);
     expect(result.warnings.some((w) => w.type === 'low_confidence')).toBe(true);
   });
 
-  it('no orphan warning for single frame', () => {
+  it('no orphan warning for single tree', () => {
     const content: SemanticContent = {
-      frames: [frame('f_001')],
+      trees: [tree('topic_a')],
       relations: [],
     };
     const result = validateIntegrity(content);
-    expect(result.warnings.filter((w) => w.type === 'orphan_frame')).toHaveLength(0);
+    expect(result.warnings.filter((w) => w.type === 'orphan_tree')).toHaveLength(0);
   });
 
   it('does not flag depends cycle (only causes/follows trigger cycle detection)', () => {
     const content: SemanticContent = {
-      frames: [frame('f_001'), frame('f_002')],
+      trees: [tree('a'), tree('b')],
       relations: [
-        { from: 'f_001', to: 'f_002', type: 'depends' },
-        { from: 'f_002', to: 'f_001', type: 'depends' },
+        { from: 'a', to: 'b', type: 'depends' },
+        { from: 'b', to: 'a', type: 'depends' },
       ],
     };
     const result = validateIntegrity(content);
@@ -135,28 +115,28 @@ describe('validateIntegrity', () => {
 
   it('reports full cycle path in error message', () => {
     const content: SemanticContent = {
-      frames: [frame('f_001'), frame('f_002'), frame('f_003')],
+      trees: [tree('a'), tree('b'), tree('c')],
       relations: [
-        { from: 'f_001', to: 'f_002', type: 'causes' },
-        { from: 'f_002', to: 'f_003', type: 'causes' },
-        { from: 'f_003', to: 'f_001', type: 'causes' },
+        { from: 'a', to: 'b', type: 'causes' },
+        { from: 'b', to: 'c', type: 'causes' },
+        { from: 'c', to: 'a', type: 'causes' },
       ],
     };
     const result = validateIntegrity(content);
     const cycleErr = result.errors.find((e) => e.type === 'cycle');
     expect(cycleErr).toBeDefined();
     expect(cycleErr!.message).toContain('→');
-    expect(cycleErr!.message).toContain('f_001');
-    expect(cycleErr!.message).toContain('f_002');
-    expect(cycleErr!.message).toContain('f_003');
+    expect(cycleErr!.message).toContain('a');
+    expect(cycleErr!.message).toContain('b');
+    expect(cycleErr!.message).toContain('c');
   });
 
   it('detects follows cycle', () => {
     const content: SemanticContent = {
-      frames: [frame('f_001'), frame('f_002')],
+      trees: [tree('a'), tree('b')],
       relations: [
-        { from: 'f_001', to: 'f_002', type: 'follows' },
-        { from: 'f_002', to: 'f_001', type: 'follows' },
+        { from: 'a', to: 'b', type: 'follows' },
+        { from: 'b', to: 'a', type: 'follows' },
       ],
     };
     const result = validateIntegrity(content);
@@ -164,34 +144,33 @@ describe('validateIntegrity', () => {
   });
 });
 
-describe('validateIntegrity — tree-native', () => {
-  it('passes for valid tree-native content', () => {
-    const tree: TreeNode = {
+describe('validateIntegrity — tree with children', () => {
+  it('passes for valid tree with children', () => {
+    const t: TreeNode = {
       key: 'trip',
       slots: { dest: 'Tokyo' },
       children: [{ key: 'budget', slots: { amount: 5000 }, children: [] }],
     };
-    const content: SemanticContent = { tree, frames: flattenTree(tree), relations: [] };
+    const content: SemanticContent = { trees: [t], relations: [] };
     const result = validateIntegrity(content);
     expect(result.valid).toBe(true);
   });
 
-  it('no orphan warnings for tree-native (tree structure is implicit hierarchy)', () => {
-    const tree: TreeNode = {
+  it('no orphan warnings for single tree with children', () => {
+    const t: TreeNode = {
       key: 'trip',
       slots: { dest: 'Tokyo' },
       children: [{ key: 'budget', slots: { amount: 5000 }, children: [] }],
     };
-    const content: SemanticContent = { tree, frames: flattenTree(tree), relations: [] };
+    const content: SemanticContent = { trees: [t], relations: [] };
     const result = validateIntegrity(content);
-    expect(result.warnings.filter((w) => w.type === 'orphan_frame')).toHaveLength(0);
+    expect(result.warnings.filter((w) => w.type === 'orphan_tree')).toHaveLength(0);
   });
 
-  it('validates cross-tree relation endpoints against frame IDs', () => {
-    const tree: TreeNode = { key: 'trip', slots: { dest: 'Tokyo' }, children: [] };
+  it('validates cross-tree relation endpoints against path IDs', () => {
+    const t: TreeNode = { key: 'trip', slots: { dest: 'Tokyo' }, children: [] };
     const content: SemanticContent = {
-      tree,
-      frames: flattenTree(tree),
+      trees: [t],
       relations: [{ from: 'trip', to: 'nonexistent', type: 'depends' }],
     };
     const result = validateIntegrity(content);

@@ -21,12 +21,12 @@ import type { SemanticContent } from '../../semantic/types';
 // ═══════════════════════════════════════════════════════════════════════════
 
 const mockKnowledge: SemanticContent = {
-  frames: [
-    { id: 'f_001', type: 'travel_plan', slots: { destination: 'Tokyo', season: 'spring' } },
-    { id: 'f_002', type: 'budget', slots: { amount: 3000, per: 'person' } },
+  trees: [
+    { key: 'travel_plan', slots: { destination: 'Tokyo', season: 'spring' }, children: [] },
+    { key: 'budget', slots: { amount: 3000, per: 'person' }, children: [] },
   ],
   relations: [
-    { from: 'f_002', to: 'f_001', type: 'elaborates' as const },
+    { from: 'budget', to: 'travel_plan', type: 'causes' as const },
   ],
 };
 
@@ -336,9 +336,9 @@ describe('buildLeafContext', () => {
     expect(result.sources[0].title).toBe('Current knowledge');
   });
 
-  it('handles empty frames array', () => {
+  it('handles empty trees array', () => {
     const emptyKnowledge: SemanticContent = {
-      frames: [],
+      trees: [],
       relations: [],
     };
 

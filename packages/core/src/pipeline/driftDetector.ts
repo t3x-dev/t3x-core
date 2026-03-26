@@ -31,7 +31,7 @@ Output ONLY JSON in this exact format:
 {
   "same_topic": true/false,
   "confidence": 0.0-1.0,
-  "relation": "elaborates|contrasts|follows|causes|conditions|depends|none",
+  "relation": "causes|conditions|contrasts|follows|depends|none",
   "new_topic": "snake_case_topic_name"
 }
 

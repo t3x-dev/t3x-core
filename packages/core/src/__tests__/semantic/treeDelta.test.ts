@@ -1,13 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { applyTreeDelta } from '../../semantic/delta';
-import { flattenTree } from '../../semantic/tree';
+import { applyDelta } from '../../semantic/delta';
 import type { SemanticContent, TreeNode } from '../../semantic/types';
 
 function makeTreeContent(tree: TreeNode): SemanticContent {
-  return { tree, frames: flattenTree(tree), relations: [] };
+  return { trees: [tree], relations: [] };
 }
 
-describe('applyTreeDelta', () => {
+describe('applyDelta (tree operations)', () => {
   const baseTree: TreeNode = {
     key: 'hangzhou_trip',
     slots: { destination: 'Hangzhou', dates: 'May 1-3' },
@@ -20,15 +19,14 @@ describe('applyTreeDelta', () => {
         {
           action: 'add' as const,
           parent_path: 'hangzhou_trip',
-          node: { transportation: { mode: 'rail', duration: '1.5h' } },
+          node: { key: 'transportation', slots: { mode: 'rail', duration: '1.5h' }, children: [] as TreeNode[] },
         },
       ],
     };
-    const result = applyTreeDelta(makeTreeContent(baseTree), delta);
-    expect(result.tree!.children).toHaveLength(2);
-    expect(result.tree!.children[1].key).toBe('transportation');
-    expect(result.tree!.children[1].slots).toEqual({ mode: 'rail', duration: '1.5h' });
-    expect(result.frames.find((f) => f.id === 'hangzhou_trip/transportation')).toBeDefined();
+    const result = applyDelta(makeTreeContent(baseTree), delta);
+    expect(result.trees[0].children).toHaveLength(2);
+    expect(result.trees[0].children[1].key).toBe('transportation');
+    expect(result.trees[0].children[1].slots).toEqual({ mode: 'rail', duration: '1.5h' });
   });
 
   it('updates a slot value', () => {
@@ -41,9 +39,9 @@ describe('applyTreeDelta', () => {
         },
       ],
     };
-    const result = applyTreeDelta(makeTreeContent(baseTree), delta);
-    expect(result.tree!.children[0].slots.budget).toBe(800);
-    expect(result.tree!.children[0].slots.cuisine).toBe('local');
+    const result = applyDelta(makeTreeContent(baseTree), delta);
+    expect(result.trees[0].children[0].slots.budget).toBe(800);
+    expect(result.trees[0].children[0].slots.cuisine).toBe('local');
   });
 
   it('removes a slot with null', () => {
@@ -56,18 +54,17 @@ describe('applyTreeDelta', () => {
         },
       ],
     };
-    const result = applyTreeDelta(makeTreeContent(baseTree), delta);
-    expect(result.tree!.children[0].slots.budget).toBeUndefined();
-    expect(result.tree!.children[0].slots.cuisine).toBe('local');
+    const result = applyDelta(makeTreeContent(baseTree), delta);
+    expect(result.trees[0].children[0].slots.budget).toBeUndefined();
+    expect(result.trees[0].children[0].slots.cuisine).toBe('local');
   });
 
   it('removes a node and its children', () => {
     const delta = {
       changes: [{ action: 'remove' as const, target_path: 'hangzhou_trip/dining' }],
     };
-    const result = applyTreeDelta(makeTreeContent(baseTree), delta);
-    expect(result.tree!.children).toHaveLength(0);
-    expect(result.frames.find((f) => f.id === 'hangzhou_trip/dining')).toBeUndefined();
+    const result = applyDelta(makeTreeContent(baseTree), delta);
+    expect(result.trees[0].children).toHaveLength(0);
   });
 
   it('updates root slot', () => {
@@ -80,9 +77,9 @@ describe('applyTreeDelta', () => {
         },
       ],
     };
-    const result = applyTreeDelta(makeTreeContent(baseTree), delta);
-    expect(result.tree!.slots.dates).toBe('May 2-4');
-    expect(result.tree!.slots.destination).toBe('Hangzhou');
+    const result = applyDelta(makeTreeContent(baseTree), delta);
+    expect(result.trees[0].slots.dates).toBe('May 2-4');
+    expect(result.trees[0].slots.destination).toBe('Hangzhou');
   });
 
   it('merges slot_quotes on update', () => {
@@ -100,8 +97,8 @@ describe('applyTreeDelta', () => {
         },
       ],
     };
-    const result = applyTreeDelta(makeTreeContent(treeWithQuotes), delta);
-    expect(result.tree!.children[0].slot_quotes?.cuisine).toBe('local food');
-    expect(result.tree!.children[0].slot_quotes?.budget).toBe('budget to 800');
+    const result = applyDelta(makeTreeContent(treeWithQuotes), delta);
+    expect(result.trees[0].children[0].slot_quotes?.cuisine).toBe('local food');
+    expect(result.trees[0].children[0].slot_quotes?.budget).toBe('budget to 800');
   });
 });

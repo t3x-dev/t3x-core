@@ -38,21 +38,21 @@ function createMockProvider(response: string): LLMProvider {
 }
 
 const sampleKnowledge: SemanticContent = {
-  frames: [
+  trees: [
     {
-      id: 'f_001',
-      type: 'travel_preference',
+      key: 'travel_preference',
       slots: { budget: 'budget-friendly', style: 'affordable' },
+      children: [],
     },
     {
-      id: 'f_002',
-      type: 'destination',
+      key: 'destination',
       slots: { place: 'Japan', season: 'spring', reason: 'cherry blossoms' },
+      children: [],
     },
     {
-      id: 'f_003',
-      type: 'dietary_restriction',
+      key: 'dietary_restriction',
       slots: { allergy: 'shellfish', restriction: 'cannot eat seafood' },
+      children: [],
     },
   ],
   relations: [],
@@ -102,7 +102,7 @@ describe('suggestConstraints', () => {
 
   it('handles empty frames', async () => {
     const provider = createMockProvider('[]');
-    const result = await suggestConstraints(provider, { frames: [], relations: [] }, 'email');
+    const result = await suggestConstraints(provider, { trees: [], relations: [] }, 'email');
 
     expect(result.suggestions).toHaveLength(0);
     expect(provider.generate).not.toHaveBeenCalled();

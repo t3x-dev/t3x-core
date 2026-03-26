@@ -134,14 +134,10 @@ describe('unflattenToTree', () => {
 });
 
 describe('isTreeNative', () => {
-  it('returns true when tree field is present', () => {
+  it('always returns true (tree-primary)', () => {
     expect(
-      isTreeNative({ tree: { key: 'x', slots: {}, children: [] }, frames: [], relations: [] })
+      isTreeNative({ trees: [{ key: 'x', slots: {}, children: [] }], relations: [] })
     ).toBe(true);
-  });
-
-  it('returns false when tree field is absent', () => {
-    expect(isTreeNative({ frames: [], relations: [] })).toBe(false);
   });
 });
 

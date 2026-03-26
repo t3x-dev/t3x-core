@@ -3,7 +3,7 @@ import {
   buildFrameExtractionPrompt,
   type FrameExtractionTurn,
 } from '../../extractors/frameExtractionPrompt';
-import type { SemanticContent, TreeNode } from '../../semantic/types';
+import type { SemanticContent } from '../../semantic/types';
 
 const sampleTurns: FrameExtractionTurn[] = [
   { role: 'user', content: 'I want to travel to Tokyo next month' },
@@ -15,49 +15,19 @@ const sampleTurns: FrameExtractionTurn[] = [
 ];
 
 const sampleSnapshot: SemanticContent = {
-  frames: [
+  trees: [
     {
-      id: 'f_001',
-      type: 'travel_plan',
+      key: 'travel_plan',
       slots: { destination: 'Tokyo', timeframe: 'next month' },
+      children: [
+        {
+          key: 'budget',
+          slots: { amount: 3000, currency: 'USD' },
+          children: [],
+          confidence: 0.9,
+        },
+      ],
       confidence: 0.95,
-    },
-    {
-      id: 'f_002',
-      type: 'budget_constraint',
-      slots: { amount: 3000, currency: 'USD' },
-      confidence: 0.9,
-    },
-  ],
-  relations: [{ from: 'f_001', to: 'f_002', type: 'depends', confidence: 0.85 }],
-};
-
-const sampleTreeSnapshot: SemanticContent = {
-  tree: {
-    key: 'travel_plan',
-    slots: { destination: 'Tokyo', timeframe: 'next month' },
-    children: [
-      {
-        key: 'budget',
-        slots: { amount: 3000, currency: 'USD' },
-        children: [],
-        confidence: 0.9,
-      },
-    ],
-    confidence: 0.95,
-  },
-  frames: [
-    {
-      id: 'travel_plan',
-      type: 'travel_plan',
-      slots: { destination: 'Tokyo', timeframe: 'next month' },
-      confidence: 0.95,
-    },
-    {
-      id: 'travel_plan/budget',
-      type: 'budget',
-      slots: { amount: 3000, currency: 'USD' },
-      confidence: 0.9,
     },
   ],
   relations: [],
@@ -79,7 +49,6 @@ describe('buildFrameExtractionPrompt', () => {
       const result = buildFrameExtractionPrompt({ turns: sampleTurns });
       expect(result.systemPrompt).toContain('YAML');
       expect(result.systemPrompt).toContain('topic tree');
-      // Should NOT mention delta/changes in first extraction mode
       expect(result.systemPrompt).not.toContain('delta');
       expect(result.systemPrompt).not.toContain('changes');
     });
@@ -108,38 +77,23 @@ describe('buildFrameExtractionPrompt', () => {
       expect(result.systemPrompt).toContain('delta');
     });
 
-    it('includes snapshot in user prompt when provided (legacy flat frames)', () => {
+    it('includes snapshot in user prompt with tree structure', () => {
       const result = buildFrameExtractionPrompt({
         turns: sampleTurns,
         snapshot: sampleSnapshot,
       });
-      // Should contain snapshot data as YAML-like text
       expect(result.userPrompt).toContain('travel_plan');
-      expect(result.userPrompt).toContain('budget_constraint');
-      expect(result.userPrompt).toContain('f_001');
-      expect(result.userPrompt).toContain('f_002');
-    });
-
-    it('includes relations in snapshot section (legacy)', () => {
-      const result = buildFrameExtractionPrompt({
-        turns: sampleTurns,
-        snapshot: sampleSnapshot,
-      });
-      expect(result.userPrompt).toContain('depends');
-      expect(result.userPrompt).toContain('f_001');
-      expect(result.userPrompt).toContain('f_002');
+      expect(result.userPrompt).toContain('budget');
     });
 
     it('serializes tree-native snapshot as YAML tree', () => {
       const result = buildFrameExtractionPrompt({
         turns: sampleTurns,
-        snapshot: sampleTreeSnapshot,
+        snapshot: sampleSnapshot,
       });
-      // Tree-native snapshot should show tree structure, not flat frames
       expect(result.userPrompt).toContain('travel_plan:');
       expect(result.userPrompt).toContain('budget:');
       expect(result.userPrompt).toContain('"Tokyo"');
-      // Should not contain frame-style "- id:" prefix
       expect(result.userPrompt).not.toContain('- id:');
     });
 
@@ -149,10 +103,8 @@ describe('buildFrameExtractionPrompt', () => {
         snapshot: sampleSnapshot,
       });
       expect(result.userPrompt).toContain('delta');
-      // Tree-native path instructions
       expect(result.userPrompt).toContain('parent_path');
       expect(result.userPrompt).toContain('target_path');
-      // Update/remove guidance in user prompt
       expect(result.userPrompt).toContain('update');
       expect(result.userPrompt).toContain('remove');
     });
@@ -175,7 +127,6 @@ describe('buildFrameExtractionPrompt', () => {
       for (const rt of relationTypes) {
         expect(firstMode.systemPrompt).toContain(rt);
       }
-      // Should NOT contain "elaborates" in tree-native system prompts
       expect(firstMode.systemPrompt).not.toContain('elaborates');
 
       const deltaMode = buildFrameExtractionPrompt({

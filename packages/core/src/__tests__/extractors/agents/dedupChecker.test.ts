@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { dedupCheckerAgent } from '../../../extractors/agents/dedupCheckerAgent';
 import type { PipelineContext } from '../../../extractors/meaningPipeline';
+import { flattenTrees } from '../../../semantic/tree';
 import { createFrameWithSlots, createSemanticContent, resetFrameIds } from '../../factories';
 import { StubLLMProvider } from '../../stubs';
 
@@ -65,8 +66,8 @@ describe('dedupCheckerAgent', () => {
     const result = await dedupCheckerAgent.run(ctx, provider);
 
     // f_2 should be removed (merged into f_1)
-    expect(result.content.frames).toHaveLength(3);
-    expect(result.content.frames[0].slots.items).toEqual(['sushi', 'ramen']);
+    expect(flattenTrees(result.content.trees)).toHaveLength(3);
+    expect(flattenTrees(result.content.trees)[0].slots.items).toEqual(['sushi', 'ramen']);
   });
 
   it('keeps frames separate when LLM returns keep_separate', async () => {
@@ -80,7 +81,7 @@ describe('dedupCheckerAgent', () => {
     provider.enqueue(JSON.stringify({ decision: 'keep_separate', merged_slots: null }));
 
     const result = await dedupCheckerAgent.run(ctx, provider);
-    expect(result.content.frames).toHaveLength(4);
+    expect(flattenTrees(result.content.trees)).toHaveLength(4);
   });
 
   it('takes minimum confidence from merged frames', async () => {
@@ -99,7 +100,7 @@ describe('dedupCheckerAgent', () => {
     provider.enqueue(JSON.stringify({ decision: 'merge', merged_slots: { a: 1, b: 2 } }));
 
     const result = await dedupCheckerAgent.run(ctx, provider);
-    expect(result.content.frames[0].confidence).toBe(0.5);
+    expect(flattenTrees(result.content.trees)[0].confidence).toBe(0.5);
   });
 
   it('continues gracefully when LLM returns invalid JSON', async () => {
@@ -114,7 +115,7 @@ describe('dedupCheckerAgent', () => {
 
     const result = await dedupCheckerAgent.run(ctx, provider);
     // Should not throw, frames unchanged
-    expect(result.content.frames).toHaveLength(4);
+    expect(flattenTrees(result.content.trees)).toHaveLength(4);
   });
 
   it('tracks LLM usage in meta', async () => {

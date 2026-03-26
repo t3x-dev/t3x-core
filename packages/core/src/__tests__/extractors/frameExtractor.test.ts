@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { FrameExtractor } from '../../extractors/frameExtractor';
 import type { LLMProvider } from '../../llm/types';
+import { flattenTrees } from '../../semantic/tree';
 import type { SemanticContent } from '../../semantic/types';
 
 // ── Helpers ──
@@ -20,11 +21,13 @@ function mockProvider(responses: string[]): LLMProvider {
 
 // ── Fixtures ──
 
+// Legacy delta output (frames format — still supported by parser)
 const validDeltaOutput = JSON.stringify({
   changes: [
     {
       action: 'add',
-      frame: { id: 'f_001', type: 'travel_plan', slots: { destination: 'Tokyo' } },
+      parent_path: '',
+      node: { key: 'travel_plan', slots: { destination: 'Tokyo' }, children: [] },
     },
   ],
 });
@@ -33,14 +36,15 @@ const validDeltaWithRelations = JSON.stringify({
   changes: [
     {
       action: 'add',
-      frame: { id: 'f_002', type: 'budget', slots: { amount: 3000 } },
+      parent_path: '',
+      node: { key: 'budget', slots: { amount: 3000 }, children: [] },
     },
   ],
-  new_relations: [{ from: 'f_001', to: 'f_002', type: 'depends' }],
+  new_relations: [{ from: 'travel_plan', to: 'budget', type: 'depends' }],
 });
 
 const existingSnapshot: SemanticContent = {
-  frames: [{ id: 'f_001', type: 'travel_plan', slots: { destination: 'Tokyo' }, confidence: 0.95 }],
+  trees: [{ key: 'travel_plan', slots: { destination: 'Tokyo' }, children: [], confidence: 0.95 }],
   relations: [],
 };
 
@@ -63,12 +67,11 @@ describe('FrameExtractor', () => {
 
     expect(result.delta.changes).toHaveLength(1);
     expect(result.delta.changes[0].action).toBe('add');
-    expect(result.snapshot.frames).toHaveLength(1);
-    expect(result.snapshot.frames[0].type).toBe('travel_plan');
+    const frames = flattenTrees(result.snapshot.trees);
+    expect(frames).toHaveLength(1);
+    expect(frames[0].type).toBe('travel_plan');
 
-    // Provider should have been called once
     expect(provider.generate).toHaveBeenCalledTimes(1);
-    // Should use temperature 0.1 and maxTokens 4096
     expect(provider.generate).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({ temperature: 0.1, maxTokens: 4096 })
@@ -87,11 +90,8 @@ describe('FrameExtractor', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
-    // Snapshot should now have both frames
-    expect(result.snapshot.frames).toHaveLength(2);
-    expect(result.snapshot.frames[0].id).toBe('f_001');
-    expect(result.snapshot.frames[1].id).toBe('f_002');
-    // Relation should be present
+    const frames = flattenTrees(result.snapshot.trees);
+    expect(frames).toHaveLength(2);
     expect(result.snapshot.relations).toHaveLength(1);
     expect(result.snapshot.relations[0].type).toBe('depends');
   });
@@ -108,7 +108,6 @@ describe('FrameExtractor', () => {
     if (!result.ok) return;
 
     expect(result.delta.changes).toHaveLength(1);
-    // Should have been called twice (first failed, second succeeded)
     expect(provider.generate).toHaveBeenCalledTimes(2);
   });
 
@@ -133,10 +132,11 @@ describe('FrameExtractor', () => {
       changes: [
         {
           action: 'add',
-          frame: { id: 'f_001', type: 'travel_plan', slots: { destination: 'Tokyo' } },
+          parent_path: '',
+          node: { key: 'travel_plan', slots: { destination: 'Tokyo' }, children: [] },
         },
       ],
-      new_relations: [{ from: 'f_001', to: 'f_001', type: 'causes' }],
+      new_relations: [{ from: 'travel_plan', to: 'travel_plan', type: 'causes' }],
     });
 
     const provider = mockProvider([invalidValidation, validDeltaOutput]);
@@ -149,7 +149,8 @@ describe('FrameExtractor', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
-    expect(result.snapshot.frames).toHaveLength(1);
+    const frames = flattenTrees(result.snapshot.trees);
+    expect(frames).toHaveLength(1);
     expect(provider.generate).toHaveBeenCalledTimes(2);
   });
 });

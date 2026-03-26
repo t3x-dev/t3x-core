@@ -10,7 +10,7 @@ describe('computeCommitHash', () => {
     author: { type: 'human', name: 'Test' },
     committed_at: '2026-03-15T00:00:00Z',
     content: {
-      frames: [{ id: 'f_001', type: 'trip_plan', slots: { destination: 'Tokyo', budget: 5000 } }],
+      trees: [{ key: 'trip_plan', slots: { destination: 'Tokyo', budget: 5000 }, children: [] }],
       relations: [],
     },
   };
@@ -24,11 +24,11 @@ describe('computeCommitHash', () => {
     expect(computeCommitHash(baseCommit)).toBe(computeCommitHash(baseCommit));
   });
 
-  it('changes when frame slot value changes', () => {
+  it('changes when tree slot value changes', () => {
     const modified: CommitFirstClass = {
       ...baseCommit,
       content: {
-        frames: [{ id: 'f_001', type: 'trip_plan', slots: { destination: 'Tokyo', budget: 7000 } }],
+        trees: [{ key: 'trip_plan', slots: { destination: 'Tokyo', budget: 7000 }, children: [] }],
         relations: [],
       },
     };
@@ -40,33 +40,33 @@ describe('computeCommitHash', () => {
     expect(computeCommitHash(baseCommit)).not.toBe(computeCommitHash(withParent));
   });
 
-  it('excludes slot_sources from hash', () => {
-    const withSources: CommitFirstClass = {
+  it('excludes slot_quotes from hash', () => {
+    const withQuotes: CommitFirstClass = {
       ...baseCommit,
       content: {
-        frames: [
+        trees: [
           {
-            id: 'f_001',
-            type: 'trip_plan',
+            key: 'trip_plan',
             slots: { destination: 'Tokyo', budget: 5000 },
-            slot_sources: { destination: { turn: 'T1', start_char: 0, end_char: 5 } },
+            children: [],
+            slot_quotes: { destination: 'I want to go to Tokyo' },
           },
         ],
         relations: [],
       },
     };
-    expect(computeCommitHash(baseCommit)).toBe(computeCommitHash(withSources));
+    expect(computeCommitHash(baseCommit)).toBe(computeCommitHash(withQuotes));
   });
 
-  it('excludes frame.source from hash', () => {
+  it('excludes node source from hash', () => {
     const withSource: CommitFirstClass = {
       ...baseCommit,
       content: {
-        frames: [
+        trees: [
           {
-            id: 'f_001',
-            type: 'trip_plan',
+            key: 'trip_plan',
             slots: { destination: 'Tokyo', budget: 5000 },
+            children: [],
             source: 'T1',
           },
         ],
@@ -76,22 +76,22 @@ describe('computeCommitHash', () => {
     expect(computeCommitHash(baseCommit)).toBe(computeCommitHash(withSource));
   });
 
-  it('includes confidence in hash', () => {
+  it('excludes confidence from hash', () => {
     const withConfidence: CommitFirstClass = {
       ...baseCommit,
       content: {
-        frames: [
+        trees: [
           {
-            id: 'f_001',
-            type: 'trip_plan',
+            key: 'trip_plan',
             slots: { destination: 'Tokyo', budget: 5000 },
+            children: [],
             confidence: 0.9,
           },
         ],
         relations: [],
       },
     };
-    expect(computeCommitHash(baseCommit)).not.toBe(computeCommitHash(withConfidence));
+    expect(computeCommitHash(baseCommit)).toBe(computeCommitHash(withConfidence));
   });
 
   it('includes relations in hash', () => {
@@ -99,7 +99,7 @@ describe('computeCommitHash', () => {
       ...baseCommit,
       content: {
         ...baseCommit.content,
-        relations: [{ from: 'f_001', to: 'f_002', type: 'causes' as const }],
+        relations: [{ from: 'trip_plan', to: 'lodging', type: 'causes' as const }],
       },
     };
     expect(computeCommitHash(baseCommit)).not.toBe(computeCommitHash(withRelation));

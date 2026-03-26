@@ -105,7 +105,7 @@ describe('Prompt segment composition', () => {
 
   describe('delta mode segments', () => {
     const snapshot = {
-      frames: [{ id: 'f_001', type: 'coffee_shop', slots: { location: 'Portland' } }],
+      trees: [{ key: 'coffee_shop', slots: { location: 'Portland' }, children: [] }],
       relations: [],
     };
 

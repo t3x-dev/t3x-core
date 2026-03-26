@@ -1,11 +1,11 @@
 /**
  * Frame Test Factories
  *
- * Create test frames, relations, and SemanticContent with sensible defaults.
+ * Create test frames, trees, relations, and SemanticContent with sensible defaults.
  */
 
 import type { Frame, Relation, SemanticContent, TreeNode } from '../../semantic/types';
-import { flattenTree } from '../../semantic/tree';
+import { flattenTree, flattenTrees, unflattenToTrees } from '../../semantic/tree';
 
 let counter = 0;
 
@@ -51,12 +51,16 @@ export function createRelation(
   return { from: fromId, to: toId, type };
 }
 
-/** Create a SemanticContent with frames and optional relations */
+/**
+ * Create a SemanticContent from frames.
+ * Converts frames to trees via unflattenToTrees for tree-primary format.
+ */
 export function createSemanticContent(
   frames: Frame[],
   relations: Relation[] = []
 ): SemanticContent {
-  return { frames, relations };
+  const trees = unflattenToTrees(frames);
+  return { trees, relations };
 }
 
 /** Create a typical test content with a few frames */
@@ -100,8 +104,8 @@ export function createContentWithRelations(): SemanticContent {
   return createSemanticContent(
     [parent, child1, child2],
     [
-      createRelation('f_child1', 'f_parent', 'elaborates'),
-      createRelation('f_child2', 'f_parent', 'elaborates'),
+      createRelation('f_child1', 'f_parent', 'depends'),
+      createRelation('f_child2', 'f_parent', 'depends'),
     ]
   );
 }
@@ -152,5 +156,5 @@ export function createDetailedTree(): TreeNode {
 /** Create tree-native SemanticContent */
 export function createTreeNativeContent(tree?: TreeNode): SemanticContent {
   const t = tree ?? createBalancedTree();
-  return { tree: t, frames: flattenTree(t), relations: [] };
+  return { trees: [t], relations: [] };
 }

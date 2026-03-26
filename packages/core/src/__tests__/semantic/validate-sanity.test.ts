@@ -3,51 +3,59 @@ import type { SemanticContent } from '../../semantic/types';
 import { checkRelationSanity } from '../../semantic/validate';
 
 describe('checkRelationSanity', () => {
-  it('should warn on contrasts between frames of the same type', () => {
+  it('should warn on contrasts between nodes of the same type (key)', () => {
+    // Two children with the same key "preference" under different parent trees
     const content: SemanticContent = {
-      frames: [
-        { id: 'f_001', type: 'preference', slots: { value: 'coffee' } },
-        { id: 'f_002', type: 'preference', slots: { value: 'tea' } },
+      trees: [
+        {
+          key: 'topic_a',
+          slots: { a: 1 },
+          children: [{ key: 'preference', slots: { value: 'coffee' }, children: [] }],
+        },
+        {
+          key: 'topic_b',
+          slots: { b: 1 },
+          children: [{ key: 'preference', slots: { value: 'tea' }, children: [] }],
+        },
       ],
-      relations: [{ from: 'f_001', to: 'f_002', type: 'contrasts' }],
+      relations: [{ from: 'topic_a/preference', to: 'topic_b/preference', type: 'contrasts' }],
     };
 
     const warnings = checkRelationSanity(content);
     expect(warnings).toHaveLength(1);
     expect(warnings[0].type).toBe('same_type_contrast');
     expect(warnings[0].message).toContain('same type preference');
-    expect(warnings[0].location).toBe('f_001->f_002');
+    expect(warnings[0].location).toBe('topic_a/preference->topic_b/preference');
   });
 
   it('should warn when contrasts and causes exist between the same pair', () => {
     const content: SemanticContent = {
-      frames: [
-        { id: 'f_001', type: 'event', slots: { name: 'rain' } },
-        { id: 'f_002', type: 'outcome', slots: { name: 'flood' } },
+      trees: [
+        { key: 'event', slots: { name: 'rain' }, children: [] },
+        { key: 'outcome', slots: { name: 'flood' }, children: [] },
       ],
       relations: [
-        { from: 'f_001', to: 'f_002', type: 'contrasts' },
-        { from: 'f_001', to: 'f_002', type: 'causes' },
+        { from: 'event', to: 'outcome', type: 'contrasts' },
+        { from: 'event', to: 'outcome', type: 'causes' },
       ],
     };
 
     const warnings = checkRelationSanity(content);
-    const conflictWarning = warnings.find((w) => w.type === 'contrast_causes_conflict');
+    const conflictWarning = warnings.find((w) => w.message.includes('Both contrasts and causes'));
     expect(conflictWarning).toBeDefined();
-    expect(conflictWarning!.message).toContain('Both contrasts and causes');
-    expect(conflictWarning!.location).toBe('f_001->f_002');
+    expect(conflictWarning!.location).toBe('event->outcome');
   });
 
   it('should return no warnings for normal relations', () => {
     const content: SemanticContent = {
-      frames: [
-        { id: 'f_001', type: 'event', slots: { name: 'rain' } },
-        { id: 'f_002', type: 'outcome', slots: { name: 'flood' } },
-        { id: 'f_003', type: 'preference', slots: { value: 'umbrella' } },
+      trees: [
+        { key: 'event', slots: { name: 'rain' }, children: [] },
+        { key: 'outcome', slots: { name: 'flood' }, children: [] },
+        { key: 'preference', slots: { value: 'umbrella' }, children: [] },
       ],
       relations: [
-        { from: 'f_001', to: 'f_002', type: 'causes' },
-        { from: 'f_002', to: 'f_003', type: 'elaborates' },
+        { from: 'event', to: 'outcome', type: 'causes' },
+        { from: 'outcome', to: 'preference', type: 'conditions' },
       ],
     };
 
@@ -57,7 +65,7 @@ describe('checkRelationSanity', () => {
 
   it('should return no warnings for empty relations', () => {
     const content: SemanticContent = {
-      frames: [{ id: 'f_001', type: 'event', slots: { name: 'test' } }],
+      trees: [{ key: 'event', slots: { name: 'test' }, children: [] }],
       relations: [],
     };
 

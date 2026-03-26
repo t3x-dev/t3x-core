@@ -18,21 +18,21 @@ const sampleTurns = [
 ];
 
 const sampleContent: SemanticContent = {
-  frames: [
+  trees: [
     {
-      id: 'f_001',
-      type: 'project_goal',
+      key: 'project_goal',
       slots: { description: 'mobile app for tracking expenses' },
+      children: [],
       confidence: 0.95,
     },
     {
-      id: 'f_002',
-      type: 'constraint',
+      key: 'constraint',
       slots: { platform: 'iOS', budget: 50000, deadline: 'March 2026' },
+      children: [],
       confidence: 0.9,
     },
   ],
-  relations: [{ from: 'f_001', to: 'f_002', type: 'elaborates' }],
+  relations: [{ from: 'project_goal', to: 'constraint', type: 'causes' }],
 };
 
 const validLLMResponse = JSON.stringify({
@@ -46,7 +46,7 @@ const validLLMResponse = JSON.stringify({
   issues: [
     {
       severity: 'warning',
-      frame_id: 'f_002',
+      node_path: 'constraint',
       dimension: 'accuracy',
       description: 'Budget value could be more precise',
       suggestion: 'Add currency unit to budget slot',
@@ -72,18 +72,17 @@ describe('buildSemanticGatePrompt', () => {
     expect(userPrompt).toContain('[user]: I want to build a mobile app');
     expect(userPrompt).toContain('[assistant]: Great idea!');
 
-    // User prompt should contain frame data
-    expect(userPrompt).toContain('f_001');
+    // User prompt should contain tree data
     expect(userPrompt).toContain('project_goal');
     expect(userPrompt).toContain('mobile app for tracking expenses');
 
     // User prompt should contain relations
-    expect(userPrompt).toContain('f_001 --[elaborates]--> f_002');
+    expect(userPrompt).toContain('project_goal --[causes]--> constraint');
   });
 
   it('handles empty relations', () => {
     const emptyRelContent: SemanticContent = {
-      frames: [{ id: 'f_001', type: 'test', slots: { a: 1 } }],
+      trees: [{ key: 'test', slots: { a: 1 }, children: [] }],
       relations: [],
     };
     const { userPrompt } = buildSemanticGatePrompt(sampleTurns, emptyRelContent);
@@ -106,7 +105,7 @@ describe('parseSemanticGateResponse', () => {
 
     expect(result.issues).toHaveLength(1);
     expect(result.issues[0].severity).toBe('warning');
-    expect(result.issues[0].frame_id).toBe('f_002');
+    expect(result.issues[0].node_path).toBe('constraint');
     expect(result.issues[0].dimension).toBe('accuracy');
     expect(result.issues[0].description).toBe('Budget value could be more precise');
     expect(result.issues[0].suggestion).toBe('Add currency unit to budget slot');
@@ -144,7 +143,6 @@ describe('parseSemanticGateResponse', () => {
       dimensions: {
         completeness: { score: 0.9, details: 'Good' },
         accuracy: { score: 0.8, details: 'OK' },
-        // relations, granularity, hallucination missing
       },
       issues: [],
     });
@@ -152,11 +150,9 @@ describe('parseSemanticGateResponse', () => {
 
     expect(result.dimensions.completeness.score).toBe(0.9);
     expect(result.dimensions.accuracy.score).toBe(0.8);
-    // Missing dimensions default to 0
     expect(result.dimensions.relations.score).toBe(0);
     expect(result.dimensions.granularity.score).toBe(0);
     expect(result.dimensions.hallucination.score).toBe(0);
-    // Average: (0.9 + 0.8 + 0 + 0 + 0) / 5 = 0.34
     expect(result.score).toBeCloseTo(0.34, 1);
     expect(result.passed).toBe(false);
   });
@@ -240,10 +236,8 @@ describe('SemanticGate', () => {
 
     expect(mockProvider.generate).toHaveBeenCalledOnce();
     const callArgs = vi.mocked(mockProvider.generate).mock.calls[0];
-    // Prompt should contain both system and user content
     expect(callArgs[0]).toContain('语义提取审查员');
-    expect(callArgs[0]).toContain('f_001');
-    // Options
+    expect(callArgs[0]).toContain('project_goal');
     expect(callArgs[1]).toEqual({ temperature: 0.1, maxTokens: 2000 });
 
     expect(result.passed).toBe(true);
@@ -277,12 +271,11 @@ const validCoverageResponse = JSON.stringify({
 // ── Coverage Tests ──
 
 describe('buildCoveragePrompt', () => {
-  it('returns system and user prompt with turns and frames', () => {
+  it('returns system and user prompt with turns and trees', () => {
     const { systemPrompt, userPrompt } = buildCoveragePrompt(sampleTurns, sampleContent);
 
     expect(systemPrompt).toContain('覆盖度');
     expect(userPrompt).toContain('[user]: I want to build a mobile app');
-    expect(userPrompt).toContain('f_001');
     expect(userPrompt).toContain('project_goal');
   });
 });
@@ -338,7 +331,7 @@ describe('SemanticGate.checkCoverage', () => {
     expect(mockProvider.generate).toHaveBeenCalledOnce();
     const callArgs = vi.mocked(mockProvider.generate).mock.calls[0];
     expect(callArgs[0]).toContain('覆盖度');
-    expect(callArgs[0]).toContain('f_001');
+    expect(callArgs[0]).toContain('project_goal');
     expect(callArgs[1]).toEqual({ temperature: 0.1, maxTokens: 1500 });
 
     expect(result.coverage_ratio).toBe(0.85);

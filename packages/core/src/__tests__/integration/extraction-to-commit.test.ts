@@ -7,45 +7,46 @@
 
 import { describe, expect, it } from 'vitest';
 import { createMeaningPipeline } from '../../extractors/createMeaningPipeline';
+import { flattenTrees } from '../../semantic/tree';
 import type { SemanticContent } from '../../semantic/types';
 import { StubLLMProvider } from '../stubs';
 
 describe('extraction-to-commit integration', () => {
-  it('pipeline produces valid SemanticContent from raw frames', async () => {
+  it('pipeline produces valid SemanticContent from raw trees', async () => {
     const provider = new StubLLMProvider();
 
-    // Simulate extractor output: raw frames before pipeline processing
+    // Simulate extractor output: raw trees before pipeline processing
     const rawContent: SemanticContent = {
-      frames: [
+      trees: [
         {
-          id: 'f_001',
-          type: 'travel_planning',
+          key: 'travel_planning',
           slots: {
             destination: 'Tokyo',
             duration: '2 weeks',
             budget_amount: '$5000',
           },
+          children: [],
         },
         {
-          id: 'f_002',
-          type: 'preference',
+          key: 'preference',
           slots: {
             item: 'Japanese food',
             sentiment: 'likes',
           },
+          children: [],
         },
         {
-          id: 'f_003',
-          type: 'constraint',
+          key: 'constraint',
           slots: {
             type: 'budget',
             value: 'under $5000',
           },
+          children: [],
         },
       ],
       relations: [
-        { from: 'f_002', to: 'f_001', type: 'elaborates' },
-        { from: 'f_003', to: 'f_001', type: 'depends' },
+        { from: 'preference', to: 'travel_planning', type: 'depends' },
+        { from: 'constraint', to: 'travel_planning', type: 'depends' },
       ],
     };
 
@@ -59,7 +60,6 @@ describe('extraction-to-commit integration', () => {
     ];
 
     // Enqueue responses for LLM agents
-    // dedup_checker won't run (<4 frames), topic_evolver won't run (first extraction)
     provider
       .enqueue('tokyo_trip_plan') // topic_namer
       .enqueue(
@@ -73,20 +73,20 @@ describe('extraction-to-commit integration', () => {
     const result = await pipeline.run(rawContent, turns as any[]);
 
     // Validate output structure
-    expect(result.content.frames.length).toBeGreaterThan(0);
+    const frames = flattenTrees(result.content.trees);
+    expect(frames.length).toBeGreaterThan(0);
     expect(result.quality).toBeDefined();
     expect(result.quality.score).toBeGreaterThan(0);
 
     // Pipeline should have completed some agents
     expect(result.meta.completedAgents.length).toBeGreaterThan(0);
 
-    // Content should be valid SemanticContent
-    for (const frame of result.content.frames) {
-      expect(frame.id).toBeDefined();
-      expect(frame.type).toBeDefined();
-      expect(frame.slots).toBeDefined();
-      expect(typeof frame.type).toBe('string');
-      expect(typeof frame.slots).toBe('object');
+    // Content should be valid tree structure
+    for (const tree of result.content.trees) {
+      expect(tree.key).toBeDefined();
+      expect(tree.slots).toBeDefined();
+      expect(typeof tree.key).toBe('string');
+      expect(typeof tree.slots).toBe('object');
     }
 
     // Topic name should be set (first extraction)
@@ -100,25 +100,25 @@ describe('extraction-to-commit integration', () => {
     const provider = new StubLLMProvider();
     const pipeline = createMeaningPipeline(provider);
 
-    const emptyContent: SemanticContent = { frames: [], relations: [] };
+    const emptyContent: SemanticContent = { trees: [], relations: [] };
     const result = await pipeline.run(emptyContent, [{ role: 'user', content: 'hello' }] as any[]);
 
-    // No frames → content stays empty, some agents may run but produce no change
-    expect(result.content.frames).toHaveLength(0);
+    // No trees → content stays empty
+    expect(flattenTrees(result.content.trees)).toHaveLength(0);
   });
 
   it('pipeline delta update preserves existing content', async () => {
     const provider = new StubLLMProvider();
 
     const existingSnapshot: SemanticContent = {
-      frames: [{ id: 'f_001', type: 'travel_plan', slots: { dest: 'Tokyo' } }],
+      trees: [{ key: 'travel_plan', slots: { dest: 'Tokyo' }, children: [] }],
       relations: [],
     };
 
     const updatedContent: SemanticContent = {
-      frames: [
-        { id: 'f_001', type: 'travel_plan', slots: { dest: 'Tokyo', duration: '2 weeks' } },
-        { id: 'f_002', type: 'budget', slots: { amount: 5000 } },
+      trees: [
+        { key: 'travel_plan', slots: { dest: 'Tokyo', duration: '2 weeks' }, children: [] },
+        { key: 'budget', slots: { amount: 5000 }, children: [] },
       ],
       relations: [],
     };
@@ -135,8 +135,8 @@ describe('extraction-to-commit integration', () => {
       existingSnapshot
     );
 
-    // Should still have frames
-    expect(result.content.frames.length).toBeGreaterThan(0);
+    // Should still have trees
+    expect(flattenTrees(result.content.trees).length).toBeGreaterThan(0);
     // Not first extraction
     expect(result.meta.isFirstExtraction).toBe(false);
   });

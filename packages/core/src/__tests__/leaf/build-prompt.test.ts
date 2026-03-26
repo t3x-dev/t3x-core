@@ -19,12 +19,12 @@ import type { Constraint, Leaf } from '../../types';
 // ═══════════════════════════════════════════════════════════════════════════
 
 const createTestKnowledge = (
-  frames: Array<{ type: string; slots: Record<string, string> }>
+  items: Array<{ type: string; slots: Record<string, string> }>
 ): SemanticContent => ({
-  frames: frames.map((f, i) => ({
-    id: `f_${String(i).padStart(3, '0')}`,
-    type: f.type,
+  trees: items.map((f) => ({
+    key: f.type,
     slots: f.slots,
+    children: [],
   })),
   relations: [],
 });

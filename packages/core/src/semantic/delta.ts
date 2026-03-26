@@ -21,13 +21,18 @@ export function applyDelta(snapshot: SemanticContent, delta: Delta): SemanticCon
   for (const change of delta.changes) {
     switch (change.action) {
       case 'add': {
-        const parent = findNodeInTrees(trees, change.parent_path);
-        if (!parent) break;
         const newNode = deepCloneTree(change.node);
         if (change.slot_quotes) {
           applyQuotesToNode(newNode, change.slot_quotes, newNode.key);
         }
-        parent.children.push(newNode);
+        if (change.parent_path === '') {
+          // Empty parent_path → add as a new root tree
+          trees.push(newNode);
+        } else {
+          const parent = findNodeInTrees(trees, change.parent_path);
+          if (!parent) break;
+          parent.children.push(newNode);
+        }
         break;
       }
       case 'update': {

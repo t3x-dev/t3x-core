@@ -94,8 +94,7 @@ describe('parseFrameDelta — tree-native delta', () => {
     children: [{ key: 'dining', slots: { cuisine: 'local' }, children: [] }],
   };
   const snapshot: SemanticContent = {
-    tree: existingTree,
-    frames: flattenTree(existingTree),
+    trees: [existingTree],
     relations: [],
   };
 
@@ -111,11 +110,10 @@ describe('parseFrameDelta — tree-native delta', () => {
         {
           action: 'add',
           parent_path: 'hangzhou_trip',
-          node: { transport: { mode: 'rail' } },
+          node: { key: 'transport', slots: { mode: 'rail' }, children: [] },
           slot_quotes: { 'transport.mode': 'take rail' },
         },
       ],
-      drift_detected: false,
     });
     const result = parseFrameDelta(raw, snapshot);
     expect(result.ok).toBe(true);
@@ -142,18 +140,17 @@ describe('parseFrameDelta — tree-native delta', () => {
 });
 
 describe('parseFrameDelta — legacy backward compat', () => {
-  it('still parses legacy delta JSON with f_NNN IDs', () => {
+  it('rejects legacy delta JSON with frame field (no longer supported)', () => {
     const raw = JSON.stringify({
       changes: [{ action: 'add', frame: { id: 'f_001', type: 'test', slots: { a: 1 } } }],
     });
     const result = parseFrameDelta(raw);
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.format).toBe('legacy');
-    expect(result.delta).toBeDefined();
+    // Legacy delta format with 'frame' field is not tree-native
+    // and DeltaSchema no longer accepts it
+    expect(result.ok).toBe(false);
   });
 
-  it('still parses legacy full output (JSON frames)', () => {
+  it('still parses legacy full output (JSON frames) into tree-native delta', () => {
     const raw = JSON.stringify({
       frames: [{ id: 'f_001', type: 'test', slots: { a: 1 }, confidence: 0.9 }],
       relations: [],
