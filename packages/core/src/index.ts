@@ -4,7 +4,7 @@
  * T3X Core - Deterministic semantic extraction, diff, and merge engine.
  *
  * This package provides:
- * - Frame semantic extraction
+ * - Tree-primary semantic extraction (TreeNode + Relation)
  * - Semantic diff (two-way)
  * - Two-way merge for combining commits
  * - Provider interfaces (NLP, Embedding, LLM)
@@ -12,7 +12,9 @@
  * All operations are deterministic and do not depend on LLMs.
  */
 
+// ═══════════════════════════════════════════════════════════════════════════
 // Autopilot (auto-commit evaluator)
+// ═══════════════════════════════════════════════════════════════════════════
 export {
   type AutoCommitCandidate,
   type AutoCommitPlan,
@@ -21,7 +23,10 @@ export {
   evaluateAutoCommit,
   mergeAutopilotConfig,
 } from './autopilot';
-// Commit (frame-based)
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Commit
+// ═══════════════════════════════════════════════════════════════════════════
 export {
   type Author,
   COMMIT_SCHEMA,
@@ -29,19 +34,13 @@ export {
   type CommitFirstClass,
   computeCommitHash,
   type Provenance,
-  type Source,
-  upgradeLegacyCommit,
 } from './commit';
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Common utilities
+// ═══════════════════════════════════════════════════════════════════════════
 export { canonText, hashText, sha256 } from './common';
-// Conflict Detection (#9)
-export {
-  type ConflictCandidate,
-  type ConflictReport,
-  type DetectConflictsOptions,
-  detectConflicts,
-  type ExistingSentenceWithEmbedding,
-} from './conflict';
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Context Builder (V4)
 // @see docs/specification/memory-pin-system-design.md
@@ -55,42 +54,10 @@ export {
   estimateTokens,
   filterActivePins,
 } from './context';
-// Diff Engine
-export {
-  buildSimilarityMatrix,
-  type ClassifiedCommitDiff,
-  type ClassifiedSentencePair,
-  type CommitDiff,
-  calculateDiffStats,
-  classifyDiff,
-  createDiffEngine,
-  type DiffableSentence,
-  type DiffCache,
-  type DiffClassification,
-  DiffEngine,
-  type DiffEngineConfig,
-  type DiffResult,
-  type DiffSegment,
-  type DiffStats,
-  DiffType,
-  diffCommits,
-  diffCommitsWithEmbeddings,
-  EQUIVALENT_THRESHOLD,
-  hungarian,
-  incrementalDiffCommits,
-  JACCARD_THRESHOLD,
-  jaccard,
-  lcs,
-  type MatchPair,
-  type SegmentDiff,
-  type SegmentMatch,
-  type SentencePair,
-  tokenize,
-  tokenizeForMatching,
-  type WordDiffSegment,
-  wordDiff,
-} from './diff';
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Extractors
+// ═══════════════════════════════════════════════════════════════════════════
 export {
   type AdaptiveConfig,
   type AdaptiveFeedbackStats,
@@ -133,6 +100,7 @@ export {
   type Segment,
   type SlotQuotesMap,
 } from './extractors';
+
 // Extraction Style Config
 export {
   DEFAULT_STYLE,
@@ -145,7 +113,10 @@ export {
   type Tier3Behavior,
   type UpdateStance,
 } from './extractors/extractionStyleConfig';
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Hash / Merkle Tree (#14)
+// ═══════════════════════════════════════════════════════════════════════════
 export {
   buildMerkleTree,
   type MembershipProof,
@@ -154,23 +125,9 @@ export {
   type ProofStep,
   verifyMembership,
 } from './hash';
-// Knowledge Graph (cross-conversation entity/topic clustering + graph builder)
-export {
-  buildKnowledgeGraph,
-  type ClusterOptions,
-  type ClusterResult,
-  clusterSentences,
-  cosineSimilarity as knowledgeCosineSimilarity,
-  extractTopTerms,
-  type GraphBuildEdge,
-  type GraphBuildInput,
-  type GraphBuildNode,
-  type GraphBuildOutput,
-  type SentenceInput as KnowledgeSentenceInput,
-} from './knowledge';
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Leaf Module (Generation + Validation)
-// @see docs/plans/parallel-dev-guidelines.md
 // ═══════════════════════════════════════════════════════════════════════════
 export {
   // Types
@@ -228,7 +185,10 @@ export {
   validateConstraintsSimple,
   validateTemplateSyntax,
 } from './leaf';
+
+// ═══════════════════════════════════════════════════════════════════════════
 // LLM Provider (interface)
+// ═══════════════════════════════════════════════════════════════════════════
 export {
   type Capability,
   createProviderForModel,
@@ -249,26 +209,10 @@ export {
   type ProviderName,
   type StructuredResult,
 } from './llm';
-// Merge (Two-way and three-way merge for combining commits - Issue #71)
-// V4: No constraint handling, prepareMerge accepts DiffableSentence[]
-export {
-  executeMerge,
-  executeThreeWayMerge,
-  type FrameMergeInput,
-  type FrameMergeSuggestion,
-  type Merge2WayResult,
-  type MergeCandidate,
-  type MergeSimilarPair,
-  type MergeSuggestion,
-  prepareMerge,
-  prepareMergeWithEmbeddings,
-  prepareThreeWayMerge,
-  suggestFrameMerge,
-  suggestMerge,
-  type ThreeWayConflict,
-  type ThreeWayMergeResult,
-} from './merge';
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Multimodal content blocks for turns
+// ═══════════════════════════════════════════════════════════════════════════
 export {
   type AudioBlock,
   type ContentBlock,
@@ -279,7 +223,10 @@ export {
   textFromBlocks,
   textToBlocks,
 } from './multimodal';
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Pipeline intelligence layer (8-step orchestrator)
+// ═══════════════════════════════════════════════════════════════════════════
 export {
   type AdvisoryQuestion,
   type AmbiguityResult,
@@ -314,7 +261,10 @@ export {
   type TopicChangedEvent,
   type UserAnswer,
 } from './pipeline';
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Provider interfaces and implementations
+// ═══════════════════════════════════════════════════════════════════════════
 export {
   AllProvidersFailedError,
   type AnyProvider,
@@ -380,6 +330,57 @@ export {
   type RoleAssignment,
   type TestConnectionResult,
 } from './providers';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Semantic Module (Tree-Primary: TreeNode + Relation + Delta + Diff + Merge)
+// ═══════════════════════════════════════════════════════════════════════════
+export {
+  // Delta
+  applyDelta,
+  // Business Gate
+  BusinessGate,
+  buildCoveragePrompt,
+  buildSemanticGatePrompt,
+  buildSlotQuotesPath,
+  // Validation
+  checkRelationSanity,
+  collectSlotQuotes,
+  // Schemas
+  DeltaSchema,
+  // Diff
+  diffCommits,
+  diffSlots,
+  evaluateRule,
+  // Merge
+  executeMerge,
+  flattenTree,
+  flattenTrees,
+  // Gate
+  GateRunner,
+  type GateRunnerOptions,
+  parseCoverageResponse,
+  parseGatesConfig,
+  parseSemanticGateResponse,
+  prepareMerge,
+  // Constants
+  RELATION_TYPES,
+  RelationSchema,
+  RelationTypeSchema,
+  resolveSlotQuotesPath,
+  SemanticContentSchema,
+  SemanticGate,
+  // Serialization
+  serializeForPrompt,
+  SlotValueSchema,
+  TreeNodeSchema,
+  unflattenToTree,
+  unflattenToTrees,
+  validateIntegrity,
+  validateTreeDepth,
+  yamlObjectToTreeNode,
+} from './semantic';
+
+// Semantic types (re-exported for convenience)
 export type {
   BusinessGateResult,
   BusinessRuleConfig,
@@ -388,78 +389,37 @@ export type {
   DeltaLogEntry,
   DeltaSource,
   DimensionResult,
-  Frame,
-  FrameChange,
-  FrameDiff,
-  FrameMergeDecision,
-  FrameMergeResult,
-  FrameRelationType,
   GateDimension,
   GateResult,
-  InlineFrame,
+  MergeDecision,
   MergeResolution,
+  MergeResult,
   Relation,
   SemanticContent,
   SemanticGateResult,
   SemanticIssue,
   SlotConflict,
   SlotDiff,
-  SlotRef,
-  SlotSourceRef,
   SlotValue,
   StructureGateResult,
-  TreeNativeChange,
-  TreeNativeDelta,
+  TreeChange,
+  TreeDiff,
   TreeNode,
   ValidationError as SemanticValidationError,
   ValidationResult as SemanticValidationResult,
   ValidationWarning as SemanticValidationWarning,
   WordDiffFn,
 } from './semantic';
+
+// Re-export RelationType from semantic (tree-primary relation types)
+export type { RelationType as SemanticRelationType } from './semantic';
+
 // ═══════════════════════════════════════════════════════════════════════════
-// Semantic Frame Paradigm (Frame + Relation + Delta + Diff + Merge)
-// @see docs/plans/core-engine/00-index.md
-// ═══════════════════════════════════════════════════════════════════════════
-export {
-  applyDelta,
-  applyTreeDelta,
-  BusinessGate,
-  buildCoveragePrompt,
-  buildDraft,
-  buildSemanticGatePrompt,
-  buildSlotQuotesPath,
-  checkRelationSanity,
-  collectSlotQuotes,
-  DeltaSchema,
-  evaluateRule,
-  executeFrameMerge,
-  FRAME_RELATION_TYPES,
-  FrameRelationTypeSchema,
-  FrameSchema,
-  flattenTree,
-  frameDiff,
-  GateRunner,
-  type GateRunnerOptions,
-  isTreeNative,
-  parseCoverageResponse,
-  parseGatesConfig,
-  parseSemanticGateResponse,
-  prepareFrameMerge,
-  RelationSchema,
-  resolveSlotQuotesPath,
-  SemanticContentSchema,
-  SemanticGate,
-  SlotValueSchema,
-  serializeFramesForPrompt,
-  TreeNativeDeltaSchema,
-  TreeNodeSchema,
-  unflattenToTree,
-  validateIntegrity,
-  validateTreeDepth,
-} from './semantic';
 // Storage (types + pure utils only)
 // For CRUD operations, use @t3x-dev/storage package
+// ═══════════════════════════════════════════════════════════════════════════
 export * from './storage';
+
 // ═══════════════════════════════════════════════════════════════════════════
 // V4 Architecture Types
 // @see docs/specification/semantic-layer-architecture.md
@@ -512,9 +472,9 @@ export {
   // Pin (source selection)
   type Pin,
   type PinType,
-  RELATION_TYPES,
+  // Ring 4: Sentence Relations (V4 app-layer)
+  SENTENCE_RELATION_TYPES,
   type RelationExtractionResult,
-  // Ring 4: Relations
   type RelationType,
   type RequireConstraint,
   type SentenceRelation,
