@@ -204,12 +204,17 @@ test.describe('Merge Workspace', () => {
     await merge.waitForLoad();
 
     // Resolve all conflicts by clicking Accept Source (frame mode) or Keep A (legacy)
-    const acceptSourceButtons = page
-      .locator('button:has-text("Accept Source")')
-      .or(page.locator('button:has-text("Keep A")'));
-    const count = await acceptSourceButtons.count();
+    // Buttons remain in DOM after resolution (just change style), so nth(i) is safe.
+    // Use separate locators to avoid .or() count issues.
+    let acceptButtons = page.locator('button:has-text("Accept Source")');
+    let count = await acceptButtons.count();
+    if (count === 0) {
+      acceptButtons = page.locator('button:has-text("Keep A")');
+      count = await acceptButtons.count();
+    }
     for (let i = 0; i < count; i++) {
-      await acceptSourceButtons.nth(i).click();
+      await acceptButtons.nth(i).click();
+      await page.waitForTimeout(300);
     }
 
     // #7: Verify all conflicts are resolved — unresolved count should be 0

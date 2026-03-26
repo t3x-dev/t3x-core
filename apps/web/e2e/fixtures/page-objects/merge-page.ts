@@ -54,25 +54,22 @@ export class MergePage {
   }
 
   async hasConflictsSection(): Promise<boolean> {
-    // Sentence mode (developer): button with "Conflicts"
-    // Frame mode: <h3> with text "Conflicts (N)"
-    // Sentence mode (default): button with "冲突"
-    const loc = this.page
-      .locator('button:has-text("Conflicts")')
-      .or(this.page.locator('h3:has-text("Conflicts")'))
-      .or(this.page.locator('button:has-text("冲突")'));
-    return loc.first().isVisible({ timeout: 5000 }).catch(() => false);
+    // Frame mode: h3 "Conflicts (N)" (CSS uppercase → "CONFLICTS (N)")
+    // Sentence mode: sidebar "Conflicts" label
+    // Default mode: "冲突"
+    // Use getByText for case-insensitive, element-agnostic matching
+    const loc = this.page.getByText(/conflicts/i).first();
+    return loc.isVisible({ timeout: 5000 }).catch(() => false);
   }
 
   async hasIdenticalSection(): Promise<boolean> {
-    // Sentence mode (developer): button with "Identical"
-    // Frame mode: <h3> with text "Auto-kept (N)" (frame mode uses auto-kept instead of identical)
-    // Sentence mode (default): button with "未变化"
+    // Frame mode: h3 "Auto-kept (N)" (CSS uppercase → "AUTO-KEPT (N)")
+    // Sentence mode: "Identical"
+    // Default mode: "未变化"
     const loc = this.page
-      .locator('button:has-text("Identical")')
-      .or(this.page.locator('h3:has-text("Auto-kept")'))
-      .or(this.page.locator('button:has-text("未变化")'));
-    return loc.first().isVisible({ timeout: 5000 }).catch(() => false);
+      .getByText(/auto-kept|identical/i)
+      .first();
+    return loc.isVisible({ timeout: 5000 }).catch(() => false);
   }
 
   async hasSourceOnlySection(): Promise<boolean> {
