@@ -10,6 +10,7 @@
  */
 
 import type { LLMProvider } from '../../llm/types';
+import { flattenTrees } from '../../semantic/tree';
 import type { MeaningAgent, PipelineContext } from '../meaningPipeline';
 
 const SYSTEM_PROMPT = `You check if a topic name still fits a conversation.
@@ -32,11 +33,11 @@ export const topicEvolverAgent: MeaningAgent = {
 
   shouldRun(ctx: PipelineContext): boolean {
     // Only on delta updates (not first extraction), and when we have a topic
-    return !ctx.meta.isFirstExtraction && ctx.content.frames.length > 0;
+    return !ctx.meta.isFirstExtraction && ctx.content.trees.length > 0;
   },
 
   async run(ctx: PipelineContext, provider: LLMProvider): Promise<PipelineContext> {
-    const currentName = ctx.content.frames[0]?.type ?? 'unknown';
+    const currentName = ctx.content.trees[0]?.key ?? 'unknown';
     const recentTurns = ctx.turns
       .slice(-4)
       .map((t) => `[${t.role}]: ${t.content.slice(0, 200)}`)
@@ -56,8 +57,8 @@ export const topicEvolverAgent: MeaningAgent = {
 
     if (name && name.length > 0 && name.length < 60 && name !== currentName) {
       ctx.topicName = name;
-      if (ctx.content.frames.length > 0) {
-        ctx.content.frames[0] = { ...ctx.content.frames[0], type: name };
+      if (ctx.content.trees.length > 0) {
+        ctx.content.trees[0] = { ...ctx.content.trees[0], key: name };
       }
     }
 

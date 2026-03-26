@@ -16,8 +16,9 @@
  */
 
 import type { LLMCallLogger, LLMProvider } from '../llm/types';
-import type { SemanticContent, SlotValue } from '../semantic/types';
-import type { FrameExtractionTurn } from './frameExtractionPrompt';
+import type { FlatNode, SemanticContent, SlotValue } from '../semantic/types';
+import { flattenTrees } from '../semantic/tree';
+import type { ExtractionTurn } from './extractionPrompt';
 
 // ── Pipeline Mode ──
 
@@ -37,7 +38,7 @@ export interface PipelineOptions {
 
 export interface PipelineContext {
   /** Conversation turns */
-  turns: FrameExtractionTurn[];
+  turns: ExtractionTurn[];
   /** Current snapshot (before this extraction) */
   previousSnapshot: SemanticContent | undefined;
   /** Working content — agents modify this as pipeline progresses */
@@ -205,7 +206,7 @@ export interface QualityMetrics {
 }
 
 function computeMetrics(content: SemanticContent): QualityMetrics {
-  const frames = content.frames;
+  const frames: FlatNode[] = flattenTrees(content.trees);
   const typeCount = new Map<string, number>();
   let totalSlots = 0;
   let framesWithArrays = 0;
@@ -308,7 +309,7 @@ export class MeaningPipeline {
   /** Run the pipeline */
   async run(
     content: SemanticContent,
-    turns: FrameExtractionTurn[],
+    turns: ExtractionTurn[],
     previousSnapshot?: SemanticContent,
     options?: PipelineOptions
   ): Promise<PipelineResult> {
@@ -316,7 +317,7 @@ export class MeaningPipeline {
     const ctx: PipelineContext = {
       turns,
       previousSnapshot,
-      content: { ...content, frames: [...content.frames], relations: [...content.relations] },
+      content: { ...content, trees: content.trees.map((t) => JSON.parse(JSON.stringify(t))), relations: [...content.relations] },
       topicName: null,
       conversationSummary: turns
         .filter((t) => t.role === 'user')
@@ -325,9 +326,9 @@ export class MeaningPipeline {
         .slice(0, 300),
       meta: {
         mode: options?.mode ?? 'full',
-        isFirstExtraction: !previousSnapshot || previousSnapshot.frames.length === 0,
+        isFirstExtraction: !previousSnapshot || previousSnapshot.trees.length === 0,
         turnCount: turns.length,
-        frameCount: content.frames.length,
+        frameCount: flattenTrees(content.trees).length,
         completedAgents: [],
         agentErrors: [],
         totalUsage: { inputTokens: 0, outputTokens: 0 },
@@ -340,7 +341,7 @@ export class MeaningPipeline {
     ctx.meta.stepSnapshots.push({
       agent: 'extractor_output',
       timestamp: new Date().toISOString(),
-      frameCount: ctx.content.frames.length,
+      frameCount: flattenTrees(ctx.content.trees).length,
       quality: initialMetrics,
       content: JSON.parse(JSON.stringify(ctx.content)),
     });
@@ -377,7 +378,7 @@ export class MeaningPipeline {
         // Validation gate: did this agent make things better or worse?
         const postMetrics = computeMetrics(currentCtx.content);
 
-        if (currentCtx.content.frames.length === 0 && preAgentContent.frames.length > 0) {
+        if (currentCtx.content.trees.length === 0 && preAgentContent.trees.length > 0) {
           // Agent wiped all frames — rollback
           currentCtx.content = preAgentContent;
           currentCtx.meta.agentErrors.push({
@@ -400,7 +401,7 @@ export class MeaningPipeline {
         currentCtx.meta.stepSnapshots.push({
           agent: agentName,
           timestamp: new Date().toISOString(),
-          frameCount: currentCtx.content.frames.length,
+          frameCount: flattenTrees(currentCtx.content.trees).length,
           quality: snapshotMetrics,
           content: JSON.parse(JSON.stringify(currentCtx.content)),
           durationMs,
@@ -414,8 +415,8 @@ export class MeaningPipeline {
           console.info(
             `[pipeline] %-22s | frames: %d→%d | quality: %d→%d (%s%d)%s | %dms`,
             agentName,
-            preAgentContent.frames.length,
-            currentCtx.content.frames.length,
+            flattenTrees(preAgentContent.trees).length,
+            flattenTrees(currentCtx.content.trees).length,
             preMetrics.score,
             snapshotMetrics.score,
             sign,

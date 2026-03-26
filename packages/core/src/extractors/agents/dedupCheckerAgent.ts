@@ -10,7 +10,8 @@
  */
 
 import type { LLMProvider } from '../../llm/types';
-import type { Frame } from '../../semantic/types';
+import type { FlatNode } from '../../semantic/types';
+import { flattenTrees, unflattenToTrees } from '../../semantic/tree';
 import type { MeaningAgent, PipelineContext } from '../meaningPipeline';
 
 const SYSTEM_PROMPT = `You check if two semantic frames describe the same concept, are different, or contradict each other.
@@ -24,7 +25,7 @@ Output JSON: { "decision": "merge" | "keep_separate" | "contradicts", "merged_sl
 Output ONLY JSON. No explanation.`;
 
 /** Find candidate pairs that might be duplicates */
-function findCandidatePairs(frames: Frame[]): Array<[number, number]> {
+function findCandidatePairs(frames: FlatNode[]): Array<[number, number]> {
   const pairs: Array<[number, number]> = [];
 
   for (let i = 0; i < frames.length; i++) {
@@ -58,11 +59,11 @@ export const dedupCheckerAgent: MeaningAgent = {
 
   shouldRun(ctx: PipelineContext): boolean {
     // Only run if we have 4+ frames (likely some overlap)
-    return ctx.content.frames.length >= 4;
+    return flattenTrees(ctx.content.trees).length >= 4;
   },
 
   async run(ctx: PipelineContext, provider: LLMProvider): Promise<PipelineContext> {
-    const frames = [...ctx.content.frames];
+    const frames = [...flattenTrees(ctx.content.trees)];
     const pairs = findCandidatePairs(frames);
 
     if (pairs.length === 0) return ctx;
@@ -127,8 +128,8 @@ export const dedupCheckerAgent: MeaningAgent = {
     // Remove merged frames
     if (toRemove.size > 0) {
       ctx.content = {
-        ...ctx.content,
-        frames: frames.filter((_, idx) => !toRemove.has(idx)),
+        trees: unflattenToTrees(frames.filter((_: FlatNode, idx: number) => !toRemove.has(idx))),
+        relations: ctx.content.relations,
       };
     }
 

@@ -69,10 +69,10 @@ export class GateRunner {
     // Map validation results to StructureGateResult checks
     const checks = {
       schema_valid: true, // assumed if we got this far (Zod validation happens upstream)
-      refs_intact: !validation.errors.some((e) => e.type === 'broken_ref'),
+      refs_intact: true, // no slot refs in tree-primary format
       relations_valid: !validation.errors.some((e) => e.type === 'broken_relation'),
       no_cycles: !validation.errors.some((e) => e.type === 'cycle'),
-      no_duplicate_ids: !validation.errors.some((e) => e.type === 'duplicate_id'),
+      no_duplicate_keys: !validation.errors.some((e) => e.type === 'duplicate_key'),
       no_self_relations: !validation.errors.some((e) => e.type === 'self_relation'),
     };
 

@@ -3,7 +3,7 @@
  */
 
 export { getAllModels, getModelInfo, getModelsByProvider, MODEL_CATALOG } from './catalog';
-export { normalizeFrameOutput } from './normalizer';
+export { normalizeLLMOutput } from './normalizer';
 export { createProviderForModel } from './providerFactory';
 export {
   type Capability,

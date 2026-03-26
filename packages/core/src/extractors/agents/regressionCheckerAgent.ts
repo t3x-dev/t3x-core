@@ -10,6 +10,8 @@
  */
 
 import type { LLMProvider } from '../../llm/types';
+import type { FlatNode } from '../../semantic/types';
+import { flattenTrees } from '../../semantic/tree';
 import type { MeaningAgent, PipelineContext } from '../meaningPipeline';
 
 /** If more than this fraction of frames are lost, flag as regression */
@@ -21,14 +23,15 @@ export const regressionCheckerAgent: MeaningAgent = {
   usesLLM: false,
 
   shouldRun(ctx: PipelineContext): boolean {
-    // Only meaningful when there's a previous snapshot with content
-    return !!ctx.previousSnapshot && ctx.previousSnapshot.frames.length > 0;
+    return !!ctx.previousSnapshot && ctx.previousSnapshot.trees.length > 0;
   },
 
   async run(ctx: PipelineContext, _provider: LLMProvider): Promise<PipelineContext> {
     const prev = ctx.previousSnapshot!;
-    const prevCount = prev.frames.length;
-    const currCount = ctx.content.frames.length;
+    const prevFrames: FlatNode[] = flattenTrees(prev.trees);
+    const currFrames: FlatNode[] = flattenTrees(ctx.content.trees);
+    const prevCount = prevFrames.length;
+    const currCount = currFrames.length;
 
     // 1. Check frame count drop
     if (currCount < prevCount) {
@@ -42,13 +45,13 @@ export const regressionCheckerAgent: MeaningAgent = {
     }
 
     // 2. Check for disappeared frame types
-    const prevTypes = new Set(prev.frames.map((f) => f.type));
-    const currTypes = new Set(ctx.content.frames.map((f) => f.type));
+    const prevTypes = new Set(prevFrames.map((f: FlatNode) => f.type));
+    const currTypes = new Set(currFrames.map((f: FlatNode) => f.type));
     const disappeared: string[] = [];
 
     for (const t of prevTypes) {
       if (!currTypes.has(t)) {
-        disappeared.push(t);
+        disappeared.push(t as string);
       }
     }
 

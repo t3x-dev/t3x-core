@@ -1,59 +1,72 @@
-import type { Frame, SemanticContent, SlotValue, TreeNode } from './types';
+import type { FlatNode, SemanticContent, SlotValue, TreeNode } from './types';
 
 /**
  * Detect whether a SemanticContent uses tree-native format.
+ * @deprecated Always returns true now — SemanticContent always has trees[].
  */
-export function isTreeNative(content: SemanticContent): boolean {
-  return content.tree !== undefined;
+export function isTreeNative(_content: SemanticContent): boolean {
+  return true;
 }
 
 /**
- * Flatten a TreeNode into a Frame[] with path-based IDs.
+ * Flatten a TreeNode into a FlatNode[] with path-based IDs.
  *
- * Each object node becomes a Frame. The frame ID is the full path
+ * Each object node becomes a FlatNode. The node ID is the full path
  * from root using "/" as separator. Leaf slot values go into
- * frame.slots; child object nodes become separate frames.
+ * node.slots; child object nodes become separate flat nodes.
  */
-export function flattenTree(tree: TreeNode): Frame[] {
-  const frames: Frame[] = [];
-  flattenNode(tree, '', frames);
-  return frames;
+export function flattenTree(tree: TreeNode): FlatNode[] {
+  const nodes: FlatNode[] = [];
+  flattenNode(tree, '', nodes);
+  return nodes;
 }
 
-function flattenNode(node: TreeNode, parentPath: string, frames: Frame[]): void {
+/**
+ * Flatten multiple trees into a single FlatNode[] array.
+ * Each tree produces flat nodes with path-based IDs rooted at its key.
+ */
+export function flattenTrees(trees: TreeNode[]): FlatNode[] {
+  const nodes: FlatNode[] = [];
+  for (const tree of trees) {
+    flattenNode(tree, '', nodes);
+  }
+  return nodes;
+}
+
+function flattenNode(node: TreeNode, parentPath: string, out: FlatNode[]): void {
   const path = parentPath ? `${parentPath}/${node.key}` : node.key;
 
-  const frame: Frame = {
+  const flat: FlatNode = {
     id: path,
     type: node.key,
     slots: { ...node.slots },
   };
-  if (node.source) frame.source = node.source;
-  if (node.confidence !== undefined) frame.confidence = node.confidence;
+  if (node.source) flat.source = node.source;
+  if (node.confidence !== undefined) flat.confidence = node.confidence;
 
-  frames.push(frame);
+  out.push(flat);
 
   for (const child of node.children) {
-    flattenNode(child, path, frames);
+    flattenNode(child, path, out);
   }
 }
 
 /**
- * Reconstruct a TreeNode from a flat Frame[] with path-based IDs.
+ * Reconstruct a TreeNode from a flat FlatNode[] with path-based IDs.
  *
- * Frames must be from the same tree (share a common root path segment).
- * The root frame has no "/" in its ID.
+ * Nodes must be from the same tree (share a common root path segment).
+ * The root node has no "/" in its ID.
  */
-export function unflattenToTree(frames: Frame[]): TreeNode {
+export function unflattenToTree(flatNodes: FlatNode[]): TreeNode {
   // Sort by path depth (root first)
-  const sorted = [...frames].sort((a, b) => {
+  const sorted = [...flatNodes].sort((a, b) => {
     const depthA = a.id.split('/').length;
     const depthB = b.id.split('/').length;
     return depthA - depthB;
   });
 
   if (sorted.length === 0) {
-    throw new Error('Cannot unflatten empty frame list');
+    throw new Error('Cannot unflatten empty flat node list');
   }
 
   const root = sorted[0];
@@ -93,9 +106,36 @@ export function unflattenToTree(frames: Frame[]): TreeNode {
 }
 
 /**
- * Build a slot_quotes dot-path from a frame ID (tree path) and slot key.
+ * Reconstruct multiple TreeNodes from a flat FlatNode[] array.
+ * Groups nodes by their root path segment, then unflattens each group.
+ */
+export function unflattenToTrees(flatNodes: FlatNode[]): TreeNode[] {
+  if (flatNodes.length === 0) return [];
+
+  // Group nodes by root path segment (first segment of the ID)
+  const groups = new Map<string, FlatNode[]>();
+  for (const node of flatNodes) {
+    const rootKey = node.id.split('/')[0];
+    let group = groups.get(rootKey);
+    if (!group) {
+      group = [];
+      groups.set(rootKey, group);
+    }
+    group.push(node);
+  }
+
+  // Unflatten each group into a tree
+  const trees: TreeNode[] = [];
+  for (const group of groups.values()) {
+    trees.push(unflattenToTree(group));
+  }
+  return trees;
+}
+
+/**
+ * Build a slot_quotes dot-path from a flat node ID (tree path) and slot key.
  *
- * Frame ID: "hangzhou_trip/activity_plan" + slot key "activities"
+ * FlatNode ID: "hangzhou_trip/activity_plan" + slot key "activities"
  * → Quote path: "activity_plan.activities"
  *
  * The root node name is stripped — paths are relative to the tree root.
@@ -111,10 +151,10 @@ export function buildSlotQuotesPath(frameId: string, slotKey: string): string {
 }
 
 /**
- * Resolve a slot_quotes dot-path back to frame ID + slot key.
+ * Resolve a slot_quotes dot-path back to flat node ID + slot key.
  *
  * Quote path: "activity_plan.activities" + root: "hangzhou_trip"
- * → Frame ID: "hangzhou_trip/activity_plan", slot key: "activities"
+ * → FlatNode ID: "hangzhou_trip/activity_plan", slot key: "activities"
  */
 export function resolveSlotQuotesPath(
   quotePath: string,
@@ -180,7 +220,7 @@ function checkDepth(node: TreeNode, currentDepth: number, maxDepth: number): str
  * Convert a YAML-parsed object to a TreeNode.
  * At each level: scalar values and arrays = slots; object values = children.
  */
-export function yamlObjectToTreeNode(key: string, value: unknown): TreeNode {
+export function yamlToTree(key: string, value: unknown): TreeNode {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     return { key, slots: { [key]: value as SlotValue }, children: [] };
   }
@@ -189,7 +229,7 @@ export function yamlObjectToTreeNode(key: string, value: unknown): TreeNode {
   const children: TreeNode[] = [];
   for (const [k, v] of Object.entries(obj)) {
     if (typeof v === 'object' && v !== null && !Array.isArray(v)) {
-      children.push(yamlObjectToTreeNode(k, v));
+      children.push(yamlToTree(k, v));
     } else {
       slots[k] = v as SlotValue;
     }

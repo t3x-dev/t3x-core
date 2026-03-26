@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { createMeaningPipeline } from '../../../extractors/createMeaningPipeline';
 import type { MeaningAgent } from '../../../extractors/meaningPipeline';
 import { MeaningPipeline } from '../../../extractors/meaningPipeline';
+import { flattenTrees } from '../../../semantic/tree';
 import { createTypicalContent, resetFrameIds } from '../../factories';
 import { StubLLMProvider } from '../../stubs';
 
@@ -74,11 +75,11 @@ describe('MeaningPipeline', () => {
     it('rolls back when agent produces 0 frames', async () => {
       const pipeline = new MeaningPipeline(provider).register({
         name: 'wiper',
-        description: 'wipes all frames',
+        description: 'wipes all trees',
         usesLLM: false,
         shouldRun: () => true,
         run: async (ctx) => {
-          ctx.content = { frames: [], relations: [] };
+          ctx.content = { trees: [], relations: [] };
           return ctx;
         },
       });
@@ -86,8 +87,8 @@ describe('MeaningPipeline', () => {
       const content = createTypicalContent();
       const result = await pipeline.run(content, [{ role: 'user', content: 'test' }] as any[]);
 
-      // Should rollback — frames preserved
-      expect(result.content.frames.length).toBeGreaterThan(0);
+      // Should rollback — trees preserved
+      expect(flattenTrees(result.content.trees).length).toBeGreaterThan(0);
       expect(result.meta.agentErrors.some((e) => e.error.includes('ROLLBACK'))).toBe(true);
     });
 
@@ -98,12 +99,12 @@ describe('MeaningPipeline', () => {
         usesLLM: false,
         shouldRun: () => true,
         run: async (ctx) => {
-          // Add many duplicate type frames to tank the quality score
+          // Add many duplicate type trees to tank the quality score
           for (let i = 0; i < 20; i++) {
-            ctx.content.frames.push({
-              id: `spam_${i}`,
-              type: 'spam',
+            ctx.content.trees.push({
+              key: `spam_${i}`,
               slots: { n: i },
+              children: [],
             });
           }
           return ctx;
@@ -114,7 +115,7 @@ describe('MeaningPipeline', () => {
       const result = await pipeline.run(content, [{ role: 'user', content: 'test' }] as any[]);
 
       // Should rollback — original frame count preserved
-      expect(result.content.frames.length).toBe(3); // typical content has 3
+      expect(flattenTrees(result.content.trees).length).toBe(3); // typical content has 3
       expect(result.meta.agentErrors.some((e) => e.error.includes('ROLLBACK'))).toBe(true);
     });
   });
@@ -193,8 +194,6 @@ describe('MeaningPipeline', () => {
 
   describe('createMeaningPipeline factory', () => {
     it('creates pipeline with all 7 default agents', async () => {
-      // Use all default responses for LLM agents
-      // dedup_checker, topic_namer, slot_polisher, reviewer all need responses
       provider
         .enqueue(JSON.stringify({ decision: 'keep_separate' })) // dedup
         .enqueue('japan_trip_plan') // topic_namer
@@ -216,10 +215,9 @@ describe('MeaningPipeline', () => {
 
       const result = await pipeline.run(content, turns);
 
-      expect(result.content.frames.length).toBeGreaterThan(0);
+      expect(flattenTrees(result.content.trees).length).toBeGreaterThan(0);
       expect(result.quality).toBeDefined();
       expect(result.quality.score).toBeGreaterThan(0);
-      // At least some agents should have run
       expect(result.meta.completedAgents.length).toBeGreaterThan(0);
     });
   });

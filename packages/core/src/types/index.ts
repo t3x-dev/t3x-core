@@ -715,17 +715,16 @@ export interface CreateDraftInput {
 // @see docs/plans/2026-03-05-ring4-inter-sentence-relations-design.md
 // ═══════════════════════════════════════════════════════════════════════════
 
-export const RELATION_TYPES = [
+export const SENTENCE_RELATION_TYPES = [
   'supports',
   'contrasts',
   'causes',
-  'elaborates',
   'temporal_follows',
   'conditions',
   'summarizes',
 ] as const;
 
-export type RelationType = (typeof RELATION_TYPES)[number];
+export type RelationType = (typeof SENTENCE_RELATION_TYPES)[number];
 
 export interface SentenceRelation {
   id: string; // rel_abc123

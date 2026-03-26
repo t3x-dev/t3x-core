@@ -12,6 +12,8 @@
  */
 
 import type { LLMProvider } from '../../llm/types';
+import type { FlatNode } from '../../semantic/types';
+import { flattenTrees, unflattenToTrees } from '../../semantic/tree';
 import type { MeaningAgent, PipelineContext } from '../meaningPipeline';
 
 const SYSTEM_PROMPT = `You name the main topic of a conversation based on extracted semantic frames.
@@ -30,12 +32,14 @@ export const topicNamerAgent: MeaningAgent = {
 
   shouldRun(ctx: PipelineContext): boolean {
     // Run on first extraction or when we have 3+ frames without a topic
-    return ctx.meta.isFirstExtraction || (ctx.content.frames.length >= 3 && !ctx.topicName);
+    const frames: FlatNode[] = flattenTrees(ctx.content.trees);
+    return ctx.meta.isFirstExtraction || (frames.length >= 3 && !ctx.topicName);
   },
 
   async run(ctx: PipelineContext, provider: LLMProvider): Promise<PipelineContext> {
-    const frameInfo = ctx.content.frames
-      .map((f) => {
+    const frames: FlatNode[] = flattenTrees(ctx.content.trees);
+    const frameInfo = frames
+      .map((f: FlatNode) => {
         const topSlots = Object.entries(f.slots)
           .slice(0, 3)
           .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`)
@@ -59,11 +63,11 @@ export const topicNamerAgent: MeaningAgent = {
     if (name && name.length > 0 && name.length < 60) {
       ctx.topicName = name;
 
-      // Rename root frame(s) to the topic name
-      if (ctx.content.frames.length > 0) {
-        ctx.content.frames[0] = {
-          ...ctx.content.frames[0],
-          type: name,
+      // Rename root tree(s) to the topic name
+      if (ctx.content.trees.length > 0) {
+        ctx.content.trees[0] = {
+          ...ctx.content.trees[0],
+          key: name,
         };
       }
     }

@@ -6,7 +6,7 @@
  * MeaningPipeline and its 9 agents remain completely unaware of this layer.
  */
 
-import type { FrameRelationType, SemanticContent } from '../semantic/types';
+import type { RelationType, SemanticContent } from '../semantic/types';
 
 // ── Step 1: Session State ──
 
@@ -24,14 +24,14 @@ export interface SessionContext {
 
 export interface DriftDecision {
   choice: 'keep_old' | 'keep_new' | 'keep_both_separate' | 'keep_both_together';
-  relation?: FrameRelationType;
+  relation?: RelationType;
   newTopic?: string;
 }
 
 export interface DriftResult {
   drifted: boolean;
   confidence: number;
-  relationType?: FrameRelationType;
+  relationType?: RelationType;
   newTopicName?: string;
 }
 

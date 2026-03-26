@@ -6,65 +6,65 @@ import type { BusinessRuleConfig, SemanticContent } from '../../semantic/types';
 // ── Helpers ──
 
 const content: SemanticContent = {
-  frames: [
+  trees: [
     {
-      id: 'f_001',
-      type: 'decision',
+      key: 'decision',
       slots: { description: 'Use React', budget: 5000, currency: 'USD' },
+      children: [],
     },
     {
-      id: 'f_002',
-      type: 'requirement',
+      key: 'requirement',
       slots: { description: 'Must be fast' },
+      children: [],
     },
     {
-      id: 'f_003',
-      type: 'decision',
+      key: 'decision_b',
       slots: { description: 'Use PostgreSQL' },
+      children: [],
     },
   ],
   relations: [
-    { from: 'f_002', to: 'f_001', type: 'causes' },
-    { from: 'f_002', to: 'f_003', type: 'depends' },
+    { from: 'requirement', to: 'decision', type: 'causes' },
+    { from: 'requirement', to: 'decision_b', type: 'depends' },
   ],
 };
 
 const passingRule: BusinessRuleConfig = {
-  id: 'has_frames',
+  id: 'has_trees',
   type: 'rule',
-  rule: 'frames.length > 0',
-  message: 'Must have at least one frame',
+  rule: 'trees.length > 0',
+  message: 'Must have at least one tree',
   severity: 'error',
 };
 
 const failingRule: BusinessRuleConfig = {
-  id: 'too_many_frames',
+  id: 'too_many_trees',
   type: 'rule',
-  rule: 'frames.length > 100',
-  message: 'Need more than 100 frames',
+  rule: 'trees.length > 100',
+  message: 'Need more than 100 trees',
   severity: 'error',
 };
 
 const warningRule: BusinessRuleConfig = {
   id: 'budget_currency',
   type: 'rule',
-  rule: `frames.filter(f => f.slots.budget !== undefined).every(f => f.slots.currency !== undefined)`,
-  message: 'Frames with budget must have currency',
+  rule: `trees.filter(t => t.slots.budget !== undefined).every(t => t.slots.currency !== undefined)`,
+  message: 'Trees with budget must have currency',
   severity: 'warning',
 };
 
 const failingWarningRule: BusinessRuleConfig = {
   id: 'all_have_budget',
   type: 'rule',
-  rule: 'frames.every(f => f.slots.budget !== undefined)',
-  message: 'All frames should have budget',
+  rule: 'trees.every(t => t.slots.budget !== undefined)',
+  message: 'All trees should have budget',
   severity: 'warning',
 };
 
 const invalidExprRule: BusinessRuleConfig = {
   id: 'bad_syntax',
   type: 'rule',
-  rule: 'frames.notAMethod(!!',
+  rule: 'trees.notAMethod(!!',
   message: 'Bad syntax',
   severity: 'error',
 };
@@ -118,7 +118,7 @@ describe('evaluateRule', () => {
   it('returns passed: false for failing expression', () => {
     const result = evaluateRule(failingRule, content);
     expect(result.passed).toBe(false);
-    expect(result.message).toBe('Need more than 100 frames');
+    expect(result.message).toBe('Need more than 100 trees');
   });
 
   it('returns passed: false with error message for invalid expression', () => {
@@ -131,8 +131,8 @@ describe('evaluateRule', () => {
     const rule: BusinessRuleConfig = {
       id: 'decision_needs_basis',
       type: 'rule',
-      rule: `frames.filter(f => f.type.includes('decision'))
-        .every(f => relations.some(r => r.to === f.id &&
+      rule: `trees.filter(t => t.key.includes('decision'))
+        .every(t => relations.some(r => r.to === t.key &&
           (r.type === 'causes' || r.type === 'depends')))`,
       message: 'Every decision must have causes or depends',
       severity: 'error',
@@ -165,7 +165,6 @@ describe('BusinessGate.evaluate', () => {
     const gate = new BusinessGate();
     const result = await gate.evaluate([passingRule, failingWarningRule], content);
     expect(result.passed).toBe(true);
-    // The warning rule did fail
     const warningResult = result.results.find((r) => r.rule_id === 'all_have_budget');
     expect(warningResult?.passed).toBe(false);
     expect(warningResult?.severity).toBe('warning');
@@ -250,7 +249,6 @@ describe('BusinessGate.evaluate', () => {
     };
     const gate = new BusinessGate(mockProvider);
     const result = await gate.evaluate([llmRule], content);
-    // Warning severity, so overall still passes
     expect(result.passed).toBe(true);
     expect(result.results[0].passed).toBe(false);
     expect(result.results[0].message).toContain('API timeout');

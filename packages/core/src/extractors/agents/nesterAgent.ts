@@ -2,20 +2,20 @@
  * Nester Agent — CODE (deterministic)
  *
  * Takes flat frames + relations and builds a nested tree structure.
- * Child frames become InlineFrame slot values in their parent.
- * Relations define the hierarchy: elaborates/conditions/depends → child of target.
+ * Child frames become nested object slot values in their parent.
+ * Relations define the hierarchy: conditions/depends/causes → child of target.
  *
  * This is the same logic as CommitYAMLDocument.tsx but server-side.
  * No LLM needed — pure deterministic transformation.
  */
 
 import type { LLMProvider } from '../../llm/types';
-import type { Frame, SemanticContent, SlotValue } from '../../semantic/types';
+import type { FlatNode, SemanticContent, SlotValue } from '../../semantic/types';
+import { flattenTrees, unflattenToTrees } from '../../semantic/tree';
 import type { MeaningAgent, PipelineContext } from '../meaningPipeline';
 
 /** Relations that indicate parent-child nesting */
 const NESTING_RELATIONS = new Set([
-  'elaborates',
   'conditions',
   'depends',
   'follows',
@@ -24,13 +24,14 @@ const NESTING_RELATIONS = new Set([
 ]);
 
 function buildNestedContent(content: SemanticContent): SemanticContent {
-  const frameMap = new Map<string, Frame>();
-  for (const frame of content.frames) {
+  const frames: FlatNode[] = flattenTrees(content.trees);
+  const frameMap = new Map<string, FlatNode>();
+  for (const frame of frames) {
     frameMap.set(frame.id, frame);
   }
 
   // Build children map: parentId → [childFrame]
-  const childrenMap = new Map<string, Array<{ frame: Frame; relationType: string }>>();
+  const childrenMap = new Map<string, Array<{ frame: FlatNode; relationType: string }>>();
   const childIds = new Set<string>();
 
   for (const rel of content.relations) {
@@ -39,7 +40,7 @@ function buildNestedContent(content: SemanticContent): SemanticContent {
 
     const childFrame = frameMap.get(rel.from);
 
-    // rel.from elaborates rel.to → rel.from is child of rel.to
+    // rel.from relates to rel.to → rel.from is child of rel.to
     childIds.add(rel.from);
     const children = childrenMap.get(rel.to) ?? [];
     if (childFrame) {
@@ -49,15 +50,15 @@ function buildNestedContent(content: SemanticContent): SemanticContent {
   }
 
   // Root frames: not a child of anyone
-  const rootFrames = content.frames.filter((f) => !childIds.has(f.id));
+  const rootFrames = frames.filter((f: FlatNode) => !childIds.has(f.id));
 
   // If only 1-2 frames and no children, nothing to nest
-  if (rootFrames.length === content.frames.length || content.relations.length === 0) {
+  if (rootFrames.length === frames.length || content.relations.length === 0) {
     return content;
   }
 
   // Recursively nest children into parent's slots
-  function nestFrame(frame: Frame, visited: Set<string>): Frame {
+  function nestFrame(frame: FlatNode, visited: Set<string>): FlatNode {
     visited.add(frame.id);
     const children = childrenMap.get(frame.id) ?? [];
     if (children.length === 0) return frame;
@@ -77,7 +78,7 @@ function buildNestedContent(content: SemanticContent): SemanticContent {
         slotKey = `${slotKey}_${suffix}`;
       }
 
-      // Convert to InlineFrame slot value
+      // Convert to nested object slot value
       newSlots[slotKey] = {
         type: nested.type,
         slots: nested.slots,
@@ -90,10 +91,10 @@ function buildNestedContent(content: SemanticContent): SemanticContent {
     };
   }
 
-  const nestedFrames = rootFrames.map((f) => nestFrame(f, new Set()));
+  const nestedFrames = rootFrames.map((f: FlatNode) => nestFrame(f, new Set()));
 
   return {
-    frames: nestedFrames,
+    trees: unflattenToTrees(nestedFrames),
     relations: [], // Relations are now expressed via nesting
   };
 }
@@ -105,7 +106,7 @@ export const nesterAgent: MeaningAgent = {
 
   shouldRun(ctx: PipelineContext): boolean {
     // Run if there are relations to nest and more than 2 frames
-    return ctx.content.relations.length > 0 && ctx.content.frames.length > 2;
+    return ctx.content.relations.length > 0 && ctx.content.trees.length > 0;
   },
 
   async run(ctx: PipelineContext, _provider: LLMProvider): Promise<PipelineContext> {

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { FrameWithSignals } from '../../extractors/compressPrompt';
-import { FrameCompressor } from '../../extractors/frameCompressor';
+import type { NodeWithSignals } from '../../extractors/compressPrompt';
+import { Compressor } from '../../extractors/compressor';
 import type { LLMProvider } from '../../llm/types';
 
 function makeMockProvider(jsonResponse: string): LLMProvider {
@@ -13,7 +13,7 @@ function makeMockProvider(jsonResponse: string): LLMProvider {
   } as unknown as LLMProvider;
 }
 
-const baseFrames: FrameWithSignals[] = [
+const baseFrames: NodeWithSignals[] = [
   {
     id: 'f_001',
     type: 'accommodation',
@@ -43,7 +43,7 @@ const baseFrames: FrameWithSignals[] = [
   },
 ];
 
-describe('FrameCompressor', () => {
+describe('Compressor', () => {
   it('parses a valid compress delta from LLM output', async () => {
     const llmOutput = JSON.stringify({
       changes: [
@@ -60,7 +60,7 @@ describe('FrameCompressor', () => {
     });
 
     const provider = makeMockProvider(llmOutput);
-    const compressor = new FrameCompressor(provider);
+    const compressor = new Compressor(provider);
     const result = await compressor.compress({ frames: baseFrames, relations: [] });
 
     expect(result.ok).toBe(true);
@@ -83,7 +83,7 @@ describe('FrameCompressor', () => {
     });
 
     const provider = makeMockProvider(llmOutput);
-    const compressor = new FrameCompressor(provider);
+    const compressor = new Compressor(provider);
     const result = await compressor.compress({ frames: baseFrames, relations: [] });
 
     expect(result.ok).toBe(true);
@@ -101,7 +101,7 @@ describe('FrameCompressor', () => {
     });
 
     const provider = makeMockProvider(llmOutput);
-    const compressor = new FrameCompressor(provider);
+    const compressor = new Compressor(provider);
     const result = await compressor.compress({ frames: baseFrames, relations: [] });
 
     expect(result.ok).toBe(false);
@@ -109,7 +109,7 @@ describe('FrameCompressor', () => {
 
   it('returns error on invalid JSON', async () => {
     const provider = makeMockProvider('not json at all');
-    const compressor = new FrameCompressor(provider);
+    const compressor = new Compressor(provider);
     const result = await compressor.compress({ frames: baseFrames, relations: [] });
 
     expect(result.ok).toBe(false);

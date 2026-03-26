@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { topicNamerAgent } from '../../../extractors/agents/topicNamerAgent';
 import type { PipelineContext } from '../../../extractors/meaningPipeline';
 import { createFrameWithSlots, createSemanticContent, resetFrameIds } from '../../factories';
+import { flattenTrees } from '../../../semantic/tree';
 import { StubLLMProvider } from '../../stubs';
 
 function makeCtx(
@@ -65,9 +66,9 @@ describe('topicNamerAgent', () => {
     const result = await topicNamerAgent.run(ctx, provider);
 
     expect(result.topicName).toBe('japan_trip_plan');
-    expect(result.content.frames[0].type).toBe('japan_trip_plan');
+    expect(flattenTrees(result.content.trees)[0].type).toBe('japan_trip_plan');
     // Second frame unchanged
-    expect(result.content.frames[1].type).toBe('budget');
+    expect(flattenTrees(result.content.trees)[1].type).toBe('budget');
   });
 
   it('cleans up LLM output: removes quotes, normalizes whitespace', async () => {

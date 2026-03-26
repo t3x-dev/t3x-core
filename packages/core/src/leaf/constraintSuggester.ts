@@ -204,7 +204,7 @@ export async function suggestConstraints(
   leafType: AnyLeafType,
   options?: SuggestConstraintsOptions
 ): Promise<ConstraintSuggestionResult> {
-  if (knowledge.frames.length === 0) {
+  if (knowledge.trees.length === 0) {
     return { suggestions: [], model: provider.id, usage: { inputTokens: 0, outputTokens: 0 } };
   }
 

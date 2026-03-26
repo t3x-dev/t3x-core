@@ -7,7 +7,6 @@
  * - Delta mode (with snapshot): asks LLM for incremental changes only
  */
 
-import { isTreeNative } from '../semantic/tree';
 import type { SemanticContent, TreeNode } from '../semantic/types';
 import {
   DEFAULT_STYLE,
@@ -20,14 +19,14 @@ import {
 
 // -- Input Types --
 
-export interface FrameExtractionTurn {
+export interface ExtractionTurn {
   role: 'user' | 'assistant' | 'system' | 'tool';
   content: string;
   turn_hash?: string; // Source tracking -- which turn this is
 }
 
-export interface FrameExtractionInput {
-  turns: FrameExtractionTurn[];
+export interface ExtractionInput {
+  turns: ExtractionTurn[];
   snapshot?: SemanticContent;
   /** Number of turns already processed by previous extractions (from the start). Used in delta mode to split context vs new turns. */
   processedTurnCount?: number;
@@ -35,7 +34,7 @@ export interface FrameExtractionInput {
 
 // -- Output Type --
 
-export interface FrameExtractionPromptResult {
+export interface ExtractionPromptResult {
   systemPrompt: string;
   userPrompt: string;
 }
@@ -62,49 +61,20 @@ function serializeTreeForSnapshot(node: TreeNode, indent = 0): string {
  * Serialize a snapshot to a YAML-like readable text format.
  */
 function serializeSnapshot(snapshot: SemanticContent): string {
-  // Tree-native: serialize as YAML tree
-  if (isTreeNative(snapshot) && snapshot.tree) {
-    return serializeTreeForSnapshot(snapshot.tree);
-  }
-  // Legacy flat-frame serialization (existing code unchanged)
-  const lines: string[] = [];
-
-  lines.push('frames:');
-  for (const frame of snapshot.frames) {
-    lines.push(`  - id: ${frame.id}`);
-    lines.push(`    type: ${frame.type}`);
-    lines.push('    slots:');
-    for (const [key, value] of Object.entries(frame.slots)) {
-      lines.push(`      ${key}: ${JSON.stringify(value)}`);
-    }
-    if (frame.confidence !== undefined) {
-      lines.push(`    confidence: ${frame.confidence}`);
-    }
-    if (frame.source !== undefined) {
-      lines.push(`    source: ${frame.source}`);
-    }
+  // Serialize trees as YAML
+  if (snapshot.trees.length > 0) {
+    return snapshot.trees.map((tree) => serializeTreeForSnapshot(tree)).join('\n\n');
   }
 
-  if (snapshot.relations.length > 0) {
-    lines.push('relations:');
-    for (const rel of snapshot.relations) {
-      lines.push(`  - from: ${rel.from}`);
-      lines.push(`    to: ${rel.to}`);
-      lines.push(`    type: ${rel.type}`);
-      if (rel.confidence !== undefined) {
-        lines.push(`    confidence: ${rel.confidence}`);
-      }
-    }
-  }
-
-  return lines.join('\n');
+  // Empty content
+  return '';
 }
 
 /**
  * Format conversation turns for prompt inclusion.
  * Includes turn_hash as [T1], [T2], etc. for source tracking.
  */
-function formatTurns(turns: FrameExtractionTurn[]): string {
+function formatTurns(turns: ExtractionTurn[]): string {
   return turns
     .map((t, i) => {
       const tag = t.turn_hash ? `[T${i + 1}:${t.turn_hash.slice(0, 8)}]` : `[T${i + 1}]`;
@@ -415,10 +385,10 @@ Output the YAML tree first (no fences), then --- on its own line, then the JSON 
  * behavior, quote length, and update stance. Defaults to `DEFAULT_STYLE`
  * (balanced preset) for backward compatibility.
  */
-export function buildFrameExtractionPrompt(
-  input: FrameExtractionInput,
+export function buildExtractionPrompt(
+  input: ExtractionInput,
   style: ExtractionStyleConfig = DEFAULT_STYLE
-): FrameExtractionPromptResult {
+): ExtractionPromptResult {
   const { turns, snapshot, processedTurnCount } = input;
 
   if (snapshot) {

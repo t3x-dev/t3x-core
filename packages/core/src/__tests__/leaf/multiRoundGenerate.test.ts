@@ -27,9 +27,9 @@ function makeMockLLM(responses: string[]): LLMProvider {
 }
 
 const knowledge: SemanticContent = {
-  frames: [
-    { id: 'f_001', type: 'user_preference', slots: { theme: 'dark mode', context: 'coding' } },
-    { id: 'f_002', type: 'auth_standard', slots: { protocol: 'OAuth 2.0' } },
+  trees: [
+    { key: 'user_preference', slots: { theme: 'dark mode', context: 'coding' }, children: [] },
+    { key: 'auth_standard', slots: { protocol: 'OAuth 2.0' }, children: [] },
   ],
   relations: [],
 };

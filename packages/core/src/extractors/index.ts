@@ -19,36 +19,36 @@ export {
   topicEvolverAgent,
   topicNamerAgent,
 } from './agents';
-// Frame Compression
+// Compression
 export {
   buildCompressPrompt,
   type CompressInput,
-  type FrameWithSignals,
+  type NodeWithSignals,
 } from './compressPrompt';
 export { createMeaningPipeline } from './createMeaningPipeline';
-export { type ParseResult as FrameDeltaParseResult, parseFrameDelta } from './frameDeltaParser';
+export { type ParseResult as DeltaParseResult, parseDelta } from './deltaParser';
 export {
-  buildFrameExtractionPrompt,
-  type FrameExtractionPromptResult,
+  buildExtractionPrompt,
+  type ExtractionPromptResult,
   granularitySegment,
   quoteLengthSegment,
   tier3Segment,
   updateStanceSegment,
-} from './frameExtractionPrompt';
-// Frame Extraction (Phase 2)
+} from './extractionPrompt';
+// Extraction (Phase 2)
 export {
-  type FrameExtractionInput,
-  type FrameExtractionResult,
-  type FrameExtractionTurn,
-  FrameExtractor,
+  type ExtractionInput,
+  type ExtractionResult,
+  type ExtractionTurn,
+  Extractor,
   type SlotQuotesMap,
-} from './frameExtractor';
-// Frame Compression
+} from './extractor';
+// Compression
 export {
   type CompressMetadata,
   type CompressResult,
-  FrameCompressor,
-} from './frameCompressor';
+  Compressor,
+} from './compressor';
 // Meaning Pipeline (multi-agent orchestration)
 export { type FuzzyLocateResult, fuzzyLocate } from './fuzzyLocate';
 export {

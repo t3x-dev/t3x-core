@@ -1,7 +1,7 @@
 /**
- * Frame Extractor Orchestrator
+ * Extractor Orchestrator
  *
- * Orchestrates the frame semantic extraction pipeline:
+ * Orchestrates the semantic extraction pipeline:
  * buildPrompt → LLM generate → parse delta → apply delta → validate integrity
  *
  * When the provider supports generateStructured(), uses native structured output
@@ -17,9 +17,9 @@ import { DeltaSchema } from '../semantic/schema';
 import type { Delta, SemanticContent } from '../semantic/types';
 import { validateIntegrity } from '../semantic/validate';
 import type { ExtractionStyleConfig } from './extractionStyleConfig';
-import { parseFrameDelta } from './frameDeltaParser';
-import type { FrameExtractionInput, FrameExtractionTurn } from './frameExtractionPrompt';
-import { buildFrameExtractionPrompt } from './frameExtractionPrompt';
+import { parseDelta } from './deltaParser';
+import type { ExtractionInput, ExtractionTurn } from './extractionPrompt';
+import { buildExtractionPrompt } from './extractionPrompt';
 
 // ── Constants ──
 
@@ -32,7 +32,7 @@ const MAX_TOKENS = 4096;
 /** Per-change slot quotes extracted from LLM output before Zod strips them */
 export type SlotQuotesMap = Map<number, Record<string, string>>; // changeIndex → { slotKey: quote }
 
-export type FrameExtractionResult =
+export type ExtractionResult =
   | {
       ok: true;
       delta: Delta;
@@ -75,7 +75,7 @@ function extractSlotQuotes(rawJson: unknown): SlotQuotesMap {
 
 // ── Re-export input types ──
 
-export type { FrameExtractionInput, FrameExtractionTurn };
+export type { ExtractionInput, ExtractionTurn };
 
 // ── Helpers ──
 
@@ -109,14 +109,14 @@ async function _callGenerateStructured(
 
 // ── Class ──
 
-export class FrameExtractor {
+export class Extractor {
   constructor(private readonly provider: LLMProvider) {}
 
   async extract(
-    input: FrameExtractionInput,
+    input: ExtractionInput,
     style?: ExtractionStyleConfig
-  ): Promise<FrameExtractionResult> {
-    const baseSnapshot: SemanticContent = input.snapshot ?? { frames: [], relations: [] };
+  ): Promise<ExtractionResult> {
+    const baseSnapshot: SemanticContent = input.snapshot ?? { trees: [], relations: [] };
     // ── Text generation path ──
     // Always use generate() (not generateStructured) so we can extract
     // slot_quotes from the raw JSON before Zod validation strips them.
@@ -125,7 +125,7 @@ export class FrameExtractor {
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       // 1. Build prompt
-      const { systemPrompt, userPrompt } = buildFrameExtractionPrompt(input, style);
+      const { systemPrompt, userPrompt } = buildExtractionPrompt(input, style);
       const combinedPrompt = `${systemPrompt}\n\n---\n\n${userPrompt}`;
 
       // 2. Call LLM
@@ -163,7 +163,7 @@ export class FrameExtractor {
       }
 
       // 4. Parse delta
-      const parseResult = parseFrameDelta(raw, input.snapshot);
+      const parseResult = parseDelta(raw, input.snapshot);
       if (!parseResult.ok) {
         lastError = `Failed to parse LLM output: ${parseResult.error}`;
         continue;

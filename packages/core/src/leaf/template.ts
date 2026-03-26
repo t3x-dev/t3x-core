@@ -14,6 +14,7 @@
 
 import type { SemanticContent } from '../semantic/types';
 import { serializeFramesForPrompt } from '../semantic/serialize';
+import { flattenTrees } from '../semantic/tree';
 import type { AnyLeafType, Constraint, Leaf } from '../types';
 import { isGenerationLeaf } from '../types';
 import { formatConstraints, getTypeInstructions } from './build-prompt';
@@ -44,8 +45,9 @@ export function buildTemplateContext(
   additionalInstructions?: string
 ): TemplateContext {
   // Build knowledge items and formatted knowledge
-  const knowledgeItems = knowledge.frames.map(
-    (f) =>
+  const frames = flattenTrees(knowledge.trees);
+  const knowledgeItems = frames.map(
+    (f: import('../semantic/types').FlatNode) =>
       `${f.type}: ${Object.entries(f.slots)
         .map(([k, v]) => `${k}=${typeof v === 'string' ? v : JSON.stringify(v)}`)
         .join(', ')}`

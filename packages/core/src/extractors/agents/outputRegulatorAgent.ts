@@ -13,16 +13,17 @@
  */
 
 import type { LLMProvider } from '../../llm/types';
-import type { Frame, SlotValue } from '../../semantic/types';
+import type { FlatNode, SlotValue } from '../../semantic/types';
+import { flattenTrees, unflattenToTrees } from '../../semantic/tree';
 import type { MeaningAgent, PipelineContext } from '../meaningPipeline';
 
 /**
  * Find groups of frames with the same type and merge them.
  * Each group becomes ONE frame with array-valued slots.
  */
-function consolidateDuplicateTypes(frames: Frame[]): Frame[] {
+function consolidateDuplicateTypes(frames: FlatNode[]): FlatNode[] {
   // Group by type
-  const groups = new Map<string, Frame[]>();
+  const groups = new Map<string, FlatNode[]>();
   const order: string[] = [];
 
   for (const frame of frames) {
@@ -35,7 +36,7 @@ function consolidateDuplicateTypes(frames: Frame[]): Frame[] {
     }
   }
 
-  const result: Frame[] = [];
+  const result: FlatNode[] = [];
 
   for (const type of order) {
     const group = groups.get(type);
@@ -65,7 +66,7 @@ function consolidateDuplicateTypes(frames: Frame[]): Frame[] {
     // Use plural type name
     const pluralType = type.endsWith('s') ? type : `${type}s`;
 
-    const mergedFrame: Frame = {
+    const mergedFrame: FlatNode = {
       id: group[0].id, // Keep first frame's ID
       type: pluralType,
       slots: {
@@ -74,11 +75,6 @@ function consolidateDuplicateTypes(frames: Frame[]): Frame[] {
       source: group[0].source,
       confidence: Math.min(...group.map((f) => f.confidence ?? 1)),
     };
-
-    // Preserve slot_sources from first frame
-    if (group[0].slot_sources) {
-      mergedFrame.slot_sources = group[0].slot_sources;
-    }
 
     result.push(mergedFrame);
   }
@@ -92,23 +88,23 @@ export const outputRegulatorAgent: MeaningAgent = {
   usesLLM: false,
 
   shouldRun(ctx: PipelineContext): boolean {
-    // Run if there are duplicate frame types
-    const types = ctx.content.frames.map((f) => f.type);
+    const frames: FlatNode[] = flattenTrees(ctx.content.trees);
+    const types = frames.map((f: FlatNode) => f.type);
     const uniqueTypes = new Set(types);
-    return uniqueTypes.size < types.length; // Has duplicates
+    return uniqueTypes.size < types.length;
   },
 
   async run(ctx: PipelineContext, _provider: LLMProvider): Promise<PipelineContext> {
-    const consolidated = consolidateDuplicateTypes(ctx.content.frames);
+    const frames: FlatNode[] = flattenTrees(ctx.content.trees);
+    const consolidated = consolidateDuplicateTypes(frames);
 
-    // Update relations: remove relations pointing to merged-away frames
     const remainingIds = new Set(consolidated.map((f) => f.id));
     const validRelations = ctx.content.relations.filter(
       (r) => remainingIds.has(r.from) && remainingIds.has(r.to)
     );
 
     ctx.content = {
-      frames: consolidated,
+      trees: unflattenToTrees(consolidated),
       relations: validRelations,
     };
 

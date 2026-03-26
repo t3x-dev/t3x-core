@@ -5,7 +5,7 @@ import {
   isTreeNative,
   unflattenToTree,
 } from '../../semantic/tree';
-import type { Frame, TreeNode } from '../../semantic/types';
+import type { FlatNode, TreeNode } from '../../semantic/types';
 
 describe('flattenTree', () => {
   it('flattens a single root node to one frame', () => {
@@ -94,7 +94,7 @@ describe('flattenTree', () => {
 
 describe('unflattenToTree', () => {
   it('reconstructs tree from flat frames', () => {
-    const frames: Frame[] = [
+    const frames: FlatNode[] = [
       { id: 'hangzhou_trip', type: 'hangzhou_trip', slots: { destination: 'Hangzhou' } },
       {
         id: 'hangzhou_trip/activity_plan',
@@ -134,14 +134,10 @@ describe('unflattenToTree', () => {
 });
 
 describe('isTreeNative', () => {
-  it('returns true when tree field is present', () => {
+  it('always returns true (tree-primary)', () => {
     expect(
-      isTreeNative({ tree: { key: 'x', slots: {}, children: [] }, frames: [], relations: [] })
+      isTreeNative({ trees: [{ key: 'x', slots: {}, children: [] }], relations: [] })
     ).toBe(true);
-  });
-
-  it('returns false when tree field is absent', () => {
-    expect(isTreeNative({ frames: [], relations: [] })).toBe(false);
   });
 });
 

@@ -2,7 +2,7 @@
  * Business Gate (Gate 3) — Configurable rule system
  *
  * Supports:
- * - Deterministic rules: JavaScript expressions evaluated against frames/relations
+ * - Deterministic rules: JavaScript expressions evaluated against trees/relations
  * - LLM-based checks: Prompt-based evaluation using an LLM provider
  *
  * @see docs/plans/core-engine/09-gate-and-ci.md §Gate 3
@@ -46,7 +46,7 @@ export function parseGatesConfig(rules: BusinessRuleConfig[]): BusinessRuleConfi
 /**
  * Evaluate a single deterministic rule expression against semantic content.
  *
- * The expression has access to `frames` and `relations` variables.
+ * The expression has access to `trees` and `relations` variables.
  * It should return a truthy value to pass.
  */
 export function evaluateRule(
@@ -69,9 +69,9 @@ export function evaluateRule(
       };
     }
 
-    // Create a sandboxed function that only exposes frames and relations
-    const fn = new Function('frames', 'relations', `"use strict"; return (${expr});`);
-    const result = fn(content.frames, content.relations);
+    // Create a sandboxed function that only exposes trees and relations
+    const fn = new Function('trees', 'relations', `"use strict"; return (${expr});`);
+    const result = fn(content.trees, content.relations);
     if (result) {
       return { passed: true };
     }
@@ -171,15 +171,15 @@ export class BusinessGate {
 
   /** Build the prompt sent to the LLM for an llm-type rule */
   private buildLLMPrompt(rule: BusinessRuleConfig, content: SemanticContent): string {
-    const framesJson = JSON.stringify(content.frames, null, 2);
+    const treesJson = JSON.stringify(content.trees, null, 2);
     const relationsJson = JSON.stringify(content.relations, null, 2);
     return [
       rule.prompt,
       '',
       '## Semantic Content',
       '',
-      '### Frames',
-      framesJson,
+      '### Trees',
+      treesJson,
       '',
       '### Relations',
       relationsJson,

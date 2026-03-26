@@ -12,7 +12,8 @@
  */
 
 import type { LLMProvider } from '../../llm/types';
-import type { SlotValue } from '../../semantic/types';
+import type { FlatNode, SlotValue } from '../../semantic/types';
+import { flattenTrees, unflattenToTrees } from '../../semantic/tree';
 import type { MeaningAgent, PipelineContext } from '../meaningPipeline';
 
 const SYSTEM_PROMPT = `You review a structured meaning document for quality. Check:
@@ -53,12 +54,13 @@ export const reviewerAgent: MeaningAgent = {
 
   shouldRun(ctx: PipelineContext): boolean {
     if (ctx.meta.mode === 'incremental') return false;
-    return ctx.content.frames.length > 0;
+    return ctx.content.trees.length > 0;
   },
 
   async run(ctx: PipelineContext, provider: LLMProvider): Promise<PipelineContext> {
-    const framesDescription = ctx.content.frames
-      .map((f) => {
+    const frames: FlatNode[] = flattenTrees(ctx.content.trees);
+    const framesDescription = frames
+      .map((f: FlatNode) => {
         const slotsStr = JSON.stringify(f.slots, null, 1).slice(0, 300);
         return `${f.id} ${f.type}: ${slotsStr}`;
       })
@@ -99,10 +101,12 @@ Review this document:`;
 
       // Apply fixes
       if (review.fixes) {
+        let modifiedFrames = [...frames];
+
         // Fix 1: Rename root frame type
-        if (review.fixes.rename_root && ctx.content.frames.length > 0) {
-          ctx.content.frames[0] = {
-            ...ctx.content.frames[0],
+        if (review.fixes.rename_root && modifiedFrames.length > 0) {
+          modifiedFrames[0] = {
+            ...modifiedFrames[0],
             type: review.fixes.rename_root,
           };
           ctx.topicName = review.fixes.rename_root;
@@ -111,7 +115,7 @@ Review this document:`;
         // Fix 2: Rename slots across all frames
         if (review.fixes.rename_slots) {
           const renames = review.fixes.rename_slots;
-          ctx.content.frames = ctx.content.frames.map((frame) => {
+          modifiedFrames = modifiedFrames.map((frame: FlatNode) => {
             const newSlots: Record<string, SlotValue> = {};
             for (const [key, value] of Object.entries(frame.slots)) {
               const newKey = renames[key] ?? key;
@@ -126,20 +130,20 @@ Review this document:`;
           for (const pair of review.fixes.merge_frames) {
             if (pair.length !== 2) continue;
             const [keepId, removeId] = pair;
-            const keepFrame = ctx.content.frames.find((f) => f.id === keepId);
-            const removeFrame = ctx.content.frames.find((f) => f.id === removeId);
+            const keepFrame = modifiedFrames.find((f: FlatNode) => f.id === keepId);
+            const removeFrame = modifiedFrames.find((f: FlatNode) => f.id === removeId);
             if (keepFrame && removeFrame) {
-              // Merge slots from removed frame into kept frame
               for (const [key, value] of Object.entries(removeFrame.slots)) {
                 if (!(key in keepFrame.slots)) {
                   keepFrame.slots[key] = value;
                 }
               }
-              // Remove the merged frame
-              ctx.content.frames = ctx.content.frames.filter((f) => f.id !== removeId);
+              modifiedFrames = modifiedFrames.filter((f: FlatNode) => f.id !== removeId);
             }
           }
         }
+
+        ctx.content = { trees: unflattenToTrees(modifiedFrames), relations: ctx.content.relations };
       }
     } catch {
       // Review parse failed — non-fatal, continue with what we have

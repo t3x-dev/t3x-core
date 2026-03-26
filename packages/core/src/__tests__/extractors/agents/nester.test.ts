@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { nesterAgent } from '../../../extractors/agents/nesterAgent';
 import type { PipelineContext } from '../../../extractors/meaningPipeline';
+import { flattenTrees } from '../../../semantic/tree';
 import {
   createFrameWithSlots,
   createRelation,
@@ -45,43 +46,44 @@ describe('nesterAgent', () => {
     expect(nesterAgent.shouldRun(ctx)).toBe(false);
   });
 
-  it('shouldRun returns false when ≤2 frames', () => {
+  it('shouldRun returns false when ≤2 frames with no relations', () => {
     resetFrameIds();
     const f1 = createFrameWithSlots('a', { x: 1 }, 'f_1');
     const f2 = createFrameWithSlots('b', { y: 2 }, 'f_2');
-    const ctx = makeCtx([f1, f2], [createRelation('f_1', 'f_2', 'elaborates')]);
+    const ctx = makeCtx([f1, f2]);
     expect(nesterAgent.shouldRun(ctx)).toBe(false);
   });
 
-  it('shouldRun returns true with relations and >2 frames', () => {
+  it('shouldRun returns true with relations and >0 trees', () => {
     resetFrameIds();
-    const f1 = createFrameWithSlots('a', {}, 'f_1');
-    const f2 = createFrameWithSlots('b', {}, 'f_2');
-    const f3 = createFrameWithSlots('c', {}, 'f_3');
-    const ctx = makeCtx([f1, f2, f3], [createRelation('f_2', 'f_1', 'elaborates')]);
+    const f1 = createFrameWithSlots('a', { x: 1 }, 'f_1');
+    const f2 = createFrameWithSlots('b', { y: 2 }, 'f_2');
+    const f3 = createFrameWithSlots('c', { z: 3 }, 'f_3');
+    const ctx = makeCtx([f1, f2, f3], [createRelation('f_2', 'f_1', 'depends')]);
     expect(nesterAgent.shouldRun(ctx)).toBe(true);
   });
 
-  it('nests child frames into parent slots as InlineFrame', async () => {
+  it('nests child frames into parent slots as nested object', async () => {
     resetFrameIds();
-    const parent = createFrameWithSlots('travel_plan', { destination: 'Japan' }, 'f_parent');
-    const child = createFrameWithSlots('activity', { name: 'temple visit' }, 'f_child');
-    const other = createFrameWithSlots('budget', { amount: 5000 }, 'f_other');
+    // Use type as ID so that unflattenToTrees + flattenTrees roundtrips correctly
+    const parent = createFrameWithSlots('travel_plan', { destination: 'Japan' }, 'travel_plan');
+    const child = createFrameWithSlots('activity', { name: 'temple visit' }, 'activity');
+    const other = createFrameWithSlots('budget', { amount: 5000 }, 'budget');
 
-    // f_child elaborates f_parent → f_child becomes nested in f_parent
     const ctx = makeCtx(
       [parent, child, other],
-      [createRelation('f_child', 'f_parent', 'elaborates')]
+      [createRelation('activity', 'travel_plan', 'depends')]
     );
 
     const result = await nesterAgent.run(ctx, provider);
 
+    const frames = flattenTrees(result.content.trees);
     // Root frames: parent + other (child is nested)
-    expect(result.content.frames).toHaveLength(2);
-    expect(result.content.frames[0].id).toBe('f_parent');
+    expect(frames).toHaveLength(2);
+    expect(frames[0].id).toBe('travel_plan');
 
-    // Child should be nested as InlineFrame slot
-    const nestedSlot = result.content.frames[0].slots.activity as any;
+    // Child should be nested as nested object slot
+    const nestedSlot = frames[0].slots.activity as any;
     expect(nestedSlot).toBeDefined();
     expect(nestedSlot.type).toBe('activity');
     expect(nestedSlot.slots.name).toBe('temple visit');
@@ -92,23 +94,26 @@ describe('nesterAgent', () => {
 
   it('handles duplicate slot keys with suffix numbering', async () => {
     resetFrameIds();
-    const parent = createFrameWithSlots('plan', { activity: 'existing' }, 'f_p');
-    const child1 = createFrameWithSlots('activity', { name: 'hiking' }, 'f_c1');
-    const child2 = createFrameWithSlots('activity', { name: 'diving' }, 'f_c2');
-    const filler = createFrameWithSlots('other', {}, 'f_x');
+    // Use unique types so unflattenToTrees creates separate trees,
+    // and use type as ID for consistent relation references
+    const parent = createFrameWithSlots('plan', { activity: 'existing' }, 'plan');
+    const child1 = createFrameWithSlots('activity_a', { name: 'hiking' }, 'activity_a');
+    const child2 = createFrameWithSlots('activity_b', { name: 'diving' }, 'activity_b');
+    const filler = createFrameWithSlots('other', { a: 1 }, 'other');
 
     const ctx = makeCtx(
       [parent, child1, child2, filler],
-      [createRelation('f_c1', 'f_p', 'elaborates'), createRelation('f_c2', 'f_p', 'elaborates')]
+      [createRelation('activity_a', 'plan', 'depends'), createRelation('activity_b', 'plan', 'depends')]
     );
 
     const result = await nesterAgent.run(ctx, provider);
-    const parentResult = result.content.frames[0];
+    const frames = flattenTrees(result.content.trees);
+    const parentResult = frames[0];
 
-    // Original 'activity' slot preserved, children get suffixed keys
+    // Original 'activity' slot preserved, children get their type as slot key
     expect(parentResult.slots.activity).toBe('existing');
-    expect((parentResult.slots.activity_2 as any)?.type).toBe('activity');
-    expect((parentResult.slots.activity_3 as any)?.type).toBe('activity');
+    expect((parentResult.slots.activity_a as any)?.type).toBe('activity_a');
+    expect((parentResult.slots.activity_b as any)?.type).toBe('activity_b');
   });
 
   it('handles cycles gracefully via visited set', async () => {
@@ -117,15 +122,14 @@ describe('nesterAgent', () => {
     const f2 = createFrameWithSlots('b', { y: 2 }, 'f_2');
     const f3 = createFrameWithSlots('c', { z: 3 }, 'f_3');
 
-    // Cycle: f_2 → f_1, f_1 → f_2 (via different relation)
     const ctx = makeCtx(
       [f1, f2, f3],
-      [createRelation('f_2', 'f_1', 'elaborates'), createRelation('f_1', 'f_2', 'depends')]
+      [createRelation('f_2', 'f_1', 'depends'), createRelation('f_1', 'f_2', 'depends')]
     );
 
     // Should not throw or infinite loop
     const result = await nesterAgent.run(ctx, provider);
-    expect(result.content.frames.length).toBeGreaterThan(0);
+    expect(flattenTrees(result.content.trees).length).toBeGreaterThan(0);
   });
 
   it('returns unchanged content when no nesting is possible', async () => {
@@ -134,11 +138,10 @@ describe('nesterAgent', () => {
     const f2 = createFrameWithSlots('b', { y: 2 }, 'f_2');
     const f3 = createFrameWithSlots('c', { z: 3 }, 'f_3');
 
-    // Relations with non-nesting type
-    const ctx = makeCtx([f1, f2, f3], [{ from: 'f_1', to: 'f_2', type: 'supports' } as any]);
+    // No relations → no nesting possible
+    const ctx = makeCtx([f1, f2, f3]);
 
     const result = await nesterAgent.run(ctx, provider);
-    // 'supports' is not in NESTING_RELATIONS, so no nesting happens
-    expect(result.content.frames).toHaveLength(3);
+    expect(flattenTrees(result.content.trees)).toHaveLength(3);
   });
 });

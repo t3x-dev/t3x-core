@@ -1,5 +1,5 @@
 /**
- * Frame Compressor Orchestrator
+ * Compressor Orchestrator
  *
  * buildPrompt → LLM generate → parse JSON → validate (no 'add' actions) → return delta + metadata
  */
@@ -30,7 +30,7 @@ export type CompressResult =
     }
   | { ok: false; error: string; usage: { inputTokens: number; outputTokens: number } };
 
-export class FrameCompressor {
+export class Compressor {
   constructor(private readonly provider: LLMProvider) {}
 
   async compress(input: CompressInput): Promise<CompressResult> {

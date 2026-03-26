@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeFrameOutput } from '../../llm/normalizer';
+import { normalizeLLMOutput } from '../../llm/normalizer';
 
-describe('normalizeFrameOutput', () => {
+describe('normalizeLLMOutput', () => {
   it('passes through valid frames unchanged', () => {
     const input = {
       frames: [{ id: 'f_001', type: 'travel_plan', slots: { destination: 'Tokyo' } }],
       relations: [],
     };
-    const result = normalizeFrameOutput(input);
+    const result = normalizeLLMOutput(input);
     expect(result).toEqual(input);
   });
 
@@ -16,7 +16,7 @@ describe('normalizeFrameOutput', () => {
       frames: [{ id: '001', type: 'topic', slots: { name: 'test' } }],
       relations: [],
     };
-    const result = normalizeFrameOutput(input);
+    const result = normalizeLLMOutput(input);
     expect(result.frames[0].id).toBe('f_001');
   });
 
@@ -25,7 +25,7 @@ describe('normalizeFrameOutput', () => {
       frames: [{ id: 'f_1', type: 'topic', slots: { name: 'test' } }],
       relations: [],
     };
-    const result = normalizeFrameOutput(input);
+    const result = normalizeLLMOutput(input);
     expect(result.frames[0].id).toBe('f_001');
   });
 
@@ -34,7 +34,7 @@ describe('normalizeFrameOutput', () => {
       frames: [{ id: 'f_001', type: 'price', slots: { amount: '42.5', currency: 'USD' } }],
       relations: [],
     };
-    const result = normalizeFrameOutput(input);
+    const result = normalizeLLMOutput(input);
     // normalizer should not blindly convert — only if slot value looks numeric
     // This is best-effort; strings that are numbers stay as strings (safe default)
     expect(result.frames[0].slots.currency).toBe('USD');
@@ -53,7 +53,7 @@ describe('normalizeFrameOutput', () => {
       ],
       relations: [],
     };
-    const result = normalizeFrameOutput(input);
+    const result = normalizeLLMOutput(input);
     expect(result.frames[0]).not.toHaveProperty('extra_field');
     expect(result.frames[0]).not.toHaveProperty('description');
   });
@@ -63,11 +63,11 @@ describe('normalizeFrameOutput', () => {
       frames: [{ id: 'f_001', type: 'TravelPlan', slots: { dest: 'NYC' } }],
       relations: [],
     };
-    const result = normalizeFrameOutput(input);
+    const result = normalizeLLMOutput(input);
     expect(result.frames[0].type).toBe('travel_plan');
   });
 
-  it('coerces plain objects in slot arrays to InlineFrame', () => {
+  it('coerces plain objects in slot arrays to nested object format', () => {
     const input = {
       frames: [
         {
@@ -83,7 +83,7 @@ describe('normalizeFrameOutput', () => {
       ],
       relations: [],
     };
-    const result = normalizeFrameOutput(input);
+    const result = normalizeLLMOutput(input);
     const stops = result.frames[0].slots.stops as unknown[];
     for (const stop of stops) {
       const frame = stop as { type: string; slots: Record<string, unknown> };
@@ -94,11 +94,11 @@ describe('normalizeFrameOutput', () => {
 
   it('passes through empty frames array', () => {
     const input = { frames: [], relations: [] };
-    const result = normalizeFrameOutput(input);
+    const result = normalizeLLMOutput(input);
     expect(result.frames).toEqual([]);
   });
 
-  it('does not re-wrap objects already in InlineFrame format', () => {
+  it('does not re-wrap objects already in nested object format', () => {
     const input = {
       frames: [
         {
@@ -111,7 +111,7 @@ describe('normalizeFrameOutput', () => {
       ],
       relations: [],
     };
-    const result = normalizeFrameOutput(input);
+    const result = normalizeLLMOutput(input);
     const items = result.frames[0].slots.items as unknown[];
     const item = items[0] as { type: string; slots: Record<string, unknown> };
     expect(item.type).toBe('city');
@@ -123,7 +123,7 @@ describe('normalizeFrameOutput', () => {
       frames: [{ id: 'f_001', type: 'a', slots: { x: 1 } }],
       relations: [{ from: 'f_001', to: 'f_002', type: 'causes' }],
     };
-    const result = normalizeFrameOutput(input);
+    const result = normalizeLLMOutput(input);
     expect(result.relations).toEqual(input.relations);
   });
 
@@ -132,7 +132,7 @@ describe('normalizeFrameOutput', () => {
       frames: [{ id: 'travel_plan', type: 'topic', slots: { x: 1 } }],
       relations: [],
     };
-    const result = normalizeFrameOutput(input);
+    const result = normalizeLLMOutput(input);
     expect(result.frames[0].id).toBe('travel_plan');
   });
 
@@ -145,7 +145,7 @@ describe('normalizeFrameOutput', () => {
         },
       ],
     };
-    const result = normalizeFrameOutput(input);
+    const result = normalizeLLMOutput(input);
     expect(result.changes[0].frame.id).toBe('f_001');
     expect(result.changes[0].frame.type).toBe('new_topic');
   });

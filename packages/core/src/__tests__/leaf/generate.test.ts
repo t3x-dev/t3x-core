@@ -14,9 +14,9 @@ import type { Leaf } from '../../types';
 // ═══════════════════════════════════════════════════════════════════════════
 
 const createTestKnowledge = (): SemanticContent => ({
-  frames: [
-    { id: 'f_001', type: 'user_preference', slots: { theme: 'dark mode' } },
-    { id: 'f_002', type: 'language', slots: { primary: 'English' } },
+  trees: [
+    { key: 'user_preference', slots: { theme: 'dark mode' }, children: [] },
+    { key: 'language', slots: { primary: 'English' }, children: [] },
   ],
   relations: [],
 });

@@ -1,5 +1,5 @@
 /**
- * Frame Delta Parser
+ * Delta Parser
  *
  * Parses raw LLM text output and extracts valid Delta JSON.
  * Handles five cases:
@@ -11,20 +11,33 @@
  */
 
 import * as yaml from 'js-yaml';
-import { normalizeFrameOutput } from '../llm/normalizer';
+import { normalizeLLMOutput } from '../llm/normalizer';
 import type { TreeNativeDelta } from '../semantic/delta';
-import { DeltaSchema, FrameSchema, TreeNativeDeltaSchema } from '../semantic/schema';
-import { flattenTree, yamlObjectToTreeNode } from '../semantic/tree';
+import { DeltaSchema, FlatNodeSchema, TreeNativeDeltaSchema } from '../semantic/schema';
+import { flattenTree, flattenTrees, yamlToTree } from '../semantic/tree';
 import type {
   Delta,
-  Frame,
-  FrameChange,
+  FlatNode,
   Relation,
   SemanticContent,
   SlotValue,
+  TreeChange,
   TreeNode,
 } from '../semantic/types';
 import { deepEqual, relKey } from '../semantic/utils';
+
+// ── Legacy helper ──
+
+/** Convert a FlatNode to a TreeNode (for legacy LLM output compatibility). */
+function frameToTreeNode(frame: FlatNode): TreeNode {
+  return {
+    key: frame.type,
+    slots: { ...frame.slots },
+    children: [],
+    ...(frame.source ? { source: frame.source } : {}),
+    ...(frame.confidence !== undefined ? { confidence: frame.confidence } : {}),
+  };
+}
 
 // ── Result type ──
 
@@ -205,7 +218,7 @@ function parseYamlTree(raw: string): ParseResult {
   }
 
   const [rootKey, rootValue] = entries[0];
-  const tree = yamlObjectToTreeNode(rootKey, rootValue);
+  const tree = yamlToTree(rootKey, rootValue);
 
   // Parse metadata (JSON after ---)
   let slotQuotes: Record<string, string> = {};
@@ -235,10 +248,11 @@ function parseYamlTree(raw: string): ParseResult {
   // Apply metadata to tree
   applyMetadataToTree(tree, slotQuotes, sourceMap, confidenceMap);
 
-  // Flatten tree to frames for backward-compatible delta
-  const frames = flattenTree(tree);
-  const changes: FrameChange[] = frames.map((frame) => ({ action: 'add' as const, frame }));
-  const delta: Delta = { changes };
+  // Create a single add change that adds the root tree node
+  // parent_path '' means add as a new root tree
+  const delta: Delta = {
+    changes: [{ action: 'add' as const, parent_path: '', node: tree }],
+  };
 
   return { ok: true, format: 'tree', tree, slotQuotes, delta };
 }
@@ -257,45 +271,49 @@ function isTreeNativeDelta(parsed: Record<string, unknown>): boolean {
 }
 
 /**
- * Convert a tree-native delta change's add node to flattened Frame changes.
+ * Convert a tree-native delta change's add node object to TreeChange add entries.
  */
-function treeNativeNodeToFrameChanges(
+function treeNativeNodeToTreeChanges(
   parentPath: string,
   nodeObj: Record<string, unknown>
-): FrameChange[] {
-  const changes: FrameChange[] = [];
+): TreeChange[] {
+  const changes: TreeChange[] = [];
   for (const [key, value] of Object.entries(nodeObj)) {
-    const node = yamlObjectToTreeNode(key, value);
-    const frames = flattenTree(node);
-    // Prefix all frame IDs with parentPath
-    for (const frame of frames) {
-      frame.id = `${parentPath}/${frame.id}`;
-      changes.push({ action: 'add' as const, frame });
-    }
+    const node = yamlToTree(key, value);
+    changes.push({ action: 'add' as const, parent_path: parentPath, node });
   }
   return changes;
 }
 
 /**
- * Convert a tree-native delta to a legacy Delta for backward compatibility.
+ * Convert a tree-native delta to Delta.
+ * Since Delta IS tree-native now, this is essentially a pass-through
+ * but handles the `node` field conversion from raw objects.
  */
-function treeNativeDeltaToLegacy(treeDelta: TreeNativeDelta): Delta {
-  const changes: FrameChange[] = [];
+function treeNativeDeltaToStandard(treeDelta: TreeNativeDelta): Delta {
+  const changes: TreeChange[] = [];
 
   for (const change of treeDelta.changes) {
     switch (change.action) {
       case 'add': {
-        if (change.parent_path && change.node) {
-          changes.push(...treeNativeNodeToFrameChanges(change.parent_path, change.node));
+        if (change.parent_path !== undefined && change.node) {
+          // The node from schema validation is already a TreeNode
+          changes.push({
+            action: 'add',
+            parent_path: change.parent_path,
+            node: change.node as TreeNode,
+            ...(change.slot_quotes ? { slot_quotes: change.slot_quotes } : {}),
+          });
         }
         break;
       }
       case 'update': {
-        if (change.target_path && change.slots) {
+        if (change.target_path) {
           changes.push({
             action: 'update',
-            target: change.target_path,
+            target_path: change.target_path,
             slots: change.slots,
+            ...(change.slot_quotes ? { slot_quotes: change.slot_quotes } : {}),
           });
         }
         break;
@@ -304,7 +322,7 @@ function treeNativeDeltaToLegacy(treeDelta: TreeNativeDelta): Delta {
         if (change.target_path) {
           changes.push({
             action: 'remove',
-            target: change.target_path,
+            target_path: change.target_path,
             ...(change.reason ? { reason: change.reason } : {}),
           });
         }
@@ -334,14 +352,13 @@ function parseTreeNativeDelta(parsed: Record<string, unknown>): ParseResult {
     Array.isArray(parsed.changes) &&
     parsed.changes.length === 0
   ) {
-    const treeDelta: TreeNativeDelta = {
+    const treeDelta = {
       changes: [],
-      drift_detected: true,
       ...(parsed.new_relations ? { new_relations: parsed.new_relations as Relation[] } : {}),
       ...(parsed.remove_relations
         ? { remove_relations: parsed.remove_relations as Relation[] }
         : {}),
-    };
+    } as TreeNativeDelta;
     // Return ok with empty delta for drift detection
     return { ok: true, format: 'tree-delta', treeDelta, delta: { changes: [] } };
   }
@@ -356,7 +373,7 @@ function parseTreeNativeDelta(parsed: Record<string, unknown>): ParseResult {
   }
 
   const treeDelta = validation.data as TreeNativeDelta;
-  const delta = treeNativeDeltaToLegacy(treeDelta);
+  const delta = treeNativeDeltaToStandard(treeDelta);
 
   return { ok: true, format: 'tree-delta', treeDelta, delta };
 }
@@ -364,20 +381,25 @@ function parseTreeNativeDelta(parsed: Record<string, unknown>): ParseResult {
 // ── Full output → all-add delta (Legacy Case 2) ──
 
 function fullOutputToAllAdd(parsed: { frames: unknown[]; relations?: unknown[] }): ParseResult {
-  const frames: Frame[] = [];
+  const frames: FlatNode[] = [];
   for (const f of parsed.frames) {
-    const result = FrameSchema.safeParse(f);
+    const result = FlatNodeSchema.safeParse(f);
     if (!result.success) {
       return { ok: false, error: `Invalid frame in full output: ${result.error.message}` };
     }
-    frames.push(result.data as Frame);
+    frames.push(result.data as FlatNode);
   }
 
   if (frames.length === 0) {
     return { ok: false, error: 'Full output contains no frames' };
   }
 
-  const changes: FrameChange[] = frames.map((frame) => ({ action: 'add' as const, frame }));
+  // Convert frames to tree-native add changes
+  const changes: TreeChange[] = frames.map((frame) => ({
+    action: 'add' as const,
+    parent_path: '',
+    node: frameToTreeNode(frame),
+  }));
 
   const delta: Delta = { changes };
 
@@ -386,13 +408,7 @@ function fullOutputToAllAdd(parsed: { frames: unknown[]; relations?: unknown[] }
     delta.new_relations = parsed.relations as Relation[];
   }
 
-  // Validate final delta
-  const validation = DeltaSchema.safeParse(delta);
-  if (!validation.success) {
-    return { ok: false, error: `Generated delta failed validation: ${validation.error.message}` };
-  }
-
-  return { ok: true, format: 'legacy', delta: validation.data as Delta };
+  return { ok: true, format: 'legacy', delta };
 }
 
 // ── Full output + snapshot → diff delta (Legacy Case 3) ──
@@ -402,33 +418,35 @@ function diffAgainstSnapshot(
   snapshot: SemanticContent
 ): ParseResult {
   // Validate incoming frames
-  const newFrames: Frame[] = [];
+  const newFrames: FlatNode[] = [];
   for (const f of parsed.frames) {
-    const result = FrameSchema.safeParse(f);
+    const result = FlatNodeSchema.safeParse(f);
     if (!result.success) {
       return { ok: false, error: `Invalid frame in full output: ${result.error.message}` };
     }
-    newFrames.push(result.data as Frame);
+    newFrames.push(result.data as FlatNode);
   }
 
-  const snapshotMap = new Map<string, Frame>();
-  for (const f of snapshot.frames) {
+  // Flatten snapshot trees to frames for comparison
+  const snapshotFrames = flattenTrees(snapshot.trees);
+  const snapshotMap = new Map<string, FlatNode>();
+  for (const f of snapshotFrames) {
     snapshotMap.set(f.id, f);
   }
 
-  const newMap = new Map<string, Frame>();
+  const newMap = new Map<string, FlatNode>();
   for (const f of newFrames) {
     newMap.set(f.id, f);
   }
 
-  const changes: FrameChange[] = [];
+  const changes: TreeChange[] = [];
 
   // Check new/modified frames
   for (const f of newFrames) {
     const old = snapshotMap.get(f.id);
     if (!old) {
-      // New frame → add
-      changes.push({ action: 'add', frame: f });
+      // New frame → add as tree node
+      changes.push({ action: 'add', parent_path: '', node: frameToTreeNode(f) });
     } else {
       // Check for slot differences
       const changedSlots: Record<string, SlotValue | null> = {};
@@ -451,15 +469,15 @@ function diffAgainstSnapshot(
       }
 
       if (hasChanges) {
-        changes.push({ action: 'update', target: f.id, slots: changedSlots });
+        changes.push({ action: 'update', target_path: f.id, slots: changedSlots });
       }
     }
   }
 
   // Check for removed frames (in snapshot but not in new output)
-  for (const f of snapshot.frames) {
+  for (const f of snapshotFrames) {
     if (!newMap.has(f.id)) {
-      changes.push({ action: 'remove', target: f.id });
+      changes.push({ action: 'remove', target_path: f.id });
     }
   }
 
@@ -505,7 +523,7 @@ function diffAgainstSnapshot(
 
 // ── Main export ──
 
-export function parseFrameDelta(raw: string, snapshot?: SemanticContent): ParseResult {
+export function parseDelta(raw: string, snapshot?: SemanticContent): ParseResult {
   // Step 1: Check if raw starts with word char (not { or [) → YAML tree path
   if (isYamlTree(raw)) {
     return parseYamlTree(raw);
@@ -536,7 +554,7 @@ export function parseFrameDelta(raw: string, snapshot?: SemanticContent): ParseR
     }
 
     // Legacy delta: normalize before schema validation
-    parsed = normalizeFrameOutput(parsed);
+    parsed = normalizeLLMOutput(parsed);
     const result = DeltaSchema.safeParse(parsed);
     if (!result.success) {
       return { ok: false, error: `Delta validation failed: ${result.error.message}` };
@@ -545,7 +563,7 @@ export function parseFrameDelta(raw: string, snapshot?: SemanticContent): ParseR
   }
 
   // Normalize before schema validation (coerces plain objects in slot arrays, etc.)
-  parsed = normalizeFrameOutput(parsed);
+  parsed = normalizeLLMOutput(parsed);
 
   // Step 5: If has 'frames': legacy full output path
   if ('frames' in parsed && Array.isArray(parsed.frames)) {

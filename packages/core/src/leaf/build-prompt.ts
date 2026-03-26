@@ -213,7 +213,7 @@ export function buildLeafPrompt(options: BuildPromptOptions): BuiltPrompt {
     systemPrompt,
     userPrompt,
     metadata: {
-      frameCount: knowledge.frames.length,
+      frameCount: knowledge.trees.length,
       requireCount,
       excludeCount,
     },
@@ -273,7 +273,7 @@ export async function buildLeafPromptWithTemplate(
     systemPrompt: rendered.systemPrompt,
     userPrompt: rendered.userPrompt,
     metadata: {
-      frameCount: knowledge.frames.length,
+      frameCount: knowledge.trees.length,
       requireCount: requires.length,
       excludeCount: excludes.length,
     },

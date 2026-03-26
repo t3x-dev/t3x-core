@@ -8,6 +8,8 @@
  */
 
 import type { LLMProvider } from '../../llm/types';
+import type { FlatNode } from '../../semantic/types';
+import { flattenTrees, unflattenToTrees } from '../../semantic/tree';
 import type { MeaningAgent, PipelineContext } from '../meaningPipeline';
 
 const SYSTEM_PROMPT = `You detect contradictions between the user's explicit statements and the extracted frames.
@@ -52,17 +54,18 @@ export const contradictionCheckerAgent: MeaningAgent = {
 
   shouldRun(ctx: PipelineContext): boolean {
     if (ctx.meta.mode === 'incremental') return false;
-    return ctx.content.frames.length > 0 && ctx.turns.some((t) => t.role === 'user');
+    return ctx.content.trees.length > 0 && ctx.turns.some((t) => t.role === 'user');
   },
 
   async run(ctx: PipelineContext, provider: LLMProvider): Promise<PipelineContext> {
+    const frames: FlatNode[] = flattenTrees(ctx.content.trees);
     const userTurns = ctx.turns
       .filter((t) => t.role === 'user')
       .map((t, i) => `[U${i + 1}]: ${t.content}`)
       .join('\n');
 
-    const framesDescription = ctx.content.frames
-      .map((f) => `${f.id} ${f.type}: ${JSON.stringify(f.slots, null, 1).slice(0, 400)}`)
+    const framesDescription = frames
+      .map((f: FlatNode) => `${f.id} ${f.type}: ${JSON.stringify(f.slots, null, 1).slice(0, 400)}`)
       .join('\n\n');
 
     const userPrompt = `## User Messages\n${userTurns}\n\n## Current Frames\n${framesDescription}\n\nCheck for contradictions:`;
@@ -89,25 +92,24 @@ export const contradictionCheckerAgent: MeaningAgent = {
 
       if (!parsed.contradictions || parsed.contradictions.length === 0) return ctx;
 
-      let frames = [...ctx.content.frames];
+      let modifiedFrames = [...frames];
 
       for (const c of parsed.contradictions) {
         if (c.action === 'remove_frame') {
-          frames = frames.filter((f) => f.id !== c.frame_id);
+          modifiedFrames = modifiedFrames.filter((f: FlatNode) => f.id !== c.frame_id);
         } else if (c.action === 'remove_slot') {
-          const frame = frames.find((f) => f.id === c.frame_id);
+          const frame = modifiedFrames.find((f: FlatNode) => f.id === c.frame_id);
           if (frame && c.slot_key in frame.slots) {
             const { [c.slot_key]: _, ...remainingSlots } = frame.slots;
             frame.slots = remainingSlots;
-            // If frame has no slots left, remove it entirely
             if (Object.keys(frame.slots).length === 0) {
-              frames = frames.filter((f) => f.id !== c.frame_id);
+              modifiedFrames = modifiedFrames.filter((f: FlatNode) => f.id !== c.frame_id);
             }
           }
         }
       }
 
-      ctx.content = { ...ctx.content, frames };
+      ctx.content = { trees: unflattenToTrees(modifiedFrames), relations: ctx.content.relations };
     } catch {
       // Parse failed — non-fatal, continue with what we have
     }
