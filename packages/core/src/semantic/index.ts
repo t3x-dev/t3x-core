@@ -1,20 +1,20 @@
 /**
- * T3X Semantic Frame Module
+ * T3X Semantic Module — Tree-Primary API
  *
- * Frame + Relation paradigm for structured meaning representation.
+ * TreeNode + Relation paradigm for structured meaning representation.
  * Zero dependencies on other @t3x/core modules.
- *
- * @see docs/plans/core-engine/00-index.md
  */
 
-// Business Gate (Gate 3)
+// ── Business Gate (Gate 3) ──
 export { BusinessGate, evaluateRule, parseGatesConfig } from './businessGate';
-// Delta
-export { applyDelta, applyTreeDelta, buildDraft } from './delta';
-export type { TreeNativeChange, TreeNativeDelta } from './delta';
-// Diff
-export { frameDiff } from './diff';
-// Gate (Gate 2 — Semantic)
+
+// ── Delta ──
+export { applyDelta } from './delta';
+
+// ── Diff ──
+export { diffCommits, diffSlots } from './diff';
+
+// ── Gate (Gate 2 — Semantic) ──
 export {
   buildCoveragePrompt,
   buildSemanticGatePrompt,
@@ -22,22 +22,40 @@ export {
   parseSemanticGateResponse,
   SemanticGate,
 } from './gate';
-// Gate Runner (Orchestrator)
+
+// ── Gate Runner (Orchestrator) ──
 export { GateRunner, type GateRunnerOptions } from './gateRunner';
-// Merge
-export { executeFrameMerge, prepareFrameMerge } from './merge';
-// Zod Schemas
+
+// ── Merge ──
+export { executeMerge, prepareMerge } from './merge';
+
+// ── Zod Schemas (public) ──
 export {
   DeltaSchema,
-  FrameRelationTypeSchema,
-  FrameSchema,
   RelationSchema,
+  RelationTypeSchema,
   SemanticContentSchema,
   SlotValueSchema,
   TreeNodeSchema,
-  TreeNativeDeltaSchema,
 } from './schema';
-// Types
+
+// ── Serialization ──
+export { serializeForPrompt } from './serialize';
+
+// ── Tree utilities ──
+export {
+  buildSlotQuotesPath,
+  collectSlotQuotes,
+  flattenTree,
+  flattenTrees,
+  resolveSlotQuotesPath,
+  unflattenToTree,
+  unflattenToTrees,
+  validateTreeDepth,
+  yamlObjectToTreeNode,
+} from './tree';
+
+// ── Types ──
 export type {
   BusinessGateResult,
   BusinessRuleConfig,
@@ -46,45 +64,29 @@ export type {
   DeltaLogEntry,
   DeltaSource,
   DimensionResult,
-  Frame,
-  FrameChange,
-  FrameDiff,
-  FrameMergeDecision,
-  FrameMergeResult,
-  FrameRelationType,
   GateDimension,
   GateResult,
-  InlineFrame,
+  MergeDecision,
   MergeResolution,
+  MergeResult,
   Relation,
+  RelationType,
   SemanticContent,
   SemanticGateResult,
   SemanticIssue,
   SlotConflict,
   SlotDiff,
-  SlotRef,
-  SlotSourceRef,
   SlotValue,
   StructureGateResult,
+  TreeChange,
+  TreeDiff,
+  TreeNode,
   ValidationError,
   ValidationResult,
   ValidationWarning,
   WordDiffFn,
 } from './types';
-export type { TreeNode } from './types';
-export { FRAME_RELATION_TYPES } from './types';
-// Tree (tree-native utilities)
-export {
-  buildSlotQuotesPath,
-  collectSlotQuotes,
-  flattenTree,
-  isTreeNative,
-  resolveSlotQuotesPath,
-  unflattenToTree,
-  validateTreeDepth,
-  yamlObjectToTreeNode,
-} from './tree';
-// Validation
+export { RELATION_TYPES } from './types';
+
+// ── Validation ──
 export { checkRelationSanity, validateIntegrity } from './validate';
-// Serialization
-export { serializeForPrompt, serializeFramesForPrompt } from './serialize';
