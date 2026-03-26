@@ -193,7 +193,7 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
   const isExtracting = useExtractionPanelStore((s) => s.isExtracting);
   const togglePanel = useExtractionPanelStore((s) => s.togglePanel);
   const _setPanelMode = useExtractionPanelStore((s) => s.setPanelMode);
-  const lastDeltaChanges = useExtractionPanelStore((s) => s.lastDeltaChanges);
+  const deltaChangeHistory = useExtractionPanelStore((s) => s.deltaChangeHistory);
   const focusIntentEnabled = useExtractionPanelStore((s) => s.focusIntentEnabled);
   const setFocusIntent = useExtractionPanelStore((s) => s.setFocusIntent);
   const isCompressing = useExtractionPanelStore((s) => s.isCompressing);
@@ -208,9 +208,10 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
 
   const frameCount = draft.frames.length;
   const manualCount = manualEditedFrameIds.size;
-  const added = lastDeltaChanges.filter((c) => c.action === 'add').length;
-  const updated = lastDeltaChanges.filter((c) => c.action === 'update').length;
-  const removed = lastDeltaChanges.filter((c) => c.action === 'remove').length;
+  const latestDeltaChanges = deltaChangeHistory[0] ?? [];
+  const added = latestDeltaChanges.filter((c) => c.action === 'add').length;
+  const updated = latestDeltaChanges.filter((c) => c.action === 'update').length;
+  const removed = latestDeltaChanges.filter((c) => c.action === 'remove').length;
   const hasChanges = added + updated + removed > 0;
   const targetWidth =
     panelMode === 'collapsed'

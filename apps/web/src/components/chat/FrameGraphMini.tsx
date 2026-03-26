@@ -128,7 +128,7 @@ const nodeTypes = { miniFrame: MiniFrameNode };
 
 function FrameGraphMiniInner() {
   const draft = useExtractionPanelStore((s) => s.draft);
-  const lastDeltaChanges = useExtractionPanelStore((s) => s.lastDeltaChanges);
+  const deltaChangeHistory = useExtractionPanelStore((s) => s.deltaChangeHistory);
   const confirmedFrameIds = useExtractionPanelStore((s) => s.confirmedFrameIds);
   const confirmFrame = useExtractionPanelStore((s) => s.confirmFrame);
   const unconfirmFrame = useExtractionPanelStore((s) => s.unconfirmFrame);
@@ -137,16 +137,16 @@ function FrameGraphMiniInner() {
   const [edges, setEdges, onEdgesChange] = useEdgesState([] as Edge[]);
   const { fitView } = useReactFlow();
 
-  // Build changeMap from lastDeltaChanges
+  // Build changeMap from most recent delta (graph view doesn't need age)
   const changeMap = useMemo(() => {
     const map = new Map<string, 'add' | 'update' | 'remove'>();
-    for (const c of lastDeltaChanges) {
+    for (const c of deltaChangeHistory[0] ?? []) {
       if (c.action === 'add') map.set(c.frame.id, 'add');
       else if (c.action === 'update') map.set(c.target, 'update');
       else if (c.action === 'remove') map.set(c.target, 'remove');
     }
     return map;
-  }, [lastDeltaChanges]);
+  }, [deltaChangeHistory]);
 
   const handleConfirmToggle = useMemo(
     () => (frameId: string) => {

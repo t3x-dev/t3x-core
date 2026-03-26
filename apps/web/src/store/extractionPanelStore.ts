@@ -30,7 +30,7 @@ interface ExtractionPanelState {
   confirmedSlotKeys: Record<string, Record<string, boolean>>; // frameId → { slotKey: true }
   focusIntentEnabled: boolean;
   llmHighlightedFrameIds: Record<string, boolean>;
-  lastDeltaChanges: FrameChange[];
+  deltaChangeHistory: FrameChange[][]; // sliding window, index 0 = most recent
   removedFrames: Frame[];
 
   // Compression
@@ -154,7 +154,7 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
   confirmedSlotKeys: {},
   focusIntentEnabled: false,
   llmHighlightedFrameIds: {},
-  lastDeltaChanges: [],
+  deltaChangeHistory: [],
   removedFrames: [],
   conversationId: null,
   gateIssues: {},
@@ -253,7 +253,7 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
     set({
       draft: { frames, relations },
       deltaLog: [...deltaLog, entry],
-      lastDeltaChanges: delta.changes,
+      deltaChangeHistory: [delta.changes, ...get().deltaChangeHistory].slice(0, 3),
     });
 
     // Track manual edits
@@ -288,7 +288,7 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
       draft: emptyContent,
       deltaLog: [],
       removedFrames: [],
-      lastDeltaChanges: [],
+      deltaChangeHistory: [],
       confirmedFrameIds: {},
       confirmedSlotKeys: {},
       manualEditedFrameIds: new Set(),

@@ -167,7 +167,7 @@ function renderSlotLines(
 export function FrameYAMLView() {
   const draft = useExtractionPanelStore((s) => s.draft);
   const applyDelta = useExtractionPanelStore((s) => s.applyDelta);
-  const lastDeltaChanges = useExtractionPanelStore((s) => s.lastDeltaChanges);
+  const deltaChangeHistory = useExtractionPanelStore((s) => s.deltaChangeHistory);
   const deltaLog = useExtractionPanelStore((s) => s.deltaLog);
   const confirmedFrameIds = useExtractionPanelStore((s) => s.confirmedFrameIds);
   const confirmedSlotKeys = useExtractionPanelStore((s) => s.confirmedSlotKeys);
@@ -214,16 +214,18 @@ export function FrameYAMLView() {
     setEditValue(yamlText);
   }, [yamlText]);
 
-  // Build change map from last delta
+  // Build change map with age from delta history (index 0 = most recent)
   const changeMap = useMemo(() => {
-    const map = new Map<string, 'add' | 'update' | 'remove'>();
-    for (const c of lastDeltaChanges) {
-      if (c.action === 'add') map.set(c.frame.id, 'add');
-      else if (c.action === 'update') map.set(c.target, 'update');
-      else if (c.action === 'remove') map.set(c.target, 'remove');
+    const map = new Map<string, { action: 'add' | 'update' | 'remove'; age: number }>();
+    // Iterate oldest→newest so newer entries overwrite
+    for (let age = deltaChangeHistory.length - 1; age >= 0; age--) {
+      for (const c of deltaChangeHistory[age]) {
+        const id = c.action === 'add' ? c.frame.id : c.target;
+        map.set(id, { action: c.action, age });
+      }
     }
     return map;
-  }, [lastDeltaChanges]);
+  }, [deltaChangeHistory]);
 
   // Build relevance context
   const relevanceCtx = useMemo((): RelevanceContext => {
@@ -267,7 +269,8 @@ export function FrameYAMLView() {
     const lines: YAMLLine[] = [];
 
     for (const frame of sortedFrames) {
-      const change = changeMap.get(frame.id) ?? null;
+      const changeEntry = changeMap.get(frame.id);
+      const change = changeEntry?.action ?? null;
       const score = relevanceScore(frame, relevanceCtx).score;
       const isAuto = score >= RELEVANCE_THRESHOLD;
       const isFrameCollapsed = (frame as Frame & { status?: string }).status === 'collapsed';
@@ -529,6 +532,16 @@ export function FrameYAMLView() {
                       : line.changeType
                         ? deltaBarColors[line.changeType]
                         : 'transparent',
+                    opacity: manualEditedFrameIds.has(line.frameId)
+                      ? 1
+                      : line.changeType
+                        ? (() => {
+                            const entry = changeMap.get(line.frameId);
+                            if (!entry) return 1;
+                            // age 0 → 1.0, age 1 → 0.5, age 2 → 0.25
+                            return entry.age === 0 ? 1 : entry.age === 1 ? 0.5 : 0.25;
+                          })()
+                        : 1,
                   }}
                 />
 
