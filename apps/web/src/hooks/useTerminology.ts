@@ -89,6 +89,10 @@ const TERMINOLOGY: Record<string, TermEntry> = {
   merge_failed: { default: '合并失败', developer: 'Merge failed' },
   commit_created: { default: '快照已创建', developer: 'Commit Created' },
   merge_completed: { default: '合并完成', developer: 'Merge Completed' },
+  leaf_created: { default: '输出已创建', developer: 'Leaf Created' },
+  leaf_generated: { default: '输出已生成', developer: 'Leaf Generated' },
+  run_completed: { default: '运行完成', developer: 'Run Completed' },
+  run_failed: { default: '运行失败', developer: 'Run Failed' },
   draft_from_canvas: { default: '来自画布的草稿', developer: 'Draft from Canvas' },
 
   // Batch 4: Command palette, tooltips, empty states

@@ -52,10 +52,9 @@ test.describe('Insights Page', () => {
     await page.goto('/insights');
     await expect(page.locator('text=Insights').first()).toBeVisible({ timeout: 15000 });
 
-    // Ledger tab should be visible — skip if not present
+    // Ledger tab should be visible
     const ledgerTab = page.locator('text=Ledger').first();
-    const hasLedger = await ledgerTab.isVisible().catch(() => false);
-    test.skip(!hasLedger, 'Ledger tab not present on insights page');
+    await expect(ledgerTab).toBeVisible({ timeout: 10000 });
     await ledgerTab.click();
 
     // Commit card with our specific test message should appear
@@ -78,8 +77,7 @@ test.describe('Insights Page', () => {
 
     // Click Latest Commits tab
     const latestTab = page.locator('text=Latest Commits').first();
-    const hasTab = await latestTab.isVisible().catch(() => false);
-    test.skip(!hasTab, 'Latest Commits tab not present');
+    await expect(latestTab).toBeVisible({ timeout: 10000 });
 
     await latestTab.click();
 

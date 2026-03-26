@@ -61,9 +61,9 @@ test.describe('Canvas Workflow', () => {
     const commitLabel = page.locator(`text=${commitMessage}`);
     await expect(commitLabel.first()).toBeVisible({ timeout: 10000 });
 
-    // Should show sentence count
-    const sentenceCount = page.locator('text=/\\d+ sentences?/');
-    await expect(sentenceCount.first()).toBeVisible({ timeout: 5000 });
+    // Should show sentence or frame count
+    const contentCount = page.locator('text=/\\d+ (sentences?|frames?)/');
+    await expect(contentCount.first()).toBeVisible({ timeout: 5000 });
   });
 
   // CW-03: Mode switch (editor/execution) — skip explicitly if unavailable (#3)

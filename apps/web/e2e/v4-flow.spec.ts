@@ -56,7 +56,7 @@ test.describe('V4 WebUI Flow', () => {
   // ─────────────────────────────────────────────────────────────────────────
   test('1. V4 commits display in canvas', async ({ page }) => {
     // Navigate to project canvas
-    await page.goto(`/project/${projectId}`);
+    await page.goto(`/project/${projectId}?view=canvas`);
 
     // Wait for canvas to load
     const canvas = page.locator('.react-flow');
@@ -82,7 +82,7 @@ test.describe('V4 WebUI Flow', () => {
   // Scenario 2: Commit detail shows sentences (not constraints)
   // ─────────────────────────────────────────────────────────────────────────
   test('2. Commit detail shows sentences (not constraints)', async ({ page }) => {
-    await page.goto(`/project/${projectId}`);
+    await page.goto(`/project/${projectId}?view=canvas`);
 
     // Wait for canvas
     const canvas = page.locator('.react-flow');
@@ -221,8 +221,8 @@ test.describe('V4 WebUI Flow', () => {
     expect(convData.success).toBe(true);
     const conversationId = convData.data.conversation_id;
 
-    // Navigate to conversation page
-    await page.goto(`/project/${projectId}/conversation/${conversationId}`);
+    // Navigate to conversation page (chat route, no projectId in URL)
+    await page.goto(`/chat/${conversationId}`);
 
     // Wait for page content to load
     await page.locator('body').waitFor({ state: 'visible', timeout: 10000 });

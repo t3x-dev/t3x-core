@@ -43,7 +43,7 @@ function ProjectDetailPageContent() {
   const defaultView = useSettingsStore((s) => s.defaultView);
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     const urlView = searchParams.get('view');
-    if (urlView === 'timeline') return urlView;
+    if (urlView === 'canvas' || urlView === 'timeline') return urlView;
     return defaultView;
   });
 

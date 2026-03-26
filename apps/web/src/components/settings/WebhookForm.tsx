@@ -149,11 +149,7 @@ export function WebhookForm({ webhook, onSubmit, onCancel, loading = false }: We
               />
               <div className="flex flex-col gap-0.5">
                 <span className="text-sm font-medium text-[var(--text-primary)]">
-                  {event.value === 'commit.created'
-                    ? t('commit_created')
-                    : event.value === 'merge.completed'
-                      ? t('merge_completed')
-                      : event.label}
+                  {t(event.value.replace('.', '_') as Parameters<typeof t>[0])}
                 </span>
                 <span className="text-xs text-[var(--text-tertiary)]">{event.description}</span>
               </div>
