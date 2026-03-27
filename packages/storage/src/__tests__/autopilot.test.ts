@@ -36,7 +36,7 @@ describe('Autopilot Config Queries', () => {
     expect(result).toEqual({
       enabled: true,
       min_confidence: 0.9,
-      min_sentences: 1,
+      min_nodes: 1,
       auto_create_leaf: false,
       target_branch: 'main',
     });
@@ -50,14 +50,14 @@ describe('Autopilot Config Queries', () => {
       target_branch: 'dev',
     });
 
-    // Now partial update — only change min_sentences
+    // Now partial update — only change min_nodes
     const result = await updateAutopilotConfig(db, projectId, {
-      min_sentences: 3,
+      min_nodes: 3,
     });
 
     expect(result.enabled).toBe(true);
     expect(result.min_confidence).toBe(0.9);
-    expect(result.min_sentences).toBe(3);
+    expect(result.min_nodes).toBe(3);
     expect(result.target_branch).toBe('dev');
     expect(result.auto_create_leaf).toBe(false);
   });
@@ -66,7 +66,7 @@ describe('Autopilot Config Queries', () => {
     await updateAutopilotConfig(db, projectId, {
       enabled: true,
       min_confidence: 0.75,
-      min_sentences: 2,
+      min_nodes: 2,
       auto_create_leaf: true,
       target_branch: 'staging',
     });
@@ -75,7 +75,7 @@ describe('Autopilot Config Queries', () => {
     expect(config).toEqual({
       enabled: true,
       min_confidence: 0.75,
-      min_sentences: 2,
+      min_nodes: 2,
       auto_create_leaf: true,
       target_branch: 'staging',
     });

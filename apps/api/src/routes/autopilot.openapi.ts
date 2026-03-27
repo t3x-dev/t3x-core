@@ -47,7 +47,7 @@ const DraftIdParam = z.object({
 const AutopilotConfigSchema = z.object({
   enabled: z.boolean(),
   min_confidence: z.number(),
-  min_sentences: z.number(),
+  min_nodes: z.number(),
   auto_create_leaf: z.boolean(),
   target_branch: z.string(),
 });
@@ -101,7 +101,7 @@ autopilotRoutes.openapi(getConfigRoute, async (c) => {
 const UpdateConfigBodySchema = z.object({
   enabled: z.boolean().optional(),
   min_confidence: z.number().min(0).max(1).optional(),
-  min_sentences: z.number().int().min(1).optional(),
+  min_nodes: z.number().int().min(1).optional(),
   auto_create_leaf: z.boolean().optional(),
   target_branch: z.string().min(1).optional(),
 });
@@ -266,8 +266,8 @@ const AutoCommitResponseSchema = z.object({
         committed_at: z.string().optional(),
       })
       .optional(),
-    sentences_committed: z.number().optional(),
-    sentences_skipped: z.number().optional(),
+    nodes_committed: z.number().optional(),
+    nodes_skipped: z.number().optional(),
     skipped: z
       .array(
         z.object({
@@ -378,8 +378,8 @@ autopilotRoutes.openapi(autoCommitRoute, async (c) => {
       );
     }
 
-    // 7. Convert qualifying SPs directly to frames (no intermediate sentence step)
-    const qualifyingIds = new Set(plan.sentences.map((s) => s.id));
+    // 7. Convert qualifying SPs directly to tree nodes
+    const qualifyingIds = new Set(plan.nodes.map((s) => s.id));
     const qualifyingSPs = sps.filter((sp) => qualifyingIds.has(sp.id));
 
     // 8. Atomically claim the draft (status WHERE guard prevents double-commit)
@@ -397,7 +397,7 @@ autopilotRoutes.openapi(autoCommitRoute, async (c) => {
 
     // 9. Create commit (only the winner of step 8 reaches here)
     const autoTrees = qualifyingSPs.map((sp) => ({
-      key: sp.id || 'legacy_sentence',
+      key: sp.id || 'legacy_node',
       slots: { text: sp.text } as Record<string, string>,
       children: [] as import('@t3x-dev/core').TreeNode[],
       confidence: sp.confidence,
@@ -407,7 +407,7 @@ autopilotRoutes.openapi(autoCommitRoute, async (c) => {
       author: { type: 'agent' as const, name: 'autopilot' },
       content: { trees: autoTrees, relations: [] },
       project_id: draft.project_id,
-      message: `Auto-commit: ${qualifyingSPs.length} sentence(s)`,
+      message: `Auto-commit: ${qualifyingSPs.length} node(s)`,
       branch: config.target_branch,
       provenance: { method: 'human_curation' },
     });
@@ -423,7 +423,7 @@ autopilotRoutes.openapi(autoCommitRoute, async (c) => {
       project_id: draft.project_id,
       type: 'commit.created',
       title: 'Auto-commit completed',
-      message: `Autopilot committed ${qualifyingSPs.length} sentence(s) from draft "${draft.title}"`,
+      message: `Autopilot committed ${qualifyingSPs.length} node(s) from draft "${draft.title}"`,
       ref_id: commit.hash,
     });
 
@@ -433,7 +433,7 @@ autopilotRoutes.openapi(autoCommitRoute, async (c) => {
       {
         commit_hash: commit.hash,
         project_id: draft.project_id,
-        sentences_count: qualifyingSPs.length,
+        nodes_count: qualifyingSPs.length,
         source: 'autopilot',
       },
       draft.project_id
@@ -449,8 +449,8 @@ autopilotRoutes.openapi(autoCommitRoute, async (c) => {
             branch: commit.branch ?? undefined,
             committed_at: commit.committed_at,
           },
-          sentences_committed: qualifyingSPs.length,
-          sentences_skipped: plan.skipped.length,
+          nodes_committed: qualifyingSPs.length,
+          nodes_skipped: plan.skipped.length,
           skipped: plan.skipped,
         },
       },

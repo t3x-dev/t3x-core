@@ -279,10 +279,6 @@ export {
   createDeepSeekProvider,
   createGeminiProvider,
   createGoogleAIEmbeddingProvider,
-  // NLP Provider (Google Cloud)
-  createGoogleCloudNLPProvider,
-  // NLP Provider (Local fallback)
-  createLocalNLPProvider,
   createOllamaEmbeddingProvider,
   createOllamaProvider,
   createOpenAIEmbeddingProvider,
@@ -291,7 +287,6 @@ export {
   createProviderRegistry,
   DeepSeekProvider,
   type DeepSeekProviderConfig,
-  type DependencyLabel,
   // Embedding Provider (interface)
   type EmbeddingProvider,
   EmbeddingProviderError,
@@ -300,19 +295,6 @@ export {
   type GoogleAIEmbeddingConfig,
   // Embedding Provider (implementations)
   GoogleAIEmbeddingProvider,
-  type GoogleCloudNLPConfig,
-  // NLP Provider (implementations)
-  GoogleCloudNLPProvider,
-  LocalNLPProvider,
-  type LocalNLPProviderConfig,
-  type NLPAnalysis,
-  type NLPEntity,
-  type NLPProvider,
-  NLPProviderError,
-  type NLPSentence,
-  type NLPToken,
-  normalizeDependencyLabel,
-  normalizePosTag,
   type OllamaEmbeddingConfig,
   OllamaEmbeddingProvider,
   OllamaProvider,
@@ -321,7 +303,6 @@ export {
   OpenAIEmbeddingProvider,
   OpenAIProvider,
   type OpenAIProviderConfig,
-  POS_TAG_MAPPING,
   type ProviderEntry,
   ProviderRegistry,
   type ProviderRole,

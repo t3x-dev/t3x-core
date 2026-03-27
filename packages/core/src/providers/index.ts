@@ -39,25 +39,6 @@ export {
   OpenAIProvider,
   type OpenAIProviderConfig,
 } from './llm';
-// NLP Provider
-export {
-  createGoogleCloudNLPProvider,
-  createLocalNLPProvider,
-  type DependencyLabel,
-  type GoogleCloudNLPConfig,
-  GoogleCloudNLPProvider,
-  LocalNLPProvider,
-  type LocalNLPProviderConfig,
-  type NLPAnalysis,
-  type NLPEntity,
-  type NLPProvider,
-  NLPProviderError,
-  type NLPSentence,
-  type NLPToken,
-  normalizeDependencyLabel,
-  normalizePosTag,
-  POS_TAG_MAPPING,
-} from './nlp';
 // Provider Registry
 export {
   AllProvidersFailedError,

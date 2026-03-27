@@ -1,21 +1,20 @@
 /**
  * Provider Registry
  *
- * Central registry for managing LLM, Embedding, and NLP providers.
+ * Central registry for managing LLM and Embedding providers.
  * Supports role-based assignment, fallback chains, and runtime configuration.
  */
 
 import type { LLMProvider } from '../llm/types';
 import type { EmbeddingProvider } from './embedding/base';
-import type { NLPProvider } from './nlp/base';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Types
 // ═══════════════════════════════════════════════════════════════════════════
 
-export type ProviderRole = 'generation' | 'embedding' | 'extraction' | 'merge';
+export type ProviderRole = 'generation' | 'embedding' | 'merge';
 
-export type AnyProvider = LLMProvider | EmbeddingProvider | NLPProvider;
+export type AnyProvider = LLMProvider | EmbeddingProvider;
 
 export interface ProviderEntry<T = AnyProvider> {
   /** Unique provider ID, e.g., "anthropic", "openai", "ollama" */
@@ -233,9 +232,6 @@ export class ProviderRegistry {
       } else if ('encode' in instance) {
         // Embedding provider — encode a test string
         await (instance as EmbeddingProvider).encode(['test']);
-      } else if ('analyze' in instance) {
-        // NLP provider — analyze a test string
-        await (instance as NLPProvider).analyze('Hello world');
       }
 
       return { ok: true, latencyMs: Date.now() - start };
