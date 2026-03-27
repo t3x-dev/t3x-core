@@ -48,7 +48,7 @@ export function safeJsonParse<T>(json: string | null, fallback: T): T {
 /**
  * Parse CommitAnchors from JSON and pre-compute global positions for UI rendering.
  *
- * The API stores anchor positions relative to their sentence (start/end).
+ * The API stores anchor positions relative to their node (start/end).
  * For UI rendering, we need global positions (relative to the full source text).
  * This function adds global_start/global_end (snake_case) to each anchor.
  * These are later converted to camelCase (globalStart/globalEnd) by parseApiConfirmedAnchor.
@@ -61,29 +61,29 @@ export function _parseAnchorsWithGlobalPositions(json: string | null): ApiCommit
 
   try {
     const anchors = JSON.parse(json) as ApiCommitAnchors;
-    if (!anchors?.sentences) return anchors;
+    if (!anchors?.nodes) return anchors;
 
     // Pre-compute global positions for each anchor
-    for (let i = 0; i < anchors.sentences.length; i++) {
-      const sentence = anchors.sentences[i];
+    for (let i = 0; i < anchors.nodes.length; i++) {
+      const node = anchors.nodes[i];
 
       // Graceful degradation: if start_char is missing, warn and return null
       // This prevents a single corrupt commit from breaking the entire canvas
-      if (typeof sentence.start_char !== 'number') {
+      if (typeof node.start_char !== 'number') {
         if (process.env.NODE_ENV !== 'production') {
           console.warn(
-            `[api] Anchor data corrupt: sentence[${i}].start_char is missing (got ${typeof sentence.start_char}). ` +
+            `[api] Anchor data corrupt: node[${i}].start_char is missing (got ${typeof node.start_char}). ` +
               `Cannot compute global anchor positions. Anchor highlighting disabled for this commit.`
           );
         }
         return null;
       }
 
-      const sentenceStart = sentence.start_char;
-      for (const anchor of sentence.anchors ?? []) {
+      const nodeStart = node.start_char;
+      for (const anchor of node.anchors ?? []) {
         // Add global positions for UI rendering (snake_case for API type consistency)
-        anchor.global_start = sentenceStart + anchor.start;
-        anchor.global_end = sentenceStart + anchor.end;
+        anchor.global_start = nodeStart + anchor.start;
+        anchor.global_end = nodeStart + anchor.end;
       }
     }
 

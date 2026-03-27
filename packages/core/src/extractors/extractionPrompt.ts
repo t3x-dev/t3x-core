@@ -137,7 +137,7 @@ export function quoteLengthSegment(ql: QuoteLength): string {
   switch (ql) {
     case 'minimal':
       return `- Keep quotes MINIMAL: extract only the shortest substring that contains the slot value
-  BAD:  "We're vegetarian and my partner is allergic to peanuts" (entire sentence)
+  BAD:  "We're vegetarian and my partner is allergic to peanuts" (entire clause)
   GOOD: "vegetarian" (just the value)
   GOOD: "allergic to peanuts" (just the relevant part)`;
     case 'contextual':

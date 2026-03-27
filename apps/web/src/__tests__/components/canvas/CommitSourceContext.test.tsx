@@ -18,7 +18,7 @@ import type { HighlightColor } from '@/types/sourceContext';
 // Recreate helper functions for unit testing
 // ═══════════════════════════════════════════════════════════════════════════
 
-interface CommitSentence {
+interface CommitContentNode {
   id: string;
   text: string;
   source?: {
@@ -33,8 +33,8 @@ interface TurnHighlight {
   end: number;
 }
 
-interface SentenceWithSource {
-  sentence: CommitSentence;
+interface NodeWithSource {
+  node: CommitContentNode;
   turnHash: string;
   highlight: TurnHighlight;
 }
@@ -42,30 +42,30 @@ interface SentenceWithSource {
 type ContentIntegrityStatus = 'valid' | 'mismatch' | 'unknown';
 
 /**
- * Group sentences by turn_hash, tracking which sentences have valid source info
+ * Group nodes by turn_hash, tracking which nodes have valid source info
  */
-function groupSentencesByTurn(sentences: CommitSentence[]): {
-  byTurn: Map<string, SentenceWithSource[]>;
-  withoutSource: CommitSentence[];
+function groupNodesByTurn(nodes: CommitContentNode[]): {
+  byTurn: Map<string, NodeWithSource[]>;
+  withoutSource: CommitContentNode[];
 } {
-  const byTurn = new Map<string, SentenceWithSource[]>();
-  const withoutSource: CommitSentence[] = [];
+  const byTurn = new Map<string, NodeWithSource[]>();
+  const withoutSource: CommitContentNode[] = [];
 
-  for (const sentence of sentences) {
+  for (const node of nodes) {
     // Handle legacy data without source field
-    if (!sentence.source || !sentence.source.turn_hash) {
-      withoutSource.push(sentence);
+    if (!node.source || !node.source.turn_hash) {
+      withoutSource.push(node);
       continue;
     }
 
-    const turnHash = sentence.source.turn_hash;
+    const turnHash = node.source.turn_hash;
     const group = byTurn.get(turnHash) || [];
     group.push({
-      sentence,
+      node,
       turnHash,
       highlight: {
-        start: sentence.source.start_char,
-        end: sentence.source.end_char,
+        start: node.source.start_char,
+        end: node.source.end_char,
       },
     });
     byTurn.set(turnHash, group);
@@ -108,10 +108,10 @@ function calculateSimilarity(a: string, b: string): number {
 }
 
 /**
- * Check if the sentence text matches the content at the source position
+ * Check if the node text matches the content at the source position
  */
 function checkContentIntegrity(
-  sentenceText: string,
+  nodeText: string,
   turnContent: string,
   startChar: number,
   endChar: number
@@ -129,15 +129,15 @@ function checkContentIntegrity(
 
   const actualText = turnContent.slice(startChar, endChar);
   // Normalize whitespace for comparison
-  const normalizedSentence = sentenceText.trim().replace(/\s+/g, ' ');
+  const normalizedNode = nodeText.trim().replace(/\s+/g, ' ');
   const normalizedActual = actualText.trim().replace(/\s+/g, ' ');
 
-  if (normalizedSentence === normalizedActual) {
+  if (normalizedNode === normalizedActual) {
     return 'valid';
   }
 
   // Check if it's a close match (>90% similar)
-  const similarity = calculateSimilarity(normalizedSentence, normalizedActual);
+  const similarity = calculateSimilarity(normalizedNode, normalizedActual);
   if (similarity > 0.9) {
     return 'valid';
   }
@@ -209,18 +209,18 @@ function adjustHighlightsForTruncation(
 
 describe('CommitSourceContext - Edge Cases', () => {
   describe('Legacy Data Handling (no source field)', () => {
-    test('separates sentences with and without source', () => {
-      const sentences: CommitSentence[] = [
+    test('separates nodes with and without source', () => {
+      const nodes: CommitContentNode[] = [
         {
           id: 's1',
           text: 'Has source',
           source: { turn_hash: 'hash1', start_char: 0, end_char: 10 },
         },
-        { id: 's2', text: 'Legacy sentence', source: undefined },
+        { id: 's2', text: 'Legacy node', source: undefined },
         { id: 's3', text: 'Another legacy' },
       ];
 
-      const { byTurn, withoutSource } = groupSentencesByTurn(sentences);
+      const { byTurn, withoutSource } = groupNodesByTurn(nodes);
 
       expect(byTurn.size).toBe(1);
       expect(withoutSource.length).toBe(2);
@@ -229,30 +229,30 @@ describe('CommitSourceContext - Edge Cases', () => {
     });
 
     test('handles all legacy data', () => {
-      const sentences: CommitSentence[] = [
+      const nodes: CommitContentNode[] = [
         { id: 's1', text: 'Legacy 1' },
         { id: 's2', text: 'Legacy 2' },
       ];
 
-      const { byTurn, withoutSource } = groupSentencesByTurn(sentences);
+      const { byTurn, withoutSource } = groupNodesByTurn(nodes);
 
       expect(byTurn.size).toBe(0);
       expect(withoutSource.length).toBe(2);
     });
 
     test('handles empty source object', () => {
-      const sentences: CommitSentence[] = [
+      const nodes: CommitContentNode[] = [
         { id: 's1', text: 'Empty source', source: { turn_hash: '', start_char: 0, end_char: 0 } },
       ];
 
-      const { byTurn, withoutSource } = groupSentencesByTurn(sentences);
+      const { byTurn, withoutSource } = groupNodesByTurn(nodes);
 
       expect(byTurn.size).toBe(0);
       expect(withoutSource.length).toBe(1);
     });
 
     test('handles mixed data correctly', () => {
-      const sentences: CommitSentence[] = [
+      const nodes: CommitContentNode[] = [
         {
           id: 's1',
           text: 'From turn 1',
@@ -272,7 +272,7 @@ describe('CommitSourceContext - Edge Cases', () => {
         },
       ];
 
-      const { byTurn, withoutSource } = groupSentencesByTurn(sentences);
+      const { byTurn, withoutSource } = groupNodesByTurn(nodes);
 
       expect(byTurn.size).toBe(2);
       expect(byTurn.get('hash1')?.length).toBe(2);
@@ -283,45 +283,45 @@ describe('CommitSourceContext - Edge Cases', () => {
 
   describe('Content Integrity Check', () => {
     test('returns valid for exact match', () => {
-      const sentenceText = 'Hello world';
+      const nodeText = 'Hello world';
       const turnContent = 'The message is: Hello world, goodbye.';
-      const status = checkContentIntegrity(sentenceText, turnContent, 16, 27);
+      const status = checkContentIntegrity(nodeText, turnContent, 16, 27);
       expect(status).toBe('valid');
     });
 
     test('returns valid for match with whitespace differences', () => {
-      const sentenceText = 'Hello   world';
+      const nodeText = 'Hello   world';
       const turnContent = 'Hello world';
-      const status = checkContentIntegrity(sentenceText, turnContent, 0, 11);
+      const status = checkContentIntegrity(nodeText, turnContent, 0, 11);
       expect(status).toBe('valid');
     });
 
     test('returns mismatch for completely different content', () => {
-      const sentenceText = 'Hello world';
+      const nodeText = 'Hello world';
       const turnContent = 'Goodbye universe';
-      const status = checkContentIntegrity(sentenceText, turnContent, 0, 16);
+      const status = checkContentIntegrity(nodeText, turnContent, 0, 16);
       expect(status).toBe('mismatch');
     });
 
     test('returns mismatch for out of bounds positions', () => {
-      const sentenceText = 'Test';
+      const nodeText = 'Test';
       const turnContent = 'Short';
 
       // Start before 0
-      expect(checkContentIntegrity(sentenceText, turnContent, -1, 4)).toBe('mismatch');
+      expect(checkContentIntegrity(nodeText, turnContent, -1, 4)).toBe('mismatch');
 
       // End beyond content length
-      expect(checkContentIntegrity(sentenceText, turnContent, 0, 100)).toBe('mismatch');
+      expect(checkContentIntegrity(nodeText, turnContent, 0, 100)).toBe('mismatch');
 
       // End before 0
-      expect(checkContentIntegrity(sentenceText, turnContent, 0, -1)).toBe('mismatch');
+      expect(checkContentIntegrity(nodeText, turnContent, 0, -1)).toBe('mismatch');
 
       // Start >= end (invalid range)
-      expect(checkContentIntegrity(sentenceText, turnContent, 3, 3)).toBe('mismatch');
-      expect(checkContentIntegrity(sentenceText, turnContent, 4, 2)).toBe('mismatch');
+      expect(checkContentIntegrity(nodeText, turnContent, 3, 3)).toBe('mismatch');
+      expect(checkContentIntegrity(nodeText, turnContent, 4, 2)).toBe('mismatch');
 
       // Start >= content length
-      expect(checkContentIntegrity(sentenceText, turnContent, 10, 12)).toBe('mismatch');
+      expect(checkContentIntegrity(nodeText, turnContent, 10, 12)).toBe('mismatch');
     });
 
     test('returns valid for very high similarity (>90%)', () => {
@@ -329,17 +329,17 @@ describe('CommitSourceContext - Edge Cases', () => {
       // With 19 common words and 2 different (one in each), we get 19/21 = 0.905
       const commonWords =
         'one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen';
-      const sentenceText = commonWords + ' original';
+      const nodeText = commonWords + ' original';
       const turnContent = commonWords + ' modified';
-      const status = checkContentIntegrity(sentenceText, turnContent, 0, turnContent.length);
+      const status = checkContentIntegrity(nodeText, turnContent, 0, turnContent.length);
       // This should be valid because 19/21 words match (>90%)
       expect(status).toBe('valid');
     });
 
     test('returns mismatch for low similarity', () => {
-      const sentenceText = 'The quick brown fox';
+      const nodeText = 'The quick brown fox';
       const turnContent = 'A slow gray cat sat quietly';
-      const status = checkContentIntegrity(sentenceText, turnContent, 0, 27);
+      const status = checkContentIntegrity(nodeText, turnContent, 0, 27);
       expect(status).toBe('mismatch');
     });
   });
@@ -437,15 +437,15 @@ describe('CommitSourceContext - Edge Cases', () => {
     });
   });
 
-  describe('Sentence Grouping by Turn', () => {
-    test('groups multiple sentences from same turn', () => {
-      const sentences: CommitSentence[] = [
+  describe('ContentNode Grouping by Turn', () => {
+    test('groups multiple nodes from same turn', () => {
+      const nodes: CommitContentNode[] = [
         { id: 's1', text: 'First', source: { turn_hash: 'hash1', start_char: 0, end_char: 5 } },
         { id: 's2', text: 'Second', source: { turn_hash: 'hash1', start_char: 10, end_char: 16 } },
         { id: 's3', text: 'Third', source: { turn_hash: 'hash1', start_char: 20, end_char: 25 } },
       ];
 
-      const { byTurn } = groupSentencesByTurn(sentences);
+      const { byTurn } = groupNodesByTurn(nodes);
 
       expect(byTurn.size).toBe(1);
       const group = byTurn.get('hash1')!;
@@ -455,8 +455,8 @@ describe('CommitSourceContext - Edge Cases', () => {
       expect(group[2].highlight).toEqual({ start: 20, end: 25 });
     });
 
-    test('groups sentences from multiple turns', () => {
-      const sentences: CommitSentence[] = [
+    test('groups nodes from multiple turns', () => {
+      const nodes: CommitContentNode[] = [
         {
           id: 's1',
           text: 'From turn 1',
@@ -474,52 +474,52 @@ describe('CommitSourceContext - Edge Cases', () => {
         },
       ];
 
-      const { byTurn } = groupSentencesByTurn(sentences);
+      const { byTurn } = groupNodesByTurn(nodes);
 
       expect(byTurn.size).toBe(2);
       expect(byTurn.get('hash1')?.length).toBe(2);
       expect(byTurn.get('hash2')?.length).toBe(1);
     });
 
-    test('preserves original sentence reference', () => {
-      const sentences: CommitSentence[] = [
+    test('preserves original node reference', () => {
+      const nodes: CommitContentNode[] = [
         {
           id: 's1',
-          text: 'Test sentence',
+          text: 'Test node',
           source: { turn_hash: 'hash1', start_char: 0, end_char: 13 },
         },
       ];
 
-      const { byTurn } = groupSentencesByTurn(sentences);
+      const { byTurn } = groupNodesByTurn(nodes);
       const group = byTurn.get('hash1')!;
 
-      expect(group[0].sentence).toBe(sentences[0]);
-      expect(group[0].sentence.text).toBe('Test sentence');
+      expect(group[0].node).toBe(nodes[0]);
+      expect(group[0].node.text).toBe('Test node');
     });
   });
 
   describe('Edge Case Combinations', () => {
-    test('handles empty sentences array', () => {
-      const { byTurn, withoutSource } = groupSentencesByTurn([]);
+    test('handles empty nodes array', () => {
+      const { byTurn, withoutSource } = groupNodesByTurn([]);
 
       expect(byTurn.size).toBe(0);
       expect(withoutSource.length).toBe(0);
     });
 
-    test('handles sentence with valid source but empty turn_hash', () => {
-      const sentences: CommitSentence[] = [
+    test('handles node with valid source but empty turn_hash', () => {
+      const nodes: CommitContentNode[] = [
         { id: 's1', text: 'Test', source: { turn_hash: '', start_char: 0, end_char: 4 } },
       ];
 
-      const { byTurn, withoutSource } = groupSentencesByTurn(sentences);
+      const { byTurn, withoutSource } = groupNodesByTurn(nodes);
 
       expect(byTurn.size).toBe(0);
       expect(withoutSource.length).toBe(1);
     });
 
-    test('handles very long sentence text', () => {
+    test('handles very long node text', () => {
       const longText = 'word '.repeat(1000);
-      const sentences: CommitSentence[] = [
+      const nodes: CommitContentNode[] = [
         {
           id: 's1',
           text: longText,
@@ -527,10 +527,10 @@ describe('CommitSourceContext - Edge Cases', () => {
         },
       ];
 
-      const { byTurn } = groupSentencesByTurn(sentences);
+      const { byTurn } = groupNodesByTurn(nodes);
 
       expect(byTurn.size).toBe(1);
-      expect(byTurn.get('hash1')![0].sentence.text.length).toBe(longText.length);
+      expect(byTurn.get('hash1')![0].node.text.length).toBe(longText.length);
     });
   });
 });

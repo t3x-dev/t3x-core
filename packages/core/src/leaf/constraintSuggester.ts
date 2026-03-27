@@ -1,7 +1,7 @@
 /**
  * LLM Constraint Suggester
  *
- * Given commit sentences + leaf type, uses LLM to suggest
+ * Given commit nodes + leaf type, uses LLM to suggest
  * require/exclude constraints. Follows the same pattern as
  * the LLM extractor (prompt → generate → parse → validate).
  */
@@ -190,7 +190,7 @@ async function getNanoid(): Promise<(size: number) => string> {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Suggest constraints for a leaf based on commit sentences.
+ * Suggest constraints for a leaf based on commit nodes.
  *
  * @param provider - LLM provider to use for suggestion
  * @param knowledge - Semantic knowledge (frames + relations)

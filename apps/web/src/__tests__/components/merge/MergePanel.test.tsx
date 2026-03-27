@@ -79,7 +79,7 @@ describe('MergePanel', () => {
       ],
       onlyInSource: [
         {
-          sentence: {
+          node: {
             id: '2',
             text: 'Only in source',
             confidence: 0.9,
@@ -90,7 +90,7 @@ describe('MergePanel', () => {
       ],
       onlyInTarget: [
         {
-          sentence: {
+          node: {
             id: '3',
             text: 'Only in target',
             confidence: 0.9,

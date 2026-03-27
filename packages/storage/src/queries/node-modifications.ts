@@ -1,5 +1,5 @@
 /**
- * Sentence Modification Queries (Audit Trail)
+ * Node Modification Queries (Audit Trail)
  *
  * CRUD operations for tracking semantic point modifications.
  * Records every review action (accept, edit, undo, delete) for audit purposes.
@@ -8,9 +8,9 @@
 import { randomUUID } from 'node:crypto';
 import { desc, eq } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
-import { sentenceModifications } from '../schema-sentence-modifications';
+import { nodeModifications } from '../schema-node-modifications';
 
-export interface InsertSentenceModificationInput {
+export interface InsertNodeModificationInput {
   draft_id: string;
   sp_id: string;
   action: 'edit' | 'undo' | 'delete' | 'accept';
@@ -19,12 +19,12 @@ export interface InsertSentenceModificationInput {
   actor: string;
 }
 
-export async function insertSentenceModification(
+export async function insertNodeModification(
   db: AnyDB,
-  input: InsertSentenceModificationInput
+  input: InsertNodeModificationInput
 ) {
   const [row] = await db
-    .insert(sentenceModifications)
+    .insert(nodeModifications)
     .values({
       id: `smod_${randomUUID().replace(/-/g, '').slice(0, 12)}`,
       draftId: input.draft_id,
@@ -41,7 +41,7 @@ export async function insertSentenceModification(
 export async function findModificationsByDraft(db: AnyDB, draftId: string) {
   return db
     .select()
-    .from(sentenceModifications)
-    .where(eq(sentenceModifications.draftId, draftId))
-    .orderBy(desc(sentenceModifications.createdAt));
+    .from(nodeModifications)
+    .where(eq(nodeModifications.draftId, draftId))
+    .orderBy(desc(nodeModifications.createdAt));
 }

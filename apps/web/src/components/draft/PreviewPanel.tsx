@@ -4,7 +4,7 @@
  * PreviewPanel - Bottom panel showing LLM-generated preview output
  *
  * 5 states (RFC §6.4): idle, loading, ready, stale, error
- * V2 additions: auto preview toggle, model selector, sentence-aware rendering for scroll sync
+ * V2 additions: auto preview toggle, model selector, node-aware rendering for scroll sync
  */
 
 import { AlertCircle, Loader2, RefreshCw } from 'lucide-react';
@@ -34,11 +34,11 @@ function formatTimeAgo(isoString: string): string {
 }
 
 /**
- * Render preview text with paragraph-level sentence mapping.
- * Each paragraph gets a data-sentence-id from the corresponding draft sentence
- * (by paragraph index → sentence index mapping).
+ * Render preview text with paragraph-level node mapping.
+ * Each paragraph gets a data-node-id from the corresponding draft node
+ * (by paragraph index → node index mapping).
  */
-function PreviewContent({ output, sentenceIds }: { output: string; sentenceIds: string[] }) {
+function PreviewContent({ output, nodeIds }: { output: string; nodeIds: string[] }) {
   const paragraphs = output.split('\n\n').filter((p) => p.trim());
 
   return (
@@ -46,7 +46,7 @@ function PreviewContent({ output, sentenceIds }: { output: string; sentenceIds: 
       {paragraphs.map((para, i) => (
         <p
           key={i}
-          data-sentence-id={sentenceIds[i] ?? undefined}
+          data-node-id={nodeIds[i] ?? undefined}
           className="text-sm text-foreground whitespace-pre-wrap leading-relaxed"
         >
           {para}
@@ -71,15 +71,15 @@ export const PreviewPanel = forwardRef<HTMLDivElement>(function PreviewPanel(_pr
   const previewModel = useDraftWorkspaceStore((s) => s.previewModel);
   const setPreviewModel = useDraftWorkspaceStore((s) => s.setPreviewModel);
 
-  const includedCount = draft?.sentences.filter((s) => s.included).length ?? 0;
-  const hasSentences = includedCount > 0;
+  const includedCount = draft?.nodes.filter((s) => s.included).length ?? 0;
+  const hasNodes = includedCount > 0;
 
-  // Build sentence IDs for scroll sync (depend only on sentences, not full draft)
-  const sentences = draft?.sentences;
-  const sentenceIds = useMemo(() => {
-    if (!sentences) return [];
-    return sentences.filter((s) => s.included).map((s) => s.id);
-  }, [sentences]);
+  // Build node IDs for scroll sync (depend only on nodes, not full draft)
+  const nodes = draft?.nodes;
+  const nodeIds = useMemo(() => {
+    if (!nodes) return [];
+    return nodes.filter((s) => s.included).map((s) => s.id);
+  }, [nodes]);
 
   return (
     <div className="flex h-full flex-col">
@@ -119,7 +119,7 @@ export const PreviewPanel = forwardRef<HTMLDivElement>(function PreviewPanel(_pr
           size="sm"
           className="h-7 gap-1.5 text-xs"
           onClick={generatePreview}
-          disabled={previewStatus === 'loading' || !hasSentences}
+          disabled={previewStatus === 'loading' || !hasNodes}
         >
           {previewStatus === 'loading' ? (
             <Loader2 className="h-3 w-3 animate-spin" />
@@ -135,7 +135,7 @@ export const PreviewPanel = forwardRef<HTMLDivElement>(function PreviewPanel(_pr
         {/* idle */}
         {previewStatus === 'idle' && (
           <p className="text-sm text-muted-foreground italic">
-            Add sentences and click Generate Preview to see output
+            Add nodes and click Generate Preview to see output
           </p>
         )}
 
@@ -153,7 +153,7 @@ export const PreviewPanel = forwardRef<HTMLDivElement>(function PreviewPanel(_pr
         {/* ready */}
         {previewStatus === 'ready' && previewOutput && (
           <div className="space-y-2">
-            <PreviewContent output={previewOutput} sentenceIds={sentenceIds} />
+            <PreviewContent output={previewOutput} nodeIds={nodeIds} />
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <span>{previewOutput.length} chars</span>
               {previewTokenCount != null && (

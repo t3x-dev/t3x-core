@@ -61,7 +61,7 @@ export {
   type PipelineResult,
   type QualityMetrics,
 } from './meaningPipeline';
-// Relation Extraction (Inter-sentence Relations)
+// Relation Extraction (Inter-node Relations)
 export { createRelationExtractor, RelationExtractor } from './relationExtractor';
 export { parseRelationResponse, type RelationItem, RelationParseError } from './relationParser';
 export { buildRelationPrompt } from './relationPrompt';

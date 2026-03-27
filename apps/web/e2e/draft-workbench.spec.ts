@@ -7,7 +7,7 @@ import { isExpectedConsoleError } from './fixtures/test-data-factory';
  *
  * Tests for Workbench RFC V2 features:
  * - Draft creation and page load
- * - Sentence list display and toggles
+ * - Node list display and toggles
  * - AutoSuggestPanel (goal-driven suggestions)
  * - PreviewPanel with model selector and auto-preview toggle
  * - Preview scroll sync infrastructure
@@ -66,10 +66,10 @@ test.describe('Draft Workbench', () => {
     const d1 = await draftResp1.json();
     draftId = d1.data.id;
 
-    // PATCH to add sentences (create API doesn't accept sentences inline)
+    // PATCH to add nodes (create API doesn't accept nodes inline)
     await request.patch(`${API_BASE}/drafts/${draftId}`, {
       data: {
-        sentences: [
+        nodes: [
           {
             id: 's_dw_1',
             text: 'Our product targets enterprise customers',
@@ -106,10 +106,10 @@ test.describe('Draft Workbench', () => {
     const d2 = await draftResp2.json();
     draftNoGoalId = d2.data.id;
 
-    // Add a sentence to no-goal draft
+    // Add a node to no-goal draft
     await request.patch(`${API_BASE}/drafts/${draftNoGoalId}`, {
       data: {
-        sentences: [
+        nodes: [
           {
             id: 's_dw_ng_1',
             text: 'Test sentence without goal',
@@ -141,14 +141,14 @@ test.describe('Draft Workbench', () => {
     });
   }
 
-  test('DW-01: Draft page loads with sentences', async ({ page }) => {
+  test('DW-01: Draft page loads with nodes', async ({ page }) => {
     setupConsoleFilter(page);
     await gotoDraft(page, draftId);
 
     // Wait for workspace to load (title in action bar)
     await expect(page.locator('text=E2E Draft With Goal').first()).toBeVisible({ timeout: 15000 });
 
-    // Sentence list should show our sentences
+    // Node list should show our nodes
     await expect(page.locator('text=Our product targets enterprise customers').first()).toBeVisible(
       {
         timeout: 10000,
@@ -212,7 +212,7 @@ test.describe('Draft Workbench', () => {
     await expect(sonnetOption).toBeVisible({ timeout: 5000 });
   });
 
-  test('DW-05: Sentence include count updates', async ({ page }) => {
+  test('DW-05: Node include count updates', async ({ page }) => {
     setupConsoleFilter(page);
     await gotoDraft(page, draftId);
 
@@ -256,9 +256,9 @@ test.describe('Draft Workbench', () => {
 
     await expect(page.locator('text=E2E Draft With Goal').first()).toBeVisible({ timeout: 15000 });
 
-    // Top pane: sentences area
-    const sentenceText = page.locator('text=Our product targets enterprise customers').first();
-    await expect(sentenceText).toBeVisible();
+    // Top pane: nodes area
+    const nodeText = page.locator('text=Our product targets enterprise customers').first();
+    await expect(nodeText).toBeVisible();
 
     // Bottom pane: preview area with "Preview" label
     const previewLabel = page.locator('text=Preview').first();

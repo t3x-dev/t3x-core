@@ -1,6 +1,6 @@
 import { cleanupProject, createTestCommit, createTestProject } from '../fixtures/api-helpers';
 import { expect, test } from '../fixtures/test';
-import { generateSentences, isExpectedConsoleError } from '../fixtures/test-data-factory';
+import { generateNodes, isExpectedConsoleError } from '../fixtures/test-data-factory';
 
 /**
  * Insights Page E2E Tests
@@ -44,8 +44,8 @@ test.describe('Insights Page', () => {
     const { projectId } = await createTestProject(request, `Insights E2E ${Date.now()}`);
     projectIdsToCleanup.push(projectId);
 
-    const sentences = generateSentences(3);
-    await createTestCommit(request, projectId, sentences, {
+    const nodes = generateNodes(3);
+    await createTestCommit(request, projectId, nodes, {
       message: 'Insights test commit',
     });
 
@@ -67,8 +67,8 @@ test.describe('Insights Page', () => {
     const { projectId } = await createTestProject(request, `Insights Timeline ${Date.now()}`);
     projectIdsToCleanup.push(projectId);
 
-    const sentences = generateSentences(2);
-    await createTestCommit(request, projectId, sentences, {
+    const nodes = generateNodes(2);
+    await createTestCommit(request, projectId, nodes, {
       message: 'Timeline test commit',
     });
 
@@ -120,10 +120,10 @@ test.describe('Insights Page', () => {
     projectIdsToCleanup.push(projectId);
 
     // Create multiple commits (chained) to trigger pagination
-    const sentences = generateSentences(2);
+    const nodes = generateNodes(2);
     let parentHash: string | undefined;
     for (let i = 0; i < 6; i++) {
-      parentHash = await createTestCommit(request, projectId, sentences, {
+      parentHash = await createTestCommit(request, projectId, nodes, {
         message: `Pagination commit ${i + 1}`,
         parents: parentHash ? [parentHash] : undefined,
       });

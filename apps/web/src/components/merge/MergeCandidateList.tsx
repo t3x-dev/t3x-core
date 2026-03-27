@@ -8,7 +8,7 @@ interface MergeCandidateListProps {
 }
 
 /**
- * List of unique sentences with keep/discard checkboxes
+ * List of unique nodes with keep/discard checkboxes
  * 唯一句子列表，带保留/丢弃复选框
  */
 export function MergeCandidateList({ candidates, side, title }: MergeCandidateListProps) {
@@ -29,7 +29,7 @@ export function MergeCandidateList({ candidates, side, title }: MergeCandidateLi
 
       <div className="space-y-[var(--space-item)]">
         {candidates.map((candidate, index) => (
-          <label key={candidate.sentence.id} className="flex items-start gap-2 cursor-pointer">
+          <label key={candidate.node.id} className="flex items-start gap-2 cursor-pointer">
             <input
               type="checkbox"
               checked={candidate.keep}
@@ -38,7 +38,7 @@ export function MergeCandidateList({ candidates, side, title }: MergeCandidateLi
             />
             <div className="flex-1">
               <div className={candidate.keep ? '' : 'text-muted-foreground/70 line-through'}>
-                {candidate.sentence.text}
+                {candidate.node.text}
               </div>
             </div>
           </label>

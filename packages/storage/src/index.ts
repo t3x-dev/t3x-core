@@ -46,5 +46,5 @@ export * from './schema-frames';
 export * from './schema-knowledge-conflicts';
 // Observable Metrics Schema (event tracking)
 export * from './schema-metrics';
-// Sentence Modifications Schema (audit trail)
-export * from './schema-sentence-modifications';
+// Node Modifications Schema (audit trail)
+export * from './schema-node-modifications';

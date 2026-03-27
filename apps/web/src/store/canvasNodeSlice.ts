@@ -61,7 +61,7 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
             draft_id: null,
             draft_text_hash: null,
             signature: null,
-            source_excerpt: null, // trees don't have a flat sentence list for excerpts
+            source_excerpt: null, // trees don't have a flat node list for excerpts
             must_have: null,
             mustnt_have: null,
             position_x: v5.position_x ?? null,
@@ -140,9 +140,9 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
       });
 
       // Build a map: commit_hash -> original ApiCommit data (for source context display)
-      const sentenceCommitMap = new Map<string, api.ApiCommit>();
+      const nodeCommitMap = new Map<string, api.ApiCommit>();
       apiCommits.forEach((v5) => {
-        sentenceCommitMap.set(v5.hash, v5);
+        nodeCommitMap.set(v5.hash, v5);
       });
 
       // Build maps for conversation → commits (one conversation can have multiple commits)
@@ -185,7 +185,7 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
           created_at: commit.created_at,
         };
 
-        const originalCommit = sentenceCommitMap.get(commit.commit_hash);
+        const originalCommit = nodeCommitMap.get(commit.commit_hash);
         const node = unitToNode(displayConv, commit, nodeIndex++, originalCommit);
         const existingPos = existingNodePositions.get(node.id);
         if (existingPos) {

@@ -579,9 +579,9 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     CREATE TABLE IF NOT EXISTS knowledge_conflicts (
       id TEXT PRIMARY KEY,
       project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
-      new_sentence_id TEXT NOT NULL,
+      new_node_id TEXT NOT NULL,
       new_commit_hash TEXT NOT NULL,
-      existing_sentence_id TEXT NOT NULL,
+      existing_node_id TEXT NOT NULL,
       existing_commit_hash TEXT NOT NULL,
       cosine REAL NOT NULL,
       jaccard REAL NOT NULL,
@@ -605,8 +605,8 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_metrics_events_type ON metrics_events(event_type);
     CREATE INDEX IF NOT EXISTS idx_metrics_events_created_at ON metrics_events(created_at);
 
-    -- Sentence Modifications (audit trail)
-    CREATE TABLE IF NOT EXISTS sentence_modifications (
+    -- Node Modifications (audit trail)
+    CREATE TABLE IF NOT EXISTS node_modifications (
       id TEXT PRIMARY KEY,
       draft_id TEXT NOT NULL,
       sp_id TEXT NOT NULL,
@@ -616,8 +616,8 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
       actor TEXT NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
-    CREATE INDEX IF NOT EXISTS idx_smod_draft ON sentence_modifications(draft_id);
-    CREATE INDEX IF NOT EXISTS idx_smod_sp ON sentence_modifications(sp_id);
+    CREATE INDEX IF NOT EXISTS idx_nmod_draft ON node_modifications(draft_id);
+    CREATE INDEX IF NOT EXISTS idx_nmod_sp ON node_modifications(sp_id);
 
     -- Recipes table (automation workflows)
     CREATE TABLE IF NOT EXISTS recipes (
@@ -648,7 +648,7 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_share_tokens_entity ON share_tokens(entity_type, entity_id);
     CREATE INDEX IF NOT EXISTS idx_share_tokens_project ON share_tokens(project_id);
 
-    -- Delta Log table (Frame Semantic Engine — inter-sentence relation deltas)
+    -- Delta Log table (Frame Semantic Engine — inter-node relation deltas)
     CREATE TABLE IF NOT EXISTS delta_log (
       id TEXT PRIMARY KEY,
       conversation_id TEXT NOT NULL REFERENCES conversations(conversation_id) ON DELETE CASCADE,
@@ -668,8 +668,8 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     ALTER TABLE delta_log ADD COLUMN IF NOT EXISTS gate_result_json JSONB;
     ALTER TABLE delta_log ADD COLUMN IF NOT EXISTS metadata JSONB;
 
-    -- Sentence Relations (Inter-sentence Relations)
-    CREATE TABLE IF NOT EXISTS sentence_relations (
+    -- Node Relations (Inter-node Relations)
+    CREATE TABLE IF NOT EXISTS node_relations (
       id TEXT PRIMARY KEY,
       project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
       commit_hash TEXT NOT NULL,
@@ -680,9 +680,9 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
       reasoning TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
-    CREATE INDEX IF NOT EXISTS idx_sr_commit ON sentence_relations(commit_hash);
-    CREATE INDEX IF NOT EXISTS idx_sr_project ON sentence_relations(project_id);
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_sr_pair ON sentence_relations(commit_hash, source_id, target_id, type);
+    CREATE INDEX IF NOT EXISTS idx_nr_commit ON node_relations(commit_hash);
+    CREATE INDEX IF NOT EXISTS idx_nr_project ON node_relations(project_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_nr_pair ON node_relations(commit_hash, source_id, target_id, type);
 
     -- ═══════════════════════════════════════════════════════════════════════════
     -- Knowledge Graph (Cross-conversation entity/topic graph)
@@ -702,11 +702,11 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
 
     CREATE TABLE IF NOT EXISTS knowledge_node_members (
       node_id TEXT NOT NULL REFERENCES knowledge_nodes(id) ON DELETE CASCADE,
-      sentence_id TEXT NOT NULL,
+      content_node_id TEXT NOT NULL,
       commit_hash TEXT NOT NULL,
-      PRIMARY KEY (node_id, sentence_id)
+      PRIMARY KEY (node_id, content_node_id)
     );
-    CREATE INDEX IF NOT EXISTS idx_knm_sentence ON knowledge_node_members (sentence_id);
+    CREATE INDEX IF NOT EXISTS idx_knm_content_node ON knowledge_node_members (content_node_id);
 
     CREATE TABLE IF NOT EXISTS knowledge_edges (
       id TEXT PRIMARY KEY,

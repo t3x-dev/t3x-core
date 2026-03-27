@@ -7,7 +7,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import type { TurnContextData } from '@/lib/api';
 import type { WordDiffSegment } from '@/types/merge';
 
-interface DiffSentenceLineProps {
+interface DiffNodeLineProps {
   text: string;
   type: 'context' | 'added' | 'removed';
   wordDiff?: WordDiffSegment[];
@@ -59,7 +59,7 @@ const lineStyles = {
   },
 };
 
-export function DiffSentenceLine({
+export function DiffNodeLine({
   text,
   type,
   wordDiff,
@@ -76,7 +76,7 @@ export function DiffSentenceLine({
   highlightEnd,
   onJumpToConversation,
   sourceTitle,
-}: DiffSentenceLineProps) {
+}: DiffNodeLineProps) {
   const styles = lineStyles[type];
   const hasDualGutter = baseLineNumber !== undefined || targetLineNumber !== undefined;
 

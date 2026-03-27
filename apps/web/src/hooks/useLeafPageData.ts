@@ -15,13 +15,13 @@ import {
 import { type ExportFormat, exportLeaf } from '@/lib/export';
 import { createRetuneSession } from '@/lib/retune';
 import { usePinsStore } from '@/store/pinsStore';
-import type { SentenceWithSource } from '@/types/sourceContext';
+import type { NodeWithSource } from '@/types/sourceContext';
 
-// ── Sentence coverage types ──
+// ── ContentNode coverage types ──
 
 export type WorkspaceMode = 'generate' | 'display';
 
-export interface SentenceCoverageEntry {
+export interface NodeCoverageEntry {
   reflected: boolean;
   matchStart?: number;
   matchEnd?: number;
@@ -29,16 +29,16 @@ export interface SentenceCoverageEntry {
 }
 
 /**
- * Compute sentence-to-output mapping.
- * For each sentence, tokenize into 3+ word ngrams and search output text.
+ * Compute node-to-output mapping.
+ * For each node, tokenize into 3+ word ngrams and search output text.
  */
-export function computeSentenceCoverage(
-  sentences: SentenceWithSource[],
+export function computeNodeCoverage(
+  nodes: NodeWithSource[],
   output: string | null
-): Map<string, SentenceCoverageEntry> {
-  const result = new Map<string, SentenceCoverageEntry>();
-  if (!output || sentences.length === 0) {
-    for (const s of sentences) {
+): Map<string, NodeCoverageEntry> {
+  const result = new Map<string, NodeCoverageEntry>();
+  if (!output || nodes.length === 0) {
+    for (const s of nodes) {
       result.set(s.id, { reflected: false });
     }
     return result;
@@ -46,7 +46,7 @@ export function computeSentenceCoverage(
 
   const lowerOutput = output.toLowerCase();
 
-  for (const s of sentences) {
+  for (const s of nodes) {
     const words = s.text.split(/\s+/).filter((w) => w.length > 0);
     let bestMatch: { start: number; end: number; snippet: string } | null = null;
 
@@ -95,7 +95,7 @@ export interface UseLeafPageDataReturn {
   commitData: ApiCommit | null;
   semanticContent: SemanticContent | null;
   commitLoadError: boolean;
-  sentences: SentenceWithSource[];
+  nodes: NodeWithSource[];
 
   // Saving states
   saving: boolean;
@@ -126,8 +126,8 @@ export interface UseLeafPageDataReturn {
   // Mode & Coverage
   mode: WorkspaceMode;
   setMode: (mode: WorkspaceMode) => void;
-  sentenceCoverage: Map<string, SentenceCoverageEntry>;
-  sentenceConfidence: Map<string, number>;
+  nodeCoverage: Map<string, NodeCoverageEntry>;
+  nodeConfidence: Map<string, number>;
 
   // Handlers
   handleUpdateConstraints: (constraints: Constraint[], optimisticLeaf?: Leaf) => Promise<void>;
@@ -140,7 +140,7 @@ export interface UseLeafPageDataReturn {
   handleAddConstraintFromSource: (
     type: 'require' | 'exclude',
     value: string,
-    sourceSentenceId: string
+    sourceNodeId: string
   ) => void;
   handleUpdateUserInstruction: (instruction: string) => Promise<void>;
   handleUpdateModel: (model: string | undefined) => Promise<void>;
@@ -338,8 +338,8 @@ export function useLeafPageData(projectId: string, leafId: string): UseLeafPageD
     [commitData]
   );
 
-  // Memoize sentences to prevent unnecessary re-renders in LeafConstraintSourceContext
-  const sentences = useMemo((): SentenceWithSource[] => {
+  // Memoize nodes to prevent unnecessary re-renders in LeafConstraintSourceContext
+  const nodes = useMemo((): NodeWithSource[] => {
     if (!semanticContent) return [];
     const { treesToNodes } = require('@/lib/treeCompat');
     const nodes = treesToNodes(semanticContent.trees);
@@ -353,7 +353,7 @@ export function useLeafPageData(projectId: string, leafId: string): UseLeafPageD
   }, [semanticContent]);
 
   // Memoize confidence scores from commit data
-  const sentenceConfidence = useMemo((): Map<string, number> => {
+  const nodeConfidence = useMemo((): Map<string, number> => {
     if (!semanticContent) return new Map();
     const { treesToNodes } = require('@/lib/treeCompat');
     const nodes = treesToNodes(semanticContent.trees);
@@ -364,10 +364,10 @@ export function useLeafPageData(projectId: string, leafId: string): UseLeafPageD
     return m;
   }, [semanticContent]);
 
-  // Compute sentence coverage (for Display Mode)
-  const sentenceCoverage = useMemo(
-    () => computeSentenceCoverage(sentences, leaf?.output ?? null),
-    [sentences, leaf?.output]
+  // Compute node coverage (for Display Mode)
+  const nodeCoverage = useMemo(
+    () => computeNodeCoverage(nodes, leaf?.output ?? null),
+    [nodes, leaf?.output]
   );
 
   // Handle constraint update (with optimistic update and abort support)
@@ -440,21 +440,21 @@ export function useLeafPageData(projectId: string, leafId: string): UseLeafPageD
     [saving, handleUpdateConstraints]
   );
 
-  // Add constraint with source sentence tracing (with optimistic update)
+  // Add constraint with source node tracing (with optimistic update)
   const handleAddConstraintFromSource = useCallback(
-    (type: 'require' | 'exclude', value: string, sourceSentenceId: string) => {
+    (type: 'require' | 'exclude', value: string, sourceNodeId: string) => {
       const current = leafRef.current;
       if (!current || saving || !value.trim()) return;
       const base = {
         id: `cst_${crypto.randomUUID?.() ?? Math.random().toString(36).slice(2, 10)}`,
         value: value.trim(),
         match_mode: 'exact' as const,
-        description: `Selected from sentence ${sourceSentenceId}`,
+        description: `Selected from node ${sourceNodeId}`,
       };
       const newConstraint: Constraint =
         type === 'require'
-          ? { ...base, type: 'require', source_sentence_id: sourceSentenceId }
-          : { ...base, type: 'exclude', reason: `Excluded from sentence ${sourceSentenceId}` };
+          ? { ...base, type: 'require', source_node: { frame_type: sourceNodeId } }
+          : { ...base, type: 'exclude', reason: `Excluded from node ${sourceNodeId}` };
       const updatedConstraints = [...current.constraints, newConstraint];
       const optimisticLeaf = { ...current, constraints: updatedConstraints };
       handleUpdateConstraints(updatedConstraints, optimisticLeaf);
@@ -593,7 +593,7 @@ export function useLeafPageData(projectId: string, leafId: string): UseLeafPageD
     error,
     commitData,
     commitLoadError,
-    sentences,
+    nodes,
     semanticContent,
 
     // Saving states
@@ -625,8 +625,8 @@ export function useLeafPageData(projectId: string, leafId: string): UseLeafPageD
     // Mode & Coverage
     mode,
     setMode,
-    sentenceCoverage,
-    sentenceConfidence,
+    nodeCoverage,
+    nodeConfidence,
 
     // Handlers
     handleUpdateConstraints,

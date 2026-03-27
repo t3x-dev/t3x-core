@@ -50,7 +50,7 @@ export function generateLeafHistoryId(): string {
   return `lhist_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
 }
 
-export function generateSentenceId(): string {
+export function generateNodeId(): string {
   return `s_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
 }
 

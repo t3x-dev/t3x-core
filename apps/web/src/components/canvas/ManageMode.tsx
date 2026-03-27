@@ -18,15 +18,15 @@ interface ManageModeProps {
   isLocked?: boolean; // When conversation has drafts, editing is locked
 }
 
-// Simple sentence splitter (can be enhanced with NLP later)
-const splitIntoSentences = (text: string): string[] => {
+// Simple node splitter (can be enhanced with NLP later)
+const splitIntoNodes = (text: string): string[] => {
   if (!text.trim()) return [];
-  // Split by common sentence terminators, keeping the terminator
-  const sentences = text
+  // Split by common node terminators, keeping the terminator
+  const nodes = text
     .split(/(?<=[.!?。！？])\s+/)
     .map((s) => s.trim())
     .filter((s) => s.length > 0);
-  return sentences.length > 0 ? sentences : [text];
+  return nodes.length > 0 ? nodes : [text];
 };
 
 // Stop words set
@@ -159,19 +159,19 @@ const isKeyword = (word: string): boolean => {
   return cleanWord.length >= 2 && !stopWords.has(cleanWord);
 };
 
-// Tokenize sentence into words while preserving structure
+// Tokenize node into words while preserving structure
 interface Token {
   text: string;
   isKeyword: boolean;
   keywordId?: string;
 }
 
-const tokenizeSentence = (
-  sentence: string,
+const tokenizeNode = (
+  node: string,
   existingKeywords?: Keyword[]
 ): { tokens: Token[]; keywords: Keyword[] } => {
   // Split by word boundaries while keeping punctuation and spaces
-  const parts = sentence.split(/(\s+|[^\w\u4e00-\u9fa5]+)/g).filter((p) => p.length > 0);
+  const parts = node.split(/(\s+|[^\w\u4e00-\u9fa5]+)/g).filter((p) => p.length > 0);
 
   const keywordMap = new Map<string, Keyword>();
   existingKeywords?.forEach((kw) => {
@@ -218,12 +218,12 @@ export default function ManageMode({
     if (initialConstraints?.clauses?.length) {
       return initialConstraints.clauses;
     }
-    const sentences = splitIntoSentences(text);
-    return sentences.map((sentence) => {
-      const { keywords } = tokenizeSentence(sentence);
+    const nodes = splitIntoNodes(text);
+    return nodes.map((node) => {
+      const { keywords } = tokenizeNode(node);
       return {
         id: generateId(),
-        text: sentence,
+        text: node,
         status: 'neutral' as ClauseStatus,
         keywords,
       };
@@ -360,9 +360,9 @@ export default function ManageMode({
     return clause.keywords.find((kw) => kw.id === keywordId);
   };
 
-  // Render sentence with inline keywords
-  const renderSentenceWithKeywords = (clause: Clause) => {
-    const { tokens } = tokenizeSentence(clause.text, clause.keywords);
+  // Render node with inline keywords
+  const renderNodeWithKeywords = (clause: Clause) => {
+    const { tokens } = tokenizeNode(clause.text, clause.keywords);
 
     return (
       <span className="text-sm leading-relaxed">
@@ -540,7 +540,7 @@ export default function ManageMode({
                   className="w-4 h-4 rounded border-[var(--color-border)]"
                 />
               </label>
-              <div className="flex-1 min-w-0">{renderSentenceWithKeywords(clause)}</div>
+              <div className="flex-1 min-w-0">{renderNodeWithKeywords(clause)}</div>
               {clause.status !== 'neutral' && (
                 <span
                   className={cn(
@@ -561,7 +561,7 @@ export default function ManageMode({
 
       {clauses.length === 0 && (
         <div className="flex-1 flex items-center justify-center text-[var(--color-text-muted)] p-10 text-center">
-          No sentences found. Add some content to the conversation first.
+          No nodes found. Add some content to the conversation first.
         </div>
       )}
     </div>

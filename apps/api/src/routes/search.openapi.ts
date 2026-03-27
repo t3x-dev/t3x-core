@@ -67,7 +67,7 @@ const searchRoute = createRoute({
 });
 
 searchRoutes.openapi(searchRoute, async (c) => {
-  // Return empty results — sentence_vectors table removed, tree-based search pending
+  // Return empty results — node_vectors table removed, tree-based search pending
   return c.json(
     {
       success: true as const,

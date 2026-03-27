@@ -1,4 +1,4 @@
-import type { CommitSentence } from '@/lib/api';
+import type { CommitContentNode } from '@/lib/api';
 import type { WordDiffSegment } from '@/types/merge';
 
 // ============================================================================
@@ -10,8 +10,8 @@ export interface UnifiedLine {
   type: 'context' | 'modified' | 'removed' | 'added' | 'collapsed' | 'group-header';
   baseIndex?: number;
   targetIndex?: number;
-  baseSentence?: CommitSentence;
-  targetSentence?: CommitSentence;
+  baseNode?: CommitContentNode;
+  targetNode?: CommitContentNode;
   wordDiff?: WordDiffSegment[];
   collapsedCount?: number;
   /** The actual lines hidden by this collapsed section (for expand) */
@@ -25,7 +25,7 @@ export interface UnifiedLine {
   groupHeader?: {
     conversationId: string;
     title: string | null;
-    sentenceCount: number;
+    nodeCount: number;
     avgConfidence: number;
     isNewSource: boolean;
     type: 'conversation' | 'leaf';
@@ -60,12 +60,12 @@ const CONTEXT_LINES = 3;
 
 /**
  * Build unified lines in position order with context folding.
- * Added sentences are inserted at their correct target position,
+ * Added nodes are inserted at their correct target position,
  * not appended at the end (3.4 fix).
  */
 export function buildUnifiedLines(
-  baseSentences: CommitSentence[],
-  targetSentences: CommitSentence[],
+  baseNodes: CommitContentNode[],
+  targetNodes: CommitContentNode[],
   segmentDiffs: SegmentDiffItem[]
 ): UnifiedLine[] {
   const diffByBaseId = new Map<string, SegmentDiffItem>();
@@ -79,27 +79,27 @@ export function buildUnifiedLines(
     }
   }
 
-  const targetMap = new Map(targetSentences.map((s) => [s.id, s]));
+  const targetMap = new Map(targetNodes.map((s) => [s.id, s]));
 
-  // Build target position map: sentenceId -> index in targetSentences
+  // Build target position map: nodeId -> index in targetNodes
   const targetPositionMap = new Map<string, number>();
-  for (let i = 0; i < targetSentences.length; i++) {
-    targetPositionMap.set(targetSentences[i].id, i);
+  for (let i = 0; i < targetNodes.length; i++) {
+    targetPositionMap.set(targetNodes[i].id, i);
   }
 
   const rawLines: UnifiedLine[] = [];
 
-  for (let i = 0; i < baseSentences.length; i++) {
-    const baseSentence = baseSentences[i];
-    const diff = diffByBaseId.get(baseSentence.id);
+  for (let i = 0; i < baseNodes.length; i++) {
+    const baseNode = baseNodes[i];
+    const diff = diffByBaseId.get(baseNode.id);
 
     if (!diff || diff.diffType === 'same') {
       rawLines.push({
         type: 'context',
         baseIndex: i,
-        targetIndex: targetPositionMap.get(baseSentence.id),
-        baseSentence,
-        targetSentence: baseSentence,
+        targetIndex: targetPositionMap.get(baseNode.id),
+        baseNode,
+        targetNode: baseNode,
       });
     } else if (diff.diffType === 'modified') {
       rawLines.push({
@@ -108,15 +108,15 @@ export function buildUnifiedLines(
         targetIndex: diff.matchedSegmentId
           ? targetPositionMap.get(diff.matchedSegmentId)
           : undefined,
-        baseSentence,
-        targetSentence: diff.matchedSegmentId ? targetMap.get(diff.matchedSegmentId) : undefined,
+        baseNode,
+        targetNode: diff.matchedSegmentId ? targetMap.get(diff.matchedSegmentId) : undefined,
         wordDiff: diff.wordDiff,
       });
     } else if (diff.diffType === 'removed') {
       rawLines.push({
         type: 'removed',
         baseIndex: i,
-        baseSentence,
+        baseNode,
       });
     }
   }
@@ -125,12 +125,12 @@ export function buildUnifiedLines(
   // Build added lines sorted by target position
   const sortedAddedLines: UnifiedLine[] = [];
   for (const added of addedItems) {
-    const targetSentence = targetMap.get(added.segmentId);
-    if (targetSentence) {
+    const targetNode = targetMap.get(added.segmentId);
+    if (targetNode) {
       sortedAddedLines.push({
         type: 'added',
         targetIndex: targetPositionMap.get(added.segmentId),
-        targetSentence,
+        targetNode,
       });
     }
   }
@@ -210,27 +210,27 @@ export function buildUnifiedLines(
 /**
  * Build document lines: target document order with change annotations.
  * Shows the resulting document as a continuous readable text.
- * No context folding -- all sentences are shown.
+ * No context folding -- all nodes are shown.
  */
 export function buildDocumentLines(
-  baseSentences: CommitSentence[],
-  targetSentences: CommitSentence[],
+  baseNodes: CommitContentNode[],
+  targetNodes: CommitContentNode[],
   segmentDiffs: SegmentDiffItem[]
 ): UnifiedLine[] {
-  // Map: base sentence ID -> { sentence, index }
-  const baseMap = new Map(baseSentences.map((s, i) => [s.id, { sentence: s, index: i }]));
+  // Map: base node ID -> { node, index }
+  const baseMap = new Map(baseNodes.map((s, i) => [s.id, { node: s, index: i }]));
 
-  // Map: target sentence ID -> diff info
+  // Map: target node ID -> diff info
   const targetToDiff = new Map<
     string,
     {
       diffType: 'same' | 'modified';
-      baseSentence: CommitSentence;
+      baseNode: CommitContentNode;
       baseIdx: number;
       wordDiff?: WordDiffSegment[];
     }
   >();
-  const removedDiffs: { baseSentence: CommitSentence; baseIndex: number }[] = [];
+  const removedDiffs: { baseNode: CommitContentNode; baseIndex: number }[] = [];
 
   for (const diff of segmentDiffs) {
     if (diff.diffType === 'same') {
@@ -238,7 +238,7 @@ export function buildDocumentLines(
       if (baseInfo) {
         targetToDiff.set(diff.segmentId, {
           diffType: 'same',
-          baseSentence: baseInfo.sentence,
+          baseNode: baseInfo.node,
           baseIdx: baseInfo.index,
         });
       }
@@ -247,7 +247,7 @@ export function buildDocumentLines(
       if (baseInfo) {
         targetToDiff.set(diff.matchedSegmentId, {
           diffType: 'modified',
-          baseSentence: baseInfo.sentence,
+          baseNode: baseInfo.node,
           baseIdx: baseInfo.index,
           wordDiff: diff.wordDiff,
         });
@@ -255,52 +255,52 @@ export function buildDocumentLines(
     } else if (diff.diffType === 'removed') {
       const baseInfo = baseMap.get(diff.segmentId);
       if (baseInfo) {
-        removedDiffs.push({ baseSentence: baseInfo.sentence, baseIndex: baseInfo.index });
+        removedDiffs.push({ baseNode: baseInfo.node, baseIndex: baseInfo.index });
       }
     }
-    // 'added' items will be detected as target sentences without a match
+    // 'added' items will be detected as target nodes without a match
   }
 
   const lines: UnifiedLine[] = [];
 
-  // Build lines from target sentences (document order)
-  for (let i = 0; i < targetSentences.length; i++) {
-    const sentence = targetSentences[i];
-    const diffInfo = targetToDiff.get(sentence.id);
+  // Build lines from target nodes (document order)
+  for (let i = 0; i < targetNodes.length; i++) {
+    const node = targetNodes[i];
+    const diffInfo = targetToDiff.get(node.id);
 
     if (diffInfo?.diffType === 'same') {
       lines.push({
         type: 'context',
         targetIndex: i,
         baseIndex: diffInfo.baseIdx,
-        baseSentence: diffInfo.baseSentence,
-        targetSentence: sentence,
+        baseNode: diffInfo.baseNode,
+        targetNode: node,
       });
     } else if (diffInfo?.diffType === 'modified') {
       lines.push({
         type: 'modified',
         targetIndex: i,
         baseIndex: diffInfo.baseIdx,
-        baseSentence: diffInfo.baseSentence,
-        targetSentence: sentence,
+        baseNode: diffInfo.baseNode,
+        targetNode: node,
         wordDiff: diffInfo.wordDiff,
       });
     } else {
-      // Added sentence (no match in base)
+      // Added node (no match in base)
       lines.push({
         type: 'added',
         targetIndex: i,
-        targetSentence: sentence,
+        targetNode: node,
       });
     }
   }
 
-  // Append removed sentences at end
-  for (const { baseSentence, baseIndex } of removedDiffs) {
+  // Append removed nodes at end
+  for (const { baseNode, baseIndex } of removedDiffs) {
     lines.push({
       type: 'removed',
       baseIndex,
-      baseSentence,
+      baseNode,
     });
   }
 
@@ -309,21 +309,21 @@ export function buildDocumentLines(
 
 /** Get the effective conversation ID for a line */
 export function getConversationId(line: UnifiedLine): string | null {
-  const sentence = line.targetSentence ?? line.baseSentence;
-  return sentence?.source_ref?.conversation_id ?? null;
+  const node = line.targetNode ?? line.baseNode;
+  return node?.source_ref?.conversation_id ?? null;
 }
 
 /**
- * Insert source group headers between groups of sentences from different conversations.
+ * Insert source group headers between groups of nodes from different conversations.
  */
 export function insertGroupHeaders(
   lines: UnifiedLine[],
-  baseSentences: CommitSentence[],
+  baseNodes: CommitContentNode[],
   sourceRefTitles?: Map<string, string>
 ): UnifiedLine[] {
   // Build a set of base conversation IDs to determine "new" sources
   const baseConvIds = new Set<string>();
-  for (const s of baseSentences) {
+  for (const s of baseNodes) {
     if (s.source_ref?.conversation_id) {
       baseConvIds.add(s.source_ref.conversation_id);
     }
@@ -353,13 +353,13 @@ export function insertGroupHeaders(
     if (currentSegment && currentSegment.convId === convId) {
       currentSegment.count++;
       currentSegment.totalConf +=
-        line.targetSentence?.confidence ?? line.baseSentence?.confidence ?? 0;
+        line.targetNode?.confidence ?? line.baseNode?.confidence ?? 0;
     } else {
       currentSegment = {
         convId,
         startIdx: i,
         count: 1,
-        totalConf: line.targetSentence?.confidence ?? line.baseSentence?.confidence ?? 0,
+        totalConf: line.targetNode?.confidence ?? line.baseNode?.confidence ?? 0,
       };
       segments.push(currentSegment);
     }
@@ -393,7 +393,7 @@ export function insertGroupHeaders(
         groupHeader: {
           conversationId: convId,
           title,
-          sentenceCount: seg?.count ?? 1,
+          nodeCount: seg?.count ?? 1,
           avgConfidence: seg && seg.count > 0 ? seg.totalConf / seg.count : 0,
           isNewSource: !baseConvIds.has(convId),
           type: 'conversation',

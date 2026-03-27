@@ -129,17 +129,17 @@ export async function runAgent(input: AgentInput): Promise<AgentOutput> {
  */
 function summarize(text: string): string {
   // Extract key points (simple heuristic)
-  const sentences = text.split(/[.!?]+/).filter((s) => s.trim().length > 0);
+  const segments = text.split(/[.!?]+/).filter((s) => s.trim().length > 0);
 
-  if (sentences.length <= 2) {
+  if (segments.length <= 2) {
     return text.trim();
   }
 
-  // Take first sentence + any sentence with key words
+  // Take first segment + any segment with key words
   const keyWords = ['timeline', 'deadline', 'risk', 'decision', 'action', 'next', 'important'];
-  const important = sentences.filter((s) => keyWords.some((kw) => s.toLowerCase().includes(kw)));
+  const important = segments.filter((s) => keyWords.some((kw) => s.toLowerCase().includes(kw)));
 
-  const summary = [sentences[0], ...important.slice(0, 2)]
+  const summary = [segments[0], ...important.slice(0, 2)]
     .map((s) => s.trim())
     .filter((s, i, arr) => arr.indexOf(s) === i) // dedupe
     .join('. ');

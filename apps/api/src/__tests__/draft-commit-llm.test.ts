@@ -120,7 +120,7 @@ describe('POST /v1/drafts/{id}/commit (LLM mode)', () => {
     return draft.id;
   }
 
-  it('converts staged SPs to sentences on commit', async () => {
+  it('converts staged SPs to nodes on commit', async () => {
     const sp1 = makeSP({
       id: 'sp_commit_1',
       text: 'User prefers dark mode.',

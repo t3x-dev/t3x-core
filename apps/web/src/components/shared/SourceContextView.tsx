@@ -3,7 +3,7 @@
 /**
  * SourceContextView - Unified inline expandable source context component
  *
- * VS Code Peek-style UX for showing conversation context with highlighted sentences.
+ * VS Code Peek-style UX for showing conversation context with highlighted nodes.
  * Supports both compact (truncated) and expanded (full content) display modes.
  *
  * Features:
@@ -236,7 +236,7 @@ export function SourceContextView({
   // Render content
   // ─────────────────────────────────────────────────────────────────────────
 
-  /** Render word-diff segments within the highlighted sentence range */
+  /** Render word-diff segments within the highlighted node range */
   const renderWordDiffContent = (contentBefore: string, contentAfter: string) => {
     const addedClass = `${highlightColorClasses.deepGreen} px-0.5 rounded-sm`;
     const removedClass = `${highlightColorClasses.deepRed} px-0.5 rounded-sm line-through`;

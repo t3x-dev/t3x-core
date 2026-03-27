@@ -1,8 +1,8 @@
 /**
  * Relation Extractor
  *
- * Extracts inter-sentence relations using a dedicated LLM call.
- * Triggered at commit time when sentences are finalized.
+ * Extracts inter-node relations using a dedicated LLM call.
+ * Triggered at commit time when nodes are finalized.
  *
  * @see docs/plans/2026-03-05-inter-sentence-relations-design.md
  */
@@ -17,13 +17,13 @@ export class RelationExtractor {
   constructor(private readonly provider: LLMProvider) {}
 
   async extract(
-    sentences: Array<{ id: string; text: string }>,
+    nodes: Array<{ id: string; text: string }>,
     options?: { temperature?: number }
   ): Promise<RelationExtractionResult> {
     const emptyResult: RelationExtractionResult = {
       relations: [],
       stats: {
-        total_nodes: sentences.length,
+        total_nodes: nodes.length,
         relations_found: 0,
         avg_confidence: 0,
         extraction_time_ms: 0,
@@ -31,9 +31,9 @@ export class RelationExtractor {
       usage: { inputTokens: 0, outputTokens: 0 },
     };
 
-    if (sentences.length < 2) return emptyResult;
+    if (nodes.length < 2) return emptyResult;
 
-    const { systemPrompt, userPrompt } = buildRelationPrompt(sentences);
+    const { systemPrompt, userPrompt } = buildRelationPrompt(nodes);
     const combinedPrompt = `${systemPrompt}\n\n---\n\n${userPrompt}`;
 
     const startTime = Date.now();
@@ -42,7 +42,7 @@ export class RelationExtractor {
       maxTokens: 4096,
     });
 
-    const validIds = new Set(sentences.map((s) => s.id));
+    const validIds = new Set(nodes.map((s) => s.id));
     const items = parseRelationResponse(genResult.text, validIds);
 
     const relations: NodeRelation[] = items.map((item) => ({
@@ -63,7 +63,7 @@ export class RelationExtractor {
     return {
       relations,
       stats: {
-        total_nodes: sentences.length,
+        total_nodes: nodes.length,
         relations_found: relations.length,
         avg_confidence: avgConfidence,
         extraction_time_ms: extractionTimeMs,

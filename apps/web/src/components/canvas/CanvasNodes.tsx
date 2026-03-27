@@ -45,7 +45,7 @@ import {
   SOURCE_ICONS,
   useSemanticZoom,
 } from './CanvasNodeUtils';
-import { CommitContentSection, PREVIEW_MAX_SENTENCES } from './CommitNodeContent';
+import { CommitContentSection, PREVIEW_MAX_NODES } from './CommitNodeContent';
 import { NodeLeavesSection } from './NodeLeavesSection';
 
 // Re-export LEAF_TYPES for backward compatibility
@@ -796,13 +796,13 @@ const UnitNode = memo(function UnitNode(props: Props) {
                 )}
               </div>
 
-              {/* V4: Sentences content */}
+              {/* V4: ContentNodes content */}
               {data.commit && (
                 <CommitContentSection
                   commit={data.commit}
                   onViewFull={() => openNodeModal(id, 'commit')}
                   projectId={projectId}
-                  maxSentences={isDetail ? Number.MAX_SAFE_INTEGER : PREVIEW_MAX_SENTENCES}
+                  maxContentNodes={isDetail ? Number.MAX_SAFE_INTEGER : PREVIEW_MAX_NODES}
                 />
               )}
             </>

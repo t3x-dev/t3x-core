@@ -184,7 +184,7 @@ export const commitsV4 = pgTable(
         }>
       >(),
 
-    /** Merkle tree root hash of commit sentences */
+    /** Merkle tree root hash of commit nodes */
     merkleRoot: text('merkle_root'),
 
     /** Merge summary statistics (only present on merge commits) */
@@ -1085,12 +1085,12 @@ export const knowledgeNodeMembers = pgTable(
     nodeId: text('node_id')
       .notNull()
       .references(() => knowledgeNodes.id, { onDelete: 'cascade' }),
-    sentenceId: text('sentence_id').notNull(),
+    contentNodeId: text('content_node_id').notNull(),
     commitHash: text('commit_hash').notNull(),
   },
   (table) => ({
-    pk: primaryKey({ columns: [table.nodeId, table.sentenceId] }),
-    sentenceIdx: index('idx_knm_sentence').on(table.sentenceId),
+    pk: primaryKey({ columns: [table.nodeId, table.contentNodeId] }),
+    contentNodeIdx: index('idx_knm_content_node').on(table.contentNodeId),
   })
 );
 

@@ -19,9 +19,9 @@ import {
   DEFAULT_MAX_LENGTH,
   truncateLongContent,
 } from '@/lib/truncationUtils';
-import type { HighlightRange, SentenceWithSource, TurnBubbleData } from '@/types/sourceContext';
+import type { HighlightRange, NodeWithSource, TurnBubbleData } from '@/types/sourceContext';
 
-import { SourceSentenceList } from './SourceSentenceList';
+import { SourceNodeList } from './SourceNodeList';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Constants
@@ -37,11 +37,11 @@ const TRUNCATION_CONTEXT = DEFAULT_CONTEXT_CHARS;
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Sentence with source info and the expected text at that position.
+ * ContentNode with source info and the expected text at that position.
  * Re-exported for consumers that need to build this data.
  */
-export interface SentenceWithHighlight {
-  sentence: SentenceWithSource;
+export interface NodeWithHighlight {
+  node: NodeWithSource;
   turnHash: string;
   highlight: HighlightRange;
 }
@@ -53,10 +53,10 @@ export interface TurnWithHighlights {
   turnHash: string;
   context: TurnContextData | null;
   highlights: HighlightRange[];
-  sentences: SentenceWithHighlight[];
+  nodes: NodeWithHighlight[];
   loading: boolean;
   error: string | null;
-  /** Content integrity check results per sentence */
+  /** Content integrity check results per node */
   integrityStatus: Map<string, 'valid' | 'mismatch' | 'unknown'>;
 }
 
@@ -65,8 +65,8 @@ export interface SourceConversationPanelProps {
   turnHashes: string[];
   /** Turn data map (keyed by turn hash) */
   turnData: Map<string, TurnWithHighlights>;
-  /** Sentence groups by turn hash */
-  byTurn: Map<string, SentenceWithHighlight[]>;
+  /** ContentNode groups by turn hash */
+  byTurn: Map<string, NodeWithHighlight[]>;
   /** Set of currently expanded section keys */
   expandedTurns: Set<string>;
   /** Callback to toggle a section's expansion */
@@ -83,7 +83,7 @@ function TurnSection({
   turnHash,
   idx,
   data,
-  sentencesForTurn,
+  nodesForTurn,
   isExpanded,
   compact,
   toggleSection,
@@ -91,7 +91,7 @@ function TurnSection({
   turnHash: string;
   idx: number;
   data: TurnWithHighlights | undefined;
-  sentencesForTurn: SentenceWithHighlight[];
+  nodesForTurn: NodeWithHighlight[];
   isExpanded: boolean;
   compact: boolean;
   toggleSection: (key: string) => void;
@@ -117,11 +117,11 @@ function TurnSection({
           </span>
         </button>
 
-        {/* Expanded content - show sentences */}
+        {/* Expanded content - show nodes */}
         {isExpanded && (
           <div className="p-3 bg-[var(--color-bg-white)]">
-            <SourceSentenceList
-              sentences={sentencesForTurn.map((sg) => sg.sentence)}
+            <SourceNodeList
+              nodes={nodesForTurn.map((sg) => sg.node)}
               variant="highlighted"
             />
           </div>
@@ -193,7 +193,7 @@ function TurnSection({
             </span>
           )}
           <span className="text-xs text-[var(--color-text-muted)]">
-            {data.sentences.length} sentence{data.sentences.length !== 1 ? 's' : ''}
+            {data.nodes.length} node{data.nodes.length !== 1 ? 's' : ''}
           </span>
         </button>
       )}
@@ -256,7 +256,7 @@ export function SourceConversationPanel({
       {hashesToRender.map((turnHash, idx) => {
         const data = turnData.get(turnHash);
         const isExpanded = expandedTurns.has(turnHash) || compact;
-        const sentencesForTurn = byTurn.get(turnHash) || [];
+        const nodesForTurn = byTurn.get(turnHash) || [];
 
         return (
           <TurnSection
@@ -264,7 +264,7 @@ export function SourceConversationPanel({
             turnHash={turnHash}
             idx={idx}
             data={data}
-            sentencesForTurn={sentencesForTurn}
+            nodesForTurn={nodesForTurn}
             isExpanded={isExpanded}
             compact={compact}
             toggleSection={toggleSection}

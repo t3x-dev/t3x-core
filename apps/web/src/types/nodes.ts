@@ -39,20 +39,20 @@ export interface LeafNodeConfig {
 import type { CommitAuthor, CommitSourceRef } from '@t3x-dev/core';
 import type { ApiCommit } from '@/lib/api/commits';
 
-// Legacy sentence types — kept locally for web components still using sentence-based display.
+// Legacy node types — kept locally for web components still using node-based display.
 // Core has moved to tree-native SemanticContent; web migration is a separate effort.
-export interface SentenceSourceRef {
+export interface NodeSourceRef {
   conversation_id: string;
   turn_hash: string;
   start_char: number;
   end_char: number;
 }
 
-export interface Sentence {
+export interface ContentNode {
   id: string;
   text: string;
   confidence?: number;
-  source_ref?: SentenceSourceRef;
+  source_ref?: NodeSourceRef;
 }
 
 // Re-export contract types for convenience
@@ -61,7 +61,7 @@ export type { CommitAuthor, CommitSourceRef };
 /**
  * Commit display data for canvas nodes.
  * Based on ApiCommit (tree-based), with backward-compat fields for components
- * that still read sentence-derived data.
+ * that still read node-derived data.
  *
  * Note: parents field is intentionally omitted as it's not needed for display.
  */
@@ -71,7 +71,7 @@ export type CommitDisplay = Pick<
 > & {
   position_x?: number;
   position_y?: number;
-  /** Backward-compat: sentence-based view derived from trees (used by older canvas components) */
+  /** Backward-compat: node-based view derived from trees (used by older canvas components) */
   source_refs?: Array<{ type: string; id: string; title?: string }> | null;
   merge_summary?: {
     kept_identical: number;
@@ -163,7 +163,7 @@ export interface MergeConfig {
   baseCommitHash?: string; // Full commit hash for API calls
 }
 
-// Clause (sentence) status in Manage mode
+// Clause (node) status in Manage mode
 export type ClauseStatus = 'neutral' | 'keep' | 'discard';
 
 // Keyword constraint type
@@ -214,18 +214,18 @@ export interface AnchorCandidate {
 
 /**
  * Confirmed anchor - user has clicked and confirmed this anchor
- * Stored within a sentence context for precise auditing
+ * Stored within a node context for precise auditing
  *
  * Position fields have different semantics depending on context:
  *
  * **API storage (after commit):**
- * - start/end: Relative position within sentence
- * - globalStart/globalEnd: Computed from sentence.startChar + start/end
+ * - start/end: Relative position within node
+ * - globalStart/globalEnd: Computed from node.startChar + start/end
  *
  * **UI layer (during staging, before commit):**
  * - start/end: May temporarily hold GLOBAL positions (same as globalStart/globalEnd)
  * - globalStart/globalEnd: Global positions for UI rendering
- * - When committing, handleCommit converts to sentence-relative positions
+ * - When committing, handleCommit converts to node-relative positions
  *
  * When rendering, always use globalStart/globalEnd if present.
  * The start/end fields are authoritative only after API round-trip.
@@ -233,9 +233,9 @@ export interface AnchorCandidate {
 export interface ConfirmedAnchor {
   id: string;
   text: string;
-  /** Position within sentence (relative after API storage, may be global during staging) */
+  /** Position within node (relative after API storage, may be global during staging) */
   start: number;
-  /** Position within sentence (relative after API storage, may be global during staging) */
+  /** Position within node (relative after API storage, may be global during staging) */
   end: number;
   type: AnchorType;
   constraint: AnchorConstraint;
@@ -246,12 +246,12 @@ export interface ConfirmedAnchor {
 }
 
 /**
- * Sentence with its confirmed anchors
- * Provides the sentence context for anchor display and auditing
+ * ContentNode with its confirmed anchors
+ * Provides the node context for anchor display and auditing
  */
-export interface SentenceWithAnchors {
-  sentenceId: string; // Ring 3 segment ID
-  text: string; // Sentence original text
+export interface NodeWithAnchors {
+  nodeId: string; // Ring 3 segment ID
+  text: string; // ContentNode original text
   startChar: number; // Position in source text (global)
   endChar: number;
   anchors: ConfirmedAnchor[];
@@ -263,10 +263,10 @@ export interface SentenceWithAnchors {
  */
 export interface CommitAnchors {
   inputTextHash: string; // SHA-256 of source text for validation
-  sentences: SentenceWithAnchors[];
+  nodes: NodeWithAnchors[];
 }
 
-// Individual clause/sentence with its status
+// Individual clause/node with its status
 export interface Clause {
   id: string;
   text: string;
@@ -341,13 +341,13 @@ export interface SourceTextBlock {
   turnBoundaries?: TurnBoundary[];
 }
 
-// Sentence info for building CommitAnchors (from curate preview chunks)
-export interface PendingCommitSentence {
-  id: string; // Sentence/chunk ID
-  text: string; // Sentence text
+// ContentNode info for building CommitAnchors (from curate preview chunks)
+export interface PendingCommitContentNode {
+  id: string; // ContentNode/chunk ID
+  text: string; // ContentNode text
   start: number; // Global start char position (in source_text)
   end: number; // Global end char position (in source_text)
-  /** v1.3: Turn hash this sentence belongs to (for source context display) */
+  /** v1.3: Turn hash this node belongs to (for source context display) */
   turn_hash?: string;
   /** v1.3: Start position relative to turn.content (without [role]: prefix) */
   turn_start?: number;
@@ -361,7 +361,7 @@ export interface PendingCommitSource {
   confirmedAnchors?: ConfirmedAnchor[]; // User-confirmed anchors during staging
   // v1.1: Data for building CommitAnchors on commit
   inputTextHash?: string; // SHA-256 hash of source text
-  sentences?: PendingCommitSentence[]; // Ring3 sentences from curate preview
+  nodes?: PendingCommitContentNode[]; // Ring3 nodes from curate preview
 }
 
 // Draft-level constraint overrides
@@ -525,14 +525,14 @@ export interface CanvasNodeData {
 
   /**
    * Confirmed anchors for this commit
-   * @display Sentence-level inline highlights in commit detail view
-   * @format SentenceWithAnchors[] with confirmed anchor spans
+   * @display ContentNode-level inline highlights in commit detail view
+   * @format NodeWithAnchors[] with confirmed anchor spans
    */
   anchors?: CommitAnchors;
 
   /**
-   * Commit display data (sentences only, no constraints)
-   * @display UnitNode: Sentences list with info about Leaf constraints
+   * Commit display data (nodes only, no constraints)
+   * @display UnitNode: ContentNodes list with info about Leaf constraints
    */
   commit?: CommitDisplay;
 

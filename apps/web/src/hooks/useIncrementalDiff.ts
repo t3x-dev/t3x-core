@@ -1,21 +1,21 @@
 /**
  * useIncrementalDiff - Real-time incremental diff hook
  *
- * Computes diff between draft sentences and parent commit sentences
+ * Computes diff between draft nodes and parent commit nodes
  * with debouncing and caching for real-time performance.
  *
  * Uses the core incrementalDiffCommits algorithm from @t3x-dev/core (via diffUtils)
- * which caches unchanged sentence pairs and only re-diffs modified sentences.
+ * which caches unchanged node pairs and only re-diffs modified nodes.
  *
  * Performance:
- * - <50 sentences: <10ms (synchronous, no debounce needed)
- * - 50-200 sentences: <50ms
- * - >200 sentences: incremental <50ms (only re-diffs changes)
+ * - <50 nodes: <10ms (synchronous, no debounce needed)
+ * - 50-200 nodes: <50ms
+ * - >200 nodes: incremental <50ms (only re-diffs changes)
  * - Debouncing prevents rapid re-computation during typing
  */
 
 import { useEffect, useRef, useState } from 'react';
-import type { CommitDiff, DiffableSentence, DiffCache } from '@/lib/diffUtils';
+import type { CommitDiff, DiffableNode, DiffCache } from '@/lib/diffUtils';
 import { incrementalDiffCommits } from '@/lib/diffUtils';
 
 const DEFAULT_DEBOUNCE_MS = 300;
@@ -31,9 +31,9 @@ export interface UseIncrementalDiffResult {
  * Simple string hash for change detection.
  * Not cryptographically secure, just fast for cache invalidation.
  */
-function hashSentences(sentences: DiffableSentence[]): string {
+function hashNodes(nodes: DiffableNode[]): string {
   let hash = 0;
-  const str = JSON.stringify(sentences);
+  const str = JSON.stringify(nodes);
   for (let i = 0; i < str.length; i++) {
     const char = str.charCodeAt(i);
     hash = ((hash << 5) - hash + char) | 0;
@@ -42,17 +42,17 @@ function hashSentences(sentences: DiffableSentence[]): string {
 }
 
 /**
- * Hook that computes diff between draft sentences and parent commit,
+ * Hook that computes diff between draft nodes and parent commit,
  * with debouncing and caching for real-time performance.
  *
- * @param draftSentences - Current draft sentences (target side of diff)
- * @param parentSentences - Parent commit sentences (source side of diff)
+ * @param draftNodes - Current draft nodes (target side of diff)
+ * @param parentNodes - Parent commit nodes (source side of diff)
  * @param debounceMs - Debounce delay in ms (default: 300)
  * @returns Object with diff result and computing state
  */
 export function useIncrementalDiff(
-  draftSentences: DiffableSentence[],
-  parentSentences: DiffableSentence[],
+  draftNodes: DiffableNode[],
+  parentNodes: DiffableNode[],
   debounceMs = DEFAULT_DEBOUNCE_MS
 ): UseIncrementalDiffResult {
   const [diff, setDiff] = useState<CommitDiff | null>(null);
@@ -67,7 +67,7 @@ export function useIncrementalDiff(
 
   useEffect(() => {
     // No valid inputs — clear state
-    if (draftSentences.length === 0 || parentSentences.length === 0) {
+    if (draftNodes.length === 0 || parentNodes.length === 0) {
       cacheRef.current = null;
       prevHashRef.current = '';
       setDiff(null);
@@ -76,7 +76,7 @@ export function useIncrementalDiff(
     }
 
     // Check if inputs actually changed
-    const currentHash = hashSentences(draftSentences) + ':' + hashSentences(parentSentences);
+    const currentHash = hashNodes(draftNodes) + ':' + hashNodes(parentNodes);
     if (currentHash === prevHashRef.current) {
       // No change — return cached result
       return;
@@ -93,8 +93,8 @@ export function useIncrementalDiff(
     // Debounce the computation
     timerRef.current = setTimeout(() => {
       const [result, newCache] = incrementalDiffCommits(
-        parentSentences,
-        draftSentences,
+        parentNodes,
+        draftNodes,
         cacheRef.current
       );
       cacheRef.current = newCache;
@@ -108,17 +108,17 @@ export function useIncrementalDiff(
         clearTimeout(timerRef.current);
       }
     };
-  }, [draftSentences, parentSentences, debounceMs]);
+  }, [draftNodes, parentNodes, debounceMs]);
 
-  // Reset cache when parent sentences change identity (new parent commit)
+  // Reset cache when parent nodes change identity (new parent commit)
   const parentIdRef = useRef<string>('');
   useEffect(() => {
-    const parentId = parentSentences.map((s) => s.id).join(',');
+    const parentId = parentNodes.map((s) => s.id).join(',');
     if (parentId !== parentIdRef.current) {
       cacheRef.current = null;
       parentIdRef.current = parentId;
     }
-  }, [parentSentences]);
+  }, [parentNodes]);
 
   return { diff, isComputing };
 }

@@ -239,7 +239,7 @@ export function CommitFullHeader({
  */
 export function CommitSourceContent({ commit }: { commit: CommitDisplay }) {
   // Derive display entries from tree nodes for source context tracing
-  const sentences = commit.content?.trees
+  const nodes = commit.content?.trees
     ? (() => {
         type TreeNodeLike = import('@t3x-dev/core').TreeNode;
         const entries: Array<{ id: string; text: string; confidence: number; source_ref?: { turn_hash?: string; start_char?: number; end_char?: number } }> = [];
@@ -265,11 +265,11 @@ export function CommitSourceContent({ commit }: { commit: CommitDisplay }) {
 
   const sourceRefs = commit.sources ?? commit.source_refs ?? undefined;
   const hasLeafSources = sourceRefs?.some((r) => r.type === 'leaf');
-  const hasTurnSourceInfo = sentences.some((s) => s.source_ref?.turn_hash);
+  const hasTurnSourceInfo = nodes.some((s) => s.source_ref?.turn_hash);
   const hasSourceInfo = hasTurnSourceInfo || hasLeafSources;
 
   if (hasSourceInfo) {
-    const mappedSentences = sentences.map((s) => ({
+    const mappedNodes = nodes.map((s) => ({
       id: s.id,
       text: s.text,
       source: s.source_ref?.turn_hash
@@ -283,7 +283,7 @@ export function CommitSourceContent({ commit }: { commit: CommitDisplay }) {
 
     return (
       <CommitSourceContext
-        sentences={mappedSentences}
+        nodes={mappedNodes}
         sourceRefs={
           sourceRefs as Array<{ type: 'conversation' | 'leaf'; id: string; title?: string }>
         }
@@ -295,10 +295,10 @@ export function CommitSourceContent({ commit }: { commit: CommitDisplay }) {
     <div className="p-[var(--space-group)] bg-muted/50 rounded-lg border border-border">
       <div className="flex items-center justify-between mb-3">
         <h3 className="font-semibold text-sm text-foreground">Frames</h3>
-        <span className="text-xs text-muted-foreground/70">{sentences.length} total</span>
+        <span className="text-xs text-muted-foreground/70">{nodes.length} total</span>
       </div>
       <ul className="space-y-[var(--space-item)]">
-        {sentences.map((s) => {
+        {nodes.map((s) => {
           const confidence = 'confidence' in s ? (s.confidence as number | undefined) : undefined;
           const barColor =
             confidence === undefined
@@ -347,8 +347,8 @@ export function CommitSourceContent({ commit }: { commit: CommitDisplay }) {
             </li>
           );
         })}
-        {sentences.length === 0 && (
-          <li className="text-center py-4 text-muted-foreground/70 text-sm">No sentences</li>
+        {nodes.length === 0 && (
+          <li className="text-center py-4 text-muted-foreground/70 text-sm">No nodes</li>
         )}
       </ul>
     </div>

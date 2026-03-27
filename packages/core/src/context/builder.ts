@@ -58,7 +58,7 @@ export interface ContextBuildInput {
 /**
  * Build context for conversation LLM.
  *
- * Context = Base (commit sentences) + Pinned items
+ * Context = Base (commit nodes) + Pinned items
  *
  * @param input - The context build input
  * @returns Built context with text, token estimate, and sources

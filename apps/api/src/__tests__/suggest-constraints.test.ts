@@ -80,7 +80,7 @@ describe('Suggest Constraints', () => {
     );
     testProjectId = project.projectId;
 
-    // Create a commit with sentences
+    // Create a commit with nodes
     const commit = await createCommit(mockDB, {
       author: { type: 'human', name: 'test' },
       content: {

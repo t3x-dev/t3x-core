@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { DiffableSentence } from '@/lib/diffUtils';
+import type { DiffableNode } from '@/lib/diffUtils';
 import {
   diffCommits,
   JACCARD_THRESHOLD,
@@ -198,9 +198,9 @@ describe('diffUtils', () => {
   // diffCommits
   // =========================================================================
   describe('diffCommits', () => {
-    const s = (id: string, text: string): DiffableSentence => ({ id, text });
+    const s = (id: string, text: string): DiffableNode => ({ id, text });
 
-    it('identifies identical sentences', () => {
+    it('identifies identical nodes', () => {
       const source = [s('s1', 'Hello world'), s('s2', 'Goodbye')];
       const target = [s('t1', 'Hello world'), s('t2', 'Goodbye')];
       const diff = diffCommits(source, target);
@@ -211,7 +211,7 @@ describe('diffUtils', () => {
       expect(diff.onlyInTarget).toHaveLength(0);
     });
 
-    it('identifies only-in-source sentences', () => {
+    it('identifies only-in-source nodes', () => {
       const source = [s('s1', 'Hello'), s('s2', 'Unique source')];
       const target = [s('t1', 'Hello')];
       const diff = diffCommits(source, target);
@@ -221,7 +221,7 @@ describe('diffUtils', () => {
       expect(diff.onlyInSource[0].text).toBe('Unique source');
     });
 
-    it('identifies only-in-target sentences', () => {
+    it('identifies only-in-target nodes', () => {
       const source = [s('s1', 'Hello')];
       const target = [s('t1', 'Hello'), s('t2', 'New addition')];
       const diff = diffCommits(source, target);
@@ -231,7 +231,7 @@ describe('diffUtils', () => {
       expect(diff.onlyInTarget[0].text).toBe('New addition');
     });
 
-    it('identifies similar sentences above Jaccard threshold', () => {
+    it('identifies similar nodes above Jaccard threshold', () => {
       const source = [s('s1', 'The budget is three thousand dollars')];
       const target = [s('t1', 'The budget is five thousand dollars')];
       const diff = diffCommits(source, target);
@@ -244,7 +244,7 @@ describe('diffUtils', () => {
       expect(diff.similar[0].wordDiff.length).toBeGreaterThan(0);
     });
 
-    it('classifies completely different sentences as onlyIn*', () => {
+    it('classifies completely different nodes as onlyIn*', () => {
       const source = [s('s1', 'Alpha beta gamma')];
       const target = [s('t1', 'Completely different words here now')];
       const diff = diffCommits(source, target);
@@ -277,25 +277,25 @@ describe('diffUtils', () => {
 
     it('mixed scenario: identical + similar + unique', () => {
       const source = [
-        s('s1', 'Exact match sentence'),
+        s('s1', 'Exact match node'),
         s('s2', 'Budget is three thousand dollars'),
         s('s3', 'Alpha beta gamma delta epsilon'),
       ];
       const target = [
-        s('t1', 'Exact match sentence'),
+        s('t1', 'Exact match node'),
         s('t2', 'Budget is five thousand dollars'),
         s('t3', 'Completely unique different words here'),
       ];
       const diff = diffCommits(source, target);
 
       expect(diff.identical).toHaveLength(1);
-      expect(diff.identical[0].text).toBe('Exact match sentence');
+      expect(diff.identical[0].text).toBe('Exact match node');
       expect(diff.similar).toHaveLength(1);
       expect(diff.onlyInSource).toHaveLength(1);
       expect(diff.onlyInTarget).toHaveLength(1);
     });
 
-    it('does not double-match similar sentences (greedy)', () => {
+    it('does not double-match similar nodes (greedy)', () => {
       const source = [s('s1', 'The cat sat on the mat'), s('s2', 'The cat ran on the mat')];
       const target = [s('t1', 'The cat sat on the rug')];
       const diff = diffCommits(source, target);

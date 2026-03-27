@@ -26,7 +26,7 @@ export interface NodeMember {
 }
 
 export interface EdgeEvidence {
-  source_node_key: string;
+  source_node: string;
   target_node_key: string;
   relation_type: string;
   confidence: number;

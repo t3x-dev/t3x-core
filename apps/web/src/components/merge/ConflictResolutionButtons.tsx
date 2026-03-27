@@ -8,9 +8,9 @@
  * - B = Keep B (Target)
  * - X = Keep Both
  *
- * - Keep A: Select source sentence
- * - Keep B: Select target sentence
- * - Keep Both: Include both sentences in merge
+ * - Keep A: Select source node
+ * - Keep B: Select target node
+ * - Keep Both: Include both nodes in merge
  */
 
 import { ArrowLeft, ArrowRight, Layers } from 'lucide-react';

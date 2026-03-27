@@ -403,7 +403,7 @@ function buildBridgePrompt(
 Requirements:
 - Prefer definitions, explanations, reasoning, contrasts, and implications.
 - Keep logical flow: definition/viewpoint -> explanation/reasoning -> (optional) example -> implication/summary.
-- Avoid repeating the same idea in multiple sentences.
+- Avoid repeating the same idea in multiple nodes.
 
 **Context**:
 ${contextText}${constraints}`;
@@ -418,7 +418,7 @@ ${contextText}${constraints}`;
       user = `Create a narrative for: ${intent}
 
 Requirements:
-- Preserve timeline, causality, and continuity across sentences.
+- Preserve timeline, causality, and continuity across nodes.
 - Prefer story elements: setup -> development -> climax -> resolution.
 - Avoid jumpy isolated quotes; keep transitions.
 
@@ -431,14 +431,14 @@ ${contextText}${constraints}`;
       break;
     case 'refine':
       system =
-        'You are an editing assistant. Identify core sentences to keep and sentences that need refinement, then suggest improvements.';
+        'You are an editing assistant. Identify core nodes to keep and nodes that need refinement, then suggest improvements.';
       user = `Refine content for: ${intent}
 
 Output format:
-A) Keep-as-core: sentences that must remain (key facts/conclusions).
-B) Needs-refine: sentences that are unclear, redundant, inconsistent, or poorly phrased.
+A) Keep-as-core: nodes that must remain (key facts/conclusions).
+B) Needs-refine: nodes that are unclear, redundant, inconsistent, or poorly phrased.
 Notes:
-- Keep sentence-level granularity so users can locate the original text.
+- Keep node-level granularity so users can locate the original text.
 - For Needs-refine, provide a suggested improved version right after each original.
 
 **Context**:

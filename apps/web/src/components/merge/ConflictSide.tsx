@@ -8,17 +8,17 @@ import { useEffect } from 'react';
 import { SourceContextView } from '@/components/shared/SourceContextView';
 import { cn } from '@/lib/utils';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
-import type { Sentence, WordDiffSegment } from '@/types/merge';
+import type { ContentNode, WordDiffSegment } from '@/types/merge';
 import { WordDiffDisplay } from './WordDiffDisplay';
 
 type SideType = 'source' | 'target';
 
 interface ConflictSideProps {
   side: SideType;
-  sentence: Sentence;
+  node: ContentNode;
   label: string;
   isSelected: boolean;
-  /** Word-level diff segments for highlighting changes within the sentence */
+  /** Word-level diff segments for highlighting changes within the node */
   wordDiff?: WordDiffSegment[];
   /** Callback when "Jump to conversation" is clicked */
   onJumpToConversation?: (conversationId: string) => void;
@@ -39,32 +39,32 @@ const sideStyles: Record<SideType, { border: string; bg: string; selectedBg: str
 
 export function ConflictSide({
   side,
-  sentence,
+  node,
   label,
   isSelected,
   wordDiff,
   onJumpToConversation,
 }: ConflictSideProps) {
   const styles = sideStyles[side];
-  const turnHash = sentence.source?.turn_hash;
+  const turnHash = node.source?.turn_hash;
 
   // Access store for context fetching
   const { contextCache, contextLoadingStates, fetchSourceContext } = useMergeWorkspaceStore();
 
-  // Memoize sentence source info to avoid unnecessary refetches
-  const startChar = sentence.source?.start_char;
-  const endChar = sentence.source?.end_char;
+  // Memoize node source info to avoid unnecessary refetches
+  const startChar = node.source?.start_char;
+  const endChar = node.source?.end_char;
 
   // Fetch context on mount if turn_hash is available
   useEffect(() => {
     if (turnHash && !contextCache[turnHash] && !contextLoadingStates[turnHash]) {
-      // Create minimal sentence object for context fetch
-      const sentenceForFetch: typeof sentence = {
-        id: sentence.id,
-        text: sentence.text,
+      // Create minimal node object for context fetch
+      const nodeForFetch: typeof node = {
+        id: node.id,
+        text: node.text,
         source: { turn_hash: turnHash, start_char: startChar, end_char: endChar },
       };
-      fetchSourceContext(turnHash, sentenceForFetch);
+      fetchSourceContext(turnHash, nodeForFetch);
     }
   }, [
     turnHash,
@@ -73,8 +73,8 @@ export function ConflictSide({
     contextCache,
     contextLoadingStates,
     fetchSourceContext,
-    sentence.id,
-    sentence.text,
+    node.id,
+    node.text,
   ]);
 
   // Get cached context data
@@ -99,7 +99,7 @@ export function ConflictSide({
         )}
       </div>
 
-      {/* Sentence text — with word-diff highlighting when available */}
+      {/* ContentNode text — with word-diff highlighting when available */}
       {wordDiff && wordDiff.length > 0 ? (
         <div className="text-sm leading-relaxed text-[var(--text-secondary)]">
           <WordDiffDisplay
@@ -109,15 +109,15 @@ export function ConflictSide({
           />
         </div>
       ) : (
-        <p className="text-sm leading-relaxed text-[var(--text-secondary)]">{sentence.text}</p>
+        <p className="text-sm leading-relaxed text-[var(--text-secondary)]">{node.text}</p>
       )}
 
       {/* Inline source context via SourceContextView */}
       {turnHash && (
         <SourceContextView
           turnHash={turnHash}
-          highlightStart={sentence.source?.start_char}
-          highlightEnd={sentence.source?.end_char}
+          highlightStart={node.source?.start_char}
+          highlightEnd={node.source?.end_char}
           contextData={cachedContext ?? undefined}
           autoFetch={false}
           loading={isLoading}

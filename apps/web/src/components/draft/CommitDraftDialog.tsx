@@ -139,7 +139,7 @@ export function CommitDraftDialog({
             <DialogHeader>
               <DialogTitle>{t('commit_draft')}</DialogTitle>
               <DialogDescription>
-                This will create a new commit with {includedCount} sentence
+                This will create a new commit with {includedCount} node
                 {includedCount !== 1 ? 's' : ''}
                 {constraintCount > 0 &&
                   ` and ${constraintCount} constraint${constraintCount !== 1 ? 's' : ''}`}
@@ -203,11 +203,11 @@ export function CommitDraftDialog({
             <div className="max-h-48 overflow-y-auto space-y-2 py-2">
               {conflictReport?.conflicts.map((c, i) => (
                 <div
-                  key={`${c.new_sentence_id}-${c.existing_sentence_id}-${i}`}
+                  key={`${c.new_node_id}-${c.existing_node_id}-${i}`}
                   className="rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20 p-2 text-xs space-y-1"
                 >
-                  <p className="font-medium">New: {c.new_sentence_text}</p>
-                  <p className="text-muted-foreground">Existing: {c.existing_sentence_text}</p>
+                  <p className="font-medium">New: {c.new_node_text}</p>
+                  <p className="text-muted-foreground">Existing: {c.existing_node_text}</p>
                   <div className="flex items-center gap-2">
                     <Badge variant="outline" className="text-[10px]">
                       Cosine: {(c.cosine * 100).toFixed(0)}%
@@ -257,7 +257,7 @@ export function CommitDraftDialog({
               <p className="text-sm text-muted-foreground font-mono mt-1">
                 {commitHash ? `${commitHash.slice(0, 16)}...` : ''}
                 {' · '}
-                {includedCount} sentence{includedCount !== 1 ? 's' : ''}
+                {includedCount} node{includedCount !== 1 ? 's' : ''}
               </p>
             </div>
 

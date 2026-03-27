@@ -1,23 +1,23 @@
 'use client';
 
 /**
- * CommitSourceContext - Displays commit sentences with source context
+ * CommitSourceContext - Displays commit nodes with source context
  *
- * Instead of showing isolated sentences, this component displays the original
- * conversation turns with the committed sentences highlighted in green.
+ * Instead of showing isolated nodes, this component displays the original
+ * conversation turns with the committed nodes highlighted in green.
  *
  * Features:
- * - Groups sentences by turn_hash
+ * - Groups nodes by turn_hash
  * - Fetches turn context from API
  * - Merges overlapping/adjacent highlights
  * - Shows turn separators between different turns
- * - Graceful fallback to sentence list on error
+ * - Graceful fallback to node list on error
  *
  * Edge Case Handling (Issue #222):
- * - Source deleted: Shows gray "Source unavailable" badge with sentence text
+ * - Source deleted: Shows gray "Source unavailable" badge with node text
  * - Very long turns (>2000 chars): Smart truncation with highlight visibility
  * - Multiple turns: Collapsible sections with expand/collapse
- * - Legacy data (no source): Falls back to sentence list view
+ * - Legacy data (no source): Falls back to node list view
  * - Content changed: Shows warning if source content doesn't match
  */
 
@@ -33,11 +33,11 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
-  SentenceWithHighlight,
+  NodeWithHighlight,
   TurnWithHighlights,
 } from '@/components/shared/SourceConversationPanel';
 import { SourceConversationPanel } from '@/components/shared/SourceConversationPanel';
-import { SourceSentenceList } from '@/components/shared/SourceSentenceList';
+import { SourceNodeList } from '@/components/shared/SourceNodeList';
 import type { Leaf } from '@/lib/api';
 import * as api from '@/lib/api';
 import { checkContentIntegrity } from '@/lib/truncationUtils';
@@ -45,19 +45,19 @@ import type {
   ColoredHighlightRange,
   ContentIntegrityStatus,
   HighlightColor,
-  SentenceWithSource,
+  NodeWithSource,
 } from '@/types/sourceContext';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Types (using shared types, keep local aliases for backward compatibility)
 // ═══════════════════════════════════════════════════════════════════════════
 
-/** Sentence from commit content - alias for SentenceWithSource */
-type CommitSentence = SentenceWithSource;
+/** ContentNode from commit content - alias for NodeWithSource */
+type CommitContentNode = NodeWithSource;
 
 interface CommitSourceContextProps {
-  /** Sentences from commit content */
-  sentences: CommitSentence[];
+  /** ContentNodes from commit content */
+  nodes: CommitContentNode[];
   /** Compact mode for canvas preview (show first 2 turns only) */
   compact?: boolean;
   /** Default expanded state for turns (default: first turn expanded) */
@@ -67,10 +67,10 @@ interface CommitSourceContextProps {
 }
 
 /**
- * Sentence grouped under a leaf source
+ * ContentNode grouped under a leaf source
  */
-interface LeafSentence {
-  sentence: CommitSentence;
+interface LeafContentNode {
+  node: CommitContentNode;
   leafId: string;
 }
 
@@ -92,47 +92,47 @@ function anchorTypeToColor(anchorType?: string): HighlightColor {
 }
 
 /**
- * Build colored highlights from sentences with anchor_type info.
+ * Build colored highlights from nodes with anchor_type info.
  * Returns coloredHighlights when mixed anchor_types exist, undefined otherwise.
  */
 function _buildColoredHighlights(
-  sentences: SentenceWithHighlight[]
+  nodes: NodeWithHighlight[]
 ): ColoredHighlightRange[] | undefined {
-  const hasNonVerbatim = sentences.some(
-    (s) => s.sentence.anchor_type && s.sentence.anchor_type !== 'verbatim'
+  const hasNonVerbatim = nodes.some(
+    (s) => s.node.anchor_type && s.node.anchor_type !== 'verbatim'
   );
   if (!hasNonVerbatim) return undefined;
 
-  return sentences.map((s) => ({
+  return nodes.map((s) => ({
     start: s.highlight.start,
     end: s.highlight.end,
-    color: anchorTypeToColor(s.sentence.anchor_type),
+    color: anchorTypeToColor(s.node.anchor_type),
   }));
 }
 
 /**
- * Group sentences by source type: turn, leaf, or legacy (no source).
+ * Group nodes by source type: turn, leaf, or legacy (no source).
  */
-function groupSentencesBySource(sentences: CommitSentence[]): {
-  byTurn: Map<string, SentenceWithHighlight[]>;
-  byLeaf: Map<string, LeafSentence[]>;
-  withoutSource: CommitSentence[];
+function groupNodesBySource(nodes: CommitContentNode[]): {
+  byTurn: Map<string, NodeWithHighlight[]>;
+  byLeaf: Map<string, LeafContentNode[]>;
+  withoutSource: CommitContentNode[];
 } {
-  const byTurn = new Map<string, SentenceWithHighlight[]>();
-  const byLeaf = new Map<string, LeafSentence[]>();
-  const withoutSource: CommitSentence[] = [];
+  const byTurn = new Map<string, NodeWithHighlight[]>();
+  const byLeaf = new Map<string, LeafContentNode[]>();
+  const withoutSource: CommitContentNode[] = [];
 
-  for (const sentence of sentences) {
+  for (const node of nodes) {
     // Group by turn if turn_hash exists
-    if (sentence.source?.turn_hash) {
-      const turnHash = sentence.source.turn_hash;
+    if (node.source?.turn_hash) {
+      const turnHash = node.source.turn_hash;
       const group = byTurn.get(turnHash) || [];
       group.push({
-        sentence,
+        node,
         turnHash,
         highlight: {
-          start: sentence.source.start_char,
-          end: sentence.source.end_char,
+          start: node.source.start_char,
+          end: node.source.end_char,
         },
       });
       byTurn.set(turnHash, group);
@@ -140,16 +140,16 @@ function groupSentencesBySource(sentences: CommitSentence[]): {
     }
 
     // Group by leaf if leaf_id exists
-    if (sentence.source?.leaf_id) {
-      const leafId = sentence.source.leaf_id;
+    if (node.source?.leaf_id) {
+      const leafId = node.source.leaf_id;
       const group = byLeaf.get(leafId) || [];
-      group.push({ sentence, leafId });
+      group.push({ node, leafId });
       byLeaf.set(leafId, group);
       continue;
     }
 
     // Legacy data without source
-    withoutSource.push(sentence);
+    withoutSource.push(node);
   }
 
   return { byTurn, byLeaf, withoutSource };
@@ -177,34 +177,34 @@ async function fetchLeafCached(leafId: string): Promise<Leaf | null> {
 }
 
 /**
- * Leaf data with fetched content and sentences
+ * Leaf data with fetched content and nodes
  */
-interface LeafWithSentences {
+interface LeafWithNodes {
   leafId: string;
   leaf: Leaf | null;
-  sentences: LeafSentence[];
+  nodes: LeafContentNode[];
   loading: boolean;
   error: string | null;
 }
 
 /**
- * Renders leaf output text with committed sentences highlighted in green.
- * Finds sentence text within the output and highlights matching regions.
+ * Renders leaf output text with committed nodes highlighted in green.
+ * Finds node text within the output and highlights matching regions.
  */
 function LeafOutputWithHighlights({
   output,
-  sentences,
+  nodes,
 }: {
   output: string;
-  sentences: LeafSentence[];
+  nodes: LeafContentNode[];
 }) {
-  // Find highlight ranges by locating sentence text within the output.
+  // Find highlight ranges by locating node text within the output.
   // Sorts by first occurrence position in the output for correct progressive matching,
   // then merges overlapping ranges to prevent segment builder corruption.
   const highlights = useMemo(() => {
-    // First pass: find each sentence's position in the output for ordering
-    const positioned = sentences
-      .map((sg) => ({ sg, pos: output.indexOf(sg.sentence.text) }))
+    // First pass: find each node's position in the output for ordering
+    const positioned = nodes
+      .map((sg) => ({ sg, pos: output.indexOf(sg.node.text) }))
       .filter((p) => p.pos !== -1)
       .sort((a, b) => a.pos - b.pos);
 
@@ -212,10 +212,10 @@ function LeafOutputWithHighlights({
     const ranges: Array<{ start: number; end: number }> = [];
     let searchFrom = 0;
     for (const { sg } of positioned) {
-      const idx = output.indexOf(sg.sentence.text, searchFrom);
+      const idx = output.indexOf(sg.node.text, searchFrom);
       if (idx !== -1) {
-        ranges.push({ start: idx, end: idx + sg.sentence.text.length });
-        searchFrom = idx + sg.sentence.text.length;
+        ranges.push({ start: idx, end: idx + sg.node.text.length });
+        searchFrom = idx + sg.node.text.length;
       }
     }
     // Merge overlapping ranges
@@ -229,28 +229,28 @@ function LeafOutputWithHighlights({
       }
     }
     return merged;
-  }, [output, sentences]);
+  }, [output, nodes]);
 
   if (highlights.length === 0) {
-    // No matches found — show output as plain text + sentence list
+    // No matches found — show output as plain text + node list
     return (
       <div className="space-y-3">
         <div className="text-[0.875rem] leading-relaxed text-[var(--color-text-secondary)] whitespace-pre-wrap break-words">
           {output}
         </div>
         <div className="border-t border-[var(--color-border-light)] pt-2">
-          <p className="text-xs text-[var(--color-text-muted)] mb-1">Committed sentences:</p>
+          <p className="text-xs text-[var(--color-text-muted)] mb-1">Committed nodes:</p>
           <ul className="space-y-1">
-            {sentences.map((sg) => (
+            {nodes.map((sg) => (
               <li
-                key={sg.sentence.id}
+                key={sg.node.id}
                 className="flex items-start gap-2 p-1.5 bg-[var(--status-success-muted)] rounded border border-[var(--status-success)]/20"
               >
                 <span className="text-xs font-mono text-[var(--color-text-muted)] bg-[var(--color-bg-subtle)] px-1 py-0.5 rounded shrink-0">
-                  {sg.sentence.id}
+                  {sg.node.id}
                 </span>
                 <span className="text-xs text-[var(--color-text-secondary)] break-words">
-                  {sg.sentence.text}
+                  {sg.node.text}
                 </span>
               </li>
             ))}
@@ -293,73 +293,73 @@ function LeafOutputWithHighlights({
 }
 
 export function CommitSourceContext({
-  sentences,
+  nodes,
   compact = false,
   defaultExpanded = true,
   sourceRefs,
 }: CommitSourceContextProps) {
   const [turnData, setTurnData] = useState<Map<string, TurnWithHighlights>>(new Map());
-  const [leafData, setLeafData] = useState<Map<string, LeafWithSentences>>(new Map());
+  const [leafData, setLeafData] = useState<Map<string, LeafWithNodes>>(new Map());
   const [isLoading, setIsLoading] = useState(true);
   const [expandedTurns, setExpandedTurns] = useState<Set<string>>(new Set());
 
   // Track if user has interacted with expand/collapse to prevent auto-reset
   const hasUserInteracted = useRef(false);
 
-  // Group sentences by source type
+  // Group nodes by source type
   const { byTurn, byLeaf, withoutSource } = useMemo(
-    () => groupSentencesBySource(sentences),
-    [sentences]
+    () => groupNodesBySource(nodes),
+    [nodes]
   );
 
-  // Group sentences by inheritance status
-  const { inheritedSentences, inheritedByCommit } = useMemo(() => {
-    const inherited: CommitSentence[] = [];
-    const byCommit = new Map<string, CommitSentence[]>();
+  // Group nodes by inheritance status
+  const { inheritedNodes, inheritedByCommit } = useMemo(() => {
+    const inherited: CommitContentNode[] = [];
+    const byCommit = new Map<string, CommitContentNode[]>();
 
-    for (const sentence of sentences) {
-      if (sentence.inherited_from != null && sentence.inherited_from !== '') {
-        inherited.push(sentence);
-        const group = byCommit.get(sentence.inherited_from) || [];
-        group.push(sentence);
-        byCommit.set(sentence.inherited_from, group);
+    for (const node of nodes) {
+      if (node.inherited_from != null && node.inherited_from !== '') {
+        inherited.push(node);
+        const group = byCommit.get(node.inherited_from) || [];
+        group.push(node);
+        byCommit.set(node.inherited_from, group);
       }
     }
 
-    return { inheritedSentences: inherited, inheritedByCommit: byCommit };
-  }, [sentences]);
+    return { inheritedNodes: inherited, inheritedByCommit: byCommit };
+  }, [nodes]);
 
-  const hasInheritedSentences = inheritedSentences.length > 0;
+  const hasInheritedNodes = inheritedNodes.length > 0;
 
-  // Sentences are only truly legacy if they have no source, aren't attributable to leaf sources,
+  // ContentNodes are only truly legacy if they have no source, aren't attributable to leaf sources,
   // and aren't inherited from parent commits.
   const hasLeafSourceRefs = (sourceRefs ?? []).some((r) => r.type === 'leaf');
   const allLegacy =
-    withoutSource.length === sentences.length && !hasLeafSourceRefs && !hasInheritedSentences;
+    withoutSource.length === nodes.length && !hasLeafSourceRefs && !hasInheritedNodes;
 
   // Get ordered list of unique turn hashes
   const turnHashes = useMemo(() => {
     const seen = new Set<string>();
     const ordered: string[] = [];
-    for (const sentence of sentences) {
-      if (!sentence.source?.turn_hash) continue;
-      const hash = sentence.source.turn_hash;
+    for (const node of nodes) {
+      if (!node.source?.turn_hash) continue;
+      const hash = node.source.turn_hash;
       if (!seen.has(hash)) {
         seen.add(hash);
         ordered.push(hash);
       }
     }
     return ordered;
-  }, [sentences]);
+  }, [nodes]);
 
-  // Get ordered list of unique leaf IDs (from sentences or sourceRefs)
+  // Get ordered list of unique leaf IDs (from nodes or sourceRefs)
   const leafIds = useMemo(() => {
     const seen = new Set<string>();
     const ordered: string[] = [];
-    // From sentence-level leaf_id
-    for (const sentence of sentences) {
-      if (!sentence.source?.leaf_id) continue;
-      const id = sentence.source.leaf_id;
+    // From node-level leaf_id
+    for (const node of nodes) {
+      if (!node.source?.leaf_id) continue;
+      const id = node.source.leaf_id;
       if (!seen.has(id)) {
         seen.add(id);
         ordered.push(id);
@@ -375,18 +375,18 @@ export function CommitSourceContext({
       }
     }
     return ordered;
-  }, [sentences, sourceRefs]);
+  }, [nodes, sourceRefs]);
 
   // All section keys (inherited + turns + leaves) for expand/collapse
   const allSectionKeys = useMemo(() => {
     const keys: string[] = [];
-    if (hasInheritedSentences) {
+    if (hasInheritedNodes) {
       keys.push('inherited');
     }
     keys.push(...turnHashes);
     keys.push(...leafIds.map((id) => `leaf:${id}`));
     return keys;
-  }, [hasInheritedSentences, turnHashes, leafIds]);
+  }, [hasInheritedNodes, turnHashes, leafIds]);
 
   // Initialize expanded state only on first mount (don't reset on data changes)
   useEffect(() => {
@@ -438,8 +438,8 @@ export function CommitSourceContext({
       const hashesToFetch = compact ? turnHashes.slice(0, 2) : turnHashes;
 
       const turnPromises = hashesToFetch.map(async (turnHash) => {
-        const sentenceGroup = byTurn.get(turnHash) || [];
-        const highlights = sentenceGroup.map((s) => s.highlight);
+        const nodeGroup = byTurn.get(turnHash) || [];
+        const highlights = nodeGroup.map((s) => s.highlight);
 
         try {
           const context = await api.fetchTurnContextCached(turnHash, {
@@ -449,15 +449,15 @@ export function CommitSourceContext({
 
           const integrityStatus = new Map<string, ContentIntegrityStatus>();
           if (context?.target_turn?.content) {
-            for (const sg of sentenceGroup) {
+            for (const sg of nodeGroup) {
               const status = checkContentIntegrity(
-                sg.sentence.text,
+                sg.node.text,
                 context.target_turn.content,
                 sg.highlight.start,
                 sg.highlight.end,
-                sg.sentence.anchor_type
+                sg.node.anchor_type
               );
-              integrityStatus.set(sg.sentence.id, status);
+              integrityStatus.set(sg.node.id, status);
             }
           }
 
@@ -466,7 +466,7 @@ export function CommitSourceContext({
               turnHash,
               context,
               highlights,
-              sentences: sentenceGroup,
+              nodes: nodeGroup,
               loading: false,
               error: null,
               integrityStatus,
@@ -479,7 +479,7 @@ export function CommitSourceContext({
               turnHash,
               context: null,
               highlights,
-              sentences: sentenceGroup,
+              nodes: nodeGroup,
               loading: false,
               error: errorMsg,
               integrityStatus: new Map(),
@@ -489,10 +489,10 @@ export function CommitSourceContext({
       });
 
       // --- Fetch leaves ---
-      const newLeafData = new Map<string, LeafWithSentences>();
+      const newLeafData = new Map<string, LeafWithNodes>();
 
       const leafPromises = leafIds.map(async (leafId) => {
-        const sentenceGroup = byLeaf.get(leafId) || [];
+        const nodeGroup = byLeaf.get(leafId) || [];
 
         try {
           const leaf = await fetchLeafCached(leafId);
@@ -500,7 +500,7 @@ export function CommitSourceContext({
             newLeafData.set(leafId, {
               leafId,
               leaf,
-              sentences: sentenceGroup,
+              nodes: nodeGroup,
               loading: false,
               error: leaf ? null : 'Leaf not found',
             });
@@ -511,7 +511,7 @@ export function CommitSourceContext({
             newLeafData.set(leafId, {
               leafId,
               leaf: null,
-              sentences: sentenceGroup,
+              nodes: nodeGroup,
               loading: false,
               error: errorMsg,
             });
@@ -535,44 +535,44 @@ export function CommitSourceContext({
     };
   }, [turnHashes, leafIds, byTurn, byLeaf, compact]);
 
-  // Post-fetch resolution: match sentences to leaves by text matching.
-  // This handles multi-leaf commits where sentence-level leaf_id isn't available.
-  // Phase 1: Match unattributed sentences (exclusive claim, no duplicates).
-  // Phase 2: Match turn-attributed sentences whose text also appears in a leaf output
-  //          (dual attribution — sentence stays in turn section AND appears in leaf section).
+  // Post-fetch resolution: match nodes to leaves by text matching.
+  // This handles multi-leaf commits where node-level leaf_id isn't available.
+  // Phase 1: Match unattributed nodes (exclusive claim, no duplicates).
+  // Phase 2: Match turn-attributed nodes whose text also appears in a leaf output
+  //          (dual attribution — node stays in turn section AND appears in leaf section).
   const resolvedByLeaf = useMemo(() => {
     if (leafData.size === 0) {
-      return new Map<string, LeafSentence[]>();
+      return new Map<string, LeafContentNode[]>();
     }
-    const resolved = new Map<string, LeafSentence[]>();
+    const resolved = new Map<string, LeafContentNode[]>();
     const claimedIds = new Set<string>();
 
-    // Phase 1: unattributed sentences — exclusive claim (first leaf wins)
+    // Phase 1: unattributed nodes — exclusive claim (first leaf wins)
     for (const [leafId, data] of leafData) {
       if (!data.leaf?.output) continue;
       const output = data.leaf.output;
-      for (const sentence of withoutSource) {
-        if (claimedIds.has(sentence.id)) continue;
-        if (output.includes(sentence.text)) {
+      for (const node of withoutSource) {
+        if (claimedIds.has(node.id)) continue;
+        if (output.includes(node.text)) {
           const group = resolved.get(leafId) || [];
-          group.push({ sentence, leafId });
+          group.push({ node, leafId });
           resolved.set(leafId, group);
-          claimedIds.add(sentence.id);
+          claimedIds.add(node.id);
         }
       }
     }
 
-    // Phase 2: turn-attributed sentences — dual attribution (appear in both turn & leaf)
-    const allTurnSentences = Array.from(byTurn.values()).flat();
+    // Phase 2: turn-attributed nodes — dual attribution (appear in both turn & leaf)
+    const allTurnNodes = Array.from(byTurn.values()).flat();
     for (const [leafId, data] of leafData) {
       if (!data.leaf?.output) continue;
       const output = data.leaf.output;
-      for (const sg of allTurnSentences) {
-        if (output.includes(sg.sentence.text)) {
+      for (const sg of allTurnNodes) {
+        if (output.includes(sg.node.text)) {
           const group = resolved.get(leafId) || [];
-          // Avoid adding the same sentence twice to this leaf
-          if (!group.some((g) => g.sentence.id === sg.sentence.id)) {
-            group.push({ sentence: sg.sentence, leafId });
+          // Avoid adding the same node twice to this leaf
+          if (!group.some((g) => g.node.id === sg.node.id)) {
+            group.push({ node: sg.node, leafId });
             resolved.set(leafId, group);
           }
         }
@@ -582,20 +582,20 @@ export function CommitSourceContext({
     return resolved;
   }, [withoutSource, byTurn, leafData]);
 
-  // Sentences truly without any source (not matched to any leaf)
-  const unresolvedSentences = useMemo(() => {
+  // ContentNodes truly without any source (not matched to any leaf)
+  const unresolvedNodes = useMemo(() => {
     if (resolvedByLeaf.size === 0) return withoutSource;
     const resolvedIds = new Set<string>();
     for (const group of resolvedByLeaf.values()) {
       for (const sg of group) {
-        resolvedIds.add(sg.sentence.id);
+        resolvedIds.add(sg.node.id);
       }
     }
     return withoutSource.filter((s) => !resolvedIds.has(s.id));
   }, [withoutSource, resolvedByLeaf]);
 
-  // Handle empty sentences
-  if (sentences.length === 0) {
+  // Handle empty nodes
+  if (nodes.length === 0) {
     return (
       <div className="p-[var(--space-group)] bg-[var(--color-bg-subtle)] rounded-lg border border-[var(--color-border)]">
         <div className="flex items-center gap-2 mb-3">
@@ -604,12 +604,12 @@ export function CommitSourceContext({
             Source Context
           </h3>
         </div>
-        <p className="text-center py-4 text-[var(--color-text-muted)] text-sm">No sentences</p>
+        <p className="text-center py-4 text-[var(--color-text-muted)] text-sm">No nodes</p>
       </div>
     );
   }
 
-  // All legacy data - show simple sentence list
+  // All legacy data - show simple node list
   if (allLegacy) {
     return (
       <div className="p-[var(--space-group)] bg-[var(--color-bg-subtle)] rounded-lg border border-[var(--color-border)]">
@@ -622,7 +622,7 @@ export function CommitSourceContext({
             Legacy format
           </span>
         </div>
-        <SourceSentenceList sentences={sentences} />
+        <SourceNodeList nodes={nodes} />
       </div>
     );
   }
@@ -655,7 +655,7 @@ export function CommitSourceContext({
     Array.from(data.integrityStatus.values()).includes('mismatch')
   );
 
-  // Fallback to sentence list if no context could be loaded
+  // Fallback to node list if no context could be loaded
   if (!hasAnyContext) {
     return (
       <div className="p-[var(--space-group)] bg-[var(--color-bg-subtle)] rounded-lg border border-[var(--color-border)]">
@@ -668,7 +668,7 @@ export function CommitSourceContext({
             Source unavailable
           </span>
         </div>
-        <SourceSentenceList sentences={sentences} />
+        <SourceNodeList nodes={nodes} />
       </div>
     );
   }
@@ -680,7 +680,7 @@ export function CommitSourceContext({
   const totalSections = turnHashes.length + leafIds.length;
   const showCollapseControls = !compact && totalSections > 1;
 
-  // Build summary text: "N sentences (X inherited) from M turns, K leaves"
+  // Build summary text: "N nodes (X inherited) from M turns, K leaves"
   const summaryParts: string[] = [];
   if (turnHashes.length > 0) {
     summaryParts.push(`${turnHashes.length} turn${turnHashes.length !== 1 ? 's' : ''}`);
@@ -689,11 +689,11 @@ export function CommitSourceContext({
     summaryParts.push(`${leafIds.length} ${leafIds.length !== 1 ? 'leaves' : 'leaf'}`);
   }
   const inheritedNote =
-    inheritedSentences.length > 0 ? ` (${inheritedSentences.length} inherited)` : '';
+    inheritedNodes.length > 0 ? ` (${inheritedNodes.length} inherited)` : '';
   const summaryText =
     summaryParts.length > 0
-      ? `${sentences.length} sentence${sentences.length !== 1 ? 's' : ''}${inheritedNote} from ${summaryParts.join(', ')}`
-      : `${sentences.length} sentence${sentences.length !== 1 ? 's' : ''}${inheritedNote}`;
+      ? `${nodes.length} node${nodes.length !== 1 ? 's' : ''}${inheritedNote} from ${summaryParts.join(', ')}`
+      : `${nodes.length} node${nodes.length !== 1 ? 's' : ''}${inheritedNote}`;
 
   return (
     <div className="p-[var(--space-group)] bg-[var(--color-bg-subtle)] rounded-lg border border-[var(--color-border)]">
@@ -740,8 +740,8 @@ export function CommitSourceContext({
 
       {/* Sections list */}
       <div className="space-y-[var(--space-item)]">
-        {/* Inherited sentences section */}
-        {hasInheritedSentences && (
+        {/* Inherited nodes section */}
+        {hasInheritedNodes && (
           <div className="rounded-lg border border-[var(--status-info)]/20 overflow-hidden">
             <button
               type="button"
@@ -758,34 +758,34 @@ export function CommitSourceContext({
                 Inherited from Parent
               </span>
               <span className="px-1.5 py-0.5 bg-[var(--status-info-muted)] text-[var(--status-info)] text-[0.65rem] rounded">
-                {inheritedSentences.length} sentence{inheritedSentences.length !== 1 ? 's' : ''}
+                {inheritedNodes.length} node{inheritedNodes.length !== 1 ? 's' : ''}
               </span>
             </button>
 
             {(expandedTurns.has('inherited') || compact) && (
               <div className="p-3 bg-[var(--status-info-muted)]">
                 {/* Group by source commit */}
-                {Array.from(inheritedByCommit.entries()).map(([commitHash, groupSentences]) => (
+                {Array.from(inheritedByCommit.entries()).map(([commitHash, groupNodes]) => (
                   <div key={commitHash} className="mb-3 last:mb-0">
                     <div className="flex items-center gap-2 mb-[var(--space-item)]">
                       <span className="text-[0.65rem] font-mono text-[var(--status-info)] bg-[var(--status-info-muted)] px-1.5 py-0.5 rounded">
                         {commitHash.slice(0, 16)}...
                       </span>
                       <span className="text-xs text-[var(--status-info)]">
-                        {groupSentences.length} sentence{groupSentences.length !== 1 ? 's' : ''}
+                        {groupNodes.length} node{groupNodes.length !== 1 ? 's' : ''}
                       </span>
                     </div>
                     <ul className="space-y-1.5">
-                      {groupSentences.map((sentence) => (
+                      {groupNodes.map((node) => (
                         <li
-                          key={sentence.id}
+                          key={node.id}
                           className="flex items-start gap-2 p-2 bg-[var(--color-bg-white)] rounded border border-[var(--status-info)]/20"
                         >
                           <span className="text-xs font-mono text-[var(--color-text-muted)] bg-[var(--color-bg-subtle)] px-1.5 py-0.5 rounded shrink-0">
-                            {sentence.id}
+                            {node.id}
                           </span>
                           <span className="text-[0.875rem] leading-relaxed text-[var(--color-text-secondary)] break-words">
-                            {sentence.text}
+                            {node.text}
                           </span>
                         </li>
                       ))}
@@ -797,7 +797,7 @@ export function CommitSourceContext({
           </div>
         )}
 
-        {/* Direct sentences - Turns list */}
+        {/* Direct nodes - Turns list */}
         <SourceConversationPanel
           turnHashes={turnHashes}
           turnData={turnData}
@@ -812,10 +812,10 @@ export function CommitSourceContext({
           const sectionKey = `leaf:${leafId}`;
           const data = leafData.get(leafId);
           const isExpanded = expandedTurns.has(sectionKey) || compact;
-          // Combine direct leaf sentences + post-fetch resolved sentences
-          const directSentences = byLeaf.get(leafId) || [];
-          const resolvedSentences = resolvedByLeaf.get(leafId) || [];
-          const sentencesForLeaf = directSentences.length > 0 ? directSentences : resolvedSentences;
+          // Combine direct leaf nodes + post-fetch resolved nodes
+          const directNodes = byLeaf.get(leafId) || [];
+          const resolvedNodes = resolvedByLeaf.get(leafId) || [];
+          const nodesForLeaf = directNodes.length > 0 ? directNodes : resolvedNodes;
           const leafRef = sourceRefs?.find((r) => r.type === 'leaf' && r.id === leafId);
           const leafTitle = data?.leaf?.title || leafRef?.title || leafId;
           const leafType = data?.leaf?.type;
@@ -845,10 +845,10 @@ export function CommitSourceContext({
                     Source unavailable
                   </span>
                 </button>
-                {isExpanded && sentencesForLeaf.length > 0 && (
+                {isExpanded && nodesForLeaf.length > 0 && (
                   <div className="p-3 bg-[var(--color-bg-white)]">
-                    <SourceSentenceList
-                      sentences={sentencesForLeaf.map((sg) => sg.sentence)}
+                    <SourceNodeList
+                      nodes={nodesForLeaf.map((sg) => sg.node)}
                       variant="highlighted"
                     />
                   </div>
@@ -857,7 +857,7 @@ export function CommitSourceContext({
             );
           }
 
-          // Leaf with output — highlight committed sentences
+          // Leaf with output — highlight committed nodes
           const leafOutput = data.leaf.output;
 
           return (
@@ -886,7 +886,7 @@ export function CommitSourceContext({
                     </span>
                   )}
                   <span className="text-xs text-[var(--color-text-muted)]">
-                    {sentencesForLeaf.length} sentence{sentencesForLeaf.length !== 1 ? 's' : ''}
+                    {nodesForLeaf.length} node{nodesForLeaf.length !== 1 ? 's' : ''}
                   </span>
                 </button>
               )}
@@ -894,10 +894,10 @@ export function CommitSourceContext({
               {isExpanded && (
                 <div className="p-3 bg-[var(--color-bg-white)]">
                   {leafOutput ? (
-                    <LeafOutputWithHighlights output={leafOutput} sentences={sentencesForLeaf} />
+                    <LeafOutputWithHighlights output={leafOutput} nodes={nodesForLeaf} />
                   ) : (
-                    <SourceSentenceList
-                      sentences={sentencesForLeaf.map((sg) => sg.sentence)}
+                    <SourceNodeList
+                      nodes={nodesForLeaf.map((sg) => sg.node)}
                       variant="highlighted"
                     />
                   )}
@@ -914,19 +914,19 @@ export function CommitSourceContext({
           </div>
         )}
 
-        {/* Legacy sentences without source info (only truly unresolved ones) */}
-        {unresolvedSentences.length > 0 && !allLegacy && (
+        {/* Legacy nodes without source info (only truly unresolved ones) */}
+        {unresolvedNodes.length > 0 && !allLegacy && (
           <div className="mt-3 pt-3 border-t border-[var(--color-border)]">
             <div className="flex items-center gap-2 mb-[var(--space-item)]">
               <span className="text-xs text-[var(--color-text-muted)]">
-                {unresolvedSentences.length} sentence
-                {unresolvedSentences.length !== 1 ? 's' : ''} without source info
+                {unresolvedNodes.length} node
+                {unresolvedNodes.length !== 1 ? 's' : ''} without source info
               </span>
               <span className="px-1.5 py-0.5 bg-[var(--hover-bg)] text-[var(--color-text-secondary)] text-[0.65rem] rounded">
                 Legacy
               </span>
             </div>
-            <SourceSentenceList sentences={unresolvedSentences} />
+            <SourceNodeList nodes={unresolvedNodes} />
           </div>
         )}
       </div>

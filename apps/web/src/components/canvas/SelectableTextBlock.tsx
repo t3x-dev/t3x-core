@@ -33,7 +33,7 @@ interface SelectableTextBlockProps {
    * Confirmed anchors (user-confirmed)
    * Position handling:
    * - If anchor has globalStart/globalEnd, those are used directly (pre-computed)
-   * - Otherwise, sentenceStartChar + start/end is used (requires sentence context)
+   * - Otherwise, nodeStartChar + start/end is used (requires node context)
    * Note: API response anchors have globalStart/globalEnd pre-computed during parsing
    */
   confirmedAnchors?: ConfirmedAnchor[];
@@ -222,8 +222,8 @@ export function SelectableTextBlock({
             if (candidate) {
               // Click on anchor candidate -> confirm as 'preferred'
               // Note: start/end use global positions (same as globalStart/globalEnd) because
-              // we don't have sentence boundary info here. When submitting to API,
-              // these should be converted to sentence-relative positions if needed.
+              // we don't have node boundary info here. When submitting to API,
+              // these should be converted to node-relative positions if needed.
               const newAnchor: ConfirmedAnchor = {
                 id: `anchor-${candidate.startChar}-${candidate.endChar}`,
                 text: candidate.text,
@@ -356,7 +356,7 @@ export function SelectableTextBlock({
             anchorCandidates,
             confirmedAnchors,
             anchorThreshold,
-            0 // sentenceStartChar - assuming block starts at 0 for now
+            0 // nodeStartChar - assuming block starts at 0 for now
           );
           const isDragging = isInDragSelection(token.index);
           const nextToken = block.tokens[idx + 1];

@@ -193,7 +193,7 @@ export {
   findKnowledgeNodesByProject,
   findMembersByNode,
   findNeighborNodes,
-  findNodeBySentence,
+  findNodeByContentId,
   insertKnowledgeEdge,
   insertKnowledgeEdges,
   insertKnowledgeNode,
@@ -354,12 +354,12 @@ export {
   insertSegmentEmbedding,
   insertSegmentEmbeddingsBatch,
 } from './segmentEmbeddings';
-// Sentence Modifications (audit trail)
+// Node Modifications (audit trail)
 export {
   findModificationsByDraft,
-  type InsertSentenceModificationInput,
-  insertSentenceModification,
-} from './sentence-modifications';
+  type InsertNodeModificationInput,
+  insertNodeModification,
+} from './node-modifications';
 // Share Tokens
 export {
   type CreateShareTokenInput,

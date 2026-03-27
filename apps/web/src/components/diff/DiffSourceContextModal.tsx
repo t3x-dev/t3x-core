@@ -4,7 +4,7 @@
  * DiffSourceContextModal - Standalone source context modal for Diff page
  *
  * Features:
- * - Shows conversation context around the source sentence
+ * - Shows conversation context around the source node
  * - Fullscreen toggle (Maximize2/Minimize2)
  * - Auto-scroll to target turn on open
  * - "Open in new tab" for full conversation page
@@ -25,7 +25,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
-import type { Sentence, TurnContextData, TurnWithContext, WordDiffSegment } from '@/types/merge';
+import type { ContentNode, TurnContextData, TurnWithContext, WordDiffSegment } from '@/types/merge';
 
 const roleIcons: Record<string, React.ReactNode> = {
   user: <User className="h-4 w-4" />,
@@ -135,8 +135,8 @@ export function TurnBubble({
   );
 }
 
-/** Flexible sentence type that accepts both required and optional source */
-interface SentenceWithOptionalSource {
+/** Flexible node type that accepts both required and optional source */
+interface NodeWithOptionalSource {
   id: string;
   text: string;
   source?: {
@@ -148,7 +148,7 @@ interface SentenceWithOptionalSource {
 
 interface DiffSourceContextModalProps {
   open: boolean;
-  sentence: SentenceWithOptionalSource | Sentence | null;
+  node: NodeWithOptionalSource | ContentNode | null;
   data: TurnContextData | null;
   loading: boolean;
   onClose: () => void;
@@ -167,7 +167,7 @@ interface DiffSourceContextModalProps {
 
 export function DiffSourceContextModal({
   open,
-  sentence,
+  node,
   data,
   loading,
   onClose,
@@ -274,12 +274,12 @@ export function DiffSourceContextModal({
             </div>
           )}
 
-          {!loading && !data && sentence && (
+          {!loading && !data && node && (
             <div className="text-center py-12 text-[var(--text-tertiary)]">
               <p>Could not load conversation context.</p>
-              {sentence.source?.turn_hash && (
+              {node.source?.turn_hash && (
                 <p className="mt-2 text-sm font-mono break-all text-[var(--text-secondary)]">
-                  Turn: {sentence.source.turn_hash}
+                  Turn: {node.source.turn_hash}
                 </p>
               )}
             </div>

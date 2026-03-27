@@ -1,7 +1,7 @@
 /**
  * Leaf Prompt Builder
  *
- * Constructs LLM prompts from commit sentences and leaf constraints.
+ * Constructs LLM prompts from commit nodes and leaf constraints.
  * Supports both legacy string concatenation and template-based rendering.
  *
  * Owner: GEN-* track

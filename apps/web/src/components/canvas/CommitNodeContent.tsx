@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 import type { CommitDisplay } from '@/types/nodes';
 
 // Preview limits for UnitNode display
-export const PREVIEW_MAX_SENTENCES = 3;
+export const PREVIEW_MAX_NODES = 3;
 const PREVIEW_MAX_FRAMES = 3;
 
 /**
@@ -40,12 +40,12 @@ export const CommitContentSection = memo(function CommitContentSection({
   commit,
   onViewFull,
   projectId: _projectId, // Reserved for future TruncatedCommitView integration
-  maxSentences: _maxSentences = PREVIEW_MAX_SENTENCES,
+  maxContentNodes: _maxNodes = PREVIEW_MAX_NODES,
 }: {
   commit: CommitDisplay;
   onViewFull?: () => void;
   projectId?: string;
-  maxSentences?: number;
+  maxContentNodes?: number;
 }) {
   const nodes = commit.content?.trees ?? [];
   const displayNodes = nodes.slice(0, PREVIEW_MAX_FRAMES) as Array<{

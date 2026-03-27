@@ -87,35 +87,35 @@ export function extractWithThresholds(
     return { id, originalText: text, tokens, selections: [], keywords: [] };
   }
 
-  // Simulate sentence-based extraction
-  // Higher cosine threshold = fewer, more relevant sentences selected
-  // Lower cosine threshold = more sentences selected
-  const sentenceBreaks: number[] = [];
+  // Simulate node-based extraction
+  // Higher cosine threshold = fewer, more relevant nodes selected
+  // Lower cosine threshold = more nodes selected
+  const nodeBreaks: number[] = [];
   tokens.forEach((token, idx) => {
     if (/[.!?。！？]/.test(token.text)) {
-      sentenceBreaks.push(idx);
+      nodeBreaks.push(idx);
     }
   });
 
-  // Build sentence ranges
-  const sentences: { start: number; end: number }[] = [];
-  let sentenceStart = 0;
-  for (const breakIdx of sentenceBreaks) {
-    if (breakIdx > sentenceStart) {
-      sentences.push({ start: sentenceStart, end: breakIdx });
+  // Build node ranges
+  const nodes: { start: number; end: number }[] = [];
+  let nodeStart = 0;
+  for (const breakIdx of nodeBreaks) {
+    if (breakIdx > nodeStart) {
+      nodes.push({ start: nodeStart, end: breakIdx });
     }
-    sentenceStart = breakIdx + 1;
+    nodeStart = breakIdx + 1;
   }
-  // Handle last sentence without period
-  if (sentenceStart < tokens.length) {
-    sentences.push({ start: sentenceStart, end: tokens.length - 1 });
+  // Handle last node without period
+  if (nodeStart < tokens.length) {
+    nodes.push({ start: nodeStart, end: tokens.length - 1 });
   }
 
-  // Select sentences based on cosine threshold (mock: higher = fewer)
+  // Select nodes based on cosine threshold (mock: higher = fewer)
   const selectRatio = 1 - cosineThreshold * 0.6; // 0.75 cosine -> 55% selected
-  const numToSelect = Math.max(1, Math.ceil(sentences.length * selectRatio));
+  const numToSelect = Math.max(1, Math.ceil(nodes.length * selectRatio));
 
-  const selections: TextSelection[] = sentences.slice(0, numToSelect).map((s, i) => ({
+  const selections: TextSelection[] = nodes.slice(0, numToSelect).map((s, i) => ({
     id: `sel-${id}-${i}`,
     startIndex: s.start,
     endIndex: s.end,

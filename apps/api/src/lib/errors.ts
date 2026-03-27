@@ -258,7 +258,7 @@ export const ErrorStatusCodes: Record<ErrorCode, number> = {
  * @returns Standardized error response object
  *
  * @example
- * return c.json(createError('INVALID_REQUEST', 'Missing required field: sentences'), 400);
+ * return c.json(createError('INVALID_REQUEST', 'Missing required field: nodes'), 400);
  */
 export function createError(
   code: ErrorCode,

@@ -5,14 +5,14 @@
 import { API_V1, buildQueryString, fetchWithTimeout, handleResponse } from './core';
 
 // ============================================================================
-// Sentence type (used by DiffDisplayView and other components)
+// ContentNode type (used by DiffDisplayView and other components)
 // ============================================================================
 
 /**
- * Sentence with source info — used by diff display and other components
- * that need sentence text plus source tracing information.
+ * ContentNode with source info — used by diff display and other components
+ * that need node text plus source tracing information.
  */
-export interface SentenceWithSourceInfo {
+export interface NodeWithSourceInfo {
   id: string;
   text: string;
   source: {
@@ -23,24 +23,24 @@ export interface SentenceWithSourceInfo {
 }
 
 // ============================================================================
-// Sentence-based commit types
+// ContentNode-based commit types
 // Used by diff display and other UI components.
 // ============================================================================
 
-/** Source reference for a sentence within a commit */
-export interface SentenceSourceRef {
+/** Source reference for a node within a commit */
+export interface NodeSourceRef {
   conversation_id: string;
   turn_hash: string;
   start_char: number;
   end_char: number;
 }
 
-/** A single sentence within a commit's content */
-export interface CommitSentence {
+/** A single node within a commit's content */
+export interface CommitContentNode {
   id: string;
   text: string;
   confidence?: number;
-  source_ref?: SentenceSourceRef;
+  source_ref?: NodeSourceRef;
   inherited_from?: string;
 }
 
@@ -105,7 +105,7 @@ export async function getApiCommit(commitHash: string): Promise<ApiCommit> {
 
 /**
  * Create a tree-based commit (new model).
- * Sends trees directly as content — no sentence conversion needed.
+ * Sends trees directly as content — no node conversion needed.
  */
 export async function createCommit(
   projectId: string,
@@ -176,10 +176,10 @@ export async function getApiCommitHistory(commitHash: string, limit = 50): Promi
 // ============================================================================
 
 export interface ConflictCandidate {
-  new_sentence_id: string;
-  new_sentence_text: string;
-  existing_sentence_id: string;
-  existing_sentence_text: string;
+  new_node_id: string;
+  new_node_text: string;
+  existing_node_id: string;
+  existing_node_text: string;
   existing_commit_hash: string;
   cosine: number;
   jaccard: number;

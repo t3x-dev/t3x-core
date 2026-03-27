@@ -11,9 +11,9 @@ function uid(): string {
 }
 
 /**
- * Generate test sentences with unique IDs (safe for parallel execution)
+ * Generate test nodes with unique IDs (safe for parallel execution)
  */
-export function generateSentences(count: number): Array<{ id: string; text: string }> {
+export function generateNodes(count: number): Array<{ id: string; text: string }> {
   const prefix = uid();
   const templates = [
     'User prefers dark mode',
@@ -48,21 +48,21 @@ export function generateConstraints(
 }
 
 /**
- * Generate merge conflict data (sentences that differ between source and target)
+ * Generate merge conflict data (nodes that differ between source and target)
  */
 export function generateMergeConflictData(): {
-  sourceSentences: Array<{ id: string; text: string }>;
-  targetSentences: Array<{ id: string; text: string }>;
+  sourceNodes: Array<{ id: string; text: string }>;
+  targetNodes: Array<{ id: string; text: string }>;
 } {
   const prefix = uid();
   return {
-    sourceSentences: [
+    sourceNodes: [
       { id: `s_${prefix}_1`, text: 'User prefers dark mode' },
       { id: `s_${prefix}_2`, text: 'User speaks English fluently' },
       { id: `s_${prefix}_3`, text: 'User timezone is UTC+8' },
       { id: `s_${prefix}_4`, text: 'User is a developer' },
     ],
-    targetSentences: [
+    targetNodes: [
       { id: `s_${prefix}_1`, text: 'User prefers dark mode' },
       { id: `s_${prefix}_2`, text: 'User speaks British English' },
       { id: `s_${prefix}_3`, text: 'User timezone is UTC+8' },

@@ -207,7 +207,7 @@ export async function previewWorkbenchDraft(
 }
 
 export interface SuggestResult {
-  sentence_id: string;
+  node_id: string;
   text: string;
   commit_hash: string;
   similarity: number;
@@ -256,7 +256,7 @@ export async function forkWorkbenchDraft(draftId: string): Promise<WorkbenchDraf
 // ============================================================================
 
 /**
- * Create an auto-draft by extracting sentences from a conversation via LLM.
+ * Create an auto-draft by extracting nodes from a conversation via LLM.
  */
 export async function createAutoDraft(
   input: {
@@ -264,7 +264,7 @@ export async function createAutoDraft(
     conversation_id: string;
     parent_commit_hash?: string;
     target_branch?: string;
-    options?: { max_sentences?: number };
+    options?: { max_nodes?: number };
   },
   signal?: AbortSignal
 ): Promise<WorkbenchDraft> {
@@ -298,12 +298,12 @@ export interface ExtractToDraftResult {
 }
 
 /**
- * Extract sentences from a conversation and append to an existing draft.
+ * Extract nodes from a conversation and append to an existing draft.
  */
 export async function extractToDraft(
   draftId: string,
   conversationId: string,
-  options?: { max_sentences?: number }
+  options?: { max_nodes?: number }
 ): Promise<ExtractToDraftResult> {
   const res = await fetchWithTimeout(
     `${API_V1}/drafts/${encodeURIComponent(draftId)}/extract`,

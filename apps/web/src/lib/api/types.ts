@@ -11,7 +11,7 @@ export type {
   AnchorType,
   CommitAnchors,
   ConfirmedAnchor,
-  SentenceWithAnchors,
+  NodeWithAnchors,
 } from '@/types/nodes';
 
 // ============================================================================
@@ -177,9 +177,9 @@ export type ApiAnchorType =
 export interface ApiConfirmedAnchor {
   id: string;
   text: string;
-  /** Relative position within sentence (for API storage) */
+  /** Relative position within node (for API storage) */
   start: number;
-  /** Relative position within sentence (for API storage) */
+  /** Relative position within node (for API storage) */
   end: number;
   type: ApiAnchorType;
   constraint: ApiAnchorConstraint;
@@ -189,9 +189,9 @@ export interface ApiConfirmedAnchor {
   global_end?: number;
 }
 
-/** Sentence with anchors (snake_case API format) */
-export interface ApiSentenceWithAnchors {
-  sentence_id: string;
+/** ContentNode with anchors (snake_case API format) */
+export interface ApiNodeWithAnchors {
+  node_id: string;
   text: string;
   start_char: number;
   end_char: number;
@@ -201,7 +201,7 @@ export interface ApiSentenceWithAnchors {
 /** Commit-level anchor storage (snake_case API format) */
 export interface ApiCommitAnchors {
   input_text_hash: string;
-  sentences: ApiSentenceWithAnchors[];
+  nodes: ApiNodeWithAnchors[];
 }
 
 // ============================================================================

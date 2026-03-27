@@ -119,7 +119,7 @@ export function ConfidenceBadge({ value, pulse = false }: { value: number; pulse
 }
 
 // ============================================================================
-// GutterBar — colored left edge bar on sentence cards
+// GutterBar — colored left edge bar on node cards
 // ============================================================================
 
 const gutterColors: Record<string, string> = {

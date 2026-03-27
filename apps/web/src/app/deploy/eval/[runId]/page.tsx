@@ -49,7 +49,7 @@ import {
   getEngineRun,
   getLeaf,
   type Leaf,
-  type SentenceSourceRef,
+  type NodeSourceRef,
   updateEngineRun,
 } from '@/lib/api';
 import { exportRunAsJSON, exportRunAsMarkdown } from '@/lib/exportReport';
@@ -266,7 +266,7 @@ export default function RunDetailPage() {
     loadRun();
   }, [runId]);
 
-  // Fetch commit data for lineage chain (assertion → constraint → sentence → source_ref)
+  // Fetch commit data for lineage chain (assertion → constraint → node → source_ref)
   useEffect(() => {
     if (!leaf?.commit_hash) return;
     getApiCommit(leaf.commit_hash)
@@ -278,23 +278,23 @@ export default function RunDetailPage() {
 
   // Build map: constraint_id → source_ref (for lineage links)
   const constraintSourceRefMap = useMemo(() => {
-    const map = new Map<string, SentenceSourceRef>();
+    const map = new Map<string, NodeSourceRef>();
     if (!leaf?.constraints || !commit?.content) return map;
 
-    // Derive sentences from tree nodes for source_ref lookup
+    // Derive nodes from tree nodes for source_ref lookup
     const content = commit.content as import('@t3x-dev/core').SemanticContent;
     type SourceRef = { conversation_id?: string; turn_hash?: string; start_char?: number; end_char?: number };
-    const sentences: Array<{ id: string; source_ref: SourceRef | undefined }> = content.trees.map((node, idx) => {
+    const nodes: Array<{ id: string; source_ref: SourceRef | undefined }> = content.trees.map((node, idx) => {
       const id = node.key.startsWith('s_') ? node.key : `s_${node.key}_${idx}`;
       const source_ref: SourceRef | undefined = undefined;
       return { id, source_ref };
     });
 
-    // Index sentences by ID for fast lookup, mapping to SentenceSourceRef
-    const sentenceMap = new Map<string, SentenceSourceRef>();
-    for (const s of sentences) {
+    // Index nodes by ID for fast lookup, mapping to NodeSourceRef
+    const nodeMap = new Map<string, NodeSourceRef>();
+    for (const s of nodes) {
       if (s.source_ref?.conversation_id && s.source_ref?.turn_hash) {
-        sentenceMap.set(s.id, {
+        nodeMap.set(s.id, {
           conversation_id: s.source_ref.conversation_id,
           turn_hash: s.source_ref.turn_hash,
           start_char: s.source_ref.start_char ?? 0,
@@ -303,10 +303,10 @@ export default function RunDetailPage() {
       }
     }
 
-    // Map constraint → sentence → source_ref
+    // Map constraint → node → source_ref
     for (const constraint of leaf.constraints) {
-      if (constraint.type === 'require' && constraint.source_sentence_id) {
-        const ref = sentenceMap.get(constraint.source_sentence_id);
+      if (constraint.type === 'require' && constraint.source_node) {
+        const ref = nodeMap.get(constraint.source_node.frame_type);
         if (ref) {
           map.set(constraint.id, ref);
         }
@@ -879,7 +879,7 @@ export default function RunDetailPage() {
                                       </div>
                                     </div>
                                   )}
-                                  {/* Lineage link: assertion → constraint → sentence → source conversation turn */}
+                                  {/* Lineage link: assertion → constraint → node → source conversation turn */}
                                   {assertion.constraint_id &&
                                     constraintSourceRefMap.get(assertion.constraint_id) &&
                                     projectId && (

@@ -52,8 +52,8 @@ export interface AnchorCandidate {
 }
 
 /**
- * Segment (sentence-level unit of text)
- * Used by sentenceBuilder and diff engine.
+ * Segment (node-level unit of text)
+ * Used by nodeBuilder and diff engine.
  */
 export interface Segment {
   /** Unique segment ID (e.g., "s-1", "s-2") */

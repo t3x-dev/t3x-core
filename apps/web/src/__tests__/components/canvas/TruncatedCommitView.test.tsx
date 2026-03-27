@@ -336,20 +336,20 @@ describe('TruncatedCommitView - Truncation Algorithm', () => {
 });
 
 describe('TruncatedCommitView - Component Logic', () => {
-  test('groups sentences by turn_hash', () => {
-    const sentences = [
+  test('groups nodes by turn_hash', () => {
+    const nodes = [
       { id: 's1', text: 'First', source: { turn_hash: 'hash1', start_char: 0, end_char: 5 } },
       { id: 's2', text: 'Second', source: { turn_hash: 'hash1', start_char: 10, end_char: 16 } },
       { id: 's3', text: 'Third', source: { turn_hash: 'hash2', start_char: 0, end_char: 5 } },
     ];
 
     const groups = new Map<string, HighlightRange[]>();
-    for (const sentence of sentences) {
-      const turnHash = sentence.source.turn_hash;
+    for (const node of nodes) {
+      const turnHash = node.source.turn_hash;
       const highlights = groups.get(turnHash) || [];
       highlights.push({
-        start: sentence.source.start_char,
-        end: sentence.source.end_char,
+        start: node.source.start_char,
+        end: node.source.end_char,
       });
       groups.set(turnHash, highlights);
     }
@@ -358,25 +358,25 @@ describe('TruncatedCommitView - Component Logic', () => {
     expect(groups.get('hash2')?.length).toBe(1);
   });
 
-  test('calculates hidden sentence count correctly', () => {
-    const totalSentences = 5;
+  test('calculates hidden node count correctly', () => {
+    const totalNodes = 5;
     const maxHighlightsPerTurn = 2;
     const visibleTurns = 2;
 
-    // Assuming 3 sentences in turn1, 2 sentences in turn2
-    const sentencesPerTurn = [3, 2];
+    // Assuming 3 nodes in turn1, 2 nodes in turn2
+    const nodesPerTurn = [3, 2];
     let visibleCount = 0;
-    for (let i = 0; i < Math.min(visibleTurns, sentencesPerTurn.length); i++) {
-      visibleCount += Math.min(sentencesPerTurn[i], maxHighlightsPerTurn);
+    for (let i = 0; i < Math.min(visibleTurns, nodesPerTurn.length); i++) {
+      visibleCount += Math.min(nodesPerTurn[i], maxHighlightsPerTurn);
     }
     // visible: min(3,2) + min(2,2) = 2 + 2 = 4
 
-    const hiddenCount = totalSentences - visibleCount;
+    const hiddenCount = totalNodes - visibleCount;
     expect(hiddenCount).toBe(1); // 5 - 4 = 1
   });
 
   test('orders turn hashes by first occurrence', () => {
-    const sentences = [
+    const nodes = [
       { id: 's1', text: 'First', source: { turn_hash: 'hash2', start_char: 0, end_char: 5 } },
       { id: 's2', text: 'Second', source: { turn_hash: 'hash1', start_char: 0, end_char: 6 } },
       { id: 's3', text: 'Third', source: { turn_hash: 'hash2', start_char: 10, end_char: 15 } },
@@ -384,8 +384,8 @@ describe('TruncatedCommitView - Component Logic', () => {
 
     const seen = new Set<string>();
     const ordered: string[] = [];
-    for (const sentence of sentences) {
-      const hash = sentence.source.turn_hash;
+    for (const node of nodes) {
+      const hash = node.source.turn_hash;
       if (!seen.has(hash)) {
         seen.add(hash);
         ordered.push(hash);

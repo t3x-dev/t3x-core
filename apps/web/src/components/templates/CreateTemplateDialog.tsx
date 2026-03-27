@@ -233,7 +233,7 @@ export function CreateTemplateDialog({ open, onOpenChange, onCreated }: CreateTe
             <Textarea
               value={form.system_prompt}
               onChange={(e) => updateForm({ system_prompt: e.target.value })}
-              placeholder="You are a content writer. Use {{formattedSentences}} as source..."
+              placeholder="You are a content writer. Use {{formattedNodes}} as source..."
               rows={5}
               className="font-mono text-xs"
               disabled={isCreating}
@@ -246,7 +246,7 @@ export function CreateTemplateDialog({ open, onOpenChange, onCreated }: CreateTe
             <Textarea
               value={form.user_prompt}
               onChange={(e) => updateForm({ user_prompt: e.target.value })}
-              placeholder="Generate content based on: {{formattedSentences}}"
+              placeholder="Generate content based on: {{formattedNodes}}"
               rows={5}
               className="font-mono text-xs"
               disabled={isCreating}

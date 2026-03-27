@@ -3,7 +3,7 @@
 /**
  * InlineDiffAnnotation - Shows word-level diff annotations inline.
  *
- * Given a sentence and a matching diff pair, renders the text with
+ * Given a node and a matching diff pair, renders the text with
  * word-level additions, removals, and unchanged spans highlighted inline.
  */
 

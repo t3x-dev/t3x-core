@@ -134,7 +134,7 @@ describe('Knowledge Graph Routes', () => {
         member_count: 1,
       });
       await insertNodeMembers(mockDB, [
-        { node_id: node.id, sentence_id: 's_detail_1', commit_hash: 'sha256:test' },
+        { node_id: node.id, content_node_id: 's_detail_1', commit_hash: 'sha256:test' },
       ]);
 
       const res = await app.request(
@@ -147,7 +147,7 @@ describe('Knowledge Graph Routes', () => {
       expect(json.data.node.id).toBe(node.id);
       expect(json.data.node.label).toBe('detail test');
       expect(json.data.members.length).toBe(1);
-      expect(json.data.members[0].sentence_id).toBe('s_detail_1');
+      expect(json.data.members[0].content_node_id).toBe('s_detail_1');
     });
 
     it('returns 404 for non-existent node', async () => {
@@ -345,7 +345,7 @@ describe('Knowledge Graph Routes', () => {
         { project_id: testProjectId, label: 'cascade B', member_count: 1 },
       ]);
       await insertNodeMembers(mockDB, [
-        { node_id: nodes[0].id, sentence_id: 's_cascade_1', commit_hash: 'sha256:cascade' },
+        { node_id: nodes[0].id, content_node_id: 's_cascade_1', commit_hash: 'sha256:cascade' },
       ]);
       await insertKnowledgeEdge(mockDB, {
         project_id: testProjectId,

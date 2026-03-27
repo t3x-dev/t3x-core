@@ -109,7 +109,7 @@ const buildRoute = createRoute({
   tags: ['Knowledge Graph'],
   summary: 'Build or rebuild knowledge graph for a project',
   description:
-    'Clusters sentence embeddings into topic nodes, promotes Inter-sentence Relations ' +
+    'Clusters node embeddings into topic nodes, promotes Inter-node Relations ' +
     'and knowledge conflicts to typed edges. Replaces any existing graph.',
   request: { params: ProjectIdParam },
   responses: {
@@ -134,7 +134,7 @@ knowledgeGraphRoutes.openapi(buildRoute, async (c) => {
   try {
     const db = await getDB();
 
-    // Build graph from tree-based content (stub — sentence_vectors removed)
+    // Build graph from tree-based content (stub — node_vectors removed)
     const result = buildKnowledgeGraph({});
 
     // Require at least some data to build from
@@ -154,17 +154,17 @@ knowledgeGraphRoutes.openapi(buildRoute, async (c) => {
           project_id: projectId,
           label: n.label,
           type: n.type,
-          member_count: n.member_sentence_ids.length,
+          member_count: n.member_node_ids.length,
         }))
       );
 
       // Insert members
-      const allMembers: Array<{ node_id: string; sentence_id: string; commit_hash: string }> = [];
+      const allMembers: Array<{ node_id: string; content_node_id: string; commit_hash: string }> = [];
       for (let i = 0; i < result.nodes.length; i++) {
-        for (const m of result.nodes[i].member_sentence_ids) {
+        for (const m of result.nodes[i].member_node_ids) {
           allMembers.push({
             node_id: insertedNodes[i].id,
-            sentence_id: m.sentence_id,
+            content_node_id: m.content_node_id,
             commit_hash: m.commit_hash,
           });
         }

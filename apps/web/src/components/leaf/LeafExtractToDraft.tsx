@@ -185,7 +185,7 @@ export function LeafExtractToDraft({ leafId, projectId, outputText }: LeafExtrac
                 >
                   {drafts.map((d) => (
                     <option key={d.id} value={d.id}>
-                      {d.title || d.id} ({d.sentences.length} sentences)
+                      {d.title || d.id} ({d.nodes.length} nodes)
                     </option>
                   ))}
                 </select>

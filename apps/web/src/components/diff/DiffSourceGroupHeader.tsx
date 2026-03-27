@@ -3,8 +3,8 @@
 /**
  * DiffSourceGroupHeader — Layer 2 provenance: inline source group header.
  *
- * Inserted between sentence groups in the diff body to show
- * which source conversation the following sentences come from.
+ * Inserted between node groups in the diff body to show
+ * which source conversation the following nodes come from.
  */
 
 import { Leaf, MessageSquare } from 'lucide-react';
@@ -17,7 +17,7 @@ import Link from 'next/link';
 interface DiffSourceGroupHeaderProps {
   conversationId: string;
   conversationTitle: string | null;
-  sentenceCount: number;
+  nodeCount: number;
   avgConfidence: number;
   isNewSource: boolean;
   projectId: string;
@@ -31,7 +31,7 @@ interface DiffSourceGroupHeaderProps {
 export function DiffSourceGroupHeader({
   conversationId,
   conversationTitle,
-  sentenceCount,
+  nodeCount,
   avgConfidence,
   isNewSource,
   projectId,
@@ -54,7 +54,7 @@ export function DiffSourceGroupHeader({
         {displayTitle}
       </Link>
       <span className="text-xs text-[var(--text-tertiary)]">
-        · {sentenceCount} sentence{sentenceCount !== 1 ? 's' : ''}
+        · {nodeCount} node{nodeCount !== 1 ? 's' : ''}
       </span>
       {avgConfidence > 0 && (
         <span className="text-xs text-[var(--text-tertiary)]">

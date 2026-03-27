@@ -405,19 +405,19 @@ export interface ContextSource {
  * Computed at merge execution time from the Merge2WayResult.
  */
 export interface MergeSummaryData {
-  /** Sentences identical in both branches (auto-kept) */
+  /** Nodes identical in both branches (auto-kept) */
   kept_identical: number;
 
   /** Similar pairs that were resolved (source or target chosen) */
   resolved_conflicts: number;
 
-  /** Sentences kept from source-only */
+  /** Nodes kept from source-only */
   kept_from_source: number;
 
-  /** Sentences kept from target-only */
+  /** Nodes kept from target-only */
   kept_from_target: number;
 
-  /** Sentences discarded during merge */
+  /** Nodes discarded during merge */
   discarded: number;
 
   /** Total nodes in the merged commit */
@@ -625,7 +625,7 @@ export interface DraftConstraint {
 
 /**
  * A Draft is a pre-commit working area (like Git's working directory).
- * Users edit sentences, constraints, and preview output before committing.
+ * Users edit nodes, constraints, and preview output before committing.
  */
 export interface Draft {
   /** Unique ID, format: "draft_" + nanoid(12) */

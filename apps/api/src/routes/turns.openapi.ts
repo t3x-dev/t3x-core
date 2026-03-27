@@ -510,7 +510,7 @@ turnRoutes.openapi(getTurnChainRoute, async (c) => {
 /**
  * GET /v1/turns/:hash/context - Get turn with surrounding context
  *
- * Used for source tracing in merge UI - shows where a sentence came from
+ * Used for source tracing in merge UI - shows where a node came from
  * with surrounding conversation context.
  *
  * Query params:

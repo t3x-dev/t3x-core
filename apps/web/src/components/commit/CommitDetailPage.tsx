@@ -568,7 +568,7 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
 
       {/* ═══════ BOTTOM: Provenance Graph ═══════ */}
       <ProvenanceGraph
-        activeSentenceId={activeNodeId}
+        activeNodeId={activeNodeId}
         commit={commit}
         leaves={leaves}
         projectId={projectId}
