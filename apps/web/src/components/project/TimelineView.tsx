@@ -18,7 +18,7 @@ interface TimelineEntry {
   branch?: string;
   hash?: string;
   fullHash?: string;
-  sentenceCount?: number;
+  nodeCount?: number;
   conversationId?: string;
   commitStatus?: string;
 }
@@ -51,7 +51,7 @@ export function TimelineView({ projectId }: { projectId: string }) {
         });
       } else {
         // Committed node
-        const commitData = d.commit as { sentences?: { text: string }[] } | undefined;
+        const commitData = d.commit as { nodes?: { text: string }[] } | undefined;
         items.push({
           id: node.id,
           type: isMerge ? 'merge' : isBranch ? 'branch' : 'commit',
@@ -61,7 +61,7 @@ export function TimelineView({ projectId }: { projectId: string }) {
           branch: isBranch ? (d.branchName as string) || 'branch' : 'main',
           hash: d.commitHash?.slice(0, 8),
           fullHash: d.commitHash,
-          sentenceCount: commitData?.sentences?.length,
+          nodeCount: commitData?.nodes?.length,
         });
       }
     }
@@ -159,9 +159,9 @@ export function TimelineView({ projectId }: { projectId: string }) {
                           {entry.hash}
                         </code>
                       )}
-                      {entry.sentenceCount !== undefined && entry.sentenceCount > 0 && (
+                      {entry.nodeCount !== undefined && entry.nodeCount > 0 && (
                         <span className="text-xs text-[var(--text-tertiary)]">
-                          {entry.sentenceCount} sentence{entry.sentenceCount !== 1 ? 's' : ''}
+                          {entry.nodeCount} node{entry.nodeCount !== 1 ? 's' : ''}
                         </span>
                       )}
                       {entry.timestamp && (

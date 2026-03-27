@@ -217,7 +217,7 @@ export function DraftPickerDialog({
               >
                 <FileEdit className="h-4 w-4 text-amber-500 shrink-0" />
                 <span className="text-sm truncate flex-1">{d.title || 'Untitled'}</span>
-                <span className="text-xs text-muted-foreground shrink-0">{d.sentences.length}</span>
+                <span className="text-xs text-muted-foreground shrink-0">{d.nodes.length}</span>
               </button>
             ))}
 

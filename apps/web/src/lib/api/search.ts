@@ -1,5 +1,5 @@
 /**
- * Search API — hybrid (keyword + vector) sentence search
+ * Search API — hybrid (keyword + vector) node search
  */
 
 import { API_V1, fetchWithTimeout, handleResponse } from './core';
@@ -11,7 +11,7 @@ import { API_V1, fetchWithTimeout, handleResponse } from './core';
 export type SearchMode = 'hybrid' | 'keyword' | 'semantic';
 
 export interface SearchHit {
-  sentence_id: string;
+  node_id: string;
   commit_hash: string;
   text: string;
   score: number;
@@ -30,7 +30,7 @@ export interface SearchResult {
 // Search
 // ============================================================================
 
-export interface SearchSentencesInput {
+export interface SearchNodesInput {
   project_id?: string;
   query: string;
   mode?: SearchMode;
@@ -38,9 +38,9 @@ export interface SearchSentencesInput {
 }
 
 /**
- * Search sentences across commits using hybrid (keyword + vector) search.
+ * Search nodes across commits using hybrid (keyword + vector) search.
  */
-export async function searchSentences(input: SearchSentencesInput): Promise<SearchResult> {
+export async function searchNodes(input: SearchNodesInput): Promise<SearchResult> {
   const res = await fetchWithTimeout(
     `${API_V1}/search`,
     {

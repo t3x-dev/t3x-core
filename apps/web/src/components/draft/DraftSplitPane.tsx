@@ -5,7 +5,7 @@
  *
  * CSS flex-based with drag handle. Follows VS Code terminal / Overleaf pattern.
  * Persists bottom panel height to localStorage.
- * V2: Integrates scroll sync between sentence list and preview.
+ * V2: Integrates scroll sync between node list and preview.
  */
 
 import { ChevronDown, ChevronUp, GripHorizontal } from 'lucide-react';

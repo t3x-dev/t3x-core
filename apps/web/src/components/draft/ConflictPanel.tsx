@@ -73,10 +73,10 @@ export function ConflictPanel({ commitHash }: ConflictPanelProps) {
         </span>
       </div>
       {conflicts.map((c) => {
-        const segments = wordDiff(c.existing_sentence_text, c.new_sentence_text);
+        const segments = wordDiff(c.existing_node_text, c.new_node_text);
         return (
           <div
-            key={`${c.new_sentence_id}-${c.existing_sentence_id}`}
+            key={`${c.new_node_id}-${c.existing_node_id}`}
             className="text-xs space-y-1.5 p-2 rounded bg-white/50 dark:bg-black/20"
           >
             <div>

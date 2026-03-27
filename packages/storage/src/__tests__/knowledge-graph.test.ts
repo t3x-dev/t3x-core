@@ -7,7 +7,7 @@ import {
   findKnowledgeNodesByProject,
   findMembersByNode,
   findNeighborNodes,
-  findNodeBySentence,
+  findNodeByContentId,
   insertKnowledgeEdge,
   insertKnowledgeEdges,
   insertKnowledgeNode,
@@ -142,8 +142,8 @@ describe('Knowledge Graph Queries', () => {
       ]);
 
       await insertNodeMembers(db, [
-        { node_id: nodeA.id, sentence_id: 's_del1', commit_hash: 'sha256:del1' },
-        { node_id: nodeB.id, sentence_id: 's_del2', commit_hash: 'sha256:del2' },
+        { node_id: nodeA.id, content_node_id: 's_del1', commit_hash: 'sha256:del1' },
+        { node_id: nodeB.id, content_node_id: 's_del2', commit_hash: 'sha256:del2' },
       ]);
 
       await insertKnowledgeEdge(db, {
@@ -185,9 +185,9 @@ describe('Knowledge Graph Queries', () => {
       memberNodeId = node.id;
 
       await insertNodeMembers(db, [
-        { node_id: memberNodeId, sentence_id: 's_m1', commit_hash: 'sha256:cm1' },
-        { node_id: memberNodeId, sentence_id: 's_m2', commit_hash: 'sha256:cm2' },
-        { node_id: memberNodeId, sentence_id: 's_m3', commit_hash: 'sha256:cm3' },
+        { node_id: memberNodeId, content_node_id: 's_m1', commit_hash: 'sha256:cm1' },
+        { node_id: memberNodeId, content_node_id: 's_m2', commit_hash: 'sha256:cm2' },
+        { node_id: memberNodeId, content_node_id: 's_m3', commit_hash: 'sha256:cm3' },
       ]);
     });
 
@@ -200,23 +200,23 @@ describe('Knowledge Graph Queries', () => {
       const members = await findMembersByNode(db, memberNodeId);
       expect(members).toHaveLength(3);
 
-      const sentenceIds = members.map((m) => m.sentence_id).sort();
-      expect(sentenceIds).toEqual(['s_m1', 's_m2', 's_m3']);
+      const contentNodeIds = members.map((m) => m.content_node_id).sort();
+      expect(contentNodeIds).toEqual(['s_m1', 's_m2', 's_m3']);
 
       // Check all fields
-      const first = members.find((m) => m.sentence_id === 's_m1');
+      const first = members.find((m) => m.content_node_id === 's_m1');
       expect(first).toBeDefined();
       expect(first!.node_id).toBe(memberNodeId);
       expect(first!.commit_hash).toBe('sha256:cm1');
     });
 
-    it('reverse lookup: finds node by sentence ID', async () => {
-      const nodeId = await findNodeBySentence(db, 's_m2');
+    it('reverse lookup: finds node by content node ID', async () => {
+      const nodeId = await findNodeByContentId(db, 's_m2');
       expect(nodeId).toBe(memberNodeId);
     });
 
-    it('returns null when sentence has no node', async () => {
-      const nodeId = await findNodeBySentence(db, 's_nonexistent');
+    it('returns null when content node has no node', async () => {
+      const nodeId = await findNodeByContentId(db, 's_nonexistent');
       expect(nodeId).toBeNull();
     });
 

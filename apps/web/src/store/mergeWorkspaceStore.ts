@@ -14,7 +14,7 @@ import { getTerminology, type TermKey } from '@/hooks/useTerminology';
 import * as api from '@/lib/api';
 import { API_V1, fetchWithTimeout, handleResponse } from '@/lib/api/core';
 import { useSettingsStore } from '@/store/settingsStore';
-import type { Merge2WayResult, MergeDraft, Sentence, TurnContextData } from '@/types/merge';
+import type { Merge2WayResult, MergeDraft, ContentNode, TurnContextData } from '@/types/merge';
 import { useCanvasStore } from './canvasStore';
 
 // ============================================================================
@@ -128,11 +128,11 @@ interface MergeWorkspaceState {
   // Preview actions
   togglePreview: () => void;
 
-  // Legacy sentence-based actions (kept for UI compat)
+  // Legacy node-based actions (kept for UI compat)
   resolvePair: (index: number, pick: 'source' | 'target') => void;
   toggleKeep: (side: 'source' | 'target', index: number) => void;
-  fetchSourceContext: (turnHash: string, sentence: Sentence) => Promise<TurnContextData | null>;
-  getPreviewSentences: () => Sentence[];
+  fetchSourceContext: (turnHash: string, node: ContentNode) => Promise<TurnContextData | null>;
+  getPreviewNodes: () => ContentNode[];
 
   // Extended resolution actions
   resolveConflict: (index: number, resolution: 'source' | 'target' | 'both') => void;
@@ -429,7 +429,7 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
   },
 
   // ============================================================================
-  // Legacy Sentence-Based Actions (kept for UI compat)
+  // Legacy ContentNode-Based Actions (kept for UI compat)
   // ============================================================================
 
   resolvePair: (index: number, pick: 'source' | 'target') => {
@@ -468,7 +468,7 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
     set({ prepared: newPrepared, isDirty: true });
   },
 
-  fetchSourceContext: async (turnHash: string, sentence: Sentence) => {
+  fetchSourceContext: async (turnHash: string, node: ContentNode) => {
     const { contextCache, contextLoadingStates } = get();
 
     if (contextCache[turnHash]) {
@@ -487,8 +487,8 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
       const contextData = await api.fetchTurnContext(turnHash, {
         before: 1,
         after: 1,
-        highlightStart: sentence.source?.start_char,
-        highlightEnd: sentence.source?.end_char,
+        highlightStart: node.source?.start_char,
+        highlightEnd: node.source?.end_char,
       });
 
       set((state) => ({
@@ -514,13 +514,13 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
     }
   },
 
-  getPreviewSentences: (): Sentence[] => {
+  getPreviewNodes: (): ContentNode[] => {
     const { prepared, extendedResolutions } = get();
     if (!prepared) return [];
 
-    const sentences: Sentence[] = [];
+    const nodes: ContentNode[] = [];
 
-    sentences.push(...prepared.identical);
+    nodes.push(...prepared.identical);
 
     for (let i = 0; i < prepared.similarPairs.length; i++) {
       const pair = prepared.similarPairs[i];
@@ -528,28 +528,28 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
       const extRes = extendedResolutions[key];
 
       if (pair.resolution === 'source') {
-        sentences.push(pair.source);
+        nodes.push(pair.source);
       } else if (pair.resolution === 'target') {
-        sentences.push(pair.target);
+        nodes.push(pair.target);
       } else if (extRes?.type === 'both') {
-        sentences.push(pair.source);
-        sentences.push(pair.target);
+        nodes.push(pair.source);
+        nodes.push(pair.target);
       }
     }
 
     for (const candidate of prepared.onlyInSource) {
       if (candidate.keep) {
-        sentences.push(candidate.sentence);
+        nodes.push(candidate.node);
       }
     }
 
     for (const candidate of prepared.onlyInTarget) {
       if (candidate.keep) {
-        sentences.push(candidate.sentence);
+        nodes.push(candidate.node);
       }
     }
 
-    return sentences;
+    return nodes;
   },
 
   // ============================================================================

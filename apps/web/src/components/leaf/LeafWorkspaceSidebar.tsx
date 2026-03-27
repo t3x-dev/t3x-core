@@ -21,7 +21,7 @@ import { Button } from '@/components/ui/button';
 import type { Assertion, Constraint, Leaf } from '@/lib/api';
 import { listLeavesByProject } from '@/lib/api/leaves';
 import { cn } from '@/lib/utils';
-import type { SentenceWithSource } from '@/types/sourceContext';
+import type { NodeWithSource } from '@/types/sourceContext';
 
 // ============================================================================
 // SidebarSection — lightweight collapsible (border-bottom divider style)
@@ -81,7 +81,7 @@ function SidebarSection({ title, icon, badge, defaultOpen = true, children }: Si
 
 interface LeafWorkspaceSidebarProps {
   leaf: Leaf;
-  sentences: SentenceWithSource[];
+  nodes: NodeWithSource[];
   commitLoadError: boolean;
   hasCommitData: boolean;
   saving: boolean;
@@ -95,7 +95,7 @@ interface LeafWorkspaceSidebarProps {
   onAddConstraintFromSource: (
     type: 'require' | 'exclude',
     value: string,
-    sourceSentenceId: string
+    sourceNodeId: string
   ) => void;
   // Runner eval
   selectedAssertionIds: Set<string>;
@@ -107,7 +107,7 @@ interface LeafWorkspaceSidebarProps {
 
 export function LeafWorkspaceSidebar({
   leaf,
-  sentences,
+  nodes,
   commitLoadError,
   hasCommitData,
   saving,
@@ -165,13 +165,13 @@ export function LeafWorkspaceSidebar({
       </SidebarSection>
 
       {/* Source Context */}
-      {hasCommitData && sentences.length > 0 && (
+      {hasCommitData && nodes.length > 0 && (
         <SidebarSection
           title="Source Context"
           icon={<MessageSquare className="h-3.5 w-3.5 text-[var(--accent-conversation)]" />}
           badge={
             <span className="text-[10px] text-[var(--text-tertiary)]">
-              {sentences.length} tree{sentences.length !== 1 ? 's' : ''}
+              {nodes.length} tree{nodes.length !== 1 ? 's' : ''}
             </span>
           }
           defaultOpen={false}
@@ -182,7 +182,7 @@ export function LeafWorkspaceSidebar({
             </p>
           )}
           <LeafConstraintSourceContext
-            sentences={sentences}
+            nodes={nodes}
             constraints={leaf.constraints}
             onAdd={onAddConstraintFromSource}
             onRemove={onRemoveConstraint}

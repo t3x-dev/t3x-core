@@ -55,7 +55,7 @@ export default function LeafDetailPage() {
     leaf,
     loading,
     error,
-    sentences,
+    nodes,
     semanticContent,
     saving,
     savingInstruction,
@@ -74,8 +74,8 @@ export default function LeafDetailPage() {
     retuning,
     mode,
     setMode,
-    sentenceCoverage,
-    sentenceConfidence,
+    nodeCoverage,
+    nodeConfidence,
     handleUpdateConstraints,
     handleRemoveConstraint,
     handleAddConstraint,
@@ -95,7 +95,7 @@ export default function LeafDetailPage() {
   const [suggestOpen, setSuggestOpen] = useState(false);
   const [sourcePanelCollapsed, setSourcePanelCollapsed] = useState(false);
   const [inspectorCollapsed, setInspectorCollapsed] = useState(false);
-  const [hoveredSentenceId, setHoveredSentenceId] = useState<string | null>(null);
+  const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
 
   // Re-tune with navigation
   const onRetune = useCallback(async () => {
@@ -122,22 +122,22 @@ export default function LeafDetailPage() {
     [leaf, saving, handleUpdateConstraints]
   );
 
-  const reflectedCount = Array.from(sentenceCoverage.values()).filter((c) => c.reflected).length;
+  const reflectedCount = Array.from(nodeCoverage.values()).filter((c) => c.reflected).length;
 
-  // Keyboard navigation for sentences
-  const sentenceIds = useMemo(() => sentences.map((s) => s.id), [sentences]);
-  const { activeId: activeSentenceId } = useKeyboardNavigation({
-    ids: sentenceIds,
+  // Keyboard navigation for nodes
+  const nodeIds = useMemo(() => nodes.map((s) => s.id), [nodes]);
+  const { activeId: activeNodeId } = useKeyboardNavigation({
+    ids: nodeIds,
     onSelect: (id) => {
       if (id) {
-        const el = document.querySelector(`[data-sentence-id="${id}"]`);
+        const el = document.querySelector(`[data-node-id="${id}"]`);
         el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       }
     },
     onAction: (id) => {
-      const sentence = sentences.find((s) => s.id === id);
-      if (sentence && !saving) {
-        handleAddConstraintFromSource('require', sentence.text, sentence.id);
+      const node = nodes.find((s) => s.id === id);
+      if (node && !saving) {
+        handleAddConstraintFromSource('require', node.text, node.id);
       }
     },
     enabled: !loading && !!leaf && !suggestOpen,
@@ -202,7 +202,7 @@ export default function LeafDetailPage() {
             onClick={() => setSourcePanelCollapsed(!sourcePanelCollapsed)}
           >
             <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-conversation)]" />
-            Frames {sentences.length}
+            Frames {nodes.length}
           </button>
           <button
             type="button"
@@ -219,9 +219,9 @@ export default function LeafDetailPage() {
           </button>
 
           {/* Display mode: coverage summary */}
-          {mode === 'display' && sentences.length > 0 && (
+          {mode === 'display' && nodes.length > 0 && (
             <span className="text-xs font-medium text-[var(--status-success)] ml-2">
-              {reflectedCount}/{sentences.length} trees reflected
+              {reflectedCount}/{nodes.length} trees reflected
             </span>
           )}
         </div>
@@ -299,8 +299,8 @@ export default function LeafDetailPage() {
             commitHash={leaf.commit_hash}
             projectId={projectId}
             onAddConstraintFromSource={handleAddConstraintFromSource}
-            highlightedConstraintId={hoveredSentenceId}
-            onHoverNode={setHoveredSentenceId}
+            highlightedConstraintId={hoveredNodeId}
+            onHoverNode={setHoveredNodeId}
           />
         )}
 
@@ -319,10 +319,10 @@ export default function LeafDetailPage() {
               generateProgressMessages={generateProgressMessages}
               generateSuccessBanner={generateSuccessBanner}
               mode={mode}
-              sentenceCoverage={sentenceCoverage}
-              sentences={sentences}
-              hoveredSentenceId={hoveredSentenceId}
-              onHoverSentence={setHoveredSentenceId}
+              nodeCoverage={nodeCoverage}
+              nodes={nodes}
+              hoveredNodeId={hoveredNodeId}
+              onHoverNode={setHoveredNodeId}
             />
 
             {/* Reverse-learn: suggest constraints from failed assertions */}
@@ -398,7 +398,7 @@ export default function LeafDetailPage() {
             assertions={leaf.assertions ?? []}
             constraints={leaf.constraints}
             generatedAt={leaf.generated_at ?? undefined}
-            onHighlightConstraint={setHoveredSentenceId}
+            onHighlightConstraint={setHoveredNodeId}
             onExport={handleExport}
           />
         )}

@@ -1,7 +1,7 @@
 /**
  * Relation Response Parser
  *
- * Parses LLM output for inter-sentence relation extraction.
+ * Parses LLM output for inter-node relation extraction.
  * More lenient than extractionParser.ts: returns empty array even when all items
  * are invalid, since relation extraction is non-blocking and should never throw
  * on valid JSON.

@@ -45,13 +45,10 @@ function AssertionCard({
     ? `${constraint.type}: ${constraint.match_mode === 'exact' ? `"${constraint.value}"` : constraint.value}`
     : assertion.details;
 
-  const sourceLabel = constraint
-    ? 'source_node' in constraint && constraint.source_node
+  const sourceLabel =
+    constraint && 'source_node' in constraint && constraint.source_node
       ? `${constraint.source_node.frame_type}${constraint.source_node.slot_key ? `.${constraint.source_node.slot_key}` : ''}`
-      : 'source_sentence_id' in constraint && constraint.source_sentence_id
-        ? constraint.source_sentence_id
-        : undefined
-    : undefined;
+      : undefined;
 
   return (
     <div

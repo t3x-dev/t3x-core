@@ -189,13 +189,13 @@ describe('truncationUtils', () => {
     });
 
     it('uses 0.4 threshold for paraphrase', () => {
-      // sentenceText words: {oauth, 2.0, is, used, for, authentication} = 6
+      // nodeText words: {oauth, 2.0, is, used, for, authentication} = 6
       // turnContent words: {oauth, 2.0, is, used, for, auth, and, sessions} = 8
       // Intersection = 5, Union = 9, Jaccard = 5/9 ≈ 0.56 > 0.4
       const turnContent = 'OAuth 2.0 is used for auth and sessions';
-      const sentenceText = 'OAuth 2.0 is used for authentication';
+      const nodeText = 'OAuth 2.0 is used for authentication';
       expect(
-        checkContentIntegrity(sentenceText, turnContent, 0, turnContent.length, 'paraphrase')
+        checkContentIntegrity(nodeText, turnContent, 0, turnContent.length, 'paraphrase')
       ).toBe('valid');
     });
 

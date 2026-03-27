@@ -1,18 +1,18 @@
 'use client';
 
 /**
- * SentenceList - Displays draft sentences with include/exclude toggles
+ * NodeList - Displays draft nodes with include/exclude toggles
  */
 
 import { Plus } from 'lucide-react';
 import { useCallback, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useDraftWorkspaceStore } from '@/store/draftWorkspaceStore';
-import { AddManualSentenceDialog } from './AddManualSentenceDialog';
-import { SentenceCard } from './SentenceCard';
+import { AddManualNodeDialog } from './AddManualNodeDialog';
+import { NodeCard } from './NodeCard';
 
-export function SentenceList() {
-  const { draft, reorderSentences } = useDraftWorkspaceStore();
+export function NodeList() {
+  const { draft, reorderNodes } = useDraftWorkspaceStore();
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const dragIndexRef = useRef<number | null>(null);
@@ -43,12 +43,12 @@ export function SentenceList() {
       e.preventDefault();
       const from = dragIndexRef.current;
       if (from != null && from !== index) {
-        reorderSentences(from, index);
+        reorderNodes(from, index);
       }
       dragIndexRef.current = null;
       setDragOverIndex(null);
     },
-    [reorderSentences]
+    [reorderNodes]
   );
 
   const handleDragEnd = useCallback(() => {
@@ -58,7 +58,7 @@ export function SentenceList() {
 
   if (!draft) return null;
 
-  const sentences = [...draft.nodes].sort((a, b) => a.position - b.position);
+  const nodes = [...draft.nodes].sort((a, b) => a.position - b.position);
 
   return (
     <section>
@@ -66,7 +66,7 @@ export function SentenceList() {
         <h2 className="text-sm font-semibold text-foreground">
           Frames
           <span className="ml-1.5 text-muted-foreground font-normal">
-            ({sentences.filter((s) => s.included).length}/{sentences.length} included)
+            ({nodes.filter((s) => s.included).length}/{nodes.length} included)
           </span>
         </h2>
         <Button
@@ -80,7 +80,7 @@ export function SentenceList() {
         </Button>
       </div>
 
-      {sentences.length === 0 ? (
+      {nodes.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border p-8 text-center">
           <p className="text-sm text-muted-foreground">
             No nodes yet. Add nodes manually or import from conversations.
@@ -92,15 +92,15 @@ export function SentenceList() {
             onClick={() => setShowAddDialog(true)}
           >
             <Plus className="h-3.5 w-3.5" />
-            Add Sentence
+            Add ContentNode
           </Button>
         </div>
       ) : (
         <div className="space-y-2">
-          {sentences.map((sentence, i) => (
-            <SentenceCard
-              key={sentence.id}
-              sentence={sentence}
+          {nodes.map((node, i) => (
+            <NodeCard
+              key={node.id}
+              node={node}
               isDragOver={dragOverIndex === i}
               onDragStart={handleDragStart(i)}
               onDragOver={handleDragOver(i)}
@@ -111,7 +111,7 @@ export function SentenceList() {
         </div>
       )}
 
-      <AddManualSentenceDialog open={showAddDialog} onClose={() => setShowAddDialog(false)} />
+      <AddManualNodeDialog open={showAddDialog} onClose={() => setShowAddDialog(false)} />
     </section>
   );
 }

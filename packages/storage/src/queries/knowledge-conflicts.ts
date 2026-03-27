@@ -2,7 +2,7 @@
  * Knowledge Conflicts Queries (S15)
  *
  * CRUD operations for knowledge_conflicts table using Drizzle ORM.
- * Tracks detected conflicts between new and existing sentences.
+ * Tracks detected conflicts between new and existing nodes.
  */
 
 import { randomUUID } from 'crypto';
@@ -17,9 +17,9 @@ import { type KnowledgeConflictRecord, knowledgeConflicts } from '../schema-know
 
 export interface InsertConflictInput {
   project_id: string;
-  new_sentence_id: string;
+  new_node_id: string;
   new_commit_hash: string;
-  existing_sentence_id: string;
+  existing_node_id: string;
   existing_commit_hash: string;
   cosine: number;
   jaccard: number;
@@ -28,9 +28,9 @@ export interface InsertConflictInput {
 export interface KnowledgeConflictOutput {
   id: string;
   project_id: string;
-  new_sentence_id: string;
+  new_node_id: string;
   new_commit_hash: string;
-  existing_sentence_id: string;
+  existing_node_id: string;
   existing_commit_hash: string;
   cosine: number;
   jaccard: number;
@@ -65,9 +65,9 @@ export async function insertConflict(
     .values({
       id,
       projectId: input.project_id,
-      newSentenceId: input.new_sentence_id,
+      newNodeId: input.new_node_id,
       newCommitHash: input.new_commit_hash,
-      existingSentenceId: input.existing_sentence_id,
+      existingNodeId: input.existing_node_id,
       existingCommitHash: input.existing_commit_hash,
       cosine: input.cosine,
       jaccard: input.jaccard,
@@ -179,9 +179,9 @@ function rowToOutput(row: KnowledgeConflictRecord): KnowledgeConflictOutput {
   return {
     id: row.id,
     project_id: row.projectId,
-    new_sentence_id: row.newSentenceId,
+    new_node_id: row.newNodeId,
     new_commit_hash: row.newCommitHash,
-    existing_sentence_id: row.existingSentenceId,
+    existing_node_id: row.existingNodeId,
     existing_commit_hash: row.existingCommitHash,
     cosine: row.cosine,
     jaccard: row.jaccard,

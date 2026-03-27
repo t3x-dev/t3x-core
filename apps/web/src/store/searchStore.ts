@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { SearchHit, SearchMode } from '@/lib/api/search';
-import { searchSentences } from '@/lib/api/search';
+import { searchNodes } from '@/lib/api/search';
 
 interface SearchState {
   query: string;
@@ -41,7 +41,7 @@ export const useSearchStore = create<SearchState>((set, get) => ({
 
     set({ loading: true, error: null });
     try {
-      const result = await searchSentences({
+      const result = await searchNodes({
         query: query.trim(),
         mode,
         project_id: projectId,

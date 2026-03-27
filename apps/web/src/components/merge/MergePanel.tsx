@@ -21,9 +21,9 @@ import { selectCanExecuteMerge, selectUnresolvedCount, useCanvasStore } from '@/
  *
  * Features:
  * - Progress summary showing counts and unresolved conflicts
- * - Identical sentences section (auto-kept)
+ * - Identical nodes section (auto-kept)
  * - Similar pairs requiring user decision
- * - Unique sentences from source/target with keep/discard options
+ * - Unique nodes from source/target with keep/discard options
  * - Merge message input and execute button
  * - Cancel merge option
  */
@@ -73,7 +73,7 @@ export function MergePanel() {
     { label: 'Analyzing branches...', detail: 'Comparing source and target commits' },
     {
       label: 'Computing diffs...',
-      detail: 'Identifying identical, modified, and unique sentences',
+      detail: 'Identifying identical, modified, and unique nodes',
     },
     { label: 'Building merge plan...', detail: 'Preparing resolution options' },
   ];
@@ -161,13 +161,13 @@ export function MergePanel() {
         <div className="mb-[var(--space-section)] p-3 bg-muted/50 rounded-lg text-sm">
           <div className="flex justify-between mb-1">
             <span>
-              {t('identical_sentences')} ({t('auto_kept').toLowerCase()}):
+              {t('identical_nodes')} ({t('auto_kept').toLowerCase()}):
             </span>
             <span className="font-medium text-[var(--diff-added-accent)]">{counts.identical}</span>
           </div>
           <div className="flex justify-between mb-1">
             <span>
-              {t('modified_sentences')} ({t('unresolved').toLowerCase()}):
+              {t('modified_nodes')} ({t('unresolved').toLowerCase()}):
             </span>
             <span className="font-medium text-[var(--diff-modified-accent)]">
               {counts.resolved}/{counts.similar}
@@ -192,7 +192,7 @@ export function MergePanel() {
       {/* Auto-kept section */}
       <div className="mb-[var(--space-group)]">
         <h3 className="font-medium mb-[var(--space-item)] text-[var(--diff-added-accent)]">
-          {t('identical_sentences')} ({prepared.autoKept.length})
+          {t('identical_nodes')} ({prepared.autoKept.length})
         </h3>
         <div className="text-sm text-muted-foreground">
           {prepared.autoKept.length} nodes auto-kept (identical in both branches)
@@ -203,7 +203,7 @@ export function MergePanel() {
       {prepared.conflicts.length > 0 && (
         <div className="mb-[var(--space-group)]">
           <h3 className="font-medium mb-[var(--space-item)] text-[var(--diff-modified-accent)]">
-            {t('modified_sentences')} ({prepared.conflicts.length} conflicts)
+            {t('modified_nodes')} ({prepared.conflicts.length} conflicts)
           </h3>
           <div className="text-sm text-muted-foreground">
             Resolve conflicts in the merge workspace
@@ -298,7 +298,7 @@ export function MergePanel() {
           <DialogHeader>
             <DialogTitle className="text-center">{t('mergeConfirm')}</DialogTitle>
             <DialogDescription className="text-center">
-              This will create a new merge commit combining the selected sentences from both
+              This will create a new merge commit combining the selected nodes from both
               branches. This action cannot be undone.
             </DialogDescription>
           </DialogHeader>

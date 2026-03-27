@@ -369,13 +369,13 @@ export function calculateTextSimilarity(a: string, b: string): number {
 }
 
 /**
- * Check if sentence text matches the content at the source position.
+ * Check if node text matches the content at the source position.
  * Threshold varies by anchor_type:
  * - 'verbatim' (default): 0.9 — strict match
  * - 'paraphrase': 0.4 — loose match for rephrased content
  * - 'inference': always valid (derived knowledge, not direct quote)
  *
- * @param sentenceText - Expected sentence text
+ * @param nodeText - Expected node text
  * @param turnContent - Full turn content
  * @param startChar - Start position
  * @param endChar - End position
@@ -383,7 +383,7 @@ export function calculateTextSimilarity(a: string, b: string): number {
  * @returns 'valid' if match, 'mismatch' if different, 'unknown' if can't determine
  */
 export function checkContentIntegrity(
-  sentenceText: string,
+  nodeText: string,
   turnContent: string,
   startChar: number,
   endChar: number,
@@ -408,17 +408,17 @@ export function checkContentIntegrity(
   const actualText = turnContent.slice(startChar, endChar);
 
   // Normalize whitespace for comparison
-  const normalizedSentence = sentenceText.trim().replace(/\s+/g, ' ');
+  const normalizedNode = nodeText.trim().replace(/\s+/g, ' ');
   const normalizedActual = actualText.trim().replace(/\s+/g, ' ');
 
-  if (normalizedSentence === normalizedActual) {
+  if (normalizedNode === normalizedActual) {
     return 'valid';
   }
 
   // Select threshold based on anchor_type
   const threshold = anchorType === 'paraphrase' ? 0.4 : 0.9;
 
-  const similarity = calculateTextSimilarity(normalizedSentence, normalizedActual);
+  const similarity = calculateTextSimilarity(normalizedNode, normalizedActual);
   if (similarity >= threshold) {
     return 'valid';
   }

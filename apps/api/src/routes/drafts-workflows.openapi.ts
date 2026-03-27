@@ -5,15 +5,15 @@
  * - POST /v1/drafts/:id/preview  - Generate preview output
  * - POST /v1/drafts/:id/commit   - Commit draft to knowledge base
  * - POST /v1/drafts/:id/fork     - Fork a committed draft
- * - POST /v1/drafts/:id/extract  - Extract sentences from conversation
- * - POST /v1/drafts/:id/suggest  - Get sentence suggestions
+ * - POST /v1/drafts/:id/extract  - Extract nodes from conversation
+ * - POST /v1/drafts/:id/suggest  - Get node suggestions
  */
 
 import { createHash } from 'node:crypto';
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
   generateLeafOutput,
-  generateSentenceId,
+  generateNodeId,
   isGenerationConfigured,
 } from '@t3x-dev/core';
 import {
@@ -165,7 +165,7 @@ const extractDraftRoute = createRoute({
   method: 'post',
   path: '/v1/drafts/{id}/extract',
   tags: ['Drafts'],
-  summary: 'Extract sentences from conversation and add to draft',
+  summary: 'Extract nodes from conversation and add to draft',
   request: {
     params: IdParamSchema,
     body: {
@@ -175,7 +175,7 @@ const extractDraftRoute = createRoute({
             conversation_id: z.string().min(1),
             options: z
               .object({
-                max_sentences: z.number().int().min(1).max(100).optional(),
+                max_nodes: z.number().int().min(1).max(100).optional(),
               })
               .optional(),
           }),
@@ -185,7 +185,7 @@ const extractDraftRoute = createRoute({
   },
   responses: {
     200: {
-      description: 'Sentences extracted and added to draft',
+      description: 'Nodes extracted and added to draft',
       content: {
         'application/json': {
           schema: SuccessResponseSchema(
@@ -221,7 +221,7 @@ const suggestDraftRoute = createRoute({
   method: 'post',
   path: '/v1/drafts/{id}/suggest',
   tags: ['Drafts'],
-  summary: 'Get sentence suggestions based on draft goal',
+  summary: 'Get node suggestions based on draft goal',
   request: {
     params: IdParamSchema,
     body: {
@@ -307,7 +307,7 @@ draftsWorkflowRoutes.openapi(previewDraftRoute, async (c) => {
     // 5. Compute cache key
     const previewType = body?.preview_type ?? draft.preview_type ?? 'tweet';
     const cacheInput = JSON.stringify({
-      sentences: includedNodes.map((s) => s.text).sort(),
+      nodes: includedNodes.map((n) => n.text).sort(),
       constraints: draft.constraints,
       instructions: draft.instructions,
       preview_type: previewType,
@@ -435,8 +435,8 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
       );
     }
 
-    // 3. Convert to Sentences (branch by extraction_mode)
-    let sentences: Array<{
+    // 3. Convert to Nodes (branch by extraction_mode)
+    let nodes: Array<{
       id: string;
       text: string;
       confidence?: number;
@@ -456,7 +456,7 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
     }>;
 
     if (draft.extraction_mode === 'llm') {
-      // LLM mode: convert staged SemanticPoints directly to sentence-like records
+      // LLM mode: convert staged SemanticPoints directly to node-like records
       const activeSPs = ((draft.semantic_points ?? []) as Array<{
         id: string;
         text: string;
@@ -479,7 +479,7 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
         return errorResponse(c, 'INVALID_REQUEST', 'No staged semantic points to commit');
       }
 
-      sentences = activeSPs.map((sp) => {
+      nodes = activeSPs.map((sp) => {
         const primary = sp.evidence?.find((e) => e.conversation_id && e.turn_hash);
         return {
           id: sp.id,
@@ -501,7 +501,7 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
         return errorResponse(c, 'INVALID_REQUEST', 'Draft has no included nodes');
       }
 
-      sentences = includedNodes.map((ds: any) => {
+      nodes = includedNodes.map((ds: any) => {
         const confidence = ds.origin.type === 'extracted' ? ds.origin.confidence : 1.0;
 
         const sourceRef =
@@ -515,7 +515,7 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
             : undefined;
 
         return {
-          id: generateSentenceId(),
+          id: generateNodeId(),
           text: ds.text,
           confidence,
           source_ref: sourceRef,
@@ -526,8 +526,8 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
     // 4. Set parents
     const parents = draft.parent_commit_hash ? [draft.parent_commit_hash] : [];
 
-    // 5. Create commit (convert sentences to legacy_sentence frames)
-    const commitFrames = sentences.map((s, i) => ({
+    // 5. Create commit (convert nodes to frames)
+    const commitFrames = nodes.map((s, i) => ({
       id: s.id || `f_${String(i + 1).padStart(3, '0')}`,
       type: 'legacy_sentence' as const,
       slots: { text: s.text },
@@ -543,11 +543,11 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
       provenance: { method: 'human_curation' },
     });
 
-    // 5b. Best-effort: populate sentence vectors (skip on failure)
+    // 5b. Best-effort: populate node vectors (skip on failure)
     const embedder = getEmbedder();
     if (embedder) {
       try {
-        const texts = sentences.map((s) => s.text);
+        const texts = nodes.map((n) => n.text);
         await embedder.encode(texts);
       } catch (embedErr) {
         console.warn('Vector population failed (best-effort, continuing):', embedErr);
@@ -651,12 +651,12 @@ draftsWorkflowRoutes.openapi(forkDraftRoute, async (c) => {
 
 // POST /v1/drafts/:id/extract
 draftsWorkflowRoutes.openapi(extractDraftRoute, async (c) => {
-  // Sentence extraction is deprecated (replaced by frame-based extraction).
+  // Node extraction is deprecated (replaced by frame-based extraction).
   // Use POST /v1/extract/frames + POST /v1/extract/incremental instead.
   return errorResponse(
     c,
     'DEPRECATED',
-    'Sentence extraction from conversation has been replaced by frame-based extraction. Use /v1/extract/frames instead.'
+    'Node extraction from conversation has been replaced by frame-based extraction. Use /v1/extract/frames instead.'
   );
 });
 
@@ -700,7 +700,7 @@ draftsWorkflowRoutes.openapi(suggestDraftRoute, async (c) => {
       );
     }
 
-    // Suggest feature requires tree-based search (sentence_vectors removed)
+    // Suggest feature requires tree-based search (node_vectors removed)
     // Return empty suggestions for now
     return c.json(
       {

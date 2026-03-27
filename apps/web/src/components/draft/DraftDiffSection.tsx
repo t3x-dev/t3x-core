@@ -16,14 +16,14 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { CollapsibleSection } from '@/components/shared/CollapsibleSection';
 import { Badge } from '@/components/ui/badge';
 import { getApiCommit } from '@/lib/api';
-import type { DiffableSentence, DiffCache } from '@/lib/diffUtils';
+import type { DiffableNode, DiffCache } from '@/lib/diffUtils';
 import { type CommitDiff, incrementalDiffCommits, type WordDiffSegment } from '@/lib/diffUtils';
 import { cn } from '@/lib/utils';
 import { useDraftWorkspaceStore } from '@/store/draftWorkspaceStore';
 
 export function DraftDiffSection() {
   const draft = useDraftWorkspaceStore((s) => s.draft);
-  const [parentSentences, setParentSentences] = useState<DiffableSentence[] | null>(null);
+  const [parentNodes, setParentNodes] = useState<DiffableNode[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fetchedHashRef = useRef<string | null>(null);
@@ -31,15 +31,15 @@ export function DraftDiffSection() {
   const parentHash = draft?.parent_commit_hash;
 
   // Convert current draft nodes to diffable format
-  const draftSentences = useMemo(() => {
+  const draftNodes = useMemo(() => {
     if (!draft) return [];
     return draft.nodes.filter((s) => s.included).map((s) => ({ id: s.id, text: s.text }));
   }, [draft]);
 
-  // Fetch parent commit only when parentHash changes (not on every sentence toggle)
+  // Fetch parent commit only when parentHash changes (not on every node toggle)
   useEffect(() => {
     if (!parentHash) {
-      setParentSentences(null);
+      setParentNodes(null);
       fetchedHashRef.current = null;
       return;
     }
@@ -56,14 +56,14 @@ export function DraftDiffSection() {
         if (cancelled) return;
         const content = parentCommit.content as import('@t3x-dev/core').SemanticContent;
         const { treesToNodes } = require('@/lib/treeCompat') as typeof import('@/lib/treeCompat');
-        const nodes = treesToNodes(content.trees);
-        const sentences = nodes.map((node) => ({
+        const compatNodes = treesToNodes(content.trees);
+        const nodes: import('@/lib/diffUtils').DiffableNode[] = compatNodes.map((node) => ({
           id: node.id,
           text: `[${node.type}] ${Object.entries(node.slots)
             .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : String(v)}`)
             .join('; ')}`,
         }));
-        setParentSentences(sentences);
+        setParentNodes(nodes);
         fetchedHashRef.current = parentHash;
       })
       .catch((err) => {
@@ -87,20 +87,20 @@ export function DraftDiffSection() {
     diffCacheRef.current = null;
   }, [parentHash]);
 
-  // Compute diff incrementally (reuses cached pair results for unchanged sentences)
+  // Compute diff incrementally (reuses cached pair results for unchanged nodes)
   const diff = useMemo<CommitDiff | null>(() => {
-    if (!parentSentences || draftSentences.length === 0) {
+    if (!parentNodes || draftNodes.length === 0) {
       diffCacheRef.current = null;
       return null;
     }
     const [result, newCache] = incrementalDiffCommits(
-      parentSentences,
-      draftSentences,
+      parentNodes,
+      draftNodes,
       diffCacheRef.current
     );
     diffCacheRef.current = newCache;
     return result;
-  }, [parentSentences, draftSentences]);
+  }, [parentNodes, draftNodes]);
 
   // Don't render if no parent
   if (!parentHash) return null;
@@ -165,7 +165,7 @@ function DraftDiffContent({ diff }: { diff: CommitDiff }) {
         )}
       </div>
 
-      {/* Identical sentences (gray stripe) */}
+      {/* Identical nodes (gray stripe) */}
       {identical.map((s) => (
         <div
           key={`id-${s.id}`}
@@ -197,7 +197,7 @@ function DraftDiffContent({ diff }: { diff: CommitDiff }) {
         </div>
       ))}
 
-      {/* Added sentences (green-accent stripe) */}
+      {/* Added nodes (green-accent stripe) */}
       {onlyInTarget.map((s) => (
         <div
           key={s.id}
@@ -208,7 +208,7 @@ function DraftDiffContent({ diff }: { diff: CommitDiff }) {
         </div>
       ))}
 
-      {/* Removed sentences (red-accent stripe) */}
+      {/* Removed nodes (red-accent stripe) */}
       {onlyInSource.map((s) => (
         <div
           key={s.id}

@@ -7,11 +7,11 @@
  * - Prioritizes showing highlighted (selected) content
  * - Shows ~50 chars context around highlights
  * - Word-boundary aware truncation
- * - "+N more sentences" indicator when truncated
+ * - "+N more nodes" indicator when truncated
  * - "View full" action to expand
  *
  * Edge Case Handling (Issue #222):
- * - Legacy data (no source): Shows sentence text directly
+ * - Legacy data (no source): Shows node text directly
  * - Source unavailable: Shows gray badge with fallback text
  *
  * @see https://github.com/t3x-dev/T3X/issues/219
@@ -24,18 +24,18 @@ import { ViewSourceLink } from '@/components/shared/ViewSourceLink';
 import type { TurnContextData } from '@/lib/api';
 import * as api from '@/lib/api';
 import { truncateWithHighlights } from '@/lib/truncationUtils';
-import type { HighlightRange, SentenceWithSource } from '@/types/sourceContext';
+import type { HighlightRange, NodeWithSource } from '@/types/sourceContext';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Types (using shared types)
 // ═══════════════════════════════════════════════════════════════════════════
 
-/** Sentence from commit content - alias for SentenceWithSource */
-type CommitSentence = SentenceWithSource;
+/** ContentNode from commit content - alias for NodeWithSource */
+type CommitContentNode = NodeWithSource;
 
 interface TruncatedCommitViewProps {
-  /** Sentences from commit content */
-  sentences: CommitSentence[];
+  /** ContentNodes from commit content */
+  nodes: CommitContentNode[];
   /** Maximum number of highlights to show fully (default: 2) */
   maxHighlights?: number;
   /** Context chars around each highlight (default: 50) */
@@ -64,36 +64,36 @@ interface TurnWithHighlights {
 }
 
 /**
- * Group sentences by turn_hash, separating legacy data
+ * Group nodes by turn_hash, separating legacy data
  */
-function groupSentencesByTurn(sentences: CommitSentence[]): {
+function groupNodesByTurn(nodes: CommitContentNode[]): {
   byTurn: Map<string, HighlightRange[]>;
-  legacySentences: CommitSentence[];
+  legacyNodes: CommitContentNode[];
 } {
   const byTurn = new Map<string, HighlightRange[]>();
-  const legacySentences: CommitSentence[] = [];
+  const legacyNodes: CommitContentNode[] = [];
 
-  for (const sentence of sentences) {
+  for (const node of nodes) {
     // Handle legacy data without source field
-    if (!sentence.source?.turn_hash) {
-      legacySentences.push(sentence);
+    if (!node.source?.turn_hash) {
+      legacyNodes.push(node);
       continue;
     }
 
-    const turnHash = sentence.source.turn_hash;
+    const turnHash = node.source.turn_hash;
     const highlights = byTurn.get(turnHash) || [];
     highlights.push({
-      start: sentence.source.start_char,
-      end: sentence.source.end_char,
+      start: node.source.start_char,
+      end: node.source.end_char,
     });
     byTurn.set(turnHash, highlights);
   }
 
-  return { byTurn, legacySentences };
+  return { byTurn, legacyNodes };
 }
 
 export function TruncatedCommitView({
-  sentences,
+  nodes,
   maxHighlights = 2,
   contextChars = 50,
   onViewFull,
@@ -103,49 +103,49 @@ export function TruncatedCommitView({
   const [turnData, setTurnData] = useState<Map<string, TurnWithHighlights>>(new Map());
   const [isLoading, setIsLoading] = useState(true);
 
-  // Group sentences by turn, separating legacy data
-  const { byTurn: sentencesByTurn, legacySentences } = useMemo(
-    () => groupSentencesByTurn(sentences),
-    [sentences]
+  // Group nodes by turn, separating legacy data
+  const { byTurn: nodesByTurn, legacyNodes } = useMemo(
+    () => groupNodesByTurn(nodes),
+    [nodes]
   );
 
-  // Check if all sentences are legacy (no source info)
-  const allLegacy = legacySentences.length === sentences.length;
+  // Check if all nodes are legacy (no source info)
+  const allLegacy = legacyNodes.length === nodes.length;
 
   // Get ordered list of unique turn hashes
   const turnHashes = useMemo(() => {
     const seen = new Set<string>();
     const ordered: string[] = [];
-    for (const sentence of sentences) {
-      if (!sentence.source?.turn_hash) continue;
-      const hash = sentence.source.turn_hash;
+    for (const node of nodes) {
+      if (!node.source?.turn_hash) continue;
+      const hash = node.source.turn_hash;
       if (!seen.has(hash)) {
         seen.add(hash);
         ordered.push(hash);
       }
     }
     return ordered;
-  }, [sentences]);
+  }, [nodes]);
 
-  // Count total sentences for "+N more" indicator
+  // Count total nodes for "+N more" indicator
   const totalHighlightsCount = useMemo(() => {
-    return sentences.length;
-  }, [sentences]);
+    return nodes.length;
+  }, [nodes]);
 
   // Visible highlights count (across all turns, up to maxHighlights per turn)
   const visibleHighlightsCount = useMemo(() => {
     let count = 0;
     for (const turnHash of turnHashes.slice(0, 2)) {
       // Show max 2 turns
-      const highlights = sentencesByTurn.get(turnHash) || [];
+      const highlights = nodesByTurn.get(turnHash) || [];
       count += Math.min(highlights.length, maxHighlights);
     }
-    // Include legacy sentences if we have room
-    if (legacySentences.length > 0 && turnHashes.length < 2) {
-      count += Math.min(legacySentences.length, maxHighlights);
+    // Include legacy nodes if we have room
+    if (legacyNodes.length > 0 && turnHashes.length < 2) {
+      count += Math.min(legacyNodes.length, maxHighlights);
     }
     return count;
-  }, [turnHashes, sentencesByTurn, maxHighlights, legacySentences]);
+  }, [turnHashes, nodesByTurn, maxHighlights, legacyNodes]);
 
   const hiddenCount = totalHighlightsCount - visibleHighlightsCount;
 
@@ -169,7 +169,7 @@ export function TruncatedCommitView({
 
       await Promise.all(
         hashesToFetch.map(async (turnHash) => {
-          const highlights = sentencesByTurn.get(turnHash) || [];
+          const highlights = nodesByTurn.get(turnHash) || [];
 
           try {
             const context = await api.fetchTurnContextCached(turnHash, {
@@ -212,21 +212,21 @@ export function TruncatedCommitView({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- Use stable key instead of Map reference
   }, [turnHashesKey]);
 
-  // Handle empty sentences
-  if (sentences.length === 0) {
+  // Handle empty nodes
+  if (nodes.length === 0) {
     return (
-      <div className="px-2 py-1.5 text-xs text-[var(--color-text-muted)] italic">No sentences</div>
+      <div className="px-2 py-1.5 text-xs text-[var(--color-text-muted)] italic">No nodes</div>
     );
   }
 
-  // All legacy data - show simple sentence list with legacy badge
+  // All legacy data - show simple node list with legacy badge
   if (allLegacy) {
     return (
       <div className="space-y-1">
         <div className="flex items-center gap-1 text-[0.65rem] text-[var(--color-text-muted)]">
           <span className="px-1 py-0.5 bg-[var(--hover-bg)] rounded text-[0.6rem]">Legacy</span>
         </div>
-        {sentences.slice(0, maxHighlights).map((s) => (
+        {nodes.slice(0, maxHighlights).map((s) => (
           <div
             key={s.id}
             className="text-xs text-[var(--color-text-secondary)] bg-[var(--status-success-muted)] px-1.5 py-1 rounded line-clamp-2"
@@ -236,7 +236,7 @@ export function TruncatedCommitView({
         ))}
         {hiddenCount > 0 && (
           <div className="text-[0.65rem] text-[var(--color-text-muted)]">
-            +{hiddenCount} more sentence{hiddenCount !== 1 ? 's' : ''}
+            +{hiddenCount} more node{hiddenCount !== 1 ? 's' : ''}
           </div>
         )}
         {onViewFull && (
@@ -268,7 +268,7 @@ export function TruncatedCommitView({
   // Check if any context was loaded
   const hasAnyContext = Array.from(turnData.values()).some((data) => data.context !== null);
 
-  // Fallback to simple sentence list if no context loaded
+  // Fallback to simple node list if no context loaded
   if (!hasAnyContext) {
     return (
       <div className="space-y-1">
@@ -277,7 +277,7 @@ export function TruncatedCommitView({
             Source unavailable
           </span>
         </div>
-        {sentences.slice(0, maxHighlights).map((s) => (
+        {nodes.slice(0, maxHighlights).map((s) => (
           <div
             key={s.id}
             className="text-xs text-[var(--color-text-secondary)] bg-[var(--status-success-muted)] px-1.5 py-1 rounded line-clamp-2"
@@ -287,7 +287,7 @@ export function TruncatedCommitView({
         ))}
         {hiddenCount > 0 && (
           <div className="text-[0.65rem] text-[var(--color-text-muted)]">
-            +{hiddenCount} more sentence{hiddenCount !== 1 ? 's' : ''}
+            +{hiddenCount} more node{hiddenCount !== 1 ? 's' : ''}
           </div>
         )}
         {onViewFull && (
@@ -375,7 +375,7 @@ export function TruncatedCommitView({
       {/* Footer: +N more + View full */}
       <div className="flex items-center justify-between pt-1 border-t border-[var(--color-border-light)]">
         <span className="text-[0.65rem] text-[var(--color-text-muted)]">
-          {hiddenCount > 0 && `+${hiddenCount} sentence${hiddenCount !== 1 ? 's' : ''}`}
+          {hiddenCount > 0 && `+${hiddenCount} node${hiddenCount !== 1 ? 's' : ''}`}
         </span>
         {onViewFull && (
           <button

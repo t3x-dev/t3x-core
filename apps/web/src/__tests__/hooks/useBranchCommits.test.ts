@@ -128,7 +128,7 @@ describe('useBranchCommits', () => {
     unmount();
   });
 
-  it('sets error when listSentenceCommits fails', async () => {
+  it('sets error when listNodeCommits fails', async () => {
     vi.mocked(api.listCommits).mockRejectedValue(new Error('fetch failed'));
 
     const { result, unmount } = renderHook(() => useBranchCommits('proj_1', 'main'));

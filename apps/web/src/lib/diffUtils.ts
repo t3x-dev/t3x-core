@@ -10,8 +10,8 @@
 // Types
 // ═══════════════════════════════════════════════════════════════════════════
 
-/** Sentence with minimal fields for diff */
-export interface DiffableSentence {
+/** ContentNode with minimal fields for diff */
+export interface DiffableNode {
   id: string;
   text: string;
 }
@@ -22,21 +22,21 @@ export interface WordDiffSegment {
   text: string;
 }
 
-/** Pair of similar sentences with word diff */
-export interface SentencePair {
-  source: DiffableSentence;
-  target: DiffableSentence;
+/** Pair of similar nodes with word diff */
+export interface NodePair {
+  source: DiffableNode;
+  target: DiffableNode;
   similarity: number;
   wordDiff: WordDiffSegment[];
 }
 
 /** Result of comparing two commits */
 export interface CommitDiff {
-  identical: DiffableSentence[];
-  equivalent: SentencePair[];
-  similar: SentencePair[];
-  onlyInSource: DiffableSentence[];
-  onlyInTarget: DiffableSentence[];
+  identical: DiffableNode[];
+  equivalent: NodePair[];
+  similar: NodePair[];
+  onlyInSource: DiffableNode[];
+  onlyInTarget: DiffableNode[];
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -200,11 +200,11 @@ export function wordDiff(from: string, to: string): WordDiffSegment[] {
 /**
  * Compare two commits and produce a structured diff.
  *
- * @param source - Sentences from source commit (old/base version)
- * @param target - Sentences from target commit (new version)
+ * @param source - ContentNodes from source commit (old/base version)
+ * @param target - ContentNodes from target commit (new version)
  * @returns CommitDiff with identical, similar, onlyInSource, onlyInTarget arrays
  */
-export function diffCommits(source: DiffableSentence[], target: DiffableSentence[]): CommitDiff {
+export function diffCommits(source: DiffableNode[], target: DiffableNode[]): CommitDiff {
   // Stage 1: Exact match
   const textsB = new Set(target.map((s) => s.text));
   const textsA = new Set(source.map((s) => s.text));
@@ -214,19 +214,19 @@ export function diffCommits(source: DiffableSentence[], target: DiffableSentence
   const unmatchedB = target.filter((s) => !textsA.has(s.text));
 
   // Stage 2-3: Build similarity matrix and find best matches
-  const similar: SentencePair[] = [];
+  const similar: NodePair[] = [];
   const matchedSourceIds = new Set<string>();
   const matchedTargetIds = new Set<string>();
 
-  const tokenizedA = unmatchedA.map((s) => ({ sentence: s, tokens: tokenize(s.text) }));
-  const tokenizedB = unmatchedB.map((s) => ({ sentence: s, tokens: tokenize(s.text) }));
+  const tokenizedA = unmatchedA.map((s) => ({ node: s, tokens: tokenize(s.text) }));
+  const tokenizedB = unmatchedB.map((s) => ({ node: s, tokens: tokenize(s.text) }));
 
   // Simple greedy matching (for smaller sets, sufficient)
   for (const a of tokenizedA) {
     let bestMatch: { index: number; similarity: number } | null = null;
 
     for (let j = 0; j < tokenizedB.length; j++) {
-      if (matchedTargetIds.has(tokenizedB[j].sentence.id)) continue;
+      if (matchedTargetIds.has(tokenizedB[j].node.id)) continue;
       const sim = jaccard(a.tokens, tokenizedB[j].tokens);
       if (sim >= JACCARD_THRESHOLD && (!bestMatch || sim > bestMatch.similarity)) {
         bestMatch = { index: j, similarity: sim };
@@ -236,13 +236,13 @@ export function diffCommits(source: DiffableSentence[], target: DiffableSentence
     if (bestMatch) {
       const b = tokenizedB[bestMatch.index];
       similar.push({
-        source: a.sentence,
-        target: b.sentence,
+        source: a.node,
+        target: b.node,
         similarity: bestMatch.similarity,
-        wordDiff: wordDiff(a.sentence.text, b.sentence.text),
+        wordDiff: wordDiff(a.node.text, b.node.text),
       });
-      matchedSourceIds.add(a.sentence.id);
-      matchedTargetIds.add(b.sentence.id);
+      matchedSourceIds.add(a.node.id);
+      matchedTargetIds.add(b.node.id);
     }
   }
 
@@ -270,17 +270,17 @@ export interface DiffCache {
   targetTexts: Map<string, string>;
   result: CommitDiff;
   /** All pairs (equivalent + similar) keyed by source id */
-  pairBySourceId: Map<string, SentencePair>;
+  pairBySourceId: Map<string, NodePair>;
 }
 
 function buildDiffCache(
-  source: DiffableSentence[],
-  target: DiffableSentence[],
+  source: DiffableNode[],
+  target: DiffableNode[],
   result: CommitDiff
 ): DiffCache {
   const sourceTexts = new Map(source.map((s) => [s.id, s.text]));
   const targetTexts = new Map(target.map((s) => [s.id, s.text]));
-  const pairBySourceId = new Map<string, SentencePair>();
+  const pairBySourceId = new Map<string, NodePair>();
   for (const pair of [...result.equivalent, ...result.similar]) {
     pairBySourceId.set(pair.source.id, pair);
   }
@@ -288,16 +288,16 @@ function buildDiffCache(
 }
 
 /**
- * Incremental diff: reuses cached pair results for unchanged sentences.
+ * Incremental diff: reuses cached pair results for unchanged nodes.
  *
  * On first call (no cache): runs full diffCommits.
- * On subsequent calls: only re-diffs sentences that changed.
+ * On subsequent calls: only re-diffs nodes that changed.
  *
  * @returns Tuple of [CommitDiff, DiffCache]
  */
 export function incrementalDiffCommits(
-  source: DiffableSentence[],
-  target: DiffableSentence[],
+  source: DiffableNode[],
+  target: DiffableNode[],
   cache?: DiffCache | null
 ): [CommitDiff, DiffCache] {
   if (!cache) {
@@ -325,7 +325,7 @@ export function incrementalDiffCommits(
   // Step 2: Find stable pairs from cache
   const unmatchedSourceMap = new Map(unmatchedSource.map((s) => [s.id, s]));
   const unmatchedTargetMap = new Map(unmatchedTarget.map((s) => [s.id, s]));
-  const stablePairs: SentencePair[] = [];
+  const stablePairs: NodePair[] = [];
   const stableSourceIds = new Set<string>();
   const stableTargetIds = new Set<string>();
 
@@ -347,14 +347,14 @@ export function incrementalDiffCommits(
     stableTargetIds.add(targetId);
   }
 
-  // Step 3: Re-diff dirty sentences
+  // Step 3: Re-diff dirty nodes
   const dirtySource = unmatchedSource.filter((s) => !stableSourceIds.has(s.id));
   const dirtyTarget = unmatchedTarget.filter((s) => !stableTargetIds.has(s.id));
 
-  let newEquivalent: SentencePair[] = [];
-  let newSimilar: SentencePair[] = [];
-  let newOnlyInSource: DiffableSentence[] = dirtySource;
-  let newOnlyInTarget: DiffableSentence[] = dirtyTarget;
+  let newEquivalent: NodePair[] = [];
+  let newSimilar: NodePair[] = [];
+  let newOnlyInSource: DiffableNode[] = dirtySource;
+  let newOnlyInTarget: DiffableNode[] = dirtyTarget;
 
   if (dirtySource.length > 0 && dirtyTarget.length > 0) {
     const dirtyDiff = diffCommits(dirtySource, dirtyTarget);

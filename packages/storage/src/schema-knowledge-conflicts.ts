@@ -1,7 +1,7 @@
 /**
  * Knowledge Conflicts Schema (S15)
  *
- * Persists detected conflicts between new and existing sentences.
+ * Persists detected conflicts between new and existing nodes.
  * Used for conflict detection, resolution tracking, and knowledge integrity.
  */
 
@@ -15,9 +15,9 @@ export const knowledgeConflicts = pgTable(
     projectId: text('project_id')
       .notNull()
       .references(() => projects.projectId, { onDelete: 'cascade' }),
-    newSentenceId: text('new_sentence_id').notNull(),
+    newNodeId: text('new_node_id').notNull(),
     newCommitHash: text('new_commit_hash').notNull(),
-    existingSentenceId: text('existing_sentence_id').notNull(),
+    existingNodeId: text('existing_node_id').notNull(),
     existingCommitHash: text('existing_commit_hash').notNull(),
     cosine: real('cosine').notNull(),
     jaccard: real('jaccard').notNull(),

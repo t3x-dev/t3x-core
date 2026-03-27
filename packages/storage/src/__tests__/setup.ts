@@ -343,9 +343,9 @@ CREATE INDEX IF NOT EXISTS idx_extraction_feedback_draft ON extraction_feedback(
 CREATE TABLE IF NOT EXISTS knowledge_conflicts (
   id TEXT PRIMARY KEY,
   project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
-  new_sentence_id TEXT NOT NULL,
+  new_node_id TEXT NOT NULL,
   new_commit_hash TEXT NOT NULL,
-  existing_sentence_id TEXT NOT NULL,
+  existing_node_id TEXT NOT NULL,
   existing_commit_hash TEXT NOT NULL,
   cosine REAL NOT NULL,
   jaccard REAL NOT NULL,
@@ -369,8 +369,8 @@ CREATE INDEX IF NOT EXISTS idx_metrics_events_project ON metrics_events(project_
 CREATE INDEX IF NOT EXISTS idx_metrics_events_type ON metrics_events(event_type);
 CREATE INDEX IF NOT EXISTS idx_metrics_events_created_at ON metrics_events(created_at);
 
--- Sentence Modifications (audit trail)
-CREATE TABLE IF NOT EXISTS sentence_modifications (
+-- Node Modifications (audit trail)
+CREATE TABLE IF NOT EXISTS node_modifications (
   id TEXT PRIMARY KEY,
   draft_id TEXT NOT NULL,
   sp_id TEXT NOT NULL,
@@ -380,8 +380,8 @@ CREATE TABLE IF NOT EXISTS sentence_modifications (
   actor TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE INDEX IF NOT EXISTS idx_smod_draft ON sentence_modifications(draft_id);
-CREATE INDEX IF NOT EXISTS idx_smod_sp ON sentence_modifications(sp_id);
+CREATE INDEX IF NOT EXISTS idx_nmod_draft ON node_modifications(draft_id);
+CREATE INDEX IF NOT EXISTS idx_nmod_sp ON node_modifications(sp_id);
 
 -- Leaf Output Edits (Item 17 — Constraint Reverse Learning)
 CREATE TABLE IF NOT EXISTS leaf_output_edits (
@@ -423,8 +423,8 @@ CREATE TABLE IF NOT EXISTS delta_log (
 CREATE INDEX IF NOT EXISTS idx_delta_log_conv ON delta_log(conversation_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_delta_log_project ON delta_log(project_id);
 
--- Sentence Relations (Ring 4 — Inter-sentence relationships)
-CREATE TABLE IF NOT EXISTS sentence_relations (
+-- Node Relations (Ring 4 — Inter-node relationships)
+CREATE TABLE IF NOT EXISTS node_relations (
   id TEXT PRIMARY KEY,
   project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
   commit_hash TEXT NOT NULL,
@@ -435,9 +435,9 @@ CREATE TABLE IF NOT EXISTS sentence_relations (
   reasoning TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE INDEX IF NOT EXISTS idx_sr_commit ON sentence_relations (commit_hash);
-CREATE INDEX IF NOT EXISTS idx_sr_project ON sentence_relations (project_id);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_sr_pair ON sentence_relations(commit_hash, source_id, target_id, type);
+CREATE INDEX IF NOT EXISTS idx_nr_commit ON node_relations (commit_hash);
+CREATE INDEX IF NOT EXISTS idx_nr_project ON node_relations (project_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_nr_pair ON node_relations(commit_hash, source_id, target_id, type);
 
 -- Knowledge Graph (cross-conversation entity/topic graph)
 CREATE TABLE IF NOT EXISTS knowledge_nodes (
@@ -454,11 +454,11 @@ CREATE INDEX IF NOT EXISTS idx_kn_project ON knowledge_nodes (project_id);
 
 CREATE TABLE IF NOT EXISTS knowledge_node_members (
   node_id TEXT NOT NULL REFERENCES knowledge_nodes(id) ON DELETE CASCADE,
-  sentence_id TEXT NOT NULL,
+  content_node_id TEXT NOT NULL,
   commit_hash TEXT NOT NULL,
-  PRIMARY KEY (node_id, sentence_id)
+  PRIMARY KEY (node_id, content_node_id)
 );
-CREATE INDEX IF NOT EXISTS idx_knm_sentence ON knowledge_node_members (sentence_id);
+CREATE INDEX IF NOT EXISTS idx_knm_content_node ON knowledge_node_members (content_node_id);
 
 CREATE TABLE IF NOT EXISTS knowledge_edges (
   id TEXT PRIMARY KEY,
@@ -572,7 +572,7 @@ export async function createTestDB(): Promise<{
     await schemaSql.unsafe('CREATE EXTENSION IF NOT EXISTS vector;');
     await schemaSql.unsafe(CREATE_VECTOR_TABLES_SQL);
   } catch {
-    // pgvector not available — sentence vector tests will be skipped
+    // pgvector not available — node vector tests will be skipped
   }
   await schemaSql.end();
 

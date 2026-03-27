@@ -10,7 +10,7 @@
 import { Loader2, Paperclip } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { SourceContextView } from '@/components/shared/SourceContextView';
-import type { CommitSentence, TurnContextData } from '@/lib/api';
+import type { CommitContentNode, TurnContextData } from '@/lib/api';
 import { fetchTurnContextCached } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
@@ -19,7 +19,7 @@ import { cn } from '@/lib/utils';
 // ============================================================================
 
 interface DiffContextSnippetProps {
-  sentence: CommitSentence;
+  node: CommitContentNode;
   onJumpToConversation?: (conversationId: string) => void;
 }
 
@@ -27,16 +27,16 @@ interface DiffContextSnippetProps {
 // Component
 // ============================================================================
 
-export function DiffContextSnippet({ sentence, onJumpToConversation }: DiffContextSnippetProps) {
+export function DiffContextSnippet({ node, onJumpToConversation }: DiffContextSnippetProps) {
   const [expanded, setExpanded] = useState(false);
   const [contextData, setContextData] = useState<TurnContextData | null>(null);
   const [loading, setLoading] = useState(false);
   const [visible, setVisible] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
-  const turnHash = sentence.source_ref?.turn_hash;
-  const startChar = sentence.source_ref?.start_char;
-  const endChar = sentence.source_ref?.end_char;
+  const turnHash = node.source_ref?.turn_hash;
+  const startChar = node.source_ref?.start_char;
+  const endChar = node.source_ref?.end_char;
 
   // Lazy-load: only fetch when visible (IntersectionObserver)
   useEffect(() => {

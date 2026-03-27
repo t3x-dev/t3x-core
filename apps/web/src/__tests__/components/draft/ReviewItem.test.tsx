@@ -95,9 +95,9 @@ describe('ReviewZone', () => {
 
   test('filter logic separates new and modify items', () => {
     const points = [makePoint({ id: 'p1' }), makePoint({ id: 'p2' }), makePoint({ id: 'p3' })];
-    const existingSentenceTexts = new Map([['p2', 'Old text for p2']]);
+    const existingNodeTexts = new Map([['p2', 'Old text for p2']]);
 
-    const isModify = (p: SemanticPointAPI) => existingSentenceTexts.has(p.id);
+    const isModify = (p: SemanticPointAPI) => existingNodeTexts.has(p.id);
     const newItems = points.filter((p) => !isModify(p));
     const modifyItems = points.filter((p) => isModify(p));
 

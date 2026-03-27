@@ -4,7 +4,7 @@
  * ProjectDraftsSection - Sidebar section showing editing drafts for current project
  *
  * Shown when user is on a /project/[id]/* route.
- * Expanded mode: list of draft links with title + sentence count + relative time
+ * Expanded mode: list of draft links with title + node count + relative time
  * Collapsed mode: FileEdit icon with badge count
  */
 
@@ -109,7 +109,7 @@ export function ProjectDraftsSection({ projectId, collapsed }: ProjectDraftsSect
         >
           <span className="truncate flex-1">{d.title || 'Untitled'}</span>
           <span className="text-xs text-muted-foreground shrink-0">
-            {d.sentences.length} · {relativeTime(d.updated_at)}
+            {d.nodes.length} · {relativeTime(d.updated_at)}
           </span>
         </Link>
       ))}

@@ -4,7 +4,7 @@
  * MergeWorkspace - Full-screen merge workspace container
  *
  * Supports two modes:
- * - Sentence-based merge (legacy): uses prepared/Merge2WayResult from the store
+ * - ContentNode-based merge (legacy): uses prepared/Merge2WayResult from the store
  * - Tree-based merge (new): uses treeMergeResult from prepareMerge()
  *
  * Mode is determined by whether treeMergeResult is set in the store.
@@ -198,7 +198,7 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
     previewExpanded,
     togglePreview,
     getMergeChecks,
-    getPreviewSentences,
+    getPreviewNodes,
     extendedResolutions,
     fetchServerChecks,
     serverChecksLoading,
@@ -222,7 +222,7 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
   const [showReviewDialog, setShowReviewDialog] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('grouped');
-  const [diffMode, setDiffMode] = useState<DiffMode>('sentence');
+  const [diffMode, setDiffMode] = useState<DiffMode>('node');
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   // Tree merge loading state
@@ -305,9 +305,9 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
             setDiffMode('tree');
           }
         } else {
-          // No tree data, fall back to sentence mode
+          // No tree data, fall back to node mode
           setTreeLoading(false);
-          setDiffMode('sentence');
+          setDiffMode('node');
         }
       })
       .catch((err) => {
@@ -316,8 +316,8 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
           err instanceof Error ? err.message : 'Failed to load commits for tree merge'
         );
         setTreeLoading(false);
-        // Fall back to sentence mode
-        setDiffMode('sentence');
+        // Fall back to node mode
+        setDiffMode('node');
       });
 
     return () => {
@@ -325,20 +325,20 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
     };
   }, [sourceHash, targetHash, setTreeMergeResult]);
 
-  // Build nav items from merge data (sentence mode)
+  // Build nav items from merge data (node mode)
   const navItems = useMemo(
     () => (prepared ? buildMergeNavItems(prepared as unknown as MergeResult, {}, extendedResolutions) : []),
     [prepared, extendedResolutions]
   );
 
-  // Scroll sync between sidebar and content (sentence mode)
+  // Scroll sync between sidebar and content (node mode)
   const { activeItemId, scrollToItem } = useMergeNavigation({
     scrollContainerRef,
     items: navItems,
     prefersReducedMotion,
   });
 
-  // Compute resolved/total for sidebar progress (sentence mode)
+  // Compute resolved/total for sidebar progress (node mode)
   const totalConflicts = prepared?.similarPairs.length ?? 0;
   const resolvedCount = totalConflicts - (prepared ? getUnresolvedCount() : 0);
 
@@ -546,7 +546,7 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
           message={message}
           sourceBranch={sourceBranch || 'source'}
           targetBranch={targetBranch || 'main'}
-          sentenceCount={framePreviewPaths.length}
+          nodeCount={framePreviewPaths.length}
           summary={null}
           serverChecksLoading={false}
           onBackToCanvas={handleCloseOrNavigate}
@@ -888,7 +888,7 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
   }
 
   // ============================================================================
-  // Sentence-based merge (legacy fallback)
+  // ContentNode-based merge (legacy fallback)
   // ============================================================================
 
   if (!prepared) {
@@ -925,7 +925,7 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
         message={message}
         sourceBranch={sourceBranch || 'source'}
         targetBranch={targetBranch || 'main'}
-        sentenceCount={getPreviewSentences().length}
+        nodeCount={getPreviewNodes().length}
         summary={summary}
         serverChecksLoading={serverChecksLoading}
         onBackToCanvas={handleCloseOrNavigate}

@@ -1,7 +1,7 @@
 import { cleanupProject, createTestCommit, createTestProject } from '../fixtures/api-helpers';
 import { CanvasPage } from '../fixtures/page-objects/canvas-page';
 import { expect, test } from '../fixtures/test';
-import { generateSentences, isExpectedConsoleError } from '../fixtures/test-data-factory';
+import { generateNodes, isExpectedConsoleError } from '../fixtures/test-data-factory';
 
 /**
  * Canvas Workflow E2E Tests
@@ -15,13 +15,13 @@ test.describe('Canvas Workflow', () => {
   let projectId: string;
   let commitHash: string;
   const commitMessage = 'Canvas workflow test commit';
-  const sentences = generateSentences(3);
+  const nodes = generateNodes(3);
 
   test.beforeAll(async ({ request }) => {
     const { projectId: id } = await createTestProject(request, `Canvas E2E ${Date.now()}`);
     projectId = id;
 
-    commitHash = await createTestCommit(request, projectId, sentences, {
+    commitHash = await createTestCommit(request, projectId, nodes, {
       message: commitMessage,
     });
   });
@@ -57,12 +57,12 @@ test.describe('Canvas Workflow', () => {
     await canvas.clickNode(commitHash);
 
     // A panel or expanded card should appear with commit details
-    // The canvas shows commit message + sentence count (not individual sentences)
+    // The canvas shows commit message + node count (not individual nodes)
     const commitLabel = page.locator(`text=${commitMessage}`);
     await expect(commitLabel.first()).toBeVisible({ timeout: 10000 });
 
-    // Should show sentence or frame count
-    const contentCount = page.locator('text=/\\d+ (sentences?|frames?)/');
+    // Should show node or frame count
+    const contentCount = page.locator('text=/\\d+ (nodes?|frames?)/');
     await expect(contentCount.first()).toBeVisible({ timeout: 5000 });
   });
 

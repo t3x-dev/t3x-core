@@ -304,18 +304,18 @@ export const createCommitSlice: StateCreator<CanvasState, [], [], CommitSlice> =
         // No turnBoundaries for unit type
       };
 
-      // Build sentences for V3 commit compatibility
-      // Each sourceExcerpt item becomes a sentence
+      // Build nodes for V3 commit compatibility
+      // Each sourceExcerpt item becomes a node
       let charOffset = 0;
-      const sentences = sourceExcerptArray.map((text, idx) => {
-        const sentence = {
+      const nodes = sourceExcerptArray.map((text, idx) => {
+        const node = {
           id: `s${idx + 1}`,
           text,
           start: charOffset,
           end: charOffset + text.length,
         };
         charOffset += text.length + 1; // +1 for newline separator
-        return sentence;
+        return node;
       });
 
       // Compute inputTextHash for anchor tracking
@@ -345,13 +345,13 @@ export const createCommitSlice: StateCreator<CanvasState, [], [], CommitSlice> =
           // Inherit parent commit trees into extraction panel on mount
           inheritFromCommitHash: source.data.commitHash,
           sourceTurnWindow: source.data.sourceTurnWindow,
-          // New: pendingSource with structured text block AND sentences for V3
+          // New: pendingSource with structured text block AND nodes for V3
           pendingSource:
             tokens.length > 0
               ? {
                   textBlocks: [pendingSourceBlock],
-                  sentences: sentences.length > 0 ? sentences : undefined,
-                  inputTextHash: sentences.length > 0 ? inputTextHash : undefined,
+                  nodes: nodes.length > 0 ? nodes : undefined,
+                  inputTextHash: nodes.length > 0 ? inputTextHash : undefined,
                 }
               : undefined,
         },

@@ -30,7 +30,7 @@ interface DiffStatsBarProps {
   /** Context snippets toggle (page mode only) */
   showSnippets?: boolean;
   onToggleSnippets?: () => void;
-  /** Current diff mode (tree vs sentence) */
+  /** Current diff mode (tree vs node) */
   diffMode?: DiffMode;
   onDiffModeChange?: (mode: DiffMode) => void;
   /** Whether Tree mode is available (both commits have semantic data) */
@@ -62,21 +62,21 @@ export function DiffStatsBar({
   const items = [
     {
       key: 'identical',
-      label: t('identical_sentences'),
+      label: t('identical_nodes'),
       count: aIdentical,
       color: 'border border-[var(--stroke-divider)] text-[var(--text-tertiary)] bg-transparent',
       icon: Check,
     },
     {
       key: 'equivalent',
-      label: t('equivalent_sentences'),
+      label: t('equivalent_nodes'),
       count: aEquivalent,
       color: 'border border-teal-500/40 text-teal-500 bg-transparent',
       icon: Equal,
     },
     {
       key: 'modified',
-      label: t('modified_sentences'),
+      label: t('modified_nodes'),
       count: aModified,
       color:
         'border border-[var(--diff-modified-line)]/40 text-[var(--diff-modified-line)] bg-transparent',
@@ -84,7 +84,7 @@ export function DiffStatsBar({
     },
     {
       key: 'added',
-      label: t('added_sentences'),
+      label: t('added_nodes'),
       count: aAdded,
       color:
         'border border-[var(--diff-added-line)]/40 text-[var(--diff-added-line)] bg-transparent',
@@ -92,7 +92,7 @@ export function DiffStatsBar({
     },
     {
       key: 'removed',
-      label: t('removed_sentences'),
+      label: t('removed_nodes'),
       count: aRemoved,
       color:
         'border border-[var(--diff-removed-line)]/40 text-[var(--diff-removed-line)] bg-transparent',
@@ -136,10 +136,10 @@ export function DiffStatsBar({
         </button>
       )}
 
-      {/* Diff mode toggle (Tree/Sentence) */}
+      {/* Diff mode toggle (Tree/ContentNode) */}
       {onDiffModeChange && (
         <DiffModeToggle
-          mode={diffMode ?? 'sentence'}
+          mode={diffMode ?? 'node'}
           onChange={onDiffModeChange}
           hidden={!hasSemanticData}
         />

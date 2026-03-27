@@ -293,7 +293,7 @@ describe('validateConstraintsSimple', () => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe('buildRound1Prompt', () => {
-  it('includes sentences in numbered format', () => {
+  it('includes nodes in numbered format', () => {
     const prompt = buildRound1Prompt(
       [{ text: 'First sentence.' }, { text: 'Second sentence.' }],
       []

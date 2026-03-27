@@ -4,10 +4,10 @@ import { Check, CheckCircle, CheckCircle2, Loader2, Play, X } from 'lucide-react
 import { useCallback, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import type { SentenceCoverageEntry, WorkspaceMode } from '@/hooks/useLeafPageData';
+import type { NodeCoverageEntry, WorkspaceMode } from '@/hooks/useLeafPageData';
 import type { Assertion, Constraint } from '@/lib/api';
 import { cn } from '@/lib/utils';
-import type { SentenceWithSource } from '@/types/sourceContext';
+import type { NodeWithSource } from '@/types/sourceContext';
 
 interface LeafOutputDisplayProps {
   output: string | null;
@@ -21,10 +21,10 @@ interface LeafOutputDisplayProps {
   generateSuccessBanner: string | null;
   // Display Mode props
   mode?: WorkspaceMode;
-  sentenceCoverage?: Map<string, SentenceCoverageEntry>;
-  sentences?: SentenceWithSource[];
-  hoveredSentenceId?: string | null;
-  onHoverSentence?: (sentenceId: string | null) => void;
+  nodeCoverage?: Map<string, NodeCoverageEntry>;
+  nodes?: NodeWithSource[];
+  hoveredNodeId?: string | null;
+  onHoverNode?: (nodeId: string | null) => void;
 }
 
 /** Build constraint hit markers from assertions + constraints */
@@ -44,22 +44,22 @@ function buildConstraintMarkers(
 
 /**
  * Build highlighted output segments for Display Mode.
- * Each segment is either plain text or highlighted (linked to a sentence).
+ * Each segment is either plain text or highlighted (linked to a node).
  */
 interface OutputSegment {
   text: string;
-  sentenceId?: string;
+  nodeId?: string;
 }
 
 function buildHighlightedSegments(
   output: string,
-  coverage: Map<string, SentenceCoverageEntry>
+  coverage: Map<string, NodeCoverageEntry>
 ): OutputSegment[] {
   // Collect all match ranges sorted by position
-  const ranges: Array<{ start: number; end: number; sentenceId: string }> = [];
+  const ranges: Array<{ start: number; end: number; nodeId: string }> = [];
   for (const [id, entry] of coverage.entries()) {
     if (entry.reflected && entry.matchStart !== undefined && entry.matchEnd !== undefined) {
-      ranges.push({ start: entry.matchStart, end: entry.matchEnd, sentenceId: id });
+      ranges.push({ start: entry.matchStart, end: entry.matchEnd, nodeId: id });
     }
   }
   ranges.sort((a, b) => a.start - b.start);
@@ -81,7 +81,7 @@ function buildHighlightedSegments(
     if (r.start > cursor) {
       segments.push({ text: output.slice(cursor, r.start) });
     }
-    segments.push({ text: output.slice(r.start, r.end), sentenceId: r.sentenceId });
+    segments.push({ text: output.slice(r.start, r.end), nodeId: r.nodeId });
     cursor = r.end;
   }
   if (cursor < output.length) {
@@ -102,10 +102,10 @@ export function LeafOutputDisplay({
   generateProgressMessages,
   generateSuccessBanner,
   mode = 'generate',
-  sentenceCoverage,
-  sentences: _sentences,
-  hoveredSentenceId,
-  onHoverSentence,
+  nodeCoverage,
+  nodes: _nodes,
+  hoveredNodeId,
+  onHoverNode,
 }: LeafOutputDisplayProps) {
   const passedCount = assertions?.filter((a) => a.passed).length ?? 0;
   const totalCount = assertions?.length ?? 0;
@@ -117,15 +117,15 @@ export function LeafOutputDisplay({
   );
 
   const highlightedSegments = useMemo(() => {
-    if (mode !== 'display' || !output || !sentenceCoverage) return null;
-    return buildHighlightedSegments(output, sentenceCoverage);
-  }, [mode, output, sentenceCoverage]);
+    if (mode !== 'display' || !output || !nodeCoverage) return null;
+    return buildHighlightedSegments(output, nodeCoverage);
+  }, [mode, output, nodeCoverage]);
 
   const handleSegmentHover = useCallback(
-    (sentenceId: string | null) => {
-      onHoverSentence?.(sentenceId);
+    (nodeId: string | null) => {
+      onHoverNode?.(nodeId);
     },
-    [onHoverSentence]
+    [onHoverNode]
   );
 
   if (!output) {
@@ -235,15 +235,15 @@ export function LeafOutputDisplay({
         {mode === 'display' && highlightedSegments
           ? // Display Mode: output with inline highlights
             highlightedSegments.map((seg, i) =>
-              seg.sentenceId ? (
+              seg.nodeId ? (
                 <span
                   key={`seg-${i}`}
                   className={cn(
                     'underline decoration-[var(--status-success)] decoration-2 underline-offset-[3px] cursor-pointer transition-colors',
-                    hoveredSentenceId === seg.sentenceId &&
+                    hoveredNodeId === seg.nodeId &&
                       'bg-[var(--status-success-muted)] rounded-sm'
                   )}
-                  onMouseEnter={() => handleSegmentHover(seg.sentenceId!)}
+                  onMouseEnter={() => handleSegmentHover(seg.nodeId!)}
                   onMouseLeave={() => handleSegmentHover(null)}
                 >
                   {seg.text}

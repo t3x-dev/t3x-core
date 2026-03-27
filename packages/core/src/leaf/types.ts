@@ -229,7 +229,7 @@ export type TemplateVariableName = (typeof TEMPLATE_VARIABLE_NAMES)[number];
  * Describes what a variable represents and whether it's required.
  */
 export interface TemplateVariable {
-  /** Variable name, e.g., "sentences" (变量名) */
+  /** Variable name, e.g., "nodes" (变量名) */
   name: TemplateVariableName;
 
   /** Human-readable description (变量描述) */

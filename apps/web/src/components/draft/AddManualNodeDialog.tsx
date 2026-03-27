@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * AddManualSentenceDialog - Dialog for adding a manual sentence to the draft
+ * AddManualNodeDialog - Dialog for adding a manual node to the draft
  */
 
 import { useState } from 'react';
@@ -17,18 +17,18 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { useDraftWorkspaceStore } from '@/store/draftWorkspaceStore';
 
-interface AddManualSentenceDialogProps {
+interface AddManualNodeDialogProps {
   open: boolean;
   onClose: () => void;
 }
 
-export function AddManualSentenceDialog({ open, onClose }: AddManualSentenceDialogProps) {
-  const { addManualSentence } = useDraftWorkspaceStore();
+export function AddManualNodeDialog({ open, onClose }: AddManualNodeDialogProps) {
+  const { addManualNode } = useDraftWorkspaceStore();
   const [text, setText] = useState('');
 
   const handleAdd = () => {
     if (!text.trim()) return;
-    addManualSentence(text);
+    addManualNode(text);
     setText('');
     onClose();
   };
@@ -44,14 +44,14 @@ export function AddManualSentenceDialog({ open, onClose }: AddManualSentenceDial
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Add Sentence</DialogTitle>
-          <DialogDescription>Add a manually composed sentence to the draft.</DialogDescription>
+          <DialogTitle>Add ContentNode</DialogTitle>
+          <DialogDescription>Add a manually composed node to the draft.</DialogDescription>
         </DialogHeader>
         <Textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Enter sentence text..."
+          placeholder="Enter node text..."
           rows={3}
           className="resize-none"
           autoFocus

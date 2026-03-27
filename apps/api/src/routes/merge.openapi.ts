@@ -928,7 +928,7 @@ const getDraftChecksRoute = createRoute({
   description: `
 Returns server-side validation checks for a merge draft:
 - **constraints_satisfied**: Whether merged text satisfies all Leaf constraints
-- **evidence_chain_complete**: Whether all sentences have source references
+- **evidence_chain_complete**: Whether all nodes have source references
 - **eval_passed**: (Optional) Latest evaluation run status for associated Leaves
   `.trim(),
   request: {

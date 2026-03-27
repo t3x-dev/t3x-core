@@ -28,6 +28,6 @@ export {
   generateMergeDraftId,
   generatePinId,
   generateProjectId,
-  generateSentenceId,
+  generateNodeId,
   isoNow,
 } from './utils';

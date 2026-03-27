@@ -191,8 +191,8 @@ export function ConversationTurnRenderer({
             if (candidate) {
               // Click on anchor candidate -> confirm as 'preferred'
               // Note: start/end use global positions (same as globalStart/globalEnd) because
-              // we don't have sentence boundary info here. When submitting to API,
-              // these should be converted to sentence-relative positions if needed.
+              // we don't have node boundary info here. When submitting to API,
+              // these should be converted to node-relative positions if needed.
               const newAnchor: ConfirmedAnchor = {
                 id: `anchor-${candidate.startChar}-${candidate.endChar}`,
                 text: candidate.text,
@@ -285,7 +285,7 @@ export function ConversationTurnRenderer({
       anchorCandidates,
       confirmedAnchors,
       anchorThreshold,
-      0 // sentenceStartChar
+      0 // nodeStartChar
     );
     const isDragging = isInDragSelection(token.index);
     const addSpace = needsSpaceAfter(token, nextToken);

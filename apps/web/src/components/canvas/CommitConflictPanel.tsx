@@ -32,7 +32,7 @@ export function CommitConflictPanel({
         </button>
       </div>
       <p className="px-4 py-2 text-xs text-muted-foreground">
-        This commit has sentences that may conflict with existing knowledge.
+        This commit has nodes that may conflict with existing knowledge.
       </p>
       <div className="flex-1 overflow-auto px-4 py-2 space-y-3">
         {conflicts.map((c, i) => {
@@ -43,7 +43,7 @@ export function CommitConflictPanel({
               : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300';
           return (
             <div
-              key={`conflict-${c.new_sentence_id}-${c.existing_sentence_id}`}
+              key={`conflict-${c.new_node_id}-${c.existing_node_id}`}
               className="rounded-md border p-3 space-y-2 text-sm"
             >
               <div className="flex items-center justify-between">
@@ -54,13 +54,13 @@ export function CommitConflictPanel({
               </div>
               <div>
                 <p className="text-xs text-muted-foreground mb-0.5">This commit:</p>
-                <p className="text-sm">&ldquo;{c.new_sentence_text}&rdquo;</p>
+                <p className="text-sm">&ldquo;{c.new_node_text}&rdquo;</p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground mb-0.5">
                   Existing (commit {c.existing_commit_hash.slice(0, 7)}):
                 </p>
-                <p className="text-sm">&ldquo;{c.existing_sentence_text}&rdquo;</p>
+                <p className="text-sm">&ldquo;{c.existing_node_text}&rdquo;</p>
               </div>
               <div className="flex gap-2 pt-1">
                 {onGoToCommit && (

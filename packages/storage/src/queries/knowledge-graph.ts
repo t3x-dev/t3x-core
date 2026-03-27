@@ -34,7 +34,7 @@ export interface KnowledgeNodeOutput {
 
 export interface NodeMemberOutput {
   node_id: string;
-  sentence_id: string;
+  content_node_id: string;
   commit_hash: string;
 }
 
@@ -92,7 +92,7 @@ function nodeRowToOutput(row: KnowledgeNodeRecord): KnowledgeNodeOutput {
 function memberRowToOutput(row: KnowledgeNodeMemberRecord): NodeMemberOutput {
   return {
     node_id: row.nodeId,
-    sentence_id: row.sentenceId,
+    content_node_id: row.contentNodeId,
     commit_hash: row.commitHash,
   };
 }
@@ -234,13 +234,13 @@ export async function deleteKnowledgeGraphByProject(
  */
 export async function insertNodeMembers(
   db: AnyDB,
-  members: Array<{ node_id: string; sentence_id: string; commit_hash: string }>
+  members: Array<{ node_id: string; content_node_id: string; commit_hash: string }>
 ): Promise<void> {
   if (members.length === 0) return;
 
   const values = members.map((m) => ({
     nodeId: m.node_id,
-    sentenceId: m.sentence_id,
+    contentNodeId: m.content_node_id,
     commitHash: m.commit_hash,
   }));
 
@@ -260,14 +260,14 @@ export async function findMembersByNode(db: AnyDB, nodeId: string): Promise<Node
 }
 
 /**
- * Reverse lookup: find which node a sentence belongs to.
- * Returns the node ID, or null if sentence is not a member of any node.
+ * Reverse lookup: find which node a content node belongs to.
+ * Returns the node ID, or null if content node is not a member of any node.
  */
-export async function findNodeBySentence(db: AnyDB, sentenceId: string): Promise<string | null> {
+export async function findNodeByContentId(db: AnyDB, contentNodeId: string): Promise<string | null> {
   const [row] = await db
     .select({ nodeId: knowledgeNodeMembers.nodeId })
     .from(knowledgeNodeMembers)
-    .where(eq(knowledgeNodeMembers.sentenceId, sentenceId))
+    .where(eq(knowledgeNodeMembers.contentNodeId, contentNodeId))
     .limit(1);
 
   return row ? row.nodeId : null;

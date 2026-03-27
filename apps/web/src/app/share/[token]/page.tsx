@@ -73,7 +73,7 @@ interface CommitData {
   author: { type?: string; name?: string; id?: string };
   committed_at: string;
   content: {
-    sentences?: Array<{ id: string; text: string; confidence?: number }>;
+    nodes?: Array<{ id: string; text: string; confidence?: number }>;
     trees?: Array<{ id: string; type: string; slots: Record<string, unknown>; key?: string; children?: unknown[] }>;
     relations?: Array<{ from: string; to: string; type: string }>;
   };
@@ -522,7 +522,7 @@ function SharedComparisonView({ comparison }: { comparison: ComparisonData }) {
 
 function SharedCommitView({ commit }: { commit: CommitData }) {
   const shortHash = commit.hash.replace('sha256:', '').slice(0, 12);
-  const sentences = commit.content.sentences ?? [];
+  const nodes = commit.content.nodes ?? [];
   const trees = commit.content.trees ?? [];
   const relations = commit.content.relations ?? [];
 
@@ -620,14 +620,14 @@ function SharedCommitView({ commit }: { commit: CommitData }) {
           </section>
         )}
 
-        {/* Sentences (V4 fallback) */}
-        {sentences.length > 0 && trees.length === 0 && (
+        {/* ContentNodes (V4 fallback) */}
+        {nodes.length > 0 && trees.length === 0 && (
           <section>
             <h2 className="text-sm font-medium text-[var(--text-secondary)] mb-2">
-              Trees ({sentences.length})
+              Trees ({nodes.length})
             </h2>
             <div className="space-y-2">
-              {sentences.map((s) => (
+              {nodes.map((s) => (
                 <div key={s.id} className={cn('rounded-lg px-4 py-3', glass.cardBase)}>
                   <div className="flex items-start gap-2">
                     <span className="shrink-0 font-mono text-[10px] text-[var(--text-tertiary)] mt-0.5">

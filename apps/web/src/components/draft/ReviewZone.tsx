@@ -11,7 +11,7 @@ type ReviewFilter = 'all' | 'new' | 'modify';
 
 interface ReviewZoneProps {
   points: SemanticPointAPI[];
-  existingSentenceTexts?: Map<string, string>;
+  existingNodeTexts?: Map<string, string>;
   onAccept: (id: string) => void;
   onDismiss: (id: string) => void;
   onEdit: (id: string, text: string) => void;
@@ -19,7 +19,7 @@ interface ReviewZoneProps {
 
 export function ReviewZone({
   points,
-  existingSentenceTexts,
+  existingNodeTexts,
   onAccept,
   onDismiss,
   onEdit,
@@ -29,7 +29,7 @@ export function ReviewZone({
 
   if (points.length === 0) return null;
 
-  const isModify = (p: SemanticPointAPI) => existingSentenceTexts?.has(p.id) ?? false;
+  const isModify = (p: SemanticPointAPI) => existingNodeTexts?.has(p.id) ?? false;
   const filtered =
     filter === 'all'
       ? points
@@ -75,7 +75,7 @@ export function ReviewZone({
             <ReviewItem
               key={p.id}
               point={p}
-              currentText={existingSentenceTexts?.get(p.id)}
+              currentText={existingNodeTexts?.get(p.id)}
               onAccept={onAccept}
               onDismiss={onDismiss}
               onEdit={onEdit}

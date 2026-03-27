@@ -18,7 +18,7 @@ import type { TurnContextData } from '@/lib/api';
 import { fetchTurnContextCached } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { isConflictResolved, useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
-import type { MergeSimilarPair, Sentence } from '@/types/merge';
+import type { MergeSimilarPair, ContentNode } from '@/types/merge';
 import { ConflictHeader } from './ConflictHeader';
 import { ConflictResolutionButtons } from './ConflictResolutionButtons';
 import { ConflictSide } from './ConflictSide';
@@ -91,10 +91,10 @@ export function MergeConflictView({
 
   /** Create a jump handler that opens the context modal with source info */
   const makeJumpHandler = useCallback(
-    (sentence: Sentence) => {
-      if (!projectId || !sentence.source?.conversation_id || !sentence.source?.turn_hash)
+    (node: ContentNode) => {
+      if (!projectId || !node.source?.conversation_id || !node.source?.turn_hash)
         return undefined;
-      const { turn_hash, start_char, end_char } = sentence.source;
+      const { turn_hash, start_char, end_char } = node.source;
       return (conversationId: string) => {
         openContextModal(conversationId, turn_hash, start_char, end_char);
       };
@@ -133,7 +133,7 @@ export function MergeConflictView({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-[var(--space-group)]">
         <ConflictSide
           side="source"
-          sentence={pair.source}
+          node={pair.source}
           label={`${t('branch')} ${sourceBranch}`}
           isSelected={effectiveResolution === 'source' || effectiveResolution === 'both'}
           wordDiff={pair.wordDiff}
@@ -141,7 +141,7 @@ export function MergeConflictView({
         />
         <ConflictSide
           side="target"
-          sentence={pair.target}
+          node={pair.target}
           label={`${t('branch')} ${targetBranch}`}
           isSelected={effectiveResolution === 'target' || effectiveResolution === 'both'}
           wordDiff={pair.wordDiff}
@@ -160,7 +160,7 @@ export function MergeConflictView({
       {/* Source context modal */}
       <DiffSourceContextModal
         open={!!contextModal?.open}
-        sentence={null}
+        node={null}
         data={modalContextData}
         loading={modalLoading}
         onClose={closeContextModal}

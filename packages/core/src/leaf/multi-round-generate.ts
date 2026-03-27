@@ -88,10 +88,10 @@ export interface StylePreferences {
  * Build the Round 1 prompt: Generate structured output covering all REQUIRE constraints.
  *
  * This is the initial generation round that produces a first draft from
- * commit sentences and leaf constraints.
+ * commit nodes and leaf constraints.
  */
 export function buildRound1Prompt(
-  sentences: Array<{ text: string }>,
+  nodes: Array<{ text: string }>,
   constraints: Array<{ type: string; value: string; match_mode: string }>,
   config?: { promptTemplate?: string }
 ): string {
@@ -105,8 +105,8 @@ export function buildRound1Prompt(
 
   parts.push('## Knowledge Base');
   parts.push('');
-  for (let i = 0; i < sentences.length; i++) {
-    parts.push(`${i + 1}. ${sentences[i].text}`);
+  for (let i = 0; i < nodes.length; i++) {
+    parts.push(`${i + 1}. ${nodes[i].text}`);
   }
   parts.push('');
 
@@ -336,7 +336,7 @@ export async function modeGenerate(options: ModeGenerateOptions): Promise<MultiR
   } = options;
 
   const frames: FlatNode[] = flattenTrees(knowledge.trees);
-  const sentences = frames.map((f: FlatNode) => ({ text: Object.values(f.slots).join(' ') }));
+  const nodes = frames.map((f: FlatNode) => ({ text: Object.values(f.slots).join(' ') }));
   const constraints = (leaf.constraints ?? []) as Array<{
     id: string;
     type: 'require' | 'exclude';
@@ -352,7 +352,7 @@ export async function modeGenerate(options: ModeGenerateOptions): Promise<MultiR
   const round1Prompt =
     contextPrefix +
     buildRound1Prompt(
-      sentences,
+      nodes,
       constraints,
       leaf.config?.prompt_template
         ? { promptTemplate: leaf.config.prompt_template as string }
@@ -523,7 +523,7 @@ function buildRoundPrompt(
   roundIndex: number
 ): string {
   const roundFrames: FlatNode[] = flattenTrees(knowledge.trees);
-  const sentences = roundFrames
+  const nodeTexts = roundFrames
     .map((f: FlatNode) => `${f.type}: ${Object.values(f.slots).join(' ')}`)
     .join('\n');
   const constraints = (leaf.constraints ?? []).map((c) => `[${c.type}] ${c.value}`).join('\n');
@@ -533,7 +533,7 @@ function buildRoundPrompt(
   parts.push(
     `You are generating content for a "${leaf.type}" leaf titled "${leaf.title ?? 'Untitled'}".`
   );
-  parts.push(`\nKnowledge base:\n${sentences}`);
+  parts.push(`\nKnowledge base:\n${nodeTexts}`);
 
   if (constraints) {
     parts.push(`\nConstraints:\n${constraints}`);

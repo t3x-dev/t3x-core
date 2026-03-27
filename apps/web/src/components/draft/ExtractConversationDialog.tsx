@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * ExtractConversationDialog — Select a conversation and extract sentences to draft.
+ * ExtractConversationDialog — Select a conversation and extract nodes to draft.
  *
  * Phase 1: Conversation picker (list from project)
  * Phase 2: Extracting (loading spinner)
@@ -72,7 +72,7 @@ export function ExtractConversationDialog({
     setExtracting(true);
     try {
       const result = await extractToDraft(draftId, selectedId);
-      toast.success(`Added ${result.added_count} sentences to draft`);
+      toast.success(`Added ${result.added_count} nodes to draft`);
       onExtracted();
       onOpenChange(false);
     } catch (err) {
@@ -88,7 +88,7 @@ export function ExtractConversationDialog({
         <DialogHeader>
           <DialogTitle>Extract from Conversation</DialogTitle>
           <DialogDescription>
-            Select a conversation to extract sentences from and append to this draft.
+            Select a conversation to extract nodes from and append to this draft.
           </DialogDescription>
         </DialogHeader>
 

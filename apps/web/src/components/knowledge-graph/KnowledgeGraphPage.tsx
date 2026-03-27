@@ -49,7 +49,7 @@ export function KnowledgeGraphPage({ projectId }: KnowledgeGraphPageProps) {
                 No knowledge graph yet
               </p>
               <p className="mt-1 text-sm text-[var(--text-tertiary)]">
-                Build a knowledge graph from your project's committed sentences.
+                Build a knowledge graph from your project's committed nodes.
               </p>
             </div>
             <Button

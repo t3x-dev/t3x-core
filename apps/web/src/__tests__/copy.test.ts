@@ -77,7 +77,7 @@ describe('getMicrocopy', () => {
 
     it('returns parameterized string for mergeSuccess', () => {
       const result = getMicrocopy('mergeSuccess', 'default', { n: 5 });
-      expect(result).toBe('Versions merged \u2014 5 sentences unified');
+      expect(result).toBe('Versions merged \u2014 5 nodes unified');
     });
 
     it('returns parameterized string for generateComplete', () => {

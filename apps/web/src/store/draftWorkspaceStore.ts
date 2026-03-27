@@ -53,10 +53,10 @@ interface DraftWorkspaceState {
   // Mutations (set isDirty=true, recompute validations)
   updateTitle: (title: string) => void;
   updateGoal: (goal: string) => void;
-  toggleSentence: (sentenceId: string) => void;
-  removeSentence: (sentenceId: string) => void;
-  reorderSentences: (fromIndex: number, toIndex: number) => void;
-  addManualSentence: (text: string) => void;
+  toggleNode: (nodeId: string) => void;
+  removeNode: (nodeId: string) => void;
+  reorderNodes: (fromIndex: number, toIndex: number) => void;
+  addManualNode: (text: string) => void;
   addConstraint: (
     type: 'require' | 'exclude',
     matchMode: 'exact' | 'semantic',
@@ -222,11 +222,11 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
     set({ draft: updated, isDirty: true });
   },
 
-  toggleSentence: (sentenceId: string) => {
+  toggleNode: (nodeId: string) => {
     const { draft, previewStatus } = get();
     if (!draft || draft.status !== 'editing') return;
     const nodes = draft.nodes.map((s) =>
-      s.id === sentenceId ? { ...s, included: !s.included } : s
+      s.id === nodeId ? { ...s, included: !s.included } : s
     );
     const updated = { ...draft, nodes };
     const newPreviewStatus = staleIfReady(previewStatus);
@@ -239,11 +239,11 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
     scheduleAutoPreview(get, newPreviewStatus);
   },
 
-  removeSentence: (sentenceId: string) => {
+  removeNode: (nodeId: string) => {
     const { draft, previewStatus } = get();
     if (!draft || draft.status !== 'editing') return;
     const nodes = draft.nodes
-      .filter((s) => s.id !== sentenceId)
+      .filter((s) => s.id !== nodeId)
       .map((s, i) => ({ ...s, position: i }));
     const updated = { ...draft, nodes };
     const newPreviewStatus = staleIfReady(previewStatus);
@@ -256,7 +256,7 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
     scheduleAutoPreview(get, newPreviewStatus);
   },
 
-  reorderSentences: (fromIndex: number, toIndex: number) => {
+  reorderNodes: (fromIndex: number, toIndex: number) => {
     const { draft, previewStatus } = get();
     if (!draft || draft.status !== 'editing') return;
     const nodes = [...draft.nodes];
@@ -274,7 +274,7 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
     scheduleAutoPreview(get, newPreviewStatus);
   },
 
-  addManualSentence: (text: string) => {
+  addManualNode: (text: string) => {
     const { draft, previewStatus } = get();
     if (!draft || draft.status !== 'editing' || !text.trim()) return;
     const newNode: DraftNode = {

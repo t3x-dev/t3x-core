@@ -12,7 +12,7 @@
 import { act } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useIncrementalDiff } from '@/hooks/useIncrementalDiff';
-import type { DiffableSentence } from '@/lib/diffUtils';
+import type { DiffableNode } from '@/lib/diffUtils';
 import { cleanupRoots, renderHook, waitForHook } from './renderHook';
 
 // Mock diffUtils to control behavior
@@ -29,12 +29,12 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-const parentSentences: DiffableSentence[] = [
+const parentNodes: DiffableNode[] = [
   { id: 's_1', text: 'The budget is $3000.' },
   { id: 's_2', text: 'Project deadline is March.' },
 ];
 
-const draftSentences: DiffableSentence[] = [
+const draftNodes: DiffableNode[] = [
   { id: 's_1', text: 'The budget is $3000.' },
   { id: 's_3', text: 'We need two developers.' },
 ];
@@ -42,7 +42,7 @@ const draftSentences: DiffableSentence[] = [
 describe('useIncrementalDiff', () => {
   it('returns null initially before debounce fires', () => {
     const { result, unmount } = renderHook(() =>
-      useIncrementalDiff(draftSentences, parentSentences, 100)
+      useIncrementalDiff(draftNodes, parentNodes, 100)
     );
 
     // Before debounce, diff is null and computing is true
@@ -56,7 +56,7 @@ describe('useIncrementalDiff', () => {
     vi.useFakeTimers();
 
     const { result, unmount } = renderHook(() =>
-      useIncrementalDiff(draftSentences, parentSentences, 50)
+      useIncrementalDiff(draftNodes, parentNodes, 50)
     );
 
     // Before debounce
@@ -88,7 +88,7 @@ describe('useIncrementalDiff', () => {
   });
 
   it('returns null when inputs are empty', async () => {
-    const { result, unmount } = renderHook(() => useIncrementalDiff([], parentSentences, 10));
+    const { result, unmount } = renderHook(() => useIncrementalDiff([], parentNodes, 10));
 
     await waitForHook();
 
@@ -99,7 +99,7 @@ describe('useIncrementalDiff', () => {
   });
 
   it('returns null when parent is empty', async () => {
-    const { result, unmount } = renderHook(() => useIncrementalDiff(draftSentences, [], 10));
+    const { result, unmount } = renderHook(() => useIncrementalDiff(draftNodes, [], 10));
 
     await waitForHook();
 

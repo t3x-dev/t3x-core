@@ -102,7 +102,7 @@ export function CommitDropdown() {
           </Button>
         </div>
         <p className="text-[10px] text-[var(--text-tertiary)]">
-          {deltaCount} new sentence{deltaCount !== 1 ? 's' : ''}
+          {deltaCount} new node{deltaCount !== 1 ? 's' : ''}
         </p>
       </div>
     );

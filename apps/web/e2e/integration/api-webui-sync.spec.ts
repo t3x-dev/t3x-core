@@ -5,7 +5,7 @@ import {
   createTestProject,
 } from '../fixtures/api-helpers';
 import { expect, test } from '../fixtures/test';
-import { generateSentences } from '../fixtures/test-data-factory';
+import { generateNodes } from '../fixtures/test-data-factory';
 
 /**
  * API-WebUI Synchronization E2E Tests
@@ -88,8 +88,8 @@ test.describe('API-WebUI Sync', () => {
     const { projectId } = await createTestProject(request, `Sync Canvas ${Date.now()}`);
     projectIdsToCleanup.push(projectId);
 
-    const sentences = generateSentences(2);
-    const commitHash = await createTestCommit(request, projectId, sentences, {
+    const nodes = generateNodes(2);
+    const commitHash = await createTestCommit(request, projectId, nodes, {
       message: 'Sync test commit',
     });
 

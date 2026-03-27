@@ -6,7 +6,7 @@ import { WordDiffDisplay } from '@/components/merge/WordDiffDisplay';
 import { SourceContextView } from '@/components/shared/SourceContextView';
 import { EmptyStateInline } from '@/components/ui/empty-state';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import type { CommitSentence, TurnContextData } from '@/lib/api';
+import type { CommitContentNode, TurnContextData } from '@/lib/api';
 import * as api from '@/lib/api';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
@@ -20,7 +20,7 @@ import {
 } from './DiffBuilders';
 import { DiffContextSnippet } from './DiffContextSnippet';
 import { DiffHunkHeader } from './DiffHunkHeader';
-import { DiffSentenceLine } from './DiffSentenceLine';
+import { DiffNodeLine } from './DiffNodeLine';
 import { DiffSourceContextModal } from './DiffSourceContextModal';
 import { DiffSourceGroupHeader } from './DiffSourceGroupHeader';
 
@@ -30,14 +30,14 @@ import { DiffSourceGroupHeader } from './DiffSourceGroupHeader';
 
 interface DiffSideBySideProps {
   segmentDiffs: SegmentDiffItem[];
-  baseSentences: CommitSentence[];
-  targetSentences: CommitSentence[];
+  baseNodes: CommitContentNode[];
+  targetNodes: CommitContentNode[];
   projectId?: string;
   /** View mode: split (side-by-side), unified (single column), or document (readable) */
   viewMode?: 'split' | 'unified' | 'document';
   /** Show context snippets below changed lines */
   showSnippets?: boolean;
-  /** Group sentences by source conversation */
+  /** Group nodes by source conversation */
   groupBySource?: boolean;
   /** Map of conversation ID -> title from commit-level source_refs */
   sourceRefTitles?: Map<string, string>;
@@ -60,8 +60,8 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
   function DiffSideBySide(
     {
       segmentDiffs,
-      baseSentences,
-      targetSentences,
+      baseNodes,
+      targetNodes,
       projectId,
       viewMode = 'split',
       showSnippets = false,
@@ -79,16 +79,16 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
     const rawUnifiedLines = useMemo(
       () =>
         isDocument
-          ? buildDocumentLines(baseSentences, targetSentences, segmentDiffs)
-          : buildUnifiedLines(baseSentences, targetSentences, segmentDiffs),
-      [baseSentences, targetSentences, segmentDiffs, isDocument]
+          ? buildDocumentLines(baseNodes, targetNodes, segmentDiffs)
+          : buildUnifiedLines(baseNodes, targetNodes, segmentDiffs),
+      [baseNodes, targetNodes, segmentDiffs, isDocument]
     );
 
     // Optionally insert group headers
     const unifiedLines = useMemo(() => {
       if (!groupBySource) return rawUnifiedLines;
-      return insertGroupHeaders(rawUnifiedLines, baseSentences, sourceRefTitles);
-    }, [rawUnifiedLines, groupBySource, baseSentences, sourceRefTitles]);
+      return insertGroupHeaders(rawUnifiedLines, baseNodes, sourceRefTitles);
+    }, [rawUnifiedLines, groupBySource, baseNodes, sourceRefTitles]);
 
     // Track expanded collapsed sections
     const [expandedSections, setExpandedSections] = useState<Set<number>>(new Set());
@@ -137,7 +137,7 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
     );
 
     const handleSourceToggle = useCallback(
-      async (segmentId: string, sentence: CommitSentence, lineWordDiff?: WordDiffSegment[]) => {
+      async (segmentId: string, node: CommitContentNode, lineWordDiff?: WordDiffSegment[]) => {
         // Use updater form to avoid stale closure over expandedSegmentIds
         let wasExpanded = false;
         setExpandedSegmentIds((prev) => {
@@ -159,11 +159,11 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
           return;
         }
 
-        if (!sentence.source_ref?.turn_hash) return;
+        if (!node.source_ref?.turn_hash) return;
 
-        const turnHash = sentence.source_ref.turn_hash;
-        const startChar = sentence.source_ref.start_char;
-        const endChar = sentence.source_ref.end_char;
+        const turnHash = node.source_ref.turn_hash;
+        const startChar = node.source_ref.start_char;
+        const endChar = node.source_ref.end_char;
 
         // Set loading state in map
         setInlineContextMap((prev) => {
@@ -260,10 +260,10 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
 
     /** Create a jump handler that opens the context modal with source_ref info */
     const makeJumpHandler = useCallback(
-      (sentence: CommitSentence | undefined, lineWordDiff?: WordDiffSegment[]) => {
-        if (!projectId || !sentence?.source_ref?.conversation_id) return undefined;
+      (node: CommitContentNode | undefined, lineWordDiff?: WordDiffSegment[]) => {
+        if (!projectId || !node?.source_ref?.conversation_id) return undefined;
         return (conversationId: string) => {
-          const ref = sentence.source_ref;
+          const ref = node.source_ref;
           openContextModal(
             conversationId,
             ref?.turn_hash || '',
@@ -303,10 +303,10 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
       [expandedSegmentIds, inlineContextMap]
     );
 
-    /** Get the source conversation title for a sentence */
+    /** Get the source conversation title for a node */
     const getSourceTitle = useCallback(
-      (sentence: CommitSentence | undefined): string | undefined => {
-        const convId = sentence?.source_ref?.conversation_id;
+      (node: CommitContentNode | undefined): string | undefined => {
+        const convId = node?.source_ref?.conversation_id;
         if (!convId) return undefined;
         return sourceRefTitles?.get(convId) ?? undefined;
       },
@@ -328,7 +328,7 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
             <DiffSourceGroupHeader
               conversationId={line.groupHeader.conversationId}
               conversationTitle={line.groupHeader.title}
-              sentenceCount={line.groupHeader.sentenceCount}
+              nodeCount={line.groupHeader.nodeCount}
               avgConfidence={line.groupHeader.avgConfidence}
               isNewSource={line.groupHeader.isNewSource}
               projectId={projectId || ''}
@@ -351,40 +351,40 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
             />
             {isExpanded &&
               line.collapsedLines?.map((cLine, ci) => {
-                const cBaseId = cLine.baseSentence?.id;
-                const cTargetId = cLine.targetSentence?.id;
+                const cBaseId = cLine.baseNode?.id;
+                const cTargetId = cLine.targetNode?.id;
                 return (
                   <div
                     key={`expanded-${index}-${ci}-${cBaseId || cTargetId}`}
                     data-segment-id={cBaseId || cTargetId}
                   >
                     <div className="grid grid-cols-2 divide-x divide-[var(--stroke-divider)]">
-                      <DiffSentenceLine
-                        text={cLine.baseSentence?.text || ''}
+                      <DiffNodeLine
+                        text={cLine.baseNode?.text || ''}
                         type="context"
                         lineNumber={cLine.baseIndex != null ? cLine.baseIndex + 1 : undefined}
-                        hasSource={!!cLine.baseSentence?.source_ref?.turn_hash}
+                        hasSource={!!cLine.baseNode?.source_ref?.turn_hash}
                         onSourceClick={() => {
-                          if (cLine.baseSentence) {
-                            handleSourceToggle(cLine.baseSentence.id, cLine.baseSentence);
+                          if (cLine.baseNode) {
+                            handleSourceToggle(cLine.baseNode.id, cLine.baseNode);
                           }
                         }}
-                        sourceTitle={getSourceTitle(cLine.baseSentence)}
+                        sourceTitle={getSourceTitle(cLine.baseNode)}
                       />
-                      <DiffSentenceLine
-                        text={cLine.targetSentence?.text || ''}
+                      <DiffNodeLine
+                        text={cLine.targetNode?.text || ''}
                         type="context"
                         lineNumber={cLine.targetIndex != null ? cLine.targetIndex + 1 : undefined}
-                        hasSource={!!cLine.targetSentence?.source_ref?.turn_hash}
+                        hasSource={!!cLine.targetNode?.source_ref?.turn_hash}
                         onSourceClick={() => {
-                          if (cLine.targetSentence) {
+                          if (cLine.targetNode) {
                             handleSourceToggle(
-                              `target-${cLine.targetSentence.id}`,
-                              cLine.targetSentence
+                              `target-${cLine.targetNode.id}`,
+                              cLine.targetNode
                             );
                           }
                         }}
-                        sourceTitle={getSourceTitle(cLine.targetSentence)}
+                        sourceTitle={getSourceTitle(cLine.targetNode)}
                       />
                     </div>
                   </div>
@@ -394,8 +394,8 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
         );
       }
 
-      const baseId = line.baseSentence?.id;
-      const targetId = line.targetSentence?.id;
+      const baseId = line.baseNode?.id;
+      const targetId = line.targetNode?.id;
       const showChange = isChangeLine(line);
       const baseSegId = baseId;
       const targetSegId = targetId ? `target-${targetId}` : undefined;
@@ -413,8 +413,8 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
             {line.type === 'added' ? (
               <div className="bg-[var(--surface-app)] px-3 py-2 min-h-[2.5rem]" />
             ) : (
-              <DiffSentenceLine
-                text={line.baseSentence?.text || ''}
+              <DiffNodeLine
+                text={line.baseNode?.text || ''}
                 type={line.type === 'context' ? 'context' : 'removed'}
                 lineNumber={line.baseIndex != null ? line.baseIndex + 1 : undefined}
                 wordDiff={
@@ -422,20 +422,20 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
                     ? line.wordDiff?.filter((seg) => seg.type !== 'added')
                     : undefined
                 }
-                hasSource={!!line.baseSentence?.source_ref?.turn_hash}
+                hasSource={!!line.baseNode?.source_ref?.turn_hash}
                 onSourceClick={() => {
-                  if (line.baseSentence) {
+                  if (line.baseNode) {
                     const wd =
                       line.type === 'modified'
                         ? line.wordDiff?.filter((seg) => seg.type !== 'added')
                         : undefined;
-                    handleSourceToggle(line.baseSentence.id, line.baseSentence, wd);
+                    handleSourceToggle(line.baseNode.id, line.baseNode, wd);
                   }
                 }}
-                sourceTitle={getSourceTitle(line.baseSentence)}
+                sourceTitle={getSourceTitle(line.baseNode)}
                 {...baseInline}
                 onJumpToConversation={makeJumpHandler(
-                  line.baseSentence,
+                  line.baseNode,
                   line.type === 'modified'
                     ? line.wordDiff?.filter((seg) => seg.type !== 'added')
                     : undefined
@@ -447,8 +447,8 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
             {line.type === 'removed' ? (
               <div className="bg-[var(--surface-app)] px-3 py-2 min-h-[2.5rem]" />
             ) : (
-              <DiffSentenceLine
-                text={line.targetSentence?.text || ''}
+              <DiffNodeLine
+                text={line.targetNode?.text || ''}
                 type={line.type === 'context' ? 'context' : 'added'}
                 lineNumber={line.targetIndex != null ? line.targetIndex + 1 : undefined}
                 wordDiff={
@@ -456,20 +456,20 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
                     ? line.wordDiff?.filter((seg) => seg.type !== 'removed')
                     : undefined
                 }
-                hasSource={!!line.targetSentence?.source_ref?.turn_hash}
+                hasSource={!!line.targetNode?.source_ref?.turn_hash}
                 onSourceClick={() => {
-                  if (line.targetSentence) {
+                  if (line.targetNode) {
                     const wd =
                       line.type === 'modified'
                         ? line.wordDiff?.filter((seg) => seg.type !== 'removed')
                         : undefined;
-                    handleSourceToggle(`target-${line.targetSentence.id}`, line.targetSentence, wd);
+                    handleSourceToggle(`target-${line.targetNode.id}`, line.targetNode, wd);
                   }
                 }}
-                sourceTitle={getSourceTitle(line.targetSentence)}
+                sourceTitle={getSourceTitle(line.targetNode)}
                 {...targetInline}
                 onJumpToConversation={makeJumpHandler(
-                  line.targetSentence,
+                  line.targetNode,
                   line.type === 'modified'
                     ? line.wordDiff?.filter((seg) => seg.type !== 'removed')
                     : undefined
@@ -482,18 +482,18 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
           {showSnippets && showChange && (
             <div className="grid grid-cols-2 divide-x divide-[var(--stroke-divider)]">
               <div>
-                {line.type !== 'added' && line.baseSentence?.source_ref && (
+                {line.type !== 'added' && line.baseNode?.source_ref && (
                   <DiffContextSnippet
-                    sentence={line.baseSentence}
-                    onJumpToConversation={makeJumpHandler(line.baseSentence)}
+                    node={line.baseNode}
+                    onJumpToConversation={makeJumpHandler(line.baseNode)}
                   />
                 )}
               </div>
               <div>
-                {line.type !== 'removed' && line.targetSentence?.source_ref && (
+                {line.type !== 'removed' && line.targetNode?.source_ref && (
                   <DiffContextSnippet
-                    sentence={line.targetSentence}
-                    onJumpToConversation={makeJumpHandler(line.targetSentence)}
+                    node={line.targetNode}
+                    onJumpToConversation={makeJumpHandler(line.targetNode)}
                   />
                 )}
               </div>
@@ -514,7 +514,7 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
             <DiffSourceGroupHeader
               conversationId={line.groupHeader.conversationId}
               conversationTitle={line.groupHeader.title}
-              sentenceCount={line.groupHeader.sentenceCount}
+              nodeCount={line.groupHeader.nodeCount}
               avgConfidence={line.groupHeader.avgConfidence}
               isNewSource={line.groupHeader.isNewSource}
               projectId={projectId || ''}
@@ -537,26 +537,26 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
             />
             {isExpanded &&
               line.collapsedLines?.map((cLine, ci) => {
-                const cSentence = cLine.targetSentence ?? cLine.baseSentence;
+                const cNode = cLine.targetNode ?? cLine.baseNode;
                 const cBaseNum = cLine.baseIndex != null ? cLine.baseIndex + 1 : undefined;
                 const cTargetNum = cLine.targetIndex != null ? cLine.targetIndex + 1 : undefined;
                 return (
                   <div
-                    key={`expanded-${index}-${ci}-${cSentence?.id}`}
-                    data-segment-id={cSentence?.id}
+                    key={`expanded-${index}-${ci}-${cNode?.id}`}
+                    data-segment-id={cNode?.id}
                   >
-                    <DiffSentenceLine
-                      text={cSentence?.text || ''}
+                    <DiffNodeLine
+                      text={cNode?.text || ''}
                       type="context"
                       baseLineNumber={cBaseNum}
                       targetLineNumber={cTargetNum}
-                      hasSource={!!cSentence?.source_ref?.turn_hash}
+                      hasSource={!!cNode?.source_ref?.turn_hash}
                       onSourceClick={() => {
-                        if (cSentence) {
-                          handleSourceToggle(cSentence.id, cSentence);
+                        if (cNode) {
+                          handleSourceToggle(cNode.id, cNode);
                         }
                       }}
-                      sourceTitle={getSourceTitle(cSentence)}
+                      sourceTitle={getSourceTitle(cNode)}
                     />
                   </div>
                 );
@@ -566,65 +566,65 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
       }
 
       const showChange = isChangeLine(line);
-      const relevantSentence = line.targetSentence ?? line.baseSentence;
+      const relevantNode = line.targetNode ?? line.baseNode;
 
       // For modified lines in unified view, show removed then added
       if (line.type === 'modified') {
-        const baseSegId = line.baseSentence?.id;
-        const targetSegId = line.targetSentence ? `target-${line.targetSentence.id}` : undefined;
+        const baseSegId = line.baseNode?.id;
+        const targetSegId = line.targetNode ? `target-${line.targetNode.id}` : undefined;
         const baseInline = getInlineProps(baseSegId);
         const targetInline = getInlineProps(targetSegId);
 
         return (
           <div key={`line-${index}`} data-line-index={index}>
-            <DiffSentenceLine
-              text={line.baseSentence?.text || ''}
+            <DiffNodeLine
+              text={line.baseNode?.text || ''}
               type="removed"
               baseLineNumber={line.baseIndex != null ? line.baseIndex + 1 : undefined}
               wordDiff={line.wordDiff?.filter((seg) => seg.type !== 'added')}
-              hasSource={!!line.baseSentence?.source_ref?.turn_hash}
+              hasSource={!!line.baseNode?.source_ref?.turn_hash}
               onSourceClick={() => {
-                if (line.baseSentence) {
+                if (line.baseNode) {
                   handleSourceToggle(
-                    line.baseSentence.id,
-                    line.baseSentence,
+                    line.baseNode.id,
+                    line.baseNode,
                     line.wordDiff?.filter((seg) => seg.type !== 'added')
                   );
                 }
               }}
-              sourceTitle={getSourceTitle(line.baseSentence)}
+              sourceTitle={getSourceTitle(line.baseNode)}
               {...baseInline}
               onJumpToConversation={makeJumpHandler(
-                line.baseSentence,
+                line.baseNode,
                 line.wordDiff?.filter((seg) => seg.type !== 'added')
               )}
             />
-            <DiffSentenceLine
-              text={line.targetSentence?.text || ''}
+            <DiffNodeLine
+              text={line.targetNode?.text || ''}
               type="added"
               targetLineNumber={line.targetIndex != null ? line.targetIndex + 1 : undefined}
               wordDiff={line.wordDiff?.filter((seg) => seg.type !== 'removed')}
-              hasSource={!!line.targetSentence?.source_ref?.turn_hash}
+              hasSource={!!line.targetNode?.source_ref?.turn_hash}
               onSourceClick={() => {
-                if (line.targetSentence) {
+                if (line.targetNode) {
                   handleSourceToggle(
-                    `target-${line.targetSentence.id}`,
-                    line.targetSentence,
+                    `target-${line.targetNode.id}`,
+                    line.targetNode,
                     line.wordDiff?.filter((seg) => seg.type !== 'removed')
                   );
                 }
               }}
-              sourceTitle={getSourceTitle(line.targetSentence)}
+              sourceTitle={getSourceTitle(line.targetNode)}
               {...targetInline}
               onJumpToConversation={makeJumpHandler(
-                line.targetSentence,
+                line.targetNode,
                 line.wordDiff?.filter((seg) => seg.type !== 'removed')
               )}
             />
-            {showSnippets && line.targetSentence?.source_ref && (
+            {showSnippets && line.targetNode?.source_ref && (
               <DiffContextSnippet
-                sentence={line.targetSentence}
-                onJumpToConversation={makeJumpHandler(line.targetSentence)}
+                node={line.targetNode}
+                onJumpToConversation={makeJumpHandler(line.targetNode)}
               />
             )}
           </div>
@@ -632,7 +632,7 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
       }
 
       // Single line (context, added, removed)
-      const segId = line.type === 'added' ? `target-${relevantSentence?.id}` : relevantSentence?.id;
+      const segId = line.type === 'added' ? `target-${relevantNode?.id}` : relevantNode?.id;
       const inlineProps = getInlineProps(segId);
       const baseNum =
         line.type !== 'added' && line.baseIndex != null ? line.baseIndex + 1 : undefined;
@@ -640,28 +640,28 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
         line.type !== 'removed' && line.targetIndex != null ? line.targetIndex + 1 : undefined;
 
       return (
-        <div key={`line-${index}`} data-line-index={index} data-segment-id={relevantSentence?.id}>
-          <DiffSentenceLine
-            text={relevantSentence?.text || ''}
+        <div key={`line-${index}`} data-line-index={index} data-segment-id={relevantNode?.id}>
+          <DiffNodeLine
+            text={relevantNode?.text || ''}
             type={line.type === 'context' ? 'context' : line.type === 'added' ? 'added' : 'removed'}
             baseLineNumber={baseNum}
             targetLineNumber={targetNum}
-            hasSource={!!relevantSentence?.source_ref?.turn_hash}
+            hasSource={!!relevantNode?.source_ref?.turn_hash}
             onSourceClick={() => {
-              if (relevantSentence) {
+              if (relevantNode) {
                 const id =
-                  line.type === 'added' ? `target-${relevantSentence.id}` : relevantSentence.id;
-                handleSourceToggle(id, relevantSentence);
+                  line.type === 'added' ? `target-${relevantNode.id}` : relevantNode.id;
+                handleSourceToggle(id, relevantNode);
               }
             }}
-            sourceTitle={getSourceTitle(relevantSentence)}
+            sourceTitle={getSourceTitle(relevantNode)}
             {...inlineProps}
-            onJumpToConversation={makeJumpHandler(relevantSentence)}
+            onJumpToConversation={makeJumpHandler(relevantNode)}
           />
-          {showSnippets && showChange && relevantSentence?.source_ref && (
+          {showSnippets && showChange && relevantNode?.source_ref && (
             <DiffContextSnippet
-              sentence={relevantSentence}
-              onJumpToConversation={makeJumpHandler(relevantSentence)}
+              node={relevantNode}
+              onJumpToConversation={makeJumpHandler(relevantNode)}
             />
           )}
         </div>
@@ -695,7 +695,7 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
               <div className="flex items-center gap-3 px-4 py-2 border-t border-[var(--stroke-divider)]">
                 <div className="h-px flex-1 bg-[var(--diff-removed-line)]/20" />
                 <span className="text-[10px] font-medium text-[var(--diff-removed-accent)]">
-                  Removed sentences
+                  Removed nodes
                 </span>
                 <div className="h-px flex-1 bg-[var(--diff-removed-line)]/20" />
               </div>
@@ -703,7 +703,7 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
             <DiffSourceGroupHeader
               conversationId={line.groupHeader.conversationId}
               conversationTitle={line.groupHeader.title}
-              sentenceCount={line.groupHeader.sentenceCount}
+              nodeCount={line.groupHeader.nodeCount}
               avgConfidence={line.groupHeader.avgConfidence}
               isNewSource={line.groupHeader.isNewSource}
               projectId={projectId || ''}
@@ -716,15 +716,15 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
       // Document view doesn't use collapsed sections
       if (line.type === 'collapsed') return null;
 
-      const sentence = line.targetSentence ?? line.baseSentence;
-      if (!sentence) return null;
+      const node = line.targetNode ?? line.baseNode;
+      if (!node) return null;
 
       const segId =
         line.type === 'added' || line.type === 'modified' || line.type === 'context'
-          ? line.targetSentence
-            ? `target-${line.targetSentence.id}`
-            : line.baseSentence?.id
-          : line.baseSentence?.id;
+          ? line.targetNode
+            ? `target-${line.targetNode.id}`
+            : line.baseNode?.id
+          : line.baseNode?.id;
       const inlineProps = getInlineProps(segId);
 
       // Status badge styles
@@ -779,15 +779,15 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
 
       return (
         <div
-          key={`doc-${index}-${sentence.id}`}
+          key={`doc-${index}-${node.id}`}
           data-line-index={index}
-          data-segment-id={sentence.id}
+          data-segment-id={node.id}
         >
           {showRemovedDivider && (
             <div className="flex items-center gap-3 px-4 py-2 border-t border-[var(--stroke-divider)]">
               <div className="h-px flex-1 bg-[var(--diff-removed-line)]/20" />
               <span className="text-[10px] font-medium text-[var(--diff-removed-accent)]">
-                Removed sentences
+                Removed nodes
               </span>
               <div className="h-px flex-1 bg-[var(--diff-removed-line)]/20" />
             </div>
@@ -796,14 +796,14 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
           <div
             className={`flex items-start gap-3 px-4 py-2.5 border-l-2 ${config.border} ${config.bg}`}
           >
-            {/* Sentence text */}
+            {/* ContentNode text */}
             <div className="flex-1 min-w-0 text-sm leading-relaxed text-[var(--text-primary)]">
               {line.type === 'modified' && line.wordDiff && line.wordDiff.length > 0 ? (
                 <WordDiffDisplay segments={line.wordDiff} />
               ) : line.type === 'removed' ? (
-                <span className="line-through text-[var(--text-tertiary)]">{sentence.text}</span>
+                <span className="line-through text-[var(--text-tertiary)]">{node.text}</span>
               ) : (
-                sentence.text
+                node.text
               )}
             </div>
 
@@ -816,14 +816,14 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
                 <button
                   type="button"
                   onClick={() => {
-                    if (sentence.source_ref?.turn_hash) {
-                      const id = line.type === 'removed' ? sentence.id : `target-${sentence.id}`;
-                      handleSourceToggle(id, sentence, line.wordDiff);
+                    if (node.source_ref?.turn_hash) {
+                      const id = line.type === 'removed' ? node.id : `target-${node.id}`;
+                      handleSourceToggle(id, node, line.wordDiff);
                     }
                   }}
-                  disabled={!sentence.source_ref?.turn_hash}
+                  disabled={!node.source_ref?.turn_hash}
                   className={`shrink-0 p-1 rounded transition-colors ${
-                    sentence.source_ref?.turn_hash
+                    node.source_ref?.turn_hash
                       ? inlineProps.expanded
                         ? 'text-[var(--accent-commit)] bg-[var(--hover-bg)]'
                         : 'text-[var(--text-tertiary)] hover:text-[var(--accent-commit)] hover:bg-[var(--hover-bg)]'
@@ -834,11 +834,11 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
                 </button>
               </TooltipTrigger>
               <TooltipContent side="left" className="max-w-xs">
-                {sentence.source_ref?.turn_hash ? (
+                {node.source_ref?.turn_hash ? (
                   <div className="space-y-0.5">
-                    {getSourceTitle(sentence) && (
+                    {getSourceTitle(node) && (
                       <div className="font-medium text-[10px] opacity-70">
-                        From: {getSourceTitle(sentence)}
+                        From: {getSourceTitle(node)}
                       </div>
                     )}
                     <div>
@@ -865,17 +865,17 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
                 contextData={inlineProps.inlineContextData}
                 autoFetch={false}
                 loading={inlineProps.inlineContextLoading}
-                showJumpLink={!!makeJumpHandler(sentence, line.wordDiff)}
-                onJumpClick={makeJumpHandler(sentence, line.wordDiff)}
+                showJumpLink={!!makeJumpHandler(node, line.wordDiff)}
+                onJumpClick={makeJumpHandler(node, line.wordDiff)}
               />
             </div>
           )}
 
           {/* Context snippet */}
-          {showSnippets && isChangeLine(line) && sentence.source_ref && (
+          {showSnippets && isChangeLine(line) && node.source_ref && (
             <DiffContextSnippet
-              sentence={sentence}
-              onJumpToConversation={makeJumpHandler(sentence)}
+              node={node}
+              onJumpToConversation={makeJumpHandler(node)}
             />
           )}
         </div>
@@ -979,7 +979,7 @@ export const DiffSideBySide = forwardRef<DiffSideBySideHandle, DiffSideBySidePro
         {/* Source context modal */}
         <DiffSourceContextModal
           open={!!contextModal?.open}
-          sentence={null}
+          node={null}
           data={modalContextData}
           loading={modalLoading}
           onClose={closeContextModal}

@@ -181,7 +181,7 @@ export default function ConstraintsPanel({
           ) : (
             <ChevronRight className="h-3.5 w-3.5" />
           )}
-          <span>Sentence Candidates</span>
+          <span>ContentNode Candidates</span>
           <Badge variant="secondary" className="ml-auto">
             {activeClauses.length}/{totalKeepClauses}
           </Badge>
@@ -201,7 +201,7 @@ export default function ConstraintsPanel({
               ))}
             {totalKeepClauses === 0 && (
               <p className="py-3 text-center text-xs text-[var(--text-tertiary)]">
-                No sentences marked as "keep" in Conversation.
+                No nodes marked as "keep" in Conversation.
               </p>
             )}
           </div>

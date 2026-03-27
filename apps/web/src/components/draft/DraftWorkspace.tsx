@@ -4,7 +4,7 @@
  * DraftWorkspace - Full-screen draft editing workspace
  *
  * Provides a workbench for composing semantic knowledge:
- * - Sentence list with include/exclude toggles
+ * - ContentNode list with include/exclude toggles
  * - Constraint editor with local validation
  * - Instruction editor for generation guidance
  * - Auto-save with conflict detection
@@ -35,7 +35,7 @@ import { ExtractConversationDialog } from './ExtractConversationDialog';
 import { InstructionEditor } from './InstructionEditor';
 import { PreviewPanel } from './PreviewPanel';
 import { PromotePreviewDialog } from './PromotePreviewDialog';
-import { SentenceList } from './SentenceList';
+import { NodeList } from './NodeList';
 
 interface DraftWorkspaceProps {
   projectId: string;
@@ -245,7 +245,7 @@ export function DraftWorkspace({ projectId, onClose }: DraftWorkspaceProps) {
               </>
             ) : (
               <>
-                <SentenceList />
+                <NodeList />
                 <AutoSuggestPanel />
               </>
             )}

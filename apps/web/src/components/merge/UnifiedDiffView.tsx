@@ -21,7 +21,7 @@ import { useTerminology } from '@/hooks/useTerminology';
 import type { ApiCommit, TurnContextData } from '@/lib/api';
 import { fetchTurnContextCached, getApiCommit } from '@/lib/api';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
-import type { Merge2WayResult, MergeCandidate, MergeSimilarPair, Sentence } from '@/types/merge';
+import type { Merge2WayResult, MergeCandidate, MergeSimilarPair, ContentNode } from '@/types/merge';
 import { MergeConflictView } from './MergeConflictView';
 import { MergeDiffLine } from './MergeDiffLine';
 import { MergeDiffSection } from './MergeDiffSection';
@@ -41,7 +41,7 @@ type UnifiedLineType = 'context' | 'conflict' | 'source-only' | 'target-only' | 
 
 interface UnifiedLine {
   type: UnifiedLineType;
-  sentence?: Sentence;
+  node?: ContentNode;
   pairIndex?: number;
   pair?: MergeSimilarPair;
   sourceCandidate?: MergeCandidate;
@@ -61,9 +61,9 @@ interface UnifiedLine {
  */
 function buildPositionalLines(
   prepared: Merge2WayResult,
-  sourceSentences?: Sentence[]
+  sourceNodes?: ContentNode[]
 ): UnifiedLine[] {
-  if (!sourceSentences || sourceSentences.length === 0) {
+  if (!sourceNodes || sourceNodes.length === 0) {
     return [];
   }
 
@@ -80,31 +80,31 @@ function buildPositionalLines(
   }
 
   for (let i = 0; i < prepared.onlyInSource.length; i++) {
-    sourceOnlyById.set(prepared.onlyInSource[i].sentence.id, {
+    sourceOnlyById.set(prepared.onlyInSource[i].node.id, {
       candidate: prepared.onlyInSource[i],
       index: i,
     });
   }
 
-  // Build raw lines in source sentence order
+  // Build raw lines in source node order
   const rawLines: UnifiedLine[] = [];
   const processedConflictIndices = new Set<number>();
   const processedSourceOnlyIndices = new Set<number>();
 
-  for (const sentence of sourceSentences) {
-    if (identicalTexts.has(sentence.text)) {
-      rawLines.push({ type: 'context', sentence });
+  for (const node of sourceNodes) {
+    if (identicalTexts.has(node.text)) {
+      rawLines.push({ type: 'context', node });
       continue;
     }
 
-    const conflict = conflictBySourceId.get(sentence.id);
+    const conflict = conflictBySourceId.get(node.id);
     if (conflict) {
       rawLines.push({ type: 'conflict', pairIndex: conflict.index, pair: conflict.pair });
       processedConflictIndices.add(conflict.index);
       continue;
     }
 
-    const sourceOnly = sourceOnlyById.get(sentence.id);
+    const sourceOnly = sourceOnlyById.get(node.id);
     if (sourceOnly) {
       rawLines.push({
         type: 'source-only',
@@ -115,7 +115,7 @@ function buildPositionalLines(
       continue;
     }
 
-    rawLines.push({ type: 'context', sentence });
+    rawLines.push({ type: 'context', node });
   }
 
   // Add unprocessed items
@@ -199,7 +199,7 @@ function CollapsedRow({ count, onExpand }: CollapsedRowProps) {
       className="w-full flex items-center gap-2 px-4 py-2 bg-[var(--surface-app)] hover:bg-[var(--hover-bg)] transition-colors text-xs text-[var(--text-tertiary)]"
     >
       <ChevronRight className="h-3 w-3" />
-      <span>··· {count} unchanged sentences ···</span>
+      <span>··· {count} unchanged nodes ···</span>
     </button>
   );
 }
@@ -289,8 +289,8 @@ export function UnifiedDiffView({
     };
   }, [viewMode, sourceHash, sourceCommit]);
 
-  // Convert ApiCommit trees to Sentence type for positional view
-  const sourceSentences = useMemo(() => {
+  // Convert ApiCommit trees to ContentNode type for positional view
+  const sourceNodes = useMemo(() => {
     if (!sourceCommit?.content?.trees) return undefined;
     const content = sourceCommit.content as import('@t3x-dev/core').SemanticContent;
     return content.trees.map((node, idx) => {
@@ -299,15 +299,15 @@ export function UnifiedDiffView({
         .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : String(v)}`)
         .join('; ')}`;
       const confidence = node.confidence ?? 1.0;
-      const source: Sentence['source'] | undefined = undefined;
+      const source: ContentNode['source'] | undefined = undefined;
       return { id, text, confidence, source };
     });
   }, [sourceCommit]);
 
   // Build positional lines (only when in positional mode)
   const positionalLines = useMemo(
-    () => (viewMode === 'positional' ? buildPositionalLines(prepared, sourceSentences) : []),
-    [viewMode, prepared, sourceSentences]
+    () => (viewMode === 'positional' ? buildPositionalLines(prepared, sourceNodes) : []),
+    [viewMode, prepared, sourceNodes]
   );
 
   // Track expanded collapsed sections (positional mode)
@@ -326,9 +326,9 @@ export function UnifiedDiffView({
   }, []);
 
   // Helper to get cached context data
-  const getContextForSentence = useCallback(
-    (sentence: Sentence) => {
-      const turnHash = sentence.source?.turn_hash;
+  const getContextForNode = useCallback(
+    (node: ContentNode) => {
+      const turnHash = node.source?.turn_hash;
       if (!turnHash) return { data: undefined, loading: false };
       return {
         data: contextCache[turnHash]?.data,
@@ -381,14 +381,14 @@ export function UnifiedDiffView({
 
   /** Create a jump handler that opens the context modal with source info */
   const makeJumpHandler = useCallback(
-    (sentence: Sentence) => {
-      if (!projectId || !sentence.source?.conversation_id) return undefined;
+    (node: ContentNode) => {
+      if (!projectId || !node.source?.conversation_id) return undefined;
       return (conversationId: string) => {
         openContextModal(
           conversationId,
-          sentence.source?.turn_hash || '',
-          sentence.source?.start_char,
-          sentence.source?.end_char
+          node.source?.turn_hash || '',
+          node.source?.start_char,
+          node.source?.end_char
         );
       };
     },
@@ -416,16 +416,16 @@ export function UnifiedDiffView({
       );
     }
 
-    if (line.type === 'context' && line.sentence) {
-      const ctx = getContextForSentence(line.sentence);
+    if (line.type === 'context' && line.node) {
+      const ctx = getContextForNode(line.node);
       return (
         <MergeDiffLine
           key={`context-${index}`}
           type="context"
-          sentence={line.sentence}
+          node={line.node}
           contextData={ctx.data}
           contextLoading={ctx.loading}
-          onJumpToConversation={makeJumpHandler(line.sentence)}
+          onJumpToConversation={makeJumpHandler(line.node)}
         />
       );
     }
@@ -444,36 +444,36 @@ export function UnifiedDiffView({
     }
 
     if (line.type === 'source-only' && line.sourceCandidate && line.sourceIndex !== undefined) {
-      const ctx = getContextForSentence(line.sourceCandidate.sentence);
+      const ctx = getContextForNode(line.sourceCandidate.node);
       return (
         <MergeDiffLine
           key={`source-${index}`}
           type="added"
-          sentence={line.sourceCandidate.sentence}
+          node={line.sourceCandidate.node}
           isKept={line.sourceCandidate.keep}
           onToggleKeep={() => onToggleKeep('source', line.sourceIndex!)}
           checkable
           contextData={ctx.data}
           contextLoading={ctx.loading}
-          onJumpToConversation={makeJumpHandler(line.sourceCandidate.sentence)}
+          onJumpToConversation={makeJumpHandler(line.sourceCandidate.node)}
           navId={`source-${line.sourceIndex}`}
         />
       );
     }
 
     if (line.type === 'target-only' && line.targetCandidate && line.targetIndex !== undefined) {
-      const ctx = getContextForSentence(line.targetCandidate.sentence);
+      const ctx = getContextForNode(line.targetCandidate.node);
       return (
         <MergeDiffLine
           key={`target-${index}`}
           type="added"
-          sentence={line.targetCandidate.sentence}
+          node={line.targetCandidate.node}
           isKept={line.targetCandidate.keep}
           onToggleKeep={() => onToggleKeep('target', line.targetIndex!)}
           checkable
           contextData={ctx.data}
           contextLoading={ctx.loading}
-          onJumpToConversation={makeJumpHandler(line.targetCandidate.sentence)}
+          onJumpToConversation={makeJumpHandler(line.targetCandidate.node)}
           navId={`target-${line.targetIndex}`}
         />
       );
@@ -490,11 +490,11 @@ export function UnifiedDiffView({
     <div className="max-w-4xl mx-auto">
       {/* Stats Header with View Toggle */}
       <div className="flex items-center justify-between mb-[var(--space-group)] px-2 py-2 bg-[var(--surface-panel)] border border-[var(--stroke-divider)] rounded-lg text-sm">
-        {/* Sentence-level stats — hidden in Tree mode */}
+        {/* ContentNode-level stats — hidden in Tree mode */}
         {diffMode !== 'tree' && (
           <div className="flex items-center gap-[var(--space-group)]">
             <span className="text-[var(--text-tertiary)]">
-              {identical.length} {t('identical_sentences').toLowerCase()}
+              {identical.length} {t('identical_nodes').toLowerCase()}
             </span>
             {similarPairs.length > 0 && (
               <span
@@ -527,7 +527,7 @@ export function UnifiedDiffView({
         {/* Diff mode toggle */}
         {onDiffModeChange && (
           <DiffModeToggle
-            mode={diffMode ?? 'sentence'}
+            mode={diffMode ?? 'node'}
             onChange={onDiffModeChange}
             hidden={!hasSemanticData}
           />
@@ -563,26 +563,26 @@ export function UnifiedDiffView({
           {/* Grouped View (default) */}
           {viewMode === 'grouped' && (
             <div className="space-y-[var(--space-section)]">
-              {/* Identical Sentences */}
+              {/* Identical ContentNodes */}
               {identical.length > 0 && (
                 <MergeDiffSection
-                  title={t('identical_sentences')}
-                  subtitle={`${identical.length} sentences (${t('auto_kept').toLowerCase()})`}
+                  title={t('identical_nodes')}
+                  subtitle={`${identical.length} nodes (${t('auto_kept').toLowerCase()})`}
                   variant="success"
                   defaultCollapsed
                   navId="identical"
                 >
                   <div className="space-y-1">
-                    {identical.map((sentence) => {
-                      const ctx = getContextForSentence(sentence);
+                    {identical.map((node) => {
+                      const ctx = getContextForNode(node);
                       return (
                         <MergeDiffLine
-                          key={`identical-${sentence.id}`}
+                          key={`identical-${node.id}`}
                           type="context"
-                          sentence={sentence}
+                          node={node}
                           contextData={ctx.data}
                           contextLoading={ctx.loading}
-                          onJumpToConversation={makeJumpHandler(sentence)}
+                          onJumpToConversation={makeJumpHandler(node)}
                         />
                       );
                     })}
@@ -617,24 +617,24 @@ export function UnifiedDiffView({
               {onlyInSource.length > 0 && (
                 <MergeDiffSection
                   title={t('only_in_source')}
-                  subtitle={`${onlyInSource.length} sentences from ${t('source').toLowerCase()}`}
+                  subtitle={`${onlyInSource.length} nodes from ${t('source').toLowerCase()}`}
                   variant="info"
                   navId="source-only"
                 >
                   <div className="space-y-1">
                     {onlyInSource.map((candidate, idx) => {
-                      const ctx = getContextForSentence(candidate.sentence);
+                      const ctx = getContextForNode(candidate.node);
                       return (
                         <MergeDiffLine
-                          key={`source-${candidate.sentence.id}`}
+                          key={`source-${candidate.node.id}`}
                           type="added"
-                          sentence={candidate.sentence}
+                          node={candidate.node}
                           isKept={candidate.keep}
                           onToggleKeep={() => onToggleKeep('source', idx)}
                           checkable
                           contextData={ctx.data}
                           contextLoading={ctx.loading}
-                          onJumpToConversation={makeJumpHandler(candidate.sentence)}
+                          onJumpToConversation={makeJumpHandler(candidate.node)}
                           navId={`source-${idx}`}
                         />
                       );
@@ -647,24 +647,24 @@ export function UnifiedDiffView({
               {onlyInTarget.length > 0 && (
                 <MergeDiffSection
                   title={t('only_in_target')}
-                  subtitle={`${onlyInTarget.length} sentences from ${t('target').toLowerCase()}`}
+                  subtitle={`${onlyInTarget.length} nodes from ${t('target').toLowerCase()}`}
                   variant="info"
                   navId="target-only"
                 >
                   <div className="space-y-1">
                     {onlyInTarget.map((candidate, idx) => {
-                      const ctx = getContextForSentence(candidate.sentence);
+                      const ctx = getContextForNode(candidate.node);
                       return (
                         <MergeDiffLine
-                          key={`target-${candidate.sentence.id}`}
+                          key={`target-${candidate.node.id}`}
                           type="added"
-                          sentence={candidate.sentence}
+                          node={candidate.node}
                           isKept={candidate.keep}
                           onToggleKeep={() => onToggleKeep('target', idx)}
                           checkable
                           contextData={ctx.data}
                           contextLoading={ctx.loading}
-                          onJumpToConversation={makeJumpHandler(candidate.sentence)}
+                          onJumpToConversation={makeJumpHandler(candidate.node)}
                           navId={`target-${idx}`}
                         />
                       );
@@ -704,7 +704,7 @@ export function UnifiedDiffView({
           {/* Source context modal */}
           <DiffSourceContextModal
             open={!!contextModal?.open}
-            sentence={null}
+            node={null}
             data={modalContextData}
             loading={modalLoading}
             onClose={closeContextModal}

@@ -42,17 +42,17 @@ export function isTokenInAnchorCandidate(
  *
  * Position resolution priority:
  * 1. Use globalStart/globalEnd if present (pre-computed for UI rendering)
- * 2. Fall back to sentenceStartChar + start/end (requires sentence context)
+ * 2. Fall back to nodeStartChar + start/end (requires node context)
  */
 export function isTokenInConfirmedAnchor(
   token: TextToken,
   anchors: ConfirmedAnchor[],
-  sentenceStartChar: number
+  nodeStartChar: number
 ): ConfirmedAnchor | null {
   for (const anchor of anchors) {
     // Use pre-computed global positions if available, otherwise convert from relative
-    const anchorGlobalStart = anchor.globalStart ?? sentenceStartChar + anchor.start;
-    const anchorGlobalEnd = anchor.globalEnd ?? sentenceStartChar + anchor.end;
+    const anchorGlobalStart = anchor.globalStart ?? nodeStartChar + anchor.start;
+    const anchorGlobalEnd = anchor.globalEnd ?? nodeStartChar + anchor.end;
     // Check if token overlaps with anchor's character range
     if (token.charStart < anchorGlobalEnd && token.charEnd > anchorGlobalStart) {
       return anchor;
@@ -68,11 +68,11 @@ export function getTokenState(
   anchorCandidates?: AnchorCandidate[],
   confirmedAnchors?: ConfirmedAnchor[],
   anchorThreshold: number = 0.5,
-  sentenceStartChar: number = 0
+  nodeStartChar: number = 0
 ): TokenState {
   // Check confirmed anchors first (highest priority)
   if (confirmedAnchors && confirmedAnchors.length > 0) {
-    const anchor = isTokenInConfirmedAnchor(token, confirmedAnchors, sentenceStartChar);
+    const anchor = isTokenInConfirmedAnchor(token, confirmedAnchors, nodeStartChar);
     if (anchor) {
       // Handle both camelCase (UI) and snake_case (API v1.1) constraint values
       const constraint = anchor.constraint;

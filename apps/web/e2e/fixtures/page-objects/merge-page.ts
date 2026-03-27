@@ -28,7 +28,7 @@ export class MergePage {
   }
 
   async waitForLoad(timeout = 15000): Promise<void> {
-    // Wait for the action bar commit button — present in both sentence and frame mode.
+    // Wait for the action bar commit button — present in both node and frame mode.
     // Button text variants:
     //   "Confirm"       — default mode (mergeConfirm default)
     //   "Execute Merge" — developer mode (mergeConfirm developer)
@@ -55,7 +55,7 @@ export class MergePage {
 
   async hasConflictsSection(): Promise<boolean> {
     // Frame mode: h3 "Conflicts (N)" (CSS uppercase → "CONFLICTS (N)")
-    // Sentence mode: sidebar "Conflicts" label
+    // Node mode: sidebar "Conflicts" label
     // Default mode: "冲突"
     // Use getByText for case-insensitive, element-agnostic matching
     const loc = this.page.getByText(/conflicts/i).first();
@@ -64,7 +64,7 @@ export class MergePage {
 
   async hasIdenticalSection(): Promise<boolean> {
     // Frame mode: h3 "Auto-kept (N)" (CSS uppercase → "AUTO-KEPT (N)")
-    // Sentence mode: "Identical"
+    // Node mode: "Identical"
     // Default mode: "未变化"
     const loc = this.page
       .getByText(/auto-kept|identical/i)

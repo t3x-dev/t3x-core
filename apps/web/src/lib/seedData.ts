@@ -79,7 +79,7 @@ export const demoSeedData = {
       hash: 'sha256:demo_commit_main_001',
       branch: 'main',
       message: 'Extract travel preferences from initial conversation',
-      sentences: [
+      nodes: [
         {
           id: 's_demo_01',
           text: 'User prefers budget-friendly accommodations under $60 per night.',
@@ -111,7 +111,7 @@ export const demoSeedData = {
       hash: 'sha256:demo_commit_accom_001',
       branch: 'accommodation',
       message: 'Extract accommodation requirements',
-      sentences: [
+      nodes: [
         {
           id: 's_demo_06',
           text: 'Reliable high-speed WiFi is essential for remote work.',

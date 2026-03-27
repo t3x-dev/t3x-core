@@ -744,7 +744,7 @@ conversationRoutes.openapi(getMemoryRoute, async (c) => {
     // 4. Build YAML knowledge from best available source:
     //    - Delta log snapshot (working draft, most up-to-date)
     //    - Committed frames (HEAD, fallback)
-    //    The YAML tree IS the knowledge — no flattening to sentences.
+    //    The YAML tree IS the knowledge — no flattening to nodes.
     let yamlKnowledge = '';
     const deltaRecords = await listDeltaLogByConversation(db, conversationId);
     if (deltaRecords.length > 0) {

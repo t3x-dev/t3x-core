@@ -8,7 +8,7 @@ import {
   switchTestBranch,
 } from '../fixtures/api-helpers';
 import { expect, test } from '../fixtures/test';
-import { generateSentences } from '../fixtures/test-data-factory';
+import { generateNodes } from '../fixtures/test-data-factory';
 
 /**
  * Branch Workflow E2E Tests
@@ -25,8 +25,8 @@ test.describe('Branch Workflow', () => {
   let featureBranchId: string;
   let featureCommitHash: string;
   const featureBranchName = `feature-${Date.now()}`;
-  const mainSentences = generateSentences(2);
-  const featureSentences = generateSentences(2);
+  const mainNodes = generateNodes(2);
+  const featureNodes = generateNodes(2);
 
   test.beforeAll(async ({ request }) => {
     const { projectId: id } = await createTestProject(request, `Branch E2E ${Date.now()}`);
@@ -36,7 +36,7 @@ test.describe('Branch Workflow', () => {
     await createTestBranch(request, projectId, 'main').catch(() => {});
 
     // Create initial commit on main
-    mainCommitHash = await createTestCommit(request, projectId, mainSentences, {
+    mainCommitHash = await createTestCommit(request, projectId, mainNodes, {
       branch: 'main',
       message: 'Initial main commit',
     });
@@ -75,7 +75,7 @@ test.describe('Branch Workflow', () => {
 
   // BR-04: Commit on feature branch
   test('BR-04: Commit on feature branch', async ({ request }) => {
-    featureCommitHash = await createTestCommit(request, projectId, featureSentences, {
+    featureCommitHash = await createTestCommit(request, projectId, featureNodes, {
       branch: featureBranchName,
       message: 'Feature branch commit',
       parents: [mainCommitHash],

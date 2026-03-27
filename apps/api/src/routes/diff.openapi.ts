@@ -24,7 +24,7 @@ import { errorResponse, zodErrorHook } from '../lib/errors';
 
 type DBType = Awaited<ReturnType<typeof getDB>>;
 
-/** Local segment type for legacy sentence-level diffs */
+/** Local segment type for legacy node-level diffs */
 interface DiffSegment {
   segmentId: string;
   text: string;
@@ -39,10 +39,10 @@ type ExtractResult =
 // ============================================================================
 
 /**
- * Extract segments from turn — tries Ring 3 first, falls back to sentence splitting.
+ * Extract segments from turn — tries Ring 3 first, falls back to text splitting.
  *
  * Strategy 1: Ring 3 segments (legacy path, when rings_json exists)
- * Strategy 2: Punctuation-based sentence splitting (when Ring data unavailable)
+ * Strategy 2: Punctuation-based text splitting (when Ring data unavailable)
  */
 async function extractSegmentsFromTurn(db: DBType, turnHash: string): Promise<ExtractResult> {
   const turn = await findTurnByHash(db, turnHash);
@@ -64,21 +64,21 @@ async function extractSegmentsFromTurn(db: DBType, turnHash: string): Promise<Ex
         return { ok: true, id: turnHash, segments };
       }
     } catch {
-      // Fall through to sentence splitting
+      // Fall through to text splitting
     }
   }
 
-  // Strategy 2: Punctuation-based sentence splitting
+  // Strategy 2: Punctuation-based text splitting
   if (turn.content) {
-    const sentences = turn.content
+    const segments = turn.content
       .split(/(?<=[.!?。！？])\s+/)
       .map((s) => s.trim())
       .filter(Boolean);
-    if (sentences.length > 0) {
+    if (segments.length > 0) {
       return {
         ok: true,
         id: turnHash,
-        segments: sentences.map((text, i) => ({
+        segments: segments.map((text, i) => ({
           segmentId: `s_fallback_${i}`,
           text,
         })),
@@ -456,7 +456,7 @@ diffRoutes.openapi(twoWayRoute, async (c) => {
       embeddingProvider = baseProvider;
     }
 
-    // TODO: Legacy sentence-level DiffEngine has been removed in tree-primary refactor.
+    // TODO: Legacy node-level DiffEngine has been removed in tree-primary refactor.
     // Return a simple text comparison for now.
     return c.json(
       {
@@ -597,7 +597,7 @@ diffRoutes.openapi(threeWayRoute, async (c) => {
       embeddingProvider = baseProvider;
     }
 
-    // TODO: Legacy sentence-level DiffEngine has been removed in tree-primary refactor.
+    // TODO: Legacy node-level DiffEngine has been removed in tree-primary refactor.
     return c.json(
       {
         success: true as const,

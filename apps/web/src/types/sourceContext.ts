@@ -19,31 +19,31 @@ import type { ContentBlock } from '@/components/shared/ContentBlockRenderer';
  * Uses character offsets relative to turn.content (not including role prefix).
  */
 export interface SourceRef {
-  /** Hash of the source turn (optional for leaf-originated sentences) */
+  /** Hash of the source turn (optional for leaf-originated nodes) */
   turn_hash?: string;
   /** Start character position (0-indexed, inclusive) */
   start_char: number;
   /** End character position (0-indexed, exclusive) */
   end_char: number;
-  /** Leaf source identifier (for sentences originating from a leaf) */
+  /** Leaf source identifier (for nodes originating from a leaf) */
   leaf_id?: string;
 }
 
 /**
- * Sentence with optional source reference.
+ * ContentNode with optional source reference.
  * Source may be absent for legacy data.
  */
-export interface SentenceWithSource {
-  /** Sentence ID (e.g., "s1", "s_abc123") */
+export interface NodeWithSource {
+  /** ContentNode ID (e.g., "s1", "s_abc123") */
   id: string;
-  /** Sentence text content */
+  /** ContentNode text content */
   text: string;
   /** Source reference (optional for legacy data) */
   source?: SourceRef;
   /**
-   * The commit hash where this sentence was originally created.
-   * Set when a sentence is inherited from a parent commit.
-   * Undefined for sentences created directly in this commit.
+   * The commit hash where this node was originally created.
+   * Set when a node is inherited from a parent commit.
+   * Undefined for nodes created directly in this commit.
    */
   inherited_from?: string;
   /** Anchor type for integrity checking threshold selection */
@@ -64,7 +64,7 @@ export interface HighlightRange {
 /**
  * Highlight range with per-range color.
  * Used when a single turn needs highlights in multiple colors
- * (e.g., green for sentences, deepGreen/deepRed for constraints).
+ * (e.g., green for nodes, deepGreen/deepRed for constraints).
  */
 export interface ColoredHighlightRange {
   /** Start position (0-indexed, inclusive) */
@@ -133,7 +133,7 @@ export interface TurnBubbleData {
   is_target?: boolean;
   /** Single highlight (legacy support) */
   highlight?: HighlightRange;
-  /** Multiple highlights (for multiple sentences from same turn) */
+  /** Multiple highlights (for multiple nodes from same turn) */
   highlights?: HighlightRange[];
   /** Multi-color highlights (each range has its own color, overrides highlightColor) */
   coloredHighlights?: ColoredHighlightRange[];
@@ -181,8 +181,8 @@ export type ContentIntegrityStatus = 'valid' | 'mismatch' | 'unknown';
  * Props for CommitSourceContext component.
  */
 export interface CommitSourceContextProps {
-  /** Sentences from commit content */
-  sentences: SentenceWithSource[];
+  /** ContentNodes from commit content */
+  nodes: NodeWithSource[];
   /** Compact mode for canvas preview (show first 2 turns only) */
   compact?: boolean;
   /** Default expanded state for turns (default: first turn expanded) */
@@ -195,8 +195,8 @@ export interface CommitSourceContextProps {
  * Props for TruncatedCommitView component.
  */
 export interface TruncatedCommitViewProps {
-  /** Sentences from commit content */
-  sentences: SentenceWithSource[];
+  /** ContentNodes from commit content */
+  nodes: NodeWithSource[];
   /** Maximum number of highlights to show fully (default: 2) */
   maxHighlights?: number;
   /** Context chars around each highlight (default: 50) */

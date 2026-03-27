@@ -5,7 +5,7 @@ import {
   createTestProject,
 } from '../fixtures/api-helpers';
 import { expect, test } from '../fixtures/test';
-import { generateConstraints, generateSentences } from '../fixtures/test-data-factory';
+import { generateConstraints, generateNodes } from '../fixtures/test-data-factory';
 
 /**
  * Leaf Workflow E2E Tests
@@ -25,14 +25,14 @@ test.describe('Leaf Workflow', () => {
   let commitHash: string;
   let leafId: string;
 
-  const sentences = generateSentences(4);
+  const nodes = generateNodes(4);
   const constraints = generateConstraints('require', 2);
 
   test.beforeAll(async ({ request }) => {
     const { projectId: id } = await createTestProject(request, `Leaf E2E ${Date.now()}`);
     projectId = id;
 
-    commitHash = await createTestCommit(request, projectId, sentences, {
+    commitHash = await createTestCommit(request, projectId, nodes, {
       message: 'Leaf test commit',
     });
 
@@ -62,17 +62,17 @@ test.describe('Leaf Workflow', () => {
     }
   });
 
-  // LW-02: Leaf page shows source commit sentences
-  test('LW-02: Source commit sentences displayed', async ({ page }) => {
+  // LW-02: Leaf page shows source commit nodes
+  test('LW-02: Source commit nodes displayed', async ({ page }) => {
     await page.goto(`/project/${projectId}/leaf/${leafId}`);
 
     const leafTitle = page.locator('text=E2E Test Leaf').or(page.locator(`text=${leafId}`));
     await expect(leafTitle.first()).toBeVisible({ timeout: 15000 });
 
-    // Source context section or actual source sentence should be present
+    // Source context section or actual source node should be present
     const sourceSection = page
       .locator('text=Source Context')
-      .or(page.locator(`text=${sentences[0].text}`));
+      .or(page.locator(`text=${nodes[0].text}`));
     await expect(sourceSection.first()).toBeVisible({ timeout: 10000 });
   });
 
@@ -98,10 +98,10 @@ test.describe('Leaf Workflow', () => {
       // LLM not configured — verify the leaf page still renders correctly
       // Constraints should still be visible
       await expect(constraintsSection).toBeVisible({ timeout: 5000 });
-      // Source context or sentences should be visible
+      // Source context or nodes should be visible
       const sourceSection = page
         .locator('text=Source Context')
-        .or(page.locator(`text=${sentences[0].text}`));
+        .or(page.locator(`text=${nodes[0].text}`));
       await expect(sourceSection.first()).toBeVisible({ timeout: 5000 });
       // Page may show "Configure LLM" or similar prompt
       return;

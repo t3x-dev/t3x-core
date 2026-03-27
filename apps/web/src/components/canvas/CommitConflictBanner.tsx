@@ -30,12 +30,12 @@ export function CommitConflictBanner({
           <div className="mt-2 space-y-1.5">
             {shown.map((c) => (
               <div
-                key={`${c.new_sentence_id}-${c.existing_sentence_id}`}
+                key={`${c.new_node_id}-${c.existing_node_id}`}
                 className="text-xs text-amber-800 dark:text-amber-200"
               >
-                <span>&ldquo;{truncate(c.new_sentence_text, 40)}&rdquo;</span>
+                <span>&ldquo;{truncate(c.new_node_text, 40)}&rdquo;</span>
                 <span className="mx-1 text-amber-400">&harr;</span>
-                <span>&ldquo;{truncate(c.existing_sentence_text, 40)}&rdquo;</span>
+                <span>&ldquo;{truncate(c.existing_node_text, 40)}&rdquo;</span>
                 <span className="ml-1 text-amber-500">({((c.cosine ?? 0) * 100).toFixed(0)}%)</span>
               </div>
             ))}

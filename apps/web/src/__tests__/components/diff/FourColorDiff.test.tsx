@@ -12,19 +12,19 @@ import { describe, expect, test } from 'vitest';
 
 import {
   type CommitDiff,
-  type DiffableSentence,
+  type DiffableNode,
   diffCommits,
   EQUIVALENT_THRESHOLD,
-  type SentencePair,
+  type NodePair,
 } from '@/lib/diffUtils';
 
 describe('FourColorDiff - Classification Logic', () => {
-  test('identical sentences are classified correctly', () => {
-    const source: DiffableSentence[] = [
+  test('identical nodes are classified correctly', () => {
+    const source: DiffableNode[] = [
       { id: 's1', text: 'User trust is paramount.' },
       { id: 's2', text: 'Deterministic systems are key.' },
     ];
-    const target: DiffableSentence[] = [
+    const target: DiffableNode[] = [
       { id: 't1', text: 'User trust is paramount.' },
       { id: 't2', text: 'Deterministic systems are key.' },
     ];
@@ -37,37 +37,37 @@ describe('FourColorDiff - Classification Logic', () => {
     expect(diff.onlyInTarget.length).toBe(0);
   });
 
-  test('added sentences are classified as onlyInTarget', () => {
-    const source: DiffableSentence[] = [{ id: 's1', text: 'Existing sentence.' }];
-    const target: DiffableSentence[] = [
-      { id: 't1', text: 'Existing sentence.' },
-      { id: 't2', text: 'Brand new sentence added here.' },
+  test('added nodes are classified as onlyInTarget', () => {
+    const source: DiffableNode[] = [{ id: 's1', text: 'Existing node.' }];
+    const target: DiffableNode[] = [
+      { id: 't1', text: 'Existing node.' },
+      { id: 't2', text: 'Brand new node added here.' },
     ];
 
     const diff = diffCommits(source, target);
     expect(diff.identical.length).toBe(1);
     expect(diff.onlyInTarget.length).toBe(1);
-    expect(diff.onlyInTarget[0].text).toBe('Brand new sentence added here.');
+    expect(diff.onlyInTarget[0].text).toBe('Brand new node added here.');
   });
 
-  test('removed sentences are classified as onlyInSource', () => {
-    const source: DiffableSentence[] = [
-      { id: 's1', text: 'Kept sentence.' },
-      { id: 's2', text: 'Removed sentence.' },
+  test('removed nodes are classified as onlyInSource', () => {
+    const source: DiffableNode[] = [
+      { id: 's1', text: 'Kept node.' },
+      { id: 's2', text: 'Removed node.' },
     ];
-    const target: DiffableSentence[] = [{ id: 't1', text: 'Kept sentence.' }];
+    const target: DiffableNode[] = [{ id: 't1', text: 'Kept node.' }];
 
     const diff = diffCommits(source, target);
     expect(diff.identical.length).toBe(1);
     expect(diff.onlyInSource.length).toBe(1);
-    expect(diff.onlyInSource[0].text).toBe('Removed sentence.');
+    expect(diff.onlyInSource[0].text).toBe('Removed node.');
   });
 
-  test('similar sentences with small changes are classified as similar/equivalent', () => {
-    const source: DiffableSentence[] = [
+  test('similar nodes with small changes are classified as similar/equivalent', () => {
+    const source: DiffableNode[] = [
       { id: 's1', text: 'The budget is three thousand dollars for the project.' },
     ];
-    const target: DiffableSentence[] = [
+    const target: DiffableNode[] = [
       { id: 't1', text: 'The budget is three thousand five hundred dollars for the project.' },
     ];
 
@@ -77,9 +77,9 @@ describe('FourColorDiff - Classification Logic', () => {
     expect(totalPairs).toBe(1);
   });
 
-  test('completely different sentences are classified as added/removed', () => {
-    const source: DiffableSentence[] = [{ id: 's1', text: 'Apple banana cherry date elderberry.' }];
-    const target: DiffableSentence[] = [
+  test('completely different nodes are classified as added/removed', () => {
+    const source: DiffableNode[] = [{ id: 's1', text: 'Apple banana cherry date elderberry.' }];
+    const target: DiffableNode[] = [
       { id: 't1', text: 'Xylophone violin trumpet saxophone piano.' },
     ];
 
@@ -105,11 +105,11 @@ describe('FourColorDiff - Classification Logic', () => {
       ],
       similar: [
         {
-          source: { id: 's3', text: 'Modified sentence original.' },
-          target: { id: 't3', text: 'Modified sentence updated.' },
+          source: { id: 's3', text: 'Modified node original.' },
+          target: { id: 't3', text: 'Modified node updated.' },
           similarity: 0.6,
           wordDiff: [
-            { type: 'unchanged', text: 'Modified sentence' },
+            { type: 'unchanged', text: 'Modified node' },
             { type: 'removed', text: 'original' },
             { type: 'added', text: 'updated' },
           ],
@@ -127,7 +127,7 @@ describe('FourColorDiff - Classification Logic', () => {
   });
 
   test('equivalent pairs have word diff segments', () => {
-    const pair: SentencePair = {
+    const pair: NodePair = {
       source: { id: 's1', text: 'Hello world' },
       target: { id: 't1', text: 'Hello earth' },
       similarity: 0.5,
@@ -158,10 +158,10 @@ describe('FourColorDiff - Classification Logic', () => {
     expect(diff.onlyInTarget.length).toBe(0);
   });
 
-  test('all source sentences removed produces correct diff', () => {
-    const source: DiffableSentence[] = [
-      { id: 's1', text: 'First sentence.' },
-      { id: 's2', text: 'Second sentence.' },
+  test('all source nodes removed produces correct diff', () => {
+    const source: DiffableNode[] = [
+      { id: 's1', text: 'First node.' },
+      { id: 's2', text: 'Second node.' },
     ];
 
     const diff = diffCommits(source, []);
@@ -170,8 +170,8 @@ describe('FourColorDiff - Classification Logic', () => {
     expect(diff.onlyInTarget.length).toBe(0);
   });
 
-  test('all target sentences added produces correct diff', () => {
-    const target: DiffableSentence[] = [
+  test('all target nodes added produces correct diff', () => {
+    const target: DiffableNode[] = [
       { id: 't1', text: 'New first.' },
       { id: 't2', text: 'New second.' },
     ];
