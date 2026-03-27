@@ -4,7 +4,7 @@
  * MergeWorkspace - Full-screen merge workspace container
  *
  * Supports two modes:
- * - Sentence-based merge (legacy): uses prepared/MergeResult from the store
+ * - Sentence-based merge (legacy): uses prepared/Merge2WayResult from the store
  * - Frame-based merge (new): uses frameMergeResult from prepareMerge()
  *
  * Mode is determined by whether frameMergeResult is set in the store.
@@ -37,7 +37,6 @@ import { MergePreview } from './MergePreview';
 import { MergeReviewDialog } from './MergeReviewDialog';
 import type { ViewMode } from './UnifiedDiffView';
 import { UnifiedDiffView } from './UnifiedDiffView';
-import type { Frame } from '@/lib/treeCompat';
 
 interface MergeWorkspaceProps {
   projectId: string;
@@ -47,76 +46,124 @@ interface MergeWorkspaceProps {
 }
 
 /**
- * Build merged SemanticContent from frame resolutions
+ * Find a TreeNode by slash-delimited path (e.g. "hangzhou_trip/dining")
+ */
+function findNodeByPath(trees: TreeNode[], path: string): TreeNode | null {
+  const segments = path.split('/');
+  const root = trees.find((t) => t.key === segments[0]);
+  if (!root) return null;
+  let current = root;
+  for (let i = 1; i < segments.length; i++) {
+    const child = current.children.find((c) => c.key === segments[i]);
+    if (!child) return null;
+    current = child;
+  }
+  return current;
+}
+
+/**
+ * Look up a TreeNode from source or target content by path
+ */
+function findNode(
+  sourceContent: SemanticContent | undefined,
+  targetContent: SemanticContent | undefined,
+  path: string
+): TreeNode | null {
+  if (sourceContent) {
+    const node = findNodeByPath(sourceContent.trees, path);
+    if (node) return node;
+  }
+  if (targetContent) {
+    const node = findNodeByPath(targetContent.trees, path);
+    if (node) return node;
+  }
+  return null;
+}
+
+/**
+ * Build merged SemanticContent from frame resolutions (tree-primary)
  */
 function buildMergedContent(
   mergeResult: MergeResult,
   resolutions: Map<string, FrameResolution>,
   keepSource: Set<string>,
-  keepTarget: Set<string>
+  keepTarget: Set<string>,
+  sourceContent?: SemanticContent,
+  targetContent?: SemanticContent
 ): SemanticContent {
-  const frames: TreeNode[] = [];
+  const trees: TreeNode[] = [];
 
-  // Auto-kept frames
-  frames.push(...mergeResult.autoKept);
+  // Auto-kept nodes (take from source since they're identical)
+  for (const path of mergeResult.autoKept) {
+    const node = findNode(sourceContent, targetContent, path);
+    if (node) trees.push(node);
+  }
 
   // Resolved conflicts
   for (const conflict of mergeResult.conflicts) {
-    const resolution = resolutions.get(conflict.frameId);
+    const resolution = resolutions.get(conflict.path);
     if (!resolution) continue;
+
+    const sourceNode = sourceContent
+      ? findNodeByPath(sourceContent.trees, conflict.path)
+      : null;
+    const targetNode = targetContent
+      ? findNodeByPath(targetContent.trees, conflict.path)
+      : null;
 
     switch (resolution.type) {
       case 'source':
-        frames.push(conflict.sourceFrame);
+        if (sourceNode) trees.push(sourceNode);
         break;
       case 'target':
-        frames.push(conflict.targetFrame);
+        if (targetNode) trees.push(targetNode);
         break;
       case 'both':
-        frames.push(conflict.sourceFrame);
-        frames.push(conflict.targetFrame);
+        if (sourceNode) trees.push(sourceNode);
+        if (targetNode) trees.push(targetNode);
         break;
       case 'per-slot': {
-        // Build a merged frame from per-slot choices
+        // Build a merged node from per-slot choices
         const mergedSlots: Record<string, unknown> = {};
-        const allKeys = new Set([
-          ...Object.keys(conflict.sourceFrame.slots),
-          ...Object.keys(conflict.targetFrame.slots),
-        ]);
+        const srcSlots = sourceNode?.slots ?? {};
+        const tgtSlots = targetNode?.slots ?? {};
+        const allKeys = new Set([...Object.keys(srcSlots), ...Object.keys(tgtSlots)]);
         const conflictKeySet = new Set(conflict.slotConflicts.map((sc) => sc.key));
         for (const key of allKeys) {
           if (conflictKeySet.has(key)) {
             const choice = resolution.slotChoices[key];
             if (choice === 'source') {
-              mergedSlots[key] = conflict.sourceFrame.slots[key];
+              mergedSlots[key] = srcSlots[key];
             } else {
-              mergedSlots[key] = conflict.targetFrame.slots[key];
+              mergedSlots[key] = tgtSlots[key];
             }
           } else {
-            // Non-conflicting: take whichever exists (or source by preference)
-            mergedSlots[key] = conflict.sourceFrame.slots[key] ?? conflict.targetFrame.slots[key];
+            mergedSlots[key] = srcSlots[key] ?? tgtSlots[key];
           }
         }
-        frames.push({
-          ...conflict.sourceFrame,
+        trees.push({
+          key: conflict.path.split('/').pop() ?? conflict.path,
           slots: mergedSlots as TreeNode['slots'],
+          children: sourceNode?.children ?? targetNode?.children ?? [],
         });
         break;
       }
     }
   }
 
-  // Source-only frames (user toggleable)
-  for (const frame of mergeResult.onlyInSource) {
-    if (keepSource.has(frame.id)) {
-      frames.push(frame);
+  // Source-only nodes (user toggleable)
+  for (const path of mergeResult.onlyInSource) {
+    if (keepSource.has(path)) {
+      const node = sourceContent ? findNodeByPath(sourceContent.trees, path) : null;
+      if (node) trees.push(node);
     }
   }
 
-  // Target-only frames (user toggleable)
-  for (const frame of mergeResult.onlyInTarget) {
-    if (keepTarget.has(frame.id)) {
-      frames.push(frame);
+  // Target-only nodes (user toggleable)
+  for (const path of mergeResult.onlyInTarget) {
+    if (keepTarget.has(path)) {
+      const node = targetContent ? findNodeByPath(targetContent.trees, path) : null;
+      if (node) trees.push(node);
     }
   }
 
@@ -127,7 +174,7 @@ function buildMergedContent(
     ...mergeResult.relationsOnlyInTarget,
   ];
 
-  return { frames, relations };
+  return { trees, relations };
 }
 
 export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWorkspaceProps) {
@@ -167,7 +214,7 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
     allFrameConflictsResolved,
     // Frame-aware getters
     getFrameMergeChecks,
-    getPreviewFrames,
+    getPreviewPaths,
   } = useMergeWorkspaceStore();
 
   const prefersReducedMotion = useReducedMotion();
@@ -228,7 +275,7 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
           const targetParents = tgtCommit.parents ?? [];
 
           // Find common parent
-          const commonParent = sourceParents.find((p) => targetParents.includes(p));
+          const commonParent = sourceParents.find((p: string) => targetParents.includes(p));
           const baseParent = commonParent ?? sourceParents[0];
 
           if (baseParent) {
@@ -280,7 +327,7 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
 
   // Build nav items from merge data (sentence mode)
   const navItems = useMemo(
-    () => (prepared ? buildMergeNavItems(prepared, extendedResolutions) : []),
+    () => (prepared ? buildMergeNavItems(prepared as unknown as MergeResult, {}, extendedResolutions) : []),
     [prepared, extendedResolutions]
   );
 
@@ -398,13 +445,15 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
         frameMergeResult,
         frameResolutions,
         keepSourceFrames,
-        keepTargetFrames
+        keepTargetFrames,
+        semanticData.source,
+        semanticData.target
       );
 
       const result = await createCommit(
         projectId,
         {
-          frames: mergedContent.trees,
+          trees: mergedContent.trees,
           relations: mergedContent.relations,
         },
         {
@@ -442,6 +491,7 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
     message,
     onClose,
     onMergeCommitted,
+    semanticData,
   ]);
 
   // Frame merge can-commit check
@@ -471,14 +521,14 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
   // If we're in frame mode, render the frame merge workspace
   if (isFrameMode && frameMergeResult) {
     const frameUnresolvedCount = frameMergeResult.conflicts.filter(
-      (c) => !frameResolutions.has(c.frameId)
+      (c) => !frameResolutions.has(c.path)
     ).length;
 
     const containerVariants = prefersReducedMotion
       ? reducedMotion.fullScreenEnter
       : fullScreenEnter;
 
-    const framePreviewFrames = getPreviewFrames();
+    const framePreviewPaths = getPreviewPaths();
 
     return (
       <motion.div
@@ -496,7 +546,7 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
           message={message}
           sourceBranch={sourceBranch || 'source'}
           targetBranch={targetBranch || 'main'}
-          sentenceCount={framePreviewFrames.length}
+          sentenceCount={framePreviewPaths.length}
           summary={null}
           serverChecksLoading={false}
           onBackToCanvas={handleCloseOrNavigate}
@@ -548,99 +598,30 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
                     Conflicts ({frameMergeResult.conflicts.length})
                   </h3>
                   <div className="space-y-3">
-                    {frameMergeResult.conflicts.map((conflict) => (
-                      <div key={conflict.frameId} id={`merge-frame-${conflict.frameId}`}>
-                        <FrameConflictCard
-                          conflict={conflict}
-                          resolution={frameResolutions.get(conflict.frameId) ?? null}
-                          onResolve={(res) => resolveFrameConflict(conflict.frameId, res)}
-                          isActive={activeFrameId === conflict.frameId}
-                          onSelect={() => setActiveFrameId(conflict.frameId)}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Auto-kept frames */}
-              {frameMergeResult.autoKept.length > 0 && (
-                <div className="mb-6">
-                  <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--diff-added-accent)]">
-                    Auto-kept ({frameMergeResult.autoKept.length})
-                  </h3>
-                  <div className="space-y-2">
-                    {frameMergeResult.autoKept.map((frame) => (
-                      <div
-                        key={frame.id}
-                        className="rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-3 opacity-50"
-                      >
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="rounded bg-[var(--surface-app)] px-1.5 py-0.5 font-mono text-[11px] font-medium text-[var(--text-secondary)] border border-[var(--stroke-divider)]">
-                            {frame.type}
-                          </span>
-                          <span className="font-mono text-[10px] text-[var(--text-tertiary)]">
-                            {frame.id}
-                          </span>
-                        </div>
-                        <div className="px-2 font-mono text-[11px] text-[var(--text-tertiary)]">
-                          {Object.entries(frame.slots).map(([key, value]) => (
-                            <div key={key} className="leading-relaxed">
-                              <span style={{ color: '#7aa2f7' }}>{key}</span>
-                              <span style={{ color: '#89ddff' }}>: </span>
-                              <span style={{ color: '#9ece6a' }}>
-                                {typeof value === 'string' ? `"${value}"` : JSON.stringify(value)}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Source-only frames */}
-              {frameMergeResult.onlyInSource.length > 0 && (
-                <div className="mb-6">
-                  <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--accent-commit)]">
-                    Source only ({frameMergeResult.onlyInSource.length})
-                  </h3>
-                  <div className="space-y-2">
-                    {frameMergeResult.onlyInSource.map((frame) => {
-                      const isKept = keepSourceFrames.has(frame.id);
+                    {frameMergeResult.conflicts.map((conflict) => {
+                      // Look up source/target TreeNodes for the FrameConflictCard
+                      const sourceNode = semanticData.source
+                        ? findNodeByPath(semanticData.source.trees, conflict.path)
+                        : null;
+                      const targetNode = semanticData.target
+                        ? findNodeByPath(semanticData.target.trees, conflict.path)
+                        : null;
+                      // Build a FrameConflictCard-compatible conflict object
+                      const cardConflict = {
+                        frameId: conflict.path,
+                        sourceFrame: sourceNode ?? { key: conflict.path, slots: {}, children: [] },
+                        targetFrame: targetNode ?? { key: conflict.path, slots: {}, children: [] },
+                        slotConflicts: conflict.slotConflicts,
+                      };
                       return (
-                        <div
-                          key={frame.id}
-                          className={`rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-3 transition-opacity ${
-                            isKept ? '' : 'opacity-40'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2 mb-1">
-                            <input
-                              type="checkbox"
-                              checked={isKept}
-                              onChange={() => toggleKeepSourceFrame(frame.id)}
-                              className="h-3.5 w-3.5 cursor-pointer accent-[var(--accent-commit)]"
-                            />
-                            <span className="rounded bg-[var(--surface-app)] px-1.5 py-0.5 font-mono text-[11px] font-medium text-[var(--text-secondary)] border border-[var(--stroke-divider)]">
-                              {frame.type}
-                            </span>
-                            <span className="font-mono text-[10px] text-[var(--text-tertiary)]">
-                              {frame.id}
-                            </span>
-                          </div>
-                          <div className="px-2 font-mono text-[11px] text-[var(--text-tertiary)]">
-                            {Object.entries(frame.slots).map(([key, value]) => (
-                              <div key={key} className="leading-relaxed">
-                                <span style={{ color: '#7aa2f7' }}>{key}</span>
-                                <span style={{ color: '#89ddff' }}>: </span>
-                                <span style={{ color: '#9ece6a' }}>
-                                  {typeof value === 'string' ? `"${value}"` : JSON.stringify(value)}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
+                        <div key={conflict.path} id={`merge-frame-${conflict.path}`}>
+                          <FrameConflictCard
+                            conflict={cardConflict}
+                            resolution={frameResolutions.get(conflict.path) ?? null}
+                            onResolve={(res) => resolveFrameConflict(conflict.path, res)}
+                            isActive={activeFrameId === conflict.path}
+                            onSelect={() => setActiveFrameId(conflict.path)}
+                          />
                         </div>
                       );
                     })}
@@ -648,18 +629,63 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
                 </div>
               )}
 
-              {/* Target-only frames */}
-              {frameMergeResult.onlyInTarget.length > 0 && (
+              {/* Auto-kept nodes */}
+              {frameMergeResult.autoKept.length > 0 && (
                 <div className="mb-6">
-                  <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--accent-commit)]">
-                    Target only ({frameMergeResult.onlyInTarget.length})
+                  <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--diff-added-accent)]">
+                    Auto-kept ({frameMergeResult.autoKept.length})
                   </h3>
                   <div className="space-y-2">
-                    {frameMergeResult.onlyInTarget.map((frame) => {
-                      const isKept = keepTargetFrames.has(frame.id);
+                    {frameMergeResult.autoKept.map((path) => {
+                      const node = findNode(semanticData.source, semanticData.target, path);
                       return (
                         <div
-                          key={frame.id}
+                          key={path}
+                          className="rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-3 opacity-50"
+                        >
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="rounded bg-[var(--surface-app)] px-1.5 py-0.5 font-mono text-[11px] font-medium text-[var(--text-secondary)] border border-[var(--stroke-divider)]">
+                              {node?.key ?? path}
+                            </span>
+                            <span className="font-mono text-[10px] text-[var(--text-tertiary)]">
+                              {path}
+                            </span>
+                          </div>
+                          {node && (
+                            <div className="px-2 font-mono text-[11px] text-[var(--text-tertiary)]">
+                              {Object.entries(node.slots).map(([key, value]) => (
+                                <div key={key} className="leading-relaxed">
+                                  <span style={{ color: '#7aa2f7' }}>{key}</span>
+                                  <span style={{ color: '#89ddff' }}>: </span>
+                                  <span style={{ color: '#9ece6a' }}>
+                                    {typeof value === 'string' ? `"${value}"` : JSON.stringify(value)}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Source-only nodes */}
+              {frameMergeResult.onlyInSource.length > 0 && (
+                <div className="mb-6">
+                  <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--accent-commit)]">
+                    Source only ({frameMergeResult.onlyInSource.length})
+                  </h3>
+                  <div className="space-y-2">
+                    {frameMergeResult.onlyInSource.map((path) => {
+                      const isKept = keepSourceFrames.has(path);
+                      const node = semanticData.source
+                        ? findNodeByPath(semanticData.source.trees, path)
+                        : null;
+                      return (
+                        <div
+                          key={path}
                           className={`rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-3 transition-opacity ${
                             isKept ? '' : 'opacity-40'
                           }`}
@@ -668,27 +694,82 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
                             <input
                               type="checkbox"
                               checked={isKept}
-                              onChange={() => toggleKeepTargetFrame(frame.id)}
+                              onChange={() => toggleKeepSourceFrame(path)}
                               className="h-3.5 w-3.5 cursor-pointer accent-[var(--accent-commit)]"
                             />
                             <span className="rounded bg-[var(--surface-app)] px-1.5 py-0.5 font-mono text-[11px] font-medium text-[var(--text-secondary)] border border-[var(--stroke-divider)]">
-                              {frame.type}
+                              {node?.key ?? path}
                             </span>
                             <span className="font-mono text-[10px] text-[var(--text-tertiary)]">
-                              {frame.id}
+                              {path}
                             </span>
                           </div>
-                          <div className="px-2 font-mono text-[11px] text-[var(--text-tertiary)]">
-                            {Object.entries(frame.slots).map(([key, value]) => (
-                              <div key={key} className="leading-relaxed">
-                                <span style={{ color: '#7aa2f7' }}>{key}</span>
-                                <span style={{ color: '#89ddff' }}>: </span>
-                                <span style={{ color: '#9ece6a' }}>
-                                  {typeof value === 'string' ? `"${value}"` : JSON.stringify(value)}
-                                </span>
-                              </div>
-                            ))}
+                          {node && (
+                            <div className="px-2 font-mono text-[11px] text-[var(--text-tertiary)]">
+                              {Object.entries(node.slots).map(([key, value]) => (
+                                <div key={key} className="leading-relaxed">
+                                  <span style={{ color: '#7aa2f7' }}>{key}</span>
+                                  <span style={{ color: '#89ddff' }}>: </span>
+                                  <span style={{ color: '#9ece6a' }}>
+                                    {typeof value === 'string' ? `"${value}"` : JSON.stringify(value)}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Target-only nodes */}
+              {frameMergeResult.onlyInTarget.length > 0 && (
+                <div className="mb-6">
+                  <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--accent-commit)]">
+                    Target only ({frameMergeResult.onlyInTarget.length})
+                  </h3>
+                  <div className="space-y-2">
+                    {frameMergeResult.onlyInTarget.map((path) => {
+                      const isKept = keepTargetFrames.has(path);
+                      const node = semanticData.target
+                        ? findNodeByPath(semanticData.target.trees, path)
+                        : null;
+                      return (
+                        <div
+                          key={path}
+                          className={`rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-3 transition-opacity ${
+                            isKept ? '' : 'opacity-40'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 mb-1">
+                            <input
+                              type="checkbox"
+                              checked={isKept}
+                              onChange={() => toggleKeepTargetFrame(path)}
+                              className="h-3.5 w-3.5 cursor-pointer accent-[var(--accent-commit)]"
+                            />
+                            <span className="rounded bg-[var(--surface-app)] px-1.5 py-0.5 font-mono text-[11px] font-medium text-[var(--text-secondary)] border border-[var(--stroke-divider)]">
+                              {node?.key ?? path}
+                            </span>
+                            <span className="font-mono text-[10px] text-[var(--text-tertiary)]">
+                              {path}
+                            </span>
                           </div>
+                          {node && (
+                            <div className="px-2 font-mono text-[11px] text-[var(--text-tertiary)]">
+                              {Object.entries(node.slots).map(([key, value]) => (
+                                <div key={key} className="leading-relaxed">
+                                  <span style={{ color: '#7aa2f7' }}>{key}</span>
+                                  <span style={{ color: '#89ddff' }}>: </span>
+                                  <span style={{ color: '#9ece6a' }}>
+                                    {typeof value === 'string' ? `"${value}"` : JSON.stringify(value)}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -792,7 +873,7 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
                   </div>
                   <div className="flex justify-between pt-1 border-t border-[var(--stroke-divider)]">
                     <span className="font-medium">Preview total</span>
-                    <span className="font-mono font-medium">{framePreviewFrames.length}</span>
+                    <span className="font-mono font-medium">{framePreviewPaths.length}</span>
                   </div>
                 </div>
               </div>
@@ -825,7 +906,7 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
   }
 
   const unresolvedCount = totalConflicts - resolvedCount;
-  const summary = prepared ? computeMergeSummary(prepared, extendedResolutions) : null;
+  const summary = prepared ? computeMergeSummary(prepared as unknown as MergeResult) : null;
   const containerVariants = prefersReducedMotion ? reducedMotion.fullScreenEnter : fullScreenEnter;
 
   return (
@@ -848,7 +929,7 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
         summary={summary}
         serverChecksLoading={serverChecksLoading}
         onBackToCanvas={handleCloseOrNavigate}
-        prepared={prepared}
+        prepared={prepared as unknown as MergeResult}
         extendedResolutions={extendedResolutions}
       />
 

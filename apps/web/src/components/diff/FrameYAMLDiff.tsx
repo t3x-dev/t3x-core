@@ -20,7 +20,6 @@ import { ChevronDown, ChevronRight, Equal, Minus, Pencil, Plus } from 'lucide-re
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { formatRelation, formatSlotValue, renderFrameSlots } from './DiffYAMLFormatters';
-import type { Frame } from '@/lib/treeCompat';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -34,10 +33,10 @@ export interface FrameYAMLDiffProps {
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 /** Collapsible section for identical paths */
-function IdenticalSection({ frames }: { frames: string[] }) {
+function IdenticalSection({ paths }: { paths: string[] }) {
   const [expanded, setExpanded] = useState(false);
 
-  if (frames.length === 0) return null;
+  if (paths.length === 0) return null;
 
   return (
     <div className="mb-2">
@@ -50,28 +49,19 @@ function IdenticalSection({ frames }: { frames: string[] }) {
         {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
         <Equal size={12} />
         <span>
-          {frames.length} identical frame{frames.length !== 1 ? 's' : ''}
+          {paths.length} identical frame{paths.length !== 1 ? 's' : ''}
         </span>
       </button>
       {expanded && (
         <div className="mt-1 opacity-50">
-          {frames.map((frame) => (
-            <div key={frame.id} className="px-2 py-0.5">
+          {paths.map((path) => (
+            <div key={path} className="px-2 py-0.5">
               <pre
                 className="m-0 text-[11px] leading-[18px]"
                 style={{ color: 'var(--text-tertiary)' }}
               >
-                {frame.type}: <span style={{ fontSize: 9, opacity: 0.7 }}>({frame.id})</span>
+                {path}
               </pre>
-              {renderFrameSlots(frame).map((line, i) => (
-                <pre
-                  key={i}
-                  className="m-0 text-[11px] leading-[18px]"
-                  style={{ color: 'var(--text-tertiary)' }}
-                >
-                  {line}
-                </pre>
-              ))}
             </div>
           ))}
         </div>
@@ -437,7 +427,7 @@ export function FrameYAMLDiff({ diff, sourceContent, targetContent, className }:
         })}
 
         {/* Identical paths (collapsible, at bottom) */}
-        <IdenticalSection frames={diff.identical} />
+        <IdenticalSection paths={diff.identical} />
 
         {/* Relation changes */}
         <RelationChanges added={diff.relationsAdded} removed={diff.relationsRemoved} />

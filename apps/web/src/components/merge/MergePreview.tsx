@@ -13,7 +13,6 @@ import { useTerminology } from '@/hooks/useTerminology';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
-import type { Frame } from '@/lib/treeCompat';
 
 interface MergePreviewProps {
   expanded: boolean;
@@ -30,23 +29,23 @@ export function MergePreview({ expanded, onToggle }: MergePreviewProps) {
     frameResolutions,
     keepSourceFrames,
     keepTargetFrames,
-    getPreviewFrames,
+    getPreviewPaths,
   } = useMergeWorkspaceStore();
 
   const isFrameMode = frameMergeResult !== null;
 
   // Frame-mode preview
   if (isFrameMode) {
-    const previewFrames = getPreviewFrames();
+    const previewPaths = getPreviewPaths();
     const autoKeptCount = frameMergeResult.autoKept.length;
     const resolvedCount = frameMergeResult.conflicts.filter((c) =>
-      frameResolutions.has(c.frameId)
+      frameResolutions.has(c.path)
     ).length;
-    const keptSourceCount = frameMergeResult.onlyInSource.filter((f) =>
-      keepSourceFrames.has(f.id)
+    const keptSourceCount = frameMergeResult.onlyInSource.filter((path) =>
+      keepSourceFrames.has(path)
     ).length;
-    const keptTargetCount = frameMergeResult.onlyInTarget.filter((f) =>
-      keepTargetFrames.has(f.id)
+    const keptTargetCount = frameMergeResult.onlyInTarget.filter((path) =>
+      keepTargetFrames.has(path)
     ).length;
 
     return (
@@ -61,7 +60,7 @@ export function MergePreview({ expanded, onToggle }: MergePreviewProps) {
             <FileText className="h-4 w-4 text-[var(--text-tertiary)]" />
             <span className="font-medium text-[var(--text-primary)]">Merge Preview</span>
             <span className="text-sm text-[var(--text-tertiary)]">
-              {previewFrames.length} frames will be in final {t('commit').toLowerCase()}
+              {previewPaths.length} nodes will be in final {t('commit').toLowerCase()}
             </span>
           </div>
 
@@ -85,46 +84,21 @@ export function MergePreview({ expanded, onToggle }: MergePreviewProps) {
         {expanded && (
           <div className="px-6 pb-4 max-h-64 overflow-auto">
             <div className="bg-[var(--surface-card)] rounded-lg border border-[var(--stroke-divider)] p-[var(--space-group)] elevation-2">
-              {previewFrames.length === 0 ? (
+              {previewPaths.length === 0 ? (
                 <p className="text-center text-[var(--text-tertiary)] py-4">
                   No frames selected for merge
                 </p>
               ) : (
                 <div className="space-y-[var(--space-item)]">
-                  {previewFrames.map((frame, idx) => (
-                    <div key={frame.id || idx} className="flex items-start gap-3 text-sm">
+                  {previewPaths.map((path, idx) => (
+                    <div key={path} className="flex items-start gap-3 text-sm">
                       <span className="shrink-0 w-6 text-[var(--text-tertiary)] text-right font-mono text-xs">
                         {idx + 1}.
                       </span>
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5 mb-0.5">
-                          <span className="rounded bg-[var(--surface-app)] px-1 py-0.5 font-mono text-[10px] font-medium text-[var(--text-secondary)] border border-[var(--stroke-divider)]">
-                            {frame.type}
-                          </span>
-                          <span className="font-mono text-[10px] text-[var(--text-tertiary)]">
-                            {frame.id}
-                          </span>
-                        </div>
-                        <div className="font-mono text-[11px] text-[var(--text-tertiary)]">
-                          {Object.entries(frame.slots)
-                            .slice(0, 3)
-                            .map(([key, value]) => (
-                              <span key={key} className="mr-2">
-                                <span style={{ color: '#7aa2f7' }}>{key}</span>
-                                <span style={{ color: '#89ddff' }}>: </span>
-                                <span style={{ color: '#9ece6a' }}>
-                                  {typeof value === 'string'
-                                    ? `"${value.length > 40 ? `${value.slice(0, 40)}...` : value}"`
-                                    : JSON.stringify(value)}
-                                </span>
-                              </span>
-                            ))}
-                          {Object.keys(frame.slots).length > 3 && (
-                            <span className="text-[var(--text-tertiary)]">
-                              +{Object.keys(frame.slots).length - 3} more
-                            </span>
-                          )}
-                        </div>
+                        <span className="font-mono text-[11px] text-[var(--text-secondary)]">
+                          {path}
+                        </span>
                       </div>
                     </div>
                   ))}

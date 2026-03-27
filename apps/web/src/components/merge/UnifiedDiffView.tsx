@@ -21,11 +21,10 @@ import { useTerminology } from '@/hooks/useTerminology';
 import type { ApiCommit, TurnContextData } from '@/lib/api';
 import { fetchTurnContextCached, getApiCommit } from '@/lib/api';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
-import type { MergeResult, MergeCandidate, MergeSimilarPair, Sentence } from '@/types/merge';
+import type { Merge2WayResult, MergeCandidate, MergeSimilarPair, Sentence } from '@/types/merge';
 import { MergeConflictView } from './MergeConflictView';
 import { MergeDiffLine } from './MergeDiffLine';
 import { MergeDiffSection } from './MergeDiffSection';
-import type { Frame } from '@/lib/treeCompat';
 
 // ============================================================================
 // Types
@@ -61,7 +60,7 @@ interface UnifiedLine {
  * Used for positional view mode
  */
 function buildPositionalLines(
-  prepared: MergeResult,
+  prepared: Merge2WayResult,
   sourceSentences?: Sentence[]
 ): UnifiedLine[] {
   if (!sourceSentences || sourceSentences.length === 0) {
@@ -228,7 +227,7 @@ function ExpandedRowHeader({ count, onCollapse }: ExpandedRowProps) {
 // ============================================================================
 
 interface UnifiedDiffViewProps {
-  prepared: MergeResult;
+  prepared: Merge2WayResult;
   onResolvePair: (index: number, pick: 'source' | 'target') => void;
   onToggleKeep: (side: 'source' | 'target', index: number) => void;
   sourceBranch?: string;
@@ -294,29 +293,13 @@ export function UnifiedDiffView({
   const sourceSentences = useMemo(() => {
     if (!sourceCommit?.content?.trees) return undefined;
     const content = sourceCommit.content as import('@t3x-dev/core').SemanticContent;
-    return content.trees.map((frame) => {
-      const id = frame.id.startsWith('s_') ? frame.id : `s_${frame.id.replace('f_', '')}`;
-      const text = `[${frame.type}] ${Object.entries(frame.slots)
+    return content.trees.map((node, idx) => {
+      const id = `s_${node.key}_${idx}`;
+      const text = `[${node.key}] ${Object.entries(node.slots)
         .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : String(v)}`)
         .join('; ')}`;
-      const confidence = frame.confidence ?? 1.0;
-      let source: Sentence['source'] | undefined;
-      if (frame.slot_sources) {
-        const firstSource = Object.values(frame.slot_sources)[0];
-        const turnHash = firstSource?.turn_hash ?? firstSource?.turn;
-        if (
-          firstSource &&
-          turnHash &&
-          firstSource.start_char != null &&
-          firstSource.end_char != null
-        ) {
-          source = {
-            turn_hash: turnHash,
-            start_char: firstSource.start_char,
-            end_char: firstSource.end_char,
-          };
-        }
-      }
+      const confidence = node.confidence ?? 1.0;
+      const source: Sentence['source'] | undefined = undefined;
       return { id, text, confidence, source };
     });
   }, [sourceCommit]);

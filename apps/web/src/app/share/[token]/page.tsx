@@ -75,6 +75,7 @@ interface CommitData {
   content: {
     sentences?: Array<{ id: string; text: string; confidence?: number }>;
     frames?: Array<{ id: string; type: string; slots: Record<string, unknown> }>;
+    trees?: Array<{ key: string; slots: Record<string, unknown>; children: unknown[] }>;
     relations?: Array<{ from: string; to: string; type: string }>;
   };
   project_id?: string;
@@ -523,7 +524,7 @@ function SharedComparisonView({ comparison }: { comparison: ComparisonData }) {
 function SharedCommitView({ commit }: { commit: CommitData }) {
   const shortHash = commit.hash.replace('sha256:', '').slice(0, 12);
   const sentences = commit.content.sentences ?? [];
-  const frames = commit.content.trees ?? [];
+  const trees = commit.content.trees ?? [];
   const relations = commit.content.relations ?? [];
 
   return (
@@ -565,21 +566,18 @@ function SharedCommitView({ commit }: { commit: CommitData }) {
           )}
         </div>
 
-        {/* Frames */}
-        {frames.length > 0 && (
+        {/* Trees */}
+        {trees.length > 0 && (
           <section>
             <h2 className="text-sm font-medium text-[var(--text-secondary)] mb-2">
-              Frames ({frames.length})
+              Trees ({trees.length})
             </h2>
             <div className="space-y-2">
-              {frames.map((frame) => (
-                <div key={frame.id} className={cn('rounded-lg px-4 py-3', glass.cardBase)}>
+              {trees.map((frame: { key: string; slots: Record<string, unknown>; children: unknown[] }, idx: number) => (
+                <div key={frame.key || idx} className={cn('rounded-lg px-4 py-3', glass.cardBase)}>
                   <div className="flex items-center gap-2 mb-1">
                     <span className="font-mono text-xs text-[var(--accent-commit,#f59e0b)]">
-                      {frame.id}
-                    </span>
-                    <span className="rounded bg-[var(--hover-bg)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--text-tertiary)]">
-                      {frame.type}
+                      {frame.key}
                     </span>
                   </div>
                   <div className="text-sm text-[var(--text-primary)]">

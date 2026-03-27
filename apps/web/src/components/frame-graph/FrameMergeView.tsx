@@ -8,7 +8,16 @@ import type {
   SlotValue,
   TreeNode,
 } from '@t3x-dev/core';
-import { prepareMerge } from '@t3x-dev/core';
+import { flattenTrees, prepareMerge } from '@t3x-dev/core';
+
+/** Local FlatNode type matching core's internal FlatNode */
+interface FlatNode {
+  id: string;
+  type: string;
+  slots: Record<string, SlotValue>;
+  source?: string;
+  confidence?: number;
+}
 import {
   AlertTriangle,
   Check,
@@ -77,6 +86,23 @@ function formatSlotValue(v: SlotValue | undefined): string {
   if (typeof v === 'object' && v !== null && 'type' in v)
     return `{${(v as { type: string }).type}}`;
   return String(v);
+}
+
+function lookupNode(flatNodes: FlatNode[], path: string): FlatNode | undefined {
+  return flatNodes.find((n) => n.id === path);
+}
+
+function findNodeByPathLocal(trees: TreeNode[], path: string): TreeNode | null {
+  const segments = path.split('/');
+  const root = trees.find((t) => t.key === segments[0]);
+  if (!root) return null;
+  let current = root;
+  for (let i = 1; i < segments.length; i++) {
+    const child = current.children.find((c) => c.key === segments[i]);
+    if (!child) return null;
+    current = child;
+  }
+  return current;
 }
 
 // ── Sub-components ──
@@ -148,17 +174,24 @@ function AgreedSlotRow({ slotKey, value }: { slotKey: string; value: SlotValue }
 
 function ConflictCard({
   conflict,
+  sourceNode,
+  targetNode,
   resolution,
   onSlotChoose,
   mergeId,
 }: {
   conflict: MergeResult['conflicts'][number];
+  sourceNode: FlatNode | undefined;
+  targetNode: FlatNode | undefined;
   resolution: ConflictResolution;
-  onSlotChoose: (frameId: string, slotKey: string, choice: SlotChoice) => void;
+  onSlotChoose: (path: string, slotKey: string, choice: SlotChoice) => void;
   mergeId?: string;
 }) {
   const [expanded, setExpanded] = useState(true);
-  const { frameId, sourceFrame, targetFrame, slotConflicts } = conflict;
+  const { path, slotConflicts } = conflict;
+
+  const sourceSlots = sourceNode?.slots ?? {};
+  const targetSlots = targetNode?.slots ?? {};
 
   // AI suggestion state
   const [suggestion, setSuggestion] = useState<FrameMergeSuggestion | null>(null);
@@ -167,11 +200,11 @@ function ConflictCard({
 
   // Find agreed-upon slots (present in both, not conflicting)
   const conflictKeys = new Set(slotConflicts.map((c) => c.key));
-  const allKeys = new Set([...Object.keys(sourceFrame.slots), ...Object.keys(targetFrame.slots)]);
+  const allKeys = new Set([...Object.keys(sourceSlots), ...Object.keys(targetSlots)]);
   const agreedSlots: Array<{ key: string; value: SlotValue }> = [];
   for (const key of allKeys) {
     if (!conflictKeys.has(key)) {
-      const value = sourceFrame.slots[key] ?? targetFrame.slots[key];
+      const value = sourceSlots[key] ?? targetSlots[key];
       if (value !== undefined) {
         agreedSlots.push({ key, value });
       }
@@ -188,9 +221,9 @@ function ConflictCard({
     try {
       const result = await getFrameMergeSuggestion(
         mergeId,
-        frameId,
-        { type: sourceFrame.type, slots: sourceFrame.slots },
-        { type: targetFrame.type, slots: targetFrame.slots }
+        path,
+        { type: sourceNode?.type ?? path, slots: sourceSlots },
+        { type: targetNode?.type ?? path, slots: targetSlots }
       );
       setSuggestion(result);
     } catch (err) {
@@ -198,14 +231,10 @@ function ConflictCard({
     } finally {
       setSuggestLoading(false);
     }
-  }, [mergeId, frameId, sourceFrame, targetFrame]);
+  }, [mergeId, path, sourceNode, targetNode, sourceSlots, targetSlots]);
 
   const handleApplySuggestion = useCallback(() => {
     if (!suggestion) return;
-    // Apply each suggested slot value by choosing source or target,
-    // based on which side matches the suggestion.
-    // Slots where the AI suggests a novel merged value are skipped
-    // (the user must choose manually).
     for (const sc of slotConflicts) {
       const suggestedValue = suggestion.slots[sc.key];
       if (suggestedValue === undefined) continue;
@@ -214,13 +243,14 @@ function ConflictCard({
       const matchesTarget = canonicalJson(suggestedValue) === canonicalJson(sc.targetValue);
 
       if (matchesTarget) {
-        onSlotChoose(frameId, sc.key, 'target');
+        onSlotChoose(path, sc.key, 'target');
       } else if (matchesSource) {
-        onSlotChoose(frameId, sc.key, 'source');
+        onSlotChoose(path, sc.key, 'source');
       }
-      // Novel merged value — skip (user must choose manually)
     }
-  }, [suggestion, slotConflicts, frameId, onSlotChoose]);
+  }, [suggestion, slotConflicts, path, onSlotChoose]);
+
+  const displayType = sourceNode?.type ?? path.split('/').pop() ?? path;
 
   return (
     <div
@@ -241,8 +271,8 @@ function ConflictCard({
         )}
       >
         {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-        <span className="font-mono text-red-700 dark:text-red-400">{frameId}</span>
-        <span className="text-zinc-500 dark:text-zinc-400">{toTitleCase(sourceFrame.type)}</span>
+        <span className="font-mono text-red-700 dark:text-red-400">{path}</span>
+        <span className="text-zinc-500 dark:text-zinc-400">{toTitleCase(displayType)}</span>
         <span className="ml-auto text-xs text-zinc-500 dark:text-zinc-400">
           {resolvedCount}/{slotConflicts.length} resolved
         </span>
@@ -265,7 +295,7 @@ function ConflictCard({
               key={sc.key}
               conflict={sc}
               choice={resolution.slotChoices[sc.key]}
-              onChoose={(key, choice) => onSlotChoose(frameId, key, choice)}
+              onChoose={(key, choice) => onSlotChoose(path, key, choice)}
             />
           ))}
 
@@ -294,7 +324,6 @@ function ConflictCard({
                   <div className="font-medium text-purple-700 dark:text-purple-300 flex items-center gap-1">
                     <Sparkles size={10} /> AI Suggestion
                   </div>
-                  {/* Show suggested slot values (only for conflicting slots) */}
                   <div className="space-y-0.5">
                     {slotConflicts.map((sc) => {
                       const value = suggestion.slots[sc.key];
@@ -353,21 +382,23 @@ function ConflictCard({
 function SideOnlySection({
   title,
   icon,
-  frames,
+  paths,
+  flatNodes,
   included,
   onToggle,
   colorClass,
 }: {
   title: string;
   icon: React.ReactNode;
-  frames: TreeNode[];
+  paths: string[];
+  flatNodes: FlatNode[];
   included: Set<string>;
-  onToggle: (id: string) => void;
+  onToggle: (path: string) => void;
   colorClass: string;
 }) {
-  const [expanded, setExpanded] = useState(frames.length <= 5);
+  const [expanded, setExpanded] = useState(paths.length <= 5);
 
-  if (frames.length === 0) return null;
+  if (paths.length === 0) return null;
 
   return (
     <div className="space-y-1.5">
@@ -380,32 +411,39 @@ function SideOnlySection({
         {icon}
         <span>{title}</span>
         <Badge variant="secondary" className="ml-1 text-[10px]">
-          {frames.length}
+          {paths.length}
         </Badge>
       </button>
 
       {expanded && (
         <div className="space-y-1 pl-6">
-          {frames.map((f) => (
-            <button
-              type="button"
-              key={f.id}
-              onClick={() => onToggle(f.id)}
-              className={cn(
-                'flex items-center gap-2 rounded border px-2 py-1.5 text-xs cursor-pointer transition-colors w-full text-left',
-                included.has(f.id)
-                  ? `${colorClass} border-current/20`
-                  : 'border-zinc-200 dark:border-zinc-700 opacity-50'
-              )}
-            >
-              <Checkbox checked={included.has(f.id)} tabIndex={-1} />
-              <span className="font-mono text-zinc-600 dark:text-zinc-300">{f.id}</span>
-              <span className="text-zinc-500 dark:text-zinc-400">{toTitleCase(f.type)}</span>
-              <span className="ml-auto text-zinc-400">
-                {Object.keys(f.slots).length} slot{Object.keys(f.slots).length !== 1 ? 's' : ''}
-              </span>
-            </button>
-          ))}
+          {paths.map((path) => {
+            const node = lookupNode(flatNodes, path);
+            return (
+              <button
+                type="button"
+                key={path}
+                onClick={() => onToggle(path)}
+                className={cn(
+                  'flex items-center gap-2 rounded border px-2 py-1.5 text-xs cursor-pointer transition-colors w-full text-left',
+                  included.has(path)
+                    ? `${colorClass} border-current/20`
+                    : 'border-zinc-200 dark:border-zinc-700 opacity-50'
+                )}
+              >
+                <Checkbox checked={included.has(path)} tabIndex={-1} />
+                <span className="font-mono text-zinc-600 dark:text-zinc-300">{path}</span>
+                {node && (
+                  <>
+                    <span className="text-zinc-500 dark:text-zinc-400">{toTitleCase(node.type)}</span>
+                    <span className="ml-auto text-zinc-400">
+                      {Object.keys(node.slots).length} slot{Object.keys(node.slots).length !== 1 ? 's' : ''}
+                    </span>
+                  </>
+                )}
+              </button>
+            );
+          })}
         </div>
       )}
     </div>
@@ -466,23 +504,27 @@ export function FrameMergeView({
     [base, source, target]
   );
 
+  // Flatten source/target for node lookup
+  const sourceFlatNodes = useMemo(() => flattenTrees(source.trees), [source]);
+  const targetFlatNodes = useMemo(() => flattenTrees(target.trees), [target]);
+
   // ── State: conflict resolutions ──
   const [conflictResolutions, setConflictResolutions] = useState<
     Record<string, ConflictResolution>
   >(() => {
     const init: Record<string, ConflictResolution> = {};
     for (const c of mergeResult.conflicts) {
-      init[c.frameId] = { slotChoices: {} };
+      init[c.path] = { slotChoices: {} };
     }
     return init;
   });
 
-  // ── State: side-only frame inclusion ──
+  // ── State: side-only path inclusion ──
   const [includedSource, setIncludedSource] = useState<Set<string>>(
-    () => new Set(mergeResult.onlyInSource.map((f) => f.id))
+    () => new Set(mergeResult.onlyInSource)
   );
   const [includedTarget, setIncludedTarget] = useState<Set<string>>(
-    () => new Set(mergeResult.onlyInTarget.map((f) => f.id))
+    () => new Set(mergeResult.onlyInTarget)
   );
 
   // ── State: side-only relation inclusion ──
@@ -496,30 +538,30 @@ export function FrameMergeView({
 
   // ── Handlers ──
 
-  const handleSlotChoose = useCallback((frameId: string, slotKey: string, choice: SlotChoice) => {
+  const handleSlotChoose = useCallback((path: string, slotKey: string, choice: SlotChoice) => {
     setConflictResolutions((prev) => ({
       ...prev,
-      [frameId]: {
-        ...prev[frameId],
-        slotChoices: { ...prev[frameId].slotChoices, [slotKey]: choice },
+      [path]: {
+        ...prev[path],
+        slotChoices: { ...prev[path].slotChoices, [slotKey]: choice },
       },
     }));
   }, []);
 
-  const toggleSourceFrame = useCallback((id: string) => {
+  const toggleSourcePath = useCallback((path: string) => {
     setIncludedSource((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
       return next;
     });
   }, []);
 
-  const toggleTargetFrame = useCallback((id: string) => {
+  const toggleTargetPath = useCallback((path: string) => {
     setIncludedTarget((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
       return next;
     });
   }, []);
@@ -546,7 +588,7 @@ export function FrameMergeView({
 
   const allConflictsResolved = useMemo(() => {
     return mergeResult.conflicts.every((c) => {
-      const res = conflictResolutions[c.frameId];
+      const res = conflictResolutions[c.path];
       return c.slotConflicts.every((sc) => res?.slotChoices[sc.key]);
     });
   }, [mergeResult.conflicts, conflictResolutions]);
@@ -554,18 +596,36 @@ export function FrameMergeView({
   // ── Apply merge ──
 
   const handleApply = useCallback(() => {
-    // 1. Start with auto-kept frames
-    const frames: TreeNode[] = [...mergeResult.autoKept];
+    // 1. Start with auto-kept nodes (from source trees since they're identical)
+    const trees: TreeNode[] = [];
 
-    // 2. Build resolved conflict frames
+    // Helper: find tree node by path from source or target
+    const findTreeNode = (path: string): TreeNode | null => {
+      return findNodeByPathLocal(source.trees, path) ?? findNodeByPathLocal(target.trees, path);
+    };
+
+    // Auto-kept: take from source (they're the same)
+    for (const path of mergeResult.autoKept) {
+      const node = findTreeNode(path);
+      if (node) trees.push(node);
+    }
+
+    // 2. Build resolved conflict nodes
     for (const c of mergeResult.conflicts) {
-      const res = conflictResolutions[c.frameId];
-      const mergedSlots: Record<string, SlotValue> = { ...c.sourceFrame.slots };
+      const res = conflictResolutions[c.path];
+      const sourceNode = lookupNode(sourceFlatNodes, c.path);
+      const targetNode = lookupNode(targetFlatNodes, c.path);
+
+      if (!sourceNode && !targetNode) continue;
+
+      const mergedSlots: Record<string, SlotValue> = { ...(sourceNode?.slots ?? {}) };
 
       // Apply non-conflicting slots from both sides
-      for (const key of Object.keys(c.targetFrame.slots)) {
-        if (!(key in mergedSlots)) {
-          mergedSlots[key] = c.targetFrame.slots[key];
+      if (targetNode) {
+        for (const key of Object.keys(targetNode.slots)) {
+          if (!(key in mergedSlots)) {
+            mergedSlots[key] = targetNode.slots[key];
+          }
         }
       }
 
@@ -583,18 +643,25 @@ export function FrameMergeView({
         }
       }
 
-      frames.push({
-        ...c.sourceFrame,
+      trees.push({
+        key: c.path.split('/').pop() ?? c.path,
         slots: mergedSlots,
+        children: [],
       });
     }
 
-    // 3. Add included side-only frames
-    for (const f of mergeResult.onlyInSource) {
-      if (includedSource.has(f.id)) frames.push(f);
+    // 3. Add included side-only nodes
+    for (const path of mergeResult.onlyInSource) {
+      if (includedSource.has(path)) {
+        const node = findTreeNode(path);
+        if (node) trees.push(node);
+      }
     }
-    for (const f of mergeResult.onlyInTarget) {
-      if (includedTarget.has(f.id)) frames.push(f);
+    for (const path of mergeResult.onlyInTarget) {
+      if (includedTarget.has(path)) {
+        const node = findTreeNode(path);
+        if (node) trees.push(node);
+      }
     }
 
     // 4. Build relations
@@ -606,7 +673,7 @@ export function FrameMergeView({
       if (includedTargetRels.has(relKey(r))) relations.push(r);
     }
 
-    onResolved({ frames, relations });
+    onResolved({ trees, relations });
   }, [
     mergeResult,
     conflictResolutions,
@@ -614,6 +681,10 @@ export function FrameMergeView({
     includedTarget,
     includedSourceRels,
     includedTargetRels,
+    source,
+    target,
+    sourceFlatNodes,
+    targetFlatNodes,
     onResolved,
   ]);
 
@@ -625,7 +696,7 @@ export function FrameMergeView({
   const resolvedSlots = mergeResult.conflicts.reduce(
     (sum, c) =>
       sum +
-      c.slotConflicts.filter((sc) => conflictResolutions[c.frameId]?.slotChoices[sc.key]).length,
+      c.slotConflicts.filter((sc) => conflictResolutions[c.path]?.slotChoices[sc.key]).length,
     0
   );
 
@@ -659,9 +730,11 @@ export function FrameMergeView({
           </h4>
           {mergeResult.conflicts.map((c) => (
             <ConflictCard
-              key={c.frameId}
+              key={c.path}
               conflict={c}
-              resolution={conflictResolutions[c.frameId]}
+              sourceNode={lookupNode(sourceFlatNodes, c.path)}
+              targetNode={lookupNode(targetFlatNodes, c.path)}
+              resolution={conflictResolutions[c.path]}
               onSlotChoose={handleSlotChoose}
               mergeId={mergeId}
             />
@@ -673,9 +746,10 @@ export function FrameMergeView({
       <SideOnlySection
         title="Only in Source (Branch A)"
         icon={<Plus className="h-4 w-4 text-blue-500" />}
-        frames={mergeResult.onlyInSource}
+        paths={mergeResult.onlyInSource}
+        flatNodes={sourceFlatNodes}
         included={includedSource}
-        onToggle={toggleSourceFrame}
+        onToggle={toggleSourcePath}
         colorClass="bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300"
       />
 
@@ -683,9 +757,10 @@ export function FrameMergeView({
       <SideOnlySection
         title="Only in Target (Branch B)"
         icon={<Plus className="h-4 w-4 text-emerald-500" />}
-        frames={mergeResult.onlyInTarget}
+        paths={mergeResult.onlyInTarget}
+        flatNodes={targetFlatNodes}
         included={includedTarget}
-        onToggle={toggleTargetFrame}
+        onToggle={toggleTargetPath}
         colorClass="bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300"
       />
 
