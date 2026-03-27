@@ -1,4 +1,3 @@
-// @ts-nocheck — tree-primary migration: needs rework
 'use client';
 
 import type { TreeNode, SlotValue } from '@t3x-dev/core';
@@ -222,7 +221,9 @@ export function FrameYAMLView() {
     // Iterate oldest→newest so newer entries overwrite
     for (let age = deltaChangeHistory.length - 1; age >= 0; age--) {
       for (const c of deltaChangeHistory[age]) {
-        const id = c.action === 'add' ? c.frame.id : c.target;
+        const id = c.action === 'add'
+          ? (c.parent_path ? `${c.parent_path}.${c.node.key}` : c.node.key)
+          : c.target_path;
         map.set(id, { action: c.action, age });
       }
     }
@@ -237,7 +238,9 @@ export function FrameYAMLView() {
     for (let i = deltaLog.length - 1; i >= 0; i--) {
       const turnsAgo = total - 1 - i;
       for (const c of deltaLog[i].delta.changes) {
-        const fid = c.action === 'add' ? c.frame.id : c.target;
+        const fid = c.action === 'add'
+          ? (c.parent_path ? `${c.parent_path}.${c.node.key}` : c.node.key)
+          : c.target_path;
         if (!(fid in turnsAgoMap)) turnsAgoMap[fid] = turnsAgo;
         touchCountMap[fid] = (touchCountMap[fid] ?? 0) + 1;
       }
@@ -256,8 +259,8 @@ export function FrameYAMLView() {
     };
   }, [deltaLog, draft.relations, confirmedFrameIds, llmHighlightedFrameIds]);
 
-  // Apply client-side nesting from relations, then sort by relevance
-  const nestedFrames = useMemo(() => nestFrames(draft), [draft]);
+  // Convert to compat frames (with .id, .type) for display and relevance scoring
+  const nestedFrames = useMemo(() => contentToFrames(draft), [draft]);
 
   const sortedFrames = useMemo(() => {
     return [...nestedFrames].sort(
@@ -275,7 +278,7 @@ export function FrameYAMLView() {
       const change = changeEntry?.action ?? null;
       const score = relevanceScore(frame, relevanceCtx).score;
       const isAuto = score >= RELEVANCE_THRESHOLD;
-      const isFrameCollapsed = (frame as TreeNode & { status?: string }).status === 'collapsed';
+      const isFrameCollapsed = (frame as Frame & { status?: string }).status === 'collapsed';
       const isExpanded = expandedCollapsed[frame.id];
 
       if (isFrameCollapsed && !isExpanded) {
@@ -411,16 +414,18 @@ export function FrameYAMLView() {
               : !!confirmedSlotKeys[line.frameId]?.[line.slotKey!];
 
             // Check if this row is highlighted by reverse hover (chat → YAML)
-            const frame = draft.trees.find((f) => f.id === line.frameId);
+            const frame = nestedFrames.find((f) => f.id === line.frameId);
             const isReverseHighlighted = (() => {
               if (!hoveredTurnHash || !frame) return false;
 
               // Slot-level precision: when charOffset is available, match specific slot
               if (hoveredCharOffset != null && frame.slot_sources) {
-                for (const [slotKey, ref] of Object.entries(frame.slot_sources)) {
+                for (const [slotKey, ref] of Object.entries(frame.slot_sources as Record<string, { turn_hash?: string; start_char?: number; end_char?: number }>)) {
                   const hashMatch = ref.turn_hash && hoveredTurnHash === ref.turn_hash;
                   if (
                     hashMatch &&
+                    ref.start_char != null &&
+                    ref.end_char != null &&
                     hoveredCharOffset >= ref.start_char &&
                     hoveredCharOffset < ref.end_char
                   ) {

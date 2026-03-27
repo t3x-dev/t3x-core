@@ -1,31 +1,27 @@
-// @ts-nocheck — tree-primary migration: needs rework
 'use client';
 
-import type { RelationType } from '@t3x-dev/core';
 import { BaseEdge, EdgeLabelRenderer, type EdgeProps, getSmoothStepPath } from '@xyflow/react';
 import { useState } from 'react';
 import { RELATION_STYLES, type RelationEdgeData } from './frameGraphUtils';
 
 // ── Stroke width per relation type ──
 
-const STROKE_WIDTHS: Record<RelationType, number> = {
+const STROKE_WIDTHS: Record<string, number> = {
   causes: 2,
   conditions: 2,
   contrasts: 2,
-  elaborates: 1,
   follows: 3,
   depends: 2,
 };
 
 /**
- * RelationEdge — Custom XYFlow edge with 6 distinct visual styles
+ * RelationEdge — Custom XYFlow edge with distinct visual styles
  * for inter-sentence frame relations.
  *
  * Visual encoding:
  * - causes:     orange, solid 2px, filled arrow
  * - conditions: yellow, dashed (8 4) 2px, filled arrow
  * - contrasts:  red, solid 2px, filled arrow
- * - elaborates: blue, thin solid 1px, filled arrow
  * - follows:    gray, thick solid 3px, filled arrow
  * - depends:    purple, dotted (4 4) 2px, filled arrow
  */
@@ -44,11 +40,11 @@ export function RelationEdge({
   const [isHovered, setIsHovered] = useState(false);
 
   const edgeData = data as RelationEdgeData | undefined;
-  const relationType = edgeData?.relationType ?? 'elaborates';
+  const relationType = edgeData?.relationType ?? 'follows';
   const isNew = edgeData?.isNew ?? false;
   const confidence = edgeData?.confidence;
-  const relStyle = RELATION_STYLES[relationType];
-  const strokeWidth = STROKE_WIDTHS[relationType];
+  const relStyle = RELATION_STYLES[relationType] ?? RELATION_STYLES.follows;
+  const strokeWidth = STROKE_WIDTHS[relationType] ?? 2;
 
   // Confidence-based visual encoding
   const confidenceOpacity =
@@ -155,27 +151,20 @@ export function RelationEdge({
 
 // ── Marker helpers ──
 
-function markerIdFor(relationType: RelationType): string {
+function markerIdFor(relationType: string): string {
   return `relation-marker-${relationType}`;
 }
 
 /**
  * Generates marker definitions for all relation types.
  * Render the returned SVG element once inside the ReactFlow wrapper.
- *
- * Usage:
- * ```tsx
- * <ReactFlow ...>
- *   <RelationEdgeMarkerDefs />
- * </ReactFlow>
- * ```
  */
 export function RelationEdgeMarkerDefs() {
   return (
     <svg style={{ position: 'absolute', width: 0, height: 0 }} aria-hidden="true">
       <title>Relation edge markers</title>
       <defs>
-        {(Object.keys(RELATION_STYLES) as RelationType[]).map((type) => {
+        {Object.keys(RELATION_STYLES).map((type) => {
           const style = RELATION_STYLES[type];
           return (
             <marker
@@ -199,7 +188,7 @@ export function RelationEdgeMarkerDefs() {
                 /* Hollow triangle for conditions */
                 <path d="M0 0 L10 5 L0 10 Z" fill="none" stroke={style.color} strokeWidth="1.5" />
               ) : (
-                /* Filled triangle (causes, elaborates, follows) */
+                /* Filled triangle (causes, follows) */
                 <path d="M0 0 L10 5 L0 10 Z" fill={style.color} />
               )}
             </marker>

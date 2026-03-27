@@ -1,12 +1,11 @@
-// @ts-nocheck — tree-primary migration: needs rework
 'use client';
 
-import type { SemanticContent, WordDiffFn } from '@t3x-dev/core';
-import { diffCommits } from '@t3x-dev/core';
+import type { SemanticContent, TreeNode, WordDiffFn } from '@t3x-dev/core';
+import { diffCommits, flattenTrees } from '@t3x-dev/core';
 import { useEffect, useMemo } from 'react';
 import { wordDiff } from '@/lib/diffUtils';
 import { FrameGraphView } from './FrameGraphView';
-import type { Frame } from '@/lib/treeCompat';
+import { treesToFrames } from '@/lib/treeCompat';
 
 // ── Props ──
 
@@ -46,14 +45,6 @@ export function FrameDiffOverlay({ source, target, onStats, className }: FrameDi
       relationsRemoved: diff.relationsRemoved.length,
     };
 
-    // Build combined SemanticContent containing all frames from both sides
-    const allFrames = [
-      ...diff.identical,
-      ...diff.modified.map((m) => m.targetFrame),
-      ...diff.onlyInTarget,
-      ...diff.onlyInSource,
-    ];
-
     // Combine relations: all unique relations from both sides
     const relKeySet = new Set<string>();
     const allRelations = [...source.relations, ...target.relations].filter((r) => {
@@ -63,29 +54,33 @@ export function FrameDiffOverlay({ source, target, onStats, className }: FrameDi
       return true;
     });
 
+    // Merge trees from both sides for the combined content
     const combinedContent: SemanticContent = {
-      frames: allFrames,
+      trees: [...target.trees, ...source.trees.filter((t) => {
+        // Include source trees that are only in source (removed)
+        const sourceFrames = treesToFrames([t]);
+        return sourceFrames.some((f) => diff.onlyInSource.includes(f.id));
+      })],
       relations: allRelations,
     };
 
-    // Build deltaState map: frameId → state
+    // Build deltaState map: path → state
     const deltaState: Record<string, 'added' | 'updated' | 'removed'> = {};
-    // identical frames get no state entry (rendered as gray/default)
     for (const m of diff.modified) {
-      deltaState[m.frameId] = 'updated';
+      deltaState[m.path] = 'updated';
     }
-    for (const f of diff.onlyInTarget) {
-      deltaState[f.id] = 'added';
+    for (const path of diff.onlyInTarget) {
+      deltaState[path] = 'added';
     }
-    for (const f of diff.onlyInSource) {
-      deltaState[f.id] = 'removed';
+    for (const path of diff.onlyInSource) {
+      deltaState[path] = 'removed';
     }
 
-    // Build updatedSlots map: frameId → list of changed slot keys
+    // Build updatedSlots map: path → list of changed slot keys
     const updatedSlots: Record<string, string[]> = {};
     for (const m of diff.modified) {
       if (m.slotDiffs.length > 0) {
-        updatedSlots[m.frameId] = m.slotDiffs.map((sd) => sd.key);
+        updatedSlots[m.path] = m.slotDiffs.map((sd) => sd.key);
       }
     }
 

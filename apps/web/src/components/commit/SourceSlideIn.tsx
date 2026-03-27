@@ -1,4 +1,3 @@
-// @ts-nocheck — tree-primary migration: needs rework
 'use client';
 
 /**
@@ -61,12 +60,14 @@ function resolveChangeStatus(
  */
 function getSlotSource(
   slotKey: string | null,
-  activeTab: 'previous' | 'current',
-  frame: import('@t3x-dev/core').Frame | undefined,
-  previousFrame: import('@t3x-dev/core').Frame | undefined
-): SlotSourceRef | undefined {
+  _activeTab: 'previous' | 'current',
+  _frame: unknown,
+  _previousFrame: unknown
+): { turn_hash?: string; turn?: string; start_char?: number; end_char?: number } | undefined {
   if (!slotKey) return undefined;
-  const targetFrame = activeTab === 'previous' ? previousFrame : frame;
+  const targetFrame = (_activeTab === 'previous' ? _previousFrame : _frame) as
+    | { slot_sources?: Record<string, { turn_hash?: string; turn?: string; start_char?: number; end_char?: number }> }
+    | undefined;
   return targetFrame?.slot_sources?.[slotKey];
 }
 
@@ -168,7 +169,7 @@ export function SourceSlideIn({ projectId }: SourceSlideInProps) {
   const panelRef = useRef<HTMLDivElement>(null);
 
   // ── Derived: active enriched frame ──
-  const enrichedFrame = enrichedFrames.find((ef) => ef.frame.id === activeFrameId);
+  const enrichedFrame = enrichedFrames.find((ef) => ef.path === activeFrameId);
   const activeFrame = enrichedFrame?.frame;
   const previousFrame = enrichedFrame?.previousFrame;
   const diffStatus = enrichedFrame?.diffStatus ?? 'identical';
@@ -280,7 +281,7 @@ export function SourceSlideIn({ projectId }: SourceSlideInProps) {
       created_at: turn.created_at,
       is_target: isTarget,
     };
-    if (isTarget && slotSource) {
+    if (isTarget && slotSource && slotSource.start_char != null && slotSource.end_char != null) {
       data.highlight = { start: slotSource.start_char, end: slotSource.end_char };
     }
     return data;

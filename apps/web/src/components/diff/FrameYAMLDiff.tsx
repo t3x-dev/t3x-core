@@ -1,4 +1,3 @@
-// @ts-nocheck — tree-primary migration: needs rework
 'use client';
 
 /**
@@ -15,7 +14,8 @@
  * - Relation changes: section at bottom
  */
 
-import type { TreeNode, TreeDiff, Relation, SlotDiff, SlotValue } from '@t3x-dev/core';
+import type { TreeNode, TreeDiff, Relation, SemanticContent, SlotDiff, SlotValue } from '@t3x-dev/core';
+import { type Frame, treesToFrames } from '@/lib/treeCompat';
 import { ChevronDown, ChevronRight, Equal, Minus, Pencil, Plus } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -26,13 +26,15 @@ import type { Frame } from '@/lib/treeCompat';
 
 export interface FrameYAMLDiffProps {
   diff: TreeDiff;
+  sourceContent?: SemanticContent;
+  targetContent?: SemanticContent;
   className?: string;
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-/** Collapsible section for identical frames */
-function IdenticalSection({ frames }: { frames: TreeNode[] }) {
+/** Collapsible section for identical paths */
+function IdenticalSection({ frames }: { frames: string[] }) {
   const [expanded, setExpanded] = useState(false);
 
   if (frames.length === 0) return null;
@@ -177,7 +179,9 @@ function SlotDiffLine({ slotDiff }: { slotDiff: SlotDiff }) {
 
 /** A modified frame: header + slot diffs */
 function ModifiedFrameBlock({ entry }: { entry: TreeDiff['modified'][number] }) {
-  const { sourceFrame, targetFrame, slotDiffs } = entry;
+  const { path, slotDiffs } = entry;
+  const pathParts = path.split('.');
+  const displayType = pathParts[pathParts.length - 1];
 
   return (
     <div
@@ -191,10 +195,10 @@ function ModifiedFrameBlock({ entry }: { entry: TreeDiff['modified'][number] }) 
           className="m-0 text-[11px] leading-[18px] font-semibold"
           style={{ color: 'var(--text-primary)' }}
         >
-          {sourceFrame.type}:
+          {displayType}:
         </pre>
         <span className="text-[9px]" style={{ color: 'var(--text-tertiary)' }}>
-          ({sourceFrame.id})
+          ({path})
         </span>
       </div>
 
@@ -203,17 +207,16 @@ function ModifiedFrameBlock({ entry }: { entry: TreeDiff['modified'][number] }) 
         <SlotDiffLine key={sd.key} slotDiff={sd} />
       ))}
 
-      {/* Unchanged slots (dimmed) */}
-      {Object.entries(sourceFrame.slots)
-        .filter(([key]) => !slotDiffs.some((sd) => sd.key === key))
-        .map(([key, value]) => (
-          <div key={key} className="px-2 py-0.5 opacity-40">
+      {/* Slot diffs only (no unchanged slots without source content) */}
+      {slotDiffs.filter(sd => sd.type !== 'removed' && sd.newValue != null)
+        .map((sd) => (
+          <div key={sd.key} className="px-2 py-0.5 opacity-40">
             <pre
               className="m-0 text-[11px] leading-[18px]"
               style={{ color: 'var(--text-tertiary)' }}
             >
               {'  '}
-              {key}: {formatSlotValue(value)}
+              {sd.key}: {formatSlotValue(sd.newValue as SlotValue)}
             </pre>
           </div>
         ))}
@@ -222,7 +225,7 @@ function ModifiedFrameBlock({ entry }: { entry: TreeDiff['modified'][number] }) 
 }
 
 /** A frame only in source (removed) */
-function RemovedFrameBlock({ frame }: { frame: TreeNode }) {
+function RemovedFrameBlock({ frame }: { frame: Frame }) {
   return (
     <div
       className="mb-2 rounded border-l-2"
@@ -261,7 +264,7 @@ function RemovedFrameBlock({ frame }: { frame: TreeNode }) {
 }
 
 /** A frame only in target (added) */
-function AddedFrameBlock({ frame }: { frame: TreeNode }) {
+function AddedFrameBlock({ frame }: { frame: Frame }) {
   return (
     <div
       className="mb-2 rounded border-l-2"
@@ -378,7 +381,7 @@ function DiffStatsBadge({ diff }: { diff: TreeDiff }) {
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
-export function FrameYAMLDiff({ diff, className }: FrameYAMLDiffProps) {
+export function FrameYAMLDiff({ diff, sourceContent, targetContent, className }: FrameYAMLDiffProps) {
   const isEmpty =
     diff.identical.length === 0 &&
     diff.modified.length === 0 &&
@@ -416,20 +419,24 @@ export function FrameYAMLDiff({ diff, className }: FrameYAMLDiffProps) {
       <div className="px-1 pb-2" style={{ borderTop: '1px solid var(--stroke-divider)' }}>
         {/* Modified frames */}
         {diff.modified.map((entry) => (
-          <ModifiedFrameBlock key={entry.frameId} entry={entry} />
+          <ModifiedFrameBlock key={entry.path} entry={entry} />
         ))}
 
-        {/* Added frames (only in target) */}
-        {diff.onlyInTarget.map((frame) => (
-          <AddedFrameBlock key={frame.id} frame={frame} />
-        ))}
+        {/* Added paths (only in target) */}
+        {diff.onlyInTarget.map((path) => {
+          const frames = targetContent ? treesToFrames(targetContent.trees) : [];
+          const frame = frames.find(f => f.id === path);
+          return frame ? <AddedFrameBlock key={path} frame={frame} /> : null;
+        })}
 
-        {/* Removed frames (only in source) */}
-        {diff.onlyInSource.map((frame) => (
-          <RemovedFrameBlock key={frame.id} frame={frame} />
-        ))}
+        {/* Removed paths (only in source) */}
+        {diff.onlyInSource.map((path) => {
+          const frames = sourceContent ? treesToFrames(sourceContent.trees) : [];
+          const frame = frames.find(f => f.id === path);
+          return frame ? <RemovedFrameBlock key={path} frame={frame} /> : null;
+        })}
 
-        {/* Identical frames (collapsible, at bottom) */}
+        {/* Identical paths (collapsible, at bottom) */}
         <IdenticalSection frames={diff.identical} />
 
         {/* Relation changes */}

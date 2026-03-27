@@ -1,4 +1,3 @@
-// @ts-nocheck — tree-primary migration: needs rework
 'use client';
 
 import { Pencil, RefreshCw, User } from 'lucide-react';
@@ -138,10 +137,13 @@ export function ChatMessage({
     [turnHash, setHoveredTurn]
   );
 
+  // Convert to compat frames for id-based lookup and source refs
+  const frames = useMemo(() => contentToFrames(draft), [draft]);
+
   // Compute highlight ranges for this message based on hovered frame/slot
   const highlightRanges = useMemo(() => {
     if (!hoveredFrameId) return [];
-    const frame = draft.trees.find((f) => f.id === hoveredFrameId);
+    const frame = frames.find((f) => f.id === hoveredFrameId);
     if (!frame) return [];
 
     // If slot_sources exist, use character-level highlighting per turn_hash
@@ -149,11 +151,11 @@ export function ChatMessage({
       if (hoveredSlotKey && frame.slot_sources[hoveredSlotKey]) {
         // Specific slot hovered — highlight just that span if turn matches
         const ref = frame.slot_sources[hoveredSlotKey];
-        if (turnHash && ref.turn_hash && turnHash === ref.turn_hash) {
+        if (turnHash && ref.turn_hash && turnHash === ref.turn_hash && ref.start_char != null && ref.end_char != null) {
           return [{ start: ref.start_char, end: ref.end_char }];
         }
         // Fallback: match by turn tag (T1, T2, ...)
-        if (turnIndex != null && ref.turn === `T${turnIndex}`) {
+        if (turnIndex != null && ref.turn === `T${turnIndex}` && ref.start_char != null && ref.end_char != null) {
           return [{ start: ref.start_char, end: ref.end_char }];
         }
         return [];
@@ -163,7 +165,7 @@ export function ChatMessage({
       for (const ref of Object.values(frame.slot_sources)) {
         const hashMatch = turnHash && ref.turn_hash && turnHash === ref.turn_hash;
         const tagMatch = turnIndex != null && ref.turn === `T${turnIndex}`;
-        if (hashMatch || tagMatch) {
+        if ((hashMatch || tagMatch) && ref.start_char != null && ref.end_char != null) {
           ranges.push({ start: ref.start_char, end: ref.end_char });
         }
       }
@@ -183,14 +185,14 @@ export function ChatMessage({
 
     // Return empty ranges — caller will check isSourceTurn via isWholeMessageHighlight
     return isSourceTurn ? [] : [];
-  }, [hoveredFrameId, hoveredSlotKey, draft.trees, turnHash, turnIndex]);
+  }, [hoveredFrameId, hoveredSlotKey, frames, turnHash, turnIndex]);
 
   const hasCharHighlights = highlightRanges.length > 0;
   const isWholeMessageHighlight =
     hoveredFrameId &&
     !hasCharHighlights &&
     (() => {
-      const frame = draft.trees.find((f) => f.id === hoveredFrameId);
+      const frame = frames.find((f) => f.id === hoveredFrameId);
       if (!frame) return false;
       // Check if any slot_source points to this turn
       if (frame.slot_sources) {

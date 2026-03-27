@@ -1,4 +1,3 @@
-// @ts-nocheck — tree-primary migration: needs rework
 'use client';
 
 /**
@@ -27,6 +26,13 @@ import type { Frame } from '@/lib/treeCompat';
 // ============================================================================
 // Types
 // ============================================================================
+
+/** Source reference from a commit */
+interface Source {
+  type: string;
+  id: string;
+  title?: string | null;
+}
 
 interface CommitFrameIndexProps {
   projectId: string;
@@ -138,20 +144,20 @@ export function CommitFrameIndex({ projectId, leaves, onLeavesChange }: CommitFr
       {/* Active frames */}
       {enrichedFrames.map((ef) => (
         <button
-          key={ef.frame.id}
+          key={ef.path}
           type="button"
-          onClick={() => handleFrameClick(ef.frame.id)}
+          onClick={() => handleFrameClick(ef.path)}
           className={`group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-all duration-200 ${
-            activeFrameId === ef.frame.id
+            activeFrameId === ef.path
               ? 'bg-[var(--accent-commit)]/8 text-[var(--text-primary)] ring-1 ring-[var(--accent-commit)]/20'
               : 'text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-secondary)]'
           }`}
         >
           <DotIndicator status={ef.diffStatus} />
           <div className="min-w-0 flex-1">
-            <div className="truncate text-[11px] font-medium">{formatFrameType(ef.frame.type)}</div>
+            <div className="truncate text-[11px] font-medium">{formatFrameType(ef.frame.key)}</div>
             <div className="truncate font-mono text-[10px] text-[var(--text-tertiary)]">
-              {ef.frame.id}
+              {ef.path}
             </div>
           </div>
         </button>
@@ -165,15 +171,15 @@ export function CommitFrameIndex({ projectId, leaves, onLeavesChange }: CommitFr
           </div>
           {removedFrames.map((ef) => (
             <div
-              key={ef.frame.id}
+              key={ef.path}
               className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[var(--text-tertiary)] opacity-60"
             >
               <DotIndicator status="removed" />
               <div className="min-w-0 flex-1">
                 <div className="truncate text-[11px] font-medium line-through">
-                  {formatFrameType(ef.frame.type)}
+                  {formatFrameType(ef.frame.key)}
                 </div>
-                <div className="truncate font-mono text-[10px] line-through">{ef.frame.id}</div>
+                <div className="truncate font-mono text-[10px] line-through">{ef.path}</div>
               </div>
             </div>
           ))}

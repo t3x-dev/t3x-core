@@ -1,4 +1,3 @@
-// @ts-nocheck — tree-primary migration: needs rework
 'use client';
 
 /**
@@ -161,7 +160,7 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
 
   // ── Frame IDs for keyboard navigation ───────────
   const allFrameIds = useMemo(() => {
-    return [...enrichedFrames.map((ef) => ef.frame.id), ...removedFrames.map((ef) => ef.frame.id)];
+    return [...enrichedFrames.map((ef) => ef.path), ...removedFrames.map((ef) => ef.path)];
   }, [enrichedFrames, removedFrames]);
 
   // ── Callbacks ─────────────────────────────────────

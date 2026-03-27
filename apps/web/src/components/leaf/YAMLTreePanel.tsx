@@ -56,7 +56,10 @@ export function YAMLTreePanel({
   highlightedConstraintId,
   onHoverFrame,
 }: YAMLTreePanelProps) {
-  const nested = useMemo(() => nestFrames(content), [content]);
+  const nested = useMemo(() => {
+    const { contentToFrames } = require('@/lib/treeCompat') as typeof import('@/lib/treeCompat');
+    return contentToFrames(content);
+  }, [content]);
 
   // Determine which frame is highlighted based on hovered constraint
   const highlightedFrameId = useMemo(() => {

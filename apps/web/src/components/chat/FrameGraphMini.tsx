@@ -1,4 +1,3 @@
-// @ts-nocheck — tree-primary migration: needs rework
 'use client';
 
 import type { Edge, Node } from '@xyflow/react';
@@ -15,6 +14,7 @@ import { Loader2 } from 'lucide-react';
 import { useEffect, useMemo } from 'react';
 import { getLayoutedElements } from '@/lib/elkLayout';
 import { useExtractionPanelStore } from '@/store/extractionPanelStore';
+import { treesToFrames } from '@/lib/treeCompat';
 
 // ── Inline mini node ──
 
@@ -142,9 +142,9 @@ function FrameGraphMiniInner() {
   const changeMap = useMemo(() => {
     const map = new Map<string, 'add' | 'update' | 'remove'>();
     for (const c of deltaChangeHistory[0] ?? []) {
-      if (c.action === 'add') map.set(c.frame.id, 'add');
-      else if (c.action === 'update') map.set(c.target, 'update');
-      else if (c.action === 'remove') map.set(c.target, 'remove');
+      if (c.action === 'add') map.set(c.parent_path ? `${c.parent_path}.${c.node.key}` : c.node.key, 'add');
+      else if (c.action === 'update') map.set(c.target_path, 'update');
+      else if (c.action === 'remove') map.set(c.target_path, 'remove');
     }
     return map;
   }, [deltaChangeHistory]);
@@ -165,7 +165,8 @@ function FrameGraphMiniInner() {
     let fitTimer: ReturnType<typeof setTimeout>;
 
     async function layout() {
-      const rawNodes: Node<MiniFrameNodeData>[] = draft.trees.map((frame) => {
+      const frames = treesToFrames(draft.trees);
+      const rawNodes: Node<MiniFrameNodeData>[] = frames.map((frame) => {
         const slotEntries = Object.entries(frame.slots);
         const summary =
           slotEntries.length > 0
@@ -191,7 +192,7 @@ function FrameGraphMiniInner() {
         };
       });
 
-      const frameIds = new Set(draft.trees.map((f) => f.id));
+      const frameIds = new Set(frames.map((f) => f.id));
       const rawEdges: Edge[] = draft.relations
         .filter((r) => frameIds.has(r.from) && frameIds.has(r.to))
         .map((r) => ({

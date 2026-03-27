@@ -13,6 +13,14 @@ import type { SemanticContent, SlotValue, TreeNode } from '@t3x-dev/core';
  * Maps TreeNode to the old Frame interface shape.
  * id = dot-path, type = key name.
  */
+/** Slot-level source reference with turn hash and character offsets */
+export interface SlotSourceRef {
+  turn_hash?: string;
+  turn?: string;
+  start_char?: number;
+  end_char?: number;
+}
+
 export interface Frame {
   id: string;
   type: string;
@@ -24,7 +32,7 @@ export interface Frame {
   /** Original slot_quotes from TreeNode */
   slot_quotes?: Record<string, string>;
   /** Slot-level source refs (for backward compat) */
-  slot_sources?: Record<string, unknown>;
+  slot_sources?: Record<string, SlotSourceRef>;
   /** Flag for manually edited nodes */
   manual_edited?: boolean;
 }

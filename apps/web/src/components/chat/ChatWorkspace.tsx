@@ -1,4 +1,3 @@
-// @ts-nocheck — tree-primary migration: needs rework
 'use client';
 
 import type { TreeNode } from '@t3x-dev/core';
@@ -178,14 +177,15 @@ export function ChatWorkspace({
             setParentConversationId(parentConvSource.id);
           }
           const store = useExtractionPanelStore.getState();
-          const frames = (parentCommit.content?.trees as TreeNode[]) ?? [];
+          const trees = (parentCommit.content?.trees as TreeNode[]) ?? [];
           const relations = parentCommit.content?.relations ?? [];
-          if (frames.length > 0) {
-            store.setDraft({ frames, relations });
+          if (trees.length > 0) {
+            store.setDraft({ trees, relations });
             // Set parent as lastCommitHash so commit B gets correct parent_hashes
             useExtractionPanelStore.setState({ lastCommitHash: hash });
             // Mark all inherited frames as confirmed
             const confirmed: Record<string, boolean> = {};
+            const frames = treesToFrames(trees);
             for (const f of frames) {
               confirmed[f.id] = true;
             }
@@ -334,7 +334,7 @@ export function ChatWorkspace({
             s2.setTopics(topicsList);
             // Auto-sync topic name with root frame type
             if (result.snapshot && result.snapshot.trees.length > 0 && topicsList.length > 0) {
-              const rootType = result.snapshot.trees[0].type;
+              const rootType = result.snapshot.trees[0].key;
               const currentTopic = topicsList.find((t) => t.id === s2.activeTopicId);
               if (currentTopic && currentTopic.name !== rootType) {
                 updateTopicApi(currentTopic.id, { name: rootType }).catch(() => {});

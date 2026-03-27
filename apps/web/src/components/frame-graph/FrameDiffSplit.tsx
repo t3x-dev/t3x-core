@@ -1,4 +1,3 @@
-// @ts-nocheck — tree-primary migration: needs rework
 'use client';
 
 import type { SemanticContent } from '@t3x-dev/core';
@@ -6,7 +5,6 @@ import { diffCommits } from '@t3x-dev/core';
 import { useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { FrameGraphView } from './FrameGraphView';
-import type { Frame } from '@/lib/treeCompat';
 
 // ── Props ──
 
@@ -31,33 +29,29 @@ export function FrameDiffSplit({ source, target, className }: FrameDiffSplitProp
   const { sourceDelta, sourceSlots, targetDelta, targetSlots } = useMemo(() => {
     const diff = diffCommits(source, target);
 
-    // Source side: frames only in source are "removed" (green = unique to this side),
-    // modified frames are "updated", identical frames have no state.
     const sourceDelta: Record<string, 'added' | 'updated' | 'removed'> = {};
     const sourceSlots: Record<string, string[]> = {};
 
-    for (const f of diff.onlyInSource) {
-      sourceDelta[f.id] = 'removed';
+    for (const path of diff.onlyInSource) {
+      sourceDelta[path] = 'removed';
     }
     for (const m of diff.modified) {
-      sourceDelta[m.frameId] = 'updated';
+      sourceDelta[m.path] = 'updated';
       if (m.slotDiffs.length > 0) {
-        sourceSlots[m.frameId] = m.slotDiffs.map((sd) => sd.key);
+        sourceSlots[m.path] = m.slotDiffs.map((sd) => sd.key);
       }
     }
 
-    // Target side: frames only in target are "added",
-    // modified frames are "updated", identical frames have no state.
     const targetDelta: Record<string, 'added' | 'updated' | 'removed'> = {};
     const targetSlots: Record<string, string[]> = {};
 
-    for (const f of diff.onlyInTarget) {
-      targetDelta[f.id] = 'added';
+    for (const path of diff.onlyInTarget) {
+      targetDelta[path] = 'added';
     }
     for (const m of diff.modified) {
-      targetDelta[m.frameId] = 'updated';
+      targetDelta[m.path] = 'updated';
       if (m.slotDiffs.length > 0) {
-        targetSlots[m.frameId] = m.slotDiffs.map((sd) => sd.key);
+        targetSlots[m.path] = m.slotDiffs.map((sd) => sd.key);
       }
     }
 

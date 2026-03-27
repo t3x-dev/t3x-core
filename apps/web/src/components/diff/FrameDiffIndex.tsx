@@ -1,4 +1,3 @@
-// @ts-nocheck — tree-primary migration: needs rework
 'use client';
 
 /**
@@ -16,7 +15,6 @@
 import type { TreeDiff } from '@t3x-dev/core';
 import { useCallback } from 'react';
 import { DotIndicator } from '@/components/commit/CommitDetailHelpers';
-import type { Frame } from '@/lib/treeCompat';
 
 // ============================================================================
 // Types
@@ -30,53 +28,47 @@ interface TreeDiffIndexProps {
   onToggleIdentical: () => void;
 }
 
-// ============================================================================
-// Helper — format frame type from snake_case to Title Case
-// ============================================================================
-
-function formatFrameType(type: string): string {
-  return type
-    .split('_')
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ');
-}
+type FrameStatus = 'modified' | 'added' | 'removed' | 'identical';
 
 // ============================================================================
-// FrameRow — individual clickable row in the sidebar
+// FrameRow
 // ============================================================================
 
-interface FrameRowProps {
+function FrameRow({
+  frameId,
+  frameType,
+  status,
+  isActive,
+  onClick,
+}: {
   frameId: string;
   frameType: string;
-  status: 'modified' | 'added' | 'removed' | 'identical';
+  status: FrameStatus;
   isActive: boolean;
   onClick: () => void;
-}
-
-function FrameRow({ frameId, frameType, status, isActive, onClick }: FrameRowProps) {
+}) {
   const isRemoved = status === 'removed';
 
   return (
     <button
       type="button"
       onClick={onClick}
-      disabled={isRemoved}
-      className={`group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-all duration-200 ${
-        isActive
-          ? 'bg-[var(--accent-commit)]/8 text-[var(--text-primary)] ring-1 ring-[var(--accent-commit)]/20'
-          : isRemoved
-            ? 'cursor-default text-[var(--text-tertiary)] opacity-60'
-            : 'text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-secondary)]'
+      className={`flex w-full items-start gap-1.5 rounded-md px-2 py-1.5 text-left hover:bg-[var(--hover-bg)] ${
+        isActive ? 'bg-[var(--hover-bg)]' : ''
       }`}
     >
-      <DotIndicator status={status} />
+      <div className="mt-0.5">
+        <DotIndicator status={status} />
+      </div>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1">
-          <div className={`truncate text-[11px] font-medium ${isRemoved ? 'line-through' : ''}`}>
-            {formatFrameType(frameType)}
-          </div>
+          <span
+            className={`truncate text-[11px] font-medium ${isRemoved ? 'line-through text-[var(--text-tertiary)]' : 'text-[var(--text-primary)]'}`}
+          >
+            {frameType}
+          </span>
           {status === 'added' && (
-            <span className="shrink-0 rounded px-1 py-px text-[9px] font-medium bg-[var(--diff-added-bg)] text-[var(--diff-added-accent)]">
+            <span className="shrink-0 rounded bg-[var(--diff-added-bg)] px-1 text-[8px] font-semibold uppercase text-[var(--diff-added-accent)]">
               new
             </span>
           )}
@@ -94,6 +86,12 @@ function FrameRow({ frameId, frameType, status, isActive, onClick }: FrameRowPro
 // ============================================================================
 // Component
 // ============================================================================
+
+/** Extract the last segment of a dot-path as the display type */
+function pathToType(path: string): string {
+  const parts = path.split('.');
+  return parts[parts.length - 1];
+}
 
 export function TreeDiffIndex({
   diff,
@@ -131,7 +129,7 @@ export function TreeDiffIndex({
       {/* Stats summary */}
       {statParts.length > 0 && (
         <div className="mb-3 px-2 text-[10px] leading-relaxed text-[var(--text-tertiary)]">
-          {statParts.join(' · ')}
+          {statParts.join(' \u00b7 ')}
         </div>
       )}
 
@@ -141,14 +139,14 @@ export function TreeDiffIndex({
           <div className="mb-1 px-2 text-[9px] font-semibold uppercase tracking-wide text-[var(--diff-modified-accent)]">
             Modified ({modifiedCount})
           </div>
-          {diff.modified.map(({ frameId, targetFrame }) => (
+          {diff.modified.map(({ path }) => (
             <FrameRow
-              key={frameId}
-              frameId={frameId}
-              frameType={targetFrame.type}
+              key={path}
+              frameId={path}
+              frameType={pathToType(path)}
               status="modified"
-              isActive={activeFrameId === frameId}
-              onClick={() => handleSelect(frameId)}
+              isActive={activeFrameId === path}
+              onClick={() => handleSelect(path)}
             />
           ))}
         </>
@@ -162,14 +160,14 @@ export function TreeDiffIndex({
           >
             Added ({addedCount})
           </div>
-          {diff.onlyInTarget.map((frame) => (
+          {diff.onlyInTarget.map((path) => (
             <FrameRow
-              key={frame.id}
-              frameId={frame.id}
-              frameType={frame.type}
+              key={path}
+              frameId={path}
+              frameType={pathToType(path)}
               status="added"
-              isActive={activeFrameId === frame.id}
-              onClick={() => handleSelect(frame.id)}
+              isActive={activeFrameId === path}
+              onClick={() => handleSelect(path)}
             />
           ))}
         </>
@@ -183,11 +181,11 @@ export function TreeDiffIndex({
           >
             Removed ({removedCount})
           </div>
-          {diff.onlyInSource.map((frame) => (
+          {diff.onlyInSource.map((path) => (
             <FrameRow
-              key={frame.id}
-              frameId={frame.id}
-              frameType={frame.type}
+              key={path}
+              frameId={path}
+              frameType={pathToType(path)}
               status="removed"
               isActive={false}
               onClick={() => {}}
@@ -204,14 +202,14 @@ export function TreeDiffIndex({
           >
             Identical ({identicalCount})
           </div>
-          {diff.identical.map((frame) => (
+          {diff.identical.map((path) => (
             <FrameRow
-              key={frame.id}
-              frameId={frame.id}
-              frameType={frame.type}
+              key={path}
+              frameId={path}
+              frameType={pathToType(path)}
               status="identical"
-              isActive={activeFrameId === frame.id}
-              onClick={() => handleSelect(frame.id)}
+              isActive={activeFrameId === path}
+              onClick={() => handleSelect(path)}
             />
           ))}
         </>
@@ -220,17 +218,15 @@ export function TreeDiffIndex({
       {/* Spacer to push toggle to bottom */}
       <div className="flex-1" />
 
-      {/* Toggle identical button */}
+      {/* Toggle button for identical frames */}
       {identicalCount > 0 && (
-        <div className="mt-3 border-t border-[var(--stroke-divider)] pt-2">
-          <button
-            type="button"
-            onClick={onToggleIdentical}
-            className="w-full rounded px-2 py-1.5 text-left text-[10px] text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-secondary)] transition-colors"
-          >
-            {showIdentical ? `Hide identical` : `Show identical (${identicalCount})`}
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={onToggleIdentical}
+          className="mt-2 w-full rounded-md border border-[var(--stroke-divider)] px-2 py-1.5 text-[10px] text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)]"
+        >
+          {showIdentical ? 'Hide identical' : `Show identical (${identicalCount})`}
+        </button>
       )}
     </aside>
   );

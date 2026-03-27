@@ -1,4 +1,3 @@
-// @ts-nocheck — tree-primary migration: needs rework
 'use client';
 
 import type { TreeNode } from '@t3x-dev/core';
@@ -74,13 +73,13 @@ function CommitPreviewSection() {
   const commitBranch = useExtractionPanelStore((s) => s.commitBranch);
   const isCommitting = useExtractionPanelStore((s) => s.isCommitting);
   const commitError = useExtractionPanelStore((s) => s.commitError);
-  const selectDeltaFrames = useExtractionPanelStore((s) => s.selectDeltaFrames);
+  const selectDeltaNodes = useExtractionPanelStore((s) => s.selectDeltaNodes);
   const commitFrames = useExtractionPanelStore((s) => s.commitFrames);
   const setPanelMode = useExtractionPanelStore((s) => s.setPanelMode);
   const clearCommitError = useExtractionPanelStore((s) => s.clearCommitError);
 
   const [commitMessage, setCommitMessage] = useState('');
-  const deltaFrames: TreeNode[] = selectDeltaFrames();
+  const deltaFrames: TreeNode[] = selectDeltaNodes();
 
   const handleConfirm = async () => {
     try {

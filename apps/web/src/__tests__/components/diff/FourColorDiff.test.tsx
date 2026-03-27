@@ -1,4 +1,3 @@
-// @ts-nocheck — tree-primary migration: test needs rework
 /**
  * FourColorDiff Classification Display Tests (S4)
  *

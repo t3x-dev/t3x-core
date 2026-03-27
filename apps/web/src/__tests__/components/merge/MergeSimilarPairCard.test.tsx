@@ -1,4 +1,3 @@
-// @ts-nocheck — tree-primary migration: test needs rework
 /**
  * MergeSimilarPairCard Component Tests
  *

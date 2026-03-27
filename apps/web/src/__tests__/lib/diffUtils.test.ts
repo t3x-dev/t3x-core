@@ -1,4 +1,3 @@
-// @ts-nocheck — tree-primary migration: test needs rework
 import { describe, expect, it } from 'vitest';
 import type { TreeNode } from '@/lib/diffUtils';
 import {
