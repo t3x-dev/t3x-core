@@ -1,76 +1,55 @@
 /**
  * Merge Type Definitions for WebUI
  *
- * Re-exports merge types from @t3x-dev/core and adds WebUI-specific types.
+ * Tree-primary merge types. The core merge system now uses path-based
+ * results (MergeResult from @t3x-dev/core). This file provides
+ * WebUI-specific types that wrap and extend those.
  */
 
-// Import types for use in this file
-import type { MergeSuggestion, WordDiffSegment } from '@t3x-dev/core';
+import type { MergeResult, SlotConflict } from '@t3x-dev/core';
 
-// Re-export for consumers of this module
-export type { MergeSuggestion, WordDiffSegment };
+// Re-export core merge types for consumers
+export type { MergeResult, SlotConflict };
 
 // ============================================================================
-// Sentence Types (compatible with both commit.ts and commit-v3.ts formats)
+// Legacy Sentence-based types (kept for UI component compatibility)
+// These types represent the display layer for merge UI.
 // ============================================================================
 
-/**
- * Sentence source - supports both legacy (type/id) and V3 (turn_hash) formats
- * 句子来源 - 支持旧格式和 V3 格式
- */
-export interface SentenceSource {
-  /** Legacy: Source type (e.g., 'conversation', 'turn') */
-  type?: string;
-  /** Legacy: Source identifier */
-  id?: string;
-  /** V4: Conversation ID for lineage tracing */
-  conversation_id?: string;
-  /** V3: Turn hash for tracing */
-  turn_hash?: string;
-  /** V3: Start character position */
-  start_char?: number;
-  /** V3: End character position */
-  end_char?: number;
+/** Word-level diff segment */
+export interface WordDiffSegment {
+  type: 'unchanged' | 'added' | 'removed';
+  text: string;
 }
 
-/**
- * A sentence - compatible with both legacy and V3 formats
- * 句子 - 兼容旧格式和 V3 格式
- *
- * Note: source is optional because DiffableSentence.source_ref is optional
- * in the core package. Some sentences (e.g., from executeMerge) may not have
- * source information.
- */
+/** A sentence for merge display (source tracing) */
 export interface Sentence {
   id: string;
   text: string;
   confidence?: number;
-  source?: SentenceSource;
+  source?: {
+    conversation_id?: string;
+    turn_hash?: string;
+    start_char?: number;
+    end_char?: number;
+  };
 }
 
-/**
- * A pair of similar sentences the user must choose between
- */
+/** A pair of similar sentences the user must choose between */
 export interface MergeSimilarPair {
   source: Sentence;
   target: Sentence;
   wordDiff: WordDiffSegment[];
   resolution?: 'source' | 'target';
-  /** LLM-suggested merged text, null if no LLM configured */
-  suggestion?: MergeSuggestion | null;
 }
 
-/**
- * A unique sentence the user can keep or discard
- */
+/** A unique sentence the user can keep or discard */
 export interface MergeCandidate {
   sentence: Sentence;
   keep: boolean;
 }
 
-/**
- * Result of preparing a merge
- */
+/** Legacy merge result (sentence-based, used by some UI components) */
 export interface Merge2WayResult {
   identical: Sentence[];
   similarPairs: MergeSimilarPair[];
@@ -78,28 +57,43 @@ export interface Merge2WayResult {
   onlyInTarget: MergeCandidate[];
 }
 
+/** LLM-suggested merge text */
+export interface MergeSuggestion {
+  text: string;
+  confidence?: number;
+}
+
+// ============================================================================
+// WebUI Merge Types (tree-primary)
+// ============================================================================
+
 /**
- * Current merge operation state in canvas store
- * Canvas Store 中的当前合并操作状态
- *
- * This state tracks an ongoing merge operation initiated by the user.
- * It holds the source/target commits and the prepared merge result.
+ * A merge conflict with path-based identification.
+ * Wraps the core MergeResult.conflicts entries for UI consumption.
+ */
+export interface MergeConflictEntry {
+  path: string;
+  slotConflicts: SlotConflict[];
+}
+
+/**
+ * Current merge operation state in canvas store (tree-primary)
  */
 export interface MergeState {
-  /** Source commit hash (源 commit 的 hash) */
+  /** Source commit hash */
   sourceHash: string;
 
-  /** Target commit hash (目标 commit 的 hash) */
+  /** Target commit hash */
   targetHash: string;
 
-  /** Optional source branch name (可选的源分支名称) */
+  /** Optional source branch name */
   sourceBranch?: string;
 
-  /** Optional target branch name (可选的目标分支名称) */
+  /** Optional target branch name */
   targetBranch?: string;
 
-  /** Prepared merge result from API (来自 API 的合并准备结果) */
-  prepared: Merge2WayResult;
+  /** Prepared merge result from API */
+  prepared: MergeResult;
 }
 
 // ============================================================================
@@ -110,7 +104,6 @@ export type MergeDraftStatus = 'pending' | 'committed' | 'cancelled';
 
 /**
  * Merge draft from API
- * API 返回的合并草稿
  */
 export interface MergeDraft {
   draftId: string;
@@ -119,7 +112,7 @@ export interface MergeDraft {
   targetHash: string;
   sourceBranch?: string | null;
   targetBranch?: string | null;
-  prepared: Merge2WayResult;
+  prepared: MergeResult;
   status: MergeDraftStatus;
   message?: string | null;
   createdAt: string;
@@ -128,7 +121,6 @@ export interface MergeDraft {
 
 /**
  * Turn with context highlight information
- * 带有上下文高亮信息的 turn
  */
 export interface TurnWithContext {
   turn_hash: string;
@@ -149,7 +141,6 @@ export interface TurnWithContext {
 
 /**
  * Turn context data from API (for source tracing)
- * 来自 API 的 turn 上下文数据（用于溯源）
  */
 export interface TurnContextData {
   target_turn: TurnWithContext;

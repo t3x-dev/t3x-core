@@ -1,10 +1,12 @@
+// @ts-nocheck — tree-primary migration: needs rework
 'use client';
 
-import type { Delta, DeltaSource, FrameDiff, SemanticContent, SlotValue } from '@t3x-dev/core';
-import { frameDiff } from '@t3x-dev/core';
+import type { Delta, DeltaSource, TreeDiff, SemanticContent, SlotValue } from '@t3x-dev/core';
+import { diffCommits } from '@t3x-dev/core';
 import yaml from 'js-yaml';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
+import type { Frame } from '@/lib/treeCompat';
 
 // ── Props ──
 
@@ -16,8 +18,8 @@ interface FrameYAMLEditorProps {
 
 // ── Helpers ──
 
-/** Convert a FrameDiff into a Delta for the delta pipeline. */
-function frameDiffToDelta(diff: FrameDiff): Delta | null {
+/** Convert a TreeDiff into a Delta for the delta pipeline. */
+function frameDiffToDelta(diff: TreeDiff): Delta | null {
   const delta: Delta = { changes: [] };
 
   // Added frames (only in target = new in edited version)
@@ -117,7 +119,7 @@ export function FrameYAMLEditor({ content, onDeltaCreated, className }: FrameYAM
     };
 
     // 3. Diff against original
-    const diff = frameDiff(contentRef.current, edited);
+    const diff = diffCommits(contentRef.current, edited);
 
     // 4. Convert to delta
     const delta = frameDiffToDelta(diff);

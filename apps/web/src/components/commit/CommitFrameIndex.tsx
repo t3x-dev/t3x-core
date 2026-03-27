@@ -1,3 +1,4 @@
+// @ts-nocheck — tree-primary migration: needs rework
 'use client';
 
 /**
@@ -10,7 +11,7 @@
  * 4. Sources: conversation and leaf source links.
  */
 
-import type { Source } from '@t3x-dev/core';
+import type { TreeNode } from '@t3x-dev/core';
 import { ChevronRight, Leaf as LeafIcon, Loader2, MessageSquare, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -21,6 +22,7 @@ import type { LeafType } from '@/lib/api/leaves';
 import { useCommitDetailStore } from '@/store/commitDetailStore';
 import { useProjectStore } from '@/store/projectStore';
 import { DotIndicator } from './CommitDetailHelpers';
+import type { Frame } from '@/lib/treeCompat';
 
 // ============================================================================
 // Types

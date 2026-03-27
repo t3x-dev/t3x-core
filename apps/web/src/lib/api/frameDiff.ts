@@ -1,4 +1,4 @@
-import type { FrameDiff } from '@t3x-dev/core';
+import type { TreeDiff } from '@t3x-dev/core';
 import { API_V1, fetchWithTimeout, handleResponse } from './core';
 
 export interface CommitMeta {
@@ -10,12 +10,12 @@ export interface CommitMeta {
 }
 
 export interface FrameDiffResponse {
-  diff: FrameDiff;
+  diff: TreeDiff;
   base: CommitMeta;
   target: CommitMeta;
 }
 
-export async function getFrameDiff(
+export async function getTreeDiff(
   baseHash: string,
   targetHash: string
 ): Promise<FrameDiffResponse> {

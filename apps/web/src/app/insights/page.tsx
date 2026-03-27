@@ -41,7 +41,7 @@ function commitToSemanticEntry(
   projectName: string,
   commitLabel: string
 ): SemanticEntry {
-  const frames = getSemanticContent(commit).frames;
+  const frames = getSemanticContent(commit).trees;
   const summaryText = frameSummaryText(commit);
   return {
     id: commit.hash.slice(7, 19),
@@ -125,7 +125,7 @@ export default function InsightsPage() {
         const timelineItems = allCommits.slice(0, 10).map(({ commit, projectName }) => ({
           id: commit.hash.slice(7, 19),
           label: commit.message || `${commitLabel} on ${commit.branch || 'main'}`,
-          detail: `${getSemanticContent(commit).frames.length} frames in ${projectName}`,
+          detail: `${getSemanticContent(commit).trees.length} frames in ${projectName}`,
           time: formatTimeAgo(commit.committed_at),
           stage: 'commit' as const,
         }));

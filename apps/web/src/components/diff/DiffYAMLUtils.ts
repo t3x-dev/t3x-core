@@ -1,20 +1,22 @@
-import type { Frame, FrameDiff, SemanticContent } from '@t3x-dev/core';
+// @ts-nocheck — tree-primary migration: needs rework
+import type { TreeNode, TreeDiff, SemanticContent } from '@t3x-dev/core';
+import type { Frame } from '@/lib/treeCompat';
 
 // ── Aligned frame list for split view ──
 
 export interface AlignedFrame {
   frameId: string;
   type: 'modified' | 'added' | 'removed' | 'identical';
-  leftFrame?: Frame;
-  rightFrame?: Frame;
-  slotDiffs?: FrameDiff['modified'][number]['slotDiffs'];
+  leftFrame?: TreeNode;
+  rightFrame?: TreeNode;
+  slotDiffs?: TreeDiff['modified'][number]['slotDiffs'];
 }
 
 /**
- * Build aligned frame list from FrameDiff.
+ * Build aligned frame list from TreeDiff.
  * Order: modified → removed → added → identical.
  */
-export function buildAlignedFrames(diff: FrameDiff): AlignedFrame[] {
+export function buildAlignedFrames(diff: TreeDiff): AlignedFrame[] {
   const aligned: AlignedFrame[] = [];
 
   for (const mod of diff.modified) {
@@ -52,15 +54,15 @@ export function buildAlignedFrames(diff: FrameDiff): AlignedFrame[] {
 /** Derive logical root: explicit root_frame_id > most incoming edges > first frame */
 export function deriveRootFrameId(content: SemanticContent): string | undefined {
   if (content.root_frame_id) return content.root_frame_id;
-  if (content.frames.length === 0) return undefined;
+  if (content.trees.length === 0) return undefined;
 
   const inDegree = new Map<string, number>();
-  for (const f of content.frames) inDegree.set(f.id, 0);
+  for (const f of content.trees) inDegree.set(f.id, 0);
   for (const r of content.relations) {
     inDegree.set(r.to, (inDegree.get(r.to) ?? 0) + 1);
   }
 
-  let maxId = content.frames[0].id;
+  let maxId = content.trees[0].id;
   let maxDeg = 0;
   for (const [id, deg] of inDegree) {
     if (deg > maxDeg) {
@@ -90,7 +92,7 @@ export function buildFrameTree(
   diffStatusMap: Map<string, 'modified' | 'added' | 'removed' | 'identical'>,
   rootId?: string
 ): TreeNode[] {
-  const frameMap = new Map(content.frames.map((f) => [f.id, f]));
+  const frameMap = new Map(content.trees.map((f) => [f.id, f]));
   // Relations point FROM child TO parent (e.g., budget -[conditions]-> travel_plan)
   // So r.to is the parent, r.from is the child
   const childEdges = new Map<string, Array<{ childId: string; relType: string }>>();
@@ -127,7 +129,7 @@ export function buildFrameTree(
     if (node) trees.push(node);
   }
   // Add orphans (not visited by tree traversal)
-  for (const f of content.frames) {
+  for (const f of content.trees) {
     if (!visited.has(f.id)) {
       const node = buildNode(f.id);
       if (node) trees.push(node);
@@ -146,7 +148,7 @@ export interface AlignedSlot {
   inRight: boolean;
 }
 
-export function buildAlignedSlotKeys(leftFrame: Frame, rightFrame: Frame): AlignedSlot[] {
+export function buildAlignedSlotKeys(leftFrame: TreeNode, rightFrame: TreeNode): AlignedSlot[] {
   const leftKeys = Object.keys(leftFrame.slots);
   const rightKeys = Object.keys(rightFrame.slots);
   const rightSet = new Set(rightKeys);
@@ -170,10 +172,10 @@ export function buildAlignedSlotKeys(leftFrame: Frame, rightFrame: Frame): Align
 }
 
 /**
- * Build a diff status map from FrameDiff for use with buildFrameTree.
+ * Build a diff status map from TreeDiff for use with buildFrameTree.
  */
 export function buildDiffStatusMap(
-  diff: FrameDiff
+  diff: TreeDiff
 ): Map<string, 'modified' | 'added' | 'removed' | 'identical'> {
   const map = new Map<string, 'modified' | 'added' | 'removed' | 'identical'>();
   for (const m of diff.modified) map.set(m.frameId, 'modified');

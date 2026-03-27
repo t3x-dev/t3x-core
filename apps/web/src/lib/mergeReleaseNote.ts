@@ -5,7 +5,7 @@
  * with human-readable sections (added/updated/removed/conflicts).
  */
 
-import type { Merge2WayResult, MergeSimilarPair } from '@t3x-dev/core';
+import type { MergeResult } from '@t3x-dev/core';
 import type { MergeSummary } from '@/lib/mergeSummary';
 import type { ExtendedResolutionData } from '@/store/mergeWorkspaceStore';
 
@@ -34,44 +34,49 @@ export interface MergeReleaseNote {
 /**
  * Generate a structured release note from merge data.
  *
- * @param prepared - The Merge2WayResult from prepareMerge()
+ * @param prepared - The MergeResult from prepareMerge()
  * @param summary - Pre-computed merge summary
  * @param sourceBranch - Source branch name
  * @param targetBranch - Target branch name
+ * @param conflictResolutions - Map of conflict path → resolution
+ * @param keepSource - Set of source-only paths to keep
+ * @param keepTarget - Set of target-only paths to keep
  * @param extendedResolutions - Optional extended resolutions (e.g. 'both')
  */
 export function generateMergeReleaseNote(
-  prepared: Merge2WayResult,
+  prepared: MergeResult,
   summary: MergeSummary,
   sourceBranch: string,
   targetBranch: string,
+  conflictResolutions?: Record<string, 'source' | 'target'>,
+  keepSource?: Set<string>,
+  keepTarget?: Set<string>,
   extendedResolutions?: Record<string, ExtendedResolutionData>
 ): MergeReleaseNote {
   const ext = extendedResolutions ?? {};
+  const resolutions = conflictResolutions ?? {};
   const sections: ReleaseNoteSection[] = [];
 
-  // Unchanged sentences
-  if (prepared.identical.length > 0) {
+  // Auto-kept (unchanged) nodes
+  if (prepared.autoKept.length > 0) {
     sections.push({
-      heading: `Unchanged (${prepared.identical.length})`,
-      items: prepared.identical.map((s) => s.text),
+      heading: `Unchanged (${prepared.autoKept.length})`,
+      items: prepared.autoKept.map((path) => path),
     });
   }
 
-  // Modified / resolved conflicts
+  // Resolved conflicts
   const resolved: string[] = [];
-  for (let i = 0; i < prepared.similarPairs.length; i++) {
-    const pair = prepared.similarPairs[i] as MergeSimilarPair;
+  for (let i = 0; i < prepared.conflicts.length; i++) {
+    const conflict = prepared.conflicts[i];
     const extRes = ext[String(i)];
 
     if (extRes?.type === 'both') {
-      resolved.push(
-        `Kept both: "${truncate(pair.source.text)}" and "${truncate(pair.target.text)}"`
-      );
-    } else if (pair.resolution === 'source') {
-      resolved.push(`Kept source: "${truncate(pair.source.text)}"`);
-    } else if (pair.resolution === 'target') {
-      resolved.push(`Updated to: "${truncate(pair.target.text)}"`);
+      resolved.push(`Kept both versions: "${truncate(conflict.path)}"`);
+    } else if (resolutions[conflict.path] === 'source') {
+      resolved.push(`Kept source: "${truncate(conflict.path)}"`);
+    } else if (resolutions[conflict.path] === 'target') {
+      resolved.push(`Updated to target: "${truncate(conflict.path)}"`);
     }
   }
   if (resolved.length > 0) {
@@ -79,31 +84,39 @@ export function generateMergeReleaseNote(
   }
 
   // Added from source
-  const addedFromSource = prepared.onlyInSource.filter((c) => c.keep);
+  const addedFromSource = keepSource
+    ? prepared.onlyInSource.filter((p) => keepSource.has(p))
+    : prepared.onlyInSource;
   if (addedFromSource.length > 0) {
     sections.push({
       heading: `Added from ${sourceBranch} (${addedFromSource.length})`,
-      items: addedFromSource.map((c) => c.sentence.text),
+      items: addedFromSource,
     });
   }
 
   // Added from target
-  const addedFromTarget = prepared.onlyInTarget.filter((c) => c.keep);
+  const addedFromTarget = keepTarget
+    ? prepared.onlyInTarget.filter((p) => keepTarget.has(p))
+    : prepared.onlyInTarget;
   if (addedFromTarget.length > 0) {
     sections.push({
       heading: `Added from ${targetBranch} (${addedFromTarget.length})`,
-      items: addedFromTarget.map((c) => c.sentence.text),
+      items: addedFromTarget,
     });
   }
 
   // Removed
-  const removedSource = prepared.onlyInSource.filter((c) => !c.keep);
-  const removedTarget = prepared.onlyInTarget.filter((c) => !c.keep);
+  const removedSource = keepSource
+    ? prepared.onlyInSource.filter((p) => !keepSource.has(p))
+    : [];
+  const removedTarget = keepTarget
+    ? prepared.onlyInTarget.filter((p) => !keepTarget.has(p))
+    : [];
   const removed = [...removedSource, ...removedTarget];
   if (removed.length > 0) {
     sections.push({
       heading: `Removed (${removed.length})`,
-      items: removed.map((c) => c.sentence.text),
+      items: removed,
     });
   }
 

@@ -6,6 +6,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { chatStream } from '@/lib/api/chat';
 import { cn } from '@/lib/utils';
 import { useExtractionPanelStore } from '@/store/extractionPanelStore';
+import { type Frame, contentToFrames, treesToFrames } from '@/lib/treeCompat';
 
 // ── Types ──
 
@@ -110,23 +111,23 @@ export function PreviewPanel({ className }: PreviewPanelProps) {
   const [isLoading, setIsLoading] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
-  const frameCount = draft.frames.length;
+  const frameCount = draft.trees.length;
 
   // Compute highlight ranges in generated output based on hovered YAML slot
   const outputHighlightRanges = useMemo(() => {
     if (!generatedOutput || !hoveredFrameId || !hoveredSlotKey) return [];
-    const frame = draft.frames.find((f) => f.id === hoveredFrameId);
+    const frame = draft.trees.find((f) => f.id === hoveredFrameId);
     if (!frame) return [];
     const slotValue = frame.slots[hoveredSlotKey];
     if (!slotValue || typeof slotValue !== 'string') return [];
     const located = fuzzyLocate(generatedOutput, slotValue);
     if (!located || located.score < 0.6) return [];
     return [{ start: located.start, end: located.end }];
-  }, [generatedOutput, hoveredFrameId, hoveredSlotKey, draft.frames]);
+  }, [generatedOutput, hoveredFrameId, hoveredSlotKey, draft.trees]);
 
   // Build context string from extracted frames
   const buildContext = useCallback(() => {
-    return draft.frames
+    return draft.trees
       .map((frame) => {
         const slots = Object.entries(frame.slots)
           .map(([k, v]) => `  ${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`)
@@ -134,7 +135,7 @@ export function PreviewPanel({ className }: PreviewPanelProps) {
         return `[${frame.type}]\n${slots}`;
       })
       .join('\n\n');
-  }, [draft.frames]);
+  }, [draft.trees]);
 
   const handleGenerate = useCallback(async () => {
     if (frameCount === 0) return;

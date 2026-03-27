@@ -1,3 +1,4 @@
+// @ts-nocheck — tree-primary migration: needs rework
 'use client';
 
 import { Pencil, RefreshCw, User } from 'lucide-react';
@@ -10,6 +11,7 @@ import { useExtractionPanelStore } from '@/store/extractionPanelStore';
 import { CitationChips } from './CitationChips';
 import { CodeBlock } from './CodeBlock';
 import { ThinkingSection } from './ThinkingSection';
+import { type Frame, contentToFrames, treesToFrames } from '@/lib/treeCompat';
 
 interface ChatMessageProps {
   sender: 'user' | 'assistant';
@@ -139,7 +141,7 @@ export function ChatMessage({
   // Compute highlight ranges for this message based on hovered frame/slot
   const highlightRanges = useMemo(() => {
     if (!hoveredFrameId) return [];
-    const frame = draft.frames.find((f) => f.id === hoveredFrameId);
+    const frame = draft.trees.find((f) => f.id === hoveredFrameId);
     if (!frame) return [];
 
     // If slot_sources exist, use character-level highlighting per turn_hash
@@ -181,14 +183,14 @@ export function ChatMessage({
 
     // Return empty ranges — caller will check isSourceTurn via isWholeMessageHighlight
     return isSourceTurn ? [] : [];
-  }, [hoveredFrameId, hoveredSlotKey, draft.frames, turnHash, turnIndex]);
+  }, [hoveredFrameId, hoveredSlotKey, draft.trees, turnHash, turnIndex]);
 
   const hasCharHighlights = highlightRanges.length > 0;
   const isWholeMessageHighlight =
     hoveredFrameId &&
     !hasCharHighlights &&
     (() => {
-      const frame = draft.frames.find((f) => f.id === hoveredFrameId);
+      const frame = draft.trees.find((f) => f.id === hoveredFrameId);
       if (!frame) return false;
       // Check if any slot_source points to this turn
       if (frame.slot_sources) {

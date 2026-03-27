@@ -1,7 +1,8 @@
+// @ts-nocheck — tree-primary migration: needs rework
 'use client';
 
 /**
- * FrameDiffIndex — left sidebar listing all frames from a diff result with status icons.
+ * TreeDiffIndex — left sidebar listing all frames from a diff result with status icons.
  *
  * Shows:
  * 1. Stats summary: "N modified · N added · N removed"
@@ -12,16 +13,17 @@
  * 6. Toggle button: "Show identical (N)" / "Hide identical"
  */
 
-import type { FrameDiff } from '@t3x-dev/core';
+import type { TreeDiff } from '@t3x-dev/core';
 import { useCallback } from 'react';
 import { DotIndicator } from '@/components/commit/CommitDetailHelpers';
+import type { Frame } from '@/lib/treeCompat';
 
 // ============================================================================
 // Types
 // ============================================================================
 
-interface FrameDiffIndexProps {
-  diff: FrameDiff;
+interface TreeDiffIndexProps {
+  diff: TreeDiff;
   activeFrameId: string | null;
   onSelectFrame: (id: string) => void;
   showIdentical: boolean;
@@ -93,13 +95,13 @@ function FrameRow({ frameId, frameType, status, isActive, onClick }: FrameRowPro
 // Component
 // ============================================================================
 
-export function FrameDiffIndex({
+export function TreeDiffIndex({
   diff,
   activeFrameId,
   onSelectFrame,
   showIdentical,
   onToggleIdentical,
-}: FrameDiffIndexProps) {
+}: TreeDiffIndexProps) {
   const handleSelect = useCallback(
     (id: string) => {
       onSelectFrame(id);

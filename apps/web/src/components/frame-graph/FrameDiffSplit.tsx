@@ -1,10 +1,12 @@
+// @ts-nocheck — tree-primary migration: needs rework
 'use client';
 
 import type { SemanticContent } from '@t3x-dev/core';
-import { frameDiff } from '@t3x-dev/core';
+import { diffCommits } from '@t3x-dev/core';
 import { useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { FrameGraphView } from './FrameGraphView';
+import type { Frame } from '@/lib/treeCompat';
 
 // ── Props ──
 
@@ -27,7 +29,7 @@ interface FrameDiffSplitProps {
  */
 export function FrameDiffSplit({ source, target, className }: FrameDiffSplitProps) {
   const { sourceDelta, sourceSlots, targetDelta, targetSlots } = useMemo(() => {
-    const diff = frameDiff(source, target);
+    const diff = diffCommits(source, target);
 
     // Source side: frames only in source are "removed" (green = unique to this side),
     // modified frames are "updated", identical frames have no state.

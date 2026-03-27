@@ -1,6 +1,6 @@
 'use client';
 
-import type { FrameDiff } from '@t3x-dev/core';
+import type { TreeDiff } from '@t3x-dev/core';
 import { useCallback, useRef } from 'react';
 import { YAML_COLORS } from './DiffYAMLFormatters';
 import {
@@ -22,7 +22,7 @@ import { YAMLLine } from './YAMLLine';
 // ── Props ──
 
 interface DiffYAMLSplitViewProps {
-  diff: FrameDiff;
+  diff: TreeDiff;
   activeFrameId: string | null;
   onSelectFrame: (id: string) => void;
   showIdentical: boolean;
@@ -45,7 +45,7 @@ function EmptyPlaceholderLines({ count }: { count: number }) {
 // ── Pane content renderer ──
 
 /** Compute how many content lines a frame takes on a given side */
-function computeFrameHeight(af: AlignedFrame, side: 'left' | 'right', diff: FrameDiff): number {
+function computeFrameHeight(af: AlignedFrame, side: 'left' | 'right', diff: TreeDiff): number {
   const frame = side === 'left' ? af.leftFrame : af.rightFrame;
   if (!frame) {
     // Placeholder side: count from the other side
@@ -67,7 +67,7 @@ function computeFrameHeight(af: AlignedFrame, side: 'left' | 'right', diff: Fram
 
 function computeFrameHeightsMap(
   aligned: AlignedFrame[],
-  diff: FrameDiff
+  diff: TreeDiff
 ): Map<string, { left: number; right: number; max: number; relCount: number }> {
   const map = new Map<string, { left: number; right: number; max: number; relCount: number }>();
   for (const af of aligned) {
@@ -98,7 +98,7 @@ function PaneContent({
 }: {
   aligned: AlignedFrame[];
   side: 'left' | 'right';
-  diff: FrameDiff;
+  diff: TreeDiff;
   activeFrameId: string | null;
   onSelectFrame: (id: string) => void;
   showIdentical: boolean;

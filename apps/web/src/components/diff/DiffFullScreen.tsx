@@ -8,13 +8,13 @@
  * - Commit metadata header
  */
 
-import type { FrameDiff } from '@t3x-dev/core';
+import type { TreeDiff } from '@t3x-dev/core';
 import { Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { useTerminology } from '@/hooks/useTerminology';
 import type { CommitMeta } from '@/lib/api/frameDiff';
-import { getFrameDiff } from '@/lib/api/frameDiff';
+import { getTreeDiff } from '@/lib/api/frameDiff';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import { DiffHeader } from './DiffHeader';
@@ -44,7 +44,7 @@ export function DiffFullScreen({
   baseCommitHash,
   targetCommitHash,
 }: DiffFullScreenProps) {
-  const [frameDiffResult, setFrameDiffResult] = useState<FrameDiff | null>(null);
+  const [frameDiffResult, setTreeDiffResult] = useState<TreeDiff | null>(null);
   const [baseMeta, setBaseMeta] = useState<CommitMeta | null>(null);
   const [targetMeta, setTargetMeta] = useState<CommitMeta | null>(null);
   const [loading, setLoading] = useState(false);
@@ -59,10 +59,10 @@ export function DiffFullScreen({
     setLoading(true);
     setError(null);
 
-    getFrameDiff(baseCommitHash, targetCommitHash)
+    getTreeDiff(baseCommitHash, targetCommitHash)
       .then((response) => {
         if (cancelled) return;
-        setFrameDiffResult(response.diff);
+        setTreeDiffResult(response.diff);
         setBaseMeta(response.base);
         setTargetMeta(response.target);
       })
@@ -81,7 +81,7 @@ export function DiffFullScreen({
 
   const handleClose = useCallback(() => {
     onClose();
-    setFrameDiffResult(null);
+    setTreeDiffResult(null);
     setBaseMeta(null);
     setTargetMeta(null);
     setError(null);

@@ -1,4 +1,10 @@
-import type { Frame } from '@t3x-dev/core';
+import type { TreeNode } from '@t3x-dev/core';
+
+/** Compatibility alias: FlatNode-like shape with an id field for relevance scoring */
+interface FrameLike {
+  id: string;
+  confidence?: number;
+}
 
 export interface RelevanceContext {
   confirmedFrameIds: Record<string, boolean>;
@@ -38,7 +44,7 @@ const RELATION_DEGREE_CAP = 3;
  * Score = max of all signal values.
  * Tier thresholds: >= 0.6 → highlighted, < 0.6 → faded
  */
-export function relevanceScore(frame: Frame, context: RelevanceContext): RelevanceResult {
+export function relevanceScore(frame: FrameLike, context: RelevanceContext): RelevanceResult {
   const reasons: RelevanceReason[] = [];
 
   // Signal 1: User confirmed

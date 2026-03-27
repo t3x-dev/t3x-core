@@ -12,10 +12,11 @@
  * Toggle between modes via the "Resolve per slot →" / "← Back to per-frame" link.
  */
 
-import type { Frame, SlotConflict, SlotValue } from '@t3x-dev/core';
+import type { TreeNode, SlotConflict, SlotValue } from '@t3x-dev/core';
 import { Check } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
+import type { Frame } from '@/lib/treeCompat';
 
 // ============================================================================
 // Types
@@ -30,9 +31,9 @@ export type FrameResolution =
 export interface FrameConflictCardProps {
   conflict: {
     frameId: string;
-    baseFrame?: Frame;
-    sourceFrame: Frame;
-    targetFrame: Frame;
+    baseFrame?: TreeNode;
+    sourceFrame: TreeNode;
+    targetFrame: TreeNode;
     slotConflicts: SlotConflict[];
   };
   resolution: FrameResolution | null;
@@ -88,7 +89,7 @@ function renderSlotValue(value: SlotValue | undefined): React.ReactNode {
 // ============================================================================
 
 interface FrameYamlPreviewProps {
-  frame: Frame;
+  frame: TreeNode;
   conflictKeys: Set<string>;
   label: string;
   labelColor: string;

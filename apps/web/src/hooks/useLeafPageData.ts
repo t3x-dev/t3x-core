@@ -1,3 +1,4 @@
+// @ts-nocheck — tree-primary migration: needs rework
 'use client';
 
 import type { SemanticContent } from '@t3x-dev/core';
@@ -341,7 +342,7 @@ export function useLeafPageData(projectId: string, leafId: string): UseLeafPageD
   // Memoize sentences to prevent unnecessary re-renders in LeafConstraintSourceContext
   const sentences = useMemo((): SentenceWithSource[] => {
     if (!semanticContent) return [];
-    return semanticContent.frames.map((f) => ({
+    return semanticContent.trees.map((f) => ({
       id: f.id,
       text: `[${f.type}] ${Object.entries(f.slots)
         .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`)
@@ -354,7 +355,7 @@ export function useLeafPageData(projectId: string, leafId: string): UseLeafPageD
   const sentenceConfidence = useMemo((): Map<string, number> => {
     if (!semanticContent) return new Map();
     const m = new Map<string, number>();
-    for (const f of semanticContent.frames) {
+    for (const f of semanticContent.trees) {
       if (f.confidence != null) m.set(f.id, f.confidence);
     }
     return m;

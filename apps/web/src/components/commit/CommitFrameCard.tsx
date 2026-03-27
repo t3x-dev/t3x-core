@@ -12,7 +12,7 @@
  * - Colored left gutter bar (GutterBar) matching diff status
  */
 
-import type { Frame, SlotValue } from '@t3x-dev/core';
+import type { TreeNode, SlotValue } from '@t3x-dev/core';
 import {
   type EnrichedFrame,
   type FrameDiffStatus,
@@ -41,7 +41,7 @@ interface SlotDiffSets {
   removedSlotEntries: Array<{ key: string; value: SlotValue }>;
 }
 
-function computeSlotDiff(frame: Frame, previousFrame: Frame | undefined): SlotDiffSets {
+function computeSlotDiff(frame: TreeNode, previousFrame: TreeNode | undefined): SlotDiffSets {
   if (!previousFrame) {
     return { changedSlots: new Set(), addedSlots: new Set(), removedSlotEntries: [] };
   }

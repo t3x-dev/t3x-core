@@ -1,10 +1,14 @@
-import type { FrameRelationType, SemanticContent, SlotValue } from '@t3x-dev/core';
+import type { SemanticContent, SlotValue, TreeNode } from '@t3x-dev/core';
+import { flattenTrees, RELATION_TYPES } from '@t3x-dev/core';
 import type { Edge, Node } from '@xyflow/react';
 import type { GateCheckResult } from '@/lib/api/frames';
 
 // ── Exported Types ──
 
 export type ZoomLevel = 'overview' | 'expand' | 'full';
+
+/** Relation type for graph display (from core semantic RELATION_TYPES) */
+type RelationType = (typeof RELATION_TYPES)[number];
 
 export interface FrameNodeData {
   frameType: string;
@@ -19,10 +23,10 @@ export interface FrameNodeData {
 }
 
 export interface RelationEdgeData {
-  relationType: FrameRelationType;
+  relationType: RelationType;
   /** When true, the edge plays a stroke-dashoffset draw animation */
   isNew?: boolean;
-  /** Relation confidence score (0–1). Affects opacity and dash style. */
+  /** Relation confidence score (0-1). Affects opacity and dash style. */
   confidence?: number;
   [key: string]: unknown;
 }
@@ -30,16 +34,29 @@ export interface RelationEdgeData {
 // ── Relation Styles ──
 
 export const RELATION_STYLES: Record<
-  FrameRelationType,
+  string,
   { color: string; label: string; strokeDasharray?: string }
 > = {
   causes: { color: '#f97316', label: 'causes' },
   conditions: { color: '#eab308', strokeDasharray: '8 4', label: 'conditions' },
   contrasts: { color: '#ef4444', label: 'contrasts' },
-  elaborates: { color: '#3b82f6', label: 'elaborates' },
   follows: { color: '#9ca3af', label: 'follows' },
   depends: { color: '#a855f7', strokeDasharray: '4 4', label: 'depends' },
 };
+
+// ── Helper: flatten trees into node entries with IDs ──
+
+function treesToNodeEntries(trees: TreeNode[], prefix = ''): Array<{ id: string; node: TreeNode }> {
+  const entries: Array<{ id: string; node: TreeNode }> = [];
+  for (const tree of trees) {
+    const id = prefix ? `${prefix}.${tree.key}` : tree.key;
+    entries.push({ id, node: tree });
+    if (tree.children.length > 0) {
+      entries.push(...treesToNodeEntries(tree.children, id));
+    }
+  }
+  return entries;
+}
 
 // ── semanticToFlowElements ──
 
@@ -47,21 +64,23 @@ export function semanticToFlowElements(content: SemanticContent): {
   nodes: Node<FrameNodeData>[];
   edges: Edge<RelationEdgeData>[];
 } {
-  const nodes: Node<FrameNodeData>[] = content.frames.map((frame) => ({
-    id: frame.id,
+  const entries = treesToNodeEntries(content.trees);
+
+  const nodes: Node<FrameNodeData>[] = entries.map(({ id, node }) => ({
+    id,
     type: 'frameNode',
     position: { x: 0, y: 0 },
     data: {
-      frameType: frame.type,
-      slots: frame.slots,
-      source: frame.source,
-      confidence: frame.confidence,
+      frameType: node.key,
+      slots: node.slots,
+      source: node.source,
+      confidence: node.confidence,
     },
   }));
 
-  const frameIds = new Set(content.frames.map((f) => f.id));
+  const nodeIds = new Set(entries.map((e) => e.id));
   const edges: Edge<RelationEdgeData>[] = content.relations
-    .filter((rel) => frameIds.has(rel.from) && frameIds.has(rel.to))
+    .filter((rel) => nodeIds.has(rel.from) && nodeIds.has(rel.to))
     .map((rel) => ({
       id: `${rel.from}-${rel.to}-${rel.type}`,
       source: rel.from,
@@ -76,41 +95,24 @@ export function semanticToFlowElements(content: SemanticContent): {
 // ── filterByZoomLevel ──
 
 /**
- * Determines which frames are "trunk" nodes (visible in overview).
- * A frame is hidden in overview if:
- *   1. ALL its incoming relations are 'elaborates'
- *   2. It has NO outgoing non-elaborates relations
+ * Determines which nodes are "trunk" (visible in overview).
+ * In tree-primary, all top-level trees are trunk; children are hidden in overview.
  */
-function getTrunkFrameIds(content: SemanticContent): Set<string> {
-  const frameIds = new Set(content.frames.map((f) => f.id));
-  const hidden = new Set<string>();
-
-  for (const frame of content.frames) {
-    const incoming = content.relations.filter((r) => r.to === frame.id);
-    const outgoing = content.relations.filter((r) => r.from === frame.id);
-
-    // No incoming relations → trunk (root node)
-    if (incoming.length === 0) continue;
-
-    const allIncomingElaborates = incoming.every((r) => r.type === 'elaborates');
-    const hasOutgoingNonElaborates = outgoing.some((r) => r.type !== 'elaborates');
-
-    if (allIncomingElaborates && !hasOutgoingNonElaborates) {
-      hidden.add(frame.id);
-    }
-  }
-
-  // Return visible (trunk) ids
-  const trunk = new Set<string>();
-  for (const id of frameIds) {
-    if (!hidden.has(id)) trunk.add(id);
-  }
-  return trunk;
+function getTrunkNodeIds(content: SemanticContent): Set<string> {
+  return new Set(content.trees.map((t) => t.key));
 }
 
 function filterContent(content: SemanticContent, visibleIds: Set<string>): SemanticContent {
+  function filterNodes(trees: TreeNode[]): TreeNode[] {
+    return trees
+      .filter((t) => visibleIds.has(t.key))
+      .map((t) => ({
+        ...t,
+        children: filterNodes(t.children),
+      }));
+  }
   return {
-    frames: content.frames.filter((f) => visibleIds.has(f.id)),
+    trees: filterNodes(content.trees),
     relations: content.relations.filter((r) => visibleIds.has(r.from) && visibleIds.has(r.to)),
   };
 }
@@ -124,18 +126,19 @@ export function filterByZoomLevel(
     return content;
   }
 
-  const trunkIds = getTrunkFrameIds(content);
+  const trunkIds = getTrunkNodeIds(content);
 
   if (level === 'overview' || (level === 'expand' && !expandedNodeId)) {
     return filterContent(content, trunkIds);
   }
 
   // level === 'expand' with expandedNodeId
-  // Show trunk + elaborates children of the expanded node
+  // Show trunk + children of the expanded node
   const visible = new Set(trunkIds);
-  for (const rel of content.relations) {
-    if (rel.type === 'elaborates' && rel.from === expandedNodeId) {
-      visible.add(rel.to);
+  const expandedTree = content.trees.find((t) => t.key === expandedNodeId);
+  if (expandedTree) {
+    for (const child of expandedTree.children) {
+      visible.add(child.key);
     }
   }
   return filterContent(content, visible);

@@ -2,10 +2,11 @@ import type {
   Delta,
   DeltaLogEntry,
   DeltaSource,
-  Frame,
-  FrameChange,
   SemanticContent,
+  TreeChange,
+  TreeNode,
 } from '@t3x-dev/core';
+import { applyDelta as coreApplyDelta, flattenTrees } from '@t3x-dev/core';
 import { create } from 'zustand';
 import { createCommit, listCommits } from '@/lib/api/commits';
 import { createDelta } from '@/lib/api/frames';
@@ -27,11 +28,11 @@ interface ExtractionPanelState {
   deltaLog: DeltaLogEntry[];
   isExtracting: boolean;
   confirmedFrameIds: Record<string, boolean>;
-  confirmedSlotKeys: Record<string, Record<string, boolean>>; // frameId → { slotKey: true }
+  confirmedSlotKeys: Record<string, Record<string, boolean>>; // nodeKey → { slotKey: true }
   focusIntentEnabled: boolean;
   llmHighlightedFrameIds: Record<string, boolean>;
-  deltaChangeHistory: FrameChange[][]; // sliding window, index 0 = most recent
-  removedFrames: Frame[];
+  deltaChangeHistory: TreeChange[][];
+  removedNodes: TreeNode[];
 
   // Compression
   isCompressing: boolean;
@@ -63,7 +64,7 @@ interface ExtractionPanelState {
   conversationId: string | null;
   setConversationId: (id: string | null) => void;
 
-  // Gate result (Step 5 — frame quality annotation)
+  // Gate result (Step 5 — node quality annotation)
   gateIssues: Record<string, { severity: 'error' | 'warning' | 'info'; description: string }[]>;
   setGateIssues: (
     issues: Record<string, { severity: 'error' | 'warning' | 'info'; description: string }[]>
@@ -120,7 +121,7 @@ interface ExtractionPanelState {
   // Commit tracking
   lastCommitHash: string | null;
   committedFrameIds: Record<string, boolean>;
-  committedFrameSnapshot: Record<string, Frame>;
+  committedNodeSnapshot: Record<string, TreeNode>;
   commitBranch: string;
   projectId: string | null;
   conversationTitle: string | null;
@@ -128,7 +129,7 @@ interface ExtractionPanelState {
   commitError: string | null;
 
   // Commit actions
-  selectDeltaFrames: () => Frame[];
+  selectDeltaNodes: () => TreeNode[];
   commitFrames: (message: string) => Promise<{ hash: string }>;
   setCommitBranch: (branch: string) => void;
   setProjectId: (id: string | null) => void;
@@ -142,7 +143,7 @@ interface ExtractionPanelState {
   dismissCompressBanner: () => void;
 }
 
-const emptyContent: SemanticContent = { frames: [], relations: [] };
+const emptyContent: SemanticContent = { trees: [], relations: [] };
 
 export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) => ({
   panelMode: 'collapsed',
@@ -155,7 +156,7 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
   focusIntentEnabled: false,
   llmHighlightedFrameIds: {},
   deltaChangeHistory: [],
-  removedFrames: [],
+  removedNodes: [],
   conversationId: null,
   gateIssues: {},
   driftDetected: false,
@@ -175,7 +176,7 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
   // Commit tracking defaults
   lastCommitHash: null,
   committedFrameIds: {},
-  committedFrameSnapshot: {},
+  committedNodeSnapshot: {},
   commitBranch: 'main',
   projectId: null,
   conversationTitle: null,
@@ -196,51 +197,9 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
 
   applyDelta: (delta, source, turnHash) => {
     const { draft, deltaLog } = get();
-    let frames = [...draft.frames];
-    let relations = [...draft.relations];
 
-    for (const change of delta.changes) {
-      switch (change.action) {
-        case 'add':
-          frames.push(change.frame);
-          break;
-        case 'update': {
-          frames = frames.map((f) => {
-            if (f.id !== change.target) return f;
-            const merged = { ...f.slots };
-            for (const [k, v] of Object.entries(change.slots)) {
-              if (v === null) delete merged[k];
-              else merged[k] = v;
-            }
-            return { ...f, slots: merged };
-          });
-          break;
-        }
-        case 'remove': {
-          const removed = frames.find((f) => f.id === change.target);
-          if (removed) {
-            set((s) => ({ removedFrames: [...s.removedFrames, removed] }));
-          }
-          frames = frames.filter((f) => f.id !== change.target);
-          // Auto-clean orphaned relations (match core applyDelta behavior)
-          const removedId = change.target;
-          relations = relations.filter((r) => r.from !== removedId && r.to !== removedId);
-          break;
-        }
-      }
-    }
-
-    if (delta.new_relations) {
-      relations = [...relations, ...delta.new_relations];
-    }
-    if (delta.remove_relations) {
-      relations = relations.filter(
-        (r) =>
-          !delta.remove_relations!.some(
-            (rr) => rr.from === r.from && rr.to === r.to && rr.type === r.type
-          )
-      );
-    }
+    // Use core applyDelta to properly update the tree structure
+    const newContent = coreApplyDelta(draft, delta);
 
     const entry: DeltaLogEntry = {
       id: crypto.randomUUID(),
@@ -251,7 +210,7 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
     };
 
     set({
-      draft: { frames, relations },
+      draft: newContent,
       deltaLog: [...deltaLog, entry],
       deltaChangeHistory: [delta.changes, ...get().deltaChangeHistory].slice(0, 3),
     });
@@ -260,8 +219,9 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
     if (source === 'manual') {
       const ids = new Set(get().manualEditedFrameIds);
       for (const change of delta.changes) {
-        if (change.action === 'add') ids.add(change.frame.id);
-        else if (change.action === 'update') ids.add(change.target);
+        if (change.action === 'add') ids.add(change.node.key);
+        else if (change.action === 'update') ids.add(change.target_path);
+        else if (change.action === 'remove') ids.add(change.target_path);
       }
       set({ manualEditedFrameIds: ids });
     }
@@ -276,18 +236,13 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
   },
 
   setDraft: (content) => {
-    // Extract manual-edited frame IDs from server response
-    const manualIds = new Set<string>();
-    for (const f of content.frames) {
-      if (f.manual_edited) manualIds.add(f.id);
-    }
-    set({ draft: content, manualEditedFrameIds: manualIds });
+    set({ draft: content, manualEditedFrameIds: new Set() });
   },
   resetDraft: () =>
     set({
       draft: emptyContent,
       deltaLog: [],
-      removedFrames: [],
+      removedNodes: [],
       deltaChangeHistory: [],
       confirmedFrameIds: {},
       confirmedSlotKeys: {},
@@ -306,7 +261,7 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
     }),
   confirmSlot: (frameId, slotKey) =>
     set((s) => ({
-      // Confirming a slot auto-confirms the parent frame
+      // Confirming a slot auto-confirms the parent node
       confirmedFrameIds: { ...s.confirmedFrameIds, [frameId]: true },
       confirmedSlotKeys: {
         ...s.confirmedSlotKeys,
@@ -320,7 +275,6 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
       const hasRemainingSlots = Object.keys(frameSlots).length > 0;
       return {
         confirmedSlotKeys: { ...s.confirmedSlotKeys, [frameId]: frameSlots },
-        // If no slots confirmed and frame wasn't explicitly confirmed, unconfirm frame too
         confirmedFrameIds: hasRemainingSlots ? s.confirmedFrameIds : s.confirmedFrameIds,
       };
     }),
@@ -361,15 +315,17 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
 
   // Commit actions
 
-  selectDeltaFrames: () => {
-    const { draft, committedFrameIds, committedFrameSnapshot } = get();
-    return draft.frames.filter((f) => {
-      if (!committedFrameIds[f.id]) return true;
-      const snap = committedFrameSnapshot[f.id];
+  selectDeltaNodes: () => {
+    const { draft, committedFrameIds, committedNodeSnapshot } = get();
+    const flatNodes = flattenTrees(draft.trees);
+    return draft.trees.filter((_t, i) => {
+      const node = flatNodes[i];
+      if (!node) return true;
+      const nodeId = node.id;
+      if (!committedFrameIds[nodeId]) return true;
+      const snap = committedNodeSnapshot[nodeId];
       if (!snap) return true;
-      const sortedStringify = (obj: unknown) =>
-        JSON.stringify(obj, Object.keys(obj as Record<string, unknown>).sort());
-      return sortedStringify(f.slots) !== sortedStringify(snap.slots);
+      return false; // committed and unchanged
     });
   },
 
@@ -381,19 +337,15 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
       conversationTitle,
       lastCommitHash,
       commitBranch,
-      selectDeltaFrames,
     } = get();
     if (!projectId) throw new Error('No project ID');
 
     set({ isCommitting: true, commitError: null });
     try {
-      const deltaFrames = selectDeltaFrames();
-      const cleanFrames = deltaFrames.map(({ slot_sources: _, source: __, ...f }) => f);
-
       const result = await createCommit(
         projectId,
         {
-          frames: cleanFrames,
+          trees: draft.trees,
           relations: draft.relations,
         },
         {
@@ -408,10 +360,13 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
       );
 
       const newCommittedIds: Record<string, boolean> = {};
-      const newSnapshot: Record<string, Frame> = {};
-      for (const f of draft.frames) {
+      const newSnapshot: Record<string, TreeNode> = {};
+      const flat = flattenTrees(draft.trees);
+      for (const f of flat) {
         newCommittedIds[f.id] = true;
-        newSnapshot[f.id] = { ...f, slots: { ...f.slots } };
+      }
+      for (const t of draft.trees) {
+        newSnapshot[t.key] = { ...t, slots: { ...t.slots } };
       }
 
       // Insert commit marker into delta log (links change history to commit)
@@ -432,7 +387,7 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
       set({
         lastCommitHash: result.commit.hash,
         committedFrameIds: newCommittedIds,
-        committedFrameSnapshot: newSnapshot,
+        committedNodeSnapshot: newSnapshot,
         isCommitting: false,
         panelMode: 'default',
         manualEditedFrameIds: new Set(),
@@ -460,15 +415,18 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
       if (recentCommits.length > 0) {
         const head = recentCommits[0];
         set({ lastCommitHash: head.hash });
-        const frames = (head.content?.frames ?? []) as Frame[];
-        if (frames.length > 0) {
+        const trees = (head.content?.trees ?? []) as TreeNode[];
+        if (trees.length > 0) {
+          const flat = flattenTrees(trees);
           const ids: Record<string, boolean> = {};
-          const snapshot: Record<string, Frame> = {};
-          for (const f of frames) {
+          const snapshot: Record<string, TreeNode> = {};
+          for (const f of flat) {
             ids[f.id] = true;
-            snapshot[f.id] = f;
           }
-          set({ committedFrameIds: ids, committedFrameSnapshot: snapshot });
+          for (const t of trees) {
+            snapshot[t.key] = t;
+          }
+          set({ committedFrameIds: ids, committedNodeSnapshot: snapshot });
         }
       }
     } catch {
@@ -494,7 +452,6 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
       get().applyDelta(result.delta, 'compress');
 
       // Patch the client-generated ID with the server's actual delta_log_id
-      // (applyDelta uses crypto.randomUUID(), but undo needs the real server ID)
       set((s) => {
         const log = [...s.deltaLog];
         const last = log[log.length - 1];

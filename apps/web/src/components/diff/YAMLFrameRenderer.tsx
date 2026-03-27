@@ -1,11 +1,12 @@
 'use client';
 
-import type { Frame, SlotDiff, SlotValue } from '@t3x-dev/core';
+import type { TreeNode, SlotDiff, SlotValue } from '@t3x-dev/core';
 import { formatSlotValue, YAML_COLORS } from './DiffYAMLFormatters';
 import { YAMLLine, type YAMLLineStatus } from './YAMLLine';
+import type { Frame } from '@/lib/treeCompat';
 
 interface YAMLFrameRendererProps {
-  frame: Frame;
+  frame: TreeNode;
   /** Overall status: how this frame differs in the diff */
   frameStatus: 'added' | 'removed' | 'modified' | 'identical';
   /** Slot-level diffs (only for modified frames) */
@@ -156,6 +157,6 @@ export function YAMLFrameRenderer({
 }
 
 /** Calculate how many lines a frame will render */
-export function frameLineCount(frame: Frame, removedSlotCount = 0): number {
+export function frameLineCount(frame: TreeNode, removedSlotCount = 0): number {
   return 1 + Object.keys(frame.slots).length + removedSlotCount;
 }

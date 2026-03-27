@@ -291,7 +291,7 @@ export default function LeafDetailPage() {
         {/* Left: YAML Tree (always visible in both modes) */}
         {!sourcePanelCollapsed && (
           <YAMLTreePanel
-            content={semanticContent ?? { frames: [], relations: [] }}
+            content={semanticContent ?? { trees: [], relations: [] }}
             mode={mode}
             constraints={leaf.constraints}
             assertions={leaf.assertions ?? undefined}

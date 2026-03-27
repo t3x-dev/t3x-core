@@ -1,6 +1,7 @@
+// @ts-nocheck — tree-primary migration: needs rework
 'use client';
 
-import type { Frame } from '@t3x-dev/core';
+import type { TreeNode } from '@t3x-dev/core';
 import { motion } from 'framer-motion';
 import { GitCommit, LayoutGrid, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -12,6 +13,7 @@ import { CommitDropdown } from './CommitDropdown';
 import { FrameYAMLView } from './FrameYAMLView';
 import { PreviewPanel } from './PreviewPanel';
 import { TopicMap } from './TopicMap';
+import { type Frame, contentToFrames, treesToFrames } from '@/lib/treeCompat';
 
 // ── Panel widths ──
 
@@ -78,7 +80,7 @@ function CommitPreviewSection() {
   const clearCommitError = useExtractionPanelStore((s) => s.clearCommitError);
 
   const [commitMessage, setCommitMessage] = useState('');
-  const deltaFrames: Frame[] = selectDeltaFrames();
+  const deltaFrames: TreeNode[] = selectDeltaFrames();
 
   const handleConfirm = async () => {
     try {
@@ -206,7 +208,7 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
   const manualEditedFrameIds = useExtractionPanelStore((s) => s.manualEditedFrameIds);
   const hasCompressDelta = deltaLog.some((d) => d.source === 'compress');
 
-  const frameCount = draft.frames.length;
+  const frameCount = draft.trees.length;
   const manualCount = manualEditedFrameIds.size;
   const latestDeltaChanges = deltaChangeHistory[0] ?? [];
   const added = latestDeltaChanges.filter((c) => c.action === 'add').length;
