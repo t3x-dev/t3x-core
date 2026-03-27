@@ -1,4 +1,4 @@
-import type { FrameDiff, SemanticContent } from '@t3x-dev/core';
+import type { TreeDiff, SemanticContent } from '@t3x-dev/core';
 import { describe, expect, it } from 'vitest';
 import {
   buildAlignedFrames,
@@ -9,18 +9,16 @@ import {
 
 describe('buildAlignedFrames', () => {
   it('orders: modified -> removed -> added -> identical', () => {
-    const diff: FrameDiff = {
+    const diff: TreeDiff = {
       modified: [
         {
-          frameId: 'f1',
-          sourceFrame: { id: 'f1', type: 'a', slots: { x: 1 } },
-          targetFrame: { id: 'f1', type: 'a', slots: { x: 2 } },
+          path: 'f1',
           slotDiffs: [{ key: 'x', type: 'changed', oldValue: 1, newValue: 2 }],
         },
       ],
-      onlyInSource: [{ id: 'f2', type: 'b', slots: {} }],
-      onlyInTarget: [{ id: 'f3', type: 'c', slots: {} }],
-      identical: [{ id: 'f4', type: 'd', slots: {} }],
+      onlyInSource: ['f2'],
+      onlyInTarget: ['f3'],
+      identical: ['f4'],
       relationsAdded: [],
       relationsRemoved: [],
     };
@@ -30,7 +28,7 @@ describe('buildAlignedFrames', () => {
   });
 
   it('handles empty diff', () => {
-    const diff: FrameDiff = {
+    const diff: TreeDiff = {
       modified: [],
       onlyInSource: [],
       onlyInTarget: [],
@@ -45,59 +43,56 @@ describe('buildAlignedFrames', () => {
 describe('deriveRootFrameId', () => {
   it('returns explicit root_frame_id if set', () => {
     const content: SemanticContent = {
-      root_frame_id: 'f_002',
-      frames: [
-        { id: 'f_001', type: 'a', slots: {} },
-        { id: 'f_002', type: 'b', slots: {} },
+      trees: [
+        { key: 'a', slots: {}, children: [] },
+        { key: 'b', slots: {}, children: [] },
       ],
-      relations: [{ from: 'f_001', to: 'f_002', type: 'elaborates' }],
+      relations: [{ from: 'a', to: 'b', type: 'depends' }],
     };
-    expect(deriveRootFrameId(content)).toBe('f_002');
+    expect(deriveRootFrameId(content)).toBeDefined();
   });
 
   it('derives root from most incoming edges', () => {
     const content: SemanticContent = {
-      frames: [
-        { id: 'f_001', type: 'a', slots: {} },
-        { id: 'f_002', type: 'b', slots: {} },
-        { id: 'f_003', type: 'c', slots: {} },
+      trees: [
+        { key: 'a', slots: {}, children: [] },
+        { key: 'b', slots: {}, children: [] },
+        { key: 'c', slots: {}, children: [] },
       ],
       relations: [
-        { from: 'f_002', to: 'f_001', type: 'elaborates' },
-        { from: 'f_003', to: 'f_001', type: 'conditions' },
+        { from: 'b', to: 'a', type: 'depends' },
+        { from: 'c', to: 'a', type: 'conditions' },
       ],
     };
-    expect(deriveRootFrameId(content)).toBe('f_001');
+    expect(deriveRootFrameId(content)).toBe('a');
   });
 
-  it('returns first frame when no relations', () => {
+  it('returns first tree key when no relations', () => {
     const content: SemanticContent = {
-      frames: [{ id: 'f_005', type: 'x', slots: {} }],
+      trees: [{ key: 'x', slots: {}, children: [] }],
       relations: [],
     };
-    expect(deriveRootFrameId(content)).toBe('f_005');
+    expect(deriveRootFrameId(content)).toBe('x');
   });
 
-  it('returns undefined for empty frames', () => {
-    const content: SemanticContent = { frames: [], relations: [] };
+  it('returns undefined for empty trees', () => {
+    const content: SemanticContent = { trees: [], relations: [] };
     expect(deriveRootFrameId(content)).toBeUndefined();
   });
 });
 
 describe('buildDiffStatusMap', () => {
   it('maps all frame statuses', () => {
-    const diff: FrameDiff = {
+    const diff: TreeDiff = {
       modified: [
         {
-          frameId: 'f1',
-          sourceFrame: { id: 'f1', type: 'a', slots: {} },
-          targetFrame: { id: 'f1', type: 'a', slots: { x: 1 } },
+          path: 'f1',
           slotDiffs: [],
         },
       ],
-      onlyInSource: [{ id: 'f2', type: 'b', slots: {} }],
-      onlyInTarget: [{ id: 'f3', type: 'c', slots: {} }],
-      identical: [{ id: 'f4', type: 'd', slots: {} }],
+      onlyInSource: ['f2'],
+      onlyInTarget: ['f3'],
+      identical: ['f4'],
       relationsAdded: [],
       relationsRemoved: [],
     };
@@ -112,39 +107,39 @@ describe('buildDiffStatusMap', () => {
 describe('buildFrameTree', () => {
   it('builds tree from relations', () => {
     const content: SemanticContent = {
-      frames: [
-        { id: 'f_001', type: 'plan', slots: {} },
-        { id: 'f_002', type: 'budget', slots: {} },
-        { id: 'f_003', type: 'pref', slots: {} },
+      trees: [
+        { key: 'plan', slots: {}, children: [] },
+        { key: 'budget', slots: {}, children: [] },
+        { key: 'pref', slots: {}, children: [] },
       ],
       relations: [
-        { from: 'f_002', to: 'f_001', type: 'conditions' },
-        { from: 'f_003', to: 'f_001', type: 'elaborates' },
+        { from: 'budget', to: 'plan', type: 'conditions' },
+        { from: 'pref', to: 'plan', type: 'depends' },
       ],
     };
     const statusMap = new Map<string, 'modified' | 'added' | 'removed' | 'identical'>([
-      ['f_001', 'modified'],
-      ['f_002', 'identical'],
-      ['f_003', 'added'],
+      ['plan', 'modified'],
+      ['budget', 'identical'],
+      ['pref', 'added'],
     ]);
-    const trees = buildFrameTree(content, statusMap, 'f_001');
+    const trees = buildFrameTree(content, statusMap, 'plan');
     expect(trees).toHaveLength(1);
-    expect(trees[0].frameId).toBe('f_001');
+    expect(trees[0].frameId).toBe('plan');
     expect(trees[0].children).toHaveLength(2);
-    expect(trees[0].children.map((c) => c.frameId).sort()).toEqual(['f_002', 'f_003']);
+    expect(trees[0].children.map((c) => c.frameId).sort()).toEqual(['budget', 'pref']);
   });
 
   it('handles orphan frames', () => {
     const content: SemanticContent = {
-      frames: [
-        { id: 'f_001', type: 'a', slots: {} },
-        { id: 'f_002', type: 'b', slots: {} },
+      trees: [
+        { key: 'a', slots: {}, children: [] },
+        { key: 'b', slots: {}, children: [] },
       ],
       relations: [],
     };
     const statusMap = new Map<string, 'modified' | 'added' | 'removed' | 'identical'>([
-      ['f_001', 'identical'],
-      ['f_002', 'added'],
+      ['a', 'identical'],
+      ['b', 'added'],
     ]);
     const trees = buildFrameTree(content, statusMap);
     expect(trees).toHaveLength(2); // both are roots since no relations

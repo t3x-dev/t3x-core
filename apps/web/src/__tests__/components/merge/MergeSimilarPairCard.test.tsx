@@ -20,13 +20,13 @@ describe('MergeSimilarPairCard', () => {
         id: 's1',
         text: 'Budget is $3000',
         confidence: 0.9,
-        source: { type: 'turn', id: 't1' },
+        source: { turn_hash: 't1' },
       },
       target: {
         id: 's2',
         text: 'Budget is $3500',
         confidence: 0.9,
-        source: { type: 'turn', id: 't2' },
+        source: { turn_hash: 't2' },
       },
       wordDiff: [
         { type: 'unchanged', text: 'Budget is ' },
@@ -47,20 +47,19 @@ describe('MergeSimilarPairCard', () => {
         id: 's1',
         text: 'Source text',
         confidence: 0.9,
-        source: { type: 'turn', id: 't1' },
+        source: { turn_hash: 't1' },
       },
       target: {
         id: 's2',
         text: 'Target text',
         confidence: 0.9,
-        source: { type: 'turn', id: 't2' },
+        source: { turn_hash: 't2' },
       },
       wordDiff: [],
       resolution: undefined,
     };
 
     expect(pair.resolution).toBeUndefined();
-    expect(pair.suggestion).toBeUndefined();
   });
 
   test('handles resolved pair with source choice', () => {
@@ -69,13 +68,13 @@ describe('MergeSimilarPairCard', () => {
         id: 's1',
         text: 'Source text',
         confidence: 0.9,
-        source: { type: 'turn', id: 't1' },
+        source: { turn_hash: 't1' },
       },
       target: {
         id: 's2',
         text: 'Target text',
         confidence: 0.9,
-        source: { type: 'turn', id: 't2' },
+        source: { turn_hash: 't2' },
       },
       wordDiff: [],
       resolution: 'source',
@@ -90,13 +89,13 @@ describe('MergeSimilarPairCard', () => {
         id: 's1',
         text: 'Source text',
         confidence: 0.9,
-        source: { type: 'turn', id: 't1' },
+        source: { turn_hash: 't1' },
       },
       target: {
         id: 's2',
         text: 'Target text',
         confidence: 0.9,
-        source: { type: 'turn', id: 't2' },
+        source: { turn_hash: 't2' },
       },
       wordDiff: [],
       resolution: 'target',
@@ -105,46 +104,19 @@ describe('MergeSimilarPairCard', () => {
     expect(pair.resolution).toBe('target');
   });
 
-  test('handles suggestion field', () => {
-    const pair: MergeSimilarPair = {
-      source: {
-        id: 's1',
-        text: 'Source text',
-        confidence: 0.9,
-        source: { type: 'turn', id: 't1' },
-      },
-      target: {
-        id: 's2',
-        text: 'Target text',
-        confidence: 0.9,
-        source: { type: 'turn', id: 't2' },
-      },
-      wordDiff: [],
-      suggestion: {
-        suggestion: 'Combined text',
-        reasoning: 'Merged both versions',
-      },
-      resolution: undefined,
-    };
-
-    expect(pair.suggestion).toBeDefined();
-    expect(pair.suggestion?.suggestion).toBe('Combined text');
-    expect(pair.suggestion?.reasoning).toBe('Merged both versions');
-  });
-
   test('word diff segments have correct structure', () => {
     const pair: MergeSimilarPair = {
       source: {
         id: 's1',
         text: 'text',
         confidence: 0.9,
-        source: { type: 'turn', id: 't1' },
+        source: { turn_hash: 't1' },
       },
       target: {
         id: 's2',
         text: 'text',
         confidence: 0.9,
-        source: { type: 'turn', id: 't2' },
+        source: { turn_hash: 't2' },
       },
       wordDiff: [
         { type: 'unchanged', text: 'same' },

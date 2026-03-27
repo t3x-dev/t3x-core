@@ -12,7 +12,7 @@
 import { act } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useIncrementalDiff } from '@/hooks/useIncrementalDiff';
-import type { TreeNode } from '@/lib/diffUtils';
+import type { DiffableSentence } from '@/lib/diffUtils';
 import { cleanupRoots, renderHook, waitForHook } from './renderHook';
 
 // Mock diffUtils to control behavior
@@ -29,12 +29,12 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-const parentSentences: TreeNode[] = [
+const parentSentences: DiffableSentence[] = [
   { id: 's_1', text: 'The budget is $3000.' },
   { id: 's_2', text: 'Project deadline is March.' },
 ];
 
-const draftSentences: TreeNode[] = [
+const draftSentences: DiffableSentence[] = [
   { id: 's_1', text: 'The budget is $3000.' },
   { id: 's_3', text: 'We need two developers.' },
 ];
