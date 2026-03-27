@@ -341,7 +341,7 @@ turnRoutes.openapi(listTurnsRoute, async (c) => {
  * POST /v1/turns - Create turn
  */
 turnRoutes.openapi(createTurnRoute, async (c) => {
-  let body: {
+  type TurnBody = {
     project_id?: string;
     conversation_id?: string;
     role?: string;
@@ -349,10 +349,11 @@ turnRoutes.openapi(createTurnRoute, async (c) => {
     language?: string;
     rings?: unknown;
     content_blocks?: ContentBlock[];
-  } | null = null;
+  };
+  let body: TurnBody | null = null;
 
   try {
-    body = c.req.valid('json') as typeof body;
+    body = c.req.valid('json') as TurnBody;
   } catch {
     return c.json(
       { success: false as const, error: { code: 'INVALID_JSON', message: 'Invalid JSON body' } },

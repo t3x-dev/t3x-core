@@ -183,10 +183,10 @@ describe('Projects Routes', () => {
       await createCommit(mockDB, {
         project_id: project.projectId,
         author: { type: 'human', name: 'Tester' },
-        content: {
-          frames: [{ id: 's_1', type: 'legacy_sentence', slots: { text: 'Test sentence' } }],
+        content: ({
+          trees: [{ id: 's_1', type: 'legacy_sentence', slots: { text: 'Test sentence' } }],
           relations: [],
-        },
+        }) as any,
         branch: 'main',
       });
 
@@ -217,12 +217,12 @@ describe('Projects Routes', () => {
       await createCommit(mockDB, {
         project_id: project.projectId,
         author: { type: 'human', name: 'Tester' },
-        content: {
-          frames: [
+        content: ({
+          trees: [
             { id: 's_mm1', type: 'legacy_sentence', slots: { text: 'Merkle mismatch test' } },
           ],
           relations: [],
-        },
+        }) as any,
         branch: 'main',
       });
 

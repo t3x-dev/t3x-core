@@ -90,8 +90,8 @@ describe('POST /v1/leaves/:id/generate — lesson collector wiring', () => {
     // Create a test commit
     const commit = await createCommit(mockDB, {
       author: { type: 'human', name: 'Test User' },
-      content: {
-        frames: [
+      content: ({
+        trees: [
           { id: 's_lc1', text: 'User prefers concise responses' },
           { id: 's_lc2', text: 'User likes bullet points' },
         ].map((s) => ({
@@ -102,7 +102,7 @@ describe('POST /v1/leaves/:id/generate — lesson collector wiring', () => {
           confidence: (s as any).confidence ?? 1,
         })),
         relations: [],
-      },
+      }) as any,
       project_id: testProjectId,
       branch: 'main',
       message: 'Commit for lesson collector tests',
@@ -262,8 +262,8 @@ describe('POST /v1/leaves/:id/generate — lesson collector wiring', () => {
     // Create a fresh commit with no sibling leaves
     const freshCommit = await createCommit(mockDB, {
       author: { type: 'human', name: 'Test User' },
-      content: {
-        frames: [{ id: 's_fresh1', text: 'A brand new sentence' }].map((s) => ({
+      content: ({
+        trees: [{ id: 's_fresh1', text: 'A brand new sentence' }].map((s) => ({
           id: s.id,
           type: 'legacy_sentence' as const,
           slots: { text: s.text },
@@ -271,7 +271,7 @@ describe('POST /v1/leaves/:id/generate — lesson collector wiring', () => {
           confidence: (s as any).confidence ?? 1,
         })),
         relations: [],
-      },
+      }) as any,
       project_id: testProjectId,
       branch: 'main',
       message: 'Isolated commit for lesson test',

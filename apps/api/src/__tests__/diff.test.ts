@@ -72,7 +72,7 @@ describe('Diff Routes', () => {
 
     it('returns success for V4 commit hash mode', async () => {
       const { getCommitUnified } = await import('@t3x-dev/storage');
-      const { frameDiff } = await import('@t3x-dev/core');
+      const { diffCommits } = await import('@t3x-dev/core');
 
       const baseCommit = {
         hash: 'sha256:base',
@@ -81,7 +81,7 @@ describe('Diff Routes', () => {
         committed_at: '2024-01-01T00:00:00Z',
         branch: 'main',
         content: {
-          frames: [{ id: 'f_001', type: 'legacy_sentence', slots: { text: 'Hello world' } }],
+          trees: [{ key: 'f_001', slots: { text: 'Hello world' } }],
           relations: [],
         },
       };
@@ -92,7 +92,7 @@ describe('Diff Routes', () => {
         committed_at: '2024-01-02T00:00:00Z',
         branch: 'main',
         content: {
-          frames: [{ id: 'f_002', type: 'legacy_sentence', slots: { text: 'Hello there' } }],
+          trees: [{ key: 'f_002', slots: { text: 'Hello there' } }],
           relations: [],
         },
       };
@@ -105,8 +105,8 @@ describe('Diff Routes', () => {
         identical: [],
         similar: [
           {
-            base: { id: 'f_001', type: 'legacy_sentence', slots: { text: 'Hello world' } },
-            target: { id: 'f_002', type: 'legacy_sentence', slots: { text: 'Hello there' } },
+            base: { key: 'f_001', slots: { text: 'Hello world' } },
+            target: { key: 'f_002', slots: { text: 'Hello there' } },
             similarity: 0.7,
             word_diff: [],
           },
@@ -114,7 +114,7 @@ describe('Diff Routes', () => {
         only_in_base: [],
         only_in_target: [],
       };
-      (frameDiff as ReturnType<typeof vi.fn>).mockReturnValue(mockFrameDiffResult);
+      (diffCommits as ReturnType<typeof vi.fn>).mockReturnValue(mockFrameDiffResult);
 
       const res = await app.request('/v1/diff/two-way', {
         method: 'POST',
@@ -152,7 +152,8 @@ describe('Diff Routes', () => {
 
         // Turn hash mode needs embedding API — mock it
         process.env.GOOGLE_AI_STUDIO_KEY = 'test-key';
-        const { createDiffEngine, createGoogleAIEmbeddingProvider, createCachedEmbeddingProvider } =
+        // createDiffEngine removed in tree-primary refactor; only test provider mocking
+        const { createGoogleAIEmbeddingProvider, createCachedEmbeddingProvider } =
           await import('@t3x-dev/core');
 
         (createGoogleAIEmbeddingProvider as ReturnType<typeof vi.fn>).mockReturnValue({});
@@ -168,7 +169,8 @@ describe('Diff Routes', () => {
             stats: { same: 0, modified: 0, added: 2, removed: 2 },
           }),
         };
-        (createDiffEngine as ReturnType<typeof vi.fn>).mockReturnValue(mockDiffEngine);
+        // createDiffEngine removed in tree-primary refactor; skip engine mock
+        // (createDiffEngine as ReturnType<typeof vi.fn>).mockReturnValue(mockDiffEngine);
 
         const res = await app.request('/v1/diff/two-way', {
           method: 'POST',

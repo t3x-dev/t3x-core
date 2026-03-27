@@ -50,13 +50,13 @@ const FrameSchema = z.object({
 const RelationSchema = z.object({
   from: z.string().min(1),
   to: z.string().min(1),
-  type: z.enum(['causes', 'conditions', 'contrasts', 'elaborates', 'follows', 'depends']),
+  type: z.enum(['causes', 'conditions', 'contrasts', 'follows', 'depends']),
   confidence: z.number().min(0).max(1).optional(),
 });
 
 const GateCheckRequest = z.object({
   content: z.object({
-    frames: z.array(FrameSchema),
+    trees: z.array(FrameSchema),
     relations: z.array(RelationSchema),
   }),
   turns: z.array(TurnSchema).optional(),
@@ -243,7 +243,8 @@ gateRoutes.openapi(gateCheckRoute, async (c) => {
 
     // Run gates
     const runner = new GateRunner();
-    const result = await runner.run(content, {
+    // biome-ignore lint/suspicious/noExplicitAny: cast validated content to SemanticContent
+    const result = await runner.run(content as any, {
       provider: provider ?? undefined,
       turns,
       businessRules: business_rules,

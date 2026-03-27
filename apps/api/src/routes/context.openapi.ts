@@ -9,7 +9,7 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import type { Frame } from '@t3x-dev/core';
+import { flattenTrees } from '@t3x-dev/core';
 import { getLatestCommit } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
@@ -34,7 +34,7 @@ export const contextRoutes = new OpenAPIHono({
  * Frames are the internal storage model; sentences are the simplified
  * integration-layer view for external consumers.
  */
-function frameToSentence(frame: Frame): z.infer<typeof ExtractSentence> {
+function frameToSentence(frame: { id: string; type: string; slots: Record<string, unknown>; confidence?: number }): z.infer<typeof ExtractSentence> {
   // Build a human-readable text from frame type + slots
   const slotEntries = Object.entries(frame.slots)
     .map(([key, value]) => `${key}: ${String(value)}`)
@@ -147,8 +147,8 @@ contextRoutes.openapi(getContextRoute, async (c) => {
     }
 
     // Convert frames to integration-layer sentences
-    const frames = commit.content.frames ?? [];
-    const sentences = frames.map(frameToSentence);
+    const flat = flattenTrees(commit.content.trees ?? []);
+    const sentences = flat.map(frameToSentence);
 
     const result: z.infer<typeof ContextResponse> = {
       commit_hash: commit.hash,

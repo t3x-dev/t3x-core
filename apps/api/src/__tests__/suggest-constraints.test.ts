@@ -83,8 +83,8 @@ describe('Suggest Constraints', () => {
     // Create a commit with sentences
     const commit = await createCommit(mockDB, {
       author: { type: 'human', name: 'test' },
-      content: {
-        frames: [
+      content: ({
+        trees: [
           { id: 's_test001', text: 'The user prefers budget-friendly travel.', confidence: 0.9 },
           { id: 's_test002', text: 'The user wants to visit Japan in spring.', confidence: 0.95 },
         ].map((s) => ({
@@ -94,7 +94,7 @@ describe('Suggest Constraints', () => {
           confidence: s.confidence,
         })),
         relations: [],
-      },
+      }) as any,
       project_id: testProjectId,
       message: 'Test commit for suggestion',
       branch: 'main',

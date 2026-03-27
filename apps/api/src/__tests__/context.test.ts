@@ -50,8 +50,8 @@ describe('Context Routes', () => {
     await createCommit(mockDB, {
       parents: [],
       author: { type: 'human', id: 'user_1', name: 'Test User' },
-      content: {
-        frames: [
+      content: ({
+        trees: [
           {
             id: 'f_001',
             type: 'preference',
@@ -60,7 +60,7 @@ describe('Context Routes', () => {
           },
         ],
         relations: [],
-      },
+      }) as any,
       project_id: testProjectId,
       message: 'First commit',
       branch: 'main',
@@ -70,8 +70,8 @@ describe('Context Routes', () => {
     await createCommit(mockDB, {
       parents: [],
       author: { type: 'human', id: 'user_1', name: 'Test User' },
-      content: {
-        frames: [
+      content: ({
+        trees: [
           {
             id: 'f_001',
             type: 'preference',
@@ -86,7 +86,7 @@ describe('Context Routes', () => {
           },
         ],
         relations: [],
-      },
+      }) as any,
       project_id: testProjectId,
       message: 'Second commit on main',
       branch: 'main',
@@ -96,8 +96,8 @@ describe('Context Routes', () => {
     await createCommit(mockDB, {
       parents: [],
       author: { type: 'human', id: 'user_1', name: 'Test User' },
-      content: {
-        frames: [
+      content: ({
+        trees: [
           {
             id: 'f_010',
             type: 'opinion',
@@ -106,7 +106,7 @@ describe('Context Routes', () => {
           },
         ],
         relations: [],
-      },
+      }) as any,
       project_id: testProjectId,
       message: 'Commit on dev branch',
       branch: 'dev',

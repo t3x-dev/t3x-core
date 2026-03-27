@@ -59,8 +59,8 @@ describe('POST /v1/leaves/:id/validate', () => {
     // Create a test commit
     const commit = await createCommit(mockDB, {
       author: { type: 'human', name: 'Test User' },
-      content: {
-        frames: [
+      content: ({
+        trees: [
           { id: 's_1', text: 'User budget is $5,000' },
           { id: 's_2', text: 'User prefers premium quality' },
         ].map((s) => ({
@@ -71,7 +71,7 @@ describe('POST /v1/leaves/:id/validate', () => {
           confidence: (s as any).confidence ?? 1,
         })),
         relations: [],
-      },
+      }) as any,
       project_id: testProjectId,
       branch: 'main',
       message: 'Test commit for validation',

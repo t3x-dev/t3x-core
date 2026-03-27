@@ -26,45 +26,37 @@ import { ALL_LEAF_TYPES, LEAF_TYPES } from '@t3x-dev/core';
 
 const OapiSlotRefSchema = z.object({ ref: z.string() });
 
-const OapiInlineFrameSchema: z.ZodType<{ type: string; slots: Record<string, unknown> }> = z.lazy(
-  () =>
-    z.object({
-      type: z.string().min(1),
-      slots: z.record(z.string(), OapiSlotValueSchema),
-    })
-);
-
 const OapiSlotValueSchema: z.ZodType<unknown> = z.lazy(() =>
   z.union([
     z.string(),
     z.number(),
     OapiSlotRefSchema,
-    OapiInlineFrameSchema,
     z.array(OapiSlotValueSchema),
   ])
 );
 
-const OapiFrameSchema = z.object({
-  id: z.string().regex(/^f_\d{3,}$/),
-  type: z
-    .string()
-    .min(1)
-    .regex(/^[a-z][a-z0-9_]*$/),
-  slots: z
-    .record(z.string(), OapiSlotValueSchema)
-    .refine((s) => Object.keys(s).length >= 1, { message: 'Frame must have at least one slot' })
-    .refine((s) => Object.keys(s).length <= 100, {
-      message: 'Frame cannot have more than 100 slots',
-    }),
-  source: z.string().optional(),
-  confidence: z.number().min(0).max(1).optional(),
-});
+const OapiTreeNodeSchema: z.ZodType<{
+  key: string;
+  slots: Record<string, unknown>;
+  children: unknown[];
+  slot_quotes?: Record<string, string>;
+  source?: string;
+  confidence?: number;
+}> = z.lazy(() =>
+  z.object({
+    key: z.string().min(1),
+    slots: z.record(z.string(), OapiSlotValueSchema),
+    children: z.array(OapiTreeNodeSchema).default([]),
+    slot_quotes: z.record(z.string(), z.string()).optional(),
+    source: z.string().optional(),
+    confidence: z.number().min(0).max(1).optional(),
+  })
+);
 
-const OapiFrameRelationTypeSchema = z.enum([
+const OapiRelationTypeSchema = z.enum([
   'causes',
   'conditions',
   'contrasts',
-  'elaborates',
   'follows',
   'depends',
 ]);
@@ -72,12 +64,12 @@ const OapiFrameRelationTypeSchema = z.enum([
 const OapiRelationSchema = z.object({
   from: z.string(),
   to: z.string(),
-  type: OapiFrameRelationTypeSchema,
+  type: OapiRelationTypeSchema,
   confidence: z.number().min(0).max(1).optional(),
 });
 
 const OapiSemanticContentSchema = z.object({
-  frames: z.array(OapiFrameSchema).min(1).max(1000),
+  trees: z.array(OapiTreeNodeSchema).min(1).max(1000),
   relations: z.array(OapiRelationSchema).max(5000),
 });
 
@@ -190,22 +182,9 @@ export const CreateCommitRequest = z
       .describe('Parent commit hashes (empty for root commit)'),
     message: z.string().optional().describe('Human-readable commit message'),
     branch: z.string().optional().describe('Branch name (defaults to main)'),
-    source_refs: z
-      .array(
-        z.object({
-          type: z.enum(['conversation', 'leaf']),
-          id: z.string(),
-          title: z.string().optional(),
-          assertion_lessons: z.array(z.string()).optional(),
-        })
-      )
-      .optional()
-      .describe('References to source conversations or leaves'),
-    position_x: z.number().optional().describe('Canvas X position'),
-    position_y: z.number().optional().describe('Canvas Y position'),
     semantic: OapiSemanticContentSchema.nullable()
       .optional()
-      .describe('Semantic frame content (frames + relations)'),
+      .describe('Semantic tree content (trees + relations)'),
 
     // Inheritance control
     inherit_parent_sentences: z
@@ -248,19 +227,8 @@ export const CommitResponse = z.object({
   project_id: z.string().nullable(),
   message: z.string().nullable(),
   branch: z.string().nullable(),
-  source_refs: z
-    .array(
-      z.object({
-        type: z.enum(['conversation', 'leaf']),
-        id: z.string(),
-        title: z.string().optional(),
-        assertion_lessons: z.array(z.string()).optional(),
-      })
-    )
-    .nullable(),
   semantic: OapiSemanticContentSchema.nullable().optional(),
-  position_x: z.number().nullable(),
-  position_y: z.number().nullable(),
+  provenance: z.unknown().nullable().optional(),
   created_at: z.string(),
   merge_summary: z
     .object({

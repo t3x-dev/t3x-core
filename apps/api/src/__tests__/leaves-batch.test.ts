@@ -43,8 +43,8 @@ describe('Batch Generation Routes', () => {
     // Create a real V4 commit for testing
     const commit = await createCommit(mockDB, {
       author: { type: 'human', name: 'test-user' },
-      content: {
-        frames: [
+      content: ({
+        trees: [
           { id: 's1', text: 'Test sentence for batch generation.' },
           { id: 's2', text: 'Another test sentence.' },
         ].map((s) => ({
@@ -55,7 +55,7 @@ describe('Batch Generation Routes', () => {
           confidence: (s as any).confidence ?? 1,
         })),
         relations: [],
-      },
+      }) as any,
       project_id: testProjectId,
       message: 'Test commit for batch',
       branch: 'main',
