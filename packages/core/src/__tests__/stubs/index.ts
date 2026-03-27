@@ -10,4 +10,3 @@ export {
   WordOverlapEmbeddingProvider,
 } from './StubEmbeddingProvider';
 export { StubLLMProvider } from './StubLLMProvider';
-export { StubNLPProvider } from './StubNLPProvider';

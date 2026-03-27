@@ -15,7 +15,6 @@
 
 import {
   boolean,
-  customType,
   index,
   integer,
   jsonb,
@@ -151,23 +150,10 @@ export const commitsV4 = pgTable(
     committedAt: timestamp('committed_at', { withTimezone: true }).notNull(),
 
     /**
-     * Content: { sentences: Sentence[] }
+     * Content: { trees: TreeNode[], relations: Relation[] }
      * NOTE: No constraints here - they belong to leaves now
      */
-    content: jsonb('content').notNull().$type<{
-      sentences: Array<{
-        id: string;
-        text: string;
-        confidence?: number;
-        source_ref?: {
-          conversation_id: string;
-          turn_hash: string;
-          start_char: number;
-          end_char: number;
-        };
-        anchor_type?: 'verbatim' | 'paraphrase' | 'inference';
-      }>;
-    }>(),
+    content: jsonb('content').notNull(),
 
     // ─────────────────────────────────────────────────────────────────────────
     // Second-class fields (NOT in hash)
@@ -208,7 +194,7 @@ export const commitsV4 = pgTable(
       kept_from_source: number;
       kept_from_target: number;
       discarded: number;
-      total_sentences: number;
+      total_nodes: number;
       release_note?: {
         title: string;
         timestamp: string;
@@ -294,8 +280,6 @@ export const leaves = pgTable(
           match_mode: 'exact' | 'semantic';
           value: string;
           description?: string;
-          /** @deprecated Use source_frame instead */
-          source_sentence_id?: string;
           /** Frame-based source reference */
           source_frame?: { frame_type: string; slot_key?: string };
           reason?: string;
@@ -741,11 +725,11 @@ export type WebhookInsert = typeof webhooks.$inferInsert;
 /**
  * Draft is a pre-commit workspace (like Git's working directory).
  *
- * Users compose sentences, add constraints, preview output, then commit.
+ * Users compose nodes, add constraints, preview output, then commit.
  * Status lifecycle: editing → committed | abandoned.
  *
  * JSONB columns:
- * - sentences_json: DraftSentence[]
+ * - nodes_json: DraftNode[]
  * - constraints_json: DraftConstraint[]
  */
 export const drafts = pgTable(
@@ -771,8 +755,8 @@ export const drafts = pgTable(
     /** Source draft ID if forked from a committed draft */
     forkedFrom: text('forked_from'),
 
-    /** Editable sentences (DraftSentence[]) */
-    sentencesJson: jsonb('sentences_json')
+    /** Editable nodes (DraftNode[]) */
+    nodesJson: jsonb('nodes_json')
       .notNull()
       .$type<
         Array<{
@@ -860,67 +844,6 @@ export const drafts = pgTable(
 
 export type DraftRecord = typeof drafts.$inferSelect;
 export type DraftInsert = typeof drafts.$inferInsert;
-
-// ═══════════════════════════════════════════════════════════════════════════
-// sentence_vectors: pgvector-powered sentence similarity search
-// ═══════════════════════════════════════════════════════════════════════════
-
-/**
- * Custom Drizzle type for pgvector's `vector(768)` column.
- * Converts between number[] (TypeScript) and vector literal (SQL).
- */
-const pgVector = customType<{ data: number[]; driverData: string }>({
-  dataType() {
-    return 'vector(768)';
-  },
-  toDriver(value: number[]): string {
-    return `[${value.join(',')}]`;
-  },
-  fromDriver(value: string): number[] {
-    return value.replace(/[[\]]/g, '').split(',').map(Number);
-  },
-});
-
-/**
- * Stores per-sentence embedding vectors for semantic similarity search.
- *
- * Populated when a draft is committed (if embedding provider is configured).
- * Enables the AutoSuggest feature: "given a goal, find relevant committed sentences".
- *
- * @see docs/rfcs/engine-moat-reinforcement.md §4.2
- */
-export const sentenceVectors = pgTable(
-  'sentence_vectors',
-  {
-    /** Sentence ID (e.g., "s_abc123") */
-    id: text('id').primaryKey(),
-
-    /** Project scope */
-    projectId: text('project_id').notNull(),
-
-    /** Which commit this sentence belongs to */
-    commitHash: text('commit_hash').notNull(),
-
-    /** The sentence text (denormalized for display without join) */
-    sentenceText: text('text').notNull(),
-
-    /** 768-dimensional embedding vector (Google AI text-embedding-004) */
-    embedding: pgVector('embedding').notNull(),
-
-    /** Which embedding model produced this vector */
-    modelId: text('model_id').notNull(),
-
-    /** When this vector was created */
-    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  },
-  (table) => ({
-    projectIdx: index('idx_sv_project').on(table.projectId),
-    commitIdx: index('idx_sv_commit').on(table.commitHash),
-  })
-);
-
-export type SentenceVectorRecord = typeof sentenceVectors.$inferSelect;
-export type SentenceVectorInsert = typeof sentenceVectors.$inferInsert;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // recipes: Workflow Recipes
@@ -1130,41 +1053,6 @@ export type TopicRecord = typeof topics.$inferSelect;
 export type TopicInsert = typeof topics.$inferInsert;
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Sentence Relations (Inter-sentence Relations)
-// @see docs/plans/2026-03-05-inter-sentence-relations-design.md
-// ═══════════════════════════════════════════════════════════════════════════
-
-export const sentenceRelations = pgTable(
-  'sentence_relations',
-  {
-    id: text('id').primaryKey(),
-    projectId: text('project_id')
-      .notNull()
-      .references(() => projects.projectId, { onDelete: 'cascade' }),
-    commitHash: text('commit_hash').notNull(),
-    sourceId: text('source_id').notNull(),
-    targetId: text('target_id').notNull(),
-    type: text('type').notNull(),
-    confidence: real('confidence').notNull(),
-    reasoning: text('reasoning'),
-    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  },
-  (table) => ({
-    commitIdx: index('idx_sr_commit').on(table.commitHash),
-    projectIdx: index('idx_sr_project').on(table.projectId),
-    pairUniq: uniqueIndex('idx_sr_pair').on(
-      table.commitHash,
-      table.sourceId,
-      table.targetId,
-      table.type
-    ),
-  })
-);
-
-export type SentenceRelationRecord = typeof sentenceRelations.$inferSelect;
-export type SentenceRelationInsert = typeof sentenceRelations.$inferInsert;
-
-// ═══════════════════════════════════════════════════════════════════════════
 // Knowledge Graph (Cross-conversation entity/topic graph)
 // @see docs/plans/2026-03-05-knowledge-graph-design.md
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1227,8 +1115,8 @@ export const knowledgeEdges = pgTable(
     evidence:
       jsonb('evidence').$type<
         Array<{
-          source_sentence_id: string;
-          target_sentence_id: string;
+          source_node_key: string;
+          target_node_key: string;
           relation_type: string;
           confidence: number;
         }>

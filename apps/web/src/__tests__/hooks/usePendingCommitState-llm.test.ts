@@ -76,7 +76,7 @@ const mockDraft = {
   goal: null,
   parent_commit_hash: null,
   forked_from: null,
-  sentences: [],
+  nodes: [],
   constraints: [],
   instructions: null,
   preview_type: null,

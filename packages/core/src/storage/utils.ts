@@ -58,7 +58,7 @@ export function generateDraftId(): string {
   return `draft_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
 }
 
-export function generateDraftSentenceId(): string {
+export function generateDraftNodeId(): string {
   return `ds_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
 }
 

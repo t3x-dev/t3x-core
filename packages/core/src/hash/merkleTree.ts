@@ -1,12 +1,12 @@
 /**
  * Merkle Tree Verification (#14)
  *
- * Builds a binary Merkle tree from commit sentences for efficient
+ * Builds a binary Merkle tree from commit content nodes for efficient
  * integrity verification. Each leaf is sha256(id + text).
  *
  * Supports:
  * - Full tree construction with root hash
- * - Membership proof (verify single sentence belongs to tree)
+ * - Membership proof (verify single node belongs to tree)
  */
 
 import { sha256 } from '../common';
@@ -27,7 +27,7 @@ export interface MerkleTree {
 
 export interface MembershipProof {
   verified: boolean;
-  sentence_id: string;
+  node_id: string;
   leaf_hash: string;
   proof: ProofStep[];
 }
@@ -48,8 +48,8 @@ function hashPair(left: string, right: string): string {
   return `sha256:${sha256(`${l}:${r}`)}`;
 }
 
-export function buildMerkleTree(sentences: { id: string; text: string }[]): MerkleTree {
-  if (sentences.length === 0) {
+export function buildMerkleTree(nodes: { id: string; text: string }[]): MerkleTree {
+  if (nodes.length === 0) {
     return {
       root: `sha256:${sha256('empty')}`,
       leaves: [],
@@ -59,8 +59,8 @@ export function buildMerkleTree(sentences: { id: string; text: string }[]): Merk
   }
 
   // Build leaf layer
-  const leafHashes = sentences.map((s) => hashLeaf(s.id, s.text));
-  const merkleLeaves: MerkleLeaf[] = sentences.map((s, i) => ({
+  const leafHashes = nodes.map((s) => hashLeaf(s.id, s.text));
+  const merkleLeaves: MerkleLeaf[] = nodes.map((s, i) => ({
     id: s.id,
     hash: leafHashes[i],
     index: i,
@@ -89,8 +89,8 @@ export function buildMerkleTree(sentences: { id: string; text: string }[]): Merk
   };
 }
 
-export function verifyMembership(tree: MerkleTree, sentenceId: string): MembershipProof | null {
-  const leaf = tree.leaves.find((l) => l.id === sentenceId);
+export function verifyMembership(tree: MerkleTree, nodeId: string): MembershipProof | null {
+  const leaf = tree.leaves.find((l) => l.id === nodeId);
   if (!leaf) return null;
 
   const proof: ProofStep[] = [];
@@ -122,7 +122,7 @@ export function verifyMembership(tree: MerkleTree, sentenceId: string): Membersh
 
   return {
     verified: computed === tree.root,
-    sentence_id: sentenceId,
+    node_id: nodeId,
     leaf_hash: leaf.hash,
     proof,
   };

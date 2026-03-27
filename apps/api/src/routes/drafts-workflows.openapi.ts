@@ -22,10 +22,8 @@ import {
   createLeaf,
   findDraftById,
   forkDraft,
-  searchSimilarSentences,
   updateDraft,
   updateDraftPreview,
-  upsertSentenceVectorsBatch,
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { getEmbedder } from '../lib/embedder';
@@ -278,10 +276,10 @@ draftsWorkflowRoutes.openapi(previewDraftRoute, async (c) => {
       );
     }
 
-    // biome-ignore lint/suspicious/noExplicitAny: draft.sentences is loosely typed from storage
-    const includedSentences = (draft.sentences as any[]).filter((s: any) => s.included);
-    if (includedSentences.length === 0) {
-      return errorResponse(c, 'INVALID_REQUEST', 'Draft has no included sentences');
+    // biome-ignore lint/suspicious/noExplicitAny: draft.nodes is loosely typed from storage
+    const includedNodes = (draft.nodes as any[]).filter((s: any) => s.included);
+    if (includedNodes.length === 0) {
+      return errorResponse(c, 'INVALID_REQUEST', 'Draft has no included nodes');
     }
 
     // 3. Check generation configured
@@ -309,7 +307,7 @@ draftsWorkflowRoutes.openapi(previewDraftRoute, async (c) => {
     // 5. Compute cache key
     const previewType = body?.preview_type ?? draft.preview_type ?? 'tweet';
     const cacheInput = JSON.stringify({
-      sentences: includedSentences.map((s) => s.text).sort(),
+      sentences: includedNodes.map((s) => s.text).sort(),
       constraints: draft.constraints,
       instructions: draft.instructions,
       preview_type: previewType,
@@ -341,7 +339,7 @@ draftsWorkflowRoutes.openapi(previewDraftRoute, async (c) => {
       author: { type: 'human' as const, name: 'preview' },
       committed_at: new Date().toISOString(),
       content: {
-        trees: includedSentences.map((s: any) => ({
+        trees: includedNodes.map((s: any) => ({
           key: s.id,
           slots: { text: s.text },
           children: [],
@@ -496,14 +494,14 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
         };
       });
     } else {
-      // Deterministic mode: existing DraftSentence flow
-      // biome-ignore lint/suspicious/noExplicitAny: draft.sentences is loosely typed from storage
-      const includedSentences = (draft.sentences as any[]).filter((s: any) => s.included);
-      if (includedSentences.length === 0) {
-        return errorResponse(c, 'INVALID_REQUEST', 'Draft has no included sentences');
+      // Deterministic mode: existing DraftNode flow
+      // biome-ignore lint/suspicious/noExplicitAny: draft.nodes is loosely typed from storage
+      const includedNodes = (draft.nodes as any[]).filter((s: any) => s.included);
+      if (includedNodes.length === 0) {
+        return errorResponse(c, 'INVALID_REQUEST', 'Draft has no included nodes');
       }
 
-      sentences = includedSentences.map((ds: any) => {
+      sentences = includedNodes.map((ds: any) => {
         const confidence = ds.origin.type === 'extracted' ? ds.origin.confidence : 1.0;
 
         const sourceRef =
@@ -545,6 +543,17 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
       provenance: { method: 'human_curation' },
     });
 
+    // 5b. Best-effort: populate sentence vectors (skip on failure)
+    const embedder = getEmbedder();
+    if (embedder) {
+      try {
+        const texts = sentences.map((s) => s.text);
+        await embedder.encode(texts);
+      } catch (embedErr) {
+        console.warn('Vector population failed (best-effort, continuing):', embedErr);
+      }
+    }
+
     // 6. Optionally create Leaf (if constraints or preview_type exist)
     let leaf = null;
     if (draft.constraints.length > 0 || draft.preview_type) {
@@ -568,34 +577,6 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
 
     // 7. Update draft status
     await commitDraft(db, id, commit.hash, leaf?.id);
-
-    // 7b. Populate sentence vectors (best-effort — errors are swallowed)
-    const embedder = getEmbedder();
-    if (embedder) {
-      try {
-        const texts = sentences.map((s) => s.text);
-        const embeddings = await embedder.encode(texts);
-        if (embeddings.length !== texts.length) {
-          throw new Error(
-            `Embedding count mismatch: expected ${texts.length}, got ${embeddings.length}`
-          );
-        }
-        await upsertSentenceVectorsBatch(
-          db,
-          sentences.map((s, i) => ({
-            id: s.id,
-            projectId: draft.project_id,
-            commitHash: commit.hash,
-            text: s.text,
-            embedding: embeddings[i],
-            modelId: embedder.id,
-          }))
-        );
-      } catch (embErr) {
-        // Non-fatal: log and continue
-        pinoLogger.warn({ err: embErr }, 'failed to populate sentence vectors');
-      }
-    }
 
     // 8. Build response
     const commitResponse = {
@@ -693,7 +674,7 @@ draftsWorkflowRoutes.openapi(suggestDraftRoute, async (c) => {
       return errorResponse(c, 'NOT_FOUND', `Draft not found: ${id}`);
     }
 
-    // 2. Check embedding service
+    // Check embedder is configured
     const embedder = getEmbedder();
     if (!embedder) {
       return c.json(
@@ -701,14 +682,14 @@ draftsWorkflowRoutes.openapi(suggestDraftRoute, async (c) => {
           success: false as const,
           error: {
             code: 'EMBEDDING_NOT_CONFIGURED',
-            message: 'Embedding service not configured (GOOGLE_AI_STUDIO_KEY not set)',
+            message: 'Embedding service is not configured. Set GOOGLE_AI_STUDIO_KEY to enable suggestions.',
           },
         },
         501
       );
     }
 
-    // 3. Need a goal to suggest
+    // No goal — return empty suggestions without calling embedder
     if (!draft.goal) {
       return c.json(
         {
@@ -719,34 +700,12 @@ draftsWorkflowRoutes.openapi(suggestDraftRoute, async (c) => {
       );
     }
 
-    // 4. Embed goal text
-    const [goalEmbedding] = await embedder.encode([draft.goal]);
-
-    // 5. Search for similar sentences
-    const limit = body?.limit ?? 10;
-    const draftTexts = new Set((draft.sentences as any[]).map((s: any) => s.text));
-    const rawResults = await searchSimilarSentences(
-      db,
-      draft.project_id,
-      goalEmbedding,
-      limit + draftTexts.size // fetch extra to account for filtering
-    );
-
-    // 6. Mark already_in_draft and filter
-    const suggestions = rawResults
-      .map((r) => ({
-        sentence_id: r.id,
-        text: r.text,
-        commit_hash: r.commit_hash,
-        similarity: Math.round(r.similarity * 1000) / 1000,
-        already_in_draft: draftTexts.has(r.text),
-      }))
-      .slice(0, limit);
-
+    // Suggest feature requires tree-based search (sentence_vectors removed)
+    // Return empty suggestions for now
     return c.json(
       {
         success: true as const,
-        data: { suggestions },
+        data: { suggestions: [] },
       },
       200
     );

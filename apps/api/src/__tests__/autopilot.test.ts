@@ -72,7 +72,7 @@ describe('Autopilot Routes', () => {
       expect(json.data.config).toEqual({
         enabled: false,
         min_confidence: 0.85,
-        min_sentences: 1,
+        min_nodes: 1,
         auto_create_leaf: false,
         target_branch: 'main',
       });
@@ -97,7 +97,7 @@ describe('Autopilot Routes', () => {
       expect(json.data.config.enabled).toBe(true);
       expect(json.data.config.min_confidence).toBe(0.9);
       // Defaults preserved
-      expect(json.data.config.min_sentences).toBe(1);
+      expect(json.data.config.min_nodes).toBe(1);
       expect(json.data.config.target_branch).toBe('main');
     });
   });
@@ -118,7 +118,7 @@ describe('Autopilot Routes', () => {
       expect(json.data.config.enabled).toBe(true);
       // Other fields preserved from defaults or previous config
       expect(json.data.config.min_confidence).toBeGreaterThan(0);
-      expect(json.data.config.min_sentences).toBeGreaterThanOrEqual(1);
+      expect(json.data.config.min_nodes).toBeGreaterThanOrEqual(1);
       expect(json.data.config.target_branch).toBe('main');
     });
 
@@ -241,7 +241,7 @@ describe('Autopilot Routes', () => {
       await updateAutopilotConfig(mockDB, testProjectId, {
         enabled: true,
         min_confidence: 0.8,
-        min_sentences: 1,
+        min_nodes: 1,
         target_branch: 'main',
       });
 
@@ -294,8 +294,8 @@ describe('Autopilot Routes', () => {
       expect(json.data.auto_committed).toBe(true);
       expect(json.data.commit).toBeDefined();
       expect(json.data.commit.hash).toBeDefined();
-      expect(json.data.sentences_committed).toBe(1); // Only sp_auto1 qualifies (0.95 >= 0.8)
-      expect(json.data.sentences_skipped).toBeGreaterThanOrEqual(1); // sp_auto2 skipped
+      expect(json.data.nodes_committed).toBe(1); // Only sp_auto1 qualifies (0.95 >= 0.8)
+      expect(json.data.nodes_skipped).toBeGreaterThanOrEqual(1); // sp_auto2 skipped
     });
   });
 });

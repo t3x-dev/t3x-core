@@ -42,7 +42,7 @@ describe('RelationExtractor', () => {
     expect(result.relations).toHaveLength(2);
     expect(result.relations[0].type).toBe('supports');
     expect(result.relations[1].type).toBe('contrasts');
-    expect(result.stats.total_sentences).toBe(3);
+    expect(result.stats.total_nodes).toBe(3);
     expect(result.stats.relations_found).toBe(2);
     expect(result.stats.avg_confidence).toBeCloseTo(0.875);
     expect(result.stats.extraction_time_ms).toBeGreaterThanOrEqual(0);
@@ -53,7 +53,7 @@ describe('RelationExtractor', () => {
     const extractor = new RelationExtractor(provider);
     const result = await extractor.extract([{ id: 's_aaa', text: 'Only one.' }]);
     expect(result.relations).toHaveLength(0);
-    expect(result.stats.total_sentences).toBe(1);
+    expect(result.stats.total_nodes).toBe(1);
     expect(provider.generate).not.toHaveBeenCalled();
   });
 

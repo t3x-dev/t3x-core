@@ -13,12 +13,12 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import type { DraftSentence } from '@/lib/api';
-import { getConstraintResultsForSentence } from '@/lib/draftValidation';
+import type { DraftNode } from '@/lib/api';
+import { getConstraintResultsForNode } from '@/lib/draftValidation';
 import { useDraftWorkspaceStore } from '@/store/draftWorkspaceStore';
 
 interface SentenceCardProps {
-  sentence: DraftSentence;
+  sentence: DraftNode;
   inherited?: boolean;
   isDragOver?: boolean;
   onDragStart?: (e: React.DragEvent) => void;
@@ -46,7 +46,7 @@ export function SentenceCard({
   }, [inherited]);
 
   const constraintResults = useMemo(
-    () => getConstraintResultsForSentence(sentence, constraints),
+    () => getConstraintResultsForNode(sentence, constraints),
     [sentence, constraints]
   );
 
@@ -155,7 +155,7 @@ export function SentenceCard({
   );
 }
 
-function getOriginLabel(sentence: DraftSentence): string | null {
+function getOriginLabel(sentence: DraftNode): string | null {
   if (sentence.origin.type === 'manual') return 'Manual';
   if (sentence.source?.conversation_title) {
     return sentence.source.conversation_title;

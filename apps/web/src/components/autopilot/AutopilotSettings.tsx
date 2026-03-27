@@ -150,26 +150,26 @@ export function AutopilotSettings({ projectId }: { projectId: string }) {
         </div>
       </div>
 
-      {/* Min Sentences */}
+      {/* Min Nodes */}
       <div className="space-y-2">
-        <Label htmlFor="min-sentences" className="text-sm text-[var(--text-primary)]">
+        <Label htmlFor="min-nodes" className="text-sm text-[var(--text-primary)]">
           Minimum Frames
         </Label>
         <Input
-          id="min-sentences"
+          id="min-nodes"
           type="number"
           min={1}
-          value={config.min_sentences}
+          value={config.min_nodes}
           onChange={(e) => {
             const val = Number.parseInt(e.target.value, 10);
             if (!Number.isNaN(val) && val >= 1) {
-              handleChange('min_sentences', val);
+              handleChange('min_nodes', val);
             }
           }}
           className="max-w-[120px]"
         />
         <p className="text-xs text-[var(--text-tertiary)]">
-          Minimum number of sentences required to trigger an auto-commit
+          Minimum number of nodes required to trigger an auto-commit
         </p>
       </div>
 

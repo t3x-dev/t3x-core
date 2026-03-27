@@ -46,7 +46,7 @@ export function registerExtractCommands(program: Command): void {
           return;
         }
 
-        success(`Extracted ${result.sentences.length} sentences`);
+        success(`Extracted ${result.trees.length} trees`);
         console.log(`Draft: ${result.draft_id}`);
         console.log(`Conversation: ${result.conversation_id}`);
         if (result.drift && result.drift.length > 0) {

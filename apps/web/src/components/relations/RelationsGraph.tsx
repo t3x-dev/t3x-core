@@ -5,22 +5,20 @@ import '@xyflow/react/dist/style.css';
 
 import type { Edge, Node } from '@xyflow/react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { SentenceRelation } from '@/lib/api/relations';
+import type { NodeRelation } from '@/lib/api/relations';
 import { getLayoutedElements } from '@/lib/elkLayout';
 
 interface RelationsGraphProps {
-  relations: SentenceRelation[];
-  sentences: Array<{ id: string; text: string }>;
+  relations: NodeRelation[];
+  nodes: Array<{ id: string; text: string }>;
 }
 
 const edgeColors: Record<string, string> = {
-  supports: '#10b981',
-  contrasts: '#ef4444',
   causes: '#3b82f6',
-  elaborates: '#6b7280',
-  temporal_follows: '#a855f7',
   conditions: '#f97316',
-  summarizes: '#06b6d4',
+  contrasts: '#ef4444',
+  follows: '#a855f7',
+  depends: '#06b6d4',
 };
 
 function truncate(text: string, maxLen: number): string {
@@ -28,26 +26,26 @@ function truncate(text: string, maxLen: number): string {
   return `${text.slice(0, maxLen)}...`;
 }
 
-export function RelationsGraph({ relations, sentences }: RelationsGraphProps) {
+export function RelationsGraph({ relations, nodes }: RelationsGraphProps) {
   const [layoutedNodes, setLayoutedNodes] = useState<Node[]>([]);
 
-  // Collect sentence IDs referenced in relations
+  // Collect node keys referenced in relations
   const referencedIds = useMemo(() => {
     const ids = new Set<string>();
     for (const rel of relations) {
-      ids.add(rel.source_id);
-      ids.add(rel.target_id);
+      ids.add(rel.from);
+      ids.add(rel.to);
     }
     return ids;
   }, [relations]);
 
   // Build raw nodes
   const rawNodes: Node[] = useMemo(() => {
-    const sentenceMap = new Map(sentences.map((s) => [s.id, s.text]));
+    const nodeMap = new Map(nodes.map((n) => [n.id, n.text]));
     return Array.from(referencedIds).map((id) => ({
       id,
       position: { x: 0, y: 0 },
-      data: { label: truncate(sentenceMap.get(id) ?? `[${id}]`, 50) },
+      data: { label: truncate(nodeMap.get(id) ?? `[${id}]`, 50) },
       style: {
         padding: '8px 12px',
         borderRadius: '8px',
@@ -58,19 +56,19 @@ export function RelationsGraph({ relations, sentences }: RelationsGraphProps) {
         color: 'var(--text-secondary)',
       },
     }));
-  }, [referencedIds, sentences]);
+  }, [referencedIds, nodes]);
 
   // Build edges
   const edges: Edge[] = useMemo(
     () =>
-      relations.map((rel) => ({
-        id: rel.id,
-        source: rel.source_id,
-        target: rel.target_id,
+      relations.map((rel, idx) => ({
+        id: `${rel.from}-${rel.to}-${rel.type}-${idx}`,
+        source: rel.from,
+        target: rel.to,
         label: rel.type.replace('_', ' '),
         style: { stroke: edgeColors[rel.type] ?? '#6b7280', strokeWidth: 2 },
         labelStyle: { fontSize: 10, fill: 'var(--text-tertiary)' },
-        animated: rel.confidence >= 0.8,
+        animated: (rel.confidence ?? 0) >= 0.8,
       })),
     [relations]
   );

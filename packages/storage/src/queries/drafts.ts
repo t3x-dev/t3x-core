@@ -2,7 +2,7 @@
  * Draft Queries (Workbench)
  *
  * CRUD operations for the drafts table using Drizzle ORM.
- * Drafts are pre-commit working areas where users compose sentences,
+ * Drafts are pre-commit working areas where users compose nodes,
  * add constraints, preview output, then commit.
  *
  * Key design:
@@ -65,7 +65,7 @@ export interface ListDraftOptions {
 export interface UpdateDraftInput {
   title?: string;
   goal?: string;
-  sentences?: unknown[];
+  nodes?: unknown[];
   constraints?: DraftConstraint[];
   instructions?: string;
   preview_type?: string;
@@ -90,7 +90,7 @@ function rowToDraft(row: DraftRecord): Draft {
     goal: row.goal ?? undefined,
     parent_commit_hash: row.parentCommitHash ?? undefined,
     forked_from: row.forkedFrom ?? undefined,
-    sentences: (row.sentencesJson ?? []) as unknown[],
+    nodes: (row.nodesJson ?? []) as unknown[],
     constraints: (row.constraintsJson ?? []) as DraftConstraint[],
     instructions: row.instructions ?? undefined,
     preview_type: row.previewType ?? undefined,
@@ -129,7 +129,7 @@ export async function insertDraft(db: AnyDB, input: CreateDraftInput): Promise<D
       goal: input.goal ?? null,
       parentCommitHash: input.parent_commit_hash ?? null,
       forkedFrom: null,
-      sentencesJson: [],
+      nodesJson: [],
       constraintsJson: [],
       instructions: null,
       previewType: input.preview_type ?? null,
@@ -210,7 +210,7 @@ export async function updateDraft(
 
   if (input.title !== undefined) updateData.title = input.title;
   if (input.goal !== undefined) updateData.goal = input.goal;
-  if (input.sentences !== undefined) updateData.sentencesJson = input.sentences;
+  if (input.nodes !== undefined) updateData.nodesJson = input.nodes;
   if (input.constraints !== undefined) updateData.constraintsJson = input.constraints;
   if (input.instructions !== undefined) updateData.instructions = input.instructions;
   if (input.preview_type !== undefined) updateData.previewType = input.preview_type;
@@ -321,7 +321,7 @@ export async function forkDraft(db: AnyDB, sourceDraftId: string): Promise<Draft
       goal: source.goal ?? null,
       parentCommitHash: source.committed_as ?? null,
       forkedFrom: source.id,
-      sentencesJson: source.sentences as DraftRecord['sentencesJson'],
+      nodesJson: source.nodes as DraftRecord['nodesJson'],
       constraintsJson: source.constraints as DraftRecord['constraintsJson'],
       instructions: source.instructions ?? null,
       previewType: source.preview_type ?? null,
@@ -363,7 +363,7 @@ export async function insertAutoDraft(
     project_id: string;
     conversation_id: string;
     title: string;
-    sentences: unknown[];
+    nodes: unknown[];
     parent_commit_hash?: string;
     target_branch?: string;
   }
@@ -380,7 +380,7 @@ export async function insertAutoDraft(
       goal: `auto:${input.conversation_id}`,
       parentCommitHash: input.parent_commit_hash ?? null,
       forkedFrom: null,
-      sentencesJson: input.sentences as DraftRecord['sentencesJson'],
+      nodesJson: input.nodes as DraftRecord['nodesJson'],
       constraintsJson: [],
       instructions: null,
       previewType: null,

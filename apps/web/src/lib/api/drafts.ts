@@ -69,15 +69,15 @@ export async function updateDraft(
 // Workbench Drafts
 // ============================================================================
 
-export type DraftSentenceOrigin =
+export type DraftNodeOrigin =
   | { type: 'extracted'; segment_id: string; confidence: number }
   | { type: 'selected' }
   | { type: 'manual' };
 
-export interface DraftSentence {
+export interface DraftNode {
   id: string;
   text: string;
-  origin: DraftSentenceOrigin;
+  origin: DraftNodeOrigin;
   source?: {
     conversation_id: string;
     conversation_title?: string;
@@ -105,7 +105,7 @@ export interface WorkbenchDraft {
   goal: string | null;
   parent_commit_hash: string | null;
   forked_from: string | null;
-  sentences: DraftSentence[];
+  nodes: DraftNode[];
   constraints: DraftConstraint[];
   instructions: string | null;
   preview_type: string | null;
@@ -136,7 +136,7 @@ export interface CreateWorkbenchDraftInput {
 export interface UpdateWorkbenchDraftInput {
   title?: string;
   goal?: string;
-  sentences?: DraftSentence[];
+  nodes?: DraftNode[];
   constraints?: DraftConstraint[];
   instructions?: string;
   preview_type?: string;

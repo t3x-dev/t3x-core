@@ -39,8 +39,6 @@ export interface RequireConstraint {
   match_mode: 'exact' | 'semantic';
   value: string;
   description?: string;
-  /** @deprecated Use source_node for tree-based commits */
-  source_sentence_id?: string;
   /** Link to source  node + slot (tree-based traceability) */
   source_node?: ConstraintSourceFrame;
 }

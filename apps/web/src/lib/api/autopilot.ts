@@ -11,7 +11,7 @@ import { API_V1, fetchWithTimeout, handleResponse } from './core';
 export interface AutopilotConfig {
   enabled: boolean;
   min_confidence: number;
-  min_sentences: number;
+  min_nodes: number;
   auto_create_leaf: boolean;
   target_branch: string;
 }
@@ -34,8 +34,8 @@ export interface AutoCommitResult {
     branch?: string;
     committed_at?: string;
   };
-  sentences_committed?: number;
-  sentences_skipped?: number;
+  nodes_committed?: number;
+  nodes_skipped?: number;
   skipped?: Array<{ id: string; reason: string }>;
 }
 

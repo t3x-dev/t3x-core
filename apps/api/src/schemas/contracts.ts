@@ -84,35 +84,6 @@ const SuccessResponse = <T extends z.ZodType>(dataSchema: T) =>
   });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Sentence Schema
-// ═══════════════════════════════════════════════════════════════════════════
-
-export const SentenceSchema = z.object({
-  id: z.string(),
-  text: z.string(),
-  confidence: z.number().min(0).max(1).optional(),
-  source_ref: z
-    .object({
-      conversation_id: z.string(),
-      turn_hash: z.string(),
-      start_char: z.number(),
-      end_char: z.number(),
-    })
-    .optional(),
-  /**
-   * The commit hash where this sentence was originally created.
-   * Set when a sentence is inherited from a parent commit.
-   * Second-class field: does NOT participate in hash calculation.
-   */
-  inherited_from: z.string().optional(),
-  /**
-   * How the evidence anchor relates to the source text.
-   * Second-class field: does NOT participate in hash calculation.
-   */
-  anchor_type: z.enum(['verbatim', 'paraphrase', 'inference']).optional(),
-});
-
-// ═══════════════════════════════════════════════════════════════════════════
 // Constraint Schema
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -127,8 +98,6 @@ export const ConstraintSchema = z.object({
   match_mode: z.enum(['exact', 'semantic']),
   value: z.string().min(1),
   description: z.string().optional(),
-  /** @deprecated Use source_frame for frame-based commits */
-  source_sentence_id: z.string().optional(),
   /** Link to source frame + slot (frame-based traceability) */
   source_frame: ConstraintSourceFrameSchema.optional(),
   reason: z.string().optional(), // For exclude constraints
@@ -151,14 +120,13 @@ export const AssertionSchema = z.object({
 // ═══════════════════════════════════════════════════════════════════════════
 
 // POST /v1/commits
-// Use passthrough() to preserve unknown fields for V3/invalid field detection
+// Use passthrough() to preserve unknown fields for invalid field detection
 //
 // Validation Rules:
 // 1. If `schema` provided, must be 't3x/commit/v4'
-// 2. `sentences` required and must be non-empty array
+// 2. `content` required with trees (SemanticContent)
 // 3. `author` required with type ('human' | 'agent')
 // 4. `constraints` NOT allowed at commit level (use Leaves instead)
-// 5. V3 fields (turn_window, facet_snapshot) NOT allowed
 export const CreateCommitRequest = z
   .object({
     // Required fields
@@ -169,10 +137,9 @@ export const CreateCommitRequest = z
         name: z.string().optional(),
       })
       .describe('Author information. type is required.'),
-    sentences: z
-      .array(SentenceSchema)
-      .min(1, 'At least one sentence is required')
-      .describe('Array of sentences (knowledge units). Must not be empty.'),
+    content: OapiSemanticContentSchema.describe(
+      'Semantic tree content (trees + relations). Required.'
+    ),
     project_id: z.string().min(1, 'project_id is required'),
 
     // Optional fields
@@ -182,32 +149,10 @@ export const CreateCommitRequest = z
       .describe('Parent commit hashes (empty for root commit)'),
     message: z.string().optional().describe('Human-readable commit message'),
     branch: z.string().optional().describe('Branch name (defaults to main)'),
-    semantic: OapiSemanticContentSchema.nullable()
-      .optional()
-      .describe('Semantic tree content (trees + relations)'),
-
-    // Inheritance control
-    inherit_parent_sentences: z
-      .boolean()
-      .default(true)
-      .describe(
-        'If true (default), automatically inherit all sentences from parent commits. ' +
-          'Inherited sentences will have inherited_from set to their original commit hash. ' +
-          'New sentences with the same text will override inherited ones.'
-      ),
 
     // V3/V4 detection fields (for validation error handling)
     schema: z.string().optional().describe('If provided, must be t3x/commit/v4'),
-    turn_window: z.unknown().optional().describe('V3 field - not allowed in V4'),
-    facet_snapshot: z.unknown().optional().describe('V3 field - not allowed in V4'),
     constraints: z.unknown().optional().describe('Not allowed at commit level - use Leaves'),
-    content: z
-      .object({
-        constraints: z.unknown().optional(),
-      })
-      .passthrough()
-      .optional()
-      .describe('V3 content structure - constraints not allowed'),
   })
   .passthrough();
 
@@ -221,13 +166,10 @@ export const CommitResponse = z.object({
     name: z.string().optional(),
   }),
   committed_at: z.string(),
-  content: z.object({
-    sentences: z.array(SentenceSchema),
-  }),
+  content: OapiSemanticContentSchema,
   project_id: z.string().nullable(),
   message: z.string().nullable(),
   branch: z.string().nullable(),
-  semantic: OapiSemanticContentSchema.nullable().optional(),
   provenance: z.unknown().nullable().optional(),
   created_at: z.string(),
   merge_summary: z
@@ -237,7 +179,7 @@ export const CommitResponse = z.object({
       kept_from_source: z.number(),
       kept_from_target: z.number(),
       discarded: z.number(),
-      total_sentences: z.number(),
+      total_nodes: z.number(),
       release_note: z
         .object({
           title: z.string(),
@@ -617,20 +559,27 @@ const WordDiffSegmentSchema = z.object({
   text: z.string(),
 });
 
+/** FlatNode representation for merge operations */
+const MergeNodeSchema = z.object({
+  id: z.string(),
+  text: z.string(),
+  confidence: z.number().min(0).max(1).optional(),
+});
+
 const MergeSimilarPairSchema = z.object({
-  source: SentenceSchema,
-  target: SentenceSchema,
+  source: MergeNodeSchema,
+  target: MergeNodeSchema,
   word_diff: z.array(WordDiffSegmentSchema),
   resolution: z.enum(['source', 'target']).optional(),
 });
 
 const MergeCandidateSchema = z.object({
-  sentence: SentenceSchema,
+  node: MergeNodeSchema,
   keep: z.boolean(),
 });
 
 export const MergeResultSchema = z.object({
-  identical: z.array(SentenceSchema),
+  identical: z.array(MergeNodeSchema),
   similar_pairs: z.array(MergeSimilarPairSchema),
   only_in_source: z.array(MergeCandidateSchema),
   only_in_target: z.array(MergeCandidateSchema),
@@ -673,7 +622,7 @@ export type BatchGenerateResponseType = z.infer<typeof BatchGenerateResponse>;
 // Draft V3 API (Workbench)
 // ═══════════════════════════════════════════════════════════════════════════
 
-export const DraftSentenceOriginSchema = z.discriminatedUnion('type', [
+export const DraftNodeOriginSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('extracted'),
     segment_id: z.string(),
@@ -683,10 +632,10 @@ export const DraftSentenceOriginSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('manual') }),
 ]);
 
-export const DraftSentenceSchema = z.object({
+export const DraftNodeSchema = z.object({
   id: z.string(),
   text: z.string(),
-  origin: DraftSentenceOriginSchema,
+  origin: DraftNodeOriginSchema,
   source: z
     .object({
       conversation_id: z.string(),
@@ -723,7 +672,7 @@ export const CreateDraftRequest = z.object({
 export const UpdateDraftRequest = z.object({
   title: z.string().min(1).max(500).optional(),
   goal: z.string().max(2000).optional(),
-  sentences: z.array(DraftSentenceSchema).optional(),
+  nodes: z.array(DraftNodeSchema).optional(),
   constraints: z.array(DraftConstraintSchema).optional(),
   instructions: z.string().max(5000).optional(),
   preview_type: z.string().optional(),
@@ -743,7 +692,7 @@ export const DraftResponse = z.object({
   goal: z.string().nullable(),
   parent_commit_hash: z.string().nullable(),
   forked_from: z.string().nullable(),
-  sentences: z.array(DraftSentenceSchema),
+  nodes: z.array(DraftNodeSchema),
   constraints: z.array(DraftConstraintSchema),
   instructions: z.string().nullable(),
   preview_type: z.string().nullable(),
@@ -809,7 +758,7 @@ export const SuggestDraftResponse = SuccessResponse(
   z.object({
     suggestions: z.array(
       z.object({
-        sentence_id: z.string(),
+        node_id: z.string(),
         text: z.string(),
         commit_hash: z.string(),
         similarity: z.number(),

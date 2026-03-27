@@ -7,7 +7,7 @@
  * on valid JSON.
  */
 
-import { SENTENCE_RELATION_TYPES, type RelationType } from '../types';
+import { RELATION_TYPE_VALUES, type RelationType } from '../types';
 
 export interface RelationItem {
   source_id: string;
@@ -27,7 +27,7 @@ export class RelationParseError extends Error {
   }
 }
 
-const VALID_TYPES = new Set<string>(SENTENCE_RELATION_TYPES);
+const VALID_TYPES = new Set<string>(RELATION_TYPE_VALUES);
 
 function stripCodeFences(raw: string): string {
   const trimmed = raw.trim();

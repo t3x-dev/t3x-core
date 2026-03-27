@@ -58,7 +58,7 @@ export function SentenceList() {
 
   if (!draft) return null;
 
-  const sentences = [...draft.sentences].sort((a, b) => a.position - b.position);
+  const sentences = [...draft.nodes].sort((a, b) => a.position - b.position);
 
   return (
     <section>
@@ -83,7 +83,7 @@ export function SentenceList() {
       {sentences.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border p-8 text-center">
           <p className="text-sm text-muted-foreground">
-            No sentences yet. Add sentences manually or import from conversations.
+            No nodes yet. Add nodes manually or import from conversations.
           </p>
           <Button
             variant="outline"

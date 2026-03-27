@@ -17,7 +17,7 @@ export function AutoCommitButton({ draftId }: { draftId: string }) {
       setIsError(false);
       const result = await autoCommitDraft(draftId);
       if (result.auto_committed) {
-        setMessage(`Auto-committed: ${result.sentences_committed ?? 0} sentences`);
+        setMessage(`Auto-committed: ${result.nodes_committed ?? 0} nodes`);
       } else {
         setMessage(result.reason ?? 'Auto-commit skipped');
       }

@@ -57,15 +57,15 @@ export function LeafExtractToDraft({ leafId, projectId, outputText }: LeafExtrac
     try {
       const { updateWorkbenchDraft, getWorkbenchDraft } = await import('@/lib/api');
       const draft = await getWorkbenchDraft(selectedDraftId);
-      const newSentence = {
+      const newNode = {
         id: `s_leaf_${leafId}_${Date.now()}`,
         text: extractedText.trim(),
         included: true,
         origin: { type: 'selected' as const },
-        position: draft.sentences.length,
+        position: draft.nodes.length,
       };
       await updateWorkbenchDraft(selectedDraftId, {
-        sentences: [...draft.sentences, newSentence],
+        nodes: [...draft.nodes, newNode],
         if_revision: draft.revision,
       });
       toast.success('Added to draft');

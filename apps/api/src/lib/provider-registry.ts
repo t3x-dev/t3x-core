@@ -10,7 +10,6 @@ import {
   createDeepSeekProvider,
   createGeminiProvider,
   createGoogleAIEmbeddingProvider,
-  createGoogleCloudNLPProvider,
   createOllamaEmbeddingProvider,
   createOllamaProvider,
   createOpenAIEmbeddingProvider,
@@ -21,7 +20,6 @@ import {
   type GenerateResult,
   generateLeafOutput,
   type LLMProvider,
-  type NLPProvider,
   type ProviderRegistry,
   type RegistryConfig,
 } from '@t3x-dev/core';
@@ -262,15 +260,6 @@ function registerBuiltinProviders(reg: ProviderRegistry): void {
       }),
   });
 
-  // ─── NLP Providers (extraction role) ───────────────────────────────
-
-  reg.register({
-    id: 'google-cloud-nlp',
-    name: 'Google Cloud NLP',
-    role: 'extraction',
-    requiredEnvKeys: ['GOOGLE_CLOUD_NLP_KEY'],
-    factory: (config) => createGoogleCloudNLPProvider(config.GOOGLE_CLOUD_NLP_KEY!),
-  });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -291,14 +280,6 @@ export async function getLLMProvider(): Promise<LLMProvider | null> {
 export async function getEmbeddingProvider(): Promise<EmbeddingProvider | null> {
   const reg = await getProviderRegistry();
   return reg.getForRole<EmbeddingProvider>('embedding');
-}
-
-/**
- * Get the NLP provider for extraction, with fallback to legacy behavior.
- */
-export async function getNLPFromRegistry(): Promise<NLPProvider | null> {
-  const reg = await getProviderRegistry();
-  return reg.getForRole<NLPProvider>('extraction');
 }
 
 /**

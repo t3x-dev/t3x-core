@@ -85,7 +85,7 @@ describe('Drafts Routes', () => {
       expect(data.data.title).toBe('My Draft');
       expect(data.data.status).toBe('editing');
       expect(data.data.revision).toBe(1);
-      expect(data.data.sentences).toEqual([]);
+      expect(data.data.nodes).toEqual([]);
       expect(data.data.constraints).toEqual([]);
       expect(data.data.target_branch).toBe('main');
     });
@@ -198,7 +198,7 @@ describe('Drafts Routes', () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: 'Updated Title',
-          sentences: [
+          nodes: [
             {
               id: 'ds_test01',
               text: 'Hello world',
@@ -214,7 +214,7 @@ describe('Drafts Routes', () => {
       expect(res.status).toBe(200);
       const data: ApiResponse = await res.json();
       expect(data.data.title).toBe('Updated Title');
-      expect(data.data.sentences).toHaveLength(1);
+      expect(data.data.nodes).toHaveLength(1);
       expect(data.data.revision).toBe(2);
     });
 
@@ -310,10 +310,10 @@ describe('Drafts Routes', () => {
   });
 
   // ============================================================
-  // Helper: create a draft with sentences (for preview/commit tests)
+  // Helper: create a draft with nodes (for preview/commit tests)
   // ============================================================
 
-  async function createDraftWithSentences(title: string) {
+  async function createDraftWithNodes(title: string) {
     const createRes = await app.request('/v1/drafts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -325,12 +325,12 @@ describe('Drafts Routes', () => {
     const created: ApiResponse = await createRes.json();
     const draftId = created.data.id;
 
-    // Add included sentences via PATCH
+    // Add included nodes via PATCH
     await app.request(`/v1/drafts/${draftId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        sentences: [
+        nodes: [
           {
             id: 'ds_test01',
             text: 'The product costs $99',
@@ -367,8 +367,8 @@ describe('Drafts Routes', () => {
       expect(res.status).toBe(404);
     });
 
-    it('returns 400 if draft has no included sentences', async () => {
-      // Create an empty draft (no sentences)
+    it('returns 400 if draft has no included nodes', async () => {
+      // Create an empty draft (no nodes)
       const createRes = await app.request('/v1/drafts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -388,11 +388,11 @@ describe('Drafts Routes', () => {
       });
       expect(res.status).toBe(400);
       const data: ApiResponse = await res.json();
-      expect(data.error.message).toContain('no included sentences');
+      expect(data.error.message).toContain('no included nodes');
     });
 
     it('returns 400 if generation not configured', async () => {
-      const draftId = await createDraftWithSentences('Preview Not Configured');
+      const draftId = await createDraftWithNodes('Preview Not Configured');
 
       mockIsGenerationConfigured.mockReturnValue(false);
 
@@ -407,7 +407,7 @@ describe('Drafts Routes', () => {
     });
 
     it('generates preview successfully', async () => {
-      const draftId = await createDraftWithSentences('Preview Success');
+      const draftId = await createDraftWithNodes('Preview Success');
 
       mockIsGenerationConfigured.mockReturnValue(true);
       mockGenerateLeafOutput.mockResolvedValue({
@@ -431,7 +431,7 @@ describe('Drafts Routes', () => {
     });
 
     it('returns cached preview on identical content', async () => {
-      const draftId = await createDraftWithSentences('Preview Cache');
+      const draftId = await createDraftWithNodes('Preview Cache');
 
       mockIsGenerationConfigured.mockReturnValue(true);
       mockGenerateLeafOutput.mockResolvedValue({
@@ -468,7 +468,7 @@ describe('Drafts Routes', () => {
     });
 
     it('returns 400 if draft is committed', async () => {
-      const draftId = await createDraftWithSentences('Preview Committed');
+      const draftId = await createDraftWithNodes('Preview Committed');
 
       // Mark as committed directly via storage
       const { commitDraft } = await import('@t3x-dev/storage');
@@ -501,7 +501,7 @@ describe('Drafts Routes', () => {
       expect(res.status).toBe(404);
     });
 
-    it('returns 400 if draft has no included sentences', async () => {
+    it('returns 400 if draft has no included nodes', async () => {
       const createRes = await app.request('/v1/drafts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -519,11 +519,11 @@ describe('Drafts Routes', () => {
       });
       expect(res.status).toBe(400);
       const data: ApiResponse = await res.json();
-      expect(data.error.message).toContain('no included sentences');
+      expect(data.error.message).toContain('no included nodes');
     });
 
     it('commits a draft without constraints (no leaf created)', async () => {
-      const draftId = await createDraftWithSentences('Commit No Leaf');
+      const draftId = await createDraftWithNodes('Commit No Leaf');
 
       const res = await app.request(`/v1/drafts/${draftId}/commit`, {
         method: 'POST',
@@ -551,7 +551,7 @@ describe('Drafts Routes', () => {
     });
 
     it('commits a draft with constraints (creates leaf)', async () => {
-      // Create draft with sentences + constraints
+      // Create draft with nodes + constraints
       const createRes = await app.request('/v1/drafts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -564,12 +564,12 @@ describe('Drafts Routes', () => {
       const created: ApiResponse = await createRes.json();
       const draftId = created.data.id;
 
-      // PATCH: add sentences + constraints
+      // PATCH: add nodes + constraints
       await app.request(`/v1/drafts/${draftId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          sentences: [
+          nodes: [
             {
               id: 'ds_leaf01',
               text: 'Important fact',
@@ -614,7 +614,7 @@ describe('Drafts Routes', () => {
     });
 
     it('returns 400 if draft is already committed', async () => {
-      const draftId = await createDraftWithSentences('Already Committed');
+      const draftId = await createDraftWithNodes('Already Committed');
 
       // Commit via storage directly
       const { commitDraft } = await import('@t3x-dev/storage');
@@ -649,7 +649,7 @@ describe('Drafts Routes', () => {
       const created: ApiResponse = await createRes.json();
       const draftId = created.data.id;
 
-      // Add sentences and commit (we need to manually commit via storage since commit
+      // Add nodes and commit (we need to manually commit via storage since commit
       // endpoint requires actual commits; instead we use the fork validation path)
       // We'll use the PATCH + storage layer to mark as committed
       const { commitDraft } = await import('@t3x-dev/storage');

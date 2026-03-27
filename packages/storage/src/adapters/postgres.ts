@@ -402,7 +402,7 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
       goal TEXT,
       parent_commit_hash TEXT,
       forked_from TEXT,
-      sentences_json JSONB NOT NULL DEFAULT '[]',
+      nodes_json JSONB NOT NULL DEFAULT '[]',
       constraints_json JSONB NOT NULL DEFAULT '[]',
       instructions TEXT,
       preview_type TEXT,
@@ -846,32 +846,6 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_token_usage_user_created ON token_usage(user_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_token_usage_project_created ON token_usage(project_id, created_at);
   `);
-
-  // pgvector: Try to create sentence_vectors table (graceful — skipped if vector extension unavailable)
-  try {
-    await sql.unsafe(`CREATE EXTENSION IF NOT EXISTS vector;`);
-    await sql.unsafe(`
-      CREATE TABLE IF NOT EXISTS sentence_vectors (
-        id TEXT PRIMARY KEY,
-        project_id TEXT NOT NULL,
-        commit_hash TEXT NOT NULL,
-        text TEXT NOT NULL,
-        embedding vector(768) NOT NULL,
-        model_id TEXT NOT NULL,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        tsv tsvector
-      );
-      CREATE INDEX IF NOT EXISTS idx_sv_project ON sentence_vectors(project_id);
-      CREATE INDEX IF NOT EXISTS idx_sv_commit ON sentence_vectors(commit_hash);
-      CREATE INDEX IF NOT EXISTS idx_sv_tsv ON sentence_vectors USING GIN (tsv);
-    `);
-    // Backfill tsvector for existing rows (idempotent)
-    await sql.unsafe(
-      `UPDATE sentence_vectors SET tsv = to_tsvector('simple', text) WHERE tsv IS NULL;`
-    );
-  } catch {
-    // pgvector not available — sentence similarity search disabled
-  }
 
   // ── Schema v29: Topics table + topic_id on delta_log ──
   await sql.unsafe(`

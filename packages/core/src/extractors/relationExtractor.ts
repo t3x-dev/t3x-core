@@ -9,7 +9,7 @@
 
 import { nanoid } from 'nanoid';
 import type { LLMProvider } from '../llm/types';
-import type { RelationExtractionResult, SentenceRelation } from '../types';
+import type { RelationExtractionResult, NodeRelation } from '../types';
 import { parseRelationResponse } from './relationParser';
 import { buildRelationPrompt } from './relationPrompt';
 
@@ -23,7 +23,7 @@ export class RelationExtractor {
     const emptyResult: RelationExtractionResult = {
       relations: [],
       stats: {
-        total_sentences: sentences.length,
+        total_nodes: sentences.length,
         relations_found: 0,
         avg_confidence: 0,
         extraction_time_ms: 0,
@@ -45,7 +45,7 @@ export class RelationExtractor {
     const validIds = new Set(sentences.map((s) => s.id));
     const items = parseRelationResponse(genResult.text, validIds);
 
-    const relations: SentenceRelation[] = items.map((item) => ({
+    const relations: NodeRelation[] = items.map((item) => ({
       id: `rel_${nanoid(12)}`,
       source_id: item.source_id,
       target_id: item.target_id,
@@ -63,7 +63,7 @@ export class RelationExtractor {
     return {
       relations,
       stats: {
-        total_sentences: sentences.length,
+        total_nodes: sentences.length,
         relations_found: relations.length,
         avg_confidence: avgConfidence,
         extraction_time_ms: extractionTimeMs,

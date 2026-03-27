@@ -2,7 +2,7 @@
  * Knowledge Graph Route Tests
  *
  * Tests for /v1/projects/:projectId/knowledge-graph/* endpoints.
- * Build endpoint requires pgvector (sentence_vectors) — guarded with vectorAvailable flag.
+ * Build endpoint is stubbed (tree-based implementation pending).
  * All other endpoints work with regular tables.
  */
 
