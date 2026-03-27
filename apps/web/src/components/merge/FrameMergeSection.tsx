@@ -30,7 +30,7 @@ export function FrameMergeSection({
     <div className={className}>
       {resolvedSemantic && (
         <div className="mb-3 flex items-center gap-2 px-4 py-2 rounded-lg bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 text-sm text-green-700 dark:text-green-300">
-          <Badge variant="secondary">{resolvedSemantic.frames.length} frames</Badge>
+          <Badge variant="secondary">{resolvedSemantic.trees.length} frames</Badge>
           <span>Frame merge resolved</span>
         </div>
       )}

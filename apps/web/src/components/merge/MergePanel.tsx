@@ -14,9 +14,6 @@ import {
 import { Skeleton, SkeletonText } from '@/components/ui/skeleton';
 import { useTerminology } from '@/hooks/useTerminology';
 import { selectCanExecuteMerge, selectUnresolvedCount, useCanvasStore } from '@/store/canvasStore';
-import { MergeCandidateList } from './MergeCandidateList';
-import { MergeIdenticalSection } from './MergeIdenticalSection';
-import { MergeSimilarPairCard } from './MergeSimilarPairCard';
 
 /**
  * Main merge review panel integrating all merge components
@@ -43,16 +40,16 @@ export function MergePanel() {
       if (!state.mergeState) return null;
       const { prepared } = state.mergeState;
       return {
-        identical: prepared.identical.length,
-        similar: prepared.similarPairs.length,
-        resolved: prepared.similarPairs.filter((p) => p.resolution).length,
+        identical: prepared.autoKept.length,
+        similar: prepared.conflicts.length,
+        resolved: 0, // Resolution tracking is in mergeWorkspaceStore
         onlyInSource: prepared.onlyInSource.length,
         onlyInTarget: prepared.onlyInTarget.length,
         // B-19: Resolution breakdown for confirm dialog
-        keptSource: prepared.similarPairs.filter((p) => p.resolution === 'source').length,
-        keptTarget: prepared.similarPairs.filter((p) => p.resolution === 'target').length,
-        keptSourceCandidates: prepared.onlyInSource.filter((c) => c.keep).length,
-        keptTargetCandidates: prepared.onlyInTarget.filter((c) => c.keep).length,
+        keptSource: 0,
+        keptTarget: 0,
+        keptSourceCandidates: prepared.onlyInSource.length,
+        keptTargetCandidates: prepared.onlyInTarget.length,
       };
     })
   );
@@ -192,45 +189,50 @@ export function MergePanel() {
         </div>
       )}
 
-      {/* Identical section */}
+      {/* Auto-kept section */}
       <div className="mb-[var(--space-group)]">
-        <MergeIdenticalSection sentences={prepared.identical} />
+        <h3 className="font-medium mb-[var(--space-item)] text-[var(--diff-added-accent)]">
+          {t('identical_sentences')} ({prepared.autoKept.length})
+        </h3>
+        <div className="text-sm text-muted-foreground">
+          {prepared.autoKept.length} nodes auto-kept (identical in both branches)
+        </div>
       </div>
 
-      {/* Similar pairs */}
-      {prepared.similarPairs.length > 0 && (
+      {/* Conflicts */}
+      {prepared.conflicts.length > 0 && (
         <div className="mb-[var(--space-group)]">
           <h3 className="font-medium mb-[var(--space-item)] text-[var(--diff-modified-accent)]">
-            {t('modified_sentences')} (Pick One)
+            {t('modified_sentences')} ({prepared.conflicts.length} conflicts)
           </h3>
-          <div className="space-y-3">
-            {prepared.similarPairs.map((pair, index) => (
-              <MergeSimilarPairCard
-                key={`${pair.source.id}-${pair.target.id}`}
-                pair={pair}
-                index={index}
-              />
-            ))}
+          <div className="text-sm text-muted-foreground">
+            Resolve conflicts in the merge workspace
           </div>
         </div>
       )}
 
       {/* Only in source */}
       <div className="mb-[var(--space-group)]">
-        <MergeCandidateList
-          candidates={prepared.onlyInSource}
-          side="source"
-          title={t('only_in_source')}
-        />
+        <h3 className="font-medium mb-[var(--space-item)]">
+          {t('only_in_source')} ({prepared.onlyInSource.length})
+        </h3>
+        <div className="space-y-1 text-sm text-muted-foreground">
+          {prepared.onlyInSource.map((path: string) => (
+            <div key={path} className="font-mono text-xs">{path}</div>
+          ))}
+        </div>
       </div>
 
       {/* Only in target */}
       <div className="mb-[var(--space-group)]">
-        <MergeCandidateList
-          candidates={prepared.onlyInTarget}
-          side="target"
-          title={t('only_in_target')}
-        />
+        <h3 className="font-medium mb-[var(--space-item)]">
+          {t('only_in_target')} ({prepared.onlyInTarget.length})
+        </h3>
+        <div className="space-y-1 text-sm text-muted-foreground">
+          {prepared.onlyInTarget.map((path: string) => (
+            <div key={path} className="font-mono text-xs">{path}</div>
+          ))}
+        </div>
       </div>
 
       {/* Execute section */}

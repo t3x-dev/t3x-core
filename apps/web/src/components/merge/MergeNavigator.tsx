@@ -7,13 +7,12 @@
  * 1. Progress bar: X/Y resolved (conflicts only)
  * 2. Conflicts section: clickable, resolved/unresolved indicator
  * 3. Auto-kept section: informational only
- * 4. Source only: toggle keep/discard per frame
- * 5. Target only: toggle keep/discard per frame
+ * 4. Source only: toggle keep/discard per path
+ * 5. Target only: toggle keep/discard per path
  */
 
 import type { MergeResult } from '@t3x-dev/core';
 import { Check, Circle } from 'lucide-react';
-import type { Frame } from '@/lib/treeCompat';
 
 // ============================================================================
 // Types
@@ -32,16 +31,18 @@ interface MergeNavigatorProps {
   keepTarget: Set<string>;
   activeFrameId: string | null;
   onSelectFrame: (id: string) => void;
-  onToggleKeepSource: (frameId: string) => void;
-  onToggleKeepTarget: (frameId: string) => void;
+  onToggleKeepSource: (path: string) => void;
+  onToggleKeepTarget: (path: string) => void;
 }
 
 // ============================================================================
 // Helpers
 // ============================================================================
 
-function formatFrameType(type: string): string {
-  return type
+function formatPath(path: string): string {
+  const parts = path.split('.');
+  const last = parts[parts.length - 1];
+  return last
     .split('_')
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(' ');
@@ -89,14 +90,14 @@ export function MergeNavigator({
 }: MergeNavigatorProps) {
   const totalConflicts = mergeResult.conflicts.length;
   const resolvedCountActual = mergeResult.conflicts.filter((c) =>
-    resolutions.has(c.frameId)
+    resolutions.has(c.path)
   ).length;
   const progress = totalConflicts > 0 ? (resolvedCountActual / totalConflicts) * 100 : 100;
 
-  function handleFrameClick(frameId: string) {
-    onSelectFrame(frameId);
+  function handleFrameClick(path: string) {
+    onSelectFrame(path);
     setTimeout(() => {
-      document.getElementById(`merge-frame-${frameId}`)?.scrollIntoView({
+      document.getElementById(`merge-frame-${path}`)?.scrollIntoView({
         behavior: 'smooth',
         block: 'center',
       });
@@ -139,13 +140,13 @@ export function MergeNavigator({
         <>
           <SectionHeader label="Conflicts" count={mergeResult.conflicts.length} color="red" />
           {mergeResult.conflicts.map((conflict) => {
-            const isResolved = resolutions.has(conflict.frameId);
-            const isActive = activeFrameId === conflict.frameId;
+            const isResolved = resolutions.has(conflict.path);
+            const isActive = activeFrameId === conflict.path;
             return (
               <button
-                key={conflict.frameId}
+                key={conflict.path}
                 type="button"
-                onClick={() => handleFrameClick(conflict.frameId)}
+                onClick={() => handleFrameClick(conflict.path)}
                 className={`group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-all duration-200 ${
                   isActive
                     ? 'bg-[var(--accent-commit)]/8 text-[var(--text-primary)] ring-1 ring-[var(--accent-commit)]/20'
@@ -165,10 +166,10 @@ export function MergeNavigator({
                 )}
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-[11px] font-medium">
-                    {formatFrameType(conflict.sourceFrame.type)}
+                    {formatPath(conflict.path)}
                   </div>
                   <div className="truncate font-mono text-[10px] text-[var(--text-tertiary)]">
-                    {conflict.frameId}
+                    {conflict.path}
                   </div>
                 </div>
               </button>
@@ -181,17 +182,17 @@ export function MergeNavigator({
       {mergeResult.autoKept.length > 0 && (
         <>
           <SectionHeader label="Auto-kept" count={mergeResult.autoKept.length} color="green" />
-          {mergeResult.autoKept.map((frame) => (
+          {mergeResult.autoKept.map((path) => (
             <div
-              key={frame.id}
+              key={path}
               className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[var(--text-tertiary)] opacity-60"
             >
               <Check size={8} className="shrink-0 rounded-full text-[var(--diff-added-accent)]" />
               <div className="min-w-0 flex-1">
                 <div className="truncate text-[11px] font-medium">
-                  {formatFrameType(frame.type)}
+                  {formatPath(path)}
                 </div>
-                <div className="truncate font-mono text-[10px]">{frame.id}</div>
+                <div className="truncate font-mono text-[10px]">{path}</div>
               </div>
             </div>
           ))}
@@ -202,23 +203,23 @@ export function MergeNavigator({
       {mergeResult.onlyInSource.length > 0 && (
         <>
           <SectionHeader label="Source only" count={mergeResult.onlyInSource.length} color="blue" />
-          {mergeResult.onlyInSource.map((frame) => {
-            const isKept = keepSource.has(frame.id);
+          {mergeResult.onlyInSource.map((path) => {
+            const isKept = keepSource.has(path);
             return (
-              <div key={frame.id} className="flex w-full items-center gap-2 rounded-md px-2 py-1.5">
+              <div key={path} className="flex w-full items-center gap-2 rounded-md px-2 py-1.5">
                 <input
                   type="checkbox"
                   checked={isKept}
-                  onChange={() => onToggleKeepSource(frame.id)}
+                  onChange={() => onToggleKeepSource(path)}
                   className="h-3 w-3 shrink-0 cursor-pointer accent-[var(--accent-commit)]"
                   title={isKept ? 'Discard from source' : 'Keep from source'}
                 />
                 <div className={`min-w-0 flex-1 ${isKept ? '' : 'opacity-40'}`}>
                   <div className="truncate text-[11px] font-medium text-[var(--text-secondary)]">
-                    {formatFrameType(frame.type)}
+                    {formatPath(path)}
                   </div>
                   <div className="truncate font-mono text-[10px] text-[var(--text-tertiary)]">
-                    {frame.id}
+                    {path}
                   </div>
                 </div>
               </div>
@@ -231,23 +232,23 @@ export function MergeNavigator({
       {mergeResult.onlyInTarget.length > 0 && (
         <>
           <SectionHeader label="Target only" count={mergeResult.onlyInTarget.length} color="blue" />
-          {mergeResult.onlyInTarget.map((frame) => {
-            const isKept = keepTarget.has(frame.id);
+          {mergeResult.onlyInTarget.map((path) => {
+            const isKept = keepTarget.has(path);
             return (
-              <div key={frame.id} className="flex w-full items-center gap-2 rounded-md px-2 py-1.5">
+              <div key={path} className="flex w-full items-center gap-2 rounded-md px-2 py-1.5">
                 <input
                   type="checkbox"
                   checked={isKept}
-                  onChange={() => onToggleKeepTarget(frame.id)}
+                  onChange={() => onToggleKeepTarget(path)}
                   className="h-3 w-3 shrink-0 cursor-pointer accent-[var(--accent-commit)]"
                   title={isKept ? 'Discard from target' : 'Keep from target'}
                 />
                 <div className={`min-w-0 flex-1 ${isKept ? '' : 'opacity-40'}`}>
                   <div className="truncate text-[11px] font-medium text-[var(--text-secondary)]">
-                    {formatFrameType(frame.type)}
+                    {formatPath(path)}
                   </div>
                   <div className="truncate font-mono text-[10px] text-[var(--text-tertiary)]">
-                    {frame.id}
+                    {path}
                   </div>
                 </div>
               </div>
