@@ -301,7 +301,7 @@ CREATE TABLE IF NOT EXISTS drafts (
   goal TEXT,
   parent_commit_hash TEXT,
   forked_from TEXT,
-  sentences_json JSONB NOT NULL DEFAULT '[]',
+  nodes_json JSONB NOT NULL DEFAULT '[]',
   constraints_json JSONB NOT NULL DEFAULT '[]',
   instructions TEXT,
   preview_type TEXT,

@@ -75,8 +75,8 @@ export function PromotePreviewDialog({
     }
   };
 
-  const sentenceCount = draft?.sentences.length ?? 0;
-  const includedCount = draft?.sentences.filter((s) => s.included).length ?? 0;
+  const nodeCount = draft?.nodes.length ?? 0;
+  const includedCount = draft?.nodes.filter((s) => s.included).length ?? 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -98,7 +98,7 @@ export function PromotePreviewDialog({
         ) : draft ? (
           <div className="space-y-3 py-2">
             <div className="flex items-center gap-2">
-              <Badge variant="secondary">{sentenceCount} sentences</Badge>
+              <Badge variant="secondary">{nodeCount} nodes</Badge>
               <Badge variant="outline">{includedCount} included</Badge>
               {draft.constraints.length > 0 && (
                 <Badge variant="outline">{draft.constraints.length} constraints</Badge>
@@ -106,15 +106,15 @@ export function PromotePreviewDialog({
             </div>
 
             <div className="max-h-48 overflow-y-auto space-y-1.5 rounded-md border p-2">
-              {draft.sentences.slice(0, 10).map((s) => (
+              {draft.nodes.slice(0, 10).map((s) => (
                 <div key={s.id} className="text-xs text-muted-foreground flex items-start gap-1.5">
                   <FileText className="h-3 w-3 mt-0.5 shrink-0" />
                   <span className={!s.included ? 'line-through opacity-50' : ''}>{s.text}</span>
                 </div>
               ))}
-              {sentenceCount > 10 && (
+              {nodeCount > 10 && (
                 <p className="text-xs text-muted-foreground/60 text-center pt-1">
-                  ...and {sentenceCount - 10} more
+                  ...and {nodeCount - 10} more
                 </p>
               )}
             </div>

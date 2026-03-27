@@ -4,7 +4,7 @@
  * AddToDraftButton - Floating button that appears near text selection
  *
  * Behavior:
- * - 0 editing drafts: Quick Collect (auto-create draft + add sentence)
+ * - 0 editing drafts: Quick Collect (auto-create draft + add node)
  * - 1 editing draft: Add directly to that draft
  * - >1 editing drafts: Open DraftPickerDialog
  */
@@ -29,7 +29,7 @@ interface AddToDraftButtonProps {
   onDone: () => void;
 }
 
-function buildSentence(
+function buildNode(
   text: string,
   sel: TextSelectionResult,
   conversationId: string,
@@ -82,8 +82,8 @@ export function AddToDraftButton({
     const autoTitle = `${t('draft')} · ${titlePrefix} · ${dateStr}`;
 
     const newDraft = await createWorkbenchDraft({ project_id: projectId, title: autoTitle });
-    const sentence = buildSentence(selection.text, selection, conversationId, conversationTitle, 0);
-    await updateWorkbenchDraft(newDraft.id, { sentences: [sentence], if_revision: 1 });
+    const node = buildNode(selection.text, selection, conversationId, conversationTitle, 0);
+    await updateWorkbenchDraft(newDraft.id, { nodes: [node], if_revision: 1 });
 
     toast.success(`Added to "${autoTitle}"`, {
       action: {
@@ -97,16 +97,16 @@ export function AddToDraftButton({
   };
 
   const addToDraft = async (draft: WorkbenchDraft) => {
-    const sentence = buildSentence(
+    const node = buildNode(
       selection.text,
       selection,
       conversationId,
       conversationTitle,
-      draft.sentences.length
+      draft.nodes.length
     );
-    const updatedSentences = [...draft.sentences, sentence];
+    const updatedNodes = [...draft.nodes, node];
     await updateWorkbenchDraft(draft.id, {
-      sentences: updatedSentences,
+      nodes: updatedNodes,
       if_revision: draft.revision,
     });
 

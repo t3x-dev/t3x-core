@@ -318,7 +318,7 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
 
           // Compute position: centroid of source conversation nodes, offset right
           const sourceConvIds = new Set(
-            draft.sentences
+            draft.nodes
               .filter((s) => s.source?.conversation_id)
               .map((s) => s.source!.conversation_id)
           );
@@ -351,7 +351,7 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
             data: {
               entryId: draft.id.replace(/^draft_/, '').slice(0, 8),
               title: draft.title,
-              summary: `${draft.sentences.length} sentences`,
+              summary: `${draft.nodes.length} nodes`,
               status: 'draft',
               timestamp: draft.updated_at,
               tags: ['draft'],

@@ -24,7 +24,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { useTerminology } from '@/hooks/useTerminology';
-import type { DraftSentence, WorkbenchDraft } from '@/lib/api';
+import type { DraftNode, WorkbenchDraft } from '@/lib/api';
 import * as api from '@/lib/api';
 import { useCanvasStore } from '@/store/canvasStore';
 
@@ -58,15 +58,15 @@ export function DraftQuickSheet({ open, onClose, draftId, projectId }: DraftQuic
   const toggleSentence = useCallback(
     async (sentenceId: string) => {
       if (!draft || savingRef.current || draft.status === 'auto') return;
-      const sentences = draft.sentences.map((s) =>
+      const nodes = draft.nodes.map((s) =>
         s.id === sentenceId ? { ...s, included: !s.included } : s
       );
-      const updated = { ...draft, sentences };
+      const updated = { ...draft, nodes };
       setDraft(updated);
       // Save in background with guard against rapid toggles
       savingRef.current = true;
       api
-        .updateWorkbenchDraft(draftId, { sentences, if_revision: draft.revision })
+        .updateWorkbenchDraft(draftId, { nodes, if_revision: draft.revision })
         .catch(() => {
           // Revert on error
           setDraft(draft);
@@ -126,8 +126,8 @@ export function DraftQuickSheet({ open, onClose, draftId, projectId }: DraftQuic
     router.push(`/project/${projectId}/draft/${draftId}`);
   }, [router, projectId, draftId, onClose]);
 
-  const includedCount = draft?.sentences.filter((s) => s.included).length ?? 0;
-  const totalCount = draft?.sentences.length ?? 0;
+  const includedCount = draft?.nodes.filter((s) => s.included).length ?? 0;
+  const totalCount = draft?.nodes.length ?? 0;
 
   return (
     <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
@@ -175,7 +175,7 @@ export function DraftQuickSheet({ open, onClose, draftId, projectId }: DraftQuic
 
           {!loading && draft && (
             <div className="space-y-1.5">
-              {[...draft.sentences]
+              {[...draft.nodes]
                 .sort((a, b) => a.position - b.position)
                 .map((sentence) => (
                   <QuickSentenceRow
@@ -184,7 +184,7 @@ export function DraftQuickSheet({ open, onClose, draftId, projectId }: DraftQuic
                     onToggle={() => toggleSentence(sentence.id)}
                   />
                 ))}
-              {draft.sentences.length === 0 && (
+              {draft.nodes.length === 0 && (
                 <p className="text-sm text-muted-foreground py-4 text-center">
                   No sentences. Open the full draft to add content.
                 </p>
@@ -220,7 +220,7 @@ function QuickSentenceRow({
   sentence,
   onToggle,
 }: {
-  sentence: DraftSentence;
+  sentence: DraftNode;
   onToggle: () => void;
 }) {
   return (

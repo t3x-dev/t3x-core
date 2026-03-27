@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'vitest';
 import { SentenceCard } from '@/components/draft/SentenceCard';
-import type { DraftSentence } from '@/lib/api';
+import type { DraftNode } from '@/lib/api';
 
-function makeSentence(overrides: Partial<DraftSentence> = {}): DraftSentence {
+function makeNode(overrides: Partial<DraftNode> = {}): DraftNode {
   return {
     id: 's_abc',
     text: 'Test sentence',
@@ -20,20 +20,20 @@ describe('SentenceCard - Inherited Locking', () => {
   });
 
   test('accepts inherited prop', () => {
-    const sentence = makeSentence();
+    const sentence = makeNode();
     const props = { sentence, inherited: true };
     expect(props.inherited).toBe(true);
   });
 
   test('default inherited is false', () => {
-    const sentence = makeSentence();
-    const props: { sentence: DraftSentence; inherited?: boolean } = { sentence };
+    const sentence = makeNode();
+    const props: { sentence: DraftNode; inherited?: boolean } = { sentence };
     expect(props.inherited ?? false).toBe(false);
   });
 
   test('inherited sentences have different styling intent', () => {
-    const inherited = makeSentence({ id: 's_inherited' });
-    const regular = makeSentence({ id: 's_regular' });
+    const inherited = makeNode({ id: 's_inherited' });
+    const regular = makeNode({ id: 's_regular' });
 
     // Locked sentences should use muted styling
     const lockedClass = 'border-border/50 bg-muted/50';

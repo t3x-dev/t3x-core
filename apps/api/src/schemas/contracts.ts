@@ -673,7 +673,7 @@ export type BatchGenerateResponseType = z.infer<typeof BatchGenerateResponse>;
 // Draft V3 API (Workbench)
 // ═══════════════════════════════════════════════════════════════════════════
 
-export const DraftSentenceOriginSchema = z.discriminatedUnion('type', [
+export const DraftNodeOriginSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('extracted'),
     segment_id: z.string(),
@@ -683,10 +683,10 @@ export const DraftSentenceOriginSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('manual') }),
 ]);
 
-export const DraftSentenceSchema = z.object({
+export const DraftNodeSchema = z.object({
   id: z.string(),
   text: z.string(),
-  origin: DraftSentenceOriginSchema,
+  origin: DraftNodeOriginSchema,
   source: z
     .object({
       conversation_id: z.string(),
@@ -723,7 +723,7 @@ export const CreateDraftRequest = z.object({
 export const UpdateDraftRequest = z.object({
   title: z.string().min(1).max(500).optional(),
   goal: z.string().max(2000).optional(),
-  sentences: z.array(DraftSentenceSchema).optional(),
+  nodes: z.array(DraftNodeSchema).optional(),
   constraints: z.array(DraftConstraintSchema).optional(),
   instructions: z.string().max(5000).optional(),
   preview_type: z.string().optional(),
@@ -743,7 +743,7 @@ export const DraftResponse = z.object({
   goal: z.string().nullable(),
   parent_commit_hash: z.string().nullable(),
   forked_from: z.string().nullable(),
-  sentences: z.array(DraftSentenceSchema),
+  nodes: z.array(DraftNodeSchema),
   constraints: z.array(DraftConstraintSchema),
   instructions: z.string().nullable(),
   preview_type: z.string().nullable(),

@@ -32,10 +32,10 @@ function makeDraft(overrides: Partial<WorkbenchDraft> = {}): WorkbenchDraft {
     goal: null,
     parent_commit_hash: null,
     forked_from: null,
-    sentences: [
+    nodes: [
       {
         id: 's1',
-        text: 'Deterministic sentence',
+        text: 'Deterministic node',
         origin: { type: 'manual' },
         position: 0,
         included: true,

@@ -22,7 +22,7 @@ export {
   generateConversationId,
   generateDraftConstraintId,
   generateDraftId,
-  generateDraftSentenceId,
+  generateDraftNodeId,
   generateLeafHistoryId,
   generateLeafId,
   generateMergeDraftId,

@@ -741,11 +741,11 @@ export type WebhookInsert = typeof webhooks.$inferInsert;
 /**
  * Draft is a pre-commit workspace (like Git's working directory).
  *
- * Users compose sentences, add constraints, preview output, then commit.
+ * Users compose nodes, add constraints, preview output, then commit.
  * Status lifecycle: editing → committed | abandoned.
  *
  * JSONB columns:
- * - sentences_json: DraftSentence[]
+ * - nodes_json: DraftNode[]
  * - constraints_json: DraftConstraint[]
  */
 export const drafts = pgTable(
@@ -771,8 +771,8 @@ export const drafts = pgTable(
     /** Source draft ID if forked from a committed draft */
     forkedFrom: text('forked_from'),
 
-    /** Editable sentences (DraftSentence[]) */
-    sentencesJson: jsonb('sentences_json')
+    /** Editable nodes (DraftNode[]) */
+    nodesJson: jsonb('nodes_json')
       .notNull()
       .$type<
         Array<{

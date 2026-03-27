@@ -109,8 +109,8 @@ commitFromDraftRoutes.openapi(postCommitFromDraftRoute, async (c) => {
     }
 
     // Step 3: Read tree data from draft
-    // The extract endpoint stores trees in the draft's sentences field (storage-level name)
-    const draftNodes = (draft.sentences ?? []) as Array<{
+    // The extract endpoint stores trees in the draft's nodes field
+    const draftNodes = (draft.nodes ?? []) as Array<{
       key?: string;
       id?: string;
       slots?: Record<string, unknown>;

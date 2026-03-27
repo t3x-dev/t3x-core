@@ -278,10 +278,10 @@ draftsWorkflowRoutes.openapi(previewDraftRoute, async (c) => {
       );
     }
 
-    // biome-ignore lint/suspicious/noExplicitAny: draft.sentences is loosely typed from storage
-    const includedSentences = (draft.sentences as any[]).filter((s: any) => s.included);
-    if (includedSentences.length === 0) {
-      return errorResponse(c, 'INVALID_REQUEST', 'Draft has no included sentences');
+    // biome-ignore lint/suspicious/noExplicitAny: draft.nodes is loosely typed from storage
+    const includedNodes = (draft.nodes as any[]).filter((s: any) => s.included);
+    if (includedNodes.length === 0) {
+      return errorResponse(c, 'INVALID_REQUEST', 'Draft has no included nodes');
     }
 
     // 3. Check generation configured
@@ -309,7 +309,7 @@ draftsWorkflowRoutes.openapi(previewDraftRoute, async (c) => {
     // 5. Compute cache key
     const previewType = body?.preview_type ?? draft.preview_type ?? 'tweet';
     const cacheInput = JSON.stringify({
-      sentences: includedSentences.map((s) => s.text).sort(),
+      sentences: includedNodes.map((s) => s.text).sort(),
       constraints: draft.constraints,
       instructions: draft.instructions,
       preview_type: previewType,
@@ -341,7 +341,7 @@ draftsWorkflowRoutes.openapi(previewDraftRoute, async (c) => {
       author: { type: 'human' as const, name: 'preview' },
       committed_at: new Date().toISOString(),
       content: {
-        trees: includedSentences.map((s: any) => ({
+        trees: includedNodes.map((s: any) => ({
           key: s.id,
           slots: { text: s.text },
           children: [],
@@ -496,14 +496,14 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
         };
       });
     } else {
-      // Deterministic mode: existing DraftSentence flow
-      // biome-ignore lint/suspicious/noExplicitAny: draft.sentences is loosely typed from storage
-      const includedSentences = (draft.sentences as any[]).filter((s: any) => s.included);
-      if (includedSentences.length === 0) {
-        return errorResponse(c, 'INVALID_REQUEST', 'Draft has no included sentences');
+      // Deterministic mode: existing DraftNode flow
+      // biome-ignore lint/suspicious/noExplicitAny: draft.nodes is loosely typed from storage
+      const includedNodes = (draft.nodes as any[]).filter((s: any) => s.included);
+      if (includedNodes.length === 0) {
+        return errorResponse(c, 'INVALID_REQUEST', 'Draft has no included nodes');
       }
 
-      sentences = includedSentences.map((ds: any) => {
+      sentences = includedNodes.map((ds: any) => {
         const confidence = ds.origin.type === 'extracted' ? ds.origin.confidence : 1.0;
 
         const sourceRef =
@@ -724,7 +724,7 @@ draftsWorkflowRoutes.openapi(suggestDraftRoute, async (c) => {
 
     // 5. Search for similar sentences
     const limit = body?.limit ?? 10;
-    const draftTexts = new Set((draft.sentences as any[]).map((s: any) => s.text));
+    const draftTexts = new Set((draft.nodes as any[]).map((s: any) => s.text));
     const rawResults = await searchSimilarSentences(
       db,
       draft.project_id,

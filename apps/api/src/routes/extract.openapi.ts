@@ -278,8 +278,8 @@ extractRoutes.openapi(postExtractRoute, async (c) => {
       title: source ? `Extract: ${source}` : 'API extraction',
     });
 
-    // Store trees into the draft (uses sentences field internally in storage)
-    await updateDraft(db, draft.id, { sentences: trees }, draft.revision);
+    // Store trees into the draft
+    await updateDraft(db, draft.id, { nodes: trees }, draft.revision);
 
     // Step 6: Detect drift (incremental mode only)
     let drift: { node_path: string; before: string; after: string }[] | undefined;

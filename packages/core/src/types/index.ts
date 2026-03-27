@@ -649,8 +649,8 @@ export interface Draft {
   /** Source draft ID if forked from a committed draft (RFC §13 Issue B) */
   forked_from?: string;
 
-  /** Editable sentences (DraftSentence records, typed as unknown[] until Task 6 cleanup) */
-  sentences: unknown[];
+  /** Editable nodes (DraftNode records, typed as unknown[] until Task 6 cleanup) */
+  nodes: unknown[];
 
   /** Editable constraints */
   constraints: DraftConstraint[];
@@ -688,7 +688,7 @@ export interface Draft {
   /** Last update timestamp, ISO8601 */
   updated_at: string;
 
-  /** LLM extraction mode. Undefined or 'deterministic' uses existing DraftSentence flow. */
+  /** LLM extraction mode. Undefined or 'deterministic' uses existing DraftNode flow. */
   extraction_mode?: 'deterministic' | 'llm';
 
   /** SemanticPoints (only when extraction_mode === 'llm'; typed as unknown[] until Task 6 cleanup) */

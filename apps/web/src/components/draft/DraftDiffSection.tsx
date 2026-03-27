@@ -4,10 +4,10 @@
  * DraftDiffSection - Collapsible "Changes from Parent" section
  *
  * Shown when draft has a parent_commit_hash.
- * Fetches parent commit once, then recomputes diff locally on sentence changes.
+ * Fetches parent commit once, then recomputes diff locally on node changes.
  *
- * TODO: Migrate to YAMLDiff once draft workspace moves from sentence-based
- * to tree-based (SemanticContent). Currently the draft store uses DraftSentence[]
+ * TODO: Migrate to YAMLDiff once draft workspace moves from node-based
+ * to tree-based (SemanticContent). Currently the draft store uses DraftNode[]
  * which has no tree structure, so diffCommits() cannot be used here yet.
  */
 
@@ -30,10 +30,10 @@ export function DraftDiffSection() {
 
   const parentHash = draft?.parent_commit_hash;
 
-  // Convert current draft sentences to diffable format
+  // Convert current draft nodes to diffable format
   const draftSentences = useMemo(() => {
     if (!draft) return [];
-    return draft.sentences.filter((s) => s.included).map((s) => ({ id: s.id, text: s.text }));
+    return draft.nodes.filter((s) => s.included).map((s) => ({ id: s.id, text: s.text }));
   }, [draft]);
 
   // Fetch parent commit only when parentHash changes (not on every sentence toggle)
