@@ -186,7 +186,7 @@ const INCREMENTAL_DELTA = JSON.stringify({
   changes: [
     {
       action: 'update',
-      target: 'f_001',
+      target_path: 'trip_plan',
       slots: {
         budget_per_person: 5000,
         transportation: '自驾',
@@ -437,7 +437,7 @@ describe('Frame Extraction E2E — Hangzhou Trip', () => {
     expect(delta.changes.length).toBeGreaterThanOrEqual(1);
     const updateChange = delta.changes.find((c: { action: string }) => c.action === 'update');
     expect(updateChange).toBeDefined();
-    expect(updateChange.target).toBe('f_001');
+    expect(updateChange.target_path).toBe('trip_plan');
     expect(updateChange.slots.budget_per_person).toBe(5000);
     expect(updateChange.slots.transportation).toBe('自驾');
 
