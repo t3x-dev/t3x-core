@@ -1,13 +1,13 @@
 import type { TreeDiff, SemanticContent } from '@t3x-dev/core';
 import { describe, expect, it } from 'vitest';
 import {
-  buildAlignedFrames,
+  buildAlignedNodes,
   buildDiffStatusMap,
-  buildFrameTree,
-  deriveRootFrameId,
+  buildTreeGraph,
+  deriveRootNodeId,
 } from '../DiffYAMLUtils';
 
-describe('buildAlignedFrames', () => {
+describe('buildAlignedNodes', () => {
   it('orders: modified -> removed -> added -> identical', () => {
     const diff: TreeDiff = {
       modified: [
@@ -22,9 +22,9 @@ describe('buildAlignedFrames', () => {
       relationsAdded: [],
       relationsRemoved: [],
     };
-    const aligned = buildAlignedFrames(diff);
+    const aligned = buildAlignedNodes(diff);
     expect(aligned.map((a) => a.type)).toEqual(['modified', 'removed', 'added', 'identical']);
-    expect(aligned.map((a) => a.frameId)).toEqual(['f1', 'f2', 'f3', 'f4']);
+    expect(aligned.map((a) => a.treeId)).toEqual(['f1', 'f2', 'f3', 'f4']);
   });
 
   it('handles empty diff', () => {
@@ -36,12 +36,12 @@ describe('buildAlignedFrames', () => {
       relationsAdded: [],
       relationsRemoved: [],
     };
-    expect(buildAlignedFrames(diff)).toEqual([]);
+    expect(buildAlignedNodes(diff)).toEqual([]);
   });
 });
 
-describe('deriveRootFrameId', () => {
-  it('returns explicit root_frame_id if set', () => {
+describe('deriveRootNodeId', () => {
+  it('returns explicit root_tree_id if set', () => {
     const content: SemanticContent = {
       trees: [
         { key: 'a', slots: {}, children: [] },
@@ -49,7 +49,7 @@ describe('deriveRootFrameId', () => {
       ],
       relations: [{ from: 'a', to: 'b', type: 'depends' }],
     };
-    expect(deriveRootFrameId(content)).toBeDefined();
+    expect(deriveRootNodeId(content)).toBeDefined();
   });
 
   it('derives root from most incoming edges', () => {
@@ -64,7 +64,7 @@ describe('deriveRootFrameId', () => {
         { from: 'c', to: 'a', type: 'conditions' },
       ],
     };
-    expect(deriveRootFrameId(content)).toBe('a');
+    expect(deriveRootNodeId(content)).toBe('a');
   });
 
   it('returns first tree key when no relations', () => {
@@ -72,17 +72,17 @@ describe('deriveRootFrameId', () => {
       trees: [{ key: 'x', slots: {}, children: [] }],
       relations: [],
     };
-    expect(deriveRootFrameId(content)).toBe('x');
+    expect(deriveRootNodeId(content)).toBe('x');
   });
 
   it('returns undefined for empty trees', () => {
     const content: SemanticContent = { trees: [], relations: [] };
-    expect(deriveRootFrameId(content)).toBeUndefined();
+    expect(deriveRootNodeId(content)).toBeUndefined();
   });
 });
 
 describe('buildDiffStatusMap', () => {
-  it('maps all frame statuses', () => {
+  it('maps all tree statuses', () => {
     const diff: TreeDiff = {
       modified: [
         {
@@ -104,7 +104,7 @@ describe('buildDiffStatusMap', () => {
   });
 });
 
-describe('buildFrameTree', () => {
+describe('buildTreeGraph', () => {
   it('builds tree from relations', () => {
     const content: SemanticContent = {
       trees: [
@@ -122,14 +122,14 @@ describe('buildFrameTree', () => {
       ['budget', 'identical'],
       ['pref', 'added'],
     ]);
-    const trees = buildFrameTree(content, statusMap, 'plan');
+    const trees = buildTreeGraph(content, statusMap, 'plan');
     expect(trees).toHaveLength(1);
-    expect(trees[0].frameId).toBe('plan');
+    expect(trees[0].treeId).toBe('plan');
     expect(trees[0].children).toHaveLength(2);
-    expect(trees[0].children.map((c) => c.frameId).sort()).toEqual(['budget', 'pref']);
+    expect(trees[0].children.map((c) => c.treeId).sort()).toEqual(['budget', 'pref']);
   });
 
-  it('handles orphan frames', () => {
+  it('handles orphan trees', () => {
     const content: SemanticContent = {
       trees: [
         { key: 'a', slots: {}, children: [] },
@@ -141,7 +141,7 @@ describe('buildFrameTree', () => {
       ['a', 'identical'],
       ['b', 'added'],
     ]);
-    const trees = buildFrameTree(content, statusMap);
+    const trees = buildTreeGraph(content, statusMap);
     expect(trees).toHaveLength(2); // both are roots since no relations
   });
 });

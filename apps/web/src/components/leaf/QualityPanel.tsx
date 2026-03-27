@@ -5,7 +5,7 @@
  *
  * Shows assertion results, generation metadata, and deploy/share actions.
  * Hover over an assertion → emits highlightedConstraintId to highlight
- * the corresponding YAML frame in YAMLTreePanel.
+ * the corresponding YAML tree in YAMLTreePanel.
  */
 
 import { CheckCircle, Clipboard, FileDown, Share2, XCircle } from 'lucide-react';
@@ -22,7 +22,7 @@ interface QualityPanelProps {
   assertions: Assertion[];
   constraints: Constraint[];
   generatedAt?: string;
-  /** Callback to highlight a YAML frame when hovering an assertion */
+  /** Callback to highlight a YAML tree when hovering an assertion */
   onHighlightConstraint?: (constraintId: string | null) => void;
   /** Export actions */
   onExport: (format: 'clipboard' | 'markdown' | 'json' | 'prompt') => Promise<void>;
@@ -46,8 +46,8 @@ function AssertionCard({
     : assertion.details;
 
   const sourceLabel = constraint
-    ? 'source_frame' in constraint && constraint.source_frame
-      ? `${constraint.source_frame.frame_type}${constraint.source_frame.slot_key ? `.${constraint.source_frame.slot_key}` : ''}`
+    ? 'source_node' in constraint && constraint.source_node
+      ? `${constraint.source_node.frame_type}${constraint.source_node.slot_key ? `.${constraint.source_node.slot_key}` : ''}`
       : 'source_sentence_id' in constraint && constraint.source_sentence_id
         ? constraint.source_sentence_id
         : undefined

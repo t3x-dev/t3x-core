@@ -8,7 +8,7 @@ import { API_V1, fetchWithTimeout } from './core';
 /**
  * Fetch a commit (tree-primary format).
  */
-export async function getCommitAsFrames(hash: string): Promise<Commit> {
+export async function getCommitAsNodes(hash: string): Promise<Commit> {
   const res = await fetchWithTimeout(`${API_V1}/commits/${encodeURIComponent(hash)}`);
   const json = (await res.json()) as { success: boolean; data?: { commit?: Commit } };
   if (json.success && json.data?.commit) {
@@ -20,7 +20,7 @@ export async function getCommitAsFrames(hash: string): Promise<Commit> {
 /**
  * Fetch commit history (tree-primary format).
  */
-export async function getCommitHistoryAsFrames(hash: string, limit = 10): Promise<Commit[]> {
+export async function getCommitHistoryAsNodes(hash: string, limit = 10): Promise<Commit[]> {
   try {
     const res = await fetchWithTimeout(
       `${API_V1}/commits/${encodeURIComponent(hash)}/history?limit=${limit}`

@@ -13,7 +13,7 @@ import { useCountUp } from '@/hooks/useCountUp';
 import { useTerminology } from '@/hooks/useTerminology';
 import type { ApiCommit, Project } from '@/lib/api';
 import { listCommits, listProjects } from '@/lib/api';
-import { frameSummaryText, getSemanticContent } from '@/lib/api/commits';
+import { treeSummaryText, getSemanticContent } from '@/lib/api/commits';
 import { cn } from '@/lib/utils';
 import type { SemanticEntry } from '@/types/semantic';
 
@@ -41,8 +41,8 @@ function commitToSemanticEntry(
   projectName: string,
   commitLabel: string
 ): SemanticEntry {
-  const frames = getSemanticContent(commit).trees;
-  const summaryText = frameSummaryText(commit);
+  const nodes = getSemanticContent(commit).trees;
+  const summaryText = treeSummaryText(commit);
   return {
     id: commit.hash.slice(7, 19),
     title: commit.message || `${commitLabel} ${commit.hash.slice(7, 15)}`,
@@ -53,8 +53,8 @@ function commitToSemanticEntry(
     bridgePrompt: commit.branch || 'main',
     updatedAt: formatTimeAgo(commit.committed_at),
     tags: [projectName, commit.branch || 'main'],
-    evidenceCount: frames.length,
-    facets: frames.slice(0, 3).map((f) => {
+    evidenceCount: nodes.length,
+    facets: nodes.slice(0, 3).map((f) => {
       const label = `${f.type}: ${Object.values(f.slots ?? {})
         .map((v) => (typeof v === 'string' ? v : JSON.stringify(v)))
         .join(', ')}`;
@@ -125,7 +125,7 @@ export default function InsightsPage() {
         const timelineItems = allCommits.slice(0, 10).map(({ commit, projectName }) => ({
           id: commit.hash.slice(7, 19),
           label: commit.message || `${commitLabel} on ${commit.branch || 'main'}`,
-          detail: `${getSemanticContent(commit).trees.length} frames in ${projectName}`,
+          detail: `${getSemanticContent(commit).trees.length} trees in ${projectName}`,
           time: formatTimeAgo(commit.committed_at),
           stage: 'commit' as const,
         }));

@@ -18,7 +18,7 @@ export function CommitDropdown() {
   const draft = useExtractionPanelStore((s) => s.draft);
   const setPanelMode = useExtractionPanelStore((s) => s.setPanelMode);
   const selectDeltaNodes = useExtractionPanelStore((s) => s.selectDeltaNodes);
-  const commitFrames = useExtractionPanelStore((s) => s.commitFrames);
+  const commitNodes = useExtractionPanelStore((s) => s.commitNodes);
   const commitBranch = useExtractionPanelStore((s) => s.commitBranch);
   const isCommitting = useExtractionPanelStore((s) => s.isCommitting);
   const projectId = useExtractionPanelStore((s) => s.projectId);
@@ -32,17 +32,17 @@ export function CommitDropdown() {
   }, [showMessageInput]);
 
   const deltaCount = selectDeltaNodes().length;
-  const hasFrames = draft.trees.length > 0;
+  const hasNodes = draft.trees.length > 0;
   const hasDelta = deltaCount > 0;
 
   const handleCommit = useCallback(() => {
-    if (!hasDelta && !hasFrames) return;
+    if (!hasDelta && !hasNodes) return;
     setShowMessageInput(true);
-  }, [hasDelta, hasFrames]);
+  }, [hasDelta, hasNodes]);
 
   const handleConfirmCommit = useCallback(async () => {
     try {
-      const result = await commitFrames(commitMessage);
+      const result = await commitNodes(commitMessage);
       const commitUrl = projectId
         ? `/project/${projectId}/commit/${encodeURIComponent(result.hash)}`
         : null;
@@ -60,7 +60,7 @@ export function CommitDropdown() {
     } catch {
       toast.error('Commit failed');
     }
-  }, [commitFrames, commitMessage, commitBranch]);
+  }, [commitNodes, commitMessage, commitBranch]);
 
   const handlePreviewAndCommit = useCallback(() => {
     setPanelMode('preview');
@@ -96,7 +96,7 @@ export function CommitDropdown() {
             size="sm"
             className="flex-1 bg-[var(--accent-commit)] text-xs text-white hover:opacity-90"
             onClick={handleConfirmCommit}
-            disabled={isCommitting || (!hasDelta && !hasFrames)}
+            disabled={isCommitting || (!hasDelta && !hasNodes)}
           >
             {isCommitting ? 'Committing...' : 'Confirm'}
           </Button>
@@ -113,18 +113,18 @@ export function CommitDropdown() {
       <div className="flex flex-1 rounded-md overflow-hidden">
         <Button
           size="sm"
-          disabled={(!hasDelta && !hasFrames) || isCommitting}
+          disabled={(!hasDelta && !hasNodes) || isCommitting}
           onClick={handleCommit}
           className="flex-1 rounded-r-none bg-[var(--accent-commit)] text-xs text-white hover:opacity-90 disabled:opacity-40"
         >
-          {hasDelta ? `Commit (${deltaCount})` : hasFrames ? 'Commit current' : 'Commit'}
+          {hasDelta ? `Commit (${deltaCount})` : hasNodes ? 'Commit current' : 'Commit'}
         </Button>
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
               size="sm"
-              disabled={(!hasDelta && !hasFrames) || isCommitting}
+              disabled={(!hasDelta && !hasNodes) || isCommitting}
               className="rounded-l-none border-l border-white/20 bg-[var(--accent-commit)] px-2 text-white hover:opacity-90 disabled:opacity-40"
             >
               <ChevronDown className="h-3 w-3" />

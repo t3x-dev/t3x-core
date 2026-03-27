@@ -4,21 +4,21 @@ import type { TreeDiff, SlotDiff, SlotValue } from '@t3x-dev/core';
 import { cn } from '@/lib/utils';
 import { formatSlotValue, YAML_COLORS } from './DiffYAMLFormatters';
 import {
-  FrameSeparator,
-  getFrameRelations,
+  TreeSeparator,
+  getTreeRelations,
   IdenticalCollapseBar,
   RelationAnnotation,
   useDYTheme,
 } from './DiffYAMLShared';
-import { type AlignedFrame, buildAlignedFrames } from './DiffYAMLUtils';
-import { frameLineCount, SlotValueSpan, WordDiffSpan } from './YAMLFrameRenderer';
+import { type AlignedNode, buildAlignedNodes } from './DiffYAMLUtils';
+import { treeLineCount, SlotValueSpan, WordDiffSpan } from './YAMLNodeRenderer';
 
 // ── Props ──
 
 interface DiffYAMLUnifiedViewProps {
   diff: TreeDiff;
-  activeFrameId: string | null;
-  onSelectFrame: (id: string) => void;
+  activeNodeId: string | null;
+  onSelectNode: (id: string) => void;
   showIdentical: boolean;
 }
 
@@ -110,15 +110,15 @@ function UnifiedLine({
   );
 }
 
-// ── Unified frame renderer ──
+// ── Unified tree renderer ──
 
-function UnifiedFrameContent({
+function UnifiedNodeContent({
   aligned,
   diff,
   leftLineRef,
   rightLineRef,
 }: {
-  aligned: AlignedFrame;
+  aligned: AlignedNode;
   diff: TreeDiff;
   leftLineRef: { current: number };
   rightLineRef: { current: number };
@@ -127,14 +127,14 @@ function UnifiedFrameContent({
 
   if (aligned.type === 'added') {
     // All lines green, right gutter only
-    const frame = aligned.rightFrame!;
+    const node = aligned.rightNode!;
     lines.push(
       <UnifiedLine key="header" rightNum={rightLineRef.current++} status="added">
-        <span style={{ color: YAML_COLORS.type, fontWeight: 600 }}>{frame.type}</span>
+        <span style={{ color: YAML_COLORS.type, fontWeight: 600 }}>{node.type}</span>
         <span style={{ color: YAML_COLORS.bracket }}>:</span>
       </UnifiedLine>
     );
-    for (const [key, value] of Object.entries(frame.slots)) {
+    for (const [key, value] of Object.entries(node.slots)) {
       lines.push(
         <UnifiedLine key={`slot-${key}`} rightNum={rightLineRef.current++} status="added">
           {'    '}
@@ -146,18 +146,18 @@ function UnifiedFrameContent({
     }
   } else if (aligned.type === 'removed') {
     // All lines red with strikethrough, left gutter only
-    const frame = aligned.leftFrame!;
+    const node = aligned.leftNode!;
     lines.push(
       <UnifiedLine key="header" leftNum={leftLineRef.current++} status="removed">
         <span className="line-through" style={{ color: YAML_COLORS.type, fontWeight: 600 }}>
-          {frame.type}
+          {node.type}
         </span>
         <span className="line-through" style={{ color: YAML_COLORS.bracket }}>
           :
         </span>
       </UnifiedLine>
     );
-    for (const [key, value] of Object.entries(frame.slots)) {
+    for (const [key, value] of Object.entries(node.slots)) {
       lines.push(
         <UnifiedLine key={`slot-${key}`} leftNum={leftLineRef.current++} status="removed">
           {'    '}
@@ -173,7 +173,7 @@ function UnifiedFrameContent({
     }
   } else if (aligned.type === 'identical') {
     // All unchanged, both gutters
-    const frame = aligned.leftFrame!;
+    const node = aligned.leftNode!;
     lines.push(
       <UnifiedLine
         key="header"
@@ -181,11 +181,11 @@ function UnifiedFrameContent({
         rightNum={rightLineRef.current++}
         status="unchanged"
       >
-        <span style={{ color: YAML_COLORS.type, fontWeight: 600 }}>{frame.type}</span>
+        <span style={{ color: YAML_COLORS.type, fontWeight: 600 }}>{node.type}</span>
         <span style={{ color: YAML_COLORS.bracket }}>:</span>
       </UnifiedLine>
     );
-    for (const [key, value] of Object.entries(frame.slots)) {
+    for (const [key, value] of Object.entries(node.slots)) {
       lines.push(
         <UnifiedLine
           key={`slot-${key}`}
@@ -201,15 +201,15 @@ function UnifiedFrameContent({
       );
     }
   } else {
-    // Modified frame: show per-slot diffs
-    const sourceFrame = aligned.leftFrame!;
-    const targetFrame = aligned.rightFrame!;
+    // Modified tree: show per-slot diffs
+    const sourceNode = aligned.leftNode!;
+    const targetNode = aligned.rightNode!;
     const slotDiffMap = new Map<string, SlotDiff>();
     if (aligned.slotDiffs) {
       for (const sd of aligned.slotDiffs) slotDiffMap.set(sd.key, sd);
     }
 
-    // Frame type header — unchanged (both frames have same type usually)
+    // Tree type header — unchanged (both trees have same type usually)
     lines.push(
       <UnifiedLine
         key="header"
@@ -217,13 +217,13 @@ function UnifiedFrameContent({
         rightNum={rightLineRef.current++}
         status="unchanged"
       >
-        <span style={{ color: YAML_COLORS.type, fontWeight: 600 }}>{targetFrame.type}</span>
+        <span style={{ color: YAML_COLORS.type, fontWeight: 600 }}>{targetNode.type}</span>
         <span style={{ color: YAML_COLORS.bracket }}>:</span>
       </UnifiedLine>
     );
 
     // Slots present in target (may be unchanged, modified, or added)
-    for (const [key, value] of Object.entries(targetFrame.slots)) {
+    for (const [key, value] of Object.entries(targetNode.slots)) {
       const sd = slotDiffMap.get(key);
 
       if (!sd) {
@@ -301,14 +301,14 @@ function UnifiedFrameContent({
   }
 
   // Relation annotations
-  const relations = getFrameRelations(aligned.frameId, diff);
+  const relations = getTreeRelations(aligned.treeId, diff);
 
   return (
     <>
       {lines}
       {relations.map((rel, i) => (
         <RelationAnnotation
-          key={`${aligned.frameId}-rel-${i}`}
+          key={`${aligned.treeId}-rel-${i}`}
           rel={rel}
           paddingLeft={UNIFIED_PADDING}
         />
@@ -321,28 +321,28 @@ function UnifiedFrameContent({
 
 export function DiffYAMLUnifiedView({
   diff,
-  activeFrameId,
-  onSelectFrame,
+  activeNodeId,
+  onSelectNode,
   showIdentical,
 }: DiffYAMLUnifiedViewProps) {
   const dyTheme = useDYTheme();
-  const aligned = buildAlignedFrames(diff);
+  const aligned = buildAlignedNodes(diff);
   const nonIdentical = aligned.filter((a) => a.type !== 'identical');
-  const identicalFrames = aligned.filter((a) => a.type === 'identical');
+  const identicalNodes = aligned.filter((a) => a.type === 'identical');
 
   // Mutable line counters passed by ref
   const leftLineRef = { current: 1 };
   const rightLineRef = { current: 1 };
 
-  const renderFrame = (af: AlignedFrame) => (
-    <div key={`unified-${af.frameId}`}>
-      <FrameSeparator
+  const renderNode = (af: AlignedNode) => (
+    <div key={`unified-${af.treeId}`}>
+      <TreeSeparator
         aligned={af}
-        onClick={() => onSelectFrame(af.frameId)}
-        isActive={activeFrameId === af.frameId}
+        onClick={() => onSelectNode(af.treeId)}
+        isActive={activeNodeId === af.treeId}
         paddingLeft={UNIFIED_PADDING}
       />
-      <UnifiedFrameContent
+      <UnifiedNodeContent
         aligned={af}
         diff={diff}
         leftLineRef={leftLineRef}
@@ -353,16 +353,16 @@ export function DiffYAMLUnifiedView({
 
   return (
     <div className="flex-1 overflow-y-auto" style={dyTheme}>
-      {nonIdentical.map(renderFrame)}
+      {nonIdentical.map(renderNode)}
       {showIdentical ? (
-        identicalFrames.map(renderFrame)
+        identicalNodes.map(renderNode)
       ) : (
         <IdenticalCollapseBar
-          frames={identicalFrames}
+          nodes={identicalNodes}
           paddingLeft={UNIFIED_PADDING}
           onClick={() => {
-            if (identicalFrames.length > 0) {
-              onSelectFrame(identicalFrames[0].frameId);
+            if (identicalNodes.length > 0) {
+              onSelectNode(identicalNodes[0].treeId);
             }
           }}
         />

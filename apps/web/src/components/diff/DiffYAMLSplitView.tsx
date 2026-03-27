@@ -4,27 +4,27 @@ import type { TreeDiff } from '@t3x-dev/core';
 import { useCallback, useRef } from 'react';
 import { YAML_COLORS } from './DiffYAMLFormatters';
 import {
-  FrameSeparator,
-  getFrameRelations,
+  TreeSeparator,
+  getTreeRelations,
   IdenticalCollapseBar,
   RelationAnnotation,
   useDYTheme,
 } from './DiffYAMLShared';
-import { type AlignedFrame, buildAlignedFrames, buildAlignedSlotKeys } from './DiffYAMLUtils';
+import { type AlignedNode, buildAlignedNodes, buildAlignedSlotKeys } from './DiffYAMLUtils';
 import {
-  frameLineCount,
+  treeLineCount,
   SlotValueSpan,
   WordDiffSpan,
-  YAMLFrameRenderer,
-} from './YAMLFrameRenderer';
+  YAMLNodeRenderer,
+} from './YAMLNodeRenderer';
 import { YAMLLine } from './YAMLLine';
 
 // ── Props ──
 
 interface DiffYAMLSplitViewProps {
   diff: TreeDiff;
-  activeFrameId: string | null;
-  onSelectFrame: (id: string) => void;
+  activeNodeId: string | null;
+  onSelectNode: (id: string) => void;
   showIdentical: boolean;
 }
 
@@ -44,40 +44,40 @@ function EmptyPlaceholderLines({ count }: { count: number }) {
 
 // ── Pane content renderer ──
 
-/** Compute how many content lines a frame takes on a given side */
-function computeFrameHeight(af: AlignedFrame, side: 'left' | 'right', diff: TreeDiff): number {
-  const frame = side === 'left' ? af.leftFrame : af.rightFrame;
-  if (!frame) {
+/** Compute how many content lines a tree node takes on a given side */
+function computeNodeHeight(af: AlignedNode, side: 'left' | 'right', diff: TreeDiff): number {
+  const node = side === 'left' ? af.leftNode : af.rightNode;
+  if (!node) {
     // Placeholder side: count from the other side
-    const otherFrame = side === 'left' ? af.rightFrame : af.leftFrame;
-    if (!otherFrame) return 0;
+    const otherNode = side === 'left' ? af.rightNode : af.leftNode;
+    if (!otherNode) return 0;
     const removedSlots = af.slotDiffs?.filter((sd) => sd.type === 'removed').length ?? 0;
-    return frameLineCount(otherFrame, removedSlots);
+    return treeLineCount(otherNode, removedSlots);
   }
 
-  if (af.type === 'modified' && af.leftFrame && af.rightFrame) {
+  if (af.type === 'modified' && af.leftNode && af.rightNode) {
     // Aligned rendering: 1 header + number of aligned slot keys
-    const alignedSlots = buildAlignedSlotKeys(af.leftFrame, af.rightFrame);
+    const alignedSlots = buildAlignedSlotKeys(af.leftNode, af.rightNode);
     return 1 + alignedSlots.length;
   }
 
   const removedSlots = af.slotDiffs?.filter((sd) => sd.type === 'removed').length ?? 0;
-  return frameLineCount(frame, removedSlots);
+  return treeLineCount(node, removedSlots);
 }
 
-function computeFrameHeightsMap(
-  aligned: AlignedFrame[],
+function computeNodeHeightsMap(
+  aligned: AlignedNode[],
   diff: TreeDiff
 ): Map<string, { left: number; right: number; max: number; relCount: number }> {
   const map = new Map<string, { left: number; right: number; max: number; relCount: number }>();
   for (const af of aligned) {
-    const left = computeFrameHeight(af, 'left', diff);
-    const right = computeFrameHeight(af, 'right', diff);
-    const relCount = getFrameRelations(af.frameId, diff).length;
+    const left = computeNodeHeight(af, 'left', diff);
+    const right = computeNodeHeight(af, 'right', diff);
+    const relCount = getTreeRelations(af.treeId, diff).length;
     // Relations may differ per side in the future, but for now same count
     const leftTotal = left + relCount;
     const rightTotal = right + relCount;
-    map.set(af.frameId, {
+    map.set(af.treeId, {
       left: leftTotal,
       right: rightTotal,
       max: Math.max(leftTotal, rightTotal),
@@ -91,30 +91,30 @@ function PaneContent({
   aligned,
   side,
   diff,
-  activeFrameId,
-  onSelectFrame,
+  activeNodeId,
+  onSelectNode,
   showIdentical,
   heightsMap,
 }: {
-  aligned: AlignedFrame[];
+  aligned: AlignedNode[];
   side: 'left' | 'right';
   diff: TreeDiff;
-  activeFrameId: string | null;
-  onSelectFrame: (id: string) => void;
+  activeNodeId: string | null;
+  onSelectNode: (id: string) => void;
   showIdentical: boolean;
   heightsMap: Map<string, { left: number; right: number; max: number; relCount: number }>;
 }) {
   let lineNum = 1;
 
-  // Separate identical frames for potential collapsing
+  // Separate identical trees for potential collapsing
   const nonIdentical = aligned.filter((a) => a.type !== 'identical');
-  const identicalFrames = aligned.filter((a) => a.type === 'identical');
+  const identicalNodes = aligned.filter((a) => a.type === 'identical');
 
-  const renderFrame = (af: AlignedFrame) => {
-    const frame = side === 'left' ? af.leftFrame : af.rightFrame;
-    const hasFrame = !!frame;
+  const renderNode = (af: AlignedNode) => {
+    const node = side === 'left' ? af.leftNode : af.rightNode;
+    const hasNode = !!node;
 
-    // For added frames, left pane shows placeholder; for removed, right pane shows placeholder
+    // For added nodes, left pane shows placeholder; for removed, right pane shows placeholder
     const isPlaceholder =
       (af.type === 'added' && side === 'left') || (af.type === 'removed' && side === 'right');
 
@@ -124,14 +124,14 @@ function PaneContent({
         ? af.slotDiffs.filter((sd) => sd.type === 'removed').length
         : 0;
 
-    // Get the frame to count lines from (the "real" side)
-    const realFrame =
-      af.type === 'added' ? af.rightFrame : af.type === 'removed' ? af.leftFrame : frame;
+    // Get the tree to count lines from (the "real" side)
+    const realNode =
+      af.type === 'added' ? af.rightNode : af.type === 'removed' ? af.leftNode : node;
 
-    const placeholderCount = realFrame ? frameLineCount(realFrame, removedSlotCount) : 0;
+    const placeholderCount = realNode ? treeLineCount(realNode, removedSlotCount) : 0;
 
-    // Gather relation annotations for this frame
-    const relations = getFrameRelations(af.frameId, diff);
+    // Gather relation annotations for this tree
+    const relations = getTreeRelations(af.treeId, diff);
 
     // For placeholders, we also need to render empty lines for relation annotations
     const relationCount = relations.length;
@@ -142,16 +142,16 @@ function PaneContent({
     let content: React.ReactNode;
     if (isPlaceholder) {
       content = <EmptyPlaceholderLines count={placeholderCount} />;
-    } else if (af.type === 'modified' && af.leftFrame && af.rightFrame) {
-      // ── Modified frame: aligned slot-by-slot rendering ──
+    } else if (af.type === 'modified' && af.leftNode && af.rightNode) {
+      // ── Modified tree: aligned slot-by-slot rendering ──
       const slotDiffMap = new Map((af.slotDiffs ?? []).map((sd) => [sd.key, sd]));
-      const alignedSlots = buildAlignedSlotKeys(af.leftFrame, af.rightFrame);
+      const alignedSlots = buildAlignedSlotKeys(af.leftNode, af.rightNode);
 
       const lines: React.ReactNode[] = [];
-      // Frame type header
+      // Tree type header
       lines.push(
         <YAMLLine key="header" lineNumber={lineNum++} status="modified">
-          <span style={{ color: YAML_COLORS.type, fontWeight: 600 }}>{frame!.type}</span>
+          <span style={{ color: YAML_COLORS.type, fontWeight: 600 }}>{node!.type}</span>
           <span style={{ color: YAML_COLORS.bracket }}>:</span>
         </YAMLLine>
       );
@@ -169,7 +169,7 @@ function PaneContent({
           continue;
         }
 
-        const value = side === 'left' ? af.leftFrame.slots[as.key] : af.rightFrame.slots[as.key];
+        const value = side === 'left' ? af.leftNode.slots[as.key] : af.rightNode.slots[as.key];
 
         // Line status: both sides stay 'modified' (subtle amber) for changed slots
         // The VALUE itself gets colored, not the whole line
@@ -210,37 +210,37 @@ function PaneContent({
       }
 
       content = <>{lines}</>;
-    } else if (hasFrame) {
+    } else if (hasNode) {
       content = (
-        <YAMLFrameRenderer
-          frame={frame!}
+        <YAMLNodeRenderer
+          node={node!}
           frameStatus={af.type}
           slotDiffs={af.type === 'modified' ? af.slotDiffs : undefined}
           startLine={startLine}
         />
       );
-      lineNum += frameLineCount(frame!, removedSlotCount);
+      lineNum += treeLineCount(node!, removedSlotCount);
     } else {
       content = null;
     }
 
     return (
-      <div key={`${side}-${af.frameId}`}>
-        <FrameSeparator
+      <div key={`${side}-${af.treeId}`}>
+        <TreeSeparator
           aligned={af}
-          onClick={() => onSelectFrame(af.frameId)}
-          isActive={activeFrameId === af.frameId}
+          onClick={() => onSelectNode(af.treeId)}
+          isActive={activeNodeId === af.treeId}
         />
         {content}
         {/* Relation annotations */}
         {isPlaceholder ? (
           <EmptyPlaceholderLines count={relationCount} />
         ) : (
-          relations.map((rel, i) => <RelationAnnotation key={`${af.frameId}-rel-${i}`} rel={rel} />)
+          relations.map((rel, i) => <RelationAnnotation key={`${af.treeId}-rel-${i}`} rel={rel} />)
         )}
         {/* Padding to align with the other side */}
         {(() => {
-          const h = heightsMap.get(af.frameId);
+          const h = heightsMap.get(af.treeId);
           if (!h) return null;
           const myHeight = side === 'left' ? h.left : h.right;
           const padCount = h.max - myHeight;
@@ -252,16 +252,16 @@ function PaneContent({
 
   return (
     <>
-      {nonIdentical.map(renderFrame)}
+      {nonIdentical.map(renderNode)}
       {showIdentical ? (
-        identicalFrames.map(renderFrame)
+        identicalNodes.map(renderNode)
       ) : (
         <IdenticalCollapseBar
-          frames={identicalFrames}
+          nodes={identicalNodes}
           onClick={() => {
-            // If there are identical frames, select the first one to trigger showing
-            if (identicalFrames.length > 0) {
-              onSelectFrame(identicalFrames[0].frameId);
+            // If there are identical nodes, select the first one to trigger showing
+            if (identicalNodes.length > 0) {
+              onSelectNode(identicalNodes[0].treeId);
             }
           }}
         />
@@ -274,8 +274,8 @@ function PaneContent({
 
 export function DiffYAMLSplitView({
   diff,
-  activeFrameId,
-  onSelectFrame,
+  activeNodeId,
+  onSelectNode,
   showIdentical,
 }: DiffYAMLSplitViewProps) {
   const dyTheme = useDYTheme();
@@ -297,8 +297,8 @@ export function DiffYAMLSplitView({
     });
   }, []);
 
-  const aligned = buildAlignedFrames(diff);
-  const heightsMap = computeFrameHeightsMap(aligned, diff);
+  const aligned = buildAlignedNodes(diff);
+  const heightsMap = computeNodeHeightsMap(aligned, diff);
 
   return (
     <div className="flex flex-1 overflow-hidden" style={dyTheme}>
@@ -313,8 +313,8 @@ export function DiffYAMLSplitView({
           aligned={aligned}
           side="left"
           diff={diff}
-          activeFrameId={activeFrameId}
-          onSelectFrame={onSelectFrame}
+          activeNodeId={activeNodeId}
+          onSelectNode={onSelectNode}
           showIdentical={showIdentical}
           heightsMap={heightsMap}
         />
@@ -326,8 +326,8 @@ export function DiffYAMLSplitView({
           aligned={aligned}
           side="right"
           diff={diff}
-          activeFrameId={activeFrameId}
-          onSelectFrame={onSelectFrame}
+          activeNodeId={activeNodeId}
+          onSelectNode={onSelectNode}
           showIdentical={showIdentical}
           heightsMap={heightsMap}
         />

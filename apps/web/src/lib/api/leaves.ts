@@ -39,10 +39,10 @@ export interface RequireConstraint {
   match_mode: 'exact' | 'semantic';
   value: string;
   description?: string;
-  /** @deprecated Use source_frame for frame-based commits */
+  /** @deprecated Use source_node for tree-based commits */
   source_sentence_id?: string;
-  /** Link to source frame + slot (frame-based traceability) */
-  source_frame?: ConstraintSourceFrame;
+  /** Link to source  node + slot (tree-based traceability) */
+  source_node?: ConstraintSourceFrame;
 }
 
 export interface ExcludeConstraint {
@@ -52,8 +52,8 @@ export interface ExcludeConstraint {
   value: string;
   description?: string;
   reason?: string;
-  /** Link to source frame + slot (frame-based traceability) */
-  source_frame?: ConstraintSourceFrame;
+  /** Link to source  node + slot (tree-based traceability) */
+  source_node?: ConstraintSourceFrame;
 }
 
 export type Constraint = RequireConstraint | ExcludeConstraint;

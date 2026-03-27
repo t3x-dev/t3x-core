@@ -1,6 +1,6 @@
 import { ChevronRight } from 'lucide-react';
 import { memo } from 'react';
-import { FrameGraphView } from '@/components/frame-graph';
+import { TreeGraphView } from '@/components/tree-graph';
 import { toneAccent } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import type { CommitDisplay } from '@/types/nodes';
@@ -33,7 +33,7 @@ export const AuthorBadge = memo(function AuthorBadge({
 });
 
 /**
- * Commit content section - shows frames preview (constraints are in Leaves)
+ * Commit content section - shows trees preview (constraints are in Leaves)
  * Header (title, branch, hash, status) is rendered by parent UnitNode
  */
 export const CommitContentSection = memo(function CommitContentSection({
@@ -47,14 +47,14 @@ export const CommitContentSection = memo(function CommitContentSection({
   projectId?: string;
   maxSentences?: number;
 }) {
-  const frames = commit.content?.trees ?? [];
-  const displayFrames = frames.slice(0, PREVIEW_MAX_FRAMES) as Array<{
+  const nodes = commit.content?.trees ?? [];
+  const displayNodes = nodes.slice(0, PREVIEW_MAX_FRAMES) as Array<{
     id: string;
     type: string;
     slots: Record<string, unknown>;
     confidence?: number;
   }>;
-  const remainingFrames = frames.length - PREVIEW_MAX_FRAMES;
+  const remainingNodes = nodes.length - PREVIEW_MAX_FRAMES;
 
   return (
     <div className="commit-v4-content mt-2 pt-2 border-t border-[var(--stroke-divider)]">
@@ -74,27 +74,27 @@ export const CommitContentSection = memo(function CommitContentSection({
         </span>
       </div>
 
-      {/* Frame Graph or Frames list (preview) */}
+      {/* Tree Graph or Frames list (preview) */}
       {commit.semantic && commit.semantic.trees.length > 0 ? (
         <div>
           <div className="text-[10px] font-medium text-[var(--text-tertiary)] uppercase tracking-wider mb-1">
-            Frame Graph ({commit.semantic.trees.length} frames)
+            Tree Graph ({commit.semantic.trees.length} nodes)
           </div>
           <div className="h-[200px] rounded border border-[var(--stroke-divider)]">
-            <FrameGraphView content={commit.semantic} className="h-full w-full" />
+            <TreeGraphView content={commit.semantic} className="h-full w-full" />
           </div>
         </div>
       ) : (
         <div>
           <div className="text-[10px] font-medium text-[var(--text-tertiary)] uppercase tracking-wider">
-            Frames ({frames.length})
+            Frames ({nodes.length})
           </div>
-          {frames.length === 0 ? (
-            <p className="mt-1 text-xs text-[var(--text-tertiary)] italic">No frames</p>
+          {nodes.length === 0 ? (
+            <p className="mt-1 text-xs text-[var(--text-tertiary)] italic">No trees</p>
           ) : (
             <>
               <ul className="mt-1 space-y-0.5">
-                {displayFrames.map((f) => {
+                {displayNodes.map((f) => {
                   const slotSummary = Object.entries(f.slots ?? {})
                     .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`)
                     .join('; ');
@@ -126,9 +126,9 @@ export const CommitContentSection = memo(function CommitContentSection({
               </ul>
               {/* Footer with +N more and View full */}
               <div className="flex items-center justify-between mt-1.5 pt-1.5 border-t border-[var(--stroke-divider)]">
-                {remainingFrames > 0 ? (
+                {remainingNodes > 0 ? (
                   <span className="text-xs text-[var(--text-tertiary)]">
-                    +{remainingFrames} frame{remainingFrames !== 1 ? 's' : ''}
+                    +{remainingNodes} tree{remainingNodes !== 1 ? 's' : ''}
                   </span>
                 ) : (
                   <span />

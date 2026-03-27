@@ -7,5 +7,5 @@
 export { DiffTreeOverview } from './DiffTreeOverview';
 export { DiffYAMLSplitView } from './DiffYAMLSplitView';
 export { DiffYAMLUnifiedView } from './DiffYAMLUnifiedView';
-export type { FrameYAMLDiffProps } from './FrameYAMLDiff';
-export { FrameYAMLDiff } from './FrameYAMLDiff';
+export type { YAMLDiffProps } from './YAMLDiff';
+export { YAMLDiff } from './YAMLDiff';

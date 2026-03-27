@@ -2,8 +2,8 @@ import type { SemanticContent, TreeNode } from '@t3x-dev/core';
 import { useMemo } from 'react';
 
 export interface HighlightSpan {
-  frameId: string;
-  frameType: string;
+  treeId: string;
+  treeType: string;
 }
 
 /**
@@ -18,7 +18,7 @@ export function useExtractionHighlights(content: SemanticContent) {
         const path = prefix ? `${prefix}.${node.key}` : node.key;
         if (node.source) {
           const existing = map.get(node.source) ?? [];
-          existing.push({ frameId: path, frameType: node.key });
+          existing.push({ treeId: path, treeType: node.key });
           map.set(node.source, existing);
         }
         if (node.children.length > 0) {

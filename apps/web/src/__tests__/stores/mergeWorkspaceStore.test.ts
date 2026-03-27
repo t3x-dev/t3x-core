@@ -10,7 +10,7 @@
  * - fetchSourceContext caching
  *
  * Updated for tree-primary merge architecture.
- * Uses frameMergeResult (path-based MergeResult from core) for conflict resolution.
+ * Uses treeMergeResult (path-based MergeResult from core) for conflict resolution.
  * Legacy getPreviewSentences still uses Merge2WayResult prepared data.
  */
 
@@ -66,7 +66,7 @@ const createMockPrepared = (): Merge2WayResult => ({
 });
 
 // Helper to create tree-primary MergeResult
-const createMockFrameMergeResult = (): MergeResult => ({
+const createMockTreeMergeResult = (): MergeResult => ({
   autoKept: ['identical/a'],
   conflicts: [
     { path: 'topic/budget', slotConflicts: [] },
@@ -89,10 +89,10 @@ describe('MergeWorkspaceStore - Extended Resolutions', () => {
     vi.clearAllMocks();
   });
 
-  // Helper to set up store with frame merge data
+  // Helper to set up store with tree merge data
   const setupStore = () => {
-    const frameMergeResult = createMockFrameMergeResult();
-    useMergeWorkspaceStore.getState().setFrameMergeResult(frameMergeResult);
+    const treeMergeResult = createMockTreeMergeResult();
+    useMergeWorkspaceStore.getState().setTreeMergeResult(treeMergeResult);
     // Also set legacy prepared for getPreviewSentences
     useMergeWorkspaceStore.setState({
       prepared: createMockPrepared(),
@@ -107,7 +107,7 @@ describe('MergeWorkspaceStore - Extended Resolutions', () => {
       useMergeWorkspaceStore.getState().resolveConflict(0, 'source');
 
       const state = useMergeWorkspaceStore.getState();
-      expect(state.frameResolutions.get('topic/budget')).toEqual({ type: 'source' });
+      expect(state.treeResolutions.get('topic/budget')).toEqual({ type: 'source' });
       expect(state.extendedResolutions['0']).toBeUndefined();
     });
 
@@ -117,7 +117,7 @@ describe('MergeWorkspaceStore - Extended Resolutions', () => {
       useMergeWorkspaceStore.getState().resolveConflict(0, 'target');
 
       const state = useMergeWorkspaceStore.getState();
-      expect(state.frameResolutions.get('topic/budget')).toEqual({ type: 'target' });
+      expect(state.treeResolutions.get('topic/budget')).toEqual({ type: 'target' });
       expect(state.extendedResolutions['0']).toBeUndefined();
     });
 
@@ -127,7 +127,7 @@ describe('MergeWorkspaceStore - Extended Resolutions', () => {
       useMergeWorkspaceStore.getState().resolveConflict(0, 'both');
 
       const state = useMergeWorkspaceStore.getState();
-      expect(state.frameResolutions.has('topic/budget')).toBe(false);
+      expect(state.treeResolutions.has('topic/budget')).toBe(false);
       expect(state.extendedResolutions['0']).toEqual({ type: 'both' });
     });
 
@@ -142,7 +142,7 @@ describe('MergeWorkspaceStore - Extended Resolutions', () => {
       useMergeWorkspaceStore.getState().resolveConflict(0, 'source');
 
       const state = useMergeWorkspaceStore.getState();
-      expect(state.frameResolutions.get('topic/budget')).toEqual({ type: 'source' });
+      expect(state.treeResolutions.get('topic/budget')).toEqual({ type: 'source' });
       expect(state.extendedResolutions['0']).toBeUndefined();
     });
   });
@@ -174,8 +174,8 @@ describe('MergeWorkspaceStore - Extended Resolutions', () => {
 
   describe('canCommit', () => {
     it('should return false when there are unresolved conflicts', () => {
-      const frameMergeResult = createMockFrameMergeResult();
-      useMergeWorkspaceStore.getState().setFrameMergeResult(frameMergeResult);
+      const treeMergeResult = createMockTreeMergeResult();
+      useMergeWorkspaceStore.getState().setTreeMergeResult(treeMergeResult);
       useMergeWorkspaceStore.setState({
         status: 'pending',
         message: 'Merge commit',
@@ -185,8 +185,8 @@ describe('MergeWorkspaceStore - Extended Resolutions', () => {
     });
 
     it('should return true when all conflicts are resolved with extended resolutions', () => {
-      const frameMergeResult = createMockFrameMergeResult();
-      useMergeWorkspaceStore.getState().setFrameMergeResult(frameMergeResult);
+      const treeMergeResult = createMockTreeMergeResult();
+      useMergeWorkspaceStore.getState().setTreeMergeResult(treeMergeResult);
       useMergeWorkspaceStore.setState({
         status: 'pending',
         message: 'Merge commit',
@@ -199,8 +199,8 @@ describe('MergeWorkspaceStore - Extended Resolutions', () => {
     });
 
     it('should return false when message is empty', () => {
-      const frameMergeResult = createMockFrameMergeResult();
-      useMergeWorkspaceStore.getState().setFrameMergeResult(frameMergeResult);
+      const treeMergeResult = createMockTreeMergeResult();
+      useMergeWorkspaceStore.getState().setTreeMergeResult(treeMergeResult);
       useMergeWorkspaceStore.setState({
         status: 'pending',
         message: '',

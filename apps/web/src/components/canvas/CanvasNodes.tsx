@@ -291,7 +291,7 @@ const UnitNode = memo(function UnitNode(props: Props) {
   const nextStep = getNextStep();
 
   // B-8: Compute stats for collapsed view
-  const frameCount = isDraft
+  const nodeCount = isDraft
     ? 0 // Draft shows its own summary in title area
     : data.commit
       ? (data.commit.content?.trees?.length ?? 0)
@@ -395,7 +395,7 @@ const UnitNode = memo(function UnitNode(props: Props) {
             : { transition: 'opacity 200ms ease' }),
         }}
         role="treeitem"
-        aria-label={`${data.title} — ${isDraft ? t('draft') : isStaging ? t('draft') : t('committed')} on ${branchLabel}${frameCount > 0 ? `, ${frameCount} frames` : ''}`}
+        aria-label={`${data.title} — ${isDraft ? t('draft') : isStaging ? t('draft') : t('committed')} on ${branchLabel}${nodeCount > 0 ? `, ${nodeCount} trees` : ''}`}
         aria-selected={selected}
         data-node-type={isDraft ? 'draft' : isStaging ? 'conversation' : 'commit'}
         tabIndex={0}
@@ -458,11 +458,11 @@ const UnitNode = memo(function UnitNode(props: Props) {
                     </span>
                   </div>
                 )}
-                {frameCount > 0 && (
+                {nodeCount > 0 && (
                   <div className="flex items-center gap-1.5">
                     <FileText size={10} className="text-[var(--text-tertiary)]" />
                     <span>
-                      {frameCount} frame{frameCount !== 1 ? 's' : ''}
+                      {nodeCount} tree{nodeCount !== 1 ? 's' : ''}
                     </span>
                   </div>
                 )}
@@ -596,9 +596,9 @@ const UnitNode = memo(function UnitNode(props: Props) {
           )}
 
           {/* B-8: Stats line (always visible in collapsed view) */}
-          {frameCount > 0 && (
+          {nodeCount > 0 && (
             <div className="text-xs text-[var(--text-secondary)] mb-[var(--space-item)]">
-              {frameCount} frame{frameCount !== 1 ? 's' : ''}
+              {nodeCount} tree{nodeCount !== 1 ? 's' : ''}
             </div>
           )}
 

@@ -163,7 +163,7 @@ export const createMergeSlice: StateCreator<CanvasState, [], [], MergeSlice> = (
           title:
             mergeCommit.message ||
             `${getTerminology('merge', useSettingsStore.getState().developerMode)} ${getTerminology('commit', useSettingsStore.getState().developerMode).toLowerCase()}`,
-          summary: `${mergeCommit.content.trees?.length ?? 0} frames`,
+          summary: `${mergeCommit.content.trees?.length ?? 0} trees`,
           status: 'committed',
           timestamp: mergeCommit.committed_at,
           tags: ['merge'],

@@ -1,0 +1,93 @@
+'use client';
+
+import type { SemanticContent } from '@t3x-dev/core';
+import { diffCommits } from '@t3x-dev/core';
+import { useMemo } from 'react';
+import { cn } from '@/lib/utils';
+import { TreeGraphView } from './TreeGraphView';
+
+// ── Props ──
+
+interface DiffSplitProps {
+  /** "Before" commit (e.g., parent) */
+  source: SemanticContent;
+  /** "After" commit (e.g., current) */
+  target: SemanticContent;
+  className?: string;
+}
+
+// ── Component ──
+
+/**
+ * DiffSplit — Side-by-side (split) diff view.
+ *
+ * Left panel shows the source content, right panel shows the target content.
+ * Nodes unique to one side get a colored border; modified nodes get orange;
+ * identical nodes render normally.
+ */
+export function DiffSplit({ source, target, className }: DiffSplitProps) {
+  const { sourceDelta, sourceSlots, targetDelta, targetSlots } = useMemo(() => {
+    const diff = diffCommits(source, target);
+
+    const sourceDelta: Record<string, 'added' | 'updated' | 'removed'> = {};
+    const sourceSlots: Record<string, string[]> = {};
+
+    for (const path of diff.onlyInSource) {
+      sourceDelta[path] = 'removed';
+    }
+    for (const m of diff.modified) {
+      sourceDelta[m.path] = 'updated';
+      if (m.slotDiffs.length > 0) {
+        sourceSlots[m.path] = m.slotDiffs.map((sd) => sd.key);
+      }
+    }
+
+    const targetDelta: Record<string, 'added' | 'updated' | 'removed'> = {};
+    const targetSlots: Record<string, string[]> = {};
+
+    for (const path of diff.onlyInTarget) {
+      targetDelta[path] = 'added';
+    }
+    for (const m of diff.modified) {
+      targetDelta[m.path] = 'updated';
+      if (m.slotDiffs.length > 0) {
+        targetSlots[m.path] = m.slotDiffs.map((sd) => sd.key);
+      }
+    }
+
+    return { sourceDelta, sourceSlots, targetDelta, targetSlots };
+  }, [source, target]);
+
+  return (
+    <div className={cn('flex h-full w-full', className)}>
+      {/* Left panel — Source */}
+      <div className="relative flex-1 min-w-0">
+        <div className="absolute top-2 left-2 z-10 rounded bg-zinc-800/80 px-2 py-0.5 text-[10px] font-medium text-zinc-300 backdrop-blur-sm">
+          Source
+        </div>
+        <TreeGraphView
+          content={source}
+          deltaState={sourceDelta}
+          updatedSlots={sourceSlots}
+          className="h-full w-full"
+        />
+      </div>
+
+      {/* Divider */}
+      <div className="w-px shrink-0 bg-zinc-300 dark:bg-zinc-600" />
+
+      {/* Right panel — Target */}
+      <div className="relative flex-1 min-w-0">
+        <div className="absolute top-2 left-2 z-10 rounded bg-zinc-800/80 px-2 py-0.5 text-[10px] font-medium text-zinc-300 backdrop-blur-sm">
+          Target
+        </div>
+        <TreeGraphView
+          content={target}
+          deltaState={targetDelta}
+          updatedSlots={targetSlots}
+          className="h-full w-full"
+        />
+      </div>
+    </div>
+  );
+}

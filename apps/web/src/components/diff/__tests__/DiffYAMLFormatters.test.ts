@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatRelation, formatSlotValue, renderFrameSlots } from '../DiffYAMLFormatters';
+import { formatRelation, formatSlotValue, renderNodeSlots } from '../DiffYAMLFormatters';
 
 describe('formatSlotValue', () => {
   it('formats string', () => expect(formatSlotValue('hello')).toBe('"hello"'));
@@ -14,10 +14,10 @@ describe('formatSlotValue', () => {
   });
 });
 
-describe('renderFrameSlots', () => {
+describe('renderNodeSlots', () => {
   it('renders slots as indented lines', () => {
-    const frame = { id: 'f_001', type: 'plan', slots: { goal: 'travel', budget: 5000 } };
-    const lines = renderFrameSlots(frame);
+    const node = { id: 'f_001', type: 'plan', slots: { goal: 'travel', budget: 5000 } };
+    const lines = renderNodeSlots(node);
     expect(lines).toContain('  goal: "travel"');
     expect(lines).toContain('  budget: 5000');
   });

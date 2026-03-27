@@ -74,8 +74,7 @@ interface CommitData {
   committed_at: string;
   content: {
     sentences?: Array<{ id: string; text: string; confidence?: number }>;
-    frames?: Array<{ id: string; type: string; slots: Record<string, unknown> }>;
-    trees?: Array<{ key: string; slots: Record<string, unknown>; children: unknown[] }>;
+    trees?: Array<{ id: string; type: string; slots: Record<string, unknown>; key?: string; children?: unknown[] }>;
     relations?: Array<{ from: string; to: string; type: string }>;
   };
   project_id?: string;
@@ -573,15 +572,15 @@ function SharedCommitView({ commit }: { commit: CommitData }) {
               Trees ({trees.length})
             </h2>
             <div className="space-y-2">
-              {trees.map((frame: { key: string; slots: Record<string, unknown>; children: unknown[] }, idx: number) => (
-                <div key={frame.key || idx} className={cn('rounded-lg px-4 py-3', glass.cardBase)}>
+              {trees.map((node, idx: number) => (
+                <div key={node.key || node.type || idx} className={cn('rounded-lg px-4 py-3', glass.cardBase)}>
                   <div className="flex items-center gap-2 mb-1">
                     <span className="font-mono text-xs text-[var(--accent-commit,#f59e0b)]">
-                      {frame.key}
+                      {node.key || node.type}
                     </span>
                   </div>
                   <div className="text-sm text-[var(--text-primary)]">
-                    {Object.entries(frame.slots).map(([key, val]) => (
+                    {Object.entries(node.slots).map(([key, val]) => (
                       <div key={key} className="flex gap-2 py-0.5">
                         <span className="shrink-0 text-[var(--text-tertiary)] text-xs font-mono">
                           {key}:
@@ -622,10 +621,10 @@ function SharedCommitView({ commit }: { commit: CommitData }) {
         )}
 
         {/* Sentences (V4 fallback) */}
-        {sentences.length > 0 && frames.length === 0 && (
+        {sentences.length > 0 && trees.length === 0 && (
           <section>
             <h2 className="text-sm font-medium text-[var(--text-secondary)] mb-2">
-              Frames ({sentences.length})
+              Trees ({sentences.length})
             </h2>
             <div className="space-y-2">
               {sentences.map((s) => (

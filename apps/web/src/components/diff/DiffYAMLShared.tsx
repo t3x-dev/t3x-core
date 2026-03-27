@@ -3,8 +3,8 @@
 import type { TreeDiff, Relation } from '@t3x-dev/core';
 import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
-import type { AlignedFrame } from './DiffYAMLUtils';
-import type { Frame } from '@/lib/treeCompat';
+import type { AlignedNode } from './DiffYAMLUtils';
+import type { CompatNode } from '@/lib/treeCompat';
 
 // ── CSS custom properties for diff colors ──
 // Light mode values (default); dark mode overridden via .dark class in globals.css
@@ -69,29 +69,29 @@ export function relColor(type: string): string {
 
 // ── Relation helpers ──
 
-export interface FrameRelation {
+export interface TreeRelation {
   relation: Relation;
   status: 'added' | 'removed' | 'kept';
-  /** The "other" frame id (relative to the frame we're annotating) */
+  /** The "other"  node id (relative to the  node we're annotating) */
   otherId: string;
-  /** Arrow direction: 'in' means other -> this frame, 'out' means this frame -> other */
+  /** Arrow direction: 'in' means other -> this node, 'out' means this tree -> other */
   direction: 'in' | 'out';
 }
 
 /**
- * Gather relations relevant to a given frame, annotated with diff status.
+ * Gather relations relevant to a given node, annotated with diff status.
  */
-export function getFrameRelations(frameId: string, diff: TreeDiff): FrameRelation[] {
-  const results: FrameRelation[] = [];
+export function getTreeRelations(treeId: string, diff: TreeDiff): TreeRelation[] {
+  const results: TreeRelation[] = [];
   const seen = new Set<string>();
 
   for (const r of diff.relationsAdded) {
     const key = `${r.from}:${r.to}:${r.type}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    if (r.from === frameId) {
+    if (r.from === treeId) {
       results.push({ relation: r, status: 'added', otherId: r.to, direction: 'out' });
-    } else if (r.to === frameId) {
+    } else if (r.to === treeId) {
       results.push({ relation: r, status: 'added', otherId: r.from, direction: 'in' });
     }
   }
@@ -100,9 +100,9 @@ export function getFrameRelations(frameId: string, diff: TreeDiff): FrameRelatio
     const key = `${r.from}:${r.to}:${r.type}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    if (r.from === frameId) {
+    if (r.from === treeId) {
       results.push({ relation: r, status: 'removed', otherId: r.to, direction: 'out' });
-    } else if (r.to === frameId) {
+    } else if (r.to === treeId) {
       results.push({ relation: r, status: 'removed', otherId: r.from, direction: 'in' });
     }
   }
@@ -116,7 +116,7 @@ export function RelationAnnotation({
   rel,
   paddingLeft = 'calc(36px + 4px + 10px)',
 }: {
-  rel: FrameRelation;
+  rel: TreeRelation;
   paddingLeft?: string;
 }) {
   const statusClass =
@@ -146,15 +146,15 @@ export function RelationAnnotation({
   );
 }
 
-// ── Frame separator ──
+// ── Tree separator ──
 
-export function FrameSeparator({
+export function TreeSeparator({
   aligned,
   onClick,
   isActive,
   paddingLeft = 'calc(36px + 4px + 10px)',
 }: {
-  aligned: AlignedFrame;
+  aligned: AlignedNode;
   onClick: () => void;
   isActive: boolean;
   paddingLeft?: string;
@@ -177,12 +177,12 @@ export function FrameSeparator({
           ? 'text-[var(--dy-removed-accent)]'
           : 'text-[var(--text-tertiary)]';
 
-  const frame = aligned.leftFrame ?? aligned.rightFrame;
-  const frameType = frame?.type ?? aligned.frameId;
+  const node = aligned.leftNode ?? aligned.rightNode;
+  const treeType = node?.type ?? aligned.treeId;
 
   return (
     <div
-      id={`diff-frame-${aligned.frameId}`}
+      id={`diff-tree-${aligned.treeId}`}
       className={cn(
         'flex items-center gap-[5px] text-[9px] font-medium uppercase tracking-[0.6px] select-none cursor-pointer',
         'pt-[5px] pb-[2px] opacity-60 hover:opacity-100',
@@ -195,27 +195,27 @@ export function FrameSeparator({
       <span className={cn('text-[8px] font-semibold tracking-[0.3px]', statusClass)}>
         {statusLabel}
       </span>
-      <span>{frameType}</span>
-      <span className="font-mono opacity-40 text-[8px]">{aligned.frameId}</span>
+      <span>{treeType}</span>
+      <span className="font-mono opacity-40 text-[8px]">{aligned.treeId}</span>
       {/* Divider line */}
       <span className="flex-1 h-px bg-[var(--stroke-divider)] opacity-50" />
     </div>
   );
 }
 
-// ── Identical frames collapse bar ──
+// ── Identical trees collapse bar ──
 
 export function IdenticalCollapseBar({
-  frames,
+  nodes,
   onClick,
   paddingLeft = 'calc(36px + 4px + 10px)',
 }: {
-  frames: AlignedFrame[];
+  nodes: AlignedNode[];
   onClick: () => void;
   paddingLeft?: string;
 }) {
-  if (frames.length === 0) return null;
-  const names = frames.map((f) => (f.leftFrame ?? f.rightFrame)?.type ?? f.frameId).join(', ');
+  if (nodes.length === 0) return null;
+  const names = nodes.map((f) => (f.leftNode ?? f.rightNode)?.type ?? f.treeId).join(', ');
   return (
     <div
       className="flex items-center gap-[5px] font-mono text-[10px] text-[var(--text-tertiary)] cursor-pointer select-none opacity-50 hover:opacity-80 hover:bg-[var(--hover-bg)]"
@@ -224,7 +224,7 @@ export function IdenticalCollapseBar({
     >
       <span>{'\u25B6'}</span>
       <span>
-        {frames.length} identical frame{frames.length > 1 ? 's' : ''}
+        {nodes.length} identical tree{nodes.length > 1 ? 's' : ''}
       </span>
       <span className="opacity-50">({names})</span>
     </div>

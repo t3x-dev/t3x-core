@@ -18,7 +18,7 @@ import { Check, Circle } from 'lucide-react';
 // Types
 // ============================================================================
 
-type FrameResolution =
+type TreeResolution =
   | { type: 'source' }
   | { type: 'target' }
   | { type: 'both' }
@@ -26,11 +26,11 @@ type FrameResolution =
 
 interface MergeNavigatorProps {
   mergeResult: MergeResult;
-  resolutions: Map<string, FrameResolution>;
+  resolutions: Map<string, TreeResolution>;
   keepSource: Set<string>;
   keepTarget: Set<string>;
-  activeFrameId: string | null;
-  onSelectFrame: (id: string) => void;
+  activeNodeId: string | null;
+  onSelectNode: (id: string) => void;
   onToggleKeepSource: (path: string) => void;
   onToggleKeepTarget: (path: string) => void;
 }
@@ -83,8 +83,8 @@ export function MergeNavigator({
   resolutions,
   keepSource,
   keepTarget,
-  activeFrameId,
-  onSelectFrame,
+  activeNodeId,
+  onSelectNode,
   onToggleKeepSource,
   onToggleKeepTarget,
 }: MergeNavigatorProps) {
@@ -94,10 +94,10 @@ export function MergeNavigator({
   ).length;
   const progress = totalConflicts > 0 ? (resolvedCountActual / totalConflicts) * 100 : 100;
 
-  function handleFrameClick(path: string) {
-    onSelectFrame(path);
+  function handleNodeClick(path: string) {
+    onSelectNode(path);
     setTimeout(() => {
-      document.getElementById(`merge-frame-${path}`)?.scrollIntoView({
+      document.getElementById(`merge-tree-${path}`)?.scrollIntoView({
         behavior: 'smooth',
         block: 'center',
       });
@@ -141,12 +141,12 @@ export function MergeNavigator({
           <SectionHeader label="Conflicts" count={mergeResult.conflicts.length} color="red" />
           {mergeResult.conflicts.map((conflict) => {
             const isResolved = resolutions.has(conflict.path);
-            const isActive = activeFrameId === conflict.path;
+            const isActive = activeNodeId === conflict.path;
             return (
               <button
                 key={conflict.path}
                 type="button"
-                onClick={() => handleFrameClick(conflict.path)}
+                onClick={() => handleNodeClick(conflict.path)}
                 className={`group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-all duration-200 ${
                   isActive
                     ? 'bg-[var(--accent-commit)]/8 text-[var(--text-primary)] ring-1 ring-[var(--accent-commit)]/20'

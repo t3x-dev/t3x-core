@@ -36,7 +36,7 @@ interface CommitWithDiffStats {
     modifiedCount: number;
     removedCount: number;
   } | null;
-  frameCount?: number;
+  nodeCount?: number;
 }
 
 // ============================================================================
@@ -105,8 +105,8 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
                   // Diff failure is non-critical
                 }
               }
-              const frameCount = (commit as { content?: { trees?: unknown[] } })?.content?.trees?.length ?? 0;
-              return { commit, diffStats, frameCount };
+              const nodeCount = (commit as { content?: { trees?: unknown[] } })?.content?.trees?.length ?? 0;
+              return { commit, diffStats, nodeCount };
             })
           );
           results.push(...batchResults);
@@ -253,7 +253,7 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
                   branch={item.commit.branch}
                   parentCount={(item.commit.parents ?? []).length}
                   diffStats={item.diffStats}
-                  frameCount={item.frameCount}
+                  nodeCount={item.nodeCount}
                   isFirst={index === 0}
                   isLast={index === commits.length - 1}
                   isActive={activeHash === item.commit.hash}

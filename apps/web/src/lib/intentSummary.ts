@@ -2,7 +2,7 @@ import type { TreeNode } from '@t3x-dev/core';
 import { chatStream } from '@/lib/api/chat';
 
 interface IntentResult {
-  coreFrameIds: string[];
+  coreNodeIds: string[];
   justifications: Record<string, string>;
 }
 
@@ -11,25 +11,25 @@ interface IntentResult {
  * Sends only node keys and slot keys (not full values) to minimize tokens.
  */
 export async function getIntentSummary(
-  frames: TreeNode[],
+  nodes: TreeNode[],
   signal?: AbortSignal
 ): Promise<IntentResult> {
-  const frameSummaries = frames.map((f) => ({
+  const frameSummaries = nodes.map((f) => ({
     id: f.key,
     type: f.key,
     slots: Object.keys(f.slots),
   }));
 
-  const prompt = `You are analyzing semantic frames extracted from a conversation.
-Given these frames, identify which ones represent the user's CORE current intentions — the key decisions and requirements that shape what they want.
+  const prompt = `You are analyzing semantic trees extracted from a conversation.
+Given these nodes, identify which ones represent the user's CORE current intentions — the key decisions and requirements that shape what they want.
 
 Frames:
 ${JSON.stringify(frameSummaries, null, 2)}
 
 Respond with JSON only:
-{"core_frame_ids": ["f_001", ...], "justifications": {"f_001": "reason", ...}}
+{"core_tree_ids": ["f_001", ...], "justifications": {"f_001": "reason", ...}}
 
-Select 3-7 frames maximum. Focus on decisions, constraints, and goals — not logistics or minor details.`;
+Select 3-7 trees maximum. Focus on decisions, constraints, and goals — not logistics or minor details.`;
 
   let fullResponse = '';
   for await (const event of chatStream({
@@ -44,7 +44,7 @@ Select 3-7 frames maximum. Focus on decisions, constraints, and goals — not lo
 
   const parsed = JSON.parse(fullResponse);
   return {
-    coreFrameIds: parsed.core_frame_ids ?? [],
+    coreNodeIds: parsed.core_tree_ids ?? [],
     justifications: parsed.justifications ?? {},
   };
 }

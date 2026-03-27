@@ -235,7 +235,7 @@ export function CommitFullHeader({
 }
 
 /**
- * Renders the source context / frame display for a commit, used inside tabs.
+ * Renders the source context / tree display for a commit, used inside tabs.
  */
 export function CommitSourceContent({ commit }: { commit: CommitDisplay }) {
   // Derive display entries from tree nodes for source context tracing

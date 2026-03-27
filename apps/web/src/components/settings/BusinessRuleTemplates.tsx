@@ -19,7 +19,7 @@ interface RuleTemplate {
 const GENERAL_TEMPLATES: RuleTemplate[] = [
   {
     name: 'Decision Requires Basis',
-    description: 'Every decision frame must reference supporting evidence',
+    description: 'Every decision tree must reference supporting evidence',
     config: {
       type: 'llm',
       prompt:
@@ -51,22 +51,22 @@ const GENERAL_TEMPLATES: RuleTemplate[] = [
     },
   },
   {
-    name: 'Minimum Frame Count',
-    description: 'Require at least 3 frames per extraction',
+    name: 'Minimum Node Count',
+    description: 'Require at least 3 trees per extraction',
     config: {
       type: 'rule',
-      rule: 'frames.length >= 3',
-      message: 'Too few frames extracted — expected at least 3',
+      rule: 'nodes.length >= 3',
+      message: 'Too few trees extracted — expected at least 3',
       severity: 'warning',
     },
   },
   {
     name: 'High Confidence',
-    description: 'All frames must have confidence above 0.7',
+    description: 'All trees must have confidence above 0.7',
     config: {
       type: 'rule',
-      rule: 'frames.every(f => f.confidence > 0.7)',
-      message: 'One or more frames have low confidence',
+      rule: 'nodes.every(f => f.confidence > 0.7)',
+      message: 'One or more trees have low confidence',
       severity: 'warning',
     },
   },

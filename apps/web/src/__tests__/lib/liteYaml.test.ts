@@ -51,19 +51,19 @@ describe('toDisplayYAML', () => {
 });
 
 describe('parseDisplayYAML', () => {
-  it('should detect added frames as add changes', () => {
+  it('should detect added trees as add changes', () => {
     const currentContent: SemanticContent = { trees: [], relations: [] };
-    const yamlWithNewFrame = `new_frame:\n  key: "value"\n`;
-    const delta = parseDisplayYAML(yamlWithNewFrame, currentContent);
+    const yamlWithNewNode = `new_node:\n  key: "value"\n`;
+    const delta = parseDisplayYAML(yamlWithNewNode, currentContent);
 
     expect(delta.changes.length).toBe(1);
     expect(delta.changes[0].action).toBe('add');
     if (delta.changes[0].action === 'add') {
-      expect(delta.changes[0].node.key).toBe('new_frame');
+      expect(delta.changes[0].node.key).toBe('new_node');
     }
   });
 
-  it('should detect removed frames as remove changes', () => {
+  it('should detect removed trees as remove changes', () => {
     const delta = parseDisplayYAML('', sampleContent);
 
     const removes = delta.changes.filter((c) => c.action === 'remove');

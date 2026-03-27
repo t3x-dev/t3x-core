@@ -168,7 +168,7 @@ export type ApiAnchorType =
   | 'entity'
   | 'term'
   | 'phrase'
-  // Frame extraction anchor types
+  // Tree extraction anchor types
   | 'verbatim'
   | 'paraphrase'
   | 'inference';

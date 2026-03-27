@@ -19,7 +19,7 @@ import {
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FrameGraphView } from '@/components/frame-graph';
+import { TreeGraphView } from '@/components/tree-graph';
 import { RelationsTab } from '@/components/relations/RelationsTab';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -411,10 +411,10 @@ export function CommittedCommitView({
                         </TabsTrigger>
                         {commit && getSemanticContent(commit as ApiCommit).trees.length > 0 && (
                           <TabsTrigger
-                            value="frame-graph"
+                            value="tree-graph"
                             className="rounded-none border-b-2 border-transparent data-[state=active]:border-[var(--accent-commit)] data-[state=active]:text-[var(--text-primary)] data-[state=active]:shadow-none text-[var(--text-tertiary)] text-xs px-3 py-2"
                           >
-                            Frame Graph
+                            Tree Graph
                           </TabsTrigger>
                         )}
                         <TabsTrigger
@@ -466,9 +466,9 @@ export function CommittedCommitView({
                       </TabsContent>
 
                       {commit && getSemanticContent(commit as ApiCommit).trees.length > 0 && (
-                        <TabsContent value="frame-graph">
+                        <TabsContent value="tree-graph">
                           <div className="h-[400px] border border-[var(--stroke-divider)] rounded-md overflow-hidden">
-                            <FrameGraphView
+                            <TreeGraphView
                               content={getSemanticContent(commit as ApiCommit)}
                               className="h-full w-full"
                             />

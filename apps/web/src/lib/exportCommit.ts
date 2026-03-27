@@ -8,7 +8,7 @@
  */
 
 import type { ApiCommit } from './api';
-import { frameSummaryText, getSemanticContent } from './api/commits';
+import { treeSummaryText, getSemanticContent } from './api/commits';
 import { copyToClipboard, downloadAsFile, type ExportResult } from './export';
 
 // ============================================================================
@@ -17,7 +17,7 @@ import { copyToClipboard, downloadAsFile, type ExportResult } from './export';
 
 export function formatCommitAsMarkdown(commit: ApiCommit): string {
   const lines: string[] = [];
-  const frames = getSemanticContent(commit).trees;
+  const nodes = getSemanticContent(commit).trees;
 
   lines.push(`# Commit: ${commit.message || commit.hash.slice(0, 12)}`);
   lines.push('');
@@ -46,17 +46,17 @@ export function formatCommitAsMarkdown(commit: ApiCommit): string {
   }
 
   // Frames
-  lines.push(`## Frames (${frames.length})`);
+  lines.push(`## Frames (${nodes.length})`);
   lines.push('');
-  for (const frame of frames) {
-    const slots = Object.entries(frame.slots ?? {})
+  for (const node of nodes) {
+    const slots = Object.entries(node.slots ?? {})
       .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`)
       .join(', ');
     const confidence =
-      frame.confidence !== undefined && frame.confidence < 1
-        ? ` *(${(frame.confidence * 100).toFixed(0)}%)*`
+      node.confidence !== undefined && node.confidence < 1
+        ? ` *(${(node.confidence * 100).toFixed(0)}%)*`
         : '';
-    lines.push(`- ${frame.type}: ${slots}${confidence}`);
+    lines.push(`- ${node.type}: ${slots}${confidence}`);
   }
   lines.push('');
 
@@ -111,9 +111,9 @@ export async function exportCommit(
   try {
     switch (format) {
       case 'clipboard': {
-        const text = frameSummaryText(commit);
+        const text = treeSummaryText(commit);
         if (!text) {
-          return { success: false, message: 'No frames to copy' };
+          return { success: false, message: 'No trees to copy' };
         }
         const copied = await copyToClipboard(text);
         return copied

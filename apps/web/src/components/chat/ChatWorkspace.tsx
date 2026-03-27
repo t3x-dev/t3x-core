@@ -6,8 +6,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { DriftPopup } from '@/components/chat/DriftPopup';
 import { useAutoProject } from '@/hooks/useAutoProject';
 import { useConversationChat } from '@/hooks/useConversationChat';
-import { getCommitAsFrames } from '@/lib/api/commitUnified';
-import { extractFrames, getSemanticDraft, listDeltas } from '@/lib/api/frames';
+import { getCommitAsNodes } from '@/lib/api/commitUnified';
+import { extractNodes, getSemanticDraft, listDeltas } from '@/lib/api/trees';
 import { listTopics, updateTopicApi } from '@/lib/api/topics';
 import { getIntentSummary } from '@/lib/intentSummary';
 import { cn } from '@/lib/utils';
@@ -18,7 +18,7 @@ import { ChatHeader } from './ChatHeader';
 import type { AttachedImage } from './ChatInput';
 import { ChatInput } from './ChatInput';
 import { ChatMessage } from './ChatMessage';
-import { type Frame, contentToFrames, treesToFrames } from '@/lib/treeCompat';
+import { type CompatNode, contentToNodes, treesToNodes } from '@/lib/treeCompat';
 
 interface ChatWorkspaceProps {
   conversationId: string;
@@ -27,7 +27,7 @@ interface ChatWorkspaceProps {
   className?: string;
   /** Called when a new conversation is created (e.g. from /chat/new). Overrides default URL update. */
   onConversationCreated?: (conversationId: string) => void;
-  /** Parent commit hash — if set, hydrate extraction panel with parent's frames */
+  /** Parent commit hash — if set, hydrate extraction panel with parent's trees */
   inheritFromCommitHash?: string;
   /** Callback to clear inheritFromCommitHash after hydration (prevents re-hydration on remount) */
   onInheritComplete?: () => void;
@@ -167,7 +167,7 @@ export function ChatWorkspace({
 
     // Helper: hydrate extraction panel from parent commit
     const hydrateFromParent = (hash: string) => {
-      getCommitAsFrames(hash)
+      getCommitAsNodes(hash)
         .then((parentCommit) => {
           // Extract parent conversation ID for "View parent" link
           const sources = (parentCommit as { sources?: Array<{ type?: string; id?: string }> })
@@ -183,13 +183,13 @@ export function ChatWorkspace({
             store.setDraft({ trees, relations });
             // Set parent as lastCommitHash so commit B gets correct parent_hashes
             useExtractionPanelStore.setState({ lastCommitHash: hash });
-            // Mark all inherited frames as confirmed
+            // Mark all inherited trees as confirmed
             const confirmed: Record<string, boolean> = {};
-            const frames = treesToFrames(trees);
-            for (const f of frames) {
+            const nodes = treesToNodes(trees);
+            for (const f of nodes) {
               confirmed[f.id] = true;
             }
-            useExtractionPanelStore.setState({ confirmedFrameIds: confirmed });
+            useExtractionPanelStore.setState({ confirmedNodeIds: confirmed });
             if (store.panelMode === 'collapsed') {
               store.setPanelMode('default');
             }
@@ -259,9 +259,9 @@ export function ChatWorkspace({
 
   const isExtracting = useExtractionPanelStore((s) => s.isExtracting);
   const focusIntentEnabled = useExtractionPanelStore((s) => s.focusIntentEnabled);
-  const setLlmHighlightedFrameIds = useExtractionPanelStore((s) => s.setLlmHighlightedFrameIds);
+  const setLlmHighlightedNodeIds = useExtractionPanelStore((s) => s.setLlmHighlightedNodeIds);
 
-  // Extract frames after turns are saved
+  // Extract trees after turns are saved
   useEffect(() => {
     const prev = prevTurnsSavedRef.current;
     prevTurnsSavedRef.current = turnsSavedCounter;
@@ -274,7 +274,7 @@ export function ChatWorkspace({
     store.setExtracting(true);
 
     const activeTopicId = store.activeTopicId;
-    extractFrames(
+    extractNodes(
       convId,
       undefined,
       undefined,
@@ -309,22 +309,22 @@ export function ChatWorkspace({
           s.setAdvisoryQuestions(result.advisory_questions);
         }
 
-        // Store gate issues for frame annotation (Step 5)
+        // Store gate issues for tree annotation (Step 5)
         if (result.gate_result?.semantic?.issues) {
-          const issuesByFrame: Record<
+          const issuesByNode: Record<
             string,
             { severity: 'error' | 'warning' | 'info'; description: string }[]
           > = {};
           for (const issue of result.gate_result.semantic.issues) {
-            if (issue.frame_id) {
-              if (!issuesByFrame[issue.frame_id]) issuesByFrame[issue.frame_id] = [];
-              issuesByFrame[issue.frame_id].push({
+            if (issue.tree_id) {
+              if (!issuesByNode[issue.tree_id]) issuesByNode[issue.tree_id] = [];
+              issuesByNode[issue.tree_id].push({
                 severity: issue.severity,
                 description: issue.description,
               });
             }
           }
-          s.setGateIssues(issuesByFrame);
+          s.setGateIssues(issuesByNode);
         }
 
         // Reload topics after extraction (new topic may have been auto-created)
@@ -332,7 +332,7 @@ export function ChatWorkspace({
           .then((topicsList) => {
             const s2 = useExtractionPanelStore.getState();
             s2.setTopics(topicsList);
-            // Auto-sync topic name with root frame type
+            // Auto-sync topic name with root tree type
             if (result.snapshot && result.snapshot.trees.length > 0 && topicsList.length > 0) {
               const rootType = result.snapshot.trees[0].key;
               const currentTopic = topicsList.find((t) => t.id === s2.activeTopicId);
@@ -349,7 +349,7 @@ export function ChatWorkspace({
         if (focusIntentEnabled && result.snapshot && result.snapshot.trees.length > 0) {
           const controller = new AbortController();
           getIntentSummary(result.snapshot.trees, controller.signal)
-            .then((intentResult) => setLlmHighlightedFrameIds(intentResult.coreFrameIds))
+            .then((intentResult) => setLlmHighlightedNodeIds(intentResult.coreNodeIds))
             .catch(() => {}); // Silent fallback - degrades to deterministic-only
         }
       })
@@ -359,7 +359,7 @@ export function ChatWorkspace({
       .finally(() => {
         useExtractionPanelStore.getState().setExtracting(false);
       });
-  }, [resolvedConversationId, turnsSavedCounter, focusIntentEnabled, setLlmHighlightedFrameIds]);
+  }, [resolvedConversationId, turnsSavedCounter, focusIntentEnabled, setLlmHighlightedNodeIds]);
 
   // Send firstMessage on mount (once only)
   useEffect(() => {

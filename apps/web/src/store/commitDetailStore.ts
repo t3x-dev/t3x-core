@@ -4,15 +4,15 @@ import type { Commit, TreeNode } from '@t3x-dev/core';
 import { flattenTrees } from '@t3x-dev/core';
 import { create } from 'zustand';
 
-export type FrameDiffStatus = 'identical' | 'added' | 'modified' | 'removed';
+export type DiffStatus = 'identical' | 'added' | 'modified' | 'removed';
 
-export interface EnrichedFrame {
-  frame: TreeNode;
+export interface EnrichedNode {
+  node: TreeNode;
   /** path in tree for identification */
   path: string;
-  diffStatus: FrameDiffStatus;
+  diffStatus: DiffStatus;
   /** For modified nodes: the previous version from parent commit */
-  previousFrame?: TreeNode;
+  previousNode?: TreeNode;
 }
 
 interface SourceViewerState {
@@ -27,17 +27,17 @@ interface CommitDetailState {
   // Data
   commit: Commit | null;
   parentCommit: Commit | null;
-  enrichedFrames: EnrichedFrame[];
-  removedFrames: EnrichedFrame[];
+  enrichedNodes: EnrichedNode[];
+  removedNodes: EnrichedNode[];
 
   // UI
-  activeFrameId: string | null;
+  activeNodeId: string | null;
   sourceViewer: SourceViewerState;
   hoveredSlotKey: string | null;
 
   // Actions
   setCommit: (commit: Commit, parent: Commit | null) => void;
-  setActiveFrame: (id: string | null) => void;
+  setActiveNode: (id: string | null) => void;
   openSourceViewer: (slotKey: string) => void;
   closeSourceViewer: () => void;
   setSourceTab: (tab: 'previous' | 'current') => void;
@@ -59,33 +59,33 @@ function buildNodeMap(trees: TreeNode[], prefix = ''): Map<string, TreeNode> {
   return map;
 }
 
-function enrichFrames(
+function enrichNodes(
   commit: Commit,
   parent: Commit | null
-): { enriched: EnrichedFrame[]; removed: EnrichedFrame[] } {
+): { enriched: EnrichedNode[]; removed: EnrichedNode[] } {
   const parentNodeMap = parent ? buildNodeMap(parent.content.trees) : new Map<string, TreeNode>();
   const currentNodeMap = buildNodeMap(commit.content.trees);
 
-  const enriched: EnrichedFrame[] = [];
+  const enriched: EnrichedNode[] = [];
   for (const [path, node] of currentNodeMap) {
     const prev = parentNodeMap.get(path);
     if (!parent || !prev) {
-      enriched.push({ frame: node, path, diffStatus: 'added' });
+      enriched.push({ node: node, path, diffStatus: 'added' });
     } else {
       const slotsChanged = JSON.stringify(node.slots) !== JSON.stringify(prev.slots);
       enriched.push({
-        frame: node,
+        node: node,
         path,
         diffStatus: slotsChanged ? 'modified' : 'identical',
-        previousFrame: slotsChanged ? prev : undefined,
+        previousNode: slotsChanged ? prev : undefined,
       });
     }
   }
 
-  const removed: EnrichedFrame[] = [];
+  const removed: EnrichedNode[] = [];
   for (const [path, node] of parentNodeMap) {
     if (!currentNodeMap.has(path)) {
-      removed.push({ frame: node, path, diffStatus: 'removed' });
+      removed.push({ node: node, path, diffStatus: 'removed' });
     }
   }
 
@@ -95,25 +95,25 @@ function enrichFrames(
 export const useCommitDetailStore = create<CommitDetailState>((set) => ({
   commit: null,
   parentCommit: null,
-  enrichedFrames: [],
-  removedFrames: [],
-  activeFrameId: null,
+  enrichedNodes: [],
+  removedNodes: [],
+  activeNodeId: null,
   sourceViewer: { isOpen: false, activeSlotKey: null, activeTab: 'current' },
   hoveredSlotKey: null,
 
   setCommit: (commit, parent) => {
-    const { enriched, removed } = enrichFrames(commit, parent);
+    const { enriched, removed } = enrichNodes(commit, parent);
     set({
       commit,
       parentCommit: parent,
-      enrichedFrames: enriched,
-      removedFrames: removed,
-      activeFrameId: null,
+      enrichedNodes: enriched,
+      removedNodes: removed,
+      activeNodeId: null,
       sourceViewer: { isOpen: false, activeSlotKey: null, activeTab: 'current' },
     });
   },
 
-  setActiveFrame: (id) => set({ activeFrameId: id }),
+  setActiveNode: (id) => set({ activeNodeId: id }),
 
   openSourceViewer: (slotKey) =>
     set(() => ({

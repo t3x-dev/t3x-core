@@ -5,7 +5,7 @@
  *
  * Collapsible panel at the bottom showing what the merge
  * commit will contain. Supports both sentence-based (legacy)
- * and frame-based merge modes.
+ * and tree-based merge modes.
  */
 
 import { ChevronDown, ChevronUp, FileText, Layers } from 'lucide-react';
@@ -25,27 +25,27 @@ export function MergePreview({ expanded, onToggle }: MergePreviewProps) {
     getPreviewSentences,
     prepared,
     getResolutionStats,
-    frameMergeResult,
-    frameResolutions,
-    keepSourceFrames,
-    keepTargetFrames,
+    treeMergeResult,
+    treeResolutions,
+    keepSourceNodes,
+    keepTargetNodes,
     getPreviewPaths,
   } = useMergeWorkspaceStore();
 
-  const isFrameMode = frameMergeResult !== null;
+  const isTreeMode = treeMergeResult !== null;
 
-  // Frame-mode preview
-  if (isFrameMode) {
+  // Tree-mode preview
+  if (isTreeMode) {
     const previewPaths = getPreviewPaths();
-    const autoKeptCount = frameMergeResult.autoKept.length;
-    const resolvedCount = frameMergeResult.conflicts.filter((c) =>
-      frameResolutions.has(c.path)
+    const autoKeptCount = treeMergeResult.autoKept.length;
+    const resolvedCount = treeMergeResult.conflicts.filter((c) =>
+      treeResolutions.has(c.path)
     ).length;
-    const keptSourceCount = frameMergeResult.onlyInSource.filter((path) =>
-      keepSourceFrames.has(path)
+    const keptSourceCount = treeMergeResult.onlyInSource.filter((path) =>
+      keepSourceNodes.has(path)
     ).length;
-    const keptTargetCount = frameMergeResult.onlyInTarget.filter((path) =>
-      keepTargetFrames.has(path)
+    const keptTargetCount = treeMergeResult.onlyInTarget.filter((path) =>
+      keepTargetNodes.has(path)
     ).length;
 
     return (
@@ -86,7 +86,7 @@ export function MergePreview({ expanded, onToggle }: MergePreviewProps) {
             <div className="bg-[var(--surface-card)] rounded-lg border border-[var(--stroke-divider)] p-[var(--space-group)] elevation-2">
               {previewPaths.length === 0 ? (
                 <p className="text-center text-[var(--text-tertiary)] py-4">
-                  No frames selected for merge
+                  No trees selected for merge
                 </p>
               ) : (
                 <div className="space-y-[var(--space-item)]">

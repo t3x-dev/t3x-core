@@ -3,8 +3,8 @@
 import type { TreeDiff, SemanticContent } from '@t3x-dev/core';
 import {
   buildDiffStatusMap,
-  buildFrameTree,
-  deriveRootFrameId,
+  buildTreeGraph,
+  deriveRootNodeId,
   type DiffTreeNode,
 } from './DiffYAMLUtils';
 
@@ -86,7 +86,7 @@ function TreeNodeLine({ node, isLast, depth }: { node: DiffTreeNode; isLast: boo
             opacity: isRemoved ? 0.5 : undefined,
           }}
         >
-          {node.frameType}
+          {node.treeType}
         </span>
         {node.relationToParent && (
           <span
@@ -102,7 +102,7 @@ function TreeNodeLine({ node, isLast, depth }: { node: DiffTreeNode; isLast: boo
       </div>
       {node.children.map((child, i) => (
         <TreeNodeLine
-          key={child.frameId}
+          key={child.treeId}
           node={child}
           isLast={i === node.children.length - 1}
           depth={depth + 1}
@@ -142,7 +142,7 @@ function TreeColumn({
         }}
       >
         {trees.map((root, i) => (
-          <TreeNodeLine key={root.frameId} node={root} isLast={i === trees.length - 1} depth={0} />
+          <TreeNodeLine key={root.treeId} node={root} isLast={i === trees.length - 1} depth={0} />
         ))}
       </div>
     </div>
@@ -155,13 +155,13 @@ export function DiffTreeOverview({ diff, baseContent, targetContent }: DiffTreeO
   const diffStatusMap = buildDiffStatusMap(diff);
 
   // Build trees for base and target sides
-  const baseRootId = deriveRootFrameId(baseContent);
-  const targetRootId = deriveRootFrameId(targetContent);
+  const baseRootId = deriveRootNodeId(baseContent);
+  const targetRootId = deriveRootNodeId(targetContent);
 
-  // For base tree: removed frames show as "removed", others show their status
-  const baseTree = buildFrameTree(baseContent, diffStatusMap, baseRootId);
-  // For target tree: added frames show as "added", others show their status
-  const targetTree = buildFrameTree(targetContent, diffStatusMap, targetRootId);
+  // For base tree: removed trees show as "removed", others show their status
+  const baseTree = buildTreeGraph(baseContent, diffStatusMap, baseRootId);
+  // For target tree: added trees show as "added", others show their status
+  const targetTree = buildTreeGraph(targetContent, diffStatusMap, targetRootId);
 
   return (
     <div className="text-[11px]">

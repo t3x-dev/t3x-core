@@ -1,5 +1,5 @@
 /**
- * Commits API (frame-based)
+ * Commits API (tree-based)
  */
 
 import { API_V1, buildQueryString, fetchWithTimeout, handleResponse } from './core';
@@ -60,10 +60,10 @@ export interface CommitSourceRef {
 }
 
 // ============================================================================
-// Frame-based Commits
+// Tree-based Commits
 // ============================================================================
 
-/** Frame-based commit from API response */
+/** Tree-based commit from API response */
 export interface ApiCommit {
   hash: string;
   schema: 't3x/commit/5';
@@ -104,8 +104,8 @@ export async function getApiCommit(commitHash: string): Promise<ApiCommit> {
 }
 
 /**
- * Create a frame-based commit (new model).
- * Sends frames directly as content — no sentence conversion needed.
+ * Create a tree-based commit (new model).
+ * Sends trees directly as content — no sentence conversion needed.
  */
 export async function createCommit(
   projectId: string,
@@ -198,24 +198,24 @@ export async function checkConflicts(_commitHash: string): Promise<ConflictRepor
 }
 
 // ============================================================================
-// ApiCommit helper functions (frame-based)
+// ApiCommit helper functions (tree-based)
 // ============================================================================
 
 import type { SemanticContent } from '@t3x-dev/core';
 
 /**
  * Extract SemanticContent from an ApiCommit.
- * Returns the frame-based content, or a default empty SemanticContent if missing.
+ * Returns the tree-based content, or a default empty SemanticContent if missing.
  */
 export function getSemanticContent(commit: ApiCommit): SemanticContent {
   return (commit.content ?? { trees: [], relations: [] }) as SemanticContent;
 }
 
 /**
- * Generate summary text from frames for display purposes (export, insights).
- * Converts frame structure to human-readable text representation.
+ * Generate summary text from trees for display purposes (export, insights).
+ * Converts tree structure to human-readable text representation.
  */
-export function frameSummaryText(commit: ApiCommit): string {
+export function treeSummaryText(commit: ApiCommit): string {
   const content = getSemanticContent(commit);
   function nodeToText(node: { key: string; slots: Record<string, unknown>; children?: unknown[] }): string {
     const slots = Object.entries(node.slots ?? {})

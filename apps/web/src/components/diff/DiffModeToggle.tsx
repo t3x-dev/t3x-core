@@ -2,7 +2,7 @@
 
 import { cn } from '@/lib/utils';
 
-export type DiffMode = 'frame' | 'sentence';
+export type DiffMode = 'tree' | 'sentence';
 
 interface DiffModeToggleProps {
   mode: DiffMode;
@@ -23,16 +23,16 @@ export function DiffModeToggle({ mode, onChange, hidden, className }: DiffModeTo
     >
       <button
         type="button"
-        onClick={() => onChange('frame')}
+        onClick={() => onChange('tree')}
         className={cn(
           'inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium transition-colors',
-          mode === 'frame'
+          mode === 'tree'
             ? 'bg-[var(--hover-bg)] text-[var(--text-primary)]'
             : 'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]'
         )}
       >
-        Frame
-        {mode === 'frame' && (
+        Tree
+        {mode === 'tree' && (
           <span className="inline-block w-1.5 h-1.5 rounded-full bg-[var(--accent-commit)]" />
         )}
       </button>

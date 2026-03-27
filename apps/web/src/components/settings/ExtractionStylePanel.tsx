@@ -14,9 +14,9 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 const PRESET_DESCRIPTIONS: Record<PresetName, string> = {
-  concise: 'Fewer frames, only confirmed facts. Best for simple conversations.',
+  concise: 'Fewer nodes, only confirmed facts. Best for simple conversations.',
   balanced: 'Standard extraction with moderate detail. Works for most cases.',
-  detailed: 'More frames, captures AI suggestions. Best for complex planning.',
+  detailed: 'More nodes, captures AI suggestions. Best for complex planning.',
 };
 
 interface ExtractionStylePanelProps {

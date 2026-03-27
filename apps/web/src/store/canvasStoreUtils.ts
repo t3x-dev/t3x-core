@@ -502,7 +502,7 @@ export const unitToNode = (
   conv: api.Conversation,
   commit: api.Commit | null, // null for staging units (no commit yet)
   index: number,
-  originalCommit?: api.ApiCommit // Original frame-based commit for source context display
+  originalCommit?: api.ApiCommit // Original tree-based commit for source context display
 ): Node<CanvasNodeData> => {
   // Use saved position from commit if available, otherwise from conversation, otherwise calculate
   const position =
@@ -572,7 +572,7 @@ export const unitToNode = (
       anchors: commit?.anchors
         ? (api.parseApiCommitAnchors(commit.anchors) ?? undefined)
         : undefined,
-      // Commit data for source context display (frame-based)
+      // Commit data for source context display (tree-based)
       commit: originalCommit
         ? {
             hash: originalCommit.hash,

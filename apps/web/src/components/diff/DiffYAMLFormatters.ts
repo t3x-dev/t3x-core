@@ -1,5 +1,5 @@
 import type { TreeNode, Relation, SlotValue } from '@t3x-dev/core';
-import type { Frame } from '@/lib/treeCompat';
+import type { CompatNode } from '@/lib/treeCompat';
 
 export function formatSlotValue(value: SlotValue | undefined): string {
   if (value === undefined) return '(none)';
@@ -14,9 +14,9 @@ export function formatSlotValue(value: SlotValue | undefined): string {
   return JSON.stringify(value);
 }
 
-export function renderFrameSlots(frame: { slots: Record<string, SlotValue> }): string[] {
+export function renderNodeSlots(node: { slots: Record<string, SlotValue> }): string[] {
   const lines: string[] = [];
-  for (const [key, value] of Object.entries(frame.slots)) {
+  for (const [key, value] of Object.entries(node.slots)) {
     lines.push(`  ${key}: ${formatSlotValue(value)}`);
   }
   return lines;

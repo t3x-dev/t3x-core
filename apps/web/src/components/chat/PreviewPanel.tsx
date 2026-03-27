@@ -6,7 +6,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { chatStream } from '@/lib/api/chat';
 import { cn } from '@/lib/utils';
 import { useExtractionPanelStore } from '@/store/extractionPanelStore';
-import { type Frame, contentToFrames, treesToFrames } from '@/lib/treeCompat';
+import { type CompatNode, contentToNodes, treesToNodes } from '@/lib/treeCompat';
 
 // ── Types ──
 
@@ -102,7 +102,7 @@ function HighlightedOutput({
 
 export function PreviewPanel({ className }: PreviewPanelProps) {
   const draft = useExtractionPanelStore((s) => s.draft);
-  const hoveredFrameId = useExtractionPanelStore((s) => s.hoveredFrameId);
+  const hoveredNodeId = useExtractionPanelStore((s) => s.hoveredNodeId);
   const hoveredSlotKey = useExtractionPanelStore((s) => s.hoveredSlotKey);
 
   const [selectedType, setSelectedType] = useState<LeafType>('tweet');
@@ -111,34 +111,34 @@ export function PreviewPanel({ className }: PreviewPanelProps) {
   const [isLoading, setIsLoading] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
-  const frameCount = draft.trees.length;
+  const nodeCount = draft.trees.length;
 
   // Compute highlight ranges in generated output based on hovered YAML slot
   const outputHighlightRanges = useMemo(() => {
-    if (!generatedOutput || !hoveredFrameId || !hoveredSlotKey) return [];
-    const frame = draft.trees.find((f) => f.id === hoveredFrameId);
-    if (!frame) return [];
-    const slotValue = frame.slots[hoveredSlotKey];
+    if (!generatedOutput || !hoveredNodeId || !hoveredSlotKey) return [];
+    const node = draft.trees.find((f) => f.id === hoveredNodeId);
+    if (!node) return [];
+    const slotValue = node.slots[hoveredSlotKey];
     if (!slotValue || typeof slotValue !== 'string') return [];
     const located = fuzzyLocate(generatedOutput, slotValue);
     if (!located || located.score < 0.6) return [];
     return [{ start: located.start, end: located.end }];
-  }, [generatedOutput, hoveredFrameId, hoveredSlotKey, draft.trees]);
+  }, [generatedOutput, hoveredNodeId, hoveredSlotKey, draft.trees]);
 
-  // Build context string from extracted frames
+  // Build context string from extracted trees
   const buildContext = useCallback(() => {
     return draft.trees
-      .map((frame) => {
-        const slots = Object.entries(frame.slots)
+      .map((node) => {
+        const slots = Object.entries(node.slots)
           .map(([k, v]) => `  ${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`)
           .join('\n');
-        return `[${frame.type}]\n${slots}`;
+        return `[${node.type}]\n${slots}`;
       })
       .join('\n\n');
   }, [draft.trees]);
 
   const handleGenerate = useCallback(async () => {
-    if (frameCount === 0) return;
+    if (nodeCount === 0) return;
 
     // Cancel any in-flight generation
     if (abortRef.current) abortRef.current.abort();
@@ -183,7 +183,7 @@ export function PreviewPanel({ className }: PreviewPanelProps) {
       setIsLoading(false);
       if (abortRef.current === controller) abortRef.current = null;
     }
-  }, [frameCount, selectedType, prompt, buildContext]);
+  }, [nodeCount, selectedType, prompt, buildContext]);
 
   const handleStop = useCallback(() => {
     abortRef.current?.abort();
@@ -231,7 +231,7 @@ export function PreviewPanel({ className }: PreviewPanelProps) {
           type="text"
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
-          placeholder={`Generate a ${selectedType} from these frames...`}
+          placeholder={`Generate a ${selectedType} from these nodes...`}
           className="w-full rounded border border-[var(--stroke-default)] bg-[var(--surface-panel)] px-2 py-1.5 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--accent-commit)]"
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !isLoading) handleGenerate();
@@ -242,7 +242,7 @@ export function PreviewPanel({ className }: PreviewPanelProps) {
           <button
             type="button"
             onClick={isLoading ? handleStop : handleGenerate}
-            disabled={!isLoading && frameCount === 0}
+            disabled={!isLoading && nodeCount === 0}
             className="flex items-center gap-1 self-start rounded border border-[var(--stroke-default)] px-2 py-1 text-[10px] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] disabled:opacity-40"
           >
             {isLoading ? (
@@ -278,7 +278,7 @@ export function PreviewPanel({ className }: PreviewPanelProps) {
         ) : (
           <div className="flex flex-1 items-center justify-center rounded border border-dashed border-[var(--stroke-default)] py-4">
             <p className="text-center text-[10px] text-[var(--text-tertiary)]">
-              {frameCount === 0 ? 'No frames to preview' : 'Click Generate to preview output'}
+              {nodeCount === 0 ? 'No trees to preview' : 'Click Generate to preview output'}
             </p>
           </div>
         )}

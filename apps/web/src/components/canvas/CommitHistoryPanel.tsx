@@ -16,7 +16,7 @@ import {
 import { useTerminology } from '@/hooks/useTerminology';
 import type { ApiCommit } from '@/lib/api';
 import * as api from '@/lib/api';
-import { getTreeDiff } from '@/lib/api/frameDiff';
+import { getTreeDiff } from '@/lib/api/treeDiff';
 import { cn } from '@/lib/utils';
 
 // Helper functions (module-scope so CommitHistoryRow can use them)
@@ -111,7 +111,7 @@ function CommitHistoryRow({
             <span>·</span>
             <span>{formatTime(commit.committed_at)}</span>
             <span>·</span>
-            <span>{commit.content?.trees?.length ?? 0} frames</span>
+            <span>{commit.content?.trees?.length ?? 0} trees</span>
           </div>
         </div>
       </div>

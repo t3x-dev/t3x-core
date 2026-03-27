@@ -1,16 +1,16 @@
 /**
  * Tree Compatibility Utilities
  *
- * Provides backward-compatible Frame-like interface from TreeNode.
- * Used by UI components that were written for the old Frame type
+ * Provides backward-compatible Tree-like interface from TreeNode.
+ * Used by UI components that were written for the old Tree type
  * (id, type, slots) and need to work with TreeNode (key, slots, children).
  */
 
 import type { SemanticContent, SlotValue, TreeNode } from '@t3x-dev/core';
 
 /**
- * Frame-like object compatible with old UI components.
- * Maps TreeNode to the old Frame interface shape.
+ * Tree-like object compatible with old UI components.
+ * Maps TreeNode to the old Tree interface shape.
  * id = dot-path, type = key name.
  */
 /** Slot-level source reference with turn hash and character offsets */
@@ -21,7 +21,7 @@ export interface SlotSourceRef {
   end_char?: number;
 }
 
-export interface Frame {
+export interface CompatNode {
   id: string;
   type: string;
   key: string;
@@ -38,14 +38,14 @@ export interface Frame {
 }
 
 /**
- * Flatten TreeNode[] into Frame-like objects for backward compatibility.
+ * Flatten TreeNode[] into Tree-like objects for backward compatibility.
  * Uses dot-path as id and key as type.
  */
-export function treesToFrames(trees: TreeNode[], prefix = ''): Frame[] {
-  const frames: Frame[] = [];
+export function treesToNodes(trees: TreeNode[], prefix = ''): CompatNode[] {
+  const nodes: CompatNode[] = [];
   for (const node of trees) {
     const path = prefix ? `${prefix}.${node.key}` : node.key;
-    frames.push({
+    nodes.push({
       id: path,
       key: node.key,
       type: node.key,
@@ -56,57 +56,57 @@ export function treesToFrames(trees: TreeNode[], prefix = ''): Frame[] {
       slot_quotes: node.slot_quotes,
     });
     if (node.children.length > 0) {
-      frames.push(...treesToFrames(node.children, path));
+      nodes.push(...treesToNodes(node.children, path));
     }
   }
-  return frames;
+  return nodes;
 }
 
 /**
- * Get flat Frame-like objects from SemanticContent.
+ * Get flat Tree-like objects from SemanticContent.
  */
-export function contentToFrames(content: SemanticContent): Frame[] {
-  return treesToFrames(content.trees);
+export function contentToNodes(content: SemanticContent): CompatNode[] {
+  return treesToNodes(content.trees);
 }
 
 /**
- * Get compat SemanticContent with both .trees and .frames.
- * .frames is a flat array of Frame compat objects derived from .trees.
+ * Get compat SemanticContent with both .trees and .nodes.
+ * .trees is a flat array of Tree compat objects derived from .trees.
  */
-export function toCompatContent(content: SemanticContent): SemanticContent & { frames: Frame[] } {
+export function toCompatContent(content: SemanticContent): SemanticContent & { nodes: CompatNode[] } {
   return {
     ...content,
-    frames: treesToFrames(content.trees),
+    nodes: treesToNodes(content.trees),
   };
 }
 
 /**
- * Convert Frame-like objects back to TreeNode[].
- * Only converts top-level frames (those without dots in id) to trees.
- * Nested frames are restored via the children property.
+ * Convert Tree-like objects back to TreeNode[].
+ * Only converts top-level trees (those without dots in id) to trees.
+ * Nested trees are restored via the children property.
  */
-export function framesToTrees(frames: Frame[]): TreeNode[] {
-  return frames
+export function nodesToTrees(nodes: CompatNode[]): TreeNode[] {
+  return nodes
     .filter((f) => !f.id.includes('.'))
-    .map((f) => frameToNode(f));
+    .map((f) => treeToNode(f));
 }
 
-function frameToNode(frame: Frame): TreeNode {
+function treeToNode(node: CompatNode): TreeNode {
   return {
-    key: frame.type,
-    slots: frame.slots,
-    children: (frame.children ?? []),
-    source: frame.source,
-    confidence: frame.confidence,
-    slot_quotes: frame.slot_quotes,
+    key: node.type,
+    slots: node.slots,
+    children: (node.children ?? []),
+    source: node.source,
+    confidence: node.confidence,
+    slot_quotes: node.slot_quotes,
   };
 }
 
 /**
- * Adapts a SemanticContent to have a .frames property that returns
- * Frame[] compat objects lazily.
+ * Adapts a SemanticContent to have a .trees property that returns
+ * CompatNode[] compat objects lazily.
  */
-export function withFrames<T extends SemanticContent>(content: T): T & { frames: Frame[] } {
-  const cached = treesToFrames(content.trees);
-  return Object.assign({}, content, { frames: cached });
+export function withNodes<T extends SemanticContent>(content: T): T & { nodes: CompatNode[] } {
+  const cached = treesToNodes(content.trees);
+  return Object.assign({}, content, { nodes: cached });
 }

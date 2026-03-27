@@ -9,7 +9,7 @@
 
 import type { MergeResult, TreeNode } from '@t3x-dev/core';
 import { create } from 'zustand';
-import type { FrameResolution } from '@/components/merge/FrameConflictCard';
+import type { TreeResolution } from '@/components/merge/ConflictCard';
 import { getTerminology, type TermKey } from '@/hooks/useTerminology';
 import * as api from '@/lib/api';
 import { API_V1, fetchWithTimeout, handleResponse } from '@/lib/api/core';
@@ -65,7 +65,7 @@ export interface CachedTurnContext {
 
 interface MergeWorkspaceState {
   // Draft data (legacy alias)
-  /** @deprecated Use frameMergeResult. Kept for backward compat. */
+  /** @deprecated Use treeMergeResult. Kept for backward compat. */
   prepared: Merge2WayResult | null;
 
   draftId: string | null;
@@ -101,13 +101,13 @@ interface MergeWorkspaceState {
   serverChecksError: string | null;
 
   // Tree-primary merge state
-  frameMergeResult: MergeResult | null;
+  treeMergeResult: MergeResult | null;
   /** Map of conflict path → resolution */
-  frameResolutions: Map<string, FrameResolution>;
+  treeResolutions: Map<string, TreeResolution>;
   /** Set of source-only paths to keep */
-  keepSourceFrames: Set<string>;
+  keepSourceNodes: Set<string>;
   /** Set of target-only paths to keep */
-  keepTargetFrames: Set<string>;
+  keepTargetNodes: Set<string>;
 
   // Actions
   fetchServerChecks: () => Promise<void>;
@@ -138,12 +138,12 @@ interface MergeWorkspaceState {
   resolveConflict: (index: number, resolution: 'source' | 'target' | 'both') => void;
   getEffectiveResolution: (index: number) => 'source' | 'target' | 'both' | null;
 
-  // Frame merge actions
-  setFrameMergeResult: (result: MergeResult) => void;
-  resolveFrameConflict: (path: string, resolution: FrameResolution) => void;
-  toggleKeepSourceFrame: (path: string) => void;
-  toggleKeepTargetFrame: (path: string) => void;
-  allFrameConflictsResolved: () => boolean;
+  // Tree merge actions
+  setTreeMergeResult: (result: MergeResult) => void;
+  resolveTreeConflict: (path: string, resolution: TreeResolution) => void;
+  toggleKeepSourceNode: (path: string) => void;
+  toggleKeepTargetNode: (path: string) => void;
+  allTreeConflictsResolved: () => boolean;
 
   // Computed getters
   getUnresolvedCount: () => number;
@@ -151,10 +151,10 @@ interface MergeWorkspaceState {
   canCommit: () => boolean;
   getMergeChecks: () => MergeCheck[];
 
-  // Frame-aware computed getters
-  getFrameUnresolvedCount: () => number;
+  // Tree-aware computed getters
+  getTreeUnresolvedCount: () => number;
   canCommitAny: () => boolean;
-  getFrameMergeChecks: () => MergeCheck[];
+  getTreeMergeChecks: () => MergeCheck[];
   getPreviewPaths: () => string[];
 }
 
@@ -193,7 +193,7 @@ function apiDraftToInternal(apiDraft: Record<string, unknown>): {
   targetHash: string;
   sourceBranch: string | null;
   targetBranch: string | null;
-  frameMergeResult: MergeResult | null;
+  treeMergeResult: MergeResult | null;
   status: MergeDraft['status'];
   message: string | null;
 } {
@@ -205,7 +205,7 @@ function apiDraftToInternal(apiDraft: Record<string, unknown>): {
     targetHash: apiDraft.targetHash as string,
     sourceBranch: (apiDraft.sourceBranch as string) || null,
     targetBranch: (apiDraft.targetBranch as string) || null,
-    frameMergeResult: prepared ?? null,
+    treeMergeResult: prepared ?? null,
     status: apiDraft.status as MergeDraft['status'],
     message: (apiDraft.message as string) || null,
   };
@@ -240,10 +240,10 @@ const initialState = {
   serverChecksLoading: false,
   serverChecksError: null,
   prepared: null as Merge2WayResult | null,
-  frameMergeResult: null as MergeResult | null,
-  frameResolutions: new Map<string, FrameResolution>(),
-  keepSourceFrames: new Set<string>(),
-  keepTargetFrames: new Set<string>(),
+  treeMergeResult: null as MergeResult | null,
+  treeResolutions: new Map<string, TreeResolution>(),
+  keepSourceNodes: new Set<string>(),
+  keepTargetNodes: new Set<string>(),
 };
 
 export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => ({
@@ -267,7 +267,7 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
         targetHash: draft.targetHash,
         sourceBranch: draft.sourceBranch,
         targetBranch: draft.targetBranch,
-        frameMergeResult: draft.frameMergeResult,
+        treeMergeResult: draft.treeMergeResult,
         status: draft.status,
         message: draft.message || '',
         loading: false,
@@ -309,7 +309,7 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
         targetHash: draft.targetHash,
         sourceBranch: draft.sourceBranch,
         targetBranch: draft.targetBranch,
-        frameMergeResult: draft.frameMergeResult,
+        treeMergeResult: draft.treeMergeResult,
         status: draft.status,
         message: '',
         loading: false,
@@ -329,7 +329,7 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
   },
 
   saveDraft: async () => {
-    const { draftId, frameMergeResult, message, isDirty, status } = get();
+    const { draftId, treeMergeResult, message, isDirty, status } = get();
     if (!draftId || !isDirty || status === 'committed') return;
 
     set({ saveStatus: 'saving' });
@@ -337,7 +337,7 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
     try {
       await fetchApi(`/merge/drafts/${draftId}`, {
         method: 'PATCH',
-        body: JSON.stringify({ prepared: frameMergeResult, message }),
+        body: JSON.stringify({ prepared: treeMergeResult, message }),
       });
 
       set({
@@ -573,54 +573,54 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
   },
 
   // ============================================================================
-  // Frame Merge Actions (tree-primary, path-based)
+  // Tree Merge Actions (tree-primary, path-based)
   // ============================================================================
 
-  setFrameMergeResult: (result: MergeResult) => {
+  setTreeMergeResult: (result: MergeResult) => {
     // Initialize keepSource/keepTarget with all source-only/target-only paths kept by default
     const keepSource = new Set(result.onlyInSource);
     const keepTarget = new Set(result.onlyInTarget);
     set({
-      frameMergeResult: result,
-      frameResolutions: new Map(),
-      keepSourceFrames: keepSource,
-      keepTargetFrames: keepTarget,
+      treeMergeResult: result,
+      treeResolutions: new Map(),
+      keepSourceNodes: keepSource,
+      keepTargetNodes: keepTarget,
     });
   },
 
-  resolveFrameConflict: (path: string, resolution: FrameResolution) => {
-    const prev = get().frameResolutions;
+  resolveTreeConflict: (path: string, resolution: TreeResolution) => {
+    const prev = get().treeResolutions;
     const next = new Map(prev);
     next.set(path, resolution);
-    set({ frameResolutions: next, isDirty: true });
+    set({ treeResolutions: next, isDirty: true });
   },
 
-  toggleKeepSourceFrame: (path: string) => {
-    const prev = get().keepSourceFrames;
+  toggleKeepSourceNode: (path: string) => {
+    const prev = get().keepSourceNodes;
     const next = new Set(prev);
     if (next.has(path)) {
       next.delete(path);
     } else {
       next.add(path);
     }
-    set({ keepSourceFrames: next, isDirty: true });
+    set({ keepSourceNodes: next, isDirty: true });
   },
 
-  toggleKeepTargetFrame: (path: string) => {
-    const prev = get().keepTargetFrames;
+  toggleKeepTargetNode: (path: string) => {
+    const prev = get().keepTargetNodes;
     const next = new Set(prev);
     if (next.has(path)) {
       next.delete(path);
     } else {
       next.add(path);
     }
-    set({ keepTargetFrames: next, isDirty: true });
+    set({ keepTargetNodes: next, isDirty: true });
   },
 
-  allFrameConflictsResolved: () => {
-    const { frameMergeResult, frameResolutions } = get();
-    if (!frameMergeResult) return true;
-    return frameMergeResult.conflicts.every((c: { path: string }) => frameResolutions.has(c.path));
+  allTreeConflictsResolved: () => {
+    const { treeMergeResult, treeResolutions } = get();
+    if (!treeMergeResult) return true;
+    return treeMergeResult.conflicts.every((c: { path: string }) => treeResolutions.has(c.path));
   },
 
   // ============================================================================
@@ -628,13 +628,13 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
   // ============================================================================
 
   getUnresolvedCount: () => {
-    const { frameMergeResult, frameResolutions, extendedResolutions } = get();
-    if (!frameMergeResult) return 0;
+    const { treeMergeResult, treeResolutions, extendedResolutions } = get();
+    if (!treeMergeResult) return 0;
 
     let count = 0;
-    for (let i = 0; i < frameMergeResult.conflicts.length; i++) {
-      const conflict = frameMergeResult.conflicts[i];
-      const resolution = frameResolutions.get(conflict.path);
+    for (let i = 0; i < treeMergeResult.conflicts.length; i++) {
+      const conflict = treeMergeResult.conflicts[i];
+      const resolution = treeResolutions.get(conflict.path);
       const extRes = extendedResolutions[String(i)];
 
       if (!resolution && !extRes) {
@@ -645,14 +645,14 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
   },
 
   getResolutionStats: (): ResolutionStats => {
-    const { frameMergeResult, frameResolutions, extendedResolutions } = get();
-    if (!frameMergeResult) return { standard: 0, both: 0, unresolved: 0 };
+    const { treeMergeResult, treeResolutions, extendedResolutions } = get();
+    if (!treeMergeResult) return { standard: 0, both: 0, unresolved: 0 };
 
     const stats: ResolutionStats = { standard: 0, both: 0, unresolved: 0 };
 
-    for (let i = 0; i < frameMergeResult.conflicts.length; i++) {
-      const conflict = frameMergeResult.conflicts[i];
-      const resolution = frameResolutions.get(conflict.path);
+    for (let i = 0; i < treeMergeResult.conflicts.length; i++) {
+      const conflict = treeMergeResult.conflicts[i];
+      const resolution = treeResolutions.get(conflict.path);
       const extRes = extendedResolutions[String(i)];
 
       if (resolution) {
@@ -672,15 +672,15 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
   },
 
   canCommit: () => {
-    const { frameMergeResult, message, status } = get();
-    if (!frameMergeResult || status !== 'pending') return false;
+    const { treeMergeResult, message, status } = get();
+    if (!treeMergeResult || status !== 'pending') return false;
     if (!message.trim()) return false;
 
     return get().getUnresolvedCount() === 0;
   },
 
   getMergeChecks: (): MergeCheck[] => {
-    const { frameMergeResult, message, targetBranch, serverChecks } = get();
+    const { treeMergeResult, message, targetBranch, serverChecks } = get();
     const unresolvedCount = get().getUnresolvedCount();
     const previewPaths = get().getPreviewPaths();
     const dev = useSettingsStore.getState().developerMode;
@@ -721,8 +721,8 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
         id: 'preview_computed',
         label: 'Preview computed',
         passed: true,
-        detail: frameMergeResult
-          ? `${frameMergeResult.autoKept.length} kept, ${frameMergeResult.conflicts.length} conflicts, ${frameMergeResult.onlyInSource.length + frameMergeResult.onlyInTarget.length} unique`
+        detail: treeMergeResult
+          ? `${treeMergeResult.autoKept.length} kept, ${treeMergeResult.conflicts.length} conflicts, ${treeMergeResult.onlyInSource.length + treeMergeResult.onlyInTarget.length} unique`
           : undefined,
         source: 'frontend',
       },
@@ -737,36 +737,36 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
   // ============================================================================
 
   resolveConflict: (index: number, resolution: 'source' | 'target' | 'both') => {
-    const { frameMergeResult, frameResolutions, extendedResolutions } = get();
-    if (!frameMergeResult || index >= frameMergeResult.conflicts.length) return;
+    const { treeMergeResult, treeResolutions, extendedResolutions } = get();
+    if (!treeMergeResult || index >= treeMergeResult.conflicts.length) return;
 
-    const conflict = frameMergeResult.conflicts[index];
+    const conflict = treeMergeResult.conflicts[index];
     const key = String(index);
 
     if (resolution === 'source' || resolution === 'target') {
-      const newResolutions = new Map(frameResolutions);
-      newResolutions.set(conflict.path, { type: resolution } as FrameResolution);
+      const newResolutions = new Map(treeResolutions);
+      newResolutions.set(conflict.path, { type: resolution } as TreeResolution);
 
       const newExtended = { ...extendedResolutions };
       delete newExtended[key];
-      set({ frameResolutions: newResolutions, extendedResolutions: newExtended, isDirty: true });
+      set({ treeResolutions: newResolutions, extendedResolutions: newExtended, isDirty: true });
     } else {
       // Extended resolution (both)
-      const newResolutions = new Map(frameResolutions);
+      const newResolutions = new Map(treeResolutions);
       newResolutions.delete(conflict.path);
 
       const newExtended = { ...extendedResolutions };
       newExtended[key] = { type: 'both' };
-      set({ frameResolutions: newResolutions, extendedResolutions: newExtended, isDirty: true });
+      set({ treeResolutions: newResolutions, extendedResolutions: newExtended, isDirty: true });
     }
   },
 
   getEffectiveResolution: (index: number) => {
-    const { frameMergeResult, frameResolutions, extendedResolutions } = get();
-    if (!frameMergeResult || index >= frameMergeResult.conflicts.length) return null;
+    const { treeMergeResult, treeResolutions, extendedResolutions } = get();
+    if (!treeMergeResult || index >= treeMergeResult.conflicts.length) return null;
 
-    const conflict = frameMergeResult.conflicts[index];
-    const resolution = frameResolutions.get(conflict.path);
+    const conflict = treeMergeResult.conflicts[index];
+    const resolution = treeResolutions.get(conflict.path);
     const key = String(index);
     const extRes = extendedResolutions[key];
 
@@ -780,29 +780,29 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
   },
 
   // ============================================================================
-  // Frame-Aware Computed Getters
+  // Tree-Aware Computed Getters
   // ============================================================================
 
-  getFrameUnresolvedCount: () => {
-    const { frameMergeResult, frameResolutions } = get();
-    if (!frameMergeResult) return 0;
-    return frameMergeResult.conflicts.filter((c: { path: string }) => !frameResolutions.has(c.path)).length;
+  getTreeUnresolvedCount: () => {
+    const { treeMergeResult, treeResolutions } = get();
+    if (!treeMergeResult) return 0;
+    return treeMergeResult.conflicts.filter((c: { path: string }) => !treeResolutions.has(c.path)).length;
   },
 
   canCommitAny: () => {
     const { message } = get();
     if (!message.trim()) return false;
-    return get().allFrameConflictsResolved();
+    return get().allTreeConflictsResolved();
   },
 
-  getFrameMergeChecks: (): MergeCheck[] => {
-    const { frameMergeResult, message, targetBranch } = get();
+  getTreeMergeChecks: (): MergeCheck[] => {
+    const { treeMergeResult, message, targetBranch } = get();
     const dev = useSettingsStore.getState().developerMode;
     const tm = (key: TermKey) => getTerminology(key, dev);
 
-    if (!frameMergeResult) return get().getMergeChecks();
+    if (!treeMergeResult) return get().getMergeChecks();
 
-    const unresolvedCount = get().getFrameUnresolvedCount();
+    const unresolvedCount = get().getTreeUnresolvedCount();
     const previewPaths = get().getPreviewPaths();
 
     const checks: MergeCheck[] = [
@@ -820,7 +820,7 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
         source: 'frontend',
       },
       {
-        id: 'frames',
+        id: 'trees',
         label: 'Result has nodes',
         passed: previewPaths.length > 0,
         detail: previewPaths.length > 0 ? `${previewPaths.length} nodes` : 'No nodes in result',
@@ -837,7 +837,7 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
         id: 'preview_computed',
         label: 'Preview computed',
         passed: true,
-        detail: `${frameMergeResult.autoKept.length} auto-kept, ${frameMergeResult.conflicts.length} conflicts, ${frameMergeResult.onlyInSource.length + frameMergeResult.onlyInTarget.length} unique`,
+        detail: `${treeMergeResult.autoKept.length} auto-kept, ${treeMergeResult.conflicts.length} conflicts, ${treeMergeResult.onlyInSource.length + treeMergeResult.onlyInTarget.length} unique`,
         source: 'frontend',
       },
     ];
@@ -846,17 +846,17 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
   },
 
   getPreviewPaths: (): string[] => {
-    const { frameMergeResult, frameResolutions, keepSourceFrames, keepTargetFrames } = get();
-    if (!frameMergeResult) return [];
+    const { treeMergeResult, treeResolutions, keepSourceNodes, keepTargetNodes } = get();
+    if (!treeMergeResult) return [];
 
     const paths: string[] = [];
 
     // Auto-kept
-    paths.push(...frameMergeResult.autoKept);
+    paths.push(...treeMergeResult.autoKept);
 
     // Resolved conflicts
-    for (const conflict of frameMergeResult.conflicts) {
-      const resolution = frameResolutions.get(conflict.path);
+    for (const conflict of treeMergeResult.conflicts) {
+      const resolution = treeResolutions.get(conflict.path);
       if (!resolution) continue;
 
       switch (resolution.type) {
@@ -871,15 +871,15 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
     }
 
     // Source-only (kept)
-    for (const path of frameMergeResult.onlyInSource) {
-      if (keepSourceFrames.has(path)) {
+    for (const path of treeMergeResult.onlyInSource) {
+      if (keepSourceNodes.has(path)) {
         paths.push(path);
       }
     }
 
     // Target-only (kept)
-    for (const path of frameMergeResult.onlyInTarget) {
-      if (keepTargetFrames.has(path)) {
+    for (const path of treeMergeResult.onlyInTarget) {
+      if (keepTargetNodes.has(path)) {
         paths.push(path);
       }
     }

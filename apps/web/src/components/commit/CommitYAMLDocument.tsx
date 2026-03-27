@@ -1,17 +1,17 @@
 'use client';
 
 /**
- * CommitYAMLDocument — renders all frames from a commit as one continuous,
+ * CommitYAMLDocument — renders all trees from a commit as one continuous,
  * nested YAML document where relations define the hierarchy.
  *
  * Frames related via elaborates/conditions/depends/follows are nested
- * under their parent frame. Root frames (not a child of anything) appear
+ * under their parent node. Root trees (not a child of anything) appear
  * at the top level.
  */
 
 import type { SemanticContent, SlotValue } from '@t3x-dev/core';
 import { useCallback, useMemo } from 'react';
-import { type Frame, treesToFrames } from '@/lib/treeCompat';
+import { type CompatNode, treesToNodes } from '@/lib/treeCompat';
 
 // ============================================================================
 // Props
@@ -20,39 +20,39 @@ import { type Frame, treesToFrames } from '@/lib/treeCompat';
 export interface CommitYAMLDocumentProps {
   content: SemanticContent;
   className?: string;
-  onSlotClick?: (frameId: string, slotKey: string) => void;
+  onSlotClick?: (treeId: string, slotKey: string) => void;
 }
 
 // ============================================================================
 // Tree-building helpers
 // ============================================================================
 
-interface FrameTreeNode {
-  frame: Frame;
+interface TreeGraphNode {
+  node: CompatNode;
   displayName: string;
   relationType?: string;
-  children: FrameTreeNode[];
+  children: TreeGraphNode[];
 }
 
 /** Build display names with _2, _3 suffixes for duplicate types (scoped per parent). */
-function buildDisplayNames(frames: Frame[]): Map<string, string> {
+function buildDisplayNames(nodes: CompatNode[]): Map<string, string> {
   const counts = new Map<string, number>();
   const nameMap = new Map<string, string>();
 
-  for (const frame of frames) {
-    const count = (counts.get(frame.type) ?? 0) + 1;
-    counts.set(frame.type, count);
-    const displayName = count === 1 ? frame.type : `${frame.type}_${count}`;
-    nameMap.set(frame.id, displayName);
+  for (const node of nodes) {
+    const count = (counts.get(node.type) ?? 0) + 1;
+    counts.set(node.type, count);
+    const displayName = count === 1 ? node.type : `${node.type}_${count}`;
+    nameMap.set(node.id, displayName);
   }
   return nameMap;
 }
 
-function buildFrameTree(content: SemanticContent): FrameTreeNode[] {
-  const frames = treesToFrames(content.trees);
-  const frameMap = new Map<string, Frame>();
-  for (const frame of frames) {
-    frameMap.set(frame.id, frame);
+function buildTreeGraph(content: SemanticContent): TreeGraphNode[] {
+  const nodes = treesToNodes(content.trees);
+  const treeMap = new Map<string, CompatNode>();
+  for (const node of nodes) {
+    treeMap.set(node.id, node);
   }
 
   // children map: parentId → [{ childId, relationType }]
@@ -62,43 +62,43 @@ function buildFrameTree(content: SemanticContent): FrameTreeNode[] {
   for (const rel of content.relations) {
     // relation: { from: A, to: B } means A elaborates/conditions/depends/follows B
     // so A is a child of B
-    if (!frameMap.has(rel.from) || !frameMap.has(rel.to)) continue;
+    if (!treeMap.has(rel.from) || !treeMap.has(rel.to)) continue;
     childIds.add(rel.from);
     const existing = childrenMap.get(rel.to) ?? [];
     existing.push({ childId: rel.from, relationType: rel.type });
     childrenMap.set(rel.to, existing);
   }
 
-  // Root frames: not a child of anyone
-  const rootFrames = frames.filter((f) => !childIds.has(f.id));
+  // Root nodes: not a child of anyone
+  const rootNodes = nodes.filter((f) => !childIds.has(f.id));
 
-  // Build display name map across all frames
-  const nameMap = buildDisplayNames(frames);
+  // Build display name map across all trees
+  const nameMap = buildDisplayNames( nodes);
 
   // Recursive builder (with visited set to avoid cycles)
-  function buildNode(frame: Frame, relationType?: string, visited?: Set<string>): FrameTreeNode {
+  function buildNode(node: CompatNode, relationType?: string, visited?: Set<string>): TreeGraphNode {
     const vis = visited ?? new Set<string>();
-    vis.add(frame.id);
+    vis.add(node.id);
 
-    const children: FrameTreeNode[] = [];
-    const childEntries = childrenMap.get(frame.id) ?? [];
+    const children: TreeGraphNode[] = [];
+    const childEntries = childrenMap.get(node.id) ?? [];
     for (const { childId, relationType: childRelType } of childEntries) {
       if (vis.has(childId)) continue;
-      const childFrame = frameMap.get(childId);
-      if (childFrame) {
-        children.push(buildNode(childFrame, childRelType, new Set(vis)));
+      const childNode = treeMap.get(childId);
+      if (childNode) {
+        children.push(buildNode(childNode, childRelType, new Set(vis)));
       }
     }
 
     return {
-      frame,
-      displayName: nameMap.get(frame.id) ?? frame.type,
+      node,
+      displayName: nameMap.get(node.id) ?? node.type,
       relationType,
       children,
     };
   }
 
-  return rootFrames.map((f) => buildNode(f));
+  return rootNodes.map((f) => buildNode(f));
 }
 
 // ============================================================================
@@ -109,7 +109,7 @@ interface YAMLLine {
   key: string;
   indent: number;
   elements: React.ReactNode[];
-  frameId?: string;
+  treeId?: string;
   slotKey?: string;
 }
 
@@ -157,7 +157,7 @@ function ArrayDash() {
 function renderSlotValueLines(
   value: SlotValue,
   indent: number,
-  frameId: string,
+  treeId: string,
   slotKey: string,
   lines: YAMLLine[],
   lineKeyPrefix: string,
@@ -171,7 +171,7 @@ function renderSlotValueLines(
         ...(isArrayItem ? [<ArrayDash key="dash" />] : []),
         <StringValue key="v" text={value} />,
       ],
-      frameId,
+      treeId,
       slotKey,
     });
     return;
@@ -185,7 +185,7 @@ function renderSlotValueLines(
         ...(isArrayItem ? [<ArrayDash key="dash" />] : []),
         <NumberValue key="v" value={value} />,
       ],
-      frameId,
+      treeId,
       slotKey,
     });
     return;
@@ -200,27 +200,27 @@ function renderSlotValueLines(
           ...(isArrayItem ? [<ArrayDash key="dash" />] : []),
           <RefValue key="v" ref={(value as { ref: string }).ref} />,
         ],
-        frameId,
+        treeId,
         slotKey,
       });
       return;
     }
     if ('type' in value && 'slots' in value) {
-      const inlineFrame = value as { type: string; slots: Record<string, SlotValue> };
-      // Render inline frame as nested keys
+      const inlineNode = value as { type: string; slots: Record<string, SlotValue> };
+      // Render inline node as nested keys
       lines.push({
         key: lineKeyPrefix,
         indent,
         elements: [
           ...(isArrayItem ? [<ArrayDash key="dash" />] : []),
-          <YAMLKey key="k" text={inlineFrame.type} />,
+          <YAMLKey key="k" text={inlineNode.type} />,
           <Colon key="c" />,
         ],
-        frameId,
+        treeId,
         slotKey,
       });
-      for (const [k, v] of Object.entries(inlineFrame.slots)) {
-        renderSlotEntry(k, v, indent + 1, frameId, slotKey, lines, `${lineKeyPrefix}-if-${k}`);
+      for (const [k, v] of Object.entries(inlineNode.slots)) {
+        renderSlotEntry(k, v, indent + 1, treeId, slotKey, lines, `${lineKeyPrefix}-if-${k}`);
       }
       return;
     }
@@ -229,7 +229,7 @@ function renderSlotValueLines(
   if (Array.isArray(value)) {
     const arr = value as SlotValue[];
     for (let i = 0; i < arr.length; i++) {
-      renderSlotValueLines(arr[i], indent, frameId, slotKey, lines, `${lineKeyPrefix}-${i}`, true);
+      renderSlotValueLines(arr[i], indent, treeId, slotKey, lines, `${lineKeyPrefix}-${i}`, true);
     }
     return;
   }
@@ -243,7 +243,7 @@ function renderSlotValueLines(
         {JSON.stringify(value)}
       </span>,
     ],
-    frameId,
+    treeId,
     slotKey,
   });
 }
@@ -252,12 +252,12 @@ function renderSlotEntry(
   key: string,
   value: SlotValue,
   indent: number,
-  frameId: string,
+  treeId: string,
   slotKey: string,
   lines: YAMLLine[],
   lineKeyPrefix: string
 ): void {
-  // For arrays and inline frames, the key goes on its own line
+  // For arrays and inline nodes, the key goes on its own line
   if (
     Array.isArray(value) ||
     (typeof value === 'object' && value !== null && 'type' in value && 'slots' in value)
@@ -266,22 +266,22 @@ function renderSlotEntry(
       key: `${lineKeyPrefix}-key`,
       indent,
       elements: [<YAMLKey key="k" text={key} />, <Colon key="c" />],
-      frameId,
+      treeId,
       slotKey,
     });
-    renderSlotValueLines(value, indent + 1, frameId, slotKey, lines, lineKeyPrefix);
+    renderSlotValueLines(value, indent + 1, treeId, slotKey, lines, lineKeyPrefix);
   } else {
     // Simple value: key: value on one line
     const valueLine: YAMLLine = {
       key: lineKeyPrefix,
       indent,
       elements: [<YAMLKey key="k" text={key} />, <Colon key="c" />],
-      frameId,
+      treeId,
       slotKey,
     };
     // Add inline value elements
     const valueLines: YAMLLine[] = [];
-    renderSlotValueLines(value, indent, frameId, slotKey, valueLines, `${lineKeyPrefix}-val`);
+    renderSlotValueLines(value, indent, treeId, slotKey, valueLines, `${lineKeyPrefix}-val`);
     if (valueLines.length === 1) {
       valueLine.elements.push(...valueLines[0].elements);
       lines.push(valueLine);
@@ -297,22 +297,22 @@ function renderSlotEntry(
 // Tree → lines
 // ============================================================================
 
-function treeToLines(nodes: FrameTreeNode[], baseIndent: number, lines: YAMLLine[]): void {
-  for (const node of nodes) {
-    const { frame, displayName, relationType, children } = node;
+function treeToLines(nodes: TreeGraphNode[], baseIndent: number, lines: YAMLLine[]): void {
+  for (const graphNode of nodes) {
+    const { node, displayName, relationType, children } = graphNode;
 
-    // Frame header line: type_name:  # f_001 · 85%  (elaborates → parent)
+    // Tree header line: type_name:  # f_001 · 85%  (elaborates → parent)
     const commentParts: string[] = [];
-    commentParts.push(`# ${frame.id}`);
-    if (frame.confidence != null) {
-      commentParts.push(` · ${confidencePercent(frame.confidence)}`);
+    commentParts.push(`# ${node.id}`);
+    if (node.confidence != null) {
+      commentParts.push(` · ${confidencePercent(node.confidence)}`);
     }
     if (relationType) {
       commentParts.push(`  (${relationType})`);
     }
 
     lines.push({
-      key: `frame-${frame.id}`,
+      key: `tree-${node.id}`,
       indent: baseIndent,
       elements: [
         <YAMLKey key="k" text={displayName} />,
@@ -320,24 +320,24 @@ function treeToLines(nodes: FrameTreeNode[], baseIndent: number, lines: YAMLLine
         <span key="pad" className="flex-1" />,
         <Comment key="comment" text={commentParts.join('')} />,
       ],
-      frameId: frame.id,
+      treeId: node.id,
     });
 
     // Slots
-    const slotEntries = Object.entries(frame.slots);
+    const slotEntries = Object.entries(node.slots);
     for (const [slotKey, slotValue] of slotEntries) {
       renderSlotEntry(
         slotKey,
-        slotValue,
+        slotValue as SlotValue,
         baseIndent + 1,
-        frame.id,
+        node.id,
         slotKey,
         lines,
-        `slot-${frame.id}-${slotKey}`
+        `slot-${node.id}-${slotKey}`
       );
     }
 
-    // Children (nested frames)
+    // Children (nested nodes)
     if (children.length > 0) {
       treeToLines(children, baseIndent + 1, lines);
     }
@@ -349,7 +349,7 @@ function treeToLines(nodes: FrameTreeNode[], baseIndent: number, lines: YAMLLine
 // ============================================================================
 
 export function CommitYAMLDocument({ content, className, onSlotClick }: CommitYAMLDocumentProps) {
-  const tree = useMemo(() => buildFrameTree(content), [content]);
+  const tree = useMemo(() => buildTreeGraph(content), [content]);
 
   const lines = useMemo(() => {
     const result: YAMLLine[] = [];
@@ -358,9 +358,9 @@ export function CommitYAMLDocument({ content, className, onSlotClick }: CommitYA
   }, [tree]);
 
   const handleClick = useCallback(
-    (frameId?: string, slotKey?: string) => {
-      if (onSlotClick && frameId && slotKey) {
-        onSlotClick(frameId, slotKey);
+    (treeId?: string, slotKey?: string) => {
+      if (onSlotClick && treeId && slotKey) {
+        onSlotClick(treeId, slotKey);
       }
     },
     [onSlotClick]
@@ -369,7 +369,7 @@ export function CommitYAMLDocument({ content, className, onSlotClick }: CommitYA
   if (content.trees.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-center">
-        <p className="text-sm text-[var(--text-tertiary)] italic">No frames in this commit.</p>
+        <p className="text-sm text-[var(--text-tertiary)] italic">No trees in this commit.</p>
       </div>
     );
   }
@@ -379,9 +379,9 @@ export function CommitYAMLDocument({ content, className, onSlotClick }: CommitYA
       className={`rounded-lg bg-[var(--surface-code,#0d1117)] px-6 py-5 font-mono text-[13px] leading-[1.9] ${className ?? ''}`}
     >
       {lines.map((line, i) => {
-        // Add spacing before top-level frame headers (indent 0, not first line)
-        const isFrameHeader = line.indent === 0 && line.key.startsWith('frame-');
-        const needsTopGap = isFrameHeader && i > 0;
+        // Add spacing before top-level tree headers (indent 0, not first line)
+        const isNodeHeader = line.indent === 0 && line.key.startsWith('tree-');
+        const needsTopGap = isNodeHeader && i > 0;
 
         return (
           <div
@@ -390,7 +390,7 @@ export function CommitYAMLDocument({ content, className, onSlotClick }: CommitYA
               line.slotKey ? 'cursor-pointer hover:bg-white/5 rounded-sm px-2 -mx-2' : ''
             } ${needsTopGap ? 'mt-3 pt-3 border-t border-white/5' : ''}`}
             style={{ paddingLeft: `${line.indent * 24}px` }}
-            onClick={line.slotKey ? () => handleClick(line.frameId, line.slotKey) : undefined}
+            onClick={line.slotKey ? () => handleClick(line.treeId, line.slotKey) : undefined}
           >
             {line.elements}
           </div>

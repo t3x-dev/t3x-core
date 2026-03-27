@@ -5,9 +5,9 @@
  *
  * Supports two modes:
  * - Sentence-based merge (legacy): uses prepared/Merge2WayResult from the store
- * - Frame-based merge (new): uses frameMergeResult from prepareMerge()
+ * - Tree-based merge (new): uses treeMergeResult from prepareMerge()
  *
- * Mode is determined by whether frameMergeResult is set in the store.
+ * Mode is determined by whether treeMergeResult is set in the store.
  */
 
 import type { MergeResult, SemanticContent, TreeNode } from '@t3x-dev/core';
@@ -22,14 +22,14 @@ import { useMergeNavigation } from '@/hooks/useMergeNavigation';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useTerminology } from '@/hooks/useTerminology';
 import { createCommit } from '@/lib/api/commits';
-import { getCommitAsFrames } from '@/lib/api/commitUnified';
+import { getCommitAsNodes } from '@/lib/api/commitUnified';
 import { computeMergeSummary } from '@/lib/mergeSummary';
 import { fullScreenEnter, reducedMotion } from '@/lib/motion';
 import { useCanvasStore } from '@/store/canvasStore';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
 import { buildMergeNavItems } from './buildMergeNavItems';
-import { FrameConflictCard, type FrameResolution } from './FrameConflictCard';
-import { FrameMergeSection } from './FrameMergeSection';
+import { ConflictCard, type TreeResolution } from './ConflictCard';
+import { MergeSection } from './MergeSection';
 import { MergeActionBar } from './MergeActionBar';
 import { MergeNavigator } from './MergeNavigator';
 import { MergeNavSidebar } from './MergeNavSidebar';
@@ -81,11 +81,11 @@ function findNode(
 }
 
 /**
- * Build merged SemanticContent from frame resolutions (tree-primary)
+ * Build merged SemanticContent from tree resolutions (tree-primary)
  */
 function buildMergedContent(
   mergeResult: MergeResult,
-  resolutions: Map<string, FrameResolution>,
+  resolutions: Map<string, TreeResolution>,
   keepSource: Set<string>,
   keepTarget: Set<string>,
   sourceContent?: SemanticContent,
@@ -202,18 +202,18 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
     extendedResolutions,
     fetchServerChecks,
     serverChecksLoading,
-    // Frame merge state
-    frameMergeResult,
-    frameResolutions,
-    keepSourceFrames,
-    keepTargetFrames,
-    setFrameMergeResult,
-    resolveFrameConflict,
-    toggleKeepSourceFrame,
-    toggleKeepTargetFrame,
-    allFrameConflictsResolved,
-    // Frame-aware getters
-    getFrameMergeChecks,
+    // Tree merge state
+    treeMergeResult,
+    treeResolutions,
+    keepSourceNodes,
+    keepTargetNodes,
+    setTreeMergeResult,
+    resolveTreeConflict,
+    toggleKeepSourceNode,
+    toggleKeepTargetNode,
+    allTreeConflictsResolved,
+    // Tree-aware getters
+    getTreeMergeChecks,
     getPreviewPaths,
   } = useMergeWorkspaceStore();
 
@@ -225,13 +225,13 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
   const [diffMode, setDiffMode] = useState<DiffMode>('sentence');
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  // Frame merge loading state
-  const [frameLoading, setFrameLoading] = useState(false);
-  const [frameError, setFrameError] = useState<string | null>(null);
-  const [activeFrameId, setActiveFrameId] = useState<string | null>(null);
+  // Tree merge loading state
+  const [treeLoading, setTreeLoading] = useState(false);
+  const [treeError, setTreeError] = useState<string | null>(null);
+  const [activeNodeId, setActiveNodeId] = useState<string | null>(null);
   const [_commitMergeLoading, setCommitMergeLoading] = useState(false);
 
-  // Semantic data for Frame mode (legacy FrameMergeSection fallback)
+  // Semantic data for Tree mode (legacy MergeSection fallback)
   const [semanticData, setSemanticData] = useState<{
     base?: SemanticContent;
     source?: SemanticContent;
@@ -242,27 +242,27 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
     semanticData.source?.trees?.length && semanticData.target?.trees?.length
   );
 
-  // Determine if we're in frame merge mode
-  const isFrameMode = frameMergeResult !== null;
+  // Determine if we're in tree merge mode
+  const isTreeMode = treeMergeResult !== null;
 
-  // Fetch commits and prepare frame merge
+  // Fetch commits and prepare tree merge
   useEffect(() => {
     const sh = sourceHash;
     const th = targetHash;
     if (!sh || !th) return;
     let cancelled = false;
 
-    setFrameLoading(true);
-    setFrameError(null);
+    setTreeLoading(true);
+    setTreeError(null);
 
-    Promise.all([getCommitAsFrames(sh), getCommitAsFrames(th)])
+    Promise.all([getCommitAsNodes(sh), getCommitAsNodes(th)])
       .then(([srcCommit, tgtCommit]) => {
         if (cancelled) return;
 
         const sourceContent = srcCommit.content;
         const targetContent = tgtCommit.content;
 
-        // Also store for legacy FrameMergeSection
+        // Also store for legacy MergeSection
         setSemanticData({
           source: sourceContent,
           target: targetContent,
@@ -279,43 +279,43 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
           const baseParent = commonParent ?? sourceParents[0];
 
           if (baseParent) {
-            getCommitAsFrames(baseParent)
+            getCommitAsNodes(baseParent)
               .then((baseCommit) => {
                 if (cancelled) return;
                 const result = prepareMerge(baseCommit.content, sourceContent, targetContent);
-                setFrameMergeResult(result);
-                setFrameLoading(false);
-                setDiffMode('frame');
+                setTreeMergeResult(result);
+                setTreeLoading(false);
+                setDiffMode('tree');
               })
               .catch(() => {
                 if (cancelled) return;
                 // No base available, use empty base (2-way comparison)
                 const emptyBase: SemanticContent = { trees: [], relations: [] };
                 const result = prepareMerge(emptyBase, sourceContent, targetContent);
-                setFrameMergeResult(result);
-                setFrameLoading(false);
-                setDiffMode('frame');
+                setTreeMergeResult(result);
+                setTreeLoading(false);
+                setDiffMode('tree');
               });
           } else {
             // No parents at all, use empty base
             const emptyBase: SemanticContent = { trees: [], relations: [] };
             const result = prepareMerge(emptyBase, sourceContent, targetContent);
-            setFrameMergeResult(result);
-            setFrameLoading(false);
-            setDiffMode('frame');
+            setTreeMergeResult(result);
+            setTreeLoading(false);
+            setDiffMode('tree');
           }
         } else {
-          // No frame data, fall back to sentence mode
-          setFrameLoading(false);
+          // No tree data, fall back to sentence mode
+          setTreeLoading(false);
           setDiffMode('sentence');
         }
       })
       .catch((err) => {
         if (cancelled) return;
-        setFrameError(
-          err instanceof Error ? err.message : 'Failed to load commits for frame merge'
+        setTreeError(
+          err instanceof Error ? err.message : 'Failed to load commits for tree merge'
         );
-        setFrameLoading(false);
+        setTreeLoading(false);
         // Fall back to sentence mode
         setDiffMode('sentence');
       });
@@ -323,7 +323,7 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
     return () => {
       cancelled = true;
     };
-  }, [sourceHash, targetHash, setFrameMergeResult]);
+  }, [sourceHash, targetHash, setTreeMergeResult]);
 
   // Build nav items from merge data (sentence mode)
   const navItems = useMemo(
@@ -370,7 +370,7 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
       // Cmd/Ctrl + Enter to open review dialog
       if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
         e.preventDefault();
-        if (isFrameMode ? allFrameConflictsResolved() && message.trim() : canCommit()) {
+        if (isTreeMode ? allTreeConflictsResolved() && message.trim() : canCommit()) {
           setShowReviewDialog(true);
         }
       }
@@ -404,8 +404,8 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
     canCommit,
     handleCancel,
     showReviewDialog,
-    isFrameMode,
-    allFrameConflictsResolved,
+    isTreeMode,
+    allTreeConflictsResolved,
     message,
   ]);
 
@@ -435,17 +435,17 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
     }
   }, [onClose, onMergeCommitted]);
 
-  // Frame merge commit handler
-  const handleFrameCommitMerge = useCallback(async () => {
-    if (!frameMergeResult || !sourceHash || !targetHash) return;
+  // Tree merge commit handler
+  const handleNodeCommitMerge = useCallback(async () => {
+    if (!treeMergeResult || !sourceHash || !targetHash) return;
 
     setCommitMergeLoading(true);
     try {
       const mergedContent = buildMergedContent(
-        frameMergeResult,
-        frameResolutions,
-        keepSourceFrames,
-        keepTargetFrames,
+        treeMergeResult,
+        treeResolutions,
+        keepSourceNodes,
+        keepTargetNodes,
         semanticData.source,
         semanticData.target
       );
@@ -458,7 +458,7 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
         },
         {
           branch: targetBranch || 'main',
-          message: message || 'Frame merge',
+          message: message || 'Tree merge',
           parents: [sourceHash, targetHash],
           author: { type: 'human', name: 'User' },
           provenance: { method: 'merge' },
@@ -475,15 +475,15 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
         onClose();
       }
     } catch (err) {
-      setFrameError(err instanceof Error ? err.message : 'Failed to commit frame merge');
+      setTreeError(err instanceof Error ? err.message : 'Failed to commit tree merge');
     } finally {
       setCommitMergeLoading(false);
     }
   }, [
-    frameMergeResult,
-    frameResolutions,
-    keepSourceFrames,
-    keepTargetFrames,
+    treeMergeResult,
+    treeResolutions,
+    keepSourceNodes,
+    keepTargetNodes,
     sourceHash,
     targetHash,
     projectId,
@@ -494,34 +494,34 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
     semanticData,
   ]);
 
-  // Frame merge can-commit check
-  const frameCanCommit = isFrameMode && allFrameConflictsResolved() && message.trim().length > 0;
+  // Tree merge can-commit check
+  const treeCanCommit = isTreeMode && allTreeConflictsResolved() && message.trim().length > 0;
 
-  // Frame merge review dialog handler
-  const handleFrameOpenReview = useCallback(() => {
+  // Tree merge review dialog handler
+  const handleNodeOpenReview = useCallback(() => {
     setShowReviewDialog(true);
   }, []);
 
-  const handleFrameConfirmMerge = useCallback(async () => {
-    await handleFrameCommitMerge();
-  }, [handleFrameCommitMerge]);
+  const handleNodeConfirmMerge = useCallback(async () => {
+    await handleNodeCommitMerge();
+  }, [handleNodeCommitMerge]);
 
-  // Loading state for frame data
-  if (frameLoading) {
+  // Loading state for tree data
+  if (treeLoading) {
     return (
       <div className="flex h-screen items-center justify-center bg-[var(--surface-app)]">
         <div className="text-center">
           <Loader2 className="h-8 w-8 animate-spin mx-auto text-[var(--accent-commit)]" />
-          <p className="mt-4 text-[var(--text-secondary)]">Preparing frame merge...</p>
+          <p className="mt-4 text-[var(--text-secondary)]">Preparing tree merge...</p>
         </div>
       </div>
     );
   }
 
-  // If we're in frame mode, render the frame merge workspace
-  if (isFrameMode && frameMergeResult) {
-    const frameUnresolvedCount = frameMergeResult.conflicts.filter(
-      (c) => !frameResolutions.has(c.path)
+  // If we're in  node mode, render the tree merge workspace
+  if (isTreeMode && treeMergeResult) {
+    const frameUnresolvedCount = treeMergeResult.conflicts.filter(
+      (c) => !treeResolutions.has(c.path)
     ).length;
 
     const containerVariants = prefersReducedMotion
@@ -537,12 +537,12 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
         animate="animate"
         className="relative flex h-screen flex-col bg-[var(--surface-app)]"
       >
-        {/* Merge Review Dialog (frame mode) */}
+        {/* Merge Review Dialog (tree mode) */}
         <MergeReviewDialog
           open={showReviewDialog}
           onClose={() => setShowReviewDialog(false)}
-          onConfirm={handleFrameConfirmMerge}
-          checks={getFrameMergeChecks()}
+          onConfirm={handleNodeConfirmMerge}
+          checks={getTreeMergeChecks()}
           message={message}
           sourceBranch={sourceBranch || 'source'}
           targetBranch={targetBranch || 'main'}
@@ -562,9 +562,9 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
           message={message}
           onMessageChange={setMessage}
           onSave={saveDraft}
-          onCommit={handleFrameOpenReview}
+          onCommit={handleNodeOpenReview}
           onCancel={handleCancel}
-          canCommit={frameCanCommit}
+          canCommit={treeCanCommit}
           onClose={onClose}
         />
 
@@ -573,54 +573,54 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
           <div className="flex-1 overflow-hidden flex">
             {/* Left: MergeNavigator (200px) */}
             <MergeNavigator
-              mergeResult={frameMergeResult}
-              resolutions={frameResolutions}
-              keepSource={keepSourceFrames}
-              keepTarget={keepTargetFrames}
-              activeFrameId={activeFrameId}
-              onSelectFrame={setActiveFrameId}
-              onToggleKeepSource={toggleKeepSourceFrame}
-              onToggleKeepTarget={toggleKeepTargetFrame}
+              mergeResult={treeMergeResult}
+              resolutions={treeResolutions}
+              keepSource={keepSourceNodes}
+              keepTarget={keepTargetNodes}
+              activeNodeId={activeNodeId}
+              onSelectNode={setActiveNodeId}
+              onToggleKeepSource={toggleKeepSourceNode}
+              onToggleKeepTarget={toggleKeepTargetNode}
             />
 
             {/* Center: Conflict cards + auto-kept */}
             <div ref={scrollContainerRef} className="flex-1 overflow-auto p-[var(--space-page)]">
-              {frameError && (
+              {treeError && (
                 <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-400">
-                  {frameError}
+                  {treeError}
                 </div>
               )}
 
               {/* Conflicts */}
-              {frameMergeResult.conflicts.length > 0 && (
+              {treeMergeResult.conflicts.length > 0 && (
                 <div className="mb-6">
                   <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--diff-removed-accent)]">
-                    Conflicts ({frameMergeResult.conflicts.length})
+                    Conflicts ({treeMergeResult.conflicts.length})
                   </h3>
                   <div className="space-y-3">
-                    {frameMergeResult.conflicts.map((conflict) => {
-                      // Look up source/target TreeNodes for the FrameConflictCard
+                    {treeMergeResult.conflicts.map((conflict) => {
+                      // Look up source/target TreeNodes for the ConflictCard
                       const sourceNode = semanticData.source
                         ? findNodeByPath(semanticData.source.trees, conflict.path)
                         : null;
                       const targetNode = semanticData.target
                         ? findNodeByPath(semanticData.target.trees, conflict.path)
                         : null;
-                      // Build a FrameConflictCard-compatible conflict object
+                      // Build a ConflictCard-compatible conflict object
                       const cardConflict = {
-                        frameId: conflict.path,
-                        sourceFrame: sourceNode ?? { key: conflict.path, slots: {}, children: [] },
-                        targetFrame: targetNode ?? { key: conflict.path, slots: {}, children: [] },
+                        treeId: conflict.path,
+                        sourceNode: sourceNode ?? { key: conflict.path, slots: {}, children: [] },
+                        targetNode: targetNode ?? { key: conflict.path, slots: {}, children: [] },
                         slotConflicts: conflict.slotConflicts,
                       };
                       return (
-                        <div key={conflict.path} id={`merge-frame-${conflict.path}`}>
-                          <FrameConflictCard
+                        <div key={conflict.path} id={`merge-tree-${conflict.path}`}>
+                          <ConflictCard
                             conflict={cardConflict}
-                            resolution={frameResolutions.get(conflict.path) ?? null}
-                            onResolve={(res) => resolveFrameConflict(conflict.path, res)}
-                            isActive={activeFrameId === conflict.path}
-                            onSelect={() => setActiveFrameId(conflict.path)}
+                            resolution={treeResolutions.get(conflict.path) ?? null}
+                            onResolve={(res) => resolveTreeConflict(conflict.path, res)}
+                            isActive={activeNodeId === conflict.path}
+                            onSelect={() => setActiveNodeId(conflict.path)}
                           />
                         </div>
                       );
@@ -630,13 +630,13 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
               )}
 
               {/* Auto-kept nodes */}
-              {frameMergeResult.autoKept.length > 0 && (
+              {treeMergeResult.autoKept.length > 0 && (
                 <div className="mb-6">
                   <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--diff-added-accent)]">
-                    Auto-kept ({frameMergeResult.autoKept.length})
+                    Auto-kept ({treeMergeResult.autoKept.length})
                   </h3>
                   <div className="space-y-2">
-                    {frameMergeResult.autoKept.map((path) => {
+                    {treeMergeResult.autoKept.map((path) => {
                       const node = findNode(semanticData.source, semanticData.target, path);
                       return (
                         <div
@@ -672,14 +672,14 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
               )}
 
               {/* Source-only nodes */}
-              {frameMergeResult.onlyInSource.length > 0 && (
+              {treeMergeResult.onlyInSource.length > 0 && (
                 <div className="mb-6">
                   <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--accent-commit)]">
-                    Source only ({frameMergeResult.onlyInSource.length})
+                    Source only ({treeMergeResult.onlyInSource.length})
                   </h3>
                   <div className="space-y-2">
-                    {frameMergeResult.onlyInSource.map((path) => {
-                      const isKept = keepSourceFrames.has(path);
+                    {treeMergeResult.onlyInSource.map((path) => {
+                      const isKept = keepSourceNodes.has(path);
                       const node = semanticData.source
                         ? findNodeByPath(semanticData.source.trees, path)
                         : null;
@@ -694,7 +694,7 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
                             <input
                               type="checkbox"
                               checked={isKept}
-                              onChange={() => toggleKeepSourceFrame(path)}
+                              onChange={() => toggleKeepSourceNode(path)}
                               className="h-3.5 w-3.5 cursor-pointer accent-[var(--accent-commit)]"
                             />
                             <span className="rounded bg-[var(--surface-app)] px-1.5 py-0.5 font-mono text-[11px] font-medium text-[var(--text-secondary)] border border-[var(--stroke-divider)]">
@@ -725,14 +725,14 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
               )}
 
               {/* Target-only nodes */}
-              {frameMergeResult.onlyInTarget.length > 0 && (
+              {treeMergeResult.onlyInTarget.length > 0 && (
                 <div className="mb-6">
                   <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--accent-commit)]">
-                    Target only ({frameMergeResult.onlyInTarget.length})
+                    Target only ({treeMergeResult.onlyInTarget.length})
                   </h3>
                   <div className="space-y-2">
-                    {frameMergeResult.onlyInTarget.map((path) => {
-                      const isKept = keepTargetFrames.has(path);
+                    {treeMergeResult.onlyInTarget.map((path) => {
+                      const isKept = keepTargetNodes.has(path);
                       const node = semanticData.target
                         ? findNodeByPath(semanticData.target.trees, path)
                         : null;
@@ -747,7 +747,7 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
                             <input
                               type="checkbox"
                               checked={isKept}
-                              onChange={() => toggleKeepTargetFrame(path)}
+                              onChange={() => toggleKeepTargetNode(path)}
                               className="h-3.5 w-3.5 cursor-pointer accent-[var(--accent-commit)]"
                             />
                             <span className="rounded bg-[var(--surface-app)] px-1.5 py-0.5 font-mono text-[11px] font-medium text-[var(--text-secondary)] border border-[var(--stroke-divider)]">
@@ -778,14 +778,14 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
               )}
 
               {/* No conflicts state */}
-              {frameMergeResult.conflicts.length === 0 &&
-                frameMergeResult.autoKept.length === 0 &&
-                frameMergeResult.onlyInSource.length === 0 &&
-                frameMergeResult.onlyInTarget.length === 0 && (
+              {treeMergeResult.conflicts.length === 0 &&
+                treeMergeResult.autoKept.length === 0 &&
+                treeMergeResult.onlyInSource.length === 0 &&
+                treeMergeResult.onlyInTarget.length === 0 && (
                   <EmptyState
                     icon={GitMerge}
                     title="Nothing to merge"
-                    description="Both branches have identical frame content."
+                    description="Both branches have identical tree content."
                     customIcon={<MergeIllustration />}
                   />
                 )}
@@ -849,7 +849,7 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
                 </div>
               </div>
 
-              {/* Frame count summary */}
+              {/* Tree count summary */}
               <div className="mb-4">
                 <h4 className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)] mb-2">
                   Summary
@@ -857,19 +857,19 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
                 <div className="space-y-1 text-xs text-[var(--text-secondary)]">
                   <div className="flex justify-between">
                     <span>Auto-kept</span>
-                    <span className="font-mono">{frameMergeResult.autoKept.length}</span>
+                    <span className="font-mono">{treeMergeResult.autoKept.length}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Conflicts</span>
-                    <span className="font-mono">{frameMergeResult.conflicts.length}</span>
+                    <span className="font-mono">{treeMergeResult.conflicts.length}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Source only</span>
-                    <span className="font-mono">{frameMergeResult.onlyInSource.length}</span>
+                    <span className="font-mono">{treeMergeResult.onlyInSource.length}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Target only</span>
-                    <span className="font-mono">{frameMergeResult.onlyInTarget.length}</span>
+                    <span className="font-mono">{treeMergeResult.onlyInTarget.length}</span>
                   </div>
                   <div className="flex justify-between pt-1 border-t border-[var(--stroke-divider)]">
                     <span className="font-medium">Preview total</span>
@@ -980,12 +980,12 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
               onDiffModeChange={setDiffMode}
               hasSemanticData={hasSemanticData}
             />
-            {diffMode === 'frame' &&
+            {diffMode === 'tree' &&
               hasSemanticData &&
               semanticData.base &&
               semanticData.source &&
               semanticData.target && (
-                <FrameMergeSection
+                <MergeSection
                   base={semanticData.base}
                   source={semanticData.source}
                   target={semanticData.target}

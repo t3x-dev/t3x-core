@@ -3,7 +3,7 @@
  * Tests for getMergeChecks from mergeWorkspaceStore
  *
  * Updated for tree-primary merge architecture.
- * Uses frameMergeResult (path-based MergeResult from core).
+ * Uses treeMergeResult (path-based MergeResult from core).
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -76,7 +76,7 @@ afterEach(() => {
 describe('getMergeChecks', () => {
   it('returns an array of MergeCheck items', () => {
     const result = makePrepared();
-    useMergeWorkspaceStore.getState().setFrameMergeResult(result);
+    useMergeWorkspaceStore.getState().setTreeMergeResult(result);
     useMergeWorkspaceStore.setState({
       message: 'test merge',
       targetBranch: 'main',
@@ -99,7 +99,7 @@ describe('getMergeChecks', () => {
 
   it('returns exactly 5 checks', () => {
     const result = makePrepared();
-    useMergeWorkspaceStore.getState().setFrameMergeResult(result);
+    useMergeWorkspaceStore.getState().setTreeMergeResult(result);
     useMergeWorkspaceStore.setState({
       message: 'msg',
       targetBranch: 'main',
@@ -123,7 +123,7 @@ describe('getMergeChecks', () => {
   describe("'resolved' check", () => {
     it('passes when there are no conflicts (unresolvedCount === 0)', () => {
       const result = makePrepared({ conflicts: [] });
-      useMergeWorkspaceStore.getState().setFrameMergeResult(result);
+      useMergeWorkspaceStore.getState().setTreeMergeResult(result);
       useMergeWorkspaceStore.setState({
         message: 'msg',
         targetBranch: 'main',
@@ -139,7 +139,7 @@ describe('getMergeChecks', () => {
       const result = makePrepared({
         conflicts: [{ path: 'topic/a', slotConflicts: [] }],
       });
-      useMergeWorkspaceStore.getState().setFrameMergeResult(result);
+      useMergeWorkspaceStore.getState().setTreeMergeResult(result);
       useMergeWorkspaceStore.setState({
         message: 'msg',
         targetBranch: 'main',
@@ -155,7 +155,7 @@ describe('getMergeChecks', () => {
       const result = makePrepared({
         conflicts: [{ path: 'topic/a', slotConflicts: [] }],
       });
-      useMergeWorkspaceStore.getState().setFrameMergeResult(result);
+      useMergeWorkspaceStore.getState().setTreeMergeResult(result);
       useMergeWorkspaceStore.setState({
         message: 'msg',
         targetBranch: 'main',
@@ -172,7 +172,7 @@ describe('getMergeChecks', () => {
       const result = makePrepared({
         conflicts: [{ path: 'topic/a', slotConflicts: [] }],
       });
-      useMergeWorkspaceStore.getState().setFrameMergeResult(result);
+      useMergeWorkspaceStore.getState().setTreeMergeResult(result);
       useMergeWorkspaceStore.setState({
         message: 'msg',
         targetBranch: 'main',
@@ -193,7 +193,7 @@ describe('getMergeChecks', () => {
   describe("'message' check", () => {
     it('passes when message is not empty', () => {
       const result = makePrepared();
-      useMergeWorkspaceStore.getState().setFrameMergeResult(result);
+      useMergeWorkspaceStore.getState().setTreeMergeResult(result);
       useMergeWorkspaceStore.setState({
         message: 'My merge message',
         targetBranch: 'main',
@@ -206,7 +206,7 @@ describe('getMergeChecks', () => {
 
     it('fails when message is empty', () => {
       const result = makePrepared();
-      useMergeWorkspaceStore.getState().setFrameMergeResult(result);
+      useMergeWorkspaceStore.getState().setTreeMergeResult(result);
       useMergeWorkspaceStore.setState({
         message: '',
         targetBranch: 'main',
@@ -219,7 +219,7 @@ describe('getMergeChecks', () => {
 
     it('fails when message is only whitespace', () => {
       const result = makePrepared();
-      useMergeWorkspaceStore.getState().setFrameMergeResult(result);
+      useMergeWorkspaceStore.getState().setTreeMergeResult(result);
       useMergeWorkspaceStore.setState({
         message: '   ',
         targetBranch: 'main',
@@ -240,7 +240,7 @@ describe('getMergeChecks', () => {
       const result = makePrepared({
         autoKept: ['path/a'],
       });
-      useMergeWorkspaceStore.getState().setFrameMergeResult(result);
+      useMergeWorkspaceStore.getState().setTreeMergeResult(result);
       useMergeWorkspaceStore.setState({
         message: 'msg',
         targetBranch: 'main',
@@ -259,7 +259,7 @@ describe('getMergeChecks', () => {
         onlyInSource: [],
         onlyInTarget: [],
       });
-      useMergeWorkspaceStore.getState().setFrameMergeResult(result);
+      useMergeWorkspaceStore.getState().setTreeMergeResult(result);
       useMergeWorkspaceStore.setState({
         message: 'msg',
         targetBranch: 'main',
@@ -278,7 +278,7 @@ describe('getMergeChecks', () => {
         onlyInSource: ['path/src_only'],
         onlyInTarget: [],
       });
-      useMergeWorkspaceStore.getState().setFrameMergeResult(result);
+      useMergeWorkspaceStore.getState().setTreeMergeResult(result);
       useMergeWorkspaceStore.setState({
         message: 'msg',
         targetBranch: 'main',
@@ -302,7 +302,7 @@ describe('getMergeChecks', () => {
   describe("'target_branch' check", () => {
     it('passes when targetBranch is set', () => {
       const result = makePrepared();
-      useMergeWorkspaceStore.getState().setFrameMergeResult(result);
+      useMergeWorkspaceStore.getState().setTreeMergeResult(result);
       useMergeWorkspaceStore.setState({
         message: 'msg',
         targetBranch: 'main',
@@ -316,7 +316,7 @@ describe('getMergeChecks', () => {
 
     it('fails when targetBranch is null', () => {
       const result = makePrepared();
-      useMergeWorkspaceStore.getState().setFrameMergeResult(result);
+      useMergeWorkspaceStore.getState().setTreeMergeResult(result);
       useMergeWorkspaceStore.setState({
         message: 'msg',
         targetBranch: null,
@@ -335,7 +335,7 @@ describe('getMergeChecks', () => {
   describe("'preview_computed' check", () => {
     it('always passes', () => {
       const result = makePrepared();
-      useMergeWorkspaceStore.getState().setFrameMergeResult(result);
+      useMergeWorkspaceStore.getState().setTreeMergeResult(result);
       useMergeWorkspaceStore.setState({
         message: 'msg',
         targetBranch: 'main',
@@ -353,7 +353,7 @@ describe('getMergeChecks', () => {
         onlyInSource: ['path/unique_src'],
         onlyInTarget: [],
       });
-      useMergeWorkspaceStore.getState().setFrameMergeResult(result);
+      useMergeWorkspaceStore.getState().setTreeMergeResult(result);
       useMergeWorkspaceStore.setState({
         message: 'msg',
         targetBranch: 'main',
@@ -372,7 +372,7 @@ describe('getMergeChecks', () => {
   describe('developer mode labels', () => {
     it('uses friendly terminology in default mode', () => {
       const result = makePrepared();
-      useMergeWorkspaceStore.getState().setFrameMergeResult(result);
+      useMergeWorkspaceStore.getState().setTreeMergeResult(result);
       useMergeWorkspaceStore.setState({
         message: 'msg',
         targetBranch: 'main',
@@ -391,7 +391,7 @@ describe('getMergeChecks', () => {
     it('uses Git terminology in developer mode', () => {
       useSettingsStore.setState({ developerMode: true });
       const result = makePrepared();
-      useMergeWorkspaceStore.getState().setFrameMergeResult(result);
+      useMergeWorkspaceStore.getState().setTreeMergeResult(result);
       useMergeWorkspaceStore.setState({
         message: 'msg',
         targetBranch: 'main',
