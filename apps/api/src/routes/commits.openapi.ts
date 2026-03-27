@@ -58,9 +58,7 @@ const ProvenanceSchema = z.object({
 const CreateCommitRequestSchema = z.object({
   project_id: z.string().min(1),
   content: z.object({
-    topic: z.string().optional(),
-    root_frame_id: z.string().optional(),
-    frames: z.any(),
+    trees: z.any(),
     relations: z.any().optional(),
   }),
   branch: z.string().optional(),

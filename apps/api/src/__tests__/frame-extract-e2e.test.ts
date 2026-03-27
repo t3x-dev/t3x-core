@@ -385,14 +385,14 @@ describe('Frame Extraction E2E — Hangzhou Trip', () => {
     expect(delta.changes.every((c: { action: string }) => c.action === 'add')).toBe(true);
 
     // Snapshot should have frames from pipeline processing
-    expect(snapshot.frames.length).toBeGreaterThanOrEqual(1);
+    expect(snapshot.trees.length).toBeGreaterThanOrEqual(1);
 
     // After pipeline processing (nesting + topic naming):
     // - nester merges child frames into root → fewer top-level frames
     // - topic_namer renames root to 'hangzhou_spring_trip'
     // So check for the topic-named root, not original 'trip_plan'
-    const frameTypes = snapshot.frames.map((f: { type: string }) => f.type);
-    expect(frameTypes).toContain('hangzhou_spring_trip');
+    const frameKeys = snapshot.trees.map((f: { key: string }) => f.key);
+    expect(frameKeys).toContain('hangzhou_spring_trip');
 
     // Delta log entry should be created
     expect(delta_log_id).toBeTruthy();
@@ -445,7 +445,7 @@ describe('Frame Extraction E2E — Hangzhou Trip', () => {
     expect(delta_log_id).toBeTruthy();
 
     // Snapshot should still have frames
-    expect(snapshot.frames.length).toBeGreaterThanOrEqual(1);
+    expect(snapshot.trees.length).toBeGreaterThanOrEqual(1);
   });
 
   // ── Test 3: Specific Turn Hashes ──

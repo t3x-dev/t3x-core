@@ -44,20 +44,14 @@ describe('Diff Routes', () => {
     const baseCommit = await createCommit(mockDB, {
       parents: [],
       author: { type: 'human', name: 'Test' },
-      content: ({
+      content: {
         trees: [
-          { id: 's_1', text: 'The budget is three thousand dollars' },
-          { id: 's_2', text: 'The deadline is next Friday' },
-          { id: 's_3', text: 'Unique to base' },
-        ].map((s) => ({
-          id: s.id,
-          type: 'legacy_sentence' as const,
-          slots: { text: s.text },
-          // biome-ignore lint/suspicious/noExplicitAny: test mock access
-          confidence: (s as any).confidence ?? 1,
-        })),
+          { key: 's_1', slots: { text: 'The budget is three thousand dollars' }, children: [] },
+          { key: 's_2', slots: { text: 'The deadline is next Friday' }, children: [] },
+          { key: 's_3', slots: { text: 'Unique to base' }, children: [] },
+        ],
         relations: [],
-      }) as any,
+      } as any,
       project_id: testProjectId,
     });
     baseCommitHash = baseCommit.hash;
@@ -65,20 +59,14 @@ describe('Diff Routes', () => {
     const targetCommit = await createCommit(mockDB, {
       parents: [baseCommitHash],
       author: { type: 'human', name: 'Test' },
-      content: ({
+      content: {
         trees: [
-          { id: 's_4', text: 'The budget is five thousand dollars' },
-          { id: 's_5', text: 'The deadline is next Friday' },
-          { id: 's_6', text: 'Unique to target' },
-        ].map((s) => ({
-          id: s.id,
-          type: 'legacy_sentence' as const,
-          slots: { text: s.text },
-          // biome-ignore lint/suspicious/noExplicitAny: test mock access
-          confidence: (s as any).confidence ?? 1,
-        })),
+          { key: 's_4', slots: { text: 'The budget is five thousand dollars' }, children: [] },
+          { key: 's_5', slots: { text: 'The deadline is next Friday' }, children: [] },
+          { key: 's_6', slots: { text: 'Unique to target' }, children: [] },
+        ],
         relations: [],
-      }) as any,
+      } as any,
       project_id: testProjectId,
     });
     targetCommitHash = targetCommit.hash;

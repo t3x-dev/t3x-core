@@ -238,7 +238,7 @@ mergeRoutes.openapi(executeMergeRoute, async (c) => {
 
   // Validate all conflicts have resolutions
   const unresolvedConflicts = prepared.conflicts.filter(
-    (conf: { frameId: string }) => !decisions.conflictResolutions[conf.frameId]
+    (conf: { path: string }) => !decisions.conflictResolutions[conf.path]
   );
   if (unresolvedConflicts.length > 0) {
     return c.json(

@@ -536,9 +536,9 @@ describe('Drafts Routes', () => {
       expect(data.success).toBe(true);
       expect(data.data.commit).toBeDefined();
       expect(data.data.commit.hash).toMatch(/^sha256:/);
-      expect(data.data.commit.content.frames).toHaveLength(2);
-      expect(data.data.commit.content.frames[0].type).toBe('legacy_sentence');
-      expect(data.data.commit.content.frames[0].slots.text).toBeDefined();
+      expect(data.data.commit.content.trees).toHaveLength(2);
+      expect(data.data.commit.content.trees[0].key).toBeDefined();
+      expect(data.data.commit.content.trees[0].slots.text).toBeDefined();
       expect(data.data.commit.message).toBe('My first commit');
       expect(data.data.leaf).toBeNull();
       expect(data.data.draft_status).toBe('committed');

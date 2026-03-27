@@ -146,7 +146,7 @@ describe('POST /v1/drafts/{id}/commit (LLM mode)', () => {
     expect(data.data.commit.hash).toMatch(/^sha256:/);
 
     // Verify frames were created from SPs
-    const frames = data.data.commit.content.frames;
+    const frames = data.data.commit.content.trees;
     expect(frames).toHaveLength(2);
     expect(frames[0].slots.text).toBe('User prefers dark mode.');
     expect(frames[1].slots.text).toBe('Dark mode reduces eye strain.');
@@ -185,7 +185,7 @@ describe('POST /v1/drafts/{id}/commit (LLM mode)', () => {
     expect(data.success).toBe(true);
 
     // Only active SP should become a frame
-    const frames = data.data.commit.content.frames;
+    const frames = data.data.commit.content.trees;
     expect(frames).toHaveLength(1);
     expect(frames[0].slots.text).toBe('Active point.');
   });

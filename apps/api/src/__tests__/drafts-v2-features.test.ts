@@ -313,7 +313,7 @@ describe('Draft Workbench Features', () => {
       expect(data.success).toBe(true);
       expect(data.data.commit).toBeDefined();
       expect(data.data.commit.hash).toMatch(/^sha256:/);
-      expect(data.data.commit.content.frames).toHaveLength(2);
+      expect(data.data.commit.content.trees).toHaveLength(2);
       expect(data.data.draft_status).toBe('committed');
     });
 
