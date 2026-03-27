@@ -21,7 +21,6 @@ export {
   ExactMatchEmbeddingProvider,
   StubEmbeddingProvider,
   StubLLMProvider,
-  StubNLPProvider,
   WordOverlapEmbeddingProvider,
 } from './stubs';
 
