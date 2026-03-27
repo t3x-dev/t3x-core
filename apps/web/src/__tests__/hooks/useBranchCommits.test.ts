@@ -26,7 +26,7 @@ const makeCommit = (hash: string) => ({
   parents: [],
   author: { type: 'human', id: 'u1', name: 'Test' },
   committed_at: '2026-01-01T00:00:00Z',
-  content: { frames: [], relations: [] },
+  content: { trees: [], relations: [] },
   project_id: 'proj_1',
   message: 'test',
   branch: 'main',

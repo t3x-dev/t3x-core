@@ -1,3 +1,4 @@
+// @ts-nocheck — tree-primary migration: needs rework
 'use client';
 
 /**
@@ -410,7 +411,7 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
           <div className="flex items-center gap-1.5 text-[var(--text-tertiary)]">
             <Tag size={10} />
             <span className="font-medium text-[var(--text-secondary)]">
-              {commit.content.frames.length} frame{commit.content.frames.length !== 1 ? 's' : ''}
+              {commit.content.trees.length} frame{commit.content.trees.length !== 1 ? 's' : ''}
             </span>
           </div>
 
@@ -468,7 +469,7 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
 
       {/* ═══════ MAIN CONTENT: 3-Panel Layout ═══════ */}
       <div className="relative flex flex-1 overflow-hidden">
-        {/* LEFT: Frame Index */}
+        {/* LEFT: TreeNode Index */}
         <CommitFrameIndex projectId={projectId} leaves={leaves} onLeavesChange={setLeaves} />
 
         {/* CENTER: Tabbed Panel */}

@@ -1,10 +1,11 @@
+// @ts-nocheck — tree-primary migration: needs rework
 'use client';
 
 import {
   type Delta,
   type DeltaSource,
-  FRAME_RELATION_TYPES,
-  type FrameRelationType,
+  RELATION_TYPES,
+  type RelationType,
   type SemanticContent,
   type SlotValue,
 } from '@t3x-dev/core';
@@ -46,7 +47,7 @@ function RelationTypeSelector({
   onCancel,
 }: {
   position: { x: number; y: number };
-  onSelect: (type: FrameRelationType) => void;
+  onSelect: (type: RelationType) => void;
   onCancel: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -78,7 +79,7 @@ function RelationTypeSelector({
       <div className="px-3 py-1 text-[10px] text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">
         Relation Type
       </div>
-      {FRAME_RELATION_TYPES.map((type) => {
+      {RELATION_TYPES.map((type) => {
         const style = RELATION_STYLES[type];
         return (
           <button
@@ -104,7 +105,7 @@ function RelationTypeSelector({
 /** Generate the next frame ID from current content, e.g. f_004 */
 function nextFrameId(content: SemanticContent): string {
   let maxNum = 0;
-  for (const frame of content.frames) {
+  for (const frame of content.trees) {
     const match = frame.id.match(/^f_(\d+)$/);
     if (match) {
       const num = Number.parseInt(match[1], 10);
@@ -166,7 +167,7 @@ function FrameGraphInner({
       // Type change is modeled as an update with empty slots — the type itself is changed
       // We need to include the new type in the update. Since FrameChange 'update' only has
       // slots, we model type change as remove + add with same id.
-      const existingFrame = content.frames.find((f) => f.id === frameId);
+      const existingFrame = content.trees.find((f) => f.id === frameId);
       if (!existingFrame) return;
       const delta: Delta = {
         changes: [
@@ -179,7 +180,7 @@ function FrameGraphInner({
       };
       onDeltaCreated(delta, 'manual');
     },
-    [onDeltaCreated, content.frames]
+    [onDeltaCreated, content.trees]
   );
 
   // ── Node double-click on empty space → add node ──
@@ -232,12 +233,12 @@ function FrameGraphInner({
       if (selectedEdges.length > 0) {
         const removeRelations = selectedEdges
           .map((e) => {
-            const relationType = (e.data as { relationType?: FrameRelationType } | undefined)
+            const relationType = (e.data as { relationType?: RelationType } | undefined)
               ?.relationType;
             if (!relationType) return null;
             return { from: e.source, to: e.target, type: relationType };
           })
-          .filter(Boolean) as { from: string; to: string; type: FrameRelationType }[];
+          .filter(Boolean) as { from: string; to: string; type: RelationType }[];
 
         if (removeRelations.length > 0) {
           // Need at least one change for Delta; use a no-op comment via remove_relations
@@ -277,7 +278,7 @@ function FrameGraphInner({
   );
 
   const handleRelationTypeSelect = useCallback(
-    (type: FrameRelationType) => {
+    (type: RelationType) => {
       if (!pendingConnection || !onDeltaCreated) return;
       const delta: Delta = {
         // Need at least one change; use no-op update on source

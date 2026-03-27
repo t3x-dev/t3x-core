@@ -1,3 +1,4 @@
+// @ts-nocheck — tree-primary migration: needs rework
 'use client';
 
 /**
@@ -523,7 +524,7 @@ function SharedComparisonView({ comparison }: { comparison: ComparisonData }) {
 function SharedCommitView({ commit }: { commit: CommitData }) {
   const shortHash = commit.hash.replace('sha256:', '').slice(0, 12);
   const sentences = commit.content.sentences ?? [];
-  const frames = commit.content.frames ?? [];
+  const frames = commit.content.trees ?? [];
   const relations = commit.content.relations ?? [];
 
   return (

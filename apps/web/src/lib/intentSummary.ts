@@ -1,4 +1,4 @@
-import type { Frame } from '@t3x-dev/core';
+import type { TreeNode } from '@t3x-dev/core';
 import { chatStream } from '@/lib/api/chat';
 
 interface IntentResult {
@@ -7,16 +7,16 @@ interface IntentResult {
 }
 
 /**
- * Ask the LLM which frames represent the user's core current intentions.
- * Sends only frame types and slot keys (not full values) to minimize tokens.
+ * Ask the LLM which nodes represent the user's core current intentions.
+ * Sends only node keys and slot keys (not full values) to minimize tokens.
  */
 export async function getIntentSummary(
-  frames: Frame[],
+  frames: TreeNode[],
   signal?: AbortSignal
 ): Promise<IntentResult> {
   const frameSummaries = frames.map((f) => ({
-    id: f.id,
-    type: f.type,
+    id: f.key,
+    type: f.key,
     slots: Object.keys(f.slots),
   }));
 

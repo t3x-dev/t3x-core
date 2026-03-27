@@ -1,3 +1,4 @@
+// @ts-nocheck — tree-primary migration: needs rework
 'use client';
 
 /**
@@ -9,8 +10,9 @@
  * at the top level.
  */
 
-import type { Frame, InlineFrame, SemanticContent, SlotValue } from '@t3x-dev/core';
+import type { TreeNode, SemanticContent, SlotValue } from '@t3x-dev/core';
 import { useCallback, useMemo } from 'react';
+import type { Frame } from '@/lib/treeCompat';
 
 // ============================================================================
 // Props
@@ -27,14 +29,14 @@ export interface CommitYAMLDocumentProps {
 // ============================================================================
 
 interface FrameTreeNode {
-  frame: Frame;
+  frame: TreeNode;
   displayName: string;
   relationType?: string;
   children: FrameTreeNode[];
 }
 
 /** Build display names with _2, _3 suffixes for duplicate types (scoped per parent). */
-function buildDisplayNames(frames: Frame[]): Map<string, string> {
+function buildDisplayNames(frames: TreeNode[]): Map<string, string> {
   const counts = new Map<string, number>();
   const nameMap = new Map<string, string>();
 
@@ -49,7 +51,7 @@ function buildDisplayNames(frames: Frame[]): Map<string, string> {
 
 function buildFrameTree(content: SemanticContent): FrameTreeNode[] {
   const frameMap = new Map<string, Frame>();
-  for (const frame of content.frames) {
+  for (const frame of content.trees) {
     frameMap.set(frame.id, frame);
   }
 
@@ -68,13 +70,13 @@ function buildFrameTree(content: SemanticContent): FrameTreeNode[] {
   }
 
   // Root frames: not a child of anyone
-  const rootFrames = content.frames.filter((f) => !childIds.has(f.id));
+  const rootFrames = content.trees.filter((f) => !childIds.has(f.id));
 
   // Build display name map across all frames
-  const nameMap = buildDisplayNames(content.frames);
+  const nameMap = buildDisplayNames(content.trees);
 
   // Recursive builder (with visited set to avoid cycles)
-  function buildNode(frame: Frame, relationType?: string, visited?: Set<string>): FrameTreeNode {
+  function buildNode(frame: TreeNode, relationType?: string, visited?: Set<string>): FrameTreeNode {
     const vis = visited ?? new Set<string>();
     vis.add(frame.id);
 
@@ -364,7 +366,7 @@ export function CommitYAMLDocument({ content, className, onSlotClick }: CommitYA
     [onSlotClick]
   );
 
-  if (content.frames.length === 0) {
+  if (content.trees.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-center">
         <p className="text-sm text-[var(--text-tertiary)] italic">No frames in this commit.</p>

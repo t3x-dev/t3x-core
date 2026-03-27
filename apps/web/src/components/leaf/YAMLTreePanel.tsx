@@ -65,7 +65,7 @@ export function YAMLTreePanel({
     if (!constraint) return null;
     if ('source_frame' in constraint && constraint.source_frame) {
       // Find frame by type match
-      const frame = content.frames.find(
+      const frame = content.trees.find(
         (f) =>
           f.type ===
           (constraint as { source_frame?: { frame_type?: string } }).source_frame?.frame_type
@@ -73,12 +73,12 @@ export function YAMLTreePanel({
       return frame?.id ?? null;
     }
     return null;
-  }, [highlightedConstraintId, constraints, content.frames]);
+  }, [highlightedConstraintId, constraints, content.trees]);
 
   const renderFrameActions = useCallback(
     (frameId: string, frameType: string): ReactNode => {
       if (mode === 'generate') {
-        const frame = content.frames.find((f) => f.id === frameId);
+        const frame = content.trees.find((f) => f.id === frameId);
         const frameValue = frame
           ? Object.entries(frame.slots)
               .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`)
@@ -139,15 +139,15 @@ export function YAMLTreePanel({
 
       return null;
     },
-    [mode, content.frames, constraints, assertions, saving, onAddConstraintFromSource]
+    [mode, content.trees, constraints, assertions, saving, onAddConstraintFromSource]
   );
 
   const getFrameMeta = useCallback(
     (frameId: string) => {
-      const frame = content.frames.find((f) => f.id === frameId);
+      const frame = content.trees.find((f) => f.id === frameId);
       return frame?.confidence != null ? { confidence: frame.confidence } : undefined;
     },
-    [content.frames]
+    [content.trees]
   );
 
   return (

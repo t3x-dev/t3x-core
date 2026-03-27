@@ -39,7 +39,7 @@ export function BusinessRuleEditor({
       const { gateCheck } = await import('@/lib/api/frames');
       // Test with minimal content
       const result = await gateCheck(
-        { frames: [], relations: [] },
+        { trees: [], relations: [] },
         {
           business_rules: [rule],
           gates: ['business'],

@@ -1,6 +1,6 @@
 'use client';
 
-import type { FrameDiff, SlotDiff, SlotValue } from '@t3x-dev/core';
+import type { TreeDiff, SlotDiff, SlotValue } from '@t3x-dev/core';
 import { cn } from '@/lib/utils';
 import { formatSlotValue, YAML_COLORS } from './DiffYAMLFormatters';
 import {
@@ -16,7 +16,7 @@ import { frameLineCount, SlotValueSpan, WordDiffSpan } from './YAMLFrameRenderer
 // ── Props ──
 
 interface DiffYAMLUnifiedViewProps {
-  diff: FrameDiff;
+  diff: TreeDiff;
   activeFrameId: string | null;
   onSelectFrame: (id: string) => void;
   showIdentical: boolean;
@@ -119,7 +119,7 @@ function UnifiedFrameContent({
   rightLineRef,
 }: {
   aligned: AlignedFrame;
-  diff: FrameDiff;
+  diff: TreeDiff;
   leftLineRef: { current: number };
   rightLineRef: { current: number };
 }) {

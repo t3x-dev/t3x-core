@@ -17,7 +17,7 @@ import { copyToClipboard, downloadAsFile, type ExportResult } from './export';
 
 export function formatCommitAsMarkdown(commit: ApiCommit): string {
   const lines: string[] = [];
-  const frames = getSemanticContent(commit).frames;
+  const frames = getSemanticContent(commit).trees;
 
   lines.push(`# Commit: ${commit.message || commit.hash.slice(0, 12)}`);
   lines.push('');

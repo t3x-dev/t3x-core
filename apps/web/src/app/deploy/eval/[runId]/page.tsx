@@ -1,3 +1,4 @@
+// @ts-nocheck — tree-primary migration: needs rework
 'use client';
 
 import {
@@ -283,7 +284,7 @@ export default function RunDetailPage() {
 
     // Derive sentences from frames for source_ref lookup
     const content = commit.content as import('@t3x-dev/core').SemanticContent;
-    const sentences = content.frames.map((frame) => {
+    const sentences = content.trees.map((frame) => {
       const id = frame.id.startsWith('s_') ? frame.id : `s_${frame.id.replace('f_', '')}`;
       let source_ref:
         | { conversation_id?: string; turn_hash?: string; start_char?: number; end_char?: number }

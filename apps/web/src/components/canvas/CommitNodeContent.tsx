@@ -47,7 +47,7 @@ export const CommitContentSection = memo(function CommitContentSection({
   projectId?: string;
   maxSentences?: number;
 }) {
-  const frames = commit.content?.frames ?? [];
+  const frames = commit.content?.trees ?? [];
   const displayFrames = frames.slice(0, PREVIEW_MAX_FRAMES) as Array<{
     id: string;
     type: string;
@@ -75,10 +75,10 @@ export const CommitContentSection = memo(function CommitContentSection({
       </div>
 
       {/* Frame Graph or Frames list (preview) */}
-      {commit.semantic && commit.semantic.frames.length > 0 ? (
+      {commit.semantic && commit.semantic.trees.length > 0 ? (
         <div>
           <div className="text-[10px] font-medium text-[var(--text-tertiary)] uppercase tracking-wider mb-1">
-            Frame Graph ({commit.semantic.frames.length} frames)
+            Frame Graph ({commit.semantic.trees.length} frames)
           </div>
           <div className="h-[200px] rounded border border-[var(--stroke-divider)]">
             <FrameGraphView content={commit.semantic} className="h-full w-full" />

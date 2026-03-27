@@ -222,7 +222,7 @@ export function ProvenanceGraph({
               <polygon points="92,8 100,12 92,16" fill="var(--accent-commit)" opacity="0.7" />
             </svg>
             <span className="text-[9px] text-[var(--text-tertiary)] whitespace-nowrap -mt-1">
-              {commit.content.frames.length} frames
+              {commit.content.trees.length} frames
             </span>
           </div>
 

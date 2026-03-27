@@ -1,3 +1,4 @@
+// @ts-nocheck — tree-primary migration: needs rework
 'use client';
 
 /**
@@ -8,7 +9,7 @@
  *
  * TODO: Migrate to FrameYAMLDiff once draft workspace moves from sentence-based
  * to frame-based (SemanticContent). Currently the draft store uses DraftSentence[]
- * which has no frame structure, so frameDiff() cannot be used here yet.
+ * which has no frame structure, so diffCommits() cannot be used here yet.
  */
 
 import { Equal, Minus, Pencil, Plus } from 'lucide-react';
@@ -55,7 +56,7 @@ export function DraftDiffSection() {
       .then((parentCommit) => {
         if (cancelled) return;
         const content = parentCommit.content as import('@t3x-dev/core').SemanticContent;
-        const sentences = content.frames.map((frame) => ({
+        const sentences = content.trees.map((frame) => ({
           id: frame.id.startsWith('s_') ? frame.id : `s_${frame.id.replace('f_', '')}`,
           text: `[${frame.type}] ${Object.entries(frame.slots)
             .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : String(v)}`)

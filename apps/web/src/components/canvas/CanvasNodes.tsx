@@ -294,7 +294,7 @@ const UnitNode = memo(function UnitNode(props: Props) {
   const frameCount = isDraft
     ? 0 // Draft shows its own summary in title area
     : data.commit
-      ? (data.commit.content?.frames?.length ?? 0)
+      ? (data.commit.content?.trees?.length ?? 0)
       : 0;
 
   // Constellation mode — render minified dot at low zoom

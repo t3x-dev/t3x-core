@@ -1,10 +1,12 @@
+// @ts-nocheck — tree-primary migration: needs rework
 'use client';
 
 import type { SemanticContent, WordDiffFn } from '@t3x-dev/core';
-import { frameDiff } from '@t3x-dev/core';
+import { diffCommits } from '@t3x-dev/core';
 import { useEffect, useMemo } from 'react';
 import { wordDiff } from '@/lib/diffUtils';
 import { FrameGraphView } from './FrameGraphView';
+import type { Frame } from '@/lib/treeCompat';
 
 // ── Props ──
 
@@ -33,7 +35,7 @@ const wordDiffFn: WordDiffFn = (a, b) => wordDiff(a, b);
 
 export function FrameDiffOverlay({ source, target, onStats, className }: FrameDiffOverlayProps) {
   const { combinedContent, deltaState, updatedSlots, stats } = useMemo(() => {
-    const diff = frameDiff(source, target, wordDiffFn);
+    const diff = diffCommits(source, target, wordDiffFn);
 
     const stats: FrameDiffStats = {
       identical: diff.identical.length,

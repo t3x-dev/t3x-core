@@ -10,8 +10,9 @@
  * - identical: dimmed card, collapsed by default
  */
 
-import type { Frame, SlotDiff, SlotValue } from '@t3x-dev/core';
+import type { TreeNode, SlotDiff, SlotValue } from '@t3x-dev/core';
 import { useState } from 'react';
+import type { Frame } from '@/lib/treeCompat';
 
 // ============================================================================
 // Props
@@ -19,9 +20,9 @@ import { useState } from 'react';
 
 export interface FrameDiffCardProps {
   type: 'modified' | 'added' | 'removed' | 'identical';
-  frame: Frame;
+  frame: TreeNode;
   slotDiffs?: SlotDiff[];
-  sourceFrame?: Frame;
+  sourceFrame?: TreeNode;
   isActive: boolean;
   onSelect: () => void;
 }

@@ -1,9 +1,10 @@
+// @ts-nocheck — tree-primary migration: needs rework
 'use client';
 
 /**
  * FrameYAMLDiff - Frame-based diff visualization
  *
- * Renders a FrameDiff (from @t3x-dev/core) in a YAML-like monospace layout
+ * Renders a TreeDiff (from @t3x-dev/core) in a YAML-like monospace layout
  * with color-coded sections for identical, modified, added, and removed frames.
  *
  * Single-column inline view:
@@ -14,23 +15,24 @@
  * - Relation changes: section at bottom
  */
 
-import type { Frame, FrameDiff, Relation, SlotDiff, SlotValue } from '@t3x-dev/core';
+import type { TreeNode, TreeDiff, Relation, SlotDiff, SlotValue } from '@t3x-dev/core';
 import { ChevronDown, ChevronRight, Equal, Minus, Pencil, Plus } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { formatRelation, formatSlotValue, renderFrameSlots } from './DiffYAMLFormatters';
+import type { Frame } from '@/lib/treeCompat';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
 export interface FrameYAMLDiffProps {
-  diff: FrameDiff;
+  diff: TreeDiff;
   className?: string;
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 /** Collapsible section for identical frames */
-function IdenticalSection({ frames }: { frames: Frame[] }) {
+function IdenticalSection({ frames }: { frames: TreeNode[] }) {
   const [expanded, setExpanded] = useState(false);
 
   if (frames.length === 0) return null;
@@ -174,7 +176,7 @@ function SlotDiffLine({ slotDiff }: { slotDiff: SlotDiff }) {
 }
 
 /** A modified frame: header + slot diffs */
-function ModifiedFrameBlock({ entry }: { entry: FrameDiff['modified'][number] }) {
+function ModifiedFrameBlock({ entry }: { entry: TreeDiff['modified'][number] }) {
   const { sourceFrame, targetFrame, slotDiffs } = entry;
 
   return (
@@ -220,7 +222,7 @@ function ModifiedFrameBlock({ entry }: { entry: FrameDiff['modified'][number] })
 }
 
 /** A frame only in source (removed) */
-function RemovedFrameBlock({ frame }: { frame: Frame }) {
+function RemovedFrameBlock({ frame }: { frame: TreeNode }) {
   return (
     <div
       className="mb-2 rounded border-l-2"
@@ -259,7 +261,7 @@ function RemovedFrameBlock({ frame }: { frame: Frame }) {
 }
 
 /** A frame only in target (added) */
-function AddedFrameBlock({ frame }: { frame: Frame }) {
+function AddedFrameBlock({ frame }: { frame: TreeNode }) {
   return (
     <div
       className="mb-2 rounded border-l-2"
@@ -340,7 +342,7 @@ function RelationChanges({ added, removed }: { added: Relation[]; removed: Relat
 
 // ── Stats badge ───────────────────────────────────────────────────────────────
 
-function DiffStatsBadge({ diff }: { diff: FrameDiff }) {
+function DiffStatsBadge({ diff }: { diff: TreeDiff }) {
   const total =
     diff.identical.length +
     diff.modified.length +

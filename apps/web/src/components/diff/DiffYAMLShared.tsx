@@ -1,9 +1,10 @@
 'use client';
 
-import type { FrameDiff, Relation } from '@t3x-dev/core';
+import type { TreeDiff, Relation } from '@t3x-dev/core';
 import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
 import type { AlignedFrame } from './DiffYAMLUtils';
+import type { Frame } from '@/lib/treeCompat';
 
 // ── CSS custom properties for diff colors ──
 // Light mode values (default); dark mode overridden via .dark class in globals.css
@@ -80,7 +81,7 @@ export interface FrameRelation {
 /**
  * Gather relations relevant to a given frame, annotated with diff status.
  */
-export function getFrameRelations(frameId: string, diff: FrameDiff): FrameRelation[] {
+export function getFrameRelations(frameId: string, diff: TreeDiff): FrameRelation[] {
   const results: FrameRelation[] = [];
   const seen = new Set<string>();
 

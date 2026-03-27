@@ -409,7 +409,7 @@ export function CommittedCommitView({
                         >
                           JSON
                         </TabsTrigger>
-                        {commit && getSemanticContent(commit as ApiCommit).frames.length > 0 && (
+                        {commit && getSemanticContent(commit as ApiCommit).trees.length > 0 && (
                           <TabsTrigger
                             value="frame-graph"
                             className="rounded-none border-b-2 border-transparent data-[state=active]:border-[var(--accent-commit)] data-[state=active]:text-[var(--text-primary)] data-[state=active]:shadow-none text-[var(--text-tertiary)] text-xs px-3 py-2"
@@ -465,7 +465,7 @@ export function CommittedCommitView({
                         </pre>
                       </TabsContent>
 
-                      {commit && getSemanticContent(commit as ApiCommit).frames.length > 0 && (
+                      {commit && getSemanticContent(commit as ApiCommit).trees.length > 0 && (
                         <TabsContent value="frame-graph">
                           <div className="h-[400px] border border-[var(--stroke-divider)] rounded-md overflow-hidden">
                             <FrameGraphView
@@ -480,9 +480,9 @@ export function CommittedCommitView({
                         <RelationsTab
                           commitHash={data.commitHash || ''}
                           sentences={
-                            commit.content?.frames
+                            commit.content?.trees
                               ? (
-                                  commit.content.frames as Array<{
+                                  commit.content.trees as Array<{
                                     id: string;
                                     type: string;
                                     slots: Record<string, unknown>;
