@@ -32,12 +32,7 @@ describe('Leaf History Storage', () => {
       parents: [],
       author: { type: 'human', name: 'Test' },
       content: {
-        frames: [{ id: 's_1', text: 'Test sentence' }].map((s) => ({
-          id: s.id,
-          type: 'legacy_sentence' as const,
-          slots: { text: s.text },
-          confidence: s.confidence,
-        })),
+        trees: [{ key: 'test', slots: { text: 'Test sentence' }, children: [] }],
         relations: [],
       },
       project_id: testProjectId,
@@ -136,12 +131,7 @@ describe('Leaf History Storage', () => {
         parents: [],
         author: { type: 'human', name: 'Test' },
         content: {
-          frames: [{ id: 's_multi', text: 'Multi history' }].map((s) => ({
-            id: s.id,
-            type: 'legacy_sentence' as const,
-            slots: { text: s.text },
-            confidence: s.confidence,
-          })),
+          trees: [{ key: 'multi', slots: { text: 'Multi history' }, children: [] }],
           relations: [],
         },
         project_id: testProjectId,
@@ -202,12 +192,7 @@ describe('Leaf History Storage', () => {
         parents: [],
         author: { type: 'human', name: 'Test' },
         content: {
-          frames: [{ id: 's_count', text: 'Count test' }].map((s) => ({
-            id: s.id,
-            type: 'legacy_sentence' as const,
-            slots: { text: s.text },
-            confidence: s.confidence,
-          })),
+          trees: [{ key: 'count', slots: { text: 'Count test' }, children: [] }],
           relations: [],
         },
         project_id: testProjectId,
@@ -275,12 +260,7 @@ describe('Leaf History Storage', () => {
         parents: [],
         author: { type: 'human', name: 'Test' },
         content: {
-          frames: [{ id: 's_delall', text: 'Delete all' }].map((s) => ({
-            id: s.id,
-            type: 'legacy_sentence' as const,
-            slots: { text: s.text },
-            confidence: s.confidence,
-          })),
+          trees: [{ key: 'delall', slots: { text: 'Delete all' }, children: [] }],
           relations: [],
         },
         project_id: testProjectId,
@@ -374,12 +354,7 @@ describe('Leaf History Storage', () => {
         parents: [],
         author: { type: 'human', name: 'Test' },
         content: {
-          frames: [{ id: 's_attempt_order', text: 'Attempt ordering test' }].map((s) => ({
-            id: s.id,
-            type: 'legacy_sentence' as const,
-            slots: { text: s.text },
-            confidence: s.confidence,
-          })),
+          trees: [{ key: 'attempt_order', slots: { text: 'Attempt ordering test' }, children: [] }],
           relations: [],
         },
         project_id: testProjectId,

@@ -48,12 +48,7 @@ describe('Leaves Storage', () => {
       parents: [],
       author: { type: 'human', name: 'Test Author' },
       content: {
-        frames: [{ id: 's_1', text: 'Test sentence' }].map((s) => ({
-          id: s.id,
-          type: 'legacy_sentence' as const,
-          slots: { text: s.text },
-          confidence: s.confidence,
-        })),
+        trees: [{ key: 'test', slots: { text: 'Test sentence' }, children: [] }],
         relations: [],
       },
       project_id: testProjectId,
@@ -217,12 +212,7 @@ describe('Leaves Storage', () => {
         parents: [],
         author: { type: 'human', name: 'Commit Author' },
         content: {
-          frames: [{ id: 's_commit', text: 'Commit sentence' }].map((s) => ({
-            id: s.id,
-            type: 'legacy_sentence' as const,
-            slots: { text: s.text },
-            confidence: s.confidence,
-          })),
+          trees: [{ key: 'commit', slots: { text: 'Commit sentence' }, children: [] }],
           relations: [],
         },
         project_id: testProjectId,
@@ -251,12 +241,7 @@ describe('Leaves Storage', () => {
         parents: [],
         author: { type: 'human', name: 'Order Author' },
         content: {
-          frames: [{ id: 's_order', text: 'Order sentence' }].map((s) => ({
-            id: s.id,
-            type: 'legacy_sentence' as const,
-            slots: { text: s.text },
-            confidence: s.confidence,
-          })),
+          trees: [{ key: 'order', slots: { text: 'Order sentence' }, children: [] }],
           relations: [],
         },
         project_id: testProjectId,
@@ -289,12 +274,7 @@ describe('Leaves Storage', () => {
         parents: [],
         author: { type: 'human', name: 'Limit Author' },
         content: {
-          frames: [{ id: 's_limit', text: 'Limit sentence' }].map((s) => ({
-            id: s.id,
-            type: 'legacy_sentence' as const,
-            slots: { text: s.text },
-            confidence: s.confidence,
-          })),
+          trees: [{ key: 'limit', slots: { text: 'Limit sentence' }, children: [] }],
           relations: [],
         },
         project_id: testProjectId,
@@ -324,12 +304,7 @@ describe('Leaves Storage', () => {
         parents: [],
         author: { type: 'human', name: 'Type Filter Author' },
         content: {
-          frames: [{ id: 's_type_filter', text: 'Type filter sentence' }].map((s) => ({
-            id: s.id,
-            type: 'legacy_sentence' as const,
-            slots: { text: s.text },
-            confidence: s.confidence,
-          })),
+          trees: [{ key: 'type_filter', slots: { text: 'Type filter sentence' }, children: [] }],
           relations: [],
         },
         project_id: testProjectId,
@@ -373,12 +348,7 @@ describe('Leaves Storage', () => {
         parents: [],
         author: { type: 'human', name: 'Project Author' },
         content: {
-          frames: [{ id: 's_proj', text: 'Project sentence' }].map((s) => ({
-            id: s.id,
-            type: 'legacy_sentence' as const,
-            slots: { text: s.text },
-            confidence: s.confidence,
-          })),
+          trees: [{ key: 'project', slots: { text: 'Project sentence' }, children: [] }],
           relations: [],
         },
         project_id: project.projectId,
@@ -409,12 +379,7 @@ describe('Leaves Storage', () => {
         parents: [],
         author: { type: 'human', name: 'Page Author' },
         content: {
-          frames: [{ id: 's_page', text: 'Page sentence' }].map((s) => ({
-            id: s.id,
-            type: 'legacy_sentence' as const,
-            slots: { text: s.text },
-            confidence: s.confidence,
-          })),
+          trees: [{ key: 'page', slots: { text: 'Page sentence' }, children: [] }],
           relations: [],
         },
         project_id: project.projectId,
@@ -447,12 +412,7 @@ describe('Leaves Storage', () => {
         parents: [],
         author: { type: 'human', name: 'Type Filter Project Author' },
         content: {
-          frames: [{ id: 's_type_proj', text: 'Type filter project sentence' }].map((s) => ({
-            id: s.id,
-            type: 'legacy_sentence' as const,
-            slots: { text: s.text },
-            confidence: s.confidence,
-          })),
+          trees: [{ key: 'type_proj', slots: { text: 'Type filter project sentence' }, children: [] }],
           relations: [],
         },
         project_id: project.projectId,
@@ -691,12 +651,7 @@ describe('Leaves Storage', () => {
         parents: [],
         author: { type: 'human', name: 'Batch Author' },
         content: {
-          frames: [{ id: 's_batch', text: 'Batch sentence' }].map((s) => ({
-            id: s.id,
-            type: 'legacy_sentence' as const,
-            slots: { text: s.text },
-            confidence: s.confidence,
-          })),
+          trees: [{ key: 'batch', slots: { text: 'Batch sentence' }, children: [] }],
           relations: [],
         },
         project_id: testProjectId,
@@ -749,12 +704,7 @@ describe('Leaves Storage', () => {
         parents: [],
         author: { type: 'human', name: 'Order Author' },
         content: {
-          frames: [{ id: 's_order2', text: 'Order sentence' }].map((s) => ({
-            id: s.id,
-            type: 'legacy_sentence' as const,
-            slots: { text: s.text },
-            confidence: s.confidence,
-          })),
+          trees: [{ key: 'order2', slots: { text: 'Order sentence' }, children: [] }],
           relations: [],
         },
         project_id: testProjectId,
@@ -861,12 +811,7 @@ describe('Leaves Storage', () => {
         parents: [],
         author: { type: 'human', name: 'Cursor Author' },
         content: {
-          frames: [{ id: 's_cursor', text: 'Cursor sentence' }].map((s) => ({
-            id: s.id,
-            type: 'legacy_sentence' as const,
-            slots: { text: s.text },
-            confidence: s.confidence,
-          })),
+          trees: [{ key: 'cursor', slots: { text: 'Cursor sentence' }, children: [] }],
           relations: [],
         },
         project_id: cursorProjectId,
@@ -968,12 +913,7 @@ describe('Leaves Storage', () => {
         parents: [],
         author: { type: 'human', name: 'Cursor Commit Author' },
         content: {
-          frames: [{ id: 's_cc', text: 'Cursor commit sentence' }].map((s) => ({
-            id: s.id,
-            type: 'legacy_sentence' as const,
-            slots: { text: s.text },
-            confidence: s.confidence,
-          })),
+          trees: [{ key: 'cursor_commit', slots: { text: 'Cursor commit sentence' }, children: [] }],
           relations: [],
         },
         project_id: cursorProjId,

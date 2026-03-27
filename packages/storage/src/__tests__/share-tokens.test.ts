@@ -43,12 +43,7 @@ describe('Share Tokens Storage', () => {
       parents: [],
       author: { type: 'human', name: 'Test Author' },
       content: {
-        frames: [{ id: 's_1', text: 'Test sentence for share tokens' }].map((s) => ({
-          id: s.id,
-          type: 'legacy_sentence' as const,
-          slots: { text: s.text },
-          confidence: s.confidence,
-        })),
+        trees: [{ key: 'test', slots: { text: 'Test sentence for share tokens' }, children: [] }],
         relations: [],
       },
       project_id: testProjectId,

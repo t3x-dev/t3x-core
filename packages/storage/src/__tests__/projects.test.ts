@@ -241,12 +241,11 @@ describe('Projects Storage', () => {
         {
           author: { type: 'human', name: 'Test User' },
           content: {
-            frames: [
+            trees: [
               {
-                id: 'f_001',
-                type: 'test_knowledge',
+                key: 'test_knowledge',
                 slots: { text: 'Test sentence' },
-                confidence: 1.0,
+                children: [],
               },
             ],
             relations: [],
