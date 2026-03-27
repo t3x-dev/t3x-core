@@ -4,7 +4,22 @@
  * Integration tests for POST /v1/drafts/:id/commit when extraction_mode='llm'.
  */
 
-import type { SemanticPoint } from '@t3x-dev/core';
+// SemanticPoint removed from core in tree-primary refactor; define locally
+interface SemanticPoint {
+  id: string;
+  text: string;
+  confidence?: number;
+  zone: string;
+  status: string;
+  staged: boolean;
+  evidence?: Array<{ conversation_id?: string; turn_hash?: string; start_char?: number; end_char?: number; role?: string; quoted_text?: string; match_score?: number; relevance?: string; enabled?: boolean }>;
+  position?: number;
+  extraction_mode?: string;
+  inference_type?: string;
+  routing_reason?: string;
+  inherited_from?: string;
+  low_coverage?: boolean;
+}
 import type { AnyDB } from '@t3x-dev/storage';
 import { insertDraft, insertProject, updateDraft } from '@t3x-dev/storage';
 import { Hono } from 'hono';
@@ -131,7 +146,7 @@ describe('POST /v1/drafts/{id}/commit (LLM mode)', () => {
     expect(data.data.commit.hash).toMatch(/^sha256:/);
 
     // Verify frames were created from SPs
-    const frames = data.data.commit.content.frames;
+    const frames = data.data.commit.content.trees;
     expect(frames).toHaveLength(2);
     expect(frames[0].slots.text).toBe('User prefers dark mode.');
     expect(frames[1].slots.text).toBe('Dark mode reduces eye strain.');
@@ -170,7 +185,7 @@ describe('POST /v1/drafts/{id}/commit (LLM mode)', () => {
     expect(data.success).toBe(true);
 
     // Only active SP should become a frame
-    const frames = data.data.commit.content.frames;
+    const frames = data.data.commit.content.trees;
     expect(frames).toHaveLength(1);
     expect(frames[0].slots.text).toBe('Active point.');
   });

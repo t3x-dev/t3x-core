@@ -15,11 +15,11 @@ import { createTestDB, testData } from './setup';
 
 const testAuthor: Author = { type: 'human', name: 'Test User' };
 
-function makeFrames(texts: string[]) {
+function makeTrees(texts: string[]) {
   return texts.map((text, i) => ({
-    id: `f_${i}`,
-    type: 'legacy_sentence' as const,
+    key: `node_${i}`,
     slots: { text },
+    children: [] as ReturnType<typeof makeTrees>,
   }));
 }
 
@@ -56,7 +56,7 @@ describe('Hash Chain Verification', () => {
       await createCommit(db, {
         project_id: projectId,
         author: testAuthor,
-        content: { frames: makeFrames(['Budget is $3000']), relations: [] },
+        content: { trees: makeTrees(['Budget is $3000']), relations: [] },
         branch: 'verify-single',
       });
 
@@ -72,7 +72,7 @@ describe('Hash Chain Verification', () => {
       const root = await createCommit(db, {
         project_id: projectId,
         author: testAuthor,
-        content: { frames: makeFrames(['Root sentence']), relations: [] },
+        content: { trees: makeTrees(['Root sentence']), relations: [] },
         branch: 'verify-chain',
       });
 
@@ -80,7 +80,7 @@ describe('Hash Chain Verification', () => {
         project_id: projectId,
         author: testAuthor,
         parents: [root.hash],
-        content: { frames: makeFrames(['Child sentence']), relations: [] },
+        content: { trees: makeTrees(['Child sentence']), relations: [] },
         branch: 'verify-chain',
       });
 
@@ -98,7 +98,7 @@ describe('Hash Chain Verification', () => {
         project_id: projectId,
         author: testAuthor,
         parents: [fakeParentHash],
-        content: { frames: makeFrames(['Orphan sentence']), relations: [] },
+        content: { trees: makeTrees(['Orphan sentence']), relations: [] },
         branch: 'verify-orphan',
       });
 
@@ -128,7 +128,7 @@ describe('Hash Chain Verification', () => {
       const commit = await createCommit(db, {
         project_id: projectId,
         author: testAuthor,
-        content: { frames: makeFrames(['Valid commit']), relations: [] },
+        content: { trees: makeTrees(['Valid commit']), relations: [] },
         branch: 'verify-single-check',
       });
 
@@ -140,15 +140,14 @@ describe('Hash Chain Verification', () => {
     it('fails for tampered commit', () => {
       const commit = {
         hash: 'sha256:fake',
-        schema: 't3x/commit/5' as const,
+        schema: 't3x/commit/1' as const,
         parents: [] as string[],
         author: testAuthor,
         committed_at: new Date().toISOString(),
-        content: { frames: makeFrames(['Hello']), relations: [] },
+        content: { trees: makeTrees(['Hello']), relations: [] },
         project_id: projectId,
         message: null,
         branch: 'main',
-        sources: null,
         provenance: null,
       };
 

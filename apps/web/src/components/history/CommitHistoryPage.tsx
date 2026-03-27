@@ -12,7 +12,6 @@
  * - Relative time + hover tooltip
  */
 
-import { upgradeLegacyCommit } from '@t3x-dev/core';
 import { ArrowLeft, GitBranch, History, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -37,7 +36,7 @@ interface CommitWithDiffStats {
     modifiedCount: number;
     removedCount: number;
   } | null;
-  frameCount?: number;
+  nodeCount?: number;
 }
 
 // ============================================================================
@@ -106,14 +105,8 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
                   // Diff failure is non-critical
                 }
               }
-              let frameCount = 0;
-              try {
-                const upgraded = upgradeLegacyCommit(commit as any);
-                frameCount = upgraded?.content?.frames?.length ?? 0;
-              } catch {
-                // Upgrade failure is non-critical — show 0 frames
-              }
-              return { commit, diffStats, frameCount };
+              const nodeCount = (commit as { content?: { trees?: unknown[] } })?.content?.trees?.length ?? 0;
+              return { commit, diffStats, nodeCount };
             })
           );
           results.push(...batchResults);
@@ -260,7 +253,7 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
                   branch={item.commit.branch}
                   parentCount={(item.commit.parents ?? []).length}
                   diffStats={item.diffStats}
-                  frameCount={item.frameCount}
+                  nodeCount={item.nodeCount}
                   isFirst={index === 0}
                   isLast={index === commits.length - 1}
                   isActive={activeHash === item.commit.hash}

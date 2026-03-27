@@ -2,14 +2,14 @@
 
 /**
  * SourceSlideIn — slide-in panel showing original conversation context
- * for a clicked YAML slot in a frame card.
+ * for a clicked YAML slot in a tree card.
  *
  * Opens when `sourceViewer.isOpen` is true in commitDetailStore.
  * Auto-scrolls to the referenced turn. Highlights source turn with
  * colored border + reduced opacity on non-source turns.
  */
 
-import type { SlotSourceRef } from '@t3x-dev/core';
+;
 import { ChevronRight, ExternalLink, MessageSquare, X } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -55,18 +55,20 @@ function resolveChangeStatus(
 }
 
 /**
- * Get the `SlotSourceRef` for the active slot from the active frame.
- * Searches current frame for 'current' tab, previousFrame for 'previous' tab.
+ * Get the `SlotSourceRef` for the active slot from the active node.
+ * Searches current tree for 'current' tab, previousNode for 'previous' tab.
  */
 function getSlotSource(
   slotKey: string | null,
-  activeTab: 'previous' | 'current',
-  frame: import('@t3x-dev/core').Frame | undefined,
-  previousFrame: import('@t3x-dev/core').Frame | undefined
-): SlotSourceRef | undefined {
+  _activeTab: 'previous' | 'current',
+  _node: unknown,
+  _previousNode: unknown
+): { turn_hash?: string; turn?: string; start_char?: number; end_char?: number } | undefined {
   if (!slotKey) return undefined;
-  const targetFrame = activeTab === 'previous' ? previousFrame : frame;
-  return targetFrame?.slot_sources?.[slotKey];
+  const targetNode = (_activeTab === 'previous' ? _previousNode : _node) as
+    | { slot_sources?: Record<string, { turn_hash?: string; turn?: string; start_char?: number; end_char?: number }> }
+    | undefined;
+  return targetNode?.slot_sources?.[slotKey];
 }
 
 /**
@@ -152,7 +154,7 @@ function TabToggle({
 // ============================================================================
 
 export function SourceSlideIn({ projectId }: SourceSlideInProps) {
-  const { commit, enrichedFrames, activeFrameId, sourceViewer, closeSourceViewer, setSourceTab } =
+  const { commit, enrichedNodes, activeNodeId, sourceViewer, closeSourceViewer, setSourceTab } =
     useCommitDetailStore();
 
   const { isOpen, activeSlotKey, activeTab } = sourceViewer;
@@ -166,23 +168,23 @@ export function SourceSlideIn({ projectId }: SourceSlideInProps) {
   const sourceTurnRef = useRef<HTMLDivElement | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
-  // ── Derived: active enriched frame ──
-  const enrichedFrame = enrichedFrames.find((ef) => ef.frame.id === activeFrameId);
-  const activeFrame = enrichedFrame?.frame;
-  const previousFrame = enrichedFrame?.previousFrame;
-  const diffStatus = enrichedFrame?.diffStatus ?? 'identical';
+  // ── Derived: active enriched node ──
+  const enrichedNode = enrichedNodes.find((ef) => ef.path === activeNodeId);
+  const activeNode = enrichedNode?.node;
+  const previousNode = enrichedNode?.previousNode;
+  const diffStatus = enrichedNode?.diffStatus ?? 'identical';
 
   // ── Derived: slot source ref for current tab ──
-  const slotSource = getSlotSource(activeSlotKey, activeTab, activeFrame, previousFrame);
+  const slotSource = getSlotSource(activeSlotKey, activeTab, activeNode, previousNode);
 
   // ── Derived: slot values for value summary bar ──
   const currentSlotValue =
-    activeSlotKey && activeFrame ? slotValueToString(activeFrame.slots[activeSlotKey]) : '';
+    activeSlotKey && activeNode ? slotValueToString(activeNode.slots[activeSlotKey]) : '';
   const previousSlotValue =
-    activeSlotKey && previousFrame ? slotValueToString(previousFrame.slots[activeSlotKey]) : '';
+    activeSlotKey && previousNode ? slotValueToString(previousNode.slots[activeSlotKey]) : '';
 
   const changeStatus = resolveChangeStatus(activeSlotKey ?? '', activeTab, diffStatus);
-  const showTabs = diffStatus === 'modified' && !!previousFrame;
+  const showTabs = diffStatus === 'modified' && !!previousNode;
 
   // ── Fetch turns when panel opens ──
   const fetchTurns = useCallback(
@@ -279,7 +281,7 @@ export function SourceSlideIn({ projectId }: SourceSlideInProps) {
       created_at: turn.created_at,
       is_target: isTarget,
     };
-    if (isTarget && slotSource) {
+    if (isTarget && slotSource && slotSource.start_char != null && slotSource.end_char != null) {
       data.highlight = { start: slotSource.start_char, end: slotSource.end_char };
     }
     return data;

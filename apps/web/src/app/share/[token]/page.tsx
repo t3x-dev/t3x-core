@@ -74,7 +74,7 @@ interface CommitData {
   committed_at: string;
   content: {
     sentences?: Array<{ id: string; text: string; confidence?: number }>;
-    frames?: Array<{ id: string; type: string; slots: Record<string, unknown> }>;
+    trees?: Array<{ id: string; type: string; slots: Record<string, unknown>; key?: string; children?: unknown[] }>;
     relations?: Array<{ from: string; to: string; type: string }>;
   };
   project_id?: string;
@@ -523,7 +523,7 @@ function SharedComparisonView({ comparison }: { comparison: ComparisonData }) {
 function SharedCommitView({ commit }: { commit: CommitData }) {
   const shortHash = commit.hash.replace('sha256:', '').slice(0, 12);
   const sentences = commit.content.sentences ?? [];
-  const frames = commit.content.frames ?? [];
+  const trees = commit.content.trees ?? [];
   const relations = commit.content.relations ?? [];
 
   return (
@@ -565,25 +565,22 @@ function SharedCommitView({ commit }: { commit: CommitData }) {
           )}
         </div>
 
-        {/* Frames */}
-        {frames.length > 0 && (
+        {/* Trees */}
+        {trees.length > 0 && (
           <section>
             <h2 className="text-sm font-medium text-[var(--text-secondary)] mb-2">
-              Frames ({frames.length})
+              Trees ({trees.length})
             </h2>
             <div className="space-y-2">
-              {frames.map((frame) => (
-                <div key={frame.id} className={cn('rounded-lg px-4 py-3', glass.cardBase)}>
+              {trees.map((node, idx: number) => (
+                <div key={node.key || node.type || idx} className={cn('rounded-lg px-4 py-3', glass.cardBase)}>
                   <div className="flex items-center gap-2 mb-1">
                     <span className="font-mono text-xs text-[var(--accent-commit,#f59e0b)]">
-                      {frame.id}
-                    </span>
-                    <span className="rounded bg-[var(--hover-bg)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--text-tertiary)]">
-                      {frame.type}
+                      {node.key || node.type}
                     </span>
                   </div>
                   <div className="text-sm text-[var(--text-primary)]">
-                    {Object.entries(frame.slots).map(([key, val]) => (
+                    {Object.entries(node.slots).map(([key, val]) => (
                       <div key={key} className="flex gap-2 py-0.5">
                         <span className="shrink-0 text-[var(--text-tertiary)] text-xs font-mono">
                           {key}:
@@ -624,10 +621,10 @@ function SharedCommitView({ commit }: { commit: CommitData }) {
         )}
 
         {/* Sentences (V4 fallback) */}
-        {sentences.length > 0 && frames.length === 0 && (
+        {sentences.length > 0 && trees.length === 0 && (
           <section>
             <h2 className="text-sm font-medium text-[var(--text-secondary)] mb-2">
-              Frames ({sentences.length})
+              Trees ({sentences.length})
             </h2>
             <div className="space-y-2">
               {sentences.map((s) => (

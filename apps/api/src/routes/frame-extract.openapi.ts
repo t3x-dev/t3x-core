@@ -10,7 +10,7 @@
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
-  buildDraft,
+  applyDelta,
   checkDiffCompatibility,
   checkReadiness,
   computeSessionContext,
@@ -20,13 +20,16 @@ import {
   detectAmbiguity,
   detectDrift,
   type ExtractionStyleConfig,
-  type FrameExtractionTurn,
-  FrameExtractor,
+  type ExtractionTurn,
+  type ExtractionResult,
+  Extractor,
+  flattenTrees,
   fuzzyLocate,
   GateRunner,
   type LLMCallLogger,
   pipelineEmitter,
   preFilterDrift,
+  type SemanticContent,
   type SlotQuotesMap,
 } from '@t3x-dev/core';
 import {
@@ -215,18 +218,23 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
     const deltaRecords = topic_id
       ? await listDeltaLogByTopic(db, conversation_id, topic_id)
       : await listDeltaLogByConversation(db, conversation_id);
-    const currentSnapshot = buildDraft(toDeltaLogEntries(deltaRecords));
+    const emptySnapshot: SemanticContent = { trees: [], relations: [] };
+    const currentSnapshot = toDeltaLogEntries(deltaRecords).reduce(
+      (snap, entry) => applyDelta(snap, entry.delta),
+      emptySnapshot
+    );
+    const currentFlat = flattenTrees(currentSnapshot.trees);
 
-    // 5. Convert turns to FrameExtractionTurn format (include turn_hash for source tracking)
-    const extractionTurns: FrameExtractionTurn[] = selectedTurns.map((t) => ({
-      role: t.role as FrameExtractionTurn['role'],
+    // 5. Convert turns to ExtractionTurn format (include turn_hash for source tracking)
+    const extractionTurns: ExtractionTurn[] = selectedTurns.map((t) => ({
+      role: t.role as ExtractionTurn['role'],
       content: t.content,
       turn_hash: t.turnHash,
     }));
 
     // 5b. Calculate processedTurnCount — how many turns were present at the last extraction
     let processedTurnCount: number | undefined;
-    if (deltaRecords.length > 0 && currentSnapshot.frames.length > 0) {
+    if (deltaRecords.length > 0 && currentFlat.length > 0) {
       const lastDelta = deltaRecords[deltaRecords.length - 1];
       const lastExtractionTime = new Date(lastDelta.createdAt).getTime();
       processedTurnCount = selectedTurns.filter(
@@ -260,7 +268,7 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
 
     // ── Step 2: ReadinessGate ──
     if (!drift_decision && !force_extract) {
-      const isFirstExtraction = currentSnapshot.frames.length === 0;
+      const isFirstExtraction = currentFlat.length === 0;
       const readiness = checkReadiness(
         selectedTurns.map((t) => ({ role: t.role, content: t.content })),
         isFirstExtraction
@@ -277,7 +285,7 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
     }
 
     // ── Step 3: DriftDetector ──
-    if (!drift_decision && currentSnapshot.frames.length > 0) {
+    if (!drift_decision && currentFlat.length > 0) {
       // Only run drift detection when there's existing content (steady phase)
       const extractionCount = deltaRecords.filter(
         (d) => d.source === 'pipeline' || d.source === 'llm_extraction'
@@ -285,8 +293,8 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
 
       if (extractionCount >= 2) {
         // Collect existing frame info for pre-filter
-        const frameTypes = currentSnapshot.frames.map((f) => f.type);
-        const slotValues = currentSnapshot.frames.flatMap((f) =>
+        const frameTypes = currentFlat.map((f) => f.type);
+        const slotValues = currentFlat.flatMap((f) =>
           Object.values(f.slots).filter((v): v is string => typeof v === 'string')
         );
         const newTurnContent = selectedTurns
@@ -308,7 +316,7 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
                   role: t.role,
                   content: t.content,
                 }));
-                const topicName = currentSnapshot.frames[0]?.type ?? 'unknown';
+                const topicName = currentFlat[0]?.type ?? 'unknown';
                 // biome-ignore lint/suspicious/noExplicitAny: generic error handler
                 return detectDrift(provider as any, topicName, frameTypes, recentTurns);
               });
@@ -322,7 +330,7 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
                       drift: {
                         relation: driftResult.relationType,
                         new_topic: driftResult.newTopicName,
-                        old_topic: currentSnapshot.frames[0]?.type,
+                        old_topic: currentFlat[0]?.type,
                       },
                       choices: ['keep_old', 'keep_new', 'keep_both_separate', 'keep_both_together'],
                     },
@@ -342,23 +350,23 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
     const reg = await getProviderRegistry();
     const trackedUsage = { inputTokens: 0, outputTokens: 0 };
     let trackedModel = 'unknown';
-    const result = await reg.tryWithFallback('generation', (provider) => {
+    const result = await reg.tryWithFallback('generation', (provider): Promise<ExtractionResult> => {
       // biome-ignore lint/suspicious/noExplicitAny: generic error handler
       const { provider: tracked, usage } = wrapWithUsageTracking(provider as any);
       trackedUsage.inputTokens = 0;
       trackedUsage.outputTokens = 0;
       trackedModel = tracked.id;
-      const extractor = new FrameExtractor(tracked);
+      const extractor = new Extractor(tracked);
       return extractor
         .extract(
           {
             turns: extractionTurns,
-            snapshot: currentSnapshot.frames.length > 0 ? currentSnapshot : undefined,
+            snapshot: currentFlat.length > 0 ? currentSnapshot : undefined,
             processedTurnCount,
           },
           resolvedStyle
         )
-        .then((r) => {
+        .then((r: ExtractionResult) => {
           trackedUsage.inputTokens = usage.inputTokens;
           trackedUsage.outputTokens = usage.outputTokens;
           return r;
@@ -434,16 +442,16 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
         );
 
         if (Object.keys(slotSources).length > 0) {
+          // Extract just the quote strings for slot_quotes (Record<string, string>)
+          const quoteStrings: Record<string, string> = {};
+          for (const [k, v] of Object.entries(slotSources)) {
+            quoteStrings[k] = typeof v === 'string' ? v : (v.quote ?? '');
+          }
           if (change.action === 'add') {
-            change.frame.slot_sources = slotSources;
+            change.node.slot_quotes = { ...change.node.slot_quotes, ...quoteStrings };
           } else if (change.action === 'update') {
-            // Merge new slot_sources into the existing frame in the snapshot
-            const targetFrame = result.snapshot.frames.find(
-              (f: { id: string }) => f.id === change.target
-            );
-            if (targetFrame) {
-              targetFrame.slot_sources = { ...targetFrame.slot_sources, ...slotSources };
-            }
+            // Merge new slot_quotes into the change
+            change.slot_quotes = { ...change.slot_quotes, ...quoteStrings };
           }
         }
       }
@@ -469,7 +477,7 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
         async (pipelineProvider) => {
           // biome-ignore lint/suspicious/noExplicitAny: generic error handler
           const pipeline = createMeaningPipeline(pipelineProvider as any);
-          const isIncremental = currentSnapshot.frames.length > 0;
+          const isIncremental = currentFlat.length > 0;
           return pipeline.run(
             result.snapshot,
             extractionTurns,
@@ -552,7 +560,7 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
     }
 
     // DiffCompatibilityCheck (non-blocking, log only)
-    if (currentSnapshot.frames.length > 0) {
+    if (currentFlat.length > 0) {
       const diffCheck = checkDiffCompatibility(currentSnapshot, result.delta);
       if (!diffCheck.compatible) {
         console.warn(`[gate] DiffCompatibilityCheck warnings: ${diffCheck.errors.join('; ')}`);
@@ -586,12 +594,12 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
     let resolvedTopicId = topic_id;
     if (!resolvedTopicId) {
       const existingTopics = await listTopicsByConversation(db, conversation_id);
-      if (existingTopics.length === 0 && organizedSnapshot.frames.length > 0) {
-        const rootFrame = organizedSnapshot.frames[0];
+      if (existingTopics.length === 0 && organizedSnapshot.trees.length > 0) {
+        const rootNode = organizedSnapshot.trees[0];
         const newTopic = await createTopic(db, {
           conversationId: conversation_id,
           projectId: conversation.projectId,
-          name: rootFrame.type,
+          name: rootNode.key,
         });
         resolvedTopicId = newTopic.id;
       } else if (existingTopics.length === 1) {
@@ -608,7 +616,7 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
     if (extractionDelta.drift_detected && extractionDelta.changes.length === 0) {
       pipelineEmitter.emit('topic.changed', {
         conversationId: conversation_id,
-        oldTopic: currentSnapshot.frames[0]?.type,
+        oldTopic: currentFlat[0]?.type,
         newTopic: extractionDelta.new_topic ?? 'unknown',
       });
       return c.json(
@@ -617,7 +625,7 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
           data: {
             status: 'drift_detected' as const,
             drift: {
-              old_topic: currentSnapshot.frames[0]?.type,
+              old_topic: currentFlat[0]?.type,
             },
             choices: ['keep_old', 'keep_new', 'keep_both_separate', 'keep_both_together'],
           },

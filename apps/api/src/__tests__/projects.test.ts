@@ -184,9 +184,9 @@ describe('Projects Routes', () => {
         project_id: project.projectId,
         author: { type: 'human', name: 'Tester' },
         content: {
-          frames: [{ id: 's_1', type: 'legacy_sentence', slots: { text: 'Test sentence' } }],
+          trees: [{ key: 's_1', slots: { text: 'Test sentence' }, children: [] }],
           relations: [],
-        },
+        } as any,
         branch: 'main',
       });
 
@@ -218,11 +218,11 @@ describe('Projects Routes', () => {
         project_id: project.projectId,
         author: { type: 'human', name: 'Tester' },
         content: {
-          frames: [
-            { id: 's_mm1', type: 'legacy_sentence', slots: { text: 'Merkle mismatch test' } },
+          trees: [
+            { key: 's_mm1', slots: { text: 'Merkle mismatch test' }, children: [] },
           ],
           relations: [],
-        },
+        } as any,
         branch: 'main',
       });
 

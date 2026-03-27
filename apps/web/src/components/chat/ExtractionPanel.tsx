@@ -1,6 +1,6 @@
 'use client';
 
-import type { Frame } from '@t3x-dev/core';
+import type { TreeNode } from '@t3x-dev/core';
 import { motion } from 'framer-motion';
 import { GitCommit, LayoutGrid, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -9,9 +9,10 @@ import { toast } from 'sonner';
 import { useExtractionPanelStore } from '@/store/extractionPanelStore';
 import { AdvisoryPanel } from './AdvisoryPanel';
 import { CommitDropdown } from './CommitDropdown';
-import { FrameYAMLView } from './FrameYAMLView';
+import { YAMLView } from './YAMLView';
 import { PreviewPanel } from './PreviewPanel';
 import { TopicMap } from './TopicMap';
+import { type CompatNode, contentToNodes, treesToNodes } from '@/lib/treeCompat';
 
 // ── Panel widths ──
 
@@ -24,11 +25,11 @@ const PANEL_WIDTHS: Record<string, number> = {
 // ── Collapsed rail ──
 
 function CollapsedRail({
-  frameCount,
+  nodeCount,
   isExtracting,
   onExpand,
 }: {
-  frameCount: number;
+  nodeCount: number;
   isExtracting: boolean;
   onExpand: () => void;
 }) {
@@ -45,9 +46,9 @@ function CollapsedRail({
         ) : (
           <LayoutGrid className="h-4 w-4" />
         )}
-        {frameCount > 0 && (
+        {nodeCount > 0 && (
           <span className="rounded-full bg-[var(--accent-commit)] px-1.5 py-0.5 text-[9px] font-bold text-white leading-none">
-            {frameCount}
+            {nodeCount}
           </span>
         )}
       </button>
@@ -72,17 +73,17 @@ function CommitPreviewSection() {
   const commitBranch = useExtractionPanelStore((s) => s.commitBranch);
   const isCommitting = useExtractionPanelStore((s) => s.isCommitting);
   const commitError = useExtractionPanelStore((s) => s.commitError);
-  const selectDeltaFrames = useExtractionPanelStore((s) => s.selectDeltaFrames);
-  const commitFrames = useExtractionPanelStore((s) => s.commitFrames);
+  const selectDeltaNodes = useExtractionPanelStore((s) => s.selectDeltaNodes);
+  const commitNodes = useExtractionPanelStore((s) => s.commitNodes);
   const setPanelMode = useExtractionPanelStore((s) => s.setPanelMode);
   const clearCommitError = useExtractionPanelStore((s) => s.clearCommitError);
 
   const [commitMessage, setCommitMessage] = useState('');
-  const deltaFrames: Frame[] = selectDeltaFrames();
+  const deltaNodes: TreeNode[] = selectDeltaNodes();
 
   const handleConfirm = async () => {
     try {
-      const result = await commitFrames(commitMessage);
+      const result = await commitNodes(commitMessage);
       const commitUrl = projectId
         ? `/project/${projectId}/commit/${encodeURIComponent(result.hash)}`
         : null;
@@ -106,17 +107,17 @@ function CommitPreviewSection() {
       <div className="flex items-center justify-between">
         <span className="text-xs font-semibold text-[var(--text-primary)]">Commit Preview</span>
         <span className="text-[10px] text-[var(--text-tertiary)]">
-          {deltaFrames.length} new frame{deltaFrames.length !== 1 ? 's' : ''}
+          {deltaNodes.length} new tree{deltaNodes.length !== 1 ? 's' : ''}
         </span>
       </div>
 
       <div className="flex flex-col gap-1 max-h-40 overflow-y-auto">
-        {deltaFrames.length === 0 ? (
+        {deltaNodes.length === 0 ? (
           <div className="text-[11px] text-[var(--text-tertiary)] italic py-2">
-            All frames already committed — up to date
+            All trees already committed — up to date
           </div>
         ) : (
-          deltaFrames.map((f) => {
+          deltaNodes.map((f) => {
             const summary = `[${f.type}] ${Object.entries(f.slots)
               .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`)
               .join('; ')}`;
@@ -148,7 +149,7 @@ function CommitPreviewSection() {
         placeholder="Commit message (optional)"
         className="w-full rounded border border-[var(--stroke-default)] bg-[var(--surface-panel)] px-2 py-1.5 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--accent-commit)]"
         onKeyDown={(e) => {
-          if (e.key === 'Enter' && !isCommitting && deltaFrames.length > 0) handleConfirm();
+          if (e.key === 'Enter' && !isCommitting && deltaNodes.length > 0) handleConfirm();
           if (e.key === 'Escape') setPanelMode('default');
         }}
         disabled={isCommitting}
@@ -175,7 +176,7 @@ function CommitPreviewSection() {
         <button
           type="button"
           onClick={handleConfirm}
-          disabled={isCommitting || deltaFrames.length === 0}
+          disabled={isCommitting || deltaNodes.length === 0}
           className="flex-1 rounded bg-[var(--accent-commit)] px-2 py-1.5 text-xs text-white hover:opacity-90 disabled:opacity-40"
         >
           {isCommitting ? 'Committing...' : 'Confirm Commit'}
@@ -203,11 +204,11 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
   const undoCompression = useExtractionPanelStore((s) => s.undoCompression);
   const dismissCompressBanner = useExtractionPanelStore((s) => s.dismissCompressBanner);
   const deltaLog = useExtractionPanelStore((s) => s.deltaLog);
-  const manualEditedFrameIds = useExtractionPanelStore((s) => s.manualEditedFrameIds);
+  const manualEditedNodeIds = useExtractionPanelStore((s) => s.manualEditedNodeIds);
   const hasCompressDelta = deltaLog.some((d) => d.source === 'compress');
 
-  const frameCount = draft.frames.length;
-  const manualCount = manualEditedFrameIds.size;
+  const nodeCount = draft.trees.length;
+  const manualCount = manualEditedNodeIds.size;
   const latestDeltaChanges = deltaChangeHistory[0] ?? [];
   const added = latestDeltaChanges.filter((c) => c.action === 'add').length;
   const updated = latestDeltaChanges.filter((c) => c.action === 'update').length;
@@ -238,7 +239,7 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
     >
       {/* Collapsed rail */}
       {panelMode === 'collapsed' && (
-        <CollapsedRail frameCount={frameCount} isExtracting={isExtracting} onExpand={togglePanel} />
+        <CollapsedRail nodeCount={nodeCount} isExtracting={isExtracting} onExpand={togglePanel} />
       )}
 
       {/* Default / Preview panel */}
@@ -255,9 +256,9 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
               <span className="text-xs font-semibold text-[var(--text-primary)]">
                 {isCompressing ? 'Compressing...' : isExtracting ? 'Extracting...' : 'Frames'}
               </span>
-              {frameCount > 0 && !isExtracting && (
+              {nodeCount > 0 && !isExtracting && (
                 <span className="rounded-full bg-[var(--hover-bg)] px-1.5 py-0.5 text-[10px] text-[var(--text-secondary)]">
-                  {frameCount}
+                  {nodeCount}
                 </span>
               )}
               {hasChanges && !isExtracting && (
@@ -277,12 +278,12 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
                 </span>
               )}
               {/* Compress button */}
-              {frameCount >= 3 && !isExtracting && !isCompressing && (
+              {nodeCount >= 3 && !isExtracting && !isCompressing && (
                 <button
                   type="button"
                   onClick={startCompress}
                   className="rounded p-0.5 text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]"
-                  title="Compress frames"
+                  title="Compress trees"
                   style={{ fontSize: 12 }}
                 >
                   🗜️
@@ -326,7 +327,7 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
               >
                 <div>
                   <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
-                    Compressed {compressResult.framesBefore} → {compressResult.framesAfter} frames
+                    Compressed {compressResult.treesBefore} → {compressResult.treesAfter} trees
                   </div>
                   <div style={{ marginTop: 2 }}>{compressResult.summary}</div>
                 </div>
@@ -379,18 +380,18 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
           {panelMode === 'default' ? (
             <div className="flex flex-1 flex-col overflow-hidden">
               <div className="flex-1 overflow-hidden">
-                <FrameYAMLView />
+                <YAMLView />
               </div>
               <AdvisoryPanel />
               <CommitDropdown />
             </div>
           ) : (
-            /* Preview mode: side-by-side (frames left, preview+commit right) */
+            /* Preview mode: side-by-side (trees left, preview+commit right) */
             <div className="flex flex-1 overflow-hidden">
               {/* Left: extraction content */}
               <div className="flex flex-1 flex-col overflow-hidden border-r border-[var(--stroke-default)]">
                 <div className="flex-1 overflow-hidden">
-                  <FrameYAMLView />
+                  <YAMLView />
                 </div>
                 <AdvisoryPanel />
               </div>

@@ -341,20 +341,24 @@ export function useLeafPageData(projectId: string, leafId: string): UseLeafPageD
   // Memoize sentences to prevent unnecessary re-renders in LeafConstraintSourceContext
   const sentences = useMemo((): SentenceWithSource[] => {
     if (!semanticContent) return [];
-    return semanticContent.frames.map((f) => ({
+    const { treesToNodes } = require('@/lib/treeCompat');
+    const nodes = treesToNodes(semanticContent.trees);
+    return nodes.map((f: { id: string; type: string; slots: Record<string, unknown> }) => ({
       id: f.id,
       text: `[${f.type}] ${Object.entries(f.slots)
         .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`)
         .join('; ')}`,
-      source: undefined, // frame source tracing handled differently
+      source: undefined, // tree source tracing handled differently
     }));
   }, [semanticContent]);
 
   // Memoize confidence scores from commit data
   const sentenceConfidence = useMemo((): Map<string, number> => {
     if (!semanticContent) return new Map();
+    const { treesToNodes } = require('@/lib/treeCompat');
+    const nodes = treesToNodes(semanticContent.trees);
     const m = new Map<string, number>();
-    for (const f of semanticContent.frames) {
+    for (const f of nodes) {
       if (f.confidence != null) m.set(f.id, f.confidence);
     }
     return m;

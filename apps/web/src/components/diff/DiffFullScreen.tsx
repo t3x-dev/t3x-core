@@ -1,24 +1,24 @@
 'use client';
 
 /**
- * DiffFullScreen - Full-screen frame-based diff overlay
+ * DiffFullScreen - Full-screen tree-based diff overlay
  *
- * Displays a complete diff between two commits using FrameYAMLDiff:
- * - Frame-level slot diffs with YAML-like display
+ * Displays a complete diff between two commits using YAMLDiff:
+ * - Tree-level slot diffs with YAML-like display
  * - Commit metadata header
  */
 
-import type { FrameDiff } from '@t3x-dev/core';
+import type { TreeDiff } from '@t3x-dev/core';
 import { Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { useTerminology } from '@/hooks/useTerminology';
-import type { CommitMeta } from '@/lib/api/frameDiff';
-import { getFrameDiff } from '@/lib/api/frameDiff';
+import type { CommitMeta } from '@/lib/api/treeDiff';
+import { getTreeDiff } from '@/lib/api/treeDiff';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import { DiffHeader } from './DiffHeader';
-import { FrameYAMLDiff } from './FrameYAMLDiff';
+import { YAMLDiff } from './YAMLDiff';
 
 // ============================================================================
 // Types
@@ -29,7 +29,7 @@ interface DiffFullScreenProps {
   onClose: () => void;
   baseCommitHash: string;
   targetCommitHash: string;
-  /** @deprecated Ignored — diff is now computed server-side via /v1/diff/frame */
+  /** @deprecated Ignored — diff is now computed server-side via /v1/diff/tree */
   diffData?: unknown;
   projectId?: string;
 }
@@ -44,14 +44,14 @@ export function DiffFullScreen({
   baseCommitHash,
   targetCommitHash,
 }: DiffFullScreenProps) {
-  const [frameDiffResult, setFrameDiffResult] = useState<FrameDiff | null>(null);
+  const [treeDiffResult, setTreeDiffResult] = useState<TreeDiff | null>(null);
   const [baseMeta, setBaseMeta] = useState<CommitMeta | null>(null);
   const [targetMeta, setTargetMeta] = useState<CommitMeta | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { t } = useTerminology();
 
-  // Fetch frame diff from API
+  // Fetch  node diff from API
   useEffect(() => {
     if (!open) return;
 
@@ -59,10 +59,10 @@ export function DiffFullScreen({
     setLoading(true);
     setError(null);
 
-    getFrameDiff(baseCommitHash, targetCommitHash)
+    getTreeDiff(baseCommitHash, targetCommitHash)
       .then((response) => {
         if (cancelled) return;
-        setFrameDiffResult(response.diff);
+        setTreeDiffResult(response.diff);
         setBaseMeta(response.base);
         setTargetMeta(response.target);
       })
@@ -81,7 +81,7 @@ export function DiffFullScreen({
 
   const handleClose = useCallback(() => {
     onClose();
-    setFrameDiffResult(null);
+    setTreeDiffResult(null);
     setBaseMeta(null);
     setTargetMeta(null);
     setError(null);
@@ -120,9 +120,9 @@ export function DiffFullScreen({
           <div className="flex-1 flex items-center justify-center">
             <span className="text-[var(--status-error)] text-sm">{error}</span>
           </div>
-        ) : frameDiffResult ? (
+        ) : treeDiffResult ? (
           <div className="flex-1 overflow-auto p-4">
-            <FrameYAMLDiff diff={frameDiffResult} />
+            <YAMLDiff diff={treeDiffResult} />
           </div>
         ) : null}
       </DialogContent>

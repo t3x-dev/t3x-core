@@ -14,13 +14,12 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import type { MergeSummaryData, SlotValue } from '@t3x-dev/core';
 import {
-  executeFrameMerge,
-  type FrameMergeDecision,
-  type FrameMergeInput,
-  type FrameMergeResult,
-  prepareFrameMerge,
+  executeMerge,
+  flattenTrees,
+  type MergeDecision,
+  type MergeResult,
+  prepareMerge,
   type SemanticContent,
-  suggestFrameMerge,
 } from '@t3x-dev/core';
 import {
   commitMergeDraft,
@@ -152,8 +151,8 @@ mergeRoutes.openapi(prepareMergeRoute, async (c) => {
     }
 
     // Prepare frame-level merge (empty base = two-way mode)
-    const baseContent: SemanticContent = { frames: [], relations: [] };
-    const prepared = prepareFrameMerge(baseContent, sourceCommit.content, targetCommit.content);
+    const baseContent: SemanticContent = { trees: [], relations: [] };
+    const prepared = prepareMerge(baseContent, sourceCommit.content, targetCommit.content);
 
     return c.json({ success: true as const, data: prepared }, 200);
   } catch (error) {
@@ -184,8 +183,8 @@ const executeMergeRoute = createRoute({
 Executes a frame merge after the user has made all resolution decisions.
 
 **Requirements:**
-- \`prepared\`: The FrameMergeResult from the prepare step
-- \`decisions\`: FrameMergeDecision with conflict resolutions and keep lists
+- \`prepared\`: The MergeResult from the prepare step
+- \`decisions\`: MergeDecision with conflict resolutions and keep lists
 
 **Result:**
 - Creates a new merge commit with 2 parents: [source_hash, target_hash]
@@ -239,7 +238,7 @@ mergeRoutes.openapi(executeMergeRoute, async (c) => {
 
   // Validate all conflicts have resolutions
   const unresolvedConflicts = prepared.conflicts.filter(
-    (conf: { frameId: string }) => !decisions.conflictResolutions[conf.frameId]
+    (conf: { path: string }) => !decisions.conflictResolutions[conf.path]
   );
   if (unresolvedConflicts.length > 0) {
     return c.json(
@@ -288,10 +287,15 @@ mergeRoutes.openapi(executeMergeRoute, async (c) => {
     }
     const projectId = sourceCommit.project_id;
 
-    // Execute frame merge - returns SemanticContent directly
-    const mergedContent = executeFrameMerge(
-      prepared as FrameMergeResult,
-      decisions as FrameMergeDecision
+    // Execute merge - returns SemanticContent directly
+    const targetCommit = await getCommitUnified(db, target_hash);
+    const emptyContent: SemanticContent = { trees: [], relations: [] };
+    const mergedContent = executeMerge(
+      emptyContent,
+      sourceCommit.content,
+      targetCommit?.content ?? emptyContent,
+      prepared as unknown as MergeResult,
+      decisions as unknown as MergeDecision
     );
 
     // Compute merge summary
@@ -305,7 +309,7 @@ mergeRoutes.openapi(executeMergeRoute, async (c) => {
       kept_from_source: keptFromSource,
       kept_from_target: keptFromTarget,
       discarded: discardedSource + discardedTarget,
-      total_sentences: mergedContent.frames.length,
+      total_sentences: flattenTrees(mergedContent.trees).length,
     };
 
     // Save to storage as frame-based commit
@@ -494,8 +498,8 @@ mergeRoutes.openapi(createDraftRoute, async (c) => {
   }
 
   // Prepare frame-level merge (empty base = two-way mode)
-  const baseContent: SemanticContent = { frames: [], relations: [] };
-  const prepared = prepareFrameMerge(baseContent, sourceCommit.content, targetCommit.content);
+  const baseContent: SemanticContent = { trees: [], relations: [] };
+  const prepared = prepareMerge(baseContent, sourceCommit.content, targetCommit.content);
 
   // Create draft
   const draft = await createMergeDraft(db, {
@@ -719,7 +723,7 @@ mergeRoutes.openapi(commitDraftRoute, async (c) => {
     );
   }
 
-  const prepared = JSON.parse(draft.preparedJson) as FrameMergeResult;
+  const prepared = JSON.parse(draft.preparedJson) as MergeResult;
 
   // For draft commit, decisions are embedded in the prepared data by the UI
   // The UI saves decisions alongside prepared via PATCH /v1/merge/drafts/:id
@@ -727,17 +731,17 @@ mergeRoutes.openapi(commitDraftRoute, async (c) => {
   const author = await getAuthorFromContext(c);
 
   // Build decisions: use explicit decisions if provided, otherwise derive from prepared
-  const mergeDecisions: FrameMergeDecision = decisionsInput ?? {
+  const mergeDecisions: MergeDecision = decisionsInput ?? {
     conflictResolutions: {},
-    keepFromSource: prepared.onlyInSource.map((f) => f.id),
-    keepFromTarget: prepared.onlyInTarget.map((f) => f.id),
+    keepFromSource: prepared.onlyInSource,
+    keepFromTarget: prepared.onlyInTarget,
     keepRelationsFromSource: true,
     keepRelationsFromTarget: true,
   };
 
   // Validate all conflicts have resolutions
   const unresolvedConflicts = prepared.conflicts.filter(
-    (conf) => !mergeDecisions.conflictResolutions[conf.frameId]
+    (conf: any) => !mergeDecisions.conflictResolutions[conf.path ?? conf.frameId]
   );
   if (unresolvedConflicts.length > 0) {
     return c.json(
@@ -753,8 +757,17 @@ mergeRoutes.openapi(commitDraftRoute, async (c) => {
   }
 
   try {
-    // Execute frame merge - returns SemanticContent directly
-    const mergedContent = executeFrameMerge(prepared, mergeDecisions);
+    // Execute merge - returns SemanticContent directly
+    const sourceCommitForDraft = await getCommitUnified(db, draft.sourceHash);
+    const targetCommitForDraft = await getCommitUnified(db, draft.targetHash);
+    const emptyContent: SemanticContent = { trees: [], relations: [] };
+    const mergedContent = executeMerge(
+      emptyContent,
+      sourceCommitForDraft?.content ?? emptyContent,
+      targetCommitForDraft?.content ?? emptyContent,
+      prepared,
+      mergeDecisions
+    );
 
     const targetBranch = branch || draft.targetBranch || 'main';
 
@@ -769,7 +782,7 @@ mergeRoutes.openapi(commitDraftRoute, async (c) => {
       kept_from_source: keptFromSource,
       kept_from_target: keptFromTarget,
       discarded: discardedSource + discardedTarget,
-      total_sentences: mergedContent.frames.length,
+      total_sentences: flattenTrees(mergedContent.trees).length,
     };
 
     // Save commit + update branch head + mark draft committed atomically
@@ -803,14 +816,14 @@ mergeRoutes.openapi(commitDraftRoute, async (c) => {
         branch: targetBranch,
         source_hash: draft.sourceHash,
         target_hash: draft.targetHash,
-        frame_count: mergedContent.frames.length,
+        frame_count: flattenTrees(mergedContent.trees).length,
       },
       draft.projectId
     );
     pushNotification({
       type: 'merge.completed',
       title: 'Merge Completed',
-      message: `Merged into ${targetBranch} with ${mergedContent.frames.length} frame${mergedContent.frames.length === 1 ? '' : 's'}`,
+      message: `Merged into ${targetBranch} with ${flattenTrees(mergedContent.trees).length} frame${flattenTrees(mergedContent.trees).length === 1 ? '' : 's'}`,
       project_id: draft.projectId,
       ref_id: savedDraftCommitHash,
     });
@@ -1001,7 +1014,6 @@ const suggestRoute = createRoute({
   },
 });
 
-// @ts-expect-error - OpenAPI handler return type
 mergeRoutes.openapi(suggestRoute, async (c) => {
   const { id, pairIndex } = c.req.valid('param');
   const idx = Number.parseInt(pairIndex, 10);
@@ -1018,7 +1030,7 @@ mergeRoutes.openapi(suggestRoute, async (c) => {
     );
   }
 
-  const prepared: FrameMergeResult = JSON.parse(draft.preparedJson);
+  const prepared: MergeResult = JSON.parse(draft.preparedJson);
   if (idx < 0 || idx >= prepared.conflicts.length) {
     return c.json(
       {
@@ -1040,21 +1052,11 @@ mergeRoutes.openapi(suggestRoute, async (c) => {
     );
   }
 
-  // Convert frame conflict to FrameMergeInput for suggestFrameMerge
+  // TODO: suggestFrameMerge was removed in tree-primary refactor
+  // For now, return null suggestion (user must resolve manually)
   const conflict = prepared.conflicts[idx];
-  const conflictInput: FrameMergeInput = {
-    sourceFrame: {
-      type: conflict.sourceFrame.type,
-      slots: conflict.sourceFrame.slots as Record<string, SlotValue>,
-    },
-    targetFrame: {
-      type: conflict.targetFrame.type,
-      slots: conflict.targetFrame.slots as Record<string, SlotValue>,
-    },
-  };
-
   const { provider: trackedLlm, usage } = wrapWithUsageTracking(llm);
-  const { suggestion } = await suggestFrameMerge(conflictInput, trackedLlm);
+  const suggestion = null;
 
   // Record usage (fire-and-forget)
   if (usage.inputTokens || usage.outputTokens) {
@@ -1162,20 +1164,9 @@ mergeRoutes.openapi(suggestFrameRoute, async (c) => {
     );
   }
 
-  const input: FrameMergeInput = {
-    sourceFrame: {
-      type: body.source_frame.type,
-      slots: body.source_frame.slots as Record<string, SlotValue>,
-    },
-    targetFrame: {
-      type: body.target_frame.type,
-      slots: body.target_frame.slots as Record<string, SlotValue>,
-    },
-    context: body.context,
-  };
-
+  // TODO: suggestFrameMerge was removed in tree-primary refactor
   const { provider: trackedLlm, usage } = wrapWithUsageTracking(llm);
-  const { suggestion } = await suggestFrameMerge(input, trackedLlm);
+  const suggestion = null;
 
   // Record usage (fire-and-forget)
   if (usage.inputTokens || usage.outputTokens) {

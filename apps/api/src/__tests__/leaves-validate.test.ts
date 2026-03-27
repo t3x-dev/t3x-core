@@ -60,18 +60,12 @@ describe('POST /v1/leaves/:id/validate', () => {
     const commit = await createCommit(mockDB, {
       author: { type: 'human', name: 'Test User' },
       content: {
-        frames: [
-          { id: 's_1', text: 'User budget is $5,000' },
-          { id: 's_2', text: 'User prefers premium quality' },
-        ].map((s) => ({
-          id: s.id,
-          type: 'legacy_sentence' as const,
-          slots: { text: s.text },
-          // biome-ignore lint/suspicious/noExplicitAny: test mock access
-          confidence: (s as any).confidence ?? 1,
-        })),
+        trees: [
+          { key: 's_1', slots: { text: 'User budget is $5,000' }, children: [] },
+          { key: 's_2', slots: { text: 'User prefers premium quality' }, children: [] },
+        ],
         relations: [],
-      },
+      } as any,
       project_id: testProjectId,
       branch: 'main',
       message: 'Test commit for validation',

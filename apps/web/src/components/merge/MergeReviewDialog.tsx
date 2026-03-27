@@ -43,8 +43,8 @@ interface MergeReviewDialogProps {
   serverChecksLoading?: boolean;
   /** Navigate back to canvas */
   onBackToCanvas: () => void;
-  /** Merge2WayResult for release note generation */
-  prepared?: import('@t3x-dev/core').Merge2WayResult | null;
+  /** MergeResult for release note generation */
+  prepared?: import('@t3x-dev/core').MergeResult | null;
   /** Extended resolutions for release note generation */
   extendedResolutions?: Record<
     string,
@@ -100,6 +100,9 @@ export function MergeReviewDialog({
       summary,
       sourceBranch,
       targetBranch,
+      undefined,
+      undefined,
+      undefined,
       extendedResolutions
     );
   }, [state, prepared, summary, sourceBranch, targetBranch, extendedResolutions]);
@@ -329,7 +332,7 @@ export function MergeReviewDialog({
                   </div>
                   <div className="text-center">
                     <div className="text-lg font-semibold text-[var(--text-primary)]">
-                      {summary.total_sentences}
+                      {summary.total_nodes}
                     </div>
                     <div className="text-[10px] text-[var(--text-tertiary)]">Total</div>
                   </div>

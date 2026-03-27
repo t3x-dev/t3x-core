@@ -57,15 +57,14 @@ describe('Merge Routes', () => {
     const commit = await createCommit(mockDB, {
       parents: [],
       author: { type: 'human', name: `Test User ${commitCounter}` },
-      content: {
-        frames: frames.map((f) => ({
-          id: f.id,
-          type: f.type,
+      content: ({
+        trees: frames.map((f) => ({
+          key: f.id,
           slots: f.slots,
-          // biome-ignore lint/suspicious/noExplicitAny: test type cast
-        })) as any,
+          children: [],
+        })),
         relations: [],
-      },
+      }) as any,
       project_id: testProjectId,
       message: `Test commit ${commitCounter}`,
       branch: 'main',
@@ -132,7 +131,7 @@ describe('Merge Routes', () => {
       expect(res.status).toBe(200);
       const json: ApiResponse = await res.json();
       expect(json.data.autoKept).toHaveLength(1);
-      expect(json.data.autoKept[0].id).toBe('f_001');
+      expect(json.data.autoKept[0]).toBe('f_001');
     });
 
     it('returns conflicts for frames with different slots', async () => {
@@ -156,9 +155,7 @@ describe('Merge Routes', () => {
       expect(res.status).toBe(200);
       const json: ApiResponse = await res.json();
       expect(json.data.conflicts.length).toBeGreaterThan(0);
-      expect(json.data.conflicts[0]).toHaveProperty('frameId');
-      expect(json.data.conflicts[0]).toHaveProperty('sourceFrame');
-      expect(json.data.conflicts[0]).toHaveProperty('targetFrame');
+      expect(json.data.conflicts[0]).toHaveProperty('path');
       expect(json.data.conflicts[0]).toHaveProperty('slotConflicts');
     });
 
@@ -230,18 +227,18 @@ describe('Merge Routes', () => {
       const prepareJson: ApiResponse = await prepareRes.json();
       const prepared = prepareJson.data;
 
-      // Build decisions: keep all frames from both sides
+      // Build decisions: keep all paths from both sides
       const decisions = {
         conflictResolutions: {} as Record<string, string>,
-        keepFromSource: prepared.onlyInSource.map((f: ApiResponse) => f.id),
-        keepFromTarget: prepared.onlyInTarget.map((f: ApiResponse) => f.id),
+        keepFromSource: prepared.onlyInSource,
+        keepFromTarget: prepared.onlyInTarget,
         keepRelationsFromSource: true,
         keepRelationsFromTarget: true,
       };
 
       // Resolve any conflicts
       for (const conflict of prepared.conflicts) {
-        decisions.conflictResolutions[conflict.frameId] = 'source';
+        decisions.conflictResolutions[conflict.path] = 'source';
       }
 
       // Execute merge

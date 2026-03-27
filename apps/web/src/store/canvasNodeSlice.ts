@@ -54,14 +54,14 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
             branch: v5.branch || 'main',
             message: v5.message,
             parent_hashes: v5.parents,
-            // v5: no turn_window in frame-based commits; use sources for conversation association
+            // v5: no turn_window in tree-based commits; use sources for conversation association
             turn_window: null,
-            facet_snapshot: null, // frame-based commits use frames, not facet_snapshot
+            facet_snapshot: null, // tree-based commits use nodes, not facet_snapshot
             pipeline_config: null,
             draft_id: null,
             draft_text_hash: null,
             signature: null,
-            source_excerpt: null, // frames don't have a flat sentence list for excerpts
+            source_excerpt: null, // trees don't have a flat sentence list for excerpts
             must_have: null,
             mustnt_have: null,
             position_x: v5.position_x ?? null,

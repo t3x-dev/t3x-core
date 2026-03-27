@@ -141,7 +141,7 @@ commitFromDraftRoutes.openapi(postCommitFromDraftRoute, async (c) => {
     const commit = await createCommit(db, {
       parents,
       author: { type: 'human' as const, name: 'api' },
-      content: { frames: commitFrames, relations: [] },
+      content: { trees: commitFrames.map((f: any) => ({ key: f.id, slots: f.slots, children: [] as any[], confidence: f.confidence })), relations: [] },
       project_id,
       message: message ?? `Draft: ${draft.title}`,
       branch: targetBranch,

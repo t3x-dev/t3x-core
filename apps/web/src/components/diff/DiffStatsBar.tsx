@@ -30,10 +30,10 @@ interface DiffStatsBarProps {
   /** Context snippets toggle (page mode only) */
   showSnippets?: boolean;
   onToggleSnippets?: () => void;
-  /** Current diff mode (frame vs sentence) */
+  /** Current diff mode (tree vs sentence) */
   diffMode?: DiffMode;
   onDiffModeChange?: (mode: DiffMode) => void;
-  /** Whether Frame mode is available (both commits have semantic data) */
+  /** Whether Tree mode is available (both commits have semantic data) */
   hasSemanticData?: boolean;
 }
 
@@ -136,7 +136,7 @@ export function DiffStatsBar({
         </button>
       )}
 
-      {/* Diff mode toggle (Frame/Sentence) */}
+      {/* Diff mode toggle (Tree/Sentence) */}
       {onDiffModeChange && (
         <DiffModeToggle
           mode={diffMode ?? 'sentence'}
@@ -146,7 +146,7 @@ export function DiffStatsBar({
       )}
 
       {/* View mode toggle */}
-      {onViewModeChange && viewMode && diffMode !== 'frame' && (
+      {onViewModeChange && viewMode && diffMode !== 'tree' && (
         <div className="inline-flex rounded-md border border-[var(--stroke-divider)] overflow-hidden">
           <button
             type="button"

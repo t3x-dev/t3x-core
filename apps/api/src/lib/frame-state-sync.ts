@@ -4,9 +4,14 @@
  * Applies delta changes to the frames + frame_relations tables.
  * Used by extraction, compression, manual edit, and undo routes.
  * All operations use the caller's transaction handle (tx) for atomicity.
+ *
+ * NOTE: The Delta type now uses tree-primary TreeChange (parent_path/target_path/node)
+ * but the frames DB table still stores flat frames. We map tree changes to flat frame
+ * upserts using the node key as the frame ID.
  */
 
-import type { Delta, DeltaSource, Frame, Relation, SemanticContent } from '@t3x-dev/core';
+import type { Delta, DeltaSource, Relation, SemanticContent } from '@t3x-dev/core';
+import { flattenTrees } from '@t3x-dev/core';
 import type { AnyDB } from '@t3x-dev/storage';
 import {
   deleteFrame,
@@ -38,24 +43,24 @@ export async function syncDeltaToFrames(
   for (const change of delta.changes) {
     switch (change.action) {
       case 'add': {
-        const f = change.frame;
+        const n = change.node;
         await upsertFrame(db, {
           conversationId,
-          frameId: f.id,
+          frameId: n.key,
           projectId,
           topicId: opts?.topicId,
-          type: f.type,
-          slots: f.slots,
-          status: f.status ?? 'active',
-          confidence: f.confidence,
+          type: n.key,
+          slots: n.slots,
+          status: 'active',
+          confidence: n.confidence,
           source,
-          slotSources: f.slot_sources,
+          slotSources: n.slot_quotes,
           manualEdited: isManual,
         });
         break;
       }
       case 'update': {
-        const current = await getFrameByKey(db, conversationId, change.target);
+        const current = await getFrameByKey(db, conversationId, change.target_path);
         if (current) {
           const mergedSlots = { ...(current.slots as Record<string, unknown>) };
           for (const [k, v] of Object.entries(change.slots)) {
@@ -67,7 +72,7 @@ export async function syncDeltaToFrames(
           }
           await upsertFrame(db, {
             conversationId,
-            frameId: change.target,
+            frameId: change.target_path,
             projectId,
             topicId: opts?.topicId ?? current.topicId ?? undefined,
             type: current.type,
@@ -82,8 +87,8 @@ export async function syncDeltaToFrames(
         break;
       }
       case 'remove': {
-        await deleteFrameRelationsByFrameId(db, conversationId, change.target);
-        await deleteFrame(db, conversationId, change.target);
+        await deleteFrameRelationsByFrameId(db, conversationId, change.target_path);
+        await deleteFrame(db, conversationId, change.target_path);
         break;
       }
     }
@@ -126,8 +131,9 @@ export async function rebuildFramesFromSnapshot(
   await deleteFrameRelationsByConversation(db, conversationId);
   await deleteFramesByConversation(db, conversationId);
 
-  // Insert frames
-  for (const f of snapshot.frames) {
+  // Flatten trees to FlatNode[] for DB storage
+  const flatNodes = flattenTrees(snapshot.trees);
+  for (const f of flatNodes) {
     await upsertFrame(db, {
       conversationId,
       frameId: f.id,
@@ -135,10 +141,9 @@ export async function rebuildFramesFromSnapshot(
       topicId,
       type: f.type,
       slots: f.slots,
-      status: f.status ?? 'active',
+      status: 'active',
       confidence: f.confidence,
       source: 'pipeline',
-      slotSources: f.slot_sources,
       manualEdited: false,
     });
   }
@@ -158,6 +163,9 @@ export async function rebuildFramesFromSnapshot(
 
 /**
  * Build a SemanticContent from the frames table (replaces buildDraft for reads).
+ *
+ * NOTE: Returns flat trees (one TreeNode per frame row) since the DB doesn't
+ * store tree hierarchy. Use unflattenToTrees() from core if nesting is needed.
  */
 export async function readDraftFromFrames(
   db: AnyDB,
@@ -167,14 +175,13 @@ export async function readDraftFromFrames(
   const frameRows = await listFramesByConversation(db, conversationId, topicId);
   const relRows = await listFrameRelationsByConversation(db, conversationId, topicId);
 
-  const framesResult: Frame[] = frameRows.map((r) => ({
-    id: r.frameId,
-    type: r.type,
-    slots: r.slots as Record<string, unknown>,
-    status: (r.status as 'active' | 'collapsed') ?? 'active',
+  const trees = frameRows.map((r) => ({
+    key: r.frameId,
+    slots: r.slots as Record<string, string>,
+    children: [] as import('@t3x-dev/core').TreeNode[],
+    source: r.source ?? undefined,
     confidence: r.confidence ?? undefined,
-    slot_sources: r.slotSources as Record<string, unknown> | undefined,
-    manual_edited: r.manualEdited || undefined,
+    slot_quotes: r.slotSources as Record<string, string> | undefined,
   }));
 
   const relationsResult: Relation[] = relRows.map((r) => ({
@@ -184,5 +191,5 @@ export async function readDraftFromFrames(
     confidence: r.confidence ?? undefined,
   }));
 
-  return { frames: framesResult, relations: relationsResult };
+  return { trees, relations: relationsResult };
 }

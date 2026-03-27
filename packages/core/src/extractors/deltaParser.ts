@@ -403,9 +403,17 @@ function fullOutputToAllAdd(parsed: { frames: unknown[]; relations?: unknown[] }
 
   const delta: Delta = { changes };
 
-  // Handle relations
+  // Handle relations — remap from/to from frame IDs to node keys (frame.type)
   if (parsed.relations && Array.isArray(parsed.relations) && parsed.relations.length > 0) {
-    delta.new_relations = parsed.relations as Relation[];
+    const idToKey = new Map<string, string>();
+    for (const frame of frames) {
+      idToKey.set(frame.id, frame.type);
+    }
+    delta.new_relations = (parsed.relations as Relation[]).map((rel) => ({
+      ...rel,
+      from: idToKey.get(rel.from) ?? rel.from,
+      to: idToKey.get(rel.to) ?? rel.to,
+    }));
   }
 
   return { ok: true, format: 'legacy', delta };

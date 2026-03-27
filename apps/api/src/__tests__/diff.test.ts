@@ -23,7 +23,8 @@ vi.mock('@t3x-dev/core', () => ({
   createDiffEngine: vi.fn(),
   createGoogleAIEmbeddingProvider: vi.fn(),
   createCachedEmbeddingProvider: vi.fn(),
-  frameDiff: vi.fn(),
+  diffCommits: vi.fn(),
+  flattenTrees: vi.fn((trees: unknown[]) => trees),
   EmbeddingProviderError: class extends Error {
     constructor(msg: string) {
       super(msg);
@@ -72,7 +73,7 @@ describe('Diff Routes', () => {
 
     it('returns success for V4 commit hash mode', async () => {
       const { getCommitUnified } = await import('@t3x-dev/storage');
-      const { frameDiff } = await import('@t3x-dev/core');
+      const { diffCommits } = await import('@t3x-dev/core');
 
       const baseCommit = {
         hash: 'sha256:base',
@@ -81,7 +82,7 @@ describe('Diff Routes', () => {
         committed_at: '2024-01-01T00:00:00Z',
         branch: 'main',
         content: {
-          frames: [{ id: 'f_001', type: 'legacy_sentence', slots: { text: 'Hello world' } }],
+          trees: [{ key: 'f_001', slots: { text: 'Hello world' }, children: [] }],
           relations: [],
         },
       };
@@ -92,7 +93,7 @@ describe('Diff Routes', () => {
         committed_at: '2024-01-02T00:00:00Z',
         branch: 'main',
         content: {
-          frames: [{ id: 'f_002', type: 'legacy_sentence', slots: { text: 'Hello there' } }],
+          trees: [{ key: 'f_002', slots: { text: 'Hello there' }, children: [] }],
           relations: [],
         },
       };
@@ -105,8 +106,8 @@ describe('Diff Routes', () => {
         identical: [],
         similar: [
           {
-            base: { id: 'f_001', type: 'legacy_sentence', slots: { text: 'Hello world' } },
-            target: { id: 'f_002', type: 'legacy_sentence', slots: { text: 'Hello there' } },
+            base: { key: 'f_001', slots: { text: 'Hello world' } },
+            target: { key: 'f_002', slots: { text: 'Hello there' } },
             similarity: 0.7,
             word_diff: [],
           },
@@ -114,7 +115,7 @@ describe('Diff Routes', () => {
         only_in_base: [],
         only_in_target: [],
       };
-      (frameDiff as ReturnType<typeof vi.fn>).mockReturnValue(mockFrameDiffResult);
+      (diffCommits as ReturnType<typeof vi.fn>).mockReturnValue(mockFrameDiffResult);
 
       const res = await app.request('/v1/diff/two-way', {
         method: 'POST',
@@ -133,7 +134,7 @@ describe('Diff Routes', () => {
       expect(data.data.target.hash).toBe('sha256:target');
     });
 
-    it('falls back to sentence splitting when rings_json is empty (turn hash mode)', async () => {
+    it('returns placeholder response for turn hash mode', async () => {
       const origGoogleKey = process.env.GOOGLE_AI_STUDIO_KEY;
       try {
         const { findTurnByHash } = await import('@t3x-dev/storage');
@@ -152,7 +153,7 @@ describe('Diff Routes', () => {
 
         // Turn hash mode needs embedding API — mock it
         process.env.GOOGLE_AI_STUDIO_KEY = 'test-key';
-        const { createDiffEngine, createGoogleAIEmbeddingProvider, createCachedEmbeddingProvider } =
+        const { createGoogleAIEmbeddingProvider, createCachedEmbeddingProvider } =
           await import('@t3x-dev/core');
 
         (createGoogleAIEmbeddingProvider as ReturnType<typeof vi.fn>).mockReturnValue({});
@@ -160,15 +161,6 @@ describe('Diff Routes', () => {
           setCacheFromRecords: vi.fn().mockReturnValue(0),
           getCacheStats: vi.fn().mockReturnValue({ hits: 0, misses: 0 }),
         });
-        const mockDiffEngine = {
-          diffTwoWay: vi.fn().mockResolvedValue({
-            baseId: 'sha256:base_turn',
-            targetId: 'sha256:target_turn',
-            segmentDiffs: [],
-            stats: { same: 0, modified: 0, added: 2, removed: 2 },
-          }),
-        };
-        (createDiffEngine as ReturnType<typeof vi.fn>).mockReturnValue(mockDiffEngine);
 
         const res = await app.request('/v1/diff/two-way', {
           method: 'POST',
@@ -182,15 +174,8 @@ describe('Diff Routes', () => {
         expect(res.status).toBe(200);
         const data = await res.json();
         expect(data.success).toBe(true);
-
-        // Verify diff engine was called with fallback segments
-        expect(mockDiffEngine.diffTwoWay).toHaveBeenCalled();
-        const callArgs = mockDiffEngine.diffTwoWay.mock.calls[0];
-        // base segments should be split from content
-        expect(callArgs[1]).toEqual([
-          { segmentId: 's_fallback_0', text: 'I want a window seat.' },
-          { segmentId: 's_fallback_1', text: 'Budget is 3000 dollars.' },
-        ]);
+        // Legacy sentence DiffEngine removed; turn hash mode now returns placeholder
+        expect(data.data.method).toBe('placeholder');
       } finally {
         if (origGoogleKey === undefined) {
           delete process.env.GOOGLE_AI_STUDIO_KEY;

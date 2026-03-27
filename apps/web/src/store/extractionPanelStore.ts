@@ -2,18 +2,19 @@ import type {
   Delta,
   DeltaLogEntry,
   DeltaSource,
-  Frame,
-  FrameChange,
   SemanticContent,
+  TreeChange,
+  TreeNode,
 } from '@t3x-dev/core';
+import { applyDelta as coreApplyDelta, flattenTrees } from '@t3x-dev/core';
 import { create } from 'zustand';
 import { createCommit, listCommits } from '@/lib/api/commits';
-import { createDelta } from '@/lib/api/frames';
+import { createDelta } from '@/lib/api/trees';
 import type { Topic } from '@/lib/api/topics';
 
 // Debounce helper for hover interactions — prevents rapid-fire re-renders
 // when mouse sweeps across YAML rows
-let hoverFrameTimer: ReturnType<typeof setTimeout> | null = null;
+let hoverNodeTimer: ReturnType<typeof setTimeout> | null = null;
 let hoverTurnTimer: ReturnType<typeof setTimeout> | null = null;
 const HOVER_DEBOUNCE_MS = 60;
 
@@ -26,22 +27,22 @@ interface ExtractionPanelState {
   draft: SemanticContent;
   deltaLog: DeltaLogEntry[];
   isExtracting: boolean;
-  confirmedFrameIds: Record<string, boolean>;
-  confirmedSlotKeys: Record<string, Record<string, boolean>>; // frameId → { slotKey: true }
+  confirmedNodeIds: Record<string, boolean>;
+  confirmedSlotKeys: Record<string, Record<string, boolean>>; // nodeKey → { slotKey: true }
   focusIntentEnabled: boolean;
-  llmHighlightedFrameIds: Record<string, boolean>;
-  deltaChangeHistory: FrameChange[][]; // sliding window, index 0 = most recent
-  removedFrames: Frame[];
+  llmHighlightedNodeIds: Record<string, boolean>;
+  deltaChangeHistory: TreeChange[][];
+  removedNodes: TreeNode[];
 
   // Compression
   isCompressing: boolean;
   compressResult: {
     summary: string;
-    framesBefore: number;
-    framesAfter: number;
+    treesBefore: number;
+    treesAfter: number;
     mergedCount: number;
     removedCount: number;
-    removedFrameIds: string[];
+    removedNodeIds: string[];
     deltaLogId: string;
   } | null;
   showCompressBanner: boolean;
@@ -53,17 +54,17 @@ interface ExtractionPanelState {
   setDraft: (content: SemanticContent) => void;
   resetDraft: () => void;
   setExtracting: (extracting: boolean) => void;
-  confirmFrame: (frameId: string) => void;
-  unconfirmFrame: (frameId: string) => void;
-  confirmSlot: (frameId: string, slotKey: string) => void;
-  unconfirmSlot: (frameId: string, slotKey: string) => void;
+  confirmNode: (treeId: string) => void;
+  unconfirmNode: (treeId: string) => void;
+  confirmSlot: (treeId: string, slotKey: string) => void;
+  unconfirmSlot: (treeId: string, slotKey: string) => void;
   setFocusIntent: (enabled: boolean) => void;
-  setLlmHighlightedFrameIds: (ids: string[]) => void;
+  setLlmHighlightedNodeIds: (ids: string[]) => void;
   hydrateDeltaLog: (entries: DeltaLogEntry[]) => void;
   conversationId: string | null;
   setConversationId: (id: string | null) => void;
 
-  // Gate result (Step 5 — frame quality annotation)
+  // Gate result (Step 5 — node quality annotation)
   gateIssues: Record<string, { severity: 'error' | 'warning' | 'info'; description: string }[]>;
   setGateIssues: (
     issues: Record<string, { severity: 'error' | 'warning' | 'info'; description: string }[]>
@@ -83,7 +84,7 @@ interface ExtractionPanelState {
   advisoryQuestions: Array<{
     id: string;
     type: string;
-    frameId: string;
+    treeId: string;
     slotKey?: string;
     question: string;
     currentValue?: unknown;
@@ -92,7 +93,7 @@ interface ExtractionPanelState {
     questions: Array<{
       id: string;
       type: string;
-      frameId: string;
+      treeId: string;
       slotKey?: string;
       question: string;
       currentValue?: unknown;
@@ -107,20 +108,20 @@ interface ExtractionPanelState {
   addTopic: (topic: Topic) => void;
 
   // Hover linking between YAML ↔ chat messages
-  hoveredFrameId: string | null; // YAML row hovered → highlight source turn
+  hoveredNodeId: string | null; // YAML row hovered → highlight source turn
   hoveredSlotKey: string | null; // Specific slot hovered (for character-level highlight)
   hoveredTurnHash: string | null; // Chat message hovered → highlight YAML rows
   hoveredCharOffset: number | null; // Character offset within hovered turn (for slot-level reverse highlight)
-  setHoveredFrameId: (id: string | null, slotKey?: string | null) => void;
+  setHoveredNodeId: (id: string | null, slotKey?: string | null) => void;
   setHoveredTurn: (hash: string | null, charOffset?: number | null) => void;
 
   // Manual edit tracking
-  manualEditedFrameIds: Set<string>;
+  manualEditedNodeIds: Set<string>;
 
   // Commit tracking
   lastCommitHash: string | null;
-  committedFrameIds: Record<string, boolean>;
-  committedFrameSnapshot: Record<string, Frame>;
+  committedNodeIds: Record<string, boolean>;
+  committedNodeSnapshot: Record<string, TreeNode>;
   commitBranch: string;
   projectId: string | null;
   conversationTitle: string | null;
@@ -128,8 +129,8 @@ interface ExtractionPanelState {
   commitError: string | null;
 
   // Commit actions
-  selectDeltaFrames: () => Frame[];
-  commitFrames: (message: string) => Promise<{ hash: string }>;
+  selectDeltaNodes: () => TreeNode[];
+  commitNodes: (message: string) => Promise<{ hash: string }>;
   setCommitBranch: (branch: string) => void;
   setProjectId: (id: string | null) => void;
   setConversationTitle: (title: string | null) => void;
@@ -142,7 +143,7 @@ interface ExtractionPanelState {
   dismissCompressBanner: () => void;
 }
 
-const emptyContent: SemanticContent = { frames: [], relations: [] };
+const emptyContent: SemanticContent = { trees: [], relations: [] };
 
 export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) => ({
   panelMode: 'collapsed',
@@ -150,12 +151,12 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
   draft: emptyContent,
   deltaLog: [],
   isExtracting: false,
-  confirmedFrameIds: {},
+  confirmedNodeIds: {},
   confirmedSlotKeys: {},
   focusIntentEnabled: false,
-  llmHighlightedFrameIds: {},
+  llmHighlightedNodeIds: {},
   deltaChangeHistory: [],
-  removedFrames: [],
+  removedNodes: [],
   conversationId: null,
   gateIssues: {},
   driftDetected: false,
@@ -164,18 +165,18 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
   advisoryQuestions: [],
   topics: [],
   activeTopicId: null,
-  hoveredFrameId: null,
+  hoveredNodeId: null,
   hoveredSlotKey: null,
   hoveredTurnHash: null,
   hoveredCharOffset: null,
 
   // Manual edit tracking
-  manualEditedFrameIds: new Set(),
+  manualEditedNodeIds: new Set(),
 
   // Commit tracking defaults
   lastCommitHash: null,
-  committedFrameIds: {},
-  committedFrameSnapshot: {},
+  committedNodeIds: {},
+  committedNodeSnapshot: {},
   commitBranch: 'main',
   projectId: null,
   conversationTitle: null,
@@ -196,51 +197,9 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
 
   applyDelta: (delta, source, turnHash) => {
     const { draft, deltaLog } = get();
-    let frames = [...draft.frames];
-    let relations = [...draft.relations];
 
-    for (const change of delta.changes) {
-      switch (change.action) {
-        case 'add':
-          frames.push(change.frame);
-          break;
-        case 'update': {
-          frames = frames.map((f) => {
-            if (f.id !== change.target) return f;
-            const merged = { ...f.slots };
-            for (const [k, v] of Object.entries(change.slots)) {
-              if (v === null) delete merged[k];
-              else merged[k] = v;
-            }
-            return { ...f, slots: merged };
-          });
-          break;
-        }
-        case 'remove': {
-          const removed = frames.find((f) => f.id === change.target);
-          if (removed) {
-            set((s) => ({ removedFrames: [...s.removedFrames, removed] }));
-          }
-          frames = frames.filter((f) => f.id !== change.target);
-          // Auto-clean orphaned relations (match core applyDelta behavior)
-          const removedId = change.target;
-          relations = relations.filter((r) => r.from !== removedId && r.to !== removedId);
-          break;
-        }
-      }
-    }
-
-    if (delta.new_relations) {
-      relations = [...relations, ...delta.new_relations];
-    }
-    if (delta.remove_relations) {
-      relations = relations.filter(
-        (r) =>
-          !delta.remove_relations!.some(
-            (rr) => rr.from === r.from && rr.to === r.to && rr.type === r.type
-          )
-      );
-    }
+    // Use core applyDelta to properly update the tree structure
+    const newContent = coreApplyDelta(draft, delta);
 
     const entry: DeltaLogEntry = {
       id: crypto.randomUUID(),
@@ -251,19 +210,20 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
     };
 
     set({
-      draft: { frames, relations },
+      draft: newContent,
       deltaLog: [...deltaLog, entry],
       deltaChangeHistory: [delta.changes, ...get().deltaChangeHistory].slice(0, 3),
     });
 
     // Track manual edits
     if (source === 'manual') {
-      const ids = new Set(get().manualEditedFrameIds);
+      const ids = new Set(get().manualEditedNodeIds);
       for (const change of delta.changes) {
-        if (change.action === 'add') ids.add(change.frame.id);
-        else if (change.action === 'update') ids.add(change.target);
+        if (change.action === 'add') ids.add(change.node.key);
+        else if (change.action === 'update') ids.add(change.target_path);
+        else if (change.action === 'remove') ids.add(change.target_path);
       }
-      set({ manualEditedFrameIds: ids });
+      set({ manualEditedNodeIds: ids });
     }
 
     // Persist user edits to database (LLM extraction and compression are already saved by the API)
@@ -276,52 +236,46 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
   },
 
   setDraft: (content) => {
-    // Extract manual-edited frame IDs from server response
-    const manualIds = new Set<string>();
-    for (const f of content.frames) {
-      if (f.manual_edited) manualIds.add(f.id);
-    }
-    set({ draft: content, manualEditedFrameIds: manualIds });
+    set({ draft: content, manualEditedNodeIds: new Set() });
   },
   resetDraft: () =>
     set({
       draft: emptyContent,
       deltaLog: [],
-      removedFrames: [],
+      removedNodes: [],
       deltaChangeHistory: [],
-      confirmedFrameIds: {},
+      confirmedNodeIds: {},
       confirmedSlotKeys: {},
-      manualEditedFrameIds: new Set(),
+      manualEditedNodeIds: new Set(),
     }),
   setExtracting: (extracting) => set({ isExtracting: extracting }),
 
-  confirmFrame: (frameId) =>
+  confirmNode: (treeId) =>
     set((s) => ({
-      confirmedFrameIds: { ...s.confirmedFrameIds, [frameId]: true },
+      confirmedNodeIds: { ...s.confirmedNodeIds, [treeId]: true },
     })),
-  unconfirmFrame: (frameId) =>
+  unconfirmNode: (treeId) =>
     set((s) => {
-      const { [frameId]: _, ...rest } = s.confirmedFrameIds;
-      return { confirmedFrameIds: rest };
+      const { [treeId]: _, ...rest } = s.confirmedNodeIds;
+      return { confirmedNodeIds: rest };
     }),
-  confirmSlot: (frameId, slotKey) =>
+  confirmSlot: (treeId, slotKey) =>
     set((s) => ({
-      // Confirming a slot auto-confirms the parent frame
-      confirmedFrameIds: { ...s.confirmedFrameIds, [frameId]: true },
+      // Confirming a slot auto-confirms the parent node
+      confirmedNodeIds: { ...s.confirmedNodeIds, [treeId]: true },
       confirmedSlotKeys: {
         ...s.confirmedSlotKeys,
-        [frameId]: { ...s.confirmedSlotKeys[frameId], [slotKey]: true },
+        [treeId]: { ...s.confirmedSlotKeys[treeId], [slotKey]: true },
       },
     })),
-  unconfirmSlot: (frameId, slotKey) =>
+  unconfirmSlot: (treeId, slotKey) =>
     set((s) => {
-      const frameSlots = { ...s.confirmedSlotKeys[frameId] };
+      const frameSlots = { ...s.confirmedSlotKeys[treeId] };
       delete frameSlots[slotKey];
       const hasRemainingSlots = Object.keys(frameSlots).length > 0;
       return {
-        confirmedSlotKeys: { ...s.confirmedSlotKeys, [frameId]: frameSlots },
-        // If no slots confirmed and frame wasn't explicitly confirmed, unconfirm frame too
-        confirmedFrameIds: hasRemainingSlots ? s.confirmedFrameIds : s.confirmedFrameIds,
+        confirmedSlotKeys: { ...s.confirmedSlotKeys, [treeId]: frameSlots },
+        confirmedNodeIds: hasRemainingSlots ? s.confirmedNodeIds : s.confirmedNodeIds,
       };
     }),
   setFocusIntent: (enabled) => set({ focusIntentEnabled: enabled }),
@@ -333,18 +287,18 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
   setTopics: (topics) => set({ topics }),
   setActiveTopicId: (id) => set({ activeTopicId: id }),
   addTopic: (topic) => set((s) => ({ topics: [...s.topics, topic] })),
-  setLlmHighlightedFrameIds: (ids) =>
-    set({ llmHighlightedFrameIds: Object.fromEntries(ids.map((id) => [id, true])) }),
+  setLlmHighlightedNodeIds: (ids) =>
+    set({ llmHighlightedNodeIds: Object.fromEntries(ids.map((id) => [id, true])) }),
   hydrateDeltaLog: (entries) => set({ deltaLog: entries }),
   setConversationId: (id) => set({ conversationId: id }),
-  setHoveredFrameId: (id, slotKey) => {
-    if (hoverFrameTimer) clearTimeout(hoverFrameTimer);
+  setHoveredNodeId: (id, slotKey) => {
+    if (hoverNodeTimer) clearTimeout(hoverNodeTimer);
     if (id === null) {
       // Clear immediately on mouse leave for snappy feel
-      set({ hoveredFrameId: null, hoveredSlotKey: null });
+      set({ hoveredNodeId: null, hoveredSlotKey: null });
     } else {
-      hoverFrameTimer = setTimeout(() => {
-        set({ hoveredFrameId: id, hoveredSlotKey: slotKey ?? null });
+      hoverNodeTimer = setTimeout(() => {
+        set({ hoveredNodeId: id, hoveredSlotKey: slotKey ?? null });
       }, HOVER_DEBOUNCE_MS);
     }
   },
@@ -361,19 +315,21 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
 
   // Commit actions
 
-  selectDeltaFrames: () => {
-    const { draft, committedFrameIds, committedFrameSnapshot } = get();
-    return draft.frames.filter((f) => {
-      if (!committedFrameIds[f.id]) return true;
-      const snap = committedFrameSnapshot[f.id];
+  selectDeltaNodes: () => {
+    const { draft, committedNodeIds, committedNodeSnapshot } = get();
+    const flatNodes = flattenTrees(draft.trees);
+    return draft.trees.filter((_t, i) => {
+      const node = flatNodes[i];
+      if (!node) return true;
+      const nodeId = node.id;
+      if (!committedNodeIds[nodeId]) return true;
+      const snap = committedNodeSnapshot[nodeId];
       if (!snap) return true;
-      const sortedStringify = (obj: unknown) =>
-        JSON.stringify(obj, Object.keys(obj as Record<string, unknown>).sort());
-      return sortedStringify(f.slots) !== sortedStringify(snap.slots);
+      return false; // committed and unchanged
     });
   },
 
-  commitFrames: async (message) => {
+  commitNodes: async (message) => {
     const {
       draft,
       projectId,
@@ -381,19 +337,15 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
       conversationTitle,
       lastCommitHash,
       commitBranch,
-      selectDeltaFrames,
     } = get();
     if (!projectId) throw new Error('No project ID');
 
     set({ isCommitting: true, commitError: null });
     try {
-      const deltaFrames = selectDeltaFrames();
-      const cleanFrames = deltaFrames.map(({ slot_sources: _, source: __, ...f }) => f);
-
       const result = await createCommit(
         projectId,
         {
-          frames: cleanFrames,
+          trees: draft.trees,
           relations: draft.relations,
         },
         {
@@ -408,10 +360,13 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
       );
 
       const newCommittedIds: Record<string, boolean> = {};
-      const newSnapshot: Record<string, Frame> = {};
-      for (const f of draft.frames) {
+      const newSnapshot: Record<string, TreeNode> = {};
+      const flat = flattenTrees(draft.trees);
+      for (const f of flat) {
         newCommittedIds[f.id] = true;
-        newSnapshot[f.id] = { ...f, slots: { ...f.slots } };
+      }
+      for (const t of draft.trees) {
+        newSnapshot[t.key] = { ...t, slots: { ...t.slots } };
       }
 
       // Insert commit marker into delta log (links change history to commit)
@@ -431,11 +386,11 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
 
       set({
         lastCommitHash: result.commit.hash,
-        committedFrameIds: newCommittedIds,
-        committedFrameSnapshot: newSnapshot,
+        committedNodeIds: newCommittedIds,
+        committedNodeSnapshot: newSnapshot,
         isCommitting: false,
         panelMode: 'default',
-        manualEditedFrameIds: new Set(),
+        manualEditedNodeIds: new Set(),
       });
 
       return { hash: result.commit.hash };
@@ -460,15 +415,18 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
       if (recentCommits.length > 0) {
         const head = recentCommits[0];
         set({ lastCommitHash: head.hash });
-        const frames = (head.content?.frames ?? []) as Frame[];
-        if (frames.length > 0) {
+        const trees = (head.content?.trees ?? []) as TreeNode[];
+        if (trees.length > 0) {
+          const flat = flattenTrees(trees);
           const ids: Record<string, boolean> = {};
-          const snapshot: Record<string, Frame> = {};
-          for (const f of frames) {
+          const snapshot: Record<string, TreeNode> = {};
+          for (const f of flat) {
             ids[f.id] = true;
-            snapshot[f.id] = f;
           }
-          set({ committedFrameIds: ids, committedFrameSnapshot: snapshot });
+          for (const t of trees) {
+            snapshot[t.key] = t;
+          }
+          set({ committedNodeIds: ids, committedNodeSnapshot: snapshot });
         }
       }
     } catch {
@@ -482,8 +440,8 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
 
     set({ isCompressing: true });
     try {
-      const { compressFrames } = await import('@/lib/api/frames');
-      const result = await compressFrames(convId);
+      const { compressNodes } = await import('@/lib/api/trees');
+      const result = await compressNodes(convId);
 
       if (result.delta.changes.length === 0) {
         set({ isCompressing: false });
@@ -494,7 +452,6 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
       get().applyDelta(result.delta, 'compress');
 
       // Patch the client-generated ID with the server's actual delta_log_id
-      // (applyDelta uses crypto.randomUUID(), but undo needs the real server ID)
       set((s) => {
         const log = [...s.deltaLog];
         const last = log[log.length - 1];
@@ -508,11 +465,11 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
         isCompressing: false,
         compressResult: {
           summary: result.metadata.compress_summary,
-          framesBefore: result.metadata.frames_before,
-          framesAfter: result.metadata.frames_after,
+          treesBefore: result.metadata.trees_before,
+          treesAfter: result.metadata.trees_after,
           mergedCount: result.metadata.merged_count,
           removedCount: result.metadata.removed_count,
-          removedFrameIds: result.metadata.removed_frame_ids,
+          removedNodeIds: result.metadata.removed_tree_ids,
           deltaLogId: result.delta_log_id,
         },
         showCompressBanner: true,
@@ -528,7 +485,7 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
     if (!compressDelta || !conversationId) return;
 
     try {
-      const { deleteDelta, getSemanticDraft } = await import('@/lib/api/frames');
+      const { deleteDelta, getSemanticDraft } = await import('@/lib/api/trees');
       await deleteDelta(conversationId, compressDelta.id);
 
       // Rebuild from server (most reliable)

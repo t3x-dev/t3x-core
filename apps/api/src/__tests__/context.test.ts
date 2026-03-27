@@ -51,16 +51,16 @@ describe('Context Routes', () => {
       parents: [],
       author: { type: 'human', id: 'user_1', name: 'Test User' },
       content: {
-        frames: [
+        trees: [
           {
-            id: 'f_001',
-            type: 'preference',
+            key: 'preference',
             slots: { topic: 'cats', sentiment: 'positive' },
+            children: [],
             confidence: 0.9,
           },
         ],
         relations: [],
-      },
+      } as any,
       project_id: testProjectId,
       message: 'First commit',
       branch: 'main',
@@ -71,22 +71,22 @@ describe('Context Routes', () => {
       parents: [],
       author: { type: 'human', id: 'user_1', name: 'Test User' },
       content: {
-        frames: [
+        trees: [
           {
-            id: 'f_001',
-            type: 'preference',
+            key: 'preference',
             slots: { topic: 'cats', sentiment: 'positive' },
+            children: [],
             confidence: 0.9,
           },
           {
-            id: 'f_002',
-            type: 'fact',
+            key: 'fact',
             slots: { subject: 'user', predicate: 'lives_in', object: 'Tokyo' },
+            children: [],
             confidence: 0.85,
           },
         ],
         relations: [],
-      },
+      } as any,
       project_id: testProjectId,
       message: 'Second commit on main',
       branch: 'main',
@@ -97,16 +97,16 @@ describe('Context Routes', () => {
       parents: [],
       author: { type: 'human', id: 'user_1', name: 'Test User' },
       content: {
-        frames: [
+        trees: [
           {
-            id: 'f_010',
-            type: 'opinion',
+            key: 'opinion',
             slots: { topic: 'dogs', stance: 'neutral' },
+            children: [],
             confidence: 0.75,
           },
         ],
         relations: [],
-      },
+      } as any,
       project_id: testProjectId,
       message: 'Commit on dev branch',
       branch: 'dev',
@@ -129,10 +129,10 @@ describe('Context Routes', () => {
       expect(data.data.commit_hash).toBeTruthy();
       // The latest commit on main has 2 frames
       expect(data.data.sentences).toHaveLength(2);
-      expect(data.data.sentences[0].id).toBe('f_001');
+      expect(data.data.sentences[0].id).toBe('preference');
       expect(data.data.sentences[0].text).toBeTruthy();
       expect(data.data.sentences[0].confidence).toBe(0.9);
-      expect(data.data.sentences[1].id).toBe('f_002');
+      expect(data.data.sentences[1].id).toBe('fact');
       expect(data.data.sentences[1].confidence).toBe(0.85);
     });
 
@@ -158,7 +158,7 @@ describe('Context Routes', () => {
       expect(data.data.branch).toBe('dev');
       expect(data.data.commit_hash).toBeTruthy();
       expect(data.data.sentences).toHaveLength(1);
-      expect(data.data.sentences[0].id).toBe('f_010');
+      expect(data.data.sentences[0].id).toBe('opinion');
     });
 
     it('returns yaml format when requested', async () => {
@@ -171,7 +171,7 @@ describe('Context Routes', () => {
       expect(data.data.yaml).toBeTruthy();
       expect(typeof data.data.yaml).toBe('string');
       expect(data.data.yaml).toContain('sentences:');
-      expect(data.data.yaml).toContain('f_001');
+      expect(data.data.yaml).toContain('preference');
       // Sentences array is still returned alongside yaml
       expect(data.data.sentences).toHaveLength(2);
     });

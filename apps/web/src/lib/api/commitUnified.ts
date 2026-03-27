@@ -1,38 +1,26 @@
 /**
- * Unified commit fetch — frame-based
+ * Unified commit fetch — tree-primary
  */
 
 import type { Commit } from '@t3x-dev/core';
-import { upgradeLegacyCommit } from '@t3x-dev/core';
-import { getApiCommit } from './commits';
 import { API_V1, fetchWithTimeout } from './core';
 
 /**
- * Fetch a commit as frames.
+ * Fetch a commit (tree-primary format).
  */
-export async function getCommitAsFrames(hash: string): Promise<Commit> {
-  try {
-    const res = await fetchWithTimeout(`${API_V1}/commits/${encodeURIComponent(hash)}`);
-    if (res.ok) {
-      const json = (await res.json()) as { success: boolean; data?: { commit?: Commit } };
-      if (json.success && json.data?.commit) {
-        return json.data.commit;
-      }
-    }
-  } catch {
-    // Fall through
+export async function getCommitAsNodes(hash: string): Promise<Commit> {
+  const res = await fetchWithTimeout(`${API_V1}/commits/${encodeURIComponent(hash)}`);
+  const json = (await res.json()) as { success: boolean; data?: { commit?: Commit } };
+  if (json.success && json.data?.commit) {
+    return json.data.commit;
   }
-
-  // Fallback: fetch via API and attempt upgrade
-  const apiCommit = await getApiCommit(hash);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return upgradeLegacyCommit(apiCommit as any);
+  throw new Error(`Failed to fetch commit ${hash}`);
 }
 
 /**
- * Fetch commit history as frames.
+ * Fetch commit history (tree-primary format).
  */
-export async function getCommitHistoryAsFrames(hash: string, limit = 10): Promise<Commit[]> {
+export async function getCommitHistoryAsNodes(hash: string, limit = 10): Promise<Commit[]> {
   try {
     const res = await fetchWithTimeout(
       `${API_V1}/commits/${encodeURIComponent(hash)}/history?limit=${limit}`

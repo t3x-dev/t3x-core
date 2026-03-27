@@ -278,7 +278,8 @@ draftsWorkflowRoutes.openapi(previewDraftRoute, async (c) => {
       );
     }
 
-    const includedSentences = draft.sentences.filter((s) => s.included);
+    // biome-ignore lint/suspicious/noExplicitAny: draft.sentences is loosely typed from storage
+    const includedSentences = (draft.sentences as any[]).filter((s: any) => s.included);
     if (includedSentences.length === 0) {
       return errorResponse(c, 'INVALID_REQUEST', 'Draft has no included sentences');
     }
@@ -340,10 +341,12 @@ draftsWorkflowRoutes.openapi(previewDraftRoute, async (c) => {
       author: { type: 'human' as const, name: 'preview' },
       committed_at: new Date().toISOString(),
       content: {
-        sentences: includedSentences.map((s) => ({
-          id: s.id,
-          text: s.text,
+        trees: includedSentences.map((s: any) => ({
+          key: s.id,
+          slots: { text: s.text },
+          children: [],
         })),
+        relations: [],
       },
     };
 
@@ -374,7 +377,7 @@ draftsWorkflowRoutes.openapi(previewDraftRoute, async (c) => {
 
     // 9. Generate
     const result = await generateLeafOutput({
-      commit: virtualCommit,
+      knowledge: virtualCommit.content as any,
       leaf: virtualLeaf,
       additionalInstructions: draft.instructions,
       model: modelId,
@@ -494,12 +497,13 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
       });
     } else {
       // Deterministic mode: existing DraftSentence flow
-      const includedSentences = draft.sentences.filter((s) => s.included);
+      // biome-ignore lint/suspicious/noExplicitAny: draft.sentences is loosely typed from storage
+      const includedSentences = (draft.sentences as any[]).filter((s: any) => s.included);
       if (includedSentences.length === 0) {
         return errorResponse(c, 'INVALID_REQUEST', 'Draft has no included sentences');
       }
 
-      sentences = includedSentences.map((ds) => {
+      sentences = includedSentences.map((ds: any) => {
         const confidence = ds.origin.type === 'extracted' ? ds.origin.confidence : 1.0;
 
         const sourceRef =
@@ -534,7 +538,7 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
     const commit = await createCommit(db, {
       parents,
       author: { type: 'human' as const, name: 'workbench' },
-      content: { frames: commitFrames, relations: [] },
+      content: { trees: commitFrames.map((f: any) => ({ key: f.id, slots: f.slots, children: [] as any[], confidence: f.confidence })), relations: [] },
       project_id: draft.project_id,
       message: body?.message ?? `Draft: ${draft.title}`,
       branch: draft.target_branch ?? 'main',
@@ -604,10 +608,7 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
       project_id: commit.project_id ?? null,
       message: commit.message ?? null,
       branch: commit.branch ?? null,
-      sources: commit.sources ?? null,
       provenance: commit.provenance ?? null,
-      position_x: commit.position_x ?? null,
-      position_y: commit.position_y ?? null,
     };
 
     const leafResponse = leaf
@@ -723,7 +724,7 @@ draftsWorkflowRoutes.openapi(suggestDraftRoute, async (c) => {
 
     // 5. Search for similar sentences
     const limit = body?.limit ?? 10;
-    const draftTexts = new Set(draft.sentences.map((s) => s.text));
+    const draftTexts = new Set((draft.sentences as any[]).map((s: any) => s.text));
     const rawResults = await searchSimilarSentences(
       db,
       draft.project_id,

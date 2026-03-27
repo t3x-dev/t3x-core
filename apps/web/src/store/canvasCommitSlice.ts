@@ -342,7 +342,7 @@ export const createCommitSlice: StateCreator<CanvasState, [], [], CommitSlice> =
           baselineSummary: sourceExcerptText,
           // Inherit source commit info for creating child commits without conversation
           sourceCommitHash: source.data.commitHash,
-          // Inherit parent commit frames into extraction panel on mount
+          // Inherit parent commit trees into extraction panel on mount
           inheritFromCommitHash: source.data.commitHash,
           sourceTurnWindow: source.data.sourceTurnWindow,
           // New: pendingSource with structured text block AND sentences for V3

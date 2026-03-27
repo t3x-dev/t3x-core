@@ -61,73 +61,15 @@ const makeMergeState = (overrides: Record<string, unknown> = {}) => ({
   sourceHash: 'sha256:a',
   targetHash: 'sha256:b',
   prepared: {
-    identical: [
-      { id: 's1', text: 'Same text', confidence: 1, source: { type: 'conversation', id: 'c1' } },
-    ],
-    similarPairs: [
+    autoKept: ['trees.topic.title'],
+    conflicts: [
       {
-        source: {
-          id: 's2',
-          text: 'Src',
-          confidence: 0.9,
-          source: { type: 'conversation', id: 'c1' },
-        },
-        target: {
-          id: 't2',
-          text: 'Tgt',
-          confidence: 0.9,
-          source: { type: 'conversation', id: 'c2' },
-        },
-        wordDiff: [],
-      },
-      {
-        source: {
-          id: 's3',
-          text: 'Src2',
-          confidence: 0.9,
-          source: { type: 'conversation', id: 'c1' },
-        },
-        target: {
-          id: 't3',
-          text: 'Tgt2',
-          confidence: 0.9,
-          source: { type: 'conversation', id: 'c2' },
-        },
-        wordDiff: [],
-        resolution: 'source',
+        path: 'trees.topic.summary',
+        slotConflicts: [{ slot: 'summary', source: 'Source summary', target: 'Target summary' }],
       },
     ],
-    onlyInSource: [
-      {
-        sentence: {
-          id: 'os1',
-          text: 'Only src',
-          confidence: 1,
-          source: { type: 'conversation', id: 'c1' },
-        },
-        keep: true,
-      },
-    ],
-    onlyInTarget: [
-      {
-        sentence: {
-          id: 'ot1',
-          text: 'Only tgt',
-          confidence: 1,
-          source: { type: 'conversation', id: 'c2' },
-        },
-        keep: false,
-      },
-      {
-        sentence: {
-          id: 'ot2',
-          text: 'Only tgt2',
-          confidence: 1,
-          source: { type: 'conversation', id: 'c2' },
-        },
-        keep: true,
-      },
-    ],
+    onlyInSource: ['trees.details.extra'],
+    onlyInTarget: ['trees.details.note1', 'trees.details.note2'],
   },
   ...overrides,
 });
@@ -178,22 +120,20 @@ describe('Merge Selectors', () => {
       expect(selectCanExecuteMerge(useCanvasStore.getState())).toBe(false);
     });
 
-    it('returns false when unresolved pairs exist', () => {
+    it('returns false when conflicts exist', () => {
       useCanvasStore.setState({ mergeState: makeMergeState() as any });
-      // First pair has no resolution
+      // conflicts array has one entry
       expect(selectCanExecuteMerge(useCanvasStore.getState())).toBe(false);
     });
 
-    it('returns true when all pairs resolved', () => {
-      const state = makeMergeState();
-      state.prepared.similarPairs[0].resolution = 'target';
+    it('returns true when all conflicts resolved', () => {
+      const state = makeMergeState({ prepared: { ...makeMergeState().prepared, conflicts: [] } });
       useCanvasStore.setState({ mergeState: state as any });
       expect(selectCanExecuteMerge(useCanvasStore.getState())).toBe(true);
     });
 
-    it('returns true when no similar pairs exist', () => {
-      const state = makeMergeState();
-      state.prepared.similarPairs = [];
+    it('returns true when no conflicts exist', () => {
+      const state = makeMergeState({ prepared: { ...makeMergeState().prepared, conflicts: [] } });
       useCanvasStore.setState({ mergeState: state as any });
       expect(selectCanExecuteMerge(useCanvasStore.getState())).toBe(true);
     });
@@ -207,15 +147,14 @@ describe('Merge Selectors', () => {
       expect(selectUnresolvedCount(useCanvasStore.getState())).toBe(0);
     });
 
-    it('counts unresolved pairs', () => {
+    it('counts unresolved conflicts', () => {
       useCanvasStore.setState({ mergeState: makeMergeState() as any });
-      // 2 pairs, 1 resolved → 1 unresolved
+      // 1 conflict in default state
       expect(selectUnresolvedCount(useCanvasStore.getState())).toBe(1);
     });
 
-    it('returns 0 when all resolved', () => {
-      const state = makeMergeState();
-      state.prepared.similarPairs[0].resolution = 'source';
+    it('returns 0 when no conflicts', () => {
+      const state = makeMergeState({ prepared: { ...makeMergeState().prepared, conflicts: [] } });
       useCanvasStore.setState({ mergeState: state as any });
       expect(selectUnresolvedCount(useCanvasStore.getState())).toBe(0);
     });
@@ -234,10 +173,10 @@ describe('Merge Selectors', () => {
       const counts = selectMergeCounts(useCanvasStore.getState());
       expect(counts).toEqual({
         identical: 1,
-        similar: 2,
+        similar: 1,
         onlyInSource: 1,
         onlyInTarget: 2,
-        resolved: 1, // only the second pair has resolution
+        resolved: 0, // resolution tracking is in mergeWorkspaceStore
       });
     });
   });

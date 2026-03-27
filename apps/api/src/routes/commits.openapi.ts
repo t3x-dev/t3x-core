@@ -58,16 +58,13 @@ const ProvenanceSchema = z.object({
 const CreateCommitRequestSchema = z.object({
   project_id: z.string().min(1),
   content: z.object({
-    topic: z.string().optional(),
-    root_frame_id: z.string().optional(),
-    frames: z.any(),
+    trees: z.any(),
     relations: z.any().optional(),
   }),
   branch: z.string().optional(),
   parents: z.array(z.string()).optional(),
   message: z.string().optional(),
   author: AuthorSchema,
-  sources: z.array(SourceSchema).optional(),
   provenance: ProvenanceSchema.optional(),
 });
 
@@ -81,10 +78,7 @@ const CommitResponseSchema = z.object({
   project_id: z.string(),
   message: z.string().nullable(),
   branch: z.string(),
-  sources: z.array(SourceSchema).nullable(),
   provenance: ProvenanceSchema.nullable(),
-  position_x: z.number().optional(),
-  position_y: z.number().optional(),
 });
 
 // ============================================================
@@ -138,18 +132,8 @@ commitRoutes.openapi(createCommitRoute, async (c) => {
       parents: body.parents,
       message: body.message,
       author: body.author,
-      sources: body.sources,
       provenance: body.provenance,
     });
-
-    // Clear manual_edited flags for all source conversations
-    if (body.sources) {
-      for (const src of body.sources) {
-        if (src.type === 'conversation' && src.id) {
-          await clearManualEditedFlags(db, src.id);
-        }
-      }
-    }
 
     return c.json({ success: true as const, data: { commit } }, 200);
   } catch (err) {

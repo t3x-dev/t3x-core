@@ -38,7 +38,7 @@ describe('Leaf Output Edits Storage', () => {
       author: { type: 'human', id: 'test', name: 'Test User' },
       message: 'test commit',
       content: {
-        frames: [{ id: 'f_001', type: 'test_knowledge', slots: { text: 'Test sentence' }, confidence: 0.9 }],
+        trees: [{ key: 'test_knowledge', slots: { text: 'Test sentence' }, children: [] }],
         relations: [],
       },
     });

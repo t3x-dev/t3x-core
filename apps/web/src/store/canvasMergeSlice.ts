@@ -4,7 +4,7 @@ import type { StateCreator } from 'zustand';
 import { getTerminology } from '@/hooks/useTerminology';
 import { API_V1, fetchWithTimeout, handleResponse } from '@/lib/api/core';
 import { useSettingsStore } from '@/store/settingsStore';
-import type { Merge2WayResult } from '../types/merge';
+import type { MergeResult } from '../types/merge';
 import type { CanvasNodeData } from '../types/nodes';
 import type { CanvasState, MergeSlice } from './canvasStoreTypes';
 import { edgeStyle, edgeType, snapPosition } from './canvasStoreUtils';
@@ -32,7 +32,7 @@ export const createMergeSlice: StateCreator<CanvasState, [], [], MergeSlice> = (
         body: JSON.stringify({ source_hash: sourceHash, target_hash: targetHash }),
       });
 
-      const data = await handleResponse<Merge2WayResult>(response);
+      const data = await handleResponse<MergeResult>(response);
 
       set({
         mergeState: {
@@ -58,55 +58,23 @@ export const createMergeSlice: StateCreator<CanvasState, [], [], MergeSlice> = (
   },
 
   /**
-   * Resolve a similar pair conflict
-   * @param index - Index in similarPairs array
+   * Resolve a conflict by index
+   * @param index - Index in conflicts array
    * @param pick - 'source' or 'target'
    */
   resolveSimilarPair: (index: number, pick: 'source' | 'target') => {
-    set((state) => {
-      if (!state.mergeState) return state;
-
-      const newPairs = [...state.mergeState.prepared.similarPairs];
-      newPairs[index] = { ...newPairs[index], resolution: pick };
-
-      return {
-        mergeState: {
-          ...state.mergeState,
-          prepared: {
-            ...state.mergeState.prepared,
-            similarPairs: newPairs,
-          },
-        },
-      };
-    });
+    // Tree-primary: conflict resolutions are tracked separately (not mutating prepared)
+    // This is a legacy API; actual resolution is handled via mergeWorkspaceStore
   },
 
   /**
-   * Toggle keep/discard for a unique sentence
+   * Toggle keep/discard for a unique path
    * @param side - 'source' or 'target'
    * @param index - Index in onlyInSource or onlyInTarget array
    */
-  toggleKeep: (side: 'source' | 'target', index: number) => {
-    set((state) => {
-      if (!state.mergeState) return state;
-
-      const key = side === 'source' ? 'onlyInSource' : 'onlyInTarget';
-      const newCandidates = [...state.mergeState.prepared[key]];
-      newCandidates[index] = {
-        ...newCandidates[index],
-        keep: !newCandidates[index].keep,
-      };
-
-      return {
-        mergeState: {
-          ...state.mergeState,
-          prepared: {
-            ...state.mergeState.prepared,
-            [key]: newCandidates,
-          },
-        },
-      };
-    });
+  toggleKeep: (side: 'source' | 'target', _index: number) => {
+    // Tree-primary: keep/discard is tracked via Sets in mergeWorkspaceStore
+    // This is a legacy API kept for interface compatibility
   },
 
   /**
@@ -149,7 +117,7 @@ export const createMergeSlice: StateCreator<CanvasState, [], [], MergeSlice> = (
         author: { type?: 'human' | 'agent'; name?: string };
         committed_at: string;
         content: {
-          frames: Array<{ id: string; type: string; slots: Record<string, unknown> }>;
+          trees: Array<{ key: string; slots: Record<string, unknown>; children: unknown[] }>;
           relations: Array<{ from: string; to: string; type: string }>;
         };
         message: string | null | undefined;
@@ -195,7 +163,7 @@ export const createMergeSlice: StateCreator<CanvasState, [], [], MergeSlice> = (
           title:
             mergeCommit.message ||
             `${getTerminology('merge', useSettingsStore.getState().developerMode)} ${getTerminology('commit', useSettingsStore.getState().developerMode).toLowerCase()}`,
-          summary: `${mergeCommit.content.frames?.length ?? 0} frames`,
+          summary: `${mergeCommit.content.trees?.length ?? 0} trees`,
           status: 'committed',
           timestamp: mergeCommit.committed_at,
           tags: ['merge'],
@@ -212,7 +180,7 @@ export const createMergeSlice: StateCreator<CanvasState, [], [], MergeSlice> = (
               : undefined,
           // Content
           sourceExcerpt:
-            mergeCommit.content.frames?.map(
+            mergeCommit.content.trees?.map(
               (f: any) =>
                 `[${f.type}] ${Object.entries(f.slots || {})
                   .map(([k, v]: [string, any]) => `${k}: ${typeof v === 'string' ? v : String(v)}`)
@@ -226,7 +194,7 @@ export const createMergeSlice: StateCreator<CanvasState, [], [], MergeSlice> = (
             schema: 't3x/commit/5' as const,
             author: { type: 'human' as const, ...mergeCommit.author },
             committed_at: mergeCommit.committed_at,
-            content: { frames: [], relations: [] },
+            content: { trees: [], relations: [] },
             message: mergeCommit.message ?? null,
             branch: mergeCommit.branch ?? 'main',
             sources: null,
@@ -298,19 +266,20 @@ export const createMergeSlice: StateCreator<CanvasState, [], [], MergeSlice> = (
 export const selectIsMerging = (state: CanvasState) => state.mergeState !== null;
 
 /**
- * Can the merge be executed? (all similar pairs resolved)
+ * Can the merge be executed? (all conflicts resolved)
  */
 export const selectCanExecuteMerge = (state: CanvasState) => {
   if (!state.mergeState) return false;
-  return state.mergeState.prepared.similarPairs.every((p) => p.resolution !== undefined);
+  // In tree-primary, conflicts are resolved via mergeWorkspaceStore
+  return state.mergeState.prepared.conflicts.length === 0;
 };
 
 /**
- * How many similar pairs are unresolved?
+ * How many conflicts are unresolved?
  */
 export const selectUnresolvedCount = (state: CanvasState) => {
   if (!state.mergeState) return 0;
-  return state.mergeState.prepared.similarPairs.filter((p) => p.resolution === undefined).length;
+  return state.mergeState.prepared.conflicts.length;
 };
 
 /**
@@ -323,10 +292,10 @@ export const selectMergeCounts = (state: CanvasState) => {
 
   const { prepared } = state.mergeState;
   return {
-    identical: prepared.identical.length,
-    similar: prepared.similarPairs.length,
+    identical: prepared.autoKept.length,
+    similar: prepared.conflicts.length,
     onlyInSource: prepared.onlyInSource.length,
     onlyInTarget: prepared.onlyInTarget.length,
-    resolved: prepared.similarPairs.filter((p) => p.resolution).length,
+    resolved: 0, // Resolution tracking is in mergeWorkspaceStore
   };
 };

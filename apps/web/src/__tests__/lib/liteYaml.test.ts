@@ -3,23 +3,23 @@ import { describe, expect, it } from 'vitest';
 import { parseDisplayYAML, toDisplayYAML } from '@/lib/liteYaml';
 
 const sampleContent: SemanticContent = {
-  frames: [
+  trees: [
     {
-      id: 'f_1',
-      type: 'decision_pending',
+      key: 'decision_pending',
       slots: { choice: 'launch API', timeline: 'Q2 2026' },
       source: 'sha256:abc',
       confidence: 0.92,
+      children: [],
     },
     {
-      id: 'f_2',
-      type: 'target_audience',
+      key: 'target_audience',
       slots: { segment: 'mid-size SaaS', size: '50-500' },
       source: 'sha256:def',
       confidence: 0.88,
+      children: [],
     },
   ],
-  relations: [{ from: 'f_2', to: 'f_1', type: 'elaborates' }],
+  relations: [{ from: 'target_audience', to: 'decision_pending', type: 'depends' }],
 };
 
 describe('toDisplayYAML', () => {
@@ -30,18 +30,17 @@ describe('toDisplayYAML', () => {
     expect(yaml).toContain('  choice: "launch API"');
     expect(yaml).toContain('  timeline: "Q2 2026"');
     expect(yaml).toContain('target_audience:');
-    expect(yaml).toContain('target_audience → decision_pending (elaborates)');
-    // Should NOT contain IDs, source, confidence
-    expect(yaml).not.toContain('f_1');
+    expect(yaml).toContain('target_audience → decision_pending (depends)');
+    // Should NOT contain source, confidence
     expect(yaml).not.toContain('sha256');
     expect(yaml).not.toContain('0.92');
   });
 
   it('should handle duplicate types with suffixes', () => {
     const content: SemanticContent = {
-      frames: [
-        { id: 'f_1', type: 'symptom', slots: { desc: 'headache' }, source: '', confidence: 1 },
-        { id: 'f_2', type: 'symptom', slots: { desc: 'nausea' }, source: '', confidence: 1 },
+      trees: [
+        { key: 'symptom', slots: { desc: 'headache' }, source: '', confidence: 1, children: [] },
+        { key: 'symptom_2', slots: { desc: 'nausea' }, source: '', confidence: 1, children: [] },
       ],
       relations: [],
     };
@@ -52,19 +51,19 @@ describe('toDisplayYAML', () => {
 });
 
 describe('parseDisplayYAML', () => {
-  it('should detect added frames as add changes', () => {
-    const currentContent: SemanticContent = { frames: [], relations: [] };
-    const yamlWithNewFrame = `new_frame:\n  key: "value"\n`;
-    const delta = parseDisplayYAML(yamlWithNewFrame, currentContent);
+  it('should detect added trees as add changes', () => {
+    const currentContent: SemanticContent = { trees: [], relations: [] };
+    const yamlWithNewNode = `new_node:\n  key: "value"\n`;
+    const delta = parseDisplayYAML(yamlWithNewNode, currentContent);
 
     expect(delta.changes.length).toBe(1);
     expect(delta.changes[0].action).toBe('add');
     if (delta.changes[0].action === 'add') {
-      expect(delta.changes[0].frame.type).toBe('new_frame');
+      expect(delta.changes[0].node.key).toBe('new_node');
     }
   });
 
-  it('should detect removed frames as remove changes', () => {
+  it('should detect removed trees as remove changes', () => {
     const delta = parseDisplayYAML('', sampleContent);
 
     const removes = delta.changes.filter((c) => c.action === 'remove');

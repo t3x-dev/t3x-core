@@ -12,7 +12,7 @@
  *  │ LINEAGE: parent · leaves count · sources count · kbd shortcuts │
  *  ├──────────┬─────────────────────────────┬────────────────────────┤
  *  │ LEFT     │ CENTER                      │ RIGHT                  │
- *  │ Frame    │ Frame Cards (scrollable)    │ Source SlideIn /        │
+ *  │ Tree     │ Tree Cards (scrollable)    │ Source SlideIn /        │
  *  │ Index    │                             │ Context                │
  *  │ Leaves   │                             │                        │
  *  │ Sources  │                             │                        │
@@ -37,20 +37,20 @@ import {
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FrameGraphView } from '@/components/frame-graph';
+import { TreeGraphView } from '@/components/tree-graph';
 import { Breadcrumb } from '@/components/shared/Breadcrumb';
 import { KeyboardHintBar } from '@/components/shared/KeyboardHintBar';
 import { ShareLinkButton } from '@/components/shared/ShareLinkButton';
 import { useKeyboardNavigation } from '@/hooks/useKeyboardNavigation';
 import type { Leaf } from '@/lib/api';
 import { getProject, listLeavesByCommit } from '@/lib/api';
-import { getCommitAsFrames, getCommitHistoryAsFrames } from '@/lib/api/commitUnified';
+import { getCommitAsNodes, getCommitHistoryAsNodes } from '@/lib/api/commitUnified';
 import { relativeTime, shortHash } from '@/lib/formatters';
 import { PAGE_ANIMATION_STYLES } from '@/lib/pageAnimations';
 import { useCommitDetailStore } from '@/store/commitDetailStore';
 import { useProjectStore } from '@/store/projectStore';
 import { CopyButton, useCountUp } from './CommitDetailHelpers';
-import { CommitFrameIndex } from './CommitFrameIndex';
+import { CommitTreeIndex } from './CommitTreeIndex';
 import { CommitOperationsSidebar } from './CommitOperationsSidebar';
 import { ProvenanceGraph } from './CommitProvenanceGraph';
 import { CommitYAMLDocument } from './CommitYAMLDocument';
@@ -82,10 +82,10 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
   const [error, setError] = useState<string | null>(null);
 
   // ── Store ──────────────────────────────────────────
-  const enrichedFrames = useCommitDetailStore((s) => s.enrichedFrames);
-  const removedFrames = useCommitDetailStore((s) => s.removedFrames);
-  const activeFrameId = useCommitDetailStore((s) => s.activeFrameId);
-  const setActiveFrame = useCommitDetailStore((s) => s.setActiveFrame);
+  const enrichedNodes = useCommitDetailStore((s) => s.enrichedNodes);
+  const removedNodes = useCommitDetailStore((s) => s.removedNodes);
+  const activeNodeId = useCommitDetailStore((s) => s.activeNodeId);
+  const setActiveNode = useCommitDetailStore((s) => s.setActiveNode);
   const sourceViewer = useCommitDetailStore((s) => s.sourceViewer);
   const storeSetCommit = useCommitDetailStore((s) => s.setCommit);
   const openSourceViewer = useCommitDetailStore((s) => s.openSourceViewer);
@@ -105,7 +105,7 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
       setError(null);
       try {
         const [commitData, leavesData, projectData] = await Promise.all([
-          getCommitAsFrames(commitHash),
+          getCommitAsNodes(commitHash),
           listLeavesByCommit(commitHash).catch(() => [] as Leaf[]),
           getProject(projectId).catch(() => null),
         ]);
@@ -117,18 +117,18 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
         let parentCommit: Commit | null = null;
         if (commitData.parents.length === 1) {
           try {
-            parentCommit = await getCommitAsFrames(commitData.parents[0]);
+            parentCommit = await getCommitAsNodes(commitData.parents[0]);
           } catch {
             // Parent fetch failure is non-critical
           }
         }
 
-        // Store computes enriched frames automatically
+        // Store computes enriched nodes automatically
         storeSetCommit(commitData, parentCommit);
 
         // Fetch commit history
         try {
-          const history = await getCommitHistoryAsFrames(commitHash, 10);
+          const history = await getCommitHistoryAsNodes(commitHash, 10);
           setCommitHistory(history);
         } catch {
           // History fetch failure is non-critical
@@ -142,15 +142,15 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
     load();
   }, [commitHash, projectId, storeSetCommit]);
 
-  // ── Frame stats ─────────────────────────────────
+  // ── Tree stats ─────────────────────────────────
   const frameStats = useMemo(
     () => ({
-      added: enrichedFrames.filter((f) => f.diffStatus === 'added').length,
-      modified: enrichedFrames.filter((f) => f.diffStatus === 'modified').length,
-      identical: enrichedFrames.filter((f) => f.diffStatus === 'identical').length,
-      removed: removedFrames.length,
+      added: enrichedNodes.filter((f) => f.diffStatus === 'added').length,
+      modified: enrichedNodes.filter((f) => f.diffStatus === 'modified').length,
+      identical: enrichedNodes.filter((f) => f.diffStatus === 'identical').length,
+      removed: removedNodes.length,
     }),
-    [enrichedFrames, removedFrames]
+    [enrichedNodes, removedNodes]
   );
 
   const countIdentical = useCountUp(frameStats.identical);
@@ -158,15 +158,15 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
   const countAdded = useCountUp(frameStats.added);
   const countRemoved = useCountUp(frameStats.removed);
 
-  // ── Frame IDs for keyboard navigation ───────────
-  const allFrameIds = useMemo(() => {
-    return [...enrichedFrames.map((ef) => ef.frame.id), ...removedFrames.map((ef) => ef.frame.id)];
-  }, [enrichedFrames, removedFrames]);
+  // ── Tree IDs for keyboard navigation ───────────
+  const allNodeIds = useMemo(() => {
+    return [...enrichedNodes.map((ef) => ef.path), ...removedNodes.map((ef) => ef.path)];
+  }, [enrichedNodes, removedNodes]);
 
   // ── Callbacks ─────────────────────────────────────
-  const scrollToFrame = useCallback(
+  const scrollToNode = useCallback(
     (id: string) => {
-      setActiveFrame(id);
+      setActiveNode(id);
       setTimeout(() => {
         frameRefs.current[id]?.scrollIntoView({
           behavior: 'smooth',
@@ -174,16 +174,16 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
         });
       }, 50);
     },
-    [setActiveFrame]
+    [setActiveNode]
   );
 
   // ── Keyboard navigation (shared hook, controlled mode) ──
   useKeyboardNavigation({
-    ids: allFrameIds,
-    activeId: activeFrameId,
+    ids: allNodeIds,
+    activeId: activeNodeId,
     onSelect: (id) => {
-      if (id) scrollToFrame(id);
-      else setActiveFrame(null);
+      if (id) scrollToNode(id);
+      else setActiveNode(null);
     },
   });
 
@@ -406,11 +406,11 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
 
           <span className="h-3 w-px bg-[var(--stroke-divider)]" />
 
-          {/* Frame count */}
+          {/* Tree count */}
           <div className="flex items-center gap-1.5 text-[var(--text-tertiary)]">
             <Tag size={10} />
             <span className="font-medium text-[var(--text-secondary)]">
-              {commit.content.frames.length} frame{commit.content.frames.length !== 1 ? 's' : ''}
+              {commit.content.trees.length} tree{commit.content.trees.length !== 1 ? 's' : ''}
             </span>
           </div>
 
@@ -468,8 +468,8 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
 
       {/* ═══════ MAIN CONTENT: 3-Panel Layout ═══════ */}
       <div className="relative flex flex-1 overflow-hidden">
-        {/* LEFT: Frame Index */}
-        <CommitFrameIndex projectId={projectId} leaves={leaves} onLeavesChange={setLeaves} />
+        {/* LEFT: TreeNode Index */}
+        <CommitTreeIndex projectId={projectId} leaves={leaves} onLeavesChange={setLeaves} />
 
         {/* CENTER: Tabbed Panel */}
         <div className="flex flex-1 flex-col overflow-hidden">
@@ -498,8 +498,8 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
               <div className="mx-auto max-w-3xl">
                 <CommitYAMLDocument
                   content={commit.content}
-                  onSlotClick={(frameId, slotKey) => {
-                    setActiveFrame(frameId);
+                  onSlotClick={(treeId, slotKey) => {
+                    setActiveNode(treeId);
                     openSourceViewer(slotKey);
                   }}
                 />
@@ -510,7 +510,7 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
             {activeTab === 'graph' && (
               <div className="mx-auto max-w-3xl">
                 <div className="h-[500px]">
-                  <FrameGraphView content={commit.content} className="h-full w-full" />
+                  <TreeGraphView content={commit.content} className="h-full w-full" />
                 </div>
               </div>
             )}
@@ -568,7 +568,7 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
 
       {/* ═══════ BOTTOM: Provenance Graph ═══════ */}
       <ProvenanceGraph
-        activeSentenceId={activeFrameId}
+        activeSentenceId={activeNodeId}
         commit={commit}
         leaves={leaves}
         projectId={projectId}
