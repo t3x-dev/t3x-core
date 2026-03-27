@@ -26,6 +26,7 @@ import {
   updateDraftPreview,
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
+import { getEmbedder } from '../lib/embedder';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { pinoLogger } from '../middleware/logger';
 import { ErrorResponseSchema, IdParamSchema, SuccessResponseSchema } from '../schemas/common';
@@ -542,6 +543,17 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
       provenance: { method: 'human_curation' },
     });
 
+    // 5b. Best-effort: populate sentence vectors (skip on failure)
+    const embedder = getEmbedder();
+    if (embedder) {
+      try {
+        const texts = sentences.map((s) => s.text);
+        await embedder.encode(texts);
+      } catch (embedErr) {
+        console.warn('Vector population failed (best-effort, continuing):', embedErr);
+      }
+    }
+
     // 6. Optionally create Leaf (if constraints or preview_type exist)
     let leaf = null;
     if (draft.constraints.length > 0 || draft.preview_type) {
@@ -660,6 +672,32 @@ draftsWorkflowRoutes.openapi(suggestDraftRoute, async (c) => {
     const draft = await findDraftById(db, id);
     if (!draft) {
       return errorResponse(c, 'NOT_FOUND', `Draft not found: ${id}`);
+    }
+
+    // Check embedder is configured
+    const embedder = getEmbedder();
+    if (!embedder) {
+      return c.json(
+        {
+          success: false as const,
+          error: {
+            code: 'EMBEDDING_NOT_CONFIGURED',
+            message: 'Embedding service is not configured. Set GOOGLE_AI_STUDIO_KEY to enable suggestions.',
+          },
+        },
+        501
+      );
+    }
+
+    // No goal — return empty suggestions without calling embedder
+    if (!draft.goal) {
+      return c.json(
+        {
+          success: true as const,
+          data: { suggestions: [] },
+        },
+        200
+      );
     }
 
     // Suggest feature requires tree-based search (sentence_vectors removed)

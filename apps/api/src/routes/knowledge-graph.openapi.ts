@@ -137,6 +137,11 @@ knowledgeGraphRoutes.openapi(buildRoute, async (c) => {
     // Build graph from tree-based content (stub — sentence_vectors removed)
     const result = buildKnowledgeGraph({});
 
+    // Require at least some data to build from
+    if (result.nodes.length === 0) {
+      return errorResponse(c, 'EMBEDDINGS_REQUIRED', 'No embeddings found for this project. Add content and generate embeddings first.');
+    }
+
     // 5-8. Persist graph in a transaction (delete + insert atomically)
     await db.transaction(async (tx) => {
       // Delete existing graph (cascade deletes members + edges)

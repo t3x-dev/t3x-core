@@ -93,12 +93,12 @@ describe('Draft Workbench Features', () => {
     const created: ApiResponse = await createRes.json();
     const draftId = created.data.id;
 
-    // Add included sentences via PATCH
+    // Add included nodes via PATCH
     await app.request(`/v1/drafts/${draftId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        sentences: [
+        nodes: [
           {
             id: 'ds_v2_01',
             text: 'The product costs $99',
@@ -436,7 +436,7 @@ describe('Draft Workbench Features', () => {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          sentences: [
+          nodes: [
             {
               id: 'ds_v2_01',
               text: 'The product costs $149',

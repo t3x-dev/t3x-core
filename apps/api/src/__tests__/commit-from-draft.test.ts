@@ -68,7 +68,7 @@ describe('Commit-from-Draft Routes', () => {
       project_id: projectId,
       title: 'Test draft for commit',
     });
-    await updateDraft(mockDB, draft.id, { sentences: trees }, draft.revision);
+    await updateDraft(mockDB, draft.id, { nodes: trees }, draft.revision);
     return draft.id;
   }
 
