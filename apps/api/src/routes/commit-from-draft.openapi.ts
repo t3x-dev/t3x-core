@@ -1,7 +1,7 @@
 /**
  * Commit-from-Draft Route — Integration Layer "Commit" Verb
  *
- * Takes a draft_id (from the extract step), reads its sentences,
+ * Takes a draft_id (from the extract step), reads its tree data,
  * computes a hash, creates an immutable commit, and marks the draft
  * as committed.
  *
@@ -31,7 +31,7 @@ const postCommitFromDraftRoute = createRoute({
   tags: ['Integration'],
   summary: 'Create commit from a draft',
   description:
-    'Takes a draft_id (from the extract step), reads its sentences, ' +
+    'Takes a draft_id (from the extract step), reads its tree data, ' +
     'computes a content hash, creates an immutable commit, marks the draft ' +
     'as committed, and fires a commit.created webhook.',
   request: {
@@ -108,40 +108,36 @@ commitFromDraftRoutes.openapi(postCommitFromDraftRoute, async (c) => {
       );
     }
 
-    // Step 3: Read sentences from draft
-    // The extract endpoint stores sentences as an array of { id, text, confidence, source_ref? }
-    const sentences = (draft.sentences ?? []) as Array<{
-      id: string;
-      text: string;
+    // Step 3: Read tree data from draft
+    // The extract endpoint stores trees in the draft's sentences field (storage-level name)
+    const draftNodes = (draft.sentences ?? []) as Array<{
+      key?: string;
+      id?: string;
+      slots?: Record<string, unknown>;
+      text?: string;
       confidence?: number;
-      source_ref?: {
-        conversation_id: string;
-        turn_hash: string;
-        start_char: number;
-        end_char: number;
-      };
+      children?: unknown[];
     }>;
 
-    if (sentences.length === 0) {
-      return errorResponse(c, 'INVALID_REQUEST', 'Draft has no sentences to commit');
+    if (draftNodes.length === 0) {
+      return errorResponse(c, 'INVALID_REQUEST', 'Draft has no trees to commit');
     }
 
     // Step 4: Resolve parent commit (from draft or branch HEAD)
     const parents = draft.parent_commit_hash ? [draft.parent_commit_hash] : [];
 
-    // Step 5: Convert sentences to commit frames and create commit
-    // Follows the same pattern as drafts-workflows.openapi.ts
-    const commitFrames = sentences.map((s, i) => ({
-      id: s.id || `f_${String(i + 1).padStart(3, '0')}`,
-      type: 'legacy_sentence' as const,
-      slots: { text: s.text },
-      confidence: s.confidence,
+    // Step 5: Convert draft nodes to commit trees
+    const commitTrees = draftNodes.map((node, i) => ({
+      key: node.key || node.id || `s_${i}`,
+      slots: node.slots || (node.text ? { text: node.text } : {}),
+      children: (node.children ?? []) as any[],
+      confidence: node.confidence,
     }));
 
     const commit = await createCommit(db, {
       parents,
       author: { type: 'human' as const, name: 'api' },
-      content: { trees: commitFrames.map((f: any) => ({ key: f.id, slots: f.slots, children: [] as any[], confidence: f.confidence })), relations: [] },
+      content: { trees: commitTrees, relations: [] },
       project_id,
       message: message ?? `Draft: ${draft.title}`,
       branch: targetBranch,
@@ -152,13 +148,13 @@ commitFromDraftRoutes.openapi(postCommitFromDraftRoute, async (c) => {
     await commitDraft(db, draft_id, commit.hash);
 
     // Step 7: Fire commit.created webhook
-    const sentenceCount = sentences.length;
+    const treeCount = commitTrees.length;
     webhookDispatcher.dispatch(
       'commit.created',
       {
         project_id,
         commit_hash: commit.hash,
-        sentence_count: sentenceCount,
+        tree_count: treeCount,
         branch: commit.branch ?? targetBranch,
       },
       project_id
@@ -170,7 +166,7 @@ commitFromDraftRoutes.openapi(postCommitFromDraftRoute, async (c) => {
         success: true as const,
         data: {
           commit_hash: commit.hash,
-          sentence_count: sentenceCount,
+          tree_count: treeCount,
           branch: commit.branch ?? targetBranch,
         },
       },

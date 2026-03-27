@@ -17,25 +17,21 @@ export const ExtractRequest = z
   })
   .openapi('ExtractRequest');
 
-export const ExtractSentence = z
-  .object({
-    id: z.string(),
-    text: z.string(),
-    confidence: z.number(),
-    source_ref: z
-      .object({
-        conversation_id: z.string(),
-        turn_hash: z.string(),
-        start_char: z.number(),
-        end_char: z.number(),
-      })
-      .optional(),
-  })
-  .openapi('ExtractSentence');
+export const ExtractTree: z.ZodType<unknown> = z.lazy(() =>
+  z
+    .object({
+      key: z.string(),
+      slots: z.record(z.string(), z.unknown()),
+      children: z.array(ExtractTree).default([]),
+      source: z.string().optional(),
+      confidence: z.number().optional(),
+    })
+    .openapi('ExtractTree')
+);
 
 export const DriftItem = z
   .object({
-    sentence_id: z.string(),
+    node_path: z.string(),
     before: z.string(),
     after: z.string(),
   })
@@ -45,7 +41,7 @@ export const ExtractResponse = z
   .object({
     conversation_id: z.string(),
     draft_id: z.string(),
-    sentences: z.array(ExtractSentence),
+    trees: z.array(ExtractTree),
     yaml: z.string().optional(),
     drift: z.array(DriftItem).optional(),
   })
@@ -98,7 +94,7 @@ export const ContextResponse = z
   .object({
     commit_hash: z.string().nullable(),
     branch: z.string(),
-    sentences: z.array(ExtractSentence),
+    trees: z.array(ExtractTree),
     yaml: z.string().optional(),
   })
   .openapi('ContextResponse');
@@ -119,7 +115,7 @@ export const CommitFromDraftRequest = z
 export const CommitFromDraftResponse = z
   .object({
     commit_hash: z.string(),
-    sentence_count: z.number(),
+    tree_count: z.number(),
     branch: z.string(),
   })
   .openapi('CommitFromDraftResponse');

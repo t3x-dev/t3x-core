@@ -59,24 +59,24 @@ describe('Commit-from-Draft Routes', () => {
     mockDispatch.mockClear();
   });
 
-  /** Helper: create a draft with sentences ready for commit */
-  async function createDraftWithSentences(
+  /** Helper: create a draft with tree nodes ready for commit */
+  async function createDraftWithTrees(
     projectId: string,
-    sentences: Array<{ id: string; text: string; confidence: number }>
+    trees: Array<{ key: string; slots: Record<string, unknown>; children?: unknown[]; confidence?: number }>
   ): Promise<string> {
     const draft = await insertDraft(mockDB, {
       project_id: projectId,
       title: 'Test draft for commit',
     });
-    await updateDraft(mockDB, draft.id, { sentences }, draft.revision);
+    await updateDraft(mockDB, draft.id, { sentences: trees }, draft.revision);
     return draft.id;
   }
 
   describe('POST /v1/commit', () => {
     it('creates commit from draft (happy path)', async () => {
-      const draftId = await createDraftWithSentences(testProjectId, [
-        { id: 's_001', text: 'The deadline is next Friday.', confidence: 1.0 },
-        { id: 's_002', text: 'Budget is $50k.', confidence: 0.95 },
+      const draftId = await createDraftWithTrees(testProjectId, [
+        { key: 's_001', slots: { text: 'The deadline is next Friday.' }, children: [], confidence: 1.0 },
+        { key: 's_002', slots: { text: 'Budget is $50k.' }, children: [], confidence: 0.95 },
       ]);
 
       const res = await app.request('/v1/commit', {
@@ -95,7 +95,7 @@ describe('Commit-from-Draft Routes', () => {
       expect(data.success).toBe(true);
       expect(data.data.commit_hash).toBeTruthy();
       expect(data.data.commit_hash).toMatch(/^sha256:/);
-      expect(data.data.sentence_count).toBe(2);
+      expect(data.data.tree_count).toBe(2);
       expect(data.data.branch).toBe('main');
     });
 
@@ -115,8 +115,8 @@ describe('Commit-from-Draft Routes', () => {
     });
 
     it('fires commit.created webhook', async () => {
-      const draftId = await createDraftWithSentences(testProjectId, [
-        { id: 's_010', text: 'Webhook test sentence.', confidence: 1.0 },
+      const draftId = await createDraftWithTrees(testProjectId, [
+        { key: 's_010', slots: { text: 'Webhook test node.' }, children: [], confidence: 1.0 },
       ]);
 
       const res = await app.request('/v1/commit', {
@@ -135,7 +135,7 @@ describe('Commit-from-Draft Routes', () => {
         expect.objectContaining({
           project_id: testProjectId,
           commit_hash: expect.any(String),
-          sentence_count: 1,
+          tree_count: 1,
           branch: 'main',
         }),
         testProjectId
@@ -143,8 +143,8 @@ describe('Commit-from-Draft Routes', () => {
     });
 
     it('uses specified branch (defaults to main)', async () => {
-      const draftId = await createDraftWithSentences(testProjectId, [
-        { id: 's_020', text: 'Feature branch sentence.', confidence: 1.0 },
+      const draftId = await createDraftWithTrees(testProjectId, [
+        { key: 's_020', slots: { text: 'Feature branch node.' }, children: [], confidence: 1.0 },
       ]);
 
       const res = await app.request('/v1/commit', {
@@ -167,8 +167,8 @@ describe('Commit-from-Draft Routes', () => {
     it('returns 404 when draft belongs to different project', async () => {
       // Create draft in a different project
       const otherProject = await insertProject(mockDB, testData.project({ name: 'Other Project' }));
-      const draftId = await createDraftWithSentences(otherProject.projectId, [
-        { id: 's_030', text: 'Wrong project sentence.', confidence: 1.0 },
+      const draftId = await createDraftWithTrees(otherProject.projectId, [
+        { key: 's_030', slots: { text: 'Wrong project node.' }, children: [], confidence: 1.0 },
       ]);
 
       const res = await app.request('/v1/commit', {
@@ -185,7 +185,7 @@ describe('Commit-from-Draft Routes', () => {
       expect(data.success).toBe(false);
     });
 
-    it('returns 400 for draft with no sentences', async () => {
+    it('returns 400 for draft with no trees', async () => {
       const draft = await insertDraft(mockDB, {
         project_id: testProjectId,
         title: 'Empty draft',
@@ -208,8 +208,8 @@ describe('Commit-from-Draft Routes', () => {
     it('marks draft as committed after successful commit', async () => {
       const { findDraftById } = await import('@t3x-dev/storage');
 
-      const draftId = await createDraftWithSentences(testProjectId, [
-        { id: 's_040', text: 'Check status sentence.', confidence: 1.0 },
+      const draftId = await createDraftWithTrees(testProjectId, [
+        { key: 's_040', slots: { text: 'Check status node.' }, children: [], confidence: 1.0 },
       ]);
 
       await app.request('/v1/commit', {

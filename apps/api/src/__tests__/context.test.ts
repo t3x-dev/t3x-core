@@ -118,7 +118,7 @@ describe('Context Routes', () => {
   });
 
   describe('GET /v1/projects/:id/context', () => {
-    it('returns sentences from latest commit on main branch (happy path)', async () => {
+    it('returns trees from latest commit on main branch (happy path)', async () => {
       const res = await app.request(`/v1/projects/${testProjectId}/context`);
 
       expect(res.status).toBe(200);
@@ -127,13 +127,13 @@ describe('Context Routes', () => {
       expect(data.success).toBe(true);
       expect(data.data.branch).toBe('main');
       expect(data.data.commit_hash).toBeTruthy();
-      // The latest commit on main has 2 frames
-      expect(data.data.sentences).toHaveLength(2);
-      expect(data.data.sentences[0].id).toBe('preference');
-      expect(data.data.sentences[0].text).toBeTruthy();
-      expect(data.data.sentences[0].confidence).toBe(0.9);
-      expect(data.data.sentences[1].id).toBe('fact');
-      expect(data.data.sentences[1].confidence).toBe(0.85);
+      // The latest commit on main has 2 trees
+      expect(data.data.trees).toHaveLength(2);
+      expect(data.data.trees[0].key).toBe('preference');
+      expect(data.data.trees[0].slots).toBeTruthy();
+      expect(data.data.trees[0].confidence).toBe(0.9);
+      expect(data.data.trees[1].key).toBe('fact');
+      expect(data.data.trees[1].confidence).toBe(0.85);
     });
 
     it('returns empty when project has no commits', async () => {
@@ -145,7 +145,7 @@ describe('Context Routes', () => {
       expect(data.success).toBe(true);
       expect(data.data.commit_hash).toBeNull();
       expect(data.data.branch).toBe('main');
-      expect(data.data.sentences).toEqual([]);
+      expect(data.data.trees).toEqual([]);
     });
 
     it('respects branch parameter', async () => {
@@ -157,8 +157,8 @@ describe('Context Routes', () => {
       expect(data.success).toBe(true);
       expect(data.data.branch).toBe('dev');
       expect(data.data.commit_hash).toBeTruthy();
-      expect(data.data.sentences).toHaveLength(1);
-      expect(data.data.sentences[0].id).toBe('opinion');
+      expect(data.data.trees).toHaveLength(1);
+      expect(data.data.trees[0].key).toBe('opinion');
     });
 
     it('returns yaml format when requested', async () => {
@@ -170,10 +170,9 @@ describe('Context Routes', () => {
       expect(data.success).toBe(true);
       expect(data.data.yaml).toBeTruthy();
       expect(typeof data.data.yaml).toBe('string');
-      expect(data.data.yaml).toContain('sentences:');
       expect(data.data.yaml).toContain('preference');
-      // Sentences array is still returned alongside yaml
-      expect(data.data.sentences).toHaveLength(2);
+      // Trees array is still returned alongside yaml
+      expect(data.data.trees).toHaveLength(2);
     });
   });
 });

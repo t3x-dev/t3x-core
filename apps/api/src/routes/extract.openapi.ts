@@ -2,11 +2,11 @@
  * Extract Route — Integration Layer "Extract" Verb
  *
  * Composite endpoint that takes raw text, creates a conversation + turn,
- * runs sentence extraction, stores results as a draft, and optionally
+ * runs tree extraction, stores results as a draft, and optionally
  * detects drift from previous extractions.
  *
  * Endpoints:
- * - POST /v1/extract — Extract semantic sentences from raw text
+ * - POST /v1/extract — Extract semantic trees from raw text
  */
 
 import type { z } from '@hono/zod-openapi';
@@ -27,7 +27,7 @@ import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 import {
   ExtractRequest,
   ExtractResponse,
-  type ExtractSentence,
+  ExtractTree,
 } from '../schemas/integration-contracts';
 
 export const extractRoutes = new OpenAPIHono({
@@ -38,108 +38,101 @@ export const extractRoutes = new OpenAPIHono({
 // Helpers
 // ============================================================
 
+/** TreeNode shape used in the integration layer */
+type TreeNodeResult = z.infer<typeof ExtractTree>;
+
 /**
- * Split text into sentences using a simple regex heuristic.
+ * Split text into tree nodes using a simple regex heuristic.
  *
+ * Each text segment becomes a TreeNode with key 's_N' and slots: { text: '...' }.
  * This is the pragmatic extraction approach (Option B). A full Ring-based
  * pipeline can be wired in later without changing the API contract.
  */
-function extractSentencesFromText(
+function extractTreesFromText(
   text: string,
-  conversationId: string,
-  turnHash: string
-): z.infer<typeof ExtractSentence>[] {
-  const sentences: z.infer<typeof ExtractSentence>[] = [];
-  const sentenceRegex = /[^.!?。！？]+[.!?。！？]+[\s]*/g;
+  _conversationId: string,
+  _turnHash: string
+): TreeNodeResult[] {
+  const trees: TreeNodeResult[] = [];
+  const segmentRegex = /[^.!?。！？]+[.!?。！？]+[\s]*/g;
 
   let match: RegExpExecArray | null;
   let idx = 0;
   let lastEnd = 0;
 
-  while ((match = sentenceRegex.exec(text)) !== null) {
-    const sentence = match[0].trim();
-    if (sentence.length > 0) {
-      sentences.push({
-        id: `s_${idx++}`,
-        text: sentence,
+  while ((match = segmentRegex.exec(text)) !== null) {
+    const segment = match[0].trim();
+    if (segment.length > 0) {
+      trees.push({
+        key: `s_${idx++}`,
+        slots: { text: segment },
+        children: [],
         confidence: 1.0,
-        source_ref: {
-          conversation_id: conversationId,
-          turn_hash: turnHash,
-          start_char: match.index,
-          end_char: match.index + sentence.length,
-        },
       });
       lastEnd = match.index + match[0].length;
     }
   }
 
-  // Handle remaining text (no sentence-ending punctuation)
+  // Handle remaining text (no segment-ending punctuation)
   if (lastEnd < text.length) {
     const remaining = text.slice(lastEnd).trim();
     if (remaining.length > 0) {
-      sentences.push({
-        id: `s_${idx}`,
-        text: remaining,
+      trees.push({
+        key: `s_${idx}`,
+        slots: { text: remaining },
+        children: [],
         confidence: 1.0,
-        source_ref: {
-          conversation_id: conversationId,
-          turn_hash: turnHash,
-          start_char: lastEnd,
-          end_char: text.length,
-        },
       });
     }
   }
 
-  return sentences;
+  return trees;
 }
 
 /**
- * Serialize sentences to a YAML string.
+ * Serialize trees to a YAML string.
  */
-function sentencesToYaml(sentences: z.infer<typeof ExtractSentence>[]): string {
-  if (sentences.length === 0) return 'sentences: []\n';
+function treesToYaml(trees: TreeNodeResult[]): string {
+  if (trees.length === 0) return 'trees: []\n';
 
-  const items = sentences
-    .map((s) => {
-      const escapedText = s.text.replace(/"/g, '\\"');
-      let entry = `  - id: ${s.id}\n    text: "${escapedText}"\n    confidence: ${s.confidence}`;
-      if (s.source_ref) {
-        entry += '\n    source_ref:';
-        entry += `\n      conversation_id: ${s.source_ref.conversation_id}`;
-        entry += `\n      turn_hash: ${s.source_ref.turn_hash}`;
-        entry += `\n      start_char: ${s.source_ref.start_char}`;
-        entry += `\n      end_char: ${s.source_ref.end_char}`;
+  const items = trees
+    .map((t: any) => {
+      const slotText = typeof t.slots?.text === 'string' ? t.slots.text : '';
+      const escapedText = slotText.replace(/"/g, '\\"');
+      let entry = `  - key: ${t.key}\n    slots:\n      text: "${escapedText}"`;
+      if (t.confidence !== undefined) {
+        entry += `\n    confidence: ${t.confidence}`;
       }
       return entry;
     })
     .join('\n');
 
-  return `sentences:\n${items}\n`;
+  return `trees:\n${items}\n`;
 }
 
 /**
  * Detect drift between previous and current extractions.
  *
- * Drift occurs when a sentence's text in the new extraction is similar to
- * but different from a sentence in the previous extraction. Uses simple
+ * Drift occurs when a tree node's text in the new extraction is similar to
+ * but different from a node in the previous extraction. Uses simple
  * Jaccard word overlap to find matching pairs, then reports changed text.
  */
 function detectDrift(
-  previousSentences: z.infer<typeof ExtractSentence>[],
-  currentSentences: z.infer<typeof ExtractSentence>[]
-): z.infer<typeof import('../schemas/integration-contracts').DriftItem>[] {
-  const drift: { sentence_id: string; before: string; after: string }[] = [];
+  previousTrees: TreeNodeResult[],
+  currentTrees: TreeNodeResult[]
+): { node_path: string; before: string; after: string }[] {
+  const drift: { node_path: string; before: string; after: string }[] = [];
 
-  for (const current of currentSentences) {
-    const currentWords = new Set(current.text.toLowerCase().split(/\s+/));
+  for (const current of currentTrees) {
+    const currentText = String((current as any).slots?.text ?? '');
+    const currentWords = new Set(currentText.toLowerCase().split(/\s+/));
 
-    let bestMatch: (typeof previousSentences)[0] | null = null;
+    let bestMatch: TreeNodeResult | null = null;
     let bestJaccard = 0;
 
-    for (const prev of previousSentences) {
-      const prevWords = new Set(prev.text.toLowerCase().split(/\s+/));
+    for (const prev of previousTrees) {
+      const prevText = String((prev as any).slots?.text ?? '');
+      const prevWords = new Set(prevText.toLowerCase().split(/\s+/));
       const intersection = new Set([...currentWords].filter((w) => prevWords.has(w)));
       const union = new Set([...currentWords, ...prevWords]);
       const jaccard = union.size > 0 ? intersection.size / union.size : 0;
@@ -150,12 +143,13 @@ function detectDrift(
       }
     }
 
-    // Similar enough to be the "same" sentence (Jaccard >= 0.3) but text changed
-    if (bestMatch && bestJaccard >= 0.3 && bestMatch.text !== current.text) {
+    // Similar enough to be the "same" node (Jaccard >= 0.3) but text changed
+    const bestMatchText = bestMatch ? String((bestMatch as any).slots?.text ?? '') : '';
+    if (bestMatch && bestJaccard >= 0.3 && bestMatchText !== currentText) {
       drift.push({
-        sentence_id: current.id,
-        before: bestMatch.text,
-        after: current.text,
+        node_path: String((current as any).key),
+        before: bestMatchText,
+        after: currentText,
       });
     }
   }
@@ -171,10 +165,10 @@ const postExtractRoute = createRoute({
   method: 'post',
   path: '/v1/extract',
   tags: ['Integration'],
-  summary: 'Extract semantic sentences from raw text',
+  summary: 'Extract semantic trees from raw text',
   description:
     'Composite endpoint: creates a conversation and turn from raw text, ' +
-    'extracts sentences, stores them as a draft, and optionally detects drift ' +
+    'extracts trees, stores them as a draft, and optionally detects drift ' +
     'from previous extractions in incremental mode.',
   request: {
     body: {
@@ -187,7 +181,7 @@ const postExtractRoute = createRoute({
   },
   responses: {
     200: {
-      description: 'Extraction result with sentences and draft',
+      description: 'Extraction result with trees and draft',
       content: {
         'application/json': {
           schema: SuccessResponseSchema(ExtractResponse),
@@ -231,7 +225,7 @@ extractRoutes.openapi(postExtractRoute, async (c) => {
 
     // Step 2: Create or reuse conversation
     let conversationId: string;
-    const previousSentences: z.infer<typeof ExtractSentence>[] = [];
+    const previousTrees: TreeNodeResult[] = [];
 
     if (conversation_id) {
       // Incremental mode: verify conversation exists and belongs to project
@@ -248,15 +242,14 @@ extractRoutes.openapi(postExtractRoute, async (c) => {
       }
       conversationId = conversation_id;
 
-      // Collect previous sentences for drift detection
-      // Extract sentences from all existing turns in the conversation
+      // Collect previous trees for drift detection
       const existingTurns = await findTurnsByConversation(db, {
         conversationId,
         limit: 1000,
       });
       for (const turn of existingTurns) {
-        const turnSentences = extractSentencesFromText(turn.content, conversationId, turn.turnHash);
-        previousSentences.push(...turnSentences);
+        const turnTrees = extractTreesFromText(turn.content, conversationId, turn.turnHash);
+        previousTrees.push(...turnTrees);
       }
     } else {
       // One-shot mode: create a new conversation
@@ -276,22 +269,22 @@ extractRoutes.openapi(postExtractRoute, async (c) => {
       content: text,
     });
 
-    // Step 4: Run extraction (sentence splitting)
-    const sentences = extractSentencesFromText(text, conversationId, turn.turnHash);
+    // Step 4: Run extraction (text segmentation into trees)
+    const trees = extractTreesFromText(text, conversationId, turn.turnHash);
 
-    // Step 5: Create a draft with extracted sentences
+    // Step 5: Create a draft with extracted trees
     const draft = await insertDraft(db, {
       project_id,
       title: source ? `Extract: ${source}` : 'API extraction',
     });
 
-    // Store sentences into the draft
-    await updateDraft(db, draft.id, { sentences: sentences }, draft.revision);
+    // Store trees into the draft (uses sentences field internally in storage)
+    await updateDraft(db, draft.id, { sentences: trees }, draft.revision);
 
     // Step 6: Detect drift (incremental mode only)
-    let drift: { sentence_id: string; before: string; after: string }[] | undefined;
-    if (conversation_id && previousSentences.length > 0) {
-      const driftItems = detectDrift(previousSentences, sentences);
+    let drift: { node_path: string; before: string; after: string }[] | undefined;
+    if (conversation_id && previousTrees.length > 0) {
+      const driftItems = detectDrift(previousTrees, trees);
       if (driftItems.length > 0) {
         drift = driftItems;
       }
@@ -304,7 +297,7 @@ extractRoutes.openapi(postExtractRoute, async (c) => {
         project_id,
         draft_id: draft.id,
         conversation_id: conversationId,
-        sentence_count: sentences.length,
+        tree_count: trees.length,
       },
       project_id
     );
@@ -326,8 +319,8 @@ extractRoutes.openapi(postExtractRoute, async (c) => {
     const result: z.infer<typeof ExtractResponse> = {
       conversation_id: conversationId,
       draft_id: draft.id,
-      sentences,
-      yaml: sentencesToYaml(sentences),
+      trees,
+      yaml: treesToYaml(trees),
       drift,
     };
 

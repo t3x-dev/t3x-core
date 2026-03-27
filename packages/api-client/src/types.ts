@@ -414,20 +414,16 @@ export interface ExtractInput {
   source?: string;
 }
 
-export interface ExtractSentence {
-  id: string;
-  text: string;
-  confidence: number;
-  source_ref?: {
-    conversation_id: string;
-    turn_hash: string;
-    start_char: number;
-    end_char: number;
-  };
+export interface ExtractTree {
+  key: string;
+  slots: Record<string, unknown>;
+  children: ExtractTree[];
+  source?: string;
+  confidence?: number;
 }
 
 export interface DriftItem {
-  sentence_id: string;
+  node_path: string;
   before: string;
   after: string;
 }
@@ -435,7 +431,7 @@ export interface DriftItem {
 export interface ExtractResult {
   conversation_id: string;
   draft_id: string;
-  sentences: ExtractSentence[];
+  trees: ExtractTree[];
   yaml?: string;
   drift?: DriftItem[];
 }
@@ -450,7 +446,7 @@ export interface CommitFromDraftInput {
 
 export interface CommitFromDraftResult {
   commit_hash: string;
-  sentence_count: number;
+  tree_count: number;
   branch: string;
 }
 
@@ -483,6 +479,6 @@ export interface ContextParams {
 export interface ContextResult {
   commit_hash: string | null;
   branch: string;
-  sentences: ExtractSentence[];
+  trees: ExtractTree[];
   yaml?: string;
 }

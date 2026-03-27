@@ -5,18 +5,18 @@ vi.mock('@t3x-dev/api-client', () => ({
     extract: vi.fn().mockResolvedValue({
       conversation_id: 'conv_test',
       draft_id: 'draft_test',
-      sentences: [{ id: 's_1', text: 'Test sentence', confidence: 0.9 }],
+      trees: [{ key: 's_0', slots: { text: 'Test tree node' }, children: [], confidence: 0.9 }],
     }),
     check: vi.fn().mockResolvedValue({ passed: true, violations: [] }),
     context: vi.fn().mockResolvedValue({
       commit_hash: 'sha256:abc',
       branch: 'main',
-      sentences: [],
+      trees: [],
     }),
     generateLeaf: vi.fn().mockResolvedValue({ output: 'Generated text' }),
     commitFromDraft: vi
       .fn()
-      .mockResolvedValue({ commit_hash: 'sha256:def', sentence_count: 3, branch: 'main' }),
+      .mockResolvedValue({ commit_hash: 'sha256:def', tree_count: 3, branch: 'main' }),
   })),
 }));
 
@@ -32,20 +32,20 @@ beforeEach(() => {
 });
 
 describe('handleExtract', () => {
-  it('returns extraction result with conversation_id, draft_id, and sentences', async () => {
+  it('returns extraction result with conversation_id, draft_id, and trees', async () => {
     const result = await handleExtract({ project_id: 'proj_test', text: 'Hello world' });
     const data = JSON.parse(result.content[0].text);
 
     expect(data.conversation_id).toBe('conv_test');
     expect(data.draft_id).toBe('draft_test');
-    expect(Array.isArray(data.sentences)).toBe(true);
-    expect(data.sentences[0].id).toBe('s_1');
-    expect(data.sentences[0].confidence).toBe(0.9);
+    expect(Array.isArray(data.trees)).toBe(true);
+    expect(data.trees[0].key).toBe('s_0');
+    expect(data.trees[0].confidence).toBe(0.9);
   });
 });
 
 describe('handleCommit', () => {
-  it('returns commit result with commit_hash, sentence_count, and branch', async () => {
+  it('returns commit result with commit_hash, tree_count, and branch', async () => {
     const result = await handleCommit({
       project_id: 'proj_test',
       draft_id: 'draft_test',
@@ -54,7 +54,7 @@ describe('handleCommit', () => {
     const data = JSON.parse(result.content[0].text);
 
     expect(data.commit_hash).toBe('sha256:def');
-    expect(data.sentence_count).toBe(3);
+    expect(data.tree_count).toBe(3);
     expect(data.branch).toBe('main');
   });
 });
@@ -80,12 +80,12 @@ describe('handleGenerate', () => {
 });
 
 describe('handleShow', () => {
-  it('returns context with commit_hash, branch, and sentences', async () => {
+  it('returns context with commit_hash, branch, and trees', async () => {
     const result = await handleShow({ project_id: 'proj_test' });
     const data = JSON.parse(result.content[0].text);
 
     expect(data.commit_hash).toBe('sha256:abc');
     expect(data.branch).toBe('main');
-    expect(Array.isArray(data.sentences)).toBe(true);
+    expect(Array.isArray(data.trees)).toBe(true);
   });
 });
