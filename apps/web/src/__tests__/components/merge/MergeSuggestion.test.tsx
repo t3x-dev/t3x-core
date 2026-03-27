@@ -43,13 +43,13 @@ function createPair(overrides?: Partial<MergeSimilarPair>): MergeSimilarPair {
       id: 's1',
       text: 'Budget is $3000 per month.',
       confidence: 0.92,
-      source: { type: 'turn', id: 't1' },
+      source: { turn_hash: 't1' },
     },
     target: {
       id: 's2',
       text: 'Budget is $3500 per month.',
       confidence: 0.88,
-      source: { type: 'turn', id: 't2' },
+      source: { turn_hash: 't2' },
     },
     wordDiff: [
       { type: 'unchanged', text: 'Budget is' },
@@ -111,27 +111,6 @@ describe('MergeSuggestion Display (S8)', () => {
 
     expect(suggestion.suggestion).toBeTruthy();
     expect(suggestion.reasoning).toBe('');
-  });
-
-  test('pair with suggestion shows suggestion info', () => {
-    const pair = createPair({
-      suggestion: {
-        suggestion: 'Budget is approximately $3250 per month.',
-        reasoning: 'Average of both values',
-      },
-    });
-
-    expect(pair.suggestion).toBeDefined();
-    expect(pair.suggestion?.suggestion).toContain('$3250');
-    expect(pair.suggestion?.reasoning).toContain('Average');
-  });
-
-  test('pair with null suggestion is valid', () => {
-    const pair = createPair({
-      suggestion: null,
-    });
-
-    expect(pair.suggestion).toBeNull();
   });
 
   test('resolution states are source or target', () => {

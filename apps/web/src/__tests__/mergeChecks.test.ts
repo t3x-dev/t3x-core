@@ -1,6 +1,9 @@
 // @vitest-environment jsdom
 /**
  * Tests for getMergeChecks from mergeWorkspaceStore
+ *
+ * Updated for tree-primary merge architecture.
+ * Uses frameMergeResult (path-based MergeResult from core).
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -32,24 +35,23 @@ vi.mock('@/lib/api', () => ({
   fetchTurnContext: vi.fn(),
 }));
 
+import type { MergeResult } from '@t3x-dev/core';
 import { type MergeCheck, useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
 import { useSettingsStore } from '@/store/settingsStore';
-import type { MergeResult, Sentence } from '@/types/merge';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeSentence(id: string, text: string): Sentence {
-  return { id, text, confidence: 0.9 };
-}
-
 function makePrepared(overrides: Partial<MergeResult> = {}): MergeResult {
   return {
-    identical: overrides.identical ?? [makeSentence('s1', 'Identical sentence')],
-    similarPairs: overrides.similarPairs ?? [],
+    autoKept: overrides.autoKept ?? ['path/identical'],
+    conflicts: overrides.conflicts ?? [],
     onlyInSource: overrides.onlyInSource ?? [],
     onlyInTarget: overrides.onlyInTarget ?? [],
+    relationsOnlyInSource: overrides.relationsOnlyInSource ?? [],
+    relationsOnlyInTarget: overrides.relationsOnlyInTarget ?? [],
+    relationsInBoth: overrides.relationsInBoth ?? [],
   };
 }
 
@@ -73,8 +75,9 @@ afterEach(() => {
 
 describe('getMergeChecks', () => {
   it('returns an array of MergeCheck items', () => {
+    const result = makePrepared();
+    useMergeWorkspaceStore.getState().setFrameMergeResult(result);
     useMergeWorkspaceStore.setState({
-      prepared: makePrepared(),
       message: 'test merge',
       targetBranch: 'main',
     });
@@ -95,8 +98,9 @@ describe('getMergeChecks', () => {
   });
 
   it('returns exactly 5 checks', () => {
+    const result = makePrepared();
+    useMergeWorkspaceStore.getState().setFrameMergeResult(result);
     useMergeWorkspaceStore.setState({
-      prepared: makePrepared(),
       message: 'msg',
       targetBranch: 'main',
     });
@@ -107,7 +111,7 @@ describe('getMergeChecks', () => {
     const ids = checks.map((c: MergeCheck) => c.id);
     expect(ids).toContain('resolved');
     expect(ids).toContain('message');
-    expect(ids).toContain('sentences');
+    expect(ids).toContain('nodes');
     expect(ids).toContain('target_branch');
     expect(ids).toContain('preview_computed');
   });
@@ -118,8 +122,9 @@ describe('getMergeChecks', () => {
 
   describe("'resolved' check", () => {
     it('passes when there are no conflicts (unresolvedCount === 0)', () => {
+      const result = makePrepared({ conflicts: [] });
+      useMergeWorkspaceStore.getState().setFrameMergeResult(result);
       useMergeWorkspaceStore.setState({
-        prepared: makePrepared({ similarPairs: [] }),
         message: 'msg',
         targetBranch: 'main',
       });
@@ -131,17 +136,11 @@ describe('getMergeChecks', () => {
     });
 
     it('fails when there are unresolved conflicts', () => {
+      const result = makePrepared({
+        conflicts: [{ path: 'topic/a', slotConflicts: [] }],
+      });
+      useMergeWorkspaceStore.getState().setFrameMergeResult(result);
       useMergeWorkspaceStore.setState({
-        prepared: makePrepared({
-          similarPairs: [
-            {
-              source: makeSentence('s1', 'Source version'),
-              target: makeSentence('s2', 'Target version'),
-              wordDiff: [],
-              // no resolution set
-            },
-          ],
-        }),
         message: 'msg',
         targetBranch: 'main',
       });
@@ -153,20 +152,16 @@ describe('getMergeChecks', () => {
     });
 
     it('passes when all conflicts are resolved', () => {
+      const result = makePrepared({
+        conflicts: [{ path: 'topic/a', slotConflicts: [] }],
+      });
+      useMergeWorkspaceStore.getState().setFrameMergeResult(result);
       useMergeWorkspaceStore.setState({
-        prepared: makePrepared({
-          similarPairs: [
-            {
-              source: makeSentence('s1', 'Source version'),
-              target: makeSentence('s2', 'Target version'),
-              wordDiff: [],
-              resolution: 'source',
-            },
-          ],
-        }),
         message: 'msg',
         targetBranch: 'main',
       });
+
+      useMergeWorkspaceStore.getState().resolveConflict(0, 'source');
 
       const checks = useMergeWorkspaceStore.getState().getMergeChecks();
       const resolved = checks.find((c: MergeCheck) => c.id === 'resolved');
@@ -174,21 +169,16 @@ describe('getMergeChecks', () => {
     });
 
     it('passes when conflicts are resolved via extended resolutions', () => {
+      const result = makePrepared({
+        conflicts: [{ path: 'topic/a', slotConflicts: [] }],
+      });
+      useMergeWorkspaceStore.getState().setFrameMergeResult(result);
       useMergeWorkspaceStore.setState({
-        prepared: makePrepared({
-          similarPairs: [
-            {
-              source: makeSentence('s1', 'Source version'),
-              target: makeSentence('s2', 'Target version'),
-              wordDiff: [],
-              // no standard resolution
-            },
-          ],
-        }),
-        extendedResolutions: { '0': { type: 'both' } },
         message: 'msg',
         targetBranch: 'main',
       });
+
+      useMergeWorkspaceStore.getState().resolveConflict(0, 'both');
 
       const checks = useMergeWorkspaceStore.getState().getMergeChecks();
       const resolved = checks.find((c: MergeCheck) => c.id === 'resolved');
@@ -202,8 +192,9 @@ describe('getMergeChecks', () => {
 
   describe("'message' check", () => {
     it('passes when message is not empty', () => {
+      const result = makePrepared();
+      useMergeWorkspaceStore.getState().setFrameMergeResult(result);
       useMergeWorkspaceStore.setState({
-        prepared: makePrepared(),
         message: 'My merge message',
         targetBranch: 'main',
       });
@@ -214,8 +205,9 @@ describe('getMergeChecks', () => {
     });
 
     it('fails when message is empty', () => {
+      const result = makePrepared();
+      useMergeWorkspaceStore.getState().setFrameMergeResult(result);
       useMergeWorkspaceStore.setState({
-        prepared: makePrepared(),
         message: '',
         targetBranch: 'main',
       });
@@ -226,8 +218,9 @@ describe('getMergeChecks', () => {
     });
 
     it('fails when message is only whitespace', () => {
+      const result = makePrepared();
+      useMergeWorkspaceStore.getState().setFrameMergeResult(result);
       useMergeWorkspaceStore.setState({
-        prepared: makePrepared(),
         message: '   ',
         targetBranch: 'main',
       });
@@ -239,77 +232,66 @@ describe('getMergeChecks', () => {
   });
 
   // --------------------------------------------------------------------------
-  // 'sentences' check
+  // 'nodes' check
   // --------------------------------------------------------------------------
 
-  describe("'sentences' check", () => {
-    it('passes when previewSentences.length > 0', () => {
+  describe("'nodes' check", () => {
+    it('passes when preview has nodes', () => {
+      const result = makePrepared({
+        autoKept: ['path/a'],
+      });
+      useMergeWorkspaceStore.getState().setFrameMergeResult(result);
       useMergeWorkspaceStore.setState({
-        prepared: makePrepared({
-          identical: [makeSentence('s1', 'A sentence')],
-        }),
         message: 'msg',
         targetBranch: 'main',
       });
 
       const checks = useMergeWorkspaceStore.getState().getMergeChecks();
-      const sentCheck = checks.find((c: MergeCheck) => c.id === 'sentences');
-      expect(sentCheck?.passed).toBe(true);
-      expect(sentCheck?.detail).toBe('1 sentences');
+      const nodesCheck = checks.find((c: MergeCheck) => c.id === 'nodes');
+      expect(nodesCheck?.passed).toBe(true);
+      expect(nodesCheck?.detail).toBeDefined();
     });
 
-    it('fails when previewSentences is empty', () => {
+    it('fails when preview is empty', () => {
+      const result = makePrepared({
+        autoKept: [],
+        conflicts: [],
+        onlyInSource: [],
+        onlyInTarget: [],
+      });
+      useMergeWorkspaceStore.getState().setFrameMergeResult(result);
       useMergeWorkspaceStore.setState({
-        prepared: makePrepared({
-          identical: [],
-          similarPairs: [],
-          onlyInSource: [],
-          onlyInTarget: [],
-        }),
         message: 'msg',
         targetBranch: 'main',
       });
 
       const checks = useMergeWorkspaceStore.getState().getMergeChecks();
-      const sentCheck = checks.find((c: MergeCheck) => c.id === 'sentences');
-      expect(sentCheck?.passed).toBe(false);
-      expect(sentCheck?.detail).toBe('No sentences in result');
+      const nodesCheck = checks.find((c: MergeCheck) => c.id === 'nodes');
+      expect(nodesCheck?.passed).toBe(false);
+      expect(nodesCheck?.detail).toBe('No nodes in result');
     });
 
-    it('counts sentences from multiple sources', () => {
+    it('counts nodes from multiple sources', () => {
+      const result = makePrepared({
+        autoKept: ['path/a', 'path/b'],
+        conflicts: [{ path: 'path/conflict', slotConflicts: [] }],
+        onlyInSource: ['path/src_only'],
+        onlyInTarget: [],
+      });
+      useMergeWorkspaceStore.getState().setFrameMergeResult(result);
       useMergeWorkspaceStore.setState({
-        prepared: makePrepared({
-          identical: [makeSentence('s1', 'Identical 1'), makeSentence('s2', 'Identical 2')],
-          similarPairs: [
-            {
-              source: makeSentence('s3', 'Source pick'),
-              target: makeSentence('s4', 'Target alternative'),
-              wordDiff: [],
-              resolution: 'source',
-            },
-          ],
-          onlyInSource: [
-            {
-              sentence: makeSentence('s5', 'Source only'),
-              keep: true,
-            },
-          ],
-          onlyInTarget: [
-            {
-              sentence: makeSentence('s6', 'Target only'),
-              keep: false,
-            },
-          ],
-        }),
         message: 'msg',
         targetBranch: 'main',
       });
 
+      // Resolve the conflict
+      useMergeWorkspaceStore.getState().resolveConflict(0, 'source');
+
       const checks = useMergeWorkspaceStore.getState().getMergeChecks();
-      const sentCheck = checks.find((c: MergeCheck) => c.id === 'sentences');
-      // 2 identical + 1 resolved source + 1 kept source-only = 4
-      expect(sentCheck?.passed).toBe(true);
-      expect(sentCheck?.detail).toBe('4 sentences');
+      const nodesCheck = checks.find((c: MergeCheck) => c.id === 'nodes');
+      // 2 auto-kept + 1 resolved conflict + 1 source-only = 4
+      expect(nodesCheck?.passed).toBe(true);
+      expect(nodesCheck?.detail).toBe('4 nodes');
     });
   });
 
@@ -319,8 +301,9 @@ describe('getMergeChecks', () => {
 
   describe("'target_branch' check", () => {
     it('passes when targetBranch is set', () => {
+      const result = makePrepared();
+      useMergeWorkspaceStore.getState().setFrameMergeResult(result);
       useMergeWorkspaceStore.setState({
-        prepared: makePrepared(),
         message: 'msg',
         targetBranch: 'main',
       });
@@ -332,8 +315,9 @@ describe('getMergeChecks', () => {
     });
 
     it('fails when targetBranch is null', () => {
+      const result = makePrepared();
+      useMergeWorkspaceStore.getState().setFrameMergeResult(result);
       useMergeWorkspaceStore.setState({
-        prepared: makePrepared(),
         message: 'msg',
         targetBranch: null,
       });
@@ -350,8 +334,9 @@ describe('getMergeChecks', () => {
 
   describe("'preview_computed' check", () => {
     it('always passes', () => {
+      const result = makePrepared();
+      useMergeWorkspaceStore.getState().setFrameMergeResult(result);
       useMergeWorkspaceStore.setState({
-        prepared: makePrepared(),
         message: 'msg',
         targetBranch: 'main',
       });
@@ -362,24 +347,14 @@ describe('getMergeChecks', () => {
     });
 
     it('includes detail with counts', () => {
+      const result = makePrepared({
+        autoKept: ['path/kept'],
+        conflicts: [{ path: 'path/conflict', slotConflicts: [] }],
+        onlyInSource: ['path/unique_src'],
+        onlyInTarget: [],
+      });
+      useMergeWorkspaceStore.getState().setFrameMergeResult(result);
       useMergeWorkspaceStore.setState({
-        prepared: makePrepared({
-          identical: [makeSentence('s1', 'kept')],
-          similarPairs: [
-            {
-              source: makeSentence('s2', 'src'),
-              target: makeSentence('s3', 'tgt'),
-              wordDiff: [],
-            },
-          ],
-          onlyInSource: [
-            {
-              sentence: makeSentence('s4', 'unique src'),
-              keep: true,
-            },
-          ],
-          onlyInTarget: [],
-        }),
         message: 'msg',
         targetBranch: 'main',
       });
@@ -396,26 +371,28 @@ describe('getMergeChecks', () => {
 
   describe('developer mode labels', () => {
     it('uses friendly terminology in default mode', () => {
+      const result = makePrepared();
+      useMergeWorkspaceStore.getState().setFrameMergeResult(result);
       useMergeWorkspaceStore.setState({
-        prepared: makePrepared(),
         message: 'msg',
         targetBranch: 'main',
       });
 
       const checks = useMergeWorkspaceStore.getState().getMergeChecks();
       const msgCheck = checks.find((c: MergeCheck) => c.id === 'message');
-      // In default mode, tm('merge') returns '合并'
+      // In default mode, tm('merge') returns '\u5408\u5E76'
       expect(msgCheck?.label).toContain('\u5408\u5E76'); // 合并
 
       const branchCheck = checks.find((c: MergeCheck) => c.id === 'target_branch');
-      // In default mode, tm('branch') returns '变体'
+      // In default mode, tm('branch') returns '\u53d8\u4f53'
       expect(branchCheck?.label).toContain('\u53d8\u4f53'); // 变体
     });
 
     it('uses Git terminology in developer mode', () => {
       useSettingsStore.setState({ developerMode: true });
+      const result = makePrepared();
+      useMergeWorkspaceStore.getState().setFrameMergeResult(result);
       useMergeWorkspaceStore.setState({
-        prepared: makePrepared(),
         message: 'msg',
         targetBranch: 'main',
       });

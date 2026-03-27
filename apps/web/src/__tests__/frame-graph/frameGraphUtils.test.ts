@@ -8,10 +8,10 @@ import {
 
 // ── Fixtures ──
 
-const mkFrame = (id: string, type: string, extra?: Partial<Frame>): TreeNode => ({
-  id,
-  type,
+const mkNode = (key: string, extra?: Partial<TreeNode>): TreeNode => ({
+  key,
   slots: { agent: 'Alice' },
+  children: [],
   ...extra,
 });
 
@@ -20,46 +20,48 @@ const mkRel = (from: string, to: string, type: Relation['type']): Relation => ({
 /**
  * Graph topology used in zoom-level tests:
  *
+ * Tree-primary: top-level nodes are trunk, children are hidden in overview.
+ *
  *   f1 --causes--> f2 --follows--> f3
  *                   |
- *               elaborates
+ *               depends
  *                   |
  *                   v
  *                  f4 --causes--> f5
  *                   |
- *               elaborates
+ *               depends
  *                   v
  *                  f6
  *
- * Trunk nodes (overview): f1, f2, f3, f4, f5
- *   - f4 has elaborates incoming but also causes outgoing → stays
- *   - f6 has ONLY elaborates incoming and no outgoing non-elaborates → hidden
+ * Top-level trees: f1, f2, f3, f4, f5
+ *   - f6 is a child of f4, hidden in overview
  */
 const zoomContent: SemanticContent = {
-  frames: [
-    mkFrame('f1', 'action'),
-    mkFrame('f2', 'action'),
-    mkFrame('f3', 'result'),
-    mkFrame('f4', 'detail'),
-    mkFrame('f5', 'outcome'),
-    mkFrame('f6', 'sub_detail'),
+  trees: [
+    mkNode('f1', { children: [] }),
+    mkNode('f2', { children: [] }),
+    mkNode('f3', { children: [] }),
+    mkNode('f4', {
+      children: [mkNode('f6')],
+    }),
+    mkNode('f5', { children: [] }),
   ],
   relations: [
     mkRel('f1', 'f2', 'causes'),
     mkRel('f2', 'f3', 'follows'),
-    mkRel('f2', 'f4', 'elaborates'),
+    mkRel('f2', 'f4', 'depends'),
     mkRel('f4', 'f5', 'causes'),
-    mkRel('f4', 'f6', 'elaborates'),
+    mkRel('f4', 'f6', 'depends'),
   ],
 };
 
 // ── semanticToFlowElements ──
 
 describe('semanticToFlowElements', () => {
-  it('converts frames to nodes with correct shape', () => {
+  it('converts trees to nodes with correct shape', () => {
     const content: SemanticContent = {
-      frames: [
-        mkFrame('f1', 'preference', {
+      trees: [
+        mkNode('preference', {
           slots: { item: 'coffee' },
           source: 'turn_abc',
           confidence: 0.9,
@@ -70,7 +72,7 @@ describe('semanticToFlowElements', () => {
     const { nodes } = semanticToFlowElements(content);
     expect(nodes).toHaveLength(1);
     const n = nodes[0];
-    expect(n.id).toBe('f1');
+    expect(n.id).toBe('preference');
     expect(n.type).toBe('frameNode');
     expect(n.position).toEqual({ x: 0, y: 0 });
     expect(n.data).toEqual({
@@ -83,7 +85,7 @@ describe('semanticToFlowElements', () => {
 
   it('converts relations to edges with correct shape', () => {
     const content: SemanticContent = {
-      frames: [mkFrame('f1', 'a'), mkFrame('f2', 'b')],
+      trees: [mkNode('f1'), mkNode('f2')],
       relations: [mkRel('f1', 'f2', 'causes')],
     };
     const { edges } = semanticToFlowElements(content);
@@ -98,7 +100,7 @@ describe('semanticToFlowElements', () => {
 
   it('handles empty content', () => {
     const { nodes, edges } = semanticToFlowElements({
-      frames: [],
+      trees: [],
       relations: [],
     });
     expect(nodes).toHaveLength(0);
@@ -109,57 +111,47 @@ describe('semanticToFlowElements', () => {
 // ── filterByZoomLevel ──
 
 describe('filterByZoomLevel', () => {
-  it("level 'full' returns all frames and relations", () => {
+  it("level 'full' returns all trees and relations", () => {
     const result = filterByZoomLevel(zoomContent, 'full');
-    expect(result.frames).toHaveLength(6);
+    expect(result.trees).toHaveLength(5);
     expect(result.relations).toHaveLength(5);
   });
 
-  it("level 'overview' hides elaborates-only children", () => {
+  it("level 'overview' shows only top-level trees", () => {
     const result = filterByZoomLevel(zoomContent, 'overview');
-    const ids = result.frames.map((f) => f.id);
-    // f6 should be hidden: only incoming is elaborates, no outgoing non-elaborates
-    expect(ids).toContain('f1');
-    expect(ids).toContain('f2');
-    expect(ids).toContain('f3');
-    expect(ids).toContain('f4'); // has causes outgoing
-    expect(ids).toContain('f5');
-    expect(ids).not.toContain('f6');
-    // relations referencing f6 should be removed
+    const keys = result.trees.map((t: TreeNode) => t.key);
+    // Top-level trees only
+    expect(keys).toContain('f1');
+    expect(keys).toContain('f2');
+    expect(keys).toContain('f3');
+    expect(keys).toContain('f4');
+    expect(keys).toContain('f5');
+  });
+
+  it("level 'overview' filters relations to only visible nodes", () => {
+    const result = filterByZoomLevel(zoomContent, 'overview');
+    // f6 is a child, so relations to/from f6 should be filtered
     for (const rel of result.relations) {
       expect(rel.from).not.toBe('f6');
       expect(rel.to).not.toBe('f6');
     }
   });
 
-  it("level 'overview' keeps frame with elaborates incoming but non-elaborates outgoing", () => {
-    const result = filterByZoomLevel(zoomContent, 'overview');
-    const ids = result.frames.map((f) => f.id);
-    // f4 has elaborates incoming from f2 but causes outgoing to f5 → trunk
-    expect(ids).toContain('f4');
-  });
-
-  it("level 'expand' with expandedNodeId shows elaborates children of that node", () => {
-    // Expand f2 → should show f4 (elaborates child of f2) but still hide f6
-    const result = filterByZoomLevel(zoomContent, 'expand', 'f2');
-    const ids = result.frames.map((f) => f.id);
-    expect(ids).toContain('f4'); // elaborates child of f2, also trunk
-    // f6 is elaborates child of f4, not f2, so hidden unless f4 is expanded
-    expect(ids).not.toContain('f6');
-  });
-
-  it("level 'expand' with expandedNodeId reveals hidden elaborates-only children", () => {
-    // Expand f4 → should reveal f6 (elaborates child of f4)
+  it("level 'expand' with expandedNodeId shows children of that node", () => {
+    // Expand f4 → should show f6 (child of f4)
     const result = filterByZoomLevel(zoomContent, 'expand', 'f4');
-    const ids = result.frames.map((f) => f.id);
-    expect(ids).toContain('f6');
+    const keys = result.trees.flatMap((t: TreeNode) => {
+      const childKeys = t.children.map((c: TreeNode) => c.key);
+      return [t.key, ...childKeys];
+    });
+    expect(keys).toContain('f6');
   });
 
   it("level 'expand' without expandedNodeId falls back to overview", () => {
     const result = filterByZoomLevel(zoomContent, 'expand');
     const overviewResult = filterByZoomLevel(zoomContent, 'overview');
-    expect(result.frames.map((f) => f.id).sort()).toEqual(
-      overviewResult.frames.map((f) => f.id).sort()
+    expect(result.trees.map((t: TreeNode) => t.key).sort()).toEqual(
+      overviewResult.trees.map((t: TreeNode) => t.key).sort()
     );
   });
 });
@@ -167,12 +159,11 @@ describe('filterByZoomLevel', () => {
 // ── RELATION_STYLES ──
 
 describe('RELATION_STYLES', () => {
-  it('has entries for all 6 relation types', () => {
+  it('has entries for all 5 relation types', () => {
     const types = [
       'causes',
       'conditions',
       'contrasts',
-      'elaborates',
       'follows',
       'depends',
     ] as const;

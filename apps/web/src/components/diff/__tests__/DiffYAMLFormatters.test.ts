@@ -29,7 +29,7 @@ describe('formatRelation', () => {
     expect(formatRelation(r)).toBe('f_001 -[causes]-> f_002');
   });
   it('formats relation with confidence', () => {
-    const r = { from: 'f_001', to: 'f_002', type: 'elaborates' as const, confidence: 0.85 };
-    expect(formatRelation(r)).toBe('f_001 -[elaborates]-> f_002 (85%)');
+    const r = { from: 'f_001', to: 'f_002', type: 'depends' as const, confidence: 0.85 };
+    expect(formatRelation(r)).toBe('f_001 -[depends]-> f_002 (85%)');
   });
 });

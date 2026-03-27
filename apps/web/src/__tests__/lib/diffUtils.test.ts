@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { TreeNode } from '@/lib/diffUtils';
+import type { DiffableSentence } from '@/lib/diffUtils';
 import {
   diffCommits,
   JACCARD_THRESHOLD,
@@ -198,7 +198,7 @@ describe('diffUtils', () => {
   // diffCommits
   // =========================================================================
   describe('diffCommits', () => {
-    const s = (id: string, text: string): TreeNode => ({ id, text });
+    const s = (id: string, text: string): DiffableSentence => ({ id, text });
 
     it('identifies identical sentences', () => {
       const source = [s('s1', 'Hello world'), s('s2', 'Goodbye')];
