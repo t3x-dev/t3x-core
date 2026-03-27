@@ -40,7 +40,7 @@ import type { CommitAuthor, CommitSourceRef } from '@t3x-dev/core';
 import type { ApiCommit } from '@/lib/api/commits';
 
 // Legacy sentence types — kept locally for web components still using sentence-based display.
-// Core has moved to frame-native SemanticContent; web migration is a separate effort.
+// Core has moved to tree-native SemanticContent; web migration is a separate effort.
 export interface SentenceSourceRef {
   conversation_id: string;
   turn_hash: string;
@@ -60,7 +60,7 @@ export type { CommitAuthor, CommitSourceRef };
 
 /**
  * Commit display data for canvas nodes.
- * Based on ApiCommit (frame-based), with backward-compat fields for components
+ * Based on ApiCommit (tree-based), with backward-compat fields for components
  * that still read sentence-derived data.
  *
  * Note: parents field is intentionally omitted as it's not needed for display.
@@ -71,7 +71,7 @@ export type CommitDisplay = Pick<
 > & {
   position_x?: number;
   position_y?: number;
-  /** Backward-compat: sentence-based view derived from frames (used by older canvas components) */
+  /** Backward-compat: sentence-based view derived from trees (used by older canvas components) */
   source_refs?: Array<{ type: string; id: string; title?: string }> | null;
   merge_summary?: {
     kept_identical: number;
@@ -488,7 +488,7 @@ export interface CanvasNodeData {
   sourceUnitId?: string;
   // Source commit hash (parent commit for new commits)
   sourceCommitHash?: string;
-  // Parent commit hash to inherit frames from (cleared after hydration)
+  // Parent commit hash to inherit trees from (cleared after hydration)
   inheritFromCommitHash?: string;
   sourceTurnWindow?: {
     start_turn_hash: string;

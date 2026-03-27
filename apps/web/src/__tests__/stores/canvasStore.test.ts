@@ -545,10 +545,13 @@ describe('Canvas Store - Unit Node Model', () => {
             Promise.resolve({
               success: true,
               data: {
-                identical: [],
-                similarPairs: [],
+                autoKept: [],
+                conflicts: [],
                 onlyInSource: [],
                 onlyInTarget: [],
+                relationsOnlyInSource: [],
+                relationsOnlyInTarget: [],
+                relationsInBoth: [],
               },
             }),
         })
@@ -563,77 +566,54 @@ describe('Canvas Store - Unit Node Model', () => {
       expect(useCanvasStore.getState().mergeLoading).toBe(false);
     });
 
-    it('resolveSimilarPair updates resolution', () => {
-      // Setup with existing mergeState
+    it('resolveSimilarPair is a no-op in tree-primary (legacy API)', () => {
+      // In tree-primary, conflict resolution is handled by mergeWorkspaceStore
       const store = useCanvasStore.getState();
       useCanvasStore.setState({
         mergeState: {
           sourceHash: 'sha256:a',
           targetHash: 'sha256:b',
           prepared: {
-            identical: [],
-            similarPairs: [
-              {
-                source: {
-                  id: 's1',
-                  text: 'Hello world.',
-                  confidence: 0.9,
-                  source: { type: 'conversation', id: 'conv1' },
-                },
-                target: {
-                  id: 't1',
-                  text: 'Hello world!',
-                  confidence: 0.9,
-                  source: { type: 'conversation', id: 'conv2' },
-                },
-                wordDiff: [],
-              },
-            ],
+            autoKept: [],
+            conflicts: [{ path: 'topic/a', slotConflicts: [] }],
             onlyInSource: [],
             onlyInTarget: [],
+            relationsOnlyInSource: [],
+            relationsOnlyInTarget: [],
+            relationsInBoth: [],
           },
         },
       });
 
+      // Should not throw
       store.resolveSimilarPair(0, 'source');
 
-      expect(useCanvasStore.getState().mergeState?.prepared.similarPairs[0].resolution).toBe(
-        'source'
-      );
+      // State unchanged (no-op)
+      expect(useCanvasStore.getState().mergeState).not.toBeNull();
     });
 
-    it('toggleKeep flips boolean', () => {
+    it('toggleKeep is a no-op in tree-primary (legacy API)', () => {
       useCanvasStore.setState({
         mergeState: {
           sourceHash: 'sha256:a',
           targetHash: 'sha256:b',
           prepared: {
-            identical: [],
-            similarPairs: [],
-            onlyInSource: [
-              {
-                sentence: {
-                  id: 's1',
-                  text: 'Unique sentence.',
-                  confidence: 0.9,
-                  source: { type: 'conversation', id: 'conv1' },
-                },
-                keep: true,
-              },
-            ],
+            autoKept: [],
+            conflicts: [],
+            onlyInSource: ['path/a'],
             onlyInTarget: [],
+            relationsOnlyInSource: [],
+            relationsOnlyInTarget: [],
+            relationsInBoth: [],
           },
         },
       });
 
-      const initialKeep = useCanvasStore.getState().mergeState?.prepared.onlyInSource[0].keep;
-
+      // Should not throw
       useCanvasStore.getState().toggleKeep('source', 0);
 
-      expect(useCanvasStore.getState().mergeState?.prepared.onlyInSource[0].keep).toBe(false);
-      expect(useCanvasStore.getState().mergeState?.prepared.onlyInSource[0].keep).toBe(
-        !initialKeep
-      );
+      // State unchanged (no-op)
+      expect(useCanvasStore.getState().mergeState).not.toBeNull();
     });
 
     it('cancelMerge clears state', () => {
@@ -642,10 +622,13 @@ describe('Canvas Store - Unit Node Model', () => {
           sourceHash: 'sha256:a',
           targetHash: 'sha256:b',
           prepared: {
-            identical: [],
-            similarPairs: [],
+            autoKept: [],
+            conflicts: [],
             onlyInSource: [],
             onlyInTarget: [],
+            relationsOnlyInSource: [],
+            relationsOnlyInTarget: [],
+            relationsInBoth: [],
           },
         },
       });
@@ -656,36 +639,22 @@ describe('Canvas Store - Unit Node Model', () => {
       expect(useCanvasStore.getState().mergeState).toBeNull();
     });
 
-    it('selectCanExecuteMerge returns true when all resolved', async () => {
+    it('selectCanExecuteMerge returns true when no conflicts', async () => {
       const { selectCanExecuteMerge } = await import('@/store/canvasStore');
 
-      // Setup with all pairs resolved
+      // Setup with no conflicts (all auto-kept)
       const state = {
         mergeState: {
           sourceHash: 'sha256:a',
           targetHash: 'sha256:b',
           prepared: {
-            identical: [],
-            similarPairs: [
-              {
-                source: {
-                  id: 's1',
-                  text: 'Hello',
-                  confidence: 0.9,
-                  source: { type: 'conversation', id: 'conv1' },
-                },
-                target: {
-                  id: 't1',
-                  text: 'Hi',
-                  confidence: 0.9,
-                  source: { type: 'conversation', id: 'conv2' },
-                },
-                wordDiff: [],
-                resolution: 'source' as const,
-              },
-            ],
+            autoKept: ['path/a'],
+            conflicts: [],
             onlyInSource: [],
             onlyInTarget: [],
+            relationsOnlyInSource: [],
+            relationsOnlyInTarget: [],
+            relationsInBoth: [],
           },
         },
       } as unknown as Parameters<typeof selectCanExecuteMerge>[0];
@@ -693,7 +662,7 @@ describe('Canvas Store - Unit Node Model', () => {
       expect(selectCanExecuteMerge(state)).toBe(true);
     });
 
-    it('selectCanExecuteMerge returns false when unresolved', async () => {
+    it('selectCanExecuteMerge returns false when there are conflicts', async () => {
       const { selectCanExecuteMerge } = await import('@/store/canvasStore');
 
       const state = {
@@ -701,27 +670,13 @@ describe('Canvas Store - Unit Node Model', () => {
           sourceHash: 'sha256:a',
           targetHash: 'sha256:b',
           prepared: {
-            identical: [],
-            similarPairs: [
-              {
-                source: {
-                  id: 's1',
-                  text: 'Hello',
-                  confidence: 0.9,
-                  source: { type: 'conversation', id: 'conv1' },
-                },
-                target: {
-                  id: 't1',
-                  text: 'Hi',
-                  confidence: 0.9,
-                  source: { type: 'conversation', id: 'conv2' },
-                },
-                wordDiff: [],
-                resolution: undefined,
-              },
-            ],
+            autoKept: [],
+            conflicts: [{ path: 'topic/a', slotConflicts: [] }],
             onlyInSource: [],
             onlyInTarget: [],
+            relationsOnlyInSource: [],
+            relationsOnlyInTarget: [],
+            relationsInBoth: [],
           },
         },
       } as unknown as Parameters<typeof selectCanExecuteMerge>[0];

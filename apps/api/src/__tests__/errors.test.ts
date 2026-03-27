@@ -9,8 +9,8 @@ import {
 } from '../lib/errors';
 
 describe('ErrorCodes', () => {
-  it('has 62 error codes', () => {
-    expect(Object.keys(ErrorCodes)).toHaveLength(62);
+  it('has 65 error codes', () => {
+    expect(Object.keys(ErrorCodes)).toHaveLength(65);
   });
 
   it('key equals value for every code', () => {
@@ -27,6 +27,8 @@ describe('ErrorCodes', () => {
         "API_KEY_REVOKED": "API_KEY_REVOKED",
         "AUTH_ERROR": "AUTH_ERROR",
         "AUTOPILOT_CONFIG_INVALID": "AUTOPILOT_CONFIG_INVALID",
+        "CHECK_FAILED": "CHECK_FAILED",
+        "COMMIT_FAILED": "COMMIT_FAILED",
         "COMMIT_NOT_FOUND": "COMMIT_NOT_FOUND",
         "COMMIT_VERSION_UNSUPPORTED": "COMMIT_VERSION_UNSUPPORTED",
         "COMPARE_FAILED": "COMPARE_FAILED",
@@ -35,6 +37,7 @@ describe('ErrorCodes', () => {
         "CREATE_FAILED": "CREATE_FAILED",
         "DATABASE_ERROR": "DATABASE_ERROR",
         "DELETE_FAILED": "DELETE_FAILED",
+        "DEPRECATED": "DEPRECATED",
         "DRAFT_NOT_FOUND": "DRAFT_NOT_FOUND",
         "DUPLICATE_PIN": "DUPLICATE_PIN",
         "EMBEDDER_NOT_CONFIGURED": "EMBEDDER_NOT_CONFIGURED",

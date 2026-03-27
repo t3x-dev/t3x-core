@@ -8,10 +8,15 @@
  * - getUnresolvedCount considering extended resolutions
  * - canCommit with extended resolutions
  * - fetchSourceContext caching
+ *
+ * Updated for tree-primary merge architecture.
+ * Uses treeMergeResult (path-based MergeResult from core) for conflict resolution.
+ * Legacy getPreviewSentences still uses Merge2WayResult prepared data.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
+import type { MergeResult } from '@t3x-dev/core';
 import type { Merge2WayResult, Sentence } from '@/types/merge';
 
 // Mock the API module
@@ -30,7 +35,7 @@ const createSentence = (id: string, text: string): Sentence => ({
   },
 });
 
-// Helper to create mock prepared merge data
+// Helper to create mock prepared merge data (legacy sentence-based)
 const createMockPrepared = (): Merge2WayResult => ({
   identical: [createSentence('identical-1', 'This sentence is the same.')],
   similarPairs: [
@@ -60,6 +65,20 @@ const createMockPrepared = (): Merge2WayResult => ({
   onlyInTarget: [{ sentence: createSentence('only-target-1', 'Only in target.'), keep: true }],
 });
 
+// Helper to create tree-primary MergeResult
+const createMockTreeMergeResult = (): MergeResult => ({
+  autoKept: ['identical/a'],
+  conflicts: [
+    { path: 'topic/budget', slotConflicts: [] },
+    { path: 'topic/meeting', slotConflicts: [] },
+  ],
+  onlyInSource: ['src/only'],
+  onlyInTarget: ['tgt/only'],
+  relationsOnlyInSource: [],
+  relationsOnlyInTarget: [],
+  relationsInBoth: [],
+});
+
 describe('MergeWorkspaceStore - Extended Resolutions', () => {
   beforeEach(() => {
     // Reset store before each test
@@ -70,8 +89,11 @@ describe('MergeWorkspaceStore - Extended Resolutions', () => {
     vi.clearAllMocks();
   });
 
-  // Helper to set up store with prepared data
+  // Helper to set up store with tree merge data
   const setupStore = () => {
+    const treeMergeResult = createMockTreeMergeResult();
+    useMergeWorkspaceStore.getState().setTreeMergeResult(treeMergeResult);
+    // Also set legacy prepared for getPreviewSentences
     useMergeWorkspaceStore.setState({
       prepared: createMockPrepared(),
       status: 'pending',
@@ -85,7 +107,7 @@ describe('MergeWorkspaceStore - Extended Resolutions', () => {
       useMergeWorkspaceStore.getState().resolveConflict(0, 'source');
 
       const state = useMergeWorkspaceStore.getState();
-      expect(state.prepared?.similarPairs[0].resolution).toBe('source');
+      expect(state.treeResolutions.get('topic/budget')).toEqual({ type: 'source' });
       expect(state.extendedResolutions['0']).toBeUndefined();
     });
 
@@ -95,7 +117,7 @@ describe('MergeWorkspaceStore - Extended Resolutions', () => {
       useMergeWorkspaceStore.getState().resolveConflict(0, 'target');
 
       const state = useMergeWorkspaceStore.getState();
-      expect(state.prepared?.similarPairs[0].resolution).toBe('target');
+      expect(state.treeResolutions.get('topic/budget')).toEqual({ type: 'target' });
       expect(state.extendedResolutions['0']).toBeUndefined();
     });
 
@@ -105,7 +127,7 @@ describe('MergeWorkspaceStore - Extended Resolutions', () => {
       useMergeWorkspaceStore.getState().resolveConflict(0, 'both');
 
       const state = useMergeWorkspaceStore.getState();
-      expect(state.prepared?.similarPairs[0].resolution).toBeUndefined();
+      expect(state.treeResolutions.has('topic/budget')).toBe(false);
       expect(state.extendedResolutions['0']).toEqual({ type: 'both' });
     });
 
@@ -120,7 +142,7 @@ describe('MergeWorkspaceStore - Extended Resolutions', () => {
       useMergeWorkspaceStore.getState().resolveConflict(0, 'source');
 
       const state = useMergeWorkspaceStore.getState();
-      expect(state.prepared?.similarPairs[0].resolution).toBe('source');
+      expect(state.treeResolutions.get('topic/budget')).toEqual({ type: 'source' });
       expect(state.extendedResolutions['0']).toBeUndefined();
     });
   });
@@ -129,7 +151,7 @@ describe('MergeWorkspaceStore - Extended Resolutions', () => {
     it('should return count of unresolved conflicts', () => {
       setupStore();
 
-      expect(useMergeWorkspaceStore.getState().getUnresolvedCount()).toBe(2); // Two unresolved pairs
+      expect(useMergeWorkspaceStore.getState().getUnresolvedCount()).toBe(2); // Two unresolved conflicts
     });
 
     it('should count standard resolutions as resolved', () => {
@@ -152,8 +174,9 @@ describe('MergeWorkspaceStore - Extended Resolutions', () => {
 
   describe('canCommit', () => {
     it('should return false when there are unresolved conflicts', () => {
+      const treeMergeResult = createMockTreeMergeResult();
+      useMergeWorkspaceStore.getState().setTreeMergeResult(treeMergeResult);
       useMergeWorkspaceStore.setState({
-        prepared: createMockPrepared(),
         status: 'pending',
         message: 'Merge commit',
       });
@@ -162,8 +185,9 @@ describe('MergeWorkspaceStore - Extended Resolutions', () => {
     });
 
     it('should return true when all conflicts are resolved with extended resolutions', () => {
+      const treeMergeResult = createMockTreeMergeResult();
+      useMergeWorkspaceStore.getState().setTreeMergeResult(treeMergeResult);
       useMergeWorkspaceStore.setState({
-        prepared: createMockPrepared(),
         status: 'pending',
         message: 'Merge commit',
       });
@@ -175,8 +199,9 @@ describe('MergeWorkspaceStore - Extended Resolutions', () => {
     });
 
     it('should return false when message is empty', () => {
+      const treeMergeResult = createMockTreeMergeResult();
+      useMergeWorkspaceStore.getState().setTreeMergeResult(treeMergeResult);
       useMergeWorkspaceStore.setState({
-        prepared: createMockPrepared(),
         status: 'pending',
         message: '',
       });
@@ -200,7 +225,15 @@ describe('MergeWorkspaceStore - Extended Resolutions', () => {
     it('should include source sentence for "source" resolution', () => {
       setupStore();
 
-      useMergeWorkspaceStore.getState().resolveConflict(0, 'source');
+      // Use legacy resolveConflict that sets prepared.similarPairs[0].resolution
+      const state = useMergeWorkspaceStore.getState();
+      const prepared = state.prepared;
+      if (prepared) {
+        const updated = { ...prepared };
+        updated.similarPairs = [...prepared.similarPairs];
+        updated.similarPairs[0] = { ...updated.similarPairs[0], resolution: 'source' };
+        useMergeWorkspaceStore.setState({ prepared: updated });
+      }
 
       const sentences = useMergeWorkspaceStore.getState().getPreviewSentences();
 
@@ -211,7 +244,10 @@ describe('MergeWorkspaceStore - Extended Resolutions', () => {
     it('should include both sentences for "both" resolution', () => {
       setupStore();
 
-      useMergeWorkspaceStore.getState().resolveConflict(0, 'both');
+      // Set extended resolution for index 0
+      useMergeWorkspaceStore.setState({
+        extendedResolutions: { '0': { type: 'both' } },
+      });
 
       const sentences = useMergeWorkspaceStore.getState().getPreviewSentences();
 

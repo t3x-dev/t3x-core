@@ -6,7 +6,7 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { buildDraft } from '@t3x-dev/core';
+import { applyDelta, type SemanticContent } from '@t3x-dev/core';
 import {
   findConversationsByProject,
   findTurnsByProject,
@@ -235,9 +235,12 @@ exportRoutes.openapi(exportCfpackRoute, async (c) => {
     for (const conv of await findConversationsByProject(db, { projectId, limit: 10000 })) {
       const deltaLogs = await listDeltaLogByConversation(db, conv.conversationId);
       if (deltaLogs.length > 0) {
-        const snapshot = buildDraft(toDeltaLogEntries(deltaLogs));
+        const snapshot = toDeltaLogEntries(deltaLogs).reduce(
+          (snap, entry) => applyDelta(snap, entry.delta),
+          { trees: [], relations: [] } as SemanticContent
+        );
         semanticSnapshots[conv.conversationId] = {
-          frames: snapshot.frames,
+          trees: snapshot.trees,
           relations: snapshot.relations,
           delta_count: deltaLogs.length,
         };
@@ -379,12 +382,15 @@ exportRoutes.openapi(exportLedgerRoute, async (c) => {
     for (const conv of conversations) {
       const deltaLogs = await listDeltaLogByConversation(db, conv.conversationId);
       if (deltaLogs.length > 0) {
-        const snapshot = buildDraft(toDeltaLogEntries(deltaLogs));
+        const snapshot = toDeltaLogEntries(deltaLogs).reduce(
+          (snap, entry) => applyDelta(snap, entry.delta),
+          { trees: [], relations: [] } as SemanticContent
+        );
         lines.push(
           JSON.stringify({
             type: 'semantic_snapshot',
             conversation_id: conv.conversationId,
-            frames: snapshot.frames,
+            trees: snapshot.trees,
             relations: snapshot.relations,
             delta_count: deltaLogs.length,
           })

@@ -36,10 +36,10 @@ export function BusinessRuleEditor({
     setTestResult(null);
     try {
       // Dynamic import to avoid circular dependency
-      const { gateCheck } = await import('@/lib/api/frames');
+      const { gateCheck } = await import('@/lib/api/trees');
       // Test with minimal content
       const result = await gateCheck(
-        { frames: [], relations: [] },
+        { trees: [], relations: [] },
         {
           business_rules: [rule],
           gates: ['business'],
@@ -160,7 +160,7 @@ export function BusinessRuleEditor({
                 value={rule.rule ?? ''}
                 onChange={(e) => updateField('rule', e.target.value)}
                 className="w-full rounded-md border bg-background px-3 py-2 text-sm font-mono min-h-[80px] resize-y focus:outline-none focus:ring-2 focus:ring-ring"
-                placeholder="frames.length >= 3 && frames.every(f => f.confidence > 0.7)"
+                placeholder="nodes.length >= 3 && nodes.every(f => f.confidence > 0.7)"
               />
               <p className="text-[10px] text-muted-foreground mt-1">
                 Available variables: <code className="font-mono">frames</code>,{' '}

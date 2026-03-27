@@ -221,7 +221,7 @@ export default function LeafDetailPage() {
           {/* Display mode: coverage summary */}
           {mode === 'display' && sentences.length > 0 && (
             <span className="text-xs font-medium text-[var(--status-success)] ml-2">
-              {reflectedCount}/{sentences.length} frames reflected
+              {reflectedCount}/{sentences.length} trees reflected
             </span>
           )}
         </div>
@@ -291,7 +291,7 @@ export default function LeafDetailPage() {
         {/* Left: YAML Tree (always visible in both modes) */}
         {!sourcePanelCollapsed && (
           <YAMLTreePanel
-            content={semanticContent ?? { frames: [], relations: [] }}
+            content={semanticContent ?? { trees: [], relations: [] }}
             mode={mode}
             constraints={leaf.constraints}
             assertions={leaf.assertions ?? undefined}
@@ -300,7 +300,7 @@ export default function LeafDetailPage() {
             projectId={projectId}
             onAddConstraintFromSource={handleAddConstraintFromSource}
             highlightedConstraintId={hoveredSentenceId}
-            onHoverFrame={setHoveredSentenceId}
+            onHoverNode={setHoveredSentenceId}
           />
         )}
 

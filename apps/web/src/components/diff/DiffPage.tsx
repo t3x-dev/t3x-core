@@ -1,32 +1,32 @@
 'use client';
 
 /**
- * DiffPage — Frame-based diff comparison page.
+ * DiffPage — Tree-based diff comparison page.
  *
  * 3-column layout:
- *   Left (160px):  FrameDiffIndex — frame list with diff status icons
+ *   Left (160px):  TreeDiffIndex — tree list with diff status icons
  *   Center (flex):  Tabbed content — Diff | Graph | JSON
  *   Right (240px):  Comparison metadata sidebar
  */
 
-import type { Commit, FrameDiff } from '@t3x-dev/core';
+import type { Commit, TreeDiff } from '@t3x-dev/core';
 import { ArrowLeft, GitBranch, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { relativeTime, shortHash } from '@/components/commit/CommitDetailHelpers';
-import { FrameGraphView } from '@/components/frame-graph';
+import { TreeGraphView } from '@/components/tree-graph';
 import { Breadcrumb } from '@/components/shared/Breadcrumb';
-import { getCommitAsFrames } from '@/lib/api/commitUnified';
+import { getCommitAsNodes } from '@/lib/api/commitUnified';
 import { API_V1, fetchWithTimeout, handleResponse } from '@/lib/api/core';
-import type { CommitMeta, FrameDiffResponse } from '@/lib/api/frameDiff';
-import { getFrameDiff } from '@/lib/api/frameDiff';
+import type { CommitMeta, DiffResponse } from '@/lib/api/treeDiff';
+import { getTreeDiff } from '@/lib/api/treeDiff';
 import { PAGE_ANIMATION_STYLES } from '@/lib/pageAnimations';
 import { useProjectStore } from '@/store/projectStore';
 import { DiffTreeOverview } from './DiffTreeOverview';
 import { DiffYAMLSplitView } from './DiffYAMLSplitView';
 import { DiffYAMLUnifiedView } from './DiffYAMLUnifiedView';
-import { FrameDiffIndex } from './FrameDiffIndex';
+import { TreeDiffIndex } from './DiffIndex';
 
 // ============================================================================
 // Types
@@ -86,7 +86,7 @@ function CommitInfoBlock({
 // DiffStatsBlock — summary stats in sidebar
 // ============================================================================
 
-function DiffStatsBlock({ diff }: { diff: FrameDiff }) {
+function DiffStatsBlock({ diff }: { diff: TreeDiff }) {
   const stats = [
     { label: 'Modified', count: diff.modified.length, color: 'var(--diff-modified-accent)' },
     { label: 'Added', count: diff.onlyInTarget.length, color: 'var(--diff-added-accent)' },
@@ -97,7 +97,7 @@ function DiffStatsBlock({ diff }: { diff: FrameDiff }) {
   return (
     <div className="space-y-1.5">
       <div className="text-[10px] font-semibold uppercase tracking-wide text-[var(--text-tertiary)]">
-        Frame Changes
+        Tree Changes
       </div>
       <div className="space-y-1">
         {stats.map(
@@ -118,7 +118,7 @@ function DiffStatsBlock({ diff }: { diff: FrameDiff }) {
 // RelationChangesBlock — relation additions/removals in sidebar
 // ============================================================================
 
-function RelationChangesBlock({ diff }: { diff: FrameDiff }) {
+function RelationChangesBlock({ diff }: { diff: TreeDiff }) {
   const added = diff.relationsAdded?.length ?? 0;
   const removed = diff.relationsRemoved?.length ?? 0;
 
@@ -192,12 +192,12 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
   const router = useRouter();
 
   // State
-  const [diffResponse, setDiffResponse] = useState<FrameDiffResponse | null>(null);
+  const [diffResponse, setDiffResponse] = useState<DiffResponse | null>(null);
   const [targetCommit, setTargetCommit] = useState<Commit | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>('diff');
-  const [activeFrameId, setActiveFrameId] = useState<string | null>(null);
+  const [activeNodeId, setActiveNodeId] = useState<string | null>(null);
   const [showIdentical, setShowIdentical] = useState(false);
   const [viewMode, setViewMode] = useState<'split' | 'unified'>('split');
   const [baseCommit, setBaseCommit] = useState<Commit | null>(null);
@@ -213,9 +213,9 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
     setError(null);
 
     Promise.all([
-      getFrameDiff(baseHash, targetHash),
-      getCommitAsFrames(targetHash),
-      getCommitAsFrames(baseHash),
+      getTreeDiff(baseHash, targetHash),
+      getCommitAsNodes(targetHash),
+      getCommitAsNodes(baseHash),
     ])
       .then(([diffResp, tgtCommit, baseCommitData]) => {
         if (cancelled) return;
@@ -241,8 +241,8 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
     router.push(`/project/${projectId}`);
   }, [router, projectId]);
 
-  const handleSelectFrame = useCallback((id: string) => {
-    setActiveFrameId(id);
+  const handleSelectNode = useCallback((id: string) => {
+    setActiveNodeId(id);
   }, []);
 
   const handleToggleIdentical = useCallback(() => {
@@ -369,11 +369,11 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
 
       {/* ═══════ BODY: 3-column layout ═══════ */}
       <div className="flex flex-1 overflow-hidden">
-        {/* ── Left sidebar: Frame index ── */}
-        <FrameDiffIndex
+        {/* ── Left sidebar: TreeNode index ── */}
+        <TreeDiffIndex
           diff={diff}
-          activeFrameId={activeFrameId}
-          onSelectFrame={handleSelectFrame}
+          activeNodeId={activeNodeId}
+          onSelectNode={handleSelectNode}
           showIdentical={showIdentical}
           onToggleIdentical={handleToggleIdentical}
         />
@@ -410,15 +410,15 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
                   {viewMode === 'split' ? (
                     <DiffYAMLSplitView
                       diff={diff}
-                      activeFrameId={activeFrameId}
-                      onSelectFrame={handleSelectFrame}
+                      activeNodeId={activeNodeId}
+                      onSelectNode={handleSelectNode}
                       showIdentical={showIdentical}
                     />
                   ) : (
                     <DiffYAMLUnifiedView
                       diff={diff}
-                      activeFrameId={activeFrameId}
-                      onSelectFrame={handleSelectFrame}
+                      activeNodeId={activeNodeId}
+                      onSelectNode={handleSelectNode}
                       showIdentical={showIdentical}
                     />
                   )}
@@ -428,7 +428,7 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
 
             {activeTab === 'graph' && targetCommit?.content && (
               <div className="h-full">
-                <FrameGraphView content={targetCommit.content} />
+                <TreeGraphView content={targetCommit.content} />
               </div>
             )}
 

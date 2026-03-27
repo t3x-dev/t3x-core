@@ -13,11 +13,14 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
   applyAnswer,
-  buildDraft,
+  applyDelta,
   createMeaningPipeline,
-  FRAME_RELATION_TYPES,
-  type FrameExtractionTurn,
-  FrameExtractor,
+  type ExtractionResult,
+  type ExtractionTurn,
+  Extractor,
+  flattenTrees,
+  RELATION_TYPES,
+  type SemanticContent,
   type UserAnswer,
 } from '@t3x-dev/core';
 import {
@@ -146,7 +149,11 @@ frameAnswerRoutes.openapi(answerRoute, async (c) => {
 
     // 2. Build current snapshot from delta log
     const deltaRecords = await listDeltaLogByConversation(db, conversation_id);
-    const currentSnapshot = buildDraft(toDeltaLogEntries(deltaRecords));
+    const emptySnapshot: SemanticContent = { trees: [], relations: [] };
+    const currentSnapshot = toDeltaLogEntries(deltaRecords).reduce(
+      (snap, entry) => applyDelta(snap, entry.delta),
+      emptySnapshot
+    );
 
     // 3. Process the first answer (single answer per request for now)
     const answer: UserAnswer = answers[0];
@@ -253,8 +260,8 @@ async function handleDriftChoice4(
   });
 
   // biome-ignore lint/suspicious/noExplicitAny: generic error handler
-  const extractionTurns: FrameExtractionTurn[] = allTurns.map((t: any) => ({
-    role: t.role as FrameExtractionTurn['role'],
+  const extractionTurns: ExtractionTurn[] = allTurns.map((t: any) => ({
+    role: t.role as ExtractionTurn['role'],
     content: t.content,
     turn_hash: t.turnHash,
   }));
@@ -272,16 +279,16 @@ async function handleDriftChoice4(
 
   // 3. Extract frames via FrameExtractor
   const reg = await getProviderRegistry();
-  const extractResult = await reg.tryWithFallback('generation', (provider) => {
+  const extractResult = (await reg.tryWithFallback('generation', (provider): Promise<ExtractionResult> => {
     // biome-ignore lint/suspicious/noExplicitAny: generic error handler
     const { provider: tracked } = wrapWithUsageTracking(provider as any);
-    const extractor = new FrameExtractor(tracked);
+    const extractor = new Extractor(tracked);
     return extractor.extract({
       turns: extractionTurns,
-      snapshot: currentSnapshot.frames.length > 0 ? currentSnapshot : undefined,
+      snapshot: currentSnapshot.trees.length > 0 ? currentSnapshot : undefined,
       processedTurnCount,
     });
-  });
+  })) as ExtractionResult;
 
   if (!extractResult.ok) {
     return errorResponse(c, 'EXTRACTION_FAILED', extractResult.error);
@@ -297,19 +304,19 @@ async function handleDriftChoice4(
         mode: 'incremental',
       });
     });
-    organizedSnapshot = pipelineResult.content;
+    organizedSnapshot = (pipelineResult as any).content;
   } catch {
     // Pipeline optional — flat frames still valid
   }
 
   // 5. Build delta with relation connecting old root → new root
-  const oldRootId = currentSnapshot.frames[0]?.id;
-  const newFrameIds = organizedSnapshot.frames
-    // biome-ignore lint/suspicious/noExplicitAny: generic error handler
-    .filter((f: any) => !currentSnapshot.frames.some((old: any) => old.id === f.id))
-    // biome-ignore lint/suspicious/noExplicitAny: generic error handler
-    .map((f: any) => f.id);
-  const newRootId = newFrameIds[0];
+  const currentFlat = flattenTrees(currentSnapshot.trees);
+  const organizedFlat = flattenTrees(organizedSnapshot.trees);
+  const oldRootId = currentFlat[0]?.id;
+  const newNodeIds = organizedFlat
+    .filter((f) => !currentFlat.some((old) => old.id === f.id))
+    .map((f) => f.id);
+  const newRootId = newNodeIds[0];
 
   // biome-ignore lint/suspicious/noExplicitAny: generic error handler
   const relationDelta: any = {
@@ -322,9 +329,9 @@ async function handleDriftChoice4(
   if (oldRootId && newRootId) {
     const relationType =
       driftContext?.relation &&
-      (FRAME_RELATION_TYPES as readonly string[]).includes(driftContext.relation)
+      (RELATION_TYPES as readonly string[]).includes(driftContext.relation)
         ? driftContext.relation
-        : 'elaborates';
+        : 'follows';
     relationDelta.new_relations.push({
       from: oldRootId,
       to: newRootId,

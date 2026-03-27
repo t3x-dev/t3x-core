@@ -289,33 +289,17 @@ export function UnifiedDiffView({
     };
   }, [viewMode, sourceHash, sourceCommit]);
 
-  // Convert ApiCommit frames to Sentence type for positional view
+  // Convert ApiCommit trees to Sentence type for positional view
   const sourceSentences = useMemo(() => {
-    if (!sourceCommit?.content?.frames) return undefined;
+    if (!sourceCommit?.content?.trees) return undefined;
     const content = sourceCommit.content as import('@t3x-dev/core').SemanticContent;
-    return content.frames.map((frame) => {
-      const id = frame.id.startsWith('s_') ? frame.id : `s_${frame.id.replace('f_', '')}`;
-      const text = `[${frame.type}] ${Object.entries(frame.slots)
+    return content.trees.map((node, idx) => {
+      const id = `s_${node.key}_${idx}`;
+      const text = `[${node.key}] ${Object.entries(node.slots)
         .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : String(v)}`)
         .join('; ')}`;
-      const confidence = frame.confidence ?? 1.0;
-      let source: Sentence['source'] | undefined;
-      if (frame.slot_sources) {
-        const firstSource = Object.values(frame.slot_sources)[0];
-        const turnHash = firstSource?.turn_hash ?? firstSource?.turn;
-        if (
-          firstSource &&
-          turnHash &&
-          firstSource.start_char != null &&
-          firstSource.end_char != null
-        ) {
-          source = {
-            turn_hash: turnHash,
-            start_char: firstSource.start_char,
-            end_char: firstSource.end_char,
-          };
-        }
-      }
+      const confidence = node.confidence ?? 1.0;
+      const source: Sentence['source'] | undefined = undefined;
       return { id, text, confidence, source };
     });
   }, [sourceCommit]);
@@ -506,8 +490,8 @@ export function UnifiedDiffView({
     <div className="max-w-4xl mx-auto">
       {/* Stats Header with View Toggle */}
       <div className="flex items-center justify-between mb-[var(--space-group)] px-2 py-2 bg-[var(--surface-panel)] border border-[var(--stroke-divider)] rounded-lg text-sm">
-        {/* Sentence-level stats — hidden in Frame mode */}
-        {diffMode !== 'frame' && (
+        {/* Sentence-level stats — hidden in Tree mode */}
+        {diffMode !== 'tree' && (
           <div className="flex items-center gap-[var(--space-group)]">
             <span className="text-[var(--text-tertiary)]">
               {identical.length} {t('identical_sentences').toLowerCase()}
@@ -537,8 +521,8 @@ export function UnifiedDiffView({
           </div>
         )}
 
-        {/* Spacer when in frame mode to push toggle to the right */}
-        {diffMode === 'frame' && <div className="flex-1" />}
+        {/* Spacer when in  node mode to push toggle to the right */}
+        {diffMode === 'tree' && <div className="flex-1" />}
 
         {/* Diff mode toggle */}
         {onDiffModeChange && (
@@ -550,7 +534,7 @@ export function UnifiedDiffView({
         )}
 
         {/* View Mode Toggle */}
-        {diffMode !== 'frame' && (
+        {diffMode !== 'tree' && (
           <div className="flex items-center gap-1 border border-[var(--stroke-divider)] rounded-md p-0.5">
             <Button
               variant={viewMode === 'grouped' ? 'secondary' : 'ghost'}
@@ -574,7 +558,7 @@ export function UnifiedDiffView({
         )}
       </div>
 
-      {diffMode !== 'frame' && (
+      {diffMode !== 'tree' && (
         <>
           {/* Grouped View (default) */}
           {viewMode === 'grouped' && (

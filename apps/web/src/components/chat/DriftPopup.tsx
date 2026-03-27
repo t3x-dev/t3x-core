@@ -2,12 +2,12 @@
 
 import { GitBranch, X } from 'lucide-react';
 import { useCallback } from 'react';
-import { extractFrames } from '@/lib/api/frames';
+import { extractNodes } from '@/lib/api/trees';
 import { useExtractionPanelStore } from '@/store/extractionPanelStore';
 
 const CHOICE_LABELS: Record<string, { label: string; description: string }> = {
   keep_old: { label: 'Keep Current', description: 'Ignore the new topic, YAML unchanged' },
-  keep_new: { label: 'Switch Topic', description: 'Fold current frames, start fresh tree' },
+  keep_new: { label: 'Switch Topic', description: 'Fold current nodes, start fresh tree' },
   keep_both_separate: {
     label: 'New Project',
     description: 'Create a separate project for the new topic',
@@ -35,7 +35,7 @@ export function DriftPopup() {
 
       // For other choices, re-call extract with drift_decision
       try {
-        const result = await extractFrames(conversationId, undefined, {
+        const result = await extractNodes(conversationId, undefined, {
           choice,
           relation: driftInfo.relation,
           new_topic: driftInfo.new_topic,

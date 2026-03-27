@@ -191,7 +191,7 @@ export const PreviewPanel = forwardRef<HTMLDivElement>(function PreviewPanel(_pr
             </div>
             <p className="text-xs text-amber-600 dark:text-amber-400">
               {previewIncludedCount != null && includedCount !== previewIncludedCount
-                ? `${Math.abs(includedCount - previewIncludedCount)} frame${Math.abs(includedCount - previewIncludedCount) !== 1 ? 's' : ''} ${includedCount > previewIncludedCount ? 'added' : 'removed'} since last preview. `
+                ? `${Math.abs(includedCount - previewIncludedCount)} tree${Math.abs(includedCount - previewIncludedCount) !== 1 ? 's' : ''} ${includedCount > previewIncludedCount ? 'added' : 'removed'} since last preview. `
                 : 'Frames changed since last preview. '}
               <button
                 type="button"

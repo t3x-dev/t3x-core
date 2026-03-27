@@ -1,22 +1,22 @@
 import type {
   Delta,
-  Frame,
-  FrameChange,
+  TreeChange,
   Relation,
   SemanticContent,
   SlotValue,
+  TreeNode,
 } from '@t3x-dev/core';
 
-/** Build a display-name map handling duplicate types with _2, _3 suffixes */
-function buildTypeNameMap(frames: Frame[]): Map<string, string> {
+/** Build a display-name map handling duplicate keys with _2, _3 suffixes */
+function buildKeyNameMap(nodes: TreeNode[]): Map<string, string> {
   const counts = new Map<string, number>();
   const nameMap = new Map<string, string>();
 
-  for (const frame of frames) {
-    const count = (counts.get(frame.type) ?? 0) + 1;
-    counts.set(frame.type, count);
-    const displayName = count === 1 ? frame.type : `${frame.type}_${count}`;
-    nameMap.set(frame.id, displayName);
+  for (const node of nodes) {
+    const count = (counts.get(node.key) ?? 0) + 1;
+    counts.set(node.key, count);
+    const displayName = count === 1 ? node.key : `${node.key}_${count}`;
+    nameMap.set(node.key, displayName);
   }
   return nameMap;
 }
@@ -30,37 +30,8 @@ function renderSlotValue(value: SlotValue, indent: number, lines: string[]): voi
     return;
   }
 
-  if (typeof value === 'number') {
+  if (typeof value === 'number' || typeof value === 'boolean') {
     lines.push(String(value));
-    return;
-  }
-
-  // SlotRef: { ref: "f_002" }
-  if (value !== null && typeof value === 'object' && !Array.isArray(value) && 'ref' in value) {
-    lines.push(`*${(value as { ref: string }).ref}`);
-    return;
-  }
-
-  // InlineFrame: { type: "...", slots: { ... } }
-  if (
-    value !== null &&
-    typeof value === 'object' &&
-    !Array.isArray(value) &&
-    'type' in value &&
-    'slots' in value
-  ) {
-    const inlineFrame = value as { type: string; slots: Record<string, SlotValue> };
-    // Render as nested YAML — key already written by caller, just add newline
-    lines.push('');
-    for (const [k, v] of Object.entries(inlineFrame.slots)) {
-      const valueLine: string[] = [];
-      renderSlotValue(v, indent + 1, valueLine);
-      if (valueLine.length === 1 && !valueLine[0].startsWith('\n')) {
-        lines.push(`${pad}  ${k}: ${valueLine[0]}`);
-      } else {
-        lines.push(`${pad}  ${k}:${valueLine.join('')}`);
-      }
-    }
     return;
   }
 
@@ -85,21 +56,23 @@ function renderSlotValue(value: SlotValue, indent: number, lines: string[]): voi
         lines.push(`${pad}  - "${item}"`);
       } else if (typeof item === 'number') {
         lines.push(`${pad}  - ${item}`);
-      } else if (typeof item === 'object' && item !== null && 'type' in item && 'slots' in item) {
-        // Array of InlineFrames
-        const inlineFrame = item as { type: string; slots: Record<string, SlotValue> };
-        lines.push(`${pad}  - ${inlineFrame.type}:`);
-        for (const [k, v] of Object.entries(inlineFrame.slots)) {
-          const valueLine: string[] = [];
-          renderSlotValue(v, indent + 2, valueLine);
-          if (valueLine.length === 1 && !valueLine[0].startsWith('\n')) {
-            lines.push(`${pad}      ${k}: ${valueLine[0]}`);
-          } else {
-            lines.push(`${pad}      ${k}:${valueLine.join('')}`);
-          }
-        }
       } else {
         lines.push(`${pad}  - ${JSON.stringify(item)}`);
+      }
+    }
+    return;
+  }
+
+  // Object
+  if (value !== null && typeof value === 'object') {
+    lines.push('');
+    for (const [k, v] of Object.entries(value as Record<string, SlotValue>)) {
+      const valueLine: string[] = [];
+      renderSlotValue(v, indent + 1, valueLine);
+      if (valueLine.length === 1 && !valueLine[0].startsWith('\n')) {
+        lines.push(`${pad}  ${k}: ${valueLine[0]}`);
+      } else {
+        lines.push(`${pad}  ${k}:${valueLine.join('')}`);
       }
     }
     return;
@@ -109,32 +82,39 @@ function renderSlotValue(value: SlotValue, indent: number, lines: string[]): voi
   lines.push(JSON.stringify(value));
 }
 
+/** Render a TreeNode and its children as YAML */
+function renderNode(node: TreeNode, indent: number, lines: string[]): void {
+  const pad = '  '.repeat(indent);
+  lines.push(`${pad}${node.key}:`);
+
+  for (const [key, value] of Object.entries(node.slots)) {
+    const valueLine: string[] = [];
+    renderSlotValue(value, indent + 1, valueLine);
+    if (valueLine.length === 1 && !valueLine[0].startsWith('\n')) {
+      lines.push(`${pad}  ${key}: ${valueLine[0]}`);
+    } else {
+      lines.push(`${pad}  ${key}:${valueLine.join('')}`);
+    }
+  }
+
+  for (const child of node.children) {
+    renderNode(child, indent + 1, lines);
+  }
+}
+
 /** Convert SemanticContent to properly nested YAML for display */
 export function toDisplayYAML(content: SemanticContent): string {
-  const nameMap = buildTypeNameMap(content.frames);
   const lines: string[] = [];
 
-  for (const frame of content.frames) {
-    const displayName = nameMap.get(frame.id) ?? frame.type;
-    lines.push(`${displayName}:`);
-    for (const [key, value] of Object.entries(frame.slots)) {
-      const valueLine: string[] = [];
-      renderSlotValue(value, 1, valueLine);
-      if (valueLine.length === 1 && !valueLine[0].startsWith('\n')) {
-        lines.push(`  ${key}: ${valueLine[0]}`);
-      } else {
-        lines.push(`  ${key}:${valueLine.join('')}`);
-      }
-    }
+  for (const tree of content.trees) {
+    renderNode(tree, 0, lines);
     lines.push('');
   }
 
   if (content.relations.length > 0) {
     lines.push('relations:');
     for (const rel of content.relations) {
-      const fromName = nameMap.get(rel.from) ?? rel.from;
-      const toName = nameMap.get(rel.to) ?? rel.to;
-      lines.push(`  - ${fromName} → ${toName} (${rel.type})`);
+      lines.push(`  - ${rel.from} → ${rel.to} (${rel.type})`);
     }
   }
 
@@ -143,41 +123,37 @@ export function toDisplayYAML(content: SemanticContent): string {
 
 /** Parse lite YAML back and diff against current content to produce a Delta */
 export function parseDisplayYAML(yaml: string, currentContent: SemanticContent): Delta {
-  const changes: FrameChange[] = [];
+  const changes: TreeChange[] = [];
   const newRelations: Relation[] = [];
   const removeRelations: Relation[] = [];
 
-  // Build reverse map: displayName → frame id
-  const nameMap = buildTypeNameMap(currentContent.frames);
-  const reverseMap = new Map<string, string>();
-  for (const [id, name] of nameMap) {
-    reverseMap.set(name, id);
-  }
+  // Build key set from current trees
+  const currentKeys = new Set(currentContent.trees.map((t) => t.key));
 
-  // Parse YAML into frames
-  const parsedFrames = new Map<string, Record<string, unknown>>();
-  let currentType: string | null = null;
+  // Parse YAML into top-level nodes
+  const parsedNodes = new Map<string, Record<string, unknown>>();
+  let currentKey: string | null = null;
 
   for (const line of yaml.split('\n')) {
     const trimmed = line.trimEnd();
     if (trimmed === '' || trimmed === 'relations:') {
       if (trimmed === 'relations:') break;
-      currentType = null;
+      currentKey = null;
       continue;
     }
 
     const topLevel = trimmed.match(/^(\w+):$/);
     if (topLevel) {
-      currentType = topLevel[1];
-      parsedFrames.set(currentType, {});
+      currentKey = topLevel[1];
+      parsedNodes.set(currentKey, {});
       continue;
     }
 
-    if (currentType) {
+    if (currentKey) {
       const slotMatch = trimmed.match(/^\s+(\w+):\s*(.+)$/);
       if (slotMatch) {
-        const frame = parsedFrames.get(currentType);
-        if (!frame) continue;
+        const node = parsedNodes.get(currentKey);
+        if (!node) continue;
         let value: unknown = slotMatch[2];
         // Strip quotes
         if (typeof value === 'string' && value.startsWith('"') && value.endsWith('"')) {
@@ -190,49 +166,47 @@ export function parseDisplayYAML(yaml: string, currentContent: SemanticContent):
             // keep as string
           }
         }
-        frame[slotMatch[1]] = value as SlotValue;
+        node[slotMatch[1]] = value as SlotValue;
       }
     }
   }
 
-  // Diff: find removed frames (in current but not in parsed)
-  const parsedNames = new Set(parsedFrames.keys());
+  // Diff: find removed nodes (in current but not in parsed)
+  const parsedNames = new Set(parsedNodes.keys());
 
-  for (const [id, name] of nameMap) {
-    if (!parsedNames.has(name)) {
-      changes.push({ action: 'remove', target: id });
+  for (const key of currentKeys) {
+    if (!parsedNames.has(key)) {
+      changes.push({ action: 'remove', target_path: key });
     }
   }
 
-  // Diff: find added frames (in parsed but not in current)
-  for (const [name, slots] of parsedFrames) {
-    if (!reverseMap.has(name)) {
-      const newId = `f_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+  // Diff: find added nodes (in parsed but not in current)
+  for (const [name, slots] of parsedNodes) {
+    if (!currentKeys.has(name)) {
       changes.push({
         action: 'add',
-        frame: {
-          id: newId,
-          type: name.replace(/_\d+$/, ''), // Strip suffix
+        parent_path: '',
+        node: {
+          key: name.replace(/_\d+$/, ''), // Strip suffix
           slots: slots as Record<string, SlotValue>,
-          source: '',
+          children: [],
           confidence: 1,
         },
       });
     }
   }
 
-  // Diff: find updated frames
-  for (const [name, newSlots] of parsedFrames) {
-    const existingId = reverseMap.get(name);
-    if (existingId) {
-      const existingFrame = currentContent.frames.find((f) => f.id === existingId);
-      if (existingFrame) {
-        const slotsDiffer = JSON.stringify(existingFrame.slots) !== JSON.stringify(newSlots);
+  // Diff: find updated nodes
+  for (const [name, newSlots] of parsedNodes) {
+    if (currentKeys.has(name)) {
+      const existingNode = currentContent.trees.find((t) => t.key === name);
+      if (existingNode) {
+        const slotsDiffer = JSON.stringify(existingNode.slots) !== JSON.stringify(newSlots);
         if (slotsDiffer) {
           changes.push({
             action: 'update',
-            target: existingId,
-            slots: newSlots as Record<string, SlotValue>,
+            target_path: name,
+            slots: newSlots as Record<string, SlotValue | null>,
           });
         }
       }

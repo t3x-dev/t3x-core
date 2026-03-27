@@ -2,12 +2,12 @@
  * Merge Summary — Pure Function
  *
  * Computes a structured summary of a merge operation from
- * Merge2WayResult + optional extended resolutions.
+ * MergeResult + optional extended resolutions.
  *
  * Purely deterministic, no side effects, no API calls.
  */
 
-import type { Merge2WayResult } from '@t3x-dev/core';
+import type { MergeResult } from '@t3x-dev/core';
 import type { ExtendedResolutionData } from '@/store/mergeWorkspaceStore';
 
 // ============================================================================
@@ -15,20 +15,20 @@ import type { ExtendedResolutionData } from '@/store/mergeWorkspaceStore';
 // ============================================================================
 
 export interface MergeSummary {
-  /** Count of identical (unchanged) sentences auto-kept */
+  /** Count of identical (unchanged) nodes auto-kept */
   kept_identical: number;
-  /** Count of resolved conflict pairs (source + target + both) */
+  /** Count of resolved conflict paths */
   resolved_conflicts: number;
-  /** Count of sentences kept from source side */
+  /** Count of nodes kept from source side */
   kept_from_source: number;
-  /** Count of sentences kept from target side */
+  /** Count of nodes kept from target side */
   kept_from_target: number;
-  /** Count of pairs where both source and target were kept */
+  /** Count of conflicts where both source and target were kept */
   kept_both: number;
-  /** Count of discarded sentences (onlyIn* with keep=false) */
+  /** Count of discarded nodes */
   discarded: number;
-  /** Final total sentence count in merged result */
-  total_sentences: number;
+  /** Final total node count in merged result */
+  total_nodes: number;
   /** One-line English summary template */
   highlight: string;
 }
@@ -40,59 +40,67 @@ export interface MergeSummary {
 /**
  * Compute a structured merge summary.
  *
- * @param prepared - The Merge2WayResult from prepareMerge()
- * @param extendedResolutions - Optional extended resolutions (e.g. 'both') keyed by pair index
- * @returns MergeSummary with 8 fields
+ * @param prepared - The MergeResult from prepareMerge()
+ * @param conflictResolutions - Map of conflict path → resolution
+ * @param keepSource - Set of source-only paths to keep
+ * @param keepTarget - Set of target-only paths to keep
+ * @param extendedResolutions - Optional extended resolutions (e.g. 'both') keyed by conflict index
+ * @returns MergeSummary
  */
 export function computeMergeSummary(
-  prepared: Merge2WayResult,
+  prepared: MergeResult,
+  conflictResolutions?: Record<string, 'source' | 'target'>,
+  keepSource?: Set<string>,
+  keepTarget?: Set<string>,
   extendedResolutions?: Record<string, ExtendedResolutionData>
 ): MergeSummary {
   const ext = extendedResolutions ?? {};
+  const resolutions = conflictResolutions ?? {};
 
-  // 1. Identical sentences — all auto-kept
-  const kept_identical = prepared.identical.length;
+  // 1. Auto-kept nodes
+  const kept_identical = prepared.autoKept.length;
 
-  // 2. Similar pairs — count by resolution type
+  // 2. Conflicts — count by resolution type
   let conflictSource = 0;
   let conflictTarget = 0;
   let kept_both = 0;
+  let unresolved = 0;
 
-  for (let i = 0; i < prepared.similarPairs.length; i++) {
-    const pair = prepared.similarPairs[i];
+  for (let i = 0; i < prepared.conflicts.length; i++) {
+    const conflict = prepared.conflicts[i];
     const extRes = ext[String(i)];
 
     if (extRes?.type === 'both') {
       kept_both++;
-    } else if (pair.resolution === 'source') {
+    } else if (resolutions[conflict.path] === 'source') {
       conflictSource++;
-    } else if (pair.resolution === 'target') {
+    } else if (resolutions[conflict.path] === 'target') {
       conflictTarget++;
+    } else {
+      unresolved++;
     }
-    // Unresolved pairs are not counted in any bucket
   }
 
   const resolved_conflicts = conflictSource + conflictTarget + kept_both;
 
   // 3. Only-in-source / only-in-target — kept vs discarded
-  const keptSourceCandidates = prepared.onlyInSource.filter((c) => c.keep).length;
-  const keptTargetCandidates = prepared.onlyInTarget.filter((c) => c.keep).length;
-  const discardedSource = prepared.onlyInSource.filter((c) => !c.keep).length;
-  const discardedTarget = prepared.onlyInTarget.filter((c) => !c.keep).length;
+  const keptSourceCount = keepSource ? keepSource.size : prepared.onlyInSource.length;
+  const keptTargetCount = keepTarget ? keepTarget.size : prepared.onlyInTarget.length;
+  const discardedSource = prepared.onlyInSource.length - keptSourceCount;
+  const discardedTarget = prepared.onlyInTarget.length - keptTargetCount;
 
-  const kept_from_source = conflictSource + keptSourceCandidates;
-  const kept_from_target = conflictTarget + keptTargetCandidates;
+  const kept_from_source = conflictSource + keptSourceCount;
+  const kept_from_target = conflictTarget + keptTargetCount;
   const discarded = discardedSource + discardedTarget;
 
-  // 4. Total sentences in merged result
-  // identical + resolved conflicts (1 per pair, except 'both' contributes 2) + kept candidates
-  const total_sentences =
+  // 4. Total nodes in merged result
+  const total_nodes =
     kept_identical +
     conflictSource +
     conflictTarget +
     kept_both * 2 +
-    keptSourceCandidates +
-    keptTargetCandidates;
+    keptSourceCount +
+    keptTargetCount;
 
   // 5. Highlight — English template string
   const parts: string[] = [];
@@ -115,7 +123,7 @@ export function computeMergeSummary(
     kept_from_target,
     kept_both,
     discarded,
-    total_sentences,
+    total_nodes,
     highlight,
   };
 }

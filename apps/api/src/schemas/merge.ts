@@ -61,10 +61,7 @@ export const SlotConflictSchema = z.object({
  * Frame conflict schema (for merge preparation)
  */
 export const FrameConflictSchema = z.object({
-  frameId: z.string().openapi({ description: 'ID of the conflicting frame' }),
-  baseFrame: FrameSchema.optional().openapi({ description: 'Base frame (if three-way)' }),
-  sourceFrame: FrameSchema.openapi({ description: 'Source version of the frame' }),
-  targetFrame: FrameSchema.openapi({ description: 'Target version of the frame' }),
+  path: z.string().openapi({ description: 'Path of the conflicting node' }),
   slotConflicts: z.array(SlotConflictSchema).openapi({
     description: 'Slot-level conflicts between source and target',
   }),
@@ -74,17 +71,17 @@ export const FrameConflictSchema = z.object({
  * FrameMergeResult schema (output of prepareFrameMerge)
  */
 export const FrameMergeResultSchema = z.object({
-  autoKept: z.array(FrameSchema).openapi({
-    description: 'Frames identical in both commits (auto-kept)',
+  autoKept: z.array(z.string()).openapi({
+    description: 'Paths identical in both commits (auto-kept)',
   }),
   conflicts: z.array(FrameConflictSchema).openapi({
-    description: 'Frames modified differently in source and target',
+    description: 'Nodes modified differently in source and target',
   }),
-  onlyInSource: z.array(FrameSchema).openapi({
-    description: 'Frames only present in source commit',
+  onlyInSource: z.array(z.string()).openapi({
+    description: 'Paths only present in source commit',
   }),
-  onlyInTarget: z.array(FrameSchema).openapi({
-    description: 'Frames only present in target commit',
+  onlyInTarget: z.array(z.string()).openapi({
+    description: 'Paths only present in target commit',
   }),
   relationsOnlyInSource: z.array(RelationSchema).openapi({
     description: 'Relations only in source',

@@ -67,21 +67,21 @@ describe('Relations Routes', () => {
         parents: [],
         author: { type: 'human', name: 'Relation Tester' },
         content: {
-          frames: [
+          trees: [
             {
-              id: 'f_001',
-              type: 'legacy_sentence',
+              key: 'f_001',
               slots: { text: 'We want to visit Tokyo in spring.' },
+              children: [],
             },
             {
-              id: 'f_002',
-              type: 'legacy_sentence',
+              key: 'f_002',
               slots: { text: 'Cherry blossoms bloom in late March.' },
+              children: [],
             },
             {
-              id: 'f_003',
-              type: 'legacy_sentence',
+              key: 'f_003',
               slots: { text: 'Budget is around $3000 per person.' },
+              children: [],
             },
           ],
           relations: [],
@@ -155,9 +155,9 @@ describe('Relations Routes', () => {
             {
               source_id: 'f_001',
               target_id: 'f_002',
-              type: 'elaborates',
+              type: 'temporal_follows',
               confidence: 0.9,
-              reasoning: 'Cherry blossoms elaborate on the spring visit timing.',
+              reasoning: 'Cherry blossoms follow the spring visit timing.',
             },
             {
               source_id: 'f_003',

@@ -8,7 +8,8 @@
  * action response.
  */
 
-import type { SemanticPoint } from '@t3x-dev/core';
+// SemanticPoint removed from core; define locally
+interface SemanticPoint { id: string; text: string; confidence?: number; zone: string; status: string; staged: boolean; evidence?: any[]; extraction_mode?: string; inference_type?: string; position?: number; routing_reason?: string; inherited_from?: string; low_coverage?: boolean }
 import type { AnyDB } from '@t3x-dev/storage';
 import { insertDraft, insertProject, updateDraft } from '@t3x-dev/storage';
 import { Hono } from 'hono';

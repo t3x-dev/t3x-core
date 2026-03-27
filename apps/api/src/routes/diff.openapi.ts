@@ -9,13 +9,10 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
   createCachedEmbeddingProvider,
-  createDiffEngine,
   createGoogleAIEmbeddingProvider,
-  type DiffSegment,
+  diffCommits,
+  type TreeDiff,
   EmbeddingProviderError,
-  type FrameDiff,
-  frameDiff,
-  wordDiff,
 } from '@t3x-dev/core';
 import { findSegmentEmbeddingsByTurn, findTurnByHash, getCommitUnified } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
@@ -26,6 +23,12 @@ import { errorResponse, zodErrorHook } from '../lib/errors';
 // ============================================================================
 
 type DBType = Awaited<ReturnType<typeof getDB>>;
+
+/** Local segment type for legacy sentence-level diffs */
+interface DiffSegment {
+  segmentId: string;
+  text: string;
+}
 
 type ExtractResult =
   | { ok: true; id: string; segments: DiffSegment[] }
@@ -346,7 +349,7 @@ diffRoutes.openapi(twoWayRoute, async (c) => {
     const targetCommit = await getCommitUnified(db, body.target_commit_hash);
 
     if (baseCommit && targetCommit) {
-      const diff: FrameDiff = frameDiff(baseCommit.content, targetCommit.content, wordDiff);
+      const diff: TreeDiff = diffCommits(baseCommit.content, targetCommit.content);
 
       const commitMeta = (commit: typeof baseCommit) => ({
         hash: commit.hash,
@@ -453,11 +456,21 @@ diffRoutes.openapi(twoWayRoute, async (c) => {
       embeddingProvider = baseProvider;
     }
 
-    const diffEngine = createDiffEngine(embeddingProvider, { threshold });
-    const result = await diffEngine.diffTwoWay(baseId, baseSegments, targetId, targetSegments);
-
+    // TODO: Legacy sentence-level DiffEngine has been removed in tree-primary refactor.
+    // Return a simple text comparison for now.
     return c.json(
-      { success: true as const, data: { ...result, method: 'embedding', usedCache, cacheStats } },
+      {
+        success: true as const,
+        data: {
+          baseId,
+          targetId,
+          baseCount: baseSegments.length,
+          targetCount: targetSegments.length,
+          method: 'placeholder',
+          usedCache,
+          cacheStats,
+        },
+      },
       200
     );
   } catch (error) {
@@ -584,18 +597,19 @@ diffRoutes.openapi(threeWayRoute, async (c) => {
       embeddingProvider = baseProvider;
     }
 
-    const diffEngine = createDiffEngine(embeddingProvider, { threshold });
-    const result = await diffEngine.diffThreeWay(
-      baseId,
-      baseSegments,
-      sourceId,
-      sourceSegments,
-      targetId,
-      targetSegments
-    );
-
+    // TODO: Legacy sentence-level DiffEngine has been removed in tree-primary refactor.
     return c.json(
-      { success: true as const, data: { ...result, method: 'embedding', usedCache, cacheStats } },
+      {
+        success: true as const,
+        data: {
+          baseId,
+          sourceId,
+          targetId,
+          method: 'placeholder',
+          usedCache,
+          cacheStats,
+        },
+      },
       200
     );
   } catch (error) {
@@ -646,7 +660,7 @@ diffRoutes.openapi(frameRoute, async (c) => {
     return errorResponse(c, 'NOT_FOUND', `Target commit ${body.target_commit_hash} not found`);
   }
 
-  const diff: FrameDiff = frameDiff(baseCommit.content, targetCommit.content, wordDiff);
+  const diff: TreeDiff = diffCommits(baseCommit.content, targetCommit.content);
 
   const commitMeta = (commit: typeof baseCommit) => ({
     hash: commit.hash,

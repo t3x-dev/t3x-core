@@ -46,7 +46,7 @@ export function MergeConflictView({
   // Get effective resolution (standard or extended)
   const effectiveResolution = getEffectiveResolution(index);
   const extRes = extendedResolutions[String(index)];
-  const resolved = isConflictResolved(pair, extRes);
+  const resolved = isConflictResolved(pair.resolution, extRes);
 
   // Context modal state
   const [contextModal, setContextModal] = useState<{

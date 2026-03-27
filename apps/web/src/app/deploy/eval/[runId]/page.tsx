@@ -281,29 +281,12 @@ export default function RunDetailPage() {
     const map = new Map<string, SentenceSourceRef>();
     if (!leaf?.constraints || !commit?.content) return map;
 
-    // Derive sentences from frames for source_ref lookup
+    // Derive sentences from tree nodes for source_ref lookup
     const content = commit.content as import('@t3x-dev/core').SemanticContent;
-    const sentences = content.frames.map((frame) => {
-      const id = frame.id.startsWith('s_') ? frame.id : `s_${frame.id.replace('f_', '')}`;
-      let source_ref:
-        | { conversation_id?: string; turn_hash?: string; start_char?: number; end_char?: number }
-        | undefined;
-      if (frame.slot_sources) {
-        const firstSource = Object.values(frame.slot_sources)[0];
-        const turnHash = firstSource?.turn_hash ?? firstSource?.turn;
-        if (
-          firstSource &&
-          turnHash &&
-          firstSource.start_char != null &&
-          firstSource.end_char != null
-        ) {
-          source_ref = {
-            turn_hash: turnHash,
-            start_char: firstSource.start_char,
-            end_char: firstSource.end_char,
-          };
-        }
-      }
+    type SourceRef = { conversation_id?: string; turn_hash?: string; start_char?: number; end_char?: number };
+    const sentences: Array<{ id: string; source_ref: SourceRef | undefined }> = content.trees.map((node, idx) => {
+      const id = node.key.startsWith('s_') ? node.key : `s_${node.key}_${idx}`;
+      const source_ref: SourceRef | undefined = undefined;
       return { id, source_ref };
     });
 

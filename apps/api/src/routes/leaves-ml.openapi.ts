@@ -395,7 +395,7 @@ leavesMLRoutes.openapi(suggestConstraintsRoute, async (c) => {
     }
     const knowledge = unifiedCommit.content;
 
-    if (knowledge.frames.length === 0) {
+    if (knowledge.trees.length === 0) {
       return c.json(
         {
           success: true as const,

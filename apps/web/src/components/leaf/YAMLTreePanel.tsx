@@ -1,21 +1,21 @@
 'use client';
 
 /**
- * YAMLTreePanel — Renders commit frames as a structured YAML tree.
+ * YAMLTreePanel — Renders commit trees as a structured YAML tree.
  *
  * Used in Leaf detail page left panel. Serves both Generate and Display modes:
- * - Generate: each frame shows Require/Exclude buttons for constraint creation
- * - Display: each frame shows assertion pass/fail badges, highlighted on hover
+ * - Generate: each tree shows Require/Exclude buttons for constraint creation
+ * - Display: each tree shows assertion pass/fail badges, highlighted on hover
  */
 
 import type { SemanticContent } from '@t3x-dev/core';
 import { ExternalLink } from 'lucide-react';
 import Link from 'next/link';
 import { type ReactNode, useCallback, useMemo } from 'react';
-import { FrameYAMLRenderer } from '@/components/shared/FrameYAMLRenderer';
+import { YAMLRenderer } from '@/components/shared/YAMLRenderer';
 import type { WorkspaceMode } from '@/hooks/useLeafPageData';
 import type { Assertion, Constraint } from '@/lib/api/leaves';
-import { nestFrames } from '@/lib/frameNesting';
+import { nestNodes } from '@/lib/treeNesting';
 import { cn } from '@/lib/utils';
 
 // ============================================================================
@@ -33,11 +33,11 @@ interface YAMLTreePanelProps {
   onAddConstraintFromSource: (
     type: 'require' | 'exclude',
     value: string,
-    sourceFrameId: string
+    sourceNodeId: string
   ) => void;
-  /** ID of constraint/frame being hovered in QualityPanel */
+  /** ID of constraint/tree being hovered in QualityPanel */
   highlightedConstraintId?: string | null;
-  onHoverFrame?: (frameId: string | null) => void;
+  onHoverNode?: (treeId: string | null) => void;
 }
 
 // ============================================================================
@@ -54,33 +54,36 @@ export function YAMLTreePanel({
   projectId,
   onAddConstraintFromSource,
   highlightedConstraintId,
-  onHoverFrame,
+  onHoverNode,
 }: YAMLTreePanelProps) {
-  const nested = useMemo(() => nestFrames(content), [content]);
+  const nested = useMemo(() => {
+    const { contentToNodes } = require('@/lib/treeCompat') as typeof import('@/lib/treeCompat');
+    return contentToNodes(content);
+  }, [content]);
 
-  // Determine which frame is highlighted based on hovered constraint
-  const highlightedFrameId = useMemo(() => {
+  // Determine which  node is highlighted based on hovered constraint
+  const highlightedNodeId = useMemo(() => {
     if (!highlightedConstraintId || !constraints) return null;
     const constraint = constraints.find((c) => c.id === highlightedConstraintId);
     if (!constraint) return null;
-    if ('source_frame' in constraint && constraint.source_frame) {
-      // Find frame by type match
-      const frame = content.frames.find(
+    if ('source_node' in constraint && constraint.source_node) {
+      // Find  node by type match
+      const node = content.trees.find(
         (f) =>
           f.type ===
-          (constraint as { source_frame?: { frame_type?: string } }).source_frame?.frame_type
+          (constraint as { source_node?: { frame_type?: string } }).source_node?.frame_type
       );
-      return frame?.id ?? null;
+      return node?.id ?? null;
     }
     return null;
-  }, [highlightedConstraintId, constraints, content.frames]);
+  }, [highlightedConstraintId, constraints, content.trees]);
 
-  const renderFrameActions = useCallback(
-    (frameId: string, frameType: string): ReactNode => {
+  const renderNodeActions = useCallback(
+    (treeId: string, treeType: string): ReactNode => {
       if (mode === 'generate') {
-        const frame = content.frames.find((f) => f.id === frameId);
-        const frameValue = frame
-          ? Object.entries(frame.slots)
+        const node = content.trees.find((f) => f.id === treeId);
+        const nodeValue = node
+          ? Object.entries(node.slots)
               .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`)
               .join('; ')
           : '';
@@ -91,7 +94,7 @@ export function YAMLTreePanel({
               className="px-1.5 py-0.5 text-[10px] font-medium rounded border border-transparent hover:border-[var(--status-success)]/30 hover:bg-[var(--status-success-muted)] text-[var(--status-success)] transition-colors"
               onClick={(e) => {
                 e.stopPropagation();
-                onAddConstraintFromSource('require', frameValue, frameId);
+                onAddConstraintFromSource('require', nodeValue, treeId);
               }}
               disabled={saving}
             >
@@ -102,7 +105,7 @@ export function YAMLTreePanel({
               className="px-1.5 py-0.5 text-[10px] font-medium rounded border border-transparent hover:border-[var(--status-error)]/30 hover:bg-[var(--status-error-muted)] text-[var(--status-error)] transition-colors"
               onClick={(e) => {
                 e.stopPropagation();
-                onAddConstraintFromSource('exclude', frameValue, frameId);
+                onAddConstraintFromSource('exclude', nodeValue, treeId);
               }}
               disabled={saving}
             >
@@ -118,9 +121,9 @@ export function YAMLTreePanel({
             const c = constraints.find((c) => c.id === a.constraint_id);
             return (
               c &&
-              'source_frame' in c &&
-              (c as { source_frame?: { frame_type?: string } }).source_frame?.frame_type ===
-                frameType
+              'source_node' in c &&
+              (c as { source_node?: { frame_type?: string } }).source_node?.frame_type ===
+                treeType
             );
           }) ?? [];
         if (frameAssertions.length > 0) {
@@ -139,15 +142,15 @@ export function YAMLTreePanel({
 
       return null;
     },
-    [mode, content.frames, constraints, assertions, saving, onAddConstraintFromSource]
+    [mode, content.trees, constraints, assertions, saving, onAddConstraintFromSource]
   );
 
-  const getFrameMeta = useCallback(
-    (frameId: string) => {
-      const frame = content.frames.find((f) => f.id === frameId);
-      return frame?.confidence != null ? { confidence: frame.confidence } : undefined;
+  const getTreeMeta = useCallback(
+    (treeId: string) => {
+      const node = content.trees.find((f) => f.id === treeId);
+      return node?.confidence != null ? { confidence: node.confidence } : undefined;
     },
-    [content.frames]
+    [content.trees]
   );
 
   return (
@@ -179,14 +182,14 @@ export function YAMLTreePanel({
         )}
       </div>
 
-      {/* Frame YAML tree */}
+      {/* Tree YAML tree */}
       <div className="flex-1 overflow-y-auto p-3">
-        <FrameYAMLRenderer
-          frames={nested}
-          renderFrameActions={renderFrameActions}
-          highlightFrameId={highlightedFrameId}
-          getFrameMeta={getFrameMeta}
-          onHoverFrame={onHoverFrame}
+        <YAMLRenderer
+          nodes={nested}
+          renderNodeActions={renderNodeActions}
+          highlightNodeId={highlightedNodeId}
+          getTreeMeta={getTreeMeta}
+          onHoverNode={onHoverNode}
         />
         {nested.length === 0 && (
           <p className="py-8 text-center text-xs text-[var(--text-tertiary)]">

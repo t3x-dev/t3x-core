@@ -31,8 +31,8 @@ export interface CommitHistoryRowProps {
     modifiedCount: number;
     removedCount: number;
   } | null;
-  /** Number of frames in this commit */
-  frameCount?: number;
+  /** Number of trees in this commit */
+  nodeCount?: number;
   /** Whether this is the first row (no top connector line) */
   isFirst: boolean;
   /** Whether this is the last row (no bottom connector line) */
@@ -54,7 +54,7 @@ export function CommitHistoryRow({
   branch,
   parentCount,
   diffStats,
-  frameCount,
+  nodeCount,
   isFirst,
   isLast,
   isActive,
@@ -129,10 +129,10 @@ export function CommitHistoryRow({
             </span>
           )}
 
-          {/* Frame count */}
-          {frameCount != null && (
+          {/* Tree count */}
+          {nodeCount != null && (
             <span className="text-[var(--text-tertiary)]">
-              {frameCount} frame{frameCount !== 1 ? 's' : ''}
+              {nodeCount} tree{nodeCount !== 1 ? 's' : ''}
             </span>
           )}
 

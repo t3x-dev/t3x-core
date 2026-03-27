@@ -25,7 +25,7 @@ export const searchRoutes = new OpenAPIHono({ defaultHook: zodErrorHook });
 // ── Schemas ──────────────────────────────────────────────────
 
 const SearchRequestSchema = z.object({
-  project_id: z.string().optional().openapi({ description: 'Project to search in (omit for all projects)' }),
+  project_id: z.string().min(1).openapi({ description: 'Project to search in' }),
   query: z.string().min(1).max(500).openapi({ description: 'Search query text' }),
   mode: z.enum(['hybrid', 'keyword', 'semantic']).default('hybrid').openapi({
     description:

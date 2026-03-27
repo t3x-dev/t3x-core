@@ -171,7 +171,7 @@ export function LeafWorkspaceSidebar({
           icon={<MessageSquare className="h-3.5 w-3.5 text-[var(--accent-conversation)]" />}
           badge={
             <span className="text-[10px] text-[var(--text-tertiary)]">
-              {sentences.length} frame{sentences.length !== 1 ? 's' : ''}
+              {sentences.length} tree{sentences.length !== 1 ? 's' : ''}
             </span>
           }
           defaultOpen={false}

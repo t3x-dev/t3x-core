@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatRelation, formatSlotValue, renderFrameSlots } from '../DiffYAMLFormatters';
+import { formatRelation, formatSlotValue, renderNodeSlots } from '../DiffYAMLFormatters';
 
 describe('formatSlotValue', () => {
   it('formats string', () => expect(formatSlotValue('hello')).toBe('"hello"'));
@@ -14,10 +14,10 @@ describe('formatSlotValue', () => {
   });
 });
 
-describe('renderFrameSlots', () => {
+describe('renderNodeSlots', () => {
   it('renders slots as indented lines', () => {
-    const frame = { id: 'f_001', type: 'plan', slots: { goal: 'travel', budget: 5000 } };
-    const lines = renderFrameSlots(frame);
+    const node = { id: 'f_001', type: 'plan', slots: { goal: 'travel', budget: 5000 } };
+    const lines = renderNodeSlots(node);
     expect(lines).toContain('  goal: "travel"');
     expect(lines).toContain('  budget: 5000');
   });
@@ -29,7 +29,7 @@ describe('formatRelation', () => {
     expect(formatRelation(r)).toBe('f_001 -[causes]-> f_002');
   });
   it('formats relation with confidence', () => {
-    const r = { from: 'f_001', to: 'f_002', type: 'elaborates' as const, confidence: 0.85 };
-    expect(formatRelation(r)).toBe('f_001 -[elaborates]-> f_002 (85%)');
+    const r = { from: 'f_001', to: 'f_002', type: 'depends' as const, confidence: 0.85 };
+    expect(formatRelation(r)).toBe('f_001 -[depends]-> f_002 (85%)');
   });
 });

@@ -22,7 +22,6 @@ import {
   RuleSchema,
   type RunRecord,
   RunRecordSchema,
-  // @ts-expect-error - @t3x-dev/runner may not be built
 } from '@t3x-dev/runner';
 import { zodErrorHook } from '../lib/errors';
 import { pinoLogger } from '../middleware/logger';
@@ -347,7 +346,7 @@ const webhookRunRoute = createRoute({
 /**
  * POST /runner/agents - Register an agent
  */
-runnerRoutes.openapi(registerAgentRoute, async (c) => {
+runnerRoutes.openapi(registerAgentRoute, async (c: any): Promise<any> => {
   try {
     const body = await c.req.json();
     const config = AgentConfigSchema.parse(body);
@@ -362,7 +361,7 @@ runnerRoutes.openapi(registerAgentRoute, async (c) => {
 /**
  * GET /runner/agents/:id - Get agent config
  */
-runnerRoutes.openapi(getAgentRoute, (c) => {
+runnerRoutes.openapi(getAgentRoute, (c: any): any => {
   const agent = observer.getAgent(c.req.param('id'));
   if (!agent) {
     return c.json({ success: false as const, error: 'Agent not found' }, 404);
@@ -373,7 +372,7 @@ runnerRoutes.openapi(getAgentRoute, (c) => {
 /**
  * POST /runner/run - Execute an agent run (proxy mode)
  */
-runnerRoutes.openapi(executeRunRoute, async (c) => {
+runnerRoutes.openapi(executeRunRoute, async (c: any): Promise<any> => {
   try {
     const body = await c.req.json();
     const input = AgentInputSchema.parse(body);
@@ -443,7 +442,7 @@ runnerRoutes.openapi(executeRunRoute, async (c) => {
 /**
  * POST /runner/run/:id/event - Add event to a running trace
  */
-runnerRoutes.openapi(addRunEventRoute, async (c) => {
+runnerRoutes.openapi(addRunEventRoute, async (c: any): Promise<any> => {
   try {
     const runId = c.req.param('id');
     const { type, data } = await c.req.json();
@@ -465,7 +464,7 @@ runnerRoutes.openapi(addRunEventRoute, async (c) => {
 /**
  * GET /runner/run/:id - Get run record
  */
-runnerRoutes.openapi(getRunRoute, (c) => {
+runnerRoutes.openapi(getRunRoute, (c: any): any => {
   const record = observer.getRun(c.req.param('id'));
   if (!record) {
     return c.json({ success: false as const, error: 'Run not found' }, 404);
@@ -476,7 +475,7 @@ runnerRoutes.openapi(getRunRoute, (c) => {
 /**
  * GET /runner/runs - List runs
  */
-runnerRoutes.openapi(listRunsRoute, (c) => {
+runnerRoutes.openapi(listRunsRoute, (c: any): any => {
   const runs = observer.listRuns();
   return c.json({ success: true as const, data: { runs } });
 });
@@ -486,7 +485,7 @@ runnerRoutes.openapi(listRunsRoute, (c) => {
  *
  * v2.0: Uses RunRecord + EvalRules instead of legacy TestStep format
  */
-runnerRoutes.openapi(evalRoute, async (c) => {
+runnerRoutes.openapi(evalRoute, async (c: any): Promise<any> => {
   try {
     const body = await c.req.json();
     const request = EvalRequestSchema.parse(body);
@@ -536,7 +535,7 @@ runnerRoutes.openapi(evalRoute, async (c) => {
  *
  * v2.0: Validates Rule objects instead of legacy TestStep format
  */
-runnerRoutes.openapi(validateRulesRoute, async (c) => {
+runnerRoutes.openapi(validateRulesRoute, async (c: any): Promise<any> => {
   try {
     const body = await c.req.json();
     const rules = body.rules || body.test_steps; // Support both new and legacy field names
@@ -565,7 +564,7 @@ runnerRoutes.openapi(validateRulesRoute, async (c) => {
  *
  * v2.0: Uses EvalRules instead of legacy TestStep format
  */
-runnerRoutes.openapi(webhookRunRoute, async (c) => {
+runnerRoutes.openapi(webhookRunRoute, async (c: any): Promise<any> => {
   try {
     const { agent_id, input, rules, rules_ref, auto_eval } = await c.req.json();
 

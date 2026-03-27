@@ -33,10 +33,11 @@ const RelationSchema = z.object({
     'supports',
     'contrasts',
     'causes',
-    'elaborates',
     'temporal_follows',
     'conditions',
     'summarizes',
+    'follows',
+    'depends',
   ]),
   confidence: z.number(),
   reasoning: z.string(),
@@ -165,7 +166,8 @@ relationsRoutes.openapi(extractRelationsRoute, async (c) => {
         'No LLM provider configured. Set ANTHROPIC_API_KEY or another provider key.'
       );
     }
-    const sentences = commit.content.frames.map((frame) => ({
+    const flat = (await import('@t3x-dev/core')).flattenTrees(commit.content.trees);
+    const sentences = flat.map((frame: any) => ({
       id: frame.id,
       text: `[${frame.type}] ${Object.entries(frame.slots)
         .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : String(v)}`)

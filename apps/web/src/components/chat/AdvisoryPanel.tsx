@@ -2,7 +2,7 @@
 
 import { HelpCircle, X } from 'lucide-react';
 import { useCallback, useState } from 'react';
-import { answerFrameQuestion } from '@/lib/api/frames';
+import { answerTreeQuestion } from '@/lib/api/trees';
 import { useExtractionPanelStore } from '@/store/extractionPanelStore';
 
 export function AdvisoryPanel() {
@@ -31,10 +31,10 @@ export function AdvisoryPanel() {
 
       setSubmitting(questionId);
       try {
-        const result = await answerFrameQuestion(
+        const result = await answerTreeQuestion(
           conversationId,
           [{ question_id: questionId, answer_text: answerText }],
-          { type: q.type as 'vagueness' | 'structural', frame_id: q.frameId, slot_key: q.slotKey }
+          { type: q.type as 'vagueness' | 'structural', tree_id: q.treeId, slot_key: q.slotKey }
         );
 
         if (result.applied && result.delta) {
@@ -75,7 +75,7 @@ export function AdvisoryPanel() {
                   {q.type === 'vagueness' ? 'Vague value' : 'Structure'}
                   {q.slotKey && (
                     <span className="ml-1 font-mono">
-                      {q.frameId}.{q.slotKey}
+                      {q.treeId}.{q.slotKey}
                     </span>
                   )}
                 </div>

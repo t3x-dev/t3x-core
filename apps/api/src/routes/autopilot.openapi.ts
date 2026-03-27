@@ -396,16 +396,16 @@ autopilotRoutes.openapi(autoCommitRoute, async (c) => {
     }
 
     // 9. Create commit (only the winner of step 8 reaches here)
-    const autoFrames = qualifyingSPs.map((sp, i) => ({
-      id: sp.id || `f_${String(i + 1).padStart(3, '0')}`,
-      type: 'legacy_sentence' as const,
-      slots: { text: sp.text },
+    const autoTrees = qualifyingSPs.map((sp) => ({
+      key: sp.id || 'legacy_sentence',
+      slots: { text: sp.text } as Record<string, string>,
+      children: [] as import('@t3x-dev/core').TreeNode[],
       confidence: sp.confidence,
     }));
     const commit = await createCommit(db, {
       parents: draft.parent_commit_hash ? [draft.parent_commit_hash] : [],
       author: { type: 'agent' as const, name: 'autopilot' },
-      content: { frames: autoFrames, relations: [] },
+      content: { trees: autoTrees, relations: [] },
       project_id: draft.project_id,
       message: `Auto-commit: ${qualifyingSPs.length} sentence(s)`,
       branch: config.target_branch,

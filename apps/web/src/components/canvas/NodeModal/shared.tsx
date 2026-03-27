@@ -235,38 +235,32 @@ export function CommitFullHeader({
 }
 
 /**
- * Renders the source context / frame display for a commit, used inside tabs.
+ * Renders the source context / tree display for a commit, used inside tabs.
  */
 export function CommitSourceContent({ commit }: { commit: CommitDisplay }) {
-  // Derive sentences from frames for display and source context tracing
-  const sentences = commit.content?.frames
-    ? (commit.content as import('@t3x-dev/core').SemanticContent).frames.map((frame) => {
-        const id = frame.id.startsWith('s_') ? frame.id : `s_${frame.id.replace('f_', '')}`;
-        const text = `[${frame.type}] ${Object.entries(frame.slots)
-          .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : String(v)}`)
-          .join('; ')}`;
-        const confidence = frame.confidence ?? 1.0;
-        let source_ref:
-          | { conversation_id?: string; turn_hash?: string; start_char?: number; end_char?: number }
-          | undefined;
-        if (frame.slot_sources) {
-          const firstSource = Object.values(frame.slot_sources)[0];
-          const turnHash = firstSource?.turn_hash ?? firstSource?.turn;
-          if (
-            firstSource &&
-            turnHash &&
-            firstSource.start_char != null &&
-            firstSource.end_char != null
-          ) {
-            source_ref = {
-              turn_hash: turnHash,
-              start_char: firstSource.start_char,
-              end_char: firstSource.end_char,
-            };
+  // Derive display entries from tree nodes for source context tracing
+  const sentences = commit.content?.trees
+    ? (() => {
+        type TreeNodeLike = import('@t3x-dev/core').TreeNode;
+        const entries: Array<{ id: string; text: string; confidence: number; source_ref?: { turn_hash?: string; start_char?: number; end_char?: number } }> = [];
+        function walk(nodes: TreeNodeLike[], prefix = '') {
+          for (const node of nodes) {
+            const path = prefix ? `${prefix}.${node.key}` : node.key;
+            const text = `[${node.key}] ${Object.entries(node.slots)
+              .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : String(v)}`)
+              .join('; ')}`;
+            entries.push({
+              id: path,
+              text,
+              confidence: node.confidence ?? 1.0,
+              source_ref: node.source ? { turn_hash: node.source } : undefined,
+            });
+            if (node.children?.length) walk(node.children, path);
           }
         }
-        return { id, text, confidence, source_ref };
-      })
+        walk((commit.content as import('@t3x-dev/core').SemanticContent).trees);
+        return entries;
+      })()
     : [];
 
   const sourceRefs = commit.sources ?? commit.source_refs ?? undefined;

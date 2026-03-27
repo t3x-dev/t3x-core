@@ -10,6 +10,7 @@ import { useExtractionPanelStore } from '@/store/extractionPanelStore';
 import { CitationChips } from './CitationChips';
 import { CodeBlock } from './CodeBlock';
 import { ThinkingSection } from './ThinkingSection';
+import { type CompatNode, contentToNodes, treesToNodes } from '@/lib/treeCompat';
 
 interface ChatMessageProps {
   sender: 'user' | 'assistant';
@@ -103,7 +104,7 @@ export function ChatMessage({
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState('');
 
-  const hoveredFrameId = useExtractionPanelStore((s) => s.hoveredFrameId);
+  const hoveredNodeId = useExtractionPanelStore((s) => s.hoveredNodeId);
   const hoveredSlotKey = useExtractionPanelStore((s) => s.hoveredSlotKey);
   const draft = useExtractionPanelStore((s) => s.draft);
   const setHoveredTurn = useExtractionPanelStore((s) => s.setHoveredTurn);
@@ -136,44 +137,47 @@ export function ChatMessage({
     [turnHash, setHoveredTurn]
   );
 
-  // Compute highlight ranges for this message based on hovered frame/slot
+  // Convert to compat trees for id-based lookup and source refs
+  const nodes = useMemo(() => contentToNodes(draft), [draft]);
+
+  // Compute highlight ranges for this message based on hovered tree/slot
   const highlightRanges = useMemo(() => {
-    if (!hoveredFrameId) return [];
-    const frame = draft.frames.find((f) => f.id === hoveredFrameId);
-    if (!frame) return [];
+    if (!hoveredNodeId) return [];
+    const node = nodes.find((f) => f.id === hoveredNodeId);
+    if (!node) return [];
 
     // If slot_sources exist, use character-level highlighting per turn_hash
-    if (frame.slot_sources) {
-      if (hoveredSlotKey && frame.slot_sources[hoveredSlotKey]) {
+    if (node.slot_sources) {
+      if (hoveredSlotKey && node.slot_sources[hoveredSlotKey]) {
         // Specific slot hovered — highlight just that span if turn matches
-        const ref = frame.slot_sources[hoveredSlotKey];
-        if (turnHash && ref.turn_hash && turnHash === ref.turn_hash) {
+        const ref = node.slot_sources[hoveredSlotKey];
+        if (turnHash && ref.turn_hash && turnHash === ref.turn_hash && ref.start_char != null && ref.end_char != null) {
           return [{ start: ref.start_char, end: ref.end_char }];
         }
         // Fallback: match by turn tag (T1, T2, ...)
-        if (turnIndex != null && ref.turn === `T${turnIndex}`) {
+        if (turnIndex != null && ref.turn === `T${turnIndex}` && ref.start_char != null && ref.end_char != null) {
           return [{ start: ref.start_char, end: ref.end_char }];
         }
         return [];
       }
-      // Frame header hovered — highlight ALL slots from this turn
+      // Tree header hovered — highlight ALL slots from this turn
       const ranges: Array<{ start: number; end: number }> = [];
-      for (const ref of Object.values(frame.slot_sources)) {
+      for (const ref of Object.values(node.slot_sources)) {
         const hashMatch = turnHash && ref.turn_hash && turnHash === ref.turn_hash;
         const tagMatch = turnIndex != null && ref.turn === `T${turnIndex}`;
-        if (hashMatch || tagMatch) {
+        if ((hashMatch || tagMatch) && ref.start_char != null && ref.end_char != null) {
           ranges.push({ start: ref.start_char, end: ref.end_char });
         }
       }
       return ranges;
     }
 
-    // No slot_sources — check if this turn matches frame's source (whole-message tint fallback)
+    // No slot_sources — check if this turn matches tree's source (whole-message tint fallback)
     const isSourceTurn = (() => {
-      if (!frame.source) return false;
-      if (turnIndex != null && frame.source === `T${turnIndex}`) return true;
-      if (turnHash && frame.source.includes(':')) {
-        const hashPart = frame.source.split(':')[1];
+      if (!node.source) return false;
+      if (turnIndex != null && node.source === `T${turnIndex}`) return true;
+      if (turnHash && node.source.includes(':')) {
+        const hashPart = node.source.split(':')[1];
         return turnHash.includes(hashPart);
       }
       return false;
@@ -181,27 +185,27 @@ export function ChatMessage({
 
     // Return empty ranges — caller will check isSourceTurn via isWholeMessageHighlight
     return isSourceTurn ? [] : [];
-  }, [hoveredFrameId, hoveredSlotKey, draft.frames, turnHash, turnIndex]);
+  }, [hoveredNodeId, hoveredSlotKey, nodes, turnHash, turnIndex]);
 
   const hasCharHighlights = highlightRanges.length > 0;
   const isWholeMessageHighlight =
-    hoveredFrameId &&
+    hoveredNodeId &&
     !hasCharHighlights &&
     (() => {
-      const frame = draft.frames.find((f) => f.id === hoveredFrameId);
-      if (!frame) return false;
+      const node = nodes.find((f) => f.id === hoveredNodeId);
+      if (!node) return false;
       // Check if any slot_source points to this turn
-      if (frame.slot_sources) {
-        for (const ref of Object.values(frame.slot_sources)) {
+      if (node.slot_sources) {
+        for (const ref of Object.values(node.slot_sources)) {
           if (turnHash && ref.turn_hash && turnHash === ref.turn_hash) return true;
           if (turnIndex != null && ref.turn === `T${turnIndex}`) return true;
         }
       }
-      // Fallback: check frame.source
-      if (!frame.source) return false;
-      if (turnIndex != null && frame.source === `T${turnIndex}`) return true;
-      if (turnHash && frame.source.includes(':')) {
-        return turnHash.includes(frame.source.split(':')[1]);
+      // Fallback: check node.source
+      if (!node.source) return false;
+      if (turnIndex != null && node.source === `T${turnIndex}`) return true;
+      if (turnHash && node.source.includes(':')) {
+        return turnHash.includes(node.source.split(':')[1]);
       }
       return false;
     })();

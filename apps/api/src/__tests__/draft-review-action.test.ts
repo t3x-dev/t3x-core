@@ -4,7 +4,22 @@
  * Integration tests for POST /v1/drafts/:id/review-action endpoint.
  */
 
-import type { SemanticPoint } from '@t3x-dev/core';
+// SemanticPoint removed from core in tree-primary refactor; define locally
+interface SemanticPoint {
+  id: string;
+  text: string;
+  confidence?: number;
+  zone: string;
+  status: string;
+  staged: boolean;
+  evidence?: Array<{ conversation_id?: string; turn_hash?: string; start_char?: number; end_char?: number; role?: string }>;
+  extraction_mode?: string;
+  inference_type?: string;
+  routing_reason?: string;
+  inherited_from?: string;
+  low_coverage?: boolean;
+  position?: number;
+}
 import type { AnyDB } from '@t3x-dev/storage';
 import { insertDraft, insertProject, updateDraft } from '@t3x-dev/storage';
 import { Hono } from 'hono';

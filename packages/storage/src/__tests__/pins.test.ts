@@ -57,12 +57,7 @@ describe('Pins Storage', () => {
       parents: [],
       author: { type: 'human', name: 'Test Author' },
       content: {
-        frames: [{ id: 's_1', text: 'Test sentence' }].map((s) => ({
-          id: s.id,
-          type: 'legacy_sentence' as const,
-          slots: { text: s.text },
-          confidence: s.confidence,
-        })),
+        trees: [{ key: 'test', slots: { text: 'Test sentence' }, children: [] }],
         relations: [],
       },
       project_id: testProjectId,

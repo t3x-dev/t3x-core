@@ -1,15 +1,18 @@
 // apps/web/src/store/commitDetailStore.ts
 
-import type { Commit, Frame } from '@t3x-dev/core';
+import type { Commit, TreeNode } from '@t3x-dev/core';
+import { flattenTrees } from '@t3x-dev/core';
 import { create } from 'zustand';
 
-export type FrameDiffStatus = 'identical' | 'added' | 'modified' | 'removed';
+export type DiffStatus = 'identical' | 'added' | 'modified' | 'removed';
 
-export interface EnrichedFrame {
-  frame: Frame;
-  diffStatus: FrameDiffStatus;
-  /** For modified frames: the previous version from parent commit */
-  previousFrame?: Frame;
+export interface EnrichedNode {
+  node: TreeNode;
+  /** path in tree for identification */
+  path: string;
+  diffStatus: DiffStatus;
+  /** For modified nodes: the previous version from parent commit */
+  previousNode?: TreeNode;
 }
 
 interface SourceViewerState {
@@ -24,46 +27,67 @@ interface CommitDetailState {
   // Data
   commit: Commit | null;
   parentCommit: Commit | null;
-  enrichedFrames: EnrichedFrame[];
-  removedFrames: EnrichedFrame[];
+  enrichedNodes: EnrichedNode[];
+  removedNodes: EnrichedNode[];
 
   // UI
-  activeFrameId: string | null;
+  activeNodeId: string | null;
   sourceViewer: SourceViewerState;
   hoveredSlotKey: string | null;
 
   // Actions
   setCommit: (commit: Commit, parent: Commit | null) => void;
-  setActiveFrame: (id: string | null) => void;
+  setActiveNode: (id: string | null) => void;
   openSourceViewer: (slotKey: string) => void;
   closeSourceViewer: () => void;
   setSourceTab: (tab: 'previous' | 'current') => void;
   setHoveredSlot: (key: string | null) => void;
 }
 
-function enrichFrames(
+/** Build a flat map of path → TreeNode from trees */
+function buildNodeMap(trees: TreeNode[], prefix = ''): Map<string, TreeNode> {
+  const map = new Map<string, TreeNode>();
+  for (const node of trees) {
+    const path = prefix ? `${prefix}.${node.key}` : node.key;
+    map.set(path, node);
+    if (node.children.length > 0) {
+      for (const [childPath, childNode] of buildNodeMap(node.children, path)) {
+        map.set(childPath, childNode);
+      }
+    }
+  }
+  return map;
+}
+
+function enrichNodes(
   commit: Commit,
   parent: Commit | null
-): { enriched: EnrichedFrame[]; removed: EnrichedFrame[] } {
-  const parentFrameMap = new Map((parent?.content.frames ?? []).map((f) => [f.id, f]));
-  const currentIds = new Set(commit.content.frames.map((f) => f.id));
+): { enriched: EnrichedNode[]; removed: EnrichedNode[] } {
+  const parentNodeMap = parent ? buildNodeMap(parent.content.trees) : new Map<string, TreeNode>();
+  const currentNodeMap = buildNodeMap(commit.content.trees);
 
-  const enriched: EnrichedFrame[] = commit.content.frames.map((frame) => {
-    const prev = parentFrameMap.get(frame.id);
-    if (!parent) return { frame, diffStatus: 'added' as const };
-    if (!prev) return { frame, diffStatus: 'added' as const };
-    const slotsChanged =
-      JSON.stringify(frame.slots) !== JSON.stringify(prev.slots) || frame.type !== prev.type;
-    return {
-      frame,
-      diffStatus: slotsChanged ? ('modified' as const) : ('identical' as const),
-      previousFrame: slotsChanged ? prev : undefined,
-    };
-  });
+  const enriched: EnrichedNode[] = [];
+  for (const [path, node] of currentNodeMap) {
+    const prev = parentNodeMap.get(path);
+    if (!parent || !prev) {
+      enriched.push({ node: node, path, diffStatus: 'added' });
+    } else {
+      const slotsChanged = JSON.stringify(node.slots) !== JSON.stringify(prev.slots);
+      enriched.push({
+        node: node,
+        path,
+        diffStatus: slotsChanged ? 'modified' : 'identical',
+        previousNode: slotsChanged ? prev : undefined,
+      });
+    }
+  }
 
-  const removed: EnrichedFrame[] = (parent?.content.frames ?? [])
-    .filter((f) => !currentIds.has(f.id))
-    .map((frame) => ({ frame, diffStatus: 'removed' as const }));
+  const removed: EnrichedNode[] = [];
+  for (const [path, node] of parentNodeMap) {
+    if (!currentNodeMap.has(path)) {
+      removed.push({ node: node, path, diffStatus: 'removed' });
+    }
+  }
 
   return { enriched, removed };
 }
@@ -71,25 +95,25 @@ function enrichFrames(
 export const useCommitDetailStore = create<CommitDetailState>((set) => ({
   commit: null,
   parentCommit: null,
-  enrichedFrames: [],
-  removedFrames: [],
-  activeFrameId: null,
+  enrichedNodes: [],
+  removedNodes: [],
+  activeNodeId: null,
   sourceViewer: { isOpen: false, activeSlotKey: null, activeTab: 'current' },
   hoveredSlotKey: null,
 
   setCommit: (commit, parent) => {
-    const { enriched, removed } = enrichFrames(commit, parent);
+    const { enriched, removed } = enrichNodes(commit, parent);
     set({
       commit,
       parentCommit: parent,
-      enrichedFrames: enriched,
-      removedFrames: removed,
-      activeFrameId: null,
+      enrichedNodes: enriched,
+      removedNodes: removed,
+      activeNodeId: null,
       sourceViewer: { isOpen: false, activeSlotKey: null, activeTab: 'current' },
     });
   },
 
-  setActiveFrame: (id) => set({ activeFrameId: id }),
+  setActiveNode: (id) => set({ activeNodeId: id }),
 
   openSourceViewer: (slotKey) =>
     set(() => ({

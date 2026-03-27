@@ -19,7 +19,7 @@ import {
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FrameGraphView } from '@/components/frame-graph';
+import { TreeGraphView } from '@/components/tree-graph';
 import { RelationsTab } from '@/components/relations/RelationsTab';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -409,12 +409,12 @@ export function CommittedCommitView({
                         >
                           JSON
                         </TabsTrigger>
-                        {commit && getSemanticContent(commit as ApiCommit).frames.length > 0 && (
+                        {commit && getSemanticContent(commit as ApiCommit).trees.length > 0 && (
                           <TabsTrigger
-                            value="frame-graph"
+                            value="tree-graph"
                             className="rounded-none border-b-2 border-transparent data-[state=active]:border-[var(--accent-commit)] data-[state=active]:text-[var(--text-primary)] data-[state=active]:shadow-none text-[var(--text-tertiary)] text-xs px-3 py-2"
                           >
-                            Frame Graph
+                            Tree Graph
                           </TabsTrigger>
                         )}
                         <TabsTrigger
@@ -465,10 +465,10 @@ export function CommittedCommitView({
                         </pre>
                       </TabsContent>
 
-                      {commit && getSemanticContent(commit as ApiCommit).frames.length > 0 && (
-                        <TabsContent value="frame-graph">
+                      {commit && getSemanticContent(commit as ApiCommit).trees.length > 0 && (
+                        <TabsContent value="tree-graph">
                           <div className="h-[400px] border border-[var(--stroke-divider)] rounded-md overflow-hidden">
-                            <FrameGraphView
+                            <TreeGraphView
                               content={getSemanticContent(commit as ApiCommit)}
                               className="h-full w-full"
                             />
@@ -480,9 +480,9 @@ export function CommittedCommitView({
                         <RelationsTab
                           commitHash={data.commitHash || ''}
                           sentences={
-                            commit.content?.frames
+                            commit.content?.trees
                               ? (
-                                  commit.content.frames as Array<{
+                                  commit.content.trees as Array<{
                                     id: string;
                                     type: string;
                                     slots: Record<string, unknown>;

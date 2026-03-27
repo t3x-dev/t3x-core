@@ -1,6 +1,6 @@
 'use client';
 
-import type { FrameDiff } from '@t3x-dev/core';
+import type { TreeDiff } from '@t3x-dev/core';
 import { Bot, GitCommit, GitCompare, History, Loader2, User } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { DiffFullScreen } from '@/components/diff/DiffFullScreen';
@@ -16,7 +16,7 @@ import {
 import { useTerminology } from '@/hooks/useTerminology';
 import type { ApiCommit } from '@/lib/api';
 import * as api from '@/lib/api';
-import { getFrameDiff } from '@/lib/api/frameDiff';
+import { getTreeDiff } from '@/lib/api/treeDiff';
 import { cn } from '@/lib/utils';
 
 // Helper functions (module-scope so CommitHistoryRow can use them)
@@ -111,7 +111,7 @@ function CommitHistoryRow({
             <span>·</span>
             <span>{formatTime(commit.committed_at)}</span>
             <span>·</span>
-            <span>{commit.content?.frames?.length ?? 0} frames</span>
+            <span>{commit.content?.trees?.length ?? 0} trees</span>
           </div>
         </div>
       </div>
@@ -146,7 +146,7 @@ export function CommitHistoryPanel({
   // Diff state
   const [diffBaseHash, setDiffBaseHash] = useState<string | null>(null);
   const [diffTargetHash, setDiffTargetHash] = useState<string | null>(null);
-  const [diffData, setDiffData] = useState<FrameDiff | null>(null);
+  const [diffData, setDiffData] = useState<TreeDiff | null>(null);
   const [diffLoading, setDiffLoading] = useState(false);
   const [diffError, setDiffError] = useState<string | null>(null);
   const [showDiffFullScreen, setShowDiffFullScreen] = useState(false);
@@ -207,7 +207,7 @@ export function CommitHistoryPanel({
       setDiffTargetHash(hash);
 
       try {
-        const response = await getFrameDiff(parentHash, hash);
+        const response = await getTreeDiff(parentHash, hash);
         setDiffData(response.diff);
       } catch (err) {
         setDiffError(err instanceof Error ? err.message : 'Failed to load diff');

@@ -177,7 +177,7 @@ export function UseTemplateDialog({ template, open, onOpenChange }: UseTemplateD
               >
                 {commits.map((c) => (
                   <option key={c.hash} value={c.hash}>
-                    {c.message || c.hash.slice(7, 19)} ({c.content?.frames?.length ?? 0} frames)
+                    {c.message || c.hash.slice(7, 19)} ({c.content?.trees?.length ?? 0} nodes)
                   </option>
                 ))}
               </select>
