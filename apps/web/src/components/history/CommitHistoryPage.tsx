@@ -1,4 +1,3 @@
-// @ts-nocheck — tree-primary migration: needs rework
 'use client';
 
 /**
@@ -106,13 +105,7 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
                   // Diff failure is non-critical
                 }
               }
-              let frameCount = 0;
-              try {
-                const upgraded = undefined(commit as any);
-                frameCount = upgraded?.content?.trees?.length ?? 0;
-              } catch {
-                // Upgrade failure is non-critical — show 0 frames
-              }
+              const frameCount = (commit as { content?: { trees?: unknown[] } })?.content?.trees?.length ?? 0;
               return { commit, diffStats, frameCount };
             })
           );

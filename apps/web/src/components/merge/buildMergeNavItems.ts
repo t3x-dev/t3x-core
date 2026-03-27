@@ -1,12 +1,11 @@
-// @ts-nocheck — tree-primary migration: needs rework
 /**
  * buildMergeNavItems — Pure function that builds navigation items
  * for the merge sidebar from merge result + resolution state.
  */
 
+import type { MergeResult } from '@t3x-dev/core';
 import type { ExtendedResolutionData } from '@/store/mergeWorkspaceStore';
 import { isConflictResolved } from '@/store/mergeWorkspaceStore';
-import type { MergeResult } from '@/types/merge';
 
 export type NavItemStatus = 'auto-kept' | 'resolved' | 'unresolved' | 'kept' | 'discarded';
 
@@ -23,59 +22,65 @@ const MAX_LABEL_LENGTH = 50;
 
 function truncate(text: string): string {
   if (text.length <= MAX_LABEL_LENGTH) return text;
-  return `${text.slice(0, MAX_LABEL_LENGTH - 1)}…`;
+  return `${text.slice(0, MAX_LABEL_LENGTH - 1)}\u2026`;
 }
 
 export function buildMergeNavItems(
   prepared: MergeResult,
-  extendedResolutions: Record<string, ExtendedResolutionData>
+  conflictResolutions: Record<string, 'source' | 'target'>,
+  extendedResolutions: Record<string, ExtendedResolutionData>,
+  keepSourcePaths?: Set<string>,
+  keepTargetPaths?: Set<string>
 ): MergeNavItem[] {
   const items: MergeNavItem[] = [];
 
-  // Identical sentences — single group entry
-  if (prepared.identical.length > 0) {
+  // Auto-kept nodes — single group entry
+  if (prepared.autoKept.length > 0) {
     items.push({
       id: 'identical',
       type: 'identical',
-      label: `${prepared.identical.length} identical`,
+      label: `${prepared.autoKept.length} identical`,
       status: 'auto-kept',
     });
   }
 
-  // Conflicts — one entry per pair
-  for (let i = 0; i < prepared.similarPairs.length; i++) {
-    const pair = prepared.similarPairs[i];
+  // Conflicts — one entry per conflict path
+  for (let i = 0; i < prepared.conflicts.length; i++) {
+    const conflict = prepared.conflicts[i];
     const extRes = extendedResolutions[String(i)];
-    const resolved = isConflictResolved(pair, extRes);
+    const resolution = conflictResolutions[conflict.path];
+    const resolved = isConflictResolved(resolution, extRes);
 
     items.push({
       id: `conflict-${i}`,
       type: 'conflict',
-      label: truncate(pair.source.text),
+      label: truncate(conflict.path),
       status: resolved ? 'resolved' : 'unresolved',
       conflictIndex: i,
     });
   }
 
-  // Source-only — one entry per sentence
+  // Source-only — one entry per path
   for (let i = 0; i < prepared.onlyInSource.length; i++) {
-    const candidate = prepared.onlyInSource[i];
+    const path = prepared.onlyInSource[i];
+    const kept = keepSourcePaths ? keepSourcePaths.has(path) : true;
     items.push({
       id: `source-${i}`,
       type: 'source-only',
-      label: truncate(candidate.sentence.text),
-      status: candidate.keep ? 'kept' : 'discarded',
+      label: truncate(path),
+      status: kept ? 'kept' : 'discarded',
     });
   }
 
-  // Target-only — one entry per sentence
+  // Target-only — one entry per path
   for (let i = 0; i < prepared.onlyInTarget.length; i++) {
-    const candidate = prepared.onlyInTarget[i];
+    const path = prepared.onlyInTarget[i];
+    const kept = keepTargetPaths ? keepTargetPaths.has(path) : true;
     items.push({
       id: `target-${i}`,
       type: 'target-only',
-      label: truncate(candidate.sentence.text),
-      status: candidate.keep ? 'kept' : 'discarded',
+      label: truncate(path),
+      status: kept ? 'kept' : 'discarded',
     });
   }
 

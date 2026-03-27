@@ -1,14 +1,16 @@
-// @ts-nocheck — tree-primary migration: needs rework
 'use client';
 
 import {
   type Delta,
   type DeltaSource,
   RELATION_TYPES,
-  type RelationType,
+  type Relation,
   type SemanticContent,
   type SlotValue,
 } from '@t3x-dev/core';
+import { treesToFrames } from '@/lib/treeCompat';
+
+type SemanticRelationType = (typeof RELATION_TYPES)[number];
 import type { Connection, Edge, Node } from '@xyflow/react';
 import {
   Background,
@@ -47,7 +49,7 @@ function RelationTypeSelector({
   onCancel,
 }: {
   position: { x: number; y: number };
-  onSelect: (type: RelationType) => void;
+  onSelect: (type: SemanticRelationType) => void;
   onCancel: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -102,17 +104,18 @@ function RelationTypeSelector({
 
 // ── Helpers ──
 
-/** Generate the next frame ID from current content, e.g. f_004 */
-function nextFrameId(content: SemanticContent): string {
+/** Generate the next frame key from current content, e.g. frame_004 */
+function nextFrameKey(content: SemanticContent): string {
+  const frames = treesToFrames(content.trees);
   let maxNum = 0;
-  for (const frame of content.trees) {
-    const match = frame.id.match(/^f_(\d+)$/);
+  for (const frame of frames) {
+    const match = frame.id.match(/^frame_(\d+)$/);
     if (match) {
       const num = Number.parseInt(match[1], 10);
       if (num > maxNum) maxNum = num;
     }
   }
-  return `f_${String(maxNum + 1).padStart(3, '0')}`;
+  return `frame_${String(maxNum + 1).padStart(3, '0')}`;
 }
 
 // ── Props ──
@@ -154,7 +157,7 @@ function FrameGraphInner({
     (frameId: string, key: string, value: SlotValue) => {
       if (!onDeltaCreated) return;
       const delta: Delta = {
-        changes: [{ action: 'update', target: frameId, slots: { [key]: value } }],
+        changes: [{ action: 'update', target_path: frameId, slots: { [key]: value } }],
       };
       onDeltaCreated(delta, 'manual');
     },
@@ -167,14 +170,16 @@ function FrameGraphInner({
       // Type change is modeled as an update with empty slots — the type itself is changed
       // We need to include the new type in the update. Since FrameChange 'update' only has
       // slots, we model type change as remove + add with same id.
-      const existingFrame = content.trees.find((f) => f.id === frameId);
+      const frames = treesToFrames(content.trees);
+      const existingFrame = frames.find((f) => f.id === frameId);
       if (!existingFrame) return;
       const delta: Delta = {
         changes: [
-          { action: 'remove', target: frameId },
+          { action: 'remove', target_path: frameId },
           {
             action: 'add',
-            frame: { ...existingFrame, type: newType },
+            parent_path: '',
+            node: { key: newType, slots: existingFrame.slots, children: existingFrame.children },
           },
         ],
       };
@@ -188,15 +193,16 @@ function FrameGraphInner({
   const handlePaneDoubleClick = useCallback(
     (_event: React.MouseEvent) => {
       if (!onDeltaCreated) return;
-      const newId = nextFrameId(content);
+      const newKey = nextFrameKey(content);
       const delta: Delta = {
         changes: [
           {
             action: 'add',
-            frame: {
-              id: newId,
-              type: 'new_frame',
+            parent_path: '',
+            node: {
+              key: newKey,
               slots: { label: 'New Frame' },
+              children: [],
             },
           },
         ],
@@ -222,7 +228,7 @@ function FrameGraphInner({
       // Delete selected node
       if (selectedNodeId) {
         const delta: Delta = {
-          changes: [{ action: 'remove', target: selectedNodeId }],
+          changes: [{ action: 'remove', target_path: selectedNodeId }],
         };
         onDeltaCreated(delta, 'manual');
         return;
@@ -233,17 +239,17 @@ function FrameGraphInner({
       if (selectedEdges.length > 0) {
         const removeRelations = selectedEdges
           .map((e) => {
-            const relationType = (e.data as { relationType?: RelationType } | undefined)
+            const relationType = (e.data as { relationType?: SemanticRelationType } | undefined)
               ?.relationType;
             if (!relationType) return null;
             return { from: e.source, to: e.target, type: relationType };
           })
-          .filter(Boolean) as { from: string; to: string; type: RelationType }[];
+          .filter(Boolean) as Relation[];
 
         if (removeRelations.length > 0) {
           // Need at least one change for Delta; use a no-op comment via remove_relations
           const delta: Delta = {
-            changes: [{ action: 'update', target: removeRelations[0].from, slots: {} }],
+            changes: [{ action: 'update', target_path: removeRelations[0].from, slots: {} }],
             remove_relations: removeRelations,
           };
           onDeltaCreated(delta, 'manual');
@@ -278,11 +284,11 @@ function FrameGraphInner({
   );
 
   const handleRelationTypeSelect = useCallback(
-    (type: RelationType) => {
+    (type: SemanticRelationType) => {
       if (!pendingConnection || !onDeltaCreated) return;
       const delta: Delta = {
         // Need at least one change; use no-op update on source
-        changes: [{ action: 'update', target: pendingConnection.source, slots: {} }],
+        changes: [{ action: 'update', target_path: pendingConnection.source, slots: {} }],
         new_relations: [{ from: pendingConnection.source, to: pendingConnection.target, type }],
       };
       onDeltaCreated(delta, 'manual');

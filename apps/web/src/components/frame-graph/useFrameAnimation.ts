@@ -1,9 +1,8 @@
-// @ts-nocheck — tree-primary migration: needs rework
 'use client';
 
 import type { SemanticContent } from '@t3x-dev/core';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { Frame } from '@/lib/treeCompat';
+import { type Frame, treesToFrames } from '@/lib/treeCompat';
 
 // ── Animation Duration Constants ──
 
@@ -60,15 +59,17 @@ export function useFrameAnimation(
 
   const computeDelta = useCallback(
     (prev: SemanticContent | null, curr: SemanticContent): FrameAnimationState => {
+      const currFrames = treesToFrames(curr.trees);
+
       if (!prev) {
         // First render — mark all frames as added
         const frameStates: Record<string, 'added' | 'updated' | 'removed'> = {};
-        for (const f of curr.frames) {
+        for (const f of currFrames) {
           frameStates[f.id] = 'added';
         }
         const newRelations = curr.relations.map((r) => relationKey(r));
         const newEdgeIds = new Set(curr.relations.map((r) => `${r.from}-${r.to}-${r.type}`));
-        const hasChanges = curr.frames.length > 0 || newRelations.length > 0;
+        const hasChanges = currFrames.length > 0 || newRelations.length > 0;
         return {
           frameStates,
           updatedSlots: {},
@@ -78,13 +79,15 @@ export function useFrameAnimation(
         };
       }
 
-      const prevById: Record<string, (typeof prev.frames)[number]> = {};
-      prev.frames.forEach((f) => {
+      const prevFrames = treesToFrames(prev.trees);
+
+      const prevById: Record<string, Frame> = {};
+      prevFrames.forEach((f) => {
         prevById[f.id] = f;
       });
 
-      const currById: Record<string, (typeof curr.frames)[number]> = {};
-      curr.frames.forEach((f) => {
+      const currById: Record<string, Frame> = {};
+      currFrames.forEach((f) => {
         currById[f.id] = f;
       });
 
@@ -92,7 +95,7 @@ export function useFrameAnimation(
       const updatedSlots: Record<string, string[]> = {};
 
       // Detect added and updated frames
-      curr.frames.forEach((currFrame) => {
+      currFrames.forEach((currFrame) => {
         const prevFrame = prevById[currFrame.id];
         if (!prevFrame) {
           frameStates[currFrame.id] = 'added';
@@ -121,7 +124,7 @@ export function useFrameAnimation(
       });
 
       // Detect removed frames
-      prev.frames.forEach((f) => {
+      prevFrames.forEach((f) => {
         if (!currById[f.id]) {
           frameStates[f.id] = 'removed';
         }

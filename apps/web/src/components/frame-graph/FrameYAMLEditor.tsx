@@ -1,12 +1,11 @@
-// @ts-nocheck — tree-primary migration: needs rework
 'use client';
 
-import type { Delta, DeltaSource, TreeDiff, SemanticContent, SlotValue } from '@t3x-dev/core';
+import type { Delta, DeltaSource, TreeDiff, SemanticContent, SlotValue, TreeNode } from '@t3x-dev/core';
 import { diffCommits } from '@t3x-dev/core';
+import { treesToFrames } from '@/lib/treeCompat';
 import yaml from 'js-yaml';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
-import type { Frame } from '@/lib/treeCompat';
 
 // ── Props ──
 
@@ -19,20 +18,29 @@ interface FrameYAMLEditorProps {
 // ── Helpers ──
 
 /** Convert a TreeDiff into a Delta for the delta pipeline. */
-function frameDiffToDelta(diff: TreeDiff): Delta | null {
+function frameDiffToDelta(diff: TreeDiff, sourceContent: SemanticContent, targetContent: SemanticContent): Delta | null {
   const delta: Delta = { changes: [] };
 
-  // Added frames (only in target = new in edited version)
-  for (const frame of diff.onlyInTarget) {
-    delta.changes.push({ action: 'add', frame });
+  // Added paths (only in target = new in edited version)
+  for (const path of diff.onlyInTarget) {
+    const frames = treesToFrames(targetContent.trees);
+    const frame = frames.find(f => f.id === path);
+    if (frame) {
+      const parentPath = path.includes('.') ? path.slice(0, path.lastIndexOf('.')) : '';
+      delta.changes.push({
+        action: 'add',
+        parent_path: parentPath,
+        node: { key: frame.key, slots: frame.slots, children: frame.children },
+      });
+    }
   }
 
-  // Removed frames (only in source = deleted in edited version)
-  for (const frame of diff.onlyInSource) {
-    delta.changes.push({ action: 'remove', target: frame.id });
+  // Removed paths (only in source = deleted in edited version)
+  for (const path of diff.onlyInSource) {
+    delta.changes.push({ action: 'remove', target_path: path });
   }
 
-  // Modified frames
+  // Modified paths
   for (const mod of diff.modified) {
     const slots: Record<string, SlotValue | null> = {};
     for (const sd of mod.slotDiffs) {
@@ -48,12 +56,8 @@ function frameDiffToDelta(diff: TreeDiff): Delta | null {
           break;
       }
     }
-    // Also check if type changed — represent as remove + add
-    if (mod.sourceFrame.type !== mod.targetFrame.type) {
-      delta.changes.push({ action: 'remove', target: mod.frameId });
-      delta.changes.push({ action: 'add', frame: mod.targetFrame });
-    } else if (Object.keys(slots).length > 0) {
-      delta.changes.push({ action: 'update', target: mod.frameId, slots });
+    if (Object.keys(slots).length > 0) {
+      delta.changes.push({ action: 'update', target_path: mod.path, slots });
     }
   }
 
@@ -73,11 +77,11 @@ function frameDiffToDelta(diff: TreeDiff): Delta | null {
   return delta;
 }
 
-/** Minimal validation: must have a frames array. */
+/** Minimal validation: must have a trees array. */
 function looksLikeSemanticContent(value: unknown): value is SemanticContent {
   if (typeof value !== 'object' || value === null) return false;
   const obj = value as Record<string, unknown>;
-  return Array.isArray(obj.frames);
+  return Array.isArray(obj.trees);
 }
 
 // ── Component ──
@@ -108,13 +112,13 @@ export function FrameYAMLEditor({ content, onDeltaCreated, className }: FrameYAM
 
     // 2. Validate shape
     if (!looksLikeSemanticContent(parsed)) {
-      setError('Invalid structure: must have a "frames" array');
+      setError('Invalid structure: must have a "trees" array');
       return;
     }
 
     // Ensure relations array exists
     const edited: SemanticContent = {
-      frames: parsed.frames,
+      trees: parsed.trees,
       relations: parsed.relations ?? [],
     };
 
@@ -122,7 +126,7 @@ export function FrameYAMLEditor({ content, onDeltaCreated, className }: FrameYAM
     const diff = diffCommits(contentRef.current, edited);
 
     // 4. Convert to delta
-    const delta = frameDiffToDelta(diff);
+    const delta = frameDiffToDelta(diff, contentRef.current, edited);
     if (!delta) {
       setError('No changes detected');
       return;

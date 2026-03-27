@@ -1,4 +1,3 @@
-// @ts-nocheck — tree-primary migration: test needs rework
 /**
  * Tests for computeMergeSummary pure function
  */

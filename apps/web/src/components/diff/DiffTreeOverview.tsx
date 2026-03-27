@@ -1,4 +1,3 @@
-// @ts-nocheck — tree-primary migration: needs rework
 'use client';
 
 import type { TreeDiff, SemanticContent } from '@t3x-dev/core';
@@ -6,7 +5,7 @@ import {
   buildDiffStatusMap,
   buildFrameTree,
   deriveRootFrameId,
-  type TreeNode,
+  type DiffTreeNode,
 } from './DiffYAMLUtils';
 
 // ── Props ──
@@ -19,7 +18,7 @@ interface DiffTreeOverviewProps {
 
 // ── Status helpers ──
 
-const STATUS_BADGE: Record<TreeNode['diffStatus'], { char: string; color: string; bg?: string }> = {
+const STATUS_BADGE: Record<DiffTreeNode['diffStatus'], { char: string; color: string; bg?: string }> = {
   modified: {
     char: '~',
     color: 'var(--dy-modified-accent)',
@@ -40,7 +39,7 @@ const STATUS_BADGE: Record<TreeNode['diffStatus'], { char: string; color: string
 
 // ── Recursive tree node renderer ──
 
-function TreeNodeLine({ node, isLast, depth }: { node: TreeNode; isLast: boolean; depth: number }) {
+function TreeNodeLine({ node, isLast, depth }: { node: DiffTreeNode; isLast: boolean; depth: number }) {
   const badge = STATUS_BADGE[node.diffStatus];
   const isRemoved = node.diffStatus === 'removed';
   const isAdded = node.diffStatus === 'added';
@@ -120,7 +119,7 @@ function TreeColumn({
 }: {
   label: string;
   labelColor: string;
-  trees: TreeNode[];
+  trees: DiffTreeNode[];
 }) {
   return (
     <div className="flex-1 min-w-0">
@@ -164,105 +163,20 @@ export function DiffTreeOverview({ diff, baseContent, targetContent }: DiffTreeO
   // For target tree: added frames show as "added", others show their status
   const targetTree = buildFrameTree(targetContent, diffStatusMap, targetRootId);
 
-  // Derive root info for display
-  const baseRoot = baseRootId ? baseContent.trees.find((f) => f.id === baseRootId) : undefined;
-
   return (
     <div className="text-[11px]">
-      {/* Section 1: Topic diff */}
-      <div className="mb-3">
-        <div
-          className="font-semibold uppercase mb-[6px]"
-          style={{
-            fontSize: '9px',
-            letterSpacing: '0.8px',
-            color: 'var(--text-tertiary)',
-          }}
-        >
-          Topic
-        </div>
-        {diff.topicChanged ? (
-          <div className="font-mono" style={{ fontSize: '10.5px', lineHeight: 1.6 }}>
-            <div className="flex items-baseline gap-1">
-              <span
-                className="font-semibold shrink-0"
-                style={{
-                  color: 'var(--dy-removed-accent)',
-                  fontSize: '9px',
-                }}
-              >
-                BASE
-              </span>
-              <span
-                style={{
-                  color: 'var(--text-tertiary)',
-                  textDecoration: 'line-through',
-                }}
-              >
-                {diff.topicChanged.oldTopic ? `"${diff.topicChanged.oldTopic}"` : '(none)'}
-              </span>
-            </div>
-            <div className="flex items-baseline gap-1">
-              <span
-                className="font-semibold shrink-0"
-                style={{
-                  color: 'var(--dy-added-accent)',
-                  fontSize: '9px',
-                }}
-              >
-                NEW
-              </span>
-              <span style={{ color: 'var(--text-secondary)' }}>
-                {diff.topicChanged.newTopic ? `"${diff.topicChanged.newTopic}"` : '(none)'}
-              </span>
-            </div>
-          </div>
-        ) : (
-          <div
-            className="font-mono"
-            style={{
-              fontSize: '10.5px',
-              color: 'var(--text-secondary)',
-            }}
-          >
-            {baseContent.topic ? `"${baseContent.topic}"` : '(no topic)'}
-          </div>
-        )}
-      </div>
-
-      {/* Section 2: Root change */}
+      {/* Section 1: Root info */}
       <div className="mb-3">
         <div className="font-mono" style={{ fontSize: '10px', color: 'var(--text-tertiary)' }}>
-          {diff.rootChanged ? (
-            <>
-              root:{' '}
-              <span
-                style={{
-                  textDecoration: 'line-through',
-                  color: 'var(--dy-removed-accent)',
-                }}
-              >
-                {diff.rootChanged.oldRoot ?? '(none)'}
-              </span>
-              {' \u2192 '}
-              <span style={{ color: 'var(--dy-added-accent)' }}>
-                {diff.rootChanged.newRoot ?? '(none)'}
-              </span>
-            </>
-          ) : (
-            <>
-              root: {baseRoot?.type ?? '?'}{' '}
-              <span style={{ fontSize: '9px', opacity: 0.5 }}>{baseRootId}</span>{' '}
-              <span
-                style={{
-                  color: 'var(--text-tertiary)',
-                  fontSize: '9px',
-                }}
-              >
-                (unchanged)
-              </span>
-            </>
-          )}
+          root: {baseRootId ?? '(none)'}{' '}
+          <span
+            style={{
+              color: 'var(--text-tertiary)',
+              fontSize: '9px',
+            }}
+          >
+            {baseRootId === (targetRootId ?? baseRootId) ? '(unchanged)' : `\u2192 ${targetRootId}`}
+          </span>
         </div>
       </div>
 
@@ -273,7 +187,7 @@ export function DiffTreeOverview({ diff, baseContent, targetContent }: DiffTreeO
         }}
       />
 
-      {/* Section 3: Structure mini-map */}
+      {/* Section 2: Structure mini-map */}
       <div className="mb-3">
         <div
           className="font-semibold uppercase mb-[6px]"

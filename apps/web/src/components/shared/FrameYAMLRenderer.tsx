@@ -1,4 +1,3 @@
-// @ts-nocheck — tree-primary migration: needs rework
 'use client';
 
 import type { TreeNode, SlotValue } from '@t3x-dev/core';
@@ -17,8 +16,8 @@ export interface YAMLLine {
 }
 
 export interface FrameYAMLRendererProps {
-  /** Pre-nested frames (output of nestFrames()) */
-  frames: TreeNode[];
+  /** Pre-nested frames (Frame[] from treeCompat) */
+  frames: Frame[];
   /** Optional: render custom actions per frame (e.g., Require/Exclude buttons, assertion badges) */
   renderFrameActions?: (frameId: string, frameType: string) => ReactNode;
   /** Optional: highlighted frame ID */
@@ -173,7 +172,7 @@ function renderSlotLines(
  * Converts an array of Frames into a flat list of YAMLLine descriptors.
  * This is a pure function — no side effects, no store dependencies.
  */
-export function buildYAMLLines(frames: TreeNode[]): YAMLLine[] {
+export function buildYAMLLines(frames: Frame[]): YAMLLine[] {
   const lines: YAMLLine[] = [];
 
   for (const frame of frames) {

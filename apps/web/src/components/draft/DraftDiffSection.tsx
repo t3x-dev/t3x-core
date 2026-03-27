@@ -1,4 +1,3 @@
-// @ts-nocheck — tree-primary migration: needs rework
 'use client';
 
 /**
@@ -56,8 +55,10 @@ export function DraftDiffSection() {
       .then((parentCommit) => {
         if (cancelled) return;
         const content = parentCommit.content as import('@t3x-dev/core').SemanticContent;
-        const sentences = content.trees.map((frame) => ({
-          id: frame.id.startsWith('s_') ? frame.id : `s_${frame.id.replace('f_', '')}`,
+        const { treesToFrames } = require('@/lib/treeCompat') as typeof import('@/lib/treeCompat');
+        const frames = treesToFrames(content.trees);
+        const sentences = frames.map((frame) => ({
+          id: frame.id,
           text: `[${frame.type}] ${Object.entries(frame.slots)
             .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : String(v)}`)
             .join('; ')}`,

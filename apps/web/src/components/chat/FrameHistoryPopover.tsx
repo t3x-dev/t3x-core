@@ -1,4 +1,3 @@
-// @ts-nocheck — tree-primary migration: needs rework
 'use client';
 
 import { History } from 'lucide-react';
@@ -30,8 +29,8 @@ export function FrameHistoryPopover({ frameId }: FrameHistoryPopoverProps) {
   const entries = deltaLog.filter((entry) =>
     entry.delta.changes.some(
       (c) =>
-        (c.action === 'add' && c.frame.id === frameId) ||
-        (c.action !== 'add' && c.target === frameId)
+        (c.action === 'add' && (`${c.parent_path ? `${c.parent_path}.` : ''}${c.node.key}`) === frameId) ||
+        (c.action !== 'add' && c.target_path === frameId)
     )
   );
 
@@ -58,8 +57,8 @@ export function FrameHistoryPopover({ frameId }: FrameHistoryPopoverProps) {
             {entries.map((entry) => {
               const changes = entry.delta.changes.filter(
                 (c) =>
-                  (c.action === 'add' && c.frame.id === frameId) ||
-                  (c.action !== 'add' && c.target === frameId)
+                  (c.action === 'add' && (`${c.parent_path ? `${c.parent_path}.` : ''}${c.node.key}`) === frameId) ||
+                  (c.action !== 'add' && c.target_path === frameId)
               );
               const action = changes[0]?.action ?? 'update';
               const sourceLabel = SOURCE_LABELS[entry.source] ?? entry.source;

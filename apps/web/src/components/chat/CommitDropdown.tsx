@@ -1,4 +1,3 @@
-// @ts-nocheck — tree-primary migration: needs rework
 'use client';
 
 import { ChevronDown } from 'lucide-react';
@@ -18,7 +17,7 @@ export function CommitDropdown() {
   const router = useRouter();
   const draft = useExtractionPanelStore((s) => s.draft);
   const setPanelMode = useExtractionPanelStore((s) => s.setPanelMode);
-  const selectDeltaFrames = useExtractionPanelStore((s) => s.selectDeltaFrames);
+  const selectDeltaNodes = useExtractionPanelStore((s) => s.selectDeltaNodes);
   const commitFrames = useExtractionPanelStore((s) => s.commitFrames);
   const commitBranch = useExtractionPanelStore((s) => s.commitBranch);
   const isCommitting = useExtractionPanelStore((s) => s.isCommitting);
@@ -32,7 +31,7 @@ export function CommitDropdown() {
     if (showMessageInput) inputRef.current?.focus();
   }, [showMessageInput]);
 
-  const deltaCount = selectDeltaFrames().length;
+  const deltaCount = selectDeltaNodes().length;
   const hasFrames = draft.trees.length > 0;
   const hasDelta = deltaCount > 0;
 

@@ -1,4 +1,3 @@
-// @ts-nocheck — tree-primary migration: test needs rework
 import type { FrameDiff, SemanticContent } from '@t3x-dev/core';
 import { describe, expect, it } from 'vitest';
 import {

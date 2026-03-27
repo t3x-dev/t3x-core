@@ -1,4 +1,3 @@
-// @ts-nocheck — tree-primary migration: needs rework
 'use client';
 
 /**
@@ -20,14 +19,14 @@ import { FrameGraphView } from '@/components/frame-graph';
 import { Breadcrumb } from '@/components/shared/Breadcrumb';
 import { getCommitAsFrames } from '@/lib/api/commitUnified';
 import { API_V1, fetchWithTimeout, handleResponse } from '@/lib/api/core';
-import type { CommitMeta, TreeDiffResponse } from '@/lib/api/frameDiff';
+import type { CommitMeta, FrameDiffResponse } from '@/lib/api/frameDiff';
 import { getTreeDiff } from '@/lib/api/frameDiff';
 import { PAGE_ANIMATION_STYLES } from '@/lib/pageAnimations';
 import { useProjectStore } from '@/store/projectStore';
 import { DiffTreeOverview } from './DiffTreeOverview';
 import { DiffYAMLSplitView } from './DiffYAMLSplitView';
 import { DiffYAMLUnifiedView } from './DiffYAMLUnifiedView';
-import { TreeDiffIndex } from './TreeDiffIndex';
+import { TreeDiffIndex } from './FrameDiffIndex';
 
 // ============================================================================
 // Types
@@ -193,7 +192,7 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
   const router = useRouter();
 
   // State
-  const [diffResponse, setDiffResponse] = useState<TreeDiffResponse | null>(null);
+  const [diffResponse, setDiffResponse] = useState<FrameDiffResponse | null>(null);
   const [targetCommit, setTargetCommit] = useState<Commit | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

@@ -1,4 +1,3 @@
-// @ts-nocheck — tree-primary migration: test needs rework
 // @vitest-environment jsdom
 /**
  * Tests for getMergeChecks from mergeWorkspaceStore

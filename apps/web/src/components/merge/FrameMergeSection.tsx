@@ -1,4 +1,3 @@
-// @ts-nocheck — tree-primary migration: needs rework
 'use client';
 
 import type { SemanticContent } from '@t3x-dev/core';

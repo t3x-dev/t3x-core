@@ -1,4 +1,3 @@
-// @ts-nocheck — tree-primary migration: needs rework
 'use client';
 
 /**
@@ -10,9 +9,9 @@
  * at the top level.
  */
 
-import type { TreeNode, SemanticContent, SlotValue } from '@t3x-dev/core';
+import type { SemanticContent, SlotValue } from '@t3x-dev/core';
 import { useCallback, useMemo } from 'react';
-import type { Frame } from '@/lib/treeCompat';
+import { type Frame, treesToFrames } from '@/lib/treeCompat';
 
 // ============================================================================
 // Props
@@ -29,14 +28,14 @@ export interface CommitYAMLDocumentProps {
 // ============================================================================
 
 interface FrameTreeNode {
-  frame: TreeNode;
+  frame: Frame;
   displayName: string;
   relationType?: string;
   children: FrameTreeNode[];
 }
 
 /** Build display names with _2, _3 suffixes for duplicate types (scoped per parent). */
-function buildDisplayNames(frames: TreeNode[]): Map<string, string> {
+function buildDisplayNames(frames: Frame[]): Map<string, string> {
   const counts = new Map<string, number>();
   const nameMap = new Map<string, string>();
 
@@ -50,8 +49,9 @@ function buildDisplayNames(frames: TreeNode[]): Map<string, string> {
 }
 
 function buildFrameTree(content: SemanticContent): FrameTreeNode[] {
+  const frames = treesToFrames(content.trees);
   const frameMap = new Map<string, Frame>();
-  for (const frame of content.trees) {
+  for (const frame of frames) {
     frameMap.set(frame.id, frame);
   }
 
@@ -70,13 +70,13 @@ function buildFrameTree(content: SemanticContent): FrameTreeNode[] {
   }
 
   // Root frames: not a child of anyone
-  const rootFrames = content.trees.filter((f) => !childIds.has(f.id));
+  const rootFrames = frames.filter((f) => !childIds.has(f.id));
 
   // Build display name map across all frames
-  const nameMap = buildDisplayNames(content.trees);
+  const nameMap = buildDisplayNames(frames);
 
   // Recursive builder (with visited set to avoid cycles)
-  function buildNode(frame: TreeNode, relationType?: string, visited?: Set<string>): FrameTreeNode {
+  function buildNode(frame: Frame, relationType?: string, visited?: Set<string>): FrameTreeNode {
     const vis = visited ?? new Set<string>();
     vis.add(frame.id);
 
@@ -206,7 +206,7 @@ function renderSlotValueLines(
       return;
     }
     if ('type' in value && 'slots' in value) {
-      const inlineFrame = value as InlineFrame;
+      const inlineFrame = value as { type: string; slots: Record<string, SlotValue> };
       // Render inline frame as nested keys
       lines.push({
         key: lineKeyPrefix,

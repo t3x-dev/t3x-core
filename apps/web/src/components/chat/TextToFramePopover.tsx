@@ -1,4 +1,3 @@
-// @ts-nocheck — tree-primary migration: needs rework
 'use client';
 
 import type { Delta } from '@t3x-dev/core';
@@ -49,10 +48,11 @@ export function TextToFramePopover({ selectedText, position, onClose }: TextToFr
       changes: [
         {
           action: 'add',
-          frame: {
-            id: `f_${Date.now()}`,
-            type: frameType || 'note',
+          parent_path: '',
+          node: {
+            key: frameType || 'note',
             slots: { [slotKey || 'content']: selectedText },
+            children: [],
           },
         },
       ],

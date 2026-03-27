@@ -14,7 +14,7 @@ export function formatSlotValue(value: SlotValue | undefined): string {
   return JSON.stringify(value);
 }
 
-export function renderFrameSlots(frame: TreeNode): string[] {
+export function renderFrameSlots(frame: { slots: Record<string, SlotValue> }): string[] {
   const lines: string[] = [];
   for (const [key, value] of Object.entries(frame.slots)) {
     lines.push(`  ${key}: ${formatSlotValue(value)}`);
