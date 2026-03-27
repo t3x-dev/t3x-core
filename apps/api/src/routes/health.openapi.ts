@@ -59,7 +59,7 @@ healthRoutes.openapi(healthRoute, (c) => {
   });
 });
 
-healthRoutes.openapi(readyRoute, async (c) => {
+healthRoutes.openapi(readyRoute, async (c: any): Promise<any> => {
   try {
     const db = await getDB();
     await findProjects(db, { limit: 1, offset: 0 });

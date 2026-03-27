@@ -8,7 +8,7 @@
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import type { SemanticContent } from '@t3x-dev/core';
-import { buildDraft, createClaudeProvider, LLMProviderError } from '@t3x-dev/core';
+import { applyDelta, createClaudeProvider, flattenTrees, LLMProviderError } from '@t3x-dev/core';
 import {
   findAgentDraftById,
   findConversationById,
@@ -233,7 +233,7 @@ function extractPreferencesFromFrames(snapshot: SemanticContent): {
   const mustNotHave: string[] = [];
   const seenLower = new Set<string>();
 
-  for (const frame of snapshot.frames) {
+  for (const frame of flattenTrees(snapshot.trees)) {
     const slots = frame.slots;
 
     // Determine frame-level polarity from metadata slots and frame type
@@ -272,7 +272,10 @@ async function extractMustHave(db: DBType, conversationId: string): Promise<stri
   // Strategy 1: Frame snapshot
   const deltaLogs = await listDeltaLogByConversation(db, conversationId);
   if (deltaLogs.length > 0) {
-    const snapshot = buildDraft(toDeltaLogEntries(deltaLogs));
+    const snapshot = toDeltaLogEntries(deltaLogs).reduce(
+      (snap, entry) => applyDelta(snap, entry.delta),
+      { trees: [], relations: [] } as SemanticContent
+    );
     const prefs = extractPreferencesFromFrames(snapshot);
     if (prefs.mustHave.length > 0) {
       return prefs.mustHave.slice(0, 15);
@@ -310,7 +313,10 @@ async function extractMustntHave(db: DBType, conversationId: string): Promise<st
   // Strategy 1: Frame snapshot
   const deltaLogs = await listDeltaLogByConversation(db, conversationId);
   if (deltaLogs.length > 0) {
-    const snapshot = buildDraft(toDeltaLogEntries(deltaLogs));
+    const snapshot = toDeltaLogEntries(deltaLogs).reduce(
+      (snap, entry) => applyDelta(snap, entry.delta),
+      { trees: [], relations: [] } as SemanticContent
+    );
     const prefs = extractPreferencesFromFrames(snapshot);
     if (prefs.mustNotHave.length > 0) {
       return prefs.mustNotHave.slice(0, 10);

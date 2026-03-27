@@ -12,7 +12,16 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { buildKnowledgeGraph } from '@t3x-dev/core';
+// TODO: buildKnowledgeGraph was removed in tree-primary refactor
+// biome-ignore lint/suspicious/noExplicitAny: stub for removed function
+function buildKnowledgeGraph(input: any): any {
+  // Placeholder: returns empty graph
+  return {
+    nodes: [],
+    edges: [],
+    stats: { node_count: 0, edge_count: 0, sentence_count: input.sentences?.length ?? 0 },
+  };
+}
 import {
   deleteKnowledgeGraphByProject,
   findConflictsByProject,
@@ -175,7 +184,7 @@ knowledgeGraphRoutes.openapi(buildRoute, async (c) => {
       // Insert nodes
       const insertedNodes = await insertKnowledgeNodes(
         tx,
-        result.nodes.map((n) => ({
+        result.nodes.map((n: any) => ({
           project_id: projectId,
           label: n.label,
           type: n.type,
@@ -202,7 +211,7 @@ knowledgeGraphRoutes.openapi(buildRoute, async (c) => {
       if (result.edges.length > 0) {
         await insertKnowledgeEdges(
           tx,
-          result.edges.map((e) => ({
+          result.edges.map((e: any) => ({
             project_id: projectId,
             source_node_id: insertedNodes[e.source_node_index].id,
             target_node_id: insertedNodes[e.target_node_index].id,

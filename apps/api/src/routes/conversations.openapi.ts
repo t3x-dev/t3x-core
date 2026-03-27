@@ -14,12 +14,13 @@
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
+  applyDelta,
   buildConversationContext,
-  buildDraft,
   type ConversationData,
+  flattenTrees,
   getModelInfo,
   type SemanticContent,
-  serializeFramesForPrompt,
+  serializeForPrompt,
 } from '@t3x-dev/core';
 import {
   deleteConversation,
@@ -54,10 +55,11 @@ import {
  */
 function serializeSnapshotForContext(snapshot: SemanticContent): string {
   const lines: string[] = ['## Extracted Knowledge (YAML Tree)\n'];
+  const flat = flattenTrees(snapshot.trees);
 
-  for (const frame of snapshot.frames) {
-    lines.push(`${frame.type}:`);
-    for (const [key, value] of Object.entries(frame.slots)) {
+  for (const node of flat) {
+    lines.push(`${node.type}:`);
+    for (const [key, value] of Object.entries(node.slots)) {
       if (Array.isArray(value)) {
         lines.push(`  ${key}:`);
         for (const item of value) {
@@ -69,17 +71,17 @@ function serializeSnapshotForContext(snapshot: SemanticContent): string {
         );
       }
     }
-    if (frame.confidence !== undefined) {
-      lines.push(`  # confidence: ${frame.confidence}`);
+    if (node.confidence !== undefined) {
+      lines.push(`  # confidence: ${node.confidence}`);
     }
   }
 
   if (snapshot.relations.length > 0) {
     lines.push('\nrelations:');
     for (const rel of snapshot.relations) {
-      const fromFrame = snapshot.frames.find((f) => f.id === rel.from);
-      const toFrame = snapshot.frames.find((f) => f.id === rel.to);
-      lines.push(`  - ${fromFrame?.type ?? rel.from} → ${toFrame?.type ?? rel.to} (${rel.type})`);
+      const fromNode = flat.find((f) => f.id === rel.from);
+      const toNode = flat.find((f) => f.id === rel.to);
+      lines.push(`  - ${fromNode?.type ?? rel.from} → ${toNode?.type ?? rel.to} (${rel.type})`);
     }
   }
 
@@ -746,8 +748,12 @@ conversationRoutes.openapi(getMemoryRoute, async (c) => {
     let yamlKnowledge = '';
     const deltaRecords = await listDeltaLogByConversation(db, conversationId);
     if (deltaRecords.length > 0) {
-      const snapshot = buildDraft(toDeltaLogEntries(deltaRecords));
-      if (snapshot.frames.length > 0) {
+      const emptySnap: SemanticContent = { trees: [], relations: [] };
+      const snapshot = toDeltaLogEntries(deltaRecords).reduce(
+        (snap, entry) => applyDelta(snap, entry.delta),
+        emptySnap
+      );
+      if (snapshot.trees.length > 0) {
         yamlKnowledge = serializeSnapshotForContext(snapshot);
       }
     }
@@ -755,7 +761,7 @@ conversationRoutes.openapi(getMemoryRoute, async (c) => {
       const currentBranch = await findCurrentBranch(db, conversation.projectId);
       if (currentBranch?.headCommitHash) {
         const unified = await getCommitUnified(db, currentBranch.headCommitHash);
-        if (unified && unified.content.frames.length > 0) {
+        if (unified && unified.content.trees.length > 0) {
           yamlKnowledge = serializeSnapshotForContext(unified.content);
         }
       }
@@ -790,7 +796,7 @@ conversationRoutes.openapi(getMemoryRoute, async (c) => {
 
     // 7. Build context: YAML knowledge + pins (conversations, leaves)
     const builtContext = buildConversationContext({
-      currentCommit: undefined,
+      knowledge: undefined,
       projectPins,
       contextConfig,
       conversations: conversationsMap,
@@ -852,7 +858,7 @@ conversationRoutes.get('/v1/conversations/:id/context-export', async (c) => {
     const currentBranch = await findCurrentBranch(db, conversation.projectId);
     if (currentBranch?.headCommitHash) {
       const unified = await getCommitUnified(db, currentBranch.headCommitHash);
-      if (unified && unified.content.frames.length > 0) {
+      if (unified && unified.content.trees.length > 0) {
         currentKnowledge = unified.content;
       }
     }

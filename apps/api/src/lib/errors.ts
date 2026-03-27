@@ -124,6 +124,11 @@ export const ErrorCodes = {
   // Autopilot errors
   AUTOPILOT_CONFIG_INVALID: 'AUTOPILOT_CONFIG_INVALID',
   ALREADY_COMMITTED: 'ALREADY_COMMITTED',
+
+  // Deprecation / migration
+  DEPRECATED: 'DEPRECATED',
+  CHECK_FAILED: 'CHECK_FAILED',
+  COMMIT_FAILED: 'COMMIT_FAILED',
 } as const;
 
 export type ErrorCode = keyof typeof ErrorCodes;
@@ -237,6 +242,11 @@ export const ErrorStatusCodes: Record<ErrorCode, number> = {
   // Autopilot errors
   AUTOPILOT_CONFIG_INVALID: 400,
   ALREADY_COMMITTED: 409,
+
+  // Deprecation / migration
+  DEPRECATED: 400,
+  CHECK_FAILED: 500,
+  COMMIT_FAILED: 500,
 };
 
 /**

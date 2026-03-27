@@ -65,16 +65,15 @@ describe('GET /v1/merge/drafts/:id/checks', () => {
     return createCommit(mockDB, {
       parents: [],
       author: { type: 'human' as const, name: 'Test User' },
-      content: {
-        frames: frames.map((f) => ({
-          id: f.id,
-          type: f.type,
+      content: ({
+        trees: frames.map((f) => ({
+          key: f.id,
           slots: f.slots,
+          children: [],
           source: f.source,
-          // biome-ignore lint/suspicious/noExplicitAny: test type cast
-        })) as any,
+        })),
         relations: [],
-      },
+      }) as any,
       project_id: testProjectId,
       message: 'Test commit',
       branch: 'main',

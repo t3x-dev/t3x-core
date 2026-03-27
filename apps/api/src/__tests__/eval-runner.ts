@@ -24,7 +24,8 @@ import dotenv from 'dotenv';
 
 dotenv.config({ path: path.resolve(process.cwd(), '../../.env') });
 
-import type { Frame, SemanticContent } from '@t3x-dev/core';
+import type { SemanticContent } from '@t3x-dev/core';
+import { flattenTrees } from '@t3x-dev/core';
 import { insertConversation, insertProject, insertTurn } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { closeDB, getDB } from '../lib/db';
@@ -291,7 +292,7 @@ const SCENARIOS: Scenario[] = [
 // Markdown Formatter
 // ============================================================
 
-function formatFrameToMarkdown(frame: Frame, indent = 0): string {
+function formatFrameToMarkdown(frame: { id: string; type: string; slots: Record<string, unknown>; confidence?: number; slot_sources?: Record<string, unknown>; source?: string }, indent = 0): string {
   const pad = '  '.repeat(indent);
   const lines: string[] = [];
   lines.push(
@@ -306,7 +307,7 @@ function formatFrameToMarkdown(frame: Frame, indent = 0): string {
   }
   if (frame.slot_sources) {
     lines.push(`${pad}  - **Slot Sources:**`);
-    for (const [key, src] of Object.entries(frame.slot_sources)) {
+    for (const [key, src] of Object.entries(frame.slot_sources) as [string, any][]) {
       lines.push(
         `${pad}    - \`${key}\` → Turn ${src.turn} [${src.start_char}:${src.end_char}] "${src.quote ?? ''}"`
       );
@@ -318,10 +319,10 @@ function formatFrameToMarkdown(frame: Frame, indent = 0): string {
 function formatSnapshotToMarkdown(snapshot: SemanticContent): string {
   const lines: string[] = [];
   lines.push('### Frames\n');
-  if (snapshot.frames.length === 0) {
+  if (flattenTrees(snapshot.trees).length === 0) {
     lines.push('_No frames extracted._\n');
   } else {
-    for (const frame of snapshot.frames) {
+    for (const frame of flattenTrees(snapshot.trees)) {
       lines.push(formatFrameToMarkdown(frame));
       lines.push('');
     }
@@ -381,10 +382,10 @@ function generateScenarioMarkdown(
 
       lines.push('## Incremental Stability Analysis\n');
       lines.push('Compare first and second extraction results:\n');
-      lines.push(`- First extraction frames: ${snapshot.frames.length}`);
-      lines.push(`- Second extraction frames: ${secondSnapshot.frames.length}`);
+      lines.push(`- First extraction frames: ${flattenTrees(snapshot.trees).length}`);
+      lines.push(`- Second extraction frames: ${flattenTrees(secondSnapshot.trees).length}`);
       lines.push(
-        `- Frames added in second extraction: ${Math.max(0, secondSnapshot.frames.length - snapshot.frames.length)}`
+        `- Frames added in second extraction: ${Math.max(0, flattenTrees(secondSnapshot.trees).length - flattenTrees(snapshot.trees).length)}`
       );
       lines.push('');
     }
@@ -494,7 +495,7 @@ async function runScenario(app: Hono, scenario: Scenario): Promise<void> {
     data: { delta: any; snapshot: SemanticContent; delta_log_id: string };
   };
   console.log(
-    `  First extraction: ${body1.data.snapshot.frames.length} frames, ${body1.data.delta.changes.length} changes (${durationMs}ms)`
+    `  First extraction: ${flattenTrees(body1.data.snapshot.trees).length} frames, ${body1.data.delta.changes.length} changes (${durationMs}ms)`
   );
 
   let secondSnapshot: SemanticContent | undefined;
@@ -535,7 +536,7 @@ async function runScenario(app: Hono, scenario: Scenario): Promise<void> {
       secondSnapshot = body2.data.snapshot;
       secondDelta = body2.data.delta;
       console.log(
-        `  Incremental extraction: ${secondSnapshot.frames.length} frames, ${secondDelta.changes.length} changes (${secondDurationMs}ms)`
+        `  Incremental extraction: ${flattenTrees(secondSnapshot.trees).length} frames, ${secondDelta.changes.length} changes (${secondDurationMs}ms)`
       );
     }
   }

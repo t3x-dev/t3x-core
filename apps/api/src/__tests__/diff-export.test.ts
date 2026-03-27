@@ -44,8 +44,8 @@ describe('Diff Routes', () => {
     const baseCommit = await createCommit(mockDB, {
       parents: [],
       author: { type: 'human', name: 'Test' },
-      content: {
-        frames: [
+      content: ({
+        trees: [
           { id: 's_1', text: 'The budget is three thousand dollars' },
           { id: 's_2', text: 'The deadline is next Friday' },
           { id: 's_3', text: 'Unique to base' },
@@ -57,7 +57,7 @@ describe('Diff Routes', () => {
           confidence: (s as any).confidence ?? 1,
         })),
         relations: [],
-      },
+      }) as any,
       project_id: testProjectId,
     });
     baseCommitHash = baseCommit.hash;
@@ -65,8 +65,8 @@ describe('Diff Routes', () => {
     const targetCommit = await createCommit(mockDB, {
       parents: [baseCommitHash],
       author: { type: 'human', name: 'Test' },
-      content: {
-        frames: [
+      content: ({
+        trees: [
           { id: 's_4', text: 'The budget is five thousand dollars' },
           { id: 's_5', text: 'The deadline is next Friday' },
           { id: 's_6', text: 'Unique to target' },
@@ -78,7 +78,7 @@ describe('Diff Routes', () => {
           confidence: (s as any).confidence ?? 1,
         })),
         relations: [],
-      },
+      }) as any,
       project_id: testProjectId,
     });
     targetCommitHash = targetCommit.hash;

@@ -67,7 +67,7 @@ describe('Relations Routes', () => {
         parents: [],
         author: { type: 'human', name: 'Relation Tester' },
         content: {
-          frames: [
+          trees: [
             {
               id: 'f_001',
               type: 'legacy_sentence',

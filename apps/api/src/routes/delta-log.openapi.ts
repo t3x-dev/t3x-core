@@ -12,8 +12,8 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import type { DeltaSource } from '@t3x-dev/core';
-import { buildDraft } from '@t3x-dev/core';
+import type { DeltaSource, SemanticContent } from '@t3x-dev/core';
+import { applyDelta, flattenTrees } from '@t3x-dev/core';
 import {
   deleteDeltaLogEntry,
   findConversationById,
@@ -68,7 +68,7 @@ const RelationInputSchema = z
   .object({
     from: z.string().min(1),
     to: z.string().min(1),
-    type: z.enum(['causes', 'conditions', 'contrasts', 'elaborates', 'follows', 'depends']),
+    type: z.enum(['causes', 'conditions', 'contrasts', 'follows', 'depends']),
   })
   .passthrough();
 
@@ -95,7 +95,7 @@ const DeltaLogEntryResponse = z.object({
 });
 
 const DraftResponse = z.object({
-  frames: z.array(z.any()),
+  trees: z.array(z.any()),
   relations: z.array(z.any()),
 });
 
@@ -289,7 +289,7 @@ deltaLogRoutes.openapi(createDeltaRoute, async (c) => {
         tx,
         conversationId,
         conversation.projectId,
-        body.delta,
+        body.delta as any,
         body.source as DeltaSource
       );
       return rec;
@@ -349,12 +349,16 @@ deltaLogRoutes.openapi(getDraftRoute, async (c) => {
 
     // Read from frames table; fallback to delta replay for unmigrated conversations
     let draft = await readDraftFromFrames(db, conversationId, topic_id);
-    if (draft.frames.length === 0) {
+    if (draft.trees.length === 0) {
       // Fallback: replay deltas (pre-migration conversations)
       const records = topic_id
         ? await listDeltaLogByTopic(db, conversationId, topic_id)
         : await listDeltaLogByConversation(db, conversationId);
-      draft = buildDraft(toDeltaLogEntries(records));
+      const emptySnap: SemanticContent = { trees: [], relations: [] };
+      draft = toDeltaLogEntries(records).reduce(
+        (snap, entry) => applyDelta(snap, entry.delta),
+        emptySnap
+      );
     }
 
     return c.json({ success: true as const, data: draft }, 200);
@@ -382,7 +386,11 @@ deltaLogRoutes.openapi(deleteDeltaRoute, async (c) => {
       await deleteDeltaLogEntry(tx, deltaId);
       const remainingRecords = await listDeltaLogByConversation(tx, conversationId);
       const remainingEntries = toDeltaLogEntries(remainingRecords);
-      const rebuilt = buildDraft(remainingEntries);
+      const emptySnap: SemanticContent = { trees: [], relations: [] };
+      const rebuilt = remainingEntries.reduce(
+        (snap, entry) => applyDelta(snap, entry.delta),
+        emptySnap
+      );
       await rebuildFramesFromSnapshot(tx, conversationId, existing.projectId, rebuilt);
     });
 

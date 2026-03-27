@@ -9,7 +9,7 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { buildDraft, FrameCompressor, type FrameWithSignals } from '@t3x-dev/core';
+import { applyDelta, Compressor, flattenTrees, type NodeWithSignals, type SemanticContent } from '@t3x-dev/core';
 import {
   findConversationById,
   insertDeltaLogEntry,
@@ -183,23 +183,28 @@ frameCompressRoutes.openapi(compressFramesRoute, async (c) => {
     // 2. Fetch existing delta log and build current snapshot
     const deltaRecords = await listDeltaLogByConversation(db, conversationId);
     const deltaEntries = toDeltaLogEntries(deltaRecords);
-    const currentSnapshot = buildDraft(deltaEntries);
+    const emptySnapshot: SemanticContent = { trees: [], relations: [] };
+    const currentSnapshot = deltaEntries.reduce(
+      (snap, entry) => applyDelta(snap, entry.delta),
+      emptySnapshot
+    );
+    const currentFlat = flattenTrees(currentSnapshot.trees);
 
-    // 3. Require at least 2 frames to compress
-    if (currentSnapshot.frames.length < 2) {
+    // 3. Require at least 2 nodes to compress
+    if (currentFlat.length < 2) {
       return errorResponse(
         c,
         'INVALID_REQUEST',
-        `Not enough frames to compress (need >= 2, have ${currentSnapshot.frames.length})`
+        `Not enough nodes to compress (need >= 2, have ${currentFlat.length})`
       );
     }
 
-    // 4. Compute engagement signals for all frames
-    const frameIds = currentSnapshot.frames.map((f) => f.id);
-    const signalsMap = computeFrameSignals(frameIds, deltaEntries);
+    // 4. Compute engagement signals for all nodes
+    const nodeIds = currentFlat.map((f) => f.id);
+    const signalsMap = computeFrameSignals(nodeIds, deltaEntries);
 
-    // 5. Attach signals to frames
-    const framesWithSignals: FrameWithSignals[] = currentSnapshot.frames.map((f) => {
+    // 5. Attach signals to nodes
+    const nodesWithSignals: NodeWithSignals[] = currentFlat.map((f) => {
       const sig = signalsMap.get(f.id) ?? {
         has_manual_edit: false,
         last_touched: 0,
@@ -213,23 +218,24 @@ frameCompressRoutes.openapi(compressFramesRoute, async (c) => {
       };
     });
 
-    // 6. Call FrameCompressor via provider registry with fallback (usage tracked)
+    // 6. Call Compressor via provider registry with fallback (usage tracked)
     const reg = await getProviderRegistry();
     const trackedUsage = { inputTokens: 0, outputTokens: 0 };
     let trackedModel = 'unknown';
-    const result = await reg.tryWithFallback('generation', (provider) => {
+    // biome-ignore lint/suspicious/noExplicitAny: compress result type
+    const result: any = await reg.tryWithFallback('generation', (provider) => {
       // biome-ignore lint/suspicious/noExplicitAny: generic error handler
       const { provider: tracked, usage } = wrapWithUsageTracking(provider as any);
       trackedUsage.inputTokens = 0;
       trackedUsage.outputTokens = 0;
       trackedModel = tracked.id;
-      const compressor = new FrameCompressor(tracked);
+      const compressor = new Compressor(tracked);
       return compressor
         .compress({
-          frames: framesWithSignals,
+          frames: nodesWithSignals,
           relations: currentSnapshot.relations,
         })
-        .then((r) => {
+        .then((r: any) => {
           trackedUsage.inputTokens = usage.inputTokens;
           trackedUsage.outputTokens = usage.outputTokens;
           return r;

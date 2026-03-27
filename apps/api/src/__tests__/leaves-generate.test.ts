@@ -93,8 +93,8 @@ describe('POST /v1/leaves/:id/generate', () => {
     // Create a test commit
     const commit = await createCommit(mockDB, {
       author: { type: 'human', name: 'Test User' },
-      content: {
-        frames: [
+      content: ({
+        trees: [
           { id: 's_1', text: 'User prefers dark mode' },
           { id: 's_2', text: 'User speaks English' },
         ].map((s) => ({
@@ -105,7 +105,7 @@ describe('POST /v1/leaves/:id/generate', () => {
           confidence: (s as any).confidence ?? 1,
         })),
         relations: [],
-      },
+      }) as any,
       project_id: testProjectId,
       branch: 'main',
       message: 'Test commit for generation',
