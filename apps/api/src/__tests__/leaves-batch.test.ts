@@ -43,19 +43,13 @@ describe('Batch Generation Routes', () => {
     // Create a real V4 commit for testing
     const commit = await createCommit(mockDB, {
       author: { type: 'human', name: 'test-user' },
-      content: ({
+      content: {
         trees: [
-          { id: 's1', text: 'Test sentence for batch generation.' },
-          { id: 's2', text: 'Another test sentence.' },
-        ].map((s) => ({
-          id: s.id,
-          type: 'legacy_sentence' as const,
-          slots: { text: s.text },
-          // biome-ignore lint/suspicious/noExplicitAny: test mock access
-          confidence: (s as any).confidence ?? 1,
-        })),
+          { key: 's1', slots: { text: 'Test sentence for batch generation.' }, children: [] },
+          { key: 's2', slots: { text: 'Another test sentence.' }, children: [] },
+        ],
         relations: [],
-      }) as any,
+      } as any,
       project_id: testProjectId,
       message: 'Test commit for batch',
       branch: 'main',

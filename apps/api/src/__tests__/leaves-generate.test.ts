@@ -93,19 +93,13 @@ describe('POST /v1/leaves/:id/generate', () => {
     // Create a test commit
     const commit = await createCommit(mockDB, {
       author: { type: 'human', name: 'Test User' },
-      content: ({
+      content: {
         trees: [
-          { id: 's_1', text: 'User prefers dark mode' },
-          { id: 's_2', text: 'User speaks English' },
-        ].map((s) => ({
-          id: s.id,
-          type: 'legacy_sentence' as const,
-          slots: { text: s.text },
-          // biome-ignore lint/suspicious/noExplicitAny: test mock access
-          confidence: (s as any).confidence ?? 1,
-        })),
+          { key: 's_1', slots: { text: 'User prefers dark mode' }, children: [] },
+          { key: 's_2', slots: { text: 'User speaks English' }, children: [] },
+        ],
         relations: [],
-      }) as any,
+      } as any,
       project_id: testProjectId,
       branch: 'main',
       message: 'Test commit for generation',
@@ -233,7 +227,7 @@ describe('POST /v1/leaves/:id/generate', () => {
     // Verify generateLeafOutput was called with knowledge (SemanticContent) and leaf
     expect(mockGenerateLeafOutput).toHaveBeenCalledWith(
       expect.objectContaining({
-        knowledge: expect.objectContaining({ frames: expect.any(Array) }),
+        knowledge: expect.objectContaining({ trees: expect.any(Array) }),
         leaf: expect.objectContaining({ id: testLeafId }),
       })
     );

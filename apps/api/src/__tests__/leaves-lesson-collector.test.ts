@@ -90,19 +90,13 @@ describe('POST /v1/leaves/:id/generate — lesson collector wiring', () => {
     // Create a test commit
     const commit = await createCommit(mockDB, {
       author: { type: 'human', name: 'Test User' },
-      content: ({
+      content: {
         trees: [
-          { id: 's_lc1', text: 'User prefers concise responses' },
-          { id: 's_lc2', text: 'User likes bullet points' },
-        ].map((s) => ({
-          id: s.id,
-          type: 'legacy_sentence' as const,
-          slots: { text: s.text },
-          // biome-ignore lint/suspicious/noExplicitAny: test mock access
-          confidence: (s as any).confidence ?? 1,
-        })),
+          { key: 's_lc1', slots: { text: 'User prefers concise responses' }, children: [] },
+          { key: 's_lc2', slots: { text: 'User likes bullet points' }, children: [] },
+        ],
         relations: [],
-      }) as any,
+      } as any,
       project_id: testProjectId,
       branch: 'main',
       message: 'Commit for lesson collector tests',
@@ -262,16 +256,12 @@ describe('POST /v1/leaves/:id/generate — lesson collector wiring', () => {
     // Create a fresh commit with no sibling leaves
     const freshCommit = await createCommit(mockDB, {
       author: { type: 'human', name: 'Test User' },
-      content: ({
-        trees: [{ id: 's_fresh1', text: 'A brand new sentence' }].map((s) => ({
-          id: s.id,
-          type: 'legacy_sentence' as const,
-          slots: { text: s.text },
-          // biome-ignore lint/suspicious/noExplicitAny: test mock access
-          confidence: (s as any).confidence ?? 1,
-        })),
+      content: {
+        trees: [
+          { key: 's_fresh1', slots: { text: 'A brand new sentence' }, children: [] },
+        ],
         relations: [],
-      }) as any,
+      } as any,
       project_id: testProjectId,
       branch: 'main',
       message: 'Isolated commit for lesson test',
@@ -352,7 +342,7 @@ describe('POST /v1/leaves/:id/generate — lesson collector wiring', () => {
     // Verify all three key fields are passed together
     expect(mockGenerateWithFallback).toHaveBeenCalledWith(
       expect.objectContaining({
-        knowledge: expect.objectContaining({ frames: expect.any(Array) }),
+        knowledge: expect.objectContaining({ trees: expect.any(Array) }),
         leaf: expect.objectContaining({ id: leaf.id }),
         lessons: fakeLessons,
       })
