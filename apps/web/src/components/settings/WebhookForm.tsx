@@ -107,7 +107,7 @@ export function WebhookForm({ webhook, onSubmit, onCancel, loading = false }: We
       {/* URL */}
       <div className="flex flex-col gap-2">
         <Label htmlFor="webhook-url">
-          Endpoint URL <span className="text-red-500">*</span>
+          Endpoint URL <span className="text-[var(--status-error)]">*</span>
         </Label>
         <Input
           id="webhook-url"
@@ -120,7 +120,7 @@ export function WebhookForm({ webhook, onSubmit, onCancel, loading = false }: We
           aria-describedby={urlFormatError ? 'webhook-url-error' : undefined}
         />
         {urlFormatError && (
-          <p id="webhook-url-error" className="text-xs text-red-500">
+          <p id="webhook-url-error" className="text-xs text-[var(--status-error)]">
             Please enter a valid URL (e.g. https://example.com/webhook).
           </p>
         )}
@@ -132,7 +132,7 @@ export function WebhookForm({ webhook, onSubmit, onCancel, loading = false }: We
       {/* Events */}
       <div className="flex flex-col gap-2">
         <Label>
-          Events <span className="text-red-500">*</span>
+          Events <span className="text-[var(--status-error)]">*</span>
         </Label>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {WEBHOOK_EVENTS.map((event) => (
@@ -156,7 +156,7 @@ export function WebhookForm({ webhook, onSubmit, onCancel, loading = false }: We
             </label>
           ))}
         </div>
-        {events.length === 0 && <p className="text-xs text-red-500">Select at least one event.</p>}
+        {events.length === 0 && <p className="text-xs text-[var(--status-error)]">Select at least one event.</p>}
       </div>
 
       {/* Secret */}

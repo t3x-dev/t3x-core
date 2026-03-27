@@ -8,9 +8,34 @@
  * No side-by-side panes — each card shows differences inline.
  */
 
-import type { FrameMergeResult, Relation } from '@t3x-dev/core';
+import type { Relation, SlotConflict, SlotValue } from '@t3x-dev/core';
+
+/** Local Frame type — mirrors internal FlatNode (not exported from core). */
+interface Frame {
+  id: string;
+  type: string;
+  slots: Record<string, SlotValue>;
+  source?: string;
+  confidence?: number;
+}
+
+/** Local FrameMergeResult — legacy merge result shape used by this UI component. */
+interface FrameMergeResult {
+  autoKept: Frame[];
+  conflicts: Array<{
+    frameId: string;
+    sourceFrame: Frame;
+    targetFrame: Frame;
+    slotConflicts: SlotConflict[];
+  }>;
+  onlyInSource: Frame[];
+  onlyInTarget: Frame[];
+  relationsInBoth: Relation[];
+  relationsOnlyInSource: Relation[];
+  relationsOnlyInTarget: Relation[];
+}
 import { useMemo, useState } from 'react';
-import type { FrameResolution } from './FrameConflictCard';
+import type { FrameResolution } from './types';
 import { MergeFrameRow } from './MergeFrameRow';
 import { MergeToolbarRow } from './MergeToolbarRow';
 

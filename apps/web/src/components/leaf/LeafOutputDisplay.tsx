@@ -49,11 +49,63 @@ function buildConstraintMarkers(
 interface OutputSegment {
   text: string;
   sentenceId?: string;
+  /** Whether the sentence's linked constraint assertion failed */
+  failed?: boolean;
+  /** Tooltip label showing source frame path (e.g., "user_preference.destination") */
+  tooltipLabel?: string;
+}
+
+/**
+ * Build a lookup: sentenceId → { failed, tooltipLabel } by cross-referencing
+ * assertions, constraints, and their source info.
+ */
+function buildSentenceMetadata(
+  assertions: Assertion[] | null,
+  constraints: Constraint[]
+): Map<string, { failed: boolean; tooltipLabel?: string }> {
+  const meta = new Map<string, { failed: boolean; tooltipLabel?: string }>();
+  if (!assertions || assertions.length === 0) return meta;
+
+  // Build constraint map and assertion-by-constraint map
+  const constraintMap = new Map(constraints.map((c) => [c.id, c]));
+  const assertionByConstraint = new Map(assertions.map((a) => [a.constraint_id, a]));
+
+  // For each constraint that links to a sentence, determine pass/fail and tooltip
+  for (const c of constraints) {
+    if (c.type !== 'require') continue;
+    const requireConstraint = c as { source_sentence_id?: string; source_node?: { frame_type: string; slot_key?: string } } & typeof c;
+    const sentenceId = requireConstraint.source_sentence_id;
+    if (!sentenceId) continue;
+
+    const assertion = assertionByConstraint.get(c.id);
+    const failed = assertion ? !assertion.passed : false;
+
+    // Build tooltip from source_node if available
+    let tooltipLabel: string | undefined;
+    if (requireConstraint.source_node) {
+      tooltipLabel = requireConstraint.source_node.slot_key
+        ? `${requireConstraint.source_node.frame_type}.${requireConstraint.source_node.slot_key}`
+        : requireConstraint.source_node.frame_type;
+    }
+
+    const existing = meta.get(sentenceId);
+    if (existing) {
+      // If any assertion fails for this sentence, mark as failed
+      if (failed) existing.failed = true;
+      // Keep the first tooltip we find
+      if (!existing.tooltipLabel && tooltipLabel) existing.tooltipLabel = tooltipLabel;
+    } else {
+      meta.set(sentenceId, { failed, tooltipLabel });
+    }
+  }
+
+  return meta;
 }
 
 function buildHighlightedSegments(
   output: string,
-  coverage: Map<string, SentenceCoverageEntry>
+  coverage: Map<string, SentenceCoverageEntry>,
+  sentenceMeta: Map<string, { failed: boolean; tooltipLabel?: string }>
 ): OutputSegment[] {
   // Collect all match ranges sorted by position
   const ranges: Array<{ start: number; end: number; sentenceId: string }> = [];
@@ -74,14 +126,20 @@ function buildHighlightedSegments(
     }
   }
 
-  // Build segments
+  // Build segments with metadata
   const segments: OutputSegment[] = [];
   let cursor = 0;
   for (const r of cleaned) {
     if (r.start > cursor) {
       segments.push({ text: output.slice(cursor, r.start) });
     }
-    segments.push({ text: output.slice(r.start, r.end), sentenceId: r.sentenceId });
+    const meta = sentenceMeta.get(r.sentenceId);
+    segments.push({
+      text: output.slice(r.start, r.end),
+      sentenceId: r.sentenceId,
+      failed: meta?.failed,
+      tooltipLabel: meta?.tooltipLabel,
+    });
     cursor = r.end;
   }
   if (cursor < output.length) {
@@ -116,10 +174,15 @@ export function LeafOutputDisplay({
     [assertions, constraints]
   );
 
+  const sentenceMeta = useMemo(
+    () => buildSentenceMetadata(assertions, constraints),
+    [assertions, constraints]
+  );
+
   const highlightedSegments = useMemo(() => {
     if (mode !== 'display' || !output || !sentenceCoverage) return null;
-    return buildHighlightedSegments(output, sentenceCoverage);
-  }, [mode, output, sentenceCoverage]);
+    return buildHighlightedSegments(output, sentenceCoverage, sentenceMeta);
+  }, [mode, output, sentenceCoverage, sentenceMeta]);
 
   const handleSegmentHover = useCallback(
     (sentenceId: string | null) => {
@@ -239,10 +302,20 @@ export function LeafOutputDisplay({
                 <span
                   key={`seg-${i}`}
                   className={cn(
-                    'underline decoration-[var(--status-success)] decoration-2 underline-offset-[3px] cursor-pointer transition-colors',
+                    'font-semibold rounded-sm px-0.5 cursor-pointer transition-colors border-b-2',
+                    seg.failed
+                      ? 'bg-[var(--leaf-fail-bg)] border-[var(--leaf-fail-border)] line-through decoration-[var(--leaf-fail-border)]'
+                      : 'bg-[var(--leaf-match-bg)] border-[var(--leaf-match-border)]',
                     hoveredSentenceId === seg.sentenceId &&
-                      'bg-[var(--status-success-muted)] rounded-sm'
+                      (seg.failed
+                        ? 'bg-[var(--leaf-fail-border)]'
+                        : 'bg-[var(--leaf-match-border)]')
                   )}
+                  title={
+                    seg.tooltipLabel
+                      ? `← ${seg.tooltipLabel}`
+                      : `← ${seg.sentenceId}`
+                  }
                   onMouseEnter={() => handleSegmentHover(seg.sentenceId!)}
                   onMouseLeave={() => handleSegmentHover(null)}
                 >

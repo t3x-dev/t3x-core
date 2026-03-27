@@ -40,7 +40,7 @@ export function AutoCommitButton({ draftId }: { draftId: string }) {
         Auto-Commit
       </Button>
       {message && (
-        <span className={`text-xs ${isError ? 'text-red-500' : 'text-[var(--text-secondary)]'}`}>
+        <span className={`text-xs ${isError ? 'text-[var(--status-error)]' : 'text-[var(--text-secondary)]'}`}>
           {message}
         </span>
       )}

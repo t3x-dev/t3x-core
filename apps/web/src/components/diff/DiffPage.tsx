@@ -294,15 +294,15 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
     return (
       <div className="flex h-screen items-center justify-center bg-[var(--surface-app)]">
         <div className="flex flex-col items-center justify-center p-8 text-center max-w-md">
-          <h2 className="text-lg font-semibold text-red-600 mb-2">Failed to load diff</h2>
-          <p className="text-sm text-muted-foreground mb-4">
+          <h2 className="text-lg font-semibold text-[var(--status-error)] mb-2">Failed to load diff</h2>
+          <p className="text-sm text-[var(--text-tertiary)] mb-4">
             {error || 'An unexpected error occurred'}
           </p>
           <div className="flex gap-2">
             <button
               type="button"
               onClick={() => window.location.reload()}
-              className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 text-sm"
+              className="px-4 py-2 bg-[var(--accent-commit)] text-white rounded-md hover:opacity-90 text-sm"
             >
               Retry
             </button>
@@ -388,18 +388,18 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
               <div className="flex flex-col flex-1 overflow-hidden">
                 {/* View mode toggle */}
                 <div className="flex items-center justify-end px-4 py-1.5 border-b border-[var(--stroke-divider)]">
-                  <div className="flex rounded-md border border-[var(--stroke-divider)] bg-[rgba(255,255,255,0.04)] p-0.5">
+                  <div className="flex rounded-md border border-[var(--stroke-divider)] bg-[var(--hover-bg)] p-0.5">
                     <button
                       type="button"
                       onClick={() => setViewMode('split')}
-                      className={`px-3 py-0.5 rounded text-[11px] font-semibold transition-colors ${viewMode === 'split' ? 'bg-[rgba(255,255,255,0.1)] text-[var(--text-primary)]' : 'text-[var(--text-tertiary)]'}`}
+                      className={`px-3 py-0.5 rounded text-[11px] font-semibold transition-colors ${viewMode === 'split' ? 'bg-[var(--hover-bg-strong)] text-[var(--text-primary)]' : 'text-[var(--text-tertiary)]'}`}
                     >
                       Split
                     </button>
                     <button
                       type="button"
                       onClick={() => setViewMode('unified')}
-                      className={`px-3 py-0.5 rounded text-[11px] font-semibold transition-colors ${viewMode === 'unified' ? 'bg-[rgba(255,255,255,0.1)] text-[var(--text-primary)]' : 'text-[var(--text-tertiary)]'}`}
+                      className={`px-3 py-0.5 rounded text-[11px] font-semibold transition-colors ${viewMode === 'unified' ? 'bg-[var(--hover-bg-strong)] text-[var(--text-primary)]' : 'text-[var(--text-tertiary)]'}`}
                     >
                       Unified
                     </button>
@@ -497,7 +497,7 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
               )}
               {mergeLoading ? 'Creating merge...' : 'Start Merge'}
             </button>
-            {mergeError && <p className="text-[10px] text-red-400 mt-1">{mergeError}</p>}
+            {mergeError && <p className="text-[10px] text-[var(--status-error)] mt-1">{mergeError}</p>}
           </div>
         </aside>
       </div>

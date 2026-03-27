@@ -421,12 +421,12 @@ export function ChatWorkspace({
           </div>
         )}
         {isLoading ? (
-          <div className="flex h-full flex-col items-center justify-center text-muted-foreground gap-2">
+          <div className="flex h-full flex-col items-center justify-center text-[var(--text-tertiary)] gap-2">
             <Loader2 size={40} strokeWidth={1} className="animate-spin" />
             <p className="text-sm font-medium">Loading conversation...</p>
           </div>
         ) : messages.length === 0 && !isStreaming ? (
-          <div className="flex h-full flex-col items-center justify-center text-muted-foreground gap-2">
+          <div className="flex h-full flex-col items-center justify-center text-[var(--text-tertiary)] gap-2">
             <MessageSquarePlus size={40} strokeWidth={1} />
             <p className="text-sm font-medium text-[var(--text-primary)]">No messages yet</p>
             <span className="text-xs text-[var(--text-tertiary)]">
@@ -478,7 +478,7 @@ export function ChatWorkspace({
               <div className="w-full py-4">
                 <div className="mx-auto max-w-3xl px-4">
                   <div className="flex gap-3">
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-medium mt-0.5 bg-gradient-to-br from-[var(--accent-commit)]/20 to-indigo-500/20 text-[var(--accent-commit)] ring-1 ring-[var(--accent-commit)]/20">
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-medium mt-0.5 bg-gradient-to-br from-[var(--accent-commit)]/20 to-[var(--accent-conversation)]/20 text-[var(--accent-commit)] ring-1 ring-[var(--accent-commit)]/20">
                       T3
                     </div>
                     <div className="flex items-center gap-2 text-[var(--text-tertiary)] text-sm pt-1">
@@ -509,7 +509,7 @@ export function ChatWorkspace({
             {warning && !error && (
               <div className="w-full py-3">
                 <div className="mx-auto max-w-3xl px-4">
-                  <div className="flex items-center gap-2 py-2 px-3.5 bg-amber-500/10 border border-amber-500/20 rounded-lg text-amber-600 dark:text-amber-400 text-xs">
+                  <div className="flex items-center gap-2 py-2 px-3.5 bg-[var(--status-warning-muted)] border border-[var(--status-warning)]/20 rounded-lg text-[var(--status-warning)] text-xs">
                     <AlertCircle size={14} />
                     <span>{warning}</span>
                   </div>

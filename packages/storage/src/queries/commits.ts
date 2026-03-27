@@ -193,15 +193,38 @@ export async function updateCommitPosition(
 
 /**
  * Convert database row to Commit type.
+ *
+ * Handles legacy content format: older commits store `{ frames, relations }`
+ * while SemanticContent expects `{ trees, relations }`.
  */
 function rowToCommit(row: CommitRecord): Commit {
+  const rawContent = row.content as unknown as Record<string, unknown>;
+  let content: SemanticContent;
+
+  if (rawContent && Array.isArray(rawContent.trees)) {
+    content = rawContent as unknown as SemanticContent;
+  } else if (rawContent && Array.isArray((rawContent as { frames?: unknown[] }).frames)) {
+    const legacyFrames = (rawContent as { frames: Array<{ id: string; type: string; slots: Record<string, unknown> }> }).frames;
+    content = {
+      trees: legacyFrames.map((f) => ({
+        key: f.id,
+        type: f.type,
+        slots: f.slots as Record<string, import('@t3x-dev/core').SlotValue>,
+        children: [],
+      })),
+      relations: (Array.isArray(rawContent.relations) ? rawContent.relations : []) as SemanticContent['relations'],
+    };
+  } else {
+    content = { trees: [], relations: [] };
+  }
+
   return {
     hash: row.hash,
     schema: COMMIT_SCHEMA,
     parents: row.parents,
     author: row.author as Author,
     committed_at: row.committedAt.toISOString(),
-    content: row.content as SemanticContent,
+    content,
     project_id: row.projectId ?? '',
     message: row.message ?? null,
     branch: row.branch ?? 'main',

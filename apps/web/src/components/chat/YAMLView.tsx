@@ -352,9 +352,9 @@ export function YAMLView() {
   }
 
   const deltaBarColors: Record<string, string> = {
-    add: '#4ade80',
-    update: '#facc15',
-    remove: '#f87171',
+    add: 'var(--status-success)',
+    update: 'var(--status-warning)',
+    remove: 'var(--status-error)',
   };
 
   return (
@@ -501,7 +501,7 @@ export function YAMLView() {
                   cursor: isNodeLine ? 'pointer' : undefined,
                   borderLeft:
                     isNodeLine && gateIssues[line.treeId]?.length
-                      ? `3px solid ${gateIssues[line.treeId].some((i) => i.severity === 'error') ? '#f87171' : '#facc15'}`
+                      ? `3px solid ${gateIssues[line.treeId].some((i) => i.severity === 'error') ? 'var(--status-error)' : 'var(--status-warning)'}`
                       : undefined,
                 }}
               >
@@ -520,7 +520,7 @@ export function YAMLView() {
                     checked={isConfirmed}
                     onChange={handleCheck}
                     style={{
-                      accentColor: '#4ade80',
+                      accentColor: 'var(--status-success)',
                       cursor: 'pointer',
                       opacity: isConfirmed ? 1 : 0.25,
                       width: 11,
@@ -535,7 +535,7 @@ export function YAMLView() {
                     width: 3,
                     flexShrink: 0,
                     background: manualEditedNodeIds.has(line.treeId)
-                      ? '#60a5fa' // blue — manual edit
+                      ? 'var(--accent-commit)' // blue — manual edit
                       : line.changeType
                         ? deltaBarColors[line.changeType]
                         : 'transparent',
@@ -581,7 +581,7 @@ export function YAMLView() {
                 >
                   {isNodeLine && committedNodeIds[line.treeId] && (
                     <span
-                      style={{ fontSize: 9, color: 'rgba(74, 222, 128, 0.6)', marginRight: 4 }}
+                      style={{ fontSize: 9, color: 'var(--status-success)', opacity: 0.6, marginRight: 4 }}
                       title="Committed"
                     >
                       ✓
@@ -594,8 +594,8 @@ export function YAMLView() {
                         fontSize: 9,
                         padding: '0 4px',
                         borderRadius: 3,
-                        background: 'rgba(96, 165, 250, 0.15)',
-                        color: '#60a5fa',
+                        background: 'color-mix(in srgb, var(--accent-commit) 15%, transparent)',
+                        color: 'var(--accent-commit)',
                         marginLeft: 4,
                         fontWeight: 600,
                       }}

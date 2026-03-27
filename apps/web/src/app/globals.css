@@ -192,6 +192,20 @@
   --diff-removed-line: var(--diff-removed-accent);
   --diff-modified-line: var(--diff-modified-accent);
 
+  /* ===== YAML Syntax Tokens (Commit YAML Document) ===== */
+  --yaml-key: #2563eb;
+  --yaml-string: #16a34a;
+  --yaml-number: #d97706;
+  --yaml-ref: #7c3aed;
+  --yaml-comment: #9ca3af;
+  --yaml-punctuation: #6b7280;
+
+  /* ===== Leaf Correspondence Tokens ===== */
+  --leaf-match-bg: rgba(22, 163, 74, 0.10);
+  --leaf-match-border: rgba(22, 163, 74, 0.3);
+  --leaf-fail-bg: rgba(220, 38, 38, 0.10);
+  --leaf-fail-border: rgba(220, 38, 38, 0.3);
+
   /* ===== Highlight Token System (§1.1) ===== */
   --highlight-yellow-bg: #fef08a;
   --highlight-green-bg: #bbf7d0;
@@ -408,6 +422,20 @@
   --diff-identical-text: #94a3b8;
   --diff-added-word-bg: rgba(34, 197, 94, 0.45);
   --diff-removed-word-bg: rgba(239, 68, 68, 0.45);
+
+  /* ===== YAML Syntax Tokens — dark overrides ===== */
+  --yaml-key: #7aa2f7;
+  --yaml-string: #9ece6a;
+  --yaml-number: #ff9e64;
+  --yaml-ref: #bb9af7;
+  --yaml-comment: #4b5563;
+  --yaml-punctuation: #89ddff;
+
+  /* ===== Leaf Correspondence Tokens — dark overrides ===== */
+  --leaf-match-bg: rgba(74, 222, 128, 0.15);
+  --leaf-match-border: rgba(74, 222, 128, 0.35);
+  --leaf-fail-bg: rgba(248, 113, 113, 0.15);
+  --leaf-fail-border: rgba(248, 113, 113, 0.35);
 
   /* ===== Highlight Token System (§1.1) — dark overrides ===== */
   --highlight-yellow-bg: rgba(133, 77, 14, 0.5);

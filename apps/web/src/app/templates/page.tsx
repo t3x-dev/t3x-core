@@ -160,7 +160,7 @@ export default function TemplatesPage() {
           </div>
         ) : error ? (
           <div className="flex items-center justify-center py-12">
-            <p className="text-sm text-red-500">{error}</p>
+            <p className="text-sm text-[var(--status-error)]">{error}</p>
           </div>
         ) : templates.length === 0 ? (
           <EmptyState

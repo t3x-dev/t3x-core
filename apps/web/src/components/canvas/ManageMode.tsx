@@ -396,7 +396,7 @@ export default function ManageMode({
                     className={cn(
                       'w-4 h-4 rounded flex items-center justify-center transition-colors',
                       keyword.constraint === 'must_have'
-                        ? 'bg-green-500 text-white'
+                        ? 'bg-[var(--status-success)] text-white'
                         : 'hover:bg-[var(--status-success-muted)] text-[var(--color-text-muted)] hover:text-[var(--status-success)]'
                     )}
                     onClick={(e) => {
@@ -411,7 +411,7 @@ export default function ManageMode({
                     className={cn(
                       'w-4 h-4 rounded flex items-center justify-center transition-colors',
                       keyword.constraint === 'mustnt_have'
-                        ? 'bg-red-500 text-white'
+                        ? 'bg-[var(--status-error)] text-white'
                         : 'hover:bg-[var(--status-error-muted)] text-[var(--color-text-muted)] hover:text-[var(--status-error)]'
                     )}
                     onClick={(e) => {

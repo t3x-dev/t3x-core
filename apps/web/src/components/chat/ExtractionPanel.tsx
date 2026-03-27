@@ -126,7 +126,7 @@ function CommitPreviewSection() {
                 key={f.id}
                 className="text-[11px] text-[var(--text-secondary)] rounded px-2 py-1 bg-[var(--hover-bg)]"
               >
-                <span className="text-green-500 mr-1">+</span>
+                <span className="text-[var(--status-success)] mr-1">+</span>
                 {summary.length > 80 ? `${summary.slice(0, 80)}...` : summary}
               </div>
             );
@@ -156,7 +156,7 @@ function CommitPreviewSection() {
       />
 
       {commitError && (
-        <div className="text-[11px] text-red-400 bg-red-400/10 rounded px-2 py-1">
+        <div className="text-[11px] text-[var(--status-error)] bg-[var(--status-error)]/10 rounded px-2 py-1">
           {commitError}
           <button type="button" onClick={clearCommitError} className="ml-2 underline">
             dismiss
@@ -271,10 +271,10 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
                     color: 'var(--text-secondary)',
                   }}
                 >
-                  {added > 0 && <span style={{ color: '#4ade80' }}>+{added}</span>}
-                  {updated > 0 && <span style={{ color: '#facc15' }}> ~{updated}</span>}
-                  {removed > 0 && <span style={{ color: '#f87171' }}> -{removed}</span>}
-                  {manualCount > 0 && <span style={{ color: '#60a5fa' }}> ✎{manualCount}</span>}
+                  {added > 0 && <span style={{ color: 'var(--diff-added-accent)' }}>+{added}</span>}
+                  {updated > 0 && <span style={{ color: 'var(--diff-modified-accent)' }}> ~{updated}</span>}
+                  {removed > 0 && <span style={{ color: 'var(--diff-removed-accent)' }}> -{removed}</span>}
+                  {manualCount > 0 && <span style={{ color: 'var(--accent-commit)' }}> ✎{manualCount}</span>}
                 </span>
               )}
               {/* Compress button */}
@@ -294,7 +294,7 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
                 <button
                   type="button"
                   onClick={undoCompression}
-                  className="rounded px-1.5 py-0.5 text-[10px] text-blue-400 hover:bg-blue-500/10"
+                  className="rounded px-1.5 py-0.5 text-[10px] text-[var(--accent-commit)] hover:bg-[var(--accent-commit)]/10"
                   title="Click to undo compression"
                 >
                   Compressed
@@ -343,7 +343,7 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
               <button
                 type="button"
                 onClick={undoCompression}
-                className="mt-1 rounded px-2 py-0.5 text-[10px] text-blue-400 hover:bg-blue-500/10"
+                className="mt-1 rounded px-2 py-0.5 text-[10px] text-[var(--accent-commit)] hover:bg-[var(--accent-commit)]/10"
               >
                 Undo
               </button>

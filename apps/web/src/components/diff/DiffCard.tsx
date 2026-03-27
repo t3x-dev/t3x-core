@@ -36,14 +36,14 @@ function renderSlotValue(value: SlotValue, strikethrough = false): React.ReactNo
 
   if (typeof value === 'string') {
     return (
-      <span className={wrapClass} style={{ color: '#9ece6a' }}>
+      <span className={`${wrapClass} text-[var(--yaml-string,#16a34a)]`}>
         &quot;{value}&quot;
       </span>
     );
   }
   if (typeof value === 'number') {
     return (
-      <span className={wrapClass} style={{ color: '#ff9e64' }}>
+      <span className={`${wrapClass} text-[var(--yaml-number,#d97706)]`}>
         {value}
       </span>
     );
@@ -53,7 +53,7 @@ function renderSlotValue(value: SlotValue, strikethrough = false): React.ReactNo
       <span className="block">
         {(value as SlotValue[]).map((item, i) => (
           <span key={i} className="block pl-4 leading-relaxed">
-            <span style={{ color: '#89ddff' }}>- </span>
+            <span className="text-[var(--yaml-punctuation,#6b7280)]">- </span>
             {renderSlotValue(item, strikethrough)}
           </span>
         ))}
@@ -63,7 +63,7 @@ function renderSlotValue(value: SlotValue, strikethrough = false): React.ReactNo
   if (value !== null && typeof value === 'object') {
     if ('ref' in value && typeof value.ref === 'string') {
       return (
-        <span className={wrapClass} style={{ color: '#bb9af7' }}>
+        <span className={`${wrapClass} text-[var(--yaml-ref,#7c3aed)]`}>
           {'{ '}ref: {value.ref}
           {' }'}
         </span>
@@ -71,14 +71,14 @@ function renderSlotValue(value: SlotValue, strikethrough = false): React.ReactNo
     }
     if ('type' in value && 'slots' in value) {
       return (
-        <span className={wrapClass} style={{ color: '#89ddff' }}>
+        <span className={`${wrapClass} text-[var(--yaml-punctuation,#6b7280)]`}>
           {JSON.stringify(value)}
         </span>
       );
     }
   }
   return (
-    <span className={wrapClass} style={{ color: '#89ddff' }}>
+    <span className={`${wrapClass} text-[var(--yaml-punctuation,#6b7280)]`}>
       {JSON.stringify(value)}
     </span>
   );
@@ -116,7 +116,7 @@ function renderWordDiff(
           );
         }
         return (
-          <span key={i} style={{ color: '#9ece6a' }}>
+          <span key={i} className="text-[var(--yaml-string,#16a34a)]">
             {chunk.text}
           </span>
         );
@@ -180,20 +180,20 @@ function SlotRow({ slotKey, value, diff, cardType }: SlotRowProps) {
     >
       <div className="flex flex-wrap items-baseline gap-x-1 font-mono text-[12px] leading-relaxed">
         {/* Key */}
-        <span style={{ color: '#7aa2f7' }}>{slotKey}</span>
-        <span style={{ color: '#89ddff' }}>:</span>
+        <span className="text-[var(--yaml-key,#2563eb)]">{slotKey}</span>
+        <span className="text-[var(--yaml-punctuation,#6b7280)]">:</span>
 
         {/* Value rendering */}
         {slotType === 'changed' && diff?.wordDiff ? (
           // Word-level diff for text changes
-          <span style={{ color: '#9ece6a' }}>{renderWordDiff(diff.wordDiff)}</span>
+          <span className="text-[var(--yaml-string,#16a34a)]">{renderWordDiff(diff.wordDiff)}</span>
         ) : slotType === 'changed' ? (
           // Fallback: show old → new
           <>
             <span className="line-through opacity-60">
               {diff?.oldValue !== undefined ? renderSlotValue(diff.oldValue) : null}
             </span>
-            <span style={{ color: '#89ddff' }} className="mx-1">
+            <span className="text-[var(--yaml-punctuation,#6b7280)] mx-1">
               →
             </span>
             {renderSlotValue(value)}

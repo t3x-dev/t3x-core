@@ -10,11 +10,20 @@
  * onlyIn slots are marked with +/- indicators.
  */
 
-import type { Frame, SlotConflict, SlotValue } from '@t3x-dev/core';
+import type { SlotConflict, SlotValue } from '@t3x-dev/core';
+
+/** Local Frame type — mirrors internal FlatNode shape (not exported from core). */
+interface Frame {
+  id: string;
+  type: string;
+  slots: Record<string, SlotValue>;
+  source?: string;
+  confidence?: number;
+}
 import { useState } from 'react';
-import { SlotValueSpan } from '@/components/diff/YAMLFrameRenderer';
+import { SlotValueSpan } from '@/components/diff/YAMLNodeRenderer';
 import { cn } from '@/lib/utils';
-import type { FrameResolution } from './FrameConflictCard';
+import type { FrameResolution } from './types';
 
 // ── Props ────────────────────────────────────────────────────────────────────
 
@@ -47,7 +56,7 @@ function DiffSlotRow({
     <div
       className={cn(
         'flex items-baseline gap-0 py-[3px] px-4 min-h-[28px] font-mono text-[12px] leading-[20px]',
-        'border-b border-[rgba(255,255,255,0.02)] hover:bg-[var(--hover-bg)]'
+        'border-b border-[var(--stroke-divider)]/30 hover:bg-[var(--hover-bg)]'
       )}
     >
       {/* +/- marker for only-in */}
@@ -265,7 +274,7 @@ function CardHeader({
           className={cn(
             'text-[10px] font-semibold px-2.5 py-[2px] rounded border transition-colors cursor-pointer',
             isKept
-              ? 'border-[rgba(63,185,80,0.3)] bg-[rgba(63,185,80,0.06)] text-[var(--added-accent,#3fb950)]'
+              ? 'border-[var(--diff-added-accent)]/30 bg-[var(--diff-added-accent)]/6 text-[var(--added-accent,#3fb950)]'
               : 'border-[var(--stroke-divider)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]'
           )}
         >

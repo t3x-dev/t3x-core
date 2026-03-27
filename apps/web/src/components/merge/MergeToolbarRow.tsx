@@ -15,7 +15,7 @@
  */
 
 import { cn } from '@/lib/utils';
-import type { FrameResolution } from './FrameConflictCard';
+import type { FrameResolution } from './types';
 
 // ============================================================================
 // Props
@@ -68,7 +68,7 @@ export function MergeToolbarRow({ resolution, onResolve, hasSlotConflicts }: Mer
       className={cn(
         'relative flex items-center justify-center gap-1.5 px-4 py-[5px]',
         'border-t border-b border-[var(--stroke-divider)]',
-        isResolved ? 'bg-[rgba(63,185,80,0.04)]' : 'bg-[var(--surface-elevated)]'
+        isResolved ? 'bg-[var(--diff-added-accent)]/4' : 'bg-[var(--surface-elevated)]'
       )}
     >
       {/* Left-edge amber accent bar — disappears when resolved */}
@@ -88,7 +88,7 @@ export function MergeToolbarRow({ resolution, onResolve, hasSlotConflicts }: Mer
           'flex items-center gap-[5px] rounded-[5px] border px-3.5 py-1',
           'text-[11px] font-semibold transition-all duration-150 cursor-pointer',
           chosenSource
-            ? 'bg-[rgba(88,166,255,0.12)] border-[rgba(88,166,255,0.4)] text-[var(--merge-source-accent)]'
+            ? 'bg-[var(--merge-source-accent)]/12 border-[var(--merge-source-accent)]/40 text-[var(--merge-source-accent)]'
             : 'bg-transparent border-[var(--stroke-divider)] text-[var(--text-tertiary)] hover:bg-[var(--hover-bg-strong)] hover:text-[var(--text-secondary)] hover:border-[var(--stroke-strong)]'
         )}
       >
@@ -104,7 +104,7 @@ export function MergeToolbarRow({ resolution, onResolve, hasSlotConflicts }: Mer
           'flex items-center gap-[5px] rounded-[5px] border px-3.5 py-1',
           'text-[11px] font-semibold transition-all duration-150 cursor-pointer',
           chosenBoth
-            ? 'bg-[rgba(88,166,255,0.08)] border-[rgba(88,166,255,0.3)] text-[var(--accent-commit)]'
+            ? 'bg-[var(--merge-source-accent)]/8 border-[var(--merge-source-accent)]/30 text-[var(--accent-commit)]'
             : 'bg-transparent border-[var(--stroke-divider)] text-[var(--text-tertiary)] hover:bg-[var(--hover-bg-strong)] hover:text-[var(--text-secondary)] hover:border-[var(--stroke-strong)]'
         )}
       >
@@ -119,7 +119,7 @@ export function MergeToolbarRow({ resolution, onResolve, hasSlotConflicts }: Mer
           'flex items-center gap-[5px] rounded-[5px] border px-3.5 py-1',
           'text-[11px] font-semibold transition-all duration-150 cursor-pointer',
           chosenTarget
-            ? 'bg-[rgba(125,211,175,0.12)] border-[rgba(125,211,175,0.4)] text-[var(--merge-target-accent)]'
+            ? 'bg-[var(--merge-target-accent)]/12 border-[var(--merge-target-accent)]/40 text-[var(--merge-target-accent)]'
             : 'bg-transparent border-[var(--stroke-divider)] text-[var(--text-tertiary)] hover:bg-[var(--hover-bg-strong)] hover:text-[var(--text-secondary)] hover:border-[var(--stroke-strong)]'
         )}
       >

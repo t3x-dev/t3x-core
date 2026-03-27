@@ -191,7 +191,7 @@ export function SearchPage() {
 
       {/* Error state */}
       {error && !loading && (
-        <div className="rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-3 text-sm text-red-400">
+        <div className="rounded-lg border border-[var(--status-error)]/20 bg-[var(--status-error)]/5 px-4 py-3 text-sm text-[var(--status-error)]">
           {error.message}
         </div>
       )}

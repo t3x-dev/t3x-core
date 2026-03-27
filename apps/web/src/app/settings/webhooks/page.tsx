@@ -172,7 +172,7 @@ export default function WebhooksPage() {
           </div>
         ) : error ? (
           <div className="flex flex-col items-center justify-center py-12 gap-3">
-            <p className="text-sm text-red-500">{error}</p>
+            <p className="text-sm text-[var(--status-error)]">{error}</p>
             <Button variant="outline" size="sm" onClick={fetchWebhooks}>
               Retry
             </Button>
@@ -341,7 +341,7 @@ function WebhookCard({ webhook, onEdit, onDelete, onTest, testing }: WebhookCard
             </DropdownMenuItem>
             <DropdownMenuItem
               onClick={() => onDelete(webhook)}
-              className="text-red-500 focus:text-red-500"
+              className="text-[var(--status-error)] focus:text-[var(--status-error)]"
             >
               <Trash2 className="h-4 w-4 mr-2" />
               Delete
