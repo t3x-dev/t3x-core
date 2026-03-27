@@ -79,7 +79,7 @@ export type CommitDisplay = Pick<
     kept_from_source: number;
     kept_from_target: number;
     discarded: number;
-    total_sentences: number;
+    total_nodes: number;
     release_note?: {
       title: string;
       summary: string;

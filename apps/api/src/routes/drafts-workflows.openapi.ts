@@ -22,13 +22,10 @@ import {
   createLeaf,
   findDraftById,
   forkDraft,
-  searchSimilarSentences,
   updateDraft,
   updateDraftPreview,
-  upsertSentenceVectorsBatch,
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
-import { getEmbedder } from '../lib/embedder';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { pinoLogger } from '../middleware/logger';
 import { ErrorResponseSchema, IdParamSchema, SuccessResponseSchema } from '../schemas/common';
@@ -569,34 +566,6 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
     // 7. Update draft status
     await commitDraft(db, id, commit.hash, leaf?.id);
 
-    // 7b. Populate sentence vectors (best-effort — errors are swallowed)
-    const embedder = getEmbedder();
-    if (embedder) {
-      try {
-        const texts = sentences.map((s) => s.text);
-        const embeddings = await embedder.encode(texts);
-        if (embeddings.length !== texts.length) {
-          throw new Error(
-            `Embedding count mismatch: expected ${texts.length}, got ${embeddings.length}`
-          );
-        }
-        await upsertSentenceVectorsBatch(
-          db,
-          sentences.map((s, i) => ({
-            id: s.id,
-            projectId: draft.project_id,
-            commitHash: commit.hash,
-            text: s.text,
-            embedding: embeddings[i],
-            modelId: embedder.id,
-          }))
-        );
-      } catch (embErr) {
-        // Non-fatal: log and continue
-        pinoLogger.warn({ err: embErr }, 'failed to populate sentence vectors');
-      }
-    }
-
     // 8. Build response
     const commitResponse = {
       hash: commit.hash,
@@ -693,60 +662,12 @@ draftsWorkflowRoutes.openapi(suggestDraftRoute, async (c) => {
       return errorResponse(c, 'NOT_FOUND', `Draft not found: ${id}`);
     }
 
-    // 2. Check embedding service
-    const embedder = getEmbedder();
-    if (!embedder) {
-      return c.json(
-        {
-          success: false as const,
-          error: {
-            code: 'EMBEDDING_NOT_CONFIGURED',
-            message: 'Embedding service not configured (GOOGLE_AI_STUDIO_KEY not set)',
-          },
-        },
-        501
-      );
-    }
-
-    // 3. Need a goal to suggest
-    if (!draft.goal) {
-      return c.json(
-        {
-          success: true as const,
-          data: { suggestions: [] },
-        },
-        200
-      );
-    }
-
-    // 4. Embed goal text
-    const [goalEmbedding] = await embedder.encode([draft.goal]);
-
-    // 5. Search for similar sentences
-    const limit = body?.limit ?? 10;
-    const draftTexts = new Set((draft.nodes as any[]).map((s: any) => s.text));
-    const rawResults = await searchSimilarSentences(
-      db,
-      draft.project_id,
-      goalEmbedding,
-      limit + draftTexts.size // fetch extra to account for filtering
-    );
-
-    // 6. Mark already_in_draft and filter
-    const suggestions = rawResults
-      .map((r) => ({
-        sentence_id: r.id,
-        text: r.text,
-        commit_hash: r.commit_hash,
-        similarity: Math.round(r.similarity * 1000) / 1000,
-        already_in_draft: draftTexts.has(r.text),
-      }))
-      .slice(0, limit);
-
+    // Suggest feature requires tree-based search (sentence_vectors removed)
+    // Return empty suggestions for now
     return c.json(
       {
         success: true as const,
-        data: { suggestions },
+        data: { suggestions: [] },
       },
       200
     );

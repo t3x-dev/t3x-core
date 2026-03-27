@@ -319,13 +319,6 @@ export {
   type UpdateRecipeInput,
   updateRecipe,
 } from './recipes';
-// Relations (Ring 4 — inter-sentence relationships)
-export {
-  deleteRelationsByCommit,
-  findRelationsByCommit,
-  findRelationsByProject,
-  upsertRelations,
-} from './relations';
 // Runs (Engine → Runner → n8n flow)
 export {
   type ConfigurationStats,
@@ -367,23 +360,6 @@ export {
   type InsertSentenceModificationInput,
   insertSentenceModification,
 } from './sentence-modifications';
-// Sentence Vectors (pgvector similarity search + keyword search + hybrid RRF)
-export {
-  deleteSentenceVectorsByCommit,
-  deleteSentenceVectorsByProject,
-  findSentenceVectorsByProject,
-  findSentenceVectorsWithEmbeddingsByProject,
-  type HybridSearchResult,
-  type KeywordSearchResult,
-  rrfFusion,
-  type SearchResult as SentenceVectorSearchResult,
-  searchByKeyword,
-  searchHybrid,
-  searchSimilarSentences,
-  type UpsertSentenceVectorInput,
-  upsertSentenceVector,
-  upsertSentenceVectorsBatch,
-} from './sentenceVectors';
 // Share Tokens
 export {
   type CreateShareTokenInput,

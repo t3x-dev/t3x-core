@@ -21,13 +21,13 @@ export interface KnowledgeNode {
 
 export interface NodeMember {
   node_id: string;
-  sentence_id: string;
+  node_key: string;
   commit_hash: string;
 }
 
 export interface EdgeEvidence {
-  source_sentence_id: string;
-  target_sentence_id: string;
+  source_node_key: string;
+  target_node_key: string;
   relation_type: string;
   confidence: number;
 }
@@ -50,7 +50,7 @@ export interface NeighborNode {
 }
 
 export interface BuildResult {
-  total_sentences: number;
+  total_nodes: number;
   nodes_created: number;
   edges_created: number;
   build_time_ms: number;

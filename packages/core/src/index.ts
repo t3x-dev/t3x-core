@@ -453,12 +453,12 @@ export {
   // Pin (source selection)
   type Pin,
   type PinType,
-  // Ring 4: Sentence Relations (V4 app-layer)
-  SENTENCE_RELATION_TYPES,
+  // Relation types (tree-node relations)
+  RELATION_TYPE_VALUES,
   type RelationExtractionResult,
   type RelationType,
   type RequireConstraint,
-  type SentenceRelation,
+  type NodeRelation,
   // Share Token
   type ShareToken,
   type User,

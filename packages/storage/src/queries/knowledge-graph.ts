@@ -46,8 +46,8 @@ export interface KnowledgeEdgeOutput {
   type: string;
   weight: number;
   evidence: Array<{
-    source_sentence_id: string;
-    target_sentence_id: string;
+    source_node_key: string;
+    target_node_key: string;
     relation_type: string;
     confidence: number;
   }> | null;
@@ -289,8 +289,8 @@ export async function insertKnowledgeEdge(
     type: string;
     weight: number;
     evidence?: Array<{
-      source_sentence_id: string;
-      target_sentence_id: string;
+      source_node_key: string;
+      target_node_key: string;
       relation_type: string;
       confidence: number;
     }>;
@@ -326,8 +326,8 @@ export async function insertKnowledgeEdges(
     type: string;
     weight: number;
     evidence?: Array<{
-      source_sentence_id: string;
-      target_sentence_id: string;
+      source_node_key: string;
+      target_node_key: string;
       relation_type: string;
       confidence: number;
     }>;

@@ -514,23 +514,8 @@ CREATE INDEX IF NOT EXISTS idx_frel_to ON frame_relations(to_frame_id);
 
 `;
 
-/** SQL for pgvector sentence_vectors table (created separately, may fail if vector unavailable) */
-export const CREATE_VECTOR_TABLES_SQL = `
-CREATE TABLE IF NOT EXISTS sentence_vectors (
-  id TEXT PRIMARY KEY,
-  project_id TEXT NOT NULL,
-  commit_hash TEXT NOT NULL,
-  text TEXT NOT NULL,
-  embedding vector(768) NOT NULL,
-  model_id TEXT NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  tsv tsvector
-);
-CREATE INDEX IF NOT EXISTS idx_sv_project ON sentence_vectors(project_id);
-CREATE INDEX IF NOT EXISTS idx_sv_commit ON sentence_vectors(commit_hash);
-CREATE INDEX IF NOT EXISTS idx_sv_tsv ON sentence_vectors USING GIN (tsv);
-UPDATE sentence_vectors SET tsv = to_tsvector('simple', text) WHERE tsv IS NULL;
-`;
+/** SQL for pgvector tables (created separately, may fail if vector unavailable) */
+export const CREATE_VECTOR_TABLES_SQL = '';
 
 const TEST_PORT = parseInt(process.env.T3X_TEST_PG_PORT || '5446', 10);
 const TEST_HOST = 'localhost';

@@ -710,7 +710,7 @@ const UnitNode = memo(function UnitNode(props: Props) {
                 (() => {
                   const ms = data.commit.merge_summary;
                   const parts = [
-                    `${ms.total_sentences} kept`,
+                    `${ms.total_nodes} kept`,
                     `${ms.resolved_conflicts} ${t('resolved').toLowerCase()}`,
                   ];
                   if (ms.discarded > 0) parts.push(`${ms.discarded} discarded`);

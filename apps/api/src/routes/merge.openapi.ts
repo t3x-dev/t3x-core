@@ -309,7 +309,7 @@ mergeRoutes.openapi(executeMergeRoute, async (c) => {
       kept_from_source: keptFromSource,
       kept_from_target: keptFromTarget,
       discarded: discardedSource + discardedTarget,
-      total_sentences: flattenTrees(mergedContent.trees).length,
+      total_nodes: flattenTrees(mergedContent.trees).length,
     };
 
     // Save to storage as frame-based commit
@@ -782,7 +782,7 @@ mergeRoutes.openapi(commitDraftRoute, async (c) => {
       kept_from_source: keptFromSource,
       kept_from_target: keptFromTarget,
       discarded: discardedSource + discardedTarget,
-      total_sentences: flattenTrees(mergedContent.trees).length,
+      total_nodes: flattenTrees(mergedContent.trees).length,
     };
 
     // Save commit + update branch head + mark draft committed atomically

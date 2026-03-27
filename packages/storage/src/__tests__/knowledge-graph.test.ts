@@ -248,8 +248,8 @@ describe('Knowledge Graph Queries', () => {
     it('inserts an edge with evidence', async () => {
       const evidence = [
         {
-          source_sentence_id: 's_ea1',
-          target_sentence_id: 's_eb1',
+          source_node_key: 's_ea1',
+          target_node_key: 's_eb1',
           relation_type: 'supports',
           confidence: 0.9,
         },
