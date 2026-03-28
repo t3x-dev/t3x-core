@@ -228,27 +228,34 @@ export function ChatMessage({
 
   const hasCharHighlights = highlightRanges.length > 0;
   // Whole-message tint: when hovering a YAML node, tint the source message
-  // Use this as fallback when no character-level highlights were found
-  const isWholeMessageHighlight =
-    hoveredNode &&
-    !hasCharHighlights &&
-    (() => {
-      // Check node.source (turn tag like "T2")
-      const src = hoveredNode.source;
-      if (src && turnIndex != null) {
-        if (src === `T${turnIndex + 1}`) return true;
-        // Hash-based match
-        if (turnHash && src.includes(':') && turnHash.includes(src.split(':')[1])) return true;
-      }
-      // If no source on node, check if any of its quotes appear in this message
-      if (hoveredNode.slot_quotes && content) {
-        const lowerContent = content.toLowerCase();
-        for (const quote of Object.values(hoveredNode.slot_quotes)) {
-          if (lowerContent.includes(quote.toLowerCase())) return true;
+  const isWholeMessageHighlight = useMemo(() => {
+    if (!hoveredNodeId) return false;
+
+    // Find the source turn tag by walking the tree
+    const findSource = (path: string): string | undefined => {
+      const segments = path.replace(/\//g, '.').split('.');
+      for (const tree of draft.trees) {
+        if (tree.key === segments[0]) {
+          let node: import('@t3x-dev/core').TreeNode | undefined = tree;
+          for (let i = 1; i < segments.length && node; i++) {
+            node = node.children.find((c) => c.key === segments[i]);
+          }
+          // Walk up: if this node has no source, use parent's
+          if (node?.source) return node.source;
+          return tree.source;
         }
       }
-      return false;
-    })();
+      return undefined;
+    };
+
+    const src = findSource(hoveredNodeId);
+    if (!src || turnIndex == null) return false;
+    // source is "T1", "T2", etc. turnIndex is 1-based from ChatWorkspace
+    if (src === `T${turnIndex}`) return true;
+    // Also try turnIndex as the actual turn position
+    // The extraction tags turns as T1 (first user), T2 (first assistant), etc.
+    return false;
+  }, [hoveredNodeId, turnIndex, draft.trees]);
 
   return (
     <div

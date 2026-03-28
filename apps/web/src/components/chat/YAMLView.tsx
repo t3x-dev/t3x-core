@@ -476,7 +476,7 @@ export function YAMLView() {
                   background: bg,
                   minHeight: 20,
                   transition: 'background 0.15s',
-                  cursor: isNodeLine ? 'pointer' : undefined,
+                  cursor: 'pointer',
                   borderLeft:
                     isNodeLine && gateIssues[line.treeId]?.length
                       ? `3px solid ${gateIssues[line.treeId].some((i) => i.severity === 'error') ? '#f87171' : '#facc15'}`
