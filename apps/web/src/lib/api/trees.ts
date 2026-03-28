@@ -88,7 +88,7 @@ export async function extractNodes(
   opts?: { topicId?: string; forceExtract?: boolean }
 ): Promise<TreeExtractResult> {
   const res = await fetchWithTimeout(
-    `${API_V1}/extract/frames`,
+    `${API_V1}/extract/trees`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -117,7 +117,7 @@ export async function answerTreeQuestion(
   driftContext?: { relation?: string; new_topic?: string }
 ): Promise<TreeAnswerResult> {
   const res = await fetchWithTimeout(
-    `${API_V1}/extract/frames/answer`,
+    `${API_V1}/extract/trees/answer`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
