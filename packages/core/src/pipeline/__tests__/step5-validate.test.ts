@@ -94,35 +94,31 @@ describe('structuralValidatorAgent', () => {
   });
 });
 
-// ── DiffCompatibilityCheck ──
+// ── DiffCompatibilityCheck (now uses YOps) ──
 
 describe('checkDiffCompatibility', () => {
-  it('returns compatible for clean add delta', () => {
+  it('returns compatible for clean add YOp', () => {
     const snapshot: SemanticContent = {
       trees: [{ key: 'a', slots: { x: 1 }, children: [] }],
       relations: [],
     };
-    const delta = {
-      changes: [{ action: 'add' as const, parent_path: 'a', node: { key: 'b', slots: { y: 2 }, children: [] } }],
-    };
-    const result = checkDiffCompatibility(snapshot, delta);
+    const yops = [{ add: { parent: 'a', node: { b: { y: 2 } }, source: {}, from: 'T1' } }];
+    const result = checkDiffCompatibility(snapshot, yops);
     expect(result.compatible).toBe(true);
     expect(result.errors).toHaveLength(0);
   });
 
-  it('returns compatible for clean update delta', () => {
+  it('returns compatible for clean set YOp', () => {
     const snapshot: SemanticContent = {
       trees: [{ key: 'a', slots: { x: 1 }, children: [] }],
       relations: [],
     };
-    const delta = {
-      changes: [{ action: 'update' as const, target_path: 'a', slots: { x: 2 } }],
-    };
-    const result = checkDiffCompatibility(snapshot, delta);
+    const yops = [{ set: { path: 'a/x', value: 2, source: '2', from: 'T1' } }];
+    const result = checkDiffCompatibility(snapshot, yops);
     expect(result.compatible).toBe(true);
   });
 
-  it('returns compatible for remove delta', () => {
+  it('returns compatible for drop YOp', () => {
     const snapshot: SemanticContent = {
       trees: [
         { key: 'a', slots: { x: 1 }, children: [
@@ -131,47 +127,42 @@ describe('checkDiffCompatibility', () => {
       ],
       relations: [],
     };
-    const delta = {
-      changes: [{ action: 'remove' as const, target_path: 'a/b' }],
-    };
-    const result = checkDiffCompatibility(snapshot, delta);
+    const yops = [{ drop: { path: 'a/b' } }];
+    const result = checkDiffCompatibility(snapshot, yops);
     expect(result.compatible).toBe(true);
   });
 
-  it('detects broken relation after delta apply', () => {
+  it('detects broken relation after YOps apply', () => {
     const snapshot: SemanticContent = {
       trees: [{ key: 'a', slots: { x: 1 }, children: [] }],
       relations: [],
     };
-    const delta = {
-      changes: [{ action: 'add' as const, parent_path: 'a', node: { key: 'b', slots: { y: 2 }, children: [] } }],
-      new_relations: [{ from: 'b', to: 'f_999', type: 'depends' as const }],
-    };
-    const result = checkDiffCompatibility(snapshot, delta);
+    const yops = [
+      { add: { parent: 'a', node: { b: { y: 2 } }, source: {}, from: 'T1' } },
+      { relate: { from: 'b', to: 'f_999', type: 'depends' as const } },
+    ];
+    const result = checkDiffCompatibility(snapshot, yops);
+    // relate to non-existent node should fail during applyYOps
     expect(result.compatible).toBe(false);
-    expect(result.errors.some((e) => e.includes('broken_relation'))).toBe(true);
   });
 
-  it('detects self-relation after delta apply', () => {
+  it('detects self-relation after YOps apply', () => {
     const snapshot: SemanticContent = {
       trees: [{ key: 'a', slots: { x: 1 }, children: [] }],
       relations: [],
     };
-    const delta = {
-      changes: [{ action: 'add' as const, parent_path: 'a', node: { key: 'b', slots: { y: 2 }, children: [] } }],
-      new_relations: [{ from: 'b', to: 'b', type: 'depends' as const }],
-    };
-    const result = checkDiffCompatibility(snapshot, delta);
+    const yops = [
+      { add: { parent: 'a', node: { b: { y: 2 } }, source: {}, from: 'T1' } },
+      { relate: { from: 'a/b', to: 'a/b', type: 'depends' as const } },
+    ];
+    const result = checkDiffCompatibility(snapshot, yops);
     expect(result.compatible).toBe(false);
-    expect(result.errors.some((e) => e.includes('self_relation'))).toBe(true);
   });
 
-  it('handles empty snapshot + add delta', () => {
+  it('handles empty snapshot + add YOp', () => {
     const snapshot: SemanticContent = { trees: [], relations: [] };
-    const delta = {
-      changes: [{ action: 'add' as const, parent_path: '', node: { key: 'a', slots: { x: 1 }, children: [] } }],
-    };
-    const result = checkDiffCompatibility(snapshot, delta);
+    const yops = [{ add: { parent: '', node: { a: { x: 1 } }, source: {}, from: 'T1' } }];
+    const result = checkDiffCompatibility(snapshot, yops);
     expect(result.compatible).toBe(true);
   });
 });

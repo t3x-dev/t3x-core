@@ -1,11 +1,11 @@
 /**
  * Compressor Orchestrator
  *
- * buildPrompt → LLM generate → parse JSON → validate (no 'add' actions) → return delta + metadata
+ * buildPrompt → LLM generate → parse JSON → validate (no 'add' YOps) → return yops + metadata
  */
 
 import type { LLMProvider } from '../llm/types';
-import type { Delta } from '../semantic/types';
+import type { YOp } from '../yops/types';
 import type { CompressInput } from './compressPrompt';
 import { buildCompressPrompt } from './compressPrompt';
 
@@ -30,7 +30,7 @@ export interface CompressMetadata {
 export type CompressResult =
   | {
       ok: true;
-      delta: Delta;
+      yops: YOp[];
       metadata: CompressMetadata;
       usage: { inputTokens: number; outputTokens: number };
     }
@@ -78,24 +78,31 @@ export class Compressor {
       return { ok: false, error: 'Missing or invalid changes array', usage };
     }
 
-    // Reject any 'add' actions — compress should only remove/update
-    if (changes.some((c: Record<string, unknown>) => c.action === 'add')) {
-      return { ok: false, error: 'Compress delta must not contain add actions', usage };
+    // Convert legacy delta changes to YOps
+    // Compress only allows: update → set, remove → drop (reject 'add')
+    const yops: YOp[] = [];
+    for (const change of changes as Array<Record<string, unknown>>) {
+      if (change.action === 'add') {
+        return { ok: false, error: 'Compress output must not contain add actions', usage };
+      }
+      if (change.action === 'remove') {
+        yops.push({ drop: { path: change.target as string, reason: (change.reason as string) ?? 'compressed' } });
+      } else if (change.action === 'update') {
+        const target = change.target as string;
+        const slots = change.slots as Record<string, unknown> | undefined;
+        if (slots) {
+          for (const [key, value] of Object.entries(slots)) {
+            yops.push({ set: { path: `${target}/${key}`, value: value as string | number | boolean, source: 'compress', from: 'system' } });
+          }
+        }
+      }
     }
-
-    // Build delta
-    const delta: Delta = {
-      changes: changes as Delta['changes'],
-      remove_relations: Array.isArray(parsed.remove_relations)
-        ? (parsed.remove_relations as Delta['remove_relations'])
-        : undefined,
-    };
 
     // Build metadata from stats
     const stats = (parsed.stats ?? {}) as Record<string, number>;
-    const removedNodeIds = changes
-      .filter((c: Record<string, unknown>) => c.action === 'remove')
-      .map((c: Record<string, unknown>) => c.target as string);
+    const removedNodeIds = (changes as Array<Record<string, unknown>>)
+      .filter((c) => c.action === 'remove')
+      .map((c) => c.target as string);
 
     const metadata: CompressMetadata = {
       compress_summary: (parsed.summary as string) ?? 'Compressed nodes',
@@ -110,6 +117,6 @@ export class Compressor {
       removed_frame_ids: removedNodeIds,
     };
 
-    return { ok: true, delta, metadata, usage };
+    return { ok: true, yops, metadata, usage };
   }
 }

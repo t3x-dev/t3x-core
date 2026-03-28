@@ -98,7 +98,6 @@ export {
   type RelationItem,
   RelationParseError,
   type Segment,
-  type SlotQuotesMap,
 } from './extractors';
 
 // Extraction Style Config
@@ -244,7 +243,7 @@ export {
   detectAmbiguity,
   detectDrift,
   type ExtractionCompletedEvent,
-  generateCollapseDelta,
+  generateCollapseYOps,
   type PipelineDecision,
   PipelineEventEmitter,
   type PipelineEventMap,

@@ -5,7 +5,8 @@
  * Zero external dependencies. Listeners are fire-and-forget (non-blocking).
  */
 
-import type { Delta, SemanticContent } from '../semantic/types';
+import type { SemanticContent } from '../semantic/types';
+import type { YOp } from '../yops/types';
 import type { AdvisoryQuestion } from './types';
 
 // ── Event Payload Types ──
@@ -14,7 +15,7 @@ export interface ExtractionCompletedEvent {
   conversationId: string;
   projectId: string;
   deltaLogId: string;
-  delta: Delta;
+  yops: YOp[];
   snapshot: SemanticContent;
   topicId?: string;
 }

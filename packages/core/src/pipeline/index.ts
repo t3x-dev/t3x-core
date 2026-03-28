@@ -10,7 +10,7 @@ export {
   applyAnswer,
   applyStructuralAnswer,
   applyVaguenessAnswer,
-  generateCollapseDelta,
+  generateCollapseYOps,
 } from './answerApplier';
 export { checkDiffCompatibility, type DiffCheckResult } from './diffCompatibilityCheck';
 export { detectDrift, parseDriftResponse } from './driftDetector';
