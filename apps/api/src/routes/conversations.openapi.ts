@@ -14,7 +14,7 @@
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
-  applyDelta,
+  applyTreeChanges,
   buildConversationContext,
   type ConversationData,
   flattenTrees,
@@ -750,7 +750,7 @@ conversationRoutes.openapi(getMemoryRoute, async (c) => {
     if (yopsRecords.length > 0) {
       const emptySnap: SemanticContent = { trees: [], relations: [] };
       const snapshot = toYOpsLogEntries(yopsRecords).reduce(
-        (snap, entry) => applyDelta(snap, entry.yops as any),
+        (snap, entry) => applyTreeChanges(snap, entry.yops as any),
         emptySnap
       );
       if (snapshot.trees.length > 0) {

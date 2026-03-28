@@ -33,7 +33,7 @@ const wordDiffFn: WordDiffFn = (a, b) => wordDiff(a, b);
 // ── Component ──
 
 export function DiffOverlay({ source, target, onStats, className }: DiffOverlayProps) {
-  const { combinedContent, deltaState, updatedSlots, stats } = useMemo(() => {
+  const { combinedContent, changeState, updatedSlots, stats } = useMemo(() => {
     const diff = diffCommits(source, target, wordDiffFn);
 
     const stats: DiffStats = {
@@ -64,16 +64,16 @@ export function DiffOverlay({ source, target, onStats, className }: DiffOverlayP
       relations: allRelations,
     };
 
-    // Build deltaState map: path → state
-    const deltaState: Record<string, 'added' | 'updated' | 'removed'> = {};
+    // Build changeState map: path → state
+    const changeState: Record<string, 'added' | 'updated' | 'removed'> = {};
     for (const m of diff.modified) {
-      deltaState[m.path] = 'updated';
+      changeState[m.path] = 'updated';
     }
     for (const path of diff.onlyInTarget) {
-      deltaState[path] = 'added';
+      changeState[path] = 'added';
     }
     for (const path of diff.onlyInSource) {
-      deltaState[path] = 'removed';
+      changeState[path] = 'removed';
     }
 
     // Build updatedSlots map: path → list of changed slot keys
@@ -84,7 +84,7 @@ export function DiffOverlay({ source, target, onStats, className }: DiffOverlayP
       }
     }
 
-    return { combinedContent, deltaState, updatedSlots, stats };
+    return { combinedContent, changeState, updatedSlots, stats };
   }, [source, target]);
 
   // Report stats to parent via effect (not inside useMemo to avoid render-time setState)
@@ -95,7 +95,7 @@ export function DiffOverlay({ source, target, onStats, className }: DiffOverlayP
   return (
     <TreeGraphView
       content={combinedContent}
-      deltaState={deltaState}
+      changeState={changeState}
       updatedSlots={updatedSlots}
       className={className}
     />

@@ -49,7 +49,7 @@ export const SemanticContentSchema = z.object({
   relations: z.array(RelationSchema).max(5000).default([]),
 });
 
-// ── Delta ──
+// ── Tree Change Batch ──
 
 const TreeChangeSchema = z.discriminatedUnion('action', [
   z.object({
@@ -71,14 +71,11 @@ const TreeChangeSchema = z.discriminatedUnion('action', [
   }),
 ]);
 
-export const DeltaSchema = z.object({
+export const TreeChangeBatchSchema = z.object({
   changes: z.array(TreeChangeSchema).min(1),
   new_relations: z.array(RelationSchema).optional(),
   remove_relations: z.array(RelationSchema).optional(),
 });
-
-/** @internal Alias — tree-native delta IS the standard delta now. */
-export const TreeNativeDeltaSchema = DeltaSchema;
 
 // ── Internal: FlatNode Schema (for diff/merge validation only) ──
 

@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { applyDelta } from '../../semantic/delta';
+import { applyTreeChanges } from '../../semantic/delta';
 import type { SemanticContent, TreeNode } from '../../semantic/types';
 
 function makeTreeContent(tree: TreeNode): SemanticContent {
   return { trees: [tree], relations: [] };
 }
 
-describe('applyDelta (tree operations)', () => {
+describe('applyTreeChanges (tree operations)', () => {
   const baseTree: TreeNode = {
     key: 'hangzhou_trip',
     slots: { destination: 'Hangzhou', dates: 'May 1-3' },
@@ -14,7 +14,7 @@ describe('applyDelta (tree operations)', () => {
   };
 
   it('adds a new child node', () => {
-    const delta = {
+    const batch = {
       changes: [
         {
           action: 'add' as const,
@@ -23,14 +23,14 @@ describe('applyDelta (tree operations)', () => {
         },
       ],
     };
-    const result = applyDelta(makeTreeContent(baseTree), delta);
+    const result = applyTreeChanges(makeTreeContent(baseTree), batch);
     expect(result.trees[0].children).toHaveLength(2);
     expect(result.trees[0].children[1].key).toBe('transportation');
     expect(result.trees[0].children[1].slots).toEqual({ mode: 'rail', duration: '1.5h' });
   });
 
   it('updates a slot value', () => {
-    const delta = {
+    const batch = {
       changes: [
         {
           action: 'update' as const,
@@ -39,13 +39,13 @@ describe('applyDelta (tree operations)', () => {
         },
       ],
     };
-    const result = applyDelta(makeTreeContent(baseTree), delta);
+    const result = applyTreeChanges(makeTreeContent(baseTree), batch);
     expect(result.trees[0].children[0].slots.budget).toBe(800);
     expect(result.trees[0].children[0].slots.cuisine).toBe('local');
   });
 
   it('removes a slot with null', () => {
-    const delta = {
+    const batch = {
       changes: [
         {
           action: 'update' as const,
@@ -54,21 +54,21 @@ describe('applyDelta (tree operations)', () => {
         },
       ],
     };
-    const result = applyDelta(makeTreeContent(baseTree), delta);
+    const result = applyTreeChanges(makeTreeContent(baseTree), batch);
     expect(result.trees[0].children[0].slots.budget).toBeUndefined();
     expect(result.trees[0].children[0].slots.cuisine).toBe('local');
   });
 
   it('removes a node and its children', () => {
-    const delta = {
+    const batch = {
       changes: [{ action: 'remove' as const, target_path: 'hangzhou_trip/dining' }],
     };
-    const result = applyDelta(makeTreeContent(baseTree), delta);
+    const result = applyTreeChanges(makeTreeContent(baseTree), batch);
     expect(result.trees[0].children).toHaveLength(0);
   });
 
   it('updates root slot', () => {
-    const delta = {
+    const batch = {
       changes: [
         {
           action: 'update' as const,
@@ -77,7 +77,7 @@ describe('applyDelta (tree operations)', () => {
         },
       ],
     };
-    const result = applyDelta(makeTreeContent(baseTree), delta);
+    const result = applyTreeChanges(makeTreeContent(baseTree), batch);
     expect(result.trees[0].slots.dates).toBe('May 2-4');
     expect(result.trees[0].slots.destination).toBe('Hangzhou');
   });
@@ -87,7 +87,7 @@ describe('applyDelta (tree operations)', () => {
       ...baseTree,
       children: [{ ...baseTree.children[0], slot_quotes: { cuisine: 'local food' } }],
     };
-    const delta = {
+    const batch = {
       changes: [
         {
           action: 'update' as const,
@@ -97,7 +97,7 @@ describe('applyDelta (tree operations)', () => {
         },
       ],
     };
-    const result = applyDelta(makeTreeContent(treeWithQuotes), delta);
+    const result = applyTreeChanges(makeTreeContent(treeWithQuotes), batch);
     expect(result.trees[0].children[0].slot_quotes?.cuisine).toBe('local food');
     expect(result.trees[0].children[0].slot_quotes?.budget).toBe('budget to 800');
   });

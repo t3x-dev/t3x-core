@@ -1,16 +1,16 @@
 /**
  * Tree State Sync
  *
- * Applies delta changes to the trees + tree_relations tables.
+ * Applies tree changes to the trees + tree_relations tables.
  * Used by extraction, compression, manual edit, and undo routes.
  * All operations use the caller's transaction handle (tx) for atomicity.
  *
- * NOTE: The Delta type now uses tree-primary TreeChange (parent_path/target_path/node)
+ * NOTE: TreeChangeBatch uses tree-primary TreeChange (parent_path/target_path/node)
  * but the trees DB table still stores flat nodes. We map tree changes to flat node
  * upserts using the node key as the tree ID.
  */
 
-import type { Delta, YOpsSource, Relation, SemanticContent } from '@t3x-dev/core';
+import type { TreeChangeBatch, YOpsSource, Relation, SemanticContent } from '@t3x-dev/core';
 import { flattenTrees } from '@t3x-dev/core';
 import type { AnyDB } from '@t3x-dev/storage';
 import {
@@ -27,20 +27,20 @@ import {
 } from '@t3x-dev/storage';
 
 /**
- * Apply a delta's changes to the trees table.
+ * Apply tree changes to the trees table.
  * The `db` parameter should be a transaction handle (tx) from the caller.
  */
 export async function syncDeltaToTrees(
   db: AnyDB,
   conversationId: string,
   projectId: string,
-  delta: Delta,
+  batch: TreeChangeBatch,
   source: YOpsSource,
   opts?: { topicId?: string }
 ): Promise<void> {
   const isManual = source === 'manual';
 
-  for (const change of delta.changes) {
+  for (const change of batch.changes) {
     switch (change.action) {
       case 'add': {
         const n = change.node;
@@ -95,8 +95,8 @@ export async function syncDeltaToTrees(
   }
 
   // Handle new relations
-  if (delta.new_relations) {
-    for (const rel of delta.new_relations) {
+  if (batch.new_relations) {
+    for (const rel of batch.new_relations) {
       await upsertTreeRelation(db, {
         conversationId,
         topicId: opts?.topicId,
@@ -109,19 +109,17 @@ export async function syncDeltaToTrees(
   }
 
   // Handle removed relations (match specific from+to+type)
-  if (delta.remove_relations) {
-    for (const rel of delta.remove_relations) {
+  if (batch.remove_relations) {
+    for (const rel of batch.remove_relations) {
       await deleteTreeRelationByKey(db, conversationId, rel.from, rel.to, rel.type);
     }
   }
 }
 
-/** @deprecated Use syncDeltaToTrees */
-export const syncDeltaToFrames = syncDeltaToTrees;
 
 /**
  * Rebuild trees table from a SemanticContent snapshot.
- * Used by undo (delete delta → rebuild from remaining deltas).
+ * Used by undo (delete entry → rebuild from remaining entries).
  */
 export async function rebuildTreesFromSnapshot(
   db: AnyDB,

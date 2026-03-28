@@ -8,8 +8,8 @@
 // ── Business Gate (Gate 3) ──
 export { BusinessGate, evaluateRule, parseGatesConfig } from './businessGate';
 
-// ── Delta ──
-export { applyDelta } from './delta';
+// ── Tree Changes ──
+export { applyTreeChanges } from './delta';
 
 // ── Diff ──
 export { diffCommits, diffSlots } from './diff';
@@ -31,7 +31,7 @@ export { executeMerge, prepareMerge } from './merge';
 
 // ── Zod Schemas (public) ──
 export {
-  DeltaSchema,
+  TreeChangeBatchSchema,
   RelationSchema,
   RelationTypeSchema,
   SemanticContentSchema,
@@ -60,9 +60,7 @@ export type {
   BusinessGateResult,
   BusinessRuleConfig,
   CoverageResult,
-  Delta,
-  DeltaLogEntry,
-  DeltaSource,
+  TreeChangeBatch,
   DimensionResult,
   GateDimension,
   GateResult,

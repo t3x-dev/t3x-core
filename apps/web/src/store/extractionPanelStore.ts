@@ -1,12 +1,12 @@
 import type {
-  Delta,
+  TreeChangeBatch,
   YOpsLogEntry,
   YOpsSource,
   SemanticContent,
   TreeChange,
   TreeNode,
 } from '@t3x-dev/core';
-import { applyDelta as coreApplyDelta, flattenTrees } from '@t3x-dev/core';
+import { applyTreeChanges, flattenTrees } from '@t3x-dev/core';
 import { create } from 'zustand';
 import { createCommit, listCommits } from '@/lib/api/commits';
 import { createYOpsEntry } from '@/lib/api/trees';
@@ -50,7 +50,7 @@ interface ExtractionPanelState {
   setPanelMode: (mode: PanelMode) => void;
   setActiveView: (view: ActiveView) => void;
   togglePanel: () => void;
-  applyDelta: (delta: Delta, source: YOpsSource, turnHash?: string) => void;
+  applyTreeChanges: (batch: TreeChangeBatch, source: YOpsSource, turnHash?: string) => void;
   setDraft: (content: SemanticContent) => void;
   resetDraft: () => void;
   setExtracting: (extracting: boolean) => void;
@@ -129,7 +129,7 @@ interface ExtractionPanelState {
   commitError: string | null;
 
   // Commit actions
-  selectDeltaNodes: () => TreeNode[];
+  selectPendingNodes: () => TreeNode[];
   commitNodes: (message: string) => Promise<{ hash: string }>;
   setCommitBranch: (branch: string) => void;
   setProjectId: (id: string | null) => void;
@@ -195,15 +195,15 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
     set({ panelMode: current === 'collapsed' ? 'default' : 'collapsed' });
   },
 
-  applyDelta: (delta, source, turnHash) => {
+  applyTreeChanges: (batch, source, turnHash) => {
     const { draft, yopsLog } = get();
 
-    // Use core applyDelta to properly update the tree structure
-    const newContent = coreApplyDelta(draft, delta);
+    // Use core applyTreeChanges to properly update the tree structure
+    const newContent = applyTreeChanges(draft, batch);
 
     const entry: YOpsLogEntry = {
       id: crypto.randomUUID(),
-      yops: delta,
+      yops: batch,
       source,
       created_at: new Date().toISOString(),
       turn_hash: turnHash,
@@ -212,13 +212,13 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
     set({
       draft: newContent,
       yopsLog: [...yopsLog, entry],
-      yopsHistory: [delta.changes, ...get().yopsHistory].slice(0, 3),
+      yopsHistory: [batch.changes, ...get().yopsHistory].slice(0, 3),
     });
 
     // Track manual edits
     if (source === 'manual') {
       const ids = new Set(get().manualEditedNodeIds);
-      for (const change of delta.changes) {
+      for (const change of batch.changes) {
         if (change.action === 'add') ids.add(change.node.key);
         else if (change.action === 'update') ids.add(change.target_path);
         else if (change.action === 'remove') ids.add(change.target_path);
@@ -229,7 +229,7 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
     // Persist user edits to database (LLM extraction and compression are already saved by the API)
     const convId = get().conversationId;
     if (convId && source !== 'pipeline' && source !== 'compress') {
-      createYOpsEntry(convId, delta, source).catch(() => {
+      createYOpsEntry(convId, batch, source).catch(() => {
         // Persist failed — non-critical, store has the data
       });
     }
@@ -315,7 +315,7 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
 
   // Commit actions
 
-  selectDeltaNodes: () => {
+  selectPendingNodes: () => {
     const { draft, committedNodeIds, committedNodeSnapshot } = get();
     const flatNodes = flattenTrees(draft.trees);
     return draft.trees.filter((_t, i) => {
@@ -443,14 +443,14 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
       const { compressNodes } = await import('@/lib/api/trees');
       const result = await compressNodes(convId);
 
-      const compressDelta = result.delta as Delta;
-      if (!compressDelta?.changes?.length) {
+      const compressBatch = result.delta as TreeChangeBatch;
+      if (!compressBatch?.changes?.length) {
         set({ isCompressing: false });
         return;
       }
 
-      // Apply the compress delta locally
-      get().applyDelta(compressDelta, 'compress');
+      // Apply the compress changes locally
+      get().applyTreeChanges(compressBatch, 'compress');
 
       // Patch the client-generated ID with the server's actual yops_log_id
       set((s) => {

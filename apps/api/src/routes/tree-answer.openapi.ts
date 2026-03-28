@@ -13,7 +13,7 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
   applyAnswer,
-  applyDelta,
+  applyTreeChanges,
   createMeaningPipeline,
   type ExtractionResult,
   type ExtractionTurn,
@@ -151,7 +151,7 @@ treeAnswerRoutes.openapi(answerRoute, async (c) => {
     const yopsRecords = await listYOpsLogByConversation(db, conversation_id);
     const emptySnapshot: SemanticContent = { trees: [], relations: [] };
     const currentSnapshot = toYOpsLogEntries(yopsRecords).reduce(
-      (snap, entry) => applyDelta(snap, entry.yops as any),
+      (snap, entry) => applyTreeChanges(snap, entry.yops as any),
       emptySnapshot
     );
 

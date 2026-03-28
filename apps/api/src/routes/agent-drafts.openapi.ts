@@ -8,7 +8,7 @@
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import type { SemanticContent } from '@t3x-dev/core';
-import { applyDelta, createClaudeProvider, flattenTrees, LLMProviderError } from '@t3x-dev/core';
+import { applyTreeChanges, createClaudeProvider, flattenTrees, LLMProviderError } from '@t3x-dev/core';
 import {
   findAgentDraftById,
   findConversationById,
@@ -273,7 +273,7 @@ async function extractMustHave(db: DBType, conversationId: string): Promise<stri
   const yopsLogs = await listYOpsLogByConversation(db, conversationId);
   if (yopsLogs.length > 0) {
     const snapshot = toYOpsLogEntries(yopsLogs).reduce(
-      (snap, entry) => applyDelta(snap, entry.yops as any),
+      (snap, entry) => applyTreeChanges(snap, entry.yops as any),
       { trees: [], relations: [] } as SemanticContent
     );
     const prefs = extractPreferencesFromFrames(snapshot);
@@ -314,7 +314,7 @@ async function extractMustntHave(db: DBType, conversationId: string): Promise<st
   const yopsLogs = await listYOpsLogByConversation(db, conversationId);
   if (yopsLogs.length > 0) {
     const snapshot = toYOpsLogEntries(yopsLogs).reduce(
-      (snap, entry) => applyDelta(snap, entry.yops as any),
+      (snap, entry) => applyTreeChanges(snap, entry.yops as any),
       { trees: [], relations: [] } as SemanticContent
     );
     const prefs = extractPreferencesFromFrames(snapshot);

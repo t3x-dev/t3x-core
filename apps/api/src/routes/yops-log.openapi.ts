@@ -13,7 +13,7 @@
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import type { YOpsSource, SemanticContent } from '@t3x-dev/core';
-import { applyDelta, flattenTrees } from '@t3x-dev/core';
+import { applyTreeChanges, flattenTrees } from '@t3x-dev/core';
 import {
   deleteYOpsLogEntry,
   findConversationById,
@@ -72,7 +72,7 @@ const RelationInputSchema = z
   })
   .passthrough();
 
-const DeltaSchema = z.object({
+const TreeChangeBatchSchema = z.object({
   changes: z.array(FrameChangeSchema).min(1),
   new_relations: z.array(RelationInputSchema).optional(),
   remove_relations: z.array(RelationInputSchema).optional(),
@@ -81,7 +81,7 @@ const DeltaSchema = z.object({
 const CreateYOpsRequest = z.object({
   source: YOpsSourceSchema,
   turn_hash: z.string().optional(),
-  yops: DeltaSchema,
+  yops: TreeChangeBatchSchema,
 });
 
 const YOpsLogEntryResponse = z.object({
@@ -356,7 +356,7 @@ yopsLogRoutes.openapi(getDraftRoute, async (c) => {
         : await listYOpsLogByConversation(db, conversationId);
       const emptySnap: SemanticContent = { trees: [], relations: [] };
       draft = toYOpsLogEntries(records).reduce(
-        (snap, entry) => applyDelta(snap, entry.yops as any),
+        (snap, entry) => applyTreeChanges(snap, entry.yops as any),
         emptySnap
       );
     }
@@ -388,7 +388,7 @@ yopsLogRoutes.openapi(deleteYOpsRoute, async (c) => {
       const remainingEntries = toYOpsLogEntries(remainingRecords);
       const emptySnap: SemanticContent = { trees: [], relations: [] };
       const rebuilt = remainingEntries.reduce(
-        (snap, entry) => applyDelta(snap, entry.yops as any),
+        (snap, entry) => applyTreeChanges(snap, entry.yops as any),
         emptySnap
       );
       await rebuildTreesFromSnapshot(tx, conversationId, existing.projectId, rebuilt);

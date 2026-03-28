@@ -9,7 +9,7 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { applyDelta, applyYOps, Compressor, flattenTrees, type NodeWithSignals, type SemanticContent } from '@t3x-dev/core';
+import { applyTreeChanges, applyYOps, Compressor, flattenTrees, type NodeWithSignals, type SemanticContent } from '@t3x-dev/core';
 import {
   findConversationById,
   insertYOpsLogEntry,
@@ -129,7 +129,7 @@ function computeNodeSignals(
     const isManual = entry.source === 'manual';
     const framesMentioned = new Set<string>();
 
-    // Extract changes from yops (may be Delta format with .changes or YOp[] array)
+    // Extract changes from yops (may be TreeChangeBatch format with .changes or YOp[] array)
     const yopsData = entry.yops as any;
     const changes: Array<{ action: string; target?: string; frame?: { id: string } }> =
       Array.isArray(yopsData) ? [] : (yopsData?.changes ?? []);
@@ -190,7 +190,7 @@ treeCompressRoutes.openapi(compressTreesRoute, async (c) => {
     const yopsEntries = toYOpsLogEntries(yopsRecords);
     const emptySnapshot: SemanticContent = { trees: [], relations: [] };
     const currentSnapshot = yopsEntries.reduce(
-      (snap, entry) => applyDelta(snap, entry.yops as any),
+      (snap, entry) => applyTreeChanges(snap, entry.yops as any),
       emptySnapshot
     );
     const currentFlat = flattenTrees(currentSnapshot.trees);

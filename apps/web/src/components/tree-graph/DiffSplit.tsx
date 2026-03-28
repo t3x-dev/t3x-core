@@ -26,36 +26,36 @@ interface DiffSplitProps {
  * identical nodes render normally.
  */
 export function DiffSplit({ source, target, className }: DiffSplitProps) {
-  const { sourceDelta, sourceSlots, targetDelta, targetSlots } = useMemo(() => {
+  const { sourceChanges, sourceSlots, targetChanges, targetSlots } = useMemo(() => {
     const diff = diffCommits(source, target);
 
-    const sourceDelta: Record<string, 'added' | 'updated' | 'removed'> = {};
+    const sourceChanges: Record<string, 'added' | 'updated' | 'removed'> = {};
     const sourceSlots: Record<string, string[]> = {};
 
     for (const path of diff.onlyInSource) {
-      sourceDelta[path] = 'removed';
+      sourceChanges[path] = 'removed';
     }
     for (const m of diff.modified) {
-      sourceDelta[m.path] = 'updated';
+      sourceChanges[m.path] = 'updated';
       if (m.slotDiffs.length > 0) {
         sourceSlots[m.path] = m.slotDiffs.map((sd) => sd.key);
       }
     }
 
-    const targetDelta: Record<string, 'added' | 'updated' | 'removed'> = {};
+    const targetChanges: Record<string, 'added' | 'updated' | 'removed'> = {};
     const targetSlots: Record<string, string[]> = {};
 
     for (const path of diff.onlyInTarget) {
-      targetDelta[path] = 'added';
+      targetChanges[path] = 'added';
     }
     for (const m of diff.modified) {
-      targetDelta[m.path] = 'updated';
+      targetChanges[m.path] = 'updated';
       if (m.slotDiffs.length > 0) {
         targetSlots[m.path] = m.slotDiffs.map((sd) => sd.key);
       }
     }
 
-    return { sourceDelta, sourceSlots, targetDelta, targetSlots };
+    return { sourceChanges, sourceSlots, targetChanges, targetSlots };
   }, [source, target]);
 
   return (
@@ -67,7 +67,7 @@ export function DiffSplit({ source, target, className }: DiffSplitProps) {
         </div>
         <TreeGraphView
           content={source}
-          deltaState={sourceDelta}
+          changeState={sourceChanges}
           updatedSlots={sourceSlots}
           className="h-full w-full"
         />
@@ -83,7 +83,7 @@ export function DiffSplit({ source, target, className }: DiffSplitProps) {
         </div>
         <TreeGraphView
           content={target}
-          deltaState={targetDelta}
+          changeState={targetChanges}
           updatedSlots={targetSlots}
           className="h-full w-full"
         />

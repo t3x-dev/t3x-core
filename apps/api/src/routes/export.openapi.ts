@@ -6,7 +6,7 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { applyDelta, type SemanticContent } from '@t3x-dev/core';
+import { applyTreeChanges, type SemanticContent } from '@t3x-dev/core';
 import {
   findConversationsByProject,
   findTurnsByProject,
@@ -236,7 +236,7 @@ exportRoutes.openapi(exportCfpackRoute, async (c) => {
       const yopsLogs = await listYOpsLogByConversation(db, conv.conversationId);
       if (yopsLogs.length > 0) {
         const snapshot = toYOpsLogEntries(yopsLogs).reduce(
-          (snap, entry) => applyDelta(snap, entry.yops as any),
+          (snap, entry) => applyTreeChanges(snap, entry.yops as any),
           { trees: [], relations: [] } as SemanticContent
         );
         semanticSnapshots[conv.conversationId] = {
@@ -383,7 +383,7 @@ exportRoutes.openapi(exportLedgerRoute, async (c) => {
       const yopsLogs = await listYOpsLogByConversation(db, conv.conversationId);
       if (yopsLogs.length > 0) {
         const snapshot = toYOpsLogEntries(yopsLogs).reduce(
-          (snap, entry) => applyDelta(snap, entry.yops as any),
+          (snap, entry) => applyTreeChanges(snap, entry.yops as any),
           { trees: [], relations: [] } as SemanticContent
         );
         lines.push(

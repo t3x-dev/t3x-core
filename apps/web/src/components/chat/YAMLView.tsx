@@ -167,7 +167,7 @@ function renderSlotLines(
 
 export function YAMLView() {
   const draft = useExtractionPanelStore((s) => s.draft);
-  const applyDelta = useExtractionPanelStore((s) => s.applyDelta);
+  const applyTreeChanges = useExtractionPanelStore((s) => s.applyTreeChanges);
   const yopsHistory = useExtractionPanelStore((s) => s.yopsHistory);
   const yopsLog = useExtractionPanelStore((s) => s.yopsLog);
   const confirmedNodeIds = useExtractionPanelStore((s) => s.confirmedNodeIds);
@@ -206,9 +206,9 @@ export function YAMLView() {
       delta.changes.length > 0 ||
       (delta.new_relations?.length ?? 0) > 0 ||
       (delta.remove_relations?.length ?? 0) > 0;
-    if (hasChanges) applyDelta(delta, 'manual');
+    if (hasChanges) applyTreeChanges(delta, 'manual');
     setIsEditing(false);
-  }, [editValue, draft, applyDelta]);
+  }, [editValue, draft, applyTreeChanges]);
 
   const handleCancel = useCallback(() => {
     setIsEditing(false);
@@ -530,7 +530,7 @@ export function YAMLView() {
                   />
                 </div>
 
-                {/* Delta color bar */}
+                {/* Change indicator color bar */}
                 <div
                   style={{
                     width: 3,

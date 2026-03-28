@@ -9,10 +9,6 @@ import { API_V1, fetchWithTimeout, handleResponse } from './core';
 
 export type { YOpsSource, YOpsLogEntry };
 
-/** @deprecated Use YOpsSource instead */
-export type DeltaSource = YOpsSource;
-/** @deprecated Use YOpsLogEntry instead */
-export type DeltaLogEntry = YOpsLogEntry;
 
 export interface AdvisoryQuestion {
   id: string;
@@ -181,8 +177,6 @@ export async function createYOpsEntry(
   return handleResponse<YOpsLogEntry>(res);
 }
 
-/** @deprecated Use createYOpsEntry instead */
-export const createDelta = createYOpsEntry;
 
 export async function deleteYOpsEntry(conversationId: string, yopsId: string): Promise<void> {
   const res = await fetchWithTimeout(
@@ -192,8 +186,6 @@ export async function deleteYOpsEntry(conversationId: string, yopsId: string): P
   await handleResponse<unknown>(res);
 }
 
-/** @deprecated Use deleteYOpsEntry instead */
-export const deleteDelta = deleteYOpsEntry;
 
 // ── Compression ──
 

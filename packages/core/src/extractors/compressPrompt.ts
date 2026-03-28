@@ -2,7 +2,7 @@
  * Compression Prompt Builder
  *
  * Builds the system + user prompt for the CompressAgent.
- * Input: frames with engagement signals → Output: Delta with remove/update actions.
+ * Input: frames with engagement signals → Output: YOps with remove/update actions.
  */
 
 import type { FlatNode, Relation } from '../semantic/types';
@@ -23,7 +23,7 @@ export interface CompressPromptResult {
   userPrompt: string;
 }
 
-const COMPRESS_SYSTEM_PROMPT = `You are a semantic frame compressor. Given a set of extracted frames with their origin and engagement signals, produce a Delta that merges redundant frames and removes low-value content.
+const COMPRESS_SYSTEM_PROMPT = `You are a semantic frame compressor. Given a set of extracted frames with their origin and engagement signals, produce YOps that merge redundant frames and remove low-value content.
 
 Each frame has these signals:
 - confidence: origin indicator

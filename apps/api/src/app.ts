@@ -221,7 +221,7 @@ export function createApp(options?: CreateAppOptions): Hono {
       { name: 'Commits', description: 'Version control commits' },
       { name: 'Branches', description: 'Branch management' },
       { name: 'Drafts', description: 'Draft management' },
-      { name: 'Delta Log', description: 'Semantic delta log (incremental tree changes)' },
+      { name: 'YOps Log', description: 'Semantic change log (incremental tree changes)' },
       { name: 'Diff', description: 'Semantic diff operations' },
       { name: 'Extract', description: 'LLM-based semantic extraction from conversations' },
       { name: 'Gate', description: 'Quality gate checks (structure, semantic, business)' },

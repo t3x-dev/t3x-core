@@ -298,7 +298,7 @@ export function ChatWorkspace({
 
         // status === 'completed' — normal flow
         if (result.delta) {
-          s.applyDelta(result.delta as import('@t3x-dev/core').Delta, 'pipeline');
+          s.applyTreeChanges(result.delta as import('@t3x-dev/core').TreeChangeBatch, 'pipeline');
         }
         if (result.snapshot && result.snapshot.trees.length > 0 && s.panelMode === 'collapsed') {
           s.setPanelMode('default');
