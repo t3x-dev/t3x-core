@@ -150,42 +150,63 @@ export function ChatMessage({
       ?? null;
   }, [hoveredNodeId, nodes]);
 
-  // Find the slot_quote for the hovered slot (verbatim text from conversation)
-  const hoveredQuote = useMemo(() => {
-    if (!hoveredNode || !hoveredSlotKey) return null;
-    // slot_quotes maps slot key → verbatim quote
-    return hoveredNode.slot_quotes?.[hoveredSlotKey] ?? null;
+  // Collect quotes to search for in this message
+  const quotesToHighlight = useMemo(() => {
+    if (!hoveredNode || !hoveredNode.slot_quotes) return [];
+
+    if (hoveredSlotKey) {
+      // Specific slot hovered — just that one quote
+      const q = hoveredNode.slot_quotes[hoveredSlotKey];
+      return q ? [q] : [];
+    }
+
+    // Node header hovered — all quotes from this node
+    return Object.values(hoveredNode.slot_quotes);
   }, [hoveredNode, hoveredSlotKey]);
 
-  // Compute highlight ranges: find the verbatim quote text in this message's content
+  // Find all quote texts in this message's content → highlight ranges
   const highlightRanges = useMemo(() => {
-    if (!hoveredNode) return [];
+    if (quotesToHighlight.length === 0 || !content) return [];
+    const lowerContent = content.toLowerCase();
+    const ranges: Array<{ start: number; end: number }> = [];
 
-    // If we have a specific slot quote, search for it in this message
-    if (hoveredQuote && content) {
-      const lowerContent = content.toLowerCase();
-      const lowerQuote = hoveredQuote.toLowerCase();
-      const idx = lowerContent.indexOf(lowerQuote);
-      if (idx !== -1) {
-        return [{ start: idx, end: idx + hoveredQuote.length }];
+    for (const quote of quotesToHighlight) {
+      const lowerQuote = quote.toLowerCase();
+      let searchFrom = 0;
+      // Find all occurrences
+      while (searchFrom < lowerContent.length) {
+        const idx = lowerContent.indexOf(lowerQuote, searchFrom);
+        if (idx === -1) break;
+        ranges.push({ start: idx, end: idx + quote.length });
+        searchFrom = idx + quote.length;
       }
     }
 
-    return [];
-  }, [hoveredNode, hoveredQuote, content]);
+    // Sort and dedupe overlapping ranges
+    ranges.sort((a, b) => a.start - b.start);
+    return ranges;
+  }, [quotesToHighlight, content]);
 
   const hasCharHighlights = highlightRanges.length > 0;
-  // Whole-message tint when a YAML node is hovered and its source matches this turn
+  // Whole-message tint: when hovering a YAML node, tint the source message
+  // Use this as fallback when no character-level highlights were found
   const isWholeMessageHighlight =
     hoveredNode &&
     !hasCharHighlights &&
     (() => {
-      if (!hoveredNode.source) return false;
-      // Match by turn tag (T1, T2, ...) — turnIndex is 0-based, source tags are 1-based
-      if (turnIndex != null && hoveredNode.source === `T${turnIndex + 1}`) return true;
-      // Match by turn hash prefix
-      if (turnHash && hoveredNode.source.includes(':')) {
-        return turnHash.includes(hoveredNode.source.split(':')[1]);
+      // Check node.source (turn tag like "T2")
+      const src = hoveredNode.source;
+      if (src && turnIndex != null) {
+        if (src === `T${turnIndex + 1}`) return true;
+        // Hash-based match
+        if (turnHash && src.includes(':') && turnHash.includes(src.split(':')[1])) return true;
+      }
+      // If no source on node, check if any of its quotes appear in this message
+      if (hoveredNode.slot_quotes && content) {
+        const lowerContent = content.toLowerCase();
+        for (const quote of Object.values(hoveredNode.slot_quotes)) {
+          if (lowerContent.includes(quote.toLowerCase())) return true;
+        }
       }
       return false;
     })();
