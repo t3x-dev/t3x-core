@@ -38,7 +38,7 @@ export function AdvisoryPanel() {
         );
 
         if (result.applied && result.delta) {
-          applyDelta(result.delta, 'answer');
+          applyDelta(result.delta as import('@t3x-dev/core').Delta, 'answer');
         }
 
         // Remove answered question

@@ -194,7 +194,7 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
   const isExtracting = useExtractionPanelStore((s) => s.isExtracting);
   const togglePanel = useExtractionPanelStore((s) => s.togglePanel);
   const _setPanelMode = useExtractionPanelStore((s) => s.setPanelMode);
-  const deltaChangeHistory = useExtractionPanelStore((s) => s.deltaChangeHistory);
+  const yopsHistory = useExtractionPanelStore((s) => s.yopsHistory);
   const focusIntentEnabled = useExtractionPanelStore((s) => s.focusIntentEnabled);
   const setFocusIntent = useExtractionPanelStore((s) => s.setFocusIntent);
   const isCompressing = useExtractionPanelStore((s) => s.isCompressing);
@@ -203,16 +203,16 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
   const startCompress = useExtractionPanelStore((s) => s.startCompress);
   const undoCompression = useExtractionPanelStore((s) => s.undoCompression);
   const dismissCompressBanner = useExtractionPanelStore((s) => s.dismissCompressBanner);
-  const deltaLog = useExtractionPanelStore((s) => s.deltaLog);
+  const yopsLog = useExtractionPanelStore((s) => s.yopsLog);
   const manualEditedNodeIds = useExtractionPanelStore((s) => s.manualEditedNodeIds);
-  const hasCompressDelta = deltaLog.some((d) => d.source === 'compress');
+  const hasCompressEntry = yopsLog.some((d) => d.source === 'compress');
 
   const nodeCount = draft.trees.length;
   const manualCount = manualEditedNodeIds.size;
-  const latestDeltaChanges = deltaChangeHistory[0] ?? [];
-  const added = latestDeltaChanges.filter((c) => c.action === 'add').length;
-  const updated = latestDeltaChanges.filter((c) => c.action === 'update').length;
-  const removed = latestDeltaChanges.filter((c) => c.action === 'remove').length;
+  const latestChanges = yopsHistory[0] ?? [];
+  const added = latestChanges.filter((c) => c.action === 'add').length;
+  const updated = latestChanges.filter((c) => c.action === 'update').length;
+  const removed = latestChanges.filter((c) => c.action === 'remove').length;
   const hasChanges = added + updated + removed > 0;
   const targetWidth =
     panelMode === 'collapsed'
@@ -290,7 +290,7 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
                 </button>
               )}
               {/* Compressed indicator */}
-              {hasCompressDelta && !isCompressing && (
+              {hasCompressEntry && !isCompressing && (
                 <button
                   type="button"
                   onClick={undoCompression}

@@ -2,7 +2,7 @@
 
 import {
   type Delta,
-  type DeltaSource,
+  type YOpsSource,
   RELATION_TYPES,
   type Relation,
   type SemanticContent,
@@ -124,7 +124,7 @@ interface TreeGraphViewProps {
   content: SemanticContent;
   deltaState?: Record<string, 'added' | 'updated' | 'removed'>;
   updatedSlots?: Record<string, string[]>;
-  onDeltaCreated?: (delta: Delta, source: DeltaSource) => void;
+  onDeltaCreated?: (delta: Delta, source: YOpsSource) => void;
   className?: string;
 }
 

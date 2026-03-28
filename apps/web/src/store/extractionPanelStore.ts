@@ -1,7 +1,7 @@
 import type {
   Delta,
-  DeltaLogEntry,
-  DeltaSource,
+  YOpsLogEntry,
+  YOpsSource,
   SemanticContent,
   TreeChange,
   TreeNode,
@@ -9,7 +9,7 @@ import type {
 import { applyDelta as coreApplyDelta, flattenTrees } from '@t3x-dev/core';
 import { create } from 'zustand';
 import { createCommit, listCommits } from '@/lib/api/commits';
-import { createDelta } from '@/lib/api/trees';
+import { createYOpsEntry } from '@/lib/api/trees';
 import type { Topic } from '@/lib/api/topics';
 
 // Debounce helper for hover interactions — prevents rapid-fire re-renders
@@ -25,13 +25,13 @@ interface ExtractionPanelState {
   panelMode: PanelMode;
   activeView: ActiveView;
   draft: SemanticContent;
-  deltaLog: DeltaLogEntry[];
+  yopsLog: YOpsLogEntry[];
   isExtracting: boolean;
   confirmedNodeIds: Record<string, boolean>;
   confirmedSlotKeys: Record<string, Record<string, boolean>>; // nodeKey → { slotKey: true }
   focusIntentEnabled: boolean;
   llmHighlightedNodeIds: Record<string, boolean>;
-  deltaChangeHistory: TreeChange[][];
+  yopsHistory: TreeChange[][];
   removedNodes: TreeNode[];
 
   // Compression
@@ -43,14 +43,14 @@ interface ExtractionPanelState {
     mergedCount: number;
     removedCount: number;
     removedNodeIds: string[];
-    deltaLogId: string;
+    yopsLogId: string;
   } | null;
   showCompressBanner: boolean;
 
   setPanelMode: (mode: PanelMode) => void;
   setActiveView: (view: ActiveView) => void;
   togglePanel: () => void;
-  applyDelta: (delta: Delta, source: DeltaSource, turnHash?: string) => void;
+  applyDelta: (delta: Delta, source: YOpsSource, turnHash?: string) => void;
   setDraft: (content: SemanticContent) => void;
   resetDraft: () => void;
   setExtracting: (extracting: boolean) => void;
@@ -60,7 +60,7 @@ interface ExtractionPanelState {
   unconfirmSlot: (treeId: string, slotKey: string) => void;
   setFocusIntent: (enabled: boolean) => void;
   setLlmHighlightedNodeIds: (ids: string[]) => void;
-  hydrateDeltaLog: (entries: DeltaLogEntry[]) => void;
+  hydrateYOpsLog: (entries: YOpsLogEntry[]) => void;
   conversationId: string | null;
   setConversationId: (id: string | null) => void;
 
@@ -149,13 +149,13 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
   panelMode: 'collapsed',
   activeView: 'graph',
   draft: emptyContent,
-  deltaLog: [],
+  yopsLog: [],
   isExtracting: false,
   confirmedNodeIds: {},
   confirmedSlotKeys: {},
   focusIntentEnabled: false,
   llmHighlightedNodeIds: {},
-  deltaChangeHistory: [],
+  yopsHistory: [],
   removedNodes: [],
   conversationId: null,
   gateIssues: {},
@@ -196,14 +196,14 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
   },
 
   applyDelta: (delta, source, turnHash) => {
-    const { draft, deltaLog } = get();
+    const { draft, yopsLog } = get();
 
     // Use core applyDelta to properly update the tree structure
     const newContent = coreApplyDelta(draft, delta);
 
-    const entry: DeltaLogEntry = {
+    const entry: YOpsLogEntry = {
       id: crypto.randomUUID(),
-      delta,
+      yops: delta,
       source,
       created_at: new Date().toISOString(),
       turn_hash: turnHash,
@@ -211,8 +211,8 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
 
     set({
       draft: newContent,
-      deltaLog: [...deltaLog, entry],
-      deltaChangeHistory: [delta.changes, ...get().deltaChangeHistory].slice(0, 3),
+      yopsLog: [...yopsLog, entry],
+      yopsHistory: [delta.changes, ...get().yopsHistory].slice(0, 3),
     });
 
     // Track manual edits
@@ -229,7 +229,7 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
     // Persist user edits to database (LLM extraction and compression are already saved by the API)
     const convId = get().conversationId;
     if (convId && source !== 'pipeline' && source !== 'compress') {
-      createDelta(convId, delta, source).catch(() => {
+      createYOpsEntry(convId, delta, source).catch(() => {
         // Persist failed — non-critical, store has the data
       });
     }
@@ -241,9 +241,9 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
   resetDraft: () =>
     set({
       draft: emptyContent,
-      deltaLog: [],
+      yopsLog: [],
       removedNodes: [],
-      deltaChangeHistory: [],
+      yopsHistory: [],
       confirmedNodeIds: {},
       confirmedSlotKeys: {},
       manualEditedNodeIds: new Set(),
@@ -289,7 +289,7 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
   addTopic: (topic) => set((s) => ({ topics: [...s.topics, topic] })),
   setLlmHighlightedNodeIds: (ids) =>
     set({ llmHighlightedNodeIds: Object.fromEntries(ids.map((id) => [id, true])) }),
-  hydrateDeltaLog: (entries) => set({ deltaLog: entries }),
+  hydrateYOpsLog: (entries) => set({ yopsLog: entries }),
   setConversationId: (id) => set({ conversationId: id }),
   setHoveredNodeId: (id, slotKey) => {
     if (hoverNodeTimer) clearTimeout(hoverNodeTimer);
@@ -369,19 +369,19 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
         newSnapshot[t.key] = { ...t, slots: { ...t.slots } };
       }
 
-      // Insert commit marker into delta log (links change history to commit)
+      // Insert commit marker into yops log (links change history to commit)
       if (conversationId) {
-        const markerEntry: DeltaLogEntry = {
+        const markerEntry: YOpsLogEntry = {
           id: crypto.randomUUID(),
           source: 'commit_marker',
-          delta: { changes: [] },
+          yops: { changes: [] },
           created_at: new Date().toISOString(),
           commit_hash: result.commit.hash,
         };
-        set((s) => ({ deltaLog: [...s.deltaLog, markerEntry] }));
+        set((s) => ({ yopsLog: [...s.yopsLog, markerEntry] }));
 
         // Persist the marker to DB
-        createDelta(conversationId, { changes: [] }, 'commit_marker').catch(() => {});
+        createYOpsEntry(conversationId, { changes: [] }, 'commit_marker').catch(() => {});
       }
 
       set({
@@ -443,22 +443,23 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
       const { compressNodes } = await import('@/lib/api/trees');
       const result = await compressNodes(convId);
 
-      if (result.delta.changes.length === 0) {
+      const compressDelta = result.delta as Delta;
+      if (!compressDelta?.changes?.length) {
         set({ isCompressing: false });
         return;
       }
 
       // Apply the compress delta locally
-      get().applyDelta(result.delta, 'compress');
+      get().applyDelta(compressDelta, 'compress');
 
-      // Patch the client-generated ID with the server's actual delta_log_id
+      // Patch the client-generated ID with the server's actual yops_log_id
       set((s) => {
-        const log = [...s.deltaLog];
+        const log = [...s.yopsLog];
         const last = log[log.length - 1];
         if (last && last.source === 'compress') {
-          log[log.length - 1] = { ...last, id: result.delta_log_id };
+          log[log.length - 1] = { ...last, id: result.yops_log_id };
         }
-        return { deltaLog: log };
+        return { yopsLog: log };
       });
 
       set({
@@ -470,7 +471,7 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
           mergedCount: result.metadata.merged_count,
           removedCount: result.metadata.removed_count,
           removedNodeIds: result.metadata.removed_tree_ids,
-          deltaLogId: result.delta_log_id,
+          yopsLogId: result.yops_log_id,
         },
         showCompressBanner: true,
       });
@@ -480,21 +481,21 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
   },
 
   undoCompression: async () => {
-    const { deltaLog, conversationId } = get();
-    const compressDelta = [...deltaLog].reverse().find((d) => d.source === 'compress');
-    if (!compressDelta || !conversationId) return;
+    const { yopsLog, conversationId } = get();
+    const compressEntry = [...yopsLog].reverse().find((d) => d.source === 'compress');
+    if (!compressEntry || !conversationId) return;
 
     try {
-      const { deleteDelta, getSemanticDraft } = await import('@/lib/api/trees');
-      await deleteDelta(conversationId, compressDelta.id);
+      const { deleteYOpsEntry, getSemanticDraft } = await import('@/lib/api/trees');
+      await deleteYOpsEntry(conversationId, compressEntry.id);
 
       // Rebuild from server (most reliable)
       const newDraft = await getSemanticDraft(conversationId);
-      const newLog = deltaLog.filter((d) => d.id !== compressDelta.id);
+      const newLog = yopsLog.filter((d) => d.id !== compressEntry.id);
 
       set({
         draft: newDraft,
-        deltaLog: newLog,
+        yopsLog: newLog,
         compressResult: null,
         showCompressBanner: false,
       });

@@ -1,6 +1,6 @@
 'use client';
 
-import type { Delta, DeltaSource, TreeDiff, SemanticContent, SlotValue, TreeNode } from '@t3x-dev/core';
+import type { Delta, YOpsSource, TreeDiff, SemanticContent, SlotValue, TreeNode } from '@t3x-dev/core';
 import { diffCommits } from '@t3x-dev/core';
 import { treesToNodes } from '@/lib/treeCompat';
 import yaml from 'js-yaml';
@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils';
 
 interface YAMLEditorProps {
   content: SemanticContent;
-  onDeltaCreated: (delta: Delta, source: DeltaSource) => void;
+  onDeltaCreated: (delta: Delta, source: YOpsSource) => void;
   className?: string;
 }
 

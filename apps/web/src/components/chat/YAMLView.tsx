@@ -168,8 +168,8 @@ function renderSlotLines(
 export function YAMLView() {
   const draft = useExtractionPanelStore((s) => s.draft);
   const applyDelta = useExtractionPanelStore((s) => s.applyDelta);
-  const deltaChangeHistory = useExtractionPanelStore((s) => s.deltaChangeHistory);
-  const deltaLog = useExtractionPanelStore((s) => s.deltaLog);
+  const yopsHistory = useExtractionPanelStore((s) => s.yopsHistory);
+  const yopsLog = useExtractionPanelStore((s) => s.yopsLog);
   const confirmedNodeIds = useExtractionPanelStore((s) => s.confirmedNodeIds);
   const confirmedSlotKeys = useExtractionPanelStore((s) => s.confirmedSlotKeys);
   const confirmNode = useExtractionPanelStore((s) => s.confirmNode);
@@ -215,12 +215,12 @@ export function YAMLView() {
     setEditValue(yamlText);
   }, [yamlText]);
 
-  // Build change map with age from delta history (index 0 = most recent)
+  // Build change map with age from yops history (index 0 = most recent)
   const changeMap = useMemo(() => {
     const map = new Map<string, { action: 'add' | 'update' | 'remove'; age: number }>();
     // Iterate oldest→newest so newer entries overwrite
-    for (let age = deltaChangeHistory.length - 1; age >= 0; age--) {
-      for (const c of deltaChangeHistory[age]) {
+    for (let age = yopsHistory.length - 1; age >= 0; age--) {
+      for (const c of yopsHistory[age]) {
         const id = c.action === 'add'
           ? (c.parent_path ? `${c.parent_path}.${c.node.key}` : c.node.key)
           : c.target_path;
@@ -228,19 +228,20 @@ export function YAMLView() {
       }
     }
     return map;
-  }, [deltaChangeHistory]);
+  }, [yopsHistory]);
 
   // Build relevance context
   const relevanceCtx = useMemo((): RelevanceContext => {
     const turnsAgoMap: Record<string, number> = {};
     const touchCountMap: Record<string, number> = {};
-    const total = deltaLog.length;
-    for (let i = deltaLog.length - 1; i >= 0; i--) {
+    const total = yopsLog.length;
+    for (let i = yopsLog.length - 1; i >= 0; i--) {
       const turnsAgo = total - 1 - i;
-      for (const c of deltaLog[i].delta.changes) {
+      const delta = yopsLog[i].yops as { changes?: Array<{ action: string; parent_path?: string; node?: { key: string }; target_path?: string }> };
+      for (const c of delta.changes ?? []) {
         const fid = c.action === 'add'
-          ? (c.parent_path ? `${c.parent_path}.${c.node.key}` : c.node.key)
-          : c.target_path;
+          ? (c.parent_path ? `${c.parent_path}.${c.node?.key}` : c.node?.key ?? '')
+          : (c.target_path ?? '');
         if (!(fid in turnsAgoMap)) turnsAgoMap[fid] = turnsAgo;
         touchCountMap[fid] = (touchCountMap[fid] ?? 0) + 1;
       }
@@ -257,7 +258,7 @@ export function YAMLView() {
       touchCountMap,
       relationDegreeMap,
     };
-  }, [deltaLog, draft.relations, confirmedNodeIds, llmHighlightedNodeIds]);
+  }, [yopsLog, draft.relations, confirmedNodeIds, llmHighlightedNodeIds]);
 
   // Convert to compat trees (with .id, .type) for display and relevance scoring
   const nestedNodes = useMemo(() => contentToNodes(draft), [draft]);
