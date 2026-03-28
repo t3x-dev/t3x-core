@@ -7,6 +7,9 @@
 
 import type { RelationType, SlotValue } from '../semantic/types';
 
+/** Shared snake_case key pattern: starts with lowercase letter, then lowercase/digits/underscores. */
+export const SNAKE_CASE_KEY = /^[a-z][a-z0-9_]*$/;
+
 // ── Operation Interfaces ──
 
 export interface SetOp {

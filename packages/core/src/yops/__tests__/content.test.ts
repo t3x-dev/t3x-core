@@ -284,6 +284,17 @@ describe('applyYOps', () => {
       expect(result.applied).toBe(1);
       expect(result.trees[0].slots.budget).toBe(1000);
     });
+
+    it('is no-op on missing node (idempotent)', () => {
+      const content = sc([t('trip', { budget: 1000 })]);
+      const result = applyYOps(content, [
+        { unset: { path: 'nonexistent/slot' } },
+      ]);
+      expect(result.ok).toBe(true);
+      expect(result.applied).toBe(1);
+      // Original tree is untouched
+      expect(result.trees[0].slots.budget).toBe(1000);
+    });
   });
 
   describe('immutability', () => {

@@ -6,8 +6,9 @@
 
 import { z } from 'zod';
 import { RelationTypeSchema, SlotValueSchema } from '../semantic/schema';
+import { SNAKE_CASE_KEY } from './types';
 
-const SNAKE_CASE = /^[a-z][a-z0-9_]*$/;
+const SNAKE_CASE = SNAKE_CASE_KEY;
 
 // ── Per-Operation Schemas ──
 

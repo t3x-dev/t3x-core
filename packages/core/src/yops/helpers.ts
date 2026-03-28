@@ -5,12 +5,11 @@
  */
 
 import type { Relation, TreeNode } from '../semantic/types';
-
-const SNAKE_CASE = /^[a-z][a-z0-9_]*$/;
+import { SNAKE_CASE_KEY } from './types';
 
 /** Check if a key matches snake_case: starts with lowercase letter, then lowercase/digits/underscores. */
 export function isValidKey(key: string): boolean {
-  return SNAKE_CASE.test(key);
+  return SNAKE_CASE_KEY.test(key);
 }
 
 /** Get the parent portion of a slash-separated path. "a/b/c" -> "a/b", "a" -> "" */
@@ -68,7 +67,7 @@ export function findParentAndChild(
 
   const parent = findNode(trees, parentPath);
   if (!parent) {
-    return { parent: undefined as unknown as TreeNode, child: undefined, childIndex: -1, isRoot: false };
+    return { parent: null, child: undefined, childIndex: -1, isRoot: false };
   }
 
   const idx = parent.children.findIndex((c) => c.key === key);

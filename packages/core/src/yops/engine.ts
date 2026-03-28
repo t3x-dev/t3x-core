@@ -77,7 +77,7 @@ function executeOp(
   if ('clone' in op) return execClone(trees, op.clone, index);
   if ('move' in op) return execMove(trees, relations, op.move, setRelations, index);
   if ('nest' in op) return execNest(trees, relations, op.nest, setRelations, index);
-  if ('split' in op) return execSplit(trees, op.split, index);
+  if ('split' in op) return execSplit(trees, relations, op.split, setRelations, index);
   if ('fold' in op) return execFold(trees, relations, op.fold, setRelations, index);
   if ('merge' in op) return execMerge(trees, relations, op.merge, setRelations, index);
   if ('relate' in op) return execRelate(trees, relations, op.relate, setRelations, index);
@@ -152,7 +152,8 @@ function execUnset(
 
   const node = nodePath ? findNode(trees, nodePath) : undefined;
   if (!node) {
-    return err(YOPS_ERRORS.NODE_NOT_FOUND, `Node not found: ${nodePath || op.path}`, index);
+    // Idempotent: missing node = no-op (just like missing slot = no-op)
+    return null;
   }
 
   // Idempotent: no-op if slot already absent
@@ -466,7 +467,9 @@ function execNest(
 
 function execSplit(
   trees: TreeNode[],
+  _relations: Relation[],
   op: SplitOp,
+  _setRelations: (r: Relation[]) => void,
   index: number,
 ): YOpsError | null {
   const node = findNode(trees, op.path);
@@ -561,7 +564,12 @@ function execFold(
   const childOldPath = `${op.path}/${child.key}`;
   const parentPath = getParentPath(op.path);
   const childNewPath = parentPath ? `${parentPath}/${child.key}` : child.key;
-  setRelations(updateRelationPaths(relations, childOldPath, childNewPath));
+  let updatedRels = updateRelationPaths(relations, childOldPath, childNewPath);
+
+  // Remove dangling relations that still reference the folded wrapper node
+  updatedRels = removeRelationsForPath(updatedRels, op.path);
+
+  setRelations(updatedRels);
 
   return null;
 }
@@ -605,10 +613,12 @@ function execMerge(
   for (const node of nodesToMerge) {
     Object.assign(mergedSlots, node.slots);
     if (node.slot_quotes) Object.assign(mergedQuotes, node.slot_quotes);
-    // Children: keep all (no dedup on key conflict per spec "kept as-is")
+    // Children: dedup by key with "last wins" (consistent with slot conflict resolution)
     for (const child of node.children) {
-      // Only add if no existing merged child has the same key
-      if (!mergedChildren.some((c) => c.key === child.key)) {
+      const existingIdx = mergedChildren.findIndex((c) => c.key === child.key);
+      if (existingIdx >= 0) {
+        mergedChildren[existingIdx] = child;
+      } else {
         mergedChildren.push(child);
       }
     }
