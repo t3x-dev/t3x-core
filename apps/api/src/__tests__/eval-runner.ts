@@ -492,7 +492,7 @@ async function runScenario(app: Hono, scenario: Scenario): Promise<void> {
   const body1 = (await res1.json()) as {
     success: boolean;
     // biome-ignore lint/suspicious/noExplicitAny: test helper
-    data: { delta: any; snapshot: SemanticContent; delta_log_id: string };
+    data: { delta: any; snapshot: SemanticContent; yops_log_id: string };
   };
   console.log(
     `  First extraction: ${flattenTrees(body1.data.snapshot.trees).length} frames, ${body1.data.delta.changes.length} changes (${durationMs}ms)`
@@ -531,7 +531,7 @@ async function runScenario(app: Hono, scenario: Scenario): Promise<void> {
       const body2 = (await res2.json()) as {
         success: boolean;
         // biome-ignore lint/suspicious/noExplicitAny: test helper
-        data: { delta: any; snapshot: SemanticContent; delta_log_id: string };
+        data: { delta: any; snapshot: SemanticContent; yops_log_id: string };
       };
       secondSnapshot = body2.data.snapshot;
       secondDelta = body2.data.delta;

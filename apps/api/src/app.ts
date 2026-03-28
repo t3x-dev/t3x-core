@@ -32,7 +32,7 @@ import {
   commitRoutes,
   conversationRoutes,
   curateRoutes,
-  deltaLogRoutes,
+  yopsLogRoutes,
   deployAgentRoutes,
   diffRoutes,
   draftsRoutes,
@@ -157,7 +157,7 @@ export function createApp(options?: CreateAppOptions): Hono {
   api.route('/', treeAnswerRoutes); // /v1/extract/trees/answer
   api.route('/', treeCompressRoutes); // /v1/conversations/:conversationId/compress
   api.route('/', gateRoutes); // /v1/gate/check
-  api.route('/', deltaLogRoutes); // /v1/conversations/:conversationId/deltas
+  api.route('/', yopsLogRoutes); // /v1/conversations/:conversationId/yops
   api.route('/', runsRoutes);
   api.route('/', leavesRoutes);
   api.route('/', pinsRoutes);

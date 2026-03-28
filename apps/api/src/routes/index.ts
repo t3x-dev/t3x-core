@@ -8,7 +8,7 @@ export { chatRoutes } from './chat.openapi';
 export { commitRoutes } from './commits.openapi';
 export { conversationRoutes } from './conversations.openapi';
 export { curateRoutes } from './curate.openapi';
-export { deltaLogRoutes } from './delta-log.openapi';
+export { yopsLogRoutes } from './yops-log.openapi';
 export { deployAgentRoutes } from './deploy-agents.openapi';
 export { diffRoutes } from './diff.openapi';
 export { draftsRoutes } from './drafts.openapi';

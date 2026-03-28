@@ -36,13 +36,13 @@ import {
   findProjectById,
   findTurnsByConversation,
   findUserById,
-  insertDeltaLogEntry,
-  listDeltaLogByConversation,
-  listDeltaLogByTopic,
+  insertYOpsLogEntry,
+  listYOpsLogByConversation,
+  listYOpsLogByTopic,
   listTopicsByConversation,
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
-import { toDeltaLogEntries } from '../lib/delta-log-utils';
+import { toYOpsLogEntries } from '../lib/yops-log-utils';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { rebuildTreesFromSnapshot } from '../lib/tree-state-sync';
 import { assertProjectAccess } from '../lib/project-access';
@@ -88,7 +88,7 @@ const TreeExtractResponse = SuccessResponseSchema(
   z.object({
     delta: DeltaResponseSchema.optional(),
     snapshot: SnapshotResponseSchema.optional(),
-    delta_log_id: z.string().optional(),
+    yops_log_id: z.string().optional(),
     status: z.enum(['completed', 'drift_detected', 'skipped']),
     drift: z
       .object({
@@ -211,14 +211,14 @@ treeExtractRoutes.openapi(extractTreesRoute, async (c) => {
       }
     }
 
-    // 4. Fetch existing delta log and build current snapshot
-    // When topic_id is provided, only load deltas for that topic
-    const deltaRecords = topic_id
-      ? await listDeltaLogByTopic(db, conversation_id, topic_id)
-      : await listDeltaLogByConversation(db, conversation_id);
+    // 4. Fetch existing yops log and build current snapshot
+    // When topic_id is provided, only load yops for that topic
+    const yopsRecords = topic_id
+      ? await listYOpsLogByTopic(db, conversation_id, topic_id)
+      : await listYOpsLogByConversation(db, conversation_id);
     const emptySnapshot: SemanticContent = { trees: [], relations: [] };
-    const currentSnapshot = toDeltaLogEntries(deltaRecords).reduce(
-      (snap, entry) => applyDelta(snap, entry.delta),
+    const currentSnapshot = toYOpsLogEntries(yopsRecords).reduce(
+      (snap, entry) => applyDelta(snap, entry.yops as any),
       emptySnapshot
     );
     const currentFlat = flattenTrees(currentSnapshot.trees);
@@ -232,9 +232,9 @@ treeExtractRoutes.openapi(extractTreesRoute, async (c) => {
 
     // 5b. Calculate processedTurnCount — how many turns were present at the last extraction
     let processedTurnCount: number | undefined;
-    if (deltaRecords.length > 0 && currentFlat.length > 0) {
-      const lastDelta = deltaRecords[deltaRecords.length - 1];
-      const lastExtractionTime = new Date(lastDelta.createdAt).getTime();
+    if (yopsRecords.length > 0 && currentFlat.length > 0) {
+      const lastEntry = yopsRecords[yopsRecords.length - 1];
+      const lastExtractionTime = new Date(lastEntry.createdAt).getTime();
       processedTurnCount = selectedTurns.filter(
         (t) => new Date(t.createdAt).getTime() <= lastExtractionTime
       ).length;
@@ -246,7 +246,7 @@ treeExtractRoutes.openapi(extractTreesRoute, async (c) => {
     // explicitly requested extraction and we respect that intent.
     if (!drift_decision && !force_extract) {
       const sessionCtx = computeSessionContext(
-        deltaRecords.map((d) => d.source),
+        yopsRecords.map((d) => d.source),
         processedTurnCount ?? 0,
         selectedTurns.length
       );
@@ -285,7 +285,7 @@ treeExtractRoutes.openapi(extractTreesRoute, async (c) => {
     // ── Step 3: DriftDetector ──
     if (!drift_decision && currentFlat.length > 0) {
       // Only run drift detection when there's existing content (steady phase)
-      const extractionCount = deltaRecords.filter(
+      const extractionCount = yopsRecords.filter(
         (d) => d.source === 'pipeline' || d.source === 'llm_extraction'
       ).length;
 
@@ -560,14 +560,14 @@ treeExtractRoutes.openapi(extractTreesRoute, async (c) => {
       );
     }
 
-    // 8c. Write delta_log + sync trees atomically
-    // Store YOps in delta log for history; use organizedSnapshot to rebuild trees table
+    // 8c. Write yops_log + sync trees atomically
+    // Store YOps in yops log for history; use organizedSnapshot to rebuild trees table
     const record = await (db as any).transaction(async (tx: any) => {
-      const rec = await insertDeltaLogEntry(tx, {
+      const rec = await insertYOpsLogEntry(tx, {
         conversationId: conversation_id,
         projectId: conversation.projectId,
         source: 'pipeline',
-        delta: result.yops,
+        yops: result.yops,
         pipelineState: 'completed',
         gateResultJson: gateResult ?? null,
         topicId: resolvedTopicId,
@@ -586,13 +586,13 @@ treeExtractRoutes.openapi(extractTreesRoute, async (c) => {
     pipelineEmitter.emit('extraction.completed', {
       conversationId: conversation_id,
       projectId: conversation.projectId,
-      deltaLogId: record.id,
+      yopsLogId: record.id,
       yops: result.yops,
       snapshot: organizedSnapshot,
       topicId: resolvedTopicId,
     });
 
-    // 9. Return yops + updated snapshot + delta_log_id
+    // 9. Return yops + updated snapshot + yops_log_id
     return c.json(
       {
         success: true as const,
@@ -600,7 +600,7 @@ treeExtractRoutes.openapi(extractTreesRoute, async (c) => {
           status: 'completed' as const,
           delta: result.yops,
           snapshot: organizedSnapshot,
-          delta_log_id: record.id,
+          yops_log_id: record.id,
           gate_result: gateResult,
           advisory_questions: advisoryQuestions,
         },

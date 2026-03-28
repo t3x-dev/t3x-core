@@ -27,13 +27,13 @@ import {
   findConversationById,
   findTurnsByConversation,
   insertConversation,
-  insertDeltaLogEntry,
+  insertYOpsLogEntry,
   insertProject,
   insertTurn,
-  listDeltaLogByConversation,
+  listYOpsLogByConversation,
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
-import { toDeltaLogEntries } from '../lib/delta-log-utils';
+import { toYOpsLogEntries } from '../lib/yops-log-utils';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { assertProjectAccess } from '../lib/project-access';
 import { getProviderRegistry } from '../lib/provider-registry';
@@ -81,7 +81,7 @@ const TreeAnswerResponse = SuccessResponseSchema(
   z.object({
     delta: z.any().optional(),
     snapshot: z.any().optional(),
-    delta_log_id: z.string().optional(),
+    yops_log_id: z.string().optional(),
     new_project_id: z.string().optional(),
     applied: z.boolean(),
     errors: z.array(z.string()).optional(),
@@ -147,11 +147,11 @@ treeAnswerRoutes.openapi(answerRoute, async (c) => {
     const accessResult = await assertProjectAccess(c, db, conversation.projectId);
     if (accessResult instanceof Response) return accessResult;
 
-    // 2. Build current snapshot from delta log
-    const deltaRecords = await listDeltaLogByConversation(db, conversation_id);
+    // 2. Build current snapshot from yops log
+    const yopsRecords = await listYOpsLogByConversation(db, conversation_id);
     const emptySnapshot: SemanticContent = { trees: [], relations: [] };
-    const currentSnapshot = toDeltaLogEntries(deltaRecords).reduce(
-      (snap, entry) => applyDelta(snap, entry.delta),
+    const currentSnapshot = toYOpsLogEntries(yopsRecords).reduce(
+      (snap, entry) => applyDelta(snap, entry.yops as any),
       emptySnapshot
     );
 
@@ -177,7 +177,7 @@ treeAnswerRoutes.openapi(answerRoute, async (c) => {
             db,
             conversation,
             currentSnapshot,
-            deltaRecords,
+            yopsRecords,
             drift_context
           );
         }
@@ -201,16 +201,16 @@ treeAnswerRoutes.openapi(answerRoute, async (c) => {
     }
 
     // 4. Persist the yops
-    let deltaLogId: string | undefined;
+    let yopsLogId: string | undefined;
     if (result.yops && result.yops.length > 0) {
-      const record = await insertDeltaLogEntry(db, {
+      const record = await insertYOpsLogEntry(db, {
         conversationId: conversation_id,
         projectId: conversation.projectId,
         source: answer.drift_choice ? 'collapse' : 'answer',
-        delta: result.yops,
+        yops: result.yops,
         pipelineState: 'completed',
       });
-      deltaLogId = record.id;
+      yopsLogId = record.id;
     }
 
     // 5. Return result
@@ -221,7 +221,7 @@ treeAnswerRoutes.openapi(answerRoute, async (c) => {
           applied: true,
           delta: result.yops,
           snapshot: result.snapshot,
-          delta_log_id: deltaLogId,
+          yops_log_id: yopsLogId,
         },
       },
       200
@@ -250,7 +250,7 @@ async function handleDriftChoice4(
   // biome-ignore lint/suspicious/noExplicitAny: generic error handler
   currentSnapshot: any,
   // biome-ignore lint/suspicious/noExplicitAny: generic error handler
-  deltaRecords: any[],
+  yopsRecords: any[],
   driftContext?: { relation?: string; new_topic?: string }
 ) {
   // 1. Fetch turns
@@ -268,9 +268,9 @@ async function handleDriftChoice4(
 
   // 2. Calculate processedTurnCount
   let processedTurnCount: number | undefined;
-  if (deltaRecords.length > 0) {
-    const lastDelta = deltaRecords[deltaRecords.length - 1];
-    const lastExtractionTime = new Date(lastDelta.createdAt).getTime();
+  if (yopsRecords.length > 0) {
+    const lastEntry = yopsRecords[yopsRecords.length - 1];
+    const lastExtractionTime = new Date(lastEntry.createdAt).getTime();
     processedTurnCount = allTurns.filter(
       // biome-ignore lint/suspicious/noExplicitAny: generic error handler
       (t: any) => new Date(t.createdAt).getTime() <= lastExtractionTime
@@ -334,11 +334,11 @@ async function handleDriftChoice4(
   }
 
   // 6. Persist yops + snapshot
-  const record = await insertDeltaLogEntry(db, {
+  const record = await insertYOpsLogEntry(db, {
     conversationId: conversation.conversationId,
     projectId: conversation.projectId,
     source: 'pipeline',
-    delta: extractResult.yops,
+    yops: extractResult.yops,
     pipelineState: 'completed',
   });
 
@@ -349,7 +349,7 @@ async function handleDriftChoice4(
         applied: true,
         delta: extractResult.yops,
         snapshot: finalSnapshot,
-        delta_log_id: record.id,
+        yops_log_id: record.id,
       },
     },
     200
@@ -375,13 +375,13 @@ async function handleDriftChoice3(
     limit: 500,
   });
 
-  const deltaRecords = await listDeltaLogByConversation(db, conversation.conversationId);
+  const yopsRecords = await listYOpsLogByConversation(db, conversation.conversationId);
 
   // Find post-drift turns (turns after last extraction)
   let postDriftTurns = allTurns;
-  if (deltaRecords.length > 0) {
-    const lastDelta = deltaRecords[deltaRecords.length - 1];
-    const lastExtractionTime = new Date(lastDelta.createdAt).getTime();
+  if (yopsRecords.length > 0) {
+    const lastEntry = yopsRecords[yopsRecords.length - 1];
+    const lastExtractionTime = new Date(lastEntry.createdAt).getTime();
     postDriftTurns = allTurns.filter(
       // biome-ignore lint/suspicious/noExplicitAny: generic error handler
       (t: any) => new Date(t.createdAt).getTime() > lastExtractionTime

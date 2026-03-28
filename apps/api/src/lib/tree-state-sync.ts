@@ -10,7 +10,7 @@
  * upserts using the node key as the tree ID.
  */
 
-import type { Delta, DeltaSource, Relation, SemanticContent } from '@t3x-dev/core';
+import type { Delta, YOpsSource, Relation, SemanticContent } from '@t3x-dev/core';
 import { flattenTrees } from '@t3x-dev/core';
 import type { AnyDB } from '@t3x-dev/storage';
 import {
@@ -35,7 +35,7 @@ export async function syncDeltaToTrees(
   conversationId: string,
   projectId: string,
   delta: Delta,
-  source: DeltaSource,
+  source: YOpsSource,
   opts?: { topicId?: string }
 ): Promise<void> {
   const isManual = source === 'manual';

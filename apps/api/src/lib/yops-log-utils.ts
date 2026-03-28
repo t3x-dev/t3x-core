@@ -1,31 +1,31 @@
 /**
- * Utility for converting storage DeltaLogRecord to core DeltaLogEntry.
+ * Utility for converting storage YOpsLogRecord to core YOpsLogEntry.
  *
  * Storage uses camelCase (turnHash, createdAt), core uses snake_case (turn_hash, created_at).
- * The `source` and `delta` fields need type assertions since storage stores them as generic JSON.
+ * The `source` and `yops` fields need type assertions since storage stores them as generic JSON.
  */
 
-import type { DeltaLogEntry } from '@t3x-dev/core';
+import type { YOpsLogEntry } from '@t3x-dev/core';
 
-/** Storage DeltaLogRecord shape (subset of fields we need) */
-interface DeltaLogRecord {
+/** Storage YOpsLogRecord shape (subset of fields we need) */
+interface YOpsLogRecord {
   id: string;
   source: unknown;
   turnHash: string | null;
-  delta: unknown;
+  yops: unknown;
   createdAt: Date | string;
   metadata?: unknown;
 }
 
 /**
- * Convert a single storage DeltaLogRecord to a core DeltaLogEntry.
+ * Convert a single storage YOpsLogRecord to a core YOpsLogEntry.
  */
-export function toDeltaLogEntry(record: DeltaLogRecord): DeltaLogEntry {
+export function toYOpsLogEntry(record: YOpsLogRecord): YOpsLogEntry {
   return {
     id: record.id,
-    source: record.source as DeltaLogEntry['source'],
+    source: record.source as YOpsLogEntry['source'],
     turn_hash: record.turnHash ?? undefined,
-    delta: record.delta as DeltaLogEntry['delta'],
+    yops: record.yops,
     created_at:
       record.createdAt instanceof Date ? record.createdAt.toISOString() : record.createdAt,
     metadata: (record.metadata as Record<string, unknown>) ?? undefined,
@@ -33,8 +33,8 @@ export function toDeltaLogEntry(record: DeltaLogRecord): DeltaLogEntry {
 }
 
 /**
- * Convert an array of storage DeltaLogRecords to core DeltaLogEntries.
+ * Convert an array of storage YOpsLogRecords to core YOpsLogEntries.
  */
-export function toDeltaLogEntries(records: DeltaLogRecord[]): DeltaLogEntry[] {
-  return records.map(toDeltaLogEntry);
+export function toYOpsLogEntries(records: YOpsLogRecord[]): YOpsLogEntry[] {
+  return records.map(toYOpsLogEntry);
 }
