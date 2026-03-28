@@ -684,6 +684,21 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_nr_project ON node_relations(project_id);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_nr_pair ON node_relations(commit_hash, source_id, target_id, type);
 
+    -- Rename legacy sentence columns before knowledge graph table references
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'knowledge_node_members' AND column_name = 'content_sentence_id'
+      ) THEN
+        ALTER TABLE knowledge_node_members RENAME COLUMN content_sentence_id TO content_node_id;
+      END IF;
+      IF EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_knm_content_sentence') THEN
+        ALTER INDEX idx_knm_content_sentence RENAME TO idx_knm_content_node;
+      END IF;
+    END
+    $$;
+
     -- ═══════════════════════════════════════════════════════════════════════════
     -- Knowledge Graph (Cross-conversation entity/topic graph)
     -- ═══════════════════════════════════════════════════════════════════════════
