@@ -67,8 +67,10 @@ export {
   type AnchorCandidate,
   type AnchorSource,
   type AnchorType,
-  // Extraction (Phase 2)
+  /** @deprecated Use buildYOpsPrompt instead */
   buildExtractionPrompt,
+  // YOps extraction pipeline
+  buildYOpsPrompt,
   // Relations
   buildRelationPrompt,
   computeAdaptiveConfig,
@@ -76,7 +78,6 @@ export {
   createMeaningPipeline,
   createRelationExtractor,
   Compressor,
-  type DeltaParseResult,
   type ExtractionInput,
   type ExtractionPromptResult,
   type ExtractionResult,
@@ -91,13 +92,14 @@ export {
   type PipelineMode,
   type PipelineOptions,
   type PipelineResult,
-  parseDelta,
   parseRelationResponse,
+  parseYOpsOutput,
   type QualityMetrics,
   RelationExtractor,
   type RelationItem,
   RelationParseError,
   type Segment,
+  type YOpsParseResult,
 } from './extractors';
 
 // Extraction Style Config
@@ -365,8 +367,11 @@ export type {
   BusinessGateResult,
   BusinessRuleConfig,
   CoverageResult,
+  /** @deprecated Use YOps operations instead of Delta */
   Delta,
+  /** @deprecated */
   DeltaLogEntry,
+  /** @deprecated */
   DeltaSource,
   DimensionResult,
   GateDimension,
