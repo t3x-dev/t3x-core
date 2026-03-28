@@ -32,9 +32,8 @@ export function traceYamlToChat(
     collectQuotes(tree, '', allQuotesMap);
   }
 
-  // Find the source turn for this path
-  const node = findNodeByPath(draft, hoveredPath);
-  const sourceTurnIndex = parseSourceTag(node?.source);
+  // Find the source turn for this path — walk up ancestors if node has no source
+  const sourceTurnIndex = findSourceTurn(draft, hoveredPath);
 
   // Normalize path to dot notation for quote lookup
   const dotPath = hoveredPath.replace(/\//g, '.');
@@ -76,18 +75,19 @@ export function traceChatToYaml(
   const tag = `T${turnIndex}`;
   const paths: string[] = [];
 
-  function walk(node: TreeNode, parentPath: string) {
+  function walk(node: TreeNode, parentPath: string, inheritedSource: string | undefined) {
     const path = parentPath ? `${parentPath}/${node.key}` : node.key;
-    if (node.source === tag) {
+    const effectiveSource = node.source ?? inheritedSource;
+    if (effectiveSource === tag) {
       paths.push(path);
     }
     for (const child of node.children) {
-      walk(child, path);
+      walk(child, path, effectiveSource);
     }
   }
 
   for (const tree of draft.trees) {
-    walk(tree, '');
+    walk(tree, '', undefined);
   }
 
   return paths;
@@ -106,6 +106,31 @@ function collectQuotes(node: TreeNode, prefix: string, out: Record<string, strin
   for (const child of node.children) {
     collectQuotes(child, prefix ? `${prefix}.${child.key}` : child.key, out);
   }
+}
+
+/**
+ * Find the source turn index for a path — walks up ancestors if the exact node has no source.
+ */
+function findSourceTurn(draft: SemanticContent, path: string): number | null {
+  const segments = path.replace(/\//g, '.').split('.');
+  for (const tree of draft.trees) {
+    if (tree.key === segments[0]) {
+      // Walk down, tracking the last node that had a source
+      let node: TreeNode = tree;
+      let lastSource = parseSourceTag(tree.source);
+      for (let i = 1; i < segments.length; i++) {
+        const child = node.children.find((c) => c.key === segments[i]);
+        if (!child) break;
+        node = child;
+        if (node.source) {
+          lastSource = parseSourceTag(node.source);
+        }
+      }
+      // If the exact node has a source, use it; otherwise use nearest ancestor's
+      return parseSourceTag(node.source) ?? lastSource;
+    }
+  }
+  return null;
 }
 
 function findNodeByPath(draft: SemanticContent, path: string): TreeNode | null {
