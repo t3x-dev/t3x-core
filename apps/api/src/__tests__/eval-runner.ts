@@ -30,7 +30,7 @@ import { insertConversation, insertProject, insertTurn } from '@t3x-dev/storage'
 import { Hono } from 'hono';
 import { closeDB, getDB } from '../lib/db';
 // Import the actual route (uses real DB + real LLM via provider-registry)
-import { frameExtractRoutes } from '../routes/frame-extract.openapi';
+import { treeExtractRoutes } from '../routes/tree-extract.openapi';
 
 // ============================================================
 // Output Directory
@@ -472,7 +472,7 @@ async function runScenario(app: Hono, scenario: Scenario): Promise<void> {
   // First extraction
   console.log('  Running first extraction...');
   const t0 = Date.now();
-  const res1 = await app.request('/v1/extract/frames', {
+  const res1 = await app.request('/v1/extract/trees', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ conversation_id: conv.conversationId }),
@@ -517,7 +517,7 @@ async function runScenario(app: Hono, scenario: Scenario): Promise<void> {
     console.log('  Running incremental extraction...');
 
     const t1 = Date.now();
-    const res2 = await app.request('/v1/extract/frames', {
+    const res2 = await app.request('/v1/extract/trees', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ conversation_id: conv.conversationId }),
@@ -566,7 +566,7 @@ async function main(): Promise<void> {
 
   // Create Hono app with real routes
   const app = new Hono();
-  app.route('/', frameExtractRoutes);
+  app.route('/', treeExtractRoutes);
 
   // Initialize DB (uses embedded PG or DATABASE_URL)
   console.log('Initializing database...');

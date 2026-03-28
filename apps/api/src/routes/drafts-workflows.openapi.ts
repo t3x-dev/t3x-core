@@ -651,12 +651,12 @@ draftsWorkflowRoutes.openapi(forkDraftRoute, async (c) => {
 
 // POST /v1/drafts/:id/extract
 draftsWorkflowRoutes.openapi(extractDraftRoute, async (c) => {
-  // Node extraction is deprecated (replaced by frame-based extraction).
+  // Node extraction is deprecated (replaced by tree-based extraction).
   // Use POST /v1/extract/frames + POST /v1/extract/incremental instead.
   return errorResponse(
     c,
     'DEPRECATED',
-    'Node extraction from conversation has been replaced by frame-based extraction. Use /v1/extract/frames instead.'
+    'Node extraction from conversation has been replaced by tree-based extraction. Use /v1/extract/trees instead.'
   );
 });
 

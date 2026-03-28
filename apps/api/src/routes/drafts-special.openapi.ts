@@ -144,7 +144,7 @@ draftsSpecialRoutes.openapi(createAutoDraftRoute, async (c) => {
   return errorResponse(
     c,
     'DEPRECATED',
-    'Auto-draft creation via node extraction has been replaced by frame-based extraction. Use /v1/extract/frames instead.'
+    'Auto-draft creation via node extraction has been replaced by tree-based extraction. Use /v1/extract/trees instead.'
   );
 });
 

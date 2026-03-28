@@ -2,7 +2,7 @@
  * Delta Log Routes with OpenAPI
  *
  * REST API endpoints for semantic delta log CRUD and draft computation.
- * Deltas track incremental changes to semantic frames within a conversation.
+ * Deltas track incremental changes to semantic trees within a conversation.
  *
  * Endpoints:
  * - POST   /v1/conversations/:conversationId/deltas        - Append a delta
@@ -26,10 +26,10 @@ import { getDB } from '../lib/db';
 import { toDeltaLogEntries } from '../lib/delta-log-utils';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import {
-  readDraftFromFrames,
-  rebuildFramesFromSnapshot,
-  syncDeltaToFrames,
-} from '../lib/frame-state-sync';
+  readDraftFromTrees,
+  rebuildTreesFromSnapshot,
+  syncDeltaToTrees,
+} from '../lib/tree-state-sync';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
 export const deltaLogRoutes = new OpenAPIHono({
@@ -285,7 +285,7 @@ deltaLogRoutes.openapi(createDeltaRoute, async (c) => {
         turnHash: body.turn_hash,
         delta: body.delta,
       });
-      await syncDeltaToFrames(
+      await syncDeltaToTrees(
         tx,
         conversationId,
         conversation.projectId,
@@ -348,7 +348,7 @@ deltaLogRoutes.openapi(getDraftRoute, async (c) => {
     }
 
     // Read from frames table; fallback to delta replay for unmigrated conversations
-    let draft = await readDraftFromFrames(db, conversationId, topic_id);
+    let draft = await readDraftFromTrees(db, conversationId, topic_id);
     if (draft.trees.length === 0) {
       // Fallback: replay deltas (pre-migration conversations)
       const records = topic_id
@@ -391,7 +391,7 @@ deltaLogRoutes.openapi(deleteDeltaRoute, async (c) => {
         (snap, entry) => applyDelta(snap, entry.delta),
         emptySnap
       );
-      await rebuildFramesFromSnapshot(tx, conversationId, existing.projectId, rebuilt);
+      await rebuildTreesFromSnapshot(tx, conversationId, existing.projectId, rebuilt);
     });
 
     return c.json({ success: true as const, data: null }, 200);
