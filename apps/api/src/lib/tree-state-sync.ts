@@ -1,119 +1,41 @@
 /**
  * Tree State Sync
  *
- * Applies tree changes to the trees + tree_relations tables.
+ * Syncs semantic tree state to the trees + tree_relations tables.
  * Used by extraction, compression, manual edit, and undo routes.
  * All operations use the caller's transaction handle (tx) for atomicity.
  *
- * NOTE: TreeChangeBatch uses tree-primary TreeChange (parent_path/target_path/node)
- * but the trees DB table still stores flat nodes. We map tree changes to flat node
- * upserts using the node key as the tree ID.
+ * After appending a YOps entry, call syncYOpsToTrees to replay the full
+ * yops log and rebuild the trees table from the resulting snapshot.
  */
 
-import type { TreeChangeBatch, YOpsSource, Relation, SemanticContent } from '@t3x-dev/core';
+import type { Relation, SemanticContent } from '@t3x-dev/core';
 import { flattenTrees } from '@t3x-dev/core';
 import type { AnyDB } from '@t3x-dev/storage';
 import {
-  deleteTree,
-  deleteTreeRelationByKey,
   deleteTreeRelationsByConversation,
-  deleteTreeRelationsByTreeId,
   deleteTreesByConversation,
-  getTreeByKey,
   listTreeRelationsByConversation,
   listTreesByConversation,
+  listYOpsLogByConversation,
   upsertTree,
   upsertTreeRelation,
 } from '@t3x-dev/storage';
+import { replayYOpsLog, toYOpsLogEntries } from './yops-log-utils';
 
 /**
- * Apply tree changes to the trees table.
+ * Replay the full yops log for a conversation and rebuild the trees table.
  * The `db` parameter should be a transaction handle (tx) from the caller.
  */
-export async function syncDeltaToTrees(
+export async function syncYOpsToTrees(
   db: AnyDB,
   conversationId: string,
   projectId: string,
-  batch: TreeChangeBatch,
-  source: YOpsSource,
   opts?: { topicId?: string }
 ): Promise<void> {
-  const isManual = source === 'manual';
-
-  for (const change of batch.changes) {
-    switch (change.action) {
-      case 'add': {
-        const n = change.node;
-        await upsertTree(db, {
-          conversationId,
-          treeId: n.key,
-          projectId,
-          topicId: opts?.topicId,
-          type: n.key,
-          slots: n.slots,
-          status: 'active',
-          confidence: n.confidence,
-          source,
-          slotSources: n.slot_quotes,
-          manualEdited: isManual,
-        });
-        break;
-      }
-      case 'update': {
-        const current = await getTreeByKey(db, conversationId, change.target_path);
-        if (current) {
-          const mergedSlots = { ...(current.slots as Record<string, unknown>) };
-          for (const [k, v] of Object.entries(change.slots)) {
-            if (v === null) {
-              delete mergedSlots[k];
-            } else {
-              mergedSlots[k] = v;
-            }
-          }
-          await upsertTree(db, {
-            conversationId,
-            treeId: change.target_path,
-            projectId,
-            topicId: opts?.topicId ?? current.topicId ?? undefined,
-            type: current.type,
-            slots: mergedSlots,
-            status: (current.status as string) ?? 'active',
-            confidence: current.confidence ?? undefined,
-            source,
-            slotSources: current.slotSources,
-            manualEdited: isManual || current.manualEdited,
-          });
-        }
-        break;
-      }
-      case 'remove': {
-        await deleteTreeRelationsByTreeId(db, conversationId, change.target_path);
-        await deleteTree(db, conversationId, change.target_path);
-        break;
-      }
-    }
-  }
-
-  // Handle new relations
-  if (batch.new_relations) {
-    for (const rel of batch.new_relations) {
-      await upsertTreeRelation(db, {
-        conversationId,
-        topicId: opts?.topicId,
-        fromTreeId: rel.from,
-        toTreeId: rel.to,
-        type: rel.type,
-        confidence: rel.confidence,
-      });
-    }
-  }
-
-  // Handle removed relations (match specific from+to+type)
-  if (batch.remove_relations) {
-    for (const rel of batch.remove_relations) {
-      await deleteTreeRelationByKey(db, conversationId, rel.from, rel.to, rel.type);
-    }
-  }
+  const records = await listYOpsLogByConversation(db, conversationId);
+  const snapshot = replayYOpsLog(toYOpsLogEntries(records));
+  await rebuildTreesFromSnapshot(db, conversationId, projectId, snapshot, opts?.topicId);
 }
 
 

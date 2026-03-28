@@ -191,6 +191,7 @@ export async function deleteYOpsEntry(conversationId: string, yopsId: string): P
 
 export interface CompressResult {
   delta: unknown;
+  snapshot?: import('@t3x-dev/core').SemanticContent;
   metadata: {
     compress_summary: string;
     trees_before: number;

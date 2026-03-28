@@ -10,7 +10,6 @@
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
-  applyTreeChanges,
   checkDiffCompatibility,
   checkReadiness,
   computeSessionContext,
@@ -28,7 +27,6 @@ import {
   type LLMCallLogger,
   pipelineEmitter,
   preFilterDrift,
-  type SemanticContent,
 } from '@t3x-dev/core';
 import {
   createTopic,
@@ -42,7 +40,7 @@ import {
   listTopicsByConversation,
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
-import { toYOpsLogEntries } from '../lib/yops-log-utils';
+import { replayYOpsLog, toYOpsLogEntries } from '../lib/yops-log-utils';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { rebuildTreesFromSnapshot } from '../lib/tree-state-sync';
 import { assertProjectAccess } from '../lib/project-access';
@@ -216,11 +214,7 @@ treeExtractRoutes.openapi(extractTreesRoute, async (c) => {
     const yopsRecords = topic_id
       ? await listYOpsLogByTopic(db, conversation_id, topic_id)
       : await listYOpsLogByConversation(db, conversation_id);
-    const emptySnapshot: SemanticContent = { trees: [], relations: [] };
-    const currentSnapshot = toYOpsLogEntries(yopsRecords).reduce(
-      (snap, entry) => applyTreeChanges(snap, entry.yops as any),
-      emptySnapshot
-    );
+    const currentSnapshot = replayYOpsLog(toYOpsLogEntries(yopsRecords));
     const currentFlat = flattenTrees(currentSnapshot.trees);
 
     // 5. Convert turns to ExtractionTurn format (include turn_hash for source tracking)

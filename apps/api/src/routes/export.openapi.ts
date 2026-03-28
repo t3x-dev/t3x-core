@@ -6,7 +6,6 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { applyTreeChanges, type SemanticContent } from '@t3x-dev/core';
 import {
   findConversationsByProject,
   findTurnsByProject,
@@ -14,7 +13,7 @@ import {
 } from '@t3x-dev/storage';
 import * as crypto from 'crypto';
 import { getDB } from '../lib/db';
-import { toYOpsLogEntries } from '../lib/yops-log-utils';
+import { replayYOpsLog, toYOpsLogEntries } from '../lib/yops-log-utils';
 import { zodErrorHook } from '../lib/errors';
 import { assertProjectAccess } from '../lib/project-access';
 import { ErrorResponseSchema } from '../schemas/common';
@@ -235,10 +234,7 @@ exportRoutes.openapi(exportCfpackRoute, async (c) => {
     for (const conv of await findConversationsByProject(db, { projectId, limit: 10000 })) {
       const yopsLogs = await listYOpsLogByConversation(db, conv.conversationId);
       if (yopsLogs.length > 0) {
-        const snapshot = toYOpsLogEntries(yopsLogs).reduce(
-          (snap, entry) => applyTreeChanges(snap, entry.yops as any),
-          { trees: [], relations: [] } as SemanticContent
-        );
+        const snapshot = replayYOpsLog(toYOpsLogEntries(yopsLogs));
         semanticSnapshots[conv.conversationId] = {
           trees: snapshot.trees,
           relations: snapshot.relations,
@@ -382,10 +378,7 @@ exportRoutes.openapi(exportLedgerRoute, async (c) => {
     for (const conv of conversations) {
       const yopsLogs = await listYOpsLogByConversation(db, conv.conversationId);
       if (yopsLogs.length > 0) {
-        const snapshot = toYOpsLogEntries(yopsLogs).reduce(
-          (snap, entry) => applyTreeChanges(snap, entry.yops as any),
-          { trees: [], relations: [] } as SemanticContent
-        );
+        const snapshot = replayYOpsLog(toYOpsLogEntries(yopsLogs));
         lines.push(
           JSON.stringify({
             type: 'semantic_snapshot',

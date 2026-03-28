@@ -55,7 +55,7 @@ function commitToSemanticEntry(
     tags: [projectName, commit.branch || 'main'],
     evidenceCount: nodes.length,
     facets: nodes.slice(0, 3).map((f) => {
-      const label = `${f.type}: ${Object.values(f.slots ?? {})
+      const label = `${f.key}: ${Object.values(f.slots ?? {})
         .map((v) => (typeof v === 'string' ? v : JSON.stringify(v)))
         .join(', ')}`;
       return label.slice(0, 50) + (label.length > 50 ? '...' : '');

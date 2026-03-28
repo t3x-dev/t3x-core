@@ -13,14 +13,12 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
   applyAnswer,
-  applyTreeChanges,
   createMeaningPipeline,
   type ExtractionResult,
   type ExtractionTurn,
   Extractor,
   flattenTrees,
   RELATION_TYPES,
-  type SemanticContent,
   type UserAnswer,
 } from '@t3x-dev/core';
 import {
@@ -33,7 +31,7 @@ import {
   listYOpsLogByConversation,
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
-import { toYOpsLogEntries } from '../lib/yops-log-utils';
+import { replayYOpsLog, toYOpsLogEntries } from '../lib/yops-log-utils';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { assertProjectAccess } from '../lib/project-access';
 import { getProviderRegistry } from '../lib/provider-registry';
@@ -149,11 +147,7 @@ treeAnswerRoutes.openapi(answerRoute, async (c) => {
 
     // 2. Build current snapshot from yops log
     const yopsRecords = await listYOpsLogByConversation(db, conversation_id);
-    const emptySnapshot: SemanticContent = { trees: [], relations: [] };
-    const currentSnapshot = toYOpsLogEntries(yopsRecords).reduce(
-      (snap, entry) => applyTreeChanges(snap, entry.yops as any),
-      emptySnapshot
-    );
+    const currentSnapshot = replayYOpsLog(toYOpsLogEntries(yopsRecords));
 
     // 3. Process the first answer (single answer per request for now)
     const answer: UserAnswer = answers[0];

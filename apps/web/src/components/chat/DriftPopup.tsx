@@ -41,9 +41,8 @@ export function DriftPopup() {
           new_topic: driftInfo.new_topic,
         });
 
-        if (result.status === 'completed' && result.delta) {
-          const s = useExtractionPanelStore.getState();
-          s.applyTreeChanges(result.delta as import('@t3x-dev/core').TreeChangeBatch, 'pipeline');
+        if (result.status === 'completed' && result.snapshot) {
+          useExtractionPanelStore.getState().setDraft(result.snapshot);
         }
       } catch {
         // Drift choice application failed — non-critical

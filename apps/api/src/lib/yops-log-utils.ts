@@ -5,7 +5,7 @@
  * The `source` and `yops` fields need type assertions since storage stores them as generic JSON.
  */
 
-import type { YOpsLogEntry } from '@t3x-dev/core';
+import { applyYOps, type SemanticContent, type YOpsLogEntry } from '@t3x-dev/core';
 
 /** Storage YOpsLogRecord shape (subset of fields we need) */
 interface YOpsLogRecord {
@@ -37,4 +37,16 @@ export function toYOpsLogEntry(record: YOpsLogRecord): YOpsLogEntry {
  */
 export function toYOpsLogEntries(records: YOpsLogRecord[]): YOpsLogEntry[] {
   return records.map(toYOpsLogEntry);
+}
+
+/**
+ * Replay a sequence of YOpsLogEntries to build the current SemanticContent snapshot.
+ * Each entry's yops are applied in order; if an entry fails it is skipped (snapshot unchanged).
+ */
+export function replayYOpsLog(entries: YOpsLogEntry[]): SemanticContent {
+  const empty: SemanticContent = { trees: [], relations: [] };
+  return entries.reduce((snap, entry) => {
+    const result = applyYOps(snap, entry.yops as any[]);
+    return result.ok ? { trees: result.trees, relations: result.relations } : snap;
+  }, empty);
 }

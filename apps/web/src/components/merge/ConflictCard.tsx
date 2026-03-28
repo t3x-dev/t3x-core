@@ -328,7 +328,7 @@ export function ConflictCard({
 
           {/* Type badge */}
           <span className="rounded bg-[var(--surface-app)] px-1.5 py-0.5 font-mono text-[11px] font-medium text-[var(--text-secondary)] border border-[var(--stroke-divider)]">
-            {sourceNode.type}
+            {sourceNode.key}
           </span>
 
           {/* Tree ID */}

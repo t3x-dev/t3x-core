@@ -282,11 +282,11 @@ export function CommitTreeCard({
 
           {/* Type badge */}
           <span className="rounded bg-[var(--surface-app)] px-1.5 py-0.5 font-mono text-[11px] font-medium text-[var(--text-secondary)] border border-[var(--stroke-divider)]">
-            {node.type}
+            {node.key}
           </span>
 
           {/* Tree ID */}
-          <span className="font-mono text-[11px] text-[var(--text-tertiary)]">{node.id}</span>
+          <span className="font-mono text-[11px] text-[var(--text-tertiary)]">{node.key}</span>
         </div>
 
         <div className="flex items-center gap-2 shrink-0">

@@ -9,7 +9,7 @@ export function AdvisoryPanel() {
   const questions = useExtractionPanelStore((s) => s.advisoryQuestions);
   const setAdvisoryQuestions = useExtractionPanelStore((s) => s.setAdvisoryQuestions);
   const conversationId = useExtractionPanelStore((s) => s.conversationId);
-  const applyTreeChanges = useExtractionPanelStore((s) => s.applyTreeChanges);
+  const setDraft = useExtractionPanelStore((s) => s.setDraft);
 
   const [answerInputs, setAnswerInputs] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState<string | null>(null);
@@ -37,8 +37,8 @@ export function AdvisoryPanel() {
           { type: q.type as 'vagueness' | 'structural', tree_id: q.treeId, slot_key: q.slotKey }
         );
 
-        if (result.applied && result.delta) {
-          applyTreeChanges(result.delta as import('@t3x-dev/core').TreeChangeBatch, 'answer');
+        if (result.applied && result.snapshot) {
+          useExtractionPanelStore.getState().setDraft(result.snapshot);
         }
 
         // Remove answered question
@@ -49,7 +49,7 @@ export function AdvisoryPanel() {
         setSubmitting(null);
       }
     },
-    [questions, conversationId, answerInputs, applyTreeChanges, handleDismiss]
+    [questions, conversationId, answerInputs, setDraft, handleDismiss]
   );
 
   if (questions.length === 0) return null;

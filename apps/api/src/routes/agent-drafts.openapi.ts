@@ -8,7 +8,7 @@
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import type { SemanticContent } from '@t3x-dev/core';
-import { applyTreeChanges, createClaudeProvider, flattenTrees, LLMProviderError } from '@t3x-dev/core';
+import { createClaudeProvider, flattenTrees, LLMProviderError } from '@t3x-dev/core';
 import {
   findAgentDraftById,
   findConversationById,
@@ -19,7 +19,7 @@ import {
   updateAgentDraft,
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
-import { toYOpsLogEntries } from '../lib/yops-log-utils';
+import { replayYOpsLog, toYOpsLogEntries } from '../lib/yops-log-utils';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { getLLMProvider } from '../lib/provider-registry';
 import { getUserId, recordUsageFireAndForget } from '../lib/usage-tracking';
@@ -272,10 +272,7 @@ async function extractMustHave(db: DBType, conversationId: string): Promise<stri
   // Strategy 1: Tree snapshot
   const yopsLogs = await listYOpsLogByConversation(db, conversationId);
   if (yopsLogs.length > 0) {
-    const snapshot = toYOpsLogEntries(yopsLogs).reduce(
-      (snap, entry) => applyTreeChanges(snap, entry.yops as any),
-      { trees: [], relations: [] } as SemanticContent
-    );
+    const snapshot = replayYOpsLog(toYOpsLogEntries(yopsLogs));
     const prefs = extractPreferencesFromFrames(snapshot);
     if (prefs.mustHave.length > 0) {
       return prefs.mustHave.slice(0, 15);
@@ -313,10 +310,7 @@ async function extractMustntHave(db: DBType, conversationId: string): Promise<st
   // Strategy 1: Tree snapshot
   const yopsLogs = await listYOpsLogByConversation(db, conversationId);
   if (yopsLogs.length > 0) {
-    const snapshot = toYOpsLogEntries(yopsLogs).reduce(
-      (snap, entry) => applyTreeChanges(snap, entry.yops as any),
-      { trees: [], relations: [] } as SemanticContent
-    );
+    const snapshot = replayYOpsLog(toYOpsLogEntries(yopsLogs));
     const prefs = extractPreferencesFromFrames(snapshot);
     if (prefs.mustNotHave.length > 0) {
       return prefs.mustNotHave.slice(0, 10);

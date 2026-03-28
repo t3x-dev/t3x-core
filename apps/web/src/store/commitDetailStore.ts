@@ -1,6 +1,7 @@
 // apps/web/src/store/commitDetailStore.ts
 
-import type { Commit, TreeNode } from '@t3x-dev/core';
+import type { TreeNode } from '@t3x-dev/core';
+import type { WebCommit } from '@/lib/api/commitUnified';
 import { flattenTrees } from '@t3x-dev/core';
 import { create } from 'zustand';
 
@@ -25,8 +26,8 @@ interface SourceViewerState {
 
 interface CommitDetailState {
   // Data
-  commit: Commit | null;
-  parentCommit: Commit | null;
+  commit: WebCommit | null;
+  parentCommit: WebCommit | null;
   enrichedNodes: EnrichedNode[];
   removedNodes: EnrichedNode[];
 
@@ -36,7 +37,7 @@ interface CommitDetailState {
   hoveredSlotKey: string | null;
 
   // Actions
-  setCommit: (commit: Commit, parent: Commit | null) => void;
+  setCommit: (commit: WebCommit, parent: WebCommit | null) => void;
   setActiveNode: (id: string | null) => void;
   openSourceViewer: (slotKey: string) => void;
   closeSourceViewer: () => void;
@@ -60,8 +61,8 @@ function buildNodeMap(trees: TreeNode[], prefix = ''): Map<string, TreeNode> {
 }
 
 function enrichNodes(
-  commit: Commit,
-  parent: Commit | null
+  commit: WebCommit,
+  parent: WebCommit | null
 ): { enriched: EnrichedNode[]; removed: EnrichedNode[] } {
   const parentNodeMap = parent ? buildNodeMap(parent.content.trees) : new Map<string, TreeNode>();
   const currentNodeMap = buildNodeMap(commit.content.trees);
