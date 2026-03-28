@@ -339,32 +339,32 @@ export function ChatSidebar() {
 
   const { menu, open: openMenu, close: closeMenu } = useContextMenu();
 
-  // Fetch projects on mount
+  const refreshKey = useChatStore((s) => s.refreshKey);
+
+  // Fetch projects on mount and when refreshKey changes
   useEffect(() => {
     listProjects(50, 0)
       .then((data) => setProjects(data.projects))
       .catch(() => {
         // silently fail — sidebar is non-critical
       });
-  }, []);
+  }, [refreshKey]);
 
-  // Fetch conversations for expanded projects
+  // Fetch conversations for expanded projects (re-fetch on refreshKey)
   useEffect(() => {
     for (const projectId of Array.from(expandedProjectIds)) {
-      if (!projectConversations[projectId]) {
-        listConversations(projectId, 50, 0)
-          .then((data) => {
-            setProjectConversations((prev) => ({
-              ...prev,
-              [projectId]: data.conversations,
-            }));
-          })
-          .catch(() => {
-            // silently fail
-          });
-      }
+      listConversations(projectId, 50, 0)
+        .then((data) => {
+          setProjectConversations((prev) => ({
+            ...prev,
+            [projectId]: data.conversations,
+          }));
+        })
+        .catch(() => {
+          // silently fail
+        });
     }
-  }, [expandedProjectIds, projectConversations]);
+  }, [expandedProjectIds, refreshKey]);
 
   const isSettings = pathname.startsWith('/settings');
 
