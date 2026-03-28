@@ -411,6 +411,12 @@ export {
   YOpsDocumentSchema,
 } from './yops';
 
+// ═══════════════════════════════════════════════════════════════════════════
+// YLint — Knowledge Tree Linter (4 Normal Forms)
+// ═══════════════════════════════════════════════════════════════════════════
+export { DEFAULT_LINT_CONFIG, ylint } from './ylint';
+export type { LintConfig, LintResult, LintWarning } from './ylint';
+
 export type {
   AddOp,
   CloneOp,
