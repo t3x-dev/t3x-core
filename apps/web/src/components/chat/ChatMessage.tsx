@@ -1,7 +1,7 @@
 'use client';
 
 import { Pencil, RefreshCw, User } from 'lucide-react';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Citation } from '@/lib/api/chat';
@@ -10,7 +10,7 @@ import { useExtractionPanelStore } from '@/store/extractionPanelStore';
 import { CitationChips } from './CitationChips';
 import { CodeBlock } from './CodeBlock';
 import { ThinkingSection } from './ThinkingSection';
-import { type CompatNode, contentToNodes, treesToNodes } from '@/lib/treeCompat';
+import { traceYamlToChat, traceChatToYaml } from '@/lib/hoverTrace';
 
 interface ChatMessageProps {
   sender: 'user' | 'assistant';
@@ -109,110 +109,29 @@ export function ChatMessage({
   const draft = useExtractionPanelStore((s) => s.draft);
   const setHoveredTurn = useExtractionPanelStore((s) => s.setHoveredTurn);
   const textRef = useRef<HTMLDivElement>(null);
+  const messageRef = useRef<HTMLDivElement>(null);
 
-  // Compute character offset from mouse position (user and assistant messages)
-  const handleMouseMove = useCallback(
-    (e: React.MouseEvent) => {
-      if (!turnHash || !textRef.current) return;
-      // caretRangeFromPoint returns a Range at the mouse cursor position
-      const range = document.caretRangeFromPoint(e.clientX, e.clientY);
-      if (!range || !textRef.current.contains(range.startContainer)) {
-        setHoveredTurn(turnHash);
-        return;
-      }
-      // Walk text nodes to compute absolute character offset
-      const walker = document.createTreeWalker(textRef.current, NodeFilter.SHOW_TEXT);
-      let offset = 0;
-      let node: Node | null = walker.nextNode();
-      while (node) {
-        if (node === range.startContainer) {
-          offset += range.startOffset;
-          break;
-        }
-        offset += node.textContent?.length ?? 0;
-        node = walker.nextNode();
-      }
-      setHoveredTurn(turnHash, offset);
-    },
-    [turnHash, setHoveredTurn]
-  );
-
-  // Convert to compat trees for id-based lookup and source refs
-  const nodes = useMemo(() => contentToNodes(draft), [draft]);
-
-  // Find the hovered tree node — match by dot-path (compat) or slash-path (TreeNode)
-  const hoveredNode = useMemo(() => {
+  // ── YAML → Chat: trace hovered YAML node to this message ──
+  const trace = useMemo(() => {
     if (!hoveredNodeId) return null;
-    // Try direct match, then convert separators
-    return nodes.find((f) => f.id === hoveredNodeId)
-      ?? nodes.find((f) => f.id === hoveredNodeId.replace(/\//g, '.'))
-      ?? nodes.find((f) => f.id.replace(/\./g, '/') === hoveredNodeId)
-      ?? null;
-  }, [hoveredNodeId, nodes]);
+    return traceYamlToChat(draft, hoveredNodeId, hoveredSlotKey);
+  }, [hoveredNodeId, hoveredSlotKey, draft]);
 
-  // Collect ALL slot_quotes from the entire draft tree (they may be on root with dot-path keys)
-  const allQuotes = useMemo(() => {
-    const quotes: Record<string, string> = {};
-    function collectQuotes(node: import('@t3x-dev/core').TreeNode, prefix: string) {
-      if (node.slot_quotes) {
-        for (const [k, v] of Object.entries(node.slot_quotes)) {
-          const fullKey = prefix ? `${prefix}.${k}` : k;
-          quotes[fullKey] = v;
-          quotes[k] = v; // also store without prefix for direct match
-        }
-      }
-      for (const child of node.children) {
-        collectQuotes(child, prefix ? `${prefix}.${child.key}` : child.key);
-      }
-    }
-    for (const tree of draft.trees) {
-      collectQuotes(tree, '');
-    }
-    return quotes;
-  }, [draft.trees]);
+  // Does the hovered YAML node come from THIS message?
+  const isSourceMessage = trace?.sourceTurnIndex != null && turnIndex != null && trace.sourceTurnIndex === turnIndex;
 
-  // Collect quotes to highlight based on what's hovered
-  const quotesToHighlight = useMemo(() => {
-    if (!hoveredNodeId) return [];
-
-    // Normalize hovered path to dot-path
-    const hoveredPath = hoveredNodeId.replace(/\//g, '.');
-
-    if (hoveredSlotKey) {
-      // Specific slot hovered — look for quote with various key formats
-      const candidates = [
-        hoveredSlotKey,
-        `${hoveredPath}.${hoveredSlotKey}`,
-        // Try parent path variants
-        hoveredPath.includes('.') ? `${hoveredPath.split('.').slice(1).join('.')}.${hoveredSlotKey}` : null,
-      ].filter(Boolean) as string[];
-
-      for (const key of candidates) {
-        if (allQuotes[key]) return [allQuotes[key]];
-      }
-      return [];
-    }
-
-    // Node header hovered — find all quotes that start with this node's path
-    const matchingQuotes: string[] = [];
-    for (const [key, value] of Object.entries(allQuotes)) {
-      if (key.startsWith(hoveredPath + '.') || key.startsWith(hoveredPath.split('.').slice(1).join('.') + '.')) {
-        matchingQuotes.push(value);
-      }
-    }
-    return matchingQuotes;
-  }, [hoveredNodeId, hoveredSlotKey, allQuotes]);
-
-  // Find all quote texts in this message's content → highlight ranges
+  // Try to find quote text in this message for character-level highlighting
   const highlightRanges = useMemo(() => {
-    if (quotesToHighlight.length === 0 || !content) return [];
+    if (!isSourceMessage || !trace) return [];
+    const quotes = trace.allQuotes;
+    if (quotes.length === 0 || !content) return [];
+
     const lowerContent = content.toLowerCase();
     const ranges: Array<{ start: number; end: number }> = [];
 
-    for (const quote of quotesToHighlight) {
+    for (const quote of quotes) {
       const lowerQuote = quote.toLowerCase();
       let searchFrom = 0;
-      // Find all occurrences
       while (searchFrom < lowerContent.length) {
         const idx = lowerContent.indexOf(lowerQuote, searchFrom);
         if (idx === -1) break;
@@ -220,53 +139,37 @@ export function ChatMessage({
         searchFrom = idx + quote.length;
       }
     }
-
-    // Sort and dedupe overlapping ranges
     ranges.sort((a, b) => a.start - b.start);
     return ranges;
-  }, [quotesToHighlight, content]);
+  }, [isSourceMessage, trace, content]);
 
   const hasCharHighlights = highlightRanges.length > 0;
-  // Whole-message tint: when hovering a YAML node, tint the source message
-  const isWholeMessageHighlight = useMemo(() => {
-    if (!hoveredNodeId) return false;
+  // Whole-message tint: when this is the source message for hovered YAML
+  const isWholeMessageHighlight = isSourceMessage && !hasCharHighlights;
 
-    // Find the source turn tag by walking the tree
-    const findSource = (path: string): string | undefined => {
-      const segments = path.replace(/\//g, '.').split('.');
-      for (const tree of draft.trees) {
-        if (tree.key === segments[0]) {
-          let node: import('@t3x-dev/core').TreeNode | undefined = tree;
-          for (let i = 1; i < segments.length && node; i++) {
-            node = node.children.find((c) => c.key === segments[i]);
-          }
-          // Walk up: if this node has no source, use parent's
-          if (node?.source) return node.source;
-          return tree.source;
-        }
-      }
-      return undefined;
-    };
-
-    const src = findSource(hoveredNodeId);
-    if (!src || turnIndex == null) return false;
-    // source is "T1", "T2", etc. turnIndex is 1-based from ChatWorkspace
-    if (src === `T${turnIndex}`) return true;
-    // Also try turnIndex as the actual turn position
-    // The extraction tags turns as T1 (first user), T2 (first assistant), etc.
-    return false;
-  }, [hoveredNodeId, turnIndex, draft.trees]);
+  // Auto-scroll this message into view when it's the source of hovered YAML
+  useEffect(() => {
+    if (isSourceMessage && messageRef.current) {
+      messageRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }, [isSourceMessage]);
 
   return (
     <div
+      ref={messageRef}
       className={cn(
         'group w-full py-4 transition-colors duration-200 relative',
         'animate-in fade-in duration-200'
       )}
       style={{
-        background: isWholeMessageHighlight ? 'rgba(96, 165, 250, 0.08)' : 'transparent',
+        background: isWholeMessageHighlight
+          ? 'rgba(96, 165, 250, 0.15)'
+          : isSourceMessage && hasCharHighlights
+            ? 'rgba(96, 165, 250, 0.06)'
+            : 'transparent',
+        borderLeft: isSourceMessage ? '3px solid rgba(96, 165, 250, 0.5)' : undefined,
       }}
-      onMouseEnter={() => turnHash && setHoveredTurn(turnHash)}
+      onMouseEnter={() => turnIndex != null && setHoveredTurn(String(turnIndex))}
       onMouseLeave={() => setHoveredTurn(null)}
     >
       <div className="mx-auto max-w-3xl px-4">
@@ -338,8 +241,7 @@ export function ChatMessage({
                 ) : (
                   <div
                     ref={textRef}
-                    onMouseMove={handleMouseMove}
-                    className="text-sm leading-relaxed text-[var(--text-primary)] whitespace-pre-wrap"
+                                        className="text-sm leading-relaxed text-[var(--text-primary)] whitespace-pre-wrap"
                   >
                     {hasCharHighlights ? (
                       <HighlightedText text={content} ranges={highlightRanges} />
@@ -356,8 +258,7 @@ export function ChatMessage({
                 )}
                 <div
                   ref={textRef}
-                  onMouseMove={handleMouseMove}
-                  className={cn(
+                                    className={cn(
                     'prose-chat text-sm leading-relaxed text-[var(--text-primary)]',
                     isStreaming && 'streaming-text'
                   )}

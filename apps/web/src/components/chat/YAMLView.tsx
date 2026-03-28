@@ -5,6 +5,7 @@ import { Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { nestNodes } from '@/lib/treeNesting';
 import { parseDisplayYAML, toDisplayYAML } from '@/lib/liteYaml';
+import { traceChatToYaml } from '@/lib/hoverTrace';
 import { RELEVANCE_THRESHOLD, type RelevanceContext, relevanceScore } from '@/lib/relevanceScore';
 import { useExtractionPanelStore } from '@/store/extractionPanelStore';
 import { TreeHistoryPopover } from './TreeHistoryPopover';
@@ -322,6 +323,26 @@ export function YAMLView() {
     return lines;
   }, [sortedNodes, changeMap, relevanceCtx, expandedCollapsed]);
 
+  // Reverse highlight: when hovering a chat message, which YAML paths light up?
+  // hoveredTurnHash now carries the turn index as a string (e.g., "1", "2")
+  const reverseHighlightPaths = useMemo(() => {
+    if (!hoveredTurnHash) return new Set<string>();
+    const turnIdx = parseInt(hoveredTurnHash, 10);
+    if (isNaN(turnIdx)) return new Set<string>();
+    const paths = traceChatToYaml(draft, turnIdx);
+    // Also include child paths for highlighting
+    const expanded = new Set<string>();
+    for (const p of paths) {
+      expanded.add(p);
+      // Add parent paths so the header lights up too
+      const segments = p.split('/');
+      for (let i = 1; i < segments.length; i++) {
+        expanded.add(segments.slice(0, i).join('/'));
+      }
+    }
+    return expanded;
+  }, [hoveredTurnHash, draft]);
+
   if (draft.trees.length === 0 && !isEditing) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2">
@@ -400,31 +421,7 @@ export function YAMLView() {
               : !!confirmedSlotKeys[line.treeId]?.[line.slotKey!];
 
             // Check if this row is highlighted by reverse hover (chat → YAML)
-            // Find the TreeNode for this line by walking draft.trees
-            const findTreeNodeSource = (path: string): string | undefined => {
-              const segments = path.split('/');
-              let node: import('@t3x-dev/core').TreeNode | undefined;
-              for (const tree of draft.trees) {
-                if (tree.key === segments[0]) {
-                  node = tree;
-                  for (let i = 1; i < segments.length && node; i++) {
-                    node = node.children.find((c) => c.key === segments[i]);
-                  }
-                  break;
-                }
-              }
-              return node?.source ?? undefined;
-            };
-            const lineNodeSource = findTreeNodeSource(line.treeId);
-            const isReverseHighlighted = (() => {
-              if (!hoveredTurnHash || !lineNodeSource) return false;
-              // Match by turn hash — hoveredTurnHash is "sha256:..." and source is "T1" or "T1:abcdef"
-              if (lineNodeSource.includes(':')) {
-                const hashPart = lineNodeSource.split(':')[1];
-                return hoveredTurnHash.includes(hashPart);
-              }
-              return false;
-            })();
+            const isReverseHighlighted = reverseHighlightPaths.has(line.treeId);
 
             // Collapsed trees get distinct grey background
             const collapsedBg = 'rgba(128, 128, 128, 0.1)';
