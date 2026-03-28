@@ -140,72 +140,52 @@ export function ChatMessage({
   // Convert to compat trees for id-based lookup and source refs
   const nodes = useMemo(() => contentToNodes(draft), [draft]);
 
-  // Compute highlight ranges for this message based on hovered tree/slot
-  const highlightRanges = useMemo(() => {
-    if (!hoveredNodeId) return [];
-    const node = nodes.find((f) => f.id === hoveredNodeId);
-    if (!node) return [];
+  // Find the hovered tree node — match by dot-path (compat) or slash-path (TreeNode)
+  const hoveredNode = useMemo(() => {
+    if (!hoveredNodeId) return null;
+    // Try direct match, then convert separators
+    return nodes.find((f) => f.id === hoveredNodeId)
+      ?? nodes.find((f) => f.id === hoveredNodeId.replace(/\//g, '.'))
+      ?? nodes.find((f) => f.id.replace(/\./g, '/') === hoveredNodeId)
+      ?? null;
+  }, [hoveredNodeId, nodes]);
 
-    // If slot_sources exist, use character-level highlighting per turn_hash
-    if (node.slot_sources) {
-      if (hoveredSlotKey && node.slot_sources[hoveredSlotKey]) {
-        // Specific slot hovered — highlight just that span if turn matches
-        const ref = node.slot_sources[hoveredSlotKey];
-        if (turnHash && ref.turn_hash && turnHash === ref.turn_hash && ref.start_char != null && ref.end_char != null) {
-          return [{ start: ref.start_char, end: ref.end_char }];
-        }
-        // Fallback: match by turn tag (T1, T2, ...)
-        if (turnIndex != null && ref.turn === `T${turnIndex}` && ref.start_char != null && ref.end_char != null) {
-          return [{ start: ref.start_char, end: ref.end_char }];
-        }
-        return [];
+  // Find the slot_quote for the hovered slot (verbatim text from conversation)
+  const hoveredQuote = useMemo(() => {
+    if (!hoveredNode || !hoveredSlotKey) return null;
+    // slot_quotes maps slot key → verbatim quote
+    return hoveredNode.slot_quotes?.[hoveredSlotKey] ?? null;
+  }, [hoveredNode, hoveredSlotKey]);
+
+  // Compute highlight ranges: find the verbatim quote text in this message's content
+  const highlightRanges = useMemo(() => {
+    if (!hoveredNode) return [];
+
+    // If we have a specific slot quote, search for it in this message
+    if (hoveredQuote && content) {
+      const lowerContent = content.toLowerCase();
+      const lowerQuote = hoveredQuote.toLowerCase();
+      const idx = lowerContent.indexOf(lowerQuote);
+      if (idx !== -1) {
+        return [{ start: idx, end: idx + hoveredQuote.length }];
       }
-      // Tree header hovered — highlight ALL slots from this turn
-      const ranges: Array<{ start: number; end: number }> = [];
-      for (const ref of Object.values(node.slot_sources)) {
-        const hashMatch = turnHash && ref.turn_hash && turnHash === ref.turn_hash;
-        const tagMatch = turnIndex != null && ref.turn === `T${turnIndex}`;
-        if ((hashMatch || tagMatch) && ref.start_char != null && ref.end_char != null) {
-          ranges.push({ start: ref.start_char, end: ref.end_char });
-        }
-      }
-      return ranges;
     }
 
-    // No slot_sources — check if this turn matches tree's source (whole-message tint fallback)
-    const isSourceTurn = (() => {
-      if (!node.source) return false;
-      if (turnIndex != null && node.source === `T${turnIndex}`) return true;
-      if (turnHash && node.source.includes(':')) {
-        const hashPart = node.source.split(':')[1];
-        return turnHash.includes(hashPart);
-      }
-      return false;
-    })();
-
-    // Return empty ranges — caller will check isSourceTurn via isWholeMessageHighlight
-    return isSourceTurn ? [] : [];
-  }, [hoveredNodeId, hoveredSlotKey, nodes, turnHash, turnIndex]);
+    return [];
+  }, [hoveredNode, hoveredQuote, content]);
 
   const hasCharHighlights = highlightRanges.length > 0;
+  // Whole-message tint when a YAML node is hovered and its source matches this turn
   const isWholeMessageHighlight =
-    hoveredNodeId &&
+    hoveredNode &&
     !hasCharHighlights &&
     (() => {
-      const node = nodes.find((f) => f.id === hoveredNodeId);
-      if (!node) return false;
-      // Check if any slot_source points to this turn
-      if (node.slot_sources) {
-        for (const ref of Object.values(node.slot_sources)) {
-          if (turnHash && ref.turn_hash && turnHash === ref.turn_hash) return true;
-          if (turnIndex != null && ref.turn === `T${turnIndex}`) return true;
-        }
-      }
-      // Fallback: check node.source
-      if (!node.source) return false;
-      if (turnIndex != null && node.source === `T${turnIndex}`) return true;
-      if (turnHash && node.source.includes(':')) {
-        return turnHash.includes(node.source.split(':')[1]);
+      if (!hoveredNode.source) return false;
+      // Match by turn tag (T1, T2, ...) — turnIndex is 0-based, source tags are 1-based
+      if (turnIndex != null && hoveredNode.source === `T${turnIndex + 1}`) return true;
+      // Match by turn hash prefix
+      if (turnHash && hoveredNode.source.includes(':')) {
+        return turnHash.includes(hoveredNode.source.split(':')[1]);
       }
       return false;
     })();

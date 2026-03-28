@@ -400,35 +400,27 @@ export function YAMLView() {
               : !!confirmedSlotKeys[line.treeId]?.[line.slotKey!];
 
             // Check if this row is highlighted by reverse hover (chat → YAML)
-            const node = nestedNodes.find((f) => f.id === line.treeId);
-            const isReverseHighlighted = (() => {
-              if (!hoveredTurnHash || !node) return false;
-
-              // Slot-level precision: when charOffset is available, match specific slot
-              if (hoveredCharOffset != null && node.slot_sources) {
-                for (const [slotKey, ref] of Object.entries(node.slot_sources as Record<string, { turn_hash?: string; start_char?: number; end_char?: number }>)) {
-                  const hashMatch = ref.turn_hash && hoveredTurnHash === ref.turn_hash;
-                  if (
-                    hashMatch &&
-                    ref.start_char != null &&
-                    ref.end_char != null &&
-                    hoveredCharOffset >= ref.start_char &&
-                    hoveredCharOffset < ref.end_char
-                  ) {
-                    // Only highlight this specific slot row (or the tree header if slotKey is null)
-                    return (
-                      line.slotKey === slotKey ||
-                      (line.slotKey === null && line.text.includes(node.type))
-                    );
+            // Find the TreeNode for this line by walking draft.trees
+            const findTreeNodeSource = (path: string): string | undefined => {
+              const segments = path.split('/');
+              let node: import('@t3x-dev/core').TreeNode | undefined;
+              for (const tree of draft.trees) {
+                if (tree.key === segments[0]) {
+                  node = tree;
+                  for (let i = 1; i < segments.length && node; i++) {
+                    node = node.children.find((c) => c.key === segments[i]);
                   }
+                  break;
                 }
-                return false;
               }
-
-              // Fallback: whole-tree highlight via node.source
-              if (!node.source) return false;
-              if (node.source.includes(':')) {
-                const hashPart = node.source.split(':')[1];
+              return node?.source ?? undefined;
+            };
+            const lineNodeSource = findTreeNodeSource(line.treeId);
+            const isReverseHighlighted = (() => {
+              if (!hoveredTurnHash || !lineNodeSource) return false;
+              // Match by turn hash — hoveredTurnHash is "sha256:..." and source is "T1" or "T1:abcdef"
+              if (lineNodeSource.includes(':')) {
+                const hashPart = lineNodeSource.split(':')[1];
                 return hoveredTurnHash.includes(hashPart);
               }
               return false;
