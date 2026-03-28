@@ -443,14 +443,13 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
       const { compressNodes } = await import('@/lib/api/trees');
       const result = await compressNodes(convId);
 
-      const compressBatch = result.delta as TreeChangeBatch;
-      if (!compressBatch?.changes?.length) {
+      if (!result.snapshot || result.snapshot.trees.length === 0) {
         set({ isCompressing: false });
         return;
       }
 
-      // Apply the compress changes locally
-      get().applyTreeChanges(compressBatch, 'compress');
+      // Apply the compressed snapshot directly
+      get().setDraft(result.snapshot);
 
       // Patch the client-generated ID with the server's actual yops_log_id
       set((s) => {

@@ -296,12 +296,12 @@ export function ChatWorkspace({
           return;
         }
 
-        // status === 'completed' — normal flow
-        if (result.delta) {
-          s.applyTreeChanges(result.delta as import('@t3x-dev/core').TreeChangeBatch, 'pipeline');
-        }
-        if (result.snapshot && result.snapshot.trees.length > 0 && s.panelMode === 'collapsed') {
-          s.setPanelMode('default');
+        // status === 'completed' — apply snapshot directly
+        if (result.snapshot && result.snapshot.trees.length > 0) {
+          s.setDraft(result.snapshot);
+          if (s.panelMode === 'collapsed') {
+            s.setPanelMode('default');
+          }
         }
 
         // Store advisory questions (Step 6)

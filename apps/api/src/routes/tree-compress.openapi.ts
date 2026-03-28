@@ -294,6 +294,7 @@ treeCompressRoutes.openapi(compressTreesRoute, async (c) => {
         success: true as const,
         data: {
           delta: result.yops,
+          snapshot: compressedSnapshot,
           metadata: result.metadata,
           yops_log_id: record.id,
         },
