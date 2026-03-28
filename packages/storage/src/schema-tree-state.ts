@@ -1,7 +1,7 @@
 /**
- * Frame State Tables
+ * Tree State Tables
  *
- * Source-of-truth for current frame state per conversation.
+ * Source-of-truth for current tree state per conversation.
  * Delta log remains as audit trail; these tables hold the latest snapshot.
  */
 
@@ -18,15 +18,15 @@ import {
 } from 'drizzle-orm/pg-core';
 import { conversations, projects } from './schema';
 
-// ── Frames ──
+// ── Trees ──
 
-export const frames = pgTable(
-  'frames',
+export const trees = pgTable(
+  'trees',
   {
     conversationId: text('conversation_id')
       .notNull()
       .references(() => conversations.conversationId, { onDelete: 'cascade' }),
-    frameId: text('frame_id').notNull(),
+    treeId: text('tree_id').notNull(),
     projectId: text('project_id')
       .notNull()
       .references(() => projects.projectId, { onDelete: 'cascade' }),
@@ -42,42 +42,42 @@ export const frames = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
-    pk: primaryKey({ columns: [table.conversationId, table.frameId] }),
-    projectIdx: index('idx_frames_project').on(table.projectId),
-    typeIdx: index('idx_frames_type').on(table.type),
-    topicIdx: index('idx_frames_conv_topic').on(table.conversationId, table.topicId),
-    manualIdx: index('idx_frames_manual')
+    pk: primaryKey({ columns: [table.conversationId, table.treeId] }),
+    projectIdx: index('idx_trees_project').on(table.projectId),
+    typeIdx: index('idx_trees_type').on(table.type),
+    topicIdx: index('idx_trees_conv_topic').on(table.conversationId, table.topicId),
+    manualIdx: index('idx_trees_manual')
       .on(table.conversationId, table.manualEdited)
       .where(sql`manual_edited = true`),
   })
 );
 
-export type FrameRecord = typeof frames.$inferSelect;
-export type FrameInsert = typeof frames.$inferInsert;
+export type TreeRecord = typeof trees.$inferSelect;
+export type TreeInsert = typeof trees.$inferInsert;
 
-// ── Frame Relations ──
+// ── Tree Relations ──
 
-export const frameRelations = pgTable(
-  'frame_relations',
+export const treeRelations = pgTable(
+  'tree_relations',
   {
     id: text('id').primaryKey(),
     conversationId: text('conversation_id')
       .notNull()
       .references(() => conversations.conversationId, { onDelete: 'cascade' }),
     topicId: text('topic_id'),
-    fromFrameId: text('from_frame_id').notNull(),
-    toFrameId: text('to_frame_id').notNull(),
+    fromTreeId: text('from_tree_id').notNull(),
+    toTreeId: text('to_tree_id').notNull(),
     type: text('type').notNull(),
     confidence: real('confidence'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
-    convIdx: index('idx_frel_conversation').on(table.conversationId),
-    topicIdx: index('idx_frel_topic').on(table.conversationId, table.topicId),
-    fromIdx: index('idx_frel_from').on(table.fromFrameId),
-    toIdx: index('idx_frel_to').on(table.toFrameId),
+    convIdx: index('idx_trel_conversation').on(table.conversationId),
+    topicIdx: index('idx_trel_topic').on(table.conversationId, table.topicId),
+    fromIdx: index('idx_trel_from').on(table.fromTreeId),
+    toIdx: index('idx_trel_to').on(table.toTreeId),
   })
 );
 
-export type FrameRelationRecord = typeof frameRelations.$inferSelect;
-export type FrameRelationInsert = typeof frameRelations.$inferInsert;
+export type TreeRelationRecord = typeof treeRelations.$inferSelect;
+export type TreeRelationInsert = typeof treeRelations.$inferInsert;

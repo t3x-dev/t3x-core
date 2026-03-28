@@ -8,7 +8,7 @@
 import { randomUUID } from 'node:crypto';
 import { and, eq, gte, lte, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
-import { tokenUsage } from '../schema-frames';
+import { tokenUsage } from '../schema-trees';
 
 // ============================================================
 // Constants

@@ -13,7 +13,7 @@ import { randomUUID } from 'node:crypto';
 import type { Account, User } from '@t3x-dev/core';
 import { and, eq } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
-import { type AccountRecord, accounts, type UserRecord, users } from '../schema-frames';
+import { type AccountRecord, accounts, type UserRecord, users } from '../schema-trees';
 
 // ============================================================
 // Constants

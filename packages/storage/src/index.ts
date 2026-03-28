@@ -33,15 +33,15 @@ export * from './backup';
 export * from './queries';
 // Schema (table definitions and types)
 export * from './schema';
-// Commits Schema (commits, frame_lineage — frame-based commits)
+// Commits Schema (commits, tree_lineage — tree-based commits)
 export * from './schema-commits';
 // Extraction Feedback Schema (Anchoring L4)
 export * from './schema-extraction-feedback';
-// Frame State (source-of-truth for current frames)
-export * from './schema-frame-state';
+// Tree State (source-of-truth for current trees)
+export * from './schema-tree-state';
 // Schema (leaves, pins, conversation_contexts + retired commits_v4 for migration)
 // @see docs/specification/semantic-layer-architecture.md
-export * from './schema-frames';
+export * from './schema-trees';
 // Knowledge Conflicts Schema (conflict detection persistence)
 export * from './schema-knowledge-conflicts';
 // Observable Metrics Schema (event tracking)

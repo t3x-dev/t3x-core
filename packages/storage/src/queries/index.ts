@@ -58,7 +58,7 @@ export {
   getBusinessRules,
   putBusinessRules,
 } from './business-rules';
-// Commits (frame-based)
+// Commits (tree-based)
 export {
   type CreateCommitInput,
   createCommit,
@@ -151,22 +151,22 @@ export {
   insertExtractionFeedback,
   listExtractionFeedback,
 } from './extraction-feedback';
-// Frame State (source-of-truth for current frames)
+// Tree State (source-of-truth for current trees)
 export {
   clearManualEditedFlags,
-  deleteFrame,
-  deleteFrameRelationByKey,
-  deleteFrameRelationsByConversation,
-  deleteFrameRelationsByFrameId,
-  deleteFramesByConversation,
-  getFrameByKey,
-  listFrameRelationsByConversation,
-  listFramesByConversation,
-  type UpsertFrameInput,
-  type UpsertFrameRelationInput,
-  upsertFrame,
-  upsertFrameRelation,
-} from './frame-state';
+  deleteTree,
+  deleteTreeRelationByKey,
+  deleteTreeRelationsByConversation,
+  deleteTreeRelationsByTreeId,
+  deleteTreesByConversation,
+  getTreeByKey,
+  listTreeRelationsByConversation,
+  listTreesByConversation,
+  type UpsertTreeInput,
+  type UpsertTreeRelationInput,
+  upsertTree,
+  upsertTreeRelation,
+} from './tree-state';
 // Global Settings (key-value config store)
 export {
   deleteGlobalSetting,

@@ -7,7 +7,7 @@
 import { randomUUID } from 'node:crypto';
 import { asc, eq } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
-import { type TopicInsert, type TopicRecord, topics } from '../schema-frames';
+import { type TopicInsert, type TopicRecord, topics } from '../schema-trees';
 
 // ============================================================
 // Queries

@@ -15,7 +15,7 @@ import {
   knowledgeEdges,
   knowledgeNodeMembers,
   knowledgeNodes,
-} from '../schema-frames';
+} from '../schema-trees';
 
 // ============================================================
 // Output Types (snake_case for API consistency)

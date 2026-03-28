@@ -474,10 +474,10 @@ CREATE INDEX IF NOT EXISTS idx_ke_project ON knowledge_edges (project_id);
 CREATE INDEX IF NOT EXISTS idx_ke_source ON knowledge_edges (source_node_id);
 CREATE INDEX IF NOT EXISTS idx_ke_target ON knowledge_edges (target_node_id);
 
--- Frames (source-of-truth for current frame state)
-CREATE TABLE IF NOT EXISTS frames (
+-- Trees (source-of-truth for current tree state)
+CREATE TABLE IF NOT EXISTS trees (
   conversation_id TEXT NOT NULL REFERENCES conversations(conversation_id) ON DELETE CASCADE,
-  frame_id TEXT NOT NULL,
+  tree_id TEXT NOT NULL,
   project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
   topic_id TEXT,
   type TEXT NOT NULL,
@@ -489,28 +489,28 @@ CREATE TABLE IF NOT EXISTS frames (
   manual_edited BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  PRIMARY KEY (conversation_id, frame_id)
+  PRIMARY KEY (conversation_id, tree_id)
 );
-CREATE INDEX IF NOT EXISTS idx_frames_project ON frames(project_id);
-CREATE INDEX IF NOT EXISTS idx_frames_type ON frames(type);
-CREATE INDEX IF NOT EXISTS idx_frames_conv_topic ON frames(conversation_id, topic_id);
-CREATE INDEX IF NOT EXISTS idx_frames_manual ON frames(conversation_id, manual_edited) WHERE manual_edited = TRUE;
+CREATE INDEX IF NOT EXISTS idx_trees_project ON trees(project_id);
+CREATE INDEX IF NOT EXISTS idx_trees_type ON trees(type);
+CREATE INDEX IF NOT EXISTS idx_trees_conv_topic ON trees(conversation_id, topic_id);
+CREATE INDEX IF NOT EXISTS idx_trees_manual ON trees(conversation_id, manual_edited) WHERE manual_edited = TRUE;
 
--- Frame Relations (source-of-truth for current relations)
-CREATE TABLE IF NOT EXISTS frame_relations (
+-- Tree Relations (source-of-truth for current relations)
+CREATE TABLE IF NOT EXISTS tree_relations (
   id TEXT PRIMARY KEY,
   conversation_id TEXT NOT NULL REFERENCES conversations(conversation_id) ON DELETE CASCADE,
   topic_id TEXT,
-  from_frame_id TEXT NOT NULL,
-  to_frame_id TEXT NOT NULL,
+  from_tree_id TEXT NOT NULL,
+  to_tree_id TEXT NOT NULL,
   type TEXT NOT NULL,
   confidence REAL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE INDEX IF NOT EXISTS idx_frel_conversation ON frame_relations(conversation_id);
-CREATE INDEX IF NOT EXISTS idx_frel_topic ON frame_relations(conversation_id, topic_id);
-CREATE INDEX IF NOT EXISTS idx_frel_from ON frame_relations(from_frame_id);
-CREATE INDEX IF NOT EXISTS idx_frel_to ON frame_relations(to_frame_id);
+CREATE INDEX IF NOT EXISTS idx_trel_conversation ON tree_relations(conversation_id);
+CREATE INDEX IF NOT EXISTS idx_trel_topic ON tree_relations(conversation_id, topic_id);
+CREATE INDEX IF NOT EXISTS idx_trel_from ON tree_relations(from_tree_id);
+CREATE INDEX IF NOT EXISTS idx_trel_to ON tree_relations(to_tree_id);
 
 `;
 
