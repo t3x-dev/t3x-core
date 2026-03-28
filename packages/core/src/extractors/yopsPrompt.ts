@@ -83,6 +83,13 @@ ${tier3KeyDistinction(style.tier3)}
 ${style.tier3 === 'extract' ? '- Even if the user hasn\'t confirmed the information yet, extract it at Tier 3 confidence (0.4-0.5)' : '- Only extract information the user has explicitly stated or confirmed'}
 - The goal: after extraction, the tree should capture ALL knowledge from the conversation
 
+## CRITICAL: from tag and source quote accuracy
+- The "from" field MUST match the turn tag where the information ACTUALLY appears
+- If the assistant says "Australian beef is grass-fed" in turn T2, use from: T2 (NOT T1)
+- If the user says "I want to know about beef" in T1, that's just the topic — the CONTENT comes from the assistant's answer
+- The "source" field MUST be a VERBATIM copy-paste from the conversation — not a paraphrase, not a summary
+- BAD source: "grass-fed beef" (paraphrase) → GOOD source: "Australian beef is known for being predominantly grass-fed" (verbatim)
+
 ## What NOT to Extract
 - Pure conversational filler ("sure!", "let me help", "here you go")
 - AI meta-commentary about its own process ("I'll organize this into...")
@@ -275,9 +282,11 @@ Build a structured tree: one root node per topic, with child nodes for subtopics
 CRITICAL RULES:
 1. Use "add" operations to create the tree. Start with parent: "" for root nodes.
 2. Each add MUST include source (verbatim quote from the conversation) and from (turn tag like T1, T2).
-3. Extract from BOTH user messages AND assistant responses. The assistant's detailed answers are valuable content.
-4. Structure the tree with meaningful nesting — group related facts under subtopic nodes.
-5. If the conversation has no extractable content, output "yops: []"`;
+3. The "from" tag MUST match the turn where the information APPEARS — if the assistant explains something in T2, use from: T2, NOT T1.
+4. The "source" field MUST be VERBATIM copy-paste from the conversation text — not a paraphrase.
+5. Extract from BOTH user messages AND assistant responses. The assistant's detailed answers are the main content.
+6. Structure the tree with meaningful nesting — group related facts under subtopic nodes.
+7. If the conversation has no extractable content, output "yops: []"`;
 
   return { systemPrompt, userPrompt };
 }
