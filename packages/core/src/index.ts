@@ -396,6 +396,42 @@ export type {
 export type { RelationType as SemanticRelationType } from './semantic';
 
 // ═══════════════════════════════════════════════════════════════════════════
+// YOps — YAML Operations for Knowledge Trees
+// ═══════════════════════════════════════════════════════════════════════════
+export {
+  applyYOps,
+  findNode,
+  formatYOpsLog,
+  getNodeKey,
+  getParentPath,
+  parseYOpsYaml,
+  SNAKE_CASE_KEY,
+  YOpSchema,
+  YOPS_ERRORS,
+  YOpsDocumentSchema,
+} from './yops';
+
+export type {
+  AddOp,
+  CloneOp,
+  DropOp,
+  FoldOp,
+  MergeOp,
+  MoveOp,
+  NestOp,
+  RelateOp,
+  RenameOp,
+  SetOp,
+  SplitOp,
+  UnrelateOp,
+  UnsetOp,
+  YOp,
+  YOpsDocument,
+  YOpsError,
+  YOpsResult,
+} from './yops';
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Storage (types + pure utils only)
 // For CRUD operations, use @t3x-dev/storage package
 // ═══════════════════════════════════════════════════════════════════════════
