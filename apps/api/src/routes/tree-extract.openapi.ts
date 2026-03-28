@@ -24,13 +24,11 @@ import {
   type ExtractionResult,
   Extractor,
   flattenTrees,
-  fuzzyLocate,
   GateRunner,
   type LLMCallLogger,
   pipelineEmitter,
   preFilterDrift,
   type SemanticContent,
-  type SlotQuotesMap,
 } from '@t3x-dev/core';
 import {
   createTopic,
@@ -46,7 +44,7 @@ import {
 import { getDB } from '../lib/db';
 import { toDeltaLogEntries } from '../lib/delta-log-utils';
 import { errorResponse, zodErrorHook } from '../lib/errors';
-import { syncDeltaToTrees } from '../lib/tree-state-sync';
+import { rebuildTreesFromSnapshot } from '../lib/tree-state-sync';
 import { assertProjectAccess } from '../lib/project-access';
 import { getProviderRegistry } from '../lib/provider-registry';
 import { getUserId, recordUsageFireAndForget, wrapWithUsageTracking } from '../lib/usage-tracking';
@@ -390,74 +388,7 @@ treeExtractRoutes.openapi(extractTreesRoute, async (c) => {
       });
     }
 
-    // 7b. Resolve slot quotes into character offsets using fuzzyLocate
-    const slotQuotes: SlotQuotesMap = result.slotQuotes ?? new Map();
-    console.info(`[slot-sources] slotQuotes from LLM: ${slotQuotes.size} changes have quotes`);
-
-    if (slotQuotes.size > 0) {
-      // Build turn content lookup: try all turns for each quote
-      const turnInfoList = selectedTurns.map((t, i) => ({
-        tag: `T${i + 1}`,
-        content: t.content,
-        turnHash: t.turnHash,
-      }));
-
-      for (let i = 0; i < result.delta.changes.length; i++) {
-        const quotes = slotQuotes.get(i);
-        if (!quotes) continue;
-
-        const change = result.delta.changes[i];
-        console.info(
-          `[slot-sources] change[${i}] action=${change.action} slots=[${Object.keys(quotes).join(', ')}]`
-        );
-        const slotSources: Record<
-          string,
-          { turn: string; turn_hash?: string; start_char: number; end_char: number; quote?: string }
-        > = {};
-
-        for (const [slotKey, quote] of Object.entries(quotes)) {
-          if (typeof quote !== 'string' || !quote) continue;
-
-          // Try matching the quote against all turns (best match wins)
-          for (const turnInfo of turnInfoList) {
-            const located = fuzzyLocate(turnInfo.content, quote);
-            if (located && located.score >= 0.6) {
-              console.info(
-                `[slot-sources]   ${slotKey}: matched in ${turnInfo.tag} score=${located.score.toFixed(2)} [${located.start}:${located.end}]`
-              );
-              slotSources[slotKey] = {
-                turn: turnInfo.tag,
-                turn_hash: turnInfo.turnHash,
-                start_char: located.start,
-                end_char: located.end,
-                quote,
-              };
-              break;
-            }
-          }
-        }
-
-        console.info(
-          `[slot-sources] change[${i}] resolved ${Object.keys(slotSources).length}/${Object.keys(quotes).length} slots`
-        );
-
-        if (Object.keys(slotSources).length > 0) {
-          // Extract just the quote strings for slot_quotes (Record<string, string>)
-          const quoteStrings: Record<string, string> = {};
-          for (const [k, v] of Object.entries(slotSources)) {
-            quoteStrings[k] = typeof v === 'string' ? v : (v.quote ?? '');
-          }
-          if (change.action === 'add') {
-            change.node.slot_quotes = { ...change.node.slot_quotes, ...quoteStrings };
-          } else if (change.action === 'update') {
-            // Merge new slot_quotes into the change
-            change.slot_quotes = { ...change.slot_quotes, ...quoteStrings };
-          }
-        }
-      }
-    }
-
-    // 7c. Run Meaning Pipeline — multi-agent post-processing
+    // 7b. Run Meaning Pipeline — multi-agent post-processing
     const debugPipeline = process.env.PIPELINE_DEBUG === 'true';
     const llmLogger: LLMCallLogger | undefined = debugPipeline
       ? (log) => {
@@ -561,7 +492,7 @@ treeExtractRoutes.openapi(extractTreesRoute, async (c) => {
 
     // DiffCompatibilityCheck (non-blocking, log only)
     if (currentFlat.length > 0) {
-      const diffCheck = checkDiffCompatibility(currentSnapshot, result.delta);
+      const diffCheck = checkDiffCompatibility(currentSnapshot, result.yops);
       if (!diffCheck.compatible) {
         console.warn(`[gate] DiffCompatibilityCheck warnings: ${diffCheck.errors.join('; ')}`);
       }
@@ -607,17 +538,12 @@ treeExtractRoutes.openapi(extractTreesRoute, async (c) => {
       }
     }
 
-    // 8b. Check for drift_detected in extraction result
-    const extractionDelta = result.delta as {
-      drift_detected?: boolean;
-      changes: unknown[];
-      new_topic?: string;
-    };
-    if (extractionDelta.drift_detected && extractionDelta.changes.length === 0) {
+    // 8b. Check for drift_detected in extraction result (YOps with zero ops = drift)
+    if (result.yops.length === 0 && organizedSnapshot.trees.length === 0) {
       pipelineEmitter.emit('topic.changed', {
         conversationId: conversation_id,
         oldTopic: currentFlat[0]?.type,
-        newTopic: extractionDelta.new_topic ?? 'unknown',
+        newTopic: 'unknown',
       });
       return c.json(
         {
@@ -634,26 +560,24 @@ treeExtractRoutes.openapi(extractTreesRoute, async (c) => {
       );
     }
 
-    // 8c. Write delta_log + sync frames atomically
+    // 8c. Write delta_log + sync trees atomically
+    // Store YOps in delta log for history; use organizedSnapshot to rebuild trees table
     const record = await (db as any).transaction(async (tx: any) => {
       const rec = await insertDeltaLogEntry(tx, {
         conversationId: conversation_id,
         projectId: conversation.projectId,
         source: 'pipeline',
-        delta: result.delta,
+        delta: result.yops,
         pipelineState: 'completed',
         gateResultJson: gateResult ?? null,
         topicId: resolvedTopicId,
       });
-      await syncDeltaToTrees(
+      await rebuildTreesFromSnapshot(
         tx,
         conversation_id,
         conversation.projectId,
-        result.delta,
-        'pipeline',
-        {
-          topicId: resolvedTopicId,
-        }
+        organizedSnapshot,
+        resolvedTopicId
       );
       return rec;
     });
@@ -663,18 +587,18 @@ treeExtractRoutes.openapi(extractTreesRoute, async (c) => {
       conversationId: conversation_id,
       projectId: conversation.projectId,
       deltaLogId: record.id,
-      delta: result.delta,
+      yops: result.yops,
       snapshot: organizedSnapshot,
       topicId: resolvedTopicId,
     });
 
-    // 9. Return delta + updated snapshot + delta_log_id
+    // 9. Return yops + updated snapshot + delta_log_id
     return c.json(
       {
         success: true as const,
         data: {
           status: 'completed' as const,
-          delta: result.delta,
+          delta: result.yops,
           snapshot: organizedSnapshot,
           delta_log_id: record.id,
           gate_result: gateResult,

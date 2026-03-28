@@ -9,7 +9,7 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { applyDelta, Compressor, flattenTrees, type NodeWithSignals, type SemanticContent } from '@t3x-dev/core';
+import { applyDelta, applyYOps, Compressor, flattenTrees, type NodeWithSignals, type SemanticContent } from '@t3x-dev/core';
 import {
   findConversationById,
   insertDeltaLogEntry,
@@ -18,7 +18,7 @@ import {
 import { getDB } from '../lib/db';
 import { toDeltaLogEntries } from '../lib/delta-log-utils';
 import { errorResponse, zodErrorHook } from '../lib/errors';
-import { syncDeltaToTrees } from '../lib/tree-state-sync';
+import { rebuildTreesFromSnapshot } from '../lib/tree-state-sync';
 import { assertProjectAccess } from '../lib/project-access';
 import { getProviderRegistry } from '../lib/provider-registry';
 import { getUserId, recordUsageFireAndForget, wrapWithUsageTracking } from '../lib/usage-tracking';
@@ -247,12 +247,12 @@ treeCompressRoutes.openapi(compressTreesRoute, async (c) => {
       return errorResponse(c, 'EXTRACTION_FAILED', result.error || 'Compression failed');
     }
 
-    // 8. Skip if nothing was compressed (empty changes)
-    if (result.delta.changes.length === 0) {
+    // 8. Skip if nothing was compressed (empty yops)
+    if (result.yops.length === 0) {
       return errorResponse(
         c,
         'INVALID_REQUEST',
-        'No frames were compressed (delta is empty). All frames may be protected or already optimal.'
+        'No frames were compressed (yops is empty). All frames may be protected or already optimal.'
       );
     }
 
@@ -268,26 +268,31 @@ treeCompressRoutes.openapi(compressTreesRoute, async (c) => {
       });
     }
 
-    // 9. Write delta_log + sync frames atomically
+    // 9. Apply YOps to get compressed snapshot, then write delta_log + sync trees atomically
+    const compressedResult = applyYOps(currentSnapshot, result.yops);
+    const compressedSnapshot: SemanticContent = compressedResult.ok
+      ? { trees: compressedResult.trees, relations: compressedResult.relations }
+      : currentSnapshot; // fallback: keep current if apply fails
+
     const record = await (db as any).transaction(async (tx: any) => {
       const rec = await insertDeltaLogEntry(tx, {
         conversationId,
         projectId: conversation.projectId,
         source: 'compress',
-        delta: result.delta,
+        delta: result.yops,
         pipelineState: 'completed',
         metadata: result.metadata,
       });
-      await syncDeltaToTrees(tx, conversationId, conversation.projectId, result.delta, 'compress');
+      await rebuildTreesFromSnapshot(tx, conversationId, conversation.projectId, compressedSnapshot);
       return rec;
     });
 
-    // 10. Return delta + metadata + delta_log_id
+    // 10. Return yops + metadata + delta_log_id
     return c.json(
       {
         success: true as const,
         data: {
-          delta: result.delta,
+          delta: result.yops,
           metadata: result.metadata,
           delta_log_id: record.id,
         },

@@ -200,14 +200,14 @@ treeAnswerRoutes.openapi(answerRoute, async (c) => {
       );
     }
 
-    // 4. Persist the delta
+    // 4. Persist the yops
     let deltaLogId: string | undefined;
-    if (result.delta && result.delta.changes.length > 0) {
+    if (result.yops && result.yops.length > 0) {
       const record = await insertDeltaLogEntry(db, {
         conversationId: conversation_id,
         projectId: conversation.projectId,
         source: answer.drift_choice ? 'collapse' : 'answer',
-        delta: result.delta,
+        delta: result.yops,
         pipelineState: 'completed',
       });
       deltaLogId = record.id;
@@ -219,7 +219,7 @@ treeAnswerRoutes.openapi(answerRoute, async (c) => {
         success: true as const,
         data: {
           applied: true,
-          delta: result.delta,
+          delta: result.yops,
           snapshot: result.snapshot,
           delta_log_id: deltaLogId,
         },
@@ -309,7 +309,7 @@ async function handleDriftChoice4(
     // Pipeline optional — flat frames still valid
   }
 
-  // 5. Build delta with relation connecting old root → new root
+  // 5. Build connecting relation between old root → new root
   const currentFlat = flattenTrees(currentSnapshot.trees);
   const organizedFlat = flattenTrees(organizedSnapshot.trees);
   const oldRootId = currentFlat[0]?.id;
@@ -318,33 +318,27 @@ async function handleDriftChoice4(
     .map((f) => f.id);
   const newRootId = newNodeIds[0];
 
-  // biome-ignore lint/suspicious/noExplicitAny: generic error handler
-  const relationDelta: any = {
-    changes: extractResult.delta.changes,
-    new_relations: [...(extractResult.delta.new_relations ?? [])],
-    remove_relations: extractResult.delta.remove_relations,
-  };
-
-  // Add connecting relation if both roots exist
+  // Add connecting relation to the organized snapshot if both roots exist
+  const finalSnapshot = { ...organizedSnapshot, relations: [...organizedSnapshot.relations] };
   if (oldRootId && newRootId) {
     const relationType =
       driftContext?.relation &&
       (RELATION_TYPES as readonly string[]).includes(driftContext.relation)
         ? driftContext.relation
         : 'follows';
-    relationDelta.new_relations.push({
+    finalSnapshot.relations.push({
       from: oldRootId,
       to: newRootId,
-      type: relationType,
+      type: relationType as any,
     });
   }
 
-  // 6. Persist
+  // 6. Persist yops + snapshot
   const record = await insertDeltaLogEntry(db, {
     conversationId: conversation.conversationId,
     projectId: conversation.projectId,
     source: 'pipeline',
-    delta: relationDelta,
+    delta: extractResult.yops,
     pipelineState: 'completed',
   });
 
@@ -353,8 +347,8 @@ async function handleDriftChoice4(
       success: true as const,
       data: {
         applied: true,
-        delta: relationDelta,
-        snapshot: organizedSnapshot,
+        delta: extractResult.yops,
+        snapshot: finalSnapshot,
         delta_log_id: record.id,
       },
     },
