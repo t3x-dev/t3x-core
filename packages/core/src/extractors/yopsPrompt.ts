@@ -117,10 +117,19 @@ Output as a YAML yops document. Each operation is one item in the yops list.
 - unset: Remove a slot from an existing node
   Required: path (node_path/slot_name)
 
+### Value vs Source — CRITICAL DISTINCTION
+- **value**: Clean, structured data. Use numbers for quantities (1900 not "1,900 people"), short labels, booleans, arrays. NOT a quote.
+- **source**: VERBATIM quote from the conversation. This is the evidence. Copy-paste from the turn.
+- BAD:  value: "At least 1,900 people have been killed"  ← this is a quote, not a value
+- GOOD: value: 1900  |  source: "At least 1,900 people have been killed"
+- BAD:  value: "The budget is around $5000"  ← conversational quote as value
+- GOOD: value: 5000  |  source: "The budget is around $5000"
+- For non-numeric facts, use short clean labels: value: "grass-fed" not "Australian beef is known for being grass-fed"
+
 ### Tree Structure Rules
 - ONE root node per topic, named with snake_case (e.g., australian_beef, travel_plan)
 - Child nodes represent subtopics — use nesting for structure
-- Leaf values (strings, numbers, booleans, arrays) are slot values
+- Leaf values: prefer numbers, booleans, short strings, arrays. NOT full sentences.
 - Keep depth ≤ 3 levels. Deeper = more specific
 
 ### Example${hasSnapshot ? ' (incremental)' : ' (first extraction)'}
@@ -149,19 +158,23 @@ ${hasSnapshot ? `yops:
       parent: ""
       node:
         australian_beef:
-          overview: "grass-fed, high quality"
+          quality: grass-fed
+          annual_production_tonnes: 2200000
           major_regions:
             queensland: largest producer
-            new_south_wales: significant cattle country
+            new_south_wales: second largest
           export_markets:
-            japan: largest export destination
-            united_states: growing market
+            japan: top destination
+            us: growing market
+            south_korea: significant
       source:
-        overview: "Australian beef is known for being predominantly grass-fed and high quality"
+        quality: "Australian beef is known for being predominantly grass-fed"
+        annual_production_tonnes: "Australia produces about 2.2 million tonnes annually"
         major_regions.queensland: "Queensland is the largest beef-producing state"
-        major_regions.new_south_wales: "New South Wales has significant cattle country"
+        major_regions.new_south_wales: "New South Wales is the second largest"
         export_markets.japan: "Japan is Australia's largest beef export market"
-        export_markets.united_states: "The US is a growing market for Australian beef"
+        export_markets.us: "The US is a growing market for Australian beef"
+        export_markets.south_korea: "South Korea is also a significant destination"
       from: T2
       confidence: 0.45`}
 
