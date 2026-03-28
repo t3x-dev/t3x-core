@@ -8,18 +8,18 @@
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import type { SemanticContent } from '@t3x-dev/core';
-import { applyDelta, createClaudeProvider, flattenTrees, LLMProviderError } from '@t3x-dev/core';
+import { applyTreeChanges, createClaudeProvider, flattenTrees, LLMProviderError } from '@t3x-dev/core';
 import {
   findAgentDraftById,
   findConversationById,
   findProjectById,
   findTurnsByConversation,
   insertAgentDraft,
-  listDeltaLogByConversation,
+  listYOpsLogByConversation,
   updateAgentDraft,
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
-import { toDeltaLogEntries } from '../lib/delta-log-utils';
+import { toYOpsLogEntries } from '../lib/yops-log-utils';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { getLLMProvider } from '../lib/provider-registry';
 import { getUserId, recordUsageFireAndForget } from '../lib/usage-tracking';
@@ -269,11 +269,11 @@ function extractPreferencesFromFrames(snapshot: SemanticContent): {
 }
 
 async function extractMustHave(db: DBType, conversationId: string): Promise<string[]> {
-  // Strategy 1: Frame snapshot
-  const deltaLogs = await listDeltaLogByConversation(db, conversationId);
-  if (deltaLogs.length > 0) {
-    const snapshot = toDeltaLogEntries(deltaLogs).reduce(
-      (snap, entry) => applyDelta(snap, entry.delta),
+  // Strategy 1: Tree snapshot
+  const yopsLogs = await listYOpsLogByConversation(db, conversationId);
+  if (yopsLogs.length > 0) {
+    const snapshot = toYOpsLogEntries(yopsLogs).reduce(
+      (snap, entry) => applyTreeChanges(snap, entry.yops as any),
       { trees: [], relations: [] } as SemanticContent
     );
     const prefs = extractPreferencesFromFrames(snapshot);
@@ -310,11 +310,11 @@ async function extractMustHave(db: DBType, conversationId: string): Promise<stri
 }
 
 async function extractMustntHave(db: DBType, conversationId: string): Promise<string[]> {
-  // Strategy 1: Frame snapshot
-  const deltaLogs = await listDeltaLogByConversation(db, conversationId);
-  if (deltaLogs.length > 0) {
-    const snapshot = toDeltaLogEntries(deltaLogs).reduce(
-      (snap, entry) => applyDelta(snap, entry.delta),
+  // Strategy 1: Tree snapshot
+  const yopsLogs = await listYOpsLogByConversation(db, conversationId);
+  if (yopsLogs.length > 0) {
+    const snapshot = toYOpsLogEntries(yopsLogs).reduce(
+      (snap, entry) => applyTreeChanges(snap, entry.yops as any),
       { trees: [], relations: [] } as SemanticContent
     );
     const prefs = extractPreferencesFromFrames(snapshot);

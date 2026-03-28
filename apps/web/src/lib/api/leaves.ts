@@ -28,7 +28,7 @@ export type LeafType =
   | 'slack'
   | 'deploy_agent';
 
-export interface ConstraintSourceFrame {
+export interface ConstraintSourceNode {
   frame_type: string;
   slot_key?: string;
 }
@@ -40,7 +40,7 @@ export interface RequireConstraint {
   value: string;
   description?: string;
   /** Link to source  node + slot (tree-based traceability) */
-  source_node?: ConstraintSourceFrame;
+  source_node?: ConstraintSourceNode;
 }
 
 export interface ExcludeConstraint {
@@ -51,7 +51,7 @@ export interface ExcludeConstraint {
   description?: string;
   reason?: string;
   /** Link to source  node + slot (tree-based traceability) */
-  source_node?: ConstraintSourceFrame;
+  source_node?: ConstraintSourceNode;
 }
 
 export type Constraint = RequireConstraint | ExcludeConstraint;

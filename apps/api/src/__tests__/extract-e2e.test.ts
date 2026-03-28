@@ -378,7 +378,7 @@ describe('Tree Extraction E2E — Hangzhou Trip', () => {
     const body: ApiResponse = await res.json();
     expect(body.success).toBe(true);
 
-    const { delta, snapshot, delta_log_id } = body.data;
+    const { delta, snapshot, yops_log_id } = body.data;
 
     // Delta should have 5 add changes (one per frame)
     expect(delta.changes).toHaveLength(5);
@@ -395,8 +395,8 @@ describe('Tree Extraction E2E — Hangzhou Trip', () => {
     expect(frameKeys).toContain('hangzhou_spring_trip');
 
     // Delta log entry should be created
-    expect(delta_log_id).toBeTruthy();
-    expect(typeof delta_log_id).toBe('string');
+    expect(yops_log_id).toBeTruthy();
+    expect(typeof yops_log_id).toBe('string');
 
     // Relations should exist
     expect(delta.new_relations).toBeDefined();
@@ -431,7 +431,7 @@ describe('Tree Extraction E2E — Hangzhou Trip', () => {
     const body: ApiResponse = await res.json();
     expect(body.success).toBe(true);
 
-    const { delta, snapshot, delta_log_id } = body.data;
+    const { delta, snapshot, yops_log_id } = body.data;
 
     // Delta should have update changes
     expect(delta.changes.length).toBeGreaterThanOrEqual(1);
@@ -442,7 +442,7 @@ describe('Tree Extraction E2E — Hangzhou Trip', () => {
     expect(updateChange.slots.transportation).toBe('自驾');
 
     // Delta log entry should be created
-    expect(delta_log_id).toBeTruthy();
+    expect(yops_log_id).toBeTruthy();
 
     // Snapshot should still have frames
     expect(snapshot.trees.length).toBeGreaterThanOrEqual(1);

@@ -70,8 +70,8 @@ describe('Compressor', () => {
       expect(result.yops.some((op) => 'drop' in op)).toBe(true);
       expect(result.yops.some((op) => 'set' in op)).toBe(true);
       expect(result.metadata.compress_summary).toBe('Merged 2 accommodation frames');
-      expect(result.metadata.frames_before).toBe(3);
-      expect(result.metadata.frames_after).toBe(2);
+      expect(result.metadata.nodes_before).toBe(3);
+      expect(result.metadata.nodes_after).toBe(2);
     }
   });
 

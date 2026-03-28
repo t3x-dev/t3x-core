@@ -7,7 +7,7 @@ import { DriftPopup } from '@/components/chat/DriftPopup';
 import { useAutoProject } from '@/hooks/useAutoProject';
 import { useConversationChat } from '@/hooks/useConversationChat';
 import { getCommitAsNodes } from '@/lib/api/commitUnified';
-import { extractNodes, getSemanticDraft, listDeltas } from '@/lib/api/trees';
+import { extractNodes, getSemanticDraft, listYOpsLog } from '@/lib/api/trees';
 import { listTopics, updateTopicApi } from '@/lib/api/topics';
 import { getIntentSummary } from '@/lib/intentSummary';
 import { cn } from '@/lib/utils';
@@ -206,8 +206,8 @@ export function ChatWorkspace({
 
     // Load existing semantic draft + full delta history + topics for this conversation
     if (convId && convId !== 'new') {
-      Promise.all([getSemanticDraft(convId), listDeltas(convId), listTopics(convId)])
-        .then(([draft, deltas, topicsList]) => {
+      Promise.all([getSemanticDraft(convId), listYOpsLog(convId), listTopics(convId)])
+        .then(([draft, yopsEntries, topicsList]) => {
           const store = useExtractionPanelStore.getState();
           if (draft && draft.trees.length > 0) {
             store.setDraft(draft);
@@ -218,10 +218,10 @@ export function ChatWorkspace({
             // No existing draft — hydrate from parent commit
             hydrateFromParent(inheritFromCommitHash);
           }
-          if (deltas && deltas.length > 0) {
-            store.hydrateDeltaLog(deltas);
+          if (yopsEntries && yopsEntries.length > 0) {
+            store.hydrateYOpsLog(yopsEntries);
             // Lock input if a commit was made from this conversation
-            if (deltas.some((d: { source?: string }) => d.source === 'commit_marker')) {
+            if (yopsEntries.some((d: { source?: string }) => d.source === 'commit_marker')) {
               setIsConversationCommitted(true);
             }
           }
@@ -298,7 +298,7 @@ export function ChatWorkspace({
 
         // status === 'completed' — normal flow
         if (result.delta) {
-          s.applyDelta(result.delta, 'pipeline');
+          s.applyTreeChanges(result.delta as import('@t3x-dev/core').TreeChangeBatch, 'pipeline');
         }
         if (result.snapshot && result.snapshot.trees.length > 0 && s.panelMode === 'collapsed') {
           s.setPanelMode('default');

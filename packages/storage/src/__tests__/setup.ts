@@ -410,18 +410,18 @@ CREATE INDEX IF NOT EXISTS idx_notifications_project ON notifications(project_id
 CREATE INDEX IF NOT EXISTS idx_notifications_read ON notifications(read);
 CREATE INDEX IF NOT EXISTS idx_notifications_created ON notifications(created_at);
 
--- Delta Log (Phase 2 — semantic delta tracking)
-CREATE TABLE IF NOT EXISTS delta_log (
+-- YOps Log (Phase 2 — semantic yops tracking)
+CREATE TABLE IF NOT EXISTS yops_log (
   id TEXT PRIMARY KEY,
   conversation_id TEXT NOT NULL REFERENCES conversations(conversation_id) ON DELETE CASCADE,
   project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
   source TEXT NOT NULL,
   turn_hash TEXT,
-  delta JSONB NOT NULL,
+  yops JSONB NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE INDEX IF NOT EXISTS idx_delta_log_conv ON delta_log(conversation_id, created_at);
-CREATE INDEX IF NOT EXISTS idx_delta_log_project ON delta_log(project_id);
+CREATE INDEX IF NOT EXISTS idx_yops_log_conv ON yops_log(conversation_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_yops_log_project ON yops_log(project_id);
 
 -- Node Relations (Ring 4 — Inter-node relationships)
 CREATE TABLE IF NOT EXISTS node_relations (

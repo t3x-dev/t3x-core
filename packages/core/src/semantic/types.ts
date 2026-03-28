@@ -63,28 +63,28 @@ export interface SemanticContent {
   relations: Relation[];
 }
 
-// ── Delta ──
+// ── Tree Change Batch ──
 
 export type TreeChange =
   | { action: 'add'; parent_path: string; node: TreeNode; slot_quotes?: Record<string, string> }
   | { action: 'update'; target_path: string; slots: Record<string, SlotValue | null>; slot_quotes?: Record<string, string> }
   | { action: 'remove'; target_path: string; reason?: string };
 
-export interface Delta {
+export interface TreeChangeBatch {
   changes: TreeChange[];
   new_relations?: Relation[];
   remove_relations?: Relation[];
 }
 
-// ── Delta Log ──
+// ── YOps Log ──
 
-export type DeltaSource = 'pipeline' | 'manual' | 'answer' | 'collapse' | 'commit_marker' | 'compress';
+export type YOpsSource = 'pipeline' | 'manual' | 'answer' | 'collapse' | 'commit_marker' | 'compress';
 
-export interface DeltaLogEntry {
+export interface YOpsLogEntry {
   id: string;
-  source: DeltaSource;
+  source: YOpsSource;
   turn_hash?: string;
-  delta: Delta;
+  yops: unknown;
   created_at: string;
   commit_hash?: string;
   model?: string;

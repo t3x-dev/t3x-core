@@ -1,29 +1,29 @@
 /**
- * Delta Log Routes with OpenAPI
+ * YOps Log Routes with OpenAPI
  *
- * REST API endpoints for semantic delta log CRUD and draft computation.
- * Deltas track incremental changes to semantic trees within a conversation.
+ * REST API endpoints for semantic yops log CRUD and draft computation.
+ * YOps track incremental changes to semantic trees within a conversation.
  *
  * Endpoints:
- * - POST   /v1/conversations/:conversationId/deltas        - Append a delta
- * - GET    /v1/conversations/:conversationId/deltas        - List deltas
- * - GET    /v1/conversations/:conversationId/draft         - Compute current draft
- * - DELETE /v1/conversations/:conversationId/deltas/:deltaId - Delete a delta (undo)
+ * - POST   /v1/conversations/:conversationId/yops        - Append yops
+ * - GET    /v1/conversations/:conversationId/yops        - List yops
+ * - GET    /v1/conversations/:conversationId/draft        - Compute current draft
+ * - DELETE /v1/conversations/:conversationId/yops/:yopsId - Delete a yops entry (undo)
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import type { DeltaSource, SemanticContent } from '@t3x-dev/core';
-import { applyDelta, flattenTrees } from '@t3x-dev/core';
+import type { YOpsSource, SemanticContent } from '@t3x-dev/core';
+import { applyTreeChanges, flattenTrees } from '@t3x-dev/core';
 import {
-  deleteDeltaLogEntry,
+  deleteYOpsLogEntry,
   findConversationById,
-  getDeltaLogEntry,
-  insertDeltaLogEntry,
-  listDeltaLogByConversation,
-  listDeltaLogByTopic,
+  getYOpsLogEntry,
+  insertYOpsLogEntry,
+  listYOpsLogByConversation,
+  listYOpsLogByTopic,
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
-import { toDeltaLogEntries } from '../lib/delta-log-utils';
+import { toYOpsLogEntries } from '../lib/yops-log-utils';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import {
   readDraftFromTrees,
@@ -32,7 +32,7 @@ import {
 } from '../lib/tree-state-sync';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
-export const deltaLogRoutes = new OpenAPIHono({
+export const yopsLogRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
 });
 
@@ -44,12 +44,12 @@ const ConversationIdParam = z.object({
   conversationId: z.string().min(1),
 });
 
-const DeltaIdParam = z.object({
+const YOpsIdParam = z.object({
   conversationId: z.string().min(1),
-  deltaId: z.string().min(1),
+  yopsId: z.string().min(1),
 });
 
-const DeltaSourceSchema = z.enum([
+const YOpsSourceSchema = z.enum([
   'pipeline',
   'manual',
   'answer',
@@ -72,25 +72,25 @@ const RelationInputSchema = z
   })
   .passthrough();
 
-const DeltaSchema = z.object({
+const TreeChangeBatchSchema = z.object({
   changes: z.array(FrameChangeSchema).min(1),
   new_relations: z.array(RelationInputSchema).optional(),
   remove_relations: z.array(RelationInputSchema).optional(),
 });
 
-const CreateDeltaRequest = z.object({
-  source: DeltaSourceSchema,
+const CreateYOpsRequest = z.object({
+  source: YOpsSourceSchema,
   turn_hash: z.string().optional(),
-  delta: DeltaSchema,
+  yops: TreeChangeBatchSchema,
 });
 
-const DeltaLogEntryResponse = z.object({
+const YOpsLogEntryResponse = z.object({
   id: z.string(),
   conversation_id: z.string(),
   project_id: z.string(),
   source: z.string(),
   turn_hash: z.string().nullable(),
-  delta: z.any(),
+  yops: z.any(),
   created_at: z.string(),
 });
 
@@ -103,13 +103,13 @@ const DraftResponse = z.object({
 // Response Helpers
 // ============================================================
 
-function toApiDeltaEntry(record: {
+function toApiYOpsEntry(record: {
   id: string;
   conversationId: string;
   projectId: string;
   source: string;
   turnHash: string | null;
-  delta: unknown;
+  yops: unknown;
   createdAt: Date;
 }) {
   return {
@@ -118,7 +118,7 @@ function toApiDeltaEntry(record: {
     project_id: record.projectId,
     source: record.source,
     turn_hash: record.turnHash ?? null,
-    delta: record.delta,
+    yops: record.yops,
     created_at: record.createdAt.toISOString(),
   };
 }
@@ -127,29 +127,29 @@ function toApiDeltaEntry(record: {
 // Route Definitions
 // ============================================================
 
-// POST /v1/conversations/:conversationId/deltas
-const createDeltaRoute = createRoute({
+// POST /v1/conversations/:conversationId/yops
+const createYOpsRoute = createRoute({
   method: 'post',
-  path: '/v1/conversations/{conversationId}/deltas',
-  tags: ['Delta Log'],
-  summary: 'Append a delta to the log',
-  description: 'Appends a new delta entry to the conversation delta log.',
+  path: '/v1/conversations/{conversationId}/yops',
+  tags: ['YOps Log'],
+  summary: 'Append yops to the log',
+  description: 'Appends a new yops entry to the conversation yops log.',
   request: {
     params: ConversationIdParam,
     body: {
       content: {
         'application/json': {
-          schema: CreateDeltaRequest,
+          schema: CreateYOpsRequest,
         },
       },
     },
   },
   responses: {
     201: {
-      description: 'Delta created successfully',
+      description: 'YOps created successfully',
       content: {
         'application/json': {
-          schema: SuccessResponseSchema(DeltaLogEntryResponse),
+          schema: SuccessResponseSchema(YOpsLogEntryResponse),
         },
       },
     },
@@ -168,24 +168,24 @@ const TopicIdQuery = z.object({
   topic_id: z.string().optional(),
 });
 
-// GET /v1/conversations/:conversationId/deltas
-const listDeltasRoute = createRoute({
+// GET /v1/conversations/:conversationId/yops
+const listYOpsRoute = createRoute({
   method: 'get',
-  path: '/v1/conversations/{conversationId}/deltas',
-  tags: ['Delta Log'],
-  summary: 'List deltas for a conversation',
+  path: '/v1/conversations/{conversationId}/yops',
+  tags: ['YOps Log'],
+  summary: 'List yops for a conversation',
   description:
-    'Returns all delta log entries for a conversation, ordered by created_at ASC. Optionally filter by topic_id.',
+    'Returns all yops log entries for a conversation, ordered by created_at ASC. Optionally filter by topic_id.',
   request: {
     params: ConversationIdParam,
     query: TopicIdQuery,
   },
   responses: {
     200: {
-      description: 'List of delta log entries',
+      description: 'List of yops log entries',
       content: {
         'application/json': {
-          schema: SuccessResponseSchema(z.array(DeltaLogEntryResponse)),
+          schema: SuccessResponseSchema(z.array(YOpsLogEntryResponse)),
         },
       },
     },
@@ -200,10 +200,10 @@ const listDeltasRoute = createRoute({
 const getDraftRoute = createRoute({
   method: 'get',
   path: '/v1/conversations/{conversationId}/draft',
-  tags: ['Delta Log'],
-  summary: 'Compute current draft from delta log',
+  tags: ['YOps Log'],
+  summary: 'Compute current draft from yops log',
   description:
-    'Computes the current semantic draft by replaying all deltas. Not stored — computed on the fly. Optionally filter by topic_id.',
+    'Computes the current semantic draft by replaying all yops. Not stored — computed on the fly. Optionally filter by topic_id.',
   request: {
     params: ConversationIdParam,
     query: TopicIdQuery,
@@ -224,19 +224,19 @@ const getDraftRoute = createRoute({
   },
 });
 
-// DELETE /v1/conversations/:conversationId/deltas/:deltaId
-const deleteDeltaRoute = createRoute({
+// DELETE /v1/conversations/:conversationId/yops/:yopsId
+const deleteYOpsRoute = createRoute({
   method: 'delete',
-  path: '/v1/conversations/{conversationId}/deltas/{deltaId}',
-  tags: ['Delta Log'],
-  summary: 'Delete a delta entry (undo)',
-  description: 'Deletes a delta log entry by ID. Used for undo operations.',
+  path: '/v1/conversations/{conversationId}/yops/{yopsId}',
+  tags: ['YOps Log'],
+  summary: 'Delete a yops entry (undo)',
+  description: 'Deletes a yops log entry by ID. Used for undo operations.',
   request: {
-    params: DeltaIdParam,
+    params: YOpsIdParam,
   },
   responses: {
     200: {
-      description: 'Delta deleted successfully',
+      description: 'YOps entry deleted successfully',
       content: {
         'application/json': {
           schema: SuccessResponseSchema(z.null()),
@@ -244,7 +244,7 @@ const deleteDeltaRoute = createRoute({
       },
     },
     404: {
-      description: 'Delta not found',
+      description: 'YOps entry not found',
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
     500: {
@@ -258,8 +258,8 @@ const deleteDeltaRoute = createRoute({
 // Route Handlers
 // ============================================================
 
-// POST /v1/conversations/:conversationId/deltas
-deltaLogRoutes.openapi(createDeltaRoute, async (c) => {
+// POST /v1/conversations/:conversationId/yops
+yopsLogRoutes.openapi(createYOpsRoute, async (c) => {
   const { conversationId } = c.req.valid('param');
   const body = c.req.valid('json');
 
@@ -276,34 +276,34 @@ deltaLogRoutes.openapi(createDeltaRoute, async (c) => {
       );
     }
 
-    // Write delta_log + sync frames atomically
+    // Write yops_log + sync trees atomically
     const record = await (db as any).transaction(async (tx: any) => {
-      const rec = await insertDeltaLogEntry(tx, {
+      const rec = await insertYOpsLogEntry(tx, {
         conversationId,
         projectId: conversation.projectId,
         source: body.source,
         turnHash: body.turn_hash,
-        delta: body.delta,
+        yops: body.yops,
       });
       await syncDeltaToTrees(
         tx,
         conversationId,
         conversation.projectId,
-        body.delta as any,
-        body.source as DeltaSource
+        body.yops as any,
+        body.source as YOpsSource
       );
       return rec;
     });
 
-    return c.json({ success: true as const, data: toApiDeltaEntry(record) }, 201);
+    return c.json({ success: true as const, data: toApiYOpsEntry(record) }, 201);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return errorResponse(c, 'CREATE_FAILED', message);
   }
 });
 
-// GET /v1/conversations/:conversationId/deltas
-deltaLogRoutes.openapi(listDeltasRoute, async (c) => {
+// GET /v1/conversations/:conversationId/yops
+yopsLogRoutes.openapi(listYOpsRoute, async (c) => {
   const { conversationId } = c.req.valid('param');
   const { topic_id } = c.req.valid('query');
 
@@ -320,10 +320,10 @@ deltaLogRoutes.openapi(listDeltasRoute, async (c) => {
     }
 
     const records = topic_id
-      ? await listDeltaLogByTopic(db, conversationId, topic_id)
-      : await listDeltaLogByConversation(db, conversationId);
+      ? await listYOpsLogByTopic(db, conversationId, topic_id)
+      : await listYOpsLogByConversation(db, conversationId);
 
-    return c.json({ success: true as const, data: records.map(toApiDeltaEntry) }, 200);
+    return c.json({ success: true as const, data: records.map(toApiYOpsEntry) }, 200);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return errorResponse(c, 'LIST_FAILED', message);
@@ -331,7 +331,7 @@ deltaLogRoutes.openapi(listDeltasRoute, async (c) => {
 });
 
 // GET /v1/conversations/:conversationId/draft
-deltaLogRoutes.openapi(getDraftRoute, async (c) => {
+yopsLogRoutes.openapi(getDraftRoute, async (c) => {
   const { conversationId } = c.req.valid('param');
   const { topic_id } = c.req.valid('query');
 
@@ -347,16 +347,16 @@ deltaLogRoutes.openapi(getDraftRoute, async (c) => {
       );
     }
 
-    // Read from frames table; fallback to delta replay for unmigrated conversations
+    // Read from trees table; fallback to yops replay for unmigrated conversations
     let draft = await readDraftFromTrees(db, conversationId, topic_id);
     if (draft.trees.length === 0) {
-      // Fallback: replay deltas (pre-migration conversations)
+      // Fallback: replay yops (pre-migration conversations)
       const records = topic_id
-        ? await listDeltaLogByTopic(db, conversationId, topic_id)
-        : await listDeltaLogByConversation(db, conversationId);
+        ? await listYOpsLogByTopic(db, conversationId, topic_id)
+        : await listYOpsLogByConversation(db, conversationId);
       const emptySnap: SemanticContent = { trees: [], relations: [] };
-      draft = toDeltaLogEntries(records).reduce(
-        (snap, entry) => applyDelta(snap, entry.delta),
+      draft = toYOpsLogEntries(records).reduce(
+        (snap, entry) => applyTreeChanges(snap, entry.yops as any),
         emptySnap
       );
     }
@@ -368,27 +368,27 @@ deltaLogRoutes.openapi(getDraftRoute, async (c) => {
   }
 });
 
-// DELETE /v1/conversations/:conversationId/deltas/:deltaId
-deltaLogRoutes.openapi(deleteDeltaRoute, async (c) => {
-  const { conversationId, deltaId } = c.req.valid('param');
+// DELETE /v1/conversations/:conversationId/yops/:yopsId
+yopsLogRoutes.openapi(deleteYOpsRoute, async (c) => {
+  const { conversationId, yopsId } = c.req.valid('param');
 
   try {
     const db = await getDB();
 
     // Verify the entry exists and belongs to this conversation
-    const existing = await getDeltaLogEntry(db, deltaId);
+    const existing = await getYOpsLogEntry(db, yopsId);
     if (!existing || existing.conversationId !== conversationId) {
-      return errorResponse(c, 'NOT_FOUND', `Delta log entry not found: ${deltaId}`);
+      return errorResponse(c, 'NOT_FOUND', `YOps log entry not found: ${yopsId}`);
     }
 
-    // Undo: delete delta + rebuild frames atomically
+    // Undo: delete yops entry + rebuild trees atomically
     await (db as any).transaction(async (tx: any) => {
-      await deleteDeltaLogEntry(tx, deltaId);
-      const remainingRecords = await listDeltaLogByConversation(tx, conversationId);
-      const remainingEntries = toDeltaLogEntries(remainingRecords);
+      await deleteYOpsLogEntry(tx, yopsId);
+      const remainingRecords = await listYOpsLogByConversation(tx, conversationId);
+      const remainingEntries = toYOpsLogEntries(remainingRecords);
       const emptySnap: SemanticContent = { trees: [], relations: [] };
       const rebuilt = remainingEntries.reduce(
-        (snap, entry) => applyDelta(snap, entry.delta),
+        (snap, entry) => applyTreeChanges(snap, entry.yops as any),
         emptySnap
       );
       await rebuildTreesFromSnapshot(tx, conversationId, existing.projectId, rebuilt);
@@ -401,4 +401,4 @@ deltaLogRoutes.openapi(deleteDeltaRoute, async (c) => {
   }
 });
 
-export default deltaLogRoutes;
+export default yopsLogRoutes;

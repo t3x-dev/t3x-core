@@ -1,6 +1,6 @@
 'use client';
 
-import type { Delta, DeltaSource, TreeDiff, SemanticContent, SlotValue, TreeNode } from '@t3x-dev/core';
+import type { TreeChangeBatch, YOpsSource, TreeDiff, SemanticContent, SlotValue } from '@t3x-dev/core';
 import { diffCommits } from '@t3x-dev/core';
 import { treesToNodes } from '@/lib/treeCompat';
 import yaml from 'js-yaml';
@@ -11,15 +11,15 @@ import { cn } from '@/lib/utils';
 
 interface YAMLEditorProps {
   content: SemanticContent;
-  onDeltaCreated: (delta: Delta, source: DeltaSource) => void;
+  onBatchCreated: (batch: TreeChangeBatch, source: YOpsSource) => void;
   className?: string;
 }
 
 // ── Helpers ──
 
-/** Convert a TreeDiff into a Delta for the delta pipeline. */
-function treeDiffToDelta(diff: TreeDiff, sourceContent: SemanticContent, targetContent: SemanticContent): Delta | null {
-  const delta: Delta = { changes: [] };
+/** Convert a TreeDiff into a TreeChangeBatch for the change pipeline. */
+function treeDiffToBatch(diff: TreeDiff, sourceContent: SemanticContent, targetContent: SemanticContent): TreeChangeBatch | null {
+  const batch: TreeChangeBatch = { changes: [] };
 
   // Added paths (only in target = new in edited version)
   for (const path of diff.onlyInTarget) {
@@ -27,7 +27,7 @@ function treeDiffToDelta(diff: TreeDiff, sourceContent: SemanticContent, targetC
     const node = nodes.find(f => f.id === path);
     if (node) {
       const parentPath = path.includes('.') ? path.slice(0, path.lastIndexOf('.')) : '';
-      delta.changes.push({
+      batch.changes.push({
         action: 'add',
         parent_path: parentPath,
         node: { key: node.key, slots: node.slots, children: node.children },
@@ -37,7 +37,7 @@ function treeDiffToDelta(diff: TreeDiff, sourceContent: SemanticContent, targetC
 
   // Removed paths (only in source = deleted in edited version)
   for (const path of diff.onlyInSource) {
-    delta.changes.push({ action: 'remove', target_path: path });
+    batch.changes.push({ action: 'remove', target_path: path });
   }
 
   // Modified paths
@@ -57,24 +57,24 @@ function treeDiffToDelta(diff: TreeDiff, sourceContent: SemanticContent, targetC
       }
     }
     if (Object.keys(slots).length > 0) {
-      delta.changes.push({ action: 'update', target_path: mod.path, slots });
+      batch.changes.push({ action: 'update', target_path: mod.path, slots });
     }
   }
 
   // Relations
   if (diff.relationsAdded.length > 0) {
-    delta.new_relations = diff.relationsAdded;
+    batch.new_relations = diff.relationsAdded;
   }
   if (diff.relationsRemoved.length > 0) {
-    delta.remove_relations = diff.relationsRemoved;
+    batch.remove_relations = diff.relationsRemoved;
   }
 
   // Return null if no changes
-  if (delta.changes.length === 0 && !delta.new_relations && !delta.remove_relations) {
+  if (batch.changes.length === 0 && !batch.new_relations && !batch.remove_relations) {
     return null;
   }
 
-  return delta;
+  return batch;
 }
 
 /** Minimal validation: must have a trees array. */
@@ -86,7 +86,7 @@ function looksLikeSemanticContent(value: unknown): value is SemanticContent {
 
 // ── Component ──
 
-export function YAMLEditor({ content, onDeltaCreated, className }: YAMLEditorProps) {
+export function YAMLEditor({ content, onBatchCreated, className }: YAMLEditorProps) {
   const [text, setText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const contentRef = useRef(content);
@@ -125,16 +125,16 @@ export function YAMLEditor({ content, onDeltaCreated, className }: YAMLEditorPro
     // 3. Diff against original
     const diff = diffCommits(contentRef.current, edited);
 
-    // 4. Convert to delta
-    const delta = treeDiffToDelta(diff, contentRef.current, edited);
-    if (!delta) {
+    // 4. Convert to tree change batch
+    const batch = treeDiffToBatch(diff, contentRef.current, edited);
+    if (!batch) {
       setError('No changes detected');
       return;
     }
 
     // 5. Emit
-    onDeltaCreated(delta, 'manual');
-  }, [text, onDeltaCreated]);
+    onBatchCreated(batch, 'manual');
+  }, [text, onBatchCreated]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {

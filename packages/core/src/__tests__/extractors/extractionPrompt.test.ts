@@ -69,12 +69,12 @@ describe('buildExtractionPrompt', () => {
   });
 
   describe('delta mode (with snapshot)', () => {
-    it('system prompt instructs delta output', () => {
+    it('system prompt instructs incremental changes output', () => {
       const result = buildExtractionPrompt({
         turns: sampleTurns,
         snapshot: sampleSnapshot,
       });
-      expect(result.systemPrompt).toContain('delta');
+      expect(result.systemPrompt).toContain('CHANGES');
     });
 
     it('includes snapshot in user prompt with tree structure', () => {
@@ -97,12 +97,12 @@ describe('buildExtractionPrompt', () => {
       expect(result.userPrompt).not.toContain('- id:');
     });
 
-    it('user prompt asks for delta output with tree paths', () => {
+    it('user prompt asks for changes output with tree paths', () => {
       const result = buildExtractionPrompt({
         turns: sampleTurns,
         snapshot: sampleSnapshot,
       });
-      expect(result.userPrompt).toContain('delta');
+      expect(result.userPrompt).toContain('changes');
       expect(result.userPrompt).toContain('parent_path');
       expect(result.userPrompt).toContain('target_path');
       expect(result.userPrompt).toContain('update');

@@ -9,16 +9,16 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { applyDelta, Compressor, flattenTrees, type NodeWithSignals, type SemanticContent } from '@t3x-dev/core';
+import { applyTreeChanges, applyYOps, Compressor, flattenTrees, type NodeWithSignals, type SemanticContent } from '@t3x-dev/core';
 import {
   findConversationById,
-  insertDeltaLogEntry,
-  listDeltaLogByConversation,
+  insertYOpsLogEntry,
+  listYOpsLogByConversation,
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
-import { toDeltaLogEntries } from '../lib/delta-log-utils';
+import { toYOpsLogEntries } from '../lib/yops-log-utils';
 import { errorResponse, zodErrorHook } from '../lib/errors';
-import { syncDeltaToTrees } from '../lib/tree-state-sync';
+import { rebuildTreesFromSnapshot } from '../lib/tree-state-sync';
 import { assertProjectAccess } from '../lib/project-access';
 import { getProviderRegistry } from '../lib/provider-registry';
 import { getUserId, recordUsageFireAndForget, wrapWithUsageTracking } from '../lib/usage-tracking';
@@ -48,7 +48,7 @@ const TreeCompressResponse = SuccessResponseSchema(
       remove_relations: z.array(z.any()).optional(),
     }),
     metadata: CompressMetadataSchema,
-    delta_log_id: z.string(),
+    yops_log_id: z.string(),
   })
 );
 
@@ -97,16 +97,16 @@ const compressTreesRoute = createRoute({
 // ============================================================
 
 /**
- * Scan delta log to compute engagement signals for each frame.
- * - has_manual_edit: true if any 'manual' delta touched this frame
- * - last_touched: number of delta entries since last mention (0 = last delta)
- * - mention_count: how many deltas referenced this frame
+ * Scan yops log to compute engagement signals for each node.
+ * - has_manual_edit: true if any 'manual' yops entry touched this node
+ * - last_touched: number of entries since last mention (0 = last entry)
+ * - mention_count: how many entries referenced this node
  */
 function computeNodeSignals(
   frameIds: string[],
-  deltaEntries: Array<{
+  yopsEntries: Array<{
     source: string;
-    delta: { changes: Array<{ action: string; target?: string; frame?: { id: string } }> };
+    yops: unknown;
   }>
 ): Map<string, { has_manual_edit: boolean; last_touched: number; mention_count: number }> {
   const signals = new Map<
@@ -118,18 +118,23 @@ function computeNodeSignals(
   for (const fid of frameIds) {
     signals.set(fid, {
       has_manual_edit: false,
-      last_touched: deltaEntries.length,
+      last_touched: yopsEntries.length,
       mention_count: 0,
     });
   }
 
-  // Scan delta log from oldest to newest
-  for (let i = 0; i < deltaEntries.length; i++) {
-    const entry = deltaEntries[i];
+  // Scan yops log from oldest to newest
+  for (let i = 0; i < yopsEntries.length; i++) {
+    const entry = yopsEntries[i];
     const isManual = entry.source === 'manual';
     const framesMentioned = new Set<string>();
 
-    for (const change of entry.delta.changes) {
+    // Extract changes from yops (may be TreeChangeBatch format with .changes or YOp[] array)
+    const yopsData = entry.yops as any;
+    const changes: Array<{ action: string; target?: string; frame?: { id: string } }> =
+      Array.isArray(yopsData) ? [] : (yopsData?.changes ?? []);
+
+    for (const change of changes) {
       let targetId: string | undefined;
       if (change.action === 'add' && change.frame) {
         targetId = change.frame.id;
@@ -148,7 +153,7 @@ function computeNodeSignals(
     // Update last_touched and mention_count
     for (const fid of Array.from(framesMentioned)) {
       const sig = signals.get(fid)!;
-      sig.last_touched = deltaEntries.length - i - 1; // Distance from end
+      sig.last_touched = yopsEntries.length - i - 1; // Distance from end
       sig.mention_count += 1;
     }
   }
@@ -180,12 +185,12 @@ treeCompressRoutes.openapi(compressTreesRoute, async (c) => {
     const accessResult = await assertProjectAccess(c, db, conversation.projectId);
     if (accessResult instanceof Response) return accessResult;
 
-    // 2. Fetch existing delta log and build current snapshot
-    const deltaRecords = await listDeltaLogByConversation(db, conversationId);
-    const deltaEntries = toDeltaLogEntries(deltaRecords);
+    // 2. Fetch existing yops log and build current snapshot
+    const yopsRecords = await listYOpsLogByConversation(db, conversationId);
+    const yopsEntries = toYOpsLogEntries(yopsRecords);
     const emptySnapshot: SemanticContent = { trees: [], relations: [] };
-    const currentSnapshot = deltaEntries.reduce(
-      (snap, entry) => applyDelta(snap, entry.delta),
+    const currentSnapshot = yopsEntries.reduce(
+      (snap, entry) => applyTreeChanges(snap, entry.yops as any),
       emptySnapshot
     );
     const currentFlat = flattenTrees(currentSnapshot.trees);
@@ -201,7 +206,7 @@ treeCompressRoutes.openapi(compressTreesRoute, async (c) => {
 
     // 4. Compute engagement signals for all nodes
     const nodeIds = currentFlat.map((f) => f.id);
-    const signalsMap = computeNodeSignals(nodeIds, deltaEntries);
+    const signalsMap = computeNodeSignals(nodeIds, yopsEntries);
 
     // 5. Attach signals to nodes
     const nodesWithSignals: NodeWithSignals[] = currentFlat.map((f) => {
@@ -247,12 +252,12 @@ treeCompressRoutes.openapi(compressTreesRoute, async (c) => {
       return errorResponse(c, 'EXTRACTION_FAILED', result.error || 'Compression failed');
     }
 
-    // 8. Skip if nothing was compressed (empty changes)
-    if (result.delta.changes.length === 0) {
+    // 8. Skip if nothing was compressed (empty yops)
+    if (result.yops.length === 0) {
       return errorResponse(
         c,
         'INVALID_REQUEST',
-        'No frames were compressed (delta is empty). All frames may be protected or already optimal.'
+        'No frames were compressed (yops is empty). All frames may be protected or already optimal.'
       );
     }
 
@@ -268,28 +273,33 @@ treeCompressRoutes.openapi(compressTreesRoute, async (c) => {
       });
     }
 
-    // 9. Write delta_log + sync frames atomically
+    // 9. Apply YOps to get compressed snapshot, then write yops_log + sync trees atomically
+    const compressedResult = applyYOps(currentSnapshot, result.yops);
+    const compressedSnapshot: SemanticContent = compressedResult.ok
+      ? { trees: compressedResult.trees, relations: compressedResult.relations }
+      : currentSnapshot; // fallback: keep current if apply fails
+
     const record = await (db as any).transaction(async (tx: any) => {
-      const rec = await insertDeltaLogEntry(tx, {
+      const rec = await insertYOpsLogEntry(tx, {
         conversationId,
         projectId: conversation.projectId,
         source: 'compress',
-        delta: result.delta,
+        yops: result.yops,
         pipelineState: 'completed',
         metadata: result.metadata,
       });
-      await syncDeltaToTrees(tx, conversationId, conversation.projectId, result.delta, 'compress');
+      await rebuildTreesFromSnapshot(tx, conversationId, conversation.projectId, compressedSnapshot);
       return rec;
     });
 
-    // 10. Return delta + metadata + delta_log_id
+    // 10. Return yops + metadata + yops_log_id
     return c.json(
       {
         success: true as const,
         data: {
-          delta: result.delta,
+          delta: result.yops,
           metadata: result.metadata,
-          delta_log_id: record.id,
+          yops_log_id: record.id,
         },
       },
       200

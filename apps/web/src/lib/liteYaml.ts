@@ -1,5 +1,5 @@
 import type {
-  Delta,
+  TreeChangeBatch,
   TreeChange,
   Relation,
   SemanticContent,
@@ -121,8 +121,8 @@ export function toDisplayYAML(content: SemanticContent): string {
   return lines.join('\n');
 }
 
-/** Parse lite YAML back and diff against current content to produce a Delta */
-export function parseDisplayYAML(yaml: string, currentContent: SemanticContent): Delta {
+/** Parse lite YAML back and diff against current content to produce a TreeChangeBatch */
+export function parseDisplayYAML(yaml: string, currentContent: SemanticContent): TreeChangeBatch {
   const changes: TreeChange[] = [];
   const newRelations: Relation[] = [];
   const removeRelations: Relation[] = [];

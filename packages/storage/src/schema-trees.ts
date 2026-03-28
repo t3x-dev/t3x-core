@@ -820,53 +820,51 @@ export type NotificationRecord = typeof notifications.$inferSelect;
 export type NotificationInsert = typeof notifications.$inferInsert;
 
 // ═══════════════════════════════════════════════════════════════════════════
-// delta_log: Append-only Semantic Delta Records
+// yops_log: Append-only YOps Records
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Append-only log of semantic deltas produced during extraction and editing.
+ * Append-only log of YOps produced during extraction and editing.
  *
  * Sources:
- * - `pipeline`: Deltas from LLM-based semantic extraction (has turn_hash)
- * - `manual`: Deltas from user edits (graph UI or YAML mode)
- * - `answer`: Deltas from user answers to advisory/drift questions
- * - `collapse`: Deltas that collapse old frames (drift choice: keep new)
+ * - `pipeline`: YOps from LLM-based semantic extraction (has turn_hash)
+ * - `manual`: YOps from user edits (graph UI or YAML mode)
+ * - `answer`: YOps from user answers to advisory/drift questions
+ * - `collapse`: YOps that collapse old frames (drift choice: keep new)
  * - `commit_marker`: Marker entry when a commit is created
- *
- * @see docs/plans/core-engine/04-delta-protocol.md
  */
-export const deltaLog = pgTable(
-  'delta_log',
+export const yopsLog = pgTable(
+  'yops_log',
   {
-    /** Unique ID: "dl_" + nanoid(12) */
+    /** Unique ID: "yl_" + nanoid(12) */
     id: text('id').primaryKey(),
 
-    /** Conversation this delta belongs to */
+    /** Conversation this yops entry belongs to */
     conversationId: text('conversation_id')
       .notNull()
       .references(() => conversations.conversationId, { onDelete: 'cascade' }),
 
-    /** Project this delta belongs to */
+    /** Project this yops entry belongs to */
     projectId: text('project_id')
       .notNull()
       .references(() => projects.projectId, { onDelete: 'cascade' }),
 
-    /** Delta source: 'pipeline' | 'manual' | 'answer' | 'collapse' | 'commit_marker' */
+    /** YOps source: 'pipeline' | 'manual' | 'answer' | 'collapse' | 'commit_marker' */
     source: text('source').notNull(),
 
     /** Turn hash (only for pipeline source) */
     turnHash: text('turn_hash'),
 
-    /** The Delta content (JSONB) */
-    delta: jsonb('delta').notNull(),
+    /** The YOps content (JSONB) */
+    yops: jsonb('yops').notNull(),
 
-    /** Commit hash — set when this delta is included in a commit, or for commit_marker entries */
+    /** Commit hash — set when this yops entry is included in a commit, or for commit_marker entries */
     commitHash: text('commit_hash'),
 
     /** Which model produced this extraction (for pipeline source) */
     model: text('model'),
 
-    /** When this delta was recorded */
+    /** When this yops entry was recorded */
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 
     // ── V2 columns ──
@@ -887,13 +885,13 @@ export const deltaLog = pgTable(
     topicId: text('topic_id'),
   },
   (table) => ({
-    convIdx: index('idx_delta_log_conv').on(table.conversationId, table.createdAt),
-    projectIdx: index('idx_delta_log_project').on(table.projectId),
+    convIdx: index('idx_yops_log_conv').on(table.conversationId, table.createdAt),
+    projectIdx: index('idx_yops_log_project').on(table.projectId),
   })
 );
 
-export type DeltaLogRecord = typeof deltaLog.$inferSelect;
-export type DeltaLogInsert = typeof deltaLog.$inferInsert;
+export type YOpsLogRecord = typeof yopsLog.$inferSelect;
+export type YOpsLogInsert = typeof yopsLog.$inferInsert;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Topics: Multi-topic Conversations

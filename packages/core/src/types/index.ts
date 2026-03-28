@@ -63,8 +63,6 @@ export interface ConstraintSourceNode {
   /** Specific slot key within the node (optional — omit to target the node as a whole) */
   slot_key?: string;
 }
-/** @deprecated Use ConstraintSourceNode */
-export type ConstraintSourceFrame = ConstraintSourceNode;
 
 export interface RequireConstraint {
   /** Unique ID, format: "cst_" + nanoid(12) */
@@ -83,8 +81,6 @@ export interface RequireConstraint {
 
   /** Link to source node + slot (tree-based traceability) */
   source_node?: ConstraintSourceNode;
-  /** @deprecated Use source_node */
-  source_frame?: ConstraintSourceFrame;
 }
 
 export interface ExcludeConstraint {
@@ -107,8 +103,6 @@ export interface ExcludeConstraint {
 
   /** Link to source node + slot (tree-based traceability) */
   source_node?: ConstraintSourceNode;
-  /** @deprecated Use source_node */
-  source_frame?: ConstraintSourceFrame;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

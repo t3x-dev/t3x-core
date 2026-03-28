@@ -73,13 +73,13 @@ function CommitPreviewSection() {
   const commitBranch = useExtractionPanelStore((s) => s.commitBranch);
   const isCommitting = useExtractionPanelStore((s) => s.isCommitting);
   const commitError = useExtractionPanelStore((s) => s.commitError);
-  const selectDeltaNodes = useExtractionPanelStore((s) => s.selectDeltaNodes);
+  const selectPendingNodes = useExtractionPanelStore((s) => s.selectPendingNodes);
   const commitNodes = useExtractionPanelStore((s) => s.commitNodes);
   const setPanelMode = useExtractionPanelStore((s) => s.setPanelMode);
   const clearCommitError = useExtractionPanelStore((s) => s.clearCommitError);
 
   const [commitMessage, setCommitMessage] = useState('');
-  const deltaNodes: TreeNode[] = selectDeltaNodes();
+  const pendingNodes: TreeNode[] = selectPendingNodes();
 
   const handleConfirm = async () => {
     try {
@@ -107,17 +107,17 @@ function CommitPreviewSection() {
       <div className="flex items-center justify-between">
         <span className="text-xs font-semibold text-[var(--text-primary)]">Commit Preview</span>
         <span className="text-[10px] text-[var(--text-tertiary)]">
-          {deltaNodes.length} new tree{deltaNodes.length !== 1 ? 's' : ''}
+          {pendingNodes.length} new tree{pendingNodes.length !== 1 ? 's' : ''}
         </span>
       </div>
 
       <div className="flex flex-col gap-1 max-h-40 overflow-y-auto">
-        {deltaNodes.length === 0 ? (
+        {pendingNodes.length === 0 ? (
           <div className="text-[11px] text-[var(--text-tertiary)] italic py-2">
             All trees already committed — up to date
           </div>
         ) : (
-          deltaNodes.map((f) => {
+          pendingNodes.map((f) => {
             const summary = `[${f.type}] ${Object.entries(f.slots)
               .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`)
               .join('; ')}`;
@@ -149,7 +149,7 @@ function CommitPreviewSection() {
         placeholder="Commit message (optional)"
         className="w-full rounded border border-[var(--stroke-default)] bg-[var(--surface-panel)] px-2 py-1.5 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--accent-commit)]"
         onKeyDown={(e) => {
-          if (e.key === 'Enter' && !isCommitting && deltaNodes.length > 0) handleConfirm();
+          if (e.key === 'Enter' && !isCommitting && pendingNodes.length > 0) handleConfirm();
           if (e.key === 'Escape') setPanelMode('default');
         }}
         disabled={isCommitting}
@@ -176,7 +176,7 @@ function CommitPreviewSection() {
         <button
           type="button"
           onClick={handleConfirm}
-          disabled={isCommitting || deltaNodes.length === 0}
+          disabled={isCommitting || pendingNodes.length === 0}
           className="flex-1 rounded bg-[var(--accent-commit)] px-2 py-1.5 text-xs text-white hover:opacity-90 disabled:opacity-40"
         >
           {isCommitting ? 'Committing...' : 'Confirm Commit'}
@@ -194,7 +194,7 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
   const isExtracting = useExtractionPanelStore((s) => s.isExtracting);
   const togglePanel = useExtractionPanelStore((s) => s.togglePanel);
   const _setPanelMode = useExtractionPanelStore((s) => s.setPanelMode);
-  const deltaChangeHistory = useExtractionPanelStore((s) => s.deltaChangeHistory);
+  const yopsHistory = useExtractionPanelStore((s) => s.yopsHistory);
   const focusIntentEnabled = useExtractionPanelStore((s) => s.focusIntentEnabled);
   const setFocusIntent = useExtractionPanelStore((s) => s.setFocusIntent);
   const isCompressing = useExtractionPanelStore((s) => s.isCompressing);
@@ -203,16 +203,16 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
   const startCompress = useExtractionPanelStore((s) => s.startCompress);
   const undoCompression = useExtractionPanelStore((s) => s.undoCompression);
   const dismissCompressBanner = useExtractionPanelStore((s) => s.dismissCompressBanner);
-  const deltaLog = useExtractionPanelStore((s) => s.deltaLog);
+  const yopsLog = useExtractionPanelStore((s) => s.yopsLog);
   const manualEditedNodeIds = useExtractionPanelStore((s) => s.manualEditedNodeIds);
-  const hasCompressDelta = deltaLog.some((d) => d.source === 'compress');
+  const hasCompressEntry = yopsLog.some((d) => d.source === 'compress');
 
   const nodeCount = draft.trees.length;
   const manualCount = manualEditedNodeIds.size;
-  const latestDeltaChanges = deltaChangeHistory[0] ?? [];
-  const added = latestDeltaChanges.filter((c) => c.action === 'add').length;
-  const updated = latestDeltaChanges.filter((c) => c.action === 'update').length;
-  const removed = latestDeltaChanges.filter((c) => c.action === 'remove').length;
+  const latestChanges = yopsHistory[0] ?? [];
+  const added = latestChanges.filter((c) => c.action === 'add').length;
+  const updated = latestChanges.filter((c) => c.action === 'update').length;
+  const removed = latestChanges.filter((c) => c.action === 'remove').length;
   const hasChanges = added + updated + removed > 0;
   const targetWidth =
     panelMode === 'collapsed'
@@ -290,7 +290,7 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
                 </button>
               )}
               {/* Compressed indicator */}
-              {hasCompressDelta && !isCompressing && (
+              {hasCompressEntry && !isCompressing && (
                 <button
                   type="button"
                   onClick={undoCompression}

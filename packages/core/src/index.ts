@@ -67,8 +67,6 @@ export {
   type AnchorCandidate,
   type AnchorSource,
   type AnchorType,
-  /** @deprecated Use buildYOpsPrompt instead */
-  buildExtractionPrompt,
   // YOps extraction pipeline
   buildYOpsPrompt,
   // Relations
@@ -314,11 +312,11 @@ export {
 } from './providers';
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Semantic Module (Tree-Primary: TreeNode + Relation + Delta + Diff + Merge)
+// Semantic Module (Tree-Primary: TreeNode + Relation + Diff + Merge)
 // ═══════════════════════════════════════════════════════════════════════════
 export {
-  // Delta
-  applyDelta,
+  // Tree Changes
+  applyTreeChanges,
   // Business Gate
   BusinessGate,
   buildCoveragePrompt,
@@ -328,7 +326,7 @@ export {
   checkRelationSanity,
   collectSlotQuotes,
   // Schemas
-  DeltaSchema,
+  TreeChangeBatchSchema,
   // Diff
   diffCommits,
   diffSlots,
@@ -367,12 +365,6 @@ export type {
   BusinessGateResult,
   BusinessRuleConfig,
   CoverageResult,
-  /** @deprecated Use YOps operations instead of Delta */
-  Delta,
-  /** @deprecated */
-  DeltaLogEntry,
-  /** @deprecated */
-  DeltaSource,
   DimensionResult,
   GateDimension,
   GateResult,
@@ -388,12 +380,15 @@ export type {
   SlotValue,
   StructureGateResult,
   TreeChange,
+  TreeChangeBatch,
   TreeDiff,
   TreeNode,
   ValidationError as SemanticValidationError,
   ValidationResult as SemanticValidationResult,
   ValidationWarning as SemanticValidationWarning,
   WordDiffFn,
+  YOpsLogEntry,
+  YOpsSource,
 } from './semantic';
 
 // Re-export RelationType from semantic (tree-primary relation types)
@@ -469,7 +464,6 @@ export {
   type CommitSourceRef,
   // Constraint (now belongs to Leaf)
   type Constraint,
-  type ConstraintSourceFrame,
   type ConstraintSourceNode,
   type ContextSource,
   // Conversation Context

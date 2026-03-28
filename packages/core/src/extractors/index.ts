@@ -27,9 +27,7 @@ export {
 } from './compressPrompt';
 export { createMeaningPipeline } from './createMeaningPipeline';
 // extractionPrompt helpers — still used by yopsPrompt.ts internally
-/** @deprecated Use buildYOpsPrompt instead */
 export {
-  buildExtractionPrompt,
   type ExtractionPromptResult,
   granularitySegment,
   quoteLengthSegment,

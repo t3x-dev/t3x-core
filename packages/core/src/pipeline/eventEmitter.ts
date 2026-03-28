@@ -14,7 +14,7 @@ import type { AdvisoryQuestion } from './types';
 export interface ExtractionCompletedEvent {
   conversationId: string;
   projectId: string;
-  deltaLogId: string;
+  yopsLogId: string;
   yops: YOp[];
   snapshot: SemanticContent;
   topicId?: string;
