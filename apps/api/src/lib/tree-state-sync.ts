@@ -1,36 +1,36 @@
 /**
- * Frame State Sync
+ * Tree State Sync
  *
- * Applies delta changes to the frames + frame_relations tables.
+ * Applies delta changes to the trees + tree_relations tables.
  * Used by extraction, compression, manual edit, and undo routes.
  * All operations use the caller's transaction handle (tx) for atomicity.
  *
  * NOTE: The Delta type now uses tree-primary TreeChange (parent_path/target_path/node)
- * but the frames DB table still stores flat frames. We map tree changes to flat frame
- * upserts using the node key as the frame ID.
+ * but the trees DB table still stores flat nodes. We map tree changes to flat node
+ * upserts using the node key as the tree ID.
  */
 
 import type { Delta, DeltaSource, Relation, SemanticContent } from '@t3x-dev/core';
 import { flattenTrees } from '@t3x-dev/core';
 import type { AnyDB } from '@t3x-dev/storage';
 import {
-  deleteFrame,
-  deleteFrameRelationByKey,
-  deleteFrameRelationsByConversation,
-  deleteFrameRelationsByFrameId,
-  deleteFramesByConversation,
-  getFrameByKey,
-  listFrameRelationsByConversation,
-  listFramesByConversation,
-  upsertFrame,
-  upsertFrameRelation,
+  deleteTree,
+  deleteTreeRelationByKey,
+  deleteTreeRelationsByConversation,
+  deleteTreeRelationsByTreeId,
+  deleteTreesByConversation,
+  getTreeByKey,
+  listTreeRelationsByConversation,
+  listTreesByConversation,
+  upsertTree,
+  upsertTreeRelation,
 } from '@t3x-dev/storage';
 
 /**
- * Apply a delta's changes to the frames table.
+ * Apply a delta's changes to the trees table.
  * The `db` parameter should be a transaction handle (tx) from the caller.
  */
-export async function syncDeltaToFrames(
+export async function syncDeltaToTrees(
   db: AnyDB,
   conversationId: string,
   projectId: string,
@@ -44,9 +44,9 @@ export async function syncDeltaToFrames(
     switch (change.action) {
       case 'add': {
         const n = change.node;
-        await upsertFrame(db, {
+        await upsertTree(db, {
           conversationId,
-          frameId: n.key,
+          treeId: n.key,
           projectId,
           topicId: opts?.topicId,
           type: n.key,
@@ -60,7 +60,7 @@ export async function syncDeltaToFrames(
         break;
       }
       case 'update': {
-        const current = await getFrameByKey(db, conversationId, change.target_path);
+        const current = await getTreeByKey(db, conversationId, change.target_path);
         if (current) {
           const mergedSlots = { ...(current.slots as Record<string, unknown>) };
           for (const [k, v] of Object.entries(change.slots)) {
@@ -70,9 +70,9 @@ export async function syncDeltaToFrames(
               mergedSlots[k] = v;
             }
           }
-          await upsertFrame(db, {
+          await upsertTree(db, {
             conversationId,
-            frameId: change.target_path,
+            treeId: change.target_path,
             projectId,
             topicId: opts?.topicId ?? current.topicId ?? undefined,
             type: current.type,
@@ -87,8 +87,8 @@ export async function syncDeltaToFrames(
         break;
       }
       case 'remove': {
-        await deleteFrameRelationsByFrameId(db, conversationId, change.target_path);
-        await deleteFrame(db, conversationId, change.target_path);
+        await deleteTreeRelationsByTreeId(db, conversationId, change.target_path);
+        await deleteTree(db, conversationId, change.target_path);
         break;
       }
     }
@@ -97,11 +97,11 @@ export async function syncDeltaToFrames(
   // Handle new relations
   if (delta.new_relations) {
     for (const rel of delta.new_relations) {
-      await upsertFrameRelation(db, {
+      await upsertTreeRelation(db, {
         conversationId,
         topicId: opts?.topicId,
-        fromFrameId: rel.from,
-        toFrameId: rel.to,
+        fromTreeId: rel.from,
+        toTreeId: rel.to,
         type: rel.type,
         confidence: rel.confidence,
       });
@@ -111,16 +111,19 @@ export async function syncDeltaToFrames(
   // Handle removed relations (match specific from+to+type)
   if (delta.remove_relations) {
     for (const rel of delta.remove_relations) {
-      await deleteFrameRelationByKey(db, conversationId, rel.from, rel.to, rel.type);
+      await deleteTreeRelationByKey(db, conversationId, rel.from, rel.to, rel.type);
     }
   }
 }
 
+/** @deprecated Use syncDeltaToTrees */
+export const syncDeltaToFrames = syncDeltaToTrees;
+
 /**
- * Rebuild frames table from a SemanticContent snapshot.
+ * Rebuild trees table from a SemanticContent snapshot.
  * Used by undo (delete delta → rebuild from remaining deltas).
  */
-export async function rebuildFramesFromSnapshot(
+export async function rebuildTreesFromSnapshot(
   db: AnyDB,
   conversationId: string,
   projectId: string,
@@ -128,15 +131,15 @@ export async function rebuildFramesFromSnapshot(
   topicId?: string
 ): Promise<void> {
   // Clear existing
-  await deleteFrameRelationsByConversation(db, conversationId);
-  await deleteFramesByConversation(db, conversationId);
+  await deleteTreeRelationsByConversation(db, conversationId);
+  await deleteTreesByConversation(db, conversationId);
 
   // Flatten trees to FlatNode[] for DB storage
   const flatNodes = flattenTrees(snapshot.trees);
   for (const f of flatNodes) {
-    await upsertFrame(db, {
+    await upsertTree(db, {
       conversationId,
-      frameId: f.id,
+      treeId: f.id,
       projectId,
       topicId,
       type: f.type,
@@ -150,33 +153,36 @@ export async function rebuildFramesFromSnapshot(
 
   // Insert relations
   for (const rel of snapshot.relations) {
-    await upsertFrameRelation(db, {
+    await upsertTreeRelation(db, {
       conversationId,
       topicId,
-      fromFrameId: rel.from,
-      toFrameId: rel.to,
+      fromTreeId: rel.from,
+      toTreeId: rel.to,
       type: rel.type,
       confidence: rel.confidence,
     });
   }
 }
 
+/** @deprecated Use rebuildTreesFromSnapshot */
+export const rebuildFramesFromSnapshot = rebuildTreesFromSnapshot;
+
 /**
- * Build a SemanticContent from the frames table (replaces buildDraft for reads).
+ * Build a SemanticContent from the trees table (replaces buildDraft for reads).
  *
- * NOTE: Returns flat trees (one TreeNode per frame row) since the DB doesn't
+ * NOTE: Returns flat trees (one TreeNode per tree row) since the DB doesn't
  * store tree hierarchy. Use unflattenToTrees() from core if nesting is needed.
  */
-export async function readDraftFromFrames(
+export async function readDraftFromTrees(
   db: AnyDB,
   conversationId: string,
   topicId?: string
 ): Promise<SemanticContent> {
-  const frameRows = await listFramesByConversation(db, conversationId, topicId);
-  const relRows = await listFrameRelationsByConversation(db, conversationId, topicId);
+  const treeRows = await listTreesByConversation(db, conversationId, topicId);
+  const relRows = await listTreeRelationsByConversation(db, conversationId, topicId);
 
-  const trees = frameRows.map((r) => ({
-    key: r.frameId,
+  const trees = treeRows.map((r) => ({
+    key: r.treeId,
     slots: r.slots as Record<string, string>,
     children: [] as import('@t3x-dev/core').TreeNode[],
     source: r.source ?? undefined,
@@ -185,11 +191,14 @@ export async function readDraftFromFrames(
   }));
 
   const relationsResult: Relation[] = relRows.map((r) => ({
-    from: r.fromFrameId,
-    to: r.toFrameId,
+    from: r.fromTreeId,
+    to: r.toTreeId,
     type: r.type as Relation['type'],
     confidence: r.confidence ?? undefined,
   }));
 
   return { trees, relations: relationsResult };
 }
+
+/** @deprecated Use readDraftFromTrees */
+export const readDraftFromFrames = readDraftFromTrees;

@@ -40,7 +40,9 @@ export interface DriftResult {
 export interface AdvisoryQuestion {
   id: string;
   type: 'vagueness' | 'structural';
-  frameId: string;
+  nodeId: string;
+  /** @deprecated Use nodeId */
+  frameId?: string;
   slotKey?: string;
   question: string;
   currentValue?: unknown;

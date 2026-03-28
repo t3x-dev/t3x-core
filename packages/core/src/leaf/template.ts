@@ -13,7 +13,7 @@
  */
 
 import type { SemanticContent } from '../semantic/types';
-import { serializeFramesForPrompt } from '../semantic/serialize';
+import { serializeForPrompt } from '../semantic/serialize';
 import { flattenTrees } from '../semantic/tree';
 import type { AnyLeafType, Constraint, Leaf } from '../types';
 import { isGenerationLeaf } from '../types';
@@ -52,7 +52,7 @@ export function buildTemplateContext(
         .map(([k, v]) => `${k}=${typeof v === 'string' ? v : JSON.stringify(v)}`)
         .join(', ')}`
   );
-  const formattedKnowledge = serializeFramesForPrompt(knowledge);
+  const formattedKnowledge = serializeForPrompt(knowledge);
 
   // Format constraints
   const { requires, excludes } = formatConstraintsForTemplate(leaf.constraints);

@@ -12,7 +12,7 @@ import { generateLeafHistoryId } from '@t3x-dev/core';
 import { asc, count, desc, eq } from 'drizzle-orm';
 
 import type { AnyDB } from '../adapters';
-import { type LeafHistoryRecord, leafHistory } from '../schema-frames';
+import { type LeafHistoryRecord, leafHistory } from '../schema-trees';
 
 // ============================================================
 // Types

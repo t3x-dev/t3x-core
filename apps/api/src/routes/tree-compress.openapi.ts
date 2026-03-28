@@ -1,11 +1,11 @@
 /**
- * Frame Compression Routes
+ * Tree Compression Routes
  *
- * LLM-based frame compression to merge redundant frames and remove low-value content.
- * Integrates FrameCompressor (Track A) with the delta log (Track C).
+ * LLM-based tree compression to merge redundant frames and remove low-value content.
+ * Integrates Compressor (Track A) with the delta log (Track C).
  *
  * Endpoints:
- * - POST /v1/conversations/{conversationId}/compress - Compress frames in a conversation
+ * - POST /v1/conversations/{conversationId}/compress - Compress trees in a conversation
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
@@ -18,13 +18,13 @@ import {
 import { getDB } from '../lib/db';
 import { toDeltaLogEntries } from '../lib/delta-log-utils';
 import { errorResponse, zodErrorHook } from '../lib/errors';
-import { syncDeltaToFrames } from '../lib/frame-state-sync';
+import { syncDeltaToTrees } from '../lib/tree-state-sync';
 import { assertProjectAccess } from '../lib/project-access';
 import { getProviderRegistry } from '../lib/provider-registry';
 import { getUserId, recordUsageFireAndForget, wrapWithUsageTracking } from '../lib/usage-tracking';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
-export const frameCompressRoutes = new OpenAPIHono({
+export const treeCompressRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
 });
 
@@ -41,7 +41,7 @@ const CompressMetadataSchema = z.object({
   removed_frame_ids: z.array(z.string()),
 });
 
-const FrameCompressResponse = SuccessResponseSchema(
+const TreeCompressResponse = SuccessResponseSchema(
   z.object({
     delta: z.object({
       changes: z.array(z.any()),
@@ -56,13 +56,13 @@ const FrameCompressResponse = SuccessResponseSchema(
 // Route Definition
 // ============================================================
 
-const compressFramesRoute = createRoute({
+const compressTreesRoute = createRoute({
   method: 'post',
   path: '/v1/conversations/{conversationId}/compress',
   tags: ['Extract'],
-  summary: 'Compress semantic frames in a conversation using LLM',
+  summary: 'Compress semantic trees in a conversation using LLM',
   description:
-    'Runs FrameCompressor on conversation frames, merges redundant frames, removes low-value content, and appends the compress delta to the delta log.',
+    'Runs Compressor on conversation nodes, merges redundant frames, removes low-value content, and appends the compress delta to the delta log.',
   request: {
     params: z.object({
       conversationId: z.string().min(1),
@@ -70,8 +70,8 @@ const compressFramesRoute = createRoute({
   },
   responses: {
     200: {
-      description: 'Frames compressed successfully',
-      content: { 'application/json': { schema: FrameCompressResponse } },
+      description: 'Trees compressed successfully',
+      content: { 'application/json': { schema: TreeCompressResponse } },
     },
     400: {
       description: 'Invalid request or not enough frames to compress',
@@ -102,7 +102,7 @@ const compressFramesRoute = createRoute({
  * - last_touched: number of delta entries since last mention (0 = last delta)
  * - mention_count: how many deltas referenced this frame
  */
-function computeFrameSignals(
+function computeNodeSignals(
   frameIds: string[],
   deltaEntries: Array<{
     source: string;
@@ -160,7 +160,7 @@ function computeFrameSignals(
 // Route Handler
 // ============================================================
 
-frameCompressRoutes.openapi(compressFramesRoute, async (c) => {
+treeCompressRoutes.openapi(compressTreesRoute, async (c) => {
   const { conversationId } = c.req.valid('param');
 
   try {
@@ -201,7 +201,7 @@ frameCompressRoutes.openapi(compressFramesRoute, async (c) => {
 
     // 4. Compute engagement signals for all nodes
     const nodeIds = currentFlat.map((f) => f.id);
-    const signalsMap = computeFrameSignals(nodeIds, deltaEntries);
+    const signalsMap = computeNodeSignals(nodeIds, deltaEntries);
 
     // 5. Attach signals to nodes
     const nodesWithSignals: NodeWithSignals[] = currentFlat.map((f) => {
@@ -278,7 +278,7 @@ frameCompressRoutes.openapi(compressFramesRoute, async (c) => {
         pipelineState: 'completed',
         metadata: result.metadata,
       });
-      await syncDeltaToFrames(tx, conversationId, conversation.projectId, result.delta, 'compress');
+      await syncDeltaToTrees(tx, conversationId, conversation.projectId, result.delta, 'compress');
       return rec;
     });
 
@@ -313,4 +313,4 @@ frameCompressRoutes.openapi(compressFramesRoute, async (c) => {
   }
 });
 
-export default frameCompressRoutes;
+export default treeCompressRoutes;

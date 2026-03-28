@@ -51,7 +51,7 @@ describe('applyVaguenessAnswer', () => {
   it('fails for non-existent frame', () => {
     const result = applyVaguenessAnswer(baseSnapshot, 'f_999', 'budget', 5000);
     expect(result.applied).toBe(false);
-    expect(result.errors).toContain('Frame f_999 not found');
+    expect(result.errors).toContain('Node f_999 not found');
   });
 
   it('fails for non-existent slot', () => {

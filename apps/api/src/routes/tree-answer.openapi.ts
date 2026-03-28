@@ -1,11 +1,11 @@
 /**
- * Frame Answer Routes (Step 8)
+ * Tree Answer Routes (Step 8)
  *
  * Processes user answers to advisory questions and drift choices.
  * Generates and applies delta corrections to the YAML tree.
  *
  * Endpoint:
- * - POST /v1/extract/frames/answer
+ * - POST /v1/extract/trees/answer
  *
  * @see https://github.com/t3x-dev/t3x-core/issues/622
  */
@@ -40,7 +40,7 @@ import { getProviderRegistry } from '../lib/provider-registry';
 import { wrapWithUsageTracking } from '../lib/usage-tracking';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
-export const frameAnswerRoutes = new OpenAPIHono({
+export const treeAnswerRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
 });
 
@@ -57,7 +57,7 @@ const AnswerSchema = z.object({
   selected_value: z.any().optional(),
 });
 
-const FrameAnswerRequest = z.object({
+const TreeAnswerRequest = z.object({
   conversation_id: z.string().min(1),
   answers: z.array(AnswerSchema).min(1),
   /** Question metadata — needed to route advisory answers to correct handler */
@@ -77,7 +77,7 @@ const FrameAnswerRequest = z.object({
     .optional(),
 });
 
-const FrameAnswerResponse = SuccessResponseSchema(
+const TreeAnswerResponse = SuccessResponseSchema(
   z.object({
     delta: z.any().optional(),
     snapshot: z.any().optional(),
@@ -94,20 +94,20 @@ const FrameAnswerResponse = SuccessResponseSchema(
 
 const answerRoute = createRoute({
   method: 'post',
-  path: '/v1/extract/frames/answer',
+  path: '/v1/extract/trees/answer',
   tags: ['Extract'],
   summary: 'Apply user answers to advisory questions or drift choices',
   description:
     'Processes user answers from drift detection or ambiguity detection, generates correction deltas, and applies them to the YAML tree.',
   request: {
     body: {
-      content: { 'application/json': { schema: FrameAnswerRequest } },
+      content: { 'application/json': { schema: TreeAnswerRequest } },
     },
   },
   responses: {
     200: {
       description: 'Answer applied successfully',
-      content: { 'application/json': { schema: FrameAnswerResponse } },
+      content: { 'application/json': { schema: TreeAnswerResponse } },
     },
     400: {
       description: 'Invalid request or answer',
@@ -128,7 +128,7 @@ const answerRoute = createRoute({
 // Route Handler
 // ============================================================
 
-frameAnswerRoutes.openapi(answerRoute, async (c) => {
+treeAnswerRoutes.openapi(answerRoute, async (c) => {
   const { conversation_id, answers, question_context, drift_context } = c.req.valid('json');
 
   try {
@@ -434,4 +434,4 @@ async function handleDriftChoice3(
   );
 }
 
-export default frameAnswerRoutes;
+export default treeAnswerRoutes;

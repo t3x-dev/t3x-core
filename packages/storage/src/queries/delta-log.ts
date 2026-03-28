@@ -7,7 +7,7 @@
 import { randomUUID } from 'node:crypto';
 import { and, asc, eq } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
-import { type DeltaLogInsert, type DeltaLogRecord, deltaLog } from '../schema-frames';
+import { type DeltaLogInsert, type DeltaLogRecord, deltaLog } from '../schema-trees';
 
 // ============================================================
 // Types

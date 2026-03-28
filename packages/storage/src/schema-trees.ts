@@ -206,7 +206,7 @@ export const commitsV4 = pgTable(
     }>(),
 
     /**
-     * Semantic content: { frames: Frame[], relations: Relation[] }
+     * Semantic content: { trees: Tree[], relations: Relation[] }
      * Nullable — old commits have null.
      * Second-class field: does NOT participate in hash calculation.
      */
@@ -280,8 +280,8 @@ export const leaves = pgTable(
           match_mode: 'exact' | 'semantic';
           value: string;
           description?: string;
-          /** Frame-based source reference */
-          source_frame?: { frame_type: string; slot_key?: string };
+          /** Tree-based source reference */
+          source_tree?: { tree_type: string; slot_key?: string };
           reason?: string;
         }>
       >()
@@ -1016,7 +1016,7 @@ export type DeltaLogInsert = typeof deltaLog.$inferInsert;
  * Tracks distinct topics within a conversation.
  *
  * Each extraction can target a specific topic. The topic name
- * is auto-synced to the root frame type during extraction.
+ * is auto-synced to the root tree type during extraction.
  */
 export const topics = pgTable(
   'topics',
@@ -1034,7 +1034,7 @@ export const topics = pgTable(
       .notNull()
       .references(() => projects.projectId, { onDelete: 'cascade' }),
 
-    /** Topic display name (synced to root frame type) */
+    /** Topic display name (synced to root tree type) */
     name: text('name').notNull(),
 
     /** Status: active, archived */

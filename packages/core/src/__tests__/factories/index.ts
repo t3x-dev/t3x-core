@@ -12,9 +12,12 @@ export {
   createDetailedTree,
   createFrame,
   createFrameWithSlots,
+  createNode,
+  createNodeWithSlots,
   createRelation,
   createSemanticContent,
   createTreeNativeContent,
   createTypicalContent,
   resetFrameIds,
-} from './frameFactory';
+  resetNodeIds,
+} from './treeFactory';

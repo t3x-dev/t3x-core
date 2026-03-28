@@ -1,5 +1,5 @@
 /**
- * Frame Extraction E2E Test
+ * Tree Extraction E2E Test
  *
  * Simulates a multi-round conversation about a Hangzhou trip,
  * mocking LLM responses for both FrameExtractor and MeaningPipeline agents.
@@ -33,7 +33,7 @@ vi.mock('../lib/provider-registry', () => ({
   getProviderRegistry: mockGetProviderRegistry,
 }));
 
-import { frameExtractRoutes } from '../routes/frame-extract.openapi';
+import { treeExtractRoutes } from '../routes/tree-extract.openapi';
 
 // ============================================================
 // Conversation Data — 杭州旅行 5 轮对话
@@ -323,12 +323,12 @@ function setupMockRegistry(mode: 'full' | 'incremental' = 'full') {
 // Tests
 // ============================================================
 
-describe('Frame Extraction E2E — Hangzhou Trip', () => {
+describe('Tree Extraction E2E — Hangzhou Trip', () => {
   let cleanup: () => Promise<void>;
   let testProjectId: string;
   let testConversationId: string;
   const app = new Hono();
-  app.route('/', frameExtractRoutes);
+  app.route('/', treeExtractRoutes);
 
   beforeAll(async () => {
     const setup = await setupTestDB();
@@ -368,7 +368,7 @@ describe('Frame Extraction E2E — Hangzhou Trip', () => {
   it('extracts frames from 5-round conversation (full mode)', async () => {
     setupMockRegistry('full');
 
-    const res = await app.request('/v1/extract/frames', {
+    const res = await app.request('/v1/extract/trees', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ conversation_id: testConversationId }),
@@ -421,7 +421,7 @@ describe('Frame Extraction E2E — Hangzhou Trip', () => {
     // - Pipeline runs in incremental mode (fewer agents)
     setupMockRegistry('incremental');
 
-    const res = await app.request('/v1/extract/frames', {
+    const res = await app.request('/v1/extract/trees', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ conversation_id: testConversationId }),
@@ -454,7 +454,7 @@ describe('Frame Extraction E2E — Hangzhou Trip', () => {
     setupMockRegistry('full');
 
     // Use non-existent turn hashes → should return error
-    const res = await app.request('/v1/extract/frames', {
+    const res = await app.request('/v1/extract/trees', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -474,7 +474,7 @@ describe('Frame Extraction E2E — Hangzhou Trip', () => {
   it('returns 404 for non-existent conversation', async () => {
     setupMockRegistry('full');
 
-    const res = await app.request('/v1/extract/frames', {
+    const res = await app.request('/v1/extract/trees', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ conversation_id: 'conv_nonexistent' }),
@@ -496,7 +496,7 @@ describe('Frame Extraction E2E — Hangzhou Trip', () => {
       tryWithFallback: vi.fn().mockRejectedValue(allProvidersError),
     });
 
-    const res = await app.request('/v1/extract/frames', {
+    const res = await app.request('/v1/extract/trees', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ conversation_id: testConversationId }),
@@ -511,7 +511,7 @@ describe('Frame Extraction E2E — Hangzhou Trip', () => {
   // ── Test 6: Missing Required Fields ──
 
   it('returns 400 for missing conversation_id', async () => {
-    const res = await app.request('/v1/extract/frames', {
+    const res = await app.request('/v1/extract/trees', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({}),

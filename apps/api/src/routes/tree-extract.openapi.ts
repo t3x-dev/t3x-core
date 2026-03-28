@@ -1,11 +1,11 @@
 /**
- * Frame Extraction Routes
+ * Tree Extraction Routes
  *
- * LLM-based frame semantic extraction from conversation turns.
- * Integrates FrameExtractor (Track A) with the delta log (Track C).
+ * LLM-based semantic extraction from conversation turns.
+ * Integrates Extractor (Track A) with the delta log (Track C).
  *
  * Endpoints:
- * - POST /v1/extract/frames - Extract semantic frames from a conversation
+ * - POST /v1/extract/trees - Extract semantic trees from a conversation
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
@@ -46,14 +46,14 @@ import {
 import { getDB } from '../lib/db';
 import { toDeltaLogEntries } from '../lib/delta-log-utils';
 import { errorResponse, zodErrorHook } from '../lib/errors';
-import { syncDeltaToFrames } from '../lib/frame-state-sync';
+import { syncDeltaToTrees } from '../lib/tree-state-sync';
 import { assertProjectAccess } from '../lib/project-access';
 import { getProviderRegistry } from '../lib/provider-registry';
 import { getUserId, recordUsageFireAndForget, wrapWithUsageTracking } from '../lib/usage-tracking';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 import { ExtractionStyleSchema } from '../schemas/contracts';
 
-export const frameExtractRoutes = new OpenAPIHono({
+export const treeExtractRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
 });
 
@@ -67,7 +67,7 @@ const DriftDecisionSchema = z.object({
   new_topic: z.string().optional(),
 });
 
-const FrameExtractRequest = z.object({
+const TreeExtractRequest = z.object({
   conversation_id: z.string().min(1),
   turn_hashes: z.array(z.string().min(1)).optional(),
   drift_decision: DriftDecisionSchema.optional(),
@@ -86,7 +86,7 @@ const SnapshotResponseSchema = z.object({
   relations: z.array(z.any()),
 });
 
-const FrameExtractResponse = SuccessResponseSchema(
+const TreeExtractResponse = SuccessResponseSchema(
   z.object({
     delta: DeltaResponseSchema.optional(),
     snapshot: SnapshotResponseSchema.optional(),
@@ -110,22 +110,22 @@ const FrameExtractResponse = SuccessResponseSchema(
 // Route Definition
 // ============================================================
 
-const extractFramesRoute = createRoute({
+const extractTreesRoute = createRoute({
   method: 'post',
-  path: '/v1/extract/frames',
+  path: '/v1/extract/trees',
   tags: ['Extract'],
-  summary: 'Extract semantic frames from a conversation using LLM',
+  summary: 'Extract semantic trees from a conversation using LLM',
   description:
-    'Runs FrameExtractor on conversation turns, appends the resulting delta to the delta log, and returns the delta with the updated snapshot.',
+    'Runs Extractor on conversation turns, appends the resulting delta to the delta log, and returns the delta with the updated snapshot.',
   request: {
     body: {
-      content: { 'application/json': { schema: FrameExtractRequest } },
+      content: { 'application/json': { schema: TreeExtractRequest } },
     },
   },
   responses: {
     200: {
-      description: 'Frames extracted successfully',
-      content: { 'application/json': { schema: FrameExtractResponse } },
+      description: 'Trees extracted successfully',
+      content: { 'application/json': { schema: TreeExtractResponse } },
     },
     400: {
       description: 'Invalid request',
@@ -150,7 +150,7 @@ const extractFramesRoute = createRoute({
 // Route Handler
 // ============================================================
 
-frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
+treeExtractRoutes.openapi(extractTreesRoute, async (c) => {
   const { conversation_id, turn_hashes, drift_decision, topic_id, force_extract } =
     c.req.valid('json');
 
@@ -645,7 +645,7 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
         gateResultJson: gateResult ?? null,
         topicId: resolvedTopicId,
       });
-      await syncDeltaToFrames(
+      await syncDeltaToTrees(
         tx,
         conversation_id,
         conversation.projectId,
@@ -702,4 +702,4 @@ frameExtractRoutes.openapi(extractFramesRoute, async (c) => {
   }
 });
 
-export default frameExtractRoutes;
+export default treeExtractRoutes;

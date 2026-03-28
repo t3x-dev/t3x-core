@@ -473,11 +473,11 @@ leavesMLRoutes.openapi(suggestConstraintsRoute, async (c) => {
 
 // POST /v1/leaves/:id/extract-nodes
 leavesMLRoutes.openapi(extractFromLeafRoute, async (c) => {
-  // Node extraction from leaf output is deprecated (replaced by frame-based extraction).
+  // Node extraction from leaf output is deprecated (replaced by tree-based extraction).
   return errorResponse(
     c,
     'DEPRECATED',
-    'Node extraction from leaf output has been replaced by frame-based extraction. Use /v1/extract/frames instead.'
+    'Node extraction from leaf output has been replaced by tree-based extraction. Use /v1/extract/trees instead.'
   );
 });
 

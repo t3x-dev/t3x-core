@@ -26,9 +26,9 @@ describe('executeMerge', () => {
       keepRelationsFromTarget: false,
     });
 
-    const frames = flattenTrees(result.trees);
-    expect(frames).toHaveLength(1);
-    expect(frames[0].id).toBe('topic_a');
+    const nodes = flattenTrees(result.trees);
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0].id).toBe('topic_a');
   });
 
   it('resolves conflict with source choice', () => {
@@ -45,9 +45,9 @@ describe('executeMerge', () => {
       keepRelationsFromTarget: false,
     });
 
-    const frames = flattenTrees(result.trees);
-    expect(frames).toHaveLength(1);
-    expect(frames[0].slots.a).toBe(10);
+    const nodes = flattenTrees(result.trees);
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0].slots.a).toBe(10);
   });
 
   it('resolves conflict with target choice', () => {
@@ -64,9 +64,9 @@ describe('executeMerge', () => {
       keepRelationsFromTarget: false,
     });
 
-    const frames = flattenTrees(result.trees);
-    expect(frames).toHaveLength(1);
-    expect(frames[0].slots.a).toBe(20);
+    const nodes = flattenTrees(result.trees);
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0].slots.a).toBe(20);
   });
 
   it('resolves conflict with both — includes both in result frames', () => {
@@ -84,8 +84,8 @@ describe('executeMerge', () => {
     });
 
     // "both" with same key results in single tree (unflattenToTrees merges by root key)
-    const frames = flattenTrees(result.trees);
-    expect(frames.length).toBeGreaterThanOrEqual(1);
+    const nodes = flattenTrees(result.trees);
+    expect(nodes.length).toBeGreaterThanOrEqual(1);
   });
 
   it('resolves conflict with custom edit', () => {
@@ -103,10 +103,10 @@ describe('executeMerge', () => {
       keepRelationsFromTarget: false,
     });
 
-    const frames = flattenTrees(result.trees);
-    expect(frames).toHaveLength(1);
-    expect(frames[0].slots.a).toBe(15);
-    expect(frames[0].slots.note).toBe('merged');
+    const nodes = flattenTrees(result.trees);
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0].slots.a).toBe(15);
+    expect(nodes[0].slots.note).toBe('merged');
   });
 
   it('defaults to source when no resolution provided for conflict', () => {
@@ -123,9 +123,9 @@ describe('executeMerge', () => {
       keepRelationsFromTarget: false,
     });
 
-    const frames = flattenTrees(result.trees);
-    expect(frames).toHaveLength(1);
-    expect(frames[0].slots.a).toBe(10);
+    const nodes = flattenTrees(result.trees);
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0].slots.a).toBe(10);
   });
 
   it('keeps selected source-only nodes', () => {
@@ -142,9 +142,9 @@ describe('executeMerge', () => {
       keepRelationsFromTarget: false,
     });
 
-    const frames = flattenTrees(result.trees);
-    expect(frames).toHaveLength(1);
-    expect(frames[0].id).toBe('topic_a');
+    const nodes = flattenTrees(result.trees);
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0].id).toBe('topic_a');
   });
 
   it('keeps selected target-only nodes', () => {
@@ -161,9 +161,9 @@ describe('executeMerge', () => {
       keepRelationsFromTarget: false,
     });
 
-    const frames = flattenTrees(result.trees);
-    expect(frames).toHaveLength(1);
-    expect(frames[0].id).toBe('topic_b');
+    const nodes = flattenTrees(result.trees);
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0].id).toBe('topic_b');
   });
 
   it('merges relations correctly', () => {
@@ -231,11 +231,11 @@ describe('executeMerge', () => {
       keepRelationsFromTarget: true,
     });
 
-    const frames = flattenTrees(result.trees);
-    expect(frames).toHaveLength(4);
-    const ids = frames.map((f) => f.id).sort();
+    const nodes = flattenTrees(result.trees);
+    expect(nodes).toHaveLength(4);
+    const ids = nodes.map((f) => f.id).sort();
     expect(ids).toEqual(['topic_a', 'topic_b', 'topic_c', 'topic_d']);
-    expect(frames.find((f) => f.id === 'topic_b')?.slots.y).toBe(30);
+    expect(nodes.find((f) => f.id === 'topic_b')?.slots.y).toBe(30);
     expect(result.relations).toHaveLength(3);
   });
 });

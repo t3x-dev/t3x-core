@@ -8,7 +8,7 @@
 
 import type { LLMProvider } from '../llm/types';
 import type { SemanticContent } from '../semantic/types';
-import { serializeFramesForPrompt } from '../semantic/serialize';
+import { serializeForPrompt } from '../semantic/serialize';
 import type { AnyLeafType, Constraint } from '../types';
 import { ID_PREFIXES } from '../types';
 
@@ -50,7 +50,7 @@ function buildConstraintSuggestionPrompt(
 
   const typeGuidance = getTypeGuidance(leafType);
 
-  const knowledgeText = serializeFramesForPrompt(knowledge);
+  const knowledgeText = serializeForPrompt(knowledge);
 
   return `You are a constraint suggestion engine for a semantic version control system.
 

@@ -7,7 +7,7 @@ export function serializeForPrompt(content: SemanticContent): string {
   return content.trees.map((tree) => serializeTree(tree)).join('\n\n');
 }
 
-/** @deprecated Use serializeForPrompt */
+/** @deprecated Use serializeForPrompt instead */
 export const serializeFramesForPrompt = serializeForPrompt;
 
 function serializeTree(node: TreeNode, indent = 0): string {

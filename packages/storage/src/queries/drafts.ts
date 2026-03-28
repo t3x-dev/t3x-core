@@ -20,7 +20,7 @@ import type {
 import { generateDraftId } from '@t3x-dev/core';
 import { and, desc, eq } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
-import { type DraftRecord, drafts } from '../schema-frames';
+import { type DraftRecord, drafts } from '../schema-trees';
 
 // ============================================================
 // Error Types

@@ -14,11 +14,17 @@ const MAX_TOKENS = 4096;
 
 export interface CompressMetadata {
   compress_summary: string;
-  frames_before: number;
-  frames_after: number;
+  nodes_before: number;
+  nodes_after: number;
   merged_count: number;
   removed_count: number;
-  removed_frame_ids: string[];
+  removed_node_ids: string[];
+  /** @deprecated Use nodes_before */
+  frames_before?: number;
+  /** @deprecated Use nodes_after */
+  frames_after?: number;
+  /** @deprecated Use removed_node_ids */
+  removed_frame_ids?: string[];
 }
 
 export type CompressResult =
@@ -87,17 +93,21 @@ export class Compressor {
 
     // Build metadata from stats
     const stats = (parsed.stats ?? {}) as Record<string, number>;
-    const removedFrameIds = changes
+    const removedNodeIds = changes
       .filter((c: Record<string, unknown>) => c.action === 'remove')
       .map((c: Record<string, unknown>) => c.target as string);
 
     const metadata: CompressMetadata = {
-      compress_summary: (parsed.summary as string) ?? 'Compressed frames',
-      frames_before: stats.before ?? input.frames.length,
-      frames_after: stats.after ?? input.frames.length - removedFrameIds.length,
+      compress_summary: (parsed.summary as string) ?? 'Compressed nodes',
+      nodes_before: stats.before ?? input.frames.length,
+      nodes_after: stats.after ?? input.frames.length - removedNodeIds.length,
       merged_count: stats.merged ?? 0,
-      removed_count: stats.removed ?? removedFrameIds.length,
-      removed_frame_ids: removedFrameIds,
+      removed_count: stats.removed ?? removedNodeIds.length,
+      removed_node_ids: removedNodeIds,
+      // Backward compatibility
+      frames_before: stats.before ?? input.frames.length,
+      frames_after: stats.after ?? input.frames.length - removedNodeIds.length,
+      removed_frame_ids: removedNodeIds,
     };
 
     return { ok: true, delta, metadata, usage };

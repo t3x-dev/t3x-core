@@ -19,7 +19,7 @@ export const nodeModifications = pgTable(
      * retain the modification history for audit purposes. If cascade-delete
      * semantics are required in the future, add:
      *   .references(() => drafts.id, { onDelete: 'cascade' })
-     * and import drafts from './schema-frames'.
+     * and import drafts from './schema-trees'.
      */
     draftId: text('draft_id').notNull(),
     spId: text('sp_id').notNull(),
