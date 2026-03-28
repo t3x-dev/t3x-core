@@ -92,24 +92,24 @@ export const contradictionCheckerAgent: MeaningAgent = {
 
       if (!parsed.contradictions || parsed.contradictions.length === 0) return ctx;
 
-      let modifiedFrames = [...frames];
+      let modifiedNodes = [...frames];
 
       for (const c of parsed.contradictions) {
         if (c.action === 'remove_frame') {
-          modifiedFrames = modifiedFrames.filter((f: FlatNode) => f.id !== c.frame_id);
+          modifiedNodes = modifiedNodes.filter((f: FlatNode) => f.id !== c.frame_id);
         } else if (c.action === 'remove_slot') {
-          const frame = modifiedFrames.find((f: FlatNode) => f.id === c.frame_id);
-          if (frame && c.slot_key in frame.slots) {
-            const { [c.slot_key]: _, ...remainingSlots } = frame.slots;
-            frame.slots = remainingSlots;
-            if (Object.keys(frame.slots).length === 0) {
-              modifiedFrames = modifiedFrames.filter((f: FlatNode) => f.id !== c.frame_id);
+          const node = modifiedNodes.find((f: FlatNode) => f.id === c.frame_id);
+          if (node && c.slot_key in node.slots) {
+            const { [c.slot_key]: _, ...remainingSlots } = node.slots;
+            node.slots = remainingSlots;
+            if (Object.keys(node.slots).length === 0) {
+              modifiedNodes = modifiedNodes.filter((f: FlatNode) => f.id !== c.frame_id);
             }
           }
         }
       }
 
-      ctx.content = { trees: unflattenToTrees(modifiedFrames), relations: ctx.content.relations };
+      ctx.content = { trees: unflattenToTrees(modifiedNodes), relations: ctx.content.relations };
     } catch {
       // Parse failed — non-fatal, continue with what we have
     }

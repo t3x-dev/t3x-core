@@ -29,7 +29,7 @@ describe('parseAmbiguityResponse', () => {
     expect(result.clean).toBe(false);
     expect(result.questions).toHaveLength(1);
     expect(result.questions[0].type).toBe('vagueness');
-    expect(result.questions[0].frameId).toBe('f_001');
+    expect(result.questions[0].nodeId).toBe('f_001');
     expect(result.questions[0].slotKey).toBe('budget');
     expect(result.questions[0].currentValue).toBe('5000左右');
     expect(result.questions[0].id).toMatch(/^aq_/);

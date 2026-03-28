@@ -466,6 +466,7 @@ export {
   // Constraint (now belongs to Leaf)
   type Constraint,
   type ConstraintSourceFrame,
+  type ConstraintSourceNode,
   type ContextSource,
   // Conversation Context
   type ConversationContext,

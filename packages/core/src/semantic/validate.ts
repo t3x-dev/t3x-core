@@ -12,9 +12,9 @@ export function validateIntegrity(content: SemanticContent): ValidationResult {
   const errors: ValidationError[] = [];
   const warnings: ValidationWarning[] = [];
 
-  // Flatten trees to frames for relation endpoint checks
-  const frames = flattenTrees(content.trees);
-  const frameIds = new Set(frames.map((f) => f.id));
+  // Flatten trees to nodes for relation endpoint checks
+  const nodes = flattenTrees(content.trees);
+  const nodeIds = new Set(nodes.map((f) => f.id));
 
   // 1. Duplicate keys within same tree level
   for (const tree of content.trees) {
@@ -37,14 +37,14 @@ export function validateIntegrity(content: SemanticContent): ValidationResult {
 
   // 2. Relation endpoint checks (relation from/to use path IDs)
   for (const rel of content.relations) {
-    if (!frameIds.has(rel.from)) {
+    if (!nodeIds.has(rel.from)) {
       errors.push({
         type: 'broken_relation',
         message: `Relation from "${rel.from}" — no such node path`,
         location: `${rel.from}->${rel.to}`,
       });
     }
-    if (!frameIds.has(rel.to)) {
+    if (!nodeIds.has(rel.to)) {
       errors.push({
         type: 'broken_relation',
         message: `Relation to "${rel.to}" — no such node path`,
@@ -105,12 +105,12 @@ export function validateIntegrity(content: SemanticContent): ValidationResult {
   }
 
   // 6. Low confidence
-  for (const frame of frames) {
-    if (frame.confidence !== undefined && frame.confidence < 0.5) {
+  for (const node of nodes) {
+    if (node.confidence !== undefined && node.confidence < 0.5) {
       warnings.push({
         type: 'low_confidence',
-        message: `Node "${frame.id}" confidence: ${frame.confidence}`,
-        location: frame.id,
+        message: `Node "${node.id}" confidence: ${node.confidence}`,
+        location: node.id,
       });
     }
   }
@@ -145,21 +145,21 @@ function collectDuplicateKeys(
 
 export function checkRelationSanity(content: SemanticContent): ValidationWarning[] {
   const warnings: ValidationWarning[] = [];
-  const frames = flattenTrees(content.trees);
-  const frameMap = new Map<string, FlatNode>();
-  for (const frame of frames) {
-    frameMap.set(frame.id, frame);
+  const nodes = flattenTrees(content.trees);
+  const nodeMap = new Map<string, FlatNode>();
+  for (const node of nodes) {
+    nodeMap.set(node.id, node);
   }
 
   for (const rel of content.relations) {
     // 1. Contrasts between nodes of the same type
     if (rel.type === 'contrasts') {
-      const fromFrame = frameMap.get(rel.from);
-      const toFrame = frameMap.get(rel.to);
-      if (fromFrame && toFrame && fromFrame.type === toFrame.type) {
+      const fromNode = nodeMap.get(rel.from);
+      const toNode = nodeMap.get(rel.to);
+      if (fromNode && toNode && fromNode.type === toNode.type) {
         warnings.push({
           type: 'same_type_contrast',
-          message: `Contrasts between same type ${fromFrame.type} — verify this is intentional`,
+          message: `Contrasts between same type ${fromNode.type} — verify this is intentional`,
           location: `${rel.from}->${rel.to}`,
         });
       }

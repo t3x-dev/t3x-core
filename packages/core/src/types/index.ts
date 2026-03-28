@@ -56,13 +56,15 @@ export interface CommitSourceRef {
  */
 export type Constraint = RequireConstraint | ExcludeConstraint;
 
-/** Reference to a source frame's slot (for frame-based constraints) */
-export interface ConstraintSourceFrame {
-  /** Frame type to target (e.g., "preference", "budget") */
-  frame_type: string;
-  /** Specific slot key within the frame (optional — omit to target the frame as a whole) */
+/** Reference to a source node's slot (for tree-based constraints) */
+export interface ConstraintSourceNode {
+  /** Node type to target (e.g., "preference", "budget") */
+  node_type: string;
+  /** Specific slot key within the node (optional — omit to target the node as a whole) */
   slot_key?: string;
 }
+/** @deprecated Use ConstraintSourceNode */
+export type ConstraintSourceFrame = ConstraintSourceNode;
 
 export interface RequireConstraint {
   /** Unique ID, format: "cst_" + nanoid(12) */
@@ -79,7 +81,9 @@ export interface RequireConstraint {
   /** Human explanation of this constraint */
   description?: string;
 
-  /** Link to source frame + slot (frame-based traceability) */
+  /** Link to source node + slot (tree-based traceability) */
+  source_node?: ConstraintSourceNode;
+  /** @deprecated Use source_node */
   source_frame?: ConstraintSourceFrame;
 }
 
@@ -101,7 +105,9 @@ export interface ExcludeConstraint {
   /** Why this is excluded (policy/compliance reason) */
   reason?: string;
 
-  /** Link to source frame + slot (frame-based traceability) */
+  /** Link to source node + slot (tree-based traceability) */
+  source_node?: ConstraintSourceNode;
+  /** @deprecated Use source_node */
   source_frame?: ConstraintSourceFrame;
 }
 

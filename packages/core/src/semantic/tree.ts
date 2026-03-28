@@ -83,23 +83,23 @@ export function unflattenToTree(flatNodes: FlatNode[]): TreeNode {
   nodeMap.set(root.id, rootNode);
 
   for (let i = 1; i < sorted.length; i++) {
-    const frame = sorted[i];
-    const segments = frame.id.split('/');
+    const flatNode = sorted[i];
+    const segments = flatNode.id.split('/');
     const parentPath = segments.slice(0, -1).join('/');
 
     const node: TreeNode = {
-      key: frame.type,
-      slots: { ...frame.slots },
+      key: flatNode.type,
+      slots: { ...flatNode.slots },
       children: [],
-      ...(frame.source ? { source: frame.source } : {}),
-      ...(frame.confidence !== undefined ? { confidence: frame.confidence } : {}),
+      ...(flatNode.source ? { source: flatNode.source } : {}),
+      ...(flatNode.confidence !== undefined ? { confidence: flatNode.confidence } : {}),
     };
 
     const parent = nodeMap.get(parentPath);
     if (parent) {
       parent.children.push(node);
     }
-    nodeMap.set(frame.id, node);
+    nodeMap.set(flatNode.id, node);
   }
 
   return rootNode;
@@ -138,10 +138,10 @@ export function unflattenToTrees(flatNodes: FlatNode[]): TreeNode[] {
  * FlatNode ID: "hangzhou_trip/activity_plan" + slot key "activities"
  * → Quote path: "activity_plan.activities"
  *
- * The root node name is stripped — paths are relative to the tree root.
+ * The root node name is stripped -- paths are relative to the tree root.
  */
-export function buildSlotQuotesPath(frameId: string, slotKey: string): string {
-  const segments = frameId.split('/');
+export function buildSlotQuotesPath(nodeId: string, slotKey: string): string {
+  const segments = nodeId.split('/');
   if (segments.length === 1) {
     // Root node slot
     return slotKey;
@@ -159,14 +159,14 @@ export function buildSlotQuotesPath(frameId: string, slotKey: string): string {
 export function resolveSlotQuotesPath(
   quotePath: string,
   rootKey: string
-): { frameId: string; slotKey: string } {
+): { nodeId: string; slotKey: string } {
   const segments = quotePath.split('.');
   const slotKey = segments[segments.length - 1];
   if (segments.length === 1) {
-    return { frameId: rootKey, slotKey };
+    return { nodeId: rootKey, slotKey };
   }
-  const framePath = [rootKey, ...segments.slice(0, -1)].join('/');
-  return { frameId: framePath, slotKey };
+  const nodePath = [rootKey, ...segments.slice(0, -1)].join('/');
+  return { nodeId: nodePath, slotKey };
 }
 
 /**

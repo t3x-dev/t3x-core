@@ -1,7 +1,7 @@
 /**
  * Ambiguity Detector (Step 6)
  *
- * LLM-based detection of vague and structurally ambiguous content in frames.
+ * LLM-based detection of vague and structurally ambiguous content in nodes.
  * Returns advisory questions for optional user correction.
  *
  * All questions are advisory — pipeline never pauses, delta persists normally.
@@ -9,7 +9,7 @@
  *
  * Two types detected:
  * - vagueness: slot values with hedging language ("about", "maybe", "大概", "左右")
- * - structural: frame could belong to multiple parent frames
+ * - structural: node could belong to multiple parent nodes
  *
  * @see docs/hlq_docs/2026-03-20-agentic-pipeline-8step-design.md §4.6
  * @see https://github.com/t3x-dev/t3x-core/issues/620
@@ -66,10 +66,10 @@ Output ONLY JSON. No explanation.`;
 const NO_AMBIGUITY: AmbiguityResult = { clean: true, questions: [] };
 
 /**
- * Detect ambiguity in extracted frames.
+ * Detect ambiguity in extracted nodes.
  *
  * @param provider - LLM provider
- * @param snapshot - Current semantic content (frames + relations)
+ * @param snapshot - Current semantic content (trees + relations)
  * @param recentTurns - Recent conversation turns for context
  * @returns Advisory questions (may be empty)
  */
@@ -78,11 +78,11 @@ export async function detectAmbiguity(
   snapshot: SemanticContent,
   recentTurns: Array<{ role: string; content: string }>
 ): Promise<AmbiguityResult> {
-  const frames: FlatNode[] = flattenTrees(snapshot.trees);
-  if (frames.length === 0) return NO_AMBIGUITY;
+  const nodes: FlatNode[] = flattenTrees(snapshot.trees);
+  if (nodes.length === 0) return NO_AMBIGUITY;
 
   try {
-    const framesYaml = frames
+    const nodesYaml = nodes
       .map((f: FlatNode) => {
         const slots = Object.entries(f.slots)
           .map(([k, v]) => `    ${k}: ${JSON.stringify(v)}`)
@@ -96,15 +96,15 @@ export async function detectAmbiguity(
       .map((t) => `[${t.role}]: ${t.content}`)
       .join('\n');
 
-    const userPrompt = `Frames:\n${framesYaml}\n\nRecent conversation:\n${escapePromptContent(turnsText, 'conversation')}\n\nCheck for ambiguity:`;
+    const userPrompt = `Frames:\n${nodesYaml}\n\nRecent conversation:\n${escapePromptContent(turnsText, 'conversation')}\n\nCheck for ambiguity:`;
 
     const result = await provider.generate(`${SYSTEM_PROMPT}\n\n${userPrompt}`, {
       temperature: 0.1,
       maxTokens: 500,
     });
 
-    const validFrameIds = new Set(frames.map((f: FlatNode) => f.id));
-    return parseAmbiguityResponse(result.text, validFrameIds);
+    const validNodeIds = new Set(nodes.map((f: FlatNode) => f.id));
+    return parseAmbiguityResponse(result.text, validNodeIds);
   } catch {
     return NO_AMBIGUITY;
   }
@@ -113,7 +113,7 @@ export async function detectAmbiguity(
 /**
  * Parse and validate LLM ambiguity detection response.
  */
-export function parseAmbiguityResponse(raw: string, validFrameIds: Set<string>): AmbiguityResult {
+export function parseAmbiguityResponse(raw: string, validNodeIds: Set<string>): AmbiguityResult {
   try {
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
     if (!jsonMatch) return NO_AMBIGUITY;
@@ -139,8 +139,8 @@ export function parseAmbiguityResponse(raw: string, validFrameIds: Set<string>):
       // Validate type
       if (typeof amb.type !== 'string' || !VALID_TYPES.has(amb.type)) continue;
 
-      // Validate frame_id exists in snapshot
-      if (typeof amb.frame_id !== 'string' || !validFrameIds.has(amb.frame_id)) continue;
+      // Validate frame_id exists in snapshot (LLM still uses frame_id in wire format)
+      if (typeof amb.frame_id !== 'string' || !validNodeIds.has(amb.frame_id)) continue;
 
       // Validate question text
       if (typeof amb.question !== 'string' || amb.question.length === 0) continue;
@@ -153,7 +153,7 @@ export function parseAmbiguityResponse(raw: string, validFrameIds: Set<string>):
       questions.push({
         id: `aq_${nanoid(12)}`,
         type: amb.type as 'vagueness' | 'structural',
-        frameId: amb.frame_id,
+        nodeId: amb.frame_id,
         slotKey: typeof amb.slot_key === 'string' ? amb.slot_key : undefined,
         question: amb.question,
         currentValue: amb.current_value,

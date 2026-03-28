@@ -1,7 +1,7 @@
 /**
- * Frame Test Factories (creates FlatNode instances for testing)
+ * Tree Test Factories (creates FlatNode instances for testing)
  *
- * Create test frames, trees, relations, and SemanticContent with sensible defaults.
+ * Create test nodes, trees, relations, and SemanticContent with sensible defaults.
  */
 
 import type { FlatNode, Relation, SemanticContent, TreeNode } from '../../semantic/types';
@@ -14,12 +14,14 @@ function nextId(): string {
 }
 
 /** Reset the ID counter (call in beforeEach if needed) */
-export function resetFrameIds(): void {
+export function resetNodeIds(): void {
   counter = 0;
 }
+/** @deprecated Use resetNodeIds */
+export const resetFrameIds = resetNodeIds;
 
-/** Create a single frame with defaults */
-export function createFrame(overrides: Partial<FlatNode> & { type: string }): FlatNode {
+/** Create a single node with defaults */
+export function createNode(overrides: Partial<FlatNode> & { type: string }): FlatNode {
   return {
     id: overrides.id ?? nextId(),
     type: overrides.type,
@@ -27,9 +29,11 @@ export function createFrame(overrides: Partial<FlatNode> & { type: string }): Fl
     confidence: overrides.confidence ?? 0.9,
   };
 }
+/** @deprecated Use createNode */
+export const createFrame = createNode;
 
-/** Create a frame with string slots */
-export function createFrameWithSlots(
+/** Create a node with string slots */
+export function createNodeWithSlots(
   type: string,
   slots: Record<string, string | number | boolean>,
   id?: string
@@ -41,8 +45,10 @@ export function createFrameWithSlots(
     confidence: 0.9,
   };
 }
+/** @deprecated Use createNodeWithSlots */
+export const createFrameWithSlots = createNodeWithSlots;
 
-/** Create a relation between two frames */
+/** Create a relation between two nodes */
 export function createRelation(
   fromId: string,
   toId: string,
@@ -52,54 +58,54 @@ export function createRelation(
 }
 
 /**
- * Create a SemanticContent from frames.
- * Converts frames to trees via unflattenToTrees for tree-primary format.
+ * Create a SemanticContent from nodes.
+ * Converts nodes to trees via unflattenToTrees for tree-primary format.
  */
 export function createSemanticContent(
-  frames: FlatNode[],
+  nodes: FlatNode[],
   relations: Relation[] = []
 ): SemanticContent {
-  const trees = unflattenToTrees(frames);
+  const trees = unflattenToTrees(nodes);
   return { trees, relations };
 }
 
-/** Create a typical test content with a few frames */
+/** Create a typical test content with a few nodes */
 export function createTypicalContent(): SemanticContent {
-  resetFrameIds();
+  resetNodeIds();
   return createSemanticContent([
-    createFrameWithSlots('travel_planning', {
+    createNodeWithSlots('travel_planning', {
       destination: 'Tokyo',
       duration: '2 weeks',
       budget: 5000,
     }),
-    createFrameWithSlots('preference', {
+    createNodeWithSlots('preference', {
       item: 'Japanese food',
       sentiment: 'likes',
     }),
-    createFrameWithSlots('constraint', {
+    createNodeWithSlots('constraint', {
       type: 'budget',
       value: 'under $5000',
     }),
   ]);
 }
 
-/** Create content with duplicate frame types (for testing outputRegulator) */
+/** Create content with duplicate node types (for testing outputRegulator) */
 export function createContentWithDuplicates(): SemanticContent {
-  resetFrameIds();
+  resetNodeIds();
   return createSemanticContent([
-    createFrameWithSlots('city_recommendation', { city: 'Tokyo', reason: 'culture' }),
-    createFrameWithSlots('city_recommendation', { city: 'Kyoto', reason: 'temples' }),
-    createFrameWithSlots('city_recommendation', { city: 'Osaka', reason: 'food' }),
-    createFrameWithSlots('budget', { amount: 5000, currency: 'USD' }),
+    createNodeWithSlots('city_recommendation', { city: 'Tokyo', reason: 'culture' }),
+    createNodeWithSlots('city_recommendation', { city: 'Kyoto', reason: 'temples' }),
+    createNodeWithSlots('city_recommendation', { city: 'Osaka', reason: 'food' }),
+    createNodeWithSlots('budget', { amount: 5000, currency: 'USD' }),
   ]);
 }
 
 /** Create content with relations (for testing nester) */
 export function createContentWithRelations(): SemanticContent {
-  resetFrameIds();
-  const parent = createFrameWithSlots('travel_plan', { destination: 'Japan' }, 'f_parent');
-  const child1 = createFrameWithSlots('activity', { name: 'temple visit' }, 'f_child1');
-  const child2 = createFrameWithSlots('activity', { name: 'food tour' }, 'f_child2');
+  resetNodeIds();
+  const parent = createNodeWithSlots('travel_plan', { destination: 'Japan' }, 'f_parent');
+  const child1 = createNodeWithSlots('activity', { name: 'temple visit' }, 'f_child1');
+  const child2 = createNodeWithSlots('activity', { name: 'food tour' }, 'f_child2');
 
   return createSemanticContent(
     [parent, child1, child2],
