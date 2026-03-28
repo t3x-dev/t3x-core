@@ -1,12 +1,4 @@
-import type { FlatNode, SemanticContent, SlotValue, TreeNode } from './types';
-
-/**
- * Detect whether a SemanticContent uses tree-native format.
- * @deprecated Always returns true now — SemanticContent always has trees[].
- */
-export function isTreeNative(_content: SemanticContent): boolean {
-  return true;
-}
+import type { FlatNode, SlotValue, TreeNode } from './types';
 
 /**
  * Flatten a TreeNode into a FlatNode[] with path-based IDs.

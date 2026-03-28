@@ -39,7 +39,7 @@ export * from './schema-commits';
 export * from './schema-extraction-feedback';
 // Tree State (source-of-truth for current trees)
 export * from './schema-tree-state';
-// Schema (leaves, pins, conversation_contexts + retired commits_v4 for migration)
+// Schema (leaves, pins, conversation_contexts)
 // @see docs/specification/semantic-layer-architecture.md
 export * from './schema-trees';
 // Knowledge Conflicts Schema (conflict detection persistence)
