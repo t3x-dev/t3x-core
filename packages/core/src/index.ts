@@ -42,7 +42,7 @@ export {
 export { canonText, hashText, sha256 } from './common';
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Context Builder (V4)
+// Context Builder
 // @see docs/specification/memory-pin-system-design.md
 // ═══════════════════════════════════════════════════════════════════════════
 export {
@@ -448,7 +448,7 @@ export type {
 export * from './storage';
 
 // ═══════════════════════════════════════════════════════════════════════════
-// V4 Architecture Types
+// Architecture Types
 // @see docs/specification/semantic-layer-architecture.md
 // @see docs/specification/memory-pin-system-design.md
 // ═══════════════════════════════════════════════════════════════════════════

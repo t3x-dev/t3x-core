@@ -1,9 +1,6 @@
 /**
  * T3X Database Schema — Leaves, Pins, Contexts, Drafts
  *
- * commits_v4 table is RETIRED (kept for migration reference only).
- * Active commit storage is in schema-commits.ts (commits table).
- *
  * Key tables:
  * - leaves: Application layer (owns constraints, output, validation)
  * - pins: Source selection mechanism
@@ -140,7 +137,7 @@ export const leaves = pgTable(
      * The commit this leaf uses for knowledge.
      *
      * Fix 14 (no-fk note): No foreign key is declared here intentionally.
-     * Leaves can reference commits from both commits_v4 AND commits_v3 (legacy),
+     * Leaves can reference commits from the commits table,
      * so a single FK to one table would be incorrect. Application-level
      * validation (in the leaves query layer) is responsible for confirming that
      * the referenced commit exists before creating or updating a leaf.

@@ -512,7 +512,7 @@ describe('Pins Storage', () => {
   });
 
   describe('output format', () => {
-    it('uses snake_case for all fields (matches V4 type contract)', async () => {
+    it('uses snake_case for all fields (matches type contract)', async () => {
       const created = await createPin(db, {
         project_id: testProjectId,
         type: 'leaf',

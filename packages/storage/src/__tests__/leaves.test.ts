@@ -742,7 +742,7 @@ describe('Leaves Storage', () => {
   });
 
   describe('output format', () => {
-    it('uses snake_case for all fields (matches V4 type contract)', async () => {
+    it('uses snake_case for all fields (matches type contract)', async () => {
       const created = await createLeaf(db, {
         commit_hash: testCommitHash,
         type: 'tweet',

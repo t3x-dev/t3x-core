@@ -1,7 +1,7 @@
 /**
- * T3X V4 Architecture Type Definitions
+ * T3X Type Definitions
  *
- * This is the SINGLE SOURCE OF TRUTH for V4 types.
+ * This is the SINGLE SOURCE OF TRUTH for T3X types.
  * All layers (storage, api, web) must import from here.
  *
  * @see docs/specification/semantic-layer-architecture.md

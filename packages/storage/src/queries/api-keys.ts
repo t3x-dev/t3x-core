@@ -9,7 +9,7 @@
  * - We store SHA-256 hash for verification and a short prefix for display
  * - Revocation is a soft-delete (sets revoked_at)
  *
- * @see packages/core/src/types/v4/index.ts – ApiKey interface
+ * @see packages/core/src/types/index.ts – ApiKey interface
  */
 
 import { createHash, randomUUID } from 'node:crypto';
