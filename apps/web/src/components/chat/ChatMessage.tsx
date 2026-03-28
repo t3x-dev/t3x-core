@@ -150,19 +150,58 @@ export function ChatMessage({
       ?? null;
   }, [hoveredNodeId, nodes]);
 
-  // Collect quotes to search for in this message
+  // Collect ALL slot_quotes from the entire draft tree (they may be on root with dot-path keys)
+  const allQuotes = useMemo(() => {
+    const quotes: Record<string, string> = {};
+    function collectQuotes(node: import('@t3x-dev/core').TreeNode, prefix: string) {
+      if (node.slot_quotes) {
+        for (const [k, v] of Object.entries(node.slot_quotes)) {
+          const fullKey = prefix ? `${prefix}.${k}` : k;
+          quotes[fullKey] = v;
+          quotes[k] = v; // also store without prefix for direct match
+        }
+      }
+      for (const child of node.children) {
+        collectQuotes(child, prefix ? `${prefix}.${child.key}` : child.key);
+      }
+    }
+    for (const tree of draft.trees) {
+      collectQuotes(tree, '');
+    }
+    return quotes;
+  }, [draft.trees]);
+
+  // Collect quotes to highlight based on what's hovered
   const quotesToHighlight = useMemo(() => {
-    if (!hoveredNode || !hoveredNode.slot_quotes) return [];
+    if (!hoveredNodeId) return [];
+
+    // Normalize hovered path to dot-path
+    const hoveredPath = hoveredNodeId.replace(/\//g, '.');
 
     if (hoveredSlotKey) {
-      // Specific slot hovered — just that one quote
-      const q = hoveredNode.slot_quotes[hoveredSlotKey];
-      return q ? [q] : [];
+      // Specific slot hovered — look for quote with various key formats
+      const candidates = [
+        hoveredSlotKey,
+        `${hoveredPath}.${hoveredSlotKey}`,
+        // Try parent path variants
+        hoveredPath.includes('.') ? `${hoveredPath.split('.').slice(1).join('.')}.${hoveredSlotKey}` : null,
+      ].filter(Boolean) as string[];
+
+      for (const key of candidates) {
+        if (allQuotes[key]) return [allQuotes[key]];
+      }
+      return [];
     }
 
-    // Node header hovered — all quotes from this node
-    return Object.values(hoveredNode.slot_quotes);
-  }, [hoveredNode, hoveredSlotKey]);
+    // Node header hovered — find all quotes that start with this node's path
+    const matchingQuotes: string[] = [];
+    for (const [key, value] of Object.entries(allQuotes)) {
+      if (key.startsWith(hoveredPath + '.') || key.startsWith(hoveredPath.split('.').slice(1).join('.') + '.')) {
+        matchingQuotes.push(value);
+      }
+    }
+    return matchingQuotes;
+  }, [hoveredNodeId, hoveredSlotKey, allQuotes]);
 
   // Find all quote texts in this message's content → highlight ranges
   const highlightRanges = useMemo(() => {
