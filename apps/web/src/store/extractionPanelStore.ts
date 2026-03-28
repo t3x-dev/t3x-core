@@ -112,6 +112,7 @@ interface ExtractionPanelState {
   hoveredSlotKey: string | null; // Specific slot hovered (for character-level highlight)
   hoveredTurnIndex: number | null; // Chat message hovered → highlight YAML rows (1-based turn index)
   scrollToCenter: boolean; // true when click-triggered (scroll center), false for hover (nearest)
+  hoveredFromChat: boolean; // true when hover/click originates from chat side
   setHoveredNodeId: (id: string | null, slotKey?: string | null) => void;
   setHoveredTurnIndex: (index: number | null) => void;
 
@@ -169,6 +170,7 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
   hoveredSlotKey: null,
   hoveredTurnIndex: null,
   scrollToCenter: false,
+  hoveredFromChat: false,
 
   // Manual edit tracking
   manualEditedNodeIds: new Set(),
@@ -295,7 +297,7 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
     if (hoverNodeTimer) clearTimeout(hoverNodeTimer);
     if (id === null) {
       // Clear immediately on mouse leave for snappy feel
-      set({ hoveredNodeId: null, hoveredSlotKey: null, scrollToCenter: false });
+      set({ hoveredNodeId: null, hoveredSlotKey: null, scrollToCenter: false, hoveredFromChat: false });
     } else {
       hoverNodeTimer = setTimeout(() => {
         set({ hoveredNodeId: id, hoveredSlotKey: slotKey ?? null });

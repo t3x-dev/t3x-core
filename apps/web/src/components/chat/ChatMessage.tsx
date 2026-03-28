@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Citation } from '@/lib/api/chat';
+import type { SourceMapping } from '@/lib/sourceMap';
 import { cn } from '@/lib/utils';
 import { useExtractionPanelStore } from '@/store/extractionPanelStore';
 import { CitationChips } from './CitationChips';
@@ -23,11 +24,12 @@ interface ChatMessageProps {
   isThinking?: boolean;
   onRegenerate?: () => void;
   onEdit?: (newContent: string) => void;
+  sourceMap?: SourceMapping[];
 }
 
 /**
- * Render text content with character-range highlights.
- * Splits the text into segments: normal text and highlighted spans.
+ * Render text content with character-range highlights (YAML → Chat direction).
+ * Used when YAML hover triggers chat highlights (blue tint).
  */
 function HighlightedText({
   text,
@@ -88,6 +90,107 @@ function HighlightedText({
   );
 }
 
+// ── Source-mapped text rendering (Chat → YAML direction) ──
+
+interface SourceSegment {
+  text: string;
+  mapping: SourceMapping | null;
+}
+
+/**
+ * Split content into segments: normal text interleaved with source-mapped spans.
+ * Handles overlapping mappings by merging them.
+ */
+function splitIntoSegments(content: string, mappings: SourceMapping[]): SourceSegment[] {
+  if (mappings.length === 0) return [{ text: content, mapping: null }];
+
+  // Sort and deduplicate by position (multiple mappings at same position → pick first)
+  const sorted = [...mappings].sort((a, b) => a.start - b.start || a.end - b.end);
+
+  const segments: SourceSegment[] = [];
+  let cursor = 0;
+
+  for (const m of sorted) {
+    const start = Math.max(0, m.start);
+    const end = Math.min(content.length, m.end);
+    if (start < cursor) continue; // skip overlapping
+
+    if (cursor < start) {
+      segments.push({ text: content.slice(cursor, start), mapping: null });
+    }
+    segments.push({ text: content.slice(start, end), mapping: m });
+    cursor = end;
+  }
+
+  if (cursor < content.length) {
+    segments.push({ text: content.slice(cursor), mapping: null });
+  }
+
+  return segments;
+}
+
+/**
+ * Render message content with source-mapped interactive spans.
+ * Each extracted span gets a purple background and click/hover handlers.
+ */
+function SourceMappedText({
+  content,
+  mappings,
+  hoveredNodeId,
+  onHoverSlot,
+  onLeaveSlot,
+  onClickSlot,
+}: {
+  content: string;
+  mappings: SourceMapping[];
+  hoveredNodeId: string | null;
+  onHoverSlot: (treePath: string, slotKey: string | null) => void;
+  onLeaveSlot: () => void;
+  onClickSlot: (treePath: string, slotKey: string | null) => void;
+}) {
+  const segments = useMemo(() => splitIntoSegments(content, mappings), [content, mappings]);
+
+  return (
+    <>
+      {segments.map((seg, i) => {
+        if (!seg.mapping) {
+          return <span key={i}>{seg.text}</span>;
+        }
+
+        const m = seg.mapping;
+        const isActive = hoveredNodeId === m.treePath;
+
+        return (
+          <span
+            key={i}
+            data-tree-path={m.treePath}
+            data-slot-key={m.slotKey}
+            style={{
+              background: isActive
+                ? 'rgba(139, 92, 246, 0.3)'
+                : 'rgba(139, 92, 246, 0.08)',
+              borderBottom: isActive ? '2px solid rgba(139, 92, 246, 0.5)' : undefined,
+              borderRadius: 2,
+              padding: '1px 0',
+              color: 'inherit',
+              cursor: 'pointer',
+              transition: 'background 0.15s, border-bottom 0.15s',
+            }}
+            onMouseEnter={() => onHoverSlot(m.treePath, m.slotKey)}
+            onMouseLeave={onLeaveSlot}
+            onClick={(e) => {
+              e.stopPropagation();
+              onClickSlot(m.treePath, m.slotKey);
+            }}
+          >
+            {seg.text}
+          </span>
+        );
+      })}
+    </>
+  );
+}
+
 export function ChatMessage({
   sender,
   content,
@@ -99,6 +202,7 @@ export function ChatMessage({
   isThinking,
   onRegenerate,
   onEdit,
+  sourceMap,
 }: ChatMessageProps) {
   const isUser = sender === 'user';
   const [isEditing, setIsEditing] = useState(false);
@@ -121,7 +225,7 @@ export function ChatMessage({
   // Does the hovered YAML node come from THIS message?
   const isSourceMessage = trace?.sourceTurnIndex != null && turnIndex != null && trace.sourceTurnIndex === turnIndex;
 
-  // Try to find quote text in this message for character-level highlighting
+  // Try to find quote text in this message for character-level highlighting (YAML → Chat)
   const highlightRanges = useMemo(() => {
     if (!isSourceMessage || !trace) return [];
     const quotes = trace.allQuotes;
@@ -145,8 +249,27 @@ export function ChatMessage({
   }, [isSourceMessage, trace, content]);
 
   const hasCharHighlights = highlightRanges.length > 0;
+  const hasSourceMappings = (sourceMap?.length ?? 0) > 0;
   // Whole-message tint: when this is the source message for hovered YAML
   const isWholeMessageHighlight = isSourceMessage && !hasCharHighlights;
+
+  // ── Chat → YAML: source map interaction handlers ──
+  const handleHoverSlot = useCallback((treePath: string, slotKey: string | null) => {
+    useExtractionPanelStore.setState({ hoveredFromChat: true });
+    useExtractionPanelStore.getState().setHoveredNodeId(treePath, slotKey);
+  }, []);
+
+  const handleLeaveSlot = useCallback(() => {
+    useExtractionPanelStore.getState().setHoveredNodeId(null);
+  }, []);
+
+  const handleClickSlot = useCallback((treePath: string, slotKey: string | null) => {
+    useExtractionPanelStore.setState({
+      hoveredFromChat: true,
+      scrollToCenter: true,
+    });
+    useExtractionPanelStore.getState().setHoveredNodeId(treePath, slotKey);
+  }, []);
 
   // Auto-scroll this message into view when it's the source of hovered YAML
   useEffect(() => {
@@ -157,6 +280,13 @@ export function ChatMessage({
       });
     }
   }, [isSourceMessage, scrollToCenter]);
+
+  // Determine which rendering mode to use:
+  // 1. YAML→Chat highlights (blue) take priority when active
+  // 2. Source-mapped spans (purple) show by default when mappings exist
+  // 3. Normal rendering otherwise
+  const useYamlHighlights = hasCharHighlights;
+  const useSourceMappedSpans = !useYamlHighlights && hasSourceMappings;
 
   return (
     <div
@@ -247,8 +377,17 @@ export function ChatMessage({
                     ref={textRef}
                                         className="text-sm leading-relaxed text-[var(--text-primary)] whitespace-pre-wrap"
                   >
-                    {hasCharHighlights ? (
+                    {useYamlHighlights ? (
                       <HighlightedText text={content} ranges={highlightRanges} />
+                    ) : useSourceMappedSpans ? (
+                      <SourceMappedText
+                        content={content}
+                        mappings={sourceMap!}
+                        hoveredNodeId={hoveredNodeId}
+                        onHoverSlot={handleHoverSlot}
+                        onLeaveSlot={handleLeaveSlot}
+                        onClickSlot={handleClickSlot}
+                      />
                     ) : (
                       content
                     )}
@@ -267,11 +406,22 @@ export function ChatMessage({
                     isStreaming && 'streaming-text'
                   )}
                 >
-                  {hasCharHighlights ? (
-                    // For assistant messages with highlights, render as plain text with highlights
-                    // (Markdown rendering would change character offsets)
+                  {useYamlHighlights ? (
+                    // YAML→Chat highlights: render as plain text to preserve character offsets
                     <div className="whitespace-pre-wrap">
                       <HighlightedText text={content} ranges={highlightRanges} />
+                    </div>
+                  ) : useSourceMappedSpans ? (
+                    // Source-mapped spans: render as plain text with interactive purple highlights
+                    <div className="whitespace-pre-wrap">
+                      <SourceMappedText
+                        content={content}
+                        mappings={sourceMap!}
+                        hoveredNodeId={hoveredNodeId}
+                        onHoverSlot={handleHoverSlot}
+                        onLeaveSlot={handleLeaveSlot}
+                        onClickSlot={handleClickSlot}
+                      />
                     </div>
                   ) : (
                     <>

@@ -2,7 +2,7 @@
 
 import type { TreeNode } from '@t3x-dev/core';
 import { AlertCircle, GitCommit, Loader2, MessageSquarePlus } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DriftPopup } from '@/components/chat/DriftPopup';
 import { useAutoProject } from '@/hooks/useAutoProject';
 import { useConversationChat } from '@/hooks/useConversationChat';
@@ -18,6 +18,7 @@ import { ChatHeader } from './ChatHeader';
 import type { AttachedImage } from './ChatInput';
 import { ChatInput } from './ChatInput';
 import { ChatMessage } from './ChatMessage';
+import { buildSourceMap } from '@/lib/sourceMap';
 import { type CompatNode, contentToNodes, treesToNodes } from '@/lib/treeCompat';
 
 interface ChatWorkspaceProps {
@@ -260,6 +261,19 @@ export function ChatWorkspace({
   const isExtracting = useExtractionPanelStore((s) => s.isExtracting);
   const focusIntentEnabled = useExtractionPanelStore((s) => s.focusIntentEnabled);
   const setLlmHighlightedNodeIds = useExtractionPanelStore((s) => s.setLlmHighlightedNodeIds);
+  const draft = useExtractionPanelStore((s) => s.draft);
+
+  // Precompute source map: quote positions in all messages for bidirectional highlighting
+  const sourceMapByTurn = useMemo(() => {
+    if (!draft || draft.trees.length === 0 || messages.length === 0) {
+      return new Map<number, import('@/lib/sourceMap').SourceMapping[]>();
+    }
+    const msgInput = messages.map((msg, i) => ({
+      content: msg.content,
+      turnIndex: i + 1,
+    }));
+    return buildSourceMap(draft, msgInput);
+  }, [draft, messages]);
 
   // Extract trees after turns are saved
   useEffect(() => {
@@ -451,6 +465,7 @@ export function ChatWorkspace({
                 citations={
                   msg.role === 'assistant' && i === messages.length - 1 ? citations : undefined
                 }
+                sourceMap={sourceMapByTurn.get(i + 1)}
               />
             ))}
 

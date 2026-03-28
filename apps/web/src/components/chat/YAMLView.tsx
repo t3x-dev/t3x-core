@@ -2,7 +2,7 @@
 
 import type { TreeNode, SlotValue } from '@t3x-dev/core';
 import { Loader2 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { nestNodes } from '@/lib/treeNesting';
 import { parseDisplayYAML, toDisplayYAML } from '@/lib/liteYaml';
 import { traceChatToYaml, traceYamlToChat } from '@/lib/hoverTrace';
@@ -188,6 +188,29 @@ export function YAMLView() {
   const hoveredTurnIndex = useExtractionPanelStore((s) => s.hoveredTurnIndex);
   const gateIssues = useExtractionPanelStore((s) => s.gateIssues);
   const manualEditedNodeIds = useExtractionPanelStore((s) => s.manualEditedNodeIds);
+  const hoveredNodeId = useExtractionPanelStore((s) => s.hoveredNodeId);
+  const hoveredFromChat = useExtractionPanelStore((s) => s.hoveredFromChat);
+  const scrollToCenter = useExtractionPanelStore((s) => s.scrollToCenter);
+
+  // Track DOM refs for each YAML line by treeId for Chat→YAML scrolling
+  const lineRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+
+  // When a chat span is clicked/hovered (hoveredFromChat=true), scroll the YAML line into view
+  useEffect(() => {
+    if (hoveredFromChat && hoveredNodeId) {
+      const el = lineRefs.current.get(hoveredNodeId);
+      if (el) {
+        el.scrollIntoView({
+          behavior: 'smooth',
+          block: scrollToCenter ? 'center' : 'nearest',
+        });
+        // Reset scrollToCenter after scroll
+        if (scrollToCenter) {
+          useExtractionPanelStore.setState({ scrollToCenter: false });
+        }
+      }
+    }
+  }, [hoveredFromChat, hoveredNodeId, scrollToCenter]);
 
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState('');
@@ -416,23 +439,27 @@ export function YAMLView() {
               ? !!confirmedNodeIds[line.treeId]
               : !!confirmedSlotKeys[line.treeId]?.[line.slotKey!];
 
-            // Check if this row is highlighted by reverse hover (chat → YAML)
+            // Check if this row is highlighted by reverse hover (chat → YAML via turn hover)
             const isReverseHighlighted = reverseHighlightPaths.has(line.treeId);
+            // Check if this row is highlighted from chat source-map interaction (purple)
+            const isChatHighlighted = hoveredFromChat && hoveredNodeId === line.treeId;
 
             // Collapsed trees get distinct grey background
             const collapsedBg = 'rgba(128, 128, 128, 0.1)';
 
-            // Background: collapsed > reverse-highlight > confirmed > auto-selected > transparent
+            // Background priority: collapsed > chat-highlight (purple) > reverse-highlight (blue) > confirmed > auto-selected > transparent
             const bg =
               line.isCollapsed && line.slotKey === null
                 ? collapsedBg
-                : isReverseHighlighted
-                  ? 'rgba(96, 165, 250, 0.15)'
-                  : isConfirmed
-                    ? 'rgba(74, 222, 128, 0.1)'
-                    : line.isAutoSelected
-                      ? 'rgba(96, 165, 250, 0.06)'
-                      : 'transparent';
+                : isChatHighlighted
+                  ? 'rgba(139, 92, 246, 0.15)'
+                  : isReverseHighlighted
+                    ? 'rgba(96, 165, 250, 0.15)'
+                    : isConfirmed
+                      ? 'rgba(74, 222, 128, 0.1)'
+                      : line.isAutoSelected
+                        ? 'rgba(96, 165, 250, 0.06)'
+                        : 'transparent';
 
             const handleCheck = () => {
               // Collapsed tree header — toggle expand
@@ -454,6 +481,9 @@ export function YAMLView() {
                 key={i}
                 className="group/yaml-line"
                 data-tree-id={isNodeLine ? line.treeId : undefined}
+                ref={(el) => {
+                  if (el) lineRefs.current.set(line.treeId, el);
+                }}
                 onMouseEnter={() => setHoveredNodeId(line.treeId, line.slotKey)}
                 onMouseLeave={() => setHoveredNodeId(null)}
                 onClick={() => {
