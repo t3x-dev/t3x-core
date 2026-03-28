@@ -35,6 +35,8 @@ export {
   tier3Segment,
   updateStanceSegment,
 } from './extractionPrompt';
+// YOps Prompt Builder (YAML operations format for incremental extraction)
+export { buildYOpsPrompt } from './yopsPrompt';
 // Extraction (Phase 2)
 export {
   type ExtractionInput,
