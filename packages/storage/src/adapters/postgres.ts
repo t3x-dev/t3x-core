@@ -648,25 +648,35 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_share_tokens_entity ON share_tokens(entity_type, entity_id);
     CREATE INDEX IF NOT EXISTS idx_share_tokens_project ON share_tokens(project_id);
 
-    -- Delta Log table (Frame Semantic Engine — inter-node relation deltas)
-    CREATE TABLE IF NOT EXISTS delta_log (
+    -- YOps Log table (semantic yops tracking)
+    CREATE TABLE IF NOT EXISTS yops_log (
       id TEXT PRIMARY KEY,
       conversation_id TEXT NOT NULL REFERENCES conversations(conversation_id) ON DELETE CASCADE,
       project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
       source TEXT NOT NULL,
       turn_hash TEXT,
-      delta JSONB NOT NULL,
+      yops JSONB NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
-    CREATE INDEX IF NOT EXISTS idx_delta_log_conv ON delta_log(conversation_id, created_at);
-    CREATE INDEX IF NOT EXISTS idx_delta_log_project ON delta_log(project_id);
-    ALTER TABLE delta_log ADD COLUMN IF NOT EXISTS commit_hash TEXT;
-    ALTER TABLE delta_log ADD COLUMN IF NOT EXISTS model TEXT;
+    CREATE INDEX IF NOT EXISTS idx_yops_log_conv ON yops_log(conversation_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_yops_log_project ON yops_log(project_id);
+    ALTER TABLE yops_log ADD COLUMN IF NOT EXISTS commit_hash TEXT;
+    ALTER TABLE yops_log ADD COLUMN IF NOT EXISTS model TEXT;
     -- V2 columns (agentic pipeline)
-    ALTER TABLE delta_log ADD COLUMN IF NOT EXISTS version INTEGER;
-    ALTER TABLE delta_log ADD COLUMN IF NOT EXISTS pipeline_state TEXT;
-    ALTER TABLE delta_log ADD COLUMN IF NOT EXISTS gate_result_json JSONB;
-    ALTER TABLE delta_log ADD COLUMN IF NOT EXISTS metadata JSONB;
+    ALTER TABLE yops_log ADD COLUMN IF NOT EXISTS version INTEGER;
+    ALTER TABLE yops_log ADD COLUMN IF NOT EXISTS pipeline_state TEXT;
+    ALTER TABLE yops_log ADD COLUMN IF NOT EXISTS gate_result_json JSONB;
+    ALTER TABLE yops_log ADD COLUMN IF NOT EXISTS metadata JSONB;
+
+    -- Migration: rename delta_log to yops_log if old table exists
+    DO $$ BEGIN
+      IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'delta_log') THEN
+        ALTER TABLE delta_log RENAME TO yops_log;
+        ALTER TABLE yops_log RENAME COLUMN delta TO yops;
+        ALTER INDEX IF EXISTS idx_delta_log_conv RENAME TO idx_yops_log_conv;
+        ALTER INDEX IF EXISTS idx_delta_log_project RENAME TO idx_yops_log_project;
+      END IF;
+    END $$;
 
     -- Node Relations (Inter-node Relations)
     CREATE TABLE IF NOT EXISTS node_relations (
@@ -862,7 +872,7 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_token_usage_project_created ON token_usage(project_id, created_at);
   `);
 
-  // ── Schema v29: Topics table + topic_id on delta_log ──
+  // ── Schema v29: Topics table + topic_id on yops_log ──
   await sql.unsafe(`
     CREATE TABLE IF NOT EXISTS topics (
       id TEXT PRIMARY KEY,
@@ -875,7 +885,7 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_topics_conv ON topics(conversation_id);
     CREATE INDEX IF NOT EXISTS idx_topics_project ON topics(project_id);
 
-    ALTER TABLE delta_log ADD COLUMN IF NOT EXISTS topic_id TEXT;
+    ALTER TABLE yops_log ADD COLUMN IF NOT EXISTS topic_id TEXT;
   `);
 
   // ── Schema v30: Trees + Tree Relations tables (live tree state) ──

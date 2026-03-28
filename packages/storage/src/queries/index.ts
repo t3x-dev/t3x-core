@@ -99,15 +99,15 @@ export {
   type UpdateConversationInput,
   updateConversation,
 } from './conversations';
-// Delta Log (Phase 2 — semantic delta tracking)
+// YOps Log (Phase 2 — semantic yops tracking)
 export {
-  deleteDeltaLogEntry,
-  getDeltaLogEntry,
-  type InsertDeltaLogInput,
-  insertDeltaLogEntry,
-  listDeltaLogByConversation,
-  listDeltaLogByTopic,
-} from './delta-log';
+  deleteYOpsLogEntry,
+  getYOpsLogEntry,
+  type InsertYOpsLogInput,
+  insertYOpsLogEntry,
+  listYOpsLogByConversation,
+  listYOpsLogByTopic,
+} from './yops-log';
 // Deploy Agents (for Deploy page, different from agent layer)
 export {
   type CreateDeployAgentInput,

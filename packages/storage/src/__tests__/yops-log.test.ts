@@ -2,15 +2,15 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
 import { insertConversation } from '../queries/conversations';
 import {
-  deleteDeltaLogEntry,
-  getDeltaLogEntry,
-  insertDeltaLogEntry,
-  listDeltaLogByConversation,
-} from '../queries/delta-log';
+  deleteYOpsLogEntry,
+  getYOpsLogEntry,
+  insertYOpsLogEntry,
+  listYOpsLogByConversation,
+} from '../queries/yops-log';
 import { insertProject } from '../queries/projects';
 import { createTestDB, sleep, testData } from './setup';
 
-describe('Delta Log Storage', () => {
+describe('YOps Log Storage', () => {
   let db: AnyDB;
   let cleanup: () => Promise<void>;
   let testProjectId: string;
@@ -21,12 +21,12 @@ describe('Delta Log Storage', () => {
     db = setup.db;
     cleanup = setup.cleanup;
 
-    const project = await insertProject(db, testData.project({ name: 'DeltaLog Test' }));
+    const project = await insertProject(db, testData.project({ name: 'YOpsLog Test' }));
     testProjectId = project.projectId;
 
     const conv = await insertConversation(
       db,
-      testData.conversation(testProjectId, { title: 'DL Conv' })
+      testData.conversation(testProjectId, { title: 'YL Conv' })
     );
     testConversationId = conv.conversationId;
   });
@@ -36,74 +36,74 @@ describe('Delta Log Storage', () => {
   });
 
   // =========================================================================
-  // insertDeltaLogEntry + getDeltaLogEntry
+  // insertYOpsLogEntry + getYOpsLogEntry
   // =========================================================================
-  describe('insertDeltaLogEntry', () => {
-    it('inserts and retrieves a delta log entry', async () => {
-      const delta = { added_entities: [{ id: 'e1', label: 'TypeScript' }] };
-      const entry = await insertDeltaLogEntry(db, {
+  describe('insertYOpsLogEntry', () => {
+    it('inserts and retrieves a yops log entry', async () => {
+      const yops = { added_entities: [{ id: 'e1', label: 'TypeScript' }] };
+      const entry = await insertYOpsLogEntry(db, {
         conversationId: testConversationId,
         projectId: testProjectId,
         source: 'pipeline',
         turnHash: 'sha256:abc123',
-        delta,
+        yops,
       });
 
       expect(entry).toBeDefined();
-      expect(entry.id).toMatch(/^dl_/);
-      expect(entry.id.length).toBe(15); // "dl_" + 12 chars
+      expect(entry.id).toMatch(/^yl_/);
+      expect(entry.id.length).toBe(15); // "yl_" + 12 chars
       expect(entry.conversationId).toBe(testConversationId);
       expect(entry.projectId).toBe(testProjectId);
       expect(entry.source).toBe('pipeline');
       expect(entry.turnHash).toBe('sha256:abc123');
-      expect(entry.delta).toEqual(delta);
+      expect(entry.yops).toEqual(yops);
       expect(entry.createdAt).toBeDefined();
 
       // Retrieve by ID
-      const fetched = await getDeltaLogEntry(db, entry.id);
+      const fetched = await getYOpsLogEntry(db, entry.id);
       expect(fetched).toBeDefined();
       expect(fetched!.id).toBe(entry.id);
-      expect(fetched!.delta).toEqual(delta);
+      expect(fetched!.yops).toEqual(yops);
     });
 
     it('inserts entry without optional turnHash', async () => {
-      const entry = await insertDeltaLogEntry(db, {
+      const entry = await insertYOpsLogEntry(db, {
         conversationId: testConversationId,
         projectId: testProjectId,
         source: 'manual',
-        delta: { removed_relations: [{ id: 'r1' }] },
+        yops: { removed_relations: [{ id: 'r1' }] },
       });
 
       expect(entry.turnHash).toBeNull();
       expect(entry.source).toBe('manual');
     });
 
-    it('generates unique IDs with dl_ prefix', async () => {
-      const entry1 = await insertDeltaLogEntry(db, {
+    it('generates unique IDs with yl_ prefix', async () => {
+      const entry1 = await insertYOpsLogEntry(db, {
         conversationId: testConversationId,
         projectId: testProjectId,
         source: 'manual',
-        delta: { a: 1 },
+        yops: { a: 1 },
       });
-      const entry2 = await insertDeltaLogEntry(db, {
+      const entry2 = await insertYOpsLogEntry(db, {
         conversationId: testConversationId,
         projectId: testProjectId,
         source: 'manual',
-        delta: { b: 2 },
+        yops: { b: 2 },
       });
 
-      expect(entry1.id).toMatch(/^dl_/);
-      expect(entry2.id).toMatch(/^dl_/);
+      expect(entry1.id).toMatch(/^yl_/);
+      expect(entry2.id).toMatch(/^yl_/);
       expect(entry1.id).not.toBe(entry2.id);
     });
 
     it('preserves source field correctly', async () => {
       for (const source of ['pipeline', 'manual', 'answer', 'collapse']) {
-        const entry = await insertDeltaLogEntry(db, {
+        const entry = await insertYOpsLogEntry(db, {
           conversationId: testConversationId,
           projectId: testProjectId,
           source,
-          delta: {},
+          yops: {},
         });
         expect(entry.source).toBe(source);
       }
@@ -111,48 +111,48 @@ describe('Delta Log Storage', () => {
   });
 
   // =========================================================================
-  // getDeltaLogEntry
+  // getYOpsLogEntry
   // =========================================================================
-  describe('getDeltaLogEntry', () => {
+  describe('getYOpsLogEntry', () => {
     it('returns undefined for non-existent ID', async () => {
-      const result = await getDeltaLogEntry(db, 'dl_nonexistent');
+      const result = await getYOpsLogEntry(db, 'yl_nonexistent');
       expect(result).toBeUndefined();
     });
   });
 
   // =========================================================================
-  // listDeltaLogByConversation
+  // listYOpsLogByConversation
   // =========================================================================
-  describe('listDeltaLogByConversation', () => {
+  describe('listYOpsLogByConversation', () => {
     it('lists entries in chronological order (ASC)', async () => {
       // Create a second conversation for isolation
       const conv2 = await insertConversation(
         db,
-        testData.conversation(testProjectId, { title: 'DL Conv 2' })
+        testData.conversation(testProjectId, { title: 'YL Conv 2' })
       );
 
-      await insertDeltaLogEntry(db, {
+      await insertYOpsLogEntry(db, {
         conversationId: conv2.conversationId,
         projectId: testProjectId,
         source: 'pipeline',
-        delta: { order: 1 },
+        yops: { order: 1 },
       });
       await sleep(10);
-      await insertDeltaLogEntry(db, {
+      await insertYOpsLogEntry(db, {
         conversationId: conv2.conversationId,
         projectId: testProjectId,
         source: 'manual',
-        delta: { order: 2 },
+        yops: { order: 2 },
       });
       await sleep(10);
-      await insertDeltaLogEntry(db, {
+      await insertYOpsLogEntry(db, {
         conversationId: conv2.conversationId,
         projectId: testProjectId,
         source: 'manual',
-        delta: { order: 3 },
+        yops: { order: 3 },
       });
 
-      const list = await listDeltaLogByConversation(db, conv2.conversationId);
+      const list = await listYOpsLogByConversation(db, conv2.conversationId);
       expect(list.length).toBe(3);
 
       // Verify ASC order
@@ -163,43 +163,43 @@ describe('Delta Log Storage', () => {
       }
 
       // Verify content order
-      expect((list[0].delta as { order: number }).order).toBe(1);
-      expect((list[2].delta as { order: number }).order).toBe(3);
+      expect((list[0].yops as { order: number }).order).toBe(1);
+      expect((list[2].yops as { order: number }).order).toBe(3);
     });
 
     it('returns empty array for conversation with no entries', async () => {
       const conv3 = await insertConversation(
         db,
-        testData.conversation(testProjectId, { title: 'DL Conv Empty' })
+        testData.conversation(testProjectId, { title: 'YL Conv Empty' })
       );
-      const list = await listDeltaLogByConversation(db, conv3.conversationId);
+      const list = await listYOpsLogByConversation(db, conv3.conversationId);
       expect(list).toEqual([]);
     });
   });
 
   // =========================================================================
-  // deleteDeltaLogEntry
+  // deleteYOpsLogEntry
   // =========================================================================
-  describe('deleteDeltaLogEntry', () => {
+  describe('deleteYOpsLogEntry', () => {
     it('deletes an entry and returns the deleted record', async () => {
-      const entry = await insertDeltaLogEntry(db, {
+      const entry = await insertYOpsLogEntry(db, {
         conversationId: testConversationId,
         projectId: testProjectId,
         source: 'manual',
-        delta: { to_delete: true },
+        yops: { to_delete: true },
       });
 
-      const deleted = await deleteDeltaLogEntry(db, entry.id);
+      const deleted = await deleteYOpsLogEntry(db, entry.id);
       expect(deleted).toBeDefined();
       expect(deleted!.id).toBe(entry.id);
 
       // Verify it no longer exists
-      const fetched = await getDeltaLogEntry(db, entry.id);
+      const fetched = await getYOpsLogEntry(db, entry.id);
       expect(fetched).toBeUndefined();
     });
 
     it('returns undefined for non-existent ID', async () => {
-      const result = await deleteDeltaLogEntry(db, 'dl_nonexistent');
+      const result = await deleteYOpsLogEntry(db, 'yl_nonexistent');
       expect(result).toBeUndefined();
     });
   });
