@@ -14,7 +14,6 @@
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
-  applyTreeChanges,
   buildConversationContext,
   type ConversationData,
   flattenTrees,
@@ -41,7 +40,7 @@ import {
 } from '@t3x-dev/storage';
 import { formatContextForExport } from '../lib/context-formatter';
 import { getDB } from '../lib/db';
-import { toYOpsLogEntries } from '../lib/yops-log-utils';
+import { replayYOpsLog, toYOpsLogEntries } from '../lib/yops-log-utils';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import {
   CursorPageResponseSchema,
@@ -748,11 +747,7 @@ conversationRoutes.openapi(getMemoryRoute, async (c) => {
     let yamlKnowledge = '';
     const yopsRecords = await listYOpsLogByConversation(db, conversationId);
     if (yopsRecords.length > 0) {
-      const emptySnap: SemanticContent = { trees: [], relations: [] };
-      const snapshot = toYOpsLogEntries(yopsRecords).reduce(
-        (snap, entry) => applyTreeChanges(snap, entry.yops as any),
-        emptySnap
-      );
+      const snapshot = replayYOpsLog(toYOpsLogEntries(yopsRecords));
       if (snapshot.trees.length > 0) {
         yamlKnowledge = serializeSnapshotForContext(snapshot);
       }

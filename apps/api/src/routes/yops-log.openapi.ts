@@ -12,8 +12,8 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import type { YOpsSource, SemanticContent } from '@t3x-dev/core';
-import { applyTreeChanges, flattenTrees } from '@t3x-dev/core';
+import type { YOpsSource } from '@t3x-dev/core';
+import { flattenTrees } from '@t3x-dev/core';
 import {
   deleteYOpsLogEntry,
   findConversationById,
@@ -23,12 +23,12 @@ import {
   listYOpsLogByTopic,
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
-import { toYOpsLogEntries } from '../lib/yops-log-utils';
+import { replayYOpsLog, toYOpsLogEntries } from '../lib/yops-log-utils';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import {
   readDraftFromTrees,
   rebuildTreesFromSnapshot,
-  syncDeltaToTrees,
+  syncYOpsToTrees,
 } from '../lib/tree-state-sync';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
@@ -285,12 +285,10 @@ yopsLogRoutes.openapi(createYOpsRoute, async (c) => {
         turnHash: body.turn_hash,
         yops: body.yops,
       });
-      await syncDeltaToTrees(
+      await syncYOpsToTrees(
         tx,
         conversationId,
         conversation.projectId,
-        body.yops as any,
-        body.source as YOpsSource
       );
       return rec;
     });
@@ -354,11 +352,7 @@ yopsLogRoutes.openapi(getDraftRoute, async (c) => {
       const records = topic_id
         ? await listYOpsLogByTopic(db, conversationId, topic_id)
         : await listYOpsLogByConversation(db, conversationId);
-      const emptySnap: SemanticContent = { trees: [], relations: [] };
-      draft = toYOpsLogEntries(records).reduce(
-        (snap, entry) => applyTreeChanges(snap, entry.yops as any),
-        emptySnap
-      );
+      draft = replayYOpsLog(toYOpsLogEntries(records));
     }
 
     return c.json({ success: true as const, data: draft }, 200);
@@ -386,11 +380,7 @@ yopsLogRoutes.openapi(deleteYOpsRoute, async (c) => {
       await deleteYOpsLogEntry(tx, yopsId);
       const remainingRecords = await listYOpsLogByConversation(tx, conversationId);
       const remainingEntries = toYOpsLogEntries(remainingRecords);
-      const emptySnap: SemanticContent = { trees: [], relations: [] };
-      const rebuilt = remainingEntries.reduce(
-        (snap, entry) => applyTreeChanges(snap, entry.yops as any),
-        emptySnap
-      );
+      const rebuilt = replayYOpsLog(remainingEntries);
       await rebuildTreesFromSnapshot(tx, conversationId, existing.projectId, rebuilt);
     });
 

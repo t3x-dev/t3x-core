@@ -9,14 +9,14 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { applyTreeChanges, applyYOps, Compressor, flattenTrees, type NodeWithSignals, type SemanticContent } from '@t3x-dev/core';
+import { applyYOps, Compressor, flattenTrees, type NodeWithSignals, type SemanticContent } from '@t3x-dev/core';
 import {
   findConversationById,
   insertYOpsLogEntry,
   listYOpsLogByConversation,
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
-import { toYOpsLogEntries } from '../lib/yops-log-utils';
+import { replayYOpsLog, toYOpsLogEntries } from '../lib/yops-log-utils';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { rebuildTreesFromSnapshot } from '../lib/tree-state-sync';
 import { assertProjectAccess } from '../lib/project-access';
@@ -188,11 +188,7 @@ treeCompressRoutes.openapi(compressTreesRoute, async (c) => {
     // 2. Fetch existing yops log and build current snapshot
     const yopsRecords = await listYOpsLogByConversation(db, conversationId);
     const yopsEntries = toYOpsLogEntries(yopsRecords);
-    const emptySnapshot: SemanticContent = { trees: [], relations: [] };
-    const currentSnapshot = yopsEntries.reduce(
-      (snap, entry) => applyTreeChanges(snap, entry.yops as any),
-      emptySnapshot
-    );
+    const currentSnapshot = replayYOpsLog(yopsEntries);
     const currentFlat = flattenTrees(currentSnapshot.trees);
 
     // 3. Require at least 2 nodes to compress
