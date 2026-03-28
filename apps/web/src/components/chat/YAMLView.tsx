@@ -24,7 +24,11 @@ interface YAMLLine {
 }
 
 function formatValue(value: SlotValue): string {
-  if (typeof value === 'string') return `"${value}"`;
+  if (typeof value === 'string') {
+    // Only quote strings that need it (contain YAML special chars or could be misinterpreted)
+    const needsQuote = /[:#{}[\],&*?|>!%@`]/.test(value) || value === '' || value === 'true' || value === 'false' || value === 'null' || /^\d+$/.test(value);
+    return needsQuote ? `"${value}"` : value;
+  }
   if (typeof value === 'number') return String(value);
   if (typeof value === 'object' && value !== null && 'ref' in value) {
     return `*${(value as { ref: string }).ref}`;

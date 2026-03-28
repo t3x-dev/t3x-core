@@ -11,7 +11,6 @@ import { AdvisoryPanel } from './AdvisoryPanel';
 import { CommitDropdown } from './CommitDropdown';
 import { YAMLView } from './YAMLView';
 import { PreviewPanel } from './PreviewPanel';
-import { TopicMap } from './TopicMap';
 import { type CompatNode, contentToNodes, treesToNodes } from '@/lib/treeCompat';
 
 // ── Panel widths ──
@@ -195,8 +194,6 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
   const togglePanel = useExtractionPanelStore((s) => s.togglePanel);
   const _setPanelMode = useExtractionPanelStore((s) => s.setPanelMode);
   const yopsHistory = useExtractionPanelStore((s) => s.yopsHistory);
-  const focusIntentEnabled = useExtractionPanelStore((s) => s.focusIntentEnabled);
-  const setFocusIntent = useExtractionPanelStore((s) => s.setFocusIntent);
   const isCompressing = useExtractionPanelStore((s) => s.isCompressing);
   const compressResult = useExtractionPanelStore((s) => s.compressResult);
   const showCompressBanner = useExtractionPanelStore((s) => s.showCompressBanner);
@@ -254,7 +251,7 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
                 <GitCommit className="h-3.5 w-3.5 text-[var(--accent-commit)]" />
               )}
               <span className="text-xs font-semibold text-[var(--text-primary)]">
-                {isCompressing ? 'Compressing...' : isExtracting ? 'Extracting...' : 'Frames'}
+                {isCompressing ? 'Compressing...' : isExtracting ? 'Extracting...' : 'Knowledge'}
               </span>
               {nodeCount > 0 && !isExtracting && (
                 <span className="rounded-full bg-[var(--hover-bg)] px-1.5 py-0.5 text-[10px] text-[var(--text-secondary)]">
@@ -350,31 +347,14 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
             </div>
           )}
 
-          {/* Topic list */}
-          <TopicMap />
-
-          {/* Focus intent toggle */}
-          <div className="px-3 py-1.5 border-b border-[var(--stroke-default)]">
-            <label
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 4,
-                fontSize: 11,
-                color: 'var(--text-secondary)',
-                cursor: 'pointer',
-                padding: '2px 0',
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={focusIntentEnabled}
-                onChange={(e) => setFocusIntent(e.target.checked)}
-                style={{ accentColor: 'rgb(139,92,246)' }}
-              />
-              Focus intent
-            </label>
-          </div>
+          {/* Topic name (if available) */}
+          {draft.trees.length > 0 && (
+            <div className="px-3 py-1.5 border-b border-[var(--stroke-default)]">
+              <span className="text-[10px] font-medium text-[var(--text-secondary)] uppercase tracking-wider">
+                {draft.trees[0].key.replace(/_/g, ' ')}
+              </span>
+            </div>
+          )}
 
           {/* Content area */}
           {panelMode === 'default' ? (
