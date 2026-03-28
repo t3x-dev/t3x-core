@@ -44,7 +44,7 @@ const baseFrames: NodeWithSignals[] = [
 ];
 
 describe('Compressor', () => {
-  it('parses a valid compress delta from LLM output', async () => {
+  it('parses a valid compress output and produces YOps', async () => {
     const llmOutput = JSON.stringify({
       changes: [
         { action: 'remove', target: 'f_001', reason: 'Merged into f_002' },
@@ -65,16 +65,17 @@ describe('Compressor', () => {
 
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.delta.changes).toHaveLength(2);
-      expect(result.delta.changes[0].action).toBe('remove');
-      expect(result.delta.changes[1].action).toBe('update');
+      // 1 drop + 2 set ops (type and area)
+      expect(result.yops.length).toBeGreaterThan(0);
+      expect(result.yops.some((op) => 'drop' in op)).toBe(true);
+      expect(result.yops.some((op) => 'set' in op)).toBe(true);
       expect(result.metadata.compress_summary).toBe('Merged 2 accommodation frames');
       expect(result.metadata.frames_before).toBe(3);
       expect(result.metadata.frames_after).toBe(2);
     }
   });
 
-  it('returns ok with empty changes when nothing to compress', async () => {
+  it('returns ok with empty yops when nothing to compress', async () => {
     const llmOutput = JSON.stringify({
       changes: [],
       remove_relations: [],
@@ -88,11 +89,11 @@ describe('Compressor', () => {
 
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.delta.changes).toHaveLength(0);
+      expect(result.yops).toHaveLength(0);
     }
   });
 
-  it('rejects delta with add actions', async () => {
+  it('rejects output with add actions', async () => {
     const llmOutput = JSON.stringify({
       changes: [{ action: 'add', frame: { id: 'f_new', type: 'x', slots: {} } }],
       remove_relations: [],

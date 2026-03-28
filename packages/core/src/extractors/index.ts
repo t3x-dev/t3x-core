@@ -26,7 +26,8 @@ export {
   type NodeWithSignals,
 } from './compressPrompt';
 export { createMeaningPipeline } from './createMeaningPipeline';
-export { type ParseResult as DeltaParseResult, parseDelta } from './deltaParser';
+// extractionPrompt helpers — still used by yopsPrompt.ts internally
+/** @deprecated Use buildYOpsPrompt instead */
 export {
   buildExtractionPrompt,
   type ExtractionPromptResult,
@@ -35,13 +36,16 @@ export {
   tier3Segment,
   updateStanceSegment,
 } from './extractionPrompt';
+// YOps Prompt Builder (YAML operations format for incremental extraction)
+export { buildYOpsPrompt } from './yopsPrompt';
+// YOps Parser
+export { parseYOpsOutput, type YOpsParseResult } from './yopsParser';
 // Extraction (Phase 2)
 export {
   type ExtractionInput,
   type ExtractionResult,
   type ExtractionTurn,
   Extractor,
-  type SlotQuotesMap,
 } from './extractor';
 // Compression
 export {
