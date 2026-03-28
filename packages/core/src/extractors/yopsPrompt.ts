@@ -84,12 +84,17 @@ ${tier3Segment(style.tier3)}
 
 ${tier3KeyDistinction(style.tier3)}
 
+## Extract From BOTH Sides
+- Extract facts and structured information from BOTH user messages AND assistant responses
+- When the assistant provides categories, lists, or structured answers, extract them as child nodes
+- User's question defines the TOPIC; assistant's response provides the CONTENT
+- Even if the user hasn't confirmed the information yet, extract it at Tier 3 confidence (0.4-0.5)
+
 ## What NOT to Extract
-- Questions (from either side) — questions are not facts
-- Meta-frames like "user_preferences" — use domain-specific types instead
-- Pure conversational filler
-- AI meta-commentary about its own process
+- Pure conversational filler ("sure!", "let me help", "here you go")
+- AI meta-commentary about its own process ("I'll organize this into...")
 - AI suggestions the user explicitly rejected
+- Generic greetings without topical content
 
 ## slot_quotes Hard Binding (MANDATORY)
 After the YAML tree, output a separate slot_quotes JSON mapping.
@@ -188,8 +193,13 @@ ${tier3Segment(style.tier3)}
 
 ${tier3KeyDistinction(style.tier3)}
 
+## Extract From BOTH Sides
+- Extract facts and structured information from BOTH user messages AND assistant responses
+- When the assistant provides new categories, details, or answers, add them as nodes/slots
+- Even if the user hasn't confirmed yet, extract at Tier 3 confidence (0.4-0.5)
+
 ## What NOT to Extract
-- Questions, conversational filler, AI meta-commentary
+- Pure conversational filler, AI meta-commentary about its own process
 - AI suggestions the user explicitly rejected
 
 ## slot_quotes Hard Binding (MANDATORY)
