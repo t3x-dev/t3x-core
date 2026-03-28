@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { Extractor } from '../../extractors/extractor';
 import type { LLMProvider } from '../../llm/types';
-import { flattenTrees } from '../../semantic/tree';
 import type { SemanticContent } from '../../semantic/types';
 
 // ── Helpers ──
@@ -21,27 +20,14 @@ function mockProvider(responses: string[]): LLMProvider {
 
 // ── Fixtures ──
 
-// Legacy delta output (frames format — still supported by parser)
-const validDeltaOutput = JSON.stringify({
-  changes: [
-    {
-      action: 'add',
-      parent_path: '',
-      node: { key: 'travel_plan', slots: { destination: 'Tokyo' }, children: [] },
-    },
-  ],
-});
+// YOps-format: first extraction (YAML tree + metadata)
+const validTreeOutput = `travel_plan:\n  destination: Tokyo\n---\n{"slot_quotes":{"destination":"travel to Tokyo"},"source_map":{"travel_plan":"T1"},"confidence_map":{"travel_plan":0.9}}`;
 
-const validDeltaWithRelations = JSON.stringify({
-  changes: [
-    {
-      action: 'add',
-      parent_path: '',
-      node: { key: 'budget', slots: { amount: 3000 }, children: [] },
-    },
-  ],
-  new_relations: [{ from: 'travel_plan', to: 'budget', type: 'depends' }],
-});
+// YOps-format: incremental add
+const validYOpsAdd = `yops:\n  - add:\n      parent: ""\n      node:\n        budget:\n          amount: 3000\n      source:\n        amount: "3000 dollars"\n      from: T1`;
+
+// YOps-format: incremental add with relation
+const validYOpsAddWithRelation = `yops:\n  - add:\n      parent: ""\n      node:\n        budget:\n          amount: 3000\n      source:\n        amount: "budget is 3000"\n      from: T1\n  - relate:\n      from: travel_plan\n      to: budget\n      type: depends`;
 
 const existingSnapshot: SemanticContent = {
   trees: [{ key: 'travel_plan', slots: { destination: 'Tokyo' }, children: [], confidence: 0.95 }],
@@ -51,8 +37,8 @@ const existingSnapshot: SemanticContent = {
 // ── Tests ──
 
 describe('Extractor', () => {
-  it('extracts delta from turns (no existing snapshot)', async () => {
-    const provider = mockProvider([validDeltaOutput]);
+  it('extracts from turns (no existing snapshot)', async () => {
+    const provider = mockProvider([validTreeOutput]);
     const extractor = new Extractor(provider);
 
     const result = await extractor.extract({
@@ -65,11 +51,10 @@ describe('Extractor', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
-    expect(result.delta.changes).toHaveLength(1);
-    expect(result.delta.changes[0].action).toBe('add');
-    const frames = flattenTrees(result.snapshot.trees);
-    expect(frames).toHaveLength(1);
-    expect(frames[0].type).toBe('travel_plan');
+    expect(result.yops).toBeDefined();
+    expect(result.yops.length).toBeGreaterThan(0);
+    expect(result.snapshot.trees).toHaveLength(1);
+    expect(result.snapshot.trees[0].key).toBe('travel_plan');
 
     expect(provider.generate).toHaveBeenCalledTimes(1);
     expect(provider.generate).toHaveBeenCalledWith(
@@ -78,8 +63,8 @@ describe('Extractor', () => {
     );
   });
 
-  it('applies delta to existing snapshot', async () => {
-    const provider = mockProvider([validDeltaWithRelations]);
+  it('applies YOps to existing snapshot', async () => {
+    const provider = mockProvider([validYOpsAddWithRelation]);
     const extractor = new Extractor(provider);
 
     const result = await extractor.extract({
@@ -90,14 +75,13 @@ describe('Extractor', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
-    const frames = flattenTrees(result.snapshot.trees);
-    expect(frames).toHaveLength(2);
+    expect(result.snapshot.trees).toHaveLength(2);
     expect(result.snapshot.relations).toHaveLength(1);
     expect(result.snapshot.relations[0].type).toBe('depends');
   });
 
   it('retries once on parse failure then succeeds', async () => {
-    const provider = mockProvider(['this is garbage not json', validDeltaOutput]);
+    const provider = mockProvider(['this is garbage not json', validTreeOutput]);
     const extractor = new Extractor(provider);
 
     const result = await extractor.extract({
@@ -107,7 +91,7 @@ describe('Extractor', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
-    expect(result.delta.changes).toHaveLength(1);
+    expect(result.yops.length).toBeGreaterThan(0);
     expect(provider.generate).toHaveBeenCalledTimes(2);
   });
 
@@ -127,19 +111,10 @@ describe('Extractor', () => {
   });
 
   it('retries on validation failure then succeeds', async () => {
-    // First response: valid parse but creates a self-referencing relation (validation error)
-    const invalidValidation = JSON.stringify({
-      changes: [
-        {
-          action: 'add',
-          parent_path: '',
-          node: { key: 'travel_plan', slots: { destination: 'Tokyo' }, children: [] },
-        },
-      ],
-      new_relations: [{ from: 'travel_plan', to: 'travel_plan', type: 'causes' }],
-    });
+    // First response: valid parse but self-relation (applyYOps will reject)
+    const invalidYOps = `yops:\n  - add:\n      parent: ""\n      node:\n        travel_plan:\n          destination: Tokyo\n      source:\n        destination: "Tokyo"\n      from: T1\n  - relate:\n      from: travel_plan\n      to: travel_plan\n      type: causes`;
 
-    const provider = mockProvider([invalidValidation, validDeltaOutput]);
+    const provider = mockProvider([invalidYOps, validTreeOutput]);
     const extractor = new Extractor(provider);
 
     const result = await extractor.extract({
@@ -149,8 +124,7 @@ describe('Extractor', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
-    const frames = flattenTrees(result.snapshot.trees);
-    expect(frames).toHaveLength(1);
+    expect(result.snapshot.trees).toHaveLength(1);
     expect(provider.generate).toHaveBeenCalledTimes(2);
   });
 });

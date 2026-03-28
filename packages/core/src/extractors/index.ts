@@ -43,7 +43,6 @@ export {
   type ExtractionResult,
   type ExtractionTurn,
   Extractor,
-  type SlotQuotesMap,
 } from './extractor';
 // Compression
 export {
