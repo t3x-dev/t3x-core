@@ -5,7 +5,7 @@ import { Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { nestNodes } from '@/lib/treeNesting';
 import { parseDisplayYAML, toDisplayYAML } from '@/lib/liteYaml';
-import { traceChatToYaml } from '@/lib/hoverTrace';
+import { traceChatToYaml, traceYamlToChat } from '@/lib/hoverTrace';
 import { RELEVANCE_THRESHOLD, type RelevanceContext, relevanceScore } from '@/lib/relevanceScore';
 import { useExtractionPanelStore } from '@/store/extractionPanelStore';
 import { TreeHistoryPopover } from './TreeHistoryPopover';
@@ -185,8 +185,7 @@ export function YAMLView() {
   const llmHighlightedNodeIds = useExtractionPanelStore((s) => s.llmHighlightedNodeIds);
   const isExtracting = useExtractionPanelStore((s) => s.isExtracting);
   const setHoveredNodeId = useExtractionPanelStore((s) => s.setHoveredNodeId);
-  const hoveredTurnHash = useExtractionPanelStore((s) => s.hoveredTurnHash);
-  const hoveredCharOffset = useExtractionPanelStore((s) => s.hoveredCharOffset);
+  const hoveredTurnIndex = useExtractionPanelStore((s) => s.hoveredTurnIndex);
   const gateIssues = useExtractionPanelStore((s) => s.gateIssues);
   const manualEditedNodeIds = useExtractionPanelStore((s) => s.manualEditedNodeIds);
 
@@ -324,12 +323,9 @@ export function YAMLView() {
   }, [sortedNodes, changeMap, relevanceCtx, expandedCollapsed]);
 
   // Reverse highlight: when hovering a chat message, which YAML paths light up?
-  // hoveredTurnHash now carries the turn index as a string (e.g., "1", "2")
   const reverseHighlightPaths = useMemo(() => {
-    if (!hoveredTurnHash) return new Set<string>();
-    const turnIdx = parseInt(hoveredTurnHash, 10);
-    if (isNaN(turnIdx)) return new Set<string>();
-    const paths = traceChatToYaml(draft, turnIdx);
+    if (hoveredTurnIndex == null) return new Set<string>();
+    const paths = traceChatToYaml(draft, hoveredTurnIndex);
     // Also include child paths for highlighting
     const expanded = new Set<string>();
     for (const p of paths) {
@@ -341,7 +337,7 @@ export function YAMLView() {
       }
     }
     return expanded;
-  }, [hoveredTurnHash, draft]);
+  }, [hoveredTurnIndex, draft]);
 
   if (draft.trees.length === 0 && !isEditing) {
     return (
@@ -460,6 +456,14 @@ export function YAMLView() {
                 data-tree-id={isNodeLine ? line.treeId : undefined}
                 onMouseEnter={() => setHoveredNodeId(line.treeId, line.slotKey)}
                 onMouseLeave={() => setHoveredNodeId(null)}
+                onClick={() => {
+                  // Click YAML slot → scroll source chat message into center view
+                  const trace = traceYamlToChat(draft, line.treeId, line.slotKey);
+                  if (trace.sourceTurnIndex != null) {
+                    useExtractionPanelStore.setState({ scrollToCenter: true });
+                    setHoveredNodeId(line.treeId, line.slotKey);
+                  }
+                }}
                 title={
                   isNodeLine && gateIssues[line.treeId]?.length
                     ? gateIssues[line.treeId]

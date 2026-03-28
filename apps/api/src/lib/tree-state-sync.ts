@@ -92,8 +92,6 @@ export async function rebuildTreesFromSnapshot(
   }
 }
 
-/** @deprecated Use rebuildTreesFromSnapshot */
-export const rebuildFramesFromSnapshot = rebuildTreesFromSnapshot;
 
 /**
  * Build a SemanticContent from the trees table (replaces buildDraft for reads).
@@ -156,5 +154,3 @@ export async function readDraftFromTrees(
   return { trees: rootTrees, relations: relationsResult };
 }
 
-/** @deprecated Use readDraftFromTrees */
-export const readDraftFromFrames = readDraftFromTrees;

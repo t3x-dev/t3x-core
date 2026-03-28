@@ -71,6 +71,7 @@ export async function upsertTree(db: AnyDB, input: UpsertTreeInput): Promise<Tre
         status: input.status ?? 'active',
         confidence: input.confidence ?? null,
         source: input.source,
+        slotQuotes: input.slotQuotes ?? null,
         slotSources: input.slotSources ?? null,
         manualEdited: input.manualEdited ?? false,
         updatedAt: new Date(),

@@ -10,7 +10,7 @@ import { useExtractionPanelStore } from '@/store/extractionPanelStore';
 import { CitationChips } from './CitationChips';
 import { CodeBlock } from './CodeBlock';
 import { ThinkingSection } from './ThinkingSection';
-import { traceYamlToChat, traceChatToYaml } from '@/lib/hoverTrace';
+import { traceYamlToChat } from '@/lib/hoverTrace';
 
 interface ChatMessageProps {
   sender: 'user' | 'assistant';
@@ -107,7 +107,8 @@ export function ChatMessage({
   const hoveredNodeId = useExtractionPanelStore((s) => s.hoveredNodeId);
   const hoveredSlotKey = useExtractionPanelStore((s) => s.hoveredSlotKey);
   const draft = useExtractionPanelStore((s) => s.draft);
-  const setHoveredTurn = useExtractionPanelStore((s) => s.setHoveredTurn);
+  const setHoveredTurnIndex = useExtractionPanelStore((s) => s.setHoveredTurnIndex);
+  const scrollToCenter = useExtractionPanelStore((s) => s.scrollToCenter);
   const textRef = useRef<HTMLDivElement>(null);
   const messageRef = useRef<HTMLDivElement>(null);
 
@@ -147,19 +148,15 @@ export function ChatMessage({
   // Whole-message tint: when this is the source message for hovered YAML
   const isWholeMessageHighlight = isSourceMessage && !hasCharHighlights;
 
-  // Debug: log hover state
-  if (hoveredNodeId && trace && turnIndex === 1) {
-    // Only log for first message to reduce noise
-    const rootSource = draft.trees[0]?.source;
-    console.log(`[hover-trace] hovered=${hoveredNodeId} | rootSource="${rootSource}" | trace.sourceTurn=${trace.sourceTurnIndex} | quotes=${trace.allQuotes.length} | draft.trees=${draft.trees.length} | tree0.key=${draft.trees[0]?.key}`);
-  }
-
   // Auto-scroll this message into view when it's the source of hovered YAML
   useEffect(() => {
     if (isSourceMessage && messageRef.current) {
-      messageRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      messageRef.current.scrollIntoView({
+        behavior: 'smooth',
+        block: scrollToCenter ? 'center' : 'nearest',
+      });
     }
-  }, [isSourceMessage]);
+  }, [isSourceMessage, scrollToCenter]);
 
   return (
     <div
@@ -176,8 +173,8 @@ export function ChatMessage({
             : 'transparent',
         borderLeft: isSourceMessage ? '3px solid rgba(96, 165, 250, 0.5)' : undefined,
       }}
-      onMouseEnter={() => turnIndex != null && setHoveredTurn(String(turnIndex))}
-      onMouseLeave={() => setHoveredTurn(null)}
+      onMouseEnter={() => turnIndex != null && setHoveredTurnIndex(turnIndex)}
+      onMouseLeave={() => setHoveredTurnIndex(null)}
     >
       <div className="mx-auto max-w-3xl px-4">
         <div className="flex gap-3">

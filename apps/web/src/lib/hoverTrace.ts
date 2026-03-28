@@ -133,22 +133,6 @@ function findSourceTurn(draft: SemanticContent, path: string): number | null {
   return null;
 }
 
-function findNodeByPath(draft: SemanticContent, path: string): TreeNode | null {
-  const segments = path.replace(/\//g, '.').split('.');
-  for (const tree of draft.trees) {
-    if (tree.key === segments[0]) {
-      let node: TreeNode = tree;
-      for (let i = 1; i < segments.length; i++) {
-        const child = node.children.find((c) => c.key === segments[i]);
-        if (!child) return node; // return closest ancestor
-        node = child;
-      }
-      return node;
-    }
-  }
-  return null;
-}
-
 function parseSourceTag(source: string | undefined): number | null {
   if (!source) return null;
   const match = source.match(/^T(\d+)/);
