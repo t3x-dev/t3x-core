@@ -147,6 +147,11 @@ export function ChatMessage({
   // Whole-message tint: when this is the source message for hovered YAML
   const isWholeMessageHighlight = isSourceMessage && !hasCharHighlights;
 
+  // Debug: log hover state
+  if (hoveredNodeId && trace) {
+    console.log(`[hover-trace] msg turnIndex=${turnIndex} | hovered=${hoveredNodeId} | trace.sourceTurn=${trace.sourceTurnIndex} | isSource=${isSourceMessage} | quotes=${trace.allQuotes.length} | charHighlights=${highlightRanges.length} | wholeTint=${isWholeMessageHighlight}`);
+  }
+
   // Auto-scroll this message into view when it's the source of hovered YAML
   useEffect(() => {
     if (isSourceMessage && messageRef.current) {
