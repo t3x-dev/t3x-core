@@ -33,12 +33,11 @@ const sampleSnapshot: SemanticContent = {
 
 describe('buildYOpsPrompt', () => {
   describe('first extraction mode (no snapshot)', () => {
-    it('system prompt contains YAML topic tree and slot_quotes, NOT yops:', () => {
+    it('system prompt uses unified YOps format', () => {
       const result = buildYOpsPrompt({ turns: sampleTurns });
-      expect(result.systemPrompt).toContain('YAML');
-      expect(result.systemPrompt).toContain('topic tree');
-      expect(result.systemPrompt).toContain('slot_quotes');
-      expect(result.systemPrompt).not.toContain('yops:');
+      expect(result.systemPrompt).toContain('yops');
+      expect(result.systemPrompt).toContain('add:');
+      expect(result.systemPrompt).toContain('source');
     });
 
     it('user prompt contains turns but no snapshot', () => {
@@ -48,9 +47,9 @@ describe('buildYOpsPrompt', () => {
       expect(result.userPrompt).not.toContain('Snapshot');
     });
 
-    it('user prompt asks to extract into a YAML topic tree', () => {
+    it('user prompt instructs add operations for first extraction', () => {
       const result = buildYOpsPrompt({ turns: sampleTurns });
-      expect(result.userPrompt).toContain('YAML');
+      expect(result.userPrompt).toContain('add');
       expect(result.userPrompt).toContain('tree');
     });
   });

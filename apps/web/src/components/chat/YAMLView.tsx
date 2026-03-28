@@ -24,7 +24,11 @@ interface YAMLLine {
 }
 
 function formatValue(value: SlotValue): string {
-  if (typeof value === 'string') return `"${value}"`;
+  if (typeof value === 'string') {
+    // Only quote strings that need it (contain YAML special chars or could be misinterpreted)
+    const needsQuote = /[:#{}[\],&*?|>!%@`]/.test(value) || value === '' || value === 'true' || value === 'false' || value === 'null' || /^\d+$/.test(value);
+    return needsQuote ? `"${value}"` : value;
+  }
   if (typeof value === 'number') return String(value);
   if (typeof value === 'object' && value !== null && 'ref' in value) {
     return `*${(value as { ref: string }).ref}`;
@@ -270,63 +274,44 @@ export function YAMLView() {
   }, [nestedNodes, relevanceCtx]);
 
   // Build per-line metadata for the YAML display
-  // Each YAML line maps to a tree header or a slot line
+  // Renders the tree HIERARCHICALLY with proper indentation
   const yamlLines = useMemo(() => {
     const lines: YAMLLine[] = [];
 
-    for (const node of sortedNodes) {
-      const changeEntry = changeMap.get(node.id);
+    function renderTreeNode(node: TreeNode, indent: number, parentPath: string): void {
+      const pad = '  '.repeat(indent);
+      const nodePath = parentPath ? `${parentPath}/${node.key}` : node.key;
+      const changeEntry = changeMap.get(nodePath) ?? changeMap.get(nodePath.replace(/\//g, '.'));
       const change = changeEntry?.action ?? null;
-      const score = relevanceScore(node, relevanceCtx).score;
-      const isAuto = score >= RELEVANCE_THRESHOLD;
-      const isNodeCollapsed = (node as CompatNode & { status?: string }).status === 'collapsed';
-      const isExpanded = expandedCollapsed[node.id];
+      const isAuto = false;
 
-      if (isNodeCollapsed && !isExpanded) {
-        // Collapsed  node — single grey line with slot count
-        const slotCount = Object.keys(node.slots).length;
-        lines.push({
-          text: `▶ ${node.type} (${slotCount} slots)`,
-          treeId: node.id,
-          slotKey: null,
-          changeType: null,
-          isAutoSelected: false,
-          isEmpty: false,
-          isCollapsed: true,
-          collapsedSlotCount: slotCount,
-        });
-        lines.push({
-          text: '',
-          treeId: node.id,
-          slotKey: null,
-          changeType: null,
-          isAutoSelected: false,
-          isEmpty: true,
-        });
-        continue;
-      }
-
-      // Tree header (normal or expanded-collapsed)
-      const headerPrefix = isNodeCollapsed && isExpanded ? '▼ ' : '';
+      // Node header
       lines.push({
-        text: `${headerPrefix}${node.type}:`,
-        treeId: node.id,
+        text: `${pad}${node.key}:`,
+        treeId: nodePath,
         slotKey: null,
         changeType: change,
         isAutoSelected: isAuto,
         isEmpty: false,
-        isCollapsed: isNodeCollapsed,
       });
 
-      // Slot lines — render nested structures as proper YAML
+      // Slot lines
       for (const [key, value] of Object.entries(node.slots)) {
-        renderSlotLines(lines, key, value, 1, node.id, key, change, isAuto);
+        renderSlotLines(lines, key, value, indent + 1, nodePath, key, change, isAuto);
       }
 
-      // Blank separator
+      // Children (recursive — proper nesting)
+      for (const child of node.children) {
+        renderTreeNode(child, indent + 1, nodePath);
+      }
+    }
+
+    for (const tree of draft.trees) {
+      renderTreeNode(tree, 0, '');
+      // Blank separator between root trees
       lines.push({
         text: '',
-        treeId: node.id,
+        treeId: tree.key,
         slotKey: null,
         changeType: null,
         isAutoSelected: false,
@@ -415,35 +400,27 @@ export function YAMLView() {
               : !!confirmedSlotKeys[line.treeId]?.[line.slotKey!];
 
             // Check if this row is highlighted by reverse hover (chat → YAML)
-            const node = nestedNodes.find((f) => f.id === line.treeId);
-            const isReverseHighlighted = (() => {
-              if (!hoveredTurnHash || !node) return false;
-
-              // Slot-level precision: when charOffset is available, match specific slot
-              if (hoveredCharOffset != null && node.slot_sources) {
-                for (const [slotKey, ref] of Object.entries(node.slot_sources as Record<string, { turn_hash?: string; start_char?: number; end_char?: number }>)) {
-                  const hashMatch = ref.turn_hash && hoveredTurnHash === ref.turn_hash;
-                  if (
-                    hashMatch &&
-                    ref.start_char != null &&
-                    ref.end_char != null &&
-                    hoveredCharOffset >= ref.start_char &&
-                    hoveredCharOffset < ref.end_char
-                  ) {
-                    // Only highlight this specific slot row (or the tree header if slotKey is null)
-                    return (
-                      line.slotKey === slotKey ||
-                      (line.slotKey === null && line.text.includes(node.type))
-                    );
+            // Find the TreeNode for this line by walking draft.trees
+            const findTreeNodeSource = (path: string): string | undefined => {
+              const segments = path.split('/');
+              let node: import('@t3x-dev/core').TreeNode | undefined;
+              for (const tree of draft.trees) {
+                if (tree.key === segments[0]) {
+                  node = tree;
+                  for (let i = 1; i < segments.length && node; i++) {
+                    node = node.children.find((c) => c.key === segments[i]);
                   }
+                  break;
                 }
-                return false;
               }
-
-              // Fallback: whole-tree highlight via node.source
-              if (!node.source) return false;
-              if (node.source.includes(':')) {
-                const hashPart = node.source.split(':')[1];
+              return node?.source ?? undefined;
+            };
+            const lineNodeSource = findTreeNodeSource(line.treeId);
+            const isReverseHighlighted = (() => {
+              if (!hoveredTurnHash || !lineNodeSource) return false;
+              // Match by turn hash — hoveredTurnHash is "sha256:..." and source is "T1" or "T1:abcdef"
+              if (lineNodeSource.includes(':')) {
+                const hashPart = lineNodeSource.split(':')[1];
                 return hoveredTurnHash.includes(hashPart);
               }
               return false;
@@ -499,7 +476,7 @@ export function YAMLView() {
                   background: bg,
                   minHeight: 20,
                   transition: 'background 0.15s',
-                  cursor: isNodeLine ? 'pointer' : undefined,
+                  cursor: 'pointer',
                   borderLeft:
                     isNodeLine && gateIssues[line.treeId]?.length
                       ? `3px solid ${gateIssues[line.treeId].some((i) => i.severity === 'error') ? '#f87171' : '#facc15'}`

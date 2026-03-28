@@ -1,10 +1,9 @@
 /**
  * YOps Prompt Builder
  *
- * Constructs system + user prompts for LLM-based tree-native semantic extraction.
- * Supports two modes:
- * - First extraction (no snapshot): identical to extractionPrompt.ts (full YAML tree output)
- * - Incremental mode (with snapshot): teaches LLM to output YAML yops format
+ * Constructs system + user prompts for LLM-based semantic extraction.
+ * UNIFIED: always outputs YOps format — both first extraction and incremental.
+ * First extraction = add operations. Incremental = set/add/drop operations.
  */
 
 import type { SemanticContent, TreeNode } from '../semantic/types';
@@ -26,7 +25,7 @@ export type { ExtractionInput, ExtractionTurn, ExtractionPromptResult } from './
 
 import type { ExtractionInput, ExtractionPromptResult } from './extractionPrompt';
 
-// -- Internal Helpers (same as extractionPrompt.ts) --
+// -- Internal Helpers --
 
 function serializeTreeForSnapshot(node: TreeNode, indent = 0): string {
   const pad = '  '.repeat(indent);
@@ -57,21 +56,14 @@ function formatTurns(turns: { role: string; content: string; turn_hash?: string 
     .join('\n');
 }
 
-// -- System Prompt Builders --
+// -- Unified System Prompt --
 
-/**
- * First extraction system prompt — identical to extractionPrompt.ts.
- * LLM outputs YAML tree + --- separator + JSON metadata.
- */
-function buildFirstExtractionSystemPrompt(style: ExtractionStyleConfig): string {
-  return `You are a semantic extraction engine. Extract meaning from conversations into a YAML topic tree.
+function buildSystemPrompt(style: ExtractionStyleConfig, hasSnapshot: boolean): string {
+  const modeIntro = hasSnapshot
+    ? 'Extract CHANGES from new conversation turns as operations on an existing topic tree.'
+    : 'Extract meaning from a conversation into a knowledge tree using add operations.';
 
-## YAML Tree Structure
-- Produce ONE root node named after the main topic (snake_case)
-- The root key IS the topic name (e.g., hangzhou_trip, product_requirements)
-- Child nodes represent subtopics (object values under the root)
-- Leaf values (strings, numbers, booleans, arrays) are slot values
-- Object values at any level are child nodes, NOT slot values
+  return `You are a semantic extraction engine. ${modeIntro}
 
 ## Three-Tier Extraction Rule
 
@@ -86,9 +78,10 @@ ${tier3KeyDistinction(style.tier3)}
 
 ## Extract From BOTH Sides
 - Extract facts and structured information from BOTH user messages AND assistant responses
-- When the assistant provides categories, lists, or structured answers, extract them as child nodes
+- When the assistant provides categories, lists, explanations, or structured answers, extract them
 - User's question defines the TOPIC; assistant's response provides the CONTENT
-- Even if the user hasn't confirmed the information yet, extract it at Tier 3 confidence (0.4-0.5)
+${style.tier3 === 'extract' ? '- Even if the user hasn\'t confirmed the information yet, extract it at Tier 3 confidence (0.4-0.5)' : '- Only extract information the user has explicitly stated or confirmed'}
+- The goal: after extraction, the tree should capture ALL knowledge from the conversation
 
 ## What NOT to Extract
 - Pure conversational filler ("sure!", "let me help", "here you go")
@@ -97,113 +90,7 @@ ${tier3KeyDistinction(style.tier3)}
 - Generic greetings without topical content
 
 ## slot_quotes Hard Binding (MANDATORY)
-After the YAML tree, output a separate slot_quotes JSON mapping.
-Each slot MUST have a corresponding entry with VERBATIM text from the conversation.
-${quoteLengthSegment(style.quote_length)}
-- slot_quotes keys use dot-path notation (e.g., "activity_plan.activities")
-- Root-level slots have no prefix (e.g., "destination")
-- If you cannot quote exact source text for a slot → DO NOT create that slot
-
-${granularitySegment(style.granularity)}
-
-## BAD vs GOOD Examples
-
-BAD — one giant flat structure:
-  trip:
-    location: "Portland"
-    budget: 80000
-    equipment_cost: 30000
-    renovation_cost: 20000
-    design_aesthetic: "Scandinavian"
-    baristas: 3
-
-GOOD — tree with subtopics as children (balanced depth 2):
-  coffee_shop:
-    location: "Portland"
-    budget: 80000
-    budget_allocation:
-      equipment: 30000
-      renovation: 20000
-    design_concept:
-      aesthetic: "Scandinavian"
-    staffing_plan:
-      baristas: 3
-      manager: 1
-
-## Source Tracking
-- Include "source" as a special comment or metadata for each node referencing the turn tag (T1, T2, etc.)
-
-## Cross-Tree Relation Types (4 only): causes, contrasts, follows, depends
-- These are ONLY for relationships between DIFFERENT topic trees
-- Within a single tree, nesting IS the relationship — no explicit relations needed${updateStanceSegment(style.update_stance)}
-
-## Output Format
-First output the YAML tree, then a --- separator, then slot_quotes as JSON:
-
-\`\`\`
-hangzhou_trip:
-  destination: "Hangzhou"
-  dates: "May 1-3"
-  activity_plan:
-    activities: ["West Lake", "hiking"]
-    duration: "2 days"
-  dining:
-    cuisine: "local Hangzhou cuisine"
-    budget: 500
----
-{
-  "slot_quotes": {
-    "destination": "going to Hangzhou",
-    "dates": "May 1st to 3rd",
-    "activity_plan.activities": "visit West Lake and go hiking",
-    "activity_plan.duration": "spend two days on activities",
-    "dining.cuisine": "try local Hangzhou food",
-    "dining.budget": "around 500 for meals"
-  },
-  "source_map": {
-    "hangzhou_trip": "T1",
-    "activity_plan": "T2",
-    "dining": "T3"
-  },
-  "confidence_map": {
-    "hangzhou_trip": 0.95,
-    "activity_plan": 0.85,
-    "dining": 0.9
-  }
-}
-\`\`\`
-Output the YAML tree first (no fences), then --- on its own line, then the JSON block (no fences). No other text.`;
-}
-
-/**
- * YOps incremental system prompt.
- * Replaces the JSON delta format with YAML yops operations.
- */
-function buildYOpsSystemPrompt(style: ExtractionStyleConfig): string {
-  return `You are a semantic extraction engine. Extract CHANGES from new conversation turns as operations on an existing topic tree.
-
-## Three-Tier Extraction Rule
-
-| Tier | Condition | Action | Confidence |
-|------|-----------|--------|------------|
-| TIER 1 | User explicitly stated a fact | Extract it | 0.85-0.95 |
-| TIER 2 | User explicitly confirmed/adopted an AI suggestion | Extract it | 0.6-0.7 |
-${tier3Segment(style.tier3)}
-| DO NOT EXTRACT | User explicitly rejected | Do NOT extract | — |
-
-${tier3KeyDistinction(style.tier3)}
-
-## Extract From BOTH Sides
-- Extract facts and structured information from BOTH user messages AND assistant responses
-- When the assistant provides new categories, details, or answers, add them as nodes/slots
-- Even if the user hasn't confirmed yet, extract at Tier 3 confidence (0.4-0.5)
-
-## What NOT to Extract
-- Pure conversational filler, AI meta-commentary about its own process
-- AI suggestions the user explicitly rejected
-
-## slot_quotes Hard Binding (MANDATORY)
-Each set and add operation MUST include a source field with VERBATIM text from the conversation.
+Every add and set operation MUST include source with VERBATIM text from the conversation.
 ${quoteLengthSegment(style.quote_length)}
 - If you cannot quote exact source text for a slot → DO NOT create that slot
 
@@ -211,28 +98,43 @@ ${granularitySegment(style.granularity)}
 
 ## YOps Output Format
 
-Output changes as a YAML yops document. Each operation is one item in the yops list.
+Output as a YAML yops document. Each operation is one item in the yops list.
 
-### Content Operations
+### Operations
 
-- set: Update or create a slot value on an existing node
-  Required fields: path (node_path/slot_name), value, source (verbatim quote), from (turn tag)
+- add: Create a new node with slots
+  Required: parent (path, empty string "" for root), node (one YAML key with its slots), source (map slot→verbatim quote), from (turn tag)
   Optional: confidence (0-1)
 
-- unset: Remove a slot from an existing node
-  Required fields: path (node_path/slot_name)
-
-- add: Create a new child node with slots
-  Required fields: parent (path, empty string for root), node (one YAML key with slots), source (map of slot→quote), from (turn tag)
+- set: Update or create a slot value on an existing node
+  Required: path (node_path/slot_name), value, source (verbatim quote), from (turn tag)
   Optional: confidence (0-1)
 
 - drop: Remove a node and all its children
-  Required fields: path
+  Required: path
   Optional: reason
 
-### Output Example
+- unset: Remove a slot from an existing node
+  Required: path (node_path/slot_name)
 
-yops:
+### Value vs Source — CRITICAL DISTINCTION
+- **value**: Clean, structured data. Use numbers for quantities (1900 not "1,900 people"), short labels, booleans, arrays. NOT a quote.
+- **source**: VERBATIM quote from the conversation. This is the evidence. Copy-paste from the turn.
+- BAD:  value: "At least 1,900 people have been killed"  ← this is a quote, not a value
+- GOOD: value: 1900  |  source: "At least 1,900 people have been killed"
+- BAD:  value: "The budget is around $5000"  ← conversational quote as value
+- GOOD: value: 5000  |  source: "The budget is around $5000"
+- For non-numeric facts, use short clean labels: value: "grass-fed" not "Australian beef is known for being grass-fed"
+
+### Tree Structure Rules
+- ONE root node per topic, named with snake_case (e.g., australian_beef, travel_plan)
+- Child nodes represent subtopics — use nesting for structure
+- Leaf values: prefer numbers, booleans, short strings, arrays. NOT full sentences.
+- Keep depth ≤ 3 levels. Deeper = more specific
+
+### Example${hasSnapshot ? ' (incremental)' : ' (first extraction)'}
+
+${hasSnapshot ? `yops:
   - set:
       path: trip/dining/budget
       value: 2000
@@ -251,19 +153,42 @@ yops:
 
   - drop:
       path: trip/shopping
-      reason: "user cancelled"
+      reason: "user cancelled"` : `yops:
+  - add:
+      parent: ""
+      node:
+        australian_beef:
+          quality: grass-fed
+          annual_production_tonnes: 2200000
+          major_regions:
+            queensland: largest producer
+            new_south_wales: second largest
+          export_markets:
+            japan: top destination
+            us: growing market
+            south_korea: significant
+      source:
+        quality: "Australian beef is known for being predominantly grass-fed"
+        annual_production_tonnes: "Australia produces about 2.2 million tonnes annually"
+        major_regions.queensland: "Queensland is the largest beef-producing state"
+        major_regions.new_south_wales: "New South Wales is the second largest"
+        export_markets.japan: "Japan is Australia's largest beef export market"
+        export_markets.us: "The US is a growing market for Australian beef"
+        export_markets.south_korea: "South Korea is also a significant destination"
+      from: T2
+      confidence: 0.45`}
 
 ### Rules
 - Output ONLY valid YAML starting with "yops:" on the first line
 - No markdown fences, no explanatory text
 - Every set and add MUST include source (verbatim quote) and from (turn tag)
-- If no changes needed: output "yops: []"
+- If no meaningful content to extract: output "yops: []"
 - Node keys use snake_case
 - Paths use / separator
-
+${hasSnapshot ? `
 ## Drift Detection
 If new turns discuss a topic UNRELATED to the current tree:
-- Output: yops: []
+- Output: yops: []` : ''}
 
 ## Cross-Tree Relation Types (4 only): causes, contrasts, follows, depends${updateStanceSegment(style.update_stance)}`;
 }
@@ -273,14 +198,9 @@ If new turns discuss a topic UNRELATED to the current tree:
 /**
  * Build system + user prompts for semantic extraction using YOps format.
  *
- * When `snapshot` is provided, produces yops-mode prompts that ask the LLM
- * to output YAML operations relative to the existing snapshot.
- * When no snapshot, produces first-extraction prompts for full YAML tree output
- * (identical to buildExtractionPrompt).
- *
- * The optional `style` parameter controls extraction granularity, tier-3
- * behavior, quote length, and update stance. Defaults to `DEFAULT_STYLE`
- * (balanced preset) for backward compatibility.
+ * UNIFIED: both first extraction and incremental mode output YOps.
+ * First extraction = add operations to build tree from scratch.
+ * Incremental = set/add/drop operations to update existing tree.
  */
 export function buildYOpsPrompt(
   input: ExtractionInput,
@@ -288,12 +208,13 @@ export function buildYOpsPrompt(
 ): ExtractionPromptResult {
   const resolvedStyle: ExtractionStyleConfig = { ...DEFAULT_STYLE, ...style };
   const { turns, snapshot, processedTurnCount } = input;
+  const hasSnapshot = !!snapshot && snapshot.trees.length > 0;
 
-  if (snapshot) {
-    // YOps incremental mode
-    const snapshotYaml = serializeSnapshot(snapshot);
+  const systemPrompt = buildSystemPrompt(resolvedStyle, hasSnapshot);
 
-    // Split turns into context (already processed) and new (to extract from)
+  if (hasSnapshot) {
+    // Incremental mode
+    const snapshotYaml = serializeSnapshot(snapshot!);
     const splitAt = processedTurnCount ?? 0;
     const contextTurns = splitAt > 0 ? turns.slice(0, splitAt) : [];
     const newTurns = splitAt > 0 ? turns.slice(splitAt) : turns;
@@ -301,18 +222,13 @@ export function buildYOpsPrompt(
     let turnsSection: string;
     if (contextTurns.length > 0 && newTurns.length > 0) {
       const contextText = formatTurns(contextTurns);
-      const newText =
-        contextTurns.length > 0
-          ? newTurns
-              .map((t, i) => {
-                const idx = contextTurns.length + i;
-                const tag = t.turn_hash
-                  ? `[T${idx + 1}:${t.turn_hash.slice(0, 8)}]`
-                  : `[T${idx + 1}]`;
-                return `${tag} [${t.role}]: ${t.content}`;
-              })
-              .join('\n')
-          : formatTurns(newTurns);
+      const newText = newTurns
+        .map((t, i) => {
+          const idx = contextTurns.length + i;
+          const tag = t.turn_hash ? `[T${idx + 1}:${t.turn_hash.slice(0, 8)}]` : `[T${idx + 1}]`;
+          return `${tag} [${t.role}]: ${t.content}`;
+        })
+        .join('\n');
       turnsSection = `## Context Turns (already in snapshot — do NOT re-extract these)
 ${contextText}
 
@@ -343,18 +259,25 @@ For each piece of new information:
 - If it NEGATES or CANCELS a node → "drop" with path
 - If no changes needed → output "yops: []"`;
 
-    return { systemPrompt: buildYOpsSystemPrompt(resolvedStyle), userPrompt };
+    return { systemPrompt, userPrompt };
   }
 
-  // First extraction mode — identical to extractionPrompt.ts
+  // First extraction mode — also uses YOps (add operations)
   const turnsText = formatTurns(turns);
 
   const userPrompt = `## Conversation
 ${turnsText}
 
 ## Instructions
-Extract the semantic meaning from this conversation into a YAML topic tree.
-Include "source" referencing the turn tag (T1, T2, etc.) for each node.`;
+Extract ALL knowledge from this conversation using yops add operations.
+Build a structured tree: one root node per topic, with child nodes for subtopics.
 
-  return { systemPrompt: buildFirstExtractionSystemPrompt(resolvedStyle), userPrompt };
+CRITICAL RULES:
+1. Use "add" operations to create the tree. Start with parent: "" for root nodes.
+2. Each add MUST include source (verbatim quote from the conversation) and from (turn tag like T1, T2).
+3. Extract from BOTH user messages AND assistant responses. The assistant's detailed answers are valuable content.
+4. Structure the tree with meaningful nesting — group related facts under subtopic nodes.
+5. If the conversation has no extractable content, output "yops: []"`;
+
+  return { systemPrompt, userPrompt };
 }
