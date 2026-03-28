@@ -148,8 +148,10 @@ export function ChatMessage({
   const isWholeMessageHighlight = isSourceMessage && !hasCharHighlights;
 
   // Debug: log hover state
-  if (hoveredNodeId && trace) {
-    console.log(`[hover-trace] msg turnIndex=${turnIndex} | hovered=${hoveredNodeId} | trace.sourceTurn=${trace.sourceTurnIndex} | isSource=${isSourceMessage} | quotes=${trace.allQuotes.length} | charHighlights=${highlightRanges.length} | wholeTint=${isWholeMessageHighlight}`);
+  if (hoveredNodeId && trace && turnIndex === 1) {
+    // Only log for first message to reduce noise
+    const rootSource = draft.trees[0]?.source;
+    console.log(`[hover-trace] hovered=${hoveredNodeId} | rootSource="${rootSource}" | trace.sourceTurn=${trace.sourceTurnIndex} | quotes=${trace.allQuotes.length} | draft.trees=${draft.trees.length} | tree0.key=${draft.trees[0]?.key}`);
   }
 
   // Auto-scroll this message into view when it's the source of hovered YAML
