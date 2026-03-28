@@ -54,21 +54,29 @@ export async function rebuildTreesFromSnapshot(
   await deleteTreeRelationsByConversation(db, conversationId);
   await deleteTreesByConversation(db, conversationId);
 
-  // Flatten trees to FlatNode[] for DB storage
-  const flatNodes = flattenTrees(snapshot.trees);
-  for (const f of flatNodes) {
+  // Walk trees and store each node with full metadata
+  async function walkAndStore(node: import('@t3x-dev/core').TreeNode, parentPath: string): Promise<void> {
+    const path = parentPath ? `${parentPath}/${node.key}` : node.key;
     await upsertTree(db, {
       conversationId,
-      treeId: f.id,
+      treeId: path,
       projectId,
       topicId,
-      type: f.type,
-      slots: f.slots,
+      type: node.key,
+      slots: node.slots,
       status: 'active',
-      confidence: f.confidence,
-      source: 'pipeline',
+      confidence: node.confidence,
+      source: node.source ?? 'unknown',
+      slotQuotes: node.slot_quotes ?? null,
       manualEdited: false,
     });
+    for (const child of node.children) {
+      await walkAndStore(child, path);
+    }
+  }
+
+  for (const tree of snapshot.trees) {
+    await walkAndStore(tree, '');
   }
 
   // Insert relations
@@ -101,14 +109,42 @@ export async function readDraftFromTrees(
   const treeRows = await listTreesByConversation(db, conversationId, topicId);
   const relRows = await listTreeRelationsByConversation(db, conversationId, topicId);
 
-  const trees = treeRows.map((r) => ({
-    key: r.treeId,
-    slots: r.slots as Record<string, string>,
-    children: [] as import('@t3x-dev/core').TreeNode[],
-    source: r.source ?? undefined,
-    confidence: r.confidence ?? undefined,
-    slot_quotes: r.slotSources as Record<string, string> | undefined,
-  }));
+  // Reconstruct hierarchical tree from flat rows (rows have path-based treeId like "root/child")
+  type TNode = import('@t3x-dev/core').TreeNode;
+  const nodeMap = new Map<string, TNode>();
+
+  // First pass: create all nodes
+  for (const r of treeRows) {
+    nodeMap.set(r.treeId, {
+      key: r.type,
+      slots: (r.slots ?? {}) as Record<string, import('@t3x-dev/core').SlotValue>,
+      children: [],
+      source: r.source !== 'unknown' ? r.source : undefined,
+      confidence: r.confidence ?? undefined,
+      slot_quotes: (r.slotQuotes ?? undefined) as Record<string, string> | undefined,
+    });
+  }
+
+  // Second pass: attach children to parents
+  const rootTrees: TNode[] = [];
+  for (const r of treeRows) {
+    const node = nodeMap.get(r.treeId)!;
+    const lastSlash = r.treeId.lastIndexOf('/');
+    if (lastSlash === -1) {
+      // Root node
+      rootTrees.push(node);
+    } else {
+      // Child node — find parent
+      const parentPath = r.treeId.substring(0, lastSlash);
+      const parent = nodeMap.get(parentPath);
+      if (parent) {
+        parent.children.push(node);
+      } else {
+        // Orphan — treat as root
+        rootTrees.push(node);
+      }
+    }
+  }
 
   const relationsResult: Relation[] = relRows.map((r) => ({
     from: r.fromTreeId,
@@ -117,7 +153,7 @@ export async function readDraftFromTrees(
     confidence: r.confidence ?? undefined,
   }));
 
-  return { trees, relations: relationsResult };
+  return { trees: rootTrees, relations: relationsResult };
 }
 
 /** @deprecated Use readDraftFromTrees */

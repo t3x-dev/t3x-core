@@ -345,14 +345,14 @@ yopsLogRoutes.openapi(getDraftRoute, async (c) => {
       );
     }
 
-    // Replay yops log to get full snapshot with metadata (source tags, slot_quotes)
-    const records = topic_id
-      ? await listYOpsLogByTopic(db, conversationId, topic_id)
-      : await listYOpsLogByConversation(db, conversationId);
-    let draft = replayYOpsLog(toYOpsLogEntries(records));
+    // Read from trees table (source-of-truth with full metadata)
+    let draft = await readDraftFromTrees(db, conversationId, topic_id);
     if (draft.trees.length === 0) {
-      // Fallback: read from trees table (legacy or sync issues)
-      draft = await readDraftFromTrees(db, conversationId, topic_id);
+      // Fallback: replay yops log for legacy conversations without trees
+      const records = topic_id
+        ? await listYOpsLogByTopic(db, conversationId, topic_id)
+        : await listYOpsLogByConversation(db, conversationId);
+      draft = replayYOpsLog(toYOpsLogEntries(records));
     }
 
     return c.json({ success: true as const, data: draft }, 200);
