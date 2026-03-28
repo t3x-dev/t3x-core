@@ -274,63 +274,44 @@ export function YAMLView() {
   }, [nestedNodes, relevanceCtx]);
 
   // Build per-line metadata for the YAML display
-  // Each YAML line maps to a tree header or a slot line
+  // Renders the tree HIERARCHICALLY with proper indentation
   const yamlLines = useMemo(() => {
     const lines: YAMLLine[] = [];
 
-    for (const node of sortedNodes) {
-      const changeEntry = changeMap.get(node.id);
+    function renderTreeNode(node: TreeNode, indent: number, parentPath: string): void {
+      const pad = '  '.repeat(indent);
+      const nodePath = parentPath ? `${parentPath}/${node.key}` : node.key;
+      const changeEntry = changeMap.get(nodePath) ?? changeMap.get(nodePath.replace(/\//g, '.'));
       const change = changeEntry?.action ?? null;
-      const score = relevanceScore(node, relevanceCtx).score;
-      const isAuto = score >= RELEVANCE_THRESHOLD;
-      const isNodeCollapsed = (node as CompatNode & { status?: string }).status === 'collapsed';
-      const isExpanded = expandedCollapsed[node.id];
+      const isAuto = false;
 
-      if (isNodeCollapsed && !isExpanded) {
-        // Collapsed  node — single grey line with slot count
-        const slotCount = Object.keys(node.slots).length;
-        lines.push({
-          text: `▶ ${node.type} (${slotCount} slots)`,
-          treeId: node.id,
-          slotKey: null,
-          changeType: null,
-          isAutoSelected: false,
-          isEmpty: false,
-          isCollapsed: true,
-          collapsedSlotCount: slotCount,
-        });
-        lines.push({
-          text: '',
-          treeId: node.id,
-          slotKey: null,
-          changeType: null,
-          isAutoSelected: false,
-          isEmpty: true,
-        });
-        continue;
-      }
-
-      // Tree header (normal or expanded-collapsed)
-      const headerPrefix = isNodeCollapsed && isExpanded ? '▼ ' : '';
+      // Node header
       lines.push({
-        text: `${headerPrefix}${node.type}:`,
-        treeId: node.id,
+        text: `${pad}${node.key}:`,
+        treeId: nodePath,
         slotKey: null,
         changeType: change,
         isAutoSelected: isAuto,
         isEmpty: false,
-        isCollapsed: isNodeCollapsed,
       });
 
-      // Slot lines — render nested structures as proper YAML
+      // Slot lines
       for (const [key, value] of Object.entries(node.slots)) {
-        renderSlotLines(lines, key, value, 1, node.id, key, change, isAuto);
+        renderSlotLines(lines, key, value, indent + 1, nodePath, key, change, isAuto);
       }
 
-      // Blank separator
+      // Children (recursive — proper nesting)
+      for (const child of node.children) {
+        renderTreeNode(child, indent + 1, nodePath);
+      }
+    }
+
+    for (const tree of draft.trees) {
+      renderTreeNode(tree, 0, '');
+      // Blank separator between root trees
       lines.push({
         text: '',
-        treeId: node.id,
+        treeId: tree.key,
         slotKey: null,
         changeType: null,
         isAutoSelected: false,
