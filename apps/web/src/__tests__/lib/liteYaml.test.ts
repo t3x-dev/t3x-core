@@ -27,8 +27,8 @@ describe('toDisplayYAML', () => {
     const yaml = toDisplayYAML(sampleContent);
 
     expect(yaml).toContain('decision_pending:');
-    expect(yaml).toContain('  choice: "launch API"');
-    expect(yaml).toContain('  timeline: "Q2 2026"');
+    expect(yaml).toContain('  choice: launch API');
+    expect(yaml).toContain('  timeline: Q2 2026');
     expect(yaml).toContain('target_audience:');
     expect(yaml).toContain('target_audience → decision_pending (depends)');
     // Should NOT contain source, confidence
