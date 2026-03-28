@@ -151,7 +151,7 @@ function PaneContent({
       // Tree type header
       lines.push(
         <YAMLLine key="header" lineNumber={lineNum++} status="modified">
-          <span style={{ color: YAML_COLORS.type, fontWeight: 600 }}>{node!.type}</span>
+          <span style={{ color: YAML_COLORS.type, fontWeight: 600 }}>{node!.key}</span>
           <span style={{ color: YAML_COLORS.bracket }}>:</span>
         </YAMLLine>
       );

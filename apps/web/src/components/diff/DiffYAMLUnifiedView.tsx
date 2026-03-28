@@ -130,7 +130,7 @@ function UnifiedNodeContent({
     const node = aligned.rightNode!;
     lines.push(
       <UnifiedLine key="header" rightNum={rightLineRef.current++} status="added">
-        <span style={{ color: YAML_COLORS.type, fontWeight: 600 }}>{node.type}</span>
+        <span style={{ color: YAML_COLORS.type, fontWeight: 600 }}>{node.key}</span>
         <span style={{ color: YAML_COLORS.bracket }}>:</span>
       </UnifiedLine>
     );
@@ -150,7 +150,7 @@ function UnifiedNodeContent({
     lines.push(
       <UnifiedLine key="header" leftNum={leftLineRef.current++} status="removed">
         <span className="line-through" style={{ color: YAML_COLORS.type, fontWeight: 600 }}>
-          {node.type}
+          {node.key}
         </span>
         <span className="line-through" style={{ color: YAML_COLORS.bracket }}>
           :
@@ -181,7 +181,7 @@ function UnifiedNodeContent({
         rightNum={rightLineRef.current++}
         status="unchanged"
       >
-        <span style={{ color: YAML_COLORS.type, fontWeight: 600 }}>{node.type}</span>
+        <span style={{ color: YAML_COLORS.type, fontWeight: 600 }}>{node.key}</span>
         <span style={{ color: YAML_COLORS.bracket }}>:</span>
       </UnifiedLine>
     );
@@ -217,7 +217,7 @@ function UnifiedNodeContent({
         rightNum={rightLineRef.current++}
         status="unchanged"
       >
-        <span style={{ color: YAML_COLORS.type, fontWeight: 600 }}>{targetNode.type}</span>
+        <span style={{ color: YAML_COLORS.type, fontWeight: 600 }}>{targetNode.key}</span>
         <span style={{ color: YAML_COLORS.bracket }}>:</span>
       </UnifiedLine>
     );

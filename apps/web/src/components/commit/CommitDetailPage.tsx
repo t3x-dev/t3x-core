@@ -21,7 +21,7 @@
  *  └─────────────────────────────────────────────────────────────────┘
  */
 
-import type { Commit } from '@t3x-dev/core';
+import type { WebCommit } from '@/lib/api/commitUnified';
 import {
   ArrowLeft,
   ExternalLink,
@@ -74,9 +74,9 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
   const _notify = useProjectStore((state) => state.notifyCallback);
 
   // ── Data state ────────────────────────────────────
-  const [commit, setCommitLocal] = useState<Commit | null>(null);
+  const [commit, setCommitLocal] = useState<WebCommit | null>(null);
   const [leaves, setLeaves] = useState<Leaf[]>([]);
-  const [_commitHistory, setCommitHistory] = useState<Commit[]>([]);
+  const [_commitHistory, setCommitHistory] = useState<WebCommit[]>([]);
   const [projectName, setProjectName] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -114,7 +114,7 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
         if (projectData?.name) setProjectName(projectData.name);
 
         // Fetch parent commit for diff computation (if single parent)
-        let parentCommit: Commit | null = null;
+        let parentCommit: WebCommit | null = null;
         if (commitData.parents.length === 1) {
           try {
             parentCommit = await getCommitAsNodes(commitData.parents[0]);

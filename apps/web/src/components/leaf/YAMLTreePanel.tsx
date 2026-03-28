@@ -67,13 +67,13 @@ export function YAMLTreePanel({
     const constraint = constraints.find((c) => c.id === highlightedConstraintId);
     if (!constraint) return null;
     if ('source_node' in constraint && constraint.source_node) {
-      // Find  node by type match
+      // Find  node by key match
       const node = content.trees.find(
         (f) =>
-          f.type ===
+          f.key ===
           (constraint as { source_node?: { frame_type?: string } }).source_node?.frame_type
       );
-      return node?.id ?? null;
+      return node?.key ?? null;
     }
     return null;
   }, [highlightedConstraintId, constraints, content.trees]);
@@ -81,7 +81,7 @@ export function YAMLTreePanel({
   const renderNodeActions = useCallback(
     (treeId: string, treeType: string): ReactNode => {
       if (mode === 'generate') {
-        const node = content.trees.find((f) => f.id === treeId);
+        const node = content.trees.find((f) => f.key === treeId);
         const nodeValue = node
           ? Object.entries(node.slots)
               .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`)
@@ -147,7 +147,7 @@ export function YAMLTreePanel({
 
   const getTreeMeta = useCallback(
     (treeId: string) => {
-      const node = content.trees.find((f) => f.id === treeId);
+      const node = content.trees.find((f) => f.key === treeId);
       return node?.confidence != null ? { confidence: node.confidence } : undefined;
     },
     [content.trees]

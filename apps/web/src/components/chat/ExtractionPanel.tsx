@@ -118,12 +118,12 @@ function CommitPreviewSection() {
           </div>
         ) : (
           pendingNodes.map((f) => {
-            const summary = `[${f.type}] ${Object.entries(f.slots)
+            const summary = `[${f.key}] ${Object.entries(f.slots)
               .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`)
               .join('; ')}`;
             return (
               <div
-                key={f.id}
+                key={f.key}
                 className="text-[11px] text-[var(--text-secondary)] rounded px-2 py-1 bg-[var(--hover-bg)]"
               >
                 <span className="text-green-500 mr-1">+</span>

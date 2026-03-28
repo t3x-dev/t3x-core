@@ -56,7 +56,7 @@ export function formatCommitAsMarkdown(commit: ApiCommit): string {
       node.confidence !== undefined && node.confidence < 1
         ? ` *(${(node.confidence * 100).toFixed(0)}%)*`
         : '';
-    lines.push(`- ${node.type}: ${slots}${confidence}`);
+    lines.push(`- ${node.key}: ${slots}${confidence}`);
   }
   lines.push('');
 

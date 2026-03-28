@@ -178,7 +178,7 @@ export function TreeSeparator({
           : 'text-[var(--text-tertiary)]';
 
   const node = aligned.leftNode ?? aligned.rightNode;
-  const treeType = node?.type ?? aligned.treeId;
+  const treeType = node?.key ?? aligned.treeId;
 
   return (
     <div
@@ -215,7 +215,7 @@ export function IdenticalCollapseBar({
   paddingLeft?: string;
 }) {
   if (nodes.length === 0) return null;
-  const names = nodes.map((f) => (f.leftNode ?? f.rightNode)?.type ?? f.treeId).join(', ');
+  const names = nodes.map((f) => (f.leftNode ?? f.rightNode)?.key ?? f.treeId).join(', ');
   return (
     <div
       className="flex items-center gap-[5px] font-mono text-[10px] text-[var(--text-tertiary)] cursor-pointer select-none opacity-50 hover:opacity-80 hover:bg-[var(--hover-bg)]"
