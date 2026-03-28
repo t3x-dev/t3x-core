@@ -1,5 +1,5 @@
 /**
- * Context Builder for T3X V4 Architecture
+ * Context Builder for T3X
  *
  * Constructs LLM memory from commits + pins.
  * This is the core of the new memory system.

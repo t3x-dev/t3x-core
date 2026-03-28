@@ -1,9 +1,6 @@
 /**
  * T3X Database Schema — Leaves, Pins, Contexts, Drafts
  *
- * commits_v4 table is RETIRED (kept for migration reference only).
- * Active commit storage is in schema-commits.ts (commits table).
- *
  * Key tables:
  * - leaves: Application layer (owns constraints, output, validation)
  * - pins: Source selection mechanism
@@ -117,116 +114,6 @@ export type AccountRecord = typeof accounts.$inferSelect;
 export type AccountInsert = typeof accounts.$inferInsert;
 
 // ═══════════════════════════════════════════════════════════════════════════
-// commits_v4: RETIRED — Table definition kept for migration reference only.
-// All production queries now use commits table (schema-commits.ts).
-// DROP TABLE commits_v4 should be run during deployment after data migration.
-// ═══════════════════════════════════════════════════════════════════════════
-
-/** @deprecated Retired — kept for migration tooling reference only */
-export const commitsV4 = pgTable(
-  'commits_v4',
-  {
-    // ─────────────────────────────────────────────────────────────────────────
-    // First-class fields (participate in hash)
-    // ─────────────────────────────────────────────────────────────────────────
-
-    /** Content hash: "sha256:" + hex */
-    hash: text('hash').primaryKey(),
-
-    /** Schema version */
-    schema: text('schema').notNull().default('t3x/commit/v4'),
-
-    /** Parent commit hashes (DAG) */
-    parents: jsonb('parents').notNull().$type<string[]>().default([]),
-
-    /** Author info */
-    author: jsonb('author').notNull().$type<{
-      type: 'human' | 'agent';
-      id?: string;
-      name?: string;
-    }>(),
-
-    /** Commit timestamp */
-    committedAt: timestamp('committed_at', { withTimezone: true }).notNull(),
-
-    /**
-     * Content: { trees: TreeNode[], relations: Relation[] }
-     * NOTE: No constraints here - they belong to leaves now
-     */
-    content: jsonb('content').notNull(),
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // Second-class fields (NOT in hash)
-    // ─────────────────────────────────────────────────────────────────────────
-
-    /** Project ID */
-    projectId: text('project_id').references(() => projects.projectId, {
-      onDelete: 'cascade',
-    }),
-
-    /** Commit message */
-    message: text('message'),
-
-    /** Branch name */
-    branch: text('branch'),
-
-    /**
-     * Source references (frozen at commit time)
-     * Records which pinned items contributed to this commit
-     */
-    sourceRefs:
-      jsonb('source_refs').$type<
-        Array<{
-          type: 'conversation' | 'leaf';
-          id: string;
-          title?: string;
-          assertion_lessons?: string[];
-        }>
-      >(),
-
-    /** Merkle tree root hash of commit nodes */
-    merkleRoot: text('merkle_root'),
-
-    /** Merge summary statistics (only present on merge commits) */
-    mergeSummary: jsonb('merge_summary').$type<{
-      kept_identical: number;
-      resolved_conflicts: number;
-      kept_from_source: number;
-      kept_from_target: number;
-      discarded: number;
-      total_nodes: number;
-      release_note?: {
-        title: string;
-        timestamp: string;
-        source_branch: string;
-        target_branch: string;
-        summary: string;
-        sections: Array<{ heading: string; items: string[] }>;
-      };
-    }>(),
-
-    /**
-     * Semantic content: { trees: Tree[], relations: Relation[] }
-     * Nullable — old commits have null.
-     * Second-class field: does NOT participate in hash calculation.
-     */
-    semantic: jsonb('semantic'),
-
-    /** Canvas position */
-    positionX: real('position_x'),
-    positionY: real('position_y'),
-
-    /** Record creation time */
-    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  },
-  (table) => ({
-    projectIdx: index('idx_commits_v4_project').on(table.projectId),
-    branchIdx: index('idx_commits_v4_branch').on(table.branch),
-    createdAtIdx: index('idx_commits_v4_created_at').on(table.createdAt),
-  })
-);
-
-// ═══════════════════════════════════════════════════════════════════════════
 // leaves: Application Layer (Owns Constraints)
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -250,7 +137,7 @@ export const leaves = pgTable(
      * The commit this leaf uses for knowledge.
      *
      * Fix 14 (no-fk note): No foreign key is declared here intentionally.
-     * Leaves can reference commits from both commits_v4 AND commits_v3 (legacy),
+     * Leaves can reference commits from the commits table,
      * so a single FK to one table would be incorrect. Application-level
      * validation (in the leaves query layer) is responsible for confirming that
      * the referenced commit exists before creating or updating a leaf.

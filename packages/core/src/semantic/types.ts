@@ -36,9 +36,8 @@ export interface TreeNode {
 
 /**
  * Semantic relation types for cross-tree connections.
- * Note: packages/core/src/types/index.ts has a separate RELATION_TYPES for V4 app-layer.
- * This constant is for the semantic layer only. The V4 types/index.ts version should be
- * deleted or updated as part of this PR to avoid naming collisions at the package export level.
+ * Note: packages/core/src/types/index.ts has a separate RELATION_TYPES for the app layer.
+ * This constant is for the semantic layer only.
  */
 export const RELATION_TYPES = [
   'causes',

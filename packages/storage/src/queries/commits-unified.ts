@@ -1,7 +1,7 @@
 /**
  * Unified Commit Query Adapter
  *
- * Delegates directly to frame-based commit queries. V4 table is retired.
+ * Delegates directly to commit queries.
  * Kept as a thin wrapper for backward compatibility of callers.
  */
 

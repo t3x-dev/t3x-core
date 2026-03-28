@@ -4,7 +4,7 @@
  * CRUD operations for leaves table using Drizzle ORM.
  * Leaves own constraints, output, and validation results.
  *
- * Key V4 insight: Same commit can have multiple leaves with different constraints.
+ * Key insight: Same commit can have multiple leaves with different constraints.
  *
  * @see docs/specification/semantic-layer-architecture.md
  */

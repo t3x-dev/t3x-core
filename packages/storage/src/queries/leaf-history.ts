@@ -4,7 +4,7 @@
  * CRUD operations for leaf_history table using Drizzle ORM.
  * Stores generation history for each leaf.
  *
- * @see packages/core/src/types/v4/index.ts for LeafHistory type
+ * @see packages/core/src/types/index.ts for LeafHistory type
  */
 
 import type { CreateLeafHistoryInput, LeafConfig, LeafHistory } from '@t3x-dev/core';

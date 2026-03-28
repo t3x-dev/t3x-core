@@ -226,7 +226,7 @@ export {
   insertLeafOutputEdit,
   type ListLeafOutputEditsOptions,
 } from './leaf-output-edits';
-// Leaves (V4 - owns constraints, output, validation)
+// Leaves (owns constraints, output, validation)
 export {
   createLeaf,
   deleteLeaf,
@@ -281,7 +281,7 @@ export {
 } from './notifications';
 // Cursor Pagination
 export { type CursorPage, decodeCursor, encodeCursor, toCursorPage } from './pagination';
-// Pins (V4 - source selection for commits and context)
+// Pins (source selection for commits and context)
 export {
   createPin,
   deletePin,
