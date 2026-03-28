@@ -204,7 +204,7 @@ export function ChatWorkspace({
         });
     };
 
-    // Load existing semantic draft + full delta history + topics for this conversation
+    // Load existing semantic draft + full yops history + topics for this conversation
     if (convId && convId !== 'new') {
       Promise.all([getSemanticDraft(convId), listYOpsLog(convId), listTopics(convId)])
         .then(([draft, yopsEntries, topicsList]) => {
