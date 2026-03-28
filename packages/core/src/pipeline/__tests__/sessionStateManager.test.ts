@@ -53,7 +53,7 @@ describe('computeSessionContext', () => {
     expect(ctx.turnCount).toBe(8);
   });
 
-  it('returns 0 extraction count for empty delta log', () => {
+  it('returns 0 extraction count for empty yops log', () => {
     const ctx = computeSessionContext([], 0, 3);
     expect(ctx.extractionCount).toBe(0);
     expect(ctx.lastExtractionTurnCount).toBe(0);

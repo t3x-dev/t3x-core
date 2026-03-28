@@ -85,6 +85,8 @@ export type {
   ValidationResult,
   ValidationWarning,
   WordDiffFn,
+  YOpsLogEntry,
+  YOpsSource,
 } from './types';
 export { RELATION_TYPES } from './types';
 

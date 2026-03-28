@@ -4,7 +4,7 @@
  * Decides whether the extraction pipeline should run, based on conversation state.
  * Pure code, zero LLM, ~1ms.
  *
- * SessionContext is computed from existing data (delta_log + turn count) on every
+ * SessionContext is computed from existing data (yops_log + turn count) on every
  * request — no separate storage needed.
  *
  * @see docs/hlq_docs/2026-03-20-agentic-pipeline-8step-design.md §4.1
@@ -39,19 +39,19 @@ export function decideAction(ctx: SessionContext): PipelineDecision {
 }
 
 /**
- * Compute SessionContext from delta log metadata and turn count.
+ * Compute SessionContext from yops log metadata and turn count.
  *
- * This function accepts minimal inputs (not DeltaLogRecord) so that
+ * This function accepts minimal inputs (not YOpsLogRecord) so that
  * @t3x-dev/core has no dependency on @t3x-dev/storage.
  *
  * The API layer is responsible for extracting these values from DB records.
  */
 export function computeSessionContext(
-  deltaLogSources: string[],
+  yopsLogSources: string[],
   lastExtractionTurnCount: number,
   turnCount: number
 ): SessionContext {
-  const extractionCount = deltaLogSources.filter(
+  const extractionCount = yopsLogSources.filter(
     (s) => s === 'pipeline' || s === 'llm_extraction'
   ).length;
 

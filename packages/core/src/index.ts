@@ -369,9 +369,9 @@ export type {
   CoverageResult,
   /** @deprecated Use YOps operations instead of Delta */
   Delta,
-  /** @deprecated */
+  /** @deprecated Use YOpsLogEntry instead */
   DeltaLogEntry,
-  /** @deprecated */
+  /** @deprecated Use YOpsSource instead */
   DeltaSource,
   DimensionResult,
   GateDimension,
@@ -394,6 +394,8 @@ export type {
   ValidationResult as SemanticValidationResult,
   ValidationWarning as SemanticValidationWarning,
   WordDiffFn,
+  YOpsLogEntry,
+  YOpsSource,
 } from './semantic';
 
 // Re-export RelationType from semantic (tree-primary relation types)

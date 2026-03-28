@@ -76,15 +76,15 @@ export interface Delta {
   remove_relations?: Relation[];
 }
 
-// ── Delta Log ──
+// ── YOps Log ──
 
-export type DeltaSource = 'pipeline' | 'manual' | 'answer' | 'collapse' | 'commit_marker' | 'compress';
+export type YOpsSource = 'pipeline' | 'manual' | 'answer' | 'collapse' | 'commit_marker' | 'compress';
 
-export interface DeltaLogEntry {
+export interface YOpsLogEntry {
   id: string;
-  source: DeltaSource;
+  source: YOpsSource;
   turn_hash?: string;
-  delta: Delta;
+  yops: unknown;
   created_at: string;
   commit_hash?: string;
   model?: string;
@@ -93,6 +93,11 @@ export interface DeltaLogEntry {
   gate_result?: unknown;
   metadata?: Record<string, unknown>;
 }
+
+/** @deprecated Use YOpsSource instead */
+export type DeltaSource = YOpsSource;
+/** @deprecated Use YOpsLogEntry instead */
+export type DeltaLogEntry = YOpsLogEntry;
 
 // ── Validation ──
 
