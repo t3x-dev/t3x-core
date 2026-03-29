@@ -110,10 +110,11 @@ interface ExtractionPanelState {
   // Hover linking between YAML ↔ chat messages
   hoveredNodeId: string | null; // YAML row hovered → highlight source turn
   hoveredSlotKey: string | null; // Specific slot hovered (for character-level highlight)
-  hoveredTurnHash: string | null; // Chat message hovered → highlight YAML rows
-  hoveredCharOffset: number | null; // Character offset within hovered turn (for slot-level reverse highlight)
+  hoveredTurnIndex: number | null; // Chat message hovered → highlight YAML rows (1-based turn index)
+  scrollToCenter: boolean; // true when click-triggered (scroll center), false for hover (nearest)
+  hoveredFromChat: boolean; // true when hover/click originates from chat side
   setHoveredNodeId: (id: string | null, slotKey?: string | null) => void;
-  setHoveredTurn: (hash: string | null, charOffset?: number | null) => void;
+  setHoveredTurnIndex: (index: number | null) => void;
 
   // Manual edit tracking
   manualEditedNodeIds: Set<string>;
@@ -167,8 +168,9 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
   activeTopicId: null,
   hoveredNodeId: null,
   hoveredSlotKey: null,
-  hoveredTurnHash: null,
-  hoveredCharOffset: null,
+  hoveredTurnIndex: null,
+  scrollToCenter: false,
+  hoveredFromChat: false,
 
   // Manual edit tracking
   manualEditedNodeIds: new Set(),
@@ -270,11 +272,11 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
     })),
   unconfirmSlot: (treeId, slotKey) =>
     set((s) => {
-      const frameSlots = { ...s.confirmedSlotKeys[treeId] };
-      delete frameSlots[slotKey];
-      const hasRemainingSlots = Object.keys(frameSlots).length > 0;
+      const nodeSlots = { ...s.confirmedSlotKeys[treeId] };
+      delete nodeSlots[slotKey];
+      const hasRemainingSlots = Object.keys(nodeSlots).length > 0;
       return {
-        confirmedSlotKeys: { ...s.confirmedSlotKeys, [treeId]: frameSlots },
+        confirmedSlotKeys: { ...s.confirmedSlotKeys, [treeId]: nodeSlots },
         confirmedNodeIds: hasRemainingSlots ? s.confirmedNodeIds : s.confirmedNodeIds,
       };
     }),
@@ -295,20 +297,20 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
     if (hoverNodeTimer) clearTimeout(hoverNodeTimer);
     if (id === null) {
       // Clear immediately on mouse leave for snappy feel
-      set({ hoveredNodeId: null, hoveredSlotKey: null });
+      set({ hoveredNodeId: null, hoveredSlotKey: null, scrollToCenter: false, hoveredFromChat: false });
     } else {
       hoverNodeTimer = setTimeout(() => {
         set({ hoveredNodeId: id, hoveredSlotKey: slotKey ?? null });
       }, HOVER_DEBOUNCE_MS);
     }
   },
-  setHoveredTurn: (hash, charOffset) => {
+  setHoveredTurnIndex: (index) => {
     if (hoverTurnTimer) clearTimeout(hoverTurnTimer);
-    if (hash === null) {
-      set({ hoveredTurnHash: null, hoveredCharOffset: null });
+    if (index === null) {
+      set({ hoveredTurnIndex: null });
     } else {
       hoverTurnTimer = setTimeout(() => {
-        set({ hoveredTurnHash: hash, hoveredCharOffset: charOffset ?? null });
+        set({ hoveredTurnIndex: index });
       }, HOVER_DEBOUNCE_MS);
     }
   },

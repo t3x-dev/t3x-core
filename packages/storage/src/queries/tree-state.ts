@@ -28,6 +28,7 @@ export interface UpsertTreeInput {
   status?: string;
   confidence?: number;
   source: string;
+  slotQuotes?: unknown;
   slotSources?: unknown;
   manualEdited?: boolean;
 }
@@ -54,6 +55,7 @@ export async function upsertTree(db: AnyDB, input: UpsertTreeInput): Promise<Tre
     status: input.status ?? 'active',
     confidence: input.confidence ?? null,
     source: input.source,
+    slotQuotes: input.slotQuotes ?? null,
     slotSources: input.slotSources ?? null,
     manualEdited: input.manualEdited ?? false,
   };
@@ -69,6 +71,7 @@ export async function upsertTree(db: AnyDB, input: UpsertTreeInput): Promise<Tre
         status: input.status ?? 'active',
         confidence: input.confidence ?? null,
         source: input.source,
+        slotQuotes: input.slotQuotes ?? null,
         slotSources: input.slotSources ?? null,
         manualEdited: input.manualEdited ?? false,
         updatedAt: new Date(),

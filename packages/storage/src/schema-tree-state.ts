@@ -36,6 +36,7 @@ export const trees = pgTable(
     status: text('status').notNull().default('active'),
     confidence: real('confidence'),
     source: text('source').notNull(),
+    slotQuotes: jsonb('slot_quotes'),
     slotSources: jsonb('slot_sources'),
     manualEdited: boolean('manual_edited').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

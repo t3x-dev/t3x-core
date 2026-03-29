@@ -345,10 +345,10 @@ yopsLogRoutes.openapi(getDraftRoute, async (c) => {
       );
     }
 
-    // Read from trees table; fallback to yops replay for unmigrated conversations
+    // Read from trees table (source-of-truth with full metadata)
     let draft = await readDraftFromTrees(db, conversationId, topic_id);
     if (draft.trees.length === 0) {
-      // Fallback: replay yops (pre-migration conversations)
+      // Fallback: replay yops log for legacy conversations without trees
       const records = topic_id
         ? await listYOpsLogByTopic(db, conversationId, topic_id)
         : await listYOpsLogByConversation(db, conversationId);

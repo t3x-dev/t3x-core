@@ -900,6 +900,7 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
       status TEXT NOT NULL DEFAULT 'active',
       confidence REAL,
       source TEXT NOT NULL,
+      slot_quotes JSONB,
       slot_sources JSONB,
       manual_edited BOOLEAN NOT NULL DEFAULT FALSE,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -968,6 +969,11 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
       END IF;
     END
     $$;
+  `);
+
+  // ── Schema v34: Add slot_quotes column to trees table ──
+  await sql.unsafe(`
+    ALTER TABLE trees ADD COLUMN IF NOT EXISTS slot_quotes JSONB;
   `);
 
   // Record schema version so subsequent startups skip the init SQL.

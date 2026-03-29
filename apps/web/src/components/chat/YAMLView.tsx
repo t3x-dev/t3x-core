@@ -2,9 +2,10 @@
 
 import type { TreeNode, SlotValue } from '@t3x-dev/core';
 import { Loader2 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { nestNodes } from '@/lib/treeNesting';
 import { parseDisplayYAML, toDisplayYAML } from '@/lib/liteYaml';
+import { traceChatToYaml, traceYamlToChat } from '@/lib/hoverTrace';
 import { RELEVANCE_THRESHOLD, type RelevanceContext, relevanceScore } from '@/lib/relevanceScore';
 import { useExtractionPanelStore } from '@/store/extractionPanelStore';
 import { TreeHistoryPopover } from './TreeHistoryPopover';
@@ -184,10 +185,32 @@ export function YAMLView() {
   const llmHighlightedNodeIds = useExtractionPanelStore((s) => s.llmHighlightedNodeIds);
   const isExtracting = useExtractionPanelStore((s) => s.isExtracting);
   const setHoveredNodeId = useExtractionPanelStore((s) => s.setHoveredNodeId);
-  const hoveredTurnHash = useExtractionPanelStore((s) => s.hoveredTurnHash);
-  const hoveredCharOffset = useExtractionPanelStore((s) => s.hoveredCharOffset);
+  const hoveredTurnIndex = useExtractionPanelStore((s) => s.hoveredTurnIndex);
   const gateIssues = useExtractionPanelStore((s) => s.gateIssues);
   const manualEditedNodeIds = useExtractionPanelStore((s) => s.manualEditedNodeIds);
+  const hoveredNodeId = useExtractionPanelStore((s) => s.hoveredNodeId);
+  const hoveredFromChat = useExtractionPanelStore((s) => s.hoveredFromChat);
+  const scrollToCenter = useExtractionPanelStore((s) => s.scrollToCenter);
+
+  // Track DOM refs for each YAML line by treeId for Chat→YAML scrolling
+  const lineRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+
+  // When a chat span is clicked/hovered (hoveredFromChat=true), scroll the YAML line into view
+  useEffect(() => {
+    if (hoveredFromChat && hoveredNodeId) {
+      const el = lineRefs.current.get(hoveredNodeId);
+      if (el) {
+        el.scrollIntoView({
+          behavior: 'smooth',
+          block: scrollToCenter ? 'center' : 'nearest',
+        });
+        // Reset scrollToCenter after scroll
+        if (scrollToCenter) {
+          useExtractionPanelStore.setState({ scrollToCenter: false });
+        }
+      }
+    }
+  }, [hoveredFromChat, hoveredNodeId, scrollToCenter]);
 
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState('');
@@ -322,6 +345,23 @@ export function YAMLView() {
     return lines;
   }, [sortedNodes, changeMap, relevanceCtx, expandedCollapsed]);
 
+  // Reverse highlight: when hovering a chat message, which YAML paths light up?
+  const reverseHighlightPaths = useMemo(() => {
+    if (hoveredTurnIndex == null) return new Set<string>();
+    const paths = traceChatToYaml(draft, hoveredTurnIndex);
+    // Also include child paths for highlighting
+    const expanded = new Set<string>();
+    for (const p of paths) {
+      expanded.add(p);
+      // Add parent paths so the header lights up too
+      const segments = p.split('/');
+      for (let i = 1; i < segments.length; i++) {
+        expanded.add(segments.slice(0, i).join('/'));
+      }
+    }
+    return expanded;
+  }, [hoveredTurnIndex, draft]);
+
   if (draft.trees.length === 0 && !isEditing) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2">
@@ -399,47 +439,27 @@ export function YAMLView() {
               ? !!confirmedNodeIds[line.treeId]
               : !!confirmedSlotKeys[line.treeId]?.[line.slotKey!];
 
-            // Check if this row is highlighted by reverse hover (chat → YAML)
-            // Find the TreeNode for this line by walking draft.trees
-            const findTreeNodeSource = (path: string): string | undefined => {
-              const segments = path.split('/');
-              let node: import('@t3x-dev/core').TreeNode | undefined;
-              for (const tree of draft.trees) {
-                if (tree.key === segments[0]) {
-                  node = tree;
-                  for (let i = 1; i < segments.length && node; i++) {
-                    node = node.children.find((c) => c.key === segments[i]);
-                  }
-                  break;
-                }
-              }
-              return node?.source ?? undefined;
-            };
-            const lineNodeSource = findTreeNodeSource(line.treeId);
-            const isReverseHighlighted = (() => {
-              if (!hoveredTurnHash || !lineNodeSource) return false;
-              // Match by turn hash — hoveredTurnHash is "sha256:..." and source is "T1" or "T1:abcdef"
-              if (lineNodeSource.includes(':')) {
-                const hashPart = lineNodeSource.split(':')[1];
-                return hoveredTurnHash.includes(hashPart);
-              }
-              return false;
-            })();
+            // Check if this row is highlighted by reverse hover (chat → YAML via turn hover)
+            const isReverseHighlighted = reverseHighlightPaths.has(line.treeId);
+            // Check if this row is highlighted from chat source-map interaction (purple)
+            const isChatHighlighted = hoveredFromChat && hoveredNodeId === line.treeId;
 
             // Collapsed trees get distinct grey background
             const collapsedBg = 'rgba(128, 128, 128, 0.1)';
 
-            // Background: collapsed > reverse-highlight > confirmed > auto-selected > transparent
+            // Background priority: collapsed > chat-highlight (purple) > reverse-highlight (blue) > confirmed > auto-selected > transparent
             const bg =
               line.isCollapsed && line.slotKey === null
                 ? collapsedBg
-                : isReverseHighlighted
-                  ? 'rgba(96, 165, 250, 0.15)'
-                  : isConfirmed
-                    ? 'rgba(74, 222, 128, 0.1)'
-                    : line.isAutoSelected
-                      ? 'rgba(96, 165, 250, 0.06)'
-                      : 'transparent';
+                : isChatHighlighted
+                  ? 'rgba(139, 92, 246, 0.15)'
+                  : isReverseHighlighted
+                    ? 'rgba(96, 165, 250, 0.15)'
+                    : isConfirmed
+                      ? 'rgba(74, 222, 128, 0.1)'
+                      : line.isAutoSelected
+                        ? 'rgba(96, 165, 250, 0.06)'
+                        : 'transparent';
 
             const handleCheck = () => {
               // Collapsed tree header — toggle expand
@@ -461,8 +481,19 @@ export function YAMLView() {
                 key={i}
                 className="group/yaml-line"
                 data-tree-id={isNodeLine ? line.treeId : undefined}
+                ref={(el) => {
+                  if (el) lineRefs.current.set(line.treeId, el);
+                }}
                 onMouseEnter={() => setHoveredNodeId(line.treeId, line.slotKey)}
                 onMouseLeave={() => setHoveredNodeId(null)}
+                onClick={() => {
+                  // Click YAML slot → scroll source chat message into center view
+                  const trace = traceYamlToChat(draft, line.treeId, line.slotKey);
+                  if (trace.sourceTurnIndex != null) {
+                    useExtractionPanelStore.setState({ scrollToCenter: true });
+                    setHoveredNodeId(line.treeId, line.slotKey);
+                  }
+                }}
                 title={
                   isNodeLine && gateIssues[line.treeId]?.length
                     ? gateIssues[line.treeId]

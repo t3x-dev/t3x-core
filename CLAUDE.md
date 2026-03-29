@@ -579,6 +579,17 @@ Before writing code, must first answer: Does the project already have something 
 | Tests can't find module | Dependency packages not built first | Run `pnpm build:core && pnpm build:storage` first |
 | Tailwind styles not working | Global styles in `globals.css` (e.g., `button { background: none }`) not in `@layer`, takes precedence over Tailwind utility classes | Global reset styles must be in `@layer base`, or remove conflicting properties |
 
+## Bug Fixing Principles
+
+**NEVER glue-fix bugs.** Always find the root cause or architectural issue. A patch that works around missing data, wrong types, or broken contracts is NOT a fix — it hides the real problem and creates tech debt.
+
+Priority order when something is broken:
+1. **Find the root cause** — trace the data flow end-to-end, identify WHERE it breaks and WHY
+2. **Fix the architecture** — if the schema is wrong, fix the schema. If the data isn't persisted, fix the persistence layer. If a type is missing, add it to the source of truth.
+3. **Remove retired/deprecated code immediately** — dead code, deprecated aliases, legacy types that should have been removed are HIGHER PRIORITY than fixing new bugs. They cause confusion and mask real issues.
+4. **Never patch the read path** to work around write-path bugs — fix the write path
+5. **Never add compatibility shims** when you can fix the source — if the database doesn't store a field, add the column, don't reconstruct it at query time
+
 ## Prohibited Actions
 
 - **Don't commit without asking**: Always ask the user for confirmation before running `git commit` or `git push`
@@ -589,6 +600,7 @@ Before writing code, must first answer: Does the project already have something 
 - **Don't assume architecture**: API and WebUI are separated after 2025-12 migration
 - **Don't rush to modify**: Read code first, understand context, confirm impact scope
 - **Don't skip verification**: Must run related tests after changes
+- **Don't glue-fix**: Never patch symptoms — find and fix root causes
 
 ## Commit Message Standards
 
