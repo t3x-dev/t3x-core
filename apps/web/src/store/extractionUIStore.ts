@@ -13,10 +13,13 @@ let hoverNodeTimer: ReturnType<typeof setTimeout> | null = null;
 let hoverTurnTimer: ReturnType<typeof setTimeout> | null = null;
 const HOVER_DEBOUNCE_MS = 60;
 
-type PanelMode = 'collapsed' | 'default' | 'preview';
+type PanelMode = 'collapsed' | 'default';
 type ActiveView = 'graph' | 'yaml';
 
+export type ExtractionPhase = 'idle' | 'yops' | 'triage' | 'review';
+
 interface ExtractionUIState {
+  phase: ExtractionPhase;
   panelMode: PanelMode;
   activeView: ActiveView;
 
@@ -73,11 +76,13 @@ interface ExtractionUIState {
       currentValue?: unknown;
     }>
   ) => void;
+  setPhase: (phase: ExtractionPhase) => void;
   setFocusIntent: (enabled: boolean) => void;
   setLlmHighlightedNodeIds: (ids: string[]) => void;
 }
 
 export const useExtractionUIStore = create<ExtractionUIState>((set, get) => ({
+  phase: 'idle',
   panelMode: 'collapsed',
   activeView: 'graph',
   hoveredNodeId: null,
@@ -93,6 +98,7 @@ export const useExtractionUIStore = create<ExtractionUIState>((set, get) => ({
   driftChoices: [],
   advisoryQuestions: [],
 
+  setPhase: (phase) => set({ phase }),
   setPanelMode: (mode) => set({ panelMode: mode }),
   setActiveView: (view) => set({ activeView: view }),
 
