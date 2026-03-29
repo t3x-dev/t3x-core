@@ -140,6 +140,16 @@ export function useExtractionStream(conversationId: string | undefined, turnsSav
               break;
 
             case 'done': {
+              // Wait for YOp buffer to fully drain so animations finish before phase change
+              await new Promise<void>((resolve) => {
+                const check = setInterval(() => {
+                  if (yopBufferRef.current.length === 0) {
+                    clearInterval(check);
+                    resolve();
+                  }
+                }, 50);
+              });
+
               const snapshot = event.data.snapshot as any;
 
               if (snapshot?.trees?.length > 0) {
