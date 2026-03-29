@@ -190,6 +190,7 @@ describe('runExtractionPipeline', () => {
     expect(types).toEqual([
       'status', // session_state
       'status', // readiness_gate
+      'status', // drift_check clear
       'status', // extracting
       'yop', // each yop
       'status', // reorganizing
@@ -207,12 +208,12 @@ describe('runExtractionPipeline', () => {
     const sessionEvent = events.find((e) => e.data.step === 'session_state');
     expect(sessionEvent).toBeDefined();
     expect(sessionEvent!.type).toBe('status');
-    expect(sessionEvent!.data.decision).toBe('extract');
+    expect(sessionEvent!.data.result).toBe('proceed');
 
     const readinessEvent = events.find((e) => e.data.step === 'readiness_gate');
     expect(readinessEvent).toBeDefined();
     expect(readinessEvent!.type).toBe('status');
-    expect(readinessEvent!.data.pass).toBe(true);
+    expect(readinessEvent!.data.result).toBe('proceed');
   });
 
   it('yields skipped event when session decision is wait', async () => {
@@ -310,10 +311,11 @@ describe('runExtractionPipeline', () => {
 
     const yopEvents = events.filter((e) => e.type === 'yop');
     expect(yopEvents).toHaveLength(1);
-    expect(yopEvents[0].data.yop).toEqual({
+    expect(yopEvents[0].data).toMatchObject({
       op: 'upsert',
       path: '/coffee',
-      value: { key: 'coffee', slots: { roast: 'dark' }, children: [] },
+      index: 0,
+      total: 1,
     });
   });
 

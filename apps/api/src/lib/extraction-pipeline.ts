@@ -80,6 +80,11 @@ export interface ExtractionPipelineParams {
 // Pipeline Generator
 // ═══════════════════════════════════════════════════════════════════════════
 
+/**
+ * IMPORTANT: This function does NOT perform authorization checks.
+ * Callers MUST verify project access before invoking this generator
+ * (e.g., via assertProjectAccess in HTTP route handlers).
+ */
 export async function* runExtractionPipeline(
   params: ExtractionPipelineParams
 ): AsyncGenerator<PipelineEvent> {
@@ -184,7 +189,7 @@ export async function* runExtractionPipeline(
 
       yield {
         type: 'status',
-        data: { step: 'session_state', decision },
+        data: { step: 'session_state', result: decision === 'extract' ? 'proceed' : decision },
       };
 
       if (decision === 'wait') {
@@ -207,7 +212,7 @@ export async function* runExtractionPipeline(
 
       yield {
         type: 'status',
-        data: { step: 'readiness_gate', pass: readiness.pass, reason: readiness.reason },
+        data: { step: 'readiness_gate', result: readiness.pass ? 'proceed' : 'blocked', reason: readiness.reason },
       };
 
       if (!readiness.pass) {
@@ -274,6 +279,9 @@ export async function* runExtractionPipeline(
       }
     }
 
+    // Drift check passed (or skipped) — signal to client
+    yield { type: 'status', data: { step: 'drift_check', result: 'clear' } };
+
     // ── Step 4: Extractor — LLM extraction via provider registry ──
     yield { type: 'status', data: { step: 'extracting' } };
 
@@ -327,9 +335,9 @@ export async function* runExtractionPipeline(
       });
     }
 
-    // Yield each YOp from the extraction
-    for (const yop of result.yops) {
-      yield { type: 'yop', data: { yop } };
+    // Yield each YOp from the extraction (with index/total for client-side progress)
+    for (let i = 0; i < result.yops.length; i++) {
+      yield { type: 'yop', data: { ...result.yops[i], index: i, total: result.yops.length } };
     }
 
     // ── Step 5: MeaningPipeline — multi-agent post-processing ──
