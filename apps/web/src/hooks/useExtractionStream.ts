@@ -53,12 +53,9 @@ export function useExtractionStream(conversationId: string | undefined, turnsSav
         yopTimerRef.current = undefined;
         return;
       }
-      // Push to yopsHistory for YOpsFeed display
+      // Push to feedYops for YOpsFeed display (simple append)
       useExtractionStore.setState((s) => ({
-        yopsHistory: [[...(s.yopsHistory[0] ?? []), yop as any], ...s.yopsHistory.slice(1)].slice(
-          0,
-          3
-        ),
+        feedYops: [...s.feedYops, yop],
       }));
 
       if (useExtractionUIStore.getState().panelMode === 'collapsed') {
@@ -75,7 +72,7 @@ export function useExtractionStream(conversationId: string | undefined, turnsSav
 
       useExtractionStore.getState().setExtracting(true);
       useExtractionUIStore.getState().setPhase('yops');
-      useExtractionStore.setState({ yopsHistory: [] });
+      useExtractionStore.setState({ feedYops: [] });
       yopBufferRef.current = [];
 
       try {

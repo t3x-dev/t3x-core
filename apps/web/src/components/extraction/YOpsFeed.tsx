@@ -185,17 +185,17 @@ const iconFgColors: Record<string, string> = {
 /* ── Component ── */
 
 export function YOpsFeed() {
-  const yopsHistory = useExtractionStore((s) => s.yopsHistory);
+  const feedYops = useExtractionStore((s) => s.feedYops);
   const isExtracting = useExtractionStore((s) => s.isExtracting);
   const phase = useExtractionUIStore((s) => s.phase);
   const setViewTab = useExtractionUIStore((s) => s.setViewTab);
 
-  const latestBatch: any[] = yopsHistory[0] ?? [];
-  const count = latestBatch.length;
+  const count = feedYops.length;
 
   // Use `total` from the first item's SSE envelope if available, else fall back to count
+  const firstYop = feedYops[0] as any;
   const total =
-    count > 0 && typeof latestBatch[0]?.total === 'number' ? latestBatch[0].total : count;
+    count > 0 && typeof firstYop?.total === 'number' ? firstYop.total : count;
 
   const isDone = !isExtracting && phase !== 'yops';
   const hasTriageData = phase === 'triage' || phase === 'review';
@@ -259,7 +259,7 @@ export function YOpsFeed() {
     <div className="flex flex-col h-full">
       {/* Feed items */}
       <div className="flex-1 overflow-auto" style={{ padding: '6px 0' }}>
-        {latestBatch.map((yop, idx) => {
+        {feedYops.map((yop: any, idx: number) => {
           const { type, data } = getYOpType(yop);
           const icon = yopIcon(type);
           const isDim = idx < count - 3;

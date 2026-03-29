@@ -25,6 +25,9 @@ interface ExtractionState {
   yopsHistory: TreeChange[][];
   removedNodes: TreeNode[];
 
+  /** Raw YOp objects for the current extraction's feed display */
+  feedYops: unknown[];
+
   // Extraction lifecycle
   isExtracting: boolean;
   conversationId: string | null;
@@ -56,6 +59,7 @@ export const useExtractionStore = create<ExtractionState>((set, get) => ({
   yopsLog: [],
   yopsHistory: [],
   removedNodes: [],
+  feedYops: [],
   isExtracting: false,
   conversationId: null,
   topics: [],
