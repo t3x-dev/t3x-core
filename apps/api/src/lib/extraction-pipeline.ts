@@ -336,8 +336,35 @@ export async function* runExtractionPipeline(
     }
 
     // Yield each YOp from the extraction (with index/total for client-side progress)
-    for (let i = 0; i < result.yops.length; i++) {
-      yield { type: 'yop', data: { ...result.yops[i], index: i, total: result.yops.length } };
+    console.log(`[extraction-pipeline] result.yops.length = ${result.yops.length}, snapshot.trees = ${result.snapshot.trees.length}`);
+    if (result.yops.length === 0 && result.snapshot.trees.length > 0) {
+      // First-time tree extraction or restructure: synthesize add YOps from snapshot nodes
+      // so the YOpsFeed has items to display
+      const synthYops = result.snapshot.trees.flatMap((tree) => {
+        const yops: Record<string, unknown>[] = [
+          { add: { parent: '', node: { [tree.key]: Object.fromEntries(Object.entries(tree.slots).slice(0, 3)) }, source: {}, from: tree.source ?? 'T1' }, index: 0, total: 0 },
+        ];
+        for (const child of tree.children) {
+          yops.push({
+            add: { parent: tree.key, node: { [child.key]: Object.fromEntries(Object.entries(child.slots).slice(0, 3)) }, source: {}, from: child.source ?? 'T1' },
+            index: 0, total: 0,
+          });
+        }
+        return yops;
+      });
+      // Set correct index/total
+      for (let i = 0; i < synthYops.length; i++) {
+        synthYops[i].index = i;
+        synthYops[i].total = synthYops.length;
+      }
+      console.log(`[extraction-pipeline] Synthesized ${synthYops.length} YOps from snapshot`);
+      for (let i = 0; i < synthYops.length; i++) {
+        yield { type: 'yop' as const, data: synthYops[i] };
+      }
+    } else {
+      for (let i = 0; i < result.yops.length; i++) {
+        yield { type: 'yop' as const, data: { ...result.yops[i], index: i, total: result.yops.length } };
+      }
     }
 
     // ── Step 5: MeaningPipeline — multi-agent post-processing ──
