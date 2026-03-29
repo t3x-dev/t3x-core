@@ -80,7 +80,7 @@ ${tier3KeyDistinction(style.tier3)}
 - Extract facts and structured information from BOTH user messages AND assistant responses
 - When the assistant provides categories, lists, explanations, or structured answers, extract them
 - User's question defines the TOPIC; assistant's response provides the CONTENT
-${style.tier3 === 'extract' ? '- Even if the user hasn\'t confirmed the information yet, extract it at Tier 3 confidence (0.4-0.5)' : '- Only extract information the user has explicitly stated or confirmed'}
+${style.tier3 === 'extract' ? '- The assistant\'s answer to a user question is TIER 3 (0.7-0.85) \u2014 extract ALL of it comprehensively\n- Unsolicited AI tips/suggestions are TIER 4 (0.4-0.5) \u2014 still extract but mark lower confidence' : '- Only extract information the user has explicitly stated or confirmed'}
 - The goal: after extraction, the tree should capture ALL knowledge from the conversation
 
 ## CRITICAL: from tag and source quote accuracy
@@ -99,7 +99,8 @@ ${style.tier3 === 'extract' ? '- Even if the user hasn\'t confirmed the informat
 ## slot_quotes Hard Binding (MANDATORY)
 Every add and set operation MUST include source with VERBATIM text from the conversation.
 ${quoteLengthSegment(style.quote_length)}
-- If you cannot quote exact source text for a slot → DO NOT create that slot
+- If you cannot quote exact source text for a slot, use a representative fragment from the relevant turn
+- Prefer longer, contextual quotes over dropping slots entirely
 
 ${granularitySegment(style.granularity)}
 
@@ -138,6 +139,8 @@ Output as a YAML yops document. Each operation is one item in the yops list.
 - Child nodes represent subtopics — use nesting for structure
 - Leaf values: prefer numbers, booleans, short strings, arrays. NOT full sentences.
 - Keep depth ≤ 3 levels. Deeper = more specific
+- User preferences, constraints, and opinions MUST be nested under the main topic — never create separate root nodes for preferences
+- Example: user_preferences should be a child of heroes_of_storm, NOT a sibling root
 
 ### Example${hasSnapshot ? ' (incremental)' : ' (first extraction)'}
 
@@ -165,25 +168,41 @@ ${hasSnapshot ? `yops:
       parent: ""
       node:
         australian_beef:
+          origin: Australia
           quality: grass-fed
           annual_production_tonnes: 2200000
-          major_regions:
-            queensland: largest producer
-            new_south_wales: second largest
-          export_markets:
-            japan: top destination
-            us: growing market
-            south_korea: significant
       source:
+        origin: "Australian beef"
         quality: "Australian beef is known for being predominantly grass-fed"
         annual_production_tonnes: "Australia produces about 2.2 million tonnes annually"
-        major_regions.queensland: "Queensland is the largest beef-producing state"
-        major_regions.new_south_wales: "New South Wales is the second largest"
-        export_markets.japan: "Japan is Australia's largest beef export market"
-        export_markets.us: "The US is a growing market for Australian beef"
-        export_markets.south_korea: "South Korea is also a significant destination"
       from: T2
-      confidence: 0.45`}
+      confidence: 0.8
+
+  - add:
+      parent: australian_beef
+      node:
+        major_regions:
+          queensland: largest producer
+          new_south_wales: second largest
+      source:
+        queensland: "Queensland is the largest beef-producing state"
+        new_south_wales: "New South Wales is the second largest"
+      from: T2
+      confidence: 0.75
+
+  - add:
+      parent: australian_beef
+      node:
+        export_markets:
+          japan: top destination
+          us: growing market
+          south_korea: significant
+      source:
+        japan: "Japan is Australia's largest beef export market"
+        us: "The US is a growing market for Australian beef"
+        south_korea: "South Korea is also a significant destination"
+      from: T2
+      confidence: 0.75`}
 
 ### Rules
 - Output ONLY valid YAML starting with "yops:" on the first line

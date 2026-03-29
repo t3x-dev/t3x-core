@@ -22,7 +22,7 @@ export const PRESETS: Record<PresetName, ExtractionStyleConfig> = {
   },
   balanced: {
     granularity: 'balanced',
-    quote_length: 'minimal',
+    quote_length: 'contextual',
     update_stance: 'balanced',
     tier3: 'extract',
   },
@@ -34,7 +34,7 @@ export const PRESETS: Record<PresetName, ExtractionStyleConfig> = {
   },
 };
 
-export const DEFAULT_STYLE: ExtractionStyleConfig = PRESETS.balanced;
+export const DEFAULT_STYLE: ExtractionStyleConfig = PRESETS.detailed;
 
 /** Returns the preset name if config matches a preset exactly, else null. */
 export function matchPreset(config: ExtractionStyleConfig): PresetName | null {
