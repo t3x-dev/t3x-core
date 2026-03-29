@@ -188,6 +188,7 @@ export function YOpsFeed() {
   const yopsHistory = useExtractionStore((s) => s.yopsHistory);
   const isExtracting = useExtractionStore((s) => s.isExtracting);
   const phase = useExtractionUIStore((s) => s.phase);
+  const setViewTab = useExtractionUIStore((s) => s.setViewTab);
 
   const latestBatch: any[] = yopsHistory[0] ?? [];
   const count = latestBatch.length;
@@ -196,8 +197,11 @@ export function YOpsFeed() {
   const total =
     count > 0 && typeof latestBatch[0]?.total === 'number' ? latestBatch[0].total : count;
 
-  // Still waiting for YOps to arrive (phase is yops but no data yet)
-  if (count === 0 && (isExtracting || phase === 'yops')) {
+  const isDone = !isExtracting && phase !== 'yops';
+  const hasTriageData = phase === 'triage' || phase === 'review';
+
+  // Actively extracting, waiting for first YOp to arrive
+  if (count === 0 && isExtracting) {
     return (
       <div className="flex flex-col items-center justify-center gap-3 py-16">
         <Loader2 className="h-5 w-5 animate-spin" style={{ color: 'var(--accent-extract)' }} />
@@ -208,7 +212,38 @@ export function YOpsFeed() {
     );
   }
 
-  // Nothing at all (idle state, no extraction has run)
+  // Extraction finished with no YOps (no delta detected)
+  if (count === 0 && isDone) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-3 py-12">
+        <span style={{ fontSize: 24, opacity: 0.15 }}>&#10003;</span>
+        <span className="text-[var(--text-tertiary)]" style={{ fontSize: 11 }}>
+          {hasTriageData ? 'Extraction complete — no incremental YOps' : 'No changes detected'}
+        </span>
+        {hasTriageData && (
+          <button
+            type="button"
+            onClick={() => setViewTab('triage')}
+            style={{
+              marginTop: 4,
+              padding: '5px 14px',
+              borderRadius: 6,
+              border: 'none',
+              fontSize: 10,
+              fontWeight: 600,
+              background: '#4ade80',
+              color: '#000',
+              cursor: 'pointer',
+            }}
+          >
+            View Triage &rarr;
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  // No extraction has happened yet
   if (count === 0) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -219,10 +254,11 @@ export function YOpsFeed() {
     );
   }
 
+  // Show the YOps feed
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col h-full">
       {/* Feed items */}
-      <div style={{ padding: '6px 0' }}>
+      <div className="flex-1 overflow-auto" style={{ padding: '6px 0' }}>
         {latestBatch.map((yop, idx) => {
           const { type, data } = getYOpType(yop);
           const icon = yopIcon(type);
@@ -243,7 +279,6 @@ export function YOpsFeed() {
                 transition: 'opacity 150ms ease',
               }}
             >
-              {/* Operation icon */}
               <div
                 className="flex items-center justify-center shrink-0"
                 style={{
@@ -259,18 +294,9 @@ export function YOpsFeed() {
               >
                 {icon.symbol}
               </div>
-
-              {/* Text content */}
               <div className="flex-1" style={{ lineHeight: 1.5 }}>
                 <span style={{ color: 'var(--text-secondary)' }}>{path}</span>
-                <span
-                  style={{
-                    color: 'var(--text-tertiary)',
-                    margin: '0 3px',
-                  }}
-                >
-                  &rarr;
-                </span>
+                <span style={{ color: 'var(--text-tertiary)', margin: '0 3px' }}>&rarr;</span>
                 <span style={{ color: 'var(--text-primary)' }}>{value}</span>
               </div>
             </div>
@@ -278,9 +304,8 @@ export function YOpsFeed() {
         })}
       </div>
 
-      {/* Progress bar */}
+      {/* Progress bar + action */}
       <div
-        className="flex items-center gap-2"
         style={{
           padding: '8px 14px',
           fontSize: 10,
@@ -288,29 +313,47 @@ export function YOpsFeed() {
           borderTop: '1px solid var(--stroke-default)',
         }}
       >
-        <span>
-          {count}/{total}
-        </span>
-        <div
-          className="flex-1 overflow-hidden"
-          style={{
-            height: 2,
-            background: 'var(--stroke-default)',
-            borderRadius: 1,
-          }}
-        >
+        <div className="flex items-center gap-2">
+          <span>{count}/{total || '...'}</span>
           <div
-            style={{
-              height: '100%',
-              width: total > 0 ? `${Math.round((count / total) * 100)}%` : '0%',
-              background: 'var(--accent-extract)',
-              borderRadius: 1,
-              transition: 'width 0.3s',
-            }}
-          />
+            className="flex-1 overflow-hidden"
+            style={{ height: 2, background: 'var(--stroke-default)', borderRadius: 1 }}
+          >
+            <div
+              style={{
+                height: '100%',
+                width: total > 0 ? `${Math.round((count / total) * 100)}%` : '0%',
+                background: 'var(--accent-extract)',
+                borderRadius: 1,
+                transition: 'width 0.3s',
+              }}
+            />
+          </div>
+          {isExtracting && <span style={{ color: 'var(--accent-extract)' }}>extracting...</span>}
+          {!isExtracting && <span style={{ color: '#4ade80' }}>complete</span>}
         </div>
-        {!isExtracting && count > 0 && <span style={{ color: '#4ade80' }}>complete</span>}
-        {isExtracting && <span style={{ color: 'var(--accent-extract)' }}>extracting...</span>}
+
+        {/* Continue button — shown when extraction is done */}
+        {!isExtracting && hasTriageData && (
+          <div className="flex justify-end" style={{ marginTop: 8 }}>
+            <button
+              type="button"
+              onClick={() => setViewTab('triage')}
+              style={{
+                padding: '5px 14px',
+                borderRadius: 6,
+                border: 'none',
+                fontSize: 10,
+                fontWeight: 600,
+                background: '#4ade80',
+                color: '#000',
+                cursor: 'pointer',
+              }}
+            >
+              Continue to Triage &rarr;
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
