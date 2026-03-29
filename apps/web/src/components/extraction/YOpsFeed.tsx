@@ -2,6 +2,7 @@
 
 import { Loader2 } from 'lucide-react';
 import { useExtractionStore } from '@/store/extractionStore';
+import { useExtractionUIStore } from '@/store/extractionUIStore';
 
 /**
  * YOpsFeed — Phase 1. Shows streaming extraction results as they arrive.
@@ -186,6 +187,7 @@ const iconFgColors: Record<string, string> = {
 export function YOpsFeed() {
   const yopsHistory = useExtractionStore((s) => s.yopsHistory);
   const isExtracting = useExtractionStore((s) => s.isExtracting);
+  const phase = useExtractionUIStore((s) => s.phase);
 
   const latestBatch: any[] = yopsHistory[0] ?? [];
   const count = latestBatch.length;
@@ -194,8 +196,8 @@ export function YOpsFeed() {
   const total =
     count > 0 && typeof latestBatch[0]?.total === 'number' ? latestBatch[0].total : count;
 
-  // Nothing yet and still extracting: show spinner
-  if (count === 0 && isExtracting) {
+  // Still waiting for YOps to arrive (phase is yops but no data yet)
+  if (count === 0 && (isExtracting || phase === 'yops')) {
     return (
       <div className="flex flex-col items-center justify-center gap-3 py-16">
         <Loader2 className="h-5 w-5 animate-spin" style={{ color: 'var(--accent-extract)' }} />
@@ -206,7 +208,7 @@ export function YOpsFeed() {
     );
   }
 
-  // Nothing at all
+  // Nothing at all (idle state, no extraction has run)
   if (count === 0) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -307,7 +309,7 @@ export function YOpsFeed() {
             }}
           />
         </div>
-        {!isExtracting && <span style={{ color: '#4ade80' }}>complete</span>}
+        {!isExtracting && count > 0 && <span style={{ color: '#4ade80' }}>complete</span>}
         {isExtracting && <span style={{ color: 'var(--accent-extract)' }}>extracting...</span>}
       </div>
     </div>
