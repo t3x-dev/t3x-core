@@ -184,41 +184,71 @@ const iconFgColors: Record<string, string> = {
 
 /* ── Component ── */
 
+const STEP_LABELS: Record<string, string> = {
+  session_state: 'Checking session...',
+  readiness_gate: 'Readiness check...',
+  drift_check: 'Checking topic drift...',
+  extracting: 'LLM extracting...',
+  reorganizing: 'Reorganizing tree...',
+  validating: 'Validating...',
+  persisting: 'Saving...',
+};
+
 export function YOpsFeed() {
   const feedYops = useExtractionStore((s) => s.feedYops);
+  const pipelineSteps = useExtractionStore((s) => s.pipelineSteps);
   const isExtracting = useExtractionStore((s) => s.isExtracting);
   const phase = useExtractionUIStore((s) => s.phase);
   const setViewTab = useExtractionUIStore((s) => s.setViewTab);
 
   const count = feedYops.length;
-
-  // Use `total` from the first item's SSE envelope if available, else fall back to count
   const firstYop = feedYops[0] as any;
   const total =
     count > 0 && typeof firstYop?.total === 'number' ? firstYop.total : count;
 
-  const isDone = !isExtracting && phase !== 'yops';
-  const hasTriageData = phase === 'triage' || phase === 'review';
+  // Triage data is ready if triageStore has items loaded
+  const hasTriageData = !isExtracting && count > 0;
 
-  // Actively extracting, waiting for first YOp to arrive
+  // Actively extracting, waiting for first YOp to arrive — show pipeline steps
   if (count === 0 && isExtracting) {
+    const currentStep = pipelineSteps[pipelineSteps.length - 1];
     return (
-      <div className="flex flex-col items-center justify-center gap-3 py-16">
+      <div className="flex flex-col items-center justify-center gap-3 py-12">
         <Loader2 className="h-5 w-5 animate-spin" style={{ color: 'var(--accent-extract)' }} />
         <span className="text-[var(--text-tertiary)]" style={{ fontSize: 11 }}>
-          Processing conversation...
+          {currentStep ? STEP_LABELS[currentStep.step] ?? currentStep.step : 'Starting extraction...'}
         </span>
+        {/* Pipeline step log */}
+        {pipelineSteps.length > 1 && (
+          <div style={{ marginTop: 8, width: '100%', padding: '0 24px' }}>
+            {pipelineSteps.slice(0, -1).map((s, i) => (
+              <div
+                key={`${s.step}-${i}`}
+                style={{
+                  fontSize: 9,
+                  color: 'var(--text-tertiary)',
+                  opacity: 0.5,
+                  padding: '1px 0',
+                  fontFamily: 'var(--font-mono, monospace)',
+                }}
+              >
+                <span style={{ color: '#4ade80', marginRight: 4 }}>&#10003;</span>
+                {STEP_LABELS[s.step] ?? s.step}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     );
   }
 
   // Extraction finished with no YOps (no delta detected)
-  if (count === 0 && isDone) {
+  if (count === 0 && !isExtracting) {
     return (
       <div className="flex flex-col items-center justify-center gap-3 py-12">
         <span style={{ fontSize: 24, opacity: 0.15 }}>&#10003;</span>
         <span className="text-[var(--text-tertiary)]" style={{ fontSize: 11 }}>
-          {hasTriageData ? 'Extraction complete — no incremental YOps' : 'No changes detected'}
+          {hasTriageData ? 'Extraction complete' : 'No changes detected'}
         </span>
         {hasTriageData && (
           <button
@@ -236,7 +266,7 @@ export function YOpsFeed() {
               cursor: 'pointer',
             }}
           >
-            View Triage &rarr;
+            Continue to Triage &rarr;
           </button>
         )}
       </div>
@@ -329,8 +359,16 @@ export function YOpsFeed() {
               }}
             />
           </div>
-          {isExtracting && <span style={{ color: 'var(--accent-extract)' }}>extracting...</span>}
-          {!isExtracting && <span style={{ color: '#4ade80' }}>complete</span>}
+          {isExtracting && (
+            <span style={{ color: 'var(--accent-extract)', display: 'flex', alignItems: 'center', gap: 4 }}>
+              <Loader2 className="h-3 w-3 animate-spin" />
+              {(() => {
+                const lastStep = pipelineSteps[pipelineSteps.length - 1];
+                return lastStep ? (STEP_LABELS[lastStep.step] ?? lastStep.step) : 'extracting...';
+              })()}
+            </span>
+          )}
+          {!isExtracting && count > 0 && <span style={{ color: '#4ade80' }}>complete</span>}
         </div>
 
         {/* Continue button — shown when extraction is done */}

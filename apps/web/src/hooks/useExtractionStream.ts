@@ -51,7 +51,7 @@ export function useExtractionStream(conversationId: string | undefined, turnsSav
 
       useExtractionStore.getState().setExtracting(true);
       useExtractionUIStore.getState().setPhase('yops');
-      useExtractionStore.setState({ feedYops: [] });
+      useExtractionStore.setState({ feedYops: [], pipelineSteps: [] });
       yopBufferRef.current = [];
 
       try {
@@ -67,6 +67,15 @@ export function useExtractionStream(conversationId: string | undefined, turnsSav
 
         for await (const event of stream) {
           switch (event.type) {
+            case 'status': {
+              const step = (event.data as any).step as string;
+              const result = (event.data as any).result as string | undefined;
+              useExtractionStore.setState((s) => ({
+                pipelineSteps: [...s.pipelineSteps, { step, result, timestamp: Date.now() }],
+              }));
+              break;
+            }
+
             case 'yop':
               yopBufferRef.current.push(event.data);
               startYopDrain();
@@ -132,7 +141,8 @@ export function useExtractionStream(conversationId: string | undefined, turnsSav
                 useExtractionStore.getState().setDraft(snapshot);
                 const triageItems = treesToTriageItems(snapshot.trees);
                 useTriageStore.getState().loadItems(triageItems, convId);
-                useExtractionUIStore.getState().setPhase('triage');
+                // Stay on YOps — user clicks "Continue to Triage" manually
+                // Phase stays 'yops', triage data is ready when they navigate
               } else {
                 // No trees extracted — go back to idle
                 useExtractionUIStore.getState().setPhase('idle');

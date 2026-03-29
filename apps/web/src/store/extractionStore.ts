@@ -28,6 +28,9 @@ interface ExtractionState {
   /** Raw YOp objects for the current extraction's feed display */
   feedYops: unknown[];
 
+  /** Pipeline status steps for progress display */
+  pipelineSteps: Array<{ step: string; result?: string; timestamp: number }>;
+
   // Extraction lifecycle
   isExtracting: boolean;
   conversationId: string | null;
@@ -60,6 +63,7 @@ export const useExtractionStore = create<ExtractionState>((set, get) => ({
   yopsHistory: [],
   removedNodes: [],
   feedYops: [],
+  pipelineSteps: [],
   isExtracting: false,
   conversationId: null,
   topics: [],
