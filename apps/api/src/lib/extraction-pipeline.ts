@@ -336,7 +336,7 @@ export async function* runExtractionPipeline(
     }
 
     // Yield each YOp from the extraction (with index/total for client-side progress)
-    console.log(`[extraction-pipeline] result.yops.length = ${result.yops.length}, snapshot.trees = ${result.snapshot.trees.length}`);
+    // Synthesize YOp events if extractor returned empty delta but has a snapshot
     if (result.yops.length === 0 && result.snapshot.trees.length > 0) {
       // First-time tree extraction or restructure: synthesize add YOps from snapshot nodes
       // so the YOpsFeed has items to display
@@ -357,7 +357,7 @@ export async function* runExtractionPipeline(
         synthYops[i].index = i;
         synthYops[i].total = synthYops.length;
       }
-      console.log(`[extraction-pipeline] Synthesized ${synthYops.length} YOps from snapshot`);
+      // Yield synthesized YOps
       for (let i = 0; i < synthYops.length; i++) {
         yield { type: 'yop' as const, data: synthYops[i] };
       }
