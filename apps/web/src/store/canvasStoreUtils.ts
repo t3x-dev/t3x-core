@@ -549,10 +549,10 @@ export const unitToNode = (
       // Conversation data
       conversationId: conv.conversation_id,
       // Import source badge
-      importSource: conv.metadata?.import
+      importSource: (conv.metadata as { import?: { source_type?: string; platform?: string } } | null)?.import
         ? {
-            source_type: conv.metadata.import.source_type,
-            platform: conv.metadata.import.platform,
+            source_type: (conv.metadata as { import: { source_type: 'url' | 'document' | 'platform' } }).import.source_type,
+            platform: (conv.metadata as { import: { platform?: string } }).import.platform,
           }
         : undefined,
       // Commit data

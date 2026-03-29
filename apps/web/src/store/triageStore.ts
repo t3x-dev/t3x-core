@@ -6,8 +6,12 @@
  * The user accepts or dismisses each one before committing.
  *
  * Flow: YOps Feed -> Triage -> Review YAML -> Commit
+ *
+ * Persistence: triage state is debounce-saved to conversation metadata
+ * so users can close the tab mid-triage and resume where they stopped.
  */
 
+import type { TreeNode } from '@t3x-dev/core';
 import { create } from 'zustand';
 
 // ---------------------------------------------------------------------------
@@ -25,6 +29,63 @@ export interface TriageItem {
 }
 
 // ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Convert extracted trees into TriageItems for the triage phase */
+export function treesToTriageItems(trees: TreeNode[]): TriageItem[] {
+  return trees.map((tree) => {
+    const source: TriageSource = tree.confidence && tree.confidence >= 0.8 ? 'both' : 'llm';
+    const slots: Record<string, string> = {};
+    for (const [key, value] of Object.entries(tree.slots)) {
+      slots[key] = typeof value === 'string' ? value : JSON.stringify(value);
+    }
+    const preview = Object.entries(slots)
+      .slice(0, 2)
+      .map(([k, v]) => `${k}: ${v}`)
+      .join(', ');
+    return {
+      id: tree.key,
+      source,
+      slots,
+      preview: preview.length > 50 ? `${preview.slice(0, 50)}...` : preview,
+    };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Debounced persistence
+// ---------------------------------------------------------------------------
+
+let saveTimer: ReturnType<typeof setTimeout> | undefined;
+
+function debouncedSave() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    const { conversationId, decisions, slotToggles, manualAdditions } =
+      useTriageStore.getState();
+    if (!conversationId) return;
+
+    // Read current phase from extractionUIStore
+    import('@/store/extractionUIStore').then(({ useExtractionUIStore }) => {
+      const phase = useExtractionUIStore.getState().phase;
+      import('@/lib/api/conversations').then(({ updateConversation }) => {
+        updateConversation(conversationId, {
+          metadata: {
+            extraction_triage: {
+              phase,
+              decisions,
+              slotToggles,
+              manualAdditions,
+            },
+          },
+        }).catch(() => {}); // Non-critical — user re-triages on refresh if save fails
+      });
+    });
+  }, 500);
+}
+
+// ---------------------------------------------------------------------------
 // State
 // ---------------------------------------------------------------------------
 
@@ -33,14 +94,16 @@ interface TriageState {
   decisions: Record<string, TriageDecision>;
   slotToggles: Record<string, Record<string, boolean>>;
   manualAdditions: Array<{ targetId: string; key: string; value: string }>;
+  conversationId: string | null;
 
-  loadItems: (items: TriageItem[]) => void;
+  loadItems: (items: TriageItem[], conversationId?: string) => void;
   acceptItem: (id: string) => void;
   dismissItem: (id: string) => void;
   acceptAll: () => void;
   toggleSlot: (itemId: string, slotKey: string, on: boolean) => void;
   addManualSlot: (targetId: string, key: string, value: string) => void;
   getAcceptedContent: () => Array<{ id: string; slots: Record<string, string> }>;
+  hydrate: (metadata: Record<string, unknown> | null, trees: TreeNode[]) => void;
   reset: () => void;
 }
 
@@ -53,6 +116,7 @@ const initialState = {
   decisions: {} as Record<string, TriageDecision>,
   slotToggles: {} as Record<string, Record<string, boolean>>,
   manualAdditions: [] as Array<{ targetId: string; key: string; value: string }>,
+  conversationId: null as string | null,
 };
 
 // ---------------------------------------------------------------------------
@@ -62,7 +126,7 @@ const initialState = {
 export const useTriageStore = create<TriageState>((set, get) => ({
   ...initialState,
 
-  loadItems: (items) => {
+  loadItems: (items, conversationId) => {
     const decisions: Record<string, TriageDecision> = {};
     const slotToggles: Record<string, Record<string, boolean>> = {};
 
@@ -78,19 +142,27 @@ export const useTriageStore = create<TriageState>((set, get) => ({
       slotToggles[item.id] = toggles;
     }
 
-    set({ items, decisions, slotToggles, manualAdditions: [] });
+    set({
+      items,
+      decisions,
+      slotToggles,
+      manualAdditions: [],
+      conversationId: conversationId ?? get().conversationId ?? null,
+    });
   },
 
   acceptItem: (id) => {
     set((s) => ({
       decisions: { ...s.decisions, [id]: 'accepted' },
     }));
+    debouncedSave();
   },
 
   dismissItem: (id) => {
     set((s) => ({
       decisions: { ...s.decisions, [id]: 'dismissed' },
     }));
+    debouncedSave();
   },
 
   acceptAll: () => {
@@ -103,6 +175,7 @@ export const useTriageStore = create<TriageState>((set, get) => ({
       }
       return { decisions: updated };
     });
+    debouncedSave();
   },
 
   toggleSlot: (itemId, slotKey, on) => {
@@ -112,12 +185,14 @@ export const useTriageStore = create<TriageState>((set, get) => ({
         [itemId]: { ...s.slotToggles[itemId], [slotKey]: on },
       },
     }));
+    debouncedSave();
   },
 
   addManualSlot: (targetId, key, value) => {
     set((s) => ({
       manualAdditions: [...s.manualAdditions, { targetId, key, value }],
     }));
+    debouncedSave();
   },
 
   getAcceptedContent: () => {
@@ -153,7 +228,41 @@ export const useTriageStore = create<TriageState>((set, get) => ({
     return result;
   },
 
+  hydrate: (metadata, trees) => {
+    const saved = (metadata as Record<string, unknown> | null)?.extraction_triage as
+      | {
+          decisions?: Record<string, TriageDecision>;
+          slotToggles?: Record<string, Record<string, boolean>>;
+          manualAdditions?: Array<{ targetId: string; key: string; value: string }>;
+        }
+      | undefined;
+
+    // Generate items from trees
+    const items = treesToTriageItems(trees);
+
+    if (saved?.decisions) {
+      set({
+        items,
+        decisions: saved.decisions,
+        slotToggles: saved.slotToggles ?? {},
+        manualAdditions: saved.manualAdditions ?? [],
+        conversationId: get().conversationId,
+      });
+    } else {
+      // No saved state — use loadItems defaults
+      get().loadItems(items, get().conversationId ?? undefined);
+    }
+  },
+
   reset: () => {
+    const { conversationId } = get();
     set({ ...initialState });
+    if (conversationId) {
+      import('@/lib/api/conversations').then(({ updateConversation }) => {
+        updateConversation(conversationId, {
+          metadata: { extraction_triage: null },
+        }).catch(() => {});
+      });
+    }
   },
 }));

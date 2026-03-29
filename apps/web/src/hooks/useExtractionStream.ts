@@ -5,7 +5,7 @@ import { listTopics, updateTopicApi } from '@/lib/api/topics';
 import { getIntentSummary } from '@/lib/intentSummary';
 import { useExtractionStore } from '@/store/extractionStore';
 import { useExtractionUIStore } from '@/store/extractionUIStore';
-import { type TriageItem, type TriageSource, useTriageStore } from '@/store/triageStore';
+import { treesToTriageItems, useTriageStore } from '@/store/triageStore';
 
 const YOP_PACE_MS = 350;
 
@@ -13,27 +13,6 @@ interface DriftDecision {
   choice: string;
   relation?: string;
   new_topic?: string;
-}
-
-/** Convert extracted trees into TriageItems for the triage phase */
-function treesToTriageItems(trees: TreeNode[]): TriageItem[] {
-  return trees.map((tree) => {
-    const source: TriageSource = tree.confidence && tree.confidence >= 0.8 ? 'both' : 'llm';
-    const slots: Record<string, string> = {};
-    for (const [key, value] of Object.entries(tree.slots)) {
-      slots[key] = typeof value === 'string' ? value : JSON.stringify(value);
-    }
-    const preview = Object.entries(slots)
-      .slice(0, 2)
-      .map(([k, v]) => `${k}: ${v}`)
-      .join(', ');
-    return {
-      id: tree.key,
-      source,
-      slots,
-      preview: preview.length > 50 ? `${preview.slice(0, 50)}...` : preview,
-    };
-  });
 }
 
 export function useExtractionStream(conversationId: string | undefined, turnsSavedCounter: number) {
@@ -152,7 +131,7 @@ export function useExtractionStream(conversationId: string | undefined, turnsSav
               if (snapshot?.trees?.length > 0) {
                 useExtractionStore.getState().setDraft(snapshot);
                 const triageItems = treesToTriageItems(snapshot.trees);
-                useTriageStore.getState().loadItems(triageItems);
+                useTriageStore.getState().loadItems(triageItems, convId);
                 useExtractionUIStore.getState().setPhase('triage');
               } else {
                 // No trees extracted — go back to idle

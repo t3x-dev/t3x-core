@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils';
 import { useChatStore } from '@/store/chatStore';
 import { useExtractionStore } from '@/store/extractionStore';
 import { useExtractionUIStore } from '@/store/extractionUIStore';
+import { useTriageStore } from '@/store/triageStore';
 import { useCommitStore } from '@/store/commitStore';
 import { useSessionStore } from '@/store/sessionStore';
 import { ChatHeader } from './ChatHeader';
@@ -206,6 +207,11 @@ export function ChatWorkspace({
         });
     };
 
+    // Set conversationId on triageStore for persistence
+    if (convId && convId !== 'new') {
+      useTriageStore.setState({ conversationId: convId });
+    }
+
     // Load existing semantic draft + full yops history + topics for this conversation
     if (convId && convId !== 'new') {
       Promise.all([getSemanticDraft(convId), listYOpsLog(convId), listTopics(convId)])
@@ -234,6 +240,24 @@ export function ChatWorkspace({
             if (activeTopic) {
               eState.setActiveTopicId(activeTopic.id);
             }
+          }
+
+          // Restore saved triage state from conversation metadata
+          if (draft && draft.trees.length > 0) {
+            import('@/lib/api/conversations').then(({ getConversation }) => {
+              getConversation(convId).then((conv) => {
+                const meta = conv?.metadata as Record<string, unknown> | null | undefined;
+                const saved = meta?.extraction_triage as
+                  | { phase?: string; decisions?: Record<string, unknown> }
+                  | undefined;
+                if (saved?.decisions) {
+                  useTriageStore.getState().hydrate(meta!, draft.trees);
+                  if (saved.phase && saved.phase !== 'idle') {
+                    useExtractionUIStore.getState().setPhase(saved.phase as any);
+                  }
+                }
+              }).catch(() => {});
+            });
           }
         })
         .catch(() => {

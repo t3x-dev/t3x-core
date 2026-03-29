@@ -66,6 +66,7 @@ export async function updateConversation(
     position_y?: number;
     provider?: string | null;
     model?: string | null;
+    metadata?: Record<string, unknown>;
   }
 ): Promise<Conversation> {
   const res = await fetchWithTimeout(
