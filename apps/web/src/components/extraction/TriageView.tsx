@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils';
 // ── Source tag component ──
 
 const SOURCE_TAG_STYLES: Record<TriageSource, { bg: string; color: string; label: string }> = {
-  user: { bg: 'rgba(139,92,246,0.15)', color: 'var(--accent-commit)', label: 'USER' },
+  user: { bg: 'rgba(139,92,246,0.15)', color: 'var(--accent-extract)', label: 'USER' },
   llm: { bg: 'rgba(96,165,250,0.15)', color: '#60a5fa', label: 'LLM' },
   both: { bg: 'rgba(250,204,21,0.15)', color: '#facc15', label: 'BOTH' },
 };
@@ -314,7 +314,7 @@ export function TriageView() {
         style={{
           padding: '8px 12px',
           borderTop: '1px solid var(--stroke-default)',
-          background: 'var(--surface-raised)',
+          background: 'rgba(255,255,255,0.03)',
         }}
       >
         <span className="flex-1" style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>

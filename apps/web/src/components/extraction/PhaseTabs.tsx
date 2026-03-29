@@ -43,7 +43,7 @@ export function PhaseTabs() {
             className={cn(
               'relative flex-1 py-2 text-center text-[10px] font-semibold transition-colors duration-150',
               'bg-transparent border-none cursor-pointer',
-              isActive && 'text-[var(--accent-commit)]',
+              isActive && 'text-[var(--accent-extract)]',
               isDone && 'text-[#4ade80]',
               isFuture && 'text-[var(--text-tertiary)] cursor-default',
             )}
@@ -55,7 +55,7 @@ export function PhaseTabs() {
                 style={{
                   width: 5,
                   height: 5,
-                  background: isActive ? 'var(--accent-commit)' : '#4ade80',
+                  background: isActive ? 'var(--accent-extract)' : '#4ade80',
                 }}
               />
             )}
@@ -66,7 +66,7 @@ export function PhaseTabs() {
                 className="absolute bottom-[-1px] left-[15%] right-[15%] rounded-[1px]"
                 style={{
                   height: 2,
-                  background: isActive ? 'var(--accent-commit)' : '#4ade80',
+                  background: isActive ? 'var(--accent-extract)' : '#4ade80',
                   opacity: isDone ? 0.3 : 1,
                 }}
               />

@@ -117,7 +117,7 @@ function YamlLine({
           <span
             style={{
               fontSize: 8,
-              color: 'var(--accent-commit)',
+              color: 'var(--accent-extract)',
               opacity: isHovered ? 0.5 : 0,
               transition: 'opacity 0.15s',
               marginLeft: 4,
@@ -370,7 +370,7 @@ export function ReviewView() {
                   border: 'none',
                   fontSize: 9,
                   fontWeight: 600,
-                  background: 'var(--accent-commit)',
+                  background: 'var(--accent-extract)',
                   color: '#fff',
                 }}
                 onClick={() => setEditMode(false)}
@@ -422,7 +422,7 @@ export function ReviewView() {
         style={{
           padding: '10px 14px',
           borderTop: '1px solid var(--stroke-default)',
-          background: 'var(--surface-raised)',
+          background: 'rgba(255,255,255,0.03)',
         }}
       >
         {/* Back button */}
@@ -458,7 +458,7 @@ export function ReviewView() {
             border: 'none',
             fontSize: 11,
             fontWeight: 600,
-            background: 'var(--accent-commit)',
+            background: 'var(--accent-extract)',
             color: '#fff',
             opacity: isCommitting ? 0.6 : 1,
           }}

@@ -26,7 +26,7 @@ export function IdleView() {
           style={{ fontSize: 11, lineHeight: 1.7 }}
         >
           Chat with the AI, then click{' '}
-          <strong className="text-[var(--accent-commit)]">Extract</strong>
+          <strong className="text-[var(--accent-extract)]">Extract</strong>
           <br />
           when you want to save key points.
         </div>

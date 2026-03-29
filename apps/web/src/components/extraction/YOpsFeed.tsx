@@ -89,7 +89,7 @@ export function YOpsFeed() {
       <div className="flex flex-col items-center justify-center gap-3 py-16">
         <Loader2
           className="h-5 w-5 animate-spin"
-          style={{ color: 'var(--accent-commit)' }}
+          style={{ color: 'var(--accent-extract)' }}
         />
         <span
           className="text-[var(--text-tertiary)]"
@@ -197,7 +197,7 @@ export function YOpsFeed() {
             style={{
               height: '100%',
               width: '100%',
-              background: 'var(--accent-commit)',
+              background: 'var(--accent-extract)',
               borderRadius: 1,
               transition: 'width 0.3s',
             }}
@@ -207,7 +207,7 @@ export function YOpsFeed() {
           <span style={{ color: '#4ade80' }}>complete</span>
         )}
         {isExtracting && (
-          <span style={{ color: 'var(--accent-commit)' }}>extracting...</span>
+          <span style={{ color: 'var(--accent-extract)' }}>extracting...</span>
         )}
       </div>
     </div>

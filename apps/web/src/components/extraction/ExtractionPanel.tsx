@@ -16,12 +16,12 @@ import { ReviewView } from './ReviewView';
  * ExtractionPanel v6 — Top-level phase router.
  *
  * Collapsed rail (40px): icon + badge + vertical label
- * Expanded (360px): header + PhaseTabs + phase content
+ * Expanded (380px): header + PhaseTabs + phase content
  * Uses framer-motion for width animation.
  */
 
 const COLLAPSED_WIDTH = 40;
-const DEFAULT_WIDTH = 360;
+const DEFAULT_WIDTH = 380;
 
 // ── Phase title map ──
 
@@ -53,7 +53,7 @@ function CollapsedRail({
         aria-label="Expand extraction panel"
       >
         {isExtracting ? (
-          <Loader2 className="h-4 w-4 animate-spin" style={{ color: 'var(--accent-commit)' }} />
+          <Loader2 className="h-4 w-4 animate-spin" style={{ color: 'var(--accent-extract)' }} />
         ) : (
           <LayoutGrid className="h-4 w-4" />
         )}
@@ -61,7 +61,7 @@ function CollapsedRail({
           <span
             className="rounded-full px-1.5 py-0.5 text-[9px] font-bold leading-none"
             style={{
-              background: 'var(--accent-commit)',
+              background: 'var(--accent-extract)',
               color: '#fff',
             }}
           >
@@ -93,7 +93,7 @@ function ExtractButton() {
         borderRadius: 8,
         border: '1px solid rgba(139,92,246,0.3)',
         background: 'rgba(139,92,246,0.08)',
-        color: 'var(--accent-commit)',
+        color: 'var(--accent-extract)',
         fontSize: 11,
         fontWeight: 600,
       }}
@@ -258,7 +258,7 @@ export function ExtractionPanel({ customWidth }: ExtractionPanelProps) {
         style={{
           padding: '10px 14px',
           borderBottom: '1px solid var(--stroke-default)',
-          background: 'var(--surface-raised)',
+          background: 'rgba(255,255,255,0.03)',
         }}
       >
         {/* Left side */}
@@ -266,7 +266,7 @@ export function ExtractionPanel({ customWidth }: ExtractionPanelProps) {
           {isExtracting ? (
             <Loader2
               className="h-3.5 w-3.5 animate-spin"
-              style={{ color: 'var(--accent-commit)' }}
+              style={{ color: 'var(--accent-extract)' }}
             />
           ) : (
             <GitCommit
