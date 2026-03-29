@@ -25,9 +25,9 @@ const DEFAULT_WIDTH = 380;
 
 // ── Phase title map ──
 
-const PHASE_TITLES: Record<ExtractionPhase, string> = {
+const VIEW_TITLES: Record<string, string> = {
   idle: 'Knowledge',
-  yops: 'Extracting...',
+  yops: 'YOps',
   triage: 'Triage',
   review: 'Review',
 };
@@ -116,11 +116,16 @@ function ExtractButton() {
 }
 
 // ── Phase content router ──
+// Routes based on viewTab (what user is looking at), not phase (extraction lifecycle).
+// In idle state, shows IdleView regardless.
 
-function PhaseContent({ phase }: { phase: ExtractionPhase }) {
-  switch (phase) {
-    case 'idle':
-      return <IdleView />;
+function PhaseContent() {
+  const phase = useExtractionUIStore((s) => s.phase);
+  const viewTab = useExtractionUIStore((s) => s.viewTab);
+
+  if (phase === 'idle') return <IdleView />;
+
+  switch (viewTab) {
     case 'yops':
       return <YOpsFeed />;
     case 'triage':
@@ -140,6 +145,7 @@ interface ExtractionPanelProps {
 
 export function ExtractionPanel({ customWidth }: ExtractionPanelProps) {
   const phase = useExtractionUIStore((s) => s.phase);
+  const viewTab = useExtractionUIStore((s) => s.viewTab);
   const panelMode = useExtractionUIStore((s) => s.panelMode);
   const setPanelMode = useExtractionUIStore((s) => s.setPanelMode);
   const togglePanel = useExtractionUIStore((s) => s.togglePanel);
@@ -174,7 +180,7 @@ export function ExtractionPanel({ customWidth }: ExtractionPanelProps) {
       }
 
       // A — accept all (triage only, not in an input)
-      if (e.key === 'a' && phase === 'triage' && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement)) {
+      if (e.key === 'a' && viewTab === 'triage' && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement)) {
         const { useTriageStore: triageImport } = require('@/store/triageStore');
         triageImport.getState().acceptAll();
         return;
@@ -182,7 +188,7 @@ export function ExtractionPanel({ customWidth }: ExtractionPanelProps) {
 
       // Enter — proceed to next phase
       if (e.key === 'Enter' && !meta && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) {
-        if (phase === 'triage') {
+        if (viewTab === 'triage') {
           e.preventDefault();
           setPhase('review');
           return;
@@ -190,7 +196,7 @@ export function ExtractionPanel({ customWidth }: ExtractionPanelProps) {
       }
 
       // Cmd+Enter — commit (review only)
-      if (meta && e.key === 'Enter' && phase === 'review') {
+      if (meta && e.key === 'Enter' && viewTab === 'review') {
         e.preventDefault();
         // Commit via store
         const { useCommitStore: commitImport } = require('@/store/commitStore');
@@ -204,7 +210,7 @@ export function ExtractionPanel({ customWidth }: ExtractionPanelProps) {
 
       // Escape — back to previous phase / cancel
       if (e.key === 'Escape') {
-        if (phase === 'review') {
+        if (viewTab === 'review') {
           e.preventDefault();
           setPhase('triage');
         }
@@ -284,7 +290,7 @@ export function ExtractionPanel({ customWidth }: ExtractionPanelProps) {
               color: phase === 'idle' ? 'var(--text-secondary)' : 'var(--text-primary)',
             }}
           >
-            {PHASE_TITLES[phase]}
+            {isExtracting ? 'Extracting...' : VIEW_TITLES[phase === 'idle' ? 'idle' : viewTab] ?? 'Knowledge'}
           </span>
           {phase === 'idle' && nodeCount > 0 && (
             <span
@@ -328,7 +334,7 @@ export function ExtractionPanel({ customWidth }: ExtractionPanelProps) {
 
       {/* Content area */}
       <div className="flex-1 overflow-y-auto">
-        <PhaseContent phase={phase} />
+        <PhaseContent />
       </div>
     </motion.div>
   );

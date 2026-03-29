@@ -17,9 +17,13 @@ type PanelMode = 'collapsed' | 'default';
 type ActiveView = 'graph' | 'yaml';
 
 export type ExtractionPhase = 'idle' | 'yops' | 'triage' | 'review';
+export type ViewTab = 'yops' | 'triage' | 'review';
 
 interface ExtractionUIState {
+  /** Extraction lifecycle phase — set by the stream hook, drives auto-transitions */
   phase: ExtractionPhase;
+  /** Which tab the user is viewing — can differ from phase (e.g. viewing YOps from triage) */
+  viewTab: ViewTab;
   panelMode: PanelMode;
   activeView: ActiveView;
 
@@ -77,12 +81,14 @@ interface ExtractionUIState {
     }>
   ) => void;
   setPhase: (phase: ExtractionPhase) => void;
+  setViewTab: (tab: ViewTab) => void;
   setFocusIntent: (enabled: boolean) => void;
   setLlmHighlightedNodeIds: (ids: string[]) => void;
 }
 
 export const useExtractionUIStore = create<ExtractionUIState>((set, get) => ({
   phase: 'idle',
+  viewTab: 'yops',
   panelMode: 'collapsed',
   activeView: 'graph',
   hoveredNodeId: null,
@@ -98,7 +104,8 @@ export const useExtractionUIStore = create<ExtractionUIState>((set, get) => ({
   driftChoices: [],
   advisoryQuestions: [],
 
-  setPhase: (phase) => set({ phase }),
+  setPhase: (phase) => set({ phase, viewTab: phase === 'idle' ? 'yops' : phase }),
+  setViewTab: (tab) => set({ viewTab: tab }),
   setPanelMode: (mode) => set({ panelMode: mode }),
   setActiveView: (view) => set({ activeView: view }),
 
