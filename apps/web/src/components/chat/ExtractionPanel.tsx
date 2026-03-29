@@ -2,7 +2,7 @@
 
 import type { TreeNode } from '@t3x-dev/core';
 import { motion } from 'framer-motion';
-import { GitCommit, LayoutGrid, Loader2 } from 'lucide-react';
+import { GitCommit, LayoutGrid, Loader2, Sparkles } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -14,6 +14,7 @@ import { CommitDropdown } from './CommitDropdown';
 import { YAMLView } from './YAMLView';
 import { PreviewPanel } from './PreviewPanel';
 import { type CompatNode, contentToNodes, treesToNodes } from '@/lib/treeCompat';
+import { cn } from '@/lib/utils';
 
 // ── Panel widths ──
 
@@ -191,6 +192,9 @@ function CommitPreviewSection() {
 export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
   const draft = useExtractionStore((s) => s.draft);
   const isExtracting = useExtractionStore((s) => s.isExtracting);
+  const extractionMode = useExtractionStore((s) => s.extractionMode);
+  const setExtractionMode = useExtractionStore((s) => s.setExtractionMode);
+  const triggerExtract = useExtractionStore((s) => s.triggerExtract);
   const yopsHistory = useExtractionStore((s) => s.yopsHistory);
   const yopsLog = useExtractionStore((s) => s.yopsLog);
   const isCompressing = useExtractionStore((s) => s.isCompressing);
@@ -298,14 +302,44 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
                 </button>
               )}
             </div>
-            <button
-              type="button"
-              onClick={togglePanel}
-              className="rounded p-0.5 text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]"
-              aria-label="Collapse panel"
-            >
-              ×
-            </button>
+            <div className="flex items-center gap-1.5">
+              {/* Live/Standard mode toggle */}
+              <button
+                type="button"
+                onClick={() => setExtractionMode(extractionMode === 'live' ? 'standard' : 'live')}
+                className={cn(
+                  'flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-medium transition-colors',
+                  extractionMode === 'live'
+                    ? 'bg-[var(--accent-commit)]/15 text-[var(--accent-commit)]'
+                    : 'bg-[var(--surface-raised)] text-[var(--text-tertiary)]'
+                )}
+              >
+                <span className={cn('h-1.5 w-1.5 rounded-full', extractionMode === 'live' ? 'bg-[var(--accent-commit)] animate-pulse' : 'bg-[var(--text-tertiary)]')} />
+                {extractionMode === 'live' ? 'Live' : 'Standard'}
+              </button>
+
+              {/* Extract button — Standard mode only */}
+              {extractionMode === 'standard' && triggerExtract && (
+                <button
+                  type="button"
+                  onClick={() => triggerExtract()}
+                  disabled={isExtracting}
+                  className="flex items-center gap-1.5 rounded px-2.5 py-1 text-[10px] font-medium bg-[var(--surface-raised)] hover:bg-[var(--hover-bg)] text-[var(--text-secondary)]"
+                >
+                  {isExtracting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                  Extract
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={togglePanel}
+                className="rounded p-0.5 text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]"
+                aria-label="Collapse panel"
+              >
+                ×
+              </button>
+            </div>
           </div>
 
           {/* Compress result banner */}
