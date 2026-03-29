@@ -127,10 +127,17 @@ export const useExtractionStore = create<ExtractionState>((set, get) => ({
       yopsLog: [],
       removedNodes: [],
       yopsHistory: [],
+      feedYops: [],
+      pipelineSteps: [],
     });
-    // Clear drift state in extractionUIStore
+    // Clear phase + drift state in extractionUIStore
     import('./extractionUIStore').then(({ useExtractionUIStore }) => {
+      useExtractionUIStore.getState().setPhase('idle');
       useExtractionUIStore.getState().clearDrift();
+    });
+    // Clear triage state
+    import('./triageStore').then(({ useTriageStore }) => {
+      useTriageStore.getState().reset();
     });
     // Clear commit-related state in commitStore (matching old extractionPanelStore behavior)
     import('./commitStore').then(({ useCommitStore }) => {
