@@ -130,15 +130,22 @@ export const useExtractionStore = create<ExtractionState>((set, get) => ({
       feedYops: [],
       pipelineSteps: [],
     });
-    // Clear phase + drift state in extractionUIStore
+    // Clear drift state in extractionUIStore
+    // NOTE: phase is reset synchronously below, NOT via async import (prevents race with extraction)
     import('./extractionUIStore').then(({ useExtractionUIStore }) => {
-      useExtractionUIStore.getState().setPhase('idle');
+      // Only reset phase if not currently extracting
+      const isExtracting = get().isExtracting;
+      if (!isExtracting) {
+        useExtractionUIStore.getState().setPhase('idle');
+      }
       useExtractionUIStore.getState().clearDrift();
     });
-    // Clear triage state
-    import('./triageStore').then(({ useTriageStore }) => {
-      useTriageStore.getState().reset();
-    });
+    // Clear triage state (only if not extracting)
+    if (!get().isExtracting) {
+      import('./triageStore').then(({ useTriageStore }) => {
+        useTriageStore.getState().reset();
+      });
+    }
     // Clear commit-related state in commitStore (matching old extractionPanelStore behavior)
     import('./commitStore').then(({ useCommitStore }) => {
       useCommitStore.setState({
