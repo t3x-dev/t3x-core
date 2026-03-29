@@ -1,6 +1,7 @@
 'use client';
 
 import { useExtractionUIStore, type ExtractionPhase } from '@/store/extractionUIStore';
+import { useExtractionStore } from '@/store/extractionStore';
 import { cn } from '@/lib/utils';
 
 const PHASES: { key: ExtractionPhase; label: string }[] = [
@@ -19,6 +20,7 @@ const PHASE_ORDER: Record<ExtractionPhase, number> = {
 export function PhaseTabs() {
   const phase = useExtractionUIStore((s) => s.phase);
   const setPhase = useExtractionUIStore((s) => s.setPhase);
+  const isExtracting = useExtractionStore((s) => s.isExtracting);
 
   if (phase === 'idle') return null;
 
@@ -31,21 +33,25 @@ export function PhaseTabs() {
         const isActive = tab.key === phase;
         const isDone = tabIndex < currentIndex;
         const isFuture = tabIndex > currentIndex;
+        // Allow clicking next phase (one step ahead) when not extracting
+        const isNextStep = tabIndex === currentIndex + 1 && !isExtracting;
+        const canClick = isDone || isNextStep;
 
         return (
           <button
             key={tab.key}
             type="button"
             onClick={() => {
-              if (isDone) setPhase(tab.key);
+              if (canClick) setPhase(tab.key);
             }}
-            disabled={isFuture}
+            disabled={isFuture && !isNextStep}
             className={cn(
               'relative flex-1 py-2 text-center text-[10px] font-semibold transition-colors duration-150',
               'bg-transparent border-none cursor-pointer',
               isActive && 'text-[var(--accent-extract)]',
               isDone && 'text-[#4ade80]',
-              isFuture && 'text-[var(--text-tertiary)] cursor-default',
+              isNextStep && 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]',
+              isFuture && !isNextStep && 'text-[var(--text-tertiary)] cursor-default',
             )}
           >
             {/* Dot indicator */}
