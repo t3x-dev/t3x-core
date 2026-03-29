@@ -2,11 +2,12 @@ import { useCallback, useEffect, useRef } from 'react';
 import { extractionStream } from '@/lib/api/extractionStream';
 import { useExtractionStore } from '@/store/extractionStore';
 import { useExtractionUIStore } from '@/store/extractionUIStore';
+import { useTriageStore, type TriageItem, type TriageSource } from '@/store/triageStore';
 import { listTopics, updateTopicApi } from '@/lib/api/topics';
 import { getIntentSummary } from '@/lib/intentSummary';
-import type { TreeChangeBatch } from '@t3x-dev/core';
+import type { TreeChangeBatch, TreeNode } from '@t3x-dev/core';
 
-const YOP_PACE_MS = 100;
+const YOP_PACE_MS = 350;
 
 interface DriftDecision {
   choice: string;
@@ -14,17 +15,34 @@ interface DriftDecision {
   new_topic?: string;
 }
 
+/** Convert extracted trees into TriageItems for the triage phase */
+function treesToTriageItems(trees: TreeNode[]): TriageItem[] {
+  return trees.map((tree) => {
+    const source: TriageSource = tree.confidence && tree.confidence >= 0.8 ? 'both' : 'llm';
+    const slots: Record<string, string> = {};
+    for (const [key, value] of Object.entries(tree.slots)) {
+      slots[key] = typeof value === 'string' ? value : JSON.stringify(value);
+    }
+    const preview = Object.entries(slots)
+      .slice(0, 2)
+      .map(([k, v]) => `${k}: ${v}`)
+      .join(', ');
+    return {
+      id: tree.key,
+      source,
+      slots,
+      preview: preview.length > 50 ? `${preview.slice(0, 50)}...` : preview,
+    };
+  });
+}
+
 export function useExtractionStream(
   conversationId: string | undefined,
   turnsSavedCounter: number
 ) {
   const abortRef = useRef<AbortController | null>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const prevTurnsRef = useRef(0);
   const yopBufferRef = useRef<Array<Record<string, unknown>>>([]);
   const yopTimerRef = useRef<ReturnType<typeof setInterval>>(undefined);
-
-  const mode = useExtractionStore((s) => s.extractionMode);
 
   // Drain YOp buffer at paced interval for animated render
   const startYopDrain = useCallback(() => {
@@ -54,6 +72,7 @@ export function useExtractionStream(
     abortRef.current = controller;
 
     useExtractionStore.getState().setExtracting(true);
+    useExtractionUIStore.getState().setPhase('yops');
     yopBufferRef.current = [];
 
     try {
@@ -118,16 +137,21 @@ export function useExtractionStream(
             break;
 
           case 'done': {
-            if (event.data.snapshot) {
-              useExtractionStore.getState().setDraft(event.data.snapshot as any);
+            const snapshot = event.data.snapshot as any;
+            if (snapshot) {
+              useExtractionStore.getState().setDraft(snapshot);
             }
+
+            // Convert extracted trees to triage items for triage phase
+            const triageItems = treesToTriageItems(snapshot?.trees ?? []);
+            useTriageStore.getState().loadItems(triageItems);
+            useExtractionUIStore.getState().setPhase('triage');
 
             listTopics(convId).then((topicsList) => {
               const s = useExtractionStore.getState();
               s.setTopics(topicsList);
-              const snap = event.data.snapshot as any;
-              if (snap?.trees?.length > 0 && topicsList.length > 0) {
-                const rootType = snap.trees[0].key;
+              if (snapshot?.trees?.length > 0 && topicsList.length > 0) {
+                const rootType = snapshot.trees[0].key;
                 const currentTopic = topicsList.find((t: any) => t.id === s.activeTopicId);
                 if (currentTopic && currentTopic.name !== rootType) {
                   updateTopicApi(currentTopic.id, { name: rootType }).catch(() => {});
@@ -138,10 +162,9 @@ export function useExtractionStream(
               }
             }).catch(() => {});
 
-            if (useExtractionUIStore.getState().focusIntentEnabled && event.data.snapshot) {
-              const snap = event.data.snapshot as any;
-              if (snap.trees?.length > 0) {
-                getIntentSummary(snap.trees, new AbortController().signal)
+            if (useExtractionUIStore.getState().focusIntentEnabled && snapshot) {
+              if (snapshot.trees?.length > 0) {
+                getIntentSummary(snapshot.trees, new AbortController().signal)
                   .then((r) => useExtractionUIStore.getState().setLlmHighlightedNodeIds(r.coreNodeIds))
                   .catch(() => {});
               }
@@ -150,53 +173,33 @@ export function useExtractionStream(
           }
 
           case 'skipped':
+            useExtractionUIStore.getState().setPhase('idle');
+            break;
+
           case 'error':
+            useExtractionUIStore.getState().setPhase('idle');
             break;
         }
       }
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
-        // Extraction failed — non-critical
+        useExtractionUIStore.getState().setPhase('idle');
       }
     } finally {
       useExtractionStore.getState().setExtracting(false);
     }
   }, [startYopDrain]);
 
-  // Live mode: auto-trigger on new turns
-  useEffect(() => {
-    if (mode !== 'live' || !conversationId) return;
-    if (turnsSavedCounter === 0 || turnsSavedCounter === prevTurnsRef.current) return;
-    prevTurnsRef.current = turnsSavedCounter;
-    openStream(conversationId);
-  }, [mode, turnsSavedCounter, conversationId, openStream]);
-
-  // Standard mode: debounced auto-trigger
-  useEffect(() => {
-    if (mode !== 'standard' || !conversationId) return;
-    if (turnsSavedCounter === 0 || turnsSavedCounter === prevTurnsRef.current) return;
-    prevTurnsRef.current = turnsSavedCounter;
-
-    clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      openStream(conversationId);
-    }, 30_000);
-
-    return () => clearTimeout(debounceRef.current);
-  }, [mode, turnsSavedCounter, conversationId, openStream]);
-
   // Cleanup on unmount
   useEffect(() => {
     return () => {
       abortRef.current?.abort();
-      clearTimeout(debounceRef.current);
       clearInterval(yopTimerRef.current);
     };
   }, []);
 
   const triggerExtract = useCallback((opts?: { driftDecision?: DriftDecision }) => {
     if (!conversationId) return;
-    clearTimeout(debounceRef.current);
     openStream(conversationId, opts);
   }, [conversationId, openStream]);
 
