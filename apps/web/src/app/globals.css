@@ -1053,3 +1053,24 @@ a {
     animation: none;
   }
 }
+
+/* YAML tree animation — extraction pipeline render */
+@keyframes yaml-enter {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes yaml-update {
+  0%, 100% { background-color: transparent; }
+  50% { background-color: color-mix(in srgb, var(--accent-commit) 15%, transparent); }
+}
+
+@keyframes yaml-exit {
+  from { opacity: 1; max-height: 40px; }
+  to { opacity: 0; max-height: 0; }
+}
+
+.animate-yaml-enter { animation: yaml-enter 300ms ease-out; }
+.animate-yaml-update { animation: yaml-update 600ms ease-in-out; }
+.animate-yaml-exit { animation: yaml-exit 400ms ease-out forwards; }
+.yaml-node-move { transition: transform 400ms ease-in-out, opacity 300ms ease; }

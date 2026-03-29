@@ -478,10 +478,20 @@ export function YAMLView() {
               }
             };
 
+            const animationClass = (() => {
+              if (!line.changeType) return 'yaml-node-move';
+              switch (line.changeType) {
+                case 'add': return 'animate-yaml-enter';
+                case 'update': return 'animate-yaml-update';
+                case 'remove': return 'animate-yaml-exit';
+                default: return 'yaml-node-move';
+              }
+            })();
+
             return (
               <div
                 key={i}
-                className="group/yaml-line"
+                className={`group/yaml-line ${animationClass}`}
                 data-tree-id={isNodeLine ? line.treeId : undefined}
                 ref={(el) => {
                   if (el) lineRefs.current.set(line.treeId, el);
