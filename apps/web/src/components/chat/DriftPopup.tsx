@@ -2,7 +2,6 @@
 
 import { GitBranch, X } from 'lucide-react';
 import { useCallback } from 'react';
-import { extractNodes } from '@/lib/api/trees';
 import { useExtractionStore } from '@/store/extractionStore';
 import { useExtractionUIStore } from '@/store/extractionUIStore';
 
@@ -21,35 +20,23 @@ export function DriftPopup() {
   const driftInfo = useExtractionUIStore((s) => s.driftInfo);
   const driftChoices = useExtractionUIStore((s) => s.driftChoices);
   const clearDrift = useExtractionUIStore((s) => s.clearDrift);
-  const conversationId = useExtractionStore((s) => s.conversationId);
+  const triggerExtract = useExtractionStore((s) => s.triggerExtract);
 
   const handleChoice = useCallback(
-    async (choice: string) => {
-      if (!conversationId || !driftInfo) return;
-
+    (choice: string) => {
+      if (!driftInfo) return;
       clearDrift();
+      if (choice === 'keep_old') return;
 
-      if (choice === 'keep_old') {
-        // Nothing to do — YAML stays the same
-        return;
-      }
-
-      // For other choices, re-call extract with drift_decision
-      try {
-        const result = await extractNodes(conversationId, undefined, {
+      triggerExtract?.({
+        driftDecision: {
           choice,
           relation: driftInfo.relation,
           new_topic: driftInfo.new_topic,
-        });
-
-        if (result.status === 'completed' && result.snapshot) {
-          useExtractionStore.getState().setDraft(result.snapshot);
-        }
-      } catch {
-        // Drift choice application failed — non-critical
-      }
+        },
+      });
     },
-    [conversationId, driftInfo, clearDrift]
+    [driftInfo, clearDrift, triggerExtract]
   );
 
   if (!driftDetected || !driftInfo) return null;

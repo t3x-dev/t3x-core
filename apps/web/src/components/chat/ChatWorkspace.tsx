@@ -6,10 +6,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DriftPopup } from '@/components/chat/DriftPopup';
 import { useAutoProject } from '@/hooks/useAutoProject';
 import { useConversationChat } from '@/hooks/useConversationChat';
+import { useExtractionStream } from '@/hooks/useExtractionStream';
 import { getCommitAsNodes } from '@/lib/api/commitUnified';
-import { extractNodes, getSemanticDraft, listYOpsLog } from '@/lib/api/trees';
-import { listTopics, updateTopicApi } from '@/lib/api/topics';
-import { getIntentSummary } from '@/lib/intentSummary';
+import { getSemanticDraft, listYOpsLog } from '@/lib/api/trees';
+import { listTopics } from '@/lib/api/topics';
 import { cn } from '@/lib/utils';
 import { useChatStore } from '@/store/chatStore';
 import { useExtractionStore } from '@/store/extractionStore';
@@ -47,7 +47,6 @@ export function ChatWorkspace({
 }: ChatWorkspaceProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const firstMessageSentRef = useRef(false);
-  const prevTurnsSavedRef = useRef(0);
 
   // For "/chat/new" routes: auto-create project + conversation
   const isNewChat = conversationId === 'new';
@@ -261,9 +260,10 @@ export function ChatWorkspace({
   }, [messages, streamingContent]);
 
   const isExtracting = useExtractionStore((s) => s.isExtracting);
-  const focusIntentEnabled = useExtractionUIStore((s) => s.focusIntentEnabled);
-  const setLlmHighlightedNodeIds = useExtractionUIStore((s) => s.setLlmHighlightedNodeIds);
   const draft = useExtractionStore((s) => s.draft);
+
+  // SSE extraction stream — replaces the old extractNodes() useEffect
+  useExtractionStream(resolvedConversationId, turnsSavedCounter);
 
   // Precompute source map: quote positions in all messages for bidirectional highlighting
   const sourceMapByTurn = useMemo(() => {
@@ -276,107 +276,6 @@ export function ChatWorkspace({
     }));
     return buildSourceMap(draft, msgInput);
   }, [draft, messages]);
-
-  // Extract trees after turns are saved
-  useEffect(() => {
-    const prev = prevTurnsSavedRef.current;
-    prevTurnsSavedRef.current = turnsSavedCounter;
-
-    if (turnsSavedCounter === 0 || turnsSavedCounter === prev) return;
-    const convId = resolvedConversationId;
-    if (!convId) return;
-
-    const eStore = useExtractionStore.getState();
-    eStore.setExtracting(true);
-
-    const activeTopicId = eStore.activeTopicId;
-    extractNodes(
-      convId,
-      undefined,
-      undefined,
-      activeTopicId ? { topicId: activeTopicId } : undefined
-    )
-      .then((result) => {
-        const es = useExtractionStore.getState();
-        const uiS = useExtractionUIStore.getState();
-
-        // Handle pipeline response status
-        if (result.status === 'skipped') {
-          // ReadinessGate or SessionStateManager blocked — nothing to do
-          return;
-        }
-
-        if (result.status === 'drift_detected') {
-          if (result.drift && result.choices) {
-            uiS.setDriftDetected(result.drift, result.choices);
-          }
-          return;
-        }
-
-        // status === 'completed' — apply snapshot directly
-        if (result.snapshot && result.snapshot.trees.length > 0) {
-          es.setDraft(result.snapshot);
-          if (uiS.panelMode === 'collapsed') {
-            uiS.setPanelMode('default');
-          }
-        }
-
-        // Store advisory questions (Step 6)
-        if (result.advisory_questions?.length) {
-          uiS.setAdvisoryQuestions(result.advisory_questions);
-        }
-
-        // Store gate issues for tree annotation (Step 5)
-        if (result.gate_result?.semantic?.issues) {
-          const issuesByNode: Record<
-            string,
-            { severity: 'error' | 'warning' | 'info'; description: string }[]
-          > = {};
-          for (const issue of result.gate_result.semantic.issues) {
-            if (issue.tree_id) {
-              if (!issuesByNode[issue.tree_id]) issuesByNode[issue.tree_id] = [];
-              issuesByNode[issue.tree_id].push({
-                severity: issue.severity,
-                description: issue.description,
-              });
-            }
-          }
-          uiS.setGateIssues(issuesByNode);
-        }
-
-        // Reload topics after extraction (new topic may have been auto-created)
-        listTopics(convId)
-          .then((topicsList) => {
-            const es2 = useExtractionStore.getState();
-            es2.setTopics(topicsList);
-            // Auto-sync topic name with root tree type
-            if (result.snapshot && result.snapshot.trees.length > 0 && topicsList.length > 0) {
-              const rootType = result.snapshot.trees[0].key;
-              const currentTopic = topicsList.find((t) => t.id === es2.activeTopicId);
-              if (currentTopic && currentTopic.name !== rootType) {
-                updateTopicApi(currentTopic.id, { name: rootType }).catch(() => {});
-                es2.setTopics(
-                  topicsList.map((t) => (t.id === currentTopic.id ? { ...t, name: rootType } : t))
-                );
-              }
-            }
-          })
-          .catch(() => {});
-
-        if (focusIntentEnabled && result.snapshot && result.snapshot.trees.length > 0) {
-          const controller = new AbortController();
-          getIntentSummary(result.snapshot.trees, controller.signal)
-            .then((intentResult) => setLlmHighlightedNodeIds(intentResult.coreNodeIds))
-            .catch(() => {}); // Silent fallback - degrades to deterministic-only
-        }
-      })
-      .catch(() => {
-        // Extraction failed silently — non-critical
-      })
-      .finally(() => {
-        useExtractionStore.getState().setExtracting(false);
-      });
-  }, [resolvedConversationId, turnsSavedCounter, focusIntentEnabled, setLlmHighlightedNodeIds]);
 
   // Send firstMessage on mount (once only)
   useEffect(() => {

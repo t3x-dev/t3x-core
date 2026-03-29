@@ -18,7 +18,7 @@ import { create } from 'zustand';
 import { createYOpsEntry } from '@/lib/api/trees';
 import type { Topic } from '@/lib/api/topics';
 
-type ExtractionMode = 'standard' | 'deep';
+type ExtractionMode = 'live' | 'standard' | 'deep';
 
 interface ExtractionState {
   // Semantic data
@@ -50,7 +50,7 @@ interface ExtractionState {
   showCompressBanner: boolean;
 
   // Callable ref — set by useExtractionStream hook
-  triggerExtract: null | ((opts?: { driftDecision?: string }) => void);
+  triggerExtract: null | ((opts?: { driftDecision?: { choice: string; relation?: string; new_topic?: string } }) => void);
 
   // Methods
   setDraft: (content: SemanticContent) => void;
@@ -66,7 +66,7 @@ interface ExtractionState {
   startCompress: () => Promise<void>;
   undoCompression: () => Promise<void>;
   dismissCompressBanner: () => void;
-  setTriggerExtract: (fn: null | ((opts?: { driftDecision?: string }) => void)) => void;
+  setTriggerExtract: (fn: null | ((opts?: { driftDecision?: { choice: string; relation?: string; new_topic?: string } }) => void)) => void;
 }
 
 const emptyContent: SemanticContent = { trees: [], relations: [] };
