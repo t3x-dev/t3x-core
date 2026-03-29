@@ -17,6 +17,7 @@ export { extractionFeedbackRoutes } from './extraction-feedback.openapi';
 export { treeAnswerRoutes } from './tree-answer.openapi';
 export { treeCompressRoutes } from './tree-compress.openapi';
 export { treeExtractRoutes } from './tree-extract.openapi';
+export { treeExtractStreamRoutes } from './tree-extract-stream.openapi';
 export { gateRoutes } from './gate.openapi';
 export { healthRoutes } from './health.openapi';
 export { leavesRoutes } from './leaves.openapi';
