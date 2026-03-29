@@ -141,6 +141,7 @@ function SourceMappedText({
   onHoverSlot,
   onLeaveSlot,
   onClickSlot,
+  phase,
 }: {
   content: string;
   mappings: SourceMapping[];
@@ -148,6 +149,7 @@ function SourceMappedText({
   onHoverSlot: (treePath: string, slotKey: string | null) => void;
   onLeaveSlot: () => void;
   onClickSlot: (treePath: string, slotKey: string | null) => void;
+  phase?: string;
 }) {
   const segments = useMemo(() => splitIntoSegments(content, mappings), [content, mappings]);
 
@@ -160,6 +162,7 @@ function SourceMappedText({
 
         const m = seg.mapping;
         const isActive = hoveredNodeId === m.treePath;
+        const isReview = phase === 'review';
 
         return (
           <span
@@ -167,12 +170,22 @@ function SourceMappedText({
             data-tree-path={m.treePath}
             data-slot-key={m.slotKey}
             style={{
-              background: isActive
-                ? 'rgba(139, 92, 246, 0.3)'
-                : 'rgba(139, 92, 246, 0.08)',
-              borderBottom: isActive ? '2px solid rgba(139, 92, 246, 0.5)' : undefined,
+              background: isReview
+                ? isActive
+                  ? 'rgba(139, 92, 246, 0.15)'
+                  : 'rgba(74, 222, 128, 0.12)'
+                : isActive
+                  ? 'rgba(139, 92, 246, 0.3)'
+                  : 'rgba(139, 92, 246, 0.08)',
+              borderBottom: isReview
+                ? isActive
+                  ? '2px solid #8b5cf6'
+                  : '2px solid #4ade80'
+                : isActive
+                  ? '2px solid rgba(139, 92, 246, 0.5)'
+                  : undefined,
               borderRadius: 2,
-              padding: '1px 0',
+              padding: '0 1px',
               color: 'inherit',
               cursor: 'pointer',
               transition: 'background 0.15s, border-bottom 0.15s',
@@ -209,6 +222,7 @@ export function ChatMessage({
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState('');
 
+  const phase = useExtractionUIStore((s) => s.phase);
   const hoveredNodeId = useExtractionUIStore((s) => s.hoveredNodeId);
   const hoveredSlotKey = useExtractionUIStore((s) => s.hoveredSlotKey);
   const draft = useExtractionStore((s) => s.draft);
@@ -388,6 +402,7 @@ export function ChatMessage({
                         onHoverSlot={handleHoverSlot}
                         onLeaveSlot={handleLeaveSlot}
                         onClickSlot={handleClickSlot}
+                        phase={phase}
                       />
                     ) : (
                       content
@@ -422,6 +437,7 @@ export function ChatMessage({
                         onHoverSlot={handleHoverSlot}
                         onLeaveSlot={handleLeaveSlot}
                         onClickSlot={handleClickSlot}
+                        phase={phase}
                       />
                     </div>
                   ) : (
