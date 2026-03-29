@@ -11,17 +11,19 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { useExtractionPanelStore } from '@/store/extractionPanelStore';
+import { useExtractionStore } from '@/store/extractionStore';
+import { useExtractionUIStore } from '@/store/extractionUIStore';
+import { useCommitStore } from '@/store/commitStore';
 
 export function CommitDropdown() {
   const router = useRouter();
-  const draft = useExtractionPanelStore((s) => s.draft);
-  const setPanelMode = useExtractionPanelStore((s) => s.setPanelMode);
-  const selectPendingNodes = useExtractionPanelStore((s) => s.selectPendingNodes);
-  const commitNodes = useExtractionPanelStore((s) => s.commitNodes);
-  const commitBranch = useExtractionPanelStore((s) => s.commitBranch);
-  const isCommitting = useExtractionPanelStore((s) => s.isCommitting);
-  const projectId = useExtractionPanelStore((s) => s.projectId);
+  const draft = useExtractionStore((s) => s.draft);
+  const setPanelMode = useExtractionUIStore((s) => s.setPanelMode);
+  const selectPendingNodes = useCommitStore((s) => s.selectPendingNodes);
+  const commitNodes = useCommitStore((s) => s.commitNodes);
+  const commitBranch = useCommitStore((s) => s.commitBranch);
+  const isCommitting = useCommitStore((s) => s.isCommitting);
+  const projectId = useCommitStore((s) => s.projectId);
 
   const [showMessageInput, setShowMessageInput] = useState(false);
   const [commitMessage, setCommitMessage] = useState('');

@@ -13,7 +13,8 @@ import '@xyflow/react/dist/style.css';
 import { Loader2 } from 'lucide-react';
 import { useEffect, useMemo } from 'react';
 import { getLayoutedElements } from '@/lib/elkLayout';
-import { useExtractionPanelStore } from '@/store/extractionPanelStore';
+import { useExtractionStore } from '@/store/extractionStore';
+import { useCommitStore } from '@/store/commitStore';
 import { treesToNodes } from '@/lib/treeCompat';
 
 // ── Inline mini node ──
@@ -128,11 +129,11 @@ const nodeTypes = { miniNode: MiniTreeNodeView };
 // ── Inner component ──
 
 function TreeGraphMiniInner() {
-  const draft = useExtractionPanelStore((s) => s.draft);
-  const yopsHistory = useExtractionPanelStore((s) => s.yopsHistory);
-  const confirmedNodeIds = useExtractionPanelStore((s) => s.confirmedNodeIds);
-  const confirmNode = useExtractionPanelStore((s) => s.confirmNode);
-  const unconfirmNode = useExtractionPanelStore((s) => s.unconfirmNode);
+  const draft = useExtractionStore((s) => s.draft);
+  const yopsHistory = useExtractionStore((s) => s.yopsHistory);
+  const confirmedNodeIds = useCommitStore((s) => s.confirmedNodeIds);
+  const confirmNode = useCommitStore((s) => s.confirmNode);
+  const unconfirmNode = useCommitStore((s) => s.unconfirmNode);
 
   const [nodes, setNodes, onNodesChange] = useNodesState([] as Node[]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([] as Edge[]);
@@ -227,7 +228,7 @@ function TreeGraphMiniInner() {
     };
   }, [draft, changeMap, confirmedNodeIds, handleConfirmToggle, setNodes, setEdges, fitView]);
 
-  const isExtracting = useExtractionPanelStore((s) => s.isExtracting);
+  const isExtracting = useExtractionStore((s) => s.isExtracting);
 
   if (draft.trees.length === 0) {
     return (

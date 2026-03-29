@@ -3,7 +3,8 @@
 import { GitBranch, X } from 'lucide-react';
 import { useCallback } from 'react';
 import { extractNodes } from '@/lib/api/trees';
-import { useExtractionPanelStore } from '@/store/extractionPanelStore';
+import { useExtractionStore } from '@/store/extractionStore';
+import { useExtractionUIStore } from '@/store/extractionUIStore';
 
 const CHOICE_LABELS: Record<string, { label: string; description: string }> = {
   keep_old: { label: 'Keep Current', description: 'Ignore the new topic, YAML unchanged' },
@@ -16,11 +17,11 @@ const CHOICE_LABELS: Record<string, { label: string; description: string }> = {
 };
 
 export function DriftPopup() {
-  const driftDetected = useExtractionPanelStore((s) => s.driftDetected);
-  const driftInfo = useExtractionPanelStore((s) => s.driftInfo);
-  const driftChoices = useExtractionPanelStore((s) => s.driftChoices);
-  const clearDrift = useExtractionPanelStore((s) => s.clearDrift);
-  const conversationId = useExtractionPanelStore((s) => s.conversationId);
+  const driftDetected = useExtractionUIStore((s) => s.driftDetected);
+  const driftInfo = useExtractionUIStore((s) => s.driftInfo);
+  const driftChoices = useExtractionUIStore((s) => s.driftChoices);
+  const clearDrift = useExtractionUIStore((s) => s.clearDrift);
+  const conversationId = useExtractionStore((s) => s.conversationId);
 
   const handleChoice = useCallback(
     async (choice: string) => {
@@ -42,7 +43,7 @@ export function DriftPopup() {
         });
 
         if (result.status === 'completed' && result.snapshot) {
-          useExtractionPanelStore.getState().setDraft(result.snapshot);
+          useExtractionStore.getState().setDraft(result.snapshot);
         }
       } catch {
         // Drift choice application failed — non-critical

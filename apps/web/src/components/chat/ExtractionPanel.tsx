@@ -6,7 +6,9 @@ import { GitCommit, LayoutGrid, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { useExtractionPanelStore } from '@/store/extractionPanelStore';
+import { useExtractionStore } from '@/store/extractionStore';
+import { useExtractionUIStore } from '@/store/extractionUIStore';
+import { useCommitStore } from '@/store/commitStore';
 import { AdvisoryPanel } from './AdvisoryPanel';
 import { CommitDropdown } from './CommitDropdown';
 import { YAMLView } from './YAMLView';
@@ -66,16 +68,15 @@ function CollapsedRail({
 
 function CommitPreviewSection() {
   const router = useRouter();
-  const _conversationId = useExtractionPanelStore((s) => s.conversationId);
-  const projectId = useExtractionPanelStore((s) => s.projectId);
-  const lastCommitHash = useExtractionPanelStore((s) => s.lastCommitHash);
-  const commitBranch = useExtractionPanelStore((s) => s.commitBranch);
-  const isCommitting = useExtractionPanelStore((s) => s.isCommitting);
-  const commitError = useExtractionPanelStore((s) => s.commitError);
-  const selectPendingNodes = useExtractionPanelStore((s) => s.selectPendingNodes);
-  const commitNodes = useExtractionPanelStore((s) => s.commitNodes);
-  const setPanelMode = useExtractionPanelStore((s) => s.setPanelMode);
-  const clearCommitError = useExtractionPanelStore((s) => s.clearCommitError);
+  const projectId = useCommitStore((s) => s.projectId);
+  const lastCommitHash = useCommitStore((s) => s.lastCommitHash);
+  const commitBranch = useCommitStore((s) => s.commitBranch);
+  const isCommitting = useCommitStore((s) => s.isCommitting);
+  const commitError = useCommitStore((s) => s.commitError);
+  const selectPendingNodes = useCommitStore((s) => s.selectPendingNodes);
+  const commitNodes = useCommitStore((s) => s.commitNodes);
+  const clearCommitError = useCommitStore((s) => s.clearCommitError);
+  const setPanelMode = useExtractionUIStore((s) => s.setPanelMode);
 
   const [commitMessage, setCommitMessage] = useState('');
   const pendingNodes: TreeNode[] = selectPendingNodes();
@@ -188,20 +189,19 @@ function CommitPreviewSection() {
 // ── Main ExtractionPanel ──
 
 export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
-  const panelMode = useExtractionPanelStore((s) => s.panelMode);
-  const draft = useExtractionPanelStore((s) => s.draft);
-  const isExtracting = useExtractionPanelStore((s) => s.isExtracting);
-  const togglePanel = useExtractionPanelStore((s) => s.togglePanel);
-  const _setPanelMode = useExtractionPanelStore((s) => s.setPanelMode);
-  const yopsHistory = useExtractionPanelStore((s) => s.yopsHistory);
-  const isCompressing = useExtractionPanelStore((s) => s.isCompressing);
-  const compressResult = useExtractionPanelStore((s) => s.compressResult);
-  const showCompressBanner = useExtractionPanelStore((s) => s.showCompressBanner);
-  const startCompress = useExtractionPanelStore((s) => s.startCompress);
-  const undoCompression = useExtractionPanelStore((s) => s.undoCompression);
-  const dismissCompressBanner = useExtractionPanelStore((s) => s.dismissCompressBanner);
-  const yopsLog = useExtractionPanelStore((s) => s.yopsLog);
-  const manualEditedNodeIds = useExtractionPanelStore((s) => s.manualEditedNodeIds);
+  const draft = useExtractionStore((s) => s.draft);
+  const isExtracting = useExtractionStore((s) => s.isExtracting);
+  const yopsHistory = useExtractionStore((s) => s.yopsHistory);
+  const yopsLog = useExtractionStore((s) => s.yopsLog);
+  const isCompressing = useExtractionStore((s) => s.isCompressing);
+  const compressResult = useExtractionStore((s) => s.compressResult);
+  const showCompressBanner = useExtractionStore((s) => s.showCompressBanner);
+  const startCompress = useExtractionStore((s) => s.startCompress);
+  const undoCompression = useExtractionStore((s) => s.undoCompression);
+  const dismissCompressBanner = useExtractionStore((s) => s.dismissCompressBanner);
+  const panelMode = useExtractionUIStore((s) => s.panelMode);
+  const togglePanel = useExtractionUIStore((s) => s.togglePanel);
+  const manualEditedNodeIds = useCommitStore((s) => s.manualEditedNodeIds);
   const hasCompressEntry = yopsLog.some((d) => d.source === 'compress');
 
   const nodeCount = draft.trees.length;

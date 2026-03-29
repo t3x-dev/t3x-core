@@ -12,7 +12,9 @@ import { listTopics, updateTopicApi } from '@/lib/api/topics';
 import { getIntentSummary } from '@/lib/intentSummary';
 import { cn } from '@/lib/utils';
 import { useChatStore } from '@/store/chatStore';
-import { useExtractionPanelStore } from '@/store/extractionPanelStore';
+import { useExtractionStore } from '@/store/extractionStore';
+import { useExtractionUIStore } from '@/store/extractionUIStore';
+import { useCommitStore } from '@/store/commitStore';
 import { useSessionStore } from '@/store/sessionStore';
 import { ChatHeader } from './ChatHeader';
 import type { AttachedImage } from './ChatInput';
@@ -133,19 +135,19 @@ export function ChatWorkspace({
     useChatStore.getState().setActiveConversation(convId, resolvedProjectId || null);
     // Skip resetDraft if we just hydrated from parent (prevents wipe on re-render)
     if (!inheritedRef.current) {
-      useExtractionPanelStore.getState().resetDraft();
+      useExtractionStore.getState().resetDraft();
     }
-    useExtractionPanelStore.getState().setConversationId(convId === 'new' ? null : convId);
+    useExtractionStore.getState().setConversationId(convId === 'new' ? null : convId);
     if (resolvedProjectId) {
       useSessionStore.getState().setLastSession(resolvedProjectId, convId);
     }
 
-    useExtractionPanelStore.getState().setProjectId(resolvedProjectId || null);
+    useCommitStore.getState().setProjectId(resolvedProjectId || null);
 
     // Initialize commit state (load branch head) — skip when inheriting
     // because inheritance sets lastCommitHash to the parent commit hash
     if (resolvedProjectId && !inheritFromCommitHash) {
-      useExtractionPanelStore.getState().initCommitState(resolvedProjectId);
+      useCommitStore.getState().initCommitState(resolvedProjectId);
     }
 
     // If no project ID yet, try to get it from the conversation
@@ -155,9 +157,9 @@ export function ChatWorkspace({
           .then((conv) => {
             if (conv?.project_id) {
               setResolvedProjectId(conv.project_id);
-              useExtractionPanelStore.getState().setProjectId(conv.project_id);
+              useCommitStore.getState().setProjectId(conv.project_id);
               if (!inheritFromCommitHash) {
-                useExtractionPanelStore.getState().initCommitState(conv.project_id);
+                useCommitStore.getState().initCommitState(conv.project_id);
               }
               useChatStore.getState().setActiveConversation(convId, conv.project_id);
             }
@@ -177,22 +179,22 @@ export function ChatWorkspace({
           if (parentConvSource?.id) {
             setParentConversationId(parentConvSource.id);
           }
-          const store = useExtractionPanelStore.getState();
+          const extractionState = useExtractionStore.getState();
           const trees = (parentCommit.content?.trees as TreeNode[]) ?? [];
           const relations = parentCommit.content?.relations ?? [];
           if (trees.length > 0) {
-            store.setDraft({ trees, relations });
+            extractionState.setDraft({ trees, relations });
             // Set parent as lastCommitHash so commit B gets correct parent_hashes
-            useExtractionPanelStore.setState({ lastCommitHash: hash });
+            useCommitStore.setState({ lastCommitHash: hash });
             // Mark all inherited trees as confirmed
             const confirmed: Record<string, boolean> = {};
             const nodes = treesToNodes(trees);
             for (const f of nodes) {
               confirmed[f.id] = true;
             }
-            useExtractionPanelStore.setState({ confirmedNodeIds: confirmed });
-            if (store.panelMode === 'collapsed') {
-              store.setPanelMode('default');
+            useCommitStore.setState({ confirmedNodeIds: confirmed });
+            if (useExtractionUIStore.getState().panelMode === 'collapsed') {
+              useExtractionUIStore.getState().setPanelMode('default');
             }
           }
           // Mark as hydrated so resetDraft() is skipped on re-render
@@ -209,29 +211,29 @@ export function ChatWorkspace({
     if (convId && convId !== 'new') {
       Promise.all([getSemanticDraft(convId), listYOpsLog(convId), listTopics(convId)])
         .then(([draft, yopsEntries, topicsList]) => {
-          const store = useExtractionPanelStore.getState();
+          const eState = useExtractionStore.getState();
           if (draft && draft.trees.length > 0) {
-            store.setDraft(draft);
-            if (store.panelMode === 'collapsed') {
-              store.setPanelMode('default');
+            eState.setDraft(draft);
+            if (useExtractionUIStore.getState().panelMode === 'collapsed') {
+              useExtractionUIStore.getState().setPanelMode('default');
             }
           } else if (inheritFromCommitHash) {
             // No existing draft — hydrate from parent commit
             hydrateFromParent(inheritFromCommitHash);
           }
           if (yopsEntries && yopsEntries.length > 0) {
-            store.hydrateYOpsLog(yopsEntries);
+            eState.hydrateYOpsLog(yopsEntries);
             // Lock input if a commit was made from this conversation
             if (yopsEntries.some((d: { source?: string }) => d.source === 'commit_marker')) {
               setIsConversationCommitted(true);
             }
           }
           if (topicsList && topicsList.length > 0) {
-            store.setTopics(topicsList);
+            eState.setTopics(topicsList);
             // Auto-select the first active topic
             const activeTopic = topicsList.find((t) => t.status === 'active');
             if (activeTopic) {
-              store.setActiveTopicId(activeTopic.id);
+              eState.setActiveTopicId(activeTopic.id);
             }
           }
         })
@@ -240,7 +242,7 @@ export function ChatWorkspace({
         });
     } else if (inheritFromCommitHash) {
       // New conversation with inheritance — hydrate from parent commit
-      useExtractionPanelStore.getState().setProjectId(resolvedProjectId || null);
+      useCommitStore.getState().setProjectId(resolvedProjectId || null);
       hydrateFromParent(inheritFromCommitHash);
     }
   }, [
@@ -258,10 +260,10 @@ export function ChatWorkspace({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, streamingContent]);
 
-  const isExtracting = useExtractionPanelStore((s) => s.isExtracting);
-  const focusIntentEnabled = useExtractionPanelStore((s) => s.focusIntentEnabled);
-  const setLlmHighlightedNodeIds = useExtractionPanelStore((s) => s.setLlmHighlightedNodeIds);
-  const draft = useExtractionPanelStore((s) => s.draft);
+  const isExtracting = useExtractionStore((s) => s.isExtracting);
+  const focusIntentEnabled = useExtractionUIStore((s) => s.focusIntentEnabled);
+  const setLlmHighlightedNodeIds = useExtractionUIStore((s) => s.setLlmHighlightedNodeIds);
+  const draft = useExtractionStore((s) => s.draft);
 
   // Precompute source map: quote positions in all messages for bidirectional highlighting
   const sourceMapByTurn = useMemo(() => {
@@ -284,10 +286,10 @@ export function ChatWorkspace({
     const convId = resolvedConversationId;
     if (!convId) return;
 
-    const store = useExtractionPanelStore.getState();
-    store.setExtracting(true);
+    const eStore = useExtractionStore.getState();
+    eStore.setExtracting(true);
 
-    const activeTopicId = store.activeTopicId;
+    const activeTopicId = eStore.activeTopicId;
     extractNodes(
       convId,
       undefined,
@@ -295,7 +297,8 @@ export function ChatWorkspace({
       activeTopicId ? { topicId: activeTopicId } : undefined
     )
       .then((result) => {
-        const s = useExtractionPanelStore.getState();
+        const es = useExtractionStore.getState();
+        const uiS = useExtractionUIStore.getState();
 
         // Handle pipeline response status
         if (result.status === 'skipped') {
@@ -305,22 +308,22 @@ export function ChatWorkspace({
 
         if (result.status === 'drift_detected') {
           if (result.drift && result.choices) {
-            s.setDriftDetected(result.drift, result.choices);
+            uiS.setDriftDetected(result.drift, result.choices);
           }
           return;
         }
 
         // status === 'completed' — apply snapshot directly
         if (result.snapshot && result.snapshot.trees.length > 0) {
-          s.setDraft(result.snapshot);
-          if (s.panelMode === 'collapsed') {
-            s.setPanelMode('default');
+          es.setDraft(result.snapshot);
+          if (uiS.panelMode === 'collapsed') {
+            uiS.setPanelMode('default');
           }
         }
 
         // Store advisory questions (Step 6)
         if (result.advisory_questions?.length) {
-          s.setAdvisoryQuestions(result.advisory_questions);
+          uiS.setAdvisoryQuestions(result.advisory_questions);
         }
 
         // Store gate issues for tree annotation (Step 5)
@@ -338,21 +341,21 @@ export function ChatWorkspace({
               });
             }
           }
-          s.setGateIssues(issuesByNode);
+          uiS.setGateIssues(issuesByNode);
         }
 
         // Reload topics after extraction (new topic may have been auto-created)
         listTopics(convId)
           .then((topicsList) => {
-            const s2 = useExtractionPanelStore.getState();
-            s2.setTopics(topicsList);
+            const es2 = useExtractionStore.getState();
+            es2.setTopics(topicsList);
             // Auto-sync topic name with root tree type
             if (result.snapshot && result.snapshot.trees.length > 0 && topicsList.length > 0) {
               const rootType = result.snapshot.trees[0].key;
-              const currentTopic = topicsList.find((t) => t.id === s2.activeTopicId);
+              const currentTopic = topicsList.find((t) => t.id === es2.activeTopicId);
               if (currentTopic && currentTopic.name !== rootType) {
                 updateTopicApi(currentTopic.id, { name: rootType }).catch(() => {});
-                s2.setTopics(
+                es2.setTopics(
                   topicsList.map((t) => (t.id === currentTopic.id ? { ...t, name: rootType } : t))
                 );
               }
@@ -371,7 +374,7 @@ export function ChatWorkspace({
         // Extraction failed silently — non-critical
       })
       .finally(() => {
-        useExtractionPanelStore.getState().setExtracting(false);
+        useExtractionStore.getState().setExtracting(false);
       });
   }, [resolvedConversationId, turnsSavedCounter, focusIntentEnabled, setLlmHighlightedNodeIds]);
 

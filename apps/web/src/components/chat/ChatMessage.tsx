@@ -7,7 +7,8 @@ import remarkGfm from 'remark-gfm';
 import type { Citation } from '@/lib/api/chat';
 import type { SourceMapping } from '@/lib/sourceMap';
 import { cn } from '@/lib/utils';
-import { useExtractionPanelStore } from '@/store/extractionPanelStore';
+import { useExtractionStore } from '@/store/extractionStore';
+import { useExtractionUIStore } from '@/store/extractionUIStore';
 import { CitationChips } from './CitationChips';
 import { CodeBlock } from './CodeBlock';
 import { ThinkingSection } from './ThinkingSection';
@@ -208,11 +209,11 @@ export function ChatMessage({
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState('');
 
-  const hoveredNodeId = useExtractionPanelStore((s) => s.hoveredNodeId);
-  const hoveredSlotKey = useExtractionPanelStore((s) => s.hoveredSlotKey);
-  const draft = useExtractionPanelStore((s) => s.draft);
-  const setHoveredTurnIndex = useExtractionPanelStore((s) => s.setHoveredTurnIndex);
-  const scrollToCenter = useExtractionPanelStore((s) => s.scrollToCenter);
+  const hoveredNodeId = useExtractionUIStore((s) => s.hoveredNodeId);
+  const hoveredSlotKey = useExtractionUIStore((s) => s.hoveredSlotKey);
+  const draft = useExtractionStore((s) => s.draft);
+  const setHoveredTurnIndex = useExtractionUIStore((s) => s.setHoveredTurnIndex);
+  const scrollToCenter = useExtractionUIStore((s) => s.scrollToCenter);
   const textRef = useRef<HTMLDivElement>(null);
   const messageRef = useRef<HTMLDivElement>(null);
 
@@ -255,20 +256,20 @@ export function ChatMessage({
 
   // ── Chat → YAML: source map interaction handlers ──
   const handleHoverSlot = useCallback((treePath: string, slotKey: string | null) => {
-    useExtractionPanelStore.setState({ hoveredFromChat: true });
-    useExtractionPanelStore.getState().setHoveredNodeId(treePath, slotKey);
+    useExtractionUIStore.setState({ hoveredFromChat: true });
+    useExtractionUIStore.getState().setHoveredNodeId(treePath, slotKey);
   }, []);
 
   const handleLeaveSlot = useCallback(() => {
-    useExtractionPanelStore.getState().setHoveredNodeId(null);
+    useExtractionUIStore.getState().setHoveredNodeId(null);
   }, []);
 
   const handleClickSlot = useCallback((treePath: string, slotKey: string | null) => {
-    useExtractionPanelStore.setState({
+    useExtractionUIStore.setState({
       hoveredFromChat: true,
       scrollToCenter: true,
     });
-    useExtractionPanelStore.getState().setHoveredNodeId(treePath, slotKey);
+    useExtractionUIStore.getState().setHoveredNodeId(treePath, slotKey);
   }, []);
 
   // Auto-scroll this message into view when it's the source of hovered YAML

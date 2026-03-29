@@ -88,6 +88,10 @@ export const useExtractionStore = create<ExtractionState>((set, get) => ({
 
   setDraft: (content) => {
     set({ draft: content });
+    // Cross-store: clear manual edit tracking (matching old extractionPanelStore behavior)
+    import('./commitStore').then(({ useCommitStore }) => {
+      useCommitStore.setState({ manualEditedNodeIds: new Set() });
+    });
   },
 
   applyTreeChanges: (batch, source, turnHash) => {
@@ -110,6 +114,20 @@ export const useExtractionStore = create<ExtractionState>((set, get) => ({
       yopsHistory: [batch.changes, ...get().yopsHistory].slice(0, 3),
     });
 
+    // Track manual edits in commitStore (cross-store write)
+    if (source === 'manual') {
+      import('./commitStore').then(({ useCommitStore }) => {
+        const commitState = useCommitStore.getState();
+        const ids = new Set(commitState.manualEditedNodeIds);
+        for (const change of batch.changes) {
+          if (change.action === 'add') ids.add(change.node.key);
+          else if (change.action === 'update') ids.add(change.target_path);
+          else if (change.action === 'remove') ids.add(change.target_path);
+        }
+        useCommitStore.setState({ manualEditedNodeIds: ids });
+      });
+    }
+
     // Persist user edits to database (LLM extraction and compression are already saved by the API)
     const convId = get().conversationId;
     if (convId && source !== 'pipeline' && source !== 'compress') {
@@ -129,6 +147,14 @@ export const useExtractionStore = create<ExtractionState>((set, get) => ({
     // Clear drift state in extractionUIStore
     import('./extractionUIStore').then(({ useExtractionUIStore }) => {
       useExtractionUIStore.getState().clearDrift();
+    });
+    // Clear commit-related state in commitStore (matching old extractionPanelStore behavior)
+    import('./commitStore').then(({ useCommitStore }) => {
+      useCommitStore.setState({
+        confirmedNodeIds: {},
+        confirmedSlotKeys: {},
+        manualEditedNodeIds: new Set(),
+      });
     });
   },
 

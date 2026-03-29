@@ -7,7 +7,9 @@ import { nestNodes } from '@/lib/treeNesting';
 import { parseDisplayYAML, toDisplayYAML } from '@/lib/liteYaml';
 import { traceChatToYaml, traceYamlToChat } from '@/lib/hoverTrace';
 import { RELEVANCE_THRESHOLD, type RelevanceContext, relevanceScore } from '@/lib/relevanceScore';
-import { useExtractionPanelStore } from '@/store/extractionPanelStore';
+import { useExtractionStore } from '@/store/extractionStore';
+import { useExtractionUIStore } from '@/store/extractionUIStore';
+import { useCommitStore } from '@/store/commitStore';
 import { TreeHistoryPopover } from './TreeHistoryPopover';
 import { type CompatNode, contentToNodes, treesToNodes } from '@/lib/treeCompat';
 
@@ -171,26 +173,26 @@ function renderSlotLines(
 // ── Component ──
 
 export function YAMLView() {
-  const draft = useExtractionPanelStore((s) => s.draft);
-  const applyTreeChanges = useExtractionPanelStore((s) => s.applyTreeChanges);
-  const yopsHistory = useExtractionPanelStore((s) => s.yopsHistory);
-  const yopsLog = useExtractionPanelStore((s) => s.yopsLog);
-  const confirmedNodeIds = useExtractionPanelStore((s) => s.confirmedNodeIds);
-  const confirmedSlotKeys = useExtractionPanelStore((s) => s.confirmedSlotKeys);
-  const confirmNode = useExtractionPanelStore((s) => s.confirmNode);
-  const unconfirmNode = useExtractionPanelStore((s) => s.unconfirmNode);
-  const confirmSlot = useExtractionPanelStore((s) => s.confirmSlot);
-  const unconfirmSlot = useExtractionPanelStore((s) => s.unconfirmSlot);
-  const committedNodeIds = useExtractionPanelStore((s) => s.committedNodeIds);
-  const llmHighlightedNodeIds = useExtractionPanelStore((s) => s.llmHighlightedNodeIds);
-  const isExtracting = useExtractionPanelStore((s) => s.isExtracting);
-  const setHoveredNodeId = useExtractionPanelStore((s) => s.setHoveredNodeId);
-  const hoveredTurnIndex = useExtractionPanelStore((s) => s.hoveredTurnIndex);
-  const gateIssues = useExtractionPanelStore((s) => s.gateIssues);
-  const manualEditedNodeIds = useExtractionPanelStore((s) => s.manualEditedNodeIds);
-  const hoveredNodeId = useExtractionPanelStore((s) => s.hoveredNodeId);
-  const hoveredFromChat = useExtractionPanelStore((s) => s.hoveredFromChat);
-  const scrollToCenter = useExtractionPanelStore((s) => s.scrollToCenter);
+  const draft = useExtractionStore((s) => s.draft);
+  const applyTreeChanges = useExtractionStore((s) => s.applyTreeChanges);
+  const yopsHistory = useExtractionStore((s) => s.yopsHistory);
+  const yopsLog = useExtractionStore((s) => s.yopsLog);
+  const isExtracting = useExtractionStore((s) => s.isExtracting);
+  const hoveredNodeId = useExtractionUIStore((s) => s.hoveredNodeId);
+  const hoveredTurnIndex = useExtractionUIStore((s) => s.hoveredTurnIndex);
+  const hoveredFromChat = useExtractionUIStore((s) => s.hoveredFromChat);
+  const scrollToCenter = useExtractionUIStore((s) => s.scrollToCenter);
+  const setHoveredNodeId = useExtractionUIStore((s) => s.setHoveredNodeId);
+  const gateIssues = useExtractionUIStore((s) => s.gateIssues);
+  const llmHighlightedNodeIds = useExtractionUIStore((s) => s.llmHighlightedNodeIds);
+  const confirmedNodeIds = useCommitStore((s) => s.confirmedNodeIds);
+  const confirmedSlotKeys = useCommitStore((s) => s.confirmedSlotKeys);
+  const confirmNode = useCommitStore((s) => s.confirmNode);
+  const unconfirmNode = useCommitStore((s) => s.unconfirmNode);
+  const confirmSlot = useCommitStore((s) => s.confirmSlot);
+  const unconfirmSlot = useCommitStore((s) => s.unconfirmSlot);
+  const committedNodeIds = useCommitStore((s) => s.committedNodeIds);
+  const manualEditedNodeIds = useCommitStore((s) => s.manualEditedNodeIds);
 
   // Track DOM refs for each YAML line by treeId for Chat→YAML scrolling
   const lineRefs = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -206,7 +208,7 @@ export function YAMLView() {
         });
         // Reset scrollToCenter after scroll
         if (scrollToCenter) {
-          useExtractionPanelStore.setState({ scrollToCenter: false });
+          useExtractionUIStore.setState({ scrollToCenter: false });
         }
       }
     }
@@ -490,7 +492,7 @@ export function YAMLView() {
                   // Click YAML slot → scroll source chat message into center view
                   const trace = traceYamlToChat(draft, line.treeId, line.slotKey);
                   if (trace.sourceTurnIndex != null) {
-                    useExtractionPanelStore.setState({ scrollToCenter: true });
+                    useExtractionUIStore.setState({ scrollToCenter: true });
                     setHoveredNodeId(line.treeId, line.slotKey);
                   }
                 }}

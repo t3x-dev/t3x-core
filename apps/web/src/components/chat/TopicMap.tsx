@@ -4,7 +4,7 @@ import { FolderOpen, Plus, Trash2 } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { createTopicApi, deleteTopicApi } from '@/lib/api/topics';
 import { cn } from '@/lib/utils';
-import { useExtractionPanelStore } from '@/store/extractionPanelStore';
+import { useExtractionStore } from '@/store/extractionStore';
 
 /**
  * TopicMap — folder-style vertical list of topics.
@@ -13,12 +13,12 @@ import { useExtractionPanelStore } from '@/store/extractionPanelStore';
  * Provides a "+ New Topic" button and delete per topic.
  */
 export function TopicMap() {
-  const topics = useExtractionPanelStore((s) => s.topics);
-  const activeTopicId = useExtractionPanelStore((s) => s.activeTopicId);
-  const setActiveTopicId = useExtractionPanelStore((s) => s.setActiveTopicId);
-  const setTopics = useExtractionPanelStore((s) => s.setTopics);
-  const addTopic = useExtractionPanelStore((s) => s.addTopic);
-  const conversationId = useExtractionPanelStore((s) => s.conversationId);
+  const topics = useExtractionStore((s) => s.topics);
+  const activeTopicId = useExtractionStore((s) => s.activeTopicId);
+  const setActiveTopicId = useExtractionStore((s) => s.setActiveTopicId);
+  const setTopics = useExtractionStore((s) => s.setTopics);
+  const addTopic = useExtractionStore((s) => s.addTopic);
+  const conversationId = useExtractionStore((s) => s.conversationId);
 
   const [isCreating, setIsCreating] = useState(false);
   const [newName, setNewName] = useState('');

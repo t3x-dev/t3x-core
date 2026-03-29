@@ -5,7 +5,8 @@ import { RefreshCw, Square } from 'lucide-react';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { chatStream } from '@/lib/api/chat';
 import { cn } from '@/lib/utils';
-import { useExtractionPanelStore } from '@/store/extractionPanelStore';
+import { useExtractionStore } from '@/store/extractionStore';
+import { useExtractionUIStore } from '@/store/extractionUIStore';
 import { type CompatNode, contentToNodes, treesToNodes } from '@/lib/treeCompat';
 
 // ── Types ──
@@ -101,9 +102,9 @@ function HighlightedOutput({
 // ── Component ──
 
 export function PreviewPanel({ className }: PreviewPanelProps) {
-  const draft = useExtractionPanelStore((s) => s.draft);
-  const hoveredNodeId = useExtractionPanelStore((s) => s.hoveredNodeId);
-  const hoveredSlotKey = useExtractionPanelStore((s) => s.hoveredSlotKey);
+  const draft = useExtractionStore((s) => s.draft);
+  const hoveredNodeId = useExtractionUIStore((s) => s.hoveredNodeId);
+  const hoveredSlotKey = useExtractionUIStore((s) => s.hoveredSlotKey);
 
   const [selectedType, setSelectedType] = useState<LeafType>('tweet');
   const [prompt, setPrompt] = useState('');
