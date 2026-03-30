@@ -289,38 +289,7 @@ export function YOpsFeed() {
           flexShrink: 0,
         }}
       >
-        {/* Pipeline step log — always visible when steps exist */}
-        {pipelineSteps.length > 0 && (
-          <div style={{ marginBottom: 6 }}>
-            {pipelineSteps.map((s, i) => {
-              const isCurrent = i === pipelineSteps.length - 1 && isExtracting;
-              return (
-                <div
-                  key={`${s.step}-${i}`}
-                  className="flex items-center gap-1"
-                  style={{
-                    fontSize: 9,
-                    color: 'var(--text-tertiary)',
-                    opacity: isCurrent ? 1 : 0.5,
-                    padding: '1px 0',
-                    fontFamily: 'var(--font-mono, monospace)',
-                  }}
-                >
-                  {isCurrent ? (
-                    <Loader2 className="h-2.5 w-2.5 animate-spin" style={{ color: 'var(--accent-extract)', marginRight: 2 }} />
-                  ) : (
-                    <span style={{ color: '#4ade80', marginRight: 4, fontSize: 8 }}>&#10003;</span>
-                  )}
-                  <span style={isCurrent ? { color: 'var(--accent-extract)' } : undefined}>
-                    {STEP_LABELS[s.step] ?? s.step}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Progress bar */}
+        {/* Progress bar + current step */}
         {(count > 0 || isExtracting) && (
           <div className="flex items-center gap-2">
             <span>{count}/{total || '...'}</span>
@@ -338,7 +307,15 @@ export function YOpsFeed() {
                 }}
               />
             </div>
-            {isExtracting && <span style={{ color: 'var(--accent-extract)' }}>extracting...</span>}
+            {isExtracting && (
+              <span style={{ color: 'var(--accent-extract)', display: 'flex', alignItems: 'center', gap: 3, whiteSpace: 'nowrap' }}>
+                <Loader2 className="h-3 w-3 animate-spin" />
+                {(() => {
+                  const last = pipelineSteps[pipelineSteps.length - 1];
+                  return last ? (STEP_LABELS[last.step] ?? last.step) : 'starting...';
+                })()}
+              </span>
+            )}
             {!isExtracting && count > 0 && <span style={{ color: '#4ade80' }}>complete</span>}
           </div>
         )}
