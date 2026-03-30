@@ -1,6 +1,6 @@
 'use client';
 
-import type { TreeDiff, SlotDiff, SlotValue } from '@t3x-dev/core';
+import type { TreeDiff, SlotDiff, SlotValue, SemanticContent } from '@t3x-dev/core';
 import { cn } from '@/lib/utils';
 import { formatSlotValue, YAML_COLORS } from './DiffYAMLFormatters';
 import {
@@ -17,6 +17,8 @@ import { treeLineCount, SlotValueSpan, WordDiffSpan } from './YAMLNodeRenderer';
 
 interface DiffYAMLUnifiedViewProps {
   diff: TreeDiff;
+  sourceContent?: SemanticContent;
+  targetContent?: SemanticContent;
   activeNodeId: string | null;
   onSelectNode: (id: string) => void;
   showIdentical: boolean;
@@ -321,12 +323,14 @@ function UnifiedNodeContent({
 
 export function DiffYAMLUnifiedView({
   diff,
+  sourceContent,
+  targetContent,
   activeNodeId,
   onSelectNode,
   showIdentical,
 }: DiffYAMLUnifiedViewProps) {
   const dyTheme = useDYTheme();
-  const aligned = buildAlignedNodes(diff);
+  const aligned = buildAlignedNodes(diff, sourceContent, targetContent);
   const nonIdentical = aligned.filter((a) => a.type !== 'identical');
   const identicalNodes = aligned.filter((a) => a.type === 'identical');
 

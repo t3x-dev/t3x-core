@@ -410,6 +410,8 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
                   {viewMode === 'split' ? (
                     <DiffYAMLSplitView
                       diff={diff}
+                      sourceContent={baseCommit?.content}
+                      targetContent={targetCommit?.content}
                       activeNodeId={activeNodeId}
                       onSelectNode={handleSelectNode}
                       showIdentical={showIdentical}
@@ -417,6 +419,8 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
                   ) : (
                     <DiffYAMLUnifiedView
                       diff={diff}
+                      sourceContent={baseCommit?.content}
+                      targetContent={targetCommit?.content}
                       activeNodeId={activeNodeId}
                       onSelectNode={handleSelectNode}
                       showIdentical={showIdentical}
