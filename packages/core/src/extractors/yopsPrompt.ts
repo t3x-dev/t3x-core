@@ -135,12 +135,14 @@ Output as a YAML yops document. Each operation is one item in the yops list.
 - For non-numeric facts, use short clean labels: value: "grass-fed" not "Australian beef is known for being grass-fed"
 
 ### Tree Structure Rules
-- ONE root node per topic, named with snake_case (e.g., australian_beef, travel_plan)
+- Start with ONE root node per conversation topic, named with snake_case (e.g., giant_panda, travel_plan)
+- Only create a SECOND root node when the USER explicitly changes subject (e.g., user stops asking about pandas and asks about cooking)
+- If the assistant mentions a related concept (e.g., "red pandas are different"), nest it as a child — do NOT create a new root
 - Child nodes represent subtopics — use nesting for structure
 - Leaf values: prefer numbers, booleans, short strings, arrays. NOT full sentences.
 - Keep depth ≤ 3 levels. Deeper = more specific
-- User preferences, constraints, and opinions MUST be nested under the main topic — never create separate root nodes for preferences
-- Example: user_preferences should be a child of heroes_of_storm, NOT a sibling root
+- User preferences, constraints, and opinions MUST be nested under the main topic
+- The USER drives the tree structure. The assistant's tangential mentions are children, not roots.
 
 ### Example${hasSnapshot ? ' (incremental)' : ' (first extraction)'}
 
@@ -171,38 +173,29 @@ ${hasSnapshot ? `yops:
           origin: Australia
           quality: grass-fed
           annual_production_tonnes: 2200000
+          major_regions:
+            queensland: largest producer
+            new_south_wales: second largest
+          export_markets:
+            japan: top destination
+            us: growing market
+            south_korea: significant
+          taste_profile:
+            grass_fed_flavor: leaner, slightly gamey
+            grain_fed_flavor: more marbled, buttery
       source:
         origin: "Australian beef"
         quality: "Australian beef is known for being predominantly grass-fed"
         annual_production_tonnes: "Australia produces about 2.2 million tonnes annually"
+        major_regions.queensland: "Queensland is the largest beef-producing state"
+        major_regions.new_south_wales: "New South Wales is the second largest"
+        export_markets.japan: "Japan is Australia's largest beef export market"
+        export_markets.us: "The US is a growing market for Australian beef"
+        export_markets.south_korea: "South Korea is also a significant destination"
+        taste_profile.grass_fed_flavor: "grass-fed beef tends to be leaner with a slightly gamey flavor"
+        taste_profile.grain_fed_flavor: "grain-fed produces more marbled, buttery meat"
       from: T2
-      confidence: 0.8
-
-  - add:
-      parent: australian_beef
-      node:
-        major_regions:
-          queensland: largest producer
-          new_south_wales: second largest
-      source:
-        queensland: "Queensland is the largest beef-producing state"
-        new_south_wales: "New South Wales is the second largest"
-      from: T2
-      confidence: 0.75
-
-  - add:
-      parent: australian_beef
-      node:
-        export_markets:
-          japan: top destination
-          us: growing market
-          south_korea: significant
-      source:
-        japan: "Japan is Australia's largest beef export market"
-        us: "The US is a growing market for Australian beef"
-        south_korea: "South Korea is also a significant destination"
-      from: T2
-      confidence: 0.75`}
+      confidence: 0.8`}
 
 ### Rules
 - Output ONLY valid YAML starting with "yops:" on the first line
