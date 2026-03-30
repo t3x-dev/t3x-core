@@ -209,86 +209,31 @@ export function YOpsFeed() {
   // Triage data is ready if triageStore has items loaded
   const hasTriageData = !isExtracting && count > 0;
 
-  // Actively extracting, waiting for first YOp to arrive — show pipeline steps
-  if (count === 0 && isExtracting) {
-    const currentStep = pipelineSteps[pipelineSteps.length - 1];
-    return (
-      <div className="flex flex-col items-center justify-center gap-3 py-12">
-        <Loader2 className="h-5 w-5 animate-spin" style={{ color: 'var(--accent-extract)' }} />
-        <span className="text-[var(--text-tertiary)]" style={{ fontSize: 11 }}>
-          {currentStep ? STEP_LABELS[currentStep.step] ?? currentStep.step : 'Starting extraction...'}
-        </span>
-        {/* Pipeline step log */}
-        {pipelineSteps.length > 1 && (
-          <div style={{ marginTop: 8, width: '100%', padding: '0 24px' }}>
-            {pipelineSteps.slice(0, -1).map((s, i) => (
-              <div
-                key={`${s.step}-${i}`}
-                style={{
-                  fontSize: 9,
-                  color: 'var(--text-tertiary)',
-                  opacity: 0.5,
-                  padding: '1px 0',
-                  fontFamily: 'var(--font-mono, monospace)',
-                }}
-              >
-                <span style={{ color: '#4ade80', marginRight: 4 }}>&#10003;</span>
-                {STEP_LABELS[s.step] ?? s.step}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // Extraction finished with no YOps (no delta detected)
-  if (count === 0 && !isExtracting) {
-    return (
-      <div className="flex flex-col items-center justify-center gap-3 py-12">
-        <span style={{ fontSize: 24, opacity: 0.15 }}>&#10003;</span>
-        <span className="text-[var(--text-tertiary)]" style={{ fontSize: 11 }}>
-          {hasTriageData ? 'Extraction complete' : 'No changes detected'}
-        </span>
-        {hasTriageData && (
-          <button
-            type="button"
-            onClick={() => setViewTab('triage')}
-            style={{
-              marginTop: 4,
-              padding: '5px 14px',
-              borderRadius: 6,
-              border: 'none',
-              fontSize: 10,
-              fontWeight: 600,
-              background: '#4ade80',
-              color: '#000',
-              cursor: 'pointer',
-            }}
-          >
-            Continue to Triage &rarr;
-          </button>
-        )}
-      </div>
-    );
-  }
-
-  // No extraction has happened yet
-  if (count === 0) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <span className="text-[var(--text-tertiary)]" style={{ fontSize: 11 }}>
-          No operations yet
-        </span>
-      </div>
-    );
-  }
-
-  // Show the YOps feed
+  // ── Unified layout: scrollable content + persistent sticky footer ──
   return (
     <div className="flex flex-col h-full">
-      {/* Feed items */}
+      {/* Scrollable content area */}
       <div className="flex-1 overflow-auto" style={{ padding: '6px 0' }}>
+        {/* Empty state: no extraction yet */}
+        {count === 0 && !isExtracting && pipelineSteps.length === 0 && (
+          <div className="flex items-center justify-center py-12">
+            <span className="text-[var(--text-tertiary)]" style={{ fontSize: 11 }}>
+              No operations yet
+            </span>
+          </div>
+        )}
+
+        {/* Extracting with no YOps yet: centered spinner */}
+        {count === 0 && isExtracting && (
+          <div className="flex flex-col items-center justify-center gap-2 py-12">
+            <Loader2 className="h-5 w-5 animate-spin" style={{ color: 'var(--accent-extract)' }} />
+            <span className="text-[var(--text-tertiary)]" style={{ fontSize: 11 }}>
+              Waiting for YOps...
+            </span>
+          </div>
+        )}
+
+        {/* YOps feed items */}
         {feedYops.map((yop: any, idx: number) => {
           const { type, data } = getYOpType(yop);
           const icon = yopIcon(type);
@@ -334,44 +279,71 @@ export function YOpsFeed() {
         })}
       </div>
 
-      {/* Progress bar + action */}
+      {/* ── Persistent sticky footer: pipeline steps + progress + action ── */}
       <div
         style={{
           padding: '8px 14px',
           fontSize: 10,
           color: 'var(--text-tertiary)',
           borderTop: '1px solid var(--stroke-default)',
+          flexShrink: 0,
         }}
       >
-        <div className="flex items-center gap-2">
-          <span>{count}/{total || '...'}</span>
-          <div
-            className="flex-1 overflow-hidden"
-            style={{ height: 2, background: 'var(--stroke-default)', borderRadius: 1 }}
-          >
-            <div
-              style={{
-                height: '100%',
-                width: total > 0 ? `${Math.round((count / total) * 100)}%` : '0%',
-                background: 'var(--accent-extract)',
-                borderRadius: 1,
-                transition: 'width 0.3s',
-              }}
-            />
+        {/* Pipeline step log — always visible when steps exist */}
+        {pipelineSteps.length > 0 && (
+          <div style={{ marginBottom: 6 }}>
+            {pipelineSteps.map((s, i) => {
+              const isCurrent = i === pipelineSteps.length - 1 && isExtracting;
+              return (
+                <div
+                  key={`${s.step}-${i}`}
+                  className="flex items-center gap-1"
+                  style={{
+                    fontSize: 9,
+                    color: 'var(--text-tertiary)',
+                    opacity: isCurrent ? 1 : 0.5,
+                    padding: '1px 0',
+                    fontFamily: 'var(--font-mono, monospace)',
+                  }}
+                >
+                  {isCurrent ? (
+                    <Loader2 className="h-2.5 w-2.5 animate-spin" style={{ color: 'var(--accent-extract)', marginRight: 2 }} />
+                  ) : (
+                    <span style={{ color: '#4ade80', marginRight: 4, fontSize: 8 }}>&#10003;</span>
+                  )}
+                  <span style={isCurrent ? { color: 'var(--accent-extract)' } : undefined}>
+                    {STEP_LABELS[s.step] ?? s.step}
+                  </span>
+                </div>
+              );
+            })}
           </div>
-          {isExtracting && (
-            <span style={{ color: 'var(--accent-extract)', display: 'flex', alignItems: 'center', gap: 4 }}>
-              <Loader2 className="h-3 w-3 animate-spin" />
-              {(() => {
-                const lastStep = pipelineSteps[pipelineSteps.length - 1];
-                return lastStep ? (STEP_LABELS[lastStep.step] ?? lastStep.step) : 'extracting...';
-              })()}
-            </span>
-          )}
-          {!isExtracting && count > 0 && <span style={{ color: '#4ade80' }}>complete</span>}
-        </div>
+        )}
 
-        {/* Continue button — shown when extraction is done */}
+        {/* Progress bar */}
+        {(count > 0 || isExtracting) && (
+          <div className="flex items-center gap-2">
+            <span>{count}/{total || '...'}</span>
+            <div
+              className="flex-1 overflow-hidden"
+              style={{ height: 2, background: 'var(--stroke-default)', borderRadius: 1 }}
+            >
+              <div
+                style={{
+                  height: '100%',
+                  width: total > 0 ? `${Math.round((count / total) * 100)}%` : '0%',
+                  background: 'var(--accent-extract)',
+                  borderRadius: 1,
+                  transition: 'width 0.3s',
+                }}
+              />
+            </div>
+            {isExtracting && <span style={{ color: 'var(--accent-extract)' }}>extracting...</span>}
+            {!isExtracting && count > 0 && <span style={{ color: '#4ade80' }}>complete</span>}
+          </div>
+        )}
+
+        {/* Continue to Triage button */}
         {!isExtracting && hasTriageData && (
           <div className="flex justify-end" style={{ marginTop: 8 }}>
             <button
