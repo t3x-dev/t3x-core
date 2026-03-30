@@ -68,7 +68,7 @@ export function WordDiffSpan({
             <span
               key={i}
               className="bg-[var(--dy-removed-word)] text-white rounded-sm px-[2px] line-through"
-              style={{ textDecorationColor: 'rgba(255,255,255,0.4)' }}
+              style={{ textDecorationColor: 'var(--text-tertiary)' }}
             >
               {seg.text}
             </span>

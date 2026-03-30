@@ -212,7 +212,7 @@ export default function RecipesPage() {
           </div>
         ) : error ? (
           <div className="flex flex-col items-center justify-center py-12 gap-3">
-            <p className="text-sm text-red-500">{error}</p>
+            <p className="text-sm text-[var(--status-error)]">{error}</p>
             <Button variant="outline" size="sm" onClick={fetchAllRecipes}>
               Retry
             </Button>
@@ -283,7 +283,7 @@ export default function RecipesPage() {
                 htmlFor="recipe-project-select"
                 className="text-sm font-medium text-[var(--text-primary)]"
               >
-                Project <span className="text-red-500">*</span>
+                Project <span className="text-[var(--status-error)]">*</span>
               </label>
               <select
                 id="recipe-project-select"
@@ -428,7 +428,7 @@ function RecipeCard({ recipe, onEdit, onDelete, onToggle, toggling }: RecipeCard
             </DropdownMenuItem>
             <DropdownMenuItem
               onClick={() => onDelete(recipe)}
-              className="text-red-500 focus:text-red-500"
+              className="text-[var(--status-error)] focus:text-[var(--status-error)]"
             >
               <Trash2 className="h-4 w-4 mr-2" />
               Delete

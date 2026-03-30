@@ -2,8 +2,8 @@
 
 import { GitBranch, X } from 'lucide-react';
 import { useCallback } from 'react';
-import { useExtractionStore } from '@/store/extractionStore';
-import { useExtractionUIStore } from '@/store/extractionUIStore';
+import { extractNodes } from '@/lib/api/trees';
+import { useExtractionPanelStore } from '@/store/extractionPanelStore';
 
 const CHOICE_LABELS: Record<string, { label: string; description: string }> = {
   keep_old: { label: 'Keep Current', description: 'Ignore the new topic, YAML unchanged' },
@@ -16,27 +16,39 @@ const CHOICE_LABELS: Record<string, { label: string; description: string }> = {
 };
 
 export function DriftPopup() {
-  const driftDetected = useExtractionUIStore((s) => s.driftDetected);
-  const driftInfo = useExtractionUIStore((s) => s.driftInfo);
-  const driftChoices = useExtractionUIStore((s) => s.driftChoices);
-  const clearDrift = useExtractionUIStore((s) => s.clearDrift);
-  const triggerExtract = useExtractionStore((s) => s.triggerExtract);
+  const driftDetected = useExtractionPanelStore((s) => s.driftDetected);
+  const driftInfo = useExtractionPanelStore((s) => s.driftInfo);
+  const driftChoices = useExtractionPanelStore((s) => s.driftChoices);
+  const clearDrift = useExtractionPanelStore((s) => s.clearDrift);
+  const conversationId = useExtractionPanelStore((s) => s.conversationId);
 
   const handleChoice = useCallback(
-    (choice: string) => {
-      if (!driftInfo) return;
-      clearDrift();
-      if (choice === 'keep_old') return;
+    async (choice: string) => {
+      if (!conversationId || !driftInfo) return;
 
-      triggerExtract?.({
-        driftDecision: {
+      clearDrift();
+
+      if (choice === 'keep_old') {
+        // Nothing to do — YAML stays the same
+        return;
+      }
+
+      // For other choices, re-call extract with drift_decision
+      try {
+        const result = await extractNodes(conversationId, undefined, {
           choice,
           relation: driftInfo.relation,
           new_topic: driftInfo.new_topic,
-        },
-      });
+        });
+
+        if (result.status === 'completed' && result.snapshot) {
+          useExtractionPanelStore.getState().setDraft(result.snapshot);
+        }
+      } catch {
+        // Drift choice application failed — non-critical
+      }
     },
-    [driftInfo, clearDrift, triggerExtract]
+    [conversationId, driftInfo, clearDrift]
   );
 
   if (!driftDetected || !driftInfo) return null;

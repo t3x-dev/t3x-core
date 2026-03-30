@@ -114,9 +114,9 @@ function SortableProviderCard({
                 {result && (
                   <span className="ml-2">
                     {result.ok ? (
-                      <span className="text-emerald-500">Connected ({result.latency_ms}ms)</span>
+                      <span className="text-[var(--status-success)]">Connected ({result.latency_ms}ms)</span>
                     ) : (
-                      <span className="text-red-500">{result.error}</span>
+                      <span className="text-[var(--status-error)]">{result.error}</span>
                     )}
                   </span>
                 )}
