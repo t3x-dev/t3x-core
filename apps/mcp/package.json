@@ -14,7 +14,8 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
-    "@t3x-dev/api-client": "workspace:*"
+    "@t3x-dev/api-client": "workspace:*",
+    "open": "^11.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
