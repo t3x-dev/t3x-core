@@ -122,14 +122,23 @@ export interface Commit {
 
 export interface CreateCommitInput {
   project_id: string;
-  branch: string;
-  message: string;
-  turn_window: {
-    start_turn_hash: string;
-    end_turn_hash: string;
+  content: {
+    trees: unknown[];
+    relations?: unknown[];
   };
-  parent_hashes?: string[];
-  pipeline_config?: Record<string, unknown>;
+  branch?: string;
+  parents?: string[];
+  message?: string;
+  author?: {
+    type: 'human' | 'agent' | 'system';
+    id?: string;
+    name?: string;
+  };
+  provenance?: {
+    method: 'llm_extraction' | 'human_curation' | 'import' | 'merge';
+    model?: string;
+    extracted_at?: string;
+  };
 }
 
 export interface ListCommitsResponse {

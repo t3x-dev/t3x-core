@@ -11,10 +11,14 @@
 
 import type { z } from '@hono/zod-openapi';
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
+import type { ExtractionTurn, SemanticContent, TreeNode } from '@t3x-dev/core';
+import { DEFAULT_STYLE, Extractor, serializeForPrompt } from '@t3x-dev/core';
 import {
+  findAutoDraftsByConversation,
   findConversationById,
   findProjectById,
   findTurnsByConversation,
+  insertAutoDraft,
   insertConversation,
   insertDraft,
   insertTurn,
@@ -22,12 +26,13 @@ import {
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { getLLMProvider } from '../lib/provider-registry';
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 import {
   ExtractRequest,
   ExtractResponse,
-  ExtractTree,
+  type ExtractTree,
 } from '../schemas/integration-contracts';
 
 export const extractRoutes = new OpenAPIHono({
@@ -208,6 +213,60 @@ const postExtractRoute = createRoute({
 });
 
 // ============================================================
+// LLM Extraction (with regex fallback)
+// ============================================================
+
+/**
+ * Try LLM-based semantic extraction via Extractor.
+ * Returns TreeNode[] on success, null on failure (caller should fallback to regex).
+ *
+ * When `options` is provided with allTurns + snapshot, uses incremental mode:
+ * the LLM sees the full conversation history and existing tree, and produces
+ * targeted updates (set/add/drop) rather than extracting from scratch.
+ */
+async function extractWithLLM(
+  text: string,
+  turnHash: string,
+  options?: {
+    allTurns?: ExtractionTurn[];
+    snapshot?: SemanticContent;
+    processedTurnCount?: number;
+  }
+): Promise<{ trees: TreeNode[]; yaml: string } | null> {
+  try {
+    const provider = await getLLMProvider();
+    if (!provider) return null;
+
+    const extractor = new Extractor(provider);
+
+    // Build ExtractionInput — incremental when snapshot provided, one-shot otherwise
+    const turns: ExtractionTurn[] = options?.allTurns ?? [
+      { role: 'user', content: text, turn_hash: turnHash },
+    ];
+
+    const result = await extractor.extract(
+      {
+        turns,
+        snapshot: options?.snapshot,
+        processedTurnCount: options?.processedTurnCount,
+      },
+      DEFAULT_STYLE
+    );
+
+    if (!result.ok) {
+      console.warn('[extract] LLM extraction failed:', result.error);
+      return null;
+    }
+
+    const yaml = serializeForPrompt(result.snapshot);
+    return { trees: result.snapshot.trees, yaml };
+  } catch (err) {
+    console.warn('[extract] LLM extraction error:', err instanceof Error ? err.message : err);
+    return null;
+  }
+}
+
+// ============================================================
 // Route Handler
 // ============================================================
 
@@ -223,9 +282,14 @@ extractRoutes.openapi(postExtractRoute, async (c) => {
       return errorResponse(c, 'NOT_FOUND', `Project ${project_id} not found`);
     }
 
-    // Step 2: Create or reuse conversation
+    // Step 2: Create or reuse conversation, load incremental context
     let conversationId: string;
-    const previousTrees: TreeNodeResult[] = [];
+    let previousTrees: TreeNodeResult[] = [];
+    let existingSnapshot: SemanticContent | undefined;
+    let allTurns: ExtractionTurn[] = [];
+    let processedTurnCount = 0;
+    let autoDraftId: string | undefined;
+    let autoDraftRevision: number | undefined;
 
     if (conversation_id) {
       // Incremental mode: verify conversation exists and belongs to project
@@ -242,14 +306,32 @@ extractRoutes.openapi(postExtractRoute, async (c) => {
       }
       conversationId = conversation_id;
 
-      // Collect previous trees for drift detection
+      // Load previous auto-draft (stores LLM-extracted trees from prior calls)
+      const autoDrafts = await findAutoDraftsByConversation(db, project_id, conversation_id);
+      const autoDraft = autoDrafts[0]; // Most recent
+
+      if (autoDraft) {
+        // Convert stored nodes back to SemanticContent snapshot
+        const storedTrees = (autoDraft.nodes ?? []) as TreeNode[];
+        existingSnapshot = { trees: storedTrees, relations: [] };
+        previousTrees = storedTrees as TreeNodeResult[];
+        autoDraftId = autoDraft.id;
+        autoDraftRevision = autoDraft.revision;
+      }
+
+      // Build ExtractionTurn[] from existing turns (for LLM context)
       const existingTurns = await findTurnsByConversation(db, {
         conversationId,
         limit: 1000,
       });
-      for (const turn of existingTurns) {
-        const turnTrees = extractTreesFromText(turn.content, conversationId, turn.turnHash);
-        previousTrees.push(...turnTrees);
+      processedTurnCount = existingTurns.length;
+
+      for (const t of existingTurns) {
+        allTurns.push({
+          role: t.role as ExtractionTurn['role'],
+          content: t.content,
+          turn_hash: t.turnHash,
+        });
       }
     } else {
       // One-shot mode: create a new conversation
@@ -269,10 +351,44 @@ extractRoutes.openapi(postExtractRoute, async (c) => {
       content: text,
     });
 
-    // Step 4: Run extraction (text segmentation into trees)
-    const trees = extractTreesFromText(text, conversationId, turn.turnHash);
+    // Append new turn to allTurns for LLM context
+    allTurns.push({ role: 'user', content: text, turn_hash: turn.turnHash });
 
-    // Step 5: Create a draft with extracted trees
+    // Step 4: Run extraction — try LLM first, fallback to regex
+    let trees: TreeNodeResult[];
+    let yaml: string;
+    const incrementalOpts =
+      existingSnapshot || allTurns.length > 1
+        ? { allTurns, snapshot: existingSnapshot, processedTurnCount }
+        : undefined;
+
+    const llmResult = await extractWithLLM(text, turn.turnHash, incrementalOpts);
+    if (llmResult) {
+      // LLM extraction succeeded — map TreeNode[] to API tree format
+      trees = llmResult.trees as TreeNodeResult[];
+      yaml = llmResult.yaml;
+    } else {
+      // Fallback to regex segmentation
+      trees = extractTreesFromText(text, conversationId, turn.turnHash);
+      yaml = treesToYaml(trees);
+      _debugExtraction = 'regex_fallback';
+    }
+
+    // Step 5: Save/update auto-draft for future incremental calls
+    if (autoDraftId && autoDraftRevision !== undefined) {
+      // Update existing auto-draft with merged trees
+      await updateDraft(db, autoDraftId, { nodes: trees }, autoDraftRevision);
+    } else {
+      // Create new auto-draft (for both one-shot and first incremental call)
+      await insertAutoDraft(db, {
+        project_id,
+        conversation_id: conversationId,
+        title: source ? `Auto: ${source}` : 'Auto extraction',
+        nodes: trees,
+      });
+    }
+
+    // Step 6: Create a user-facing draft with extracted trees
     const draft = await insertDraft(db, {
       project_id,
       title: source ? `Extract: ${source}` : 'API extraction',
@@ -281,7 +397,7 @@ extractRoutes.openapi(postExtractRoute, async (c) => {
     // Store trees into the draft
     await updateDraft(db, draft.id, { nodes: trees }, draft.revision);
 
-    // Step 6: Detect drift (incremental mode only)
+    // Step 7: Detect drift (incremental mode only)
     let drift: { node_path: string; before: string; after: string }[] | undefined;
     if (conversation_id && previousTrees.length > 0) {
       const driftItems = detectDrift(previousTrees, trees);
@@ -290,7 +406,7 @@ extractRoutes.openapi(postExtractRoute, async (c) => {
       }
     }
 
-    // Step 7: Fire webhooks
+    // Step 8: Fire webhooks
     webhookDispatcher.dispatch(
       'draft.ready',
       {
@@ -315,12 +431,12 @@ extractRoutes.openapi(postExtractRoute, async (c) => {
       );
     }
 
-    // Step 8: Build response
+    // Step 9: Build response
     const result: z.infer<typeof ExtractResponse> = {
       conversation_id: conversationId,
       draft_id: draft.id,
       trees,
-      yaml: treesToYaml(trees),
+      yaml,
       drift,
     };
 

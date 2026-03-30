@@ -357,9 +357,9 @@ describe('T3xClient', () => {
 
       await client.createCommit({
         project_id: 'proj_1',
+        content: { trees: [{ key: 'test', slots: { text: 'hello' }, children: [] }] },
         branch: 'main',
         message: 'Initial',
-        turn_window: { start_turn_hash: 'sha256:a', end_turn_hash: 'sha256:b' },
       });
       expect(fn).toHaveBeenCalledWith(
         expect.stringContaining('/v1/commits'),
