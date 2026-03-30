@@ -95,23 +95,28 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
   const projectId = useExtractionPanelStore((s) => s.projectId);
   const isCommitting = useExtractionPanelStore((s) => s.isCommitting);
   const commitNodes = useExtractionPanelStore((s) => s.commitNodes);
-  const selectPendingNodes = useExtractionPanelStore((s) => s.selectPendingNodes);
+
 
   const nodeCount = draft.trees.length;
   const committedNodes = useMemo(() => Object.values(committedNodeSnapshot), [committedNodeSnapshot]);
   const manualCount = manualEditedNodeIds.size;
 
-  // Compute pending nodes and slot count only when needed (review/committing phase)
+  // Count all draft trees + total slots for commit bar (use draft directly, not selectPendingNodes)
   const { pendingNodeCount, pendingSlotCount } = useMemo(() => {
     if (extractionPhase !== 'review' && extractionPhase !== 'committing') {
       return { pendingNodeCount: 0, pendingSlotCount: 0 };
     }
-    const pending = selectPendingNodes();
-    return {
-      pendingNodeCount: pending.length,
-      pendingSlotCount: pending.reduce((acc, n) => acc + Object.keys(n.slots).length, 0),
-    };
-  }, [extractionPhase, selectPendingNodes]);
+    // Count all trees and their total slots (including children)
+    let totalSlots = 0;
+    function countSlots(trees: import('@t3x-dev/core').TreeNode[]) {
+      for (const t of trees) {
+        totalSlots += Object.keys(t.slots).length;
+        if (t.children.length > 0) countSlots(t.children);
+      }
+    }
+    countSlots(draft.trees);
+    return { pendingNodeCount: draft.trees.length, pendingSlotCount: totalSlots };
+  }, [extractionPhase, draft.trees]);
 
   const targetWidth =
     panelMode === 'collapsed' ? PANEL_WIDTHS.collapsed : (customWidth ?? PANEL_WIDTHS.expanded);
