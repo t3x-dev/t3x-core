@@ -232,6 +232,17 @@ export function ChatWorkspace({
             if (yopsEntries.some((d: { source?: string }) => d.source === 'commit_marker')) {
               setIsConversationCommitted(true);
             }
+            // Restore feedYops from the last pipeline extraction entry
+            const lastPipelineEntry = [...yopsEntries]
+              .reverse()
+              .find((d: { source?: string }) => d.source === 'pipeline');
+            if (lastPipelineEntry) {
+              const yops = (lastPipelineEntry as any).yops;
+              const changes = yops?.changes ?? yops ?? [];
+              if (Array.isArray(changes) && changes.length > 0) {
+                useExtractionStore.setState({ feedYops: changes });
+              }
+            }
           }
           if (topicsList && topicsList.length > 0) {
             eState.setTopics(topicsList);
