@@ -17,18 +17,18 @@ import { closePostgresStorage, createPostgresStorage } from '../adapters/postgre
  * Exported for reuse in other packages (e.g., t3x-webui tests)
  */
 export const CREATE_TABLES_SQL = `
--- Users (OAuth authentication)
+-- Users (Multi-provider authentication)
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
-  provider TEXT NOT NULL,
-  provider_id TEXT NOT NULL,
   email TEXT,
+  email_verified BOOLEAN NOT NULL DEFAULT FALSE,
   name TEXT,
   avatar_url TEXT,
+  username TEXT UNIQUE,
+  password_hash TEXT,
   default_extraction_style JSONB,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE UNIQUE INDEX IF NOT EXISTS idx_users_provider_unique ON users(provider, provider_id);
 
 -- Projects
 CREATE TABLE IF NOT EXISTS projects (
@@ -511,6 +511,73 @@ CREATE INDEX IF NOT EXISTS idx_trel_conversation ON tree_relations(conversation_
 CREATE INDEX IF NOT EXISTS idx_trel_topic ON tree_relations(conversation_id, topic_id);
 CREATE INDEX IF NOT EXISTS idx_trel_from ON tree_relations(from_tree_id);
 CREATE INDEX IF NOT EXISTS idx_trel_to ON tree_relations(to_tree_id);
+
+-- API Keys
+CREATE TABLE IF NOT EXISTS api_keys (
+  id TEXT PRIMARY KEY,
+  key_prefix TEXT NOT NULL,
+  key_hash TEXT NOT NULL,
+  name TEXT NOT NULL,
+  project_id TEXT REFERENCES projects(project_id) ON DELETE CASCADE,
+  user_id TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_used_at TIMESTAMPTZ,
+  revoked_at TIMESTAMPTZ
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys(key_hash);
+CREATE INDEX IF NOT EXISTS idx_api_keys_project ON api_keys(project_id);
+
+-- Device Codes (OAuth Device Flow - RFC 8628)
+CREATE TABLE IF NOT EXISTS device_codes (
+  id TEXT PRIMARY KEY,
+  device_code TEXT NOT NULL UNIQUE,
+  user_code TEXT NOT NULL UNIQUE,
+  client_id TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  user_id TEXT,
+  api_key_id TEXT,
+  expires_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL
+);
+
+-- Token Usage (LLM token metering)
+CREATE TABLE IF NOT EXISTS token_usage (
+  id TEXT PRIMARY KEY,
+  user_id TEXT,
+  project_id TEXT REFERENCES projects(project_id) ON DELETE CASCADE,
+  endpoint TEXT NOT NULL,
+  model TEXT NOT NULL,
+  input_tokens INTEGER NOT NULL,
+  output_tokens INTEGER NOT NULL,
+  estimated_cost NUMERIC(10,6) DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_token_usage_user_created ON token_usage(user_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_token_usage_project_created ON token_usage(project_id, created_at);
+
+-- Accounts (OAuth Provider Records)
+CREATE TABLE IF NOT EXISTS accounts (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  provider TEXT NOT NULL,
+  provider_account_id TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_accounts_provider ON accounts(provider, provider_account_id);
+CREATE INDEX IF NOT EXISTS idx_accounts_user ON accounts(user_id);
+
+-- Topics (Multi-topic Conversations)
+CREATE TABLE IF NOT EXISTS topics (
+  id TEXT PRIMARY KEY,
+  conversation_id TEXT NOT NULL REFERENCES conversations(conversation_id) ON DELETE CASCADE,
+  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  description TEXT,
+  status TEXT NOT NULL DEFAULT 'active',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_topics_conversation ON topics(conversation_id);
+CREATE INDEX IF NOT EXISTS idx_topics_project ON topics(project_id);
 
 `;
 
