@@ -3,6 +3,7 @@
 import { Loader2 } from 'lucide-react';
 import { useExtractionStore } from '@/store/extractionStore';
 import { useExtractionUIStore } from '@/store/extractionUIStore';
+import { useTriageStore } from '@/store/triageStore';
 
 /**
  * YOpsFeed — Phase 1. Shows streaming extraction results as they arrive.
@@ -206,20 +207,35 @@ export function YOpsFeed() {
   const total =
     count > 0 && typeof firstYop?.total === 'number' ? firstYop.total : count;
 
-  // Triage data is ready if triageStore has items loaded
-  const hasTriageData = !isExtracting && count > 0;
+  // Triage data is ready if triageStore has items (either from live extraction or restored from DB)
+  const triageItems = useTriageStore((s) => s.items);
+  const hasTriageData = triageItems.length > 0;
 
   // ── Unified layout: scrollable content + persistent sticky footer ──
   return (
     <div className="flex flex-col h-full">
       {/* Scrollable content area */}
       <div className="flex-1 overflow-auto" style={{ padding: '6px 0' }}>
-        {/* Empty state: no extraction yet */}
-        {count === 0 && !isExtracting && pipelineSteps.length === 0 && (
-          <div className="flex items-center justify-center py-12">
+        {/* Empty state: no live YOps */}
+        {count === 0 && !isExtracting && (
+          <div className="flex flex-col items-center justify-center gap-2 py-12">
             <span className="text-[var(--text-tertiary)]" style={{ fontSize: 11 }}>
-              No operations yet
+              {hasTriageData
+                ? 'YOps from previous extraction completed.'
+                : 'No operations yet'}
             </span>
+            {hasTriageData && (
+              <button
+                type="button"
+                onClick={() => setViewTab('triage')}
+                style={{
+                  marginTop: 4, padding: '4px 12px', borderRadius: 6, border: 'none',
+                  fontSize: 10, fontWeight: 600, background: '#4ade80', color: '#000', cursor: 'pointer',
+                }}
+              >
+                View Triage &rarr;
+              </button>
+            )}
           </div>
         )}
 
