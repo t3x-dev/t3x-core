@@ -1,23 +1,18 @@
 'use client';
 
-import type { TreeDiff, SemanticContent } from '@t3x-dev/core';
+import type { SemanticContent, TreeDiff } from '@t3x-dev/core';
 import { useCallback, useRef } from 'react';
 import { YAML_COLORS } from './DiffYAMLFormatters';
 import {
-  TreeSeparator,
   getTreeRelations,
   IdenticalCollapseBar,
   RelationAnnotation,
+  TreeSeparator,
   useDYTheme,
 } from './DiffYAMLShared';
 import { type AlignedNode, buildAlignedNodes, buildAlignedSlotKeys } from './DiffYAMLUtils';
-import {
-  treeLineCount,
-  SlotValueSpan,
-  WordDiffSpan,
-  YAMLNodeRenderer,
-} from './YAMLNodeRenderer';
 import { YAMLLine } from './YAMLLine';
+import { SlotValueSpan, treeLineCount, WordDiffSpan, YAMLNodeRenderer } from './YAMLNodeRenderer';
 
 // ── Props ──
 

@@ -27,17 +27,17 @@
 /* Dark mode */
 .dark {
   --merge-source-bg: rgba(107, 138, 255, 0.07);
-  --merge-source-accent: #6B8AFF;
+  --merge-source-accent: #6b8aff;
   --merge-source-word: rgba(107, 138, 255, 0.35);
   --merge-target-bg: rgba(52, 211, 153, 0.07);
-  --merge-target-accent: #34D399;
+  --merge-target-accent: #34d399;
   --merge-target-word: rgba(52, 211, 153, 0.35);
-  --merge-conflict-accent: #E5A030;
+  --merge-conflict-accent: #e5a030;
   --merge-conflict-bg: rgba(229, 160, 48, 0.06);
   --merge-unchosen-opacity: 0.15;
-  --rel-color: #BB9AF7;
-  --added-accent: #34D399;
-  --removed-accent: #F87171;
+  --rel-color: #bb9af7;
+  --added-accent: #34d399;
+  --removed-accent: #f87171;
   /* Short-form aliases */
   --merge-src-bg: var(--merge-source-bg);
   --merge-src-accent: var(--merge-source-accent);

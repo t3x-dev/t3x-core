@@ -1,10 +1,10 @@
 'use client';
 
-import type { TreeDiff, Relation } from '@t3x-dev/core';
+import type { Relation, TreeDiff } from '@t3x-dev/core';
 import { useEffect, useState } from 'react';
+import type { CompatNode } from '@/lib/treeCompat';
 import { cn } from '@/lib/utils';
 import type { AlignedNode } from './DiffYAMLUtils';
-import type { CompatNode } from '@/lib/treeCompat';
 
 // ── CSS custom properties for diff colors ──
 // Light mode values (default); dark mode overridden via .dark class in globals.css

@@ -1,17 +1,17 @@
 'use client';
 
-import type { TreeDiff, SlotDiff, SlotValue, SemanticContent } from '@t3x-dev/core';
+import type { SemanticContent, SlotDiff, SlotValue, TreeDiff } from '@t3x-dev/core';
 import { cn } from '@/lib/utils';
 import { formatSlotValue, YAML_COLORS } from './DiffYAMLFormatters';
 import {
-  TreeSeparator,
   getTreeRelations,
   IdenticalCollapseBar,
   RelationAnnotation,
+  TreeSeparator,
   useDYTheme,
 } from './DiffYAMLShared';
 import { type AlignedNode, buildAlignedNodes } from './DiffYAMLUtils';
-import { treeLineCount, SlotValueSpan, WordDiffSpan } from './YAMLNodeRenderer';
+import { SlotValueSpan, treeLineCount, WordDiffSpan } from './YAMLNodeRenderer';
 
 // ── Props ──
 

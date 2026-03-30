@@ -15,18 +15,18 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { relativeTime, shortHash } from '@/components/commit/CommitDetailHelpers';
-import { TreeGraphView } from '@/components/tree-graph';
 import { Breadcrumb } from '@/components/shared/Breadcrumb';
+import { TreeGraphView } from '@/components/tree-graph';
 import { getCommitAsNodes } from '@/lib/api/commitUnified';
 import { API_V1, fetchWithTimeout, handleResponse } from '@/lib/api/core';
 import type { CommitMeta, DiffResponse } from '@/lib/api/treeDiff';
 import { getTreeDiff } from '@/lib/api/treeDiff';
 import { PAGE_ANIMATION_STYLES } from '@/lib/pageAnimations';
 import { useProjectStore } from '@/store/projectStore';
+import { TreeDiffIndex } from './DiffIndex';
 import { DiffTreeOverview } from './DiffTreeOverview';
 import { DiffYAMLSplitView } from './DiffYAMLSplitView';
 import { DiffYAMLUnifiedView } from './DiffYAMLUnifiedView';
-import { TreeDiffIndex } from './DiffIndex';
 
 // ============================================================================
 // Types
@@ -294,7 +294,9 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
     return (
       <div className="flex h-screen items-center justify-center bg-[var(--surface-app)]">
         <div className="flex flex-col items-center justify-center p-8 text-center max-w-md">
-          <h2 className="text-lg font-semibold text-[var(--status-error)] mb-2">Failed to load diff</h2>
+          <h2 className="text-lg font-semibold text-[var(--status-error)] mb-2">
+            Failed to load diff
+          </h2>
           <p className="text-sm text-[var(--text-tertiary)] mb-4">
             {error || 'An unexpected error occurred'}
           </p>
@@ -501,7 +503,9 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
               )}
               {mergeLoading ? 'Creating merge...' : 'Start Merge'}
             </button>
-            {mergeError && <p className="text-[10px] text-[var(--status-error)] mt-1">{mergeError}</p>}
+            {mergeError && (
+              <p className="text-[10px] text-[var(--status-error)] mt-1">{mergeError}</p>
+            )}
           </div>
         </aside>
       </div>
