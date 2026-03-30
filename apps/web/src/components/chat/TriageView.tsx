@@ -31,10 +31,12 @@ export function TriageView({ onGoToReview }: TriageViewProps) {
   for (const tree of draft.trees) {
     if (committedNodeIds[tree.key] && committedNodeSnapshot[tree.key]) {
       const snap = committedNodeSnapshot[tree.key];
+      // Compare slots AND children count — if children changed, it's "changed"
       const sameSlots =
         JSON.stringify(Object.entries(tree.slots).sort()) ===
         JSON.stringify(Object.entries(snap.slots).sort());
-      if (sameSlots) {
+      const sameChildren = tree.children.length === (snap.children?.length ?? 0);
+      if (sameSlots && sameChildren) {
         committedUnchanged.push(tree);
         continue;
       }
