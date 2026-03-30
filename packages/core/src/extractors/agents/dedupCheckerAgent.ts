@@ -1,136 +1,73 @@
 /**
- * Dedup Checker Agent — LLM
+ * Dedup Checker Agent — CODE
  *
- * ONE job: look at pairs of frames and decide if they're duplicates.
- * Input: two frames
- * Output: "merge" or "keep_separate" + reason
+ * ONE job: find and merge trees with identical keys or high slot overlap.
+ * Pure code — no LLM needed. Uses exact key matching + Jaccard similarity.
  *
- * Only runs when there are 4+ frames (likely some overlap).
- * Checks pairs with similar types or overlapping slot keys.
+ * Only runs when there are 4+ trees (likely some overlap).
  */
 
-import type { LLMProvider } from '../../llm/types';
-import type { FlatNode } from '../../semantic/types';
-import { flattenTrees, unflattenToTrees } from '../../semantic/tree';
+import type { TreeNode } from '../../semantic/types';
 import type { MeaningAgent, PipelineContext } from '../meaningPipeline';
 
-const SYSTEM_PROMPT = `You check if two semantic frames describe the same concept, are different, or contradict each other.
-
-Rules:
-1. "merge" if they describe the SAME thing (even with different names) — output merged slots
-2. "keep_separate" if they describe DIFFERENT things
-3. "contradicts" if they contain CONFLICTING information (e.g., one says "avoid X" and the other recommends X) — output which frame to keep ("A" or "B"), prefer the one with higher confidence or from the user
-
-Output JSON: { "decision": "merge" | "keep_separate" | "contradicts", "merged_slots": { ... } | null, "keep": "A" | "B" | null }
-Output ONLY JSON. No explanation.`;
-
-/** Find candidate pairs that might be duplicates */
-function findCandidatePairs(frames: FlatNode[]): Array<[number, number]> {
-  const pairs: Array<[number, number]> = [];
-
-  for (let i = 0; i < frames.length; i++) {
-    for (let j = i + 1; j < frames.length; j++) {
-      const a = frames[i];
-      const b = frames[j];
-
-      // Same type → likely duplicate
-      if (a.type === b.type) {
-        pairs.push([i, j]);
-        continue;
-      }
-
-      // Overlapping slot keys → might be duplicate
-      // Require 4+ overlapping keys and at least 3 slots each to avoid false positives
-      const aKeys = new Set(Object.keys(a.slots));
-      const bKeys = Object.keys(b.slots);
-      if (aKeys.size < 3 || bKeys.length < 3) continue; // Small frames are distinct by nature
-      const overlap = bKeys.filter((k) => aKeys.has(k)).length;
-      if (overlap >= 4) {
-        pairs.push([i, j]);
-      }
-    }
+/** Jaccard similarity: |A ∩ B| / |A ∪ B| */
+function jaccardKeys(a: Record<string, unknown>, b: Record<string, unknown>): number {
+  const aKeys = new Set(Object.keys(a));
+  const bKeys = new Set(Object.keys(b));
+  let intersection = 0;
+  for (const k of bKeys) {
+    if (aKeys.has(k)) intersection++;
   }
-
-  return pairs;
+  const union = aKeys.size + bKeys.size - intersection;
+  return union === 0 ? 0 : intersection / union;
 }
+
+/** Merge two trees: combine slots (b overwrites a on conflict), combine children */
+function mergeTrees(a: TreeNode, b: TreeNode): TreeNode {
+  return {
+    key: a.key,
+    slots: { ...a.slots, ...b.slots },
+    children: [...a.children, ...b.children],
+    slot_quotes: { ...a.slot_quotes, ...b.slot_quotes },
+    source: a.source ?? b.source,
+    confidence: Math.max(a.confidence ?? 0.5, b.confidence ?? 0.5),
+  };
+}
+
+const JACCARD_MERGE_THRESHOLD = 0.8;
 
 export const dedupCheckerAgent: MeaningAgent = {
   name: 'dedup_checker',
-  description: 'Find and merge duplicate frames',
-  usesLLM: true,
+  description: 'Find and merge duplicate trees (code-based: exact key + Jaccard similarity)',
+  usesLLM: false,
 
   shouldRun(ctx: PipelineContext): boolean {
-    // Only run if we have 4+ frames (likely some overlap)
-    return flattenTrees(ctx.content.trees).length >= 4;
+    return ctx.content.trees.length >= 4;
   },
 
-  async run(ctx: PipelineContext, provider: LLMProvider): Promise<PipelineContext> {
-    const frames = [...flattenTrees(ctx.content.trees)];
-    const pairs = findCandidatePairs(frames);
+  async run(ctx: PipelineContext): Promise<PipelineContext> {
+    const trees = [...ctx.content.trees];
+    const merged = new Set<number>();
 
-    if (pairs.length === 0) return ctx;
+    for (let i = 0; i < trees.length; i++) {
+      if (merged.has(i)) continue;
+      for (let j = i + 1; j < trees.length; j++) {
+        if (merged.has(j)) continue;
 
-    const toRemove = new Set<number>();
+        const shouldMerge =
+          trees[i].key === trees[j].key ||
+          jaccardKeys(trees[i].slots, trees[j].slots) >= JACCARD_MERGE_THRESHOLD;
 
-    for (const [i, j] of pairs) {
-      if (toRemove.has(i) || toRemove.has(j)) continue;
-
-      const frameA = frames[i];
-      const frameB = frames[j];
-
-      const userPrompt = `Frame A (${frameA.type}): ${JSON.stringify(frameA.slots)}\nFrame B (${frameB.type}): ${JSON.stringify(frameB.slots)}\n\nDecision:`;
-
-      try {
-        const result = await provider.generate(`${SYSTEM_PROMPT}\n\n${userPrompt}`, {
-          temperature: 0.1,
-          maxTokens: 1024,
-        });
-
-        ctx.meta.totalUsage.inputTokens += result.usage.inputTokens;
-        ctx.meta.totalUsage.outputTokens += result.usage.outputTokens;
-
-        const jsonMatch = result.text.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          const parsed = JSON.parse(jsonMatch[0]) as {
-            decision: 'merge' | 'keep_separate' | 'contradicts';
-            merged_slots?: Record<string, unknown>;
-            keep?: 'A' | 'B';
-          };
-
-          if (parsed.decision === 'merge' && parsed.merged_slots) {
-            // Merge into frame A, mark frame B for removal
-            frames[i] = {
-              ...frameA,
-              slots: parsed.merged_slots as Record<
-                string,
-                import('../../semantic/types').SlotValue
-              >,
-              confidence: Math.min(frameA.confidence ?? 1, frameB.confidence ?? 1),
-            };
-            toRemove.add(j);
-          } else if (parsed.decision === 'contradicts') {
-            // Keep the frame with higher confidence (user-sourced), remove the other
-            if (parsed.keep === 'A') {
-              toRemove.add(j);
-            } else if (parsed.keep === 'B') {
-              toRemove.add(i);
-            } else {
-              // Default: keep the one with higher confidence
-              const confA = frameA.confidence ?? 0.5;
-              const confB = frameB.confidence ?? 0.5;
-              toRemove.add(confA >= confB ? j : i);
-            }
-          }
+        if (shouldMerge) {
+          trees[i] = mergeTrees(trees[i], trees[j]);
+          merged.add(j);
         }
-      } catch {
-        // Skip this pair if LLM fails
       }
     }
 
-    // Remove merged frames
-    if (toRemove.size > 0) {
+    if (merged.size > 0) {
       ctx.content = {
-        trees: unflattenToTrees(frames.filter((_: FlatNode, idx: number) => !toRemove.has(idx))),
+        trees: trees.filter((_, idx) => !merged.has(idx)),
         relations: ctx.content.relations,
       };
     }
