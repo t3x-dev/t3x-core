@@ -175,15 +175,3 @@ export function ensureAuth(baseUrl: string): string | null {
 
   return null;
 }
-
-/**
- * @deprecated Temporary wrapper for backward compatibility with index.ts.
- * Will be removed in Task 5 when index.ts is rewritten.
- */
-export async function deviceFlowAuth(
-  baseUrl: string
-): Promise<{ token: string; message: string }> {
-  const token = await browserAuth(baseUrl);
-  return { token, message: 'Browser authentication completed.' };
-}
-

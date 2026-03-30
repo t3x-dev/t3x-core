@@ -2,7 +2,7 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-import { ensureAuth, deviceFlowAuth } from './auth.js';
+import { browserAuth, clearStoredToken, ensureAuth } from './auth.js';
 import { getBaseUrl, getClient, updateToken } from './client.js';
 import { checkTool, handleCheck } from './tools/check.js';
 import { commitTool, handleCommit } from './tools/commit.js';
@@ -40,10 +40,26 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     };
   }
 
-  // Ensure auth token is set before tool call
   const baseUrl = getBaseUrl();
-  const token = ensureAuth(baseUrl);
-  if (token) {
+
+  // Ensure auth token is available before calling
+  let token = ensureAuth(baseUrl);
+  if (!token) {
+    try {
+      token = await browserAuth(baseUrl);
+      updateToken(token);
+    } catch (authErr) {
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: `Authentication failed: ${authErr instanceof Error ? authErr.message : String(authErr)}`,
+          },
+        ],
+        isError: true,
+      };
+    }
+  } else {
     getClient(token);
   }
 
@@ -52,25 +68,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
 
-    // If we get a 401, try Device Flow
+    // If 401, token may be expired/revoked — re-auth and retry once
     if (message.includes('401') || message.includes('Unauthorized')) {
       try {
-        const { token: newToken, message: authMsg } = await deviceFlowAuth(baseUrl);
+        clearStoredToken();
+        const newToken = await browserAuth(baseUrl);
         updateToken(newToken);
+        return await handler(args ?? {});
+      } catch (retryErr) {
         return {
           content: [
             {
               type: 'text' as const,
-              text: `Authentication required.\n\n${authMsg}\n\nPlease authorize, then retry your request.`,
-            },
-          ],
-        };
-      } catch (authErr) {
-        return {
-          content: [
-            {
-              type: 'text' as const,
-              text: `Authentication failed: ${authErr instanceof Error ? authErr.message : String(authErr)}`,
+              text: `Authentication failed: ${retryErr instanceof Error ? retryErr.message : String(retryErr)}`,
             },
           ],
           isError: true,
