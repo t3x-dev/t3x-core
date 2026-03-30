@@ -242,7 +242,7 @@ export function ChatWorkspace({
             }
           }
 
-          // Restore saved triage state from conversation metadata
+          // Restore extraction state: if draft has trees, restore triage or auto-generate it
           if (draft && draft.trees.length > 0) {
             import('@/lib/api/conversations').then(({ getConversation }) => {
               getConversation(convId).then((conv) => {
@@ -251,10 +251,17 @@ export function ChatWorkspace({
                   | { phase?: string; decisions?: Record<string, unknown> }
                   | undefined;
                 if (saved?.decisions) {
+                  // Restore saved triage state
                   useTriageStore.getState().hydrate(meta!, draft.trees);
                   if (saved.phase && saved.phase !== 'idle') {
                     useExtractionUIStore.getState().setPhase(saved.phase as any);
                   }
+                } else {
+                  // No saved triage — auto-generate from draft trees so user sees previous extraction
+                  const { treesToTriageItems } = require('@/store/triageStore');
+                  const items = treesToTriageItems(draft.trees);
+                  useTriageStore.getState().loadItems(items, convId);
+                  useExtractionUIStore.getState().setPhase('triage');
                 }
               }).catch(() => {});
             });
