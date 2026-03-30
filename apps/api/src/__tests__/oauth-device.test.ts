@@ -122,4 +122,66 @@ describe('OAuth Device Flow', () => {
     const body = await tokenRes.json();
     expect(body.error).toBe('expired_token');
   });
+
+  it('full flow: code → authorize → token → API call', async () => {
+    const { createLocalUser, createApiKey } = await import('@t3x-dev/storage');
+
+    // 1. MCP requests device code
+    const codeRes = await app.request('/v1/oauth/device/code', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ client_id: 'mcp' }),
+    });
+    expect(codeRes.status).toBe(200);
+    const { device_code, user_code } = await codeRes.json();
+
+    // 2. User authorizes via WebUI endpoint
+    const user = await createLocalUser(mockDB, {
+      username: `fullflow_${Date.now()}`,
+      passwordHash: 'unused',
+    });
+
+    // Create an API key for the user (simulates their browser session)
+    const sessionKeyValue = `t3xk_test_session_${Date.now()}`;
+    await createApiKey(mockDB, {
+      name: `session:${user.id}`,
+      keyValue: sessionKeyValue,
+      userId: user.id,
+    });
+
+    // Mount full app with auth middleware for this test
+    const { createApp } = await import('../app');
+    const fullApp = createApp();
+
+    const authRes = await fullApp.request('/api/v1/oauth/device/authorize', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${sessionKeyValue}`,
+      },
+      body: JSON.stringify({ user_code }),
+    });
+    expect(authRes.status).toBe(200);
+
+    // 3. MCP polls and gets token
+    const tokenRes = await app.request('/v1/oauth/device/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        device_code,
+        grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
+      }),
+    });
+    expect(tokenRes.status).toBe(200);
+    const { access_token, token_type } = await tokenRes.json();
+    expect(access_token).toBeTruthy();
+    expect(token_type).toBe('Bearer');
+
+    // 4. Verify the token works for API calls
+    const healthRes = await fullApp.request('/api/v1/projects', {
+      headers: { Authorization: `Bearer ${access_token}` },
+    });
+    // Should not be 401 (the token is valid even if no projects exist)
+    expect(healthRes.status).not.toBe(401);
+  });
 });
