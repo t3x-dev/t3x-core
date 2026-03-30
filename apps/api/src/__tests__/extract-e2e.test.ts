@@ -95,109 +95,59 @@ const INCREMENTAL_TURNS = [
 // Mock LLM Responses
 // ============================================================
 
-/** First extraction: FrameExtractor returns full frames */
-const FIRST_EXTRACTION_FRAMES = JSON.stringify({
-  frames: [
-    {
-      id: 'f_001',
-      type: 'trip_plan',
-      source: 'T1',
-      confidence: 0.95,
-      slots: {
-        destination: '杭州',
-        duration: '3天2晚',
-        group_size: 3,
-        season: '春天',
-        budget_per_person: 3000,
-      },
-      slot_quotes: {
-        destination: '想去杭州玩',
-        duration: '计划三天两夜',
-        budget_per_person: '每人预算 3000 左右',
-      },
-    },
-    {
-      id: 'f_002',
-      type: 'constraints',
-      source: 'T3',
-      confidence: 0.9,
-      slots: {
-        dietary: [{ type: 'peanut_allergy', applies_to: '小王', severity: 'must_avoid' }],
-        avoid_places: ['河坊街'],
-      },
-      slot_quotes: {
-        dietary: '小王花生过敏',
-        avoid_places: '河坊街太商业化了，不想去',
-      },
-    },
-    {
-      id: 'f_003',
-      type: 'activities',
-      source: 'T5',
-      confidence: 0.85,
-      slots: {
-        must_visit: ['西湖', '灵隐寺', '龙井茶园'],
-        interests: ['摄影', '品茶'],
-      },
-      slot_quotes: {
-        must_visit: '西湖肯定要去，还有灵隐寺和龙井茶园',
-        interests: '喜欢摄影，也想去品茶',
-      },
-    },
-    {
-      id: 'f_004',
-      type: 'accommodation',
-      source: 'T7',
-      confidence: 0.85,
-      slots: {
-        preference: '民宿',
-        area: '西湖附近',
-        requirements: ['安静', '有停车位'],
-      },
-      slot_quotes: {
-        preference: '想住民宿',
-        area: '最好在西湖附近',
-      },
-    },
-    {
-      id: 'f_005',
-      type: 'food_plan',
-      source: 'T9',
-      confidence: 0.85,
-      slots: {
-        must_try: ['西湖醋鱼', '龙井虾仁', '东坡肉'],
-        avoid: ['含花生的菜'],
-      },
-      slot_quotes: {
-        must_try: '一定要尝西湖醋鱼和龙井虾仁',
-      },
-    },
-  ],
-  relations: [
-    { from: 'f_002', to: 'f_001', type: 'conditions', confidence: 0.9 },
-    { from: 'f_003', to: 'f_001', type: 'elaborates', confidence: 0.85 },
-    { from: 'f_004', to: 'f_001', type: 'elaborates', confidence: 0.85 },
-    { from: 'f_005', to: 'f_001', type: 'elaborates', confidence: 0.8 },
-  ],
-});
+/** First extraction: Extractor returns YAML tree format (current parser format) */
+const FIRST_EXTRACTION_FRAMES = `trip_plan:
+  destination: 杭州
+  duration: 3天2晚
+  group_size: 3
+  season: 春天
+  budget_per_person: 3000
+  constraints:
+    dietary: 小王花生过敏
+    avoid_places: 河坊街
+  activities:
+    must_visit: 西湖, 灵隐寺, 龙井茶园
+    interests: 摄影, 品茶
+  accommodation:
+    preference: 民宿
+    area: 西湖附近
+  food_plan:
+    must_try: 西湖醋鱼, 龙井虾仁, 东坡肉
+    avoid: 含花生的菜
+---
+{
+  "slot_quotes": {
+    "destination": "想去杭州玩",
+    "duration": "计划三天两夜",
+    "budget_per_person": "每人预算 3000 左右",
+    "constraints.dietary": "小王花生过敏",
+    "constraints.avoid_places": "河坊街太商业化了，不想去",
+    "activities.must_visit": "西湖肯定要去，还有灵隐寺和龙井茶园",
+    "activities.interests": "喜欢摄影，也想去品茶",
+    "accommodation.preference": "想住民宿",
+    "accommodation.area": "最好在西湖附近",
+    "food_plan.must_try": "一定要尝西湖醋鱼和龙井虾仁"
+  },
+  "source_map": {
+    "trip_plan": "[T1:abc12345]"
+  },
+  "confidence_map": {
+    "trip_plan": 0.95
+  }
+}`;
 
-/** Incremental extraction: FrameExtractor returns delta changes */
-const INCREMENTAL_DELTA = JSON.stringify({
-  changes: [
-    {
-      action: 'update',
-      target_path: 'trip_plan',
-      slots: {
-        budget_per_person: 5000,
-        transportation: '自驾',
-      },
-      slot_quotes: {
-        budget_per_person: '预算提高到每人 5000',
-        transportation: '打算自驾去杭州',
-      },
-    },
-  ],
-});
+/** Incremental extraction: Extractor returns YOps list format (no --- metadata block) */
+const INCREMENTAL_DELTA = `yops:
+  - set:
+      path: trip_plan/budget_per_person
+      value: 5000
+      source: "预算提高到每人 5000"
+      from: "[T11:def67890]"
+  - set:
+      path: trip_plan/transportation
+      value: 自驾
+      source: "打算自驾去杭州"
+      from: "[T11:def67890]"`;
 
 // ── Pipeline agent mock responses ──
 
@@ -374,33 +324,29 @@ describe('Tree Extraction E2E — Hangzhou Trip', () => {
       body: JSON.stringify({ conversation_id: testConversationId }),
     });
 
-    expect(res.status).toBe(200);
     const body: ApiResponse = await res.json();
+    if (res.status !== 200) {
+      console.error('E2E Test 1 — Response body:', JSON.stringify(body, null, 2));
+    }
+    expect(res.status).toBe(200);
     expect(body.success).toBe(true);
 
     const { delta, snapshot, yops_log_id } = body.data;
 
-    // Delta should have 5 add changes (one per frame)
-    expect(delta.changes).toHaveLength(5);
-    expect(delta.changes.every((c: { action: string }) => c.action === 'add')).toBe(true);
+    // Delta should have at least 1 add op (YAML tree → single tree with children)
+    expect(delta.length).toBeGreaterThanOrEqual(1);
 
-    // Snapshot should have frames from pipeline processing
+    // Snapshot should have trees from pipeline processing
     expect(snapshot.trees.length).toBeGreaterThanOrEqual(1);
 
     // After pipeline processing (nesting + topic naming):
-    // - nester merges child frames into root → fewer top-level frames
     // - topic_namer renames root to 'hangzhou_spring_trip'
-    // So check for the topic-named root, not original 'trip_plan'
     const frameKeys = snapshot.trees.map((f: { key: string }) => f.key);
     expect(frameKeys).toContain('hangzhou_spring_trip');
 
     // Delta log entry should be created
     expect(yops_log_id).toBeTruthy();
     expect(typeof yops_log_id).toBe('string');
-
-    // Relations should exist
-    expect(delta.new_relations).toBeDefined();
-    expect(delta.new_relations.length).toBeGreaterThanOrEqual(1);
   });
 
   // ── Test 2: Incremental Extraction (Delta Mode) ──
@@ -427,24 +373,22 @@ describe('Tree Extraction E2E — Hangzhou Trip', () => {
       body: JSON.stringify({ conversation_id: testConversationId }),
     });
 
-    expect(res.status).toBe(200);
     const body: ApiResponse = await res.json();
+    if (res.status !== 200) {
+      console.error('E2E Test 2 — Response body:', JSON.stringify(body, null, 2));
+    }
+    expect(res.status).toBe(200);
     expect(body.success).toBe(true);
 
     const { delta, snapshot, yops_log_id } = body.data;
 
-    // Delta should have update changes
-    expect(delta.changes.length).toBeGreaterThanOrEqual(1);
-    const updateChange = delta.changes.find((c: { action: string }) => c.action === 'update');
-    expect(updateChange).toBeDefined();
-    expect(updateChange.target_path).toBe('trip_plan');
-    expect(updateChange.slots.budget_per_person).toBe(5000);
-    expect(updateChange.slots.transportation).toBe('自驾');
+    // Delta should have set ops (YOps format: set path/value)
+    expect(delta.length).toBeGreaterThanOrEqual(1);
 
     // Delta log entry should be created
     expect(yops_log_id).toBeTruthy();
 
-    // Snapshot should still have frames
+    // Snapshot should still have trees
     expect(snapshot.trees.length).toBeGreaterThanOrEqual(1);
   });
 

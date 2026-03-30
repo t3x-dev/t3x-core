@@ -34,6 +34,32 @@ function stripFences(raw: string): string {
 }
 
 /**
+ * Fix YAML strings with nested quotes that break parsing.
+ * e.g., value: "素有"人间天堂"的美誉" → value: "素有「人间天堂」的美誉"
+ * Also normalizes smart/curly quotes to avoid YAML issues.
+ */
+function sanitizeYamlQuotes(text: string): string {
+  // Replace smart/curly quotes with straight quotes first
+  let result = text.replace(/[\u201C\u201D\u201E\u201F\u2033]/g, '"').replace(/[\u2018\u2019\u201A\u201B\u2032]/g, "'");
+
+  // Fix nested double quotes inside YAML string values
+  // Pattern: a line like `key: "text"nested"text"` → `key: "text「nested」text"`
+  result = result.replace(/^(\s*[\w.]+:\s*)"(.*)"$/gm, (_match, prefix: string, content: string) => {
+    // Check if the content itself contains unescaped double quotes
+    // (i.e., the outer quotes are the YAML delimiters, inner ones are problematic)
+    if (content.includes('"')) {
+      const fixed = content.replace(/"/g, '\u300C').replace(/\u300C([^\u300C]*?)$/g, (m) => m.replace(/\u300C/g, '"'));
+      // Actually, simpler: replace ALL inner quotes with corner brackets
+      const safeContent = content.replace(/"/g, '「').replace(/"/g, '」');
+      return `${prefix}"${safeContent}"`;
+    }
+    return `${prefix}"${content}"`;
+  });
+
+  return result;
+}
+
+/**
  * Check if the first non-empty line is a YAML root key (snake_case key followed by colon).
  */
 function isYamlTree(cleaned: string): boolean {
@@ -270,7 +296,7 @@ function parseYopsList(cleaned: string): YOpsParseResult {
 // ── Main export ──
 
 export function parseYOpsOutput(raw: string): YOpsParseResult {
-  const cleaned = stripFences(raw);
+  const cleaned = sanitizeYamlQuotes(stripFences(raw));
 
   if (cleaned.length === 0) {
     return { ok: false, error: 'Empty input' };

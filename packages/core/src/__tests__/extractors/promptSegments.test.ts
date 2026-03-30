@@ -17,10 +17,10 @@ describe('Prompt segment composition', () => {
       expect(systemPrompt).not.toContain('2 Levels');
     });
 
-    it('balanced: includes 2 Levels and 1-4 slots (default)', () => {
+    it('balanced: includes 3 Levels and comprehensive extraction (default)', () => {
       const { systemPrompt } = buildExtractionPrompt({ turns: baseTurns }, PRESETS.balanced);
-      expect(systemPrompt).toContain('2 Levels');
-      expect(systemPrompt).toContain('1-4 slots');
+      expect(systemPrompt).toContain('3 Levels');
+      expect(systemPrompt).toContain('Extract ALL substantive information');
     });
 
     it('detailed: includes 3 Levels and 1-3 slots for grandchildren', () => {
@@ -53,7 +53,7 @@ describe('Prompt segment composition', () => {
     it('minimal: includes shortest substring rule', () => {
       const { systemPrompt } = buildExtractionPrompt(
         { turns: baseTurns },
-        PRESETS.balanced // quote_length: 'minimal'
+        PRESETS.concise // quote_length: 'minimal'
       );
       expect(systemPrompt).toContain('MINIMAL');
     });
@@ -95,11 +95,11 @@ describe('Prompt segment composition', () => {
   });
 
   describe('backward compatibility', () => {
-    it('no style param produces same output as balanced', () => {
+    it('no style param produces same output as detailed', () => {
       const withoutStyle = buildExtractionPrompt({ turns: baseTurns });
-      const withBalanced = buildExtractionPrompt({ turns: baseTurns }, PRESETS.balanced);
-      expect(withoutStyle.systemPrompt).toEqual(withBalanced.systemPrompt);
-      expect(withoutStyle.userPrompt).toEqual(withBalanced.userPrompt);
+      const withDetailed = buildExtractionPrompt({ turns: baseTurns }, PRESETS.detailed);
+      expect(withoutStyle.systemPrompt).toEqual(withDetailed.systemPrompt);
+      expect(withoutStyle.userPrompt).toEqual(withDetailed.userPrompt);
     });
   });
 

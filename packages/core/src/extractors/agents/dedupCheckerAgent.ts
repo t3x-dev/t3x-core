@@ -40,10 +40,12 @@ function findCandidatePairs(frames: FlatNode[]): Array<[number, number]> {
       }
 
       // Overlapping slot keys → might be duplicate
+      // Require 4+ overlapping keys and at least 3 slots each to avoid false positives
       const aKeys = new Set(Object.keys(a.slots));
       const bKeys = Object.keys(b.slots);
+      if (aKeys.size < 3 || bKeys.length < 3) continue; // Small frames are distinct by nature
       const overlap = bKeys.filter((k) => aKeys.has(k)).length;
-      if (overlap >= 2) {
+      if (overlap >= 4) {
         pairs.push([i, j]);
       }
     }

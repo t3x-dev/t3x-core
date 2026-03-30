@@ -56,16 +56,7 @@ export interface Conversation {
   turns_count?: number;
   provider?: string | null;
   model?: string | null;
-  metadata?: {
-    import?: {
-      source_type: 'url' | 'document' | 'platform';
-      source_url?: string;
-      source_filename?: string;
-      platform?: string;
-      title?: string;
-      imported_at?: string;
-    };
-  } | null;
+  metadata?: Record<string, unknown> | null;
 }
 
 // ============================================================================

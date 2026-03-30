@@ -3,17 +3,17 @@
 import { useParams, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChatWorkspace } from '@/components/chat/ChatWorkspace';
-import { ExtractionPanel } from '@/components/chat/ExtractionPanel';
+import { ExtractionPanel } from '@/components/extraction/ExtractionPanel';
 import { getConversation } from '@/lib/api';
 import { useChatStore } from '@/store/chatStore';
-import { useExtractionPanelStore } from '@/store/extractionPanelStore';
+import { useExtractionUIStore } from '@/store/extractionUIStore';
 
 export default function ConversationPage() {
   const { conversationId } = useParams<{ conversationId: string }>();
   const searchParams = useSearchParams();
   const firstMessage = searchParams.get('firstMessage');
   const activeProjectId = useChatStore((s) => s.activeProjectId);
-  const panelMode = useExtractionPanelStore((s) => s.panelMode);
+  const panelMode = useExtractionUIStore((s) => s.panelMode);
 
   // Fetch parent commit hash for inheritance (when navigating from canvas "Create Unit")
   const [inheritFromCommitHash, setInheritFromCommitHash] = useState<string | undefined>();
@@ -31,23 +31,8 @@ export default function ConversationPage() {
 
   // Resizable panel via drag handle
   const [panelWidth, setPanelWidth] = useState(320);
-  const [previewPrevWidth, setPreviewPrevWidth] = useState(320);
   const isDragging = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
-
-  // Auto-widen when entering preview mode, restore when leaving
-  const prevModeRef = useRef(panelMode);
-  if (panelMode !== prevModeRef.current) {
-    if (panelMode === 'preview' && prevModeRef.current !== 'preview') {
-      setPreviewPrevWidth(panelWidth);
-      // Take ~60% of viewport for preview mode
-      const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1200;
-      setPanelWidth(Math.max(Math.round(viewportWidth * 0.6), panelWidth));
-    } else if (panelMode !== 'preview' && prevModeRef.current === 'preview') {
-      setPanelWidth(previewPrevWidth);
-    }
-    prevModeRef.current = panelMode;
-  }
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();

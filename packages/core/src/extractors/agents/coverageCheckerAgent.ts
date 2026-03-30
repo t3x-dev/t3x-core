@@ -191,10 +191,12 @@ export const coverageCheckerAgent: MeaningAgent = {
           }
           // If slot already exists with a non-array value, don't overwrite
         } else {
-          // Create new frame
+          // Create new frame — nest under main topic root if possible
+          const rootFrame = modifiedFrames[0];
+          const nestedType = rootFrame ? `${rootFrame.type}/${point.frame_type}` : point.frame_type;
           const newFrame: FlatNode = {
             id: nextFrameId(modifiedFrames),
-            type: point.frame_type,
+            type: nestedType,
             slots: { [point.slot_key]: point.slot_value },
             confidence: 0.95,
             source: 'coverage_checker',

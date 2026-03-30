@@ -9,8 +9,8 @@ import {
 } from '../../extractors/extractionStyleConfig';
 
 describe('ExtractionStyleConfig', () => {
-  it('DEFAULT_STYLE equals balanced preset', () => {
-    expect(DEFAULT_STYLE).toEqual(PRESETS.balanced);
+  it('DEFAULT_STYLE equals detailed preset', () => {
+    expect(DEFAULT_STYLE).toEqual(PRESETS.detailed);
   });
 
   it('all presets have valid fields', () => {

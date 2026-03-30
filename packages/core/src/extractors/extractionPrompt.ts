@@ -89,7 +89,8 @@ function formatTurns(turns: ExtractionTurn[]): string {
 export function tier3Segment(t3: Tier3Behavior): string {
   switch (t3) {
     case 'extract':
-      return '| TIER 3 | AI provided information and user did NOT object (silence, moved on, or continued without contradicting) | Extract it | 0.4-0.5 |';
+      return `| TIER 3 | Assistant's direct answer to a user question \u2014 factual content the user requested | Extract it | 0.7-0.85 |
+| TIER 4 | AI-provided tangential information (unsolicited tips, suggestions, opinions) | Extract it | 0.4-0.5 |`;
     case 'skip':
       return '| TIER 3 | AI provided information and user did NOT object (silence, moved on, or continued without contradicting) | Do NOT extract | \u2014 |';
     default:
@@ -101,7 +102,7 @@ export function tier3Segment(t3: Tier3Behavior): string {
 export function tier3KeyDistinction(t3: Tier3Behavior): string {
   switch (t3) {
     case 'extract':
-      return 'Key distinction: Silence or moving on = the user did NOT object = TIER 3 (extract with low confidence). Only explicit rejection prevents extraction.';
+      return 'Key distinction: When the user asks a question and the assistant answers, the answer content is TIER 3 (0.7-0.85) \u2014 this IS the knowledge the user came for. Only unsolicited AI additions are TIER 4 (0.4-0.5). Explicit rejection = never extract.';
     case 'skip':
       return 'Key distinction: Only extract information the user explicitly stated (TIER 1) or explicitly confirmed (TIER 2). Do NOT extract unconfirmed AI suggestions.';
     default:
@@ -118,10 +119,12 @@ export function granularitySegment(g: Granularity): string {
 - Do NOT create child nodes \u2014 all information goes into root-level slots
 - 3-5 slots total. Prefer fewer, high-confidence slots.`;
     case 'balanced':
-      return `## Tree Depth: 2 Levels (Root + Children)
-- The tree has at most TWO levels: root node and its direct children
+      return `## Tree Depth: 3 Levels (Root + Children + Grandchildren)
+- The tree has up to THREE levels: root, children, and grandchildren
 - Group related slots into child nodes when a subtopic has 2+ related slots
-- Root: 1-3 slots. Each child: 1-4 slots.`;
+- Use grandchildren for detailed breakdowns (hero list \u2192 individual heroes)
+- Root: 2-5 slots. Children: 2-6 slots. Grandchildren: 1-4 slots.
+- IMPORTANT: Extract ALL substantive information from the conversation, not just highlights`;
     case 'detailed':
       return `## Tree Depth: 3 Levels (Root + Children + Grandchildren)
 - The tree has at most THREE levels: root, children, and grandchildren

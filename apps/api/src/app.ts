@@ -41,6 +41,7 @@ import {
   treeAnswerRoutes,
   treeCompressRoutes,
   treeExtractRoutes,
+  treeExtractStreamRoutes,
   gateRoutes,
   healthRoutes,
   leavesRoutes,
@@ -154,6 +155,7 @@ export function createApp(options?: CreateAppOptions): Hono {
   api.route('/', deployAgentRoutes);
   api.route('/', draftsRoutes);
   api.route('/', treeExtractRoutes); // /v1/extract/trees
+  api.route('/', treeExtractStreamRoutes); // /v1/extract/trees/stream
   api.route('/', treeAnswerRoutes); // /v1/extract/trees/answer
   api.route('/', treeCompressRoutes); // /v1/conversations/:conversationId/compress
   api.route('/', gateRoutes); // /v1/gate/check

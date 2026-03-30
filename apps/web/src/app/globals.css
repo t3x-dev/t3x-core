@@ -199,6 +199,7 @@
 
   /* ===== Accent Colors (light mode) ===== */
   --accent-commit: #2563eb;
+  --accent-extract: #7c3aed;
   --accent-pending: #f97316;
   --accent-leaf: #10b981;
   --accent-branch: #f59e0b;
@@ -364,6 +365,7 @@
 
   /* ===== Accent — desaturated (dark only) ===== */
   --accent-commit: oklch(0.65 0.15 260);
+  --accent-extract: #8b5cf6;
   --accent-pending: oklch(0.7 0.14 55);
   --accent-leaf: oklch(0.65 0.14 155);
   --accent-branch: oklch(0.7 0.12 80);
@@ -1053,3 +1055,24 @@ a {
     animation: none;
   }
 }
+
+/* YAML tree animation — extraction pipeline render */
+@keyframes yaml-enter {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes yaml-update {
+  0%, 100% { background-color: transparent; }
+  50% { background-color: color-mix(in srgb, var(--accent-commit) 15%, transparent); }
+}
+
+@keyframes yaml-exit {
+  from { opacity: 1; max-height: 40px; }
+  to { opacity: 0; max-height: 0; }
+}
+
+.animate-yaml-enter { animation: yaml-enter 300ms ease-out; }
+.animate-yaml-update { animation: yaml-update 600ms ease-in-out; }
+.animate-yaml-exit { animation: yaml-exit 400ms ease-out forwards; }
+.yaml-node-move { transition: transform 400ms ease-in-out, opacity 300ms ease; }
