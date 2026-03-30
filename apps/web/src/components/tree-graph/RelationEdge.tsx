@@ -16,7 +16,7 @@ const STROKE_WIDTHS: Record<string, number> = {
 
 /**
  * RelationEdge — Custom XYFlow edge with distinct visual styles
- * for inter-sentence tree relations.
+ * for inter-node tree relations.
  *
  * Visual encoding:
  * - causes:     orange, solid 2px, filled arrow

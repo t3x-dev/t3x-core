@@ -5,11 +5,11 @@
  *
  * Reuses the same source context pattern as CommitSourceContext, but overlays
  * constraint matches onto the text:
- * - green: sentence excerpt (default, same as Commit view)
+ * - green: node excerpt (default, same as Commit view)
  * - deepGreen: require constraint match
  * - deepRed: exclude constraint match
  *
- * Constraint highlights override sentence highlights where they overlap.
+ * Constraint highlights override node highlights where they overlap.
  */
 
 import {
@@ -43,7 +43,7 @@ import type {
   ContentIntegrityStatus,
   HighlightColor,
   HighlightRange,
-  SentenceWithSource,
+  NodeWithSource,
   TurnBubbleData,
 } from '@/types/sourceContext';
 
@@ -61,12 +61,12 @@ const TRUNCATION_CONTEXT = DEFAULT_CONTEXT_CHARS;
 type SelectionMode = 'require' | 'exclude';
 
 interface LeafConstraintSourceContextProps {
-  /** Sentences from commit content */
-  sentences: SentenceWithSource[];
+  /** ContentNodes from commit content */
+  nodes: NodeWithSource[];
   /** Constraints from leaf */
   constraints: Constraint[];
-  /** Callback to add a new constraint (type, value, sourceSentenceId) */
-  onAdd?: (type: 'require' | 'exclude', value: string, sourceSentenceId: string) => void;
+  /** Callback to add a new constraint (type, value, sourceNodeId) */
+  onAdd?: (type: 'require' | 'exclude', value: string, sourceNodeId: string) => void;
   /** Callback to remove a constraint by id */
   onRemove?: (constraintId: string) => void;
   /** Whether a save is in progress */
@@ -87,8 +87,8 @@ interface LeafConstraintSourceContextProps {
 // Internal Types
 // ═══════════════════════════════════════════════════════════════════════════
 
-interface SentenceWithHighlight {
-  sentence: SentenceWithSource;
+interface NodeWithHighlight {
+  node: NodeWithSource;
   turnHash: string;
   highlight: HighlightRange;
 }
@@ -97,7 +97,7 @@ interface TurnWithHighlights {
   turnHash: string;
   context: TurnContextData | null;
   highlights: HighlightRange[];
-  sentences: SentenceWithHighlight[];
+  nodes: NodeWithHighlight[];
   loading: boolean;
   error: string | null;
   integrityStatus: Map<string, ContentIntegrityStatus>;
@@ -107,27 +107,27 @@ interface TurnWithHighlights {
 // Helpers
 // ═══════════════════════════════════════════════════════════════════════════
 
-function groupSentencesByTurn(sentences: SentenceWithSource[]): {
-  byTurn: Map<string, SentenceWithHighlight[]>;
-  withoutSource: SentenceWithSource[];
+function groupNodesByTurn(nodes: NodeWithSource[]): {
+  byTurn: Map<string, NodeWithHighlight[]>;
+  withoutSource: NodeWithSource[];
 } {
-  const byTurn = new Map<string, SentenceWithHighlight[]>();
-  const withoutSource: SentenceWithSource[] = [];
+  const byTurn = new Map<string, NodeWithHighlight[]>();
+  const withoutSource: NodeWithSource[] = [];
 
-  for (const sentence of sentences) {
-    if (!sentence.source || !sentence.source.turn_hash) {
-      withoutSource.push(sentence);
+  for (const node of nodes) {
+    if (!node.source || !node.source.turn_hash) {
+      withoutSource.push(node);
       continue;
     }
 
-    const turnHash = sentence.source.turn_hash;
+    const turnHash = node.source.turn_hash;
     const group = byTurn.get(turnHash) || [];
     group.push({
-      sentence,
+      node,
       turnHash,
       highlight: {
-        start: sentence.source.start_char,
-        end: sentence.source.end_char,
+        start: node.source.start_char,
+        end: node.source.end_char,
       },
     });
     byTurn.set(turnHash, group);
@@ -137,14 +137,14 @@ function groupSentencesByTurn(sentences: SentenceWithSource[]): {
 }
 
 /**
- * Build ColoredHighlightRange[] for a single turn, merging sentence highlights
- * with constraint highlights. Constraint colors override sentence green.
+ * Build ColoredHighlightRange[] for a single turn, merging node highlights
+ * with constraint highlights. Constraint colors override node green.
  */
 export function buildColoredHighlights(
   turnContent: string,
-  sentenceHighlights: SentenceWithHighlight[],
+  nodeHighlights: NodeWithHighlight[],
   constraints: Constraint[],
-  sentences: SentenceWithSource[]
+  nodes: NodeWithSource[]
 ): ColoredHighlightRange[] {
   // Step 1: Find constraint match ranges within this turn
   const constraintRanges: { start: number; end: number; color: HighlightColor }[] = [];
@@ -153,22 +153,22 @@ export function buildColoredHighlights(
     const color: HighlightColor = c.type === 'require' ? 'deepGreen' : 'deepRed';
     let found = false;
 
-    // Strategy 1: Try linked sentence first (most precise)
-    const linkedId = (c.type === 'require' && c.source_sentence_id) || null;
+    // Strategy 1: Try linked node first (most precise)
+    const linkedId = (c.type === 'require' && c.source_node) || null;
     const linkedByDesc = c.description
-      ? sentences.find((s) => c.description?.includes(s.id))?.id
+      ? nodes.find((s) => c.description?.includes(s.id))?.id
       : null;
     const linkedByReason =
-      c.type === 'exclude' && c.reason ? sentences.find((s) => c.reason?.includes(s.id))?.id : null;
-    const targetSentenceId = linkedId || linkedByDesc || linkedByReason;
+      c.type === 'exclude' && c.reason ? nodes.find((s) => c.reason?.includes(s.id))?.id : null;
+    const targetNodeId = linkedId || linkedByDesc || linkedByReason;
 
-    if (targetSentenceId) {
-      const sh = sentenceHighlights.find((s) => s.sentence.id === targetSentenceId);
+    if (targetNodeId) {
+      const sh = nodeHighlights.find((s) => s.node.id === targetNodeId);
       if (sh) {
-        const sentenceText = turnContent.slice(sh.highlight.start, sh.highlight.end);
+        const nodeText = turnContent.slice(sh.highlight.start, sh.highlight.end);
         let searchFrom = 0;
-        while (searchFrom < sentenceText.length) {
-          const idx = sentenceText.indexOf(c.value, searchFrom);
+        while (searchFrom < nodeText.length) {
+          const idx = nodeText.indexOf(c.value, searchFrom);
           if (idx === -1) break;
           constraintRanges.push({
             start: sh.highlight.start + idx,
@@ -181,13 +181,13 @@ export function buildColoredHighlights(
       }
     }
 
-    // Strategy 2: Search all sentence ranges in this turn
+    // Strategy 2: Search all node ranges in this turn
     if (!found) {
-      for (const sh of sentenceHighlights) {
-        const sentenceText = turnContent.slice(sh.highlight.start, sh.highlight.end);
+      for (const sh of nodeHighlights) {
+        const nodeText = turnContent.slice(sh.highlight.start, sh.highlight.end);
         let searchFrom = 0;
-        while (searchFrom < sentenceText.length) {
-          const idx = sentenceText.indexOf(c.value, searchFrom);
+        while (searchFrom < nodeText.length) {
+          const idx = nodeText.indexOf(c.value, searchFrom);
           if (idx === -1) break;
           constraintRanges.push({
             start: sh.highlight.start + idx,
@@ -200,7 +200,7 @@ export function buildColoredHighlights(
       }
     }
 
-    // Strategy 3: Search entire turn content (last resort, for text between sentences)
+    // Strategy 3: Search entire turn content (last resort, for text between nodes)
     if (!found) {
       let searchFrom = 0;
       while (searchFrom < turnContent.length) {
@@ -216,8 +216,8 @@ export function buildColoredHighlights(
     }
   }
 
-  // Step 2: Build base green ranges from sentence highlights
-  const baseRanges: { start: number; end: number }[] = sentenceHighlights.map((sh) => ({
+  // Step 2: Build base green ranges from node highlights
+  const baseRanges: { start: number; end: number }[] = nodeHighlights.map((sh) => ({
     start: sh.highlight.start,
     end: sh.highlight.end,
   }));
@@ -254,7 +254,7 @@ export function buildColoredHighlights(
     }
   }
 
-  // Step 4: Add constraint ranges not fully inside any sentence range
+  // Step 4: Add constraint ranges not fully inside any node range
   // (from Strategy 3 — full turn content search)
   // Partial overlaps with base ranges may cause duplicate coverage, but
   // TurnBubble's overlap handling (Math.max(rawStart, lastEnd)) resolves this.
@@ -275,16 +275,16 @@ export function buildColoredHighlights(
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Find which sentence a character offset belongs to within a turn.
- * Returns the sentence ID or null if not within any sentence range.
+ * Find which node a character offset belongs to within a turn.
+ * Returns the node ID or null if not within any node range.
  */
-function findSentenceAtTurnOffset(
+function findNodeAtTurnOffset(
   offset: number,
-  sentenceHighlights: SentenceWithHighlight[]
+  nodeHighlights: NodeWithHighlight[]
 ): string | null {
-  for (const sh of sentenceHighlights) {
+  for (const sh of nodeHighlights) {
     if (offset >= sh.highlight.start && offset < sh.highlight.end) {
-      return sh.sentence.id;
+      return sh.node.id;
     }
   }
   return null;
@@ -309,7 +309,7 @@ function getAbsoluteOffset(container: Node, targetNode: Node, targetOffset: numb
 }
 
 export function LeafConstraintSourceContext({
-  sentences,
+  nodes,
   constraints,
   onAdd,
   onRemove,
@@ -332,23 +332,23 @@ export function LeafConstraintSourceContext({
   const turnBubbleRefs = useRef<Map<string, HTMLDivElement | null>>(new Map());
   const isEditable = !!onAdd;
 
-  const { byTurn, withoutSource } = useMemo(() => groupSentencesByTurn(sentences), [sentences]);
+  const { byTurn, withoutSource } = useMemo(() => groupNodesByTurn(nodes), [nodes]);
   const hasLegacyData = withoutSource.length > 0;
-  const allLegacy = withoutSource.length === sentences.length;
+  const allLegacy = withoutSource.length === nodes.length;
 
   const turnHashes = useMemo(() => {
     const seen = new Set<string>();
     const ordered: string[] = [];
-    for (const sentence of sentences) {
-      if (!sentence.source?.turn_hash) continue;
-      const hash = sentence.source.turn_hash;
+    for (const node of nodes) {
+      if (!node.source?.turn_hash) continue;
+      const hash = node.source.turn_hash;
       if (!seen.has(hash)) {
         seen.add(hash);
         ordered.push(hash);
       }
     }
     return ordered;
-  }, [sentences]);
+  }, [nodes]);
 
   useEffect(() => {
     if (!hasUserInteracted.current && defaultExpanded && turnHashes.length > 0) {
@@ -420,14 +420,14 @@ export function LeafConstraintSourceContext({
         return;
       }
 
-      // Find which sentence this offset belongs to
-      const sentenceId = findSentenceAtTurnOffset(idx, data.sentences);
-      if (!sentenceId) {
+      // Find which node this offset belongs to
+      const nodeId = findNodeAtTurnOffset(idx, data.nodes);
+      if (!nodeId) {
         selection.removeAllRanges();
         return;
       }
 
-      onAdd(mode, selectedText, sentenceId);
+      onAdd(mode, selectedText, nodeId);
       selection.removeAllRanges();
     },
     [onAdd, mode, turnData]
@@ -449,8 +449,8 @@ export function LeafConstraintSourceContext({
 
       await Promise.all(
         hashesToFetch.map(async (turnHash) => {
-          const sentenceGroup = byTurn.get(turnHash) || [];
-          const highlights = sentenceGroup.map((s) => s.highlight);
+          const nodeGroup = byTurn.get(turnHash) || [];
+          const highlights = nodeGroup.map((s) => s.highlight);
 
           try {
             const context = await api.fetchTurnContextCached(turnHash, {
@@ -460,15 +460,15 @@ export function LeafConstraintSourceContext({
 
             const integrityStatus = new Map<string, ContentIntegrityStatus>();
             if (context?.target_turn?.content) {
-              for (const sg of sentenceGroup) {
+              for (const sg of nodeGroup) {
                 const status = checkContentIntegrity(
-                  sg.sentence.text,
+                  sg.node.text,
                   context.target_turn.content,
                   sg.highlight.start,
                   sg.highlight.end,
-                  sg.sentence.anchor_type
+                  sg.node.anchor_type
                 );
-                integrityStatus.set(sg.sentence.id, status);
+                integrityStatus.set(sg.node.id, status);
               }
             }
 
@@ -477,7 +477,7 @@ export function LeafConstraintSourceContext({
                 turnHash,
                 context,
                 highlights,
-                sentences: sentenceGroup,
+                nodes: nodeGroup,
                 loading: false,
                 error: null,
                 integrityStatus,
@@ -490,7 +490,7 @@ export function LeafConstraintSourceContext({
                 turnHash,
                 context: null,
                 highlights,
-                sentences: sentenceGroup,
+                nodes: nodeGroup,
                 loading: false,
                 error: errorMsg,
                 integrityStatus: new Map(),
@@ -513,7 +513,7 @@ export function LeafConstraintSourceContext({
   }, [turnHashes, byTurn, compact]);
 
   // Empty
-  if (sentences.length === 0) {
+  if (nodes.length === 0) {
     return (
       <div className="p-[var(--space-group)] bg-[var(--color-bg-subtle)] rounded-lg border border-[var(--color-border)]">
         <div className="flex items-center gap-2 mb-3">
@@ -522,7 +522,7 @@ export function LeafConstraintSourceContext({
             Source Context
           </h3>
         </div>
-        <p className="text-center py-4 text-[var(--color-text-muted)] text-sm">No sentences</p>
+        <p className="text-center py-4 text-[var(--color-text-muted)] text-sm">No nodes</p>
       </div>
     );
   }
@@ -541,7 +541,7 @@ export function LeafConstraintSourceContext({
           </span>
         </div>
         <ul className="space-y-[var(--space-item)]">
-          {sentences.map((s) => (
+          {nodes.map((s) => (
             <li
               key={s.id}
               className="flex items-start gap-2 p-2 bg-[var(--color-bg-white)] rounded border border-[var(--color-border-light)]"
@@ -596,7 +596,7 @@ export function LeafConstraintSourceContext({
           </span>
         </div>
         <ul className="space-y-[var(--space-item)]">
-          {sentences.map((s) => (
+          {nodes.map((s) => (
             <li
               key={s.id}
               className="flex items-start gap-2 p-2 bg-[var(--color-bg-white)] rounded border border-[var(--color-border-light)]"
@@ -671,7 +671,7 @@ export function LeafConstraintSourceContext({
               </div>
             )}
             <span className="text-xs text-[var(--color-text-muted)]">
-              {sentences.length} sentence{sentences.length !== 1 ? 's' : ''} from{' '}
+              {nodes.length} node{nodes.length !== 1 ? 's' : ''} from{' '}
               {turnHashes.length} turn{turnHashes.length !== 1 ? 's' : ''}
             </span>
           </div>
@@ -710,7 +710,7 @@ export function LeafConstraintSourceContext({
         <div className="flex items-center gap-4 text-xs text-[var(--color-text-muted)] mb-3">
           <span className="flex items-center gap-1.5">
             <span className="inline-block w-3 h-3 rounded-sm bg-[var(--status-success-muted)]" />
-            Sentence
+            ContentNode
           </span>
           {constraintCount > 0 && (
             <>
@@ -735,7 +735,7 @@ export function LeafConstraintSourceContext({
 
           // Error state
           if (!data || data.error) {
-            const sentencesForTurn = byTurn.get(turnHash) || [];
+            const nodesForTurn = byTurn.get(turnHash) || [];
             return (
               <div
                 key={turnHash}
@@ -761,16 +761,16 @@ export function LeafConstraintSourceContext({
                 {isExpanded && (
                   <div className="p-3 bg-[var(--color-bg-white)]">
                     <ul className="space-y-[var(--space-item)]">
-                      {sentencesForTurn.map((sg) => (
+                      {nodesForTurn.map((sg) => (
                         <li
-                          key={sg.sentence.id}
+                          key={sg.node.id}
                           className="flex items-start gap-2 p-2 bg-[var(--status-success-muted)] rounded border border-[var(--status-success)]/20"
                         >
                           <span className="text-xs font-mono text-[var(--color-text-muted)] bg-[var(--color-bg-subtle)] px-1.5 py-0.5 rounded shrink-0">
-                            {sg.sentence.id}
+                            {sg.node.id}
                           </span>
                           <span className="text-[0.875rem] leading-relaxed text-[var(--color-text-secondary)] break-words">
-                            {sg.sentence.text}
+                            {sg.node.text}
                           </span>
                         </li>
                       ))}
@@ -790,12 +790,12 @@ export function LeafConstraintSourceContext({
           const isLongTurn = targetTurn.content.length > MAX_TURN_LENGTH;
           const shouldTruncate = isLongTurn && (compact || !expandedTurns.has(turnHash));
 
-          // Build colored highlights (sentence green + constraint deepGreen/deepRed)
+          // Build colored highlights (node green + constraint deepGreen/deepRed)
           const coloredHighlights = buildColoredHighlights(
             targetTurn.content,
-            data.sentences,
+            data.nodes,
             constraints,
-            sentences
+            nodes
           );
 
           const truncationOpts = {
@@ -858,7 +858,7 @@ export function LeafConstraintSourceContext({
                     </span>
                   )}
                   <span className="text-xs text-[var(--color-text-muted)]">
-                    {data.sentences.length} sentence{data.sentences.length !== 1 ? 's' : ''}
+                    {data.nodes.length} node{data.nodes.length !== 1 ? 's' : ''}
                   </span>
                 </button>
               )}
@@ -912,7 +912,7 @@ export function LeafConstraintSourceContext({
           <div className="mt-3 pt-3 border-t border-[var(--color-border)]">
             <div className="flex items-center gap-2 mb-[var(--space-item)]">
               <span className="text-xs text-[var(--color-text-muted)]">
-                {withoutSource.length} sentence{withoutSource.length !== 1 ? 's' : ''} without
+                {withoutSource.length} node{withoutSource.length !== 1 ? 's' : ''} without
                 source info
               </span>
               <span className="px-1.5 py-0.5 bg-[var(--hover-bg)] text-[var(--color-text-secondary)] text-[0.65rem] rounded">

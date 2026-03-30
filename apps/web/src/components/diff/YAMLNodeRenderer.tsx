@@ -115,7 +115,7 @@ export function YAMLNodeRenderer({
     <>
       {/* Tree type header */}
       <YAMLLine lineNumber={lineNum++} status={lineStatus()}>
-        <span style={{ color: YAML_COLORS.type, fontWeight: 600 }}>{node.type}</span>
+        <span style={{ color: YAML_COLORS.type, fontWeight: 600 }}>{node.key}</span>
         <span style={{ color: YAML_COLORS.bracket }}>:</span>
       </YAMLLine>
 

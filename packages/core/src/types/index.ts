@@ -1,7 +1,7 @@
 /**
- * T3X V4 Architecture Type Definitions
+ * T3X Type Definitions
  *
- * This is the SINGLE SOURCE OF TRUTH for V4 types.
+ * This is the SINGLE SOURCE OF TRUTH for T3X types.
  * All layers (storage, api, web) must import from here.
  *
  * @see docs/specification/semantic-layer-architecture.md
@@ -56,11 +56,11 @@ export interface CommitSourceRef {
  */
 export type Constraint = RequireConstraint | ExcludeConstraint;
 
-/** Reference to a source frame's slot (for frame-based constraints) */
-export interface ConstraintSourceFrame {
-  /** Frame type to target (e.g., "preference", "budget") */
-  frame_type: string;
-  /** Specific slot key within the frame (optional — omit to target the frame as a whole) */
+/** Reference to a source node's slot (for tree-based constraints) */
+export interface ConstraintSourceNode {
+  /** Node type to target (e.g., "preference", "budget") */
+  node_type: string;
+  /** Specific slot key within the node (optional — omit to target the node as a whole) */
   slot_key?: string;
 }
 
@@ -79,11 +79,8 @@ export interface RequireConstraint {
   /** Human explanation of this constraint */
   description?: string;
 
-  /** @deprecated Use source_frame for frame-based commits */
-  source_sentence_id?: string;
-
-  /** Link to source frame + slot (frame-based traceability) */
-  source_frame?: ConstraintSourceFrame;
+  /** Link to source node + slot (tree-based traceability) */
+  source_node?: ConstraintSourceNode;
 }
 
 export interface ExcludeConstraint {
@@ -104,8 +101,8 @@ export interface ExcludeConstraint {
   /** Why this is excluded (policy/compliance reason) */
   reason?: string;
 
-  /** Link to source frame + slot (frame-based traceability) */
-  source_frame?: ConstraintSourceFrame;
+  /** Link to source node + slot (tree-based traceability) */
+  source_node?: ConstraintSourceNode;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -408,23 +405,23 @@ export interface ContextSource {
  * Computed at merge execution time from the Merge2WayResult.
  */
 export interface MergeSummaryData {
-  /** Sentences identical in both branches (auto-kept) */
+  /** Nodes identical in both branches (auto-kept) */
   kept_identical: number;
 
   /** Similar pairs that were resolved (source or target chosen) */
   resolved_conflicts: number;
 
-  /** Sentences kept from source-only */
+  /** Nodes kept from source-only */
   kept_from_source: number;
 
-  /** Sentences kept from target-only */
+  /** Nodes kept from target-only */
   kept_from_target: number;
 
-  /** Sentences discarded during merge */
+  /** Nodes discarded during merge */
   discarded: number;
 
-  /** Total sentences in the merged commit */
-  total_sentences: number;
+  /** Total nodes in the merged commit */
+  total_nodes: number;
 
   /** Optional release note generated after merge */
   release_note?: {
@@ -628,7 +625,7 @@ export interface DraftConstraint {
 
 /**
  * A Draft is a pre-commit working area (like Git's working directory).
- * Users edit sentences, constraints, and preview output before committing.
+ * Users edit nodes, constraints, and preview output before committing.
  */
 export interface Draft {
   /** Unique ID, format: "draft_" + nanoid(12) */
@@ -649,8 +646,8 @@ export interface Draft {
   /** Source draft ID if forked from a committed draft (RFC §13 Issue B) */
   forked_from?: string;
 
-  /** Editable sentences (DraftSentence records, typed as unknown[] until Task 6 cleanup) */
-  sentences: unknown[];
+  /** Editable nodes (DraftNode records, typed as unknown[] until Task 6 cleanup) */
+  nodes: unknown[];
 
   /** Editable constraints */
   constraints: DraftConstraint[];
@@ -688,7 +685,7 @@ export interface Draft {
   /** Last update timestamp, ISO8601 */
   updated_at: string;
 
-  /** LLM extraction mode. Undefined or 'deterministic' uses existing DraftSentence flow. */
+  /** LLM extraction mode. Undefined or 'deterministic' uses existing DraftNode flow. */
   extraction_mode?: 'deterministic' | 'llm';
 
   /** SemanticPoints (only when extraction_mode === 'llm'; typed as unknown[] until Task 6 cleanup) */
@@ -711,11 +708,10 @@ export interface CreateDraftInput {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Ring 4: Inter-Sentence Relations
-// @see docs/plans/2026-03-05-ring4-inter-sentence-relations-design.md
+// Relation Types (used by relation extractor + knowledge graph)
 // ═══════════════════════════════════════════════════════════════════════════
 
-export const SENTENCE_RELATION_TYPES = [
+export const RELATION_TYPE_VALUES = [
   'supports',
   'contrasts',
   'causes',
@@ -724,21 +720,21 @@ export const SENTENCE_RELATION_TYPES = [
   'summarizes',
 ] as const;
 
-export type RelationType = (typeof SENTENCE_RELATION_TYPES)[number];
+export type RelationType = (typeof RELATION_TYPE_VALUES)[number];
 
-export interface SentenceRelation {
+export interface NodeRelation {
   id: string; // rel_abc123
-  source_id: string; // s_xxx (from sentence)
-  target_id: string; // s_yyy (to sentence)
+  source_id: string; // node key
+  target_id: string; // node key
   type: RelationType;
   confidence: number; // 0.0 - 1.0
   reasoning: string; // LLM explanation
 }
 
 export interface RelationExtractionResult {
-  relations: SentenceRelation[];
+  relations: NodeRelation[];
   stats: {
-    total_sentences: number;
+    total_nodes: number;
     relations_found: number;
     avg_confidence: number;
     extraction_time_ms: number;

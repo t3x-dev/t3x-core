@@ -2,24 +2,22 @@
  * Extractor Orchestrator
  *
  * Orchestrates the semantic extraction pipeline:
- * buildPrompt → LLM generate → parse delta → apply delta → validate integrity
- *
- * When the provider supports generateStructured(), uses native structured output
- * for more reliable extraction. Falls back to generate() + text parsing for
- * legacy providers.
+ * buildYOpsPrompt → LLM generate → parseYOpsOutput → applyYOps → validate → ylint
  *
  * Retries once on parse or validation failure (MAX_RETRIES = 1, 2 attempts total).
  */
 
-import type { LLMGenerateOptions, LLMPrompt, LLMProvider } from '../llm/types';
-import { applyDelta } from '../semantic/delta';
-import { DeltaSchema } from '../semantic/schema';
-import type { Delta, SemanticContent } from '../semantic/types';
+import type { LLMProvider } from '../llm/types';
+import type { SemanticContent } from '../semantic/types';
 import { validateIntegrity } from '../semantic/validate';
+import { applyYOps } from '../yops/engine';
+import type { YOp } from '../yops/types';
+import { ylint } from '../ylint';
+import type { LintResult } from '../ylint/types';
 import type { ExtractionStyleConfig } from './extractionStyleConfig';
-import { parseDelta } from './deltaParser';
-import type { ExtractionInput, ExtractionTurn } from './extractionPrompt';
-import { buildExtractionPrompt } from './extractionPrompt';
+import { parseYOpsOutput } from './yopsParser';
+import type { ExtractionInput, ExtractionTurn } from './yopsPrompt';
+import { buildYOpsPrompt } from './yopsPrompt';
 
 // ── Constants ──
 
@@ -29,83 +27,19 @@ const MAX_TOKENS = 4096;
 
 // ── Result Type ──
 
-/** Per-change slot quotes extracted from LLM output before Zod strips them */
-export type SlotQuotesMap = Map<number, Record<string, string>>; // changeIndex → { slotKey: quote }
-
 export type ExtractionResult =
   | {
       ok: true;
-      delta: Delta;
+      yops: YOp[];
       snapshot: SemanticContent;
       usage: { inputTokens: number; outputTokens: number };
-      slotQuotes?: SlotQuotesMap;
+      lintResult?: LintResult;
     }
   | { ok: false; error: string; usage: { inputTokens: number; outputTokens: number } };
-
-/**
- * Extract slot_quotes from raw LLM JSON before Zod validation strips them.
- * Returns a map of changeIndex → { slotKey: quote }.
- */
-function extractSlotQuotes(rawJson: unknown): SlotQuotesMap {
-  const map: SlotQuotesMap = new Map();
-  if (!rawJson || typeof rawJson !== 'object') return map;
-
-  const obj = rawJson as Record<string, unknown>;
-  const changes = (obj.changes ?? obj.frames) as Array<Record<string, unknown>> | undefined;
-  if (!Array.isArray(changes)) return map;
-
-  for (let i = 0; i < changes.length; i++) {
-    const change = changes[i];
-    // Handles both formats:
-    // - Delta: changes[i].frame.slot_quotes (add action) or changes[i].slot_quotes (update action)
-    // - First extraction: frames[i].slot_quotes (flat, no .frame wrapper)
-    const quotes = (change.frame as Record<string, unknown>)?.slot_quotes ?? change.slot_quotes;
-    if (quotes && typeof quotes === 'object') {
-      map.set(i, quotes as Record<string, string>);
-      // Clean from the object so Zod doesn't reject unknown keys
-      if ((change.frame as Record<string, unknown>)?.slot_quotes) {
-        delete (change.frame as Record<string, unknown>).slot_quotes;
-      }
-      delete change.slot_quotes;
-    }
-  }
-  console.info(`[slot-sources] extractSlotQuotes: ${map.size} changes have quotes`);
-  return map;
-}
 
 // ── Re-export input types ──
 
 export type { ExtractionInput, ExtractionTurn };
-
-// ── Helpers ──
-
-/**
- * Call generateStructured with one retry on validation failure.
- * The retry appends the error message to guide the model.
- */
-async function _callGenerateStructured(
-  provider: Required<Pick<LLMProvider, 'generateStructured'>>,
-  prompt: LLMPrompt,
-  options: LLMGenerateOptions
-): Promise<{
-  delta: Delta;
-  usage: { inputTokens: number; outputTokens: number };
-}> {
-  const promptWithRetry = { ...prompt, messages: [...prompt.messages] };
-  try {
-    const result = await provider.generateStructured(promptWithRetry, DeltaSchema, options);
-    return { delta: result.data as Delta, usage: result.usage };
-  } catch (error) {
-    // Retry once with error feedback appended to the conversation
-    const errorMsg = `Previous attempt failed validation: ${error instanceof Error ? error.message : String(error)}. Fix these issues.`;
-    promptWithRetry.messages.push(
-      { role: 'assistant', content: 'I apologize for the error.' },
-      { role: 'user', content: errorMsg }
-    );
-    const retryResult = await provider.generateStructured(promptWithRetry, DeltaSchema, options);
-    return { delta: retryResult.data as Delta, usage: retryResult.usage };
-  }
-}
 
 // ── Class ──
 
@@ -117,15 +51,12 @@ export class Extractor {
     style?: ExtractionStyleConfig
   ): Promise<ExtractionResult> {
     const baseSnapshot: SemanticContent = input.snapshot ?? { trees: [], relations: [] };
-    // ── Text generation path ──
-    // Always use generate() (not generateStructured) so we can extract
-    // slot_quotes from the raw JSON before Zod validation strips them.
     let lastError = '';
     const totalUsage = { inputTokens: 0, outputTokens: 0 };
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-      // 1. Build prompt
-      const { systemPrompt, userPrompt } = buildExtractionPrompt(input, style);
+      // 1. Build prompt (YOps format)
+      const { systemPrompt, userPrompt } = buildYOpsPrompt(input, style);
       const combinedPrompt = `${systemPrompt}\n\n---\n\n${userPrompt}`;
 
       // 2. Call LLM
@@ -143,50 +74,33 @@ export class Extractor {
         continue;
       }
 
-      // 3. Extract slot_quotes from raw JSON before parsing strips them
-      let slotQuotes: SlotQuotesMap = new Map();
-      try {
-        // Find JSON in the raw text
-        const jsonMatch = raw.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          const rawJson = JSON.parse(jsonMatch[0]);
-          slotQuotes = extractSlotQuotes(rawJson);
-          // Only re-stringify when the JSON is the primary output (has changes/frames).
-          // For YAML tree responses, the JSON is just metadata after --- separator;
-          // replacing raw would destroy the YAML tree.
-          if ('changes' in rawJson || 'frames' in rawJson) {
-            raw = JSON.stringify(rawJson);
-          }
-        }
-      } catch {
-        // JSON extraction failed — continue with original raw text
-      }
-
-      // 4. Parse delta
-      const parseResult = parseDelta(raw, input.snapshot);
+      // 3. Parse YOps output
+      const parseResult = parseYOpsOutput(raw);
       if (!parseResult.ok) {
         lastError = `Failed to parse LLM output: ${parseResult.error}`;
         continue;
       }
 
-      // 5. Apply delta
-      let snapshot: SemanticContent;
-      try {
-        snapshot = applyDelta(baseSnapshot, parseResult.delta);
-      } catch (err) {
-        lastError = `Failed to apply delta: ${err instanceof Error ? err.message : String(err)}`;
+      // 4. Apply YOps
+      const applyResult = applyYOps(baseSnapshot, parseResult.yops);
+      if (!applyResult.ok) {
+        lastError = `Failed to apply YOps: ${applyResult.error?.message ?? 'unknown'}`;
         continue;
       }
 
-      // 6. Validate integrity
+      const snapshot: SemanticContent = { trees: applyResult.trees, relations: applyResult.relations };
+
+      // 5. Validate integrity
       const validation = validateIntegrity(snapshot);
       if (!validation.valid) {
-        const errorMessages = validation.errors.map((e) => e.message).join('; ');
-        lastError = `Validation failed: ${errorMessages}`;
+        lastError = `Validation failed: ${validation.errors.map((e) => e.message).join('; ')}`;
         continue;
       }
 
-      return { ok: true, delta: parseResult.delta, snapshot, usage: totalUsage, slotQuotes };
+      // 6. ylint (non-blocking — attach result)
+      const lintResult = ylint(snapshot);
+
+      return { ok: true, yops: parseResult.yops, snapshot, usage: totalUsage, lintResult };
     }
 
     return { ok: false, error: lastError, usage: totalUsage };

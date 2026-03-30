@@ -2,9 +2,10 @@
 
 import type { TreeNode, SlotValue } from '@t3x-dev/core';
 import { Loader2 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { nestNodes } from '@/lib/treeNesting';
 import { parseDisplayYAML, toDisplayYAML } from '@/lib/liteYaml';
+import { traceChatToYaml, traceYamlToChat } from '@/lib/hoverTrace';
 import { RELEVANCE_THRESHOLD, type RelevanceContext, relevanceScore } from '@/lib/relevanceScore';
 import { useExtractionPanelStore } from '@/store/extractionPanelStore';
 import { TreeHistoryPopover } from './TreeHistoryPopover';
@@ -24,7 +25,11 @@ interface YAMLLine {
 }
 
 function formatValue(value: SlotValue): string {
-  if (typeof value === 'string') return `"${value}"`;
+  if (typeof value === 'string') {
+    // Only quote strings that need it (contain YAML special chars or could be misinterpreted)
+    const needsQuote = /[:#{}[\],&*?|>!%@`]/.test(value) || value === '' || value === 'true' || value === 'false' || value === 'null' || /^\d+$/.test(value);
+    return needsQuote ? `"${value}"` : value;
+  }
   if (typeof value === 'number') return String(value);
   if (typeof value === 'object' && value !== null && 'ref' in value) {
     return `*${(value as { ref: string }).ref}`;
@@ -167,9 +172,9 @@ function renderSlotLines(
 
 export function YAMLView() {
   const draft = useExtractionPanelStore((s) => s.draft);
-  const applyDelta = useExtractionPanelStore((s) => s.applyDelta);
-  const deltaChangeHistory = useExtractionPanelStore((s) => s.deltaChangeHistory);
-  const deltaLog = useExtractionPanelStore((s) => s.deltaLog);
+  const applyTreeChanges = useExtractionPanelStore((s) => s.applyTreeChanges);
+  const yopsHistory = useExtractionPanelStore((s) => s.yopsHistory);
+  const yopsLog = useExtractionPanelStore((s) => s.yopsLog);
   const confirmedNodeIds = useExtractionPanelStore((s) => s.confirmedNodeIds);
   const confirmedSlotKeys = useExtractionPanelStore((s) => s.confirmedSlotKeys);
   const confirmNode = useExtractionPanelStore((s) => s.confirmNode);
@@ -180,10 +185,32 @@ export function YAMLView() {
   const llmHighlightedNodeIds = useExtractionPanelStore((s) => s.llmHighlightedNodeIds);
   const isExtracting = useExtractionPanelStore((s) => s.isExtracting);
   const setHoveredNodeId = useExtractionPanelStore((s) => s.setHoveredNodeId);
-  const hoveredTurnHash = useExtractionPanelStore((s) => s.hoveredTurnHash);
-  const hoveredCharOffset = useExtractionPanelStore((s) => s.hoveredCharOffset);
+  const hoveredTurnIndex = useExtractionPanelStore((s) => s.hoveredTurnIndex);
   const gateIssues = useExtractionPanelStore((s) => s.gateIssues);
   const manualEditedNodeIds = useExtractionPanelStore((s) => s.manualEditedNodeIds);
+  const hoveredNodeId = useExtractionPanelStore((s) => s.hoveredNodeId);
+  const hoveredFromChat = useExtractionPanelStore((s) => s.hoveredFromChat);
+  const scrollToCenter = useExtractionPanelStore((s) => s.scrollToCenter);
+
+  // Track DOM refs for each YAML line by treeId for Chat→YAML scrolling
+  const lineRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+
+  // When a chat span is clicked/hovered (hoveredFromChat=true), scroll the YAML line into view
+  useEffect(() => {
+    if (hoveredFromChat && hoveredNodeId) {
+      const el = lineRefs.current.get(hoveredNodeId);
+      if (el) {
+        el.scrollIntoView({
+          behavior: 'smooth',
+          block: scrollToCenter ? 'center' : 'nearest',
+        });
+        // Reset scrollToCenter after scroll
+        if (scrollToCenter) {
+          useExtractionPanelStore.setState({ scrollToCenter: false });
+        }
+      }
+    }
+  }, [hoveredFromChat, hoveredNodeId, scrollToCenter]);
 
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState('');
@@ -206,21 +233,21 @@ export function YAMLView() {
       delta.changes.length > 0 ||
       (delta.new_relations?.length ?? 0) > 0 ||
       (delta.remove_relations?.length ?? 0) > 0;
-    if (hasChanges) applyDelta(delta, 'manual');
+    if (hasChanges) applyTreeChanges(delta, 'manual');
     setIsEditing(false);
-  }, [editValue, draft, applyDelta]);
+  }, [editValue, draft, applyTreeChanges]);
 
   const handleCancel = useCallback(() => {
     setIsEditing(false);
     setEditValue(yamlText);
   }, [yamlText]);
 
-  // Build change map with age from delta history (index 0 = most recent)
+  // Build change map with age from yops history (index 0 = most recent)
   const changeMap = useMemo(() => {
     const map = new Map<string, { action: 'add' | 'update' | 'remove'; age: number }>();
     // Iterate oldest→newest so newer entries overwrite
-    for (let age = deltaChangeHistory.length - 1; age >= 0; age--) {
-      for (const c of deltaChangeHistory[age]) {
+    for (let age = yopsHistory.length - 1; age >= 0; age--) {
+      for (const c of yopsHistory[age]) {
         const id = c.action === 'add'
           ? (c.parent_path ? `${c.parent_path}.${c.node.key}` : c.node.key)
           : c.target_path;
@@ -228,19 +255,20 @@ export function YAMLView() {
       }
     }
     return map;
-  }, [deltaChangeHistory]);
+  }, [yopsHistory]);
 
   // Build relevance context
   const relevanceCtx = useMemo((): RelevanceContext => {
     const turnsAgoMap: Record<string, number> = {};
     const touchCountMap: Record<string, number> = {};
-    const total = deltaLog.length;
-    for (let i = deltaLog.length - 1; i >= 0; i--) {
+    const total = yopsLog.length;
+    for (let i = yopsLog.length - 1; i >= 0; i--) {
       const turnsAgo = total - 1 - i;
-      for (const c of deltaLog[i].delta.changes) {
+      const delta = yopsLog[i].yops as { changes?: Array<{ action: string; parent_path?: string; node?: { key: string }; target_path?: string }> };
+      for (const c of delta.changes ?? []) {
         const fid = c.action === 'add'
-          ? (c.parent_path ? `${c.parent_path}.${c.node.key}` : c.node.key)
-          : c.target_path;
+          ? (c.parent_path ? `${c.parent_path}.${c.node?.key}` : c.node?.key ?? '')
+          : (c.target_path ?? '');
         if (!(fid in turnsAgoMap)) turnsAgoMap[fid] = turnsAgo;
         touchCountMap[fid] = (touchCountMap[fid] ?? 0) + 1;
       }
@@ -257,7 +285,7 @@ export function YAMLView() {
       touchCountMap,
       relationDegreeMap,
     };
-  }, [deltaLog, draft.relations, confirmedNodeIds, llmHighlightedNodeIds]);
+  }, [yopsLog, draft.relations, confirmedNodeIds, llmHighlightedNodeIds]);
 
   // Convert to compat trees (with .id, .type) for display and relevance scoring
   const nestedNodes = useMemo(() => contentToNodes(draft), [draft]);
@@ -269,63 +297,44 @@ export function YAMLView() {
   }, [nestedNodes, relevanceCtx]);
 
   // Build per-line metadata for the YAML display
-  // Each YAML line maps to a tree header or a slot line
+  // Renders the tree HIERARCHICALLY with proper indentation
   const yamlLines = useMemo(() => {
     const lines: YAMLLine[] = [];
 
-    for (const node of sortedNodes) {
-      const changeEntry = changeMap.get(node.id);
+    function renderTreeNode(node: TreeNode, indent: number, parentPath: string): void {
+      const pad = '  '.repeat(indent);
+      const nodePath = parentPath ? `${parentPath}/${node.key}` : node.key;
+      const changeEntry = changeMap.get(nodePath) ?? changeMap.get(nodePath.replace(/\//g, '.'));
       const change = changeEntry?.action ?? null;
-      const score = relevanceScore(node, relevanceCtx).score;
-      const isAuto = score >= RELEVANCE_THRESHOLD;
-      const isNodeCollapsed = (node as CompatNode & { status?: string }).status === 'collapsed';
-      const isExpanded = expandedCollapsed[node.id];
+      const isAuto = false;
 
-      if (isNodeCollapsed && !isExpanded) {
-        // Collapsed  node — single grey line with slot count
-        const slotCount = Object.keys(node.slots).length;
-        lines.push({
-          text: `▶ ${node.type} (${slotCount} slots)`,
-          treeId: node.id,
-          slotKey: null,
-          changeType: null,
-          isAutoSelected: false,
-          isEmpty: false,
-          isCollapsed: true,
-          collapsedSlotCount: slotCount,
-        });
-        lines.push({
-          text: '',
-          treeId: node.id,
-          slotKey: null,
-          changeType: null,
-          isAutoSelected: false,
-          isEmpty: true,
-        });
-        continue;
-      }
-
-      // Tree header (normal or expanded-collapsed)
-      const headerPrefix = isNodeCollapsed && isExpanded ? '▼ ' : '';
+      // Node header
       lines.push({
-        text: `${headerPrefix}${node.type}:`,
-        treeId: node.id,
+        text: `${pad}${node.key}:`,
+        treeId: nodePath,
         slotKey: null,
         changeType: change,
         isAutoSelected: isAuto,
         isEmpty: false,
-        isCollapsed: isNodeCollapsed,
       });
 
-      // Slot lines — render nested structures as proper YAML
+      // Slot lines
       for (const [key, value] of Object.entries(node.slots)) {
-        renderSlotLines(lines, key, value, 1, node.id, key, change, isAuto);
+        renderSlotLines(lines, key, value, indent + 1, nodePath, key, change, isAuto);
       }
 
-      // Blank separator
+      // Children (recursive — proper nesting)
+      for (const child of node.children) {
+        renderTreeNode(child, indent + 1, nodePath);
+      }
+    }
+
+    for (const tree of draft.trees) {
+      renderTreeNode(tree, 0, '');
+      // Blank separator between root trees
       lines.push({
         text: '',
-        treeId: node.id,
+        treeId: tree.key,
         slotKey: null,
         changeType: null,
         isAutoSelected: false,
@@ -335,6 +344,23 @@ export function YAMLView() {
 
     return lines;
   }, [sortedNodes, changeMap, relevanceCtx, expandedCollapsed]);
+
+  // Reverse highlight: when hovering a chat message, which YAML paths light up?
+  const reverseHighlightPaths = useMemo(() => {
+    if (hoveredTurnIndex == null) return new Set<string>();
+    const paths = traceChatToYaml(draft, hoveredTurnIndex);
+    // Also include child paths for highlighting
+    const expanded = new Set<string>();
+    for (const p of paths) {
+      expanded.add(p);
+      // Add parent paths so the header lights up too
+      const segments = p.split('/');
+      for (let i = 1; i < segments.length; i++) {
+        expanded.add(segments.slice(0, i).join('/'));
+      }
+    }
+    return expanded;
+  }, [hoveredTurnIndex, draft]);
 
   if (draft.trees.length === 0 && !isEditing) {
     return (
@@ -413,55 +439,27 @@ export function YAMLView() {
               ? !!confirmedNodeIds[line.treeId]
               : !!confirmedSlotKeys[line.treeId]?.[line.slotKey!];
 
-            // Check if this row is highlighted by reverse hover (chat → YAML)
-            const node = nestedNodes.find((f) => f.id === line.treeId);
-            const isReverseHighlighted = (() => {
-              if (!hoveredTurnHash || !node) return false;
-
-              // Slot-level precision: when charOffset is available, match specific slot
-              if (hoveredCharOffset != null && node.slot_sources) {
-                for (const [slotKey, ref] of Object.entries(node.slot_sources as Record<string, { turn_hash?: string; start_char?: number; end_char?: number }>)) {
-                  const hashMatch = ref.turn_hash && hoveredTurnHash === ref.turn_hash;
-                  if (
-                    hashMatch &&
-                    ref.start_char != null &&
-                    ref.end_char != null &&
-                    hoveredCharOffset >= ref.start_char &&
-                    hoveredCharOffset < ref.end_char
-                  ) {
-                    // Only highlight this specific slot row (or the tree header if slotKey is null)
-                    return (
-                      line.slotKey === slotKey ||
-                      (line.slotKey === null && line.text.includes(node.type))
-                    );
-                  }
-                }
-                return false;
-              }
-
-              // Fallback: whole-tree highlight via node.source
-              if (!node.source) return false;
-              if (node.source.includes(':')) {
-                const hashPart = node.source.split(':')[1];
-                return hoveredTurnHash.includes(hashPart);
-              }
-              return false;
-            })();
+            // Check if this row is highlighted by reverse hover (chat → YAML via turn hover)
+            const isReverseHighlighted = reverseHighlightPaths.has(line.treeId);
+            // Check if this row is highlighted from chat source-map interaction (purple)
+            const isChatHighlighted = hoveredFromChat && hoveredNodeId === line.treeId;
 
             // Collapsed trees get distinct grey background
             const collapsedBg = 'rgba(128, 128, 128, 0.1)';
 
-            // Background: collapsed > reverse-highlight > confirmed > auto-selected > transparent
+            // Background priority: collapsed > chat-highlight (purple) > reverse-highlight (blue) > confirmed > auto-selected > transparent
             const bg =
               line.isCollapsed && line.slotKey === null
                 ? collapsedBg
-                : isReverseHighlighted
-                  ? 'rgba(96, 165, 250, 0.15)'
-                  : isConfirmed
-                    ? 'rgba(74, 222, 128, 0.1)'
-                    : line.isAutoSelected
-                      ? 'rgba(96, 165, 250, 0.06)'
-                      : 'transparent';
+                : isChatHighlighted
+                  ? 'rgba(139, 92, 246, 0.15)'
+                  : isReverseHighlighted
+                    ? 'rgba(96, 165, 250, 0.15)'
+                    : isConfirmed
+                      ? 'rgba(74, 222, 128, 0.1)'
+                      : line.isAutoSelected
+                        ? 'rgba(96, 165, 250, 0.06)'
+                        : 'transparent';
 
             const handleCheck = () => {
               // Collapsed tree header — toggle expand
@@ -483,8 +481,19 @@ export function YAMLView() {
                 key={i}
                 className="group/yaml-line"
                 data-tree-id={isNodeLine ? line.treeId : undefined}
+                ref={(el) => {
+                  if (el) lineRefs.current.set(line.treeId, el);
+                }}
                 onMouseEnter={() => setHoveredNodeId(line.treeId, line.slotKey)}
                 onMouseLeave={() => setHoveredNodeId(null)}
+                onClick={() => {
+                  // Click YAML slot → scroll source chat message into center view
+                  const trace = traceYamlToChat(draft, line.treeId, line.slotKey);
+                  if (trace.sourceTurnIndex != null) {
+                    useExtractionPanelStore.setState({ scrollToCenter: true });
+                    setHoveredNodeId(line.treeId, line.slotKey);
+                  }
+                }}
                 title={
                   isNodeLine && gateIssues[line.treeId]?.length
                     ? gateIssues[line.treeId]
@@ -498,7 +507,7 @@ export function YAMLView() {
                   background: bg,
                   minHeight: 20,
                   transition: 'background 0.15s',
-                  cursor: isNodeLine ? 'pointer' : undefined,
+                  cursor: 'pointer',
                   borderLeft:
                     isNodeLine && gateIssues[line.treeId]?.length
                       ? `3px solid ${gateIssues[line.treeId].some((i) => i.severity === 'error') ? 'var(--status-error)' : 'var(--status-warning)'}`
@@ -529,7 +538,7 @@ export function YAMLView() {
                   />
                 </div>
 
-                {/* Delta color bar */}
+                {/* Change indicator color bar */}
                 <div
                   style={{
                     width: 3,

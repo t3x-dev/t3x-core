@@ -1,8 +1,8 @@
 'use client';
 
 import {
-  type Delta,
-  type DeltaSource,
+  type TreeChangeBatch,
+  type YOpsSource,
   RELATION_TYPES,
   type Relation,
   type SemanticContent,
@@ -122,9 +122,9 @@ function nextNodeKey(content: SemanticContent): string {
 
 interface TreeGraphViewProps {
   content: SemanticContent;
-  deltaState?: Record<string, 'added' | 'updated' | 'removed'>;
+  changeState?: Record<string, 'added' | 'updated' | 'removed'>;
   updatedSlots?: Record<string, string[]>;
-  onDeltaCreated?: (delta: Delta, source: DeltaSource) => void;
+  onBatchCreated?: (batch: TreeChangeBatch, source: YOpsSource) => void;
   className?: string;
 }
 
@@ -132,9 +132,9 @@ interface TreeGraphViewProps {
 
 function TreeGraphInner({
   content,
-  deltaState,
+  changeState,
   updatedSlots,
-  onDeltaCreated,
+  onBatchCreated,
   className,
 }: TreeGraphViewProps) {
   const [zoomLevel, setZoomLevel] = useState<ZoomLevel>('overview');
@@ -155,25 +155,25 @@ function TreeGraphInner({
 
   const handleSlotEdit = useCallback(
     (treeId: string, key: string, value: SlotValue) => {
-      if (!onDeltaCreated) return;
-      const delta: Delta = {
+      if (!onBatchCreated) return;
+      const batch: TreeChangeBatch = {
         changes: [{ action: 'update', target_path: treeId, slots: { [key]: value } }],
       };
-      onDeltaCreated(delta, 'manual');
+      onBatchCreated(batch, 'manual');
     },
-    [onDeltaCreated]
+    [onBatchCreated]
   );
 
   const handleTypeEdit = useCallback(
     (treeId: string, newType: string) => {
-      if (!onDeltaCreated) return;
+      if (!onBatchCreated) return;
       // Type change is modeled as an update with empty slots — the type itself is changed
       // We need to include the new type in the update. Since TreeChange 'update' only has
       // slots, we model type change as remove + add with same id.
       const nodes = treesToNodes(content.trees);
       const existingNode = nodes.find((f) => f.id === treeId);
       if (!existingNode) return;
-      const delta: Delta = {
+      const batch: TreeChangeBatch = {
         changes: [
           { action: 'remove', target_path: treeId },
           {
@@ -183,18 +183,18 @@ function TreeGraphInner({
           },
         ],
       };
-      onDeltaCreated(delta, 'manual');
+      onBatchCreated(batch, 'manual');
     },
-    [onDeltaCreated, content.trees]
+    [onBatchCreated, content.trees]
   );
 
   // ── Node double-click on empty space → add node ──
 
   const handlePaneDoubleClick = useCallback(
     (_event: React.MouseEvent) => {
-      if (!onDeltaCreated) return;
+      if (!onBatchCreated) return;
       const newKey = nextNodeKey(content);
-      const delta: Delta = {
+      const batch: TreeChangeBatch = {
         changes: [
           {
             action: 'add',
@@ -207,16 +207,16 @@ function TreeGraphInner({
           },
         ],
       };
-      onDeltaCreated(delta, 'manual');
+      onBatchCreated(batch, 'manual');
     },
-    [onDeltaCreated, content]
+    [onBatchCreated, content]
   );
 
   // ── Delete key → remove selected node or edge ──
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
-      if (!onDeltaCreated) return;
+      if (!onBatchCreated) return;
       if (event.key !== 'Delete' && event.key !== 'Backspace') return;
 
       // Check if we're inside an input/contentEditable — don't intercept
@@ -227,10 +227,10 @@ function TreeGraphInner({
 
       // Delete selected node
       if (selectedNodeId) {
-        const delta: Delta = {
+        const batch: TreeChangeBatch = {
           changes: [{ action: 'remove', target_path: selectedNodeId }],
         };
-        onDeltaCreated(delta, 'manual');
+        onBatchCreated(batch, 'manual');
         return;
       }
 
@@ -247,23 +247,23 @@ function TreeGraphInner({
           .filter(Boolean) as Relation[];
 
         if (removeRelations.length > 0) {
-          // Need at least one change for Delta; use a no-op comment via remove_relations
-          const delta: Delta = {
+          // Need at least one change for TreeChangeBatch; use a no-op comment via remove_relations
+          const batch: TreeChangeBatch = {
             changes: [{ action: 'update', target_path: removeRelations[0].from, slots: {} }],
             remove_relations: removeRelations,
           };
-          onDeltaCreated(delta, 'manual');
+          onBatchCreated(batch, 'manual');
         }
       }
     },
-    [onDeltaCreated, selectedNodeId, edges]
+    [onBatchCreated, selectedNodeId, edges]
   );
 
   // ── Connect handler → show relation type selector ──
 
   const handleConnect = useCallback(
     (connection: Connection) => {
-      if (!onDeltaCreated || !connection.source || !connection.target) return;
+      if (!onBatchCreated || !connection.source || !connection.target) return;
       if (connection.source === connection.target) return;
 
       // Position the selector near the center of the viewport
@@ -280,21 +280,21 @@ function TreeGraphInner({
         screenPos,
       });
     },
-    [onDeltaCreated]
+    [onBatchCreated]
   );
 
   const handleRelationTypeSelect = useCallback(
     (type: SemanticRelationType) => {
-      if (!pendingConnection || !onDeltaCreated) return;
-      const delta: Delta = {
+      if (!pendingConnection || !onBatchCreated) return;
+      const batch: TreeChangeBatch = {
         // Need at least one change; use no-op update on source
         changes: [{ action: 'update', target_path: pendingConnection.source, slots: {} }],
         new_relations: [{ from: pendingConnection.source, to: pendingConnection.target, type }],
       };
-      onDeltaCreated(delta, 'manual');
+      onBatchCreated(batch, 'manual');
       setPendingConnection(null);
     },
-    [pendingConnection, onDeltaCreated]
+    [pendingConnection, onBatchCreated]
   );
 
   const handleRelationTypeCancel = useCallback(() => {
@@ -307,21 +307,21 @@ function TreeGraphInner({
     [content, zoomLevel, selectedNodeId]
   );
 
-  // Convert to flow elements, merge deltaState, inject edit callbacks, run layout
+  // Convert to flow elements, merge changeState, inject edit callbacks, run layout
   useEffect(() => {
     let cancelled = false;
 
     async function layout() {
       const { nodes: rawNodes, edges: rawEdges } = semanticToFlowElements(filtered);
 
-      // Merge delta state and edit callbacks into node data
+      // Merge change state and edit callbacks into node data
       const nodesWithState: Node<TreeNodeData>[] = rawNodes.map((node) => ({
         ...node,
         data: {
           ...node.data,
-          ...(deltaState?.[node.id] ? { state: deltaState[node.id] } : {}),
+          ...(changeState?.[node.id] ? { state: changeState[node.id] } : {}),
           ...(updatedSlots?.[node.id] ? { updatedSlots: updatedSlots[node.id] } : {}),
-          ...(onDeltaCreated ? { onSlotEdit: handleSlotEdit, onTypeEdit: handleTypeEdit } : {}),
+          ...(onBatchCreated ? { onSlotEdit: handleSlotEdit, onTypeEdit: handleTypeEdit } : {}),
         },
       }));
 
@@ -346,12 +346,12 @@ function TreeGraphInner({
     };
   }, [
     filtered,
-    deltaState,
+    changeState,
     updatedSlots,
     setNodes,
     setEdges,
     fitView,
-    onDeltaCreated,
+    onBatchCreated,
     handleSlotEdit,
     handleTypeEdit,
   ]);

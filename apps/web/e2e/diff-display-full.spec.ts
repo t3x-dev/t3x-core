@@ -174,7 +174,7 @@ test.describe('DiffDisplayView Full E2E', () => {
     await page.goto(`/project/${projectId}?view=canvas`);
     await page.locator('.react-flow').waitFor({ state: 'visible', timeout: 15000 });
 
-    // Wait for "Loading..." to disappear (sentences loaded)
+    // Wait for "Loading..." to disappear (nodes loaded)
     await page
       .locator('text=Loading...')
       .waitFor({ state: 'hidden', timeout: 30000 })
@@ -199,7 +199,7 @@ test.describe('DiffDisplayView Full E2E', () => {
       pageText.includes('committed') ||
       pageText.includes('initial requirements') ||
       pageText.includes('updated requirements') ||
-      pageText.includes('sentences') ||
+      pageText.includes('nodes') ||
       pageText.includes('sources') ||
       pageText.includes('create commit');
 

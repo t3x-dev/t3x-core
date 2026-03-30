@@ -36,9 +36,9 @@ describe('Knowledge Conflicts Storage', () => {
     it('creates and returns a typed conflict result', async () => {
       const conflict = await insertConflict(db, {
         project_id: testProjectId,
-        new_sentence_id: 's_new001',
+        new_node_id: 's_new001',
         new_commit_hash: 'sha256:aaa',
-        existing_sentence_id: 's_exist001',
+        existing_node_id: 's_exist001',
         existing_commit_hash: 'sha256:bbb',
         cosine: 0.92,
         jaccard: 0.45,
@@ -47,9 +47,9 @@ describe('Knowledge Conflicts Storage', () => {
       expect(conflict).toBeDefined();
       expect(conflict.id).toMatch(/^kc_/);
       expect(conflict.project_id).toBe(testProjectId);
-      expect(conflict.new_sentence_id).toBe('s_new001');
+      expect(conflict.new_node_id).toBe('s_new001');
       expect(conflict.new_commit_hash).toBe('sha256:aaa');
-      expect(conflict.existing_sentence_id).toBe('s_exist001');
+      expect(conflict.existing_node_id).toBe('s_exist001');
       expect(conflict.existing_commit_hash).toBe('sha256:bbb');
       expect(conflict.cosine).toBeCloseTo(0.92);
       expect(conflict.jaccard).toBeCloseTo(0.45);
@@ -71,9 +71,9 @@ describe('Knowledge Conflicts Storage', () => {
 
       await insertConflict(db, {
         project_id: projId,
-        new_sentence_id: 's_a1',
+        new_node_id: 's_a1',
         new_commit_hash: 'sha256:c1',
-        existing_sentence_id: 's_a2',
+        existing_node_id: 's_a2',
         existing_commit_hash: 'sha256:c2',
         cosine: 0.88,
         jaccard: 0.4,
@@ -81,9 +81,9 @@ describe('Knowledge Conflicts Storage', () => {
 
       const second = await insertConflict(db, {
         project_id: projId,
-        new_sentence_id: 's_b1',
+        new_node_id: 's_b1',
         new_commit_hash: 'sha256:c3',
-        existing_sentence_id: 's_b2',
+        existing_node_id: 's_b2',
         existing_commit_hash: 'sha256:c4',
         cosine: 0.95,
         jaccard: 0.6,
@@ -120,9 +120,9 @@ describe('Knowledge Conflicts Storage', () => {
     it('returns a single conflict by ID', async () => {
       const created = await insertConflict(db, {
         project_id: testProjectId,
-        new_sentence_id: 's_find1',
+        new_node_id: 's_find1',
         new_commit_hash: 'sha256:f1',
-        existing_sentence_id: 's_find2',
+        existing_node_id: 's_find2',
         existing_commit_hash: 'sha256:f2',
         cosine: 0.91,
         jaccard: 0.5,
@@ -131,7 +131,7 @@ describe('Knowledge Conflicts Storage', () => {
       const found = await findConflictById(db, created.id);
       expect(found).toBeDefined();
       expect(found!.id).toBe(created.id);
-      expect(found!.new_sentence_id).toBe('s_find1');
+      expect(found!.new_node_id).toBe('s_find1');
     });
 
     it('returns null for non-existent ID', async () => {
@@ -147,9 +147,9 @@ describe('Knowledge Conflicts Storage', () => {
     it('sets status to resolved and records resolution', async () => {
       const created = await insertConflict(db, {
         project_id: testProjectId,
-        new_sentence_id: 's_res1',
+        new_node_id: 's_res1',
         new_commit_hash: 'sha256:r1',
-        existing_sentence_id: 's_res2',
+        existing_node_id: 's_res2',
         existing_commit_hash: 'sha256:r2',
         cosine: 0.89,
         jaccard: 0.42,
@@ -174,9 +174,9 @@ describe('Knowledge Conflicts Storage', () => {
     it('sets status to dismissed', async () => {
       const created = await insertConflict(db, {
         project_id: testProjectId,
-        new_sentence_id: 's_dis1',
+        new_node_id: 's_dis1',
         new_commit_hash: 'sha256:d1',
-        existing_sentence_id: 's_dis2',
+        existing_node_id: 's_dis2',
         existing_commit_hash: 'sha256:d2',
         cosine: 0.87,
         jaccard: 0.38,
@@ -208,9 +208,9 @@ describe('Knowledge Conflicts Storage', () => {
       for (let i = 0; i < 3; i++) {
         await insertConflict(db, {
           project_id: countProjId,
-          new_sentence_id: `s_cnt_new_${i}`,
+          new_node_id: `s_cnt_new_${i}`,
           new_commit_hash: `sha256:cnt_${i}`,
-          existing_sentence_id: `s_cnt_exist_${i}`,
+          existing_node_id: `s_cnt_exist_${i}`,
           existing_commit_hash: `sha256:cnt_e_${i}`,
           cosine: 0.9,
           jaccard: 0.5,

@@ -58,10 +58,10 @@ export async function createTestTurn(
 export async function createTestCommit(
   request: APIRequestContext,
   projectId: string,
-  sentences: Array<{ id: string; text: string }>,
+  nodes: Array<{ id: string; text: string }>,
   options?: { branch?: string; message?: string; parents?: string[] }
 ): Promise<string> {
-  const frames = sentences.map((s, i) => ({
+  const frames = nodes.map((s, i) => ({
     id: `f_${String(i + 1).padStart(3, '0')}`,
     type: 'legacy_sentence',
     slots: { text: s.text },

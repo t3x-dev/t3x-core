@@ -1,11 +1,11 @@
 /**
  * Draft Validation — Local constraint checking (zero LLM cost)
  *
- * Validates exact-match constraints against included sentences.
+ * Validates exact-match constraints against included nodes.
  * Semantic constraints are deferred to preview generation.
  */
 
-import type { DraftConstraint, DraftSentence } from '@/lib/api';
+import type { DraftConstraint, DraftNode } from '@/lib/api';
 
 export interface ValidationResult {
   constraint_id: string;
@@ -13,26 +13,26 @@ export interface ValidationResult {
   details: string;
 }
 
-/** Per-sentence constraint match/violation result */
-export interface SentenceConstraintResult {
+/** Per-node constraint match/violation result */
+export interface NodeConstraintResult {
   constraint_id: string;
   type: 'match' | 'violation';
   constraint: DraftConstraint;
 }
 
 /**
- * Check which exact-match constraints apply to a specific sentence.
+ * Check which exact-match constraints apply to a specific node.
  * Returns matches (require found) and violations (exclude found).
  * Skips semantic constraints (require LLM).
  */
-export function getConstraintResultsForSentence(
-  sentence: DraftSentence,
+export function getConstraintResultsForNode(
+  node: DraftNode,
   constraints: DraftConstraint[]
-): SentenceConstraintResult[] {
-  if (!sentence.included || constraints.length === 0) return [];
+): NodeConstraintResult[] {
+  if (!node.included || constraints.length === 0) return [];
 
-  const results: SentenceConstraintResult[] = [];
-  const lowerText = sentence.text.toLowerCase();
+  const results: NodeConstraintResult[] = [];
+  const lowerText = node.text.toLowerCase();
 
   for (const c of constraints) {
     if (c.match_mode === 'semantic') continue;
@@ -51,19 +51,19 @@ export function getConstraintResultsForSentence(
 }
 
 /**
- * Validate constraints locally against included sentences.
+ * Validate constraints locally against included nodes.
  *
  * - `require` + `exact`: included text must contain the value
  * - `exclude` + `exact`: included text must NOT contain the value
  * - `semantic` mode: always passes (requires preview for real validation)
  */
 export function validateConstraintsLocally(
-  sentences: DraftSentence[],
+  nodes: DraftNode[],
   constraints: DraftConstraint[]
 ): ValidationResult[] {
   if (constraints.length === 0) return [];
 
-  const includedText = sentences
+  const includedText = nodes
     .filter((s) => s.included)
     .map((s) => s.text)
     .join(' ');
@@ -86,7 +86,7 @@ export function validateConstraintsLocally(
       return {
         constraint_id: c.id,
         passed: found,
-        details: found ? 'Found in included sentences' : 'Not found in included sentences',
+        details: found ? 'Found in included nodes' : 'Not found in included nodes',
       };
     }
 
@@ -95,7 +95,7 @@ export function validateConstraintsLocally(
     return {
       constraint_id: c.id,
       passed: !found,
-      details: found ? 'Found in included sentences (should be excluded)' : 'Not found (good)',
+      details: found ? 'Found in included nodes (should be excluded)' : 'Not found (good)',
     };
   });
 }

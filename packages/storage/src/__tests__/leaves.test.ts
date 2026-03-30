@@ -25,7 +25,7 @@ import {
 } from '../queries/leaves';
 import { decodeCursor } from '../queries/pagination';
 import { insertProject } from '../queries/projects';
-import { leaves } from '../schema-frames';
+import { leaves } from '../schema-trees';
 import { createTestDB, sleep, testData } from './setup';
 
 describe('Leaves Storage', () => {
@@ -742,7 +742,7 @@ describe('Leaves Storage', () => {
   });
 
   describe('output format', () => {
-    it('uses snake_case for all fields (matches V4 type contract)', async () => {
+    it('uses snake_case for all fields (matches type contract)', async () => {
       const created = await createLeaf(db, {
         commit_hash: testCommitHash,
         type: 'tweet',

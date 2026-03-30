@@ -4,7 +4,7 @@
  * MergePreview - Shows the final merged result before commit
  *
  * Collapsible panel at the bottom showing what the merge
- * commit will contain. Supports both sentence-based (legacy)
+ * commit will contain. Supports both node-based (legacy)
  * and tree-based merge modes.
  */
 
@@ -22,7 +22,7 @@ interface MergePreviewProps {
 export function MergePreview({ expanded, onToggle }: MergePreviewProps) {
   const { t } = useTerminology();
   const {
-    getPreviewSentences,
+    getPreviewNodes,
     prepared,
     getResolutionStats,
     treeMergeResult,
@@ -111,8 +111,8 @@ export function MergePreview({ expanded, onToggle }: MergePreviewProps) {
     );
   }
 
-  // Sentence-mode preview (legacy fallback)
-  const sentences = getPreviewSentences();
+  // ContentNode-mode preview (legacy fallback)
+  const nodes = getPreviewNodes();
   const identicalCount = prepared?.identical.length || 0;
   const stats = getResolutionStats();
   const keptSourceCount = prepared?.onlyInSource.filter((c) => c.keep).length || 0;
@@ -130,7 +130,7 @@ export function MergePreview({ expanded, onToggle }: MergePreviewProps) {
           <FileText className="h-4 w-4 text-[var(--text-tertiary)]" />
           <span className="font-medium text-[var(--text-primary)]">{t('mergePreview')}</span>
           <span className="text-sm text-[var(--text-tertiary)]">
-            {sentences.length} sentences will be in final {t('commit').toLowerCase()}
+            {nodes.length} nodes will be in final {t('commit').toLowerCase()}
           </span>
         </div>
 
@@ -160,18 +160,18 @@ export function MergePreview({ expanded, onToggle }: MergePreviewProps) {
       {expanded && (
         <div className="px-6 pb-4 max-h-64 overflow-auto">
           <div className="bg-[var(--surface-card)] rounded-lg border border-[var(--stroke-divider)] p-[var(--space-group)] elevation-2">
-            {sentences.length === 0 ? (
+            {nodes.length === 0 ? (
               <p className="text-center text-[var(--text-tertiary)] py-4">
-                No sentences selected for merge
+                No nodes selected for merge
               </p>
             ) : (
               <div className="space-y-[var(--space-item)]">
-                {sentences.map((sentence, idx) => (
-                  <div key={sentence.id || idx} className="flex items-start gap-3 text-sm">
+                {nodes.map((node, idx) => (
+                  <div key={node.id || idx} className="flex items-start gap-3 text-sm">
                     <span className="shrink-0 w-6 text-[var(--text-tertiary)] text-right">
                       {idx + 1}.
                     </span>
-                    <span className="flex-1">{sentence.text}</span>
+                    <span className="flex-1">{node.text}</span>
                   </div>
                 ))}
               </div>

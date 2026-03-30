@@ -57,7 +57,7 @@ describe('Extract Routes', () => {
   });
 
   describe('POST /v1/extract', () => {
-    it('one-shot: creates conversation, extracts sentences, returns draft', async () => {
+    it('one-shot: creates conversation, extracts trees, returns draft', async () => {
       const res = await app.request('/v1/extract', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -75,14 +75,14 @@ describe('Extract Routes', () => {
       expect(data.data.conversation_id).toBeTruthy();
       expect(data.data.conversation_id).toMatch(/^conv_/);
       expect(data.data.draft_id).toBeTruthy();
-      expect(data.data.sentences).toBeInstanceOf(Array);
-      expect(data.data.sentences.length).toBeGreaterThan(0);
+      expect(data.data.trees).toBeInstanceOf(Array);
+      expect(data.data.trees.length).toBeGreaterThan(0);
 
-      // Each sentence should have id and text
-      for (const sentence of data.data.sentences) {
-        expect(sentence.id).toBeTruthy();
-        expect(sentence.text).toBeTruthy();
-        expect(typeof sentence.confidence).toBe('number');
+      // Each tree node should have key and slots
+      for (const node of data.data.trees) {
+        expect(node.key).toBeTruthy();
+        expect(node.slots).toBeTruthy();
+        expect(typeof node.confidence).toBe('number');
       }
     });
 
@@ -117,7 +117,7 @@ describe('Extract Routes', () => {
       expect(data2.success).toBe(true);
       expect(data2.data.conversation_id).toBe(conversationId);
       expect(data2.data.draft_id).toBeTruthy();
-      expect(data2.data.sentences.length).toBeGreaterThan(0);
+      expect(data2.data.trees.length).toBeGreaterThan(0);
     });
 
     it('fires draft.ready webhook on successful extraction', async () => {
@@ -140,7 +140,7 @@ describe('Extract Routes', () => {
         expect.objectContaining({
           project_id: testProjectId,
           draft_id: expect.any(String),
-          sentence_count: expect.any(Number),
+          tree_count: expect.any(Number),
         }),
         testProjectId
       );
@@ -222,7 +222,7 @@ describe('Extract Routes', () => {
       if (data2.data.drift) {
         expect(data2.data.drift).toBeInstanceOf(Array);
         for (const item of data2.data.drift) {
-          expect(item.sentence_id).toBeTruthy();
+          expect(item.node_path).toBeTruthy();
           expect(typeof item.before).toBe('string');
           expect(typeof item.after).toBe('string');
         }

@@ -2,12 +2,12 @@
 
 import type { TreeNode } from '@t3x-dev/core';
 import { AlertCircle, GitCommit, Loader2, MessageSquarePlus } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DriftPopup } from '@/components/chat/DriftPopup';
 import { useAutoProject } from '@/hooks/useAutoProject';
 import { useConversationChat } from '@/hooks/useConversationChat';
 import { getCommitAsNodes } from '@/lib/api/commitUnified';
-import { extractNodes, getSemanticDraft, listDeltas } from '@/lib/api/trees';
+import { extractNodes, getSemanticDraft, listYOpsLog } from '@/lib/api/trees';
 import { listTopics, updateTopicApi } from '@/lib/api/topics';
 import { getIntentSummary } from '@/lib/intentSummary';
 import { cn } from '@/lib/utils';
@@ -18,6 +18,7 @@ import { ChatHeader } from './ChatHeader';
 import type { AttachedImage } from './ChatInput';
 import { ChatInput } from './ChatInput';
 import { ChatMessage } from './ChatMessage';
+import { buildSourceMap } from '@/lib/sourceMap';
 import { type CompatNode, contentToNodes, treesToNodes } from '@/lib/treeCompat';
 
 interface ChatWorkspaceProps {
@@ -204,10 +205,10 @@ export function ChatWorkspace({
         });
     };
 
-    // Load existing semantic draft + full delta history + topics for this conversation
+    // Load existing semantic draft + full yops history + topics for this conversation
     if (convId && convId !== 'new') {
-      Promise.all([getSemanticDraft(convId), listDeltas(convId), listTopics(convId)])
-        .then(([draft, deltas, topicsList]) => {
+      Promise.all([getSemanticDraft(convId), listYOpsLog(convId), listTopics(convId)])
+        .then(([draft, yopsEntries, topicsList]) => {
           const store = useExtractionPanelStore.getState();
           if (draft && draft.trees.length > 0) {
             store.setDraft(draft);
@@ -218,10 +219,10 @@ export function ChatWorkspace({
             // No existing draft — hydrate from parent commit
             hydrateFromParent(inheritFromCommitHash);
           }
-          if (deltas && deltas.length > 0) {
-            store.hydrateDeltaLog(deltas);
+          if (yopsEntries && yopsEntries.length > 0) {
+            store.hydrateYOpsLog(yopsEntries);
             // Lock input if a commit was made from this conversation
-            if (deltas.some((d: { source?: string }) => d.source === 'commit_marker')) {
+            if (yopsEntries.some((d: { source?: string }) => d.source === 'commit_marker')) {
               setIsConversationCommitted(true);
             }
           }
@@ -260,6 +261,19 @@ export function ChatWorkspace({
   const isExtracting = useExtractionPanelStore((s) => s.isExtracting);
   const focusIntentEnabled = useExtractionPanelStore((s) => s.focusIntentEnabled);
   const setLlmHighlightedNodeIds = useExtractionPanelStore((s) => s.setLlmHighlightedNodeIds);
+  const draft = useExtractionPanelStore((s) => s.draft);
+
+  // Precompute source map: quote positions in all messages for bidirectional highlighting
+  const sourceMapByTurn = useMemo(() => {
+    if (!draft || draft.trees.length === 0 || messages.length === 0) {
+      return new Map<number, import('@/lib/sourceMap').SourceMapping[]>();
+    }
+    const msgInput = messages.map((msg, i) => ({
+      content: msg.content,
+      turnIndex: i + 1,
+    }));
+    return buildSourceMap(draft, msgInput);
+  }, [draft, messages]);
 
   // Extract trees after turns are saved
   useEffect(() => {
@@ -296,12 +310,12 @@ export function ChatWorkspace({
           return;
         }
 
-        // status === 'completed' — normal flow
-        if (result.delta) {
-          s.applyDelta(result.delta, 'pipeline');
-        }
-        if (result.snapshot && result.snapshot.trees.length > 0 && s.panelMode === 'collapsed') {
-          s.setPanelMode('default');
+        // status === 'completed' — apply snapshot directly
+        if (result.snapshot && result.snapshot.trees.length > 0) {
+          s.setDraft(result.snapshot);
+          if (s.panelMode === 'collapsed') {
+            s.setPanelMode('default');
+          }
         }
 
         // Store advisory questions (Step 6)
@@ -451,6 +465,7 @@ export function ChatWorkspace({
                 citations={
                   msg.role === 'assistant' && i === messages.length - 1 ? citations : undefined
                 }
+                sourceMap={sourceMapByTurn.get(i + 1)}
               />
             ))}
 

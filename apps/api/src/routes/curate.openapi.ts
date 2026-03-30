@@ -204,7 +204,7 @@ interface ExtractedData {
  * Also extracts Ring1 anchor candidates for inline highlighting when available.
  *
  * When Ring data is unavailable (e.g., DISABLE_RING_EXTRACTION=true),
- * automatically falls back to regex sentence splitting. Anchor candidates
+ * automatically falls back to regex text splitting. Anchor candidates
  * are not available in fallback mode.
  */
 function extractChunksFromTurns(
@@ -239,27 +239,27 @@ function extractChunksFromTurns(
     // Support both formats: { rings: { ring3 } } and { ring3 }
     const ring3 = turn.rings?.rings?.ring3 ?? turn.rings?.ring3;
 
-    // If Ring3 is missing (NLP was unavailable), fall back to regex sentence splitting
+    // If Ring3 is missing (NLP was unavailable), fall back to regex text splitting
     if (!ring3) {
       warnings.push(
-        `Turn ${i} (role: ${turn.role}) has no Ring3 data — using regex sentence splitting.`
+        `Turn ${i} (role: ${turn.role}) has no Ring3 data — using regex text splitting.`
       );
       // Regex fallback for this turn's content
       const turnContent = turn.content;
-      const sentenceRegex = /[^.!?。！？]+[.!?。！？]+[\s]*/g;
+      const segmentRegex = /[^.!?。！？]+[.!?。！？]+[\s]*/g;
       let match: RegExpExecArray | null;
       let lastEnd = 0;
-      while ((match = sentenceRegex.exec(turnContent)) !== null) {
-        const sentence = match[0].trim();
-        if (sentence.length > 0) {
+      while ((match = segmentRegex.exec(turnContent)) !== null) {
+        const segment = match[0].trim();
+        if (segment.length > 0) {
           chunks.push({
             id: `chunk-${chunkIdx++}`,
             start: globalOffset + prefix.length + match.index,
-            end: globalOffset + prefix.length + match.index + sentence.length,
-            text: sentence,
+            end: globalOffset + prefix.length + match.index + segment.length,
+            text: segment,
             turn_hash: turn.turn_hash,
             turn_start: match.index,
-            turn_end: match.index + sentence.length,
+            turn_end: match.index + segment.length,
           });
           lastEnd = match.index + match[0].length;
         }
@@ -474,36 +474,36 @@ function extractChunksFromTurns(
 }
 
 /**
- * Fallback: Simple regex-based sentence splitting
+ * Fallback: Simple regex-based text splitting
  * Only used when source_text is provided directly (no turns/Ring3 data)
  */
-function chunkBySentencesFallback(
+function chunkBySegmentsFallback(
   text: string
 ): Array<{ id: string; start: number; end: number; text: string }> {
   const chunks: Array<{ id: string; start: number; end: number; text: string }> = [];
 
-  // Simple sentence splitter - ONLY for fallback when no Ring3 data
+  // Simple text splitter - ONLY for fallback when no Ring3 data
   // Prefer using extractChunksFromTurns() which uses NLP-based segmentation
-  const sentenceRegex = /[^.!?。！？]+[.!?。！？]+[\s]*/g;
+  const segmentRegex = /[^.!?。！？]+[.!?。！？]+[\s]*/g;
 
   let match: RegExpExecArray | null;
   let idx = 0;
   let lastEnd = 0;
 
-  while ((match = sentenceRegex.exec(text)) !== null) {
-    const sentence = match[0].trim();
-    if (sentence.length > 0) {
+  while ((match = segmentRegex.exec(text)) !== null) {
+    const segment = match[0].trim();
+    if (segment.length > 0) {
       chunks.push({
         id: `chunk-${idx++}`,
         start: match.index,
         end: match.index + match[0].length,
-        text: sentence,
+        text: segment,
       });
       lastEnd = match.index + match[0].length;
     }
   }
 
-  // Handle remaining text (no sentence ending)
+  // Handle remaining text (no segment ending)
   if (lastEnd < text.length) {
     const remaining = text.slice(lastEnd).trim();
     if (remaining.length > 0) {
@@ -730,7 +730,7 @@ curateRoutes.openapi(curatePreviewRoute, async (c) => {
 
       // If conversation has turns, use Ring3 extraction
       if (turns.length > 0) {
-        // Use Ring3 segments (rule-based sentence splitting)
+        // Use Ring3 segments (rule-based text splitting)
         // This follows the "Core 优先原則" in CLAUDE.md
         const extracted = extractChunksFromTurns(
           turns.map((t) => ({
@@ -749,9 +749,9 @@ curateRoutes.openapi(curatePreviewRoute, async (c) => {
       } else if (body.source_text) {
         // Conversation exists but has no turns — fall back to source_text
         sourceText = body.source_text;
-        chunks = chunkBySentencesFallback(sourceText);
+        chunks = chunkBySegmentsFallback(sourceText);
         extractionWarnings.push(
-          'Conversation has no turns. Using provided source_text with regex sentence splitting.'
+          'Conversation has no turns. Using provided source_text with regex text splitting.'
         );
       }
       // else: conversation has no turns and no source_text fallback — sourceText stays undefined
@@ -759,10 +759,10 @@ curateRoutes.openapi(curatePreviewRoute, async (c) => {
       // source_text provided directly, use simple regex splitting
       // No anchor candidates available in this mode
       sourceText = body.source_text;
-      chunks = chunkBySentencesFallback(sourceText);
+      chunks = chunkBySegmentsFallback(sourceText);
       // Inform caller about degraded experience (no Ring3 segments, no anchor candidates)
       extractionWarnings.push(
-        'Using fallback regex sentence splitting (source_text mode). ' +
+        'Using fallback regex text splitting (source_text mode). ' +
           'Anchor candidates not available. For Ring3 segments and anchor extraction, use source_conversation_id instead.'
       );
     } else {

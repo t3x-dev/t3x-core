@@ -301,7 +301,7 @@ CREATE TABLE IF NOT EXISTS drafts (
   goal TEXT,
   parent_commit_hash TEXT,
   forked_from TEXT,
-  sentences_json JSONB NOT NULL DEFAULT '[]',
+  nodes_json JSONB NOT NULL DEFAULT '[]',
   constraints_json JSONB NOT NULL DEFAULT '[]',
   instructions TEXT,
   preview_type TEXT,
@@ -343,9 +343,9 @@ CREATE INDEX IF NOT EXISTS idx_extraction_feedback_draft ON extraction_feedback(
 CREATE TABLE IF NOT EXISTS knowledge_conflicts (
   id TEXT PRIMARY KEY,
   project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
-  new_sentence_id TEXT NOT NULL,
+  new_node_id TEXT NOT NULL,
   new_commit_hash TEXT NOT NULL,
-  existing_sentence_id TEXT NOT NULL,
+  existing_node_id TEXT NOT NULL,
   existing_commit_hash TEXT NOT NULL,
   cosine REAL NOT NULL,
   jaccard REAL NOT NULL,
@@ -369,8 +369,8 @@ CREATE INDEX IF NOT EXISTS idx_metrics_events_project ON metrics_events(project_
 CREATE INDEX IF NOT EXISTS idx_metrics_events_type ON metrics_events(event_type);
 CREATE INDEX IF NOT EXISTS idx_metrics_events_created_at ON metrics_events(created_at);
 
--- Sentence Modifications (audit trail)
-CREATE TABLE IF NOT EXISTS sentence_modifications (
+-- Node Modifications (audit trail)
+CREATE TABLE IF NOT EXISTS node_modifications (
   id TEXT PRIMARY KEY,
   draft_id TEXT NOT NULL,
   sp_id TEXT NOT NULL,
@@ -380,8 +380,8 @@ CREATE TABLE IF NOT EXISTS sentence_modifications (
   actor TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE INDEX IF NOT EXISTS idx_smod_draft ON sentence_modifications(draft_id);
-CREATE INDEX IF NOT EXISTS idx_smod_sp ON sentence_modifications(sp_id);
+CREATE INDEX IF NOT EXISTS idx_nmod_draft ON node_modifications(draft_id);
+CREATE INDEX IF NOT EXISTS idx_nmod_sp ON node_modifications(sp_id);
 
 -- Leaf Output Edits (Item 17 — Constraint Reverse Learning)
 CREATE TABLE IF NOT EXISTS leaf_output_edits (
@@ -410,21 +410,21 @@ CREATE INDEX IF NOT EXISTS idx_notifications_project ON notifications(project_id
 CREATE INDEX IF NOT EXISTS idx_notifications_read ON notifications(read);
 CREATE INDEX IF NOT EXISTS idx_notifications_created ON notifications(created_at);
 
--- Delta Log (Phase 2 — semantic delta tracking)
-CREATE TABLE IF NOT EXISTS delta_log (
+-- YOps Log (Phase 2 — semantic yops tracking)
+CREATE TABLE IF NOT EXISTS yops_log (
   id TEXT PRIMARY KEY,
   conversation_id TEXT NOT NULL REFERENCES conversations(conversation_id) ON DELETE CASCADE,
   project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
   source TEXT NOT NULL,
   turn_hash TEXT,
-  delta JSONB NOT NULL,
+  yops JSONB NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE INDEX IF NOT EXISTS idx_delta_log_conv ON delta_log(conversation_id, created_at);
-CREATE INDEX IF NOT EXISTS idx_delta_log_project ON delta_log(project_id);
+CREATE INDEX IF NOT EXISTS idx_yops_log_conv ON yops_log(conversation_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_yops_log_project ON yops_log(project_id);
 
--- Sentence Relations (Ring 4 — Inter-sentence relationships)
-CREATE TABLE IF NOT EXISTS sentence_relations (
+-- Node Relations (Ring 4 — Inter-node relationships)
+CREATE TABLE IF NOT EXISTS node_relations (
   id TEXT PRIMARY KEY,
   project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
   commit_hash TEXT NOT NULL,
@@ -435,9 +435,9 @@ CREATE TABLE IF NOT EXISTS sentence_relations (
   reasoning TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE INDEX IF NOT EXISTS idx_sr_commit ON sentence_relations (commit_hash);
-CREATE INDEX IF NOT EXISTS idx_sr_project ON sentence_relations (project_id);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_sr_pair ON sentence_relations(commit_hash, source_id, target_id, type);
+CREATE INDEX IF NOT EXISTS idx_nr_commit ON node_relations (commit_hash);
+CREATE INDEX IF NOT EXISTS idx_nr_project ON node_relations (project_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_nr_pair ON node_relations(commit_hash, source_id, target_id, type);
 
 -- Knowledge Graph (cross-conversation entity/topic graph)
 CREATE TABLE IF NOT EXISTS knowledge_nodes (
@@ -454,11 +454,11 @@ CREATE INDEX IF NOT EXISTS idx_kn_project ON knowledge_nodes (project_id);
 
 CREATE TABLE IF NOT EXISTS knowledge_node_members (
   node_id TEXT NOT NULL REFERENCES knowledge_nodes(id) ON DELETE CASCADE,
-  sentence_id TEXT NOT NULL,
+  content_node_id TEXT NOT NULL,
   commit_hash TEXT NOT NULL,
-  PRIMARY KEY (node_id, sentence_id)
+  PRIMARY KEY (node_id, content_node_id)
 );
-CREATE INDEX IF NOT EXISTS idx_knm_sentence ON knowledge_node_members (sentence_id);
+CREATE INDEX IF NOT EXISTS idx_knm_content_node ON knowledge_node_members (content_node_id);
 
 CREATE TABLE IF NOT EXISTS knowledge_edges (
   id TEXT PRIMARY KEY,
@@ -474,10 +474,10 @@ CREATE INDEX IF NOT EXISTS idx_ke_project ON knowledge_edges (project_id);
 CREATE INDEX IF NOT EXISTS idx_ke_source ON knowledge_edges (source_node_id);
 CREATE INDEX IF NOT EXISTS idx_ke_target ON knowledge_edges (target_node_id);
 
--- Frames (source-of-truth for current frame state)
-CREATE TABLE IF NOT EXISTS frames (
+-- Trees (source-of-truth for current tree state)
+CREATE TABLE IF NOT EXISTS trees (
   conversation_id TEXT NOT NULL REFERENCES conversations(conversation_id) ON DELETE CASCADE,
-  frame_id TEXT NOT NULL,
+  tree_id TEXT NOT NULL,
   project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
   topic_id TEXT,
   type TEXT NOT NULL,
@@ -489,48 +489,33 @@ CREATE TABLE IF NOT EXISTS frames (
   manual_edited BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  PRIMARY KEY (conversation_id, frame_id)
+  PRIMARY KEY (conversation_id, tree_id)
 );
-CREATE INDEX IF NOT EXISTS idx_frames_project ON frames(project_id);
-CREATE INDEX IF NOT EXISTS idx_frames_type ON frames(type);
-CREATE INDEX IF NOT EXISTS idx_frames_conv_topic ON frames(conversation_id, topic_id);
-CREATE INDEX IF NOT EXISTS idx_frames_manual ON frames(conversation_id, manual_edited) WHERE manual_edited = TRUE;
+CREATE INDEX IF NOT EXISTS idx_trees_project ON trees(project_id);
+CREATE INDEX IF NOT EXISTS idx_trees_type ON trees(type);
+CREATE INDEX IF NOT EXISTS idx_trees_conv_topic ON trees(conversation_id, topic_id);
+CREATE INDEX IF NOT EXISTS idx_trees_manual ON trees(conversation_id, manual_edited) WHERE manual_edited = TRUE;
 
--- Frame Relations (source-of-truth for current relations)
-CREATE TABLE IF NOT EXISTS frame_relations (
+-- Tree Relations (source-of-truth for current relations)
+CREATE TABLE IF NOT EXISTS tree_relations (
   id TEXT PRIMARY KEY,
   conversation_id TEXT NOT NULL REFERENCES conversations(conversation_id) ON DELETE CASCADE,
   topic_id TEXT,
-  from_frame_id TEXT NOT NULL,
-  to_frame_id TEXT NOT NULL,
+  from_tree_id TEXT NOT NULL,
+  to_tree_id TEXT NOT NULL,
   type TEXT NOT NULL,
   confidence REAL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE INDEX IF NOT EXISTS idx_frel_conversation ON frame_relations(conversation_id);
-CREATE INDEX IF NOT EXISTS idx_frel_topic ON frame_relations(conversation_id, topic_id);
-CREATE INDEX IF NOT EXISTS idx_frel_from ON frame_relations(from_frame_id);
-CREATE INDEX IF NOT EXISTS idx_frel_to ON frame_relations(to_frame_id);
+CREATE INDEX IF NOT EXISTS idx_trel_conversation ON tree_relations(conversation_id);
+CREATE INDEX IF NOT EXISTS idx_trel_topic ON tree_relations(conversation_id, topic_id);
+CREATE INDEX IF NOT EXISTS idx_trel_from ON tree_relations(from_tree_id);
+CREATE INDEX IF NOT EXISTS idx_trel_to ON tree_relations(to_tree_id);
 
 `;
 
-/** SQL for pgvector sentence_vectors table (created separately, may fail if vector unavailable) */
-export const CREATE_VECTOR_TABLES_SQL = `
-CREATE TABLE IF NOT EXISTS sentence_vectors (
-  id TEXT PRIMARY KEY,
-  project_id TEXT NOT NULL,
-  commit_hash TEXT NOT NULL,
-  text TEXT NOT NULL,
-  embedding vector(768) NOT NULL,
-  model_id TEXT NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  tsv tsvector
-);
-CREATE INDEX IF NOT EXISTS idx_sv_project ON sentence_vectors(project_id);
-CREATE INDEX IF NOT EXISTS idx_sv_commit ON sentence_vectors(commit_hash);
-CREATE INDEX IF NOT EXISTS idx_sv_tsv ON sentence_vectors USING GIN (tsv);
-UPDATE sentence_vectors SET tsv = to_tsvector('simple', text) WHERE tsv IS NULL;
-`;
+/** SQL for pgvector tables (created separately, may fail if vector unavailable) */
+export const CREATE_VECTOR_TABLES_SQL = '';
 
 const TEST_PORT = parseInt(process.env.T3X_TEST_PG_PORT || '5446', 10);
 const TEST_HOST = 'localhost';
@@ -587,7 +572,7 @@ export async function createTestDB(): Promise<{
     await schemaSql.unsafe('CREATE EXTENSION IF NOT EXISTS vector;');
     await schemaSql.unsafe(CREATE_VECTOR_TABLES_SQL);
   } catch {
-    // pgvector not available — sentence vector tests will be skipped
+    // pgvector not available — node vector tests will be skipped
   }
   await schemaSql.end();
 

@@ -13,7 +13,7 @@ import type { RelationType, SemanticContent } from '../semantic/types';
 /** Pipeline decision: should we extract? */
 export type PipelineDecision = 'extract' | 'wait' | 'skip';
 
-/** Computed from delta_log + turn count — never stored separately */
+/** Computed from yops_log + turn count — never stored separately */
 export interface SessionContext {
   turnCount: number;
   extractionCount: number;
@@ -40,7 +40,9 @@ export interface DriftResult {
 export interface AdvisoryQuestion {
   id: string;
   type: 'vagueness' | 'structural';
-  frameId: string;
+  nodeId: string;
+  /** @deprecated Use nodeId */
+  frameId?: string;
   slotKey?: string;
   question: string;
   currentValue?: unknown;

@@ -26,7 +26,7 @@ const MICROCOPY: Record<string, MicrocopyEntry> = {
     developer: (p) => `Committed: ${p.hash_short}`,
   },
   mergeSuccess: {
-    default: (p) => `Versions merged — ${p.n} sentences unified`,
+    default: (p) => `Versions merged — ${p.n} nodes unified`,
     developer: (p) => `Merge complete: ${p.hash_short}`,
   },
   generateComplete: {

@@ -36,10 +36,10 @@ describe('CommitDraftDialog', () => {
     const report: ConflictReport = {
       conflicts: [
         {
-          new_sentence_id: 's1',
-          new_sentence_text: 'Budget is $3000',
-          existing_sentence_id: 's2',
-          existing_sentence_text: 'Budget is $3500',
+          new_node_id: 's1',
+          new_node_text: 'Budget is $3000',
+          existing_node_id: 's2',
+          existing_node_text: 'Budget is $3500',
           existing_commit_hash: 'sha256:def456',
           cosine: 0.92,
           jaccard: 0.66,

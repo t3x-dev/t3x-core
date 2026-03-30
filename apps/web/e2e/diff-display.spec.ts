@@ -121,11 +121,11 @@ test.describe('DiffDisplayView Integration', () => {
       (f: { slots: { text: string } }) => f.slots.text
     );
 
-    // Unchanged sentence
+    // Unchanged node
     expect(commit1Texts).toContain('User prefers dark mode');
     expect(commit2Texts).toContain('User prefers dark mode');
 
-    // Modified sentence
+    // Modified node
     expect(commit1Texts).toContain('Budget is $3000');
     expect(commit2Texts).toContain('Budget is $5000');
 

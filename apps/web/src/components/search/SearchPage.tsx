@@ -132,7 +132,7 @@ export function SearchPage() {
         <Input
           value={query}
           onChange={(e) => handleQueryChange(e.target.value)}
-          placeholder="Search sentences across your knowledge base..."
+          placeholder="Search nodes across your knowledge base..."
           className="pl-10 pr-10 h-11 bg-[var(--surface-card)] border-[var(--stroke-divider)] text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)]"
         />
         {query && (
@@ -217,7 +217,7 @@ export function SearchPage() {
           <ul className="space-y-3">
             {results.map((hit) => (
               <li
-                key={`${hit.commit_hash}-${hit.sentence_id}`}
+                key={`${hit.commit_hash}-${hit.node_id}`}
                 className="rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-4 transition-colors hover:border-[var(--stroke-default)]"
               >
                 <p className="mb-2 text-sm leading-relaxed text-[var(--text-secondary)]">

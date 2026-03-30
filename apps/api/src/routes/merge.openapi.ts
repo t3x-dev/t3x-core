@@ -309,7 +309,7 @@ mergeRoutes.openapi(executeMergeRoute, async (c) => {
       kept_from_source: keptFromSource,
       kept_from_target: keptFromTarget,
       discarded: discardedSource + discardedTarget,
-      total_sentences: flattenTrees(mergedContent.trees).length,
+      total_nodes: flattenTrees(mergedContent.trees).length,
     };
 
     // Save to storage as frame-based commit
@@ -782,7 +782,7 @@ mergeRoutes.openapi(commitDraftRoute, async (c) => {
       kept_from_source: keptFromSource,
       kept_from_target: keptFromTarget,
       discarded: discardedSource + discardedTarget,
-      total_sentences: flattenTrees(mergedContent.trees).length,
+      total_nodes: flattenTrees(mergedContent.trees).length,
     };
 
     // Save commit + update branch head + mark draft committed atomically
@@ -928,7 +928,7 @@ const getDraftChecksRoute = createRoute({
   description: `
 Returns server-side validation checks for a merge draft:
 - **constraints_satisfied**: Whether merged text satisfies all Leaf constraints
-- **evidence_chain_complete**: Whether all sentences have source references
+- **evidence_chain_complete**: Whether all nodes have source references
 - **eval_passed**: (Optional) Latest evaluation run status for associated Leaves
   `.trim(),
   request: {

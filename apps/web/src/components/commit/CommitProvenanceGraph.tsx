@@ -5,10 +5,10 @@
  *   Conversation(s) → Commit → Leaf(ves)
  *
  * Also includes ConnectionLines — SVG overlay drawing bezier curves
- * from the active sentence card to the right context panel.
+ * from the active node card to the right context panel.
  */
 
-import type { Commit } from '@t3x-dev/core';
+import type { WebCommit } from '@/lib/api/commitUnified';
 import { ChevronDown, GitCommit, Leaf as LeafIcon, MessageSquare } from 'lucide-react';
 import Link from 'next/link';
 import { type MutableRefObject, type RefObject, useEffect, useState } from 'react';
@@ -20,41 +20,41 @@ import { relativeTime, shortHash } from './CommitDetailHelpers';
 // ============================================================================
 
 interface ConnectionLinesProps {
-  activeSentenceId: string | null;
-  sentenceRefs: MutableRefObject<Record<string, HTMLDivElement | null>>;
+  activeNodeId: string | null;
+  nodeRefs: MutableRefObject<Record<string, HTMLDivElement | null>>;
   rightPanelRef: RefObject<HTMLDivElement | null>;
   containerRef: RefObject<HTMLDivElement | null>;
 }
 
 export function ConnectionLines({
-  activeSentenceId,
-  sentenceRefs,
+  activeNodeId,
+  nodeRefs,
   rightPanelRef,
   containerRef,
 }: ConnectionLinesProps) {
   const [paths, setPaths] = useState<{ d: string; key: string }[]>([]);
 
   useEffect(() => {
-    if (!activeSentenceId || !containerRef.current || !rightPanelRef.current) {
+    if (!activeNodeId || !containerRef.current || !rightPanelRef.current) {
       setPaths([]);
       return;
     }
 
     const compute = () => {
       const container = containerRef.current;
-      const sentenceEl = sentenceRefs.current[activeSentenceId];
+      const nodeEl = nodeRefs.current[activeNodeId];
       const rightPanel = rightPanelRef.current;
-      if (!container || !sentenceEl || !rightPanel) {
+      if (!container || !nodeEl || !rightPanel) {
         setPaths([]);
         return;
       }
 
       const containerRect = container.getBoundingClientRect();
-      const sentenceRect = sentenceEl.getBoundingClientRect();
+      const nodeRect = nodeEl.getBoundingClientRect();
       const rightRect = rightPanel.getBoundingClientRect();
 
-      const sx = sentenceRect.right - containerRect.left;
-      const sy = sentenceRect.top + sentenceRect.height / 2 - containerRect.top;
+      const sx = nodeRect.right - containerRect.left;
+      const sy = nodeRect.top + nodeRect.height / 2 - containerRect.top;
       const ex = rightRect.left - containerRect.left + 4;
 
       const sections = rightPanel.querySelectorAll('[data-context-section]');
@@ -77,7 +77,7 @@ export function ConnectionLines({
     compute();
     const timer = setTimeout(compute, 100);
     return () => clearTimeout(timer);
-  }, [activeSentenceId, sentenceRefs, rightPanelRef, containerRef]);
+  }, [activeNodeId, nodeRefs, rightPanelRef, containerRef]);
 
   if (paths.length === 0) return null;
 
@@ -112,8 +112,8 @@ export function ConnectionLines({
 // ============================================================================
 
 interface ProvenanceGraphProps {
-  activeSentenceId: string | null;
-  commit: Commit;
+  activeNodeId: string | null;
+  commit: WebCommit;
   leaves: Leaf[];
   projectId: string;
   collapsed: boolean;
@@ -121,14 +121,14 @@ interface ProvenanceGraphProps {
 }
 
 export function ProvenanceGraph({
-  activeSentenceId,
+  activeNodeId,
   commit,
   leaves,
   projectId,
   collapsed,
   onToggleCollapse,
 }: ProvenanceGraphProps) {
-  const isConnected = activeSentenceId !== null;
+  const isConnected = activeNodeId !== null;
   const sourceConversations = commit.sources?.filter((ref) => ref.type === 'conversation') ?? [];
   const sourceLeaves = commit.sources?.filter((ref) => ref.type === 'leaf') ?? [];
   const totalSources = sourceConversations.length + sourceLeaves.length;

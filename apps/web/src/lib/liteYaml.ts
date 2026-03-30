@@ -1,5 +1,5 @@
 import type {
-  Delta,
+  TreeChangeBatch,
   TreeChange,
   Relation,
   SemanticContent,
@@ -26,7 +26,9 @@ function renderSlotValue(value: SlotValue, indent: number, lines: string[]): voi
   const pad = '  '.repeat(indent);
 
   if (typeof value === 'string') {
-    lines.push(`"${value}"`);
+    // Only quote if the string contains special YAML chars or could be misinterpreted
+    const needsQuote = /[:#{}[\],&*?|>!%@`]/.test(value) || value === '' || value === 'true' || value === 'false' || value === 'null' || /^\d+$/.test(value);
+    lines.push(needsQuote ? `"${value}"` : value);
     return;
   }
 
@@ -44,7 +46,13 @@ function renderSlotValue(value: SlotValue, indent: number, lines: string[]): voi
     if (allSimple && arr.length <= 5) {
       // Inline array for short simple lists
       lines.push(
-        `[${arr.map((item) => (typeof item === 'string' ? `"${item}"` : String(item))).join(', ')}]`
+        `[${arr.map((item) => {
+          if (typeof item === 'string') {
+            const needsQuote = /[:#{}[\],&*?|>!%@`]/.test(item) || item === '';
+            return needsQuote ? `"${item}"` : item;
+          }
+          return String(item);
+        }).join(', ')}]`
       );
       return;
     }
@@ -53,7 +61,8 @@ function renderSlotValue(value: SlotValue, indent: number, lines: string[]): voi
     lines.push('');
     for (const item of arr) {
       if (typeof item === 'string') {
-        lines.push(`${pad}  - "${item}"`);
+        const needsQuote = /[:#{}[\],&*?|>!%@`]/.test(item) || item === '';
+        lines.push(`${pad}  - ${needsQuote ? `"${item}"` : item}`);
       } else if (typeof item === 'number') {
         lines.push(`${pad}  - ${item}`);
       } else {
@@ -121,8 +130,8 @@ export function toDisplayYAML(content: SemanticContent): string {
   return lines.join('\n');
 }
 
-/** Parse lite YAML back and diff against current content to produce a Delta */
-export function parseDisplayYAML(yaml: string, currentContent: SemanticContent): Delta {
+/** Parse lite YAML back and diff against current content to produce a TreeChangeBatch */
+export function parseDisplayYAML(yaml: string, currentContent: SemanticContent): TreeChangeBatch {
   const changes: TreeChange[] = [];
   const newRelations: Relation[] = [];
   const removeRelations: Relation[] = [];

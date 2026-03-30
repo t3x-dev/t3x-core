@@ -50,7 +50,7 @@ export const projects = pgTable(
     autopilotConfig: jsonb('autopilot_config').$type<{
       enabled: boolean;
       min_confidence: number;
-      min_sentences: number;
+      min_nodes: number;
       auto_create_leaf: boolean;
       target_branch: string;
     }>(),

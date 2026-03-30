@@ -46,7 +46,7 @@ const createAutoDraftRoute = createRoute({
             target_branch: z.string().optional(),
             options: z
               .object({
-                max_sentences: z.number().int().min(1).max(100).optional(),
+                max_nodes: z.number().int().min(1).max(100).optional(),
               })
               .optional(),
           }),
@@ -139,12 +139,12 @@ const reviewActionRoute = createRoute({
 
 // POST /v1/drafts/auto
 draftsSpecialRoutes.openapi(createAutoDraftRoute, async (c) => {
-  // Auto-draft creation via sentence extraction is deprecated.
+  // Auto-draft creation via node extraction is deprecated.
   // Use frame-based extraction via /v1/extract/frames instead.
   return errorResponse(
     c,
     'DEPRECATED',
-    'Auto-draft creation via sentence extraction has been replaced by frame-based extraction. Use /v1/extract/frames instead.'
+    'Auto-draft creation via node extraction has been replaced by tree-based extraction. Use /v1/extract/trees instead.'
   );
 });
 
@@ -228,10 +228,10 @@ draftsSpecialRoutes.openapi(reviewActionRoute, async (c) => {
 
     await updateDraft(db, draftId, { semantic_points: sps }, draft.revision);
 
-    // Record sentence modification audit trail — fire-and-forget
+    // Record node modification audit trail — fire-and-forget
     try {
-      const { insertSentenceModification } = await import('@t3x-dev/storage');
-      await insertSentenceModification(db, {
+      const { insertNodeModification } = await import('@t3x-dev/storage');
+      await insertNodeModification(db, {
         draft_id: draftId,
         sp_id: sp_id,
         action: action === 'accept_change' ? 'accept' : action === 'dismiss' ? 'delete' : action,

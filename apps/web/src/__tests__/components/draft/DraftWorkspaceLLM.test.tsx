@@ -5,7 +5,7 @@ import type { SemanticPointAPI, WorkbenchDraft } from '@/lib/api';
  * Tests for the DraftWorkspace LLM extraction mode integration.
  *
  * DraftWorkspace conditionally renders DraftWorkbenchLLM (LLM mode)
- * vs SentenceList + AutoSuggestPanel (deterministic mode) based on
+ * vs NodeList + AutoSuggestPanel (deterministic mode) based on
  * draft.extraction_mode and draft.semantic_points.
  */
 
@@ -32,10 +32,10 @@ function makeDraft(overrides: Partial<WorkbenchDraft> = {}): WorkbenchDraft {
     goal: null,
     parent_commit_hash: null,
     forked_from: null,
-    sentences: [
+    nodes: [
       {
         id: 's1',
-        text: 'Deterministic sentence',
+        text: 'Deterministic node',
         origin: { type: 'manual' },
         position: 0,
         included: true,
@@ -170,10 +170,10 @@ describe('DraftWorkspace LLM mode component selection', () => {
     expect(typeof DraftWorkbenchLLM).toBe('function');
   });
 
-  test('deterministic mode renders SentenceList + AutoSuggestPanel', async () => {
-    const { SentenceList } = await import('@/components/draft/SentenceList');
+  test('deterministic mode renders NodeList + AutoSuggestPanel', async () => {
+    const { NodeList } = await import('@/components/draft/NodeList');
     const { AutoSuggestPanel } = await import('@/components/draft/AutoSuggestPanel');
-    expect(SentenceList).toBeDefined();
+    expect(NodeList).toBeDefined();
     expect(AutoSuggestPanel).toBeDefined();
   });
 

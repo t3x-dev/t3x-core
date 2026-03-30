@@ -36,7 +36,7 @@ interface MergeReviewDialogProps {
   message: string;
   sourceBranch: string;
   targetBranch: string;
-  sentenceCount: number;
+  nodeCount: number;
   /** Merge summary stats (from computeMergeSummary) */
   summary: MergeSummary | null;
   /** Whether server-side checks are still loading */
@@ -60,7 +60,7 @@ export function MergeReviewDialog({
   message,
   sourceBranch,
   targetBranch,
-  sentenceCount,
+  nodeCount,
   summary,
   serverChecksLoading,
   onBackToCanvas,
@@ -90,7 +90,7 @@ export function MergeReviewDialog({
     return () => clearTimeout(timer);
   }, [state, onBackToCanvas]);
 
-  const animatedCount = useCountUp(sentenceCount, 400, state === 'success');
+  const animatedCount = useCountUp(nodeCount, 400, state === 'success');
 
   // Generate release note on success
   const releaseNote = useMemo<MergeReleaseNote | null>(() => {
@@ -313,7 +313,7 @@ export function MergeReviewDialog({
                       {summary.kept_identical}
                     </div>
                     <div className="text-[10px] text-[var(--text-tertiary)]">
-                      {t('identical_sentences')}
+                      {t('identical_nodes')}
                     </div>
                   </div>
                   <div className="text-center">
@@ -327,7 +327,7 @@ export function MergeReviewDialog({
                       {summary.discarded}
                     </div>
                     <div className="text-[10px] text-[var(--text-tertiary)]">
-                      {t('removed_sentences')}
+                      {t('removed_nodes')}
                     </div>
                   </div>
                   <div className="text-center">

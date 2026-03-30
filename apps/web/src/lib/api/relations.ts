@@ -1,5 +1,5 @@
 /**
- * Inter-sentence relations API — extract and query semantic relations between sentences
+ * Relations API — query semantic relations from commit content
  */
 
 import { API_V1, fetchWithTimeout, handleResponse } from './core';
@@ -9,28 +9,17 @@ import { API_V1, fetchWithTimeout, handleResponse } from './core';
 // ============================================================================
 
 export type RelationType =
-  | 'supports'
-  | 'contrasts'
   | 'causes'
-  | 'elaborates'
-  | 'temporal_follows'
   | 'conditions'
-  | 'summarizes';
+  | 'contrasts'
+  | 'follows'
+  | 'depends';
 
-export interface SentenceRelation {
-  id: string;
-  source_id: string;
-  target_id: string;
+export interface NodeRelation {
+  from: string;
+  to: string;
   type: RelationType;
-  confidence: number;
-  reasoning: string;
-}
-
-export interface ExtractionStats {
-  total_sentences: number;
-  relations_found: number;
-  avg_confidence: number;
-  extraction_time_ms: number;
+  confidence?: number;
 }
 
 // ============================================================================
@@ -38,27 +27,9 @@ export interface ExtractionStats {
 // ============================================================================
 
 /**
- * Get existing relations for a commit.
+ * Get relations for a commit (from content.relations).
  */
-export async function getCommitRelations(hash: string): Promise<{ relations: SentenceRelation[] }> {
+export async function getCommitRelations(hash: string): Promise<{ relations: NodeRelation[] }> {
   const res = await fetchWithTimeout(`${API_V1}/commits/${encodeURIComponent(hash)}/relations`);
-  return handleResponse<{ relations: SentenceRelation[] }>(res);
-}
-
-/**
- * Extract (compute) inter-sentence relations for a commit.
- */
-export async function extractCommitRelations(
-  hash: string
-): Promise<{ relations_found: number; stats: ExtractionStats }> {
-  const res = await fetchWithTimeout(
-    `${API_V1}/commits/${encodeURIComponent(hash)}/relations/extract`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({}),
-    },
-    60000 // 60s timeout for LLM relation extraction
-  );
-  return handleResponse<{ relations_found: number; stats: ExtractionStats }>(res);
+  return handleResponse<{ relations: NodeRelation[] }>(res);
 }

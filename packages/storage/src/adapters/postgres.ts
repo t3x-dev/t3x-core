@@ -67,7 +67,7 @@ export async function closePostgresStorage(): Promise<void> {
 /**
  * Schema version — bump this number whenever you add migrations below.
  */
-const SCHEMA_VERSION = 31;
+const SCHEMA_VERSION = 32;
 
 /**
  * Initialize database schema (skips if already at current version)
@@ -402,7 +402,7 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
       goal TEXT,
       parent_commit_hash TEXT,
       forked_from TEXT,
-      sentences_json JSONB NOT NULL DEFAULT '[]',
+      nodes_json JSONB NOT NULL DEFAULT '[]',
       constraints_json JSONB NOT NULL DEFAULT '[]',
       instructions TEXT,
       preview_type TEXT,
@@ -579,9 +579,9 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     CREATE TABLE IF NOT EXISTS knowledge_conflicts (
       id TEXT PRIMARY KEY,
       project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
-      new_sentence_id TEXT NOT NULL,
+      new_node_id TEXT NOT NULL,
       new_commit_hash TEXT NOT NULL,
-      existing_sentence_id TEXT NOT NULL,
+      existing_node_id TEXT NOT NULL,
       existing_commit_hash TEXT NOT NULL,
       cosine REAL NOT NULL,
       jaccard REAL NOT NULL,
@@ -605,8 +605,8 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_metrics_events_type ON metrics_events(event_type);
     CREATE INDEX IF NOT EXISTS idx_metrics_events_created_at ON metrics_events(created_at);
 
-    -- Sentence Modifications (audit trail)
-    CREATE TABLE IF NOT EXISTS sentence_modifications (
+    -- Node Modifications (audit trail)
+    CREATE TABLE IF NOT EXISTS node_modifications (
       id TEXT PRIMARY KEY,
       draft_id TEXT NOT NULL,
       sp_id TEXT NOT NULL,
@@ -616,8 +616,8 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
       actor TEXT NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
-    CREATE INDEX IF NOT EXISTS idx_smod_draft ON sentence_modifications(draft_id);
-    CREATE INDEX IF NOT EXISTS idx_smod_sp ON sentence_modifications(sp_id);
+    CREATE INDEX IF NOT EXISTS idx_nmod_draft ON node_modifications(draft_id);
+    CREATE INDEX IF NOT EXISTS idx_nmod_sp ON node_modifications(sp_id);
 
     -- Recipes table (automation workflows)
     CREATE TABLE IF NOT EXISTS recipes (
@@ -648,28 +648,38 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_share_tokens_entity ON share_tokens(entity_type, entity_id);
     CREATE INDEX IF NOT EXISTS idx_share_tokens_project ON share_tokens(project_id);
 
-    -- Delta Log table (Frame Semantic Engine — inter-sentence relation deltas)
-    CREATE TABLE IF NOT EXISTS delta_log (
+    -- YOps Log table (semantic yops tracking)
+    CREATE TABLE IF NOT EXISTS yops_log (
       id TEXT PRIMARY KEY,
       conversation_id TEXT NOT NULL REFERENCES conversations(conversation_id) ON DELETE CASCADE,
       project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
       source TEXT NOT NULL,
       turn_hash TEXT,
-      delta JSONB NOT NULL,
+      yops JSONB NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
-    CREATE INDEX IF NOT EXISTS idx_delta_log_conv ON delta_log(conversation_id, created_at);
-    CREATE INDEX IF NOT EXISTS idx_delta_log_project ON delta_log(project_id);
-    ALTER TABLE delta_log ADD COLUMN IF NOT EXISTS commit_hash TEXT;
-    ALTER TABLE delta_log ADD COLUMN IF NOT EXISTS model TEXT;
+    CREATE INDEX IF NOT EXISTS idx_yops_log_conv ON yops_log(conversation_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_yops_log_project ON yops_log(project_id);
+    ALTER TABLE yops_log ADD COLUMN IF NOT EXISTS commit_hash TEXT;
+    ALTER TABLE yops_log ADD COLUMN IF NOT EXISTS model TEXT;
     -- V2 columns (agentic pipeline)
-    ALTER TABLE delta_log ADD COLUMN IF NOT EXISTS version INTEGER;
-    ALTER TABLE delta_log ADD COLUMN IF NOT EXISTS pipeline_state TEXT;
-    ALTER TABLE delta_log ADD COLUMN IF NOT EXISTS gate_result_json JSONB;
-    ALTER TABLE delta_log ADD COLUMN IF NOT EXISTS metadata JSONB;
+    ALTER TABLE yops_log ADD COLUMN IF NOT EXISTS version INTEGER;
+    ALTER TABLE yops_log ADD COLUMN IF NOT EXISTS pipeline_state TEXT;
+    ALTER TABLE yops_log ADD COLUMN IF NOT EXISTS gate_result_json JSONB;
+    ALTER TABLE yops_log ADD COLUMN IF NOT EXISTS metadata JSONB;
 
-    -- Sentence Relations (Inter-sentence Relations)
-    CREATE TABLE IF NOT EXISTS sentence_relations (
+    -- Migration: rename delta_log to yops_log if old table exists
+    DO $$ BEGIN
+      IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'delta_log') THEN
+        ALTER TABLE delta_log RENAME TO yops_log;
+        ALTER TABLE yops_log RENAME COLUMN delta TO yops;
+        ALTER INDEX IF EXISTS idx_delta_log_conv RENAME TO idx_yops_log_conv;
+        ALTER INDEX IF EXISTS idx_delta_log_project RENAME TO idx_yops_log_project;
+      END IF;
+    END $$;
+
+    -- Node Relations (Inter-node Relations)
+    CREATE TABLE IF NOT EXISTS node_relations (
       id TEXT PRIMARY KEY,
       project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
       commit_hash TEXT NOT NULL,
@@ -680,9 +690,24 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
       reasoning TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
-    CREATE INDEX IF NOT EXISTS idx_sr_commit ON sentence_relations(commit_hash);
-    CREATE INDEX IF NOT EXISTS idx_sr_project ON sentence_relations(project_id);
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_sr_pair ON sentence_relations(commit_hash, source_id, target_id, type);
+    CREATE INDEX IF NOT EXISTS idx_nr_commit ON node_relations(commit_hash);
+    CREATE INDEX IF NOT EXISTS idx_nr_project ON node_relations(project_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_nr_pair ON node_relations(commit_hash, source_id, target_id, type);
+
+    -- Rename legacy sentence columns before knowledge graph table references
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'knowledge_node_members' AND column_name = 'content_sentence_id'
+      ) THEN
+        ALTER TABLE knowledge_node_members RENAME COLUMN content_sentence_id TO content_node_id;
+      END IF;
+      IF EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_knm_content_sentence') THEN
+        ALTER INDEX idx_knm_content_sentence RENAME TO idx_knm_content_node;
+      END IF;
+    END
+    $$;
 
     -- ═══════════════════════════════════════════════════════════════════════════
     -- Knowledge Graph (Cross-conversation entity/topic graph)
@@ -702,11 +727,11 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
 
     CREATE TABLE IF NOT EXISTS knowledge_node_members (
       node_id TEXT NOT NULL REFERENCES knowledge_nodes(id) ON DELETE CASCADE,
-      sentence_id TEXT NOT NULL,
+      content_node_id TEXT NOT NULL,
       commit_hash TEXT NOT NULL,
-      PRIMARY KEY (node_id, sentence_id)
+      PRIMARY KEY (node_id, content_node_id)
     );
-    CREATE INDEX IF NOT EXISTS idx_knm_sentence ON knowledge_node_members (sentence_id);
+    CREATE INDEX IF NOT EXISTS idx_knm_content_node ON knowledge_node_members (content_node_id);
 
     CREATE TABLE IF NOT EXISTS knowledge_edges (
       id TEXT PRIMARY KEY,
@@ -847,33 +872,7 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_token_usage_project_created ON token_usage(project_id, created_at);
   `);
 
-  // pgvector: Try to create sentence_vectors table (graceful — skipped if vector extension unavailable)
-  try {
-    await sql.unsafe(`CREATE EXTENSION IF NOT EXISTS vector;`);
-    await sql.unsafe(`
-      CREATE TABLE IF NOT EXISTS sentence_vectors (
-        id TEXT PRIMARY KEY,
-        project_id TEXT NOT NULL,
-        commit_hash TEXT NOT NULL,
-        text TEXT NOT NULL,
-        embedding vector(768) NOT NULL,
-        model_id TEXT NOT NULL,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        tsv tsvector
-      );
-      CREATE INDEX IF NOT EXISTS idx_sv_project ON sentence_vectors(project_id);
-      CREATE INDEX IF NOT EXISTS idx_sv_commit ON sentence_vectors(commit_hash);
-      CREATE INDEX IF NOT EXISTS idx_sv_tsv ON sentence_vectors USING GIN (tsv);
-    `);
-    // Backfill tsvector for existing rows (idempotent)
-    await sql.unsafe(
-      `UPDATE sentence_vectors SET tsv = to_tsvector('simple', text) WHERE tsv IS NULL;`
-    );
-  } catch {
-    // pgvector not available — sentence similarity search disabled
-  }
-
-  // ── Schema v29: Topics table + topic_id on delta_log ──
+  // ── Schema v29: Topics table + topic_id on yops_log ──
   await sql.unsafe(`
     CREATE TABLE IF NOT EXISTS topics (
       id TEXT PRIMARY KEY,
@@ -886,14 +885,14 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_topics_conv ON topics(conversation_id);
     CREATE INDEX IF NOT EXISTS idx_topics_project ON topics(project_id);
 
-    ALTER TABLE delta_log ADD COLUMN IF NOT EXISTS topic_id TEXT;
+    ALTER TABLE yops_log ADD COLUMN IF NOT EXISTS topic_id TEXT;
   `);
 
-  // ── Schema v30: Frames + Frame Relations tables (live frame state) ──
+  // ── Schema v30: Trees + Tree Relations tables (live tree state) ──
   await sql.unsafe(`
-    CREATE TABLE IF NOT EXISTS frames (
+    CREATE TABLE IF NOT EXISTS trees (
       conversation_id TEXT NOT NULL REFERENCES conversations(conversation_id) ON DELETE CASCADE,
-      frame_id TEXT NOT NULL,
+      tree_id TEXT NOT NULL,
       project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
       topic_id TEXT,
       type TEXT NOT NULL,
@@ -901,31 +900,80 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
       status TEXT NOT NULL DEFAULT 'active',
       confidence REAL,
       source TEXT NOT NULL,
+      slot_quotes JSONB,
       slot_sources JSONB,
       manual_edited BOOLEAN NOT NULL DEFAULT FALSE,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      PRIMARY KEY (conversation_id, frame_id)
+      PRIMARY KEY (conversation_id, tree_id)
     );
-    CREATE INDEX IF NOT EXISTS idx_frames_project ON frames(project_id);
-    CREATE INDEX IF NOT EXISTS idx_frames_type ON frames(type);
-    CREATE INDEX IF NOT EXISTS idx_frames_conv_topic ON frames(conversation_id, topic_id);
-    CREATE INDEX IF NOT EXISTS idx_frames_manual ON frames(conversation_id, manual_edited) WHERE manual_edited = true;
+    CREATE INDEX IF NOT EXISTS idx_trees_project ON trees(project_id);
+    CREATE INDEX IF NOT EXISTS idx_trees_type ON trees(type);
+    CREATE INDEX IF NOT EXISTS idx_trees_conv_topic ON trees(conversation_id, topic_id);
+    CREATE INDEX IF NOT EXISTS idx_trees_manual ON trees(conversation_id, manual_edited) WHERE manual_edited = true;
 
-    CREATE TABLE IF NOT EXISTS frame_relations (
+    CREATE TABLE IF NOT EXISTS tree_relations (
       id TEXT PRIMARY KEY,
       conversation_id TEXT NOT NULL REFERENCES conversations(conversation_id) ON DELETE CASCADE,
       topic_id TEXT,
-      from_frame_id TEXT NOT NULL,
-      to_frame_id TEXT NOT NULL,
+      from_tree_id TEXT NOT NULL,
+      to_tree_id TEXT NOT NULL,
       type TEXT NOT NULL,
       confidence REAL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
-    CREATE INDEX IF NOT EXISTS idx_frel_conversation ON frame_relations(conversation_id);
-    CREATE INDEX IF NOT EXISTS idx_frel_topic ON frame_relations(conversation_id, topic_id);
-    CREATE INDEX IF NOT EXISTS idx_frel_from ON frame_relations(from_frame_id);
-    CREATE INDEX IF NOT EXISTS idx_frel_to ON frame_relations(to_frame_id);
+    CREATE INDEX IF NOT EXISTS idx_trel_conversation ON tree_relations(conversation_id);
+    CREATE INDEX IF NOT EXISTS idx_trel_topic ON tree_relations(conversation_id, topic_id);
+    CREATE INDEX IF NOT EXISTS idx_trel_from ON tree_relations(from_tree_id);
+    CREATE INDEX IF NOT EXISTS idx_trel_to ON tree_relations(to_tree_id);
+  `);
+
+  // ── Schema v32: Rename frames → trees (migration for existing databases) ──
+  await sql.unsafe(`
+    DO $$
+    BEGIN
+      -- Rename tables if old names still exist
+      IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'frames') THEN
+        ALTER TABLE frames RENAME TO trees;
+        ALTER TABLE trees RENAME COLUMN frame_id TO tree_id;
+      END IF;
+      IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'frame_relations') THEN
+        ALTER TABLE frame_relations RENAME TO tree_relations;
+        ALTER TABLE tree_relations RENAME COLUMN from_frame_id TO from_tree_id;
+        ALTER TABLE tree_relations RENAME COLUMN to_frame_id TO to_tree_id;
+      END IF;
+      -- Rename indexes (safe — no-op if already renamed)
+      IF EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_frames_project') THEN
+        ALTER INDEX idx_frames_project RENAME TO idx_trees_project;
+      END IF;
+      IF EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_frames_type') THEN
+        ALTER INDEX idx_frames_type RENAME TO idx_trees_type;
+      END IF;
+      IF EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_frames_conv_topic') THEN
+        ALTER INDEX idx_frames_conv_topic RENAME TO idx_trees_conv_topic;
+      END IF;
+      IF EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_frames_manual') THEN
+        ALTER INDEX idx_frames_manual RENAME TO idx_trees_manual;
+      END IF;
+      IF EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_frel_conversation') THEN
+        ALTER INDEX idx_frel_conversation RENAME TO idx_trel_conversation;
+      END IF;
+      IF EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_frel_topic') THEN
+        ALTER INDEX idx_frel_topic RENAME TO idx_trel_topic;
+      END IF;
+      IF EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_frel_from') THEN
+        ALTER INDEX idx_frel_from RENAME TO idx_trel_from;
+      END IF;
+      IF EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_frel_to') THEN
+        ALTER INDEX idx_frel_to RENAME TO idx_trel_to;
+      END IF;
+    END
+    $$;
+  `);
+
+  // ── Schema v34: Add slot_quotes column to trees table ──
+  await sql.unsafe(`
+    ALTER TABLE trees ADD COLUMN IF NOT EXISTS slot_quotes JSONB;
   `);
 
   // Record schema version so subsequent startups skip the init SQL.

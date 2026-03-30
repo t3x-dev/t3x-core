@@ -4,7 +4,7 @@
  * Integration tests for Workbench features:
  * 1. Preview with model parameter (haiku/sonnet/opus)
  * 2. Suggest endpoint (returns suggestions based on draft goal)
- * 3. Commit populates sentence vectors (best-effort)
+ * 3. Commit populates node vectors (best-effort)
  * 4. Preview caching (same content returns cached result)
  * 5. Preview stale detection (after update, preview should be stale)
  */
@@ -77,10 +77,10 @@ describe('Draft Workbench Features', () => {
   });
 
   // ============================================================
-  // Helper: create a draft with sentences
+  // Helper: create a draft with nodes
   // ============================================================
 
-  async function createDraftWithSentences(title: string, opts?: { goal?: string }) {
+  async function createDraftWithNodes(title: string, opts?: { goal?: string }) {
     const createRes = await app.request('/v1/drafts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -93,12 +93,12 @@ describe('Draft Workbench Features', () => {
     const created: ApiResponse = await createRes.json();
     const draftId = created.data.id;
 
-    // Add included sentences via PATCH
+    // Add included nodes via PATCH
     await app.request(`/v1/drafts/${draftId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        sentences: [
+        nodes: [
           {
             id: 'ds_v2_01',
             text: 'The product costs $99',
@@ -127,7 +127,7 @@ describe('Draft Workbench Features', () => {
 
   describe('POST /v1/drafts/:id/preview — model parameter', () => {
     it('passes haiku model through to generation', async () => {
-      const draftId = await createDraftWithSentences('Preview Haiku');
+      const draftId = await createDraftWithNodes('Preview Haiku');
 
       mockIsGenerationConfigured.mockReturnValue(true);
       mockGenerateLeafOutput.mockResolvedValue({
@@ -155,7 +155,7 @@ describe('Draft Workbench Features', () => {
     });
 
     it('passes sonnet model through to generation', async () => {
-      const draftId = await createDraftWithSentences('Preview Sonnet');
+      const draftId = await createDraftWithNodes('Preview Sonnet');
 
       mockIsGenerationConfigured.mockReturnValue(true);
       mockGenerateLeafOutput.mockResolvedValue({
@@ -181,7 +181,7 @@ describe('Draft Workbench Features', () => {
     });
 
     it('passes opus model through to generation', async () => {
-      const draftId = await createDraftWithSentences('Preview Opus');
+      const draftId = await createDraftWithNodes('Preview Opus');
 
       mockIsGenerationConfigured.mockReturnValue(true);
       mockGenerateLeafOutput.mockResolvedValue({
@@ -207,7 +207,7 @@ describe('Draft Workbench Features', () => {
     });
 
     it('defaults to haiku when no model specified', async () => {
-      const draftId = await createDraftWithSentences('Preview Default');
+      const draftId = await createDraftWithNodes('Preview Default');
 
       mockIsGenerationConfigured.mockReturnValue(true);
       mockGenerateLeafOutput.mockResolvedValue({
@@ -239,7 +239,7 @@ describe('Draft Workbench Features', () => {
 
   describe('POST /v1/drafts/:id/suggest', () => {
     it('returns 501 when embedder is not configured', async () => {
-      const draftId = await createDraftWithSentences('Suggest No Embedder', {
+      const draftId = await createDraftWithNodes('Suggest No Embedder', {
         goal: 'Find pricing info',
       });
 
@@ -268,7 +268,7 @@ describe('Draft Workbench Features', () => {
     });
 
     it('returns empty suggestions when draft has no goal', async () => {
-      const draftId = await createDraftWithSentences('Suggest No Goal');
+      const draftId = await createDraftWithNodes('Suggest No Goal');
 
       // Provide a mock embedder that will not be called
       const mockEmb = {
@@ -294,12 +294,12 @@ describe('Draft Workbench Features', () => {
   });
 
   // ============================================================
-  // 3. Commit populates sentence vectors (best-effort)
+  // 3. Commit populates node vectors (best-effort)
   // ============================================================
 
   describe('POST /v1/drafts/:id/commit — vector population', () => {
     it('commits successfully when embedder is null (vectors skipped)', async () => {
-      const draftId = await createDraftWithSentences('Commit No Vectors');
+      const draftId = await createDraftWithNodes('Commit No Vectors');
       mockGetEmbedder.mockReturnValue(null);
 
       const res = await app.request(`/v1/drafts/${draftId}/commit`, {
@@ -318,7 +318,7 @@ describe('Draft Workbench Features', () => {
     });
 
     it('commits successfully even if vector population fails', async () => {
-      const draftId = await createDraftWithSentences('Commit Vector Fail');
+      const draftId = await createDraftWithNodes('Commit Vector Fail');
 
       // Provide an embedder that throws on encode
       const failingEmbedder = {
@@ -356,7 +356,7 @@ describe('Draft Workbench Features', () => {
 
   describe('POST /v1/drafts/:id/preview — caching', () => {
     it('returns cached preview on identical content', async () => {
-      const draftId = await createDraftWithSentences('Preview Cache V2');
+      const draftId = await createDraftWithNodes('Preview Cache V2');
 
       mockIsGenerationConfigured.mockReturnValue(true);
       mockGenerateLeafOutput.mockResolvedValue({
@@ -406,7 +406,7 @@ describe('Draft Workbench Features', () => {
 
   describe('POST /v1/drafts/:id/preview — stale detection', () => {
     it('regenerates after draft content changes', async () => {
-      const draftId = await createDraftWithSentences('Preview Stale Test');
+      const draftId = await createDraftWithNodes('Preview Stale Test');
 
       mockIsGenerationConfigured.mockReturnValue(true);
       mockGenerateLeafOutput.mockClear();
@@ -431,12 +431,12 @@ describe('Draft Workbench Features', () => {
       expect(data1.data.cached).toBe(false);
       expect(data1.data.output).toBe('First preview output');
 
-      // Update the draft sentences (content changes → cache should invalidate)
+      // Update the draft nodes (content changes → cache should invalidate)
       await app.request(`/v1/drafts/${draftId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          sentences: [
+          nodes: [
             {
               id: 'ds_v2_01',
               text: 'The product costs $149',

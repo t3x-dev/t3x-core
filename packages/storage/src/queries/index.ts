@@ -58,7 +58,7 @@ export {
   getBusinessRules,
   putBusinessRules,
 } from './business-rules';
-// Commits (frame-based)
+// Commits (tree-based)
 export {
   type CreateCommitInput,
   createCommit,
@@ -99,15 +99,15 @@ export {
   type UpdateConversationInput,
   updateConversation,
 } from './conversations';
-// Delta Log (Phase 2 — semantic delta tracking)
+// YOps Log (Phase 2 — semantic yops tracking)
 export {
-  deleteDeltaLogEntry,
-  getDeltaLogEntry,
-  type InsertDeltaLogInput,
-  insertDeltaLogEntry,
-  listDeltaLogByConversation,
-  listDeltaLogByTopic,
-} from './delta-log';
+  deleteYOpsLogEntry,
+  getYOpsLogEntry,
+  type InsertYOpsLogInput,
+  insertYOpsLogEntry,
+  listYOpsLogByConversation,
+  listYOpsLogByTopic,
+} from './yops-log';
 // Deploy Agents (for Deploy page, different from agent layer)
 export {
   type CreateDeployAgentInput,
@@ -151,22 +151,22 @@ export {
   insertExtractionFeedback,
   listExtractionFeedback,
 } from './extraction-feedback';
-// Frame State (source-of-truth for current frames)
+// Tree State (source-of-truth for current trees)
 export {
   clearManualEditedFlags,
-  deleteFrame,
-  deleteFrameRelationByKey,
-  deleteFrameRelationsByConversation,
-  deleteFrameRelationsByFrameId,
-  deleteFramesByConversation,
-  getFrameByKey,
-  listFrameRelationsByConversation,
-  listFramesByConversation,
-  type UpsertFrameInput,
-  type UpsertFrameRelationInput,
-  upsertFrame,
-  upsertFrameRelation,
-} from './frame-state';
+  deleteTree,
+  deleteTreeRelationByKey,
+  deleteTreeRelationsByConversation,
+  deleteTreeRelationsByTreeId,
+  deleteTreesByConversation,
+  getTreeByKey,
+  listTreeRelationsByConversation,
+  listTreesByConversation,
+  type UpsertTreeInput,
+  type UpsertTreeRelationInput,
+  upsertTree,
+  upsertTreeRelation,
+} from './tree-state';
 // Global Settings (key-value config store)
 export {
   deleteGlobalSetting,
@@ -193,7 +193,7 @@ export {
   findKnowledgeNodesByProject,
   findMembersByNode,
   findNeighborNodes,
-  findNodeBySentence,
+  findNodeByContentId,
   insertKnowledgeEdge,
   insertKnowledgeEdges,
   insertKnowledgeNode,
@@ -226,7 +226,7 @@ export {
   insertLeafOutputEdit,
   type ListLeafOutputEditsOptions,
 } from './leaf-output-edits';
-// Leaves (V4 - owns constraints, output, validation)
+// Leaves (owns constraints, output, validation)
 export {
   createLeaf,
   deleteLeaf,
@@ -281,7 +281,7 @@ export {
 } from './notifications';
 // Cursor Pagination
 export { type CursorPage, decodeCursor, encodeCursor, toCursorPage } from './pagination';
-// Pins (V4 - source selection for commits and context)
+// Pins (source selection for commits and context)
 export {
   createPin,
   deletePin,
@@ -319,13 +319,6 @@ export {
   type UpdateRecipeInput,
   updateRecipe,
 } from './recipes';
-// Relations (Ring 4 — inter-sentence relationships)
-export {
-  deleteRelationsByCommit,
-  findRelationsByCommit,
-  findRelationsByProject,
-  upsertRelations,
-} from './relations';
 // Runs (Engine → Runner → n8n flow)
 export {
   type ConfigurationStats,
@@ -361,29 +354,12 @@ export {
   insertSegmentEmbedding,
   insertSegmentEmbeddingsBatch,
 } from './segmentEmbeddings';
-// Sentence Modifications (audit trail)
+// Node Modifications (audit trail)
 export {
   findModificationsByDraft,
-  type InsertSentenceModificationInput,
-  insertSentenceModification,
-} from './sentence-modifications';
-// Sentence Vectors (pgvector similarity search + keyword search + hybrid RRF)
-export {
-  deleteSentenceVectorsByCommit,
-  deleteSentenceVectorsByProject,
-  findSentenceVectorsByProject,
-  findSentenceVectorsWithEmbeddingsByProject,
-  type HybridSearchResult,
-  type KeywordSearchResult,
-  rrfFusion,
-  type SearchResult as SentenceVectorSearchResult,
-  searchByKeyword,
-  searchHybrid,
-  searchSimilarSentences,
-  type UpsertSentenceVectorInput,
-  upsertSentenceVector,
-  upsertSentenceVectorsBatch,
-} from './sentenceVectors';
+  type InsertNodeModificationInput,
+  insertNodeModification,
+} from './node-modifications';
 // Share Tokens
 export {
   type CreateShareTokenInput,

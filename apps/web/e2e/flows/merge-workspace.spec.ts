@@ -19,7 +19,7 @@ import { expect, test } from '../fixtures/test';
  * - Cancelling a merge
  */
 
-// #4: Generate unique sentence IDs per test run
+// #4: Generate unique node IDs per test run
 function uid(): string {
   return Math.random().toString(36).slice(2, 8);
 }
@@ -89,7 +89,7 @@ test.describe('Merge Workspace', () => {
     const hasConflicts = await merge.hasConflictsSection();
 
     // Merge workspace should show at least one section (identical or conflicts)
-    // Frame-based commits may classify differently than sentence-based
+    // Frame-based commits may classify differently than node-based
     expect(hasIdentical || hasConflicts).toBe(true);
 
     // Commit should be disabled initially (no message, unresolved conflicts)
@@ -110,7 +110,7 @@ test.describe('Merge Workspace', () => {
     const initialCount = await merge.getUnresolvedCount();
 
     // #5: Click and wait for UI state change, not fixed timeout
-    // UI shows "Accept Source" (frame mode) or "Keep A" (legacy sentence mode)
+    // UI shows "Accept Source" (frame mode) or "Keep A" (legacy node mode)
     const keepAButton = page
       .locator('button:has-text("Accept Source")')
       .or(page.locator('button:has-text("Keep A")'))
@@ -137,7 +137,7 @@ test.describe('Merge Workspace', () => {
 
     const initialCount = await merge.getUnresolvedCount();
 
-    // UI shows "Accept Target" (frame mode) or "Keep B" (legacy sentence mode)
+    // UI shows "Accept Target" (frame mode) or "Keep B" (legacy node mode)
     const keepBButton = page
       .locator('button:has-text("Accept Target")')
       .or(page.locator('button:has-text("Keep B")'))

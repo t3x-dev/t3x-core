@@ -12,7 +12,7 @@ import type { MergeResult, SlotConflict } from '@t3x-dev/core';
 export type { MergeResult, SlotConflict };
 
 // ============================================================================
-// Legacy Sentence-based types (kept for UI component compatibility)
+// Legacy ContentNode-based types (kept for UI component compatibility)
 // These types represent the display layer for merge UI.
 // ============================================================================
 
@@ -22,8 +22,8 @@ export interface WordDiffSegment {
   text: string;
 }
 
-/** A sentence for merge display (source tracing) */
-export interface Sentence {
+/** A node for merge display (source tracing) */
+export interface ContentNode {
   id: string;
   text: string;
   confidence?: number;
@@ -35,23 +35,23 @@ export interface Sentence {
   };
 }
 
-/** A pair of similar sentences the user must choose between */
+/** A pair of similar nodes the user must choose between */
 export interface MergeSimilarPair {
-  source: Sentence;
-  target: Sentence;
+  source: ContentNode;
+  target: ContentNode;
   wordDiff: WordDiffSegment[];
   resolution?: 'source' | 'target';
 }
 
-/** A unique sentence the user can keep or discard */
+/** A unique node the user can keep or discard */
 export interface MergeCandidate {
-  sentence: Sentence;
+  node: ContentNode;
   keep: boolean;
 }
 
-/** Legacy merge result (sentence-based, used by some UI components) */
+/** Legacy merge result (node-based, used by some UI components) */
 export interface Merge2WayResult {
-  identical: Sentence[];
+  identical: ContentNode[];
   similarPairs: MergeSimilarPair[];
   onlyInSource: MergeCandidate[];
   onlyInTarget: MergeCandidate[];

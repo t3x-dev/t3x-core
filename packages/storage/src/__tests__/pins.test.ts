@@ -26,7 +26,7 @@ import {
   updatePinAssertions,
 } from '../queries/pins';
 import { insertProject } from '../queries/projects';
-import { pins } from '../schema-frames';
+import { pins } from '../schema-trees';
 import { createTestDB, testData } from './setup';
 
 describe('Pins Storage', () => {
@@ -512,7 +512,7 @@ describe('Pins Storage', () => {
   });
 
   describe('output format', () => {
-    it('uses snake_case for all fields (matches V4 type contract)', async () => {
+    it('uses snake_case for all fields (matches type contract)', async () => {
       const created = await createPin(db, {
         project_id: testProjectId,
         type: 'leaf',

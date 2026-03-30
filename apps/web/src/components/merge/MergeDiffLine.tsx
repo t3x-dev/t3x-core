@@ -23,13 +23,13 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { SourceContextView } from '@/components/shared/SourceContextView';
-import type { Sentence, TurnContextData } from '@/types/merge';
+import type { ContentNode, TurnContextData } from '@/types/merge';
 
 type LineType = 'context' | 'added' | 'removed';
 
 interface MergeDiffLineProps {
   type: LineType;
-  sentence: Sentence;
+  node: ContentNode;
   isSelected?: boolean;
   isKept?: boolean;
   onSelect?: () => void;
@@ -71,7 +71,7 @@ const lineStyles: Record<LineType, { bg: string; text: string; prefix: string; b
 
 export function MergeDiffLine({
   type,
-  sentence,
+  node,
   isSelected,
   isKept,
   onSelect,
@@ -86,7 +86,7 @@ export function MergeDiffLine({
 }: MergeDiffLineProps) {
   const styles = lineStyles[type];
   const isDiscarded = checkable && !isKept;
-  const hasSource = !!sentence.source?.turn_hash;
+  const hasSource = !!node.source?.turn_hash;
 
   // Local expand state for inline context
   const [expanded, setExpanded] = useState(false);
@@ -104,7 +104,7 @@ export function MergeDiffLine({
   };
 
   return (
-    <div className="space-y-0" data-merge-nav={navId} aria-label={`${type} sentence`}>
+    <div className="space-y-0" data-merge-nav={navId} aria-label={`${type} node`}>
       {/* Main diff line */}
       <div
         className={`
@@ -146,7 +146,7 @@ export function MergeDiffLine({
               e.stopPropagation();
               onToggleKeep?.();
             }}
-            aria-label={isKept ? 'Exclude sentence' : 'Include sentence'}
+            aria-label={isKept ? 'Exclude node' : 'Include node'}
             className="shrink-0 text-[var(--text-tertiary)] hover:text-[var(--text-primary)]"
           >
             {isKept ? (
@@ -172,9 +172,9 @@ export function MergeDiffLine({
           </div>
         )}
 
-        {/* Sentence Text */}
+        {/* ContentNode Text */}
         <span className={`flex-1 ${styles.text} ${isDiscarded ? 'line-through' : ''}`}>
-          {sentence.text}
+          {node.text}
         </span>
 
         {/* Source Trace Button - always shown, disabled when no source */}
@@ -217,9 +217,9 @@ export function MergeDiffLine({
           `}
         >
           <SourceContextView
-            turnHash={sentence.source!.turn_hash!}
-            highlightStart={sentence.source?.start_char}
-            highlightEnd={sentence.source?.end_char}
+            turnHash={node.source!.turn_hash!}
+            highlightStart={node.source?.start_char}
+            highlightEnd={node.source?.end_char}
             mode="compact"
             highlightColor="yellow"
             contextData={contextData}

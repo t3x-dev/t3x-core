@@ -1,18 +1,18 @@
 /**
  * Relation Extraction Prompt Builder
  *
- * Builds a dedicated prompt for inter-sentence relation extraction.
- * Designed as a single-task prompt (not bundled with sentence extraction)
+ * Builds a dedicated prompt for inter-node relation extraction.
+ * Designed as a single-task prompt (not bundled with node extraction)
  * based on research evidence favoring separate extraction calls.
  *
  * @see docs/plans/2026-03-05-ring4-inter-sentence-relations-design.md §4.5
  */
 
-export function buildRelationPrompt(sentences: Array<{ id: string; text: string }>): {
+export function buildRelationPrompt(nodes: Array<{ id: string; text: string }>): {
   systemPrompt: string;
   userPrompt: string;
 } {
-  const systemPrompt = `You are a discourse relation analyzer. Given a list of semantic sentences extracted from conversations, identify meaningful relationships between them.
+  const systemPrompt = `You are a discourse relation analyzer. Given a list of semantic nodes extracted from conversations, identify meaningful relationships between them.
 
 ## Relation Types
 - supports: S_target provides evidence, reasoning, or backing for S_source
@@ -26,8 +26,8 @@ export function buildRelationPrompt(sentences: Array<{ id: string; text: string 
 1. Only identify relationships where there is clear semantic evidence.
 2. Each relation needs a brief reasoning explaining WHY this relation exists.
 3. Confidence: 0.9+ for explicit markers ("because", "however"), 0.7-0.9 for implicit but clear, 0.5-0.7 for inferred.
-4. A sentence can participate in multiple relations.
-5. Do NOT force relations — if sentences are independent, return fewer or zero relations.
+4. A node can participate in multiple relations.
+5. Do NOT force relations — if nodes are independent, return fewer or zero relations.
 6. Relations are directional: source → target.
 
 ## Output Format
@@ -44,7 +44,7 @@ Return a JSON array:
 
 Return ONLY the JSON array, no markdown fences.`;
 
-  const userPrompt = sentences.map((s) => `[${s.id}] ${s.text}`).join('\n');
+  const userPrompt = nodes.map((s) => `[${s.id}] ${s.text}`).join('\n');
 
   return { systemPrompt, userPrompt };
 }

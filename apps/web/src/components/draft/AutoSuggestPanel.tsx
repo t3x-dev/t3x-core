@@ -1,9 +1,9 @@
 'use client';
 
 /**
- * AutoSuggestPanel - Goal-driven sentence recommendations
+ * AutoSuggestPanel - Goal-driven node recommendations
  *
- * Uses pgvector similarity search to suggest relevant committed sentences
+ * Uses pgvector similarity search to suggest relevant committed nodes
  * based on the draft's goal text. Part of Workbench V2 (RFC §4.4, §12.8).
  */
 
@@ -17,7 +17,7 @@ import { useDraftWorkspaceStore } from '@/store/draftWorkspaceStore';
 export function AutoSuggestPanel() {
   const draftId = useDraftWorkspaceStore((s) => s.draftId);
   const draft = useDraftWorkspaceStore((s) => s.draft);
-  const addManualSentence = useDraftWorkspaceStore((s) => s.addManualSentence);
+  const addManualNode = useDraftWorkspaceStore((s) => s.addManualNode);
 
   const [suggestions, setSuggestions] = useState<SuggestResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -69,14 +69,14 @@ export function AutoSuggestPanel() {
   }, [goal, fetchSuggestions]);
 
   const handleAdd = useCallback(
-    (sentenceId: string, text: string) => {
-      addManualSentence(text);
+    (nodeId: string, text: string) => {
+      addManualNode(text);
       // Mark as added in suggestions list (match by ID, not text, to avoid false positives)
       setSuggestions((prev) =>
-        prev.map((s) => (s.sentence_id === sentenceId ? { ...s, already_in_draft: true } : s))
+        prev.map((s) => (s.node_id === nodeId ? { ...s, already_in_draft: true } : s))
       );
     },
-    [addManualSentence]
+    [addManualNode]
   );
 
   if (!goal) {
@@ -84,7 +84,7 @@ export function AutoSuggestPanel() {
       <div className="rounded-lg border border-dashed border-border p-4">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Lightbulb className="h-4 w-4" />
-          Set a goal to get sentence suggestions from your knowledge base.
+          Set a goal to get node suggestions from your knowledge base.
         </div>
       </div>
     );
@@ -136,7 +136,7 @@ export function AutoSuggestPanel() {
           {loading && suggestions.length === 0 && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
-              Finding relevant sentences...
+              Finding relevant nodes...
             </div>
           )}
 
@@ -144,7 +144,7 @@ export function AutoSuggestPanel() {
 
           {!loading && !error && activeSuggestions.length === 0 && suggestions.length === 0 && (
             <p className="text-sm text-muted-foreground italic">
-              No matching sentences found. Commit more knowledge to improve suggestions.
+              No matching nodes found. Commit more knowledge to improve suggestions.
             </p>
           )}
 
@@ -162,7 +162,7 @@ export function AutoSuggestPanel() {
               </p>
               {activeSuggestions.map((s) => (
                 <div
-                  key={s.sentence_id}
+                  key={s.node_id}
                   className={cn(
                     'flex items-start gap-2 rounded-md border border-border/50 px-3 py-2',
                     'hover:border-border hover:bg-muted/30 transition-colors'
@@ -178,7 +178,7 @@ export function AutoSuggestPanel() {
                     variant="ghost"
                     size="sm"
                     className="h-6 shrink-0 gap-1 text-xs"
-                    onClick={() => handleAdd(s.sentence_id, s.text)}
+                    onClick={() => handleAdd(s.node_id, s.text)}
                   >
                     <Plus className="h-3 w-3" />
                     Add

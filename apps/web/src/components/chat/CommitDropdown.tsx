@@ -17,7 +17,7 @@ export function CommitDropdown() {
   const router = useRouter();
   const draft = useExtractionPanelStore((s) => s.draft);
   const setPanelMode = useExtractionPanelStore((s) => s.setPanelMode);
-  const selectDeltaNodes = useExtractionPanelStore((s) => s.selectDeltaNodes);
+  const selectPendingNodes = useExtractionPanelStore((s) => s.selectPendingNodes);
   const commitNodes = useExtractionPanelStore((s) => s.commitNodes);
   const commitBranch = useExtractionPanelStore((s) => s.commitBranch);
   const isCommitting = useExtractionPanelStore((s) => s.isCommitting);
@@ -31,14 +31,14 @@ export function CommitDropdown() {
     if (showMessageInput) inputRef.current?.focus();
   }, [showMessageInput]);
 
-  const deltaCount = selectDeltaNodes().length;
+  const pendingCount = selectPendingNodes().length;
   const hasNodes = draft.trees.length > 0;
-  const hasDelta = deltaCount > 0;
+  const hasPending = pendingCount > 0;
 
   const handleCommit = useCallback(() => {
-    if (!hasDelta && !hasNodes) return;
+    if (!hasPending && !hasNodes) return;
     setShowMessageInput(true);
-  }, [hasDelta, hasNodes]);
+  }, [hasPending, hasNodes]);
 
   const handleConfirmCommit = useCallback(async () => {
     try {
@@ -96,13 +96,13 @@ export function CommitDropdown() {
             size="sm"
             className="flex-1 bg-[var(--accent-commit)] text-xs text-white hover:opacity-90"
             onClick={handleConfirmCommit}
-            disabled={isCommitting || (!hasDelta && !hasNodes)}
+            disabled={isCommitting || (!hasPending && !hasNodes)}
           >
             {isCommitting ? 'Committing...' : 'Confirm'}
           </Button>
         </div>
         <p className="text-[10px] text-[var(--text-tertiary)]">
-          {deltaCount} new sentence{deltaCount !== 1 ? 's' : ''}
+          {pendingCount} new node{pendingCount !== 1 ? 's' : ''}
         </p>
       </div>
     );
@@ -113,18 +113,18 @@ export function CommitDropdown() {
       <div className="flex flex-1 rounded-md overflow-hidden">
         <Button
           size="sm"
-          disabled={(!hasDelta && !hasNodes) || isCommitting}
+          disabled={(!hasPending && !hasNodes) || isCommitting}
           onClick={handleCommit}
           className="flex-1 rounded-r-none bg-[var(--accent-commit)] text-xs text-white hover:opacity-90 disabled:opacity-40"
         >
-          {hasDelta ? `Commit (${deltaCount})` : hasNodes ? 'Commit current' : 'Commit'}
+          {hasPending ? `Commit (${pendingCount})` : hasNodes ? 'Commit current' : 'Commit'}
         </Button>
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
               size="sm"
-              disabled={(!hasDelta && !hasNodes) || isCommitting}
+              disabled={(!hasPending && !hasNodes) || isCommitting}
               className="rounded-l-none border-l border-white/20 bg-[var(--accent-commit)] px-2 text-white hover:opacity-90 disabled:opacity-40"
             >
               <ChevronDown className="h-3 w-3" />

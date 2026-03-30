@@ -41,7 +41,7 @@ export function toApiDraft(draft: Draft) {
     goal: draft.goal ?? null,
     parent_commit_hash: draft.parent_commit_hash ?? null,
     forked_from: draft.forked_from ?? null,
-    sentences: draft.sentences ?? [],
+    nodes: draft.nodes ?? [],
     constraints: draft.constraints ?? [],
     instructions: draft.instructions ?? null,
     preview_type: draft.preview_type ?? null,

@@ -5,13 +5,13 @@
  * Only pages that need animations include this; it is NOT added to globals.css.
  */
 export const PAGE_ANIMATION_STYLES = `
-  .sentence-active {
+  .node-active {
     box-shadow: 0 0 0 1px var(--accent-commit), 0 0 24px rgba(37,99,235,0.12), 0 0 48px rgba(37,99,235,0.05);
   }
-  .sentence-fade-in {
-    animation: sentenceFadeIn 0.4s ease-out forwards;
+  .node-fade-in {
+    animation: nodeFadeIn 0.4s ease-out forwards;
   }
-  @keyframes sentenceFadeIn {
+  @keyframes nodeFadeIn {
     from { opacity: 0; transform: translateY(8px); }
     to { opacity: 1; transform: translateY(0); }
   }

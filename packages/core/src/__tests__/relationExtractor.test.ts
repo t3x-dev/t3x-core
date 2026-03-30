@@ -13,13 +13,13 @@ function createMockProvider(response: string): LLMProvider {
 }
 
 describe('RelationExtractor', () => {
-  const sentences = [
+  const nodes = [
     { id: 's_aaa', text: 'The user prefers TypeScript for all projects.' },
     { id: 's_bbb', text: 'Because TypeScript catches type errors at compile time.' },
     { id: 's_ccc', text: 'However, JavaScript is simpler for small scripts.' },
   ];
 
-  it('extracts relations from sentences', async () => {
+  it('extracts relations from nodes', async () => {
     const mockResponse = JSON.stringify([
       {
         source_id: 's_aaa',
@@ -38,29 +38,29 @@ describe('RelationExtractor', () => {
     ]);
     const provider = createMockProvider(mockResponse);
     const extractor = new RelationExtractor(provider);
-    const result = await extractor.extract(sentences);
+    const result = await extractor.extract(nodes);
     expect(result.relations).toHaveLength(2);
     expect(result.relations[0].type).toBe('supports');
     expect(result.relations[1].type).toBe('contrasts');
-    expect(result.stats.total_sentences).toBe(3);
+    expect(result.stats.total_nodes).toBe(3);
     expect(result.stats.relations_found).toBe(2);
     expect(result.stats.avg_confidence).toBeCloseTo(0.875);
     expect(result.stats.extraction_time_ms).toBeGreaterThanOrEqual(0);
   });
 
-  it('returns empty result for fewer than 2 sentences', async () => {
+  it('returns empty result for fewer than 2 nodes', async () => {
     const provider = createMockProvider('[]');
     const extractor = new RelationExtractor(provider);
     const result = await extractor.extract([{ id: 's_aaa', text: 'Only one.' }]);
     expect(result.relations).toHaveLength(0);
-    expect(result.stats.total_sentences).toBe(1);
+    expect(result.stats.total_nodes).toBe(1);
     expect(provider.generate).not.toHaveBeenCalled();
   });
 
   it('calls provider.generate with combined prompt', async () => {
     const provider = createMockProvider('[]');
     const extractor = new RelationExtractor(provider);
-    await extractor.extract(sentences);
+    await extractor.extract(nodes);
     expect(provider.generate).toHaveBeenCalledOnce();
     const call = (provider.generate as ReturnType<typeof vi.fn>).mock.calls[0];
     expect(call[0]).toContain('discourse relation analyzer');
@@ -87,7 +87,7 @@ describe('RelationExtractor', () => {
     ]);
     const provider = createMockProvider(mockResponse);
     const extractor = new RelationExtractor(provider);
-    const result = await extractor.extract(sentences);
+    const result = await extractor.extract(nodes);
     expect(result.relations).toHaveLength(1);
   });
 
@@ -103,7 +103,7 @@ describe('RelationExtractor', () => {
     ]);
     const provider = createMockProvider(mockResponse);
     const extractor = new RelationExtractor(provider);
-    const result = await extractor.extract(sentences);
+    const result = await extractor.extract(nodes);
     expect(result.relations[0].id).toMatch(/^rel_/);
   });
 
@@ -114,13 +114,13 @@ describe('RelationExtractor', () => {
       resolveConflict: vi.fn(),
     };
     const extractor = new RelationExtractor(provider);
-    await expect(extractor.extract(sentences)).rejects.toThrow('rate limited');
+    await expect(extractor.extract(nodes)).rejects.toThrow('rate limited');
   });
 
   it('uses custom temperature when provided', async () => {
     const provider = createMockProvider('[]');
     const extractor = new RelationExtractor(provider);
-    await extractor.extract(sentences, { temperature: 0.5 });
+    await extractor.extract(nodes, { temperature: 0.5 });
     const call = (provider.generate as ReturnType<typeof vi.fn>).mock.calls[0];
     expect(call[1].temperature).toBe(0.5);
   });

@@ -42,7 +42,7 @@ export {
 export { canonText, hashText, sha256 } from './common';
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Context Builder (V4)
+// Context Builder
 // @see docs/specification/memory-pin-system-design.md
 // ═══════════════════════════════════════════════════════════════════════════
 export {
@@ -67,8 +67,8 @@ export {
   type AnchorCandidate,
   type AnchorSource,
   type AnchorType,
-  // Extraction (Phase 2)
-  buildExtractionPrompt,
+  // YOps extraction pipeline
+  buildYOpsPrompt,
   // Relations
   buildRelationPrompt,
   computeAdaptiveConfig,
@@ -76,7 +76,6 @@ export {
   createMeaningPipeline,
   createRelationExtractor,
   Compressor,
-  type DeltaParseResult,
   type ExtractionInput,
   type ExtractionPromptResult,
   type ExtractionResult,
@@ -91,14 +90,14 @@ export {
   type PipelineMode,
   type PipelineOptions,
   type PipelineResult,
-  parseDelta,
   parseRelationResponse,
+  parseYOpsOutput,
   type QualityMetrics,
   RelationExtractor,
   type RelationItem,
   RelationParseError,
   type Segment,
-  type SlotQuotesMap,
+  type YOpsParseResult,
 } from './extractors';
 
 // Extraction Style Config
@@ -244,7 +243,7 @@ export {
   detectAmbiguity,
   detectDrift,
   type ExtractionCompletedEvent,
-  generateCollapseDelta,
+  generateCollapseYOps,
   type PipelineDecision,
   PipelineEventEmitter,
   type PipelineEventMap,
@@ -279,10 +278,6 @@ export {
   createDeepSeekProvider,
   createGeminiProvider,
   createGoogleAIEmbeddingProvider,
-  // NLP Provider (Google Cloud)
-  createGoogleCloudNLPProvider,
-  // NLP Provider (Local fallback)
-  createLocalNLPProvider,
   createOllamaEmbeddingProvider,
   createOllamaProvider,
   createOpenAIEmbeddingProvider,
@@ -291,7 +286,6 @@ export {
   createProviderRegistry,
   DeepSeekProvider,
   type DeepSeekProviderConfig,
-  type DependencyLabel,
   // Embedding Provider (interface)
   type EmbeddingProvider,
   EmbeddingProviderError,
@@ -300,19 +294,6 @@ export {
   type GoogleAIEmbeddingConfig,
   // Embedding Provider (implementations)
   GoogleAIEmbeddingProvider,
-  type GoogleCloudNLPConfig,
-  // NLP Provider (implementations)
-  GoogleCloudNLPProvider,
-  LocalNLPProvider,
-  type LocalNLPProviderConfig,
-  type NLPAnalysis,
-  type NLPEntity,
-  type NLPProvider,
-  NLPProviderError,
-  type NLPSentence,
-  type NLPToken,
-  normalizeDependencyLabel,
-  normalizePosTag,
   type OllamaEmbeddingConfig,
   OllamaEmbeddingProvider,
   OllamaProvider,
@@ -321,7 +302,6 @@ export {
   OpenAIEmbeddingProvider,
   OpenAIProvider,
   type OpenAIProviderConfig,
-  POS_TAG_MAPPING,
   type ProviderEntry,
   ProviderRegistry,
   type ProviderRole,
@@ -332,11 +312,11 @@ export {
 } from './providers';
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Semantic Module (Tree-Primary: TreeNode + Relation + Delta + Diff + Merge)
+// Semantic Module (Tree-Primary: TreeNode + Relation + Diff + Merge)
 // ═══════════════════════════════════════════════════════════════════════════
 export {
-  // Delta
-  applyDelta,
+  // Tree Changes
+  applyTreeChanges,
   // Business Gate
   BusinessGate,
   buildCoveragePrompt,
@@ -346,7 +326,7 @@ export {
   checkRelationSanity,
   collectSlotQuotes,
   // Schemas
-  DeltaSchema,
+  TreeChangeBatchSchema,
   // Diff
   diffCommits,
   diffSlots,
@@ -385,9 +365,6 @@ export type {
   BusinessGateResult,
   BusinessRuleConfig,
   CoverageResult,
-  Delta,
-  DeltaLogEntry,
-  DeltaSource,
   DimensionResult,
   GateDimension,
   GateResult,
@@ -403,16 +380,61 @@ export type {
   SlotValue,
   StructureGateResult,
   TreeChange,
+  TreeChangeBatch,
   TreeDiff,
   TreeNode,
   ValidationError as SemanticValidationError,
   ValidationResult as SemanticValidationResult,
   ValidationWarning as SemanticValidationWarning,
   WordDiffFn,
+  YOpsLogEntry,
+  YOpsSource,
 } from './semantic';
 
 // Re-export RelationType from semantic (tree-primary relation types)
 export type { RelationType as SemanticRelationType } from './semantic';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// YOps — YAML Operations for Knowledge Trees
+// ═══════════════════════════════════════════════════════════════════════════
+export {
+  applyYOps,
+  findNode,
+  formatYOpsLog,
+  getNodeKey,
+  getParentPath,
+  parseYOpsYaml,
+  SNAKE_CASE_KEY,
+  YOpSchema,
+  YOPS_ERRORS,
+  YOpsDocumentSchema,
+} from './yops';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// YLint — Knowledge Tree Linter (4 Normal Forms)
+// ═══════════════════════════════════════════════════════════════════════════
+export { DEFAULT_LINT_CONFIG, ylint } from './ylint';
+export type { LintConfig, LintResult, LintWarning } from './ylint';
+
+export type {
+  AddOp,
+  CloneOp,
+  DropOp,
+  FoldOp,
+  MergeOp,
+  MoveOp,
+  NestOp,
+  RelateOp,
+  RenameOp,
+  SetOp,
+  SplitOp,
+  UnrelateOp,
+  UnsetOp,
+  YOp,
+  YOpsDocument,
+  YOpsError,
+  YOpsResult,
+} from './yops';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Storage (types + pure utils only)
@@ -421,7 +443,7 @@ export type { RelationType as SemanticRelationType } from './semantic';
 export * from './storage';
 
 // ═══════════════════════════════════════════════════════════════════════════
-// V4 Architecture Types
+// Architecture Types
 // @see docs/specification/semantic-layer-architecture.md
 // @see docs/specification/memory-pin-system-design.md
 // ═══════════════════════════════════════════════════════════════════════════
@@ -442,7 +464,7 @@ export {
   type CommitSourceRef,
   // Constraint (now belongs to Leaf)
   type Constraint,
-  type ConstraintSourceFrame,
+  type ConstraintSourceNode,
   type ContextSource,
   // Conversation Context
   type ConversationContext,
@@ -472,12 +494,12 @@ export {
   // Pin (source selection)
   type Pin,
   type PinType,
-  // Ring 4: Sentence Relations (V4 app-layer)
-  SENTENCE_RELATION_TYPES,
+  // Relation types (tree-node relations)
+  RELATION_TYPE_VALUES,
   type RelationExtractionResult,
   type RelationType,
   type RequireConstraint,
-  type SentenceRelation,
+  type NodeRelation,
   // Share Token
   type ShareToken,
   type User,

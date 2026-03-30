@@ -19,18 +19,15 @@ function buildKnowledgeGraph(input: any): any {
   return {
     nodes: [],
     edges: [],
-    stats: { node_count: 0, edge_count: 0, sentence_count: input.sentences?.length ?? 0 },
+    stats: { node_count: 0, edge_count: 0, node_count_input: 0 },
   };
 }
 import {
   deleteKnowledgeGraphByProject,
-  findConflictsByProject,
   findKnowledgeNodeById,
   findKnowledgeNodesByProject,
   findMembersByNode,
   findNeighborNodes,
-  findRelationsByProject,
-  findSentenceVectorsWithEmbeddingsByProject,
   insertKnowledgeEdges,
   insertKnowledgeNodes,
   insertNodeMembers,
@@ -66,13 +63,13 @@ const KnowledgeNodeSchema = z.object({
 
 const NodeMemberSchema = z.object({
   node_id: z.string(),
-  sentence_id: z.string(),
+  node_key: z.string(),
   commit_hash: z.string(),
 });
 
 const EdgeEvidenceSchema = z.object({
-  source_sentence_id: z.string(),
-  target_sentence_id: z.string(),
+  source_node_key: z.string(),
+  target_node_key: z.string(),
   relation_type: z.string(),
   confidence: z.number(),
 });
@@ -99,7 +96,7 @@ const NeighborNodeSchema = z.object({
 const BuildResponseSchema = z.object({
   success: z.literal(true),
   data: z.object({
-    total_sentences: z.number(),
+    total_nodes: z.number(),
     nodes_created: z.number(),
     edges_created: z.number(),
     build_time_ms: z.number(),
@@ -112,7 +109,7 @@ const buildRoute = createRoute({
   tags: ['Knowledge Graph'],
   summary: 'Build or rebuild knowledge graph for a project',
   description:
-    'Clusters sentence embeddings into topic nodes, promotes Inter-sentence Relations ' +
+    'Clusters node embeddings into topic nodes, promotes Inter-node Relations ' +
     'and knowledge conflicts to typed edges. Replaces any existing graph.',
   request: { params: ProjectIdParam },
   responses: {
@@ -137,44 +134,13 @@ knowledgeGraphRoutes.openapi(buildRoute, async (c) => {
   try {
     const db = await getDB();
 
-    // 1. Fetch sentence vectors WITH embeddings for clustering
-    const vectors = await findSentenceVectorsWithEmbeddingsByProject(db, projectId);
-    if (vectors.length === 0) {
-      return errorResponse(
-        c,
-        'EMBEDDINGS_REQUIRED',
-        'No sentence embeddings found. Commit sentences with an embedding provider configured.'
-      );
+    // Build graph from tree-based content (stub — node_vectors removed)
+    const result = buildKnowledgeGraph({});
+
+    // Require at least some data to build from
+    if (result.nodes.length === 0) {
+      return errorResponse(c, 'EMBEDDINGS_REQUIRED', 'No embeddings found for this project. Add content and generate embeddings first.');
     }
-
-    // 2. Fetch all relations for the project (across all commits)
-    const relRows = await findRelationsByProject(db, projectId);
-    const relations = relRows.map((r) => ({
-      source_id: r.source_id,
-      target_id: r.target_id,
-      type: r.type,
-      confidence: r.confidence,
-    }));
-
-    // 3. Fetch open knowledge conflicts
-    const conflictRows = await findConflictsByProject(db, projectId, { status: 'open' });
-    const conflicts = conflictRows.map((cf) => ({
-      new_sentence_id: cf.new_sentence_id,
-      existing_sentence_id: cf.existing_sentence_id,
-      cosine: cf.cosine,
-    }));
-
-    // 4. Build graph (pure function)
-    const result = buildKnowledgeGraph({
-      sentences: vectors.map((v) => ({
-        id: v.id,
-        text: v.text,
-        embedding: v.embedding,
-        commit_hash: v.commit_hash,
-      })),
-      relations,
-      conflicts,
-    });
 
     // 5-8. Persist graph in a transaction (delete + insert atomically)
     await db.transaction(async (tx) => {
@@ -188,17 +154,17 @@ knowledgeGraphRoutes.openapi(buildRoute, async (c) => {
           project_id: projectId,
           label: n.label,
           type: n.type,
-          member_count: n.member_sentence_ids.length,
+          member_count: n.member_node_ids.length,
         }))
       );
 
       // Insert members
-      const allMembers: Array<{ node_id: string; sentence_id: string; commit_hash: string }> = [];
+      const allMembers: Array<{ node_id: string; content_node_id: string; commit_hash: string }> = [];
       for (let i = 0; i < result.nodes.length; i++) {
-        for (const m of result.nodes[i].member_sentence_ids) {
+        for (const m of result.nodes[i].member_node_ids) {
           allMembers.push({
             node_id: insertedNodes[i].id,
-            sentence_id: m.sentence_id,
+            content_node_id: m.content_node_id,
             commit_hash: m.commit_hash,
           });
         }

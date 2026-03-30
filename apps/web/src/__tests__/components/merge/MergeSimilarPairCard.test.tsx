@@ -1,7 +1,7 @@
 /**
  * MergeSimilarPairCard Component Tests
  *
- * Tests for similar sentence pair card component
+ * Tests for similar node pair card component
  */
 
 import { describe, expect, test } from 'vitest';

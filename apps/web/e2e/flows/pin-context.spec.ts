@@ -9,7 +9,7 @@ import {
   createTestTurn,
 } from '../fixtures/api-helpers';
 import { expect, test } from '../fixtures/test';
-import { generateSentences } from '../fixtures/test-data-factory';
+import { generateNodes } from '../fixtures/test-data-factory';
 
 /**
  * Pin & Context Management E2E Tests
@@ -48,8 +48,8 @@ test.describe('Pin & Context Management', () => {
     );
 
     // Create commit and leaf
-    const sentences = generateSentences(3);
-    commitHash = await createTestCommit(request, projectId, sentences, {
+    const nodes = generateNodes(3);
+    commitHash = await createTestCommit(request, projectId, nodes, {
       message: 'Pin test commit',
     });
     leafId = await createTestLeaf(request, commitHash, projectId);

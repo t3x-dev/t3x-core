@@ -14,20 +14,18 @@ export {
   computeTextHash,
   computeTurnHash,
   generateAgentDraftId,
-  // V4 ID generation
   generateAssertionId,
-  // V3 ID generation
   generateBranchId,
   generateConstraintId,
   generateConversationId,
   generateDraftConstraintId,
   generateDraftId,
-  generateDraftSentenceId,
+  generateDraftNodeId,
   generateLeafHistoryId,
   generateLeafId,
   generateMergeDraftId,
   generatePinId,
   generateProjectId,
-  generateSentenceId,
+  generateNodeId,
   isoNow,
 } from './utils';

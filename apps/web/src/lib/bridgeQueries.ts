@@ -11,7 +11,7 @@ export const bridgeQueryDefs: Record<BridgeTemplate, { task: string; schema: str
   summary: {
     task: 'Extract the most important conclusions and factual takeaways: key numbers, core judgments, and summary statements. Prefer high-signal content; ignore detailed elaboration and repetition.',
     schema:
-      'Output 3-7 bullet points. Each bullet is one clear conclusion/fact, ideally one sentence, avoiding examples and process details.',
+      'Output 3-7 bullet points. Each bullet is one clear conclusion/fact, ideally one node, avoiding examples and process details.',
   },
   plan: {
     task: 'Extract actionable steps and tasks: order, dependencies, prerequisites, roles, and acceptance criteria. Prefer list-like, instruction-style content.',
@@ -21,7 +21,7 @@ export const bridgeQueryDefs: Record<BridgeTemplate, { task: string; schema: str
   prose: {
     task: 'Extract paragraph-ready content: definitions, explanations, reasons, contrasts, reasoning chains, viewpoints, and implications. Prefer logically complete statements.',
     schema:
-      'Preferred paragraph flow: definition/viewpoint -> explanation/reasoning -> example (optional) -> implication/summary. Keep coherence; avoid fragmented sentence piles.',
+      'Preferred paragraph flow: definition/viewpoint -> explanation/reasoning -> example (optional) -> implication/summary. Keep coherence; avoid fragmented node piles.',
   },
   story: {
     task: 'Extract narrative elements: timeline events, causality, characters/setting, conflict and resolution. Prefer content that supports a coherent storyline.',
@@ -29,9 +29,9 @@ export const bridgeQueryDefs: Record<BridgeTemplate, { task: string; schema: str
       'Preferred arc: setup -> development -> climax -> resolution. Keep transitions and connections; avoid jumpy isolated quotes.',
   },
   refine: {
-    task: 'Extract two kinds of sentences: (1) core sentences that must be preserved (key info/conclusions); (2) sentences that need rewriting (unclear, redundant, illogical flow, inconsistent style). Prefer sentence-level granularity.',
+    task: 'Extract two kinds of nodes: (1) core nodes that must be preserved (key info/conclusions); (2) nodes that need rewriting (unclear, redundant, illogical flow, inconsistent style). Prefer node-level granularity.',
     schema:
-      'Output two lists: A) Keep-as-core, B) Needs-refine. Keep each item as the original sentence or minimal quote for easy pinpointing.',
+      'Output two lists: A) Keep-as-core, B) Needs-refine. Keep each item as the original node or minimal quote for easy pinpointing.',
   },
   explain: {
     task: 'Extract content that supports a clear explanation: definitions, reasoning steps, examples, and clarifications that reduce confusion.',

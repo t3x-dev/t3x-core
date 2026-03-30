@@ -1,7 +1,7 @@
 /**
  * Provider Routes (OpenAPI)
  *
- * Manage LLM, Embedding, and NLP providers.
+ * Manage LLM and Embedding providers.
  *
  * GET    /v1/providers              - List all providers
  * GET    /v1/providers/roles        - Get role assignments
@@ -27,16 +27,16 @@ export const providersRoutes = new OpenAPIHono({
 const ProviderSchema = z.object({
   id: z.string(),
   name: z.string(),
-  role: z.enum(['generation', 'embedding', 'extraction', 'merge']),
+  role: z.enum(['generation', 'embedding', 'merge']),
   configured: z.boolean(),
-  roles: z.array(z.enum(['generation', 'embedding', 'extraction', 'merge'])),
+  roles: z.array(z.enum(['generation', 'embedding', 'merge'])),
   required_env_keys: z.array(z.string()),
   default_model: z.string().nullable(),
   available_models: z.array(z.string()).nullable(),
 });
 
 const RoleAssignmentSchema = z.object({
-  role: z.enum(['generation', 'embedding', 'extraction', 'merge']),
+  role: z.enum(['generation', 'embedding', 'merge']),
   provider_ids: z.array(z.string()),
 });
 

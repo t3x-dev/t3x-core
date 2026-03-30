@@ -4,7 +4,7 @@
  * Constructs system + user prompts for LLM-based tree-native semantic extraction.
  * Supports two modes:
  * - First extraction (no snapshot): asks LLM for full YAML tree output
- * - Delta mode (with snapshot): asks LLM for incremental changes only
+ * - Incremental mode (with snapshot): asks LLM for incremental changes only
  */
 
 import type { SemanticContent, TreeNode } from '../semantic/types';
@@ -28,7 +28,7 @@ export interface ExtractionTurn {
 export interface ExtractionInput {
   turns: ExtractionTurn[];
   snapshot?: SemanticContent;
-  /** Number of turns already processed by previous extractions (from the start). Used in delta mode to split context vs new turns. */
+  /** Number of turns already processed by previous extractions (from the start). Used in incremental mode to split context vs new turns. */
   processedTurnCount?: number;
 }
 
@@ -137,7 +137,7 @@ export function quoteLengthSegment(ql: QuoteLength): string {
   switch (ql) {
     case 'minimal':
       return `- Keep quotes MINIMAL: extract only the shortest substring that contains the slot value
-  BAD:  "We're vegetarian and my partner is allergic to peanuts" (entire sentence)
+  BAD:  "We're vegetarian and my partner is allergic to peanuts" (entire clause)
   GOOD: "vegetarian" (just the value)
   GOOD: "allergic to peanuts" (just the relevant part)`;
     case 'contextual':
@@ -174,8 +174,8 @@ export function updateStanceSegment(us: UpdateStance): string {
 
 // -- System Prompt Builders --
 
-function buildDeltaSystemPrompt(style: ExtractionStyleConfig): string {
-  return `You are a semantic extraction engine. Extract CHANGES (delta) from new conversation turns as updates to an existing topic tree.
+function buildIncrementalSystemPrompt(style: ExtractionStyleConfig): string {
+  return `You are a semantic extraction engine. Extract CHANGES from new conversation turns as updates to an existing topic tree.
 
 ## Three-Tier Extraction Rule
 
@@ -193,14 +193,14 @@ ${tier3KeyDistinction(style.tier3)}
 - AI suggestions the user explicitly rejected
 
 ## slot_quotes Hard Binding (MANDATORY)
-Each slot in your delta MUST have a corresponding slot_quotes entry with VERBATIM text from the conversation.
+Each slot in your changes MUST have a corresponding slot_quotes entry with VERBATIM text from the conversation.
 ${quoteLengthSegment(style.quote_length)}
 - slot_quotes keys use dot-path notation relative to tree root
 - If you cannot quote exact source text for a slot \u2192 DO NOT create that slot
 
 ${granularitySegment(style.granularity)}
 
-## Delta Actions
+## Tree Change Actions
 
 | Action | When | Fields |
 |--------|------|--------|
@@ -217,7 +217,7 @@ ${granularitySegment(style.granularity)}
 If new info doesn't fit an existing node \u2192 add a new child at the nearest suitable parent.
 
 ## Core Rules
-1. Output ONLY changes (delta) \u2014 do NOT repeat unchanged tree nodes
+1. Output ONLY changes \u2014 do NOT repeat unchanged tree nodes
 2. Node keys use snake_case (e.g., "dietary_restrictions")
 3. Paths use / separator (e.g., "hangzhou_trip/dining")
 
@@ -377,7 +377,7 @@ Output the YAML tree first (no fences), then --- on its own line, then the JSON 
 /**
  * Build system + user prompts for semantic extraction.
  *
- * When `snapshot` is provided, produces delta-mode prompts that ask the LLM
+ * When `snapshot` is provided, produces incremental-mode prompts that ask the LLM
  * to output only changes relative to the existing snapshot.
  * When no snapshot, produces first-extraction prompts for full output.
  *
@@ -392,7 +392,7 @@ export function buildExtractionPrompt(
   const { turns, snapshot, processedTurnCount } = input;
 
   if (snapshot) {
-    // Delta mode
+    // Incremental mode
     const snapshotYaml = serializeSnapshot(snapshot);
 
     // Split turns into context (already processed) and new (to extract from)
@@ -419,7 +419,7 @@ export function buildExtractionPrompt(
       turnsSection = `## Context Turns (already in snapshot \u2014 do NOT re-extract these)
 ${contextText}
 
-## \u2605 NEW Turns (extract delta from THESE) \u2605
+## \u2605 NEW Turns (extract changes from THESE) \u2605
 ${newText}`;
     } else {
       // No split info -- treat all as new (backward compatible)
@@ -433,9 +433,9 @@ ${snapshotYaml}
 ${turnsSection}
 
 ## Instructions
-Output the delta (changes only) based on the \u2605 NEW turns \u2605 above.
+Output the changes only based on the \u2605 NEW turns \u2605 above.
 CRITICAL RULES:
-1. Each slot in your delta MUST have a corresponding slot_quotes entry pointing to VERBATIM text from the conversation. No quote \u2192 no slot.
+1. Each slot in your changes MUST have a corresponding slot_quotes entry pointing to VERBATIM text from the conversation. No quote \u2192 no slot.
 2. For AI-originated information (TIER 3), quote from the assistant turn. Do NOT extract content the user explicitly rejected.
 3. The context turns are for reference only \u2014 their information is already in the snapshot.
 4. Use tree paths with / separator for parent_path and target_path.
@@ -447,7 +447,7 @@ For each piece of new information:
 - If the user explicitly rejected all new AI content \u2192 output empty changes: { "changes": [], "drift_detected": false }
 Include "source" field referencing the turn tag (T1, T2, etc.).`;
 
-    return { systemPrompt: buildDeltaSystemPrompt(style), userPrompt };
+    return { systemPrompt: buildIncrementalSystemPrompt(style), userPrompt };
   }
 
   // First extraction mode

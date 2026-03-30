@@ -116,7 +116,7 @@ export function PreviewPanel({ className }: PreviewPanelProps) {
   // Compute highlight ranges in generated output based on hovered YAML slot
   const outputHighlightRanges = useMemo(() => {
     if (!generatedOutput || !hoveredNodeId || !hoveredSlotKey) return [];
-    const node = draft.trees.find((f) => f.id === hoveredNodeId);
+    const node = draft.trees.find((f) => f.key === hoveredNodeId);
     if (!node) return [];
     const slotValue = node.slots[hoveredSlotKey];
     if (!slotValue || typeof slotValue !== 'string') return [];
@@ -132,7 +132,7 @@ export function PreviewPanel({ className }: PreviewPanelProps) {
         const slots = Object.entries(node.slots)
           .map(([k, v]) => `  ${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`)
           .join('\n');
-        return `[${node.type}]\n${slots}`;
+        return `[${node.key}]\n${slots}`;
       })
       .join('\n\n');
   }, [draft.trees]);

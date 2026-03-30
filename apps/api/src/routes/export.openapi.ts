@@ -6,15 +6,14 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { applyDelta, type SemanticContent } from '@t3x-dev/core';
 import {
   findConversationsByProject,
   findTurnsByProject,
-  listDeltaLogByConversation,
+  listYOpsLogByConversation,
 } from '@t3x-dev/storage';
 import * as crypto from 'crypto';
 import { getDB } from '../lib/db';
-import { toDeltaLogEntries } from '../lib/delta-log-utils';
+import { replayYOpsLog, toYOpsLogEntries } from '../lib/yops-log-utils';
 import { zodErrorHook } from '../lib/errors';
 import { assertProjectAccess } from '../lib/project-access';
 import { ErrorResponseSchema } from '../schemas/common';
@@ -230,19 +229,16 @@ exportRoutes.openapi(exportCfpackRoute, async (c) => {
       evidence_refs: [],
     };
 
-    // Build semantic snapshots from delta logs (Frame data)
+    // Build semantic snapshots from yops logs
     const semanticSnapshots: Record<string, unknown> = {};
     for (const conv of await findConversationsByProject(db, { projectId, limit: 10000 })) {
-      const deltaLogs = await listDeltaLogByConversation(db, conv.conversationId);
-      if (deltaLogs.length > 0) {
-        const snapshot = toDeltaLogEntries(deltaLogs).reduce(
-          (snap, entry) => applyDelta(snap, entry.delta),
-          { trees: [], relations: [] } as SemanticContent
-        );
+      const yopsLogs = await listYOpsLogByConversation(db, conv.conversationId);
+      if (yopsLogs.length > 0) {
+        const snapshot = replayYOpsLog(toYOpsLogEntries(yopsLogs));
         semanticSnapshots[conv.conversationId] = {
           trees: snapshot.trees,
           relations: snapshot.relations,
-          delta_count: deltaLogs.length,
+          yops_count: yopsLogs.length,
         };
       }
     }
@@ -378,21 +374,18 @@ exportRoutes.openapi(exportLedgerRoute, async (c) => {
       );
     }
 
-    // Semantic snapshots (Frame data)
+    // Semantic snapshots
     for (const conv of conversations) {
-      const deltaLogs = await listDeltaLogByConversation(db, conv.conversationId);
-      if (deltaLogs.length > 0) {
-        const snapshot = toDeltaLogEntries(deltaLogs).reduce(
-          (snap, entry) => applyDelta(snap, entry.delta),
-          { trees: [], relations: [] } as SemanticContent
-        );
+      const yopsLogs = await listYOpsLogByConversation(db, conv.conversationId);
+      if (yopsLogs.length > 0) {
+        const snapshot = replayYOpsLog(toYOpsLogEntries(yopsLogs));
         lines.push(
           JSON.stringify({
             type: 'semantic_snapshot',
             conversation_id: conv.conversationId,
             trees: snapshot.trees,
             relations: snapshot.relations,
-            delta_count: deltaLogs.length,
+            yops_count: yopsLogs.length,
           })
         );
       }

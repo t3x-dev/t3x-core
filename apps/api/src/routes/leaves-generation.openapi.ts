@@ -68,7 +68,7 @@ const generateLeafRoute = createRoute({
   tags: ['Leaves'],
   summary: 'Generate leaf output',
   description:
-    'Generates output for a leaf using the Claude API based on commit sentences and constraints.',
+    'Generates output for a leaf using the Claude API based on commit nodes and constraints.',
   request: {
     params: IdParamSchema,
     body: {

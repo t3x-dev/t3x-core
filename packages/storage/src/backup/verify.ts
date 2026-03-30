@@ -2,7 +2,7 @@
  * Hash Chain Verification (Upgrade #6)
  *
  * Three-layer verification strategy:
- * - L1: Incremental — verify parent hashes during commit creation (in commits-v4.ts)
+ * - L1: Incremental — verify parent hashes during commit creation (in commits.ts)
  * - L2: On-demand — full project verification via API
  * - L3: Chain — BFS DAG traversal from leaf commits to roots
  *
@@ -52,7 +52,7 @@ export interface VerifyChainResult {
 const VERIFY_LIMIT = 100_000;
 
 /**
- * Verify the hash chain integrity for all V4 commits in a project.
+ * Verify the hash chain integrity for all commits in a project.
  *
  * Enhanced chain verification (Upgrade #6):
  * 1. Recompute each commit's hash and compare with stored value

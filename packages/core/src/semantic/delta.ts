@@ -1,10 +1,7 @@
-import type { Delta, SemanticContent, SlotValue, TreeNode } from './types';
-
-/** @internal Alias — tree-native delta IS the standard Delta now. */
-export type TreeNativeDelta = Delta;
+import type { TreeChangeBatch, SemanticContent, SlotValue, TreeNode } from './types';
 
 /**
- * Apply a delta to a semantic snapshot, returning a new snapshot.
+ * Apply a tree change batch to a semantic snapshot, returning a new snapshot.
  * Pure function — does not mutate the input.
  *
  * Operates on content.trees (array of root TreeNodes).
@@ -14,11 +11,11 @@ export type TreeNativeDelta = Delta;
  * Note: The result is NOT automatically validated. Callers should run
  * `validateIntegrity()` on the result before committing to storage.
  */
-export function applyDelta(snapshot: SemanticContent, delta: Delta): SemanticContent {
+export function applyTreeChanges(snapshot: SemanticContent, batch: TreeChangeBatch): SemanticContent {
   const trees = snapshot.trees.map(deepCloneTree);
   let relations = [...snapshot.relations];
 
-  for (const change of delta.changes) {
+  for (const change of batch.changes) {
     switch (change.action) {
       case 'add': {
         const newNode = deepCloneTree(change.node);
@@ -71,11 +68,11 @@ export function applyDelta(snapshot: SemanticContent, delta: Delta): SemanticCon
     }
   }
 
-  if (delta.new_relations) {
-    relations.push(...delta.new_relations);
+  if (batch.new_relations) {
+    relations.push(...batch.new_relations);
   }
-  if (delta.remove_relations) {
-    for (const toRemove of delta.remove_relations) {
+  if (batch.remove_relations) {
+    for (const toRemove of batch.remove_relations) {
       const idx = relations.findIndex(
         (r) => r.from === toRemove.from && r.to === toRemove.to && r.type === toRemove.type
       );

@@ -129,7 +129,7 @@ const nodeTypes = { miniNode: MiniTreeNodeView };
 
 function TreeGraphMiniInner() {
   const draft = useExtractionPanelStore((s) => s.draft);
-  const deltaChangeHistory = useExtractionPanelStore((s) => s.deltaChangeHistory);
+  const yopsHistory = useExtractionPanelStore((s) => s.yopsHistory);
   const confirmedNodeIds = useExtractionPanelStore((s) => s.confirmedNodeIds);
   const confirmNode = useExtractionPanelStore((s) => s.confirmNode);
   const unconfirmNode = useExtractionPanelStore((s) => s.unconfirmNode);
@@ -138,16 +138,16 @@ function TreeGraphMiniInner() {
   const [edges, setEdges, onEdgesChange] = useEdgesState([] as Edge[]);
   const { fitView } = useReactFlow();
 
-  // Build changeMap from most recent delta (graph view doesn't need age)
+  // Build changeMap from most recent yops (graph view doesn't need age)
   const changeMap = useMemo(() => {
     const map = new Map<string, 'add' | 'update' | 'remove'>();
-    for (const c of deltaChangeHistory[0] ?? []) {
+    for (const c of yopsHistory[0] ?? []) {
       if (c.action === 'add') map.set(c.parent_path ? `${c.parent_path}.${c.node.key}` : c.node.key, 'add');
       else if (c.action === 'update') map.set(c.target_path, 'update');
       else if (c.action === 'remove') map.set(c.target_path, 'remove');
     }
     return map;
-  }, [deltaChangeHistory]);
+  }, [yopsHistory]);
 
   const handleConfirmToggle = useMemo(
     () => (treeId: string) => {

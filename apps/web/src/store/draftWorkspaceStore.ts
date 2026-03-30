@@ -6,7 +6,7 @@
  */
 
 import { create } from 'zustand';
-import type { DraftConstraint, DraftSentence, WorkbenchDraft } from '@/lib/api';
+import type { DraftConstraint, DraftNode, WorkbenchDraft } from '@/lib/api';
 import * as api from '@/lib/api';
 import { type ValidationResult, validateConstraintsLocally } from '@/lib/draftValidation';
 import { useCanvasStore } from './canvasStore';
@@ -53,10 +53,10 @@ interface DraftWorkspaceState {
   // Mutations (set isDirty=true, recompute validations)
   updateTitle: (title: string) => void;
   updateGoal: (goal: string) => void;
-  toggleSentence: (sentenceId: string) => void;
-  removeSentence: (sentenceId: string) => void;
-  reorderSentences: (fromIndex: number, toIndex: number) => void;
-  addManualSentence: (text: string) => void;
+  toggleNode: (nodeId: string) => void;
+  removeNode: (nodeId: string) => void;
+  reorderNodes: (fromIndex: number, toIndex: number) => void;
+  addManualNode: (text: string) => void;
   addConstraint: (
     type: 'require' | 'exclude',
     matchMode: 'exact' | 'semantic',
@@ -94,7 +94,7 @@ interface DraftWorkspaceState {
 
 function recomputeValidation(draft: WorkbenchDraft | null): ValidationResult[] {
   if (!draft) return [];
-  return validateConstraintsLocally(draft.sentences, draft.constraints);
+  return validateConstraintsLocally(draft.nodes, draft.constraints);
 }
 
 function nextId(prefix: string): string {
@@ -195,7 +195,7 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
         previewStatus,
         previewError: null,
         previewIncludedCount: previewOutput
-          ? draft.sentences.filter((s) => s.included).length
+          ? draft.nodes.filter((s) => s.included).length
           : null,
       });
     } catch (err) {
@@ -222,13 +222,13 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
     set({ draft: updated, isDirty: true });
   },
 
-  toggleSentence: (sentenceId: string) => {
+  toggleNode: (nodeId: string) => {
     const { draft, previewStatus } = get();
     if (!draft || draft.status !== 'editing') return;
-    const sentences = draft.sentences.map((s) =>
-      s.id === sentenceId ? { ...s, included: !s.included } : s
+    const nodes = draft.nodes.map((s) =>
+      s.id === nodeId ? { ...s, included: !s.included } : s
     );
-    const updated = { ...draft, sentences };
+    const updated = { ...draft, nodes };
     const newPreviewStatus = staleIfReady(previewStatus);
     set({
       draft: updated,
@@ -239,13 +239,13 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
     scheduleAutoPreview(get, newPreviewStatus);
   },
 
-  removeSentence: (sentenceId: string) => {
+  removeNode: (nodeId: string) => {
     const { draft, previewStatus } = get();
     if (!draft || draft.status !== 'editing') return;
-    const sentences = draft.sentences
-      .filter((s) => s.id !== sentenceId)
+    const nodes = draft.nodes
+      .filter((s) => s.id !== nodeId)
       .map((s, i) => ({ ...s, position: i }));
-    const updated = { ...draft, sentences };
+    const updated = { ...draft, nodes };
     const newPreviewStatus = staleIfReady(previewStatus);
     set({
       draft: updated,
@@ -256,14 +256,14 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
     scheduleAutoPreview(get, newPreviewStatus);
   },
 
-  reorderSentences: (fromIndex: number, toIndex: number) => {
+  reorderNodes: (fromIndex: number, toIndex: number) => {
     const { draft, previewStatus } = get();
     if (!draft || draft.status !== 'editing') return;
-    const sentences = [...draft.sentences];
-    const [moved] = sentences.splice(fromIndex, 1);
-    sentences.splice(toIndex, 0, moved);
-    const reindexed = sentences.map((s, i) => ({ ...s, position: i }));
-    const updated = { ...draft, sentences: reindexed };
+    const nodes = [...draft.nodes];
+    const [moved] = nodes.splice(fromIndex, 1);
+    nodes.splice(toIndex, 0, moved);
+    const reindexed = nodes.map((s, i) => ({ ...s, position: i }));
+    const updated = { ...draft, nodes: reindexed };
     const newPreviewStatus = staleIfReady(previewStatus);
     set({
       draft: updated,
@@ -274,18 +274,18 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
     scheduleAutoPreview(get, newPreviewStatus);
   },
 
-  addManualSentence: (text: string) => {
+  addManualNode: (text: string) => {
     const { draft, previewStatus } = get();
     if (!draft || draft.status !== 'editing' || !text.trim()) return;
-    const newSentence: DraftSentence = {
+    const newNode: DraftNode = {
       id: nextId('ds_'),
       text: text.trim(),
       origin: { type: 'manual' },
-      position: draft.sentences.length,
+      position: draft.nodes.length,
       included: true,
     };
-    const sentences = [...draft.sentences, newSentence];
-    const updated = { ...draft, sentences };
+    const nodes = [...draft.nodes, newNode];
+    const updated = { ...draft, nodes };
     const newPreviewStatus = staleIfReady(previewStatus);
     set({
       draft: updated,
@@ -381,7 +381,7 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
       // Stale check: discard if a newer generation was started during API call
       if (gen !== previewGeneration) return;
 
-      const includedCount = get().draft?.sentences.filter((s) => s.included).length ?? 0;
+      const includedCount = get().draft?.nodes.filter((s) => s.included).length ?? 0;
       set({
         previewOutput: result.output,
         previewGeneratedAt: new Date().toISOString(),
@@ -442,7 +442,7 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
       const updated = await api.updateWorkbenchDraft(draftId, {
         title: draft.title,
         goal: draft.goal ?? undefined,
-        sentences: draft.sentences,
+        nodes: draft.nodes,
         constraints: draft.constraints,
         instructions: draft.instructions ?? undefined,
         preview_type: draft.preview_type ?? undefined,
@@ -525,7 +525,7 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
   getIncludedCount: () => {
     const { draft } = get();
     if (!draft) return 0;
-    return draft.sentences.filter((s) => s.included).length;
+    return draft.nodes.filter((s) => s.included).length;
   },
 
   // ============================================================================

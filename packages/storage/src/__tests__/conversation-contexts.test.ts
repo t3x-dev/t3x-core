@@ -22,7 +22,7 @@ import {
 } from '../queries/conversation-contexts';
 import { insertConversation } from '../queries/conversations';
 import { insertProject } from '../queries/projects';
-import { conversationContexts } from '../schema-frames';
+import { conversationContexts } from '../schema-trees';
 import { createTestDB, testData } from './setup';
 
 describe('Conversation Contexts Storage', () => {
@@ -218,7 +218,7 @@ describe('Conversation Contexts Storage', () => {
   });
 
   describe('output format', () => {
-    it('uses snake_case for all fields (matches V4 type contract)', async () => {
+    it('uses snake_case for all fields (matches type contract)', async () => {
       const conversation = await insertConversation(
         db,
         testData.conversation(testProjectId, { title: 'Format Test' })

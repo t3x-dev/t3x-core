@@ -16,7 +16,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useTerminology } from '@/hooks/useTerminology';
-import type { DraftSentence, WorkbenchDraft } from '@/lib/api';
+import type { DraftNode, WorkbenchDraft } from '@/lib/api';
 import { createWorkbenchDraft, listWorkbenchDrafts, updateWorkbenchDraft } from '@/lib/api';
 import { nextDraftId } from '@/lib/draftUtils';
 import { cn } from '@/lib/utils';
@@ -34,7 +34,7 @@ interface DraftPickerDialogProps {
   endChar: number;
 }
 
-function buildSentence(
+function buildNode(
   text: string,
   conversationId: string,
   conversationTitle: string | undefined,
@@ -43,7 +43,7 @@ function buildSentence(
   startChar: number,
   endChar: number,
   position: number
-): DraftSentence {
+): DraftNode {
   return {
     id: nextDraftId('ds_'),
     text,
@@ -97,7 +97,7 @@ export function DraftPickerDialog({
       const autoTitle = `${t('draft')} · ${titlePrefix} · ${dateStr}`;
 
       const newDraft = await createWorkbenchDraft({ project_id: projectId, title: autoTitle });
-      const sentence = buildSentence(
+      const node = buildNode(
         selectedText,
         conversationId,
         conversationTitle,
@@ -107,7 +107,7 @@ export function DraftPickerDialog({
         endChar,
         0
       );
-      await updateWorkbenchDraft(newDraft.id, { sentences: [sentence], if_revision: 1 });
+      await updateWorkbenchDraft(newDraft.id, { nodes: [node], if_revision: 1 });
 
       toast.success(`Added to "${autoTitle}"`, {
         action: {
@@ -128,7 +128,7 @@ export function DraftPickerDialog({
   const handleAddToDraft = async (draft: WorkbenchDraft) => {
     setActing(true);
     try {
-      const sentence = buildSentence(
+      const node = buildNode(
         selectedText,
         conversationId,
         conversationTitle,
@@ -136,11 +136,11 @@ export function DraftPickerDialog({
         turnRole,
         startChar,
         endChar,
-        draft.sentences.length
+        draft.nodes.length
       );
-      const updatedSentences = [...draft.sentences, sentence];
+      const updatedNodes = [...draft.nodes, node];
       await updateWorkbenchDraft(draft.id, {
-        sentences: updatedSentences,
+        nodes: updatedNodes,
         if_revision: draft.revision,
       });
 
@@ -217,7 +217,7 @@ export function DraftPickerDialog({
               >
                 <FileEdit className="h-4 w-4 text-amber-500 shrink-0" />
                 <span className="text-sm truncate flex-1">{d.title || 'Untitled'}</span>
-                <span className="text-xs text-muted-foreground shrink-0">{d.sentences.length}</span>
+                <span className="text-xs text-muted-foreground shrink-0">{d.nodes.length}</span>
               </button>
             ))}
 

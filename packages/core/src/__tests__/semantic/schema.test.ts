@@ -1,11 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
-  DeltaSchema,
+  TreeChangeBatchSchema,
   FlatNodeSchema,
   RelationTypeSchema,
   SemanticContentSchema,
   TreeNodeSchema,
-  TreeNativeDeltaSchema,
 } from '../../semantic/schema';
 
 describe('TreeNodeSchema', () => {
@@ -173,9 +172,9 @@ describe('SemanticContentSchema', () => {
   });
 });
 
-describe('DeltaSchema', () => {
+describe('TreeChangeBatchSchema', () => {
   it('accepts add change with parent_path and node', () => {
-    const result = DeltaSchema.safeParse({
+    const result = TreeChangeBatchSchema.safeParse({
       changes: [
         {
           action: 'add',
@@ -188,21 +187,21 @@ describe('DeltaSchema', () => {
   });
 
   it('accepts update change with null slot (delete)', () => {
-    const result = DeltaSchema.safeParse({
+    const result = TreeChangeBatchSchema.safeParse({
       changes: [{ action: 'update', target_path: 'trip/budget', slots: { old_key: null } }],
     });
     expect(result.success).toBe(true);
   });
 
   it('accepts remove change', () => {
-    const result = DeltaSchema.safeParse({
+    const result = TreeChangeBatchSchema.safeParse({
       changes: [{ action: 'remove', target_path: 'trip/shopping', reason: 'user denied' }],
     });
     expect(result.success).toBe(true);
   });
 
   it('accepts new_relations', () => {
-    const result = DeltaSchema.safeParse({
+    const result = TreeChangeBatchSchema.safeParse({
       changes: [
         {
           action: 'add',
@@ -216,7 +215,7 @@ describe('DeltaSchema', () => {
   });
 
   it('rejects empty changes', () => {
-    const result = DeltaSchema.safeParse({
+    const result = TreeChangeBatchSchema.safeParse({
       changes: [],
     });
     expect(result.success).toBe(false);
@@ -244,9 +243,9 @@ describe('RelationTypeSchema', () => {
   });
 });
 
-describe('TreeNativeDeltaSchema', () => {
+describe('TreeChangeBatchSchema (with slot_quotes)', () => {
   it('accepts add with parent_path and node', () => {
-    const result = TreeNativeDeltaSchema.safeParse({
+    const result = TreeChangeBatchSchema.safeParse({
       changes: [
         {
           action: 'add',
@@ -260,7 +259,7 @@ describe('TreeNativeDeltaSchema', () => {
   });
 
   it('accepts update with target_path', () => {
-    const result = TreeNativeDeltaSchema.safeParse({
+    const result = TreeChangeBatchSchema.safeParse({
       changes: [
         {
           action: 'update',
@@ -274,7 +273,7 @@ describe('TreeNativeDeltaSchema', () => {
   });
 
   it('accepts remove with target_path', () => {
-    const result = TreeNativeDeltaSchema.safeParse({
+    const result = TreeChangeBatchSchema.safeParse({
       changes: [{ action: 'remove', target_path: 'hangzhou_trip/shopping', reason: 'cancelled' }],
     });
     expect(result.success).toBe(true);

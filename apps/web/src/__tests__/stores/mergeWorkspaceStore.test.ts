@@ -4,28 +4,28 @@
  * Tests for extended resolution functionality (Issue #221):
  * - resolveConflict with 'both' and 'edit' options
  * - setCustomText for edit mode
- * - getPreviewSentences with extended resolutions
+ * - getPreviewNodes with extended resolutions
  * - getUnresolvedCount considering extended resolutions
  * - canCommit with extended resolutions
  * - fetchSourceContext caching
  *
  * Updated for tree-primary merge architecture.
  * Uses treeMergeResult (path-based MergeResult from core) for conflict resolution.
- * Legacy getPreviewSentences still uses Merge2WayResult prepared data.
+ * Legacy getPreviewNodes still uses Merge2WayResult prepared data.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
 import type { MergeResult } from '@t3x-dev/core';
-import type { Merge2WayResult, Sentence } from '@/types/merge';
+import type { Merge2WayResult, ContentNode } from '@/types/merge';
 
 // Mock the API module
 vi.mock('@/lib/api', () => ({
   fetchTurnContext: vi.fn(),
 }));
 
-// Helper to create a mock sentence
-const createSentence = (id: string, text: string): Sentence => ({
+// Helper to create a mock node
+const createNode = (id: string, text: string): ContentNode => ({
   id,
   text,
   source: {
@@ -35,13 +35,13 @@ const createSentence = (id: string, text: string): Sentence => ({
   },
 });
 
-// Helper to create mock prepared merge data (legacy sentence-based)
+// Helper to create mock prepared merge data (legacy node-based)
 const createMockPrepared = (): Merge2WayResult => ({
-  identical: [createSentence('identical-1', 'This sentence is the same.')],
+  identical: [createNode('identical-1', 'This node is the same.')],
   similarPairs: [
     {
-      source: createSentence('source-1', 'Budget is $3000 per month.'),
-      target: createSentence('target-1', 'Budget is $3500 per month.'),
+      source: createNode('source-1', 'Budget is $3000 per month.'),
+      target: createNode('target-1', 'Budget is $3500 per month.'),
       wordDiff: [
         { type: 'unchanged', text: 'Budget is' },
         { type: 'removed', text: '$3000' },
@@ -51,8 +51,8 @@ const createMockPrepared = (): Merge2WayResult => ({
       resolution: undefined,
     },
     {
-      source: createSentence('source-2', 'Meeting on Monday.'),
-      target: createSentence('target-2', 'Meeting on Tuesday.'),
+      source: createNode('source-2', 'Meeting on Monday.'),
+      target: createNode('target-2', 'Meeting on Tuesday.'),
       wordDiff: [
         { type: 'unchanged', text: 'Meeting on' },
         { type: 'removed', text: 'Monday' },
@@ -61,8 +61,8 @@ const createMockPrepared = (): Merge2WayResult => ({
       resolution: undefined,
     },
   ],
-  onlyInSource: [{ sentence: createSentence('only-source-1', 'Only in source.'), keep: true }],
-  onlyInTarget: [{ sentence: createSentence('only-target-1', 'Only in target.'), keep: true }],
+  onlyInSource: [{ node: createNode('only-source-1', 'Only in source.'), keep: true }],
+  onlyInTarget: [{ node: createNode('only-target-1', 'Only in target.'), keep: true }],
 });
 
 // Helper to create tree-primary MergeResult
@@ -93,7 +93,7 @@ describe('MergeWorkspaceStore - Extended Resolutions', () => {
   const setupStore = () => {
     const treeMergeResult = createMockTreeMergeResult();
     useMergeWorkspaceStore.getState().setTreeMergeResult(treeMergeResult);
-    // Also set legacy prepared for getPreviewSentences
+    // Also set legacy prepared for getPreviewNodes
     useMergeWorkspaceStore.setState({
       prepared: createMockPrepared(),
       status: 'pending',
@@ -213,16 +213,16 @@ describe('MergeWorkspaceStore - Extended Resolutions', () => {
     });
   });
 
-  describe('getPreviewSentences', () => {
-    it('should include identical sentences', () => {
+  describe('getPreviewNodes', () => {
+    it('should include identical nodes', () => {
       setupStore();
 
-      const sentences = useMergeWorkspaceStore.getState().getPreviewSentences();
+      const nodes = useMergeWorkspaceStore.getState().getPreviewNodes();
 
-      expect(sentences.some((s) => s.id === 'identical-1')).toBe(true);
+      expect(nodes.some((s) => s.id === 'identical-1')).toBe(true);
     });
 
-    it('should include source sentence for "source" resolution', () => {
+    it('should include source node for "source" resolution', () => {
       setupStore();
 
       // Use legacy resolveConflict that sets prepared.similarPairs[0].resolution
@@ -235,13 +235,13 @@ describe('MergeWorkspaceStore - Extended Resolutions', () => {
         useMergeWorkspaceStore.setState({ prepared: updated });
       }
 
-      const sentences = useMergeWorkspaceStore.getState().getPreviewSentences();
+      const nodes = useMergeWorkspaceStore.getState().getPreviewNodes();
 
-      expect(sentences.some((s) => s.id === 'source-1')).toBe(true);
-      expect(sentences.some((s) => s.id === 'target-1')).toBe(false);
+      expect(nodes.some((s) => s.id === 'source-1')).toBe(true);
+      expect(nodes.some((s) => s.id === 'target-1')).toBe(false);
     });
 
-    it('should include both sentences for "both" resolution', () => {
+    it('should include both nodes for "both" resolution', () => {
       setupStore();
 
       // Set extended resolution for index 0
@@ -249,19 +249,19 @@ describe('MergeWorkspaceStore - Extended Resolutions', () => {
         extendedResolutions: { '0': { type: 'both' } },
       });
 
-      const sentences = useMergeWorkspaceStore.getState().getPreviewSentences();
+      const nodes = useMergeWorkspaceStore.getState().getPreviewNodes();
 
-      expect(sentences.some((s) => s.id === 'source-1')).toBe(true);
-      expect(sentences.some((s) => s.id === 'target-1')).toBe(true);
+      expect(nodes.some((s) => s.id === 'source-1')).toBe(true);
+      expect(nodes.some((s) => s.id === 'target-1')).toBe(true);
     });
 
-    it('should include kept source-only and target-only sentences', () => {
+    it('should include kept source-only and target-only nodes', () => {
       setupStore();
 
-      const sentences = useMergeWorkspaceStore.getState().getPreviewSentences();
+      const nodes = useMergeWorkspaceStore.getState().getPreviewNodes();
 
-      expect(sentences.some((s) => s.id === 'only-source-1')).toBe(true);
-      expect(sentences.some((s) => s.id === 'only-target-1')).toBe(true);
+      expect(nodes.some((s) => s.id === 'only-source-1')).toBe(true);
+      expect(nodes.some((s) => s.id === 'only-target-1')).toBe(true);
     });
   });
 

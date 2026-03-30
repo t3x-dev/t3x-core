@@ -5,7 +5,7 @@
  *
  * Endpoints:
  * - POST   /v1/leaves/:id/suggest-constraints  - Suggest constraints via LLM
- * - POST   /v1/leaves/:id/extract-sentences     - Extract sentences from leaf output
+ * - POST   /v1/leaves/:id/extract-nodes          - Extract nodes from leaf output
  * - POST   /v1/leaves/:id/learn-from-edits      - Learn constraints from user edits
  * - POST   /v1/leaves/:id/reverse-learn         - Learn constraints from failed assertions
  * - POST   /v1/leaves/:id/compare               - Compare models for leaf generation
@@ -77,15 +77,15 @@ const SuggestConstraintsResponse = z.object({
 });
 
 const ExtractFromLeafRequest = z.object({
-  max_sentences: z.number().int().min(1).max(50).optional().openapi({
-    description: 'Maximum number of sentences to extract (default: 20)',
+  max_nodes: z.number().int().min(1).max(50).optional().openapi({
+    description: 'Maximum number of nodes to extract (default: 20)',
   }),
 });
 
 const ExtractFromLeafResponse = z.object({
   success: z.literal(true),
   data: z.object({
-    sentences: z.array(
+    nodes: z.array(
       z.object({
         id: z.string(),
         text: z.string(),
@@ -202,7 +202,7 @@ const suggestConstraintsRoute = createRoute({
   tags: ['Leaves'],
   summary: 'Suggest constraints via LLM',
   description:
-    'Uses LLM to analyze commit sentences and suggest appropriate require/exclude constraints for the leaf type.',
+    'Uses LLM to analyze commit nodes and suggest appropriate require/exclude constraints for the leaf type.',
   request: {
     params: IdParamSchema,
     body: {
@@ -235,11 +235,11 @@ const suggestConstraintsRoute = createRoute({
 
 const extractFromLeafRoute = createRoute({
   method: 'post',
-  path: '/v1/leaves/{id}/extract-sentences',
+  path: '/v1/leaves/{id}/extract-nodes',
   tags: ['Leaves'],
-  summary: 'Extract sentences from leaf output',
+  summary: 'Extract nodes from leaf output',
   description:
-    "Uses LLM to extract structured knowledge sentences from a leaf's generated output. Enables the Leaf → Commit feedback loop.",
+    "Uses LLM to extract structured knowledge nodes from a leaf's generated output. Enables the Leaf → Commit feedback loop.",
   request: {
     params: IdParamSchema,
     body: {
@@ -253,7 +253,7 @@ const extractFromLeafRoute = createRoute({
   responses: {
     200: {
       content: { 'application/json': { schema: ExtractFromLeafResponse } },
-      description: 'Sentences extracted from leaf output',
+      description: 'Nodes extracted from leaf output',
     },
     400: {
       content: { 'application/json': { schema: ErrorResponseSchema } },
@@ -471,13 +471,13 @@ leavesMLRoutes.openapi(suggestConstraintsRoute, async (c) => {
   }
 });
 
-// POST /v1/leaves/:id/extract-sentences
+// POST /v1/leaves/:id/extract-nodes
 leavesMLRoutes.openapi(extractFromLeafRoute, async (c) => {
-  // Sentence extraction from leaf output is deprecated (replaced by frame-based extraction).
+  // Node extraction from leaf output is deprecated (replaced by tree-based extraction).
   return errorResponse(
     c,
     'DEPRECATED',
-    'Sentence extraction from leaf output has been replaced by frame-based extraction. Use /v1/extract/frames instead.'
+    'Node extraction from leaf output has been replaced by tree-based extraction. Use /v1/extract/trees instead.'
   );
 });
 

@@ -9,14 +9,14 @@
  * - We store SHA-256 hash for verification and a short prefix for display
  * - Revocation is a soft-delete (sets revoked_at)
  *
- * @see packages/core/src/types/v4/index.ts – ApiKey interface
+ * @see packages/core/src/types/index.ts – ApiKey interface
  */
 
 import { createHash, randomUUID } from 'node:crypto';
 import type { ApiKey } from '@t3x-dev/core';
 import { and, eq, isNull } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
-import { type ApiKeyRecord, apiKeys } from '../schema-frames';
+import { type ApiKeyRecord, apiKeys } from '../schema-trees';
 
 // ============================================================
 // Constants

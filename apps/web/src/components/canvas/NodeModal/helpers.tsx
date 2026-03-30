@@ -148,10 +148,10 @@ export function extractPhrasesFromText(
 
   const minWordLength = Math.floor(3 + keywordsThreshold * 3);
 
-  const sentences = text.split(/[.!?]+/).filter((s) => s.trim().length > 10);
-  return sentences.slice(0, 8).map((sentence, idx) => {
+  const nodes = text.split(/[.!?]+/).filter((s) => s.trim().length > 10);
+  return nodes.slice(0, 8).map((node, idx) => {
     const phraseId = `phrase-${sourceBoxId}-${idx}`;
-    const trimmedText = sentence.trim();
+    const trimmedText = node.trim();
     return {
       id: phraseId,
       text: trimmedText,

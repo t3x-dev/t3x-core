@@ -86,7 +86,7 @@ export async function restoreFromCfpack(db: AnyDB, cfpack: CfpackData): Promise<
     }
   }
 
-  // Warn about skipped V4 data (commits, leaves, pins are exported but not yet restored)
+  // Warn about skipped data (commits, leaves, pins are exported but not yet restored)
   const skippedTypes: string[] = [];
   if ((cfpack as any).commits_v4?.length)
     skippedTypes.push(`${(cfpack as any).commits_v4.length} commits_v4`);

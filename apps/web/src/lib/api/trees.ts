@@ -1,13 +1,14 @@
 /**
- * Tree Semantic Engine API — extraction, delta log, gate check
+ * Tree Semantic Engine API — extraction, yops log, gate check
  */
 
-import type { Delta, DeltaLogEntry, DeltaSource, SemanticContent } from '@t3x-dev/core';
+import type { YOpsLogEntry, YOpsSource, SemanticContent } from '@t3x-dev/core';
 import { API_V1, fetchWithTimeout, handleResponse } from './core';
 
 // ── Types ──
 
-export type { DeltaSource, DeltaLogEntry };
+export type { YOpsSource, YOpsLogEntry };
+
 
 export interface AdvisoryQuestion {
   id: string;
@@ -19,9 +20,9 @@ export interface AdvisoryQuestion {
 }
 
 export interface TreeExtractResult {
-  delta?: Delta;
+  delta?: unknown;
   snapshot?: SemanticContent;
-  delta_log_id?: string;
+  yops_log_id?: string;
   status: 'completed' | 'drift_detected' | 'skipped';
   drift?: { relation?: string; new_topic?: string; old_topic?: string };
   choices?: string[];
@@ -32,9 +33,9 @@ export interface TreeExtractResult {
 
 export interface TreeAnswerResult {
   applied: boolean;
-  delta?: Delta;
+  delta?: unknown;
   snapshot?: SemanticContent;
-  delta_log_id?: string;
+  yops_log_id?: string;
   new_project_id?: string;
   new_project_url?: string;
   errors?: string[];
@@ -88,7 +89,7 @@ export async function extractNodes(
   opts?: { topicId?: string; forceExtract?: boolean }
 ): Promise<TreeExtractResult> {
   const res = await fetchWithTimeout(
-    `${API_V1}/extract/frames`,
+    `${API_V1}/extract/trees`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -117,7 +118,7 @@ export async function answerTreeQuestion(
   driftContext?: { relation?: string; new_topic?: string }
 ): Promise<TreeAnswerResult> {
   const res = await fetchWithTimeout(
-    `${API_V1}/extract/frames/answer`,
+    `${API_V1}/extract/trees/answer`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -133,18 +134,21 @@ export async function answerTreeQuestion(
   return handleResponse<TreeAnswerResult>(res);
 }
 
-// ── Delta Log CRUD ──
+// ── YOps Log CRUD ──
 
-export async function listDeltas(
+export async function listYOpsLog(
   conversationId: string,
   topicId?: string
-): Promise<DeltaLogEntry[]> {
+): Promise<YOpsLogEntry[]> {
   const params = topicId ? `?topic_id=${encodeURIComponent(topicId)}` : '';
   const res = await fetchWithTimeout(
-    `${API_V1}/conversations/${encodeURIComponent(conversationId)}/deltas${params}`
+    `${API_V1}/conversations/${encodeURIComponent(conversationId)}/yops${params}`
   );
-  return handleResponse<DeltaLogEntry[]>(res);
+  return handleResponse<YOpsLogEntry[]>(res);
 }
+
+/** @deprecated Use listYOpsLog instead */
+export const listDeltas = listYOpsLog;
 
 export async function getSemanticDraft(
   conversationId: string,
@@ -157,34 +161,37 @@ export async function getSemanticDraft(
   return handleResponse<SemanticContent>(res);
 }
 
-export async function createDelta(
+export async function createYOpsEntry(
   conversationId: string,
-  delta: Delta,
-  source: DeltaSource
-): Promise<DeltaLogEntry> {
+  yops: unknown,
+  source: YOpsSource
+): Promise<YOpsLogEntry> {
   const res = await fetchWithTimeout(
-    `${API_V1}/conversations/${encodeURIComponent(conversationId)}/deltas`,
+    `${API_V1}/conversations/${encodeURIComponent(conversationId)}/yops`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ source, delta }),
+      body: JSON.stringify({ source, yops }),
     }
   );
-  return handleResponse<DeltaLogEntry>(res);
+  return handleResponse<YOpsLogEntry>(res);
 }
 
-export async function deleteDelta(conversationId: string, deltaId: string): Promise<void> {
+
+export async function deleteYOpsEntry(conversationId: string, yopsId: string): Promise<void> {
   const res = await fetchWithTimeout(
-    `${API_V1}/conversations/${encodeURIComponent(conversationId)}/deltas/${encodeURIComponent(deltaId)}`,
+    `${API_V1}/conversations/${encodeURIComponent(conversationId)}/yops/${encodeURIComponent(yopsId)}`,
     { method: 'DELETE' }
   );
   await handleResponse<unknown>(res);
 }
 
+
 // ── Compression ──
 
 export interface CompressResult {
-  delta: Delta;
+  delta: unknown;
+  snapshot?: import('@t3x-dev/core').SemanticContent;
   metadata: {
     compress_summary: string;
     trees_before: number;
@@ -193,7 +200,7 @@ export interface CompressResult {
     removed_count: number;
     removed_tree_ids: string[];
   };
-  delta_log_id: string;
+  yops_log_id: string;
 }
 
 export async function compressNodes(conversationId: string): Promise<CompressResult> {

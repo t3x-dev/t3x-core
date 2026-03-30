@@ -4,7 +4,7 @@
  * DraftQuickSheet - Sheet (drawer) for quick draft editing from canvas
  *
  * RFC §11 Q1: Two-level entry — Sheet quick mode + full-screen deep mode.
- * Shows simplified Draft view: sentence list with toggles, constraint count,
+ * Shows simplified Draft view: node list with toggles, constraint count,
  * commit button, and "Open Full Draft" link.
  */
 
@@ -24,7 +24,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { useTerminology } from '@/hooks/useTerminology';
-import type { DraftSentence, WorkbenchDraft } from '@/lib/api';
+import type { DraftNode, WorkbenchDraft } from '@/lib/api';
 import * as api from '@/lib/api';
 import { useCanvasStore } from '@/store/canvasStore';
 
@@ -55,18 +55,18 @@ export function DraftQuickSheet({ open, onClose, draftId, projectId }: DraftQuic
       .finally(() => setLoading(false));
   }, [open, draftId]);
 
-  const toggleSentence = useCallback(
-    async (sentenceId: string) => {
+  const toggleNode = useCallback(
+    async (nodeId: string) => {
       if (!draft || savingRef.current || draft.status === 'auto') return;
-      const sentences = draft.sentences.map((s) =>
-        s.id === sentenceId ? { ...s, included: !s.included } : s
+      const nodes = draft.nodes.map((s) =>
+        s.id === nodeId ? { ...s, included: !s.included } : s
       );
-      const updated = { ...draft, sentences };
+      const updated = { ...draft, nodes };
       setDraft(updated);
       // Save in background with guard against rapid toggles
       savingRef.current = true;
       api
-        .updateWorkbenchDraft(draftId, { sentences, if_revision: draft.revision })
+        .updateWorkbenchDraft(draftId, { nodes, if_revision: draft.revision })
         .catch(() => {
           // Revert on error
           setDraft(draft);
@@ -126,8 +126,8 @@ export function DraftQuickSheet({ open, onClose, draftId, projectId }: DraftQuic
     router.push(`/project/${projectId}/draft/${draftId}`);
   }, [router, projectId, draftId, onClose]);
 
-  const includedCount = draft?.sentences.filter((s) => s.included).length ?? 0;
-  const totalCount = draft?.sentences.length ?? 0;
+  const includedCount = draft?.nodes.filter((s) => s.included).length ?? 0;
+  const totalCount = draft?.nodes.length ?? 0;
 
   return (
     <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
@@ -138,7 +138,7 @@ export function DraftQuickSheet({ open, onClose, draftId, projectId }: DraftQuic
             <SheetTitle className="text-base">{draft?.title || t('draft')}</SheetTitle>
           </div>
           <SheetDescription>
-            {includedCount}/{totalCount} sentences included
+            {includedCount}/{totalCount} nodes included
             {(draft?.constraints.length ?? 0) > 0 && (
               <span> · {draft?.constraints.length ?? 0} constraints</span>
             )}
@@ -175,18 +175,18 @@ export function DraftQuickSheet({ open, onClose, draftId, projectId }: DraftQuic
 
           {!loading && draft && (
             <div className="space-y-1.5">
-              {[...draft.sentences]
+              {[...draft.nodes]
                 .sort((a, b) => a.position - b.position)
-                .map((sentence) => (
-                  <QuickSentenceRow
-                    key={sentence.id}
-                    sentence={sentence}
-                    onToggle={() => toggleSentence(sentence.id)}
+                .map((node) => (
+                  <QuickNodeRow
+                    key={node.id}
+                    node={node}
+                    onToggle={() => toggleNode(node.id)}
                   />
                 ))}
-              {draft.sentences.length === 0 && (
+              {draft.nodes.length === 0 && (
                 <p className="text-sm text-muted-foreground py-4 text-center">
-                  No sentences. Open the full draft to add content.
+                  No nodes. Open the full draft to add content.
                 </p>
               )}
             </div>
@@ -216,27 +216,27 @@ export function DraftQuickSheet({ open, onClose, draftId, projectId }: DraftQuic
   );
 }
 
-function QuickSentenceRow({
-  sentence,
+function QuickNodeRow({
+  node,
   onToggle,
 }: {
-  sentence: DraftSentence;
+  node: DraftNode;
   onToggle: () => void;
 }) {
   return (
     <div
       className={`flex items-start gap-2.5 rounded-lg border px-3 py-2 transition-colors ${
-        sentence.included
+        node.included
           ? 'border-border bg-[var(--surface-card)]'
           : 'border-border/50 bg-muted/30 opacity-60'
       }`}
     >
-      <Checkbox checked={sentence.included} onCheckedChange={onToggle} className="mt-0.5" />
+      <Checkbox checked={node.included} onCheckedChange={onToggle} className="mt-0.5" />
       <div className="flex-1 min-w-0">
-        <p className="text-sm leading-relaxed line-clamp-2">{sentence.text}</p>
-        {sentence.source?.conversation_title && (
+        <p className="text-sm leading-relaxed line-clamp-2">{node.text}</p>
+        {node.source?.conversation_title && (
           <Badge variant="secondary" className="mt-1 text-xs">
-            {sentence.source.conversation_title}
+            {node.source.conversation_title}
           </Badge>
         )}
       </div>

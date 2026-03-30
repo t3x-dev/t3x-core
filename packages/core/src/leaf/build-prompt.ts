@@ -1,7 +1,7 @@
 /**
  * Leaf Prompt Builder
  *
- * Constructs LLM prompts from commit sentences and leaf constraints.
+ * Constructs LLM prompts from commit nodes and leaf constraints.
  * Supports both legacy string concatenation and template-based rendering.
  *
  * Owner: GEN-* track
@@ -9,7 +9,7 @@
  */
 
 import { escapeConstraintValue } from '../llm/sanitize';
-import { serializeFramesForPrompt } from '../semantic/serialize';
+import { serializeForPrompt } from '../semantic/serialize';
 import type { AnyLeafType, Constraint } from '../types';
 import type { BuildPromptOptions, BuiltPrompt, LeafTemplate } from './types';
 
@@ -141,7 +141,7 @@ export function buildLeafPrompt(options: BuildPromptOptions): BuiltPrompt {
   const { knowledge, leaf, additionalInstructions } = options;
 
   // Serialize frames to text
-  const knowledgeText = serializeFramesForPrompt(knowledge);
+  const knowledgeText = serializeForPrompt(knowledge);
 
   // Format constraints
   const { requires, excludes } = formatConstraints(leaf.constraints);

@@ -17,7 +17,7 @@ import {
 import { insertProject } from '../queries/projects';
 import { createTestDB, testData } from './setup';
 
-function makeSentences(texts: string[]): unknown[] {
+function makeNodes(texts: string[]): unknown[] {
   return texts.map((text, i) => ({
     id: `ds_auto_${i}`,
     text,
@@ -51,13 +51,13 @@ describe('Auto-Draft Storage (Upgrade #7)', () => {
         project_id: projectId,
         conversation_id: 'conv_test_001',
         title: 'Auto-draft from conversation',
-        sentences: makeSentences(['User prefers luxury hotels', 'Budget is $3000']),
+        nodes: makeNodes(['User prefers luxury hotels', 'Budget is $3000']),
       });
 
       expect(draft.status).toBe('auto');
       expect(draft.goal).toBe('auto:conv_test_001');
-      expect(draft.sentences).toHaveLength(2);
-      expect(draft.sentences[0].text).toBe('User prefers luxury hotels');
+      expect(draft.nodes).toHaveLength(2);
+      expect(draft.nodes[0].text).toBe('User prefers luxury hotels');
     });
 
     it('stores conversation_id in goal field', async () => {
@@ -65,7 +65,7 @@ describe('Auto-Draft Storage (Upgrade #7)', () => {
         project_id: projectId,
         conversation_id: 'conv_test_002',
         title: 'Another auto-draft',
-        sentences: makeSentences(['Test sentence']),
+        nodes: makeNodes(['Test sentence']),
       });
 
       expect(draft.goal).toBe('auto:conv_test_002');
@@ -76,7 +76,7 @@ describe('Auto-Draft Storage (Upgrade #7)', () => {
         project_id: projectId,
         conversation_id: 'conv_test_003',
         title: 'Draft with parent',
-        sentences: makeSentences(['Sentence']),
+        nodes: makeNodes(['Sentence']),
         parent_commit_hash: 'sha256:fakehash',
       });
 
@@ -121,7 +121,7 @@ describe('Auto-Draft Storage (Upgrade #7)', () => {
         project_id: projectId,
         conversation_id: 'conv_promote_001',
         title: 'Promote me',
-        sentences: makeSentences(['Promotable sentence']),
+        nodes: makeNodes(['Promotable sentence']),
       });
 
       expect(autoDraft.status).toBe('auto');
@@ -129,7 +129,7 @@ describe('Auto-Draft Storage (Upgrade #7)', () => {
       const promoted = await promoteDraft(db, autoDraft.id);
 
       expect(promoted.status).toBe('editing');
-      expect(promoted.sentences).toHaveLength(1);
+      expect(promoted.nodes).toHaveLength(1);
     });
 
     it('throws for non-existent draft', async () => {
@@ -145,21 +145,21 @@ describe('Auto-Draft Storage (Upgrade #7)', () => {
       await expect(promoteDraft(db, editingDraft.id)).rejects.toThrow('Cannot promote');
     });
 
-    it('preserves sentences after promotion', async () => {
+    it('preserves nodes after promotion', async () => {
       const autoDraft = await insertAutoDraft(db, {
         project_id: projectId,
         conversation_id: 'conv_promote_002',
         title: 'Check sentences',
-        sentences: makeSentences(['Sentence A', 'Sentence B']),
+        nodes: makeNodes(['Sentence A', 'Sentence B']),
       });
 
       const promoted = await promoteDraft(db, autoDraft.id);
       const fetched = await findDraftById(db, promoted.id);
 
       expect(fetched).not.toBeNull();
-      expect(fetched!.sentences).toHaveLength(2);
-      expect(fetched!.sentences[0].text).toBe('Sentence A');
-      expect(fetched!.sentences[1].text).toBe('Sentence B');
+      expect(fetched!.nodes).toHaveLength(2);
+      expect(fetched!.nodes[0].text).toBe('Sentence A');
+      expect(fetched!.nodes[1].text).toBe('Sentence B');
     });
   });
 });

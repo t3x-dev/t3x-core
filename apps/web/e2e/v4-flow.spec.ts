@@ -79,9 +79,9 @@ test.describe('V4 WebUI Flow', () => {
   });
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Scenario 2: Commit detail shows sentences (not constraints)
+  // Scenario 2: Commit detail shows nodes (not constraints)
   // ─────────────────────────────────────────────────────────────────────────
-  test('2. Commit detail shows sentences (not constraints)', async ({ page }) => {
+  test('2. Commit detail shows nodes (not constraints)', async ({ page }) => {
     await page.goto(`/project/${projectId}?view=canvas`);
 
     // Wait for canvas
@@ -99,17 +99,17 @@ test.describe('V4 WebUI Flow', () => {
     const detailPanel = page.locator('aside, [role="dialog"]').first();
     await expect(detailPanel).toBeVisible({ timeout: 10000 });
 
-    // Check for sentences display
-    const sentenceTexts = [
+    // Check for nodes display
+    const nodeTexts = [
       'User prefers dark mode',
       'User speaks English',
       'User timezone is UTC+8',
     ];
 
-    for (const text of sentenceTexts) {
-      const sentence = page.locator(`text=${text}`);
-      // Soft check - sentences may be in expandable sections
-      await sentence.isVisible();
+    for (const text of nodeTexts) {
+      const node = page.locator(`text=${text}`);
+      // Soft check - nodes may be in expandable sections
+      await node.isVisible();
     }
 
     // Verify NO constraints section at commit level (V4 feature)

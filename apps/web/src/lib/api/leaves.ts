@@ -9,10 +9,10 @@ import type {
   AnchorType,
   ApiCommitAnchors,
   ApiConfirmedAnchor,
-  ApiSentenceWithAnchors,
+  ApiNodeWithAnchors,
   CommitAnchors,
   ConfirmedAnchor,
-  SentenceWithAnchors,
+  NodeWithAnchors,
 } from './types';
 
 // ============================================================================
@@ -28,7 +28,7 @@ export type LeafType =
   | 'slack'
   | 'deploy_agent';
 
-export interface ConstraintSourceFrame {
+export interface ConstraintSourceNode {
   frame_type: string;
   slot_key?: string;
 }
@@ -39,10 +39,8 @@ export interface RequireConstraint {
   match_mode: 'exact' | 'semantic';
   value: string;
   description?: string;
-  /** @deprecated Use source_node for tree-based commits */
-  source_sentence_id?: string;
   /** Link to source  node + slot (tree-based traceability) */
-  source_node?: ConstraintSourceFrame;
+  source_node?: ConstraintSourceNode;
 }
 
 export interface ExcludeConstraint {
@@ -53,7 +51,7 @@ export interface ExcludeConstraint {
   description?: string;
   reason?: string;
   /** Link to source  node + slot (tree-based traceability) */
-  source_node?: ConstraintSourceFrame;
+  source_node?: ConstraintSourceNode;
 }
 
 export type Constraint = RequireConstraint | ExcludeConstraint;
@@ -491,17 +489,17 @@ export function parseApiConfirmedAnchor(api: ApiConfirmedAnchor): ConfirmedAncho
 }
 
 /**
- * Convert API sentence with anchors (snake_case) to internal format (camelCase)
- * Computes globalStart/globalEnd for each anchor using sentence.start_char offset
+ * Convert API node with anchors (snake_case) to internal format (camelCase)
+ * Computes globalStart/globalEnd for each anchor using node.start_char offset
  * If start_char is missing/invalid, anchors will only have their original positions (no global computation)
  */
-export function parseApiSentenceWithAnchors(api: ApiSentenceWithAnchors): SentenceWithAnchors {
-  const sentenceStartChar = api.start_char;
+export function parseApiNodeWithAnchors(api: ApiNodeWithAnchors): NodeWithAnchors {
+  const nodeStartChar = api.start_char;
   const hasValidStartChar =
-    typeof sentenceStartChar === 'number' && !Number.isNaN(sentenceStartChar);
+    typeof nodeStartChar === 'number' && !Number.isNaN(nodeStartChar);
 
   return {
-    sentenceId: api.sentence_id,
+    nodeId: api.node_id,
     text: api.text,
     startChar: api.start_char,
     endChar: api.end_char,
@@ -513,8 +511,8 @@ export function parseApiSentenceWithAnchors(api: ApiSentenceWithAnchors): Senten
         if (hasValidStartChar) {
           return {
             ...parsed,
-            globalStart: parsed.globalStart ?? sentenceStartChar + parsed.start,
-            globalEnd: parsed.globalEnd ?? sentenceStartChar + parsed.end,
+            globalStart: parsed.globalStart ?? nodeStartChar + parsed.start,
+            globalEnd: parsed.globalEnd ?? nodeStartChar + parsed.end,
           };
         }
         return parsed;
@@ -530,7 +528,7 @@ export function parseApiCommitAnchors(api: ApiCommitAnchors | null): CommitAncho
   if (!api) return null;
   return {
     inputTextHash: api.input_text_hash,
-    sentences: api.sentences?.map(parseApiSentenceWithAnchors) ?? [],
+    nodes: api.nodes?.map(parseApiNodeWithAnchors) ?? [],
   };
 }
 

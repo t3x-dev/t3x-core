@@ -22,21 +22,21 @@ test.describe('DiffDisplayView Real UI Test', () => {
     projectId = id;
 
     // Create 2 chained commits so diff has something to compare
-    const sentences1 = [
+    const nodes1 = [
       { id: `s_diff_${prefix}_1`, text: 'User prefers dark mode' },
       { id: `s_diff_${prefix}_2`, text: 'User speaks English' },
     ];
-    hash1 = await createTestCommit(request, projectId, sentences1, {
+    hash1 = await createTestCommit(request, projectId, nodes1, {
       branch: 'main',
       message: 'Base commit for diff',
     });
 
-    const sentences2 = [
+    const nodes2 = [
       { id: `s_diff_${prefix}_1`, text: 'User prefers dark mode' },
       { id: `s_diff_${prefix}_2`, text: 'User speaks English fluently' },
       { id: `s_diff_${prefix}_3`, text: 'User is a developer' },
     ];
-    hash2 = await createTestCommit(request, projectId, sentences2, {
+    hash2 = await createTestCommit(request, projectId, nodes2, {
       branch: 'main',
       message: 'Updated commit for diff',
       parents: [hash1],

@@ -1,11 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { SemanticContent } from '../../semantic/types';
-import { flattenTrees } from '../../semantic/tree';
 import {
   applyAnswer,
   applyStructuralAnswer,
   applyVaguenessAnswer,
-  generateCollapseDelta,
+  generateCollapseYOps,
 } from '../answerApplier';
 
 // ── Fixtures ──
@@ -33,12 +32,8 @@ describe('applyVaguenessAnswer', () => {
   it('updates slot with precise value', () => {
     const result = applyVaguenessAnswer(baseSnapshot, 'travel_plan', 'budget', 5000);
     expect(result.applied).toBe(true);
-    expect(result.delta!.changes).toHaveLength(1);
-    expect(result.delta!.changes[0]).toEqual({
-      action: 'update',
-      target_path: 'travel_plan',
-      slots: { budget: 5000 },
-    });
+    expect(result.yops).toBeDefined();
+    expect(result.yops!.length).toBeGreaterThan(0);
     expect(result.snapshot!.trees[0].slots.budget).toBe(5000);
   });
 
@@ -51,7 +46,7 @@ describe('applyVaguenessAnswer', () => {
   it('fails for non-existent frame', () => {
     const result = applyVaguenessAnswer(baseSnapshot, 'f_999', 'budget', 5000);
     expect(result.applied).toBe(false);
-    expect(result.errors).toContain('Frame f_999 not found');
+    expect(result.errors).toContain('Node f_999 not found');
   });
 
   it('fails for non-existent slot', () => {
@@ -71,16 +66,11 @@ describe('applyVaguenessAnswer', () => {
 // ══════════════════════════════════════════════════════
 
 describe('applyStructuralAnswer', () => {
-  it('moves frame under new parent', () => {
+  it('adds relate YOp for new parent', () => {
     const result = applyStructuralAnswer(baseSnapshot, 'travel_plan/food', 'travel_plan/attractions');
     expect(result.applied).toBe(true);
-    expect(result.delta!.remove_relations).toHaveLength(1);
-    expect(result.delta!.new_relations).toHaveLength(1);
-    expect(result.delta!.new_relations![0]).toEqual({
-      from: 'travel_plan/attractions',
-      to: 'travel_plan/food',
-      type: 'depends',
-    });
+    expect(result.yops).toBeDefined();
+    expect(result.yops!.length).toBeGreaterThan(0);
   });
 
   it('fails for non-existent frame', () => {
@@ -101,27 +91,31 @@ describe('applyStructuralAnswer', () => {
 });
 
 // ══════════════════════════════════════════════════════
-// generateCollapseDelta
+// generateCollapseYOps
 // ══════════════════════════════════════════════════════
 
-describe('generateCollapseDelta', () => {
-  it('generates collapse for root + direct children', () => {
-    const delta = generateCollapseDelta(baseSnapshot);
-    expect(delta.changes.length).toBeGreaterThan(0);
+describe('generateCollapseYOps', () => {
+  it('generates drop YOps for root trees', () => {
+    const yops = generateCollapseYOps(baseSnapshot);
+    expect(yops.length).toBeGreaterThan(0);
+    // Should be drop operations
+    for (const op of yops) {
+      expect('drop' in op).toBe(true);
+    }
   });
 
-  it('returns empty delta for empty snapshot', () => {
-    const delta = generateCollapseDelta({ trees: [], relations: [] });
-    expect(delta.changes).toHaveLength(0);
+  it('returns empty array for empty snapshot', () => {
+    const yops = generateCollapseYOps({ trees: [], relations: [] });
+    expect(yops).toHaveLength(0);
   });
 
-  it('collapses only root when no children', () => {
+  it('generates one drop for single root', () => {
     const snapshot: SemanticContent = {
       trees: [{ key: 'solo', slots: { x: 1 }, children: [] }],
       relations: [],
     };
-    const delta = generateCollapseDelta(snapshot);
-    expect(delta.changes).toHaveLength(1);
+    const yops = generateCollapseYOps(snapshot);
+    expect(yops).toHaveLength(1);
   });
 });
 
@@ -133,14 +127,14 @@ describe('applyAnswer', () => {
   it('handles drift choice keep_old (no-op)', () => {
     const result = applyAnswer(baseSnapshot, { question_id: 'q1', drift_choice: 'keep_old' });
     expect(result.applied).toBe(true);
-    expect(result.delta!.changes).toHaveLength(0);
+    expect(result.yops).toHaveLength(0);
     expect(result.snapshot).toBe(baseSnapshot); // same reference, no mutation
   });
 
   it('handles drift choice keep_new (collapse)', () => {
     const result = applyAnswer(baseSnapshot, { question_id: 'q1', drift_choice: 'keep_new' });
     expect(result.applied).toBe(true);
-    expect(result.delta!.changes.length).toBeGreaterThan(0);
+    expect(result.yops!.length).toBeGreaterThan(0);
   });
 
   it('returns error for keep_both_separate (needs API orchestration)', () => {

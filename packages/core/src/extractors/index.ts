@@ -26,22 +26,24 @@ export {
   type NodeWithSignals,
 } from './compressPrompt';
 export { createMeaningPipeline } from './createMeaningPipeline';
-export { type ParseResult as DeltaParseResult, parseDelta } from './deltaParser';
+// extractionPrompt helpers — still used by yopsPrompt.ts internally
 export {
-  buildExtractionPrompt,
   type ExtractionPromptResult,
   granularitySegment,
   quoteLengthSegment,
   tier3Segment,
   updateStanceSegment,
 } from './extractionPrompt';
+// YOps Prompt Builder (YAML operations format for incremental extraction)
+export { buildYOpsPrompt } from './yopsPrompt';
+// YOps Parser
+export { parseYOpsOutput, type YOpsParseResult } from './yopsParser';
 // Extraction (Phase 2)
 export {
   type ExtractionInput,
   type ExtractionResult,
   type ExtractionTurn,
   Extractor,
-  type SlotQuotesMap,
 } from './extractor';
 // Compression
 export {
@@ -61,7 +63,7 @@ export {
   type PipelineResult,
   type QualityMetrics,
 } from './meaningPipeline';
-// Relation Extraction (Inter-sentence Relations)
+// Relation Extraction (Inter-node Relations)
 export { createRelationExtractor, RelationExtractor } from './relationExtractor';
 export { parseRelationResponse, type RelationItem, RelationParseError } from './relationParser';
 export { buildRelationPrompt } from './relationPrompt';

@@ -16,7 +16,7 @@ interface MergeSimilarPairCardProps {
 }
 
 /**
- * Card for a similar sentence pair requiring user decision
+ * Card for a similar node pair requiring user decision
  * 相似句子对卡片，需要用户决策
  *
  * Shows:

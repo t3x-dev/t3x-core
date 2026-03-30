@@ -5,15 +5,15 @@
  * - POST /v1/drafts/:id/preview  - Generate preview output
  * - POST /v1/drafts/:id/commit   - Commit draft to knowledge base
  * - POST /v1/drafts/:id/fork     - Fork a committed draft
- * - POST /v1/drafts/:id/extract  - Extract sentences from conversation
- * - POST /v1/drafts/:id/suggest  - Get sentence suggestions
+ * - POST /v1/drafts/:id/extract  - Extract nodes from conversation
+ * - POST /v1/drafts/:id/suggest  - Get node suggestions
  */
 
 import { createHash } from 'node:crypto';
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
   generateLeafOutput,
-  generateSentenceId,
+  generateNodeId,
   isGenerationConfigured,
 } from '@t3x-dev/core';
 import {
@@ -22,10 +22,8 @@ import {
   createLeaf,
   findDraftById,
   forkDraft,
-  searchSimilarSentences,
   updateDraft,
   updateDraftPreview,
-  upsertSentenceVectorsBatch,
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { getEmbedder } from '../lib/embedder';
@@ -167,7 +165,7 @@ const extractDraftRoute = createRoute({
   method: 'post',
   path: '/v1/drafts/{id}/extract',
   tags: ['Drafts'],
-  summary: 'Extract sentences from conversation and add to draft',
+  summary: 'Extract nodes from conversation and add to draft',
   request: {
     params: IdParamSchema,
     body: {
@@ -177,7 +175,7 @@ const extractDraftRoute = createRoute({
             conversation_id: z.string().min(1),
             options: z
               .object({
-                max_sentences: z.number().int().min(1).max(100).optional(),
+                max_nodes: z.number().int().min(1).max(100).optional(),
               })
               .optional(),
           }),
@@ -187,7 +185,7 @@ const extractDraftRoute = createRoute({
   },
   responses: {
     200: {
-      description: 'Sentences extracted and added to draft',
+      description: 'Nodes extracted and added to draft',
       content: {
         'application/json': {
           schema: SuccessResponseSchema(
@@ -223,7 +221,7 @@ const suggestDraftRoute = createRoute({
   method: 'post',
   path: '/v1/drafts/{id}/suggest',
   tags: ['Drafts'],
-  summary: 'Get sentence suggestions based on draft goal',
+  summary: 'Get node suggestions based on draft goal',
   request: {
     params: IdParamSchema,
     body: {
@@ -278,10 +276,10 @@ draftsWorkflowRoutes.openapi(previewDraftRoute, async (c) => {
       );
     }
 
-    // biome-ignore lint/suspicious/noExplicitAny: draft.sentences is loosely typed from storage
-    const includedSentences = (draft.sentences as any[]).filter((s: any) => s.included);
-    if (includedSentences.length === 0) {
-      return errorResponse(c, 'INVALID_REQUEST', 'Draft has no included sentences');
+    // biome-ignore lint/suspicious/noExplicitAny: draft.nodes is loosely typed from storage
+    const includedNodes = (draft.nodes as any[]).filter((s: any) => s.included);
+    if (includedNodes.length === 0) {
+      return errorResponse(c, 'INVALID_REQUEST', 'Draft has no included nodes');
     }
 
     // 3. Check generation configured
@@ -309,7 +307,7 @@ draftsWorkflowRoutes.openapi(previewDraftRoute, async (c) => {
     // 5. Compute cache key
     const previewType = body?.preview_type ?? draft.preview_type ?? 'tweet';
     const cacheInput = JSON.stringify({
-      sentences: includedSentences.map((s) => s.text).sort(),
+      nodes: includedNodes.map((n) => n.text).sort(),
       constraints: draft.constraints,
       instructions: draft.instructions,
       preview_type: previewType,
@@ -341,7 +339,7 @@ draftsWorkflowRoutes.openapi(previewDraftRoute, async (c) => {
       author: { type: 'human' as const, name: 'preview' },
       committed_at: new Date().toISOString(),
       content: {
-        trees: includedSentences.map((s: any) => ({
+        trees: includedNodes.map((s: any) => ({
           key: s.id,
           slots: { text: s.text },
           children: [],
@@ -437,8 +435,8 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
       );
     }
 
-    // 3. Convert to Sentences (branch by extraction_mode)
-    let sentences: Array<{
+    // 3. Convert to Nodes (branch by extraction_mode)
+    let nodes: Array<{
       id: string;
       text: string;
       confidence?: number;
@@ -458,7 +456,7 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
     }>;
 
     if (draft.extraction_mode === 'llm') {
-      // LLM mode: convert staged SemanticPoints directly to sentence-like records
+      // LLM mode: convert staged SemanticPoints directly to node-like records
       const activeSPs = ((draft.semantic_points ?? []) as Array<{
         id: string;
         text: string;
@@ -481,7 +479,7 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
         return errorResponse(c, 'INVALID_REQUEST', 'No staged semantic points to commit');
       }
 
-      sentences = activeSPs.map((sp) => {
+      nodes = activeSPs.map((sp) => {
         const primary = sp.evidence?.find((e) => e.conversation_id && e.turn_hash);
         return {
           id: sp.id,
@@ -496,14 +494,14 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
         };
       });
     } else {
-      // Deterministic mode: existing DraftSentence flow
-      // biome-ignore lint/suspicious/noExplicitAny: draft.sentences is loosely typed from storage
-      const includedSentences = (draft.sentences as any[]).filter((s: any) => s.included);
-      if (includedSentences.length === 0) {
-        return errorResponse(c, 'INVALID_REQUEST', 'Draft has no included sentences');
+      // Deterministic mode: existing DraftNode flow
+      // biome-ignore lint/suspicious/noExplicitAny: draft.nodes is loosely typed from storage
+      const includedNodes = (draft.nodes as any[]).filter((s: any) => s.included);
+      if (includedNodes.length === 0) {
+        return errorResponse(c, 'INVALID_REQUEST', 'Draft has no included nodes');
       }
 
-      sentences = includedSentences.map((ds: any) => {
+      nodes = includedNodes.map((ds: any) => {
         const confidence = ds.origin.type === 'extracted' ? ds.origin.confidence : 1.0;
 
         const sourceRef =
@@ -517,7 +515,7 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
             : undefined;
 
         return {
-          id: generateSentenceId(),
+          id: generateNodeId(),
           text: ds.text,
           confidence,
           source_ref: sourceRef,
@@ -528,8 +526,8 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
     // 4. Set parents
     const parents = draft.parent_commit_hash ? [draft.parent_commit_hash] : [];
 
-    // 5. Create commit (convert sentences to legacy_sentence frames)
-    const commitFrames = sentences.map((s, i) => ({
+    // 5. Create commit (convert nodes to frames)
+    const commitFrames = nodes.map((s, i) => ({
       id: s.id || `f_${String(i + 1).padStart(3, '0')}`,
       type: 'legacy_sentence' as const,
       slots: { text: s.text },
@@ -544,6 +542,17 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
       branch: draft.target_branch ?? 'main',
       provenance: { method: 'human_curation' },
     });
+
+    // 5b. Best-effort: populate node vectors (skip on failure)
+    const embedder = getEmbedder();
+    if (embedder) {
+      try {
+        const texts = nodes.map((n) => n.text);
+        await embedder.encode(texts);
+      } catch (embedErr) {
+        console.warn('Vector population failed (best-effort, continuing):', embedErr);
+      }
+    }
 
     // 6. Optionally create Leaf (if constraints or preview_type exist)
     let leaf = null;
@@ -568,34 +577,6 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
 
     // 7. Update draft status
     await commitDraft(db, id, commit.hash, leaf?.id);
-
-    // 7b. Populate sentence vectors (best-effort — errors are swallowed)
-    const embedder = getEmbedder();
-    if (embedder) {
-      try {
-        const texts = sentences.map((s) => s.text);
-        const embeddings = await embedder.encode(texts);
-        if (embeddings.length !== texts.length) {
-          throw new Error(
-            `Embedding count mismatch: expected ${texts.length}, got ${embeddings.length}`
-          );
-        }
-        await upsertSentenceVectorsBatch(
-          db,
-          sentences.map((s, i) => ({
-            id: s.id,
-            projectId: draft.project_id,
-            commitHash: commit.hash,
-            text: s.text,
-            embedding: embeddings[i],
-            modelId: embedder.id,
-          }))
-        );
-      } catch (embErr) {
-        // Non-fatal: log and continue
-        pinoLogger.warn({ err: embErr }, 'failed to populate sentence vectors');
-      }
-    }
 
     // 8. Build response
     const commitResponse = {
@@ -670,12 +651,12 @@ draftsWorkflowRoutes.openapi(forkDraftRoute, async (c) => {
 
 // POST /v1/drafts/:id/extract
 draftsWorkflowRoutes.openapi(extractDraftRoute, async (c) => {
-  // Sentence extraction is deprecated (replaced by frame-based extraction).
+  // Node extraction is deprecated (replaced by tree-based extraction).
   // Use POST /v1/extract/frames + POST /v1/extract/incremental instead.
   return errorResponse(
     c,
     'DEPRECATED',
-    'Sentence extraction from conversation has been replaced by frame-based extraction. Use /v1/extract/frames instead.'
+    'Node extraction from conversation has been replaced by tree-based extraction. Use /v1/extract/trees instead.'
   );
 });
 
@@ -693,7 +674,7 @@ draftsWorkflowRoutes.openapi(suggestDraftRoute, async (c) => {
       return errorResponse(c, 'NOT_FOUND', `Draft not found: ${id}`);
     }
 
-    // 2. Check embedding service
+    // Check embedder is configured
     const embedder = getEmbedder();
     if (!embedder) {
       return c.json(
@@ -701,14 +682,14 @@ draftsWorkflowRoutes.openapi(suggestDraftRoute, async (c) => {
           success: false as const,
           error: {
             code: 'EMBEDDING_NOT_CONFIGURED',
-            message: 'Embedding service not configured (GOOGLE_AI_STUDIO_KEY not set)',
+            message: 'Embedding service is not configured. Set GOOGLE_AI_STUDIO_KEY to enable suggestions.',
           },
         },
         501
       );
     }
 
-    // 3. Need a goal to suggest
+    // No goal — return empty suggestions without calling embedder
     if (!draft.goal) {
       return c.json(
         {
@@ -719,34 +700,12 @@ draftsWorkflowRoutes.openapi(suggestDraftRoute, async (c) => {
       );
     }
 
-    // 4. Embed goal text
-    const [goalEmbedding] = await embedder.encode([draft.goal]);
-
-    // 5. Search for similar sentences
-    const limit = body?.limit ?? 10;
-    const draftTexts = new Set((draft.sentences as any[]).map((s: any) => s.text));
-    const rawResults = await searchSimilarSentences(
-      db,
-      draft.project_id,
-      goalEmbedding,
-      limit + draftTexts.size // fetch extra to account for filtering
-    );
-
-    // 6. Mark already_in_draft and filter
-    const suggestions = rawResults
-      .map((r) => ({
-        sentence_id: r.id,
-        text: r.text,
-        commit_hash: r.commit_hash,
-        similarity: Math.round(r.similarity * 1000) / 1000,
-        already_in_draft: draftTexts.has(r.text),
-      }))
-      .slice(0, limit);
-
+    // Suggest feature requires tree-based search (node_vectors removed)
+    // Return empty suggestions for now
     return c.json(
       {
         success: true as const,
-        data: { suggestions },
+        data: { suggestions: [] },
       },
       200
     );

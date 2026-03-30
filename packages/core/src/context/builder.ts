@@ -1,5 +1,5 @@
 /**
- * Context Builder for T3X V4 Architecture
+ * Context Builder for T3X
  *
  * Constructs LLM memory from commits + pins.
  * This is the core of the new memory system.
@@ -16,7 +16,7 @@ import type {
   Pin,
 } from '../types';
 import type { SemanticContent } from '../semantic/types';
-import { serializeFramesForPrompt } from '../semantic/serialize';
+import { serializeForPrompt } from '../semantic/serialize';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Input Types
@@ -58,7 +58,7 @@ export interface ContextBuildInput {
 /**
  * Build context for conversation LLM.
  *
- * Context = Base (commit sentences) + Pinned items
+ * Context = Base (commit nodes) + Pinned items
  *
  * @param input - The context build input
  * @returns Built context with text, token estimate, and sources
@@ -72,7 +72,7 @@ export function buildConversationContext(input: ContextBuildInput): BuiltContext
   // ─────────────────────────────────────────────────────────────────────────
   if (input.knowledge) {
     text += '## Current Knowledge\n\n';
-    text += serializeFramesForPrompt(input.knowledge);
+    text += serializeForPrompt(input.knowledge);
     text += '\n\n';
     sources.push({ type: 'commit', id: 'knowledge', title: 'Current knowledge' });
   }
@@ -175,7 +175,7 @@ export function buildConversationContext(input: ContextBuildInput): BuiltContext
  */
 export function buildLeafContext(knowledge: SemanticContent): BuiltContext {
   let text = '## Knowledge\n\n';
-  text += serializeFramesForPrompt(knowledge);
+  text += serializeForPrompt(knowledge);
 
   return {
     text,

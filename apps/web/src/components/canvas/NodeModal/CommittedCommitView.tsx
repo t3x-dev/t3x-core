@@ -479,7 +479,7 @@ export function CommittedCommitView({
                       <TabsContent value="relations">
                         <RelationsTab
                           commitHash={data.commitHash || ''}
-                          sentences={
+                          nodes={
                             commit.content?.trees
                               ? (
                                   commit.content.trees as Array<{

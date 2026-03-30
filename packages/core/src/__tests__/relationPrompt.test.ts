@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { buildRelationPrompt } from '../extractors/relationPrompt';
 
 describe('buildRelationPrompt', () => {
-  const sentences = [
+  const nodes = [
     { id: 's_aaa', text: 'The user prefers dark mode for coding.' },
     {
       id: 's_bbb',
@@ -15,13 +15,13 @@ describe('buildRelationPrompt', () => {
   ];
 
   it('returns systemPrompt and userPrompt', () => {
-    const { systemPrompt, userPrompt } = buildRelationPrompt(sentences);
+    const { systemPrompt, userPrompt } = buildRelationPrompt(nodes);
     expect(systemPrompt).toBeDefined();
     expect(userPrompt).toBeDefined();
   });
 
   it('system prompt includes all 6 relation types', () => {
-    const { systemPrompt } = buildRelationPrompt(sentences);
+    const { systemPrompt } = buildRelationPrompt(nodes);
     expect(systemPrompt).toContain('supports');
     expect(systemPrompt).toContain('contrasts');
     expect(systemPrompt).toContain('causes');
@@ -31,8 +31,8 @@ describe('buildRelationPrompt', () => {
     expect(systemPrompt).toContain('summarizes');
   });
 
-  it('user prompt lists sentences with IDs', () => {
-    const { userPrompt } = buildRelationPrompt(sentences);
+  it('user prompt lists nodes with IDs', () => {
+    const { userPrompt } = buildRelationPrompt(nodes);
     expect(userPrompt).toContain('[s_aaa]');
     expect(userPrompt).toContain('[s_bbb]');
     expect(userPrompt).toContain('[s_ccc]');
@@ -40,13 +40,13 @@ describe('buildRelationPrompt', () => {
   });
 
   it('system prompt requests JSON array output', () => {
-    const { systemPrompt } = buildRelationPrompt(sentences);
+    const { systemPrompt } = buildRelationPrompt(nodes);
     expect(systemPrompt).toContain('JSON array');
     expect(systemPrompt).toContain('source_id');
     expect(systemPrompt).toContain('target_id');
   });
 
-  it('returns empty userPrompt for empty sentences', () => {
+  it('returns empty userPrompt for empty nodes', () => {
     const { userPrompt } = buildRelationPrompt([]);
     expect(userPrompt).toBe('');
   });

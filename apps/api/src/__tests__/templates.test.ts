@@ -30,7 +30,7 @@ describe('Templates Routes', () => {
       category: 'social',
       leaf_type: 'tweet',
       system_prompt: 'You are a {{leafType}} writer. Follow constraints: {{formattedConstraints}}',
-      user_prompt: 'Write based on: {{formattedSentences}}',
+      user_prompt: 'Write based on: {{formattedNodes}}',
       variables: [
         { name: 'leafType', description: 'Type of leaf', required: true },
         {
@@ -39,7 +39,7 @@ describe('Templates Routes', () => {
           required: false,
           defaultValue: '',
         },
-        { name: 'formattedSentences', description: 'Sentences', required: true },
+        { name: 'formattedNodes', description: 'Sentences', required: true },
       ],
       tags: ['custom', 'tweet'],
       ...overrides,
@@ -192,8 +192,8 @@ describe('Templates Routes', () => {
         body: JSON.stringify(
           makeCreateBody({
             system_prompt: 'Hello {{customVar}}',
-            user_prompt: 'Write {{formattedSentences}}',
-            variables: [{ name: 'formattedSentences', description: 'Sentences', required: true }],
+            user_prompt: 'Write {{formattedNodes}}',
+            variables: [{ name: 'formattedNodes', description: 'Sentences', required: true }],
           })
         ),
       });

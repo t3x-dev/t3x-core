@@ -36,9 +36,8 @@ export interface TreeNode {
 
 /**
  * Semantic relation types for cross-tree connections.
- * Note: packages/core/src/types/index.ts has a separate RELATION_TYPES for V4 app-layer.
- * This constant is for the semantic layer only. The V4 types/index.ts version should be
- * deleted or updated as part of this PR to avoid naming collisions at the package export level.
+ * Note: packages/core/src/types/index.ts has a separate RELATION_TYPES for the app layer.
+ * This constant is for the semantic layer only.
  */
 export const RELATION_TYPES = [
   'causes',
@@ -64,28 +63,28 @@ export interface SemanticContent {
   relations: Relation[];
 }
 
-// ── Delta ──
+// ── Tree Change Batch ──
 
 export type TreeChange =
   | { action: 'add'; parent_path: string; node: TreeNode; slot_quotes?: Record<string, string> }
   | { action: 'update'; target_path: string; slots: Record<string, SlotValue | null>; slot_quotes?: Record<string, string> }
   | { action: 'remove'; target_path: string; reason?: string };
 
-export interface Delta {
+export interface TreeChangeBatch {
   changes: TreeChange[];
   new_relations?: Relation[];
   remove_relations?: Relation[];
 }
 
-// ── Delta Log ──
+// ── YOps Log ──
 
-export type DeltaSource = 'pipeline' | 'manual' | 'answer' | 'collapse' | 'commit_marker' | 'compress';
+export type YOpsSource = 'pipeline' | 'manual' | 'answer' | 'collapse' | 'commit_marker' | 'compress';
 
-export interface DeltaLogEntry {
+export interface YOpsLogEntry {
   id: string;
-  source: DeltaSource;
+  source: YOpsSource;
   turn_hash?: string;
-  delta: Delta;
+  yops: unknown;
   created_at: string;
   commit_hash?: string;
   model?: string;

@@ -4,7 +4,7 @@
  * CRUD operations for leaves table using Drizzle ORM.
  * Leaves own constraints, output, and validation results.
  *
- * Key V4 insight: Same commit can have multiple leaves with different constraints.
+ * Key insight: Same commit can have multiple leaves with different constraints.
  *
  * @see docs/specification/semantic-layer-architecture.md
  */
@@ -20,7 +20,7 @@ import type {
 import { generateAssertionId, generateConstraintId, generateLeafId } from '@t3x-dev/core';
 import { and, desc, eq, inArray, lt, or } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
-import { type LeafRecord, leaves } from '../schema-frames';
+import { type LeafRecord, leaves } from '../schema-trees';
 import { type CursorPage, decodeCursor, toCursorPage } from './pagination';
 
 // ============================================================

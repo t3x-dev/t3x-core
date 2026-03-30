@@ -14,7 +14,6 @@
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
-  applyDelta,
   buildConversationContext,
   type ConversationData,
   flattenTrees,
@@ -35,13 +34,13 @@ import {
   getConversationTurnCount,
   getLeavesByIds,
   insertConversation,
-  listDeltaLogByConversation,
+  listYOpsLogByConversation,
   setConversationContext,
   updateConversation,
 } from '@t3x-dev/storage';
 import { formatContextForExport } from '../lib/context-formatter';
 import { getDB } from '../lib/db';
-import { toDeltaLogEntries } from '../lib/delta-log-utils';
+import { replayYOpsLog, toYOpsLogEntries } from '../lib/yops-log-utils';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import {
   CursorPageResponseSchema,
@@ -742,17 +741,13 @@ conversationRoutes.openapi(getMemoryRoute, async (c) => {
     const projectPins = await findPinsByProject(db, conversation.projectId);
 
     // 4. Build YAML knowledge from best available source:
-    //    - Delta log snapshot (working draft, most up-to-date)
+    //    - YOps log snapshot (working draft, most up-to-date)
     //    - Committed frames (HEAD, fallback)
-    //    The YAML tree IS the knowledge — no flattening to sentences.
+    //    The YAML tree IS the knowledge — no flattening to nodes.
     let yamlKnowledge = '';
-    const deltaRecords = await listDeltaLogByConversation(db, conversationId);
-    if (deltaRecords.length > 0) {
-      const emptySnap: SemanticContent = { trees: [], relations: [] };
-      const snapshot = toDeltaLogEntries(deltaRecords).reduce(
-        (snap, entry) => applyDelta(snap, entry.delta),
-        emptySnap
-      );
+    const yopsRecords = await listYOpsLogByConversation(db, conversationId);
+    if (yopsRecords.length > 0) {
+      const snapshot = replayYOpsLog(toYOpsLogEntries(yopsRecords));
       if (snapshot.trees.length > 0) {
         yamlKnowledge = serializeSnapshotForContext(snapshot);
       }

@@ -6,11 +6,14 @@ interface ChatState {
   activeBranch: string;
   sidebarCollapsed: boolean;
   expandedProjectIds: Set<string>;
+  /** Incremented to signal sidebar should refresh */
+  refreshKey: number;
 
   setActiveConversation: (conversationId: string | null, projectId: string | null) => void;
   setActiveBranch: (branch: string) => void;
   toggleSidebar: () => void;
   toggleProjectExpanded: (projectId: string) => void;
+  refreshSidebar: () => void;
 }
 
 export const useChatStore = create<ChatState>((set) => ({
@@ -19,6 +22,7 @@ export const useChatStore = create<ChatState>((set) => ({
   activeBranch: 'main',
   sidebarCollapsed: false,
   expandedProjectIds: new Set<string>(),
+  refreshKey: 0,
 
   setActiveConversation: (conversationId, projectId) =>
     set({ activeConversationId: conversationId, activeProjectId: projectId }),
@@ -31,4 +35,5 @@ export const useChatStore = create<ChatState>((set) => ({
       else next.add(projectId);
       return { expandedProjectIds: next };
     }),
+  refreshSidebar: () => set((s) => ({ refreshKey: s.refreshKey + 1 })),
 }));

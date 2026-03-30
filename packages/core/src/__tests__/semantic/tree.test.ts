@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   buildSlotQuotesPath,
   flattenTree,
-  isTreeNative,
   unflattenToTree,
 } from '../../semantic/tree';
 import type { FlatNode, TreeNode } from '../../semantic/types';
@@ -130,14 +129,6 @@ describe('unflattenToTree', () => {
     expect(reconstructed.children).toHaveLength(2);
     expect(reconstructed.children[1].children).toHaveLength(1);
     expect(reconstructed.children[1].children[0].key).toBe('gear');
-  });
-});
-
-describe('isTreeNative', () => {
-  it('always returns true (tree-primary)', () => {
-    expect(
-      isTreeNative({ trees: [{ key: 'x', slots: {}, children: [] }], relations: [] })
-    ).toBe(true);
   });
 });
 

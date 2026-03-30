@@ -28,7 +28,7 @@ export function generateMergeDraftId(): string {
   return `mdraft_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
 }
 
-// === V4 ID Generation (12-char IDs per V4 spec) ===
+// === ID Generation (12-char IDs) ===
 
 export function generateLeafId(): string {
   return `leaf_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
@@ -50,7 +50,7 @@ export function generateLeafHistoryId(): string {
   return `lhist_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
 }
 
-export function generateSentenceId(): string {
+export function generateNodeId(): string {
   return `s_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
 }
 
@@ -58,7 +58,7 @@ export function generateDraftId(): string {
   return `draft_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
 }
 
-export function generateDraftSentenceId(): string {
+export function generateDraftNodeId(): string {
   return `ds_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
 }
 
