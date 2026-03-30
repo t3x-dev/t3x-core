@@ -2,6 +2,8 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+import { ensureAuth, deviceFlowAuth } from './auth.js';
+import { getBaseUrl, getClient, updateToken } from './client.js';
 import { checkTool, handleCheck } from './tools/check.js';
 import { commitTool, handleCommit } from './tools/commit.js';
 import { extractTool, handleExtract } from './tools/extract.js';
@@ -38,10 +40,44 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     };
   }
 
+  // Ensure auth token is set before tool call
+  const baseUrl = getBaseUrl();
+  const token = ensureAuth(baseUrl);
+  if (token) {
+    getClient(token);
+  }
+
   try {
     return await handler(args ?? {});
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
+
+    // If we get a 401, try Device Flow
+    if (message.includes('401') || message.includes('Unauthorized')) {
+      try {
+        const { token: newToken, message: authMsg } = await deviceFlowAuth(baseUrl);
+        updateToken(newToken);
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: `Authentication required.\n\n${authMsg}\n\nPlease authorize, then retry your request.`,
+            },
+          ],
+        };
+      } catch (authErr) {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: `Authentication failed: ${authErr instanceof Error ? authErr.message : String(authErr)}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+
     return {
       content: [{ type: 'text' as const, text: `Error: ${message}` }],
       isError: true,
