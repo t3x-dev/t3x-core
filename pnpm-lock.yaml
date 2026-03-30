@@ -352,9 +352,6 @@ importers:
       framer-motion:
         specifier: ^12.23.26
         version: 12.23.26(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
-      geist:
-        specifier: ^1.5.1
-        version: 1.5.1(next@16.1.1(@playwright/test@1.58.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))
       js-yaml:
         specifier: ^4.1.1
         version: 4.1.1
@@ -3663,11 +3660,6 @@ packages:
 
   function-bind@1.1.2:
     resolution: {integrity: sha512-7XHNxH7qX9xG5mIwxkhumTox/MIRNcOgDrxWsMt2pAr23WHp6MrRlN7FBSFpCpr+oVO0F744iUgR82nJMfG2SA==}
-
-  geist@1.5.1:
-    resolution: {integrity: sha512-mAHZxIsL2o3ZITFaBVFBnwyDOw+zNLYum6A6nIjpzCGIO8QtC3V76XF2RnZTyLx1wlDTmMDy8jg3Ib52MIjGvQ==}
-    peerDependencies:
-      next: '>=13.2.0'
 
   gel@2.2.0:
     resolution: {integrity: sha512-q0ma7z2swmoamHQusey8ayo8+ilVdzDt4WTxSPzq/yRqvucWRfymRVMvNgmSC0XK7eNjjEZEcplxpgaNojKdmQ==}
@@ -8494,10 +8486,6 @@ snapshots:
     optional: true
 
   function-bind@1.1.2: {}
-
-  geist@1.5.1(next@16.1.1(@playwright/test@1.58.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)):
-    dependencies:
-      next: 16.1.1(@playwright/test@1.58.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
 
   gel@2.2.0:
     dependencies:

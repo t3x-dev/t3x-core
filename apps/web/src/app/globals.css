@@ -26,19 +26,18 @@
      Multiple .dark blocks with hue conflict → unified hue 260, single block
    ============================================ */
 :root {
-  /* Typography - Geist (Vercel's font) with optimal settings */
-  font-family: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  line-height: 1.5;
+  /* Typography — Inter + JetBrains Mono (Unified Design v2) */
+  font-family: var(--font-inter), 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  /* Note: no font-size override on :root — browser default 16px preserved to avoid breaking rem units */
+  line-height: 1.6;
   font-weight: 400;
-  font-feature-settings:
-    "rlig" 1,
-    "calt" 1;
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 
-  /* Monospace font for code */
-  --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", Monaco, "Cascadia Code", monospace;
+  /* Monospace font for code & YAML */
+  --font-mono: var(--font-jetbrains-mono), 'JetBrains Mono', 'SF Mono', 'Fira Code', ui-monospace, monospace;
 
   /* Brand Colors - Modern Blue/Indigo */
   --color-brand: #4f46e5;
@@ -185,20 +184,41 @@
   --diff-identical-border: #e2e8f0;
   --diff-identical-text: #64748b;
   /* Word-level highlights — strong contrast against line bg */
-  --diff-added-word-bg: #86efac;
-  --diff-removed-word-bg: #fca5a5;
+  --diff-added-word-bg: rgba(22, 163, 74, 0.28);
+  --diff-removed-word-bg: rgba(220, 38, 38, 0.25);
   /* Backward compat: --diff-*-line → --diff-*-accent (migrate to proper tokens in #360) */
   --diff-added-line: var(--diff-added-accent);
   --diff-removed-line: var(--diff-removed-accent);
   --diff-modified-line: var(--diff-modified-accent);
+  /* Unified aliases (used by component CSS from HTML preview) */
+  --diff-add-bg: var(--diff-added-bg);
+  --diff-add-accent: var(--diff-added-accent);
+  --diff-add-word: var(--diff-added-word-bg);
+  --diff-rm-bg: var(--diff-removed-bg);
+  --diff-rm-accent: var(--diff-removed-accent);
+  --diff-rm-word: var(--diff-removed-word-bg);
+  --diff-mod-bg: var(--diff-modified-bg);
+  --diff-mod-accent: var(--diff-modified-accent);
+  /* Merge colors — light mode (source=blue, target=green) */
+  --merge-src-bg: rgba(29, 78, 216, 0.08);
+  --merge-src-accent: #1d4ed8;
+  --merge-src-word: rgba(29, 78, 216, 0.28);
+  --merge-tgt-bg: rgba(21, 128, 61, 0.08);
+  --merge-tgt-accent: #15803d;
+  --merge-tgt-word: rgba(21, 128, 61, 0.28);
 
-  /* ===== YAML Syntax Tokens (Commit YAML Document) ===== */
-  --yaml-key: #2563eb;
-  --yaml-string: #16a34a;
-  --yaml-number: #d97706;
-  --yaml-ref: #7c3aed;
-  --yaml-comment: #9ca3af;
+  /* ===== YAML Syntax Tokens — light mode (deeper for white bg contrast) ===== */
+  --yaml-key: #1d4ed8;
+  --yaml-string: #15803d;
+  --yaml-number: #b45309;
+  --yaml-ref: #6d28d9;
+  --yaml-comment: #6b7280;
   --yaml-punctuation: #6b7280;
+  --yaml-bracket: #0e7490;
+  --yaml-type: #1e3a8a;
+  /* Shorthand aliases used by component CSS */
+  --yaml-str: var(--yaml-string);
+  --yaml-num: var(--yaml-number);
 
   /* ===== Leaf Correspondence Tokens ===== */
   --leaf-match-bg: rgba(22, 163, 74, 0.10);
@@ -219,6 +239,35 @@
   --accent-leaf: #10b981;
   --accent-branch: #f59e0b;
   --accent-conversation: #6366f1;
+  /* Soft accent backgrounds */
+  --accent-commit-soft: rgba(37, 99, 235, 0.10);
+  --accent-pending-soft: rgba(249, 115, 22, 0.10);
+  --accent-leaf-soft: rgba(16, 185, 129, 0.10);
+  --accent-conversation-soft: rgba(99, 102, 241, 0.10);
+
+  /* ===== Unified Design v2 Aliases (light mode) ===== */
+  /* Text hierarchy aliases */
+  --text-1: var(--text-primary);
+  --text-2: var(--text-secondary);
+  --text-3: var(--text-tertiary);
+  --text-dim: #b0b0b5;
+  /* Surface aliases */
+  --bg: #fafaf9;
+  --surface: #ffffff;
+  --surface-hover: rgba(0, 0, 0, 0.02);
+  --surface-alt: #f5f5f4;
+  --surface-raised: #ffffff;
+  /* Border aliases */
+  --border-divider: rgba(0, 0, 0, 0.06);
+  --border-strong: rgba(0, 0, 0, 0.14);
+  /* Glass (light: opaque) */
+  --glass-bg: rgba(255, 255, 255, 0.92);
+  --glass-blur: 8px;
+  --noise: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+  /* Layout */
+  --radius-xs: 6px;
+  --shadow-sm-unified: 0 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-md-unified: 0 4px 12px rgba(0, 0, 0, 0.08);
 
   /* ===== Surface System — light mode: opaque, no glass ===== */
   --surface-app: oklch(0.98 0.002 250);
@@ -321,14 +370,14 @@
 
 /* Dark mode - refined with better contrast */
 .dark {
-  --color-text: #f8fafc;
-  --color-text-secondary: #cbd5e1;
-  --color-text-muted: #64748b;
-  --color-bg: #0f172a;
-  --color-bg-white: #1e293b;
-  --color-bg-subtle: #1e293b;
-  --color-border: #334155;
-  --color-border-light: #1e293b;
+  --color-text: #ECECEF;
+  --color-text-secondary: #9D9DA5;
+  --color-text-muted: #6B6B75;
+  --color-bg: #0e0e10;
+  --color-bg-white: #1a1a1e;
+  --color-bg-subtle: #16161a;
+  --color-border: rgba(255, 255, 255, 0.07);
+  --color-border-light: rgba(255, 255, 255, 0.05);
 
   /* Shadows for dark mode - subtle glow effect */
   --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.3);
@@ -378,13 +427,18 @@
   --motion-slow: 200ms;
   --ease-out-soft: cubic-bezier(0.16, 1, 0.3, 1);
 
-  /* ===== Accent — desaturated (dark only) ===== */
-  --accent-commit: oklch(0.65 0.15 260);
+  /* ===== Accent — Unified Design v2 (dark only) ===== */
+  --accent-commit: #6B8AFF;
   --accent-extract: #8b5cf6;
-  --accent-pending: oklch(0.7 0.14 55);
-  --accent-leaf: oklch(0.65 0.14 155);
-  --accent-branch: oklch(0.7 0.12 80);
-  --accent-conversation: oklch(0.65 0.14 290);
+  --accent-pending: #E5A030;
+  --accent-leaf: #34D399;
+  --accent-branch: #E5A030;
+  --accent-conversation: #818CF8;
+  /* Soft accent backgrounds */
+  --accent-commit-soft: rgba(107, 138, 255, 0.10);
+  --accent-pending-soft: rgba(229, 160, 48, 0.10);
+  --accent-leaf-soft: rgba(52, 211, 153, 0.10);
+  --accent-conversation-soft: rgba(129, 140, 248, 0.10);
 
   /* ===== Status Colors (dark overrides) ===== */
   --status-success: #4ade80;
@@ -396,42 +450,67 @@
   --status-info: #60a5fa;
   --status-info-muted: rgba(30, 58, 138, 0.3);
 
-  /* ===== Text Hierarchy — WCAG AA: 4.5:1 body text ===== */
-  --text-primary: oklch(0.95 0.005 260);
-  --text-secondary: oklch(0.8 0.01 260);
-  --text-tertiary: oklch(0.65 0.01 260);
+  /* ===== Text Hierarchy — Unified Design v2 (warm off-white) ===== */
+  --text-primary: #ECECEF;
+  --text-secondary: #9D9DA5;
+  --text-tertiary: #6B6B75;
+  /* Aliases */
+  --text-1: var(--text-primary);
+  --text-2: var(--text-secondary);
+  --text-3: var(--text-tertiary);
+  --text-dim: #4A4A55;
 
   /* ===== Scrollbar ===== */
   --scrollbar-width: 4px;
   --scrollbar-thumb: oklch(1 0 0 / 15%);
   --scrollbar-thumb-hover: oklch(1 0 0 / 25%);
 
-  /* ===== Diff Token System (§1.1) — dark overrides ===== */
-  --diff-added-bg: rgba(5, 46, 22, 0.3);
+  /* ===== Diff Token System — Unified Design v2 dark overrides ===== */
+  --diff-added-bg: rgba(52, 211, 153, 0.07);
   --diff-added-border: #15803d;
   --diff-added-text: #86efac;
-  --diff-added-accent: #4ade80;
-  --diff-removed-bg: rgba(69, 10, 10, 0.3);
+  --diff-added-accent: #34D399;
+  --diff-removed-bg: rgba(248, 113, 113, 0.07);
   --diff-removed-border: #b91c1c;
   --diff-removed-text: #fca5a5;
-  --diff-removed-accent: #f87171;
-  --diff-modified-bg: rgba(69, 26, 3, 0.3);
+  --diff-removed-accent: #F87171;
+  --diff-modified-bg: rgba(229, 160, 48, 0.06);
   --diff-modified-border: #b45309;
   --diff-modified-text: #fcd34d;
-  --diff-modified-accent: #fbbf24;
+  --diff-modified-accent: #E5A030;
   --diff-identical-bg: rgba(2, 6, 23, 0.3);
   --diff-identical-border: #334155;
   --diff-identical-text: #94a3b8;
-  --diff-added-word-bg: rgba(34, 197, 94, 0.45);
-  --diff-removed-word-bg: rgba(239, 68, 68, 0.45);
+  --diff-added-word-bg: rgba(52, 211, 153, 0.35);
+  --diff-removed-word-bg: rgba(248, 113, 113, 0.30);
+  /* Unified aliases */
+  --diff-add-bg: var(--diff-added-bg);
+  --diff-add-accent: var(--diff-added-accent);
+  --diff-add-word: var(--diff-added-word-bg);
+  --diff-rm-bg: var(--diff-removed-bg);
+  --diff-rm-accent: var(--diff-removed-accent);
+  --diff-rm-word: var(--diff-removed-word-bg);
+  --diff-mod-bg: var(--diff-modified-bg);
+  --diff-mod-accent: var(--diff-modified-accent);
+  /* Merge colors — dark mode (source=blue, target=green) */
+  --merge-src-bg: rgba(107, 138, 255, 0.07);
+  --merge-src-accent: #6B8AFF;
+  --merge-src-word: rgba(107, 138, 255, 0.35);
+  --merge-tgt-bg: rgba(52, 211, 153, 0.07);
+  --merge-tgt-accent: #34D399;
+  --merge-tgt-word: rgba(52, 211, 153, 0.35);
 
-  /* ===== YAML Syntax Tokens — dark overrides ===== */
-  --yaml-key: #7aa2f7;
-  --yaml-string: #9ece6a;
-  --yaml-number: #ff9e64;
-  --yaml-ref: #bb9af7;
-  --yaml-comment: #4b5563;
-  --yaml-punctuation: #89ddff;
+  /* ===== YAML Syntax Tokens — Tokyo Night (slightly desaturated) ===== */
+  --yaml-key: #7AA2F7;
+  --yaml-string: #9ECE6A;
+  --yaml-number: #FF9E64;
+  --yaml-ref: #BB9AF7;
+  --yaml-comment: #565F89;
+  --yaml-punctuation: #7DCFEE;
+  --yaml-bracket: #7DCFEE;
+  --yaml-type: #C0CAF5;
+  --yaml-str: var(--yaml-string);
+  --yaml-num: var(--yaml-number);
 
   /* ===== Leaf Correspondence Tokens — dark overrides ===== */
   --leaf-match-bg: rgba(74, 222, 128, 0.15);
@@ -452,6 +531,21 @@
 
   /* ===== Noise ===== */
   --noise-opacity: 0.015;
+
+  /* ===== Unified Design v2 Aliases (dark mode) ===== */
+  --bg: #0e0e10;
+  --surface: rgba(255, 255, 255, 0.03);
+  --surface-hover: rgba(255, 255, 255, 0.05);
+  --surface-alt: rgba(255, 255, 255, 0.02);
+  --surface-raised: rgba(255, 255, 255, 0.045);
+  --surface-panel-unified: rgba(20, 20, 24, 0.88);
+  --border-unified: rgba(255, 255, 255, 0.07);
+  --border-strong: rgba(255, 255, 255, 0.12);
+  --border-divider: rgba(255, 255, 255, 0.05);
+  --glass-bg: rgba(20, 20, 24, 0.90);
+  --glass-blur: 8px;
+  --shadow-sm-unified: 0 1px 3px rgba(0, 0, 0, 0.12);
+  --shadow-md-unified: 0 4px 12px rgba(0, 0, 0, 0.20);
 
   /* shadcn tokens — aligned with four-layer surface system */
   --background: oklch(0.11 0.005 260); /* = surface-app */
@@ -509,6 +603,11 @@ a {
   color: inherit;
   text-decoration: none;
 }
+
+/* ═══ Font Weight Hierarchy (Unified Design v2) ═══ */
+h1, .text-title { font-weight: 700; letter-spacing: -0.02em; }
+h2, .text-heading { font-weight: 600; letter-spacing: -0.01em; }
+h3, .text-label { font-weight: 500; }
 
 /* Button reset moved to @layer base so Tailwind utilities can override */
 
@@ -770,6 +869,202 @@ a {
 }
 
 /* Duplicate .dark block removed — all tokens consolidated above */
+
+/* ============================================
+   Unified Design v2 — Component CSS
+   Shared YAML lines, word-diff badges, and
+   component-level classes for all 5 page types
+   ============================================ */
+
+/* ═══ YAML Shared Lines ═══ */
+.yaml-line { display: flex; align-items: stretch; font-family: var(--font-mono); font-size: 11.5px; line-height: 22px; min-height: 22px; }
+.yaml-gutter { width: 36px; min-width: 36px; text-align: right; padding-right: 8px; font-size: 9px; color: var(--text-dim); display: flex; align-items: center; justify-content: flex-end; opacity: 0.5; }
+.yaml-marker { width: 3px; min-width: 3px; flex-shrink: 0; }
+.yaml-content { flex: 1; padding: 0 12px; white-space: pre-wrap; }
+.yaml-line.added { background: var(--diff-add-bg); }
+.yaml-line.added .yaml-marker { background: var(--diff-add-accent); }
+.yaml-line.removed { background: var(--diff-rm-bg); }
+.yaml-line.removed .yaml-marker { background: var(--diff-rm-accent); }
+.yaml-line.removed .yaml-content { text-decoration: line-through; opacity: 0.6; }
+.yaml-line.modified { background: var(--diff-mod-bg); }
+.yaml-line.modified .yaml-marker { background: var(--diff-mod-accent); }
+.yaml-line.source { background: var(--merge-src-bg); }
+.yaml-line.source .yaml-marker { background: var(--merge-src-accent); }
+.yaml-line.target { background: var(--merge-tgt-bg); }
+.yaml-line.target .yaml-marker { background: var(--merge-tgt-accent); }
+.yaml-line.identical { opacity: 0.45; }
+.yaml-line.identical:hover { opacity: 0.8; }
+
+/* ═══ Word-diff Badges ═══ */
+.word-add { background: var(--diff-add-word); color: #fff; border-radius: 3px; padding: 1px 4px; font-weight: 600; box-shadow: 0 0 0 1px rgba(52, 211, 153, 0.3); }
+.word-rm { background: var(--diff-rm-word); color: #fff; border-radius: 3px; padding: 1px 4px; text-decoration: line-through; box-shadow: 0 0 0 1px rgba(248, 113, 113, 0.3); }
+.word-src { background: var(--merge-src-word); color: #fff; border-radius: 3px; padding: 1px 4px; font-weight: 600; box-shadow: 0 0 0 1px rgba(107, 138, 255, 0.3); }
+.word-tgt { background: var(--merge-tgt-word); color: #fff; border-radius: 3px; padding: 1px 4px; font-weight: 600; box-shadow: 0 0 0 1px rgba(52, 211, 153, 0.3); }
+
+/* ═══ Shared Badge Classes ═══ */
+.badge-commit { background: var(--accent-commit-soft); color: var(--accent-commit); }
+.badge-pending { background: var(--accent-pending-soft); color: var(--accent-pending); }
+.badge-leaf { background: var(--accent-leaf-soft); color: var(--accent-leaf); }
+.badge-convo { background: var(--accent-conversation-soft); color: var(--accent-conversation); }
+.badge-muted { background: rgba(255, 255, 255, 0.04); color: var(--text-3); }
+.badge-success { background: rgba(74, 222, 128, 0.10); color: #4ADE80; }
+.badge-danger { background: rgba(248, 113, 113, 0.10); color: #F87171; }
+.badge-warning { background: rgba(251, 191, 36, 0.10); color: #FBBF24; }
+
+/* ═══ 1. EXTRACTION PANEL — YAML Tree Cards ═══ */
+.ext-yaml-tree { margin: 6px 6px; padding: 6px 0 4px; border-radius: var(--radius-xs, 6px); background: var(--surface, rgba(255,255,255,0.03)); border: 1px solid var(--stroke-default); position: relative; overflow: hidden; }
+.ext-yaml-tree::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; border-radius: 2px 0 0 2px; }
+.ext-yaml-tree.tree-committed::before { background: var(--accent-commit); }
+.ext-yaml-tree.tree-added::before, .ext-yaml-tree.tree-new::before { background: var(--diff-add-accent); }
+.ext-yaml-tree.tree-modified::before { background: var(--diff-mod-accent); }
+.ext-yaml-line { display: flex; align-items: center; gap: 0; font-family: var(--font-mono); font-size: 11.5px; line-height: 24px; padding: 0 8px; }
+.ext-yaml-line:hover { background: var(--hover-bg); }
+.ext-yaml-check { width: 11px; height: 11px; border: 1.5px solid var(--stroke-default); border-radius: 2px; flex-shrink: 0; margin-right: 6px; cursor: pointer; }
+.ext-yaml-check.checked { background: var(--accent-leaf); border-color: var(--accent-leaf); position: relative; }
+.ext-yaml-check.checked::after { content: ''; position: absolute; top: 1px; left: 3px; width: 3px; height: 5px; border: solid #fff; border-width: 0 1.5px 1.5px 0; transform: rotate(45deg); }
+.ext-yaml-delta { width: 3px; min-width: 3px; height: 18px; border-radius: 1px; margin-right: 6px; flex-shrink: 0; }
+.ext-yaml-text { flex: 1; white-space: normal; word-break: break-word; }
+.ext-yaml-confirmed { color: var(--accent-leaf); font-size: 10px; margin-left: auto; flex-shrink: 0; padding-left: 6px; }
+.ext-yaml-relation { display: flex; align-items: center; gap: 5px; padding: 0 18px; font-family: var(--font-mono); font-size: 9px; color: var(--text-dim); margin: 0 6px; height: 20px; }
+.ext-yaml-relation-dot { width: 4px; height: 4px; border-radius: 50%; flex-shrink: 0; }
+.ext-yaml-relation::before { content: ''; width: 1px; height: 8px; background: var(--stroke-default); margin-right: 2px; }
+
+/* ═══ 2. COMMIT DETAIL — White YAML Document ═══ */
+/* Intentional: Commit YAML always renders on a white "paper" surface regardless of theme.
+   This is a deliberate design choice — the committed knowledge is presented as a clean,
+   print-ready document. Colors reference the :root (light-mode) YAML tokens. */
+.commit-yaml-doc {
+  --cyd-bg: #fefefe;
+  --cyd-text: var(--text-1, #1a1a2e);
+  --cyd-gutter: var(--text-dim, #b0b0b5);
+  --cyd-key: var(--yaml-key);
+  --cyd-str: var(--yaml-string);
+  --cyd-num: var(--yaml-number);
+  --cyd-ref: var(--yaml-ref);
+  --cyd-comment: var(--yaml-comment);
+  --cyd-type: var(--yaml-type);
+  --cyd-head-text: #3a3a5a;
+  flex: 1; overflow-y: auto; padding: 0; background: var(--cyd-bg); color: var(--cyd-text);
+}
+/* Force light-mode palette inside the paper document even in dark mode */
+.dark .commit-yaml-doc {
+  --cyd-key: #2563eb; --cyd-str: #16a34a; --cyd-num: #d97706;
+  --cyd-ref: #7c3aed; --cyd-comment: #9ca3af; --cyd-type: #1e40af;
+  --cyd-text: #1a1a2e; --cyd-gutter: #b0b0b5; --cyd-head-text: #3a3a5a;
+}
+.commit-yaml-doc .yaml-line { background: transparent; color: var(--cyd-text); }
+.commit-yaml-doc .yaml-line:nth-child(even) { background: rgba(0, 0, 0, 0.015); }
+.commit-yaml-doc .yaml-gutter { color: var(--cyd-gutter); }
+.commit-yaml-doc .yaml-content { color: var(--cyd-text); }
+.commit-yaml-doc .yk { color: var(--cyd-key); }
+.commit-yaml-doc .ys { color: var(--cyd-str); }
+.commit-yaml-doc .yn { color: var(--cyd-num); }
+.commit-yaml-doc .yr { color: var(--cyd-ref); }
+.commit-yaml-doc .yc { color: var(--cyd-comment); }
+.commit-yaml-doc .yt { color: var(--cyd-type); font-weight: 600; }
+.commit-yaml-doc .frame-section { border-bottom: 1px solid rgba(0, 0, 0, 0.06); padding: 4px 0; margin-bottom: 2px; }
+.commit-yaml-doc .frame-section:last-child { border-bottom: none; }
+.commit-yaml-doc .frame-section-head { display: flex; align-items: center; gap: 8px; padding: 8px 14px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: var(--cyd-head-text); background: rgba(0, 0, 0, 0.03); border-bottom: 1px solid rgba(0, 0, 0, 0.05); font-family: var(--font-mono); }
+.commit-yaml-doc .yaml-line:hover { background: rgba(37, 99, 235, 0.04); }
+
+/* ═══ 3. DIFF — Frame Separators & Placeholders ═══ */
+.diff-frame-sep { display: flex; align-items: center; gap: 6px; padding: 6px 14px; font-size: 10px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.6px; border-bottom: 1px solid var(--stroke-default); background: var(--surface-alt, rgba(255,255,255,0.02)); font-family: var(--font-mono); }
+.diff-placeholder { background: repeating-linear-gradient(45deg, transparent, transparent 8px, rgba(255, 255, 255, 0.02) 8px, rgba(255, 255, 255, 0.02) 16px); min-height: 60px; }
+.diff-pill { padding: 3px 10px; font-size: 11px; font-weight: 500; border-radius: 20px; font-family: var(--font-mono); display: flex; align-items: center; gap: 4px; }
+.diff-pill.base { background: var(--diff-rm-bg); color: var(--diff-rm-accent); border: 1px solid rgba(248, 113, 113, 0.15); }
+.diff-pill.target { background: var(--diff-add-bg); color: var(--diff-add-accent); border: 1px solid rgba(74, 222, 128, 0.15); }
+.diff-toggle-group { display: flex; border: 1px solid var(--stroke-default); border-radius: var(--radius-xs, 6px); overflow: hidden; }
+.diff-toggle { padding: 4px 10px; font-size: 11px; font-weight: 500; cursor: pointer; background: transparent; color: var(--text-3); border: none; font-family: system-ui; }
+.diff-toggle.active { background: var(--accent-commit-soft); color: var(--accent-commit); }
+
+/* ═══ 4. MERGE — YAML Tree Cards ═══ */
+.merge-yaml-card { border: 1px solid var(--stroke-default); border-radius: var(--radius-lg, 12px); margin-bottom: 12px; overflow: hidden; background: var(--surface, rgba(255,255,255,0.03)); transition: border-color 0.2s; }
+.merge-yaml-card.resolved { border-color: rgba(74, 222, 128, 0.20); }
+.merge-yaml-card.unresolved { border-color: rgba(251, 191, 36, 0.25); }
+.merge-yaml-card-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 14px; border-bottom: 1px solid var(--stroke-default); background: var(--surface-alt, rgba(255,255,255,0.02)); }
+.merge-yaml-card-head .mch-type { font-size: 11px; font-weight: 600; font-family: var(--font-mono); text-transform: uppercase; color: var(--yaml-type); }
+.merge-yaml-card-head .mch-id { font-size: 10px; color: var(--text-dim); font-family: var(--font-mono); }
+.merge-yaml-sides { display: flex; min-height: 60px; }
+.merge-yaml-side { flex: 1; padding: 0; }
+.merge-yaml-side + .merge-yaml-side { border-left: 1px solid var(--stroke-default); }
+.merge-yaml-side.source { border-left: 3px solid var(--merge-src-accent); background: var(--merge-src-bg); }
+.merge-yaml-side.target { border-left: 3px solid var(--merge-tgt-accent); background: var(--merge-tgt-bg); }
+.merge-yaml-side-label { font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; padding: 6px 12px; font-family: var(--font-mono); }
+.merge-yaml-side.source .merge-yaml-side-label { color: var(--merge-src-accent); }
+.merge-yaml-side.target .merge-yaml-side-label { color: var(--merge-tgt-accent); }
+.merge-yaml-slot { font-family: var(--font-mono); font-size: 12px; line-height: 24px; padding: 1px 12px; }
+.merge-yaml-slot.dimmed { opacity: 0.40; }
+.merge-yaml-actions { display: flex; gap: 8px; padding: 10px 14px; background: var(--surface-alt, rgba(255,255,255,0.02)); align-items: center; border-radius: 0 0 var(--radius-lg, 12px) var(--radius-lg, 12px); }
+.merge-yaml-actions.unresolved-bar { border-left: 3px solid var(--diff-mod-accent); }
+.res-btn { padding: 6px 16px; font-size: 11px; font-weight: 500; border: 1px solid var(--border-strong, rgba(255,255,255,0.12)); background: var(--surface, rgba(255,255,255,0.03)); color: var(--text-2); border-radius: var(--radius-xs, 6px); cursor: pointer; transition: all 0.15s; font-family: var(--font-inter), 'Inter', system-ui, sans-serif; }
+.res-btn:hover { border-color: var(--accent-commit); color: var(--text-1); background: var(--surface-hover, rgba(255,255,255,0.05)); }
+.res-btn.sel-src { background: var(--merge-src-accent); color: #fff; border-color: var(--merge-src-accent); box-shadow: 0 0 0 2px var(--merge-src-bg); }
+.res-btn.sel-tgt { background: var(--merge-tgt-accent); color: #fff; border-color: var(--merge-tgt-accent); box-shadow: 0 0 0 2px var(--merge-tgt-bg); }
+.merge-card-connector { display: flex; align-items: center; gap: 8px; padding: 2px 0 2px 24px; font-size: 10px; color: var(--text-dim); font-family: var(--font-mono); margin-bottom: 8px; }
+.merge-card-connector .mcc-line { width: 1px; height: 16px; border-left: 1px dashed var(--text-dim); }
+.merge-source-only { border: 1px solid var(--merge-src-accent); border-radius: var(--radius-lg, 12px); margin-bottom: 12px; overflow: hidden; background: var(--merge-src-bg); }
+.merge-source-only .merge-yaml-card-head { background: rgba(107, 138, 255, 0.06); }
+.merge-auto-collapsed { padding: 10px 14px; border: 1px solid var(--stroke-default); border-radius: var(--radius-lg, 12px); margin-bottom: 16px; background: var(--surface-alt, rgba(255,255,255,0.02)); font-size: 11px; color: var(--text-dim); display: flex; align-items: center; gap: 8px; cursor: pointer; }
+
+/* ═══ 5. LEAF — Glass Refined ═══ */
+.leaf-frame { margin: 6px 8px; padding: 4px 0; border-radius: var(--radius-xs, 6px); border: 1px solid var(--stroke-default); background: var(--surface, transparent); transition: border-color 0.15s, background 0.15s; }
+.leaf-frame:hover { border-color: var(--stroke-strong); background: var(--hover-bg); }
+.leaf-frame-head { padding: 5px 10px; font-family: var(--font-mono); font-size: 12.5px; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: background 0.1s; border-bottom: 1px solid var(--border-divider, rgba(255,255,255,0.05)); }
+.leaf-frame-head:hover { background: var(--hover-bg); }
+.leaf-frame-type { color: var(--yaml-type); font-weight: 600; }
+.leaf-frame-assert { margin-left: auto; font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 8px; }
+.leaf-slot { padding: 2px 10px 2px 24px; font-family: var(--font-mono); font-size: 12px; line-height: 24px; display: flex; gap: 0; transition: background 0.15s; position: relative; cursor: default; }
+.leaf-slot:hover { background: var(--hover-bg); }
+.leaf-slot[data-slot]:hover { background: rgba(107, 138, 255, 0.06); border-left: 2px solid var(--accent-commit); padding-left: 22px; }
+.leaf-slot-key { color: var(--yaml-key); min-width: 90px; font-weight: 500; }
+.leaf-slot-colon { color: var(--yaml-bracket, var(--yaml-punctuation)); margin-right: 6px; }
+.leaf-slot-val { color: var(--yaml-string); }
+.leaf-slot-num { color: var(--yaml-number); }
+.leaf-slot-actions { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); display: none; gap: 4px; }
+.leaf-slot:hover .leaf-slot-actions { display: flex; }
+.leaf-relation { display: flex; align-items: center; gap: 5px; padding: 0 16px; font-family: var(--font-mono); font-size: 9px; color: var(--text-dim); height: 18px; margin: 0 8px; }
+.leaf-relation::before { content: ''; width: 1px; height: 10px; background: var(--stroke-default); }
+.leaf-highlight-pass { background: rgba(74, 222, 128, 0.15); padding: 1px 5px; border-radius: 3px; border-bottom: 2px solid rgba(74, 222, 128, 0.5); cursor: help; transition: background 0.15s; }
+.leaf-highlight-pass:hover { background: rgba(74, 222, 128, 0.28); }
+.leaf-highlight-fail { background: rgba(248, 113, 113, 0.15); padding: 1px 5px; border-radius: 3px; border-bottom: 2px solid rgba(248, 113, 113, 0.5); color: #F87171; cursor: help; transition: background 0.15s; }
+.leaf-highlight-fail:hover { background: rgba(248, 113, 113, 0.28); }
+.leaf-highlight-fail s { text-decoration: line-through; text-decoration-color: #F87171; }
+.leaf-assertion-badge { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; font-size: 11px; font-weight: 500; border-radius: var(--radius-xs, 6px); }
+.leaf-assertion-badge.passed { background: rgba(74, 222, 128, 0.10); color: #4ADE80; }
+.leaf-assertion-badge.failed { background: rgba(248, 113, 113, 0.10); color: #F87171; }
+.constraint-card { border: 1px solid var(--stroke-default); border-radius: var(--radius-xs, 6px); padding: 8px 10px; margin-bottom: 6px; background: var(--surface, rgba(255,255,255,0.03)); font-size: 12px; position: relative; overflow: hidden; }
+.constraint-card.require { border-left: 2px solid var(--accent-leaf); }
+.constraint-card.exclude { border-left: 2px solid #F87171; }
+.constraint-card .ct-type { font-size: 10px; font-weight: 700; font-family: var(--font-mono); margin-bottom: 2px; }
+.constraint-card .ct-type.require { color: var(--accent-leaf); }
+.constraint-card .ct-type.exclude { color: #F87171; }
+.constraint-card .ct-match { font-size: 9px; color: var(--text-dim); font-family: var(--font-mono); }
+.constraint-card .ct-value { font-size: 11px; color: var(--text-2); margin-top: 4px; }
+.constraint-card .ct-delete { position: absolute; top: 6px; right: 8px; color: var(--text-dim); cursor: pointer; opacity: 0; transition: opacity 0.15s; }
+.constraint-card:hover .ct-delete { opacity: 1; }
+.assertion-row { display: flex; align-items: flex-start; gap: 6px; padding: 6px 8px; font-size: 12px; border-radius: var(--radius-xs, 6px); margin-bottom: 4px; }
+.assertion-row.pass-bg { background: rgba(74, 222, 128, 0.06); }
+.assertion-row.fail-bg { background: rgba(248, 113, 113, 0.06); }
+.leaf-inspector-label { font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: var(--text-dim); margin-bottom: 8px; margin-top: 16px; padding-bottom: 4px; border-bottom: 1px solid var(--border-divider, rgba(255,255,255,0.05)); font-family: var(--font-mono); }
+.leaf-inspector-label:first-child { margin-top: 0; }
+
+/* ═══ Light Mode Overrides (scoped via :not(.dark) for specificity safety) ═══ */
+:root:not(.dark) .leaf-slot[data-slot]:hover { background: rgba(29, 78, 216, 0.04); }
+:root:not(.dark) .leaf-highlight-pass { background: rgba(21, 128, 61, 0.10); border-bottom-color: rgba(21, 128, 61, 0.35); }
+:root:not(.dark) .leaf-highlight-pass:hover { background: rgba(21, 128, 61, 0.18); }
+:root:not(.dark) .leaf-highlight-fail { background: rgba(185, 28, 28, 0.10); border-bottom-color: rgba(185, 28, 28, 0.35); color: #b91c1c; }
+:root:not(.dark) .leaf-highlight-fail:hover { background: rgba(185, 28, 28, 0.18); }
+:root:not(.dark) .leaf-assertion-badge.passed { background: rgba(22, 163, 74, 0.08); color: #16a34a; }
+:root:not(.dark) .leaf-assertion-badge.failed { background: rgba(220, 38, 38, 0.08); color: #dc2626; }
+:root:not(.dark) .badge-muted { background: rgba(0, 0, 0, 0.04); }
+:root:not(.dark) .badge-success { background: rgba(22, 163, 74, 0.08); color: #16a34a; }
+:root:not(.dark) .badge-danger { background: rgba(220, 38, 38, 0.08); color: #dc2626; }
+:root:not(.dark) .badge-warning { background: rgba(217, 119, 6, 0.08); color: #d97706; }
+:root:not(.dark) .diff-placeholder { background: repeating-linear-gradient(45deg, transparent, transparent 8px, rgba(0, 0, 0, 0.02) 8px, rgba(0, 0, 0, 0.02) 16px); }
+:root:not(.dark) .constraint-card.exclude { border-left-color: #dc2626; }
+:root:not(.dark) .constraint-card .ct-type.exclude { color: #dc2626; }
+:root:not(.dark) .assertion-row.pass-bg { background: rgba(22, 163, 74, 0.04); }
+:root:not(.dark) .assertion-row.fail-bg { background: rgba(220, 38, 38, 0.04); }
 
 @layer base {
   * {
