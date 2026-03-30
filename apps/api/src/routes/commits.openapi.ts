@@ -64,7 +64,7 @@ const CreateCommitRequestSchema = z.object({
   branch: z.string().optional(),
   parents: z.array(z.string()).optional(),
   message: z.string().optional(),
-  author: AuthorSchema,
+  author: AuthorSchema.optional(),
   provenance: ProvenanceSchema.optional(),
 });
 
@@ -131,7 +131,7 @@ commitRoutes.openapi(createCommitRoute, async (c) => {
       branch: body.branch,
       parents: body.parents,
       message: body.message,
-      author: body.author,
+      author: body.author ?? { type: 'human' as const, name: 'cli' },
       provenance: body.provenance,
     });
 
