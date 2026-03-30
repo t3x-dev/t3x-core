@@ -16,7 +16,7 @@ do_patch() { local r; r=$(curl -sf -X PATCH "$1" -H "Content-Type: application/j
 curl -sf "${API_BASE}/health" > /dev/null 2>&1 || fail "API not running"
 ok "API healthy"
 echo ""
-echo "===== T3X E2E UI Test Seed ====="
+echo "===== T3X E2E UI Test Seed (3-commit DAG) ====="
 echo ""
 
 # --- Project ---
@@ -53,25 +53,65 @@ T8=$(post "${API}/turns" '{"project_id":"'"${PID}"'","conversation_id":"'"${C2ID
 T8H=$(jx "$T8" '.data.turn_hash')
 ok "  4 turns"
 
-# --- Commit 1: main (5 trees, 3 relations) ---
-step "Commit 1 on main (5 trees, 3 relations)"
+# ===========================================================
+# 3-commit DAG:
+#
+#   base_commit (branch "base")
+#   ├── commit_main    (parent: base, branch "main")
+#   └── commit_feature (parent: base, branch "feature/dietary")
+#
+# Both diverge from base with DIFFERENT slot values → real conflicts
+# ===========================================================
 
-# Build JSON with jq to avoid all escaping issues
-COMMIT1_JSON=$(jq -n \
+# --- Base Commit (3 trees, 2 relations, branch "base") ---
+step "Base commit (3 trees, 2 relations)"
+
+BASE_JSON=$(jq -n \
   --arg pid "$PID" \
   --arg t1h "$T1H" \
   --arg t2h "$T2H" \
-  --arg t4h "$T4H" \
   --arg c1id "$C1ID" \
 '{
   project_id: $pid,
   content: {
     trees: [
-      {key:"travel_plan", slots:{destination:"Tokyo, Japan",duration:"2 weeks",budget:"$5000",cities:["Tokyo (5d)","Kyoto (4d)","Nikko (2d)"],transport:"14-day JR Pass"}, children:[], confidence:0.95, source:$t2h},
-      {key:"budget_breakdown", slots:{flights:"$1000",accommodation:"$1400 (hostels+ryokans)",food:"$700 ($50/day)",transport:"$400 (JR Pass)",activities:"$300",extras:"$200"}, children:[], confidence:0.92, source:$t2h},
-      {key:"temple_recommendations", slots:{tokyo:["Senso-ji","Meiji Shrine"],kyoto:["Kinkaku-ji","Fushimi Inari"],nikko:["Toshogu Shrine"]}, children:[], confidence:0.93, source:$t4h},
-      {key:"vegetarian_restaurants", slots:{tokyo:"Ain Soph (vegan)",kyoto:"Shigetsu (temple cuisine)",specialty:"Komaki Shokudo (shojin ryori)",shellfish_safe:true}, children:[], confidence:0.91, source:$t4h},
+      {key:"travel_plan", slots:{destination:"Tokyo, Japan",duration:"2 weeks",budget:"$5000",cities:["Tokyo","Kyoto"]}, children:[], confidence:0.90, source:$t1h},
+      {key:"budget_breakdown", slots:{flights:"$1000",accommodation:"$1300",food:"$600",transport:"$400",activities:"$250",extras:"$150"}, children:[], confidence:0.88, source:$t2h},
       {key:"dietary_restriction", slots:{type:"vegetarian",allergy:"shellfish",severity:"critical"}, children:[], confidence:0.97, source:$t1h}
+    ],
+    relations: [
+      {from:"travel_plan", to:"budget_breakdown", type:"elaborates"},
+      {from:"dietary_restriction", to:"travel_plan", type:"conditions"}
+    ]
+  },
+  branch: "base",
+  message: "Initial extraction: base travel plan, budget, dietary info",
+  author: {type:"human", name:"heliuqi"},
+  source_refs: [{type:"conversation", id:$c1id, title:"Trip Planning"}]
+}')
+
+BASE_COMMIT=$(curl -sf -X POST "${API}/commits" -H "Content-Type: application/json" -d "$BASE_JSON") || fail "POST base commit failed"
+BASE_HASH=$(jx "$BASE_COMMIT" '.data.commit.hash // .data.hash')
+ok "Base commit: ${BASE_HASH}"
+
+# --- Main Commit (parent: base, 5 trees, 3 relations, branch "main") ---
+step "Main commit (5 trees, 3 relations) — diverges from base"
+
+MAIN_JSON=$(jq -n \
+  --arg pid "$PID" \
+  --arg t2h "$T2H" \
+  --arg t4h "$T4H" \
+  --arg c1id "$C1ID" \
+  --arg parent "$BASE_HASH" \
+'{
+  project_id: $pid,
+  content: {
+    trees: [
+      {key:"travel_plan", slots:{destination:"Tokyo, Japan",duration:"2 weeks",budget:"$5000",cities:["Tokyo (5d)","Kyoto (4d)","Nikko (2d)"]}, children:[], confidence:0.95, source:$t2h},
+      {key:"budget_breakdown", slots:{flights:"$1000",accommodation:"$1400",food:"$700 ($50/day)",transport:"$400 (JR Pass)",activities:"$300",extras:"$200"}, children:[], confidence:0.92, source:$t2h},
+      {key:"dietary_restriction", slots:{type:"vegetarian",allergy:"shellfish",severity:"critical"}, children:[], confidence:0.97, source:$t2h},
+      {key:"temple_recommendations", slots:{tokyo:["Senso-ji","Meiji Shrine"],kyoto:["Kinkaku-ji","Fushimi Inari"],nikko:["Toshogu Shrine"]}, children:[], confidence:0.93, source:$t4h},
+      {key:"vegetarian_restaurants", slots:{tokyo:"Ain Soph (vegan)",kyoto:"Shigetsu (temple cuisine)",specialty:"Komaki Shokudo"}, children:[], confidence:0.91, source:$t4h}
     ],
     relations: [
       {from:"travel_plan", to:"budget_breakdown", type:"elaborates"},
@@ -80,38 +120,39 @@ COMMIT1_JSON=$(jq -n \
     ]
   },
   branch: "main",
+  parents: [$parent],
   message: "Extract travel plan: 2-week Tokyo, budget + dietary constraints",
   author: {type:"human", name:"heliuqi"},
   source_refs: [{type:"conversation", id:$c1id, title:"Trip Planning"}]
 }')
 
-COMMIT1=$(curl -sf -X POST "${API}/commits" -H "Content-Type: application/json" -d "$COMMIT1_JSON") || fail "POST commits failed"
-HASH1=$(jx "$COMMIT1" '.data.commit.hash // .data.hash')
-ok "Commit 1 (main): ${HASH1}"
+MAIN_COMMIT=$(curl -sf -X POST "${API}/commits" -H "Content-Type: application/json" -d "$MAIN_JSON") || fail "POST main commit failed"
+MAIN_HASH=$(jx "$MAIN_COMMIT" '.data.commit.hash // .data.hash')
+ok "Main commit: ${MAIN_HASH}"
 
-# --- Commit 2: feature/dietary (5 trees, 3 relations, slot conflicts) ---
-step "Commit 2 on feature/dietary (5 trees, 3 relations)"
+# --- Feature Commit (parent: base, 5 trees, 3 relations, branch "feature/dietary") ---
+step "Feature commit (5 trees, 3 relations) — diverges from base"
 
-COMMIT2_JSON=$(jq -n \
+FEATURE_JSON=$(jq -n \
   --arg pid "$PID" \
   --arg t4h "$T4H" \
   --arg t6h "$T6H" \
   --arg t8h "$T8H" \
   --arg c2id "$C2ID" \
-  --arg parent "$HASH1" \
+  --arg parent "$BASE_HASH" \
 '{
   project_id: $pid,
   content: {
     trees: [
-      {key:"travel_plan", slots:{destination:"Tokyo, Japan",duration:"2 weeks",budget:"$5000",cities:["Tokyo (7d)","Kyoto (5d)","Osaka (2d)"],transport:"14-day JR Pass"}, children:[], confidence:0.94, source:$t8h},
+      {key:"travel_plan", slots:{destination:"Tokyo, Japan",duration:"2 weeks",budget:"$5000",cities:["Tokyo (7d)","Kyoto (5d)","Osaka (2d)"]}, children:[], confidence:0.94, source:$t8h},
       {key:"budget_breakdown", slots:{flights:"$1000",accommodation:"$1200 (hostels+capsule)",food:"$800 ($57/day veg premium)",transport:"$400 (14d JR Pass)",activities:"$400",extras:"$200"}, children:[], confidence:0.90, source:$t8h},
+      {key:"dietary_restriction", slots:{type:"vegetarian",allergy:"shellfish",severity:"critical"}, children:[], confidence:0.97, source:$t6h},
       {key:"temple_recommendations", slots:{tokyo:["Senso-ji","Meiji Shrine","Gotoku-ji"],kyoto:["Kinkaku-ji","Fushimi Inari","Ryoan-ji"],osaka:["Shitenno-ji"]}, children:[], confidence:0.91, source:$t4h},
-      {key:"vegetarian_restaurants", slots:{tokyo:"Ain Soph (vegan)",kyoto:"Shigetsu (temple cuisine)",osaka:"Green Earth (organic)",specialty:"Komaki Shokudo (shojin ryori)",shellfish_safe:true}, children:[], confidence:0.92, source:$t4h},
-      {key:"allergy_safety_guide", slots:{allergy:"shellfish (critical)",key_phrase:"Ebi to kai no arerugi ga arimasu",carry_card:true,avoid:["dashi","tempura oil","cheap miso"],safe:["soba","onigiri","conbini items"]}, children:[], confidence:0.96, source:$t6h}
+      {key:"allergy_safety_guide", slots:{allergy:"shellfish (critical)",key_phrase:"Ebi to kai no arerugi ga arimasu",avoid:["dashi","tempura oil","cheap miso"],safe:["soba","onigiri","conbini items"]}, children:[], confidence:0.96, source:$t6h}
     ],
     relations: [
       {from:"travel_plan", to:"budget_breakdown", type:"elaborates"},
-      {from:"allergy_safety_guide", to:"vegetarian_restaurants", type:"conditions"},
+      {from:"allergy_safety_guide", to:"travel_plan", type:"conditions"},
       {from:"travel_plan", to:"temple_recommendations", type:"elaborates"}
     ]
   },
@@ -122,41 +163,36 @@ COMMIT2_JSON=$(jq -n \
   source_refs: [{type:"conversation", id:$c2id, title:"Dietary Requirements"}]
 }')
 
-COMMIT2=$(curl -sf -X POST "${API}/commits" -H "Content-Type: application/json" -d "$COMMIT2_JSON") || fail "POST commits failed"
-HASH2=$(jx "$COMMIT2" '.data.commit.hash // .data.hash')
-ok "Commit 2 (feature/dietary): ${HASH2}"
+FEATURE_COMMIT=$(curl -sf -X POST "${API}/commits" -H "Content-Type: application/json" -d "$FEATURE_JSON") || fail "POST feature commit failed"
+FEATURE_HASH=$(jx "$FEATURE_COMMIT" '.data.commit.hash // .data.hash')
+ok "Feature commit: ${FEATURE_HASH}"
 
-# --- Leaf ---
+# --- Leaf on main commit ---
 step "Creating Leaf: Travel Assistant v1"
-LEAF=$(post "${API}/leaves" '{"project_id":"'"${PID}"'","commit_hash":"'"${HASH1}"'","type":"deploy_agent","title":"Travel Assistant v1","constraints":[{"type":"require","match_mode":"exact","value":"Tokyo"},{"type":"require","match_mode":"exact","value":"2 weeks"},{"type":"require","match_mode":"semantic","value":"vegetarian"},{"type":"exclude","match_mode":"exact","value":"shellfish","reason":"Critical allergy"}],"config":{"prompt_template":"Generate a Japan travel guide focusing on vegetarian options.","model":"claude-sonnet-4-20250514","max_tokens":2048}}')
+LEAF=$(post "${API}/leaves" '{"project_id":"'"${PID}"'","commit_hash":"'"${MAIN_HASH}"'","type":"deploy_agent","title":"Travel Assistant v1","constraints":[{"type":"require","match_mode":"exact","value":"Tokyo"},{"type":"require","match_mode":"exact","value":"2 weeks"},{"type":"require","match_mode":"semantic","value":"vegetarian"},{"type":"exclude","match_mode":"exact","value":"shellfish","reason":"Critical allergy"}],"config":{"prompt_template":"Generate a Japan travel guide focusing on vegetarian options.","model":"claude-sonnet-4-20250514","max_tokens":2048}}')
 LEAF_ID=$(jx "$LEAF" '.data.id')
 ok "Leaf: ${LEAF_ID}"
 
-step "Writing mock output..."
-MOCK_JSON=$(jq -n --arg out 'Welcome! Here is your 2-week Tokyo travel guide.
+step "Writing mock output"
+MOCK_JSON=$(jq -n --arg out 'Welcome! Here is your 2 weeks Tokyo travel guide.
 
-Your $5000 budget covers: Flights $1000, Accommodation $1400, Food $700 ($50/day vegetarian), Transport $400 (JR Pass), Activities $300, Extras $200.
+Budget: $5000 covers Flights $1000, Accommodation $1400, Food $700 ($50/day vegetarian), Transport $400 (JR Pass), Activities $300, Extras $200.
 
-Week 1 — Tokyo (5 days):
-Day 1-2: Senso-ji temple, Asakusa area
-Day 3: Meiji Shrine, Harajuku
-Day 4: Vegetarian food tour at Ain Soph (fully vegan)
-Day 5: Komaki Shokudo for authentic shojin ryori
+Week 1 Tokyo (5 days): Senso-ji temple, Meiji Shrine, Ain Soph vegan restaurant, Komaki Shokudo shojin ryori.
 
-Week 2 — Kyoto & Nikko:
-Day 6-7: Kyoto, Kinkaku-ji Golden Pavilion
-Day 8: Fushimi Inari thousand gates walk
-Day 9: Temple cuisine lunch at Shigetsu
-Day 10-11: Nikko, Toshogu Shrine complex
-Day 12-14: Return to Tokyo, free exploration
+Week 2 Kyoto and Nikko: Kinkaku-ji, Fushimi Inari, Shigetsu temple cuisine, Toshogu Shrine.
 
-Dietary Note: You are vegetarian. All restaurant recommendations have been verified as safe for your dietary needs. Carry your allergy card at all times when dining out.' '{output: $out}')
+Dietary note: You are vegetarian with a critical shellfish allergy. All restaurants verified safe. Carry your allergy card at all times.' '{output: $out}')
 do_patch "${API}/leaves/${LEAF_ID}" "$MOCK_JSON" > /dev/null
 ok "Mock output written"
 
+step "Validating leaf (exact match)"
+VALIDATE=$(post "${API}/leaves/${LEAF_ID}/validate" '{"use_semantic": false}')
+ok "Leaf validated — assertions created"
+
 # --- Merge Draft ---
 step "Creating merge draft: feature/dietary -> main"
-MERGE=$(post "${API}/merge/drafts" '{"project_id":"'"${PID}"'","source_hash":"'"${HASH2}"'","target_hash":"'"${HASH1}"'","source_branch":"feature/dietary","target_branch":"main"}')
+MERGE=$(post "${API}/merge/drafts" '{"project_id":"'"${PID}"'","source_hash":"'"${FEATURE_HASH}"'","target_hash":"'"${MAIN_HASH}"'","source_branch":"feature/dietary","target_branch":"main"}')
 MERGE_ID=$(jx "$MERGE" '.data.draftId')
 ok "Merge draft: ${MERGE_ID}"
 
@@ -167,16 +203,16 @@ echo "============================================="
 echo ""
 echo "  Project:       ${PID}"
 echo "  Conversations: 2 (8 turns)"
-echo "  Commits:       2 (5 trees each, 3 relations each)"
-echo "  Leaf:          1 (4 constraints + output)"
-echo "  Merge Draft:   1 (with slot conflicts)"
+echo "  Commits:       3 (base + main + feature, DAG)"
+echo "  Leaf:          1 (4 constraints + output + assertions)"
+echo "  Merge Draft:   1 (real 3-way conflicts)"
 echo ""
 echo "  ===== Click these URLs ====="
 echo ""
 echo "  Chat:    http://localhost:3000/chat/${C1ID}"
 echo "  Canvas:  http://localhost:3000/project/${PID}"
-echo "  Commit:  http://localhost:3000/project/${PID}/commit/${HASH1}"
-echo "  Diff:    http://localhost:3000/project/${PID}/diff?base=${HASH1}&target=${HASH2}"
+echo "  Commit:  http://localhost:3000/project/${PID}/commit/${MAIN_HASH}"
+echo "  Diff:    http://localhost:3000/project/${PID}/diff?base=${MAIN_HASH}&target=${FEATURE_HASH}"
 echo "  Merge:   http://localhost:3000/project/${PID}/merge/${MERGE_ID}"
 echo "  Leaf:    http://localhost:3000/project/${PID}/leaf/${LEAF_ID}"
 echo ""
