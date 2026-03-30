@@ -307,7 +307,9 @@ export function ChatWorkspace({
 
   // User-initiated extraction callback (called by ExtractionPanel's Extract button)
   const handleExtract = useCallback(async () => {
-    if (!resolvedConversationId || isExtracting) return;
+    // Use resolved ID, or fallback to store's active conversation
+    const extractConvId = resolvedConversationId ?? useChatStore.getState().activeConversationId ?? undefined;
+    if (!extractConvId || isExtracting) return;
 
     startExtraction();
 
@@ -319,7 +321,7 @@ export function ChatWorkspace({
 
     try {
       const result = await extractNodes(
-        resolvedConversationId,
+        extractConvId,
         undefined,
         undefined,
         activeTopicId ? { topicId: activeTopicId } : undefined
@@ -411,8 +413,7 @@ export function ChatWorkspace({
       }
 
       // Reload topics after extraction (new topic may have been auto-created)
-      const convId = resolvedConversationId;
-      listTopics(convId)
+      listTopics(extractConvId)
         .then((topicsList) => {
           const s2 = useExtractionPanelStore.getState();
           s2.setTopics(topicsList);
