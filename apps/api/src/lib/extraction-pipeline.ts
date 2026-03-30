@@ -452,6 +452,20 @@ export async function* runExtractionPipeline(
       // Pipeline is optional — flat frames are still valid
     }
 
+    // ── Code-based structure enforcement ──
+    // Single-root: if multiple roots exist and no drift was detected, nest smaller roots under the largest
+    if (organizedSnapshot.trees.length > 1 && !driftDecision) {
+      const countSlots = (node: { slots: Record<string, unknown>; children: Array<{ slots: Record<string, unknown>; children: any[] }> }): number =>
+        Object.keys(node.slots).length + (node.children || []).reduce((sum: number, c: any) => sum + countSlots(c), 0);
+
+      const sorted = [...organizedSnapshot.trees].sort((a, b) => countSlots(b) - countSlots(a));
+      const largest = sorted[0];
+      for (let i = 1; i < sorted.length; i++) {
+        largest.children.push(sorted[i]);
+      }
+      organizedSnapshot = { trees: [largest], relations: organizedSnapshot.relations };
+    }
+
     yield {
       type: 'reorganized',
       data: { snapshot: organizedSnapshot, changes_summary: changesSummary },
