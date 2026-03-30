@@ -42,7 +42,8 @@ export const dedupCheckerAgent: MeaningAgent = {
   usesLLM: false,
 
   shouldRun(ctx: PipelineContext): boolean {
-    return ctx.content.trees.length >= 4;
+    // Run with 2+ trees — even 2 trees can have duplicate keys
+    return ctx.content.trees.length >= 2;
   },
 
   async run(ctx: PipelineContext): Promise<PipelineContext> {

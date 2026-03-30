@@ -60,19 +60,28 @@ function validateTree(node: TreeNode, turnContents: string[]): TreeNode {
     };
   }
 
-  let hasUnmatched = false;
+  // Proportional confidence: matched/total ratio instead of all-or-nothing
+  let total = 0;
+  let matched = 0;
   for (const quote of Object.values(node.slot_quotes)) {
     if (typeof quote === 'string' && quote.length > 0) {
-      if (!quoteMatchesTurns(quote, turnContents)) {
-        hasUnmatched = true;
-        break;
+      total++;
+      if (quoteMatchesTurns(quote, turnContents)) {
+        matched++;
       }
     }
   }
 
+  // Scale confidence by match ratio: all matched = keep original, none matched = LOW_CONFIDENCE
+  const baseConfidence = node.confidence ?? 0.8;
+  const matchRatio = total > 0 ? matched / total : 1;
+  const adjustedConfidence = total > 0
+    ? LOW_CONFIDENCE + (baseConfidence - LOW_CONFIDENCE) * matchRatio
+    : baseConfidence;
+
   return {
     ...node,
-    confidence: hasUnmatched ? LOW_CONFIDENCE : (node.confidence ?? 0.8),
+    confidence: adjustedConfidence,
     children: node.children.map((c) => validateTree(c, turnContents)),
   };
 }

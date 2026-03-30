@@ -23,9 +23,14 @@ function tree(key: string, slots: Record<string, string>): TreeNode {
 }
 
 describe('code dedup checker', () => {
-  test('does not run with fewer than 4 trees', () => {
-    const ctx = makeCtx([tree('a', { x: '1' }), tree('b', { y: '2' })]);
+  test('does not run with fewer than 2 trees', () => {
+    const ctx = makeCtx([tree('a', { x: '1' })]);
     expect(dedupCheckerAgent.shouldRun(ctx)).toBe(false);
+  });
+
+  test('runs with 2+ trees', () => {
+    const ctx = makeCtx([tree('a', { x: '1' }), tree('b', { y: '2' })]);
+    expect(dedupCheckerAgent.shouldRun(ctx)).toBe(true);
   });
 
   test('merges trees with identical keys', async () => {

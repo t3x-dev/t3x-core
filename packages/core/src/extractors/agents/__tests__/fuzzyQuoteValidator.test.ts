@@ -31,7 +31,7 @@ describe('fuzzy quote validator', () => {
       { role: 'user', content: 'I have a $3000 budget for this trip' },
     ]);
     const result = await fuzzyQuoteValidatorAgent.run(ctx, null as any);
-    expect(result.content.trees[0].confidence).toBe(0.9);
+    expect(result.content.trees[0].confidence).toBeCloseTo(0.9, 5);
   });
 
   test('reduces confidence when quote does not match any turn', async () => {
