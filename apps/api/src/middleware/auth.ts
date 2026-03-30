@@ -25,8 +25,6 @@ const PUBLIC_PREFIXES = [
   '/api/v1/auth/callback',
   '/api/v1/auth/register',
   '/api/v1/auth/login',
-  '/api/v1/oauth/device/code',   // MCP requests device code (no auth)
-  '/api/v1/oauth/device/token',  // MCP polls for token (no auth)
 ];
 
 /**
