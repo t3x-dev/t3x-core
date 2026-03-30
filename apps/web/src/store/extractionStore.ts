@@ -122,13 +122,14 @@ export const useExtractionStore = create<ExtractionState>((set, get) => ({
   },
 
   resetDraft: () => {
+    const wasExtracting = get().isExtracting;
     set({
       draft: emptyContent,
       yopsLog: [],
       removedNodes: [],
       yopsHistory: [],
-      feedYops: [],
-      pipelineSteps: [],
+      // Only clear feed display if NOT mid-extraction (prevents wipe on conversation remount)
+      ...(wasExtracting ? {} : { feedYops: [], pipelineSteps: [] }),
     });
     // Clear drift state in extractionUIStore
     // NOTE: phase is reset synchronously below, NOT via async import (prevents race with extraction)

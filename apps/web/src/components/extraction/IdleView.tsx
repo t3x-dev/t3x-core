@@ -18,23 +18,13 @@ export function IdleView() {
     return (
       <div
         className="flex flex-col items-center justify-center text-center"
-        style={{ padding: '40px 24px', gap: 12 }}
+        style={{ padding: '60px 24px', gap: 8 }}
       >
-        <div style={{ fontSize: 36, opacity: 0.12 }}>&#9878;</div>
         <div
           className="text-[var(--text-tertiary)]"
-          style={{ fontSize: 11, lineHeight: 1.7 }}
+          style={{ fontSize: 11, opacity: 0.4 }}
         >
-          Chat with the AI, then click{' '}
-          <strong className="text-[var(--accent-extract)]">Extract</strong>
-          <br />
-          when you want to save key points.
-        </div>
-        <div
-          className="text-[var(--text-tertiary)]"
-          style={{ fontSize: 10, opacity: 0.6, marginTop: 4 }}
-        >
-          Keyboard shortcut: Cmd+E
+          No extractions yet
         </div>
       </div>
     );
