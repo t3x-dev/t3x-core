@@ -21,7 +21,13 @@ import { pinoLogger } from './logger';
 const PUBLIC_PATHS = ['/health', '/api/docs', '/api/openapi.json', '/api/v1/llm/models'];
 
 /** Path prefixes that never require authentication */
-const PUBLIC_PREFIXES = ['/api/v1/auth/callback', '/api/v1/auth/register', '/api/v1/auth/login'];
+const PUBLIC_PREFIXES = [
+  '/api/v1/auth/callback',
+  '/api/v1/auth/register',
+  '/api/v1/auth/login',
+  '/api/v1/oauth/device/code',   // MCP requests device code (no auth)
+  '/api/v1/oauth/device/token',  // MCP polls for token (no auth)
+];
 
 /**
  * Match the share resolve endpoint: GET /api/v1/share/:token

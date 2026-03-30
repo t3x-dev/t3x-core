@@ -44,6 +44,7 @@ export const ExtractResponse = z
     trees: z.array(ExtractTree),
     yaml: z.string().optional(),
     drift: z.array(DriftItem).optional(),
+    extraction_mode: z.enum(['llm', 'regex']).describe('Whether LLM or regex fallback was used'),
   })
   .openapi('ExtractResponse');
 

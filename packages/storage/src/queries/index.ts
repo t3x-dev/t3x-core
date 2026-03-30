@@ -87,6 +87,15 @@ export {
   getConversationContext,
   setConversationContext,
 } from './conversation-contexts';
+// Device Codes (OAuth Device Flow)
+export {
+  authorizeDeviceCode,
+  cleanupExpiredDeviceCodes,
+  findDeviceCodeByDeviceCode,
+  findDeviceCodeByUserCode,
+  insertDeviceCode,
+  markDeviceCodeUsed,
+} from './device-codes';
 // Conversations
 export {
   type CreateConversationInput,

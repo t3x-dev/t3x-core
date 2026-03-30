@@ -228,5 +228,21 @@ describe('Extract Routes', () => {
         }
       }
     });
+
+    it('returns extraction_mode in response', async () => {
+      const res = await app.request('/v1/extract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_id: testProjectId,
+          text: 'Budget is $50k for the project.',
+        }),
+      });
+
+      expect(res.status).toBe(200);
+      const data: ApiResponse = await res.json();
+      expect(data.data.extraction_mode).toBeDefined();
+      expect(['llm', 'regex']).toContain(data.data.extraction_mode);
+    });
   });
 });
