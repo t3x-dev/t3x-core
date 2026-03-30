@@ -357,6 +357,7 @@ extractRoutes.openapi(postExtractRoute, async (c) => {
     // Step 4: Run extraction — try LLM first, fallback to regex
     let trees: TreeNodeResult[];
     let yaml: string;
+    let extractionMode: 'llm' | 'regex';
     const incrementalOpts =
       existingSnapshot || allTurns.length > 1
         ? { allTurns, snapshot: existingSnapshot, processedTurnCount }
@@ -367,11 +368,12 @@ extractRoutes.openapi(postExtractRoute, async (c) => {
       // LLM extraction succeeded — map TreeNode[] to API tree format
       trees = llmResult.trees as TreeNodeResult[];
       yaml = llmResult.yaml;
+      extractionMode = 'llm';
     } else {
       // Fallback to regex segmentation
       trees = extractTreesFromText(text, conversationId, turn.turnHash);
       yaml = treesToYaml(trees);
-      _debugExtraction = 'regex_fallback';
+      extractionMode = 'regex';
     }
 
     // Step 5: Save/update auto-draft for future incremental calls
@@ -438,6 +440,7 @@ extractRoutes.openapi(postExtractRoute, async (c) => {
       trees,
       yaml,
       drift,
+      extraction_mode: extractionMode,
     };
 
     return c.json({ success: true as const, data: result }, 200);
