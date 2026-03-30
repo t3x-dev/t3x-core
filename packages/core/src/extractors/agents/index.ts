@@ -23,7 +23,3 @@ export { sourceTraceValidatorAgent } from './sourceTraceValidatorAgent';
 export { topicNamerAgent } from './topicNamerAgent';
 export { coverageCheckerAgent } from './coverageCheckerAgent';
 
-// REMOVED from pipeline (files kept for reference):
-// - slotPolisherAgent (unnecessary LLM beautification)
-// - reviewerAgent (biggest data remover)
-// - topicEvolverAgent (code uses root key directly)
