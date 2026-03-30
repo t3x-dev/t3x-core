@@ -10,13 +10,15 @@
 
 import { randomBytes } from 'node:crypto';
 import { OpenAPIHono } from '@hono/zod-openapi';
-import { z } from 'zod';
 import {
+  authorizeDeviceCode,
   createApiKey,
   findDeviceCodeByDeviceCode,
+  findDeviceCodeByUserCode,
   insertDeviceCode,
   markDeviceCodeUsed,
 } from '@t3x-dev/storage';
+import { z } from 'zod';
 import { getDB } from '../lib/db';
 import { zodErrorHook } from '../lib/errors';
 
@@ -118,4 +120,44 @@ oauthDeviceRoutes.post('/v1/oauth/device/token', async (c) => {
   }
 
   return c.json({ error: 'server_error' }, 500);
+});
+
+// ── POST /v1/oauth/device/authorize ──
+// Called by WebUI when user enters user_code and clicks "Authorize"
+// This endpoint REQUIRES authentication (not in PUBLIC_PREFIXES)
+
+const AuthorizeRequestSchema = z.object({
+  user_code: z.string().min(1),
+});
+
+oauthDeviceRoutes.post('/v1/oauth/device/authorize', async (c) => {
+  // biome-ignore lint/suspicious/noExplicitAny: context typing
+  const apiKey = (c as any).get('apiKey') as { user_id?: string } | undefined;
+  const userId = apiKey?.user_id;
+  if (!userId) {
+    return c.json({ error: 'unauthorized', error_description: 'Login required' }, 401);
+  }
+
+  const body = await c.req.json();
+  const parsed = AuthorizeRequestSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json({ error: 'invalid_request', error_description: 'user_code is required' }, 400);
+  }
+
+  const db = await getDB();
+  const dc = await findDeviceCodeByUserCode(db, parsed.data.user_code);
+
+  if (!dc) {
+    return c.json({ error: 'invalid_code', error_description: 'Code not found or expired' }, 404);
+  }
+
+  const result = await authorizeDeviceCode(db, dc.id, userId);
+  if (!result) {
+    return c.json(
+      { error: 'invalid_code', error_description: 'Code already used or expired' },
+      400
+    );
+  }
+
+  return c.json({ status: 'authorized' });
 });
