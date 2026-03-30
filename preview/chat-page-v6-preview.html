@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>T3X Chat Page V6 — Full Preview</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #161922;
+    --panel: #1a1d28;
+    --panel-alt: #1e2130;
+    --stroke: #2a2d3a;
+    --stroke-light: #333648;
+    --text-primary: #e4e4e7;
+    --text-secondary: #a1a1aa;
+    --text-tertiary: #636370;
+    --accent: #8b5cf6;
+    --accent-blue: #2563eb;
+    --green: #4ade80;
+    --green-dim: rgba(74,222,128,0.15);
+    --yellow: #facc15;
+    --yellow-dim: rgba(250,204,21,0.15);
+    --red: #f87171;
+    --red-dim: rgba(248,113,113,0.15);
+    --blue: #60a5fa;
+    --blue-dim: rgba(96,165,250,0.15);
+    --orange: #fb923c;
+    --hover: rgba(255,255,255,0.04);
+    --font-mono: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--bg); color: var(--text-primary); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; overflow-x: auto; }
+
+  /* ── Page header ── */
+  .page-title { text-align: center; padding: 24px 0 4px; font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }
+  .page-title span { color: var(--accent); font-weight: 400; font-size: 14px; margin-left: 8px; }
+  .page-sub { text-align: center; font-size: 12px; color: var(--text-tertiary); margin-bottom: 32px; line-height: 1.6; }
+
+  /* ── Section header ── */
+  .section-title { text-align: center; font-size: 16px; font-weight: 700; margin: 48px 0 4px; }
+  .section-title em { color: var(--accent); font-style: normal; font-weight: 400; font-size: 13px; margin-left: 6px; }
+  .section-sub { text-align: center; font-size: 11px; color: var(--text-tertiary); margin-bottom: 20px; }
+
+  /* ── Full page mockup frame ── */
+  .page-frame {
+    width: 1100px; height: 640px; margin: 0 auto 16px;
+    background: var(--bg); border: 1px solid var(--stroke); border-radius: 12px;
+    display: flex; overflow: hidden; position: relative;
+  }
+
+  /* ── Sidebar ── */
+  .sidebar {
+    width: 220px; background: var(--surface); border-right: 1px solid var(--stroke);
+    display: flex; flex-direction: column; padding: 16px 12px; flex-shrink: 0;
+  }
+  .sidebar-logo { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; padding: 0 4px; }
+  .sidebar-logo svg { width: 28px; height: 28px; flex-shrink: 0; }
+  .sidebar-logo span { font-size: 14px; font-weight: 700; }
+
+  .sidebar-new-btn {
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    width: 100%; height: 36px; border-radius: 10px;
+    background: rgba(37,99,235,0.1); border: 1px solid rgba(37,99,235,0.3);
+    color: var(--accent-blue); font-size: 13px; font-weight: 600;
+    cursor: pointer; margin-bottom: 16px; transition: background 0.15s;
+  }
+  .sidebar-new-btn:hover { background: rgba(37,99,235,0.18); }
+
+  .sidebar-section-label {
+    font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px;
+    color: var(--text-tertiary); padding: 0 6px; margin-bottom: 6px;
+  }
+
+  .sidebar-scroll { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+
+  /* Project item */
+  .proj-item {
+    display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 8px;
+    cursor: pointer; transition: background 0.12s; position: relative;
+  }
+  .proj-item:hover { background: var(--hover); }
+  .proj-item.active { background: rgba(37,99,235,0.08); border-left: 2px solid var(--accent-blue); }
+  .proj-icon {
+    width: 28px; height: 28px; border-radius: 7px; display: flex; align-items: center; justify-content: center;
+    font-size: 13px; flex-shrink: 0;
+  }
+  .proj-icon.blue { background: rgba(96,165,250,0.12); color: var(--blue); }
+  .proj-icon.purple { background: rgba(139,92,246,0.12); color: var(--accent); }
+  .proj-icon.green { background: rgba(74,222,128,0.12); color: var(--green); }
+  .proj-icon.orange { background: rgba(251,146,60,0.12); color: var(--orange); }
+  .proj-info { flex: 1; min-width: 0; }
+  .proj-name { font-size: 12px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .proj-meta { font-size: 9px; color: var(--text-tertiary); margin-top: 1px; }
+  .proj-badge {
+    font-size: 8px; padding: 1px 5px; border-radius: 4px; font-weight: 600;
+    background: rgba(74,222,128,0.1); color: var(--green); flex-shrink: 0;
+  }
+
+  /* Expanded conversations under project */
+  .proj-convs { padding: 2px 0 4px 20px; border-left: 1px solid var(--stroke-light); margin-left: 20px; }
+  .conv-item {
+    display: flex; align-items: center; gap: 6px; padding: 5px 8px; border-radius: 6px;
+    font-size: 11px; color: var(--text-secondary); cursor: pointer; transition: background 0.12s;
+  }
+  .conv-item:hover { background: var(--hover); color: var(--text-primary); }
+  .conv-item.active { background: rgba(37,99,235,0.08); color: var(--text-primary); font-weight: 600; }
+  .conv-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--text-tertiary); flex-shrink: 0; opacity: 0.4; }
+  .conv-item.active .conv-dot { background: var(--accent-blue); opacity: 1; }
+
+  .sidebar-bottom {
+    margin-top: auto; padding-top: 12px; border-top: 1px solid var(--stroke);
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .sidebar-bottom-item {
+    display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 8px;
+    font-size: 12px; color: var(--text-secondary); cursor: pointer; transition: background 0.12s;
+  }
+  .sidebar-bottom-item:hover { background: var(--hover); color: var(--text-primary); }
+
+  /* ── Chat Area ── */
+  .chat-area { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .chat-header {
+    height: 48px; border-bottom: 1px solid var(--stroke); display: flex; align-items: center;
+    padding: 0 16px; gap: 10px; flex-shrink: 0;
+  }
+  .chat-header-title { font-size: 13px; font-weight: 600; flex: 1; }
+  .chat-header-model {
+    font-size: 10px; padding: 3px 8px; border-radius: 6px;
+    background: rgba(139,92,246,0.08); border: 1px solid rgba(139,92,246,0.2);
+    color: var(--accent); font-weight: 500;
+  }
+
+  .chat-messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+
+  .bubble { padding: 10px 14px; border-radius: 14px; font-size: 13px; line-height: 1.65; max-width: 85%; }
+  .bubble.user { background: rgba(37,99,235,0.1); border: 1px solid rgba(37,99,235,0.2); align-self: flex-end; }
+  .bubble.assistant { background: var(--panel); border: 1px solid var(--stroke); color: var(--text-secondary); align-self: flex-start; }
+  .bubble strong { color: var(--text-primary); }
+
+  /* Source highlights in chat */
+  .src-hl { background: rgba(74,222,128,0.12); border-bottom: 2px solid var(--green); padding: 0 1px; cursor: pointer; }
+  .src-hl:hover { background: rgba(74,222,128,0.22); }
+  .src-hl.active { background: rgba(139,92,246,0.15); border-color: var(--accent); }
+
+  .chat-input-area {
+    padding: 12px 16px; border-top: 1px solid var(--stroke); flex-shrink: 0;
+  }
+  .chat-input-box {
+    display: flex; align-items: center; gap: 8px; padding: 10px 14px;
+    background: var(--panel); border: 1px solid var(--stroke-light); border-radius: 12px;
+  }
+  .chat-input-text { flex: 1; font-size: 13px; color: var(--text-tertiary); }
+  .chat-send-btn {
+    width: 28px; height: 28px; border-radius: 8px; background: var(--accent-blue);
+    border: none; color: white; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+  }
+
+  /* ── Extraction Panel ── */
+  .ext-panel {
+    width: 360px; background: var(--panel); border-left: 1px solid var(--stroke);
+    display: flex; flex-direction: column; flex-shrink: 0;
+  }
+  .ext-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 14px; border-bottom: 1px solid var(--stroke); background: var(--panel-alt);
+  }
+  .ext-header-left { display: flex; align-items: center; gap: 8px; }
+  .ext-title { font-size: 12px; font-weight: 600; }
+  .node-count { font-size: 10px; background: var(--hover); padding: 1px 7px; border-radius: 8px; color: var(--text-secondary); }
+
+  .extract-btn {
+    display: flex; align-items: center; gap: 5px; padding: 5px 12px; border-radius: 7px;
+    border: 1px solid rgba(139,92,246,0.3); background: rgba(139,92,246,0.08);
+    color: var(--accent); font-size: 11px; font-weight: 600; cursor: pointer;
+  }
+  .extract-btn:hover { background: rgba(139,92,246,0.15); }
+
+  .ext-content { flex: 1; overflow-y: auto; }
+
+  /* Phase tabs */
+  .phase-tabs { display: flex; border-bottom: 1px solid var(--stroke); }
+  .phase-tab {
+    flex: 1; padding: 8px 0; text-align: center; font-size: 10px; font-weight: 600;
+    color: var(--text-tertiary); cursor: pointer; background: transparent; border: none; position: relative;
+  }
+  .phase-tab.active { color: var(--accent); }
+  .phase-tab.active::after { content: ''; position: absolute; bottom: -1px; left: 15%; right: 15%; height: 2px; background: var(--accent); border-radius: 1px; }
+  .phase-tab.done { color: var(--green); }
+  .phase-tab.done::after { content: ''; position: absolute; bottom: -1px; left: 15%; right: 15%; height: 2px; background: var(--green); border-radius: 1px; opacity: 0.3; }
+  .tab-dot { display: inline-block; width: 5px; height: 5px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
+
+  /* Idle state */
+  .idle-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 24px; gap: 12px; text-align: center; }
+  .idle-icon { font-size: 40px; opacity: 0.1; }
+  .idle-text { font-size: 11px; color: var(--text-tertiary); line-height: 1.7; }
+  .idle-hint { font-size: 10px; color: var(--text-tertiary); opacity: 0.5; }
+
+  /* Committed nodes (collapsed) */
+  .committed-hdr { display: flex; align-items: center; justify-content: space-between; padding: 7px 14px; font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: var(--text-tertiary); background: rgba(255,255,255,0.015); border-bottom: 1px solid var(--stroke); }
+  .committed-row { display: flex; align-items: center; gap: 6px; padding: 5px 10px 5px 14px; min-height: 28px; cursor: pointer; opacity: 0.5; }
+  .committed-row:hover { background: var(--hover); }
+  .committed-bar { width: 4px; align-self: stretch; background: var(--green); opacity: 0.25; border-radius: 1px; }
+  .committed-check { font-size: 10px; color: var(--green); opacity: 0.4; }
+  .committed-label { font-size: 11px; font-family: var(--font-mono); color: var(--text-tertiary); flex: 1; }
+  .slot-badge { font-size: 9px; padding: 1px 6px; border-radius: 8px; background: rgba(255,255,255,0.04); color: var(--text-tertiary); }
+
+  /* Extract nudge */
+  .extract-nudge {
+    margin: 8px 12px; padding: 8px 12px; background: rgba(139,92,246,0.05);
+    border: 1px solid rgba(139,92,246,0.12); border-radius: 6px;
+    display: flex; align-items: center; gap: 8px; font-size: 10px; color: var(--text-secondary);
+  }
+  .nudge-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: pulse 2s infinite; flex-shrink: 0; }
+  @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+
+  /* YOps Feed */
+  .yop-item { display: flex; align-items: flex-start; gap: 8px; padding: 4px 14px; font-size: 11px; font-family: var(--font-mono); }
+  .yop-item.dim { opacity: 0.3; }
+  .yop-icon { width: 16px; height: 16px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 800; flex-shrink: 0; margin-top: 2px; }
+  .yop-icon.add { background: var(--green-dim); color: var(--green); }
+  .yop-icon.upd { background: var(--yellow-dim); color: var(--yellow); }
+  .yop-text { flex: 1; line-height: 1.5; }
+  .yop-path { color: var(--text-secondary); }
+  .yop-arrow { color: var(--text-tertiary); margin: 0 3px; }
+  .yop-value { color: var(--text-primary); }
+
+  .progress-row { padding: 8px 14px; display: flex; align-items: center; gap: 8px; font-size: 10px; color: var(--text-tertiary); border-top: 1px solid var(--stroke); }
+  .progress-bar { flex: 1; height: 2px; background: var(--stroke); border-radius: 1px; overflow: hidden; }
+  .progress-fill { height: 100%; background: var(--accent); border-radius: 1px; }
+
+  /* Triage */
+  .triage-row { display: flex; align-items: center; min-height: 36px; border-bottom: 1px solid rgba(255,255,255,0.03); cursor: pointer; }
+  .triage-row:hover { background: var(--hover); }
+  .triage-row.accepted { background: rgba(74,222,128,0.02); }
+  .triage-row.dismissed { opacity: 0.2; }
+  .triage-bar { width: 4px; align-self: stretch; flex-shrink: 0; }
+  .triage-bar.ok { background: var(--green); }
+  .triage-bar.auto { background: var(--green); opacity: 0.5; }
+  .triage-bar.pending { background: var(--stroke-light); }
+  .triage-bar.no { background: var(--red); opacity: 0.4; }
+  .triage-body { flex: 1; padding: 6px 10px; min-width: 0; display: flex; align-items: center; gap: 8px; }
+  .triage-name { font-size: 11px; font-weight: 600; font-family: var(--font-mono); color: var(--text-primary); white-space: nowrap; }
+  .triage-preview { font-size: 10px; color: var(--text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; font-family: var(--font-mono); }
+  .source-tag { font-size: 7px; font-weight: 700; padding: 1px 5px; border-radius: 3px; letter-spacing: 0.5px; flex-shrink: 0; }
+  .source-tag.user { background: rgba(139,92,246,0.15); color: var(--accent); }
+  .source-tag.llm { background: var(--blue-dim); color: var(--blue); }
+  .source-tag.both { background: var(--yellow-dim); color: var(--yellow); }
+  .triage-count { font-size: 9px; color: var(--text-tertiary); flex-shrink: 0; }
+  .triage-actions { display: flex; gap: 1px; padding-right: 6px; flex-shrink: 0; }
+  .triage-btn { width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border: none; border-radius: 5px; cursor: pointer; font-size: 11px; background: transparent; }
+  .triage-btn.yes { color: var(--green); opacity: 0.4; }
+  .triage-btn.yes.on { opacity: 1; }
+  .triage-btn.no { color: var(--red); opacity: 0.2; }
+  .chevron { font-size: 10px; color: var(--text-tertiary); width: 14px; text-align: center; flex-shrink: 0; }
+
+  /* YAML lines */
+  .yaml-line { display: flex; align-items: stretch; min-height: 22px; cursor: pointer; }
+  .yaml-line:hover { background: var(--hover); }
+  .yaml-line.clicked { background: rgba(139,92,246,0.06); }
+  .yaml-bar-line { width: 4px; flex-shrink: 0; }
+  .yaml-bar-line.g { background: var(--green); }
+  .yaml-bar-line.b { background: var(--blue); }
+  .yaml-text { padding: 2px 8px; font-size: 11px; line-height: 18px; font-family: var(--font-mono); white-space: pre; flex: 1; }
+  .yaml-key { color: var(--text-primary); font-weight: 600; }
+  .yaml-sk { color: var(--text-secondary); }
+  .yaml-sv { color: var(--text-primary); }
+  .yaml-spacer { height: 6px; }
+  .trace-tag { font-size: 8px; color: var(--accent); opacity: 0; margin-left: 4px; padding: 1px 4px; border-radius: 3px; }
+  .yaml-line:hover .trace-tag { opacity: 0.5; }
+
+  /* Action bars */
+  .action-bar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-top: 1px solid var(--stroke); background: var(--panel-alt); margin-top: auto; }
+  .action-info { font-size: 10px; color: var(--text-tertiary); flex: 1; }
+  .action-btn { padding: 6px 14px; border-radius: 6px; border: none; font-size: 10px; font-weight: 600; cursor: pointer; }
+  .action-btn.green { background: var(--green); color: #000; }
+  .action-btn.ghost { background: transparent; color: var(--text-tertiary); border: 1px solid var(--stroke); }
+  .action-btn.accent { background: var(--accent); color: white; }
+
+  .commit-bar { border-top: 1px solid var(--stroke); padding: 10px 14px; display: flex; align-items: center; gap: 8px; background: var(--panel-alt); margin-top: auto; }
+  .commit-info { font-size: 10px; color: var(--text-tertiary); flex: 1; line-height: 1.4; }
+  .commit-btn { padding: 7px 16px; border-radius: 6px; border: none; font-size: 11px; font-weight: 600; cursor: pointer; background: var(--accent); color: white; }
+
+  /* Phase label overlay */
+  .phase-label {
+    position: absolute; top: 8px; right: 8px;
+    font-size: 9px; font-weight: 700; padding: 3px 10px; border-radius: 6px;
+    text-transform: uppercase; letter-spacing: 1px; z-index: 10;
+  }
+  .phase-label.idle { background: rgba(99,99,112,0.15); color: var(--text-tertiary); }
+  .phase-label.yops { background: rgba(139,92,246,0.15); color: var(--accent); }
+  .phase-label.triage { background: rgba(74,222,128,0.15); color: var(--green); }
+  .phase-label.review { background: rgba(250,204,21,0.15); color: var(--yellow); }
+  .phase-label.commit { background: rgba(96,165,250,0.15); color: var(--blue); }
+
+  .notif { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); display: inline-block; animation: pulse 2s infinite; }
+
+  /* ── Callout ── */
+  .callout { max-width: 1100px; margin: 0 auto 48px; padding: 12px 18px; background: rgba(139,92,246,0.03); border: 1px solid rgba(139,92,246,0.08); border-radius: 8px; font-size: 11px; color: var(--text-secondary); line-height: 1.7; }
+  .callout strong { color: var(--accent); }
+</style>
+</head>
+<body style="padding: 24px 20px 80px;">
+
+<div class="page-title">T3X Chat Page <span>V6 Preview</span></div>
+<p class="page-sub">
+  完整页面预览：左侧项目侧边栏 + 中间聊天区 + 右侧 Extraction Panel 各阶段<br>
+  每一帧展示一个阶段的实际效果。浏览器打开即可审。
+</p>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- PHASE: IDLE (首次 — 无提取记录)                    -->
+<!-- ═══════════════════════════════════════════════════ -->
+
+<div class="section-title">阶段 1 <em>Idle — 首次进入，无提取</em></div>
+<div class="section-sub">用户刚打开对话，还没有点过 Extract。面板显示空状态 + Extract 按钮。</div>
+
+<div class="page-frame">
+  <div class="phase-label idle">IDLE</div>
+
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-logo">
+      <svg width="28" height="28" viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="14" fill="#020617"/><g fill="none" stroke="#2563EB" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 18L32 28L48 18"/><path d="M16 46L32 36L48 46"/></g></svg>
+      <span>T3X</span>
+    </div>
+    <button class="sidebar-new-btn">+ New Chat</button>
+    <div class="sidebar-section-label">Projects</div>
+    <div class="sidebar-scroll">
+      <div class="proj-item active">
+        <div class="proj-icon blue">&#9992;</div>
+        <div class="proj-info">
+          <div class="proj-name">Japan Trip Planning</div>
+          <div class="proj-meta">3 conversations &middot; 2 commits</div>
+        </div>
+        <div class="proj-badge">3</div>
+      </div>
+      <div class="proj-convs">
+        <div class="conv-item active"><span class="conv-dot"></span>Budget & Route</div>
+        <div class="conv-item"><span class="conv-dot"></span>Accommodation</div>
+        <div class="conv-item"><span class="conv-dot"></span>Food & Activities</div>
+      </div>
+
+      <div class="proj-item">
+        <div class="proj-icon purple">&#128218;</div>
+        <div class="proj-info">
+          <div class="proj-name">Thesis Research</div>
+          <div class="proj-meta">2 conversations &middot; 5 commits</div>
+        </div>
+      </div>
+
+      <div class="proj-item">
+        <div class="proj-icon green">&#128187;</div>
+        <div class="proj-info">
+          <div class="proj-name">API Design Review</div>
+          <div class="proj-meta">1 conversation &middot; 1 commit</div>
+        </div>
+      </div>
+
+      <div class="proj-item">
+        <div class="proj-icon orange">&#127968;</div>
+        <div class="proj-info">
+          <div class="proj-name">Home Renovation</div>
+          <div class="proj-meta">4 conversations &middot; 0 commits</div>
+        </div>
+      </div>
+    </div>
+    <div class="sidebar-bottom">
+      <div class="sidebar-bottom-item">&#9881; Settings</div>
+    </div>
+  </div>
+
+  <!-- Chat -->
+  <div class="chat-area">
+    <div class="chat-header">
+      <div class="chat-header-title">Budget & Route</div>
+      <div class="chat-header-model">Claude 3.5 Sonnet</div>
+    </div>
+    <div class="chat-messages">
+      <div class="bubble user">What's a good plan for 2 weeks in Japan on $3000 budget?</div>
+      <div class="bubble assistant">
+        <strong>Great question!</strong> Here's a rough breakdown:<br>
+        &bull; Flights: $800-1,200 round trip<br>
+        &bull; JR Pass (14-day): $420<br>
+        &bull; Accommodation: $40-80/night<br>
+        &bull; Food: $20-40/day<br>
+        &bull; Route: Tokyo &rarr; Hakone &rarr; Kyoto &rarr; Osaka
+      </div>
+      <div class="bubble user">Skip Osaka, focus on Tokyo + Kyoto. I want a ryokan experience.</div>
+      <div class="bubble assistant">
+        <strong>Smart choice!</strong> Tokyo + Kyoto is the classic combo. For ryokan, budget $150-200/night in Kyoto. Top pick: Gion Hatanaka — $180/night with private onsen.
+      </div>
+    </div>
+    <div class="chat-input-area">
+      <div class="chat-input-box">
+        <span class="chat-input-text">Type a message...</span>
+        <button class="chat-send-btn">&uarr;</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Extraction Panel: IDLE -->
+  <div class="ext-panel">
+    <div class="ext-header">
+      <div class="ext-header-left">
+        <span style="color:var(--text-tertiary);">&#9649;</span>
+        <span class="ext-title" style="color:var(--text-secondary);">Knowledge</span>
+      </div>
+      <button class="extract-btn">&#10022; Extract</button>
+    </div>
+    <div class="ext-content">
+      <div class="idle-state">
+        <div class="idle-icon">&#9878;</div>
+        <div class="idle-text">
+          Chat with the AI, then click <strong style="color:var(--accent);">Extract</strong><br>
+          when you want to save key points.
+        </div>
+        <div class="idle-hint">Keyboard shortcut: Cmd+E</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="callout">
+  <strong>侧边栏改造：</strong> 项目用图标+名称+元信息（对话数、commit 数），展开显示子对话列表。当前对话高亮。不再是纯文件夹图标+标题的平铺列表。<br>
+  <strong>Extraction Panel：</strong> Idle 空状态 + Extract 按钮常驻 header。无自动提取，用户完全控制。
+</div>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- PHASE: IDLE (有 commit — 显示已提交节点)            -->
+<!-- ═══════════════════════════════════════════════════ -->
+
+<div class="section-title">阶段 1b <em>Idle — 有 commit 记录 + Nudge</em></div>
+<div class="section-sub">上次提取已 commit，继续聊了几轮后。面板显示已 commit 节点 + nudge 提醒。</div>
+
+<div class="page-frame">
+  <div class="phase-label idle">IDLE + NUDGE</div>
+
+  <!-- Sidebar (same) -->
+  <div class="sidebar">
+    <div class="sidebar-logo"><svg width="28" height="28" viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="14" fill="#020617"/><g fill="none" stroke="#2563EB" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 18L32 28L48 18"/><path d="M16 46L32 36L48 46"/></g></svg><span>T3X</span></div>
+    <button class="sidebar-new-btn">+ New Chat</button>
+    <div class="sidebar-section-label">Projects</div>
+    <div class="sidebar-scroll">
+      <div class="proj-item active"><div class="proj-icon blue">&#9992;</div><div class="proj-info"><div class="proj-name">Japan Trip Planning</div><div class="proj-meta">3 conversations &middot; 3 commits</div></div><div class="proj-badge">3</div></div>
+      <div class="proj-convs"><div class="conv-item active"><span class="conv-dot"></span>Budget & Route</div><div class="conv-item"><span class="conv-dot"></span>Accommodation</div></div>
+      <div class="proj-item"><div class="proj-icon purple">&#128218;</div><div class="proj-info"><div class="proj-name">Thesis Research</div><div class="proj-meta">2 conversations &middot; 5 commits</div></div></div>
+    </div>
+    <div class="sidebar-bottom"><div class="sidebar-bottom-item">&#9881; Settings</div></div>
+  </div>
+
+  <!-- Chat (more turns) -->
+  <div class="chat-area">
+    <div class="chat-header"><div class="chat-header-title">Budget & Route</div><div class="chat-header-model">Claude 3.5 Sonnet</div></div>
+    <div class="chat-messages">
+      <div class="bubble user">What's a good plan for 2 weeks in Japan on $3000 budget?</div>
+      <div class="bubble assistant"><strong>Great question!</strong> Flights: $800-1,200. JR Pass: $420...</div>
+      <div class="bubble user">Skip Osaka, focus on Tokyo + Kyoto.</div>
+      <div class="bubble assistant"><strong>Smart choice!</strong> Tokyo + Kyoto is classic...</div>
+      <div class="bubble user" style="border:1px solid rgba(251,146,60,0.3);">I want a ryokan in Kyoto, how much extra?</div>
+      <div class="bubble assistant" style="border:1px solid rgba(251,146,60,0.15);">A ryokan runs $150-200/night. Top pick: Gion Hatanaka. Pro tip: book directly for 10-15% less.</div>
+    </div>
+    <div class="chat-input-area"><div class="chat-input-box"><span class="chat-input-text">Type a message...</span><button class="chat-send-btn">&uarr;</button></div></div>
+  </div>
+
+  <!-- Extraction Panel: IDLE with committed nodes -->
+  <div class="ext-panel">
+    <div class="ext-header">
+      <div class="ext-header-left">
+        <span style="color:var(--green); opacity:0.6;">&#9649;</span>
+        <span class="ext-title">Knowledge</span>
+        <span class="node-count">3</span>
+      </div>
+      <button class="extract-btn">&#10022; Extract</button>
+    </div>
+    <div class="ext-content">
+      <div class="committed-hdr"><span>Committed</span><span style="font-weight:400;">sha256:a3f8...2d1e</span></div>
+      <div class="committed-row"><div class="committed-bar"></div><span class="committed-check">&check;</span><span class="committed-label">japan_trip:</span><span class="slot-badge">4 slots</span></div>
+      <div class="committed-row"><div class="committed-bar"></div><span class="committed-check">&check;</span><span class="committed-label">budget:</span><span class="slot-badge">5 slots</span></div>
+      <div class="committed-row"><div class="committed-bar"></div><span class="committed-check">&check;</span><span class="committed-label">route:</span><span class="slot-badge">2 slots</span></div>
+
+      <div class="extract-nudge">
+        <span class="nudge-dot"></span>
+        <span>4 new turns since last extraction</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="callout"><strong>有 commit 后的 Idle：</strong> 已 commit 节点折叠显示（&#10003; name: N slots）。底部 nudge 提醒"4 new turns since last extraction"。用户可以选择继续聊或点 Extract。</div>
+
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- PHASE 2: YOps Feed                                  -->
+<!-- ═══════════════════════════════════════════════════ -->
+
+<div class="section-title">阶段 2 <em>YOps Feed — 提取进行中</em></div>
+<div class="section-sub">用户点了 Extract，实时观看 LLM 提取操作。每条 350ms 逐条出现。</div>
+
+<div class="page-frame">
+  <div class="phase-label yops">YOPS FEED</div>
+
+  <div class="sidebar">
+    <div class="sidebar-logo"><svg width="28" height="28" viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="14" fill="#020617"/><g fill="none" stroke="#2563EB" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 18L32 28L48 18"/><path d="M16 46L32 36L48 46"/></g></svg><span>T3X</span></div>
+    <button class="sidebar-new-btn">+ New Chat</button>
+    <div class="sidebar-section-label">Projects</div>
+    <div class="sidebar-scroll">
+      <div class="proj-item active"><div class="proj-icon blue">&#9992;</div><div class="proj-info"><div class="proj-name">Japan Trip Planning</div><div class="proj-meta">3 conversations &middot; 2 commits</div></div></div>
+      <div class="proj-convs"><div class="conv-item active"><span class="conv-dot"></span>Budget & Route</div></div>
+    </div>
+    <div class="sidebar-bottom"><div class="sidebar-bottom-item">&#9881; Settings</div></div>
+  </div>
+
+  <div class="chat-area">
+    <div class="chat-header"><div class="chat-header-title">Budget & Route</div><div class="chat-header-model">Claude 3.5 Sonnet</div></div>
+    <div class="chat-messages">
+      <div class="bubble user">What's a good plan for 2 weeks in Japan on $3000 budget?</div>
+      <div class="bubble assistant"><strong>Great question!</strong> Flights: $800-1,200. JR Pass: $420. Food: $20-40/day. Route: Tokyo, Kyoto, Osaka...</div>
+      <div class="bubble user">Skip Osaka, focus on Tokyo + Kyoto.</div>
+      <div class="bubble assistant"><strong>Smart!</strong> Tokyo + Kyoto is classic. Budget $150-200/night for ryokan.</div>
+    </div>
+    <div class="chat-input-area"><div class="chat-input-box"><span class="chat-input-text">Type a message...</span><button class="chat-send-btn">&uarr;</button></div></div>
+  </div>
+
+  <!-- Extraction Panel: YOps -->
+  <div class="ext-panel">
+    <div class="ext-header">
+      <div class="ext-header-left">
+        <span class="notif"></span>
+        <span class="ext-title">Extracting...</span>
+      </div>
+    </div>
+    <div class="phase-tabs">
+      <button class="phase-tab active"><span class="tab-dot" style="background:var(--accent);"></span> YOps</button>
+      <button class="phase-tab">Triage</button>
+      <button class="phase-tab">Review</button>
+    </div>
+    <div class="ext-content" style="padding:6px 0;">
+      <div class="yop-item dim"><div class="yop-icon add">+</div><div class="yop-text"><span class="yop-path">japan_trip</span> <span class="yop-arrow">&rarr;</span> <span class="yop-value">new topic</span></div></div>
+      <div class="yop-item dim"><div class="yop-icon add">+</div><div class="yop-text"><span class="yop-path">.budget</span> <span class="yop-arrow">&rarr;</span> <span class="yop-value">3000</span></div></div>
+      <div class="yop-item dim"><div class="yop-icon add">+</div><div class="yop-text"><span class="yop-path">.duration</span> <span class="yop-arrow">&rarr;</span> <span class="yop-value">2 weeks</span></div></div>
+      <div class="yop-item"><div class="yop-icon add">+</div><div class="yop-text"><span class="yop-path">budget</span> <span class="yop-arrow">&rarr;</span> <span class="yop-value">flights, rail, food...</span></div></div>
+      <div class="yop-item"><div class="yop-icon add">+</div><div class="yop-text"><span class="yop-path">route</span> <span class="yop-arrow">&rarr;</span> <span class="yop-value">[Tokyo, Kyoto]</span></div></div>
+      <div class="yop-item"><div class="yop-icon add">+</div><div class="yop-text"><span class="yop-path">dietary</span> <span class="yop-arrow">&rarr;</span> <span class="yop-value">allergy: shellfish</span></div></div>
+      <div class="yop-item"><div class="yop-icon add">+</div><div class="yop-text"><span class="yop-path">dates</span> <span class="yop-arrow">&rarr;</span> <span class="yop-value">Apr 20-30</span></div></div>
+    </div>
+    <div class="progress-row">
+      <span>7/7</span>
+      <div class="progress-bar"><div class="progress-fill" style="width:100%;"></div></div>
+      <span style="color:var(--green);">complete</span>
+    </div>
+    <div class="action-bar"><div class="action-info">Auto-transitioning to Triage...</div></div>
+  </div>
+</div>
+
+<div class="callout"><strong>YOps Feed：</strong> 提取完成后逐条展示操作（add / update / remove）。旧条目变暗，最新条目高亮。底部进度条。完成后自动过渡到 Triage。</div>
+
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- PHASE 3: Triage                                     -->
+<!-- ═══════════════════════════════════════════════════ -->
+
+<div class="section-title">阶段 3 <em>Triage — 快速分诊</em></div>
+<div class="section-sub">紧凑单行，扫一眼即可。USER 项自动接受，LLM 项需确认。</div>
+
+<div class="page-frame">
+  <div class="phase-label triage">TRIAGE</div>
+
+  <div class="sidebar">
+    <div class="sidebar-logo"><svg width="28" height="28" viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="14" fill="#020617"/><g fill="none" stroke="#2563EB" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 18L32 28L48 18"/><path d="M16 46L32 36L48 46"/></g></svg><span>T3X</span></div>
+    <button class="sidebar-new-btn">+ New Chat</button>
+    <div class="sidebar-section-label">Projects</div>
+    <div class="sidebar-scroll">
+      <div class="proj-item active"><div class="proj-icon blue">&#9992;</div><div class="proj-info"><div class="proj-name">Japan Trip Planning</div><div class="proj-meta">3 conversations &middot; 2 commits</div></div></div>
+      <div class="proj-convs"><div class="conv-item active"><span class="conv-dot"></span>Budget & Route</div></div>
+    </div>
+    <div class="sidebar-bottom"><div class="sidebar-bottom-item">&#9881; Settings</div></div>
+  </div>
+
+  <div class="chat-area">
+    <div class="chat-header"><div class="chat-header-title">Budget & Route</div><div class="chat-header-model">Claude 3.5 Sonnet</div></div>
+    <div class="chat-messages">
+      <div class="bubble user">What's a good plan for 2 weeks in Japan on $3000 budget?</div>
+      <div class="bubble assistant"><strong>Great question!</strong> Flights: $800-1,200. JR Pass: $420...</div>
+      <div class="bubble user">Skip Osaka, focus on Tokyo + Kyoto.</div>
+      <div class="bubble assistant"><strong>Smart!</strong> Tokyo + Kyoto is classic...</div>
+    </div>
+    <div class="chat-input-area"><div class="chat-input-box"><span class="chat-input-text">Type a message...</span><button class="chat-send-btn">&uarr;</button></div></div>
+  </div>
+
+  <!-- Extraction Panel: Triage -->
+  <div class="ext-panel">
+    <div class="ext-header">
+      <div class="ext-header-left">
+        <span class="ext-title">Triage</span>
+        <span class="node-count">6 topics</span>
+      </div>
+    </div>
+    <div class="phase-tabs">
+      <button class="phase-tab done"><span class="tab-dot" style="background:var(--green);"></span> YOps</button>
+      <button class="phase-tab active"><span class="tab-dot" style="background:var(--accent);"></span> Triage</button>
+      <button class="phase-tab">Review</button>
+    </div>
+    <div class="ext-content">
+      <div class="triage-row accepted"><div class="triage-bar auto"></div><div class="triage-body"><span class="chevron">&#9656;</span><span class="triage-name">japan_trip</span><span class="triage-preview">budget: 3000, duration: 2wk</span><span class="source-tag user">USER</span><span class="triage-count">4</span></div><div class="triage-actions"><button class="triage-btn yes on">&#10003;</button><button class="triage-btn no">&times;</button></div></div>
+
+      <div class="triage-row accepted"><div class="triage-bar ok"></div><div class="triage-body"><span class="chevron">&#9656;</span><span class="triage-name">budget</span><span class="triage-preview">flights: 1000, rail: 420...</span><span class="source-tag llm">LLM</span><span class="triage-count">5</span></div><div class="triage-actions"><button class="triage-btn yes on">&#10003;</button><button class="triage-btn no">&times;</button></div></div>
+
+      <div class="triage-row accepted"><div class="triage-bar ok"></div><div class="triage-body"><span class="chevron">&#9656;</span><span class="triage-name">route</span><span class="triage-preview">[Tokyo, Kyoto], skip: Osaka</span><span class="source-tag both">BOTH</span><span class="triage-count">2</span></div><div class="triage-actions"><button class="triage-btn yes on">&#10003;</button><button class="triage-btn no">&times;</button></div></div>
+
+      <div class="triage-row accepted"><div class="triage-bar auto"></div><div class="triage-body"><span class="chevron">&#9656;</span><span class="triage-name">dietary</span><span class="triage-preview">allergy: shellfish, loves: ramen</span><span class="source-tag user">USER</span><span class="triage-count">2</span></div><div class="triage-actions"><button class="triage-btn yes on">&#10003;</button><button class="triage-btn no">&times;</button></div></div>
+
+      <div class="triage-row accepted"><div class="triage-bar auto"></div><div class="triage-body"><span class="chevron">&#9656;</span><span class="triage-name">dates</span><span class="triage-preview">Apr 20 - Apr 30</span><span class="source-tag user">USER</span><span class="triage-count">2</span></div><div class="triage-actions"><button class="triage-btn yes on">&#10003;</button><button class="triage-btn no">&times;</button></div></div>
+
+      <div class="triage-row dismissed"><div class="triage-bar no"></div><div class="triage-body"><span class="chevron">&#9656;</span><span class="triage-name" style="text-decoration:line-through; color:var(--text-tertiary);">travel_tips</span><span class="triage-preview">conbini, Suica, ATMs...</span><span class="source-tag llm">LLM</span><span class="triage-count">4</span></div><div class="triage-actions"><button class="triage-btn yes">&#10003;</button><button class="triage-btn no">&times;</button></div></div>
+    </div>
+    <div class="action-bar">
+      <div class="action-info">5 accepted &middot; 1 dismissed</div>
+      <button class="action-btn ghost">Accept All</button>
+      <button class="action-btn green">Review &rarr;</button>
+    </div>
+  </div>
+</div>
+
+<div class="callout"><strong>Triage：</strong> 每行 = 一个 topic。<span style="color:var(--accent);">USER</span> 标签自动接受，<span style="color:var(--blue);">LLM</span> 需要手动确认。点 &#9656; 展开看 slot 级别。"Accept All" 快捷操作。3 次点击 5 秒搞定。</div>
+
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- PHASE 4: Review YAML + Bidirectional                -->
+<!-- ═══════════════════════════════════════════════════ -->
+
+<div class="section-title">阶段 4 <em>Review YAML — 双向溯源 + 手动编辑</em></div>
+<div class="section-sub">最终 YAML 审查。聊天中绿色下划线标记已提取文本。点击 YAML 行可跳转到源文本。</div>
+
+<div class="page-frame">
+  <div class="phase-label review">REVIEW</div>
+
+  <div class="sidebar">
+    <div class="sidebar-logo"><svg width="28" height="28" viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="14" fill="#020617"/><g fill="none" stroke="#2563EB" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 18L32 28L48 18"/><path d="M16 46L32 36L48 46"/></g></svg><span>T3X</span></div>
+    <button class="sidebar-new-btn">+ New Chat</button>
+    <div class="sidebar-section-label">Projects</div>
+    <div class="sidebar-scroll">
+      <div class="proj-item active"><div class="proj-icon blue">&#9992;</div><div class="proj-info"><div class="proj-name">Japan Trip Planning</div><div class="proj-meta">3 conversations &middot; 2 commits</div></div></div>
+      <div class="proj-convs"><div class="conv-item active"><span class="conv-dot"></span>Budget & Route</div></div>
+    </div>
+    <div class="sidebar-bottom"><div class="sidebar-bottom-item">&#9881; Settings</div></div>
+  </div>
+
+  <!-- Chat with green source highlights -->
+  <div class="chat-area">
+    <div class="chat-header"><div class="chat-header-title">Budget & Route</div><div class="chat-header-model">Claude 3.5 Sonnet</div></div>
+    <div class="chat-messages">
+      <div class="bubble user">What's a good plan for <span class="src-hl">2 weeks in Japan</span> on <span class="src-hl">$3000 budget</span>?</div>
+      <div class="bubble assistant">
+        <strong>Great question!</strong> Breakdown:<br>
+        &bull; Flights: <span class="src-hl">$800-1,200</span><br>
+        &bull; JR Pass: <span class="src-hl">$420</span><br>
+        &bull; Food: <span class="src-hl">$20-40/day</span><br>
+        &bull; Route: <span class="src-hl">Tokyo, Kyoto, Osaka</span>
+      </div>
+      <div class="bubble user"><span class="src-hl">Skip Osaka</span>, focus on <span class="src-hl">Tokyo + Kyoto</span>.</div>
+      <div class="bubble assistant"><strong>Smart!</strong> Tokyo + Kyoto is classic...</div>
+      <div class="bubble user"><span class="src-hl active">I want a ryokan in Kyoto</span>, how much extra?</div>
+      <div class="bubble assistant">A ryokan runs <span class="src-hl">$150-200/night</span>. Top pick: Gion Hatanaka.</div>
+    </div>
+    <div class="chat-input-area"><div class="chat-input-box"><span class="chat-input-text">Type a message...</span><button class="chat-send-btn">&uarr;</button></div></div>
+  </div>
+
+  <!-- Extraction Panel: Review YAML -->
+  <div class="ext-panel">
+    <div class="ext-header">
+      <div class="ext-header-left">
+        <span class="ext-title">Review</span>
+        <span style="font-size:10px; color:var(--green);">5 nodes</span>
+        <span style="font-size:10px; color:var(--text-tertiary);">&middot; 17 slots</span>
+      </div>
+    </div>
+    <div class="phase-tabs">
+      <button class="phase-tab done"><span class="tab-dot" style="background:var(--green);"></span> YOps</button>
+      <button class="phase-tab done"><span class="tab-dot" style="background:var(--green);"></span> Triage</button>
+      <button class="phase-tab active"><span class="tab-dot" style="background:var(--accent);"></span> Review</button>
+    </div>
+    <div class="ext-content" style="padding:2px 0;">
+      <div class="committed-hdr"><span>Changes to commit</span><span style="font-weight:400; font-size:9px;"><button style="padding:2px 8px; border-radius:4px; border:1px solid var(--stroke); background:transparent; color:var(--text-secondary); font-size:9px; font-weight:600; cursor:pointer;">Edit YAML</button></span></div>
+
+      <div class="yaml-line"><div class="yaml-bar-line g"></div><div class="yaml-text"><span class="yaml-key">japan_trip:</span></div></div>
+      <div class="yaml-line"><div class="yaml-bar-line g"></div><div class="yaml-text"><span class="yaml-sk">  budget: </span><span class="yaml-sv">3000</span> <span class="trace-tag">&larr; T1</span></div></div>
+      <div class="yaml-line"><div class="yaml-bar-line g"></div><div class="yaml-text"><span class="yaml-sk">  duration: </span><span class="yaml-sv">2 weeks</span> <span class="trace-tag">&larr; T1</span></div></div>
+      <div class="yaml-line"><div class="yaml-bar-line g"></div><div class="yaml-text"><span class="yaml-sk">  wants: </span><span class="yaml-sv">[ryokan]</span></div></div>
+      <div class="yaml-spacer"></div>
+
+      <div class="yaml-line"><div class="yaml-bar-line g"></div><div class="yaml-text"><span class="yaml-key">budget:</span></div></div>
+      <div class="yaml-line"><div class="yaml-bar-line g"></div><div class="yaml-text"><span class="yaml-sk">  flights: </span><span class="yaml-sv">1000</span></div></div>
+      <div class="yaml-line"><div class="yaml-bar-line g"></div><div class="yaml-text"><span class="yaml-sk">  rail_pass: </span><span class="yaml-sv">420</span></div></div>
+      <div class="yaml-line"><div class="yaml-bar-line g"></div><div class="yaml-text"><span class="yaml-sk">  food: </span><span class="yaml-sv">20-40/day</span></div></div>
+      <div class="yaml-line"><div class="yaml-bar-line g"></div><div class="yaml-text"><span class="yaml-sk">  activities: </span><span class="yaml-sv">200-400</span></div></div>
+      <div class="yaml-spacer"></div>
+
+      <div class="yaml-line"><div class="yaml-bar-line g"></div><div class="yaml-text"><span class="yaml-key">route:</span></div></div>
+      <div class="yaml-line clicked"><div class="yaml-bar-line g"></div><div class="yaml-text"><span class="yaml-sk">  cities: </span><span class="yaml-sv">[Tokyo, Kyoto]</span> <span class="trace-tag" style="opacity:1;">&larr; T3 &#128279;</span></div></div>
+      <div class="yaml-line"><div class="yaml-bar-line g"></div><div class="yaml-text"><span class="yaml-sk">  skip: </span><span class="yaml-sv">[Osaka]</span> <span class="trace-tag">&larr; T3</span></div></div>
+      <div class="yaml-spacer"></div>
+
+      <div class="yaml-line"><div class="yaml-bar-line g"></div><div class="yaml-text"><span class="yaml-key">dietary:</span></div></div>
+      <div class="yaml-line"><div class="yaml-bar-line g"></div><div class="yaml-text"><span class="yaml-sk">  allergy: </span><span class="yaml-sv">shellfish</span></div></div>
+      <div class="yaml-spacer"></div>
+
+      <div class="yaml-line"><div class="yaml-bar-line g"></div><div class="yaml-text"><span class="yaml-key">dates:</span></div></div>
+      <div class="yaml-line"><div class="yaml-bar-line g"></div><div class="yaml-text"><span class="yaml-sk">  start: </span><span class="yaml-sv">Apr 20</span></div></div>
+      <div class="yaml-line"><div class="yaml-bar-line g"></div><div class="yaml-text"><span class="yaml-sk">  end: </span><span class="yaml-sv">Apr 30</span></div></div>
+      <div class="yaml-spacer"></div>
+
+      <!-- Manual add -->
+      <div class="yaml-line" style="background:rgba(96,165,250,0.04);"><div class="yaml-bar-line b"></div><div class="yaml-text"><span class="yaml-sk">  booking_tip: </span><span class="yaml-sv">book direct, 10-15% cheaper</span> <span style="font-size:8px;color:var(--blue);padding:1px 4px;background:var(--blue-dim);border-radius:3px;">manual</span></div></div>
+    </div>
+    <div class="commit-bar">
+      <div class="commit-info">5 nodes &middot; 17 slots<br><span style="font-size:9px; opacity:0.7;">1 manually added</span></div>
+      <button class="commit-btn">Commit</button>
+    </div>
+  </div>
+</div>
+
+<div class="callout">
+  <strong>Review 阶段：</strong> 聊天中<span style="color:var(--green);">绿色下划线</span>标记所有已提取文本。Hover YAML 行 → 出现 &larr; Tn 溯源标签。点击 → 聊天滚动到源文本。<span style="color:var(--blue);">蓝色条</span> = 手动从聊天中选中添加的。底部 Commit 按钮。
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- PHASE 5: After Commit                               -->
+<!-- ═══════════════════════════════════════════════════ -->
+
+<div class="section-title">阶段 5 <em>Commit 完成 — 回到 Idle</em></div>
+<div class="section-sub">提交成功，面板回到 idle 状态。所有节点折叠显示，等待下一次提取。</div>
+
+<div class="page-frame">
+  <div class="phase-label commit">COMMITTED</div>
+
+  <div class="sidebar">
+    <div class="sidebar-logo"><svg width="28" height="28" viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="14" fill="#020617"/><g fill="none" stroke="#2563EB" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 18L32 28L48 18"/><path d="M16 46L32 36L48 46"/></g></svg><span>T3X</span></div>
+    <button class="sidebar-new-btn">+ New Chat</button>
+    <div class="sidebar-section-label">Projects</div>
+    <div class="sidebar-scroll">
+      <div class="proj-item active"><div class="proj-icon blue">&#9992;</div><div class="proj-info"><div class="proj-name">Japan Trip Planning</div><div class="proj-meta">3 conversations &middot; 3 commits</div></div><div class="proj-badge">3</div></div>
+      <div class="proj-convs"><div class="conv-item active"><span class="conv-dot"></span>Budget & Route</div></div>
+    </div>
+    <div class="sidebar-bottom"><div class="sidebar-bottom-item">&#9881; Settings</div></div>
+  </div>
+
+  <div class="chat-area">
+    <div class="chat-header"><div class="chat-header-title">Budget & Route</div><div class="chat-header-model">Claude 3.5 Sonnet</div></div>
+    <div class="chat-messages">
+      <div class="bubble user">What's a good plan for 2 weeks in Japan on $3000 budget?</div>
+      <div class="bubble assistant"><strong>Great question!</strong> Flights: $800-1,200...</div>
+      <div class="bubble user">Skip Osaka, focus on Tokyo + Kyoto.</div>
+      <div class="bubble assistant"><strong>Smart!</strong> Tokyo + Kyoto is classic...</div>
+      <div class="bubble user">I want a ryokan in Kyoto, how much extra?</div>
+      <div class="bubble assistant">A ryokan runs $150-200/night. Top pick: Gion Hatanaka.</div>
+
+      <!-- Toast notification -->
+      <div style="position:absolute; bottom:80px; right:390px; background:var(--panel); border:1px solid var(--green); border-radius:10px; padding:10px 16px; font-size:11px; display:flex; align-items:center; gap:8px; box-shadow:0 8px 24px rgba(0,0,0,0.4);">
+        <span style="color:var(--green);">&#10003;</span>
+        <span>Committed <span style="color:var(--text-tertiary); font-family:var(--font-mono); font-size:10px;">sha256:b7e2...f41a</span></span>
+      </div>
+    </div>
+    <div class="chat-input-area"><div class="chat-input-box"><span class="chat-input-text">Type a message...</span><button class="chat-send-btn">&uarr;</button></div></div>
+  </div>
+
+  <!-- Panel: back to idle with committed -->
+  <div class="ext-panel">
+    <div class="ext-header">
+      <div class="ext-header-left">
+        <span style="color:var(--green); opacity:0.6;">&#9649;</span>
+        <span class="ext-title">Knowledge</span>
+        <span class="node-count">5</span>
+      </div>
+      <button class="extract-btn">&#10022; Extract</button>
+    </div>
+    <div class="ext-content">
+      <div class="committed-hdr"><span>Committed</span><span style="font-weight:400;">sha256:b7e2...f41a</span></div>
+      <div class="committed-row"><div class="committed-bar"></div><span class="committed-check">&check;</span><span class="committed-label">japan_trip:</span><span class="slot-badge">4</span></div>
+      <div class="committed-row"><div class="committed-bar"></div><span class="committed-check">&check;</span><span class="committed-label">budget:</span><span class="slot-badge">4</span></div>
+      <div class="committed-row"><div class="committed-bar"></div><span class="committed-check">&check;</span><span class="committed-label">route:</span><span class="slot-badge">2</span></div>
+      <div class="committed-row"><div class="committed-bar"></div><span class="committed-check">&check;</span><span class="committed-label">dietary:</span><span class="slot-badge">1</span></div>
+      <div class="committed-row"><div class="committed-bar"></div><span class="committed-check">&check;</span><span class="committed-label">dates:</span><span class="slot-badge">3</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="callout"><strong>Commit 完成：</strong> 面板回到 idle。所有节点折叠显示 &#10003;。commit 数更新（侧边栏 badge 从 2→3）。Extract 按钮就绪，等待下一轮。Toast 通知显示 hash。</div>
+
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- FLOW SUMMARY                                        -->
+<!-- ═══════════════════════════════════════════════════ -->
+
+<div class="section-title">完整流程总结</div>
+<div style="max-width:700px; margin:16px auto 48px; background:var(--surface); border:1px solid var(--stroke); border-radius:10px; padding:24px; font-family:var(--font-mono); font-size:12px; line-height:2.4; color:var(--text-secondary);">
+  <span style="color:var(--text-tertiary);">Idle</span> &rarr; <span style="color:var(--accent);">用户点 Extract</span> &rarr; <span style="color:var(--accent);">Phase 1 (YOps Feed)</span><br>
+  <span style="color:var(--accent);">Phase 1</span> &rarr; <span style="color:var(--green);">自动过渡</span> &rarr; <span style="color:var(--green);">Phase 2 (Triage)</span><br>
+  <span style="color:var(--green);">Phase 2</span> &rarr; <span style="color:var(--yellow);">点 Review &rarr;</span> &rarr; <span style="color:var(--yellow);">Phase 3 (Review YAML)</span><br>
+  <span style="color:var(--yellow);">Phase 3</span> &larr; <span style="color:var(--text-tertiary);">&larr; Back</span> &larr; <span style="color:var(--green);">Phase 2 (可返回)</span><br>
+  <span style="color:var(--yellow);">Phase 3</span> &rarr; <span style="color:var(--blue);">点 Commit</span> &rarr; <span style="color:var(--blue);">Phase 4</span> &rarr; <span style="color:var(--text-tertiary);">Idle</span><br><br>
+  <span style="color:var(--text-tertiary);">快捷路径：</span> Extract &rarr; Accept All &rarr; Review &rarr; Commit = <span style="color:var(--green); font-weight:700;">3 次点击，~5秒</span>
+</div>
+
+</body>
+</html>

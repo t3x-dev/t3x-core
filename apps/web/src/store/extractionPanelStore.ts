@@ -20,6 +20,7 @@ const HOVER_DEBOUNCE_MS = 60;
 
 type PanelMode = 'collapsed' | 'default' | 'preview';
 type ActiveView = 'graph' | 'yaml';
+export type ExtractionPhase = 'idle' | 'yops' | 'triage' | 'review' | 'committing';
 
 interface ExtractionPanelState {
   panelMode: PanelMode;
@@ -46,6 +47,37 @@ interface ExtractionPanelState {
     yopsLogId: string;
   } | null;
   showCompressBanner: boolean;
+
+  // V6 Phase state machine
+  extractionPhase: ExtractionPhase;
+  pendingYOps: unknown[];
+  turnsSinceLastExtract: number;
+
+  // V6 Triage state
+  acceptedNodeIds: Set<string>;
+  dismissedNodeIds: Set<string>;
+  nodeSourceTags: Record<string, 'user' | 'llm' | 'both'>;
+
+  // V6 Phase transitions
+  startExtraction: () => void;
+  completeYOps: () => void;
+  goToReview: () => void;
+  goBackToTriage: () => void;
+  startCommitting: () => void;
+  completeCommit: () => void;
+  setPendingYOps: (ops: unknown[]) => void;
+  setNodeSourceTags: (tags: Record<string, 'user' | 'llm' | 'both'>) => void;
+
+  // V6 Triage actions
+  acceptNode: (key: string) => void;
+  dismissNode: (key: string) => void;
+  undismissNode: (key: string) => void;
+  acceptAll: () => void;
+  incrementTurnsSinceLastExtract: () => void;
+
+  // V6 Extract callback
+  onExtractRequested: (() => void) | null;
+  setOnExtractRequested: (fn: (() => void) | null) => void;
 
   setPanelMode: (mode: PanelMode) => void;
   setActiveView: (view: ActiveView) => void;
@@ -188,6 +220,70 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
   isCompressing: false,
   compressResult: null,
   showCompressBanner: false,
+
+  // V6 Phase state machine defaults
+  extractionPhase: 'idle' as ExtractionPhase,
+  pendingYOps: [],
+  turnsSinceLastExtract: 0,
+  acceptedNodeIds: new Set<string>(),
+  dismissedNodeIds: new Set<string>(),
+  nodeSourceTags: {},
+  onExtractRequested: null,
+
+  // V6 Phase transitions
+  startExtraction: () =>
+    set({
+      // Phase stays 'idle' during extraction — switch to 'yops' only after
+      // pendingYOps are set, otherwise YOpsFeed sees empty array and auto-completes
+      isExtracting: true,
+      pendingYOps: [],
+      acceptedNodeIds: new Set(),
+      dismissedNodeIds: new Set(),
+      nodeSourceTags: {},
+      turnsSinceLastExtract: 0,
+    }),
+  completeYOps: () => set({ extractionPhase: 'triage', isExtracting: false }),
+  goToReview: () => set({ extractionPhase: 'review' }),
+  goBackToTriage: () => set({ extractionPhase: 'triage' }),
+  startCommitting: () => set({ extractionPhase: 'committing' }),
+  completeCommit: () => set({ extractionPhase: 'idle' }),
+  setPendingYOps: (ops) => set({ pendingYOps: ops }),
+  setNodeSourceTags: (tags) => set({ nodeSourceTags: tags }),
+
+  // V6 Triage actions
+  acceptNode: (key) =>
+    set((state) => {
+      const accepted = new Set(state.acceptedNodeIds);
+      const dismissed = new Set(state.dismissedNodeIds);
+      accepted.add(key);
+      dismissed.delete(key);
+      return { acceptedNodeIds: accepted, dismissedNodeIds: dismissed };
+    }),
+  dismissNode: (key) =>
+    set((state) => {
+      const accepted = new Set(state.acceptedNodeIds);
+      const dismissed = new Set(state.dismissedNodeIds);
+      dismissed.add(key);
+      accepted.delete(key);
+      return { acceptedNodeIds: accepted, dismissedNodeIds: dismissed };
+    }),
+  undismissNode: (key) =>
+    set((state) => {
+      const dismissed = new Set(state.dismissedNodeIds);
+      dismissed.delete(key);
+      return { dismissedNodeIds: dismissed };
+    }),
+  acceptAll: () =>
+    set((state) => {
+      const accepted = new Set<string>();
+      for (const tree of state.draft.trees) {
+        accepted.add(tree.key);
+      }
+      return { acceptedNodeIds: accepted, dismissedNodeIds: new Set() };
+    }),
+  incrementTurnsSinceLastExtract: () =>
+    set((state) => ({ turnsSinceLastExtract: state.turnsSinceLastExtract + 1 })),
+  setOnExtractRequested: (fn) => set({ onExtractRequested: fn }),
 
   setPanelMode: (mode) => set({ panelMode: mode }),
   setActiveView: (view) => set({ activeView: view }),
@@ -357,7 +453,7 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
           sources: conversationId
             ? [{ type: 'conversation', id: conversationId, title: conversationTitle ?? undefined }]
             : undefined,
-          provenance: { method: 'pipeline' },
+          provenance: { method: 'llm_extraction' },
         }
       );
 

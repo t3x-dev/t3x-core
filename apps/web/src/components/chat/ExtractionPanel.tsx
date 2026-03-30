@@ -2,23 +2,24 @@
 
 import type { TreeNode } from '@t3x-dev/core';
 import { motion } from 'framer-motion';
-import { GitCommit, LayoutGrid, Loader2 } from 'lucide-react';
+import { GitCommit, LayoutGrid, Loader2, Sparkles } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { toast } from 'sonner';
 import { useExtractionPanelStore } from '@/store/extractionPanelStore';
 import { AdvisoryPanel } from './AdvisoryPanel';
-import { CommitDropdown } from './CommitDropdown';
+import { CommitBar } from './CommitBar';
+import { IdleView } from './IdleView';
+import { PhaseTabs } from './PhaseTabs';
+import { TriageView } from './TriageView';
 import { YAMLView } from './YAMLView';
-import { PreviewPanel } from './PreviewPanel';
-import { type CompatNode, contentToNodes, treesToNodes } from '@/lib/treeCompat';
+import { YOpsFeed } from './YOpsFeed';
 
 // ── Panel widths ──
 
-const PANEL_WIDTHS: Record<string, number> = {
+const PANEL_WIDTHS = {
   collapsed: 40,
-  default: 320,
-  preview: 480,
+  expanded: 380,
 };
 
 // ── Collapsed rail ──
@@ -56,33 +57,74 @@ function CollapsedRail({
         className="text-[9px] font-medium uppercase tracking-widest text-[var(--text-tertiary)]"
         style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
       >
-        {isExtracting ? 'Processing...' : 'Frames'}
+        {isExtracting ? 'Processing...' : 'Knowledge'}
       </span>
     </div>
   );
 }
 
-// ── Commit preview section ──
+// ── Main ExtractionPanel ──
 
-function CommitPreviewSection() {
+export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
   const router = useRouter();
-  const _conversationId = useExtractionPanelStore((s) => s.conversationId);
-  const projectId = useExtractionPanelStore((s) => s.projectId);
+
+  // Panel chrome
+  const panelMode = useExtractionPanelStore((s) => s.panelMode);
+  const draft = useExtractionPanelStore((s) => s.draft);
+  const isExtracting = useExtractionPanelStore((s) => s.isExtracting);
+  const togglePanel = useExtractionPanelStore((s) => s.togglePanel);
+  const manualEditedNodeIds = useExtractionPanelStore((s) => s.manualEditedNodeIds);
+
+  // V6 Phase state
+  const extractionPhase = useExtractionPanelStore((s) => s.extractionPhase);
+  const pendingYOps = useExtractionPanelStore((s) => s.pendingYOps);
+  const turnsSinceLastExtract = useExtractionPanelStore((s) => s.turnsSinceLastExtract);
+  const onExtractRequested = useExtractionPanelStore((s) => s.onExtractRequested);
+
+  // V6 Phase transitions
+  const completeYOps = useExtractionPanelStore((s) => s.completeYOps);
+  const goToReview = useExtractionPanelStore((s) => s.goToReview);
+  const goBackToTriage = useExtractionPanelStore((s) => s.goBackToTriage);
+  const startCommitting = useExtractionPanelStore((s) => s.startCommitting);
+  const completeCommit = useExtractionPanelStore((s) => s.completeCommit);
+
+  // Commit state
+  const committedNodeSnapshot = useExtractionPanelStore((s) => s.committedNodeSnapshot);
   const lastCommitHash = useExtractionPanelStore((s) => s.lastCommitHash);
   const commitBranch = useExtractionPanelStore((s) => s.commitBranch);
+  const projectId = useExtractionPanelStore((s) => s.projectId);
   const isCommitting = useExtractionPanelStore((s) => s.isCommitting);
-  const commitError = useExtractionPanelStore((s) => s.commitError);
-  const selectPendingNodes = useExtractionPanelStore((s) => s.selectPendingNodes);
   const commitNodes = useExtractionPanelStore((s) => s.commitNodes);
+  const selectPendingNodes = useExtractionPanelStore((s) => s.selectPendingNodes);
+
+  const nodeCount = draft.trees.length;
+  const committedNodes = useMemo(() => Object.values(committedNodeSnapshot), [committedNodeSnapshot]);
+  const manualCount = manualEditedNodeIds.size;
+
+  // Compute pending nodes and slot count only when needed (review/committing phase)
+  const { pendingNodeCount, pendingSlotCount } = useMemo(() => {
+    if (extractionPhase !== 'review' && extractionPhase !== 'committing') {
+      return { pendingNodeCount: 0, pendingSlotCount: 0 };
+    }
+    const pending = selectPendingNodes();
+    return {
+      pendingNodeCount: pending.length,
+      pendingSlotCount: pending.reduce((acc, n) => acc + Object.keys(n.slots).length, 0),
+    };
+  }, [extractionPhase, selectPendingNodes]);
+
+  const targetWidth =
+    panelMode === 'collapsed' ? PANEL_WIDTHS.collapsed : (customWidth ?? PANEL_WIDTHS.expanded);
+
+  // Panel mode setter
   const setPanelMode = useExtractionPanelStore((s) => s.setPanelMode);
-  const clearCommitError = useExtractionPanelStore((s) => s.clearCommitError);
 
-  const [commitMessage, setCommitMessage] = useState('');
-  const pendingNodes: TreeNode[] = selectPendingNodes();
-
-  const handleConfirm = async () => {
+  // Handle commit flow
+  const handleCommit = useCallback(async (message: string) => {
+    startCommitting();
     try {
-      const result = await commitNodes(commitMessage);
+      const result = await commitNodes(message);
+      completeCommit();
       const commitUrl = projectId
         ? `/project/${projectId}/commit/${encodeURIComponent(result.hash)}`
         : null;
@@ -95,138 +137,95 @@ function CommitPreviewSection() {
             }
           : undefined,
       });
-      setCommitMessage('');
     } catch {
-      // Error already set in store
+      completeCommit();
+    }
+  }, [commitNodes, startCommitting, completeCommit, commitBranch, projectId, router]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      // Don't capture when focused on input/textarea
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+      // Cmd+E: Start extraction
+      if (e.metaKey && e.key === 'e') {
+        e.preventDefault();
+        if (extractionPhase === 'idle') {
+          onExtractRequested?.();
+        }
+        return;
+      }
+
+      // Cmd+]: Toggle panel
+      if (e.metaKey && e.key === ']') {
+        e.preventDefault();
+        if (panelMode === 'collapsed') {
+          setPanelMode('default');
+        } else {
+          setPanelMode('collapsed');
+        }
+        return;
+      }
+
+      // 'a' key: Accept All (in triage)
+      if (e.key === 'a' && !e.metaKey && !e.ctrlKey && extractionPhase === 'triage') {
+        e.preventDefault();
+        useExtractionPanelStore.getState().acceptAll();
+        return;
+      }
+
+      // Enter: Next phase (triage → review)
+      if (e.key === 'Enter' && !e.metaKey && extractionPhase === 'triage') {
+        e.preventDefault();
+        goToReview();
+        return;
+      }
+
+      // Cmd+Enter: Commit (in review)
+      if (e.metaKey && e.key === 'Enter' && extractionPhase === 'review') {
+        e.preventDefault();
+        handleCommit('');
+        return;
+      }
+
+      // Escape: Back / cancel
+      if (e.key === 'Escape' && extractionPhase === 'review') {
+        e.preventDefault();
+        goBackToTriage();
+        return;
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [
+    extractionPhase,
+    panelMode,
+    setPanelMode,
+    goToReview,
+    goBackToTriage,
+    handleCommit,
+    onExtractRequested,
+  ]);
+
+  // Handle extract button
+  const handleExtract = () => {
+    onExtractRequested?.();
+  };
+
+  // Phase tab navigation (only between done phases)
+  const handleTabClick = (phase: 'yops' | 'triage' | 'review') => {
+    if (phase === 'triage' && (extractionPhase === 'review' || extractionPhase === 'committing')) {
+      goBackToTriage();
+    } else if (phase === 'review' && extractionPhase === 'triage') {
+      goToReview();
     }
   };
 
-  return (
-    <div className="flex flex-col gap-2 p-3">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-semibold text-[var(--text-primary)]">Commit Preview</span>
-        <span className="text-[10px] text-[var(--text-tertiary)]">
-          {pendingNodes.length} new tree{pendingNodes.length !== 1 ? 's' : ''}
-        </span>
-      </div>
-
-      <div className="flex flex-col gap-1 max-h-40 overflow-y-auto">
-        {pendingNodes.length === 0 ? (
-          <div className="text-[11px] text-[var(--text-tertiary)] italic py-2">
-            All trees already committed — up to date
-          </div>
-        ) : (
-          pendingNodes.map((f) => {
-            const summary = `[${f.key}] ${Object.entries(f.slots)
-              .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`)
-              .join('; ')}`;
-            return (
-              <div
-                key={f.key}
-                className="text-[11px] text-[var(--text-secondary)] rounded px-2 py-1 bg-[var(--hover-bg)]"
-              >
-                <span className="text-[var(--status-success)] mr-1">+</span>
-                {summary.length > 80 ? `${summary.slice(0, 80)}...` : summary}
-              </div>
-            );
-          })
-        )}
-      </div>
-
-      <div className="flex items-center gap-2 text-[10px] text-[var(--text-tertiary)]">
-        <span>
-          Branch: <strong>{commitBranch}</strong>
-        </span>
-        <span>·</span>
-        <span>{lastCommitHash ? `Parent: ${lastCommitHash.slice(0, 12)}` : 'Root commit'}</span>
-      </div>
-
-      <input
-        type="text"
-        value={commitMessage}
-        onChange={(e) => setCommitMessage(e.target.value)}
-        placeholder="Commit message (optional)"
-        className="w-full rounded border border-[var(--stroke-default)] bg-[var(--surface-panel)] px-2 py-1.5 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--accent-commit)]"
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' && !isCommitting && pendingNodes.length > 0) handleConfirm();
-          if (e.key === 'Escape') setPanelMode('default');
-        }}
-        disabled={isCommitting}
-      />
-
-      {commitError && (
-        <div className="text-[11px] text-[var(--status-error)] bg-[var(--status-error)]/10 rounded px-2 py-1">
-          {commitError}
-          <button type="button" onClick={clearCommitError} className="ml-2 underline">
-            dismiss
-          </button>
-        </div>
-      )}
-
-      <div className="flex gap-1.5">
-        <button
-          type="button"
-          onClick={() => setPanelMode('default')}
-          disabled={isCommitting}
-          className="flex-1 rounded border border-[var(--stroke-default)] px-2 py-1.5 text-xs text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] disabled:opacity-40"
-        >
-          Cancel
-        </button>
-        <button
-          type="button"
-          onClick={handleConfirm}
-          disabled={isCommitting || pendingNodes.length === 0}
-          className="flex-1 rounded bg-[var(--accent-commit)] px-2 py-1.5 text-xs text-white hover:opacity-90 disabled:opacity-40"
-        >
-          {isCommitting ? 'Committing...' : 'Confirm Commit'}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ── Main ExtractionPanel ──
-
-export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
-  const panelMode = useExtractionPanelStore((s) => s.panelMode);
-  const draft = useExtractionPanelStore((s) => s.draft);
-  const isExtracting = useExtractionPanelStore((s) => s.isExtracting);
-  const togglePanel = useExtractionPanelStore((s) => s.togglePanel);
-  const _setPanelMode = useExtractionPanelStore((s) => s.setPanelMode);
-  const yopsHistory = useExtractionPanelStore((s) => s.yopsHistory);
-  const isCompressing = useExtractionPanelStore((s) => s.isCompressing);
-  const compressResult = useExtractionPanelStore((s) => s.compressResult);
-  const showCompressBanner = useExtractionPanelStore((s) => s.showCompressBanner);
-  const startCompress = useExtractionPanelStore((s) => s.startCompress);
-  const undoCompression = useExtractionPanelStore((s) => s.undoCompression);
-  const dismissCompressBanner = useExtractionPanelStore((s) => s.dismissCompressBanner);
-  const yopsLog = useExtractionPanelStore((s) => s.yopsLog);
-  const manualEditedNodeIds = useExtractionPanelStore((s) => s.manualEditedNodeIds);
-  const hasCompressEntry = yopsLog.some((d) => d.source === 'compress');
-
-  const nodeCount = draft.trees.length;
-  const manualCount = manualEditedNodeIds.size;
-  const latestChanges = yopsHistory[0] ?? [];
-  const added = latestChanges.filter((c) => c.action === 'add').length;
-  const updated = latestChanges.filter((c) => c.action === 'update').length;
-  const removed = latestChanges.filter((c) => c.action === 'remove').length;
-  const hasChanges = added + updated + removed > 0;
-  const targetWidth =
-    panelMode === 'collapsed'
-      ? PANEL_WIDTHS.collapsed
-      : (customWidth ?? PANEL_WIDTHS[panelMode] ?? 320);
-
-  // Keyboard shortcut: Cmd+] to toggle panel
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.key === ']') {
-        e.preventDefault();
-        togglePanel();
-      }
-    }
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [togglePanel]);
+  // Determine if we should show phase tabs (not in idle)
+  const showPhaseTabs = extractionPhase !== 'idle';
 
   return (
     <motion.div
@@ -239,62 +238,34 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
         <CollapsedRail nodeCount={nodeCount} isExtracting={isExtracting} onExpand={togglePanel} />
       )}
 
-      {/* Default / Preview panel */}
+      {/* Expanded panel */}
       {panelMode !== 'collapsed' && (
         <div className="flex h-full flex-col min-w-0">
           {/* Panel header */}
           <div className="flex items-center justify-between border-b border-[var(--stroke-default)] px-3 py-2">
             <div className="flex items-center gap-1.5">
-              {isExtracting || isCompressing ? (
+              {isExtracting ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin text-[var(--accent-commit)]" />
               ) : (
                 <GitCommit className="h-3.5 w-3.5 text-[var(--accent-commit)]" />
               )}
               <span className="text-xs font-semibold text-[var(--text-primary)]">
-                {isCompressing ? 'Compressing...' : isExtracting ? 'Extracting...' : 'Knowledge'}
+                {isExtracting ? 'Extracting...' : 'Knowledge'}
               </span>
               {nodeCount > 0 && !isExtracting && (
                 <span className="rounded-full bg-[var(--hover-bg)] px-1.5 py-0.5 text-[10px] text-[var(--text-secondary)]">
                   {nodeCount}
                 </span>
               )}
-              {hasChanges && !isExtracting && (
-                <span
-                  style={{
-                    fontSize: 10,
-                    padding: '1px 6px',
-                    borderRadius: 4,
-                    background: 'var(--hover-bg)',
-                    color: 'var(--text-secondary)',
-                  }}
-                >
-                  {added > 0 && <span style={{ color: 'var(--diff-added-accent)' }}>+{added}</span>}
-                  {updated > 0 && <span style={{ color: 'var(--diff-modified-accent)' }}> ~{updated}</span>}
-                  {removed > 0 && <span style={{ color: 'var(--diff-removed-accent)' }}> -{removed}</span>}
-                  {manualCount > 0 && <span style={{ color: 'var(--accent-commit)' }}> ✎{manualCount}</span>}
-                </span>
-              )}
-              {/* Compress button */}
-              {nodeCount >= 3 && !isExtracting && !isCompressing && (
+              {/* Extract button in idle phase */}
+              {extractionPhase === 'idle' && !isExtracting && (
                 <button
                   type="button"
-                  onClick={startCompress}
-                  className="rounded p-0.5 text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]"
-                  title="Compress trees"
-                  style={{ fontSize: 12 }}
+                  onClick={handleExtract}
+                  className="ml-1 flex items-center gap-1 rounded-full bg-[var(--accent-commit)]/10 px-2 py-0.5 text-[10px] font-medium text-[var(--accent-commit)] hover:bg-[var(--accent-commit)]/20 transition-colors"
                 >
-                  🗜️
-                </button>
-              )}
-              {/* Compressed indicator */}
-              {hasCompressEntry && !isCompressing && (
-                <button
-                  type="button"
-                  onClick={undoCompression}
-                  className="rounded px-1.5 py-0.5 text-[10px] text-[var(--accent-commit)] hover:bg-[var(--accent-commit)]/10"
-                  title="Click to undo compression"
-                >
-                  Compressed
+                  <Sparkles className="h-3 w-3" />
+                  Extract
                 </button>
               )}
             </div>
@@ -308,85 +279,42 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
             </button>
           </div>
 
-          {/* Compress result banner */}
-          {showCompressBanner && compressResult && (
-            <div
-              style={{
-                padding: '8px 12px',
-                background: 'rgba(96, 165, 250, 0.08)',
-                borderBottom: '1px solid var(--stroke-default)',
-                fontSize: 11,
-                color: 'var(--text-secondary)',
-              }}
-            >
-              <div
-                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}
-              >
-                <div>
-                  <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
-                    Compressed {compressResult.treesBefore} → {compressResult.treesAfter} trees
-                  </div>
-                  <div style={{ marginTop: 2 }}>{compressResult.summary}</div>
-                </div>
-                <button
-                  type="button"
-                  onClick={dismissCompressBanner}
-                  className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)]"
-                  style={{ fontSize: 14, lineHeight: 1, padding: 2 }}
-                >
-                  ×
-                </button>
-              </div>
-              <button
-                type="button"
-                onClick={undoCompression}
-                className="mt-1 rounded px-2 py-0.5 text-[10px] text-[var(--accent-commit)] hover:bg-[var(--accent-commit)]/10"
-              >
-                Undo
-              </button>
-            </div>
+          {/* Phase tabs (shown when not idle) */}
+          {showPhaseTabs && (
+            <PhaseTabs currentPhase={extractionPhase} onTabClick={handleTabClick} />
           )}
 
-          {/* Topic name (if available) */}
-          {draft.trees.length > 0 && (
-            <div className="px-3 py-1.5 border-b border-[var(--stroke-default)]">
-              <span className="text-[10px] font-medium text-[var(--text-secondary)] uppercase tracking-wider">
-                {draft.trees[0].key.replace(/_/g, ' ')}
-              </span>
-            </div>
+          {/* Content area — routed by extractionPhase */}
+          {extractionPhase === 'idle' && (
+            <IdleView
+              committedNodes={committedNodes}
+              commitHash={lastCommitHash}
+              turnsSinceLastExtract={turnsSinceLastExtract}
+            />
           )}
 
-          {/* Content area */}
-          {panelMode === 'default' ? (
+          {extractionPhase === 'yops' && (
+            <YOpsFeed
+              ops={pendingYOps as import('@t3x-dev/core').YOp[]}
+              onComplete={completeYOps}
+            />
+          )}
+
+          {extractionPhase === 'triage' && <TriageView onGoToReview={goToReview} />}
+
+          {(extractionPhase === 'review' || extractionPhase === 'committing') && (
             <div className="flex flex-1 flex-col overflow-hidden">
               <div className="flex-1 overflow-hidden">
                 <YAMLView />
               </div>
               <AdvisoryPanel />
-              <CommitDropdown />
-            </div>
-          ) : (
-            /* Preview mode: side-by-side (trees left, preview+commit right) */
-            <div className="flex flex-1 overflow-hidden">
-              {/* Left: extraction content */}
-              <div className="flex flex-1 flex-col overflow-hidden border-r border-[var(--stroke-default)]">
-                <div className="flex-1 overflow-hidden">
-                  <YAMLView />
-                </div>
-                <AdvisoryPanel />
-              </div>
-
-              {/* Right: Preview + Commit */}
-              <div className="flex flex-1 flex-col overflow-hidden">
-                {/* Leaf preview */}
-                <div className="flex-1 overflow-y-auto border-b border-[var(--stroke-default)]">
-                  <PreviewPanel />
-                </div>
-                {/* Commit section */}
-                <div className="overflow-y-auto">
-                  <CommitPreviewSection />
-                </div>
-              </div>
+              <CommitBar
+                onCommit={handleCommit}
+                nodeCount={pendingNodeCount}
+                slotCount={pendingSlotCount}
+                manualCount={manualCount}
+                isCommitting={isCommitting || extractionPhase === 'committing'}
+              />
             </div>
           )}
         </div>

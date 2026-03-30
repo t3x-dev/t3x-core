@@ -131,7 +131,8 @@ function splitIntoSegments(content: string, mappings: SourceMapping[]): SourceSe
 
 /**
  * Render message content with source-mapped interactive spans.
- * Each extracted span gets a purple background and click/hover handlers.
+ * Each extracted span gets a purple background (default) or green underline (review phase)
+ * and click/hover handlers.
  */
 function SourceMappedText({
   content,
@@ -140,6 +141,7 @@ function SourceMappedText({
   onHoverSlot,
   onLeaveSlot,
   onClickSlot,
+  isReviewPhase,
 }: {
   content: string;
   mappings: SourceMapping[];
@@ -147,6 +149,7 @@ function SourceMappedText({
   onHoverSlot: (treePath: string, slotKey: string | null) => void;
   onLeaveSlot: () => void;
   onClickSlot: (treePath: string, slotKey: string | null) => void;
+  isReviewPhase: boolean;
 }) {
   const segments = useMemo(() => splitIntoSegments(content, mappings), [content, mappings]);
 
@@ -160,22 +163,34 @@ function SourceMappedText({
         const m = seg.mapping;
         const isActive = hoveredNodeId === m.treePath;
 
-        return (
-          <span
-            key={i}
-            data-tree-path={m.treePath}
-            data-slot-key={m.slotKey}
-            style={{
+        const spanStyle: React.CSSProperties = isReviewPhase
+          ? {
+              background: isActive ? 'rgba(74, 222, 128, 0.2)' : 'rgba(74, 222, 128, 0.12)',
+              borderBottom: '2px solid var(--status-success)',
+              borderRadius: 2,
+              padding: '1px 0',
+              color: 'inherit',
+              cursor: 'pointer',
+              transition: 'background 0.15s',
+            }
+          : {
               background: isActive
                 ? 'rgba(139, 92, 246, 0.3)'
                 : 'rgba(139, 92, 246, 0.08)',
-              borderBottom: isActive ? '2px solid rgba(139, 92, 246, 0.5)' : undefined,
+              borderBottom: isActive ? '2px solid var(--accent)' : 'none',
               borderRadius: 2,
               padding: '1px 0',
               color: 'inherit',
               cursor: 'pointer',
               transition: 'background 0.15s, border-bottom 0.15s',
-            }}
+            };
+
+        return (
+          <span
+            key={i}
+            data-tree-path={m.treePath}
+            data-slot-key={m.slotKey}
+            style={spanStyle}
             onMouseEnter={() => onHoverSlot(m.treePath, m.slotKey)}
             onMouseLeave={onLeaveSlot}
             onClick={(e) => {
@@ -211,6 +226,8 @@ export function ChatMessage({
   const hoveredNodeId = useExtractionPanelStore((s) => s.hoveredNodeId);
   const hoveredSlotKey = useExtractionPanelStore((s) => s.hoveredSlotKey);
   const draft = useExtractionPanelStore((s) => s.draft);
+  const extractionPhase = useExtractionPanelStore((s) => s.extractionPhase);
+  const isReviewPhase = extractionPhase === 'review' || extractionPhase === 'committing';
   const setHoveredTurnIndex = useExtractionPanelStore((s) => s.setHoveredTurnIndex);
   const scrollToCenter = useExtractionPanelStore((s) => s.scrollToCenter);
   const textRef = useRef<HTMLDivElement>(null);
@@ -387,6 +404,7 @@ export function ChatMessage({
                         onHoverSlot={handleHoverSlot}
                         onLeaveSlot={handleLeaveSlot}
                         onClickSlot={handleClickSlot}
+                        isReviewPhase={isReviewPhase}
                       />
                     ) : (
                       content
@@ -421,6 +439,7 @@ export function ChatMessage({
                         onHoverSlot={handleHoverSlot}
                         onLeaveSlot={handleLeaveSlot}
                         onClickSlot={handleClickSlot}
+                        isReviewPhase={isReviewPhase}
                       />
                     </div>
                   ) : (

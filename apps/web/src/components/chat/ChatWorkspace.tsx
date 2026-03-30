@@ -5,6 +5,7 @@ import { AlertCircle, GitCommit, Loader2, MessageSquarePlus } from 'lucide-react
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DriftPopup } from '@/components/chat/DriftPopup';
 import { useAutoProject } from '@/hooks/useAutoProject';
+import { useTextSelection } from '@/hooks/useTextSelection';
 import { useConversationChat } from '@/hooks/useConversationChat';
 import { getCommitAsNodes } from '@/lib/api/commitUnified';
 import { extractNodes, getSemanticDraft, listYOpsLog } from '@/lib/api/trees';
@@ -17,6 +18,7 @@ import { useSessionStore } from '@/store/sessionStore';
 import { ChatHeader } from './ChatHeader';
 import type { AttachedImage } from './ChatInput';
 import { ChatInput } from './ChatInput';
+import { ChatAddForm } from './ChatAddForm';
 import { ChatMessage } from './ChatMessage';
 import { buildSourceMap } from '@/lib/sourceMap';
 import { type CompatNode, contentToNodes, treesToNodes } from '@/lib/treeCompat';
@@ -44,6 +46,11 @@ export function ChatWorkspace({
   onInheritComplete,
 }: ChatWorkspaceProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  const { selection, clearSelection } = useTextSelection(chatContainerRef);
+  const extractionPhase = useExtractionPanelStore((s) => s.extractionPhase);
+  const isReviewPhase = extractionPhase === 'review' || extractionPhase === 'committing';
+  const showAddForm = isReviewPhase && selection && selection.text.length > 3;
   const firstMessageSentRef = useRef(false);
   const prevTurnsSavedRef = useRef(0);
 
@@ -262,6 +269,18 @@ export function ChatWorkspace({
   const focusIntentEnabled = useExtractionPanelStore((s) => s.focusIntentEnabled);
   const setLlmHighlightedNodeIds = useExtractionPanelStore((s) => s.setLlmHighlightedNodeIds);
   const draft = useExtractionPanelStore((s) => s.draft);
+  const activeTopicId = useExtractionPanelStore((s) => s.activeTopicId);
+  const startExtraction = useExtractionPanelStore((s) => s.startExtraction);
+  const setPendingYOps = useExtractionPanelStore((s) => s.setPendingYOps);
+  const setNodeSourceTags = useExtractionPanelStore((s) => s.setNodeSourceTags);
+  const setOnExtractRequested = useExtractionPanelStore((s) => s.setOnExtractRequested);
+  const setDraft = useExtractionPanelStore((s) => s.setDraft);
+  const setDriftDetected = useExtractionPanelStore((s) => s.setDriftDetected);
+  const setAdvisoryQuestions = useExtractionPanelStore((s) => s.setAdvisoryQuestions);
+  const setGateIssues = useExtractionPanelStore((s) => s.setGateIssues);
+  const incrementTurnsSinceLastExtract = useExtractionPanelStore(
+    (s) => s.incrementTurnsSinceLastExtract
+  );
 
   // Precompute source map: quote positions in all messages for bidirectional highlighting
   const sourceMapByTurn = useMemo(() => {
@@ -275,61 +294,110 @@ export function ChatWorkspace({
     return buildSourceMap(draft, msgInput);
   }, [draft, messages]);
 
-  // Extract trees after turns are saved
+  // Count turns since last extraction (for nudge badge)
   useEffect(() => {
     const prev = prevTurnsSavedRef.current;
     prevTurnsSavedRef.current = turnsSavedCounter;
 
     if (turnsSavedCounter === 0 || turnsSavedCounter === prev) return;
-    const convId = resolvedConversationId;
-    if (!convId) return;
+    if (!resolvedConversationId) return;
 
-    const store = useExtractionPanelStore.getState();
-    store.setExtracting(true);
+    incrementTurnsSinceLastExtract();
+  }, [resolvedConversationId, turnsSavedCounter, incrementTurnsSinceLastExtract]);
 
-    const activeTopicId = store.activeTopicId;
-    extractNodes(
-      convId,
-      undefined,
-      undefined,
-      activeTopicId ? { topicId: activeTopicId } : undefined
-    )
-      .then((result) => {
-        const s = useExtractionPanelStore.getState();
+  // User-initiated extraction callback (called by ExtractionPanel's Extract button)
+  const handleExtract = useCallback(async () => {
+    if (!resolvedConversationId || isExtracting) return;
 
-        // Handle pipeline response status
-        if (result.status === 'skipped') {
-          // ReadinessGate or SessionStateManager blocked — nothing to do
-          return;
-        }
+    startExtraction();
 
-        if (result.status === 'drift_detected') {
-          if (result.drift && result.choices) {
-            s.setDriftDetected(result.drift, result.choices);
+    // Expand panel if collapsed
+    const state = useExtractionPanelStore.getState();
+    if (state.panelMode === 'collapsed') {
+      state.setPanelMode('default');
+    }
+
+    try {
+      const result = await extractNodes(
+        resolvedConversationId,
+        undefined,
+        undefined,
+        activeTopicId ? { topicId: activeTopicId } : undefined
+      );
+
+      if (result.status === 'skipped') {
+        useExtractionPanelStore.setState({
+          extractionPhase: 'idle',
+          isExtracting: false,
+        });
+        return;
+      }
+
+      if (result.status === 'drift_detected') {
+        setDriftDetected(
+          result.drift ?? { new_topic: 'New topic' },
+          result.choices ?? ['keep_current', 'switch_topic']
+        );
+        useExtractionPanelStore.setState({ isExtracting: false, extractionPhase: 'idle' });
+        return;
+      }
+
+      // status === 'completed'
+      if (result.snapshot) {
+        setDraft(result.snapshot);
+      }
+
+      // delta can be YOp[] (raw array) or { changes: YOp[] } (TreeChangeBatch wrapper)
+      const rawDelta = result.delta;
+      const deltaOps: unknown[] | undefined = Array.isArray(rawDelta)
+        ? rawDelta
+        : (rawDelta as { changes?: unknown[] } | undefined)?.changes;
+
+      if (deltaOps && deltaOps.length > 0) {
+        // Has delta ops — show YOps feed animation first
+        setPendingYOps(deltaOps);
+        // Now that ops are loaded, switch phase to yops for feed animation
+        useExtractionPanelStore.setState({ extractionPhase: 'yops' });
+
+        // Derive source tags
+        const { deriveSourceTags } = await import('@/lib/sourceTag');
+        const tags = deriveSourceTags(
+          deltaOps as import('@t3x-dev/core').YOp[],
+          messages.map((m) => ({ role: m.role }))
+        );
+        setNodeSourceTags(tags);
+
+        // Auto-accept USER-sourced nodes
+        for (const [key, tag] of Object.entries(tags)) {
+          if (tag === 'user' || tag === 'both') {
+            useExtractionPanelStore.getState().acceptNode(key);
           }
-          return;
         }
+      } else {
+        // No delta ops — skip YOps feed, go straight to triage
+        useExtractionPanelStore.setState({ extractionPhase: 'triage', isExtracting: false });
+      }
 
-        // status === 'completed' — apply snapshot directly
-        if (result.snapshot && result.snapshot.trees.length > 0) {
-          s.setDraft(result.snapshot);
-          if (s.panelMode === 'collapsed') {
-            s.setPanelMode('default');
-          }
-        }
+      if (result.advisory_questions) {
+        setAdvisoryQuestions(result.advisory_questions);
+      }
 
-        // Store advisory questions (Step 6)
-        if (result.advisory_questions?.length) {
-          s.setAdvisoryQuestions(result.advisory_questions);
-        }
-
-        // Store gate issues for tree annotation (Step 5)
-        if (result.gate_result?.semantic?.issues) {
+      if (result.gate_result) {
+        const gate = result.gate_result as {
+          semantic?: {
+            issues?: Array<{
+              tree_id?: string;
+              severity: 'error' | 'warning' | 'info';
+              description: string;
+            }>;
+          };
+        };
+        if (gate.semantic?.issues) {
           const issuesByNode: Record<
             string,
             { severity: 'error' | 'warning' | 'info'; description: string }[]
           > = {};
-          for (const issue of result.gate_result.semantic.issues) {
+          for (const issue of gate.semantic.issues) {
             if (issue.tree_id) {
               if (!issuesByNode[issue.tree_id]) issuesByNode[issue.tree_id] = [];
               issuesByNode[issue.tree_id].push({
@@ -338,42 +406,60 @@ export function ChatWorkspace({
               });
             }
           }
-          s.setGateIssues(issuesByNode);
+          setGateIssues(issuesByNode);
         }
+      }
 
-        // Reload topics after extraction (new topic may have been auto-created)
-        listTopics(convId)
-          .then((topicsList) => {
-            const s2 = useExtractionPanelStore.getState();
-            s2.setTopics(topicsList);
-            // Auto-sync topic name with root tree type
-            if (result.snapshot && result.snapshot.trees.length > 0 && topicsList.length > 0) {
-              const rootType = result.snapshot.trees[0].key;
-              const currentTopic = topicsList.find((t) => t.id === s2.activeTopicId);
-              if (currentTopic && currentTopic.name !== rootType) {
-                updateTopicApi(currentTopic.id, { name: rootType }).catch(() => {});
-                s2.setTopics(
-                  topicsList.map((t) => (t.id === currentTopic.id ? { ...t, name: rootType } : t))
-                );
-              }
+      // Reload topics after extraction (new topic may have been auto-created)
+      const convId = resolvedConversationId;
+      listTopics(convId)
+        .then((topicsList) => {
+          const s2 = useExtractionPanelStore.getState();
+          s2.setTopics(topicsList);
+          // Auto-sync topic name with root tree type
+          if (result.snapshot && result.snapshot.trees.length > 0 && topicsList.length > 0) {
+            const rootType = result.snapshot.trees[0].key;
+            const currentTopic = topicsList.find((t) => t.id === s2.activeTopicId);
+            if (currentTopic && currentTopic.name !== rootType) {
+              updateTopicApi(currentTopic.id, { name: rootType }).catch(() => {});
+              s2.setTopics(
+                topicsList.map((t) => (t.id === currentTopic.id ? { ...t, name: rootType } : t))
+              );
             }
-          })
-          .catch(() => {});
+          }
+        })
+        .catch(() => {});
 
-        if (focusIntentEnabled && result.snapshot && result.snapshot.trees.length > 0) {
-          const controller = new AbortController();
-          getIntentSummary(result.snapshot.trees, controller.signal)
-            .then((intentResult) => setLlmHighlightedNodeIds(intentResult.coreNodeIds))
-            .catch(() => {}); // Silent fallback - degrades to deterministic-only
-        }
-      })
-      .catch(() => {
-        // Extraction failed silently — non-critical
-      })
-      .finally(() => {
-        useExtractionPanelStore.getState().setExtracting(false);
-      });
-  }, [resolvedConversationId, turnsSavedCounter, focusIntentEnabled, setLlmHighlightedNodeIds]);
+      if (focusIntentEnabled && result.snapshot && result.snapshot.trees.length > 0) {
+        const controller = new AbortController();
+        getIntentSummary(result.snapshot.trees, controller.signal)
+          .then((intentResult) => setLlmHighlightedNodeIds(intentResult.coreNodeIds))
+          .catch(() => {});
+      }
+    } catch (err) {
+      useExtractionPanelStore.setState({ extractionPhase: 'idle', isExtracting: false });
+    }
+  }, [
+    resolvedConversationId,
+    isExtracting,
+    activeTopicId,
+    messages,
+    startExtraction,
+    setPendingYOps,
+    setNodeSourceTags,
+    setDraft,
+    setDriftDetected,
+    setAdvisoryQuestions,
+    setGateIssues,
+    focusIntentEnabled,
+    setLlmHighlightedNodeIds,
+  ]);
+
+  // Register the extract callback so ExtractionPanel can invoke it
+  useEffect(() => {
+    setOnExtractRequested(handleExtract);
+    return () => setOnExtractRequested(null);
+  }, [handleExtract, setOnExtractRequested]);
 
   // Send firstMessage on mount (once only)
   useEffect(() => {
@@ -418,7 +504,7 @@ export function ChatWorkspace({
       />
 
       {/* Message list */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden">
+      <div ref={chatContainerRef} className="flex-1 overflow-y-auto overflow-x-hidden">
         {/* Parent conversation banner */}
         {parentConversationId && (
           <div className="w-full py-2 bg-[var(--accent-commit)]/5 border-b border-[var(--accent-commit)]/10">
@@ -536,6 +622,11 @@ export function ChatWorkspace({
 
         <div ref={messagesEndRef} />
       </div>
+
+      {/* Add-to-extraction form (visible in Review phase when text is selected) */}
+      {showAddForm && selection && (
+        <ChatAddForm selection={selection} onDone={clearSelection} />
+      )}
 
       {/* Input area — centered like messages */}
       <div className="border-t border-[var(--stroke-divider)] shrink-0 py-3">
