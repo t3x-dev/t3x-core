@@ -1,25 +1,29 @@
 /**
  * Meaning Pipeline Agents — each does ONE focused job.
  *
- * Code agents: output_regulator, nester
- * LLM agents: dedup_checker, topic_namer, topic_evolver, slot_polisher,
- *             reviewer, coverage_checker, contradiction_checker
+ * Code agents: output_regulator, fuzzy_quote_validator, dedup_checker,
+ *              nester, contradiction_checker, regression_checker,
+ *              structural_validator, source_trace_validator
+ * LLM agents: topic_namer, coverage_checker
  *
  * Order matters — see createMeaningPipeline.ts for execution order.
  */
 
-export { contradictionCheckerAgent } from './contradictionCheckerAgent';
-export { coverageCheckerAgent } from './coverageCheckerAgent';
-// LLM agents (focused, one job each)
+// Code agents
+export { outputRegulatorAgent } from './outputRegulatorAgent';
+export { fuzzyQuoteValidatorAgent } from './fuzzyQuoteValidator';
 export { dedupCheckerAgent } from './dedupCheckerAgent';
 export { nesterAgent } from './nesterAgent';
-// Code agents (deterministic, run first)
-export { outputRegulatorAgent } from './outputRegulatorAgent';
+export { contradictionCheckerAgent } from './contradictionCheckerAgent';
 export { regressionCheckerAgent } from './regressionCheckerAgent';
-export { reviewerAgent } from './reviewerAgent';
-export { slotPolisherAgent } from './slotPolisherAgent';
-// Step 5 validators (deterministic, run last)
-export { sourceTraceValidatorAgent } from './sourceTraceValidatorAgent';
 export { structuralValidatorAgent } from './structuralValidatorAgent';
-export { topicEvolverAgent } from './topicEvolverAgent';
+export { sourceTraceValidatorAgent } from './sourceTraceValidatorAgent';
+
+// LLM agents (kept — lightweight and additive)
 export { topicNamerAgent } from './topicNamerAgent';
+export { coverageCheckerAgent } from './coverageCheckerAgent';
+
+// REMOVED from pipeline (files kept for reference):
+// - slotPolisherAgent (unnecessary LLM beautification)
+// - reviewerAgent (biggest data remover)
+// - topicEvolverAgent (code uses root key directly)
