@@ -455,11 +455,12 @@ export function ChatWorkspace({
     setLlmHighlightedNodeIds,
   ]);
 
-  // Register the extract callback so ExtractionPanel can invoke it
+  // Listen for extraction request from ExtractionPanel (via custom event)
   useEffect(() => {
-    setOnExtractRequested(handleExtract);
-    return () => setOnExtractRequested(null);
-  }, [handleExtract, setOnExtractRequested]);
+    const handler = () => handleExtract();
+    window.addEventListener('t3x:extract-requested', handler);
+    return () => window.removeEventListener('t3x:extract-requested', handler);
+  }, [handleExtract]);
 
   // Send firstMessage on mount (once only)
   useEffect(() => {

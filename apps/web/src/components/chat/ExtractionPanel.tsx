@@ -158,7 +158,7 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
       if (e.metaKey && e.key === 'e') {
         e.preventDefault();
         if (extractionPhase === 'idle') {
-          onExtractRequested?.();
+          window.dispatchEvent(new CustomEvent('t3x:extract-requested'));
         }
         return;
       }
@@ -217,7 +217,8 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
 
   // Handle extract button
   const handleExtract = () => {
-    onExtractRequested?.();
+    // Dispatch custom event — ChatWorkspace listens for it
+    window.dispatchEvent(new CustomEvent('t3x:extract-requested'));
   };
 
   // Phase tab navigation (only between done phases)
