@@ -11,6 +11,8 @@
 
 import type { z } from '@hono/zod-openapi';
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
+import type { TreeNode } from '@t3x-dev/core';
+import { DEFAULT_STYLE, Extractor, serializeForPrompt } from '@t3x-dev/core';
 import {
   findConversationById,
   findProjectById,
@@ -22,12 +24,13 @@ import {
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { getLLMProvider } from '../lib/provider-registry';
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 import {
   ExtractRequest,
   ExtractResponse,
-  ExtractTree,
+  type ExtractTree,
 } from '../schemas/integration-contracts';
 
 export const extractRoutes = new OpenAPIHono({
@@ -208,6 +211,39 @@ const postExtractRoute = createRoute({
 });
 
 // ============================================================
+// LLM Extraction (with regex fallback)
+// ============================================================
+
+/**
+ * Try LLM-based semantic extraction via Extractor.
+ * Returns TreeNode[] on success, null on failure (caller should fallback to regex).
+ */
+async function extractWithLLM(
+  text: string,
+  turnHash: string
+): Promise<{ trees: TreeNode[]; yaml: string } | null> {
+  try {
+    const provider = await getLLMProvider();
+    if (!provider) return null;
+
+    const extractor = new Extractor(provider);
+    const result = await extractor.extract(
+      {
+        turns: [{ role: 'user', content: text, turn_hash: turnHash }],
+      },
+      DEFAULT_STYLE
+    );
+
+    if (!result.ok) return null;
+
+    const yaml = serializeForPrompt(result.snapshot);
+    return { trees: result.snapshot.trees, yaml };
+  } catch {
+    return null;
+  }
+}
+
+// ============================================================
 // Route Handler
 // ============================================================
 
@@ -269,8 +305,20 @@ extractRoutes.openapi(postExtractRoute, async (c) => {
       content: text,
     });
 
-    // Step 4: Run extraction (text segmentation into trees)
-    const trees = extractTreesFromText(text, conversationId, turn.turnHash);
+    // Step 4: Run extraction — try LLM first, fallback to regex
+    let trees: TreeNodeResult[];
+    let yaml: string;
+
+    const llmResult = await extractWithLLM(text, turn.turnHash);
+    if (llmResult) {
+      // LLM extraction succeeded — map TreeNode[] to API tree format
+      trees = llmResult.trees as TreeNodeResult[];
+      yaml = llmResult.yaml;
+    } else {
+      // Fallback to regex segmentation
+      trees = extractTreesFromText(text, conversationId, turn.turnHash);
+      yaml = treesToYaml(trees);
+    }
 
     // Step 5: Create a draft with extracted trees
     const draft = await insertDraft(db, {
@@ -320,7 +368,7 @@ extractRoutes.openapi(postExtractRoute, async (c) => {
       conversation_id: conversationId,
       draft_id: draft.id,
       trees,
-      yaml: treesToYaml(trees),
+      yaml,
       drift,
     };
 
