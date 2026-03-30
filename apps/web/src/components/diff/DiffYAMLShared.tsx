@@ -1,42 +1,42 @@
 'use client';
 
-import type { TreeDiff, Relation } from '@t3x-dev/core';
+import type { Relation, TreeDiff } from '@t3x-dev/core';
 import { useEffect, useState } from 'react';
+import type { CompatNode } from '@/lib/treeCompat';
 import { cn } from '@/lib/utils';
 import type { AlignedNode } from './DiffYAMLUtils';
-import type { CompatNode } from '@/lib/treeCompat';
 
 // ── CSS custom properties for diff colors ──
 // Light mode values (default); dark mode overridden via .dark class in globals.css
 
 export const DY_CSS_VARS_LIGHT: React.CSSProperties = {
   '--dy-surface': '#ffffff',
-  '--dy-added-bg': '#dafbe1',
-  '--dy-added-accent': '#1a7f37',
-  '--dy-added-word': '#acf2bd',
-  '--dy-removed-bg': '#ffebe9',
-  '--dy-removed-accent': '#cf222e',
-  '--dy-removed-word': '#ffc1ba',
-  '--dy-modified-bg': '#fff8c5',
-  '--dy-modified-accent': '#9a6700',
-  '--dy-text-primary': '#1f2328',
-  '--dy-text-secondary': '#656d76',
-  '--dy-text-tertiary': '#8b949e',
+  '--dy-added-bg': 'rgba(22,163,74,0.10)',
+  '--dy-added-accent': '#15803d',
+  '--dy-added-word': 'rgba(22,163,74,0.28)',
+  '--dy-removed-bg': 'rgba(220,38,38,0.10)',
+  '--dy-removed-accent': '#b91c1c',
+  '--dy-removed-word': 'rgba(220,38,38,0.25)',
+  '--dy-modified-bg': 'rgba(180,83,9,0.08)',
+  '--dy-modified-accent': '#b45309',
+  '--dy-text-primary': '#1a1a2e',
+  '--dy-text-secondary': '#4a4a6a',
+  '--dy-text-tertiary': '#7a7a9a',
 } as React.CSSProperties;
 
 export const DY_CSS_VARS_DARK: React.CSSProperties = {
-  '--dy-surface': '#0d1117',
-  '--dy-added-bg': 'rgba(46,160,67,0.15)',
-  '--dy-added-accent': '#3fb950',
-  '--dy-added-word': 'rgba(46,160,67,0.45)',
-  '--dy-removed-bg': 'rgba(248,81,73,0.15)',
-  '--dy-removed-accent': '#f85149',
-  '--dy-removed-word': 'rgba(248,81,73,0.40)',
-  '--dy-modified-bg': 'rgba(210,153,34,0.10)',
-  '--dy-modified-accent': '#d29922',
-  '--dy-text-primary': '#e6edf3',
-  '--dy-text-secondary': '#b1bac4',
-  '--dy-text-tertiary': '#7d8590',
+  '--dy-surface': '#0e0e10',
+  '--dy-added-bg': 'rgba(52,211,153,0.07)',
+  '--dy-added-accent': '#34D399',
+  '--dy-added-word': 'rgba(52,211,153,0.35)',
+  '--dy-removed-bg': 'rgba(248,113,113,0.07)',
+  '--dy-removed-accent': '#F87171',
+  '--dy-removed-word': 'rgba(248,113,113,0.30)',
+  '--dy-modified-bg': 'rgba(229,160,48,0.06)',
+  '--dy-modified-accent': '#E5A030',
+  '--dy-text-primary': '#ECECEF',
+  '--dy-text-secondary': '#9D9DA5',
+  '--dy-text-tertiary': '#6B6B75',
 } as React.CSSProperties;
 
 /** Hook: returns the correct CSS vars based on dark/light mode */
@@ -55,12 +55,12 @@ export function useDYTheme(): React.CSSProperties {
 // ── Relation color map ──
 
 export const REL_COLORS: Record<string, string> = {
-  causes: '#ff9e64',
-  conditions: '#e3b341',
-  contrasts: '#f85149',
-  elaborates: '#58a6ff',
-  follows: '#7d8590',
-  depends: '#d2a8ff',
+  causes: '#FF9E64',
+  conditions: '#E5A030',
+  contrasts: '#F87171',
+  elaborates: '#7AA2F7',
+  follows: '#6B6B75',
+  depends: '#BB9AF7',
 };
 
 export function relColor(type: string): string {

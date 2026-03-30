@@ -76,17 +76,17 @@ function computeSlotDiff(node: TreeNode, previousNode: TreeNode | undefined): Sl
 
 function renderSlotValue(value: SlotValue): React.ReactNode {
   if (typeof value === 'string') {
-    return <span style={{ color: '#9ece6a' }}>&quot;{value}&quot;</span>;
+    return <span className="text-[var(--yaml-string,#16a34a)]">&quot;{value}&quot;</span>;
   }
   if (typeof value === 'number') {
-    return <span style={{ color: '#ff9e64' }}>{value}</span>;
+    return <span className="text-[var(--yaml-number,#d97706)]">{value}</span>;
   }
   if (Array.isArray(value)) {
     return (
       <span className="block">
         {(value as SlotValue[]).map((item, i) => (
           <span key={i} className="block pl-4 leading-relaxed">
-            <span style={{ color: '#89ddff' }}>- </span>
+            <span className="text-[var(--yaml-punctuation,#6b7280)]">- </span>
             {renderSlotValue(item)}
           </span>
         ))}
@@ -97,7 +97,7 @@ function renderSlotValue(value: SlotValue): React.ReactNode {
     if ('ref' in value && typeof value.ref === 'string') {
       // SlotRef
       return (
-        <span style={{ color: '#bb9af7' }}>
+        <span className="text-[var(--yaml-ref,#7c3aed)]">
           {'{ '}ref: {value.ref}
           {' }'}
         </span>
@@ -105,10 +105,10 @@ function renderSlotValue(value: SlotValue): React.ReactNode {
     }
     if ('type' in value && 'slots' in value) {
       // InlineNode — render as JSON
-      return <span style={{ color: '#89ddff' }}>{JSON.stringify(value)}</span>;
+      return <span className="text-[var(--yaml-punctuation,#6b7280)]">{JSON.stringify(value)}</span>;
     }
   }
-  return <span style={{ color: '#89ddff' }}>{JSON.stringify(value)}</span>;
+  return <span className="text-[var(--yaml-punctuation,#6b7280)]">{JSON.stringify(value)}</span>;
 }
 
 // ============================================================================
@@ -171,8 +171,8 @@ function SlotRow({ slotKey, value, status, oldValue, isHovered, onHover, onClick
     >
       <div className="flex flex-wrap items-baseline gap-x-1 font-mono text-[12px] leading-relaxed">
         {/* Key */}
-        <span style={{ color: '#7aa2f7' }}>{slotKey}</span>
-        <span style={{ color: '#89ddff' }}>:</span>
+        <span className="text-[var(--yaml-key,#2563eb)]">{slotKey}</span>
+        <span className="text-[var(--yaml-punctuation,#6b7280)]">:</span>
 
         {/* Value */}
         {status === 'removed' ? (

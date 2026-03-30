@@ -3,17 +3,17 @@
 import { useParams, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChatWorkspace } from '@/components/chat/ChatWorkspace';
-import { ExtractionPanel } from '@/components/extraction/ExtractionPanel';
+import { ExtractionPanel } from '@/components/chat/ExtractionPanel';
 import { getConversation } from '@/lib/api';
 import { useChatStore } from '@/store/chatStore';
-import { useExtractionUIStore } from '@/store/extractionUIStore';
+import { useExtractionPanelStore } from '@/store/extractionPanelStore';
 
 export default function ConversationPage() {
   const { conversationId } = useParams<{ conversationId: string }>();
   const searchParams = useSearchParams();
   const firstMessage = searchParams.get('firstMessage');
   const activeProjectId = useChatStore((s) => s.activeProjectId);
-  const panelMode = useExtractionUIStore((s) => s.panelMode);
+  const panelMode = useExtractionPanelStore((s) => s.panelMode);
 
   // Fetch parent commit hash for inheritance (when navigating from canvas "Create Unit")
   const [inheritFromCommitHash, setInheritFromCommitHash] = useState<string | undefined>();
@@ -30,7 +30,7 @@ export default function ConversationPage() {
   }, [conversationId]);
 
   // Resizable panel via drag handle
-  const [panelWidth, setPanelWidth] = useState(320);
+  const [panelWidth, setPanelWidth] = useState(380);
   const isDragging = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
 

@@ -16,17 +16,17 @@ export function FeedbackOverview({ stats }: FeedbackOverviewProps) {
     {
       label: 'Accept Rate',
       value: stats.accept_rate,
-      colorClass: 'text-emerald-600',
+      colorClass: 'text-[var(--status-success)]',
     },
     {
       label: 'Edit Rate',
       value: stats.edit_rate,
-      colorClass: 'text-blue-600',
+      colorClass: 'text-[var(--accent-commit)]',
     },
     {
       label: 'Reject Rate',
       value: stats.reject_rate,
-      colorClass: 'text-red-600',
+      colorClass: 'text-[var(--status-error)]',
     },
   ];
 

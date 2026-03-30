@@ -45,14 +45,14 @@ export function FeedbackByTypeTable({ byType }: FeedbackByTypeTableProps) {
               >
                 <td className="py-2 pr-4 font-medium text-[var(--text-primary)]">{row.type}</td>
                 <td className="py-2 pr-4 text-[var(--text-secondary)]">{row.total}</td>
-                <td className="py-2 pr-4 text-emerald-600">{row.accepted}</td>
-                <td className="py-2 pr-4 text-blue-600">{row.edited}</td>
-                <td className="py-2 pr-4 text-red-600">{row.rejected}</td>
+                <td className="py-2 pr-4 text-[var(--status-success)]">{row.accepted}</td>
+                <td className="py-2 pr-4 text-[var(--accent-commit)]">{row.edited}</td>
+                <td className="py-2 pr-4 text-[var(--status-error)]">{row.rejected}</td>
                 <td className="py-2">
                   <div className="flex items-center gap-2">
                     <div className="h-2 w-24 overflow-hidden rounded-full bg-[var(--surface-app)]">
                       <div
-                        className="h-full rounded-full bg-emerald-500 transition-all"
+                        className="h-full rounded-full bg-[var(--status-success)] transition-all"
                         style={{ width: `${acceptRate * 100}%` }}
                       />
                     </div>

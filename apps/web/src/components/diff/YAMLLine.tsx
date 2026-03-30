@@ -2,7 +2,14 @@
 
 import { cn } from '@/lib/utils';
 
-export type YAMLLineStatus = 'added' | 'removed' | 'modified' | 'unchanged' | 'empty';
+export type YAMLLineStatus =
+  | 'added'
+  | 'removed'
+  | 'modified'
+  | 'unchanged'
+  | 'empty'
+  | 'source'
+  | 'target';
 
 export interface YAMLLineProps {
   lineNumber?: number;
@@ -32,6 +39,8 @@ export function YAMLLine({ lineNumber, status, children }: YAMLLineProps) {
           status === 'added' && 'text-[var(--dy-added-accent)] opacity-50',
           status === 'removed' && 'text-[var(--dy-removed-accent)] opacity-50',
           status === 'modified' && 'text-[var(--dy-modified-accent)] opacity-40',
+          status === 'source' && 'text-[var(--merge-source-accent)] opacity-50',
+          status === 'target' && 'text-[var(--merge-target-accent)] opacity-50',
           (status === 'unchanged' || isEmpty) && 'text-[var(--text-tertiary)] opacity-50'
         )}
       >
@@ -44,7 +53,9 @@ export function YAMLLine({ lineNumber, status, children }: YAMLLineProps) {
           'w-1 min-w-1 shrink-0',
           status === 'added' && 'bg-[var(--dy-added-accent)]',
           status === 'removed' && 'bg-[var(--dy-removed-accent)]',
-          status === 'modified' && 'bg-[var(--dy-modified-accent)]'
+          status === 'modified' && 'bg-[var(--dy-modified-accent)]',
+          status === 'source' && 'bg-[var(--merge-source-accent)]',
+          status === 'target' && 'bg-[var(--merge-target-accent)]'
         )}
       />
 
@@ -54,7 +65,9 @@ export function YAMLLine({ lineNumber, status, children }: YAMLLineProps) {
           'flex-1 px-[10px] whitespace-pre overflow-hidden text-ellipsis',
           status === 'added' && 'bg-[var(--dy-added-bg)]',
           status === 'removed' && 'bg-[var(--dy-removed-bg)]',
-          status === 'modified' && 'bg-[var(--dy-modified-bg)]'
+          status === 'modified' && 'bg-[var(--dy-modified-bg)]',
+          status === 'source' && 'bg-[var(--merge-source-bg)]',
+          status === 'target' && 'bg-[var(--merge-target-bg)]'
         )}
         style={
           isEmpty

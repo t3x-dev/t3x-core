@@ -26,7 +26,7 @@ export type PipelineMode = 'full' | 'incremental';
 
 export interface PipelineOptions {
   mode?: PipelineMode;
-  /** Agent names to skip (e.g., ['slot_polisher', 'reviewer']) */
+  /** Agent names to skip (e.g., ['coverage_checker', 'topic_namer']) */
   disabledAgents?: string[];
   /** Enable structured console logging for each stage */
   debug?: boolean;

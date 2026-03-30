@@ -66,7 +66,7 @@ Read the conversation and extract ALL facts, details, and information into a str
 ${hasSnapshot ? `Operations: set (update slot), add (new node), drop (remove node), unset (remove slot)` : `Operation: add (create nodes)`}
 
 Each operation needs:
-- **source**: VERBATIM quote from the conversation (copy-paste, not paraphrase)
+- **source**: key phrase from the conversation that contains this fact (a few words are enough — does NOT need to be a complete sentence)
 - **from**: turn tag (T1, T2, etc.) where the information appears
 
 ### Structure
@@ -116,6 +116,12 @@ ${hasSnapshot ? `yops:
         coloring.purpose: "camouflage in their natural habitat"
         habitat: "mountain forests of central China"
       from: T2`}
+
+### Extraction Priority
+- Extract MORE rather than less — code will clean up duplicates
+- Do NOT skip a fact because you can't find a perfect quote — use the closest matching phrase
+- Every list item, number, recommendation, and detail is worth capturing
+- A short keyword source is better than skipping the data entirely
 
 ### Rules
 - Output ONLY valid YAML starting with "yops:"
@@ -177,7 +183,9 @@ Extract changes from the NEW turns only. Use set/add/drop/unset operations.`;
   const userPrompt = `## Conversation
 ${formatTurns(turns)}
 
-Extract ALL knowledge into a tree using add operations. Capture every detail the assistant provides.`;
+Extract ALL knowledge into a tree using add operations.
+Capture EVERY fact, number, list item, recommendation, and detail — both from user and assistant.
+Do NOT skip information because you're unsure about quoting. A short keyword source is enough.`;
 
   return { systemPrompt, userPrompt };
 }

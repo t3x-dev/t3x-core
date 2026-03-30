@@ -1,0 +1,90 @@
+/* Merge tokens — Unified Design v2
+   Source = blue, Target = green — matching diff intensity */
+
+/* Light mode */
+:root {
+  --merge-source-bg: rgba(29, 78, 216, 0.08);
+  --merge-source-accent: #1d4ed8;
+  --merge-source-word: rgba(29, 78, 216, 0.28);
+  --merge-target-bg: rgba(21, 128, 61, 0.08);
+  --merge-target-accent: #15803d;
+  --merge-target-word: rgba(21, 128, 61, 0.28);
+  --merge-conflict-accent: #b45309;
+  --merge-conflict-bg: rgba(180, 83, 9, 0.08);
+  --merge-unchosen-opacity: 0.15;
+  --rel-color: #6d28d9;
+  --added-accent: #15803d;
+  --removed-accent: #b91c1c;
+  /* Short-form aliases (used by unified component CSS) */
+  --merge-src-bg: var(--merge-source-bg);
+  --merge-src-accent: var(--merge-source-accent);
+  --merge-src-word: var(--merge-source-word);
+  --merge-tgt-bg: var(--merge-target-bg);
+  --merge-tgt-accent: var(--merge-target-accent);
+  --merge-tgt-word: var(--merge-target-word);
+}
+
+/* Dark mode */
+.dark {
+  --merge-source-bg: rgba(107, 138, 255, 0.07);
+  --merge-source-accent: #6b8aff;
+  --merge-source-word: rgba(107, 138, 255, 0.35);
+  --merge-target-bg: rgba(52, 211, 153, 0.07);
+  --merge-target-accent: #34d399;
+  --merge-target-word: rgba(52, 211, 153, 0.35);
+  --merge-conflict-accent: #e5a030;
+  --merge-conflict-bg: rgba(229, 160, 48, 0.06);
+  --merge-unchosen-opacity: 0.15;
+  --rel-color: #bb9af7;
+  --added-accent: #34d399;
+  --removed-accent: #f87171;
+  /* Short-form aliases */
+  --merge-src-bg: var(--merge-source-bg);
+  --merge-src-accent: var(--merge-source-accent);
+  --merge-src-word: var(--merge-source-word);
+  --merge-tgt-bg: var(--merge-target-bg);
+  --merge-tgt-accent: var(--merge-target-accent);
+  --merge-tgt-word: var(--merge-target-word);
+}
+
+/* Word highlights — badge style, high contrast */
+.word-source {
+  background: var(--merge-source-word);
+  color: #fff;
+  border-radius: 3px;
+  padding: 1px 4px;
+  font-weight: 600;
+  box-shadow: 0 0 0 1px rgba(107, 138, 255, 0.3);
+}
+.word-target {
+  background: var(--merge-target-word);
+  color: #fff;
+  border-radius: 3px;
+  padding: 1px 4px;
+  font-weight: 600;
+  box-shadow: 0 0 0 1px rgba(52, 211, 153, 0.3);
+}
+
+/* Light mode word overrides */
+:root .word-source {
+  color: #1e40af;
+  background: rgba(29, 78, 216, 0.18);
+  box-shadow: 0 0 0 1px rgba(29, 78, 216, 0.25);
+  font-weight: 700;
+}
+:root .word-target {
+  color: #166534;
+  background: rgba(21, 128, 61, 0.18);
+  box-shadow: 0 0 0 1px rgba(21, 128, 61, 0.25);
+  font-weight: 700;
+}
+.dark .word-source {
+  color: #fff;
+  box-shadow: 0 0 0 1px rgba(107, 138, 255, 0.3);
+  font-weight: 600;
+}
+.dark .word-target {
+  color: #fff;
+  box-shadow: 0 0 0 1px rgba(52, 211, 153, 0.3);
+  font-weight: 600;
+}

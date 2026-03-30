@@ -14,9 +14,8 @@ export {
   contradictionCheckerAgent,
   coverageCheckerAgent,
   dedupCheckerAgent,
+  fuzzyQuoteValidatorAgent,
   nesterAgent,
-  slotPolisherAgent,
-  topicEvolverAgent,
   topicNamerAgent,
 } from './agents';
 // Compression

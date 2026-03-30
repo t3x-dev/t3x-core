@@ -1,8 +1,10 @@
 /**
  * Factory for creating a pre-configured MeaningPipeline.
  *
- * Registers all default agents in the correct order.
- * Each agent decides independently whether to run via shouldRun().
+ * v2: Simplified pipeline — 8 CODE agents + 2 LLM agents.
+ * LLM agents removed: slot_polisher, reviewer, topic_evolver.
+ * LLM agents converted to CODE: dedup_checker, contradiction_checker.
+ * New CODE agent: fuzzy_quote_validator.
  */
 
 import type { LLMProvider } from '../llm/types';
@@ -10,49 +12,41 @@ import {
   contradictionCheckerAgent,
   coverageCheckerAgent,
   dedupCheckerAgent,
+  fuzzyQuoteValidatorAgent,
   nesterAgent,
   outputRegulatorAgent,
   regressionCheckerAgent,
-  reviewerAgent,
-  slotPolisherAgent,
   sourceTraceValidatorAgent,
   structuralValidatorAgent,
-  topicEvolverAgent,
   topicNamerAgent,
 } from './agents';
 import { MeaningPipeline } from './meaningPipeline';
 
 /**
- * Create the default meaning pipeline with all agents.
+ * Create the simplified meaning pipeline.
  *
- * Agent execution order (agents decide independently whether to run):
- * 1. output_regulator (CODE) — consolidate duplicate frame types into arrays
- * 2. dedup_checker (LLM) — find and merge semantically duplicate frames
- * 3. nester (CODE) — build nested tree from relations
- * 4. topic_namer (LLM) — name the root topic (first extraction)
- * 5. topic_evolver (LLM) — update topic name (delta updates)
- * 6. slot_polisher (LLM) — clean up slot names and values
- * 7. reviewer (LLM) — quality gate: review structure, flag issues, auto-fix
- * 8. coverage_checker (LLM) — verify all user points are captured, auto-add missing
- * 9. contradiction_checker (LLM) — detect and remove content contradicting user statements
- * 10. regression_checker (CODE) — detect significant content loss vs previous snapshot
- * 11. structural_validator (CODE) — validate structural integrity after all agents
- * 12. source_trace_validator (CODE) — validate source references point to real turns
- *
- * After each step, a snapshot is saved for human review.
+ * Agent execution order:
+ * 1.  output_regulator       (CODE) — consolidate duplicate frame types
+ * 2.  fuzzy_quote_validator   (CODE) — validate source quotes, adjust confidence
+ * 3.  dedup_checker           (CODE) — exact key + Jaccard similarity dedup
+ * 4.  nester                  (CODE) — build nested tree from relations
+ * 5.  topic_namer             (LLM)  — name root topic (first extraction only)
+ * 6.  coverage_checker        (LLM)  — verify all user points captured, auto-add
+ * 7.  contradiction_checker   (CODE) — flag (not delete) contradicting slots
+ * 8.  regression_checker      (CODE) — detect significant content loss
+ * 9.  structural_validator    (CODE) — validate structural integrity
+ * 10. source_trace_validator  (CODE) — validate source references
  */
 export function createMeaningPipeline(provider: LLMProvider): MeaningPipeline {
   return new MeaningPipeline(provider)
-    .register(outputRegulatorAgent) // CODE: fix duplicates first
-    .register(dedupCheckerAgent) // LLM: semantic dedup
-    .register(nesterAgent) // CODE: build tree
-    .register(topicNamerAgent) // LLM: name root topic
-    .register(topicEvolverAgent) // LLM: evolve topic name
-    .register(slotPolisherAgent) // LLM: clean up slots
-    .register(reviewerAgent) // LLM: quality gate
-    .register(coverageCheckerAgent) // LLM: check coverage
-    .register(contradictionCheckerAgent) // LLM: check contradictions
-    .register(regressionCheckerAgent) // CODE: content loss detection (Step 5)
-    .register(structuralValidatorAgent) // CODE: structural integrity (Step 5)
-    .register(sourceTraceValidatorAgent); // CODE: source traceability (Step 5)
+    .register(outputRegulatorAgent)
+    .register(fuzzyQuoteValidatorAgent)
+    .register(dedupCheckerAgent)
+    .register(nesterAgent)
+    .register(topicNamerAgent)
+    .register(coverageCheckerAgent)
+    .register(contradictionCheckerAgent)
+    .register(regressionCheckerAgent)
+    .register(structuralValidatorAgent)
+    .register(sourceTraceValidatorAgent);
 }
