@@ -32,23 +32,40 @@ export interface TriageItem {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Convert extracted trees into TriageItems for the triage phase */
+/** Collect all slots from a tree node and its children, prefixed by path */
+function collectAllSlots(node: TreeNode, prefix: string): Record<string, string> {
+  const slots: Record<string, string> = {};
+  for (const [key, value] of Object.entries(node.slots)) {
+    const fullKey = prefix ? `${prefix}.${key}` : key;
+    slots[fullKey] = typeof value === 'string' ? value : JSON.stringify(value);
+  }
+  for (const child of node.children) {
+    Object.assign(slots, collectAllSlots(child, prefix ? `${prefix}.${child.key}` : child.key));
+  }
+  return slots;
+}
+
+/** Convert extracted trees into TriageItems for the triage phase.
+ *  Each root tree becomes one triage item. Children's slots are included
+ *  with dot-path keys so the full tree content is visible in triage. */
 export function treesToTriageItems(trees: TreeNode[]): TriageItem[] {
   return trees.map((tree) => {
     const source: TriageSource = tree.confidence && tree.confidence >= 0.8 ? 'both' : 'llm';
-    const slots: Record<string, string> = {};
-    for (const [key, value] of Object.entries(tree.slots)) {
-      slots[key] = typeof value === 'string' ? value : JSON.stringify(value);
-    }
-    const preview = Object.entries(slots)
-      .slice(0, 2)
-      .map(([k, v]) => `${k}: ${v}`)
-      .join(', ');
+    // Include root slots + all children slots
+    const slots = collectAllSlots(tree, '');
+    const childCount = tree.children.length;
+    const slotCount = Object.keys(slots).length;
+    const preview = childCount > 0
+      ? `${childCount} subtopics, ${slotCount} total slots`
+      : Object.entries(slots)
+          .slice(0, 2)
+          .map(([k, v]) => `${k}: ${v}`)
+          .join(', ');
     return {
       id: tree.key,
       source,
       slots,
-      preview: preview.length > 50 ? `${preview.slice(0, 50)}...` : preview,
+      preview: preview.length > 60 ? `${preview.slice(0, 60)}...` : preview,
     };
   });
 }
