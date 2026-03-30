@@ -241,7 +241,7 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
       {/* Expanded panel */}
       {panelMode !== 'collapsed' && (
         <div className="flex h-full flex-col min-w-0">
-          {/* Panel header */}
+          {/* Panel header — changes based on extractionPhase */}
           <div className="flex items-center justify-between border-b border-[var(--stroke-default)] px-3 py-2">
             <div className="flex items-center gap-1.5">
               {isExtracting ? (
@@ -250,11 +250,33 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
                 <GitCommit className="h-3.5 w-3.5 text-[var(--accent-commit)]" />
               )}
               <span className="text-xs font-semibold text-[var(--text-primary)]">
-                {isExtracting ? 'Extracting...' : 'Knowledge'}
+                {isExtracting
+                  ? 'Extracting...'
+                  : extractionPhase === 'review' || extractionPhase === 'committing'
+                    ? 'Review'
+                    : extractionPhase === 'triage'
+                      ? 'Triage'
+                      : 'Knowledge'}
               </span>
+              {/* Node/slot count — always show when we have nodes */}
               {nodeCount > 0 && !isExtracting && (
-                <span className="rounded-full bg-[var(--hover-bg)] px-1.5 py-0.5 text-[10px] text-[var(--text-secondary)]">
-                  {nodeCount}
+                <span className="text-[10px] text-[var(--text-secondary)]">
+                  {extractionPhase === 'review' || extractionPhase === 'committing'
+                    ? `${pendingNodeCount} nodes · ${pendingSlotCount} slots`
+                    : extractionPhase === 'triage'
+                      ? `${nodeCount} topics`
+                      : String(nodeCount)}
+                </span>
+              )}
+              {/* Phase badge pill */}
+              {(extractionPhase === 'review' || extractionPhase === 'committing') && (
+                <span className="rounded-full bg-[var(--accent)]/15 px-2 py-0.5 text-[8px] font-bold uppercase tracking-wider text-[var(--accent)]">
+                  Review
+                </span>
+              )}
+              {extractionPhase === 'triage' && (
+                <span className="rounded-full bg-[var(--status-success)]/15 px-2 py-0.5 text-[8px] font-bold uppercase tracking-wider text-[var(--status-success)]">
+                  Triage
                 </span>
               )}
               {/* Extract button in idle phase */}
@@ -304,6 +326,10 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
 
           {(extractionPhase === 'review' || extractionPhase === 'committing') && (
             <div className="flex flex-1 flex-col overflow-hidden">
+              {/* Section header */}
+              <div className="flex items-center justify-between px-3.5 py-[7px] text-[9px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)] bg-[var(--hover-bg)]/30 border-b border-[var(--stroke-default)]">
+                <span>Changes to commit</span>
+              </div>
               <div className="flex-1 overflow-hidden">
                 <YAMLView />
               </div>
