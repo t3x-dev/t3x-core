@@ -14,9 +14,12 @@ import { insertConversation } from '../queries/conversations';
 import {
   deleteProject,
   findProjectById,
+  findProjectByIdIncludingDeleted,
   findProjects,
   findProjectWithStats,
   insertProject,
+  permanentDeleteProject,
+  restoreProject,
   updateProject,
 } from '../queries/projects';
 import { insertTurn } from '../queries/turns';
@@ -150,22 +153,130 @@ describe('Projects Storage', () => {
   });
 
   describe('deleteProject', () => {
-    it('deletes the project from database', async () => {
-      const created = await insertProject(db, testData.project({ name: 'To Delete' }));
+    it('soft-deletes the project (hidden from find)', async () => {
+      const created = await insertProject(db, testData.project({ name: 'To Soft Delete' }));
 
       const deleted = await deleteProject(db, created.projectId);
 
       expect(deleted).toBe(true);
 
-      // Verify database effect
+      // findProjectById should return null (filtered)
       const found = await findProjectById(db, created.projectId);
       expect(found).toBeNull();
+
+      // But row still exists in database (including deleted)
+      const raw = await findProjectByIdIncludingDeleted(db, created.projectId);
+      expect(raw).toBeDefined();
+      expect(raw!.deletedAt).toBeInstanceOf(Date);
     });
 
     it('returns false when project does not exist', async () => {
       const deleted = await deleteProject(db, 'proj_nonexistent');
 
       expect(deleted).toBe(false);
+    });
+
+    it('returns false when project is already soft-deleted', async () => {
+      const created = await insertProject(db, testData.project({ name: 'Already Deleted' }));
+      await deleteProject(db, created.projectId);
+
+      const deleted = await deleteProject(db, created.projectId);
+      expect(deleted).toBe(false);
+    });
+  });
+
+  describe('restoreProject', () => {
+    it('restores a soft-deleted project', async () => {
+      const created = await insertProject(db, testData.project({ name: 'To Restore' }));
+      await deleteProject(db, created.projectId);
+
+      const restored = await restoreProject(db, created.projectId);
+
+      expect(restored).toBeDefined();
+      expect(restored!.projectId).toBe(created.projectId);
+      expect(restored!.deletedAt).toBeNull();
+
+      // findProjectById should find it again
+      const found = await findProjectById(db, created.projectId);
+      expect(found).toBeDefined();
+      expect(found!.name).toBe('To Restore');
+    });
+
+    it('returns null for non-existent project', async () => {
+      const restored = await restoreProject(db, 'proj_nonexistent');
+      expect(restored).toBeNull();
+    });
+
+    it('returns null for non-deleted project', async () => {
+      const created = await insertProject(db, testData.project({ name: 'Not Deleted' }));
+
+      const restored = await restoreProject(db, created.projectId);
+      expect(restored).toBeNull();
+    });
+  });
+
+  describe('permanentDeleteProject', () => {
+    it('permanently removes the project from database', async () => {
+      const created = await insertProject(db, testData.project({ name: 'To Permanently Delete' }));
+
+      const deleted = await permanentDeleteProject(db, created.projectId);
+
+      expect(deleted).toBe(true);
+
+      // Gone from both regular and including-deleted queries
+      const found = await findProjectById(db, created.projectId);
+      expect(found).toBeNull();
+      const raw = await findProjectByIdIncludingDeleted(db, created.projectId);
+      expect(raw).toBeNull();
+    });
+
+    it('can permanently delete a soft-deleted project', async () => {
+      const created = await insertProject(db, testData.project({ name: 'Soft Then Permanent' }));
+      await deleteProject(db, created.projectId);
+
+      const deleted = await permanentDeleteProject(db, created.projectId);
+      expect(deleted).toBe(true);
+
+      const raw = await findProjectByIdIncludingDeleted(db, created.projectId);
+      expect(raw).toBeNull();
+    });
+
+    it('restore fails after permanent delete', async () => {
+      const created = await insertProject(db, testData.project({ name: 'Cannot Restore' }));
+      await permanentDeleteProject(db, created.projectId);
+
+      const restored = await restoreProject(db, created.projectId);
+      expect(restored).toBeNull();
+    });
+  });
+
+  describe('soft-delete filtering', () => {
+    it('findProjects excludes soft-deleted projects', async () => {
+      const active = await insertProject(db, testData.project({ name: 'Active Project' }));
+      const toDelete = await insertProject(db, testData.project({ name: 'Deleted Project' }));
+      await deleteProject(db, toDelete.projectId);
+
+      const results = await findProjects(db, {});
+      const ids = results.map((p) => p.projectId);
+
+      expect(ids).toContain(active.projectId);
+      expect(ids).not.toContain(toDelete.projectId);
+    });
+
+    it('updateProject does not update soft-deleted projects', async () => {
+      const created = await insertProject(db, testData.project({ name: 'Update Block' }));
+      await deleteProject(db, created.projectId);
+
+      const updated = await updateProject(db, created.projectId, { name: 'New Name' });
+      expect(updated).toBeNull();
+    });
+
+    it('findProjectWithStats returns null for soft-deleted projects', async () => {
+      const created = await insertProject(db, testData.project({ name: 'Stats Block' }));
+      await deleteProject(db, created.projectId);
+
+      const result = await findProjectWithStats(db, created.projectId);
+      expect(result).toBeNull();
     });
   });
 
