@@ -1063,20 +1063,3 @@ export const tokenUsage = pgTable(
 export type TokenUsageRecord = typeof tokenUsage.$inferSelect;
 export type TokenUsageInsert = typeof tokenUsage.$inferInsert;
 
-// ═══════════════════════════════════════════════════════════════════════════
-// device_codes: OAuth Device Flow (RFC 8628)
-// ═══════════════════════════════════════════════════════════════════════════
-
-export const deviceCodes = pgTable('device_codes', {
-  id: text('id').primaryKey(), // dc_ + uuid12
-  deviceCode: text('device_code').notNull().unique(),
-  userCode: text('user_code').notNull().unique(),
-  clientId: text('client_id').notNull(), // e.g. "mcp"
-  status: text('status').notNull().default('pending'), // pending | authorized | expired | used
-  userId: text('user_id'), // set when user authorizes
-  apiKeyId: text('api_key_id'), // set when token is issued
-  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
-});
-
-export type DeviceCodeRecord = typeof deviceCodes.$inferSelect;

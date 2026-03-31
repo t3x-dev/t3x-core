@@ -1,21 +1,27 @@
 /**
- * MCP Device Flow Authentication
+ * MCP Browser-Based Authentication
  *
- * Handles OAuth Device Flow to get an API key from the t3x server.
+ * Opens the t3x WebUI login page in the user's browser.
+ * Receives the API key via local HTTP callback after login.
  * Stores the token in a local file for reuse across sessions.
  */
 
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import { randomBytes } from 'node:crypto';
+import { readFileSync, writeFileSync, mkdirSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 
 const TOKEN_DIR = join(homedir(), '.t3x');
 const TOKEN_FILE = join(TOKEN_DIR, 'mcp-token.json');
+const AUTH_TIMEOUT_MS = 3 * 60 * 1000; // 3 minutes
 
 interface StoredToken {
   access_token: string;
   server_url: string;
 }
+
+// ── Token persistence ──────────────────────────────────────────────────────
 
 export function getStoredToken(serverUrl: string): string | null {
   try {
@@ -38,71 +44,122 @@ function saveToken(serverUrl: string, accessToken: string): void {
   );
 }
 
-/**
- * Run the OAuth Device Flow to obtain an access token.
- * Returns the token and the user-facing message with verification URI + code.
- */
-export async function deviceFlowAuth(
-  baseUrl: string
-): Promise<{ token: string; message: string }> {
-  // Phase 1: Request device code
-  const codeRes = await fetch(`${baseUrl}/v1/oauth/device/code`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ client_id: 'mcp' }),
-  });
-
-  if (!codeRes.ok) {
-    throw new Error(`Device code request failed: ${codeRes.status}`);
+export function clearStoredToken(): void {
+  try {
+    unlinkSync(TOKEN_FILE);
+  } catch {
+    // File doesn't exist, that's fine
   }
+}
 
-  const codeData = await codeRes.json() as {
-    device_code: string;
-    user_code: string;
-    verification_uri: string;
-    expires_in: number;
-    interval: number;
-  };
+// ── Browser auth flow ──────────────────────────────────────────────────────
 
-  const message =
-    `To authorize, visit: ${codeData.verification_uri}\n` +
-    `Enter code: ${codeData.user_code}\n` +
-    `(Expires in ${Math.floor(codeData.expires_in / 60)} minutes)`;
+const SUCCESS_HTML = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>T3X Auth</title>
+<style>body{font-family:system-ui;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#0a0a0a;color:#fafafa}
+.card{text-align:center;padding:2rem}.check{font-size:3rem;margin-bottom:1rem}</style>
+</head><body><div class="card"><div class="check">&#10003;</div>
+<h2>Authentication successful</h2><p>You can close this page.</p></div></body></html>`;
 
-  // Phase 2: Poll for token
-  const deadline = Date.now() + codeData.expires_in * 1000;
-  const interval = codeData.interval * 1000;
+const ERROR_HTML = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>T3X Auth</title>
+<style>body{font-family:system-ui;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#0a0a0a;color:#fafafa}
+.card{text-align:center;padding:2rem}.icon{font-size:3rem;margin-bottom:1rem;color:#ef4444}</style>
+</head><body><div class="card"><div class="icon">&#10007;</div>
+<h2>Authentication failed</h2><p>State mismatch. Please retry.</p></div></body></html>`;
 
-  while (Date.now() < deadline) {
-    await new Promise((r) => setTimeout(r, interval));
+/** In-flight auth promise to prevent multiple browser popups */
+let pendingAuth: Promise<string> | null = null;
 
-    const tokenRes = await fetch(`${baseUrl}/v1/oauth/device/token`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        device_code: codeData.device_code,
-        grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
-      }),
+/**
+ * Open the browser to the WebUI login page and wait for the callback.
+ * Returns the API key token.
+ */
+export async function browserAuth(baseUrl: string): Promise<string> {
+  // Prevent concurrent auth attempts
+  if (pendingAuth) return pendingAuth;
+
+  pendingAuth = doBrowserAuth(baseUrl).finally(() => {
+    pendingAuth = null;
+  });
+  return pendingAuth;
+}
+
+async function doBrowserAuth(baseUrl: string): Promise<string> {
+  const state = randomBytes(32).toString('hex');
+  const webUrl = getWebUrl();
+
+  return new Promise<string>((resolve, reject) => {
+    const server = createServer((req: IncomingMessage, res: ServerResponse) => {
+      const url = new URL(req.url ?? '/', `http://127.0.0.1`);
+
+      if (url.pathname !== '/callback') {
+        res.writeHead(404);
+        res.end('Not found');
+        return;
+      }
+
+      const token = url.searchParams.get('token');
+      const returnedState = url.searchParams.get('state');
+
+      if (returnedState !== state || !token) {
+        res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(ERROR_HTML);
+        cleanup();
+        reject(new Error('Authentication failed: state mismatch'));
+        return;
+      }
+
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(SUCCESS_HTML);
+
+      saveToken(baseUrl, token);
+      cleanup();
+      resolve(token);
     });
 
-    if (tokenRes.ok) {
-      const tokenData = await tokenRes.json() as { access_token: string };
-      saveToken(baseUrl, tokenData.access_token);
-      return { token: tokenData.access_token, message };
-    }
+    // Listen on random port, loopback only
+    server.listen(0, '127.0.0.1', async () => {
+      const addr = server.address();
+      if (!addr || typeof addr === 'string') {
+        cleanup();
+        reject(new Error('Failed to start callback server'));
+        return;
+      }
 
-    const errData = await tokenRes.json() as { error: string };
-    if (errData.error === 'authorization_pending') {
-      continue;
-    }
-    if (errData.error === 'slow_down') {
-      await new Promise((r) => setTimeout(r, interval));
-      continue;
-    }
-    throw new Error(`Device flow failed: ${errData.error}`);
-  }
+      const callbackUrl = `http://127.0.0.1:${addr.port}/callback`;
+      const loginUrl = `${webUrl}/login?mcp_callback=${encodeURIComponent(callbackUrl)}&state=${state}`;
 
-  throw new Error('Device flow timed out');
+      try {
+        const openModule = await import('open');
+        await openModule.default(loginUrl);
+      } catch {
+        cleanup();
+        reject(
+          new Error(
+            `Cannot open browser. Set T3X_API_KEY environment variable instead.\nLogin URL: ${loginUrl}`
+          )
+        );
+      }
+    });
+
+    // Timeout after 3 minutes
+    const timer = setTimeout(() => {
+      cleanup();
+      reject(new Error('Authentication timed out (3 minutes). Please retry.'));
+    }, AUTH_TIMEOUT_MS);
+
+    function cleanup() {
+      clearTimeout(timer);
+      server.close();
+    }
+  });
+}
+
+// ── Public API ─────────────────────────────────────────────────────────────
+
+export function getWebUrl(): string {
+  return process.env.T3X_WEB_URL || 'http://localhost:3000';
 }
 
 /**

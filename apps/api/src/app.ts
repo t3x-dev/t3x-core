@@ -56,7 +56,6 @@ import {
 import { apiKeysRoutes } from './routes/api-keys.openapi';
 import { authLocalRoutes } from './routes/auth-local.openapi';
 import { authMeRoutes } from './routes/auth-me.openapi';
-import { oauthDeviceRoutes } from './routes/oauth-device.openapi';
 import { autopilotRoutes } from './routes/autopilot.openapi';
 import { checkRoutes } from './routes/check.openapi';
 import { commitFromDraftRoutes } from './routes/commit-from-draft.openapi';
@@ -185,9 +184,6 @@ export function createApp(options?: CreateAppOptions): Hono {
   api.route('/', relationsRoutes);
   api.route('/', extractionFeedbackRoutes);
   api.route('/', topicsRoutes);
-
-  // OAuth Device Flow (for MCP clients)
-  api.route('/', oauthDeviceRoutes);
 
   // Auth /me route (always available — works with any auth provider)
   api.route('/', authMeRoutes);

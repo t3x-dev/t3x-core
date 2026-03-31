@@ -48,7 +48,30 @@ function LoginForm() {
         return;
       }
 
-      setSessionKey(json.data.api_key);
+      const apiKey: string = json.data.api_key;
+
+      // MCP callback: redirect token to local MCP server instead of storing cookie
+      const mcpCallback = searchParams.get('mcp_callback');
+      const state = searchParams.get('state');
+
+      if (mcpCallback && state) {
+        try {
+          const callbackUrl = new URL(mcpCallback);
+          if (callbackUrl.hostname !== '127.0.0.1' && callbackUrl.hostname !== 'localhost') {
+            setError('Invalid callback address: only localhost is allowed');
+            return;
+          }
+          callbackUrl.searchParams.set('token', apiKey);
+          callbackUrl.searchParams.set('state', state);
+          window.location.href = callbackUrl.toString();
+        } catch {
+          setError('Invalid callback URL');
+        }
+        return;
+      }
+
+      // Normal flow: store session and redirect
+      setSessionKey(apiKey);
       setSessionUser({
         id: json.data.id,
         name: json.data.name ?? null,
