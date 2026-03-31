@@ -22,11 +22,10 @@ export function BranchSwitcher({ projectId, activeBranch, onBranchChange }: Bran
   const dropdownRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Fetch branches when dropdown opens (with request cancellation)
+  // Fetch branches when dropdown opens
   useEffect(() => {
     if (!open || !projectId) return;
     let cancelled = false;
-    const controller = new AbortController();
 
     async function fetchBranches() {
       setLoading(true);
@@ -61,7 +60,7 @@ export function BranchSwitcher({ projectId, activeBranch, onBranchChange }: Bran
     }
 
     fetchBranches();
-    return () => { cancelled = true; controller.abort(); };
+    return () => { cancelled = true; };
   }, [open, projectId]);
 
   // Close on outside click

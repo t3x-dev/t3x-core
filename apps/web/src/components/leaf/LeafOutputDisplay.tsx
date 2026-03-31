@@ -88,7 +88,7 @@ function buildConstraintRanges(
     }
   }
 
-  // Sort by position, remove overlaps (keep first)
+  // Sort by position, remove overlaps (first match wins; overlapping constraint fully dropped)
   ranges.sort((a, b) => a.start - b.start);
   const cleaned: typeof ranges = [];
   let lastEnd = 0;

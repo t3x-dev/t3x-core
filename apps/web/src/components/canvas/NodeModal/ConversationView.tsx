@@ -219,6 +219,17 @@ export function ConversationView({
           )}
 
           {/* ChatWorkspace replaces ConversationWorkspace */}
+          {data?.conversationId?.startsWith('orphan-') ? (
+            <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
+              <GitCommit className="h-10 w-10 text-[var(--text-tertiary)] mb-3" />
+              <p className="text-sm font-medium text-[var(--text-secondary)] mb-1">
+                No linked conversation
+              </p>
+              <p className="text-xs text-[var(--text-tertiary)] max-w-[320px] leading-relaxed">
+                This commit was created without a conversation source. Click <strong>Details</strong> on the commit card to view its content.
+              </p>
+            </div>
+          ) : (
           <ChatWorkspace
             conversationId={data?.conversationId || 'new'}
             projectId={projectId}
@@ -235,6 +246,7 @@ export function ConversationView({
               }
             }}
           />
+          )}
         </div>
       </div>
     </div>
