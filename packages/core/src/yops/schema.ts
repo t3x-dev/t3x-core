@@ -21,15 +21,15 @@ const SetOpSchema = z
         path: z
           .string()
           .min(1)
-          .describe('Node path + slot key separated by / (e.g. trip/budget, trip/dining/cuisine)'),
+          .describe('Existing node path / slot key (e.g. trip/budget). Node must exist.'),
         value: SlotValueSchema.describe(
-          'The value — string, number, boolean, array, or nested object'
+          'Slot value: string, number, boolean, array, or nested object'
         ),
         source: z
           .string()
           .min(1)
-          .describe('Verbatim key phrase from the conversation that contains this fact'),
-        from: z.string().min(1).describe('Turn reference where the info appears (e.g. T3)'),
+          .describe('Short verbatim phrase from conversation (a few words, not full sentences)'),
+        from: z.string().min(1).describe('Turn reference (e.g. T1, T3)'),
         confidence: z.number().min(0).max(1).optional().describe('Extraction confidence 0-1'),
       })
       .strict()
@@ -54,17 +54,17 @@ const AddOpSchema = z
   .object({
     add: z
       .object({
-        parent: z.string().describe('Parent node path, or empty string "" for root level'),
+        parent: z.string().describe('Parent node path ("" for root, "trip" for child of trip)'),
         node: z
           .record(z.string(), z.unknown())
           .refine((n) => Object.keys(n).length === 1, {
             message: 'node must have exactly one top-level key',
           })
-          .describe('New node as {key: {slot: value, ...}} — one top-level key'),
+          .describe('One-key object: {node_key: {slot: value, ...}} e.g. {hotel: {name: "Hilton", stars: 5}}'),
         source: z
           .record(z.string(), z.string())
-          .describe('Per-slot source quotes from the conversation'),
-        from: z.string().min(1).describe('Turn reference (e.g. T1)'),
+          .describe('Quote per slot: {slot_key: "short phrase from conversation"}'),
+        from: z.string().min(1).describe('Turn reference (e.g. T1, T3)'),
         confidence: z.number().min(0).max(1).optional().describe('Extraction confidence 0-1'),
       })
       .strict()
@@ -108,7 +108,7 @@ const CloneOpSchema = z
         to: z.string().describe('Target parent path — empty string "" for root level'),
       })
       .strict()
-      .describe('Duplicate a node for variant exploration.'),
+      .describe('Duplicate a node (and children) under a target parent. Keeps the same key.'),
   })
   .strict();
 
@@ -120,7 +120,7 @@ const MoveOpSchema = z
         to: z
           .string()
           .min(1)
-          .describe('Full target path including new key (e.g. trip/hotel moves hotel under trip)'),
+          .describe('New full path: parent/key (e.g. "trip/hotel" nests hotel under trip)'),
       })
       .strict()
       .describe('Move a node to a different parent. Use when a node is under the wrong parent.'),
@@ -148,7 +148,7 @@ const SplitOpSchema = z
         path: z.string().min(1).describe('Node path to split'),
         into: z
           .record(z.string().regex(SNAKE_CASE), z.array(z.string().min(1)).min(1))
-          .describe('Map of new child key → list of slot names to move there'),
+          .describe('{child_key: [slot_names]} e.g. {"budget_info": ["budget", "currency"]}'),
       })
       .strict()
       .describe(
@@ -191,7 +191,7 @@ const RelateOpSchema = z
         from: z.string().min(1).describe('Source node path'),
         to: z.string().min(1).describe('Target node path'),
         type: RelationTypeSchema.describe(
-          'Relation type: causes, conditions, contrasts, follows, depends'
+          'causes (A→B), conditions (if A then B), contrasts (A vs B), follows (A after B), depends (A needs B)'
         ),
         confidence: z.number().min(0).max(1).optional().describe('Relation confidence 0-1'),
       })
