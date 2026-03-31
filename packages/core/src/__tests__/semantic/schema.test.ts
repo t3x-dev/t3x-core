@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  TreeChangeBatchSchema,
   FlatNodeSchema,
   RelationTypeSchema,
   SemanticContentSchema,
@@ -172,56 +171,6 @@ describe('SemanticContentSchema', () => {
   });
 });
 
-describe('TreeChangeBatchSchema', () => {
-  it('accepts add change with parent_path and node', () => {
-    const result = TreeChangeBatchSchema.safeParse({
-      changes: [
-        {
-          action: 'add',
-          parent_path: 'trip',
-          node: { key: 'budget', slots: { amount: 5000 }, children: [] },
-        },
-      ],
-    });
-    expect(result.success).toBe(true);
-  });
-
-  it('accepts update change with null slot (delete)', () => {
-    const result = TreeChangeBatchSchema.safeParse({
-      changes: [{ action: 'update', target_path: 'trip/budget', slots: { old_key: null } }],
-    });
-    expect(result.success).toBe(true);
-  });
-
-  it('accepts remove change', () => {
-    const result = TreeChangeBatchSchema.safeParse({
-      changes: [{ action: 'remove', target_path: 'trip/shopping', reason: 'user denied' }],
-    });
-    expect(result.success).toBe(true);
-  });
-
-  it('accepts new_relations', () => {
-    const result = TreeChangeBatchSchema.safeParse({
-      changes: [
-        {
-          action: 'add',
-          parent_path: 'root',
-          node: { key: 'topic', slots: { a: 1 }, children: [] },
-        },
-      ],
-      new_relations: [{ from: 'topic', to: 'other', type: 'causes' }],
-    });
-    expect(result.success).toBe(true);
-  });
-
-  it('rejects empty changes', () => {
-    const result = TreeChangeBatchSchema.safeParse({
-      changes: [],
-    });
-    expect(result.success).toBe(false);
-  });
-});
-
 describe('RelationTypeSchema', () => {
   it('accepts depends', () => {
     expect(RelationTypeSchema.safeParse('depends').success).toBe(true);
@@ -243,39 +192,3 @@ describe('RelationTypeSchema', () => {
   });
 });
 
-describe('TreeChangeBatchSchema (with slot_quotes)', () => {
-  it('accepts add with parent_path and node', () => {
-    const result = TreeChangeBatchSchema.safeParse({
-      changes: [
-        {
-          action: 'add',
-          parent_path: 'hangzhou_trip',
-          node: { key: 'transportation', slots: { mode: 'rail' }, children: [] },
-          slot_quotes: { 'transportation.mode': 'take the rail' },
-        },
-      ],
-    });
-    expect(result.success).toBe(true);
-  });
-
-  it('accepts update with target_path', () => {
-    const result = TreeChangeBatchSchema.safeParse({
-      changes: [
-        {
-          action: 'update',
-          target_path: 'hangzhou_trip/dining',
-          slots: { budget: 800 },
-          slot_quotes: { 'dining.budget': 'budget to 800' },
-        },
-      ],
-    });
-    expect(result.success).toBe(true);
-  });
-
-  it('accepts remove with target_path', () => {
-    const result = TreeChangeBatchSchema.safeParse({
-      changes: [{ action: 'remove', target_path: 'hangzhou_trip/shopping', reason: 'cancelled' }],
-    });
-    expect(result.success).toBe(true);
-  });
-});

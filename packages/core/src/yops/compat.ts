@@ -5,8 +5,21 @@
  * Used at the boundary where legacy code enters the YOps pipeline.
  */
 
-import type { RelationType, SlotValue, TreeChangeBatch } from '../semantic/types';
+import type { RelationType, SlotValue, TreeNode } from '../semantic/types';
 import type { YOp } from './types';
+
+/** Legacy TreeChange format — kept only for bridge conversion. */
+type TreeChange =
+  | { action: 'add'; parent_path: string; node: TreeNode; slot_quotes?: Record<string, string> }
+  | { action: 'update'; target_path: string; slots: Record<string, SlotValue | null>; slot_quotes?: Record<string, string> }
+  | { action: 'remove'; target_path: string; reason?: string };
+
+/** Legacy TreeChangeBatch — kept only for bridge conversion. */
+export interface TreeChangeBatch {
+  changes: TreeChange[];
+  new_relations?: Array<{ from: string; to: string; type: string }>;
+  remove_relations?: Array<{ from: string; to: string; type: string }>;
+}
 
 /**
  * Convert a TreeChangeBatch to YOp[].

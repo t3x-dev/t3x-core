@@ -335,8 +335,6 @@ export type {
   SlotDiff,
   SlotValue,
   StructureGateResult,
-  TreeChange,
-  TreeChangeBatch,
   TreeDiff,
   TreeNode,
   ValidationError as SemanticValidationError,
@@ -357,8 +355,6 @@ export {
 // Semantic Module (Tree-Primary: TreeNode + Relation + Diff + Merge)
 // ═══════════════════════════════════════════════════════════════════════════
 export {
-  // Tree Changes
-  applyTreeChanges,
   // Business Gate
   BusinessGate,
   buildCoveragePrompt,
@@ -392,8 +388,6 @@ export {
   SlotValueSchema,
   // Serialization
   serializeForPrompt,
-  // Schemas
-  TreeChangeBatchSchema,
   TreeNodeSchema,
   unflattenToTree,
   unflattenToTrees,

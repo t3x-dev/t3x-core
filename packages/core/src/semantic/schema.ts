@@ -49,34 +49,6 @@ export const SemanticContentSchema = z.object({
   relations: z.array(RelationSchema).max(5000).default([]),
 });
 
-// ── Tree Change Batch ──
-
-const TreeChangeSchema = z.discriminatedUnion('action', [
-  z.object({
-    action: z.literal('add'),
-    parent_path: z.string(),
-    node: z.lazy(() => TreeNodeSchema) as z.ZodType<unknown>,
-    slot_quotes: z.record(z.string(), z.string()).optional(),
-  }),
-  z.object({
-    action: z.literal('update'),
-    target_path: z.string(),
-    slots: z.record(z.string(), SlotValueSchema.nullable()),
-    slot_quotes: z.record(z.string(), z.string()).optional(),
-  }),
-  z.object({
-    action: z.literal('remove'),
-    target_path: z.string(),
-    reason: z.string().optional(),
-  }),
-]);
-
-export const TreeChangeBatchSchema = z.object({
-  changes: z.array(TreeChangeSchema).min(1),
-  new_relations: z.array(RelationSchema).optional(),
-  remove_relations: z.array(RelationSchema).optional(),
-});
-
 // ── Internal: FlatNode Schema (for diff/merge validation only) ──
 
 /** @internal */

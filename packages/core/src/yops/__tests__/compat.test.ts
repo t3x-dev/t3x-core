@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { TreeChangeBatch } from '../../semantic/types';
+import type { TreeChangeBatch } from '../compat';
 import { treeChangesToYOps } from '../compat';
 
 describe('treeChangesToYOps', () => {
