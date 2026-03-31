@@ -15,6 +15,7 @@ export { computeCommitHash } from '@t3x-dev/core';
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { type CommitRecord, commits } from '../schema-commits';
+import { getSupersededHashes } from './commit-rewrites';
 
 // ============================================================
 // Types
@@ -36,6 +37,7 @@ export interface ListCommitsOptions {
   branch?: string;
   limit?: number;
   offset?: number;
+  includeSuperseded?: boolean;
 }
 
 // ============================================================
@@ -97,7 +99,7 @@ export async function getCommit(db: AnyDB, hash: string): Promise<Commit | null>
  * Returns commits ordered by committed_at descending.
  */
 export async function listCommits(db: AnyDB, options: ListCommitsOptions): Promise<Commit[]> {
-  const { projectId, branch, limit = 100, offset = 0 } = options;
+  const { projectId, branch, limit = 100, offset = 0, includeSuperseded = false } = options;
 
   const conditions = [eq(commits.projectId, projectId)];
   if (branch) {
@@ -112,7 +114,16 @@ export async function listCommits(db: AnyDB, options: ListCommitsOptions): Promi
     .limit(limit)
     .offset(offset);
 
-  return rows.map(rowToCommit);
+  let result = rows.map(rowToCommit);
+
+  if (!includeSuperseded) {
+    const superseded = await getSupersededHashes(db, projectId);
+    if (superseded.size > 0) {
+      result = result.filter((c) => !superseded.has(c.hash));
+    }
+  }
+
+  return result;
 }
 
 /**
@@ -167,6 +178,38 @@ export async function deleteCommit(db: AnyDB, hash: string): Promise<boolean> {
   const result = await db.delete(commits).where(eq(commits.hash, hash)).returning();
 
   return result.length > 0;
+}
+
+/**
+ * Collect all yops_log_ids from an ordered list of commits.
+ * Returns IDs in order (oldest commit's ops first).
+ * Throws if any commit is missing or has empty yops_log_ids.
+ */
+export async function collectYOpsForCommitRange(
+  db: AnyDB,
+  commitHashes: string[],
+): Promise<string[]> {
+  if (commitHashes.length === 0) return [];
+
+  const commitMap = new Map<string, Commit>();
+  const rows = await db.select().from(commits).where(inArray(commits.hash, commitHashes));
+  for (const row of rows) {
+    commitMap.set(row.hash, rowToCommit(row));
+  }
+
+  const allIds: string[] = [];
+  for (const hash of commitHashes) {
+    const commit = commitMap.get(hash);
+    if (!commit) {
+      throw new Error(`Commit not found: ${hash}`);
+    }
+    if (commit.yops_log_ids.length === 0) {
+      throw new Error(`Commit ${hash} has empty yops_log_ids — cannot squash pre-solidification commits`);
+    }
+    allIds.push(...commit.yops_log_ids);
+  }
+
+  return allIds;
 }
 
 /**

@@ -60,6 +60,7 @@ export {
 } from './business-rules';
 // Commits (tree-based)
 export {
+  collectYOpsForCommitRange,
   type CreateCommitInput,
   createCommit,
   deleteCommit,
