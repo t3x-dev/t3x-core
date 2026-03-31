@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { collectLessonsFromAssertions } from '../../feedback/collect';
-import { validateConstraintsExactOnly } from '../../leaf/validate-constraints';
 import { buildLeafPrompt } from '../../leaf/build-prompt';
+import { validateConstraintsExactOnly } from '../../leaf/validate-constraints';
 import type { Constraint, Leaf } from '../../types';
 
 describe('Feedback loop E2E', () => {
@@ -20,7 +20,7 @@ describe('Feedback loop E2E', () => {
 
     const validationResult = validateConstraintsExactOnly(
       'The trip costs around five thousand. TODO: finalize.',
-      constraints,
+      constraints
     );
 
     // Should have 2 failures

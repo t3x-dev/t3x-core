@@ -127,7 +127,10 @@ describe('collectLessonsFromAssertions', () => {
   });
 
   it('handles leaves with no assertions', () => {
-    const leaves = [{ id: 'leaf_1', assertions: undefined }, { id: 'leaf_2', assertions: [] }];
+    const leaves = [
+      { id: 'leaf_1', assertions: undefined },
+      { id: 'leaf_2', assertions: [] },
+    ];
     // biome-ignore lint/suspicious/noExplicitAny: test helper
     expect(collectLessonsFromAssertions(leaves as any)).toEqual([]);
   });

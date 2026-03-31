@@ -642,7 +642,8 @@ leavesGenerationRoutes.openapi(batchGenerateRoute, async (c) => {
       try {
         // 3a. Create leaf (auto-generate title from commit message if not provided)
         const leafTitle =
-          leafConfig.title || `${unifiedCommit.message || decodedHash.slice(0, 16)} — ${leafConfig.type}`;
+          leafConfig.title ||
+          `${unifiedCommit.message || decodedHash.slice(0, 16)} — ${leafConfig.type}`;
         const leaf = await createLeaf(db, {
           commit_hash: decodedHash,
           type: leafConfig.type,

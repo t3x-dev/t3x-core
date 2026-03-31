@@ -67,25 +67,25 @@ export {
   type AnchorCandidate,
   type AnchorSource,
   type AnchorType,
-  // YOps extraction pipeline
-  buildYOpsPrompt,
   // Relations
   buildRelationPrompt,
+  // YOps extraction pipeline
+  buildYOpsPrompt,
+  Compressor,
   computeAdaptiveConfig,
   computeAdaptiveThresholds,
   createMeaningPipeline,
   createRelationExtractor,
-  Compressor,
   type ExtractionInput,
   type ExtractionPromptResult,
   type ExtractionResult,
   type ExtractionTurn,
   Extractor,
-  type NodeWithSignals,
   type FuzzyLocateResult,
   fuzzyLocate,
   type MeaningAgent,
   MeaningPipeline,
+  type NodeWithSignals,
   type PipelineContext,
   type PipelineMode,
   type PipelineOptions,
@@ -112,7 +112,12 @@ export {
   type Tier3Behavior,
   type UpdateStance,
 } from './extractors/extractionStyleConfig';
+export type { Lesson, LessonSource } from './feedback';
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Feedback Module (Lesson generation + collection)
+// ═══════════════════════════════════════════════════════════════════════════
+export { collectLessonsFromAssertions, generateLesson } from './feedback';
 // ═══════════════════════════════════════════════════════════════════════════
 // Hash / Merkle Tree (#14)
 // ═══════════════════════════════════════════════════════════════════════════
@@ -124,12 +129,6 @@ export {
   type ProofStep,
   verifyMembership,
 } from './hash';
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Feedback Module (Lesson generation + collection)
-// ═══════════════════════════════════════════════════════════════════════════
-export { collectLessonsFromAssertions, generateLesson } from './feedback';
-export type { Lesson, LessonSource } from './feedback';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Leaf Module (Generation + Validation)
@@ -315,7 +314,38 @@ export {
   type RoleAssignment,
   type TestConnectionResult,
 } from './providers';
-
+// Semantic types (re-exported for convenience)
+// Re-export RelationType from semantic (tree-primary relation types)
+export type {
+  BusinessGateResult,
+  BusinessRuleConfig,
+  CoverageResult,
+  DimensionResult,
+  GateDimension,
+  GateResult,
+  MergeDecision,
+  MergeResolution,
+  MergeResult,
+  Relation,
+  RelationType as SemanticRelationType,
+  SemanticContent,
+  SemanticGateResult,
+  SemanticIssue,
+  SlotConflict,
+  SlotDiff,
+  SlotValue,
+  StructureGateResult,
+  TreeChange,
+  TreeChangeBatch,
+  TreeDiff,
+  TreeNode,
+  ValidationError as SemanticValidationError,
+  ValidationResult as SemanticValidationResult,
+  ValidationWarning as SemanticValidationWarning,
+  WordDiffFn,
+  YOpsLogEntry,
+  YOpsSource,
+} from './semantic';
 // ═══════════════════════════════════════════════════════════════════════════
 // Semantic Module (Tree-Primary: TreeNode + Relation + Diff + Merge)
 // ═══════════════════════════════════════════════════════════════════════════
@@ -330,8 +360,6 @@ export {
   // Validation
   checkRelationSanity,
   collectSlotQuotes,
-  // Schemas
-  TreeChangeBatchSchema,
   // Diff
   diffCommits,
   diffSlots,
@@ -354,9 +382,11 @@ export {
   resolveSlotQuotesPath,
   SemanticContentSchema,
   SemanticGate,
+  SlotValueSchema,
   // Serialization
   serializeForPrompt,
-  SlotValueSchema,
+  // Schemas
+  TreeChangeBatchSchema,
   TreeNodeSchema,
   unflattenToTree,
   unflattenToTrees,
@@ -364,89 +394,11 @@ export {
   validateTreeDepth,
   yamlToTree,
 } from './semantic';
-
-// Semantic types (re-exported for convenience)
-export type {
-  BusinessGateResult,
-  BusinessRuleConfig,
-  CoverageResult,
-  DimensionResult,
-  GateDimension,
-  GateResult,
-  MergeDecision,
-  MergeResolution,
-  MergeResult,
-  Relation,
-  SemanticContent,
-  SemanticGateResult,
-  SemanticIssue,
-  SlotConflict,
-  SlotDiff,
-  SlotValue,
-  StructureGateResult,
-  TreeChange,
-  TreeChangeBatch,
-  TreeDiff,
-  TreeNode,
-  ValidationError as SemanticValidationError,
-  ValidationResult as SemanticValidationResult,
-  ValidationWarning as SemanticValidationWarning,
-  WordDiffFn,
-  YOpsLogEntry,
-  YOpsSource,
-} from './semantic';
-
-// Re-export RelationType from semantic (tree-primary relation types)
-export type { RelationType as SemanticRelationType } from './semantic';
-
-// ═══════════════════════════════════════════════════════════════════════════
-// YOps — YAML Operations for Knowledge Trees
-// ═══════════════════════════════════════════════════════════════════════════
-export {
-  applyYOps,
-  findNode,
-  formatYOpsLog,
-  getNodeKey,
-  getParentPath,
-  parseYOpsYaml,
-  SNAKE_CASE_KEY,
-  YOpSchema,
-  YOPS_ERRORS,
-  YOpsDocumentSchema,
-} from './yops';
-
-// ═══════════════════════════════════════════════════════════════════════════
-// YLint — Knowledge Tree Linter (4 Normal Forms)
-// ═══════════════════════════════════════════════════════════════════════════
-export { DEFAULT_LINT_CONFIG, ylint } from './ylint';
-export type { LintConfig, LintResult, LintWarning } from './ylint';
-
-export type {
-  AddOp,
-  CloneOp,
-  DropOp,
-  FoldOp,
-  MergeOp,
-  MoveOp,
-  NestOp,
-  RelateOp,
-  RenameOp,
-  SetOp,
-  SplitOp,
-  UnrelateOp,
-  UnsetOp,
-  YOp,
-  YOpsDocument,
-  YOpsError,
-  YOpsResult,
-} from './yops';
-
 // ═══════════════════════════════════════════════════════════════════════════
 // Storage (types + pure utils only)
 // For CRUD operations, use @t3x-dev/storage package
 // ═══════════════════════════════════════════════════════════════════════════
 export * from './storage';
-
 // ═══════════════════════════════════════════════════════════════════════════
 // Architecture Types
 // @see docs/specification/semantic-layer-architecture.md
@@ -496,6 +448,7 @@ export {
   type LeafType,
   // Merge summary
   type MergeSummaryData,
+  type NodeRelation,
   // Pin (source selection)
   type Pin,
   type PinType,
@@ -504,8 +457,46 @@ export {
   type RelationExtractionResult,
   type RelationType,
   type RequireConstraint,
-  type NodeRelation,
   // Share Token
   type ShareToken,
   type User,
 } from './types';
+export type { LintConfig, LintResult, LintWarning } from './ylint';
+// ═══════════════════════════════════════════════════════════════════════════
+// YLint — Knowledge Tree Linter (4 Normal Forms)
+// ═══════════════════════════════════════════════════════════════════════════
+export { DEFAULT_LINT_CONFIG, ylint } from './ylint';
+export type {
+  AddOp,
+  CloneOp,
+  DropOp,
+  FoldOp,
+  MergeOp,
+  MoveOp,
+  NestOp,
+  RelateOp,
+  RenameOp,
+  SetOp,
+  SplitOp,
+  UnrelateOp,
+  UnsetOp,
+  YOp,
+  YOpsDocument,
+  YOpsError,
+  YOpsResult,
+} from './yops';
+// ═══════════════════════════════════════════════════════════════════════════
+// YOps — YAML Operations for Knowledge Trees
+// ═══════════════════════════════════════════════════════════════════════════
+export {
+  applyYOps,
+  findNode,
+  formatYOpsLog,
+  getNodeKey,
+  getParentPath,
+  parseYOpsYaml,
+  SNAKE_CASE_KEY,
+  YOPS_ERRORS,
+  YOpSchema,
+  YOpsDocumentSchema,
+} from './yops';

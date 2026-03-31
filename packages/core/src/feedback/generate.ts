@@ -6,8 +6,7 @@ import type { Constraint } from '../types';
  */
 export function generateLesson(constraint: Constraint, _failureDetails: string): string {
   if (constraint.type === 'require') {
-    const mode =
-      constraint.match_mode === 'exact' ? 'include exact text' : 'convey the meaning of';
+    const mode = constraint.match_mode === 'exact' ? 'include exact text' : 'convey the meaning of';
     return `Output must ${mode}: "${constraint.value}"`;
   }
 

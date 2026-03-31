@@ -17,7 +17,7 @@ interface CollectOptions {
  */
 export function collectLessonsFromAssertions(
   leaves: LeafWithAssertions[],
-  options?: CollectOptions,
+  options?: CollectOptions
 ): Lesson[] {
   const max = options?.maxLessons ?? 10;
   const seen = new Set<string>();

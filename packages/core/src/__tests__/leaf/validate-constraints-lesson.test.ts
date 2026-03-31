@@ -30,8 +30,6 @@ describe('validate-constraints lesson generation', () => {
     const result = validateConstraintsExactOnly('this has bad word in it', constraints);
     const failedAssertion = result.assertions.find((a) => !a.passed);
     expect(failedAssertion).toBeDefined();
-    expect(failedAssertion!.lesson).toBe(
-      'Output must NOT contain: "bad word" (reason: policy)'
-    );
+    expect(failedAssertion!.lesson).toBe('Output must NOT contain: "bad word" (reason: policy)');
   });
 });
