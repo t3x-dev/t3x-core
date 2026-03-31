@@ -35,6 +35,8 @@ export interface Commit {
   provenance: Provenance | null;
   /** YOps log entry IDs that produced this commit (second-class, not in hash) */
   yops_log_ids: string[];
+  /** Source references (conversations, imports, leaves that contributed) */
+  sources?: Array<{ type: 'conversation' | 'import' | 'leaf'; id: string; title?: string }> | null;
 }
 
 export interface CommitFirstClass {

@@ -73,6 +73,15 @@ const CreateCommitRequestSchema = z.object({
   author: AuthorSchema.optional(),
   provenance: ProvenanceSchema.optional(),
   yops_log_ids: z.array(z.string()).optional(),
+  sources: z
+    .array(
+      z.object({
+        type: z.enum(['conversation', 'import', 'leaf']),
+        id: z.string(),
+        title: z.string().optional(),
+      })
+    )
+    .optional(),
 });
 
 const CommitResponseSchema = z.object({
@@ -141,6 +150,7 @@ commitRoutes.openapi(createCommitRoute, async (c) => {
       author: body.author ?? { type: 'human' as const, name: 'cli' },
       provenance: body.provenance,
       yops_log_ids: body.yops_log_ids ?? [],
+      sources: body.sources,
     });
 
     return c.json({ success: true as const, data: { commit } }, 200);
