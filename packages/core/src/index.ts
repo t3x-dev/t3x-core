@@ -149,7 +149,6 @@ export {
   type ConstraintCheckResult,
   type ConstraintSuggestionResult,
   type CorrectivePromptOptions,
-  collectLessons,
   DEFAULT_MODEL,
   DEFAULT_TEMPERATURE,
   // Default templates
