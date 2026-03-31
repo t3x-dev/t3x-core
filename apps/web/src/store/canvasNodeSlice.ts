@@ -168,7 +168,14 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
 
       // Create a node for each committed unit (each commit is a separate node)
       commits.forEach((commit) => {
-        const convId = commitSourceConvMap.get(commit.commit_hash);
+        let convId = commitSourceConvMap.get(commit.commit_hash);
+
+        // Method 3: If no mapping found but project has exactly one conversation,
+        // assume it's the source (common case for simple single-conversation projects)
+        if (!convId && conversations.length === 1) {
+          convId = conversations[0].conversation_id;
+        }
+
         const conv = convId ? conversations.find((c) => c.conversation_id === convId) : undefined;
 
         // Use conversation if found, otherwise create virtual one
