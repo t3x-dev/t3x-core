@@ -28,6 +28,7 @@ import {
 import { getDB } from '../lib/db';
 import { getEmbedder } from '../lib/embedder';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { findUncommittedYOpsIds } from '../lib/yops-commit-link';
 import { pinoLogger } from '../middleware/logger';
 import { ErrorResponseSchema, IdParamSchema, SuccessResponseSchema } from '../schemas/common';
 import {
@@ -533,6 +534,13 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
       slots: { text: s.text },
       confidence: s.confidence,
     }));
+
+    // Find uncommitted yops for this conversation
+    const draftConversationId = draft.goal?.startsWith('auto:') ? draft.goal.slice(5) : undefined;
+    const yopsLogIds = draftConversationId
+      ? await findUncommittedYOpsIds(db, draftConversationId, draft.project_id)
+      : [];
+
     const commit = await createCommit(db, {
       parents,
       author: { type: 'human' as const, name: 'workbench' },
@@ -541,6 +549,7 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
       message: body?.message ?? `Draft: ${draft.title}`,
       branch: draft.target_branch ?? 'main',
       provenance: { method: 'human_curation' },
+      yops_log_ids: yopsLogIds,
     });
 
     // 5b. Best-effort: populate node vectors (skip on failure)

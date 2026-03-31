@@ -325,6 +325,7 @@ mergeRoutes.openapi(executeMergeRoute, async (c) => {
       message,
       branch: branch || undefined,
       provenance: { method: 'merge' },
+      yops_log_ids: [],
     });
 
     // Update branch head with the actual commit hash
@@ -801,6 +802,7 @@ mergeRoutes.openapi(commitDraftRoute, async (c) => {
         message,
         branch: targetBranch,
         provenance: { method: 'merge' },
+        yops_log_ids: [],
       });
       savedDraftCommitHash = saved.hash;
       await updateBranchHead(tx, draft.projectId, targetBranch, saved.hash);
