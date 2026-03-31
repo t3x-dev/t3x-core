@@ -2,6 +2,7 @@
 
 import type { TreeNode } from '@t3x-dev/core';
 import { AlertCircle, GitCommit, Loader2, MessageSquarePlus } from 'lucide-react';
+import { toast } from 'sonner';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DriftPopup } from '@/components/chat/DriftPopup';
 import { useAutoProject } from '@/hooks/useAutoProject';
@@ -329,6 +330,9 @@ export function ChatWorkspace({
           extractionPhase: 'idle',
           isExtracting: false,
         });
+        toast.info(
+          result.reason || 'Not enough new content to extract. Continue the conversation first.'
+        );
         return;
       }
 
