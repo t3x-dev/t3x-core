@@ -228,10 +228,10 @@ export function ChatWorkspace({
           }
           if (yopsEntries && yopsEntries.length > 0) {
             store.hydrateYOpsLog(yopsEntries);
-            // Lock input if a commit was made from this conversation
-            if (yopsEntries.some((d: { source?: string }) => d.source === 'commit_marker')) {
-              setIsConversationCommitted(true);
-            }
+          }
+          // Lock input if a commit was made from this conversation
+          if (store.lastCommitHash) {
+            setIsConversationCommitted(true);
           }
           if (topicsList && topicsList.length > 0) {
             store.setTopics(topicsList);

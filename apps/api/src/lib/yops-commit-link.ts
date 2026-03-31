@@ -21,6 +21,6 @@ export async function findUncommittedYOpsIds(
   const allCommits = await listCommits(db, { projectId });
   const usedIds = new Set(allCommits.flatMap((c) => c.yops_log_ids));
   return allYops
-    .filter((y) => !usedIds.has(y.id) && y.source !== 'commit_marker')
+    .filter((y) => !usedIds.has(y.id))
     .map((y) => y.id);
 }

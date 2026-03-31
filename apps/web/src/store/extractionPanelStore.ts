@@ -467,21 +467,6 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
         newSnapshot[t.key] = { ...t, slots: { ...t.slots } };
       }
 
-      // Insert commit marker into yops log (links change history to commit)
-      if (conversationId) {
-        const markerEntry: YOpsLogEntry = {
-          id: crypto.randomUUID(),
-          source: 'commit_marker',
-          yops: { changes: [] },
-          created_at: new Date().toISOString(),
-          commit_hash: result.commit.hash,
-        };
-        set((s) => ({ yopsLog: [...s.yopsLog, markerEntry] }));
-
-        // Persist the marker to DB
-        createYOpsEntry(conversationId, { changes: [] }, 'commit_marker').catch(() => {});
-      }
-
       set({
         lastCommitHash: result.commit.hash,
         committedNodeIds: newCommittedIds,

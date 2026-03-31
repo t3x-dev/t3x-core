@@ -13,7 +13,6 @@ const SOURCE_LABELS: Record<string, string> = {
   manual: 'Manual',
   answer: 'Answer',
   collapse: 'Collapse',
-  commit_marker: 'Commit',
   compress: 'Compress',
 };
 

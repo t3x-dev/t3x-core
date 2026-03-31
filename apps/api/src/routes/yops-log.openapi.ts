@@ -54,7 +54,6 @@ const YOpsSourceSchema = z.enum([
   'manual',
   'answer',
   'collapse',
-  'commit_marker',
   'compress',
 ]);
 

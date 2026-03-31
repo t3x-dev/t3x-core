@@ -78,7 +78,7 @@ export interface TreeChangeBatch {
 
 // ── YOps Log ──
 
-export type YOpsSource = 'pipeline' | 'manual' | 'answer' | 'collapse' | 'commit_marker' | 'compress';
+export type YOpsSource = 'pipeline' | 'manual' | 'answer' | 'collapse' | 'compress';
 
 export interface YOpsLogEntry {
   id: string;
@@ -86,7 +86,6 @@ export interface YOpsLogEntry {
   turn_hash?: string;
   yops: unknown;
   created_at: string;
-  commit_hash?: string;
   model?: string;
   version?: number;
   pipeline_state?: 'completed' | 'failed';

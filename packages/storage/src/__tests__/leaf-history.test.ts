@@ -304,9 +304,9 @@ describe('Leaf History Storage', () => {
   });
 
   // =========================================================================
-  // S16: attempt_number, corrective_feedback, prompt_used
+  // Storage-only columns: attempt_number, prompt_used
   // =========================================================================
-  describe('S16 columns (attempt_number, corrective_feedback, prompt_used)', () => {
+  describe('Storage-only columns (attempt_number, prompt_used)', () => {
     it('creates history with explicit attempt_number', async () => {
       const history = await createLeafHistory(db, {
         leaf_id: testLeafId,
@@ -319,19 +319,17 @@ describe('Leaf History Storage', () => {
       expect(history.attempt_number).toBe(3);
     });
 
-    it('creates history with corrective_feedback and prompt_used', async () => {
+    it('creates history with prompt_used', async () => {
       const history = await createLeafHistory(db, {
         leaf_id: testLeafId,
         output: 'Corrected output',
         config: {},
         model: 'gpt-4',
         attempt_number: 2,
-        corrective_feedback: 'The tone was too formal, make it casual.',
         prompt_used: 'Write a casual tweet about AI. Context: ...',
       });
 
       expect(history.attempt_number).toBe(2);
-      expect(history.corrective_feedback).toBe('The tone was too formal, make it casual.');
       expect(history.prompt_used).toBe('Write a casual tweet about AI. Context: ...');
     });
 
@@ -344,7 +342,6 @@ describe('Leaf History Storage', () => {
       });
 
       expect(history.attempt_number).toBe(1);
-      expect(history.corrective_feedback).toBeUndefined();
       expect(history.prompt_used).toBeUndefined();
     });
 
@@ -372,7 +369,6 @@ describe('Leaf History Storage', () => {
         config: {},
         model: 'gpt-4',
         attempt_number: 3,
-        corrective_feedback: 'Still not right',
         prompt_used: 'Prompt v3',
       });
       await createLeafHistory(db, {
@@ -389,7 +385,6 @@ describe('Leaf History Storage', () => {
         config: {},
         model: 'gpt-4',
         attempt_number: 2,
-        corrective_feedback: 'Too formal',
         prompt_used: 'Prompt v2',
       });
 
@@ -399,27 +394,24 @@ describe('Leaf History Storage', () => {
       expect(ordered[0].output).toBe('First attempt');
       expect(ordered[1].attempt_number).toBe(2);
       expect(ordered[1].output).toBe('Second attempt');
-      expect(ordered[1].corrective_feedback).toBe('Too formal');
       expect(ordered[2].attempt_number).toBe(3);
       expect(ordered[2].output).toBe('Third attempt');
       expect(ordered[2].prompt_used).toBe('Prompt v3');
     });
 
-    it('persists S16 fields via findLeafHistoryById', async () => {
+    it('persists storage-only fields via findLeafHistoryById', async () => {
       const created = await createLeafHistory(db, {
         leaf_id: testLeafId,
         output: 'Persist check',
         config: {},
         model: 'claude-3',
         attempt_number: 5,
-        corrective_feedback: 'Add more examples',
         prompt_used: 'Full prompt text here',
       });
 
       const found = await findLeafHistoryById(db, created.id);
       expect(found).toBeDefined();
       expect(found!.attempt_number).toBe(5);
-      expect(found!.corrective_feedback).toBe('Add more examples');
       expect(found!.prompt_used).toBe('Full prompt text here');
     });
   });
