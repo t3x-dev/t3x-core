@@ -9,7 +9,7 @@
  * @see packages/core/src/semantic/types.ts
  */
 
-import { index, jsonb, pgTable, real, text, timestamp } from 'drizzle-orm/pg-core';
+import { index, integer, jsonb, pgTable, real, text, timestamp } from 'drizzle-orm/pg-core';
 import { projects } from './schema';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -143,6 +143,43 @@ export const frameLineage = pgTable(
     frameIdx: index('idx_frame_lineage_frame').on(table.frameId),
   })
 );
+
+// ═══════════════════════════════════════════════════════════════════════════
+// commit_rewrites: Append-Only Rewrite Log (Git Reflog Equivalent)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Records every commit rewrite operation (squash, rebase, amend).
+ * Append-only — never updated or deleted. Commits table stays immutable.
+ * Like git's reflog: old commits aren't mutated, operations are logged.
+ */
+export const commitRewrites = pgTable(
+  'commit_rewrites',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id').notNull(),
+    branch: text('branch').notNull(),
+    operation: text('operation').notNull(),
+    sourceHashes: jsonb('source_hashes').$type<string[]>().notNull(),
+    resultHash: text('result_hash').notNull(),
+    baseHash: text('base_hash'),
+    opsReplayed: integer('ops_replayed').notNull(),
+    yopsLogIds: jsonb('yops_log_ids').$type<string[]>().notNull(),
+    author: jsonb('author').$type<{
+      type: 'human' | 'agent' | 'system';
+      id?: string;
+      name?: string;
+    }>().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    projectIdx: index('idx_commit_rewrites_project').on(table.projectId),
+    resultIdx: index('idx_commit_rewrites_result').on(table.resultHash),
+  }),
+);
+
+export type RewriteRecord = typeof commitRewrites.$inferSelect;
+export type RewriteInsert = typeof commitRewrites.$inferInsert;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Type Exports
