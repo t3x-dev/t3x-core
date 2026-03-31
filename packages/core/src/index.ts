@@ -505,6 +505,7 @@ export {
   parseYOpsYaml,
   replayYOps,
   SNAKE_CASE_KEY,
+  treeChangesToYOps,
   verifyReplay,
   YOPS_ERRORS,
   YOpSchema,

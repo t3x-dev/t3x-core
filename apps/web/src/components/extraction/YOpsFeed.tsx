@@ -31,8 +31,6 @@ function getYOpType(yop: any): { type: string; data: any } {
   if ('merge' in yop) return { type: 'merge', data: yop.merge };
   if ('relate' in yop) return { type: 'relate', data: yop.relate };
   if ('unrelate' in yop) return { type: 'unrelate', data: yop.unrelate };
-  // TreeChange format fallback (for manual changes that use the old format)
-  if ('action' in yop) return { type: yop.action, data: yop };
   return { type: 'unknown', data: yop };
 }
 
@@ -44,7 +42,6 @@ function yopIcon(type: string): { symbol: string; cls: string } {
     case 'clone':
       return { symbol: '+', cls: 'add' };
     case 'set':
-    case 'update':
     case 'rename':
     case 'move':
     case 'nest':
@@ -55,7 +52,6 @@ function yopIcon(type: string): { symbol: string; cls: string } {
     case 'unrelate':
       return { symbol: '~', cls: 'update' };
     case 'drop':
-    case 'remove':
     case 'unset':
       return { symbol: '-', cls: 'remove' };
     default:
@@ -91,10 +87,6 @@ function yopPath(type: string, data: any): string {
     case 'relate':
     case 'unrelate':
       return `${data.from ?? ''} - ${data.to ?? ''}`;
-    // TreeChange fallback
-    case 'update':
-    case 'remove':
-      return data.target_path ?? '';
     default:
       return '';
   }
@@ -146,24 +138,6 @@ function yopValue(type: string, data: any): string {
       return `${data.type ?? 'related'}`;
     case 'unrelate':
       return `unrelated (${data.type ?? ''})`;
-    // TreeChange fallback
-    case 'update': {
-      const slots = data.slots;
-      if (!slots) return 'updated';
-      const keys = Object.keys(slots);
-      if (keys.length === 0) return 'updated';
-      const preview = keys
-        .slice(0, 2)
-        .map((k: string) => {
-          const v = slots[k];
-          if (v === null) return `${k}: removed`;
-          return typeof v === 'string' ? v : JSON.stringify(v);
-        })
-        .join(', ');
-      return keys.length > 2 ? `${preview}...` : preview;
-    }
-    case 'remove':
-      return 'removed';
     default:
       return '';
   }

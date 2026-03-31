@@ -1,10 +1,8 @@
 import type {
-  TreeChangeBatch,
-  TreeChange,
-  Relation,
   SemanticContent,
   SlotValue,
   TreeNode,
+  YOp,
 } from '@t3x-dev/core';
 
 /** Build a display-name map handling duplicate keys with _2, _3 suffixes */
@@ -130,11 +128,9 @@ export function toDisplayYAML(content: SemanticContent): string {
   return lines.join('\n');
 }
 
-/** Parse lite YAML back and diff against current content to produce a TreeChangeBatch */
-export function parseDisplayYAML(yaml: string, currentContent: SemanticContent): TreeChangeBatch {
-  const changes: TreeChange[] = [];
-  const newRelations: Relation[] = [];
-  const removeRelations: Relation[] = [];
+/** Parse lite YAML back and diff against current content to produce YOp[] */
+export function parseDisplayYAML(yaml: string, currentContent: SemanticContent): YOp[] {
+  const ops: YOp[] = [];
 
   // Build key set from current trees
   const currentKeys = new Set(currentContent.trees.map((t) => t.key));
@@ -164,11 +160,9 @@ export function parseDisplayYAML(yaml: string, currentContent: SemanticContent):
         const node = parsedNodes.get(currentKey);
         if (!node) continue;
         let value: unknown = slotMatch[2];
-        // Strip quotes
         if (typeof value === 'string' && value.startsWith('"') && value.endsWith('"')) {
           value = value.slice(1, -1);
         } else {
-          // Try parse arrays/numbers
           try {
             value = JSON.parse(slotMatch[2]);
           } catch {
@@ -185,42 +179,52 @@ export function parseDisplayYAML(yaml: string, currentContent: SemanticContent):
 
   for (const key of currentKeys) {
     if (!parsedNames.has(key)) {
-      changes.push({ action: 'remove', target_path: key });
+      ops.push({ drop: { path: key } });
     }
   }
 
   // Diff: find added nodes (in parsed but not in current)
   for (const [name, slots] of parsedNodes) {
     if (!currentKeys.has(name)) {
-      changes.push({
-        action: 'add',
-        parent_path: '',
-        node: {
-          key: name.replace(/_\d+$/, ''), // Strip suffix
-          slots: slots as Record<string, SlotValue>,
-          children: [],
-          confidence: 1,
+      const cleanKey = name.replace(/_\d+$/, ''); // Strip suffix
+      ops.push({
+        add: {
+          parent: '',
+          node: { [cleanKey]: slots },
+          source: {},
+          from: 'manual',
         },
       });
     }
   }
 
-  // Diff: find updated nodes
+  // Diff: find updated nodes — emit one set per changed slot
   for (const [name, newSlots] of parsedNodes) {
     if (currentKeys.has(name)) {
       const existingNode = currentContent.trees.find((t) => t.key === name);
       if (existingNode) {
-        const slotsDiffer = JSON.stringify(existingNode.slots) !== JSON.stringify(newSlots);
-        if (slotsDiffer) {
-          changes.push({
-            action: 'update',
-            target_path: name,
-            slots: newSlots as Record<string, SlotValue | null>,
-          });
+        for (const [slotKey, newValue] of Object.entries(newSlots)) {
+          const oldValue = existingNode.slots[slotKey];
+          if (JSON.stringify(oldValue) !== JSON.stringify(newValue)) {
+            ops.push({
+              set: {
+                path: `${name}/${slotKey}`,
+                value: newValue as SlotValue,
+                source: String(newValue),
+                from: 'manual',
+              },
+            });
+          }
+        }
+        // Check for removed slots (in existing but not in new)
+        for (const slotKey of Object.keys(existingNode.slots)) {
+          if (!(slotKey in newSlots)) {
+            ops.push({ unset: { path: `${name}/${slotKey}` } });
+          }
         }
       }
     }
   }
 
-  return { changes, new_relations: newRelations, remove_relations: removeRelations };
+  return ops;
 }

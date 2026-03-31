@@ -1,7 +1,7 @@
 'use client';
 
-import type { TreeChangeBatch, YOpsSource, TreeDiff, SemanticContent, SlotValue } from '@t3x-dev/core';
-import { diffCommits } from '@t3x-dev/core';
+import type { YOp, YOpsSource, TreeDiff, SemanticContent, SlotValue, TreeChangeBatch } from '@t3x-dev/core';
+import { diffCommits, treeChangesToYOps } from '@t3x-dev/core';
 import { treesToNodes } from '@/lib/treeCompat';
 import yaml from 'js-yaml';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -11,14 +11,14 @@ import { cn } from '@/lib/utils';
 
 interface YAMLEditorProps {
   content: SemanticContent;
-  onBatchCreated: (batch: TreeChangeBatch, source: YOpsSource) => void;
+  onBatchCreated: (ops: YOp[], source: YOpsSource) => void;
   className?: string;
 }
 
 // ── Helpers ──
 
-/** Convert a TreeDiff into a TreeChangeBatch for the change pipeline. */
-function treeDiffToBatch(diff: TreeDiff, sourceContent: SemanticContent, targetContent: SemanticContent): TreeChangeBatch | null {
+/** Convert a TreeDiff into YOp[] for the change pipeline. */
+function treeDiffToYOps(diff: TreeDiff, sourceContent: SemanticContent, targetContent: SemanticContent): YOp[] | null {
   const batch: TreeChangeBatch = { changes: [] };
 
   // Added paths (only in target = new in edited version)
@@ -74,7 +74,7 @@ function treeDiffToBatch(diff: TreeDiff, sourceContent: SemanticContent, targetC
     return null;
   }
 
-  return batch;
+  return treeChangesToYOps(batch);
 }
 
 /** Minimal validation: must have a trees array. */
@@ -125,15 +125,15 @@ export function YAMLEditor({ content, onBatchCreated, className }: YAMLEditorPro
     // 3. Diff against original
     const diff = diffCommits(contentRef.current, edited);
 
-    // 4. Convert to tree change batch
-    const batch = treeDiffToBatch(diff, contentRef.current, edited);
-    if (!batch) {
+    // 4. Convert to YOp[]
+    const ops = treeDiffToYOps(diff, contentRef.current, edited);
+    if (!ops) {
       setError('No changes detected');
       return;
     }
 
     // 5. Emit
-    onBatchCreated(batch, 'manual');
+    onBatchCreated(ops, 'manual');
   }, [text, onBatchCreated]);
 
   const handleKeyDown = useCallback(
