@@ -350,6 +350,7 @@ export {
   getSemanticContentJsonSchema,
   getTreeNodeJsonSchema,
 } from './semantic/jsonSchema';
+export { getYOpsJsonSchema } from './yops/jsonSchema';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Semantic Module (Tree-Primary: TreeNode + Relation + Diff + Merge)

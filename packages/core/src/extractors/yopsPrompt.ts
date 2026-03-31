@@ -7,14 +7,11 @@
  */
 
 import type { SemanticContent, TreeNode } from '../semantic/types';
-import {
-  DEFAULT_STYLE,
-  type ExtractionStyleConfig,
-} from './extractionStyleConfig';
+import { DEFAULT_STYLE, type ExtractionStyleConfig } from './extractionStyleConfig';
 
 // -- Re-export types that callers need --
 
-export type { ExtractionInput, ExtractionTurn, ExtractionPromptResult } from './extractionPrompt';
+export type { ExtractionInput, ExtractionPromptResult, ExtractionTurn } from './extractionPrompt';
 
 import type { ExtractionInput, ExtractionPromptResult } from './extractionPrompt';
 
@@ -63,7 +60,19 @@ Read the conversation and extract ALL facts, details, and information into a str
 
 ## Output format: YOps YAML
 
-${hasSnapshot ? `Operations: set (update slot), add (new node), drop (remove node), unset (remove slot)` : `Operation: add (create nodes)`}
+${
+  hasSnapshot
+    ? `Operations:
+- set: Set or update a slot value on an existing node
+- unset: Remove a slot from a node
+- add: Create a new node with initial slots
+- drop: Remove a node and all its children
+- rename: Change a node's key name (path: current, to: new_name)
+- move: Move a node to a different parent (path: source, to: target_path/key)
+- relate: Add a semantic relation (from, to, type: causes|conditions|contrasts|follows|depends)
+- unrelate: Remove a semantic relation`
+    : `Operation: add (create nodes with slots and source quotes)`
+}
 
 Each operation needs:
 - **source**: key phrase from the conversation that contains this fact (a few words are enough — does NOT need to be a complete sentence)
@@ -77,7 +86,9 @@ Each operation needs:
 
 ### Example${hasSnapshot ? ' (incremental)' : ''}
 
-${hasSnapshot ? `yops:
+${
+  hasSnapshot
+    ? `yops:
   - set:
       path: trip/budget
       value: 3000
@@ -93,7 +104,8 @@ ${hasSnapshot ? `yops:
       source:
         type: "I want a ryokan"
         budget: "around 200 per night"
-      from: T5` : `yops:
+      from: T5`
+    : `yops:
   - add:
       parent: ""
       node:
@@ -115,7 +127,8 @@ ${hasSnapshot ? `yops:
         coloring.pattern: "distinctive black and white coloring"
         coloring.purpose: "camouflage in their natural habitat"
         habitat: "mountain forests of central China"
-      from: T2`}
+      from: T2`
+}
 
 ### Extraction Priority
 - Extract MORE rather than less — code will clean up duplicates
