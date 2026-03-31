@@ -29,6 +29,7 @@ import { eq } from 'drizzle-orm';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
+import { findUncommittedYOpsIds } from '../lib/yops-commit-link';
 import { ErrorResponseSchema } from '../schemas/common';
 import { pushNotification } from './notifications.openapi';
 
@@ -402,6 +403,13 @@ autopilotRoutes.openapi(autoCommitRoute, async (c) => {
       children: [] as import('@t3x-dev/core').TreeNode[],
       confidence: sp.confidence,
     }));
+
+    // Find uncommitted yops for this conversation
+    const autoConversationId = draft.goal?.startsWith('auto:') ? draft.goal.slice(5) : undefined;
+    const yopsLogIds = autoConversationId
+      ? await findUncommittedYOpsIds(db, autoConversationId, draft.project_id)
+      : [];
+
     const commit = await createCommit(db, {
       parents: draft.parent_commit_hash ? [draft.parent_commit_hash] : [],
       author: { type: 'agent' as const, name: 'autopilot' },
@@ -410,6 +418,7 @@ autopilotRoutes.openapi(autoCommitRoute, async (c) => {
       message: `Auto-commit: ${qualifyingSPs.length} node(s)`,
       branch: config.target_branch,
       provenance: { method: 'human_curation' },
+      yops_log_ids: yopsLogIds,
     });
 
     // 10. Update draft with the real commit hash

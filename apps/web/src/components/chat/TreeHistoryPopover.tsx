@@ -13,7 +13,6 @@ const SOURCE_LABELS: Record<string, string> = {
   manual: 'Manual',
   answer: 'Answer',
   collapse: 'Collapse',
-  commit_marker: 'Commit',
   compress: 'Compress',
 };
 
@@ -27,10 +26,18 @@ export function TreeHistoryPopover({ treeId }: TreeHistoryPopoverProps) {
 
   // Filter entries that affect this tree
   const entries = yopsLog.filter((entry) => {
-    const delta = entry.yops as { changes?: Array<{ action: string; parent_path?: string; node?: { key: string }; target_path?: string }> };
+    const delta = entry.yops as {
+      changes?: Array<{
+        action: string;
+        parent_path?: string;
+        node?: { key: string };
+        target_path?: string;
+      }>;
+    };
     return (delta.changes ?? []).some(
       (c) =>
-        (c.action === 'add' && (`${c.parent_path ? `${c.parent_path}.` : ''}${c.node?.key}`) === treeId) ||
+        (c.action === 'add' &&
+          `${c.parent_path ? `${c.parent_path}.` : ''}${c.node?.key}` === treeId) ||
         (c.action !== 'add' && c.target_path === treeId)
     );
   });
@@ -56,10 +63,18 @@ export function TreeHistoryPopover({ treeId }: TreeHistoryPopoverProps) {
         ) : (
           <ol className="relative border-l border-[var(--stroke-default)] pl-4">
             {entries.map((entry) => {
-              const delta = entry.yops as { changes?: Array<{ action: string; parent_path?: string; node?: { key: string }; target_path?: string }> };
+              const delta = entry.yops as {
+                changes?: Array<{
+                  action: string;
+                  parent_path?: string;
+                  node?: { key: string };
+                  target_path?: string;
+                }>;
+              };
               const changes = (delta.changes ?? []).filter(
                 (c) =>
-                  (c.action === 'add' && (`${c.parent_path ? `${c.parent_path}.` : ''}${c.node?.key}`) === treeId) ||
+                  (c.action === 'add' &&
+                    `${c.parent_path ? `${c.parent_path}.` : ''}${c.node?.key}` === treeId) ||
                   (c.action !== 'add' && c.target_path === treeId)
               );
               const action = changes[0]?.action ?? 'update';

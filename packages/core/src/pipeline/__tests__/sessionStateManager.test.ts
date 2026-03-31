@@ -61,7 +61,7 @@ describe('computeSessionContext', () => {
   });
 
   it('ignores non-extraction sources', () => {
-    const sources = ['manual', 'answer', 'collapse', 'commit_marker'];
+    const sources = ['manual', 'answer', 'collapse', 'compress'];
     const ctx = computeSessionContext(sources, 4, 6);
     expect(ctx.extractionCount).toBe(0);
   });

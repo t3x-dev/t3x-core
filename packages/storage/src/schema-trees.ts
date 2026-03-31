@@ -828,7 +828,7 @@ export type NotificationInsert = typeof notifications.$inferInsert;
  * - `manual`: YOps from user edits (graph UI or YAML mode)
  * - `answer`: YOps from user answers to advisory/drift questions
  * - `collapse`: YOps that collapse old frames (drift choice: keep new)
- * - `commit_marker`: Marker entry when a commit is created
+ * - `compress`: YOps from tree compression
  */
 export const yopsLog = pgTable(
   'yops_log',
@@ -846,7 +846,7 @@ export const yopsLog = pgTable(
       .notNull()
       .references(() => projects.projectId, { onDelete: 'cascade' }),
 
-    /** YOps source: 'pipeline' | 'manual' | 'answer' | 'collapse' | 'commit_marker' */
+    /** YOps source: 'pipeline' | 'manual' | 'answer' | 'collapse' | 'compress' */
     source: text('source').notNull(),
 
     /** Turn hash (only for pipeline source) */
@@ -854,9 +854,6 @@ export const yopsLog = pgTable(
 
     /** The YOps content (JSONB) */
     yops: jsonb('yops').notNull(),
-
-    /** Commit hash — set when this yops entry is included in a commit, or for commit_marker entries */
-    commitHash: text('commit_hash'),
 
     /** Which model produced this extraction (for pipeline source) */
     model: text('model'),

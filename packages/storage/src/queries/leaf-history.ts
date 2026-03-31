@@ -24,7 +24,7 @@ export interface ListLeafHistoryOptions {
 }
 
 /**
- * Extended input that includes S16 columns (attempt_number, prompt_used).
+ * Extended input that includes storage-only columns (attempt_number, prompt_used).
  * The base CreateLeafHistoryInput from @t3x-dev/core is not modified;
  * extra fields are handled at the storage layer only.
  */
@@ -41,7 +41,7 @@ export type CreateLeafHistoryInputExtended = CreateLeafHistoryInput & {
  * Create a new LeafHistory entry
  *
  * @param db - Database instance
- * @param input - History data (accepts base or extended input with S16 columns)
+ * @param input - History data (accepts base or extended input with storage-only columns)
  * @returns Created history entry
  */
 export async function createLeafHistory(
@@ -163,7 +163,7 @@ export async function findHistoryByLeafIdOrderedByAttempt(
 // ============================================================
 
 /**
- * Convert database row to LeafHistory type (including S16 columns)
+ * Convert database row to LeafHistory type (including storage-only columns)
  */
 function rowToLeafHistory(
   row: LeafHistoryRecord

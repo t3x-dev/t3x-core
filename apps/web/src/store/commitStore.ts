@@ -6,11 +6,10 @@
  * Cross-store reads: useExtractionStore (draft, conversationId), useExtractionUIStore (panelMode).
  */
 
-import type { TreeNode, YOpsLogEntry } from '@t3x-dev/core';
+import type { TreeNode } from '@t3x-dev/core';
 import { flattenTrees } from '@t3x-dev/core';
 import { create } from 'zustand';
 import { createCommit, listCommits } from '@/lib/api/commits';
-import { createYOpsEntry } from '@/lib/api/trees';
 
 interface CommitState {
   // Confirmation tracking
@@ -142,22 +141,6 @@ export const useCommitStore = create<CommitState>((set, get) => ({
       }
       for (const t of draft.trees) {
         newSnapshot[t.key] = { ...t, slots: { ...t.slots } };
-      }
-
-      // Insert commit marker into yops log (links change history to commit)
-      if (conversationId) {
-        const markerEntry: YOpsLogEntry = {
-          id: crypto.randomUUID(),
-          source: 'commit_marker',
-          yops: { changes: [] },
-          created_at: new Date().toISOString(),
-          commit_hash: result.commit.hash,
-        };
-        // Update yopsLog in extractionStore
-        useExtractionStore.setState((s) => ({ yopsLog: [...s.yopsLog, markerEntry] }));
-
-        // Persist the marker to DB
-        createYOpsEntry(conversationId, { changes: [] }, 'commit_marker').catch(() => {});
       }
 
       set({

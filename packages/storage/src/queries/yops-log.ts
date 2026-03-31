@@ -5,7 +5,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, inArray } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { type YOpsLogInsert, type YOpsLogRecord, yopsLog } from '../schema-trees';
 
@@ -106,5 +106,18 @@ export async function listYOpsLogByTopic(
     .select()
     .from(yopsLog)
     .where(and(eq(yopsLog.conversationId, conversationId), eq(yopsLog.topicId, topicId)))
+    .orderBy(asc(yopsLog.createdAt));
+}
+
+/**
+ * Retrieve YOps log entries by their IDs (for commit operations lookup).
+ * Returns entries ordered by createdAt ASC.
+ */
+export async function getYOpsForCommit(db: AnyDB, yopsLogIds: string[]): Promise<YOpsLogRecord[]> {
+  if (yopsLogIds.length === 0) return [];
+  return db
+    .select()
+    .from(yopsLog)
+    .where(inArray(yopsLog.id, yopsLogIds))
     .orderBy(asc(yopsLog.createdAt));
 }

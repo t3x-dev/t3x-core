@@ -111,6 +111,7 @@ export {
 // YOps Log (Phase 2 — semantic yops tracking)
 export {
   deleteYOpsLogEntry,
+  getYOpsForCommit,
   getYOpsLogEntry,
   type InsertYOpsLogInput,
   insertYOpsLogEntry,

@@ -14,6 +14,7 @@ import { commitDraft, createCommit, findDraftById } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
+import { findUncommittedYOpsIds } from '../lib/yops-commit-link';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 import { CommitFromDraftRequest, CommitFromDraftResponse } from '../schemas/integration-contracts';
 
@@ -134,6 +135,12 @@ commitFromDraftRoutes.openapi(postCommitFromDraftRoute, async (c) => {
       confidence: node.confidence,
     }));
 
+    // Find uncommitted yops for this conversation (if draft is from a conversation)
+    const conversationId = draft.goal?.startsWith('auto:') ? draft.goal.slice(5) : undefined;
+    const yopsLogIds = conversationId
+      ? await findUncommittedYOpsIds(db, conversationId, project_id)
+      : [];
+
     const commit = await createCommit(db, {
       parents,
       author: { type: 'human' as const, name: 'api' },
@@ -142,6 +149,7 @@ commitFromDraftRoutes.openapi(postCommitFromDraftRoute, async (c) => {
       message: message ?? `Draft: ${draft.title}`,
       branch: targetBranch,
       provenance: { method: 'human_curation' },
+      yops_log_ids: yopsLogIds,
     });
 
     // Step 6: Mark draft as committed

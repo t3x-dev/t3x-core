@@ -304,9 +304,9 @@ describe('Leaf History Storage', () => {
   });
 
   // =========================================================================
-  // S16: attempt_number, prompt_used
+  // Storage-only columns: attempt_number, prompt_used
   // =========================================================================
-  describe('S16 columns (attempt_number, prompt_used)', () => {
+  describe('Storage-only columns (attempt_number, prompt_used)', () => {
     it('creates history with explicit attempt_number', async () => {
       const history = await createLeafHistory(db, {
         leaf_id: testLeafId,
@@ -399,7 +399,7 @@ describe('Leaf History Storage', () => {
       expect(ordered[2].prompt_used).toBe('Prompt v3');
     });
 
-    it('persists S16 fields via findLeafHistoryById', async () => {
+    it('persists storage-only fields via findLeafHistoryById', async () => {
       const created = await createLeafHistory(db, {
         leaf_id: testLeafId,
         output: 'Persist check',

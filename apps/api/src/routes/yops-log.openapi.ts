@@ -23,13 +23,13 @@ import {
   listYOpsLogByTopic,
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
-import { replayYOpsLog, toYOpsLogEntries } from '../lib/yops-log-utils';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import {
   readDraftFromTrees,
   rebuildTreesFromSnapshot,
   syncYOpsToTrees,
 } from '../lib/tree-state-sync';
+import { replayYOpsLog, toYOpsLogEntries } from '../lib/yops-log-utils';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
 export const yopsLogRoutes = new OpenAPIHono({
@@ -49,14 +49,7 @@ const YOpsIdParam = z.object({
   yopsId: z.string().min(1),
 });
 
-const YOpsSourceSchema = z.enum([
-  'pipeline',
-  'manual',
-  'answer',
-  'collapse',
-  'commit_marker',
-  'compress',
-]);
+const YOpsSourceSchema = z.enum(['pipeline', 'manual', 'answer', 'collapse', 'compress']);
 
 const FrameChangeSchema = z
   .object({
@@ -285,11 +278,7 @@ yopsLogRoutes.openapi(createYOpsRoute, async (c) => {
         turnHash: body.turn_hash,
         yops: body.yops,
       });
-      await syncYOpsToTrees(
-        tx,
-        conversationId,
-        conversation.projectId,
-      );
+      await syncYOpsToTrees(tx, conversationId, conversation.projectId);
       return rec;
     });
 

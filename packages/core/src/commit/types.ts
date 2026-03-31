@@ -31,6 +31,8 @@ export interface Commit {
   message: string | null;
   branch: string;
   provenance: Provenance | null;
+  /** YOps log entry IDs that produced this commit (second-class, not in hash) */
+  yops_log_ids: string[];
 }
 
 export interface CommitFirstClass {

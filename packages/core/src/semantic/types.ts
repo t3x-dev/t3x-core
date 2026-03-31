@@ -8,12 +8,7 @@
 
 // ── Slot Values ──
 
-export type SlotValue =
-  | string
-  | number
-  | boolean
-  | SlotValue[]
-  | { [key: string]: SlotValue };
+export type SlotValue = string | number | boolean | SlotValue[] | { [key: string]: SlotValue };
 
 // ── Tree Node ──
 
@@ -39,13 +34,7 @@ export interface TreeNode {
  * Note: packages/core/src/types/index.ts has a separate RELATION_TYPES for the app layer.
  * This constant is for the semantic layer only.
  */
-export const RELATION_TYPES = [
-  'causes',
-  'conditions',
-  'contrasts',
-  'follows',
-  'depends',
-] as const;
+export const RELATION_TYPES = ['causes', 'conditions', 'contrasts', 'follows', 'depends'] as const;
 
 export type RelationType = (typeof RELATION_TYPES)[number];
 
@@ -67,7 +56,12 @@ export interface SemanticContent {
 
 export type TreeChange =
   | { action: 'add'; parent_path: string; node: TreeNode; slot_quotes?: Record<string, string> }
-  | { action: 'update'; target_path: string; slots: Record<string, SlotValue | null>; slot_quotes?: Record<string, string> }
+  | {
+      action: 'update';
+      target_path: string;
+      slots: Record<string, SlotValue | null>;
+      slot_quotes?: Record<string, string>;
+    }
   | { action: 'remove'; target_path: string; reason?: string };
 
 export interface TreeChangeBatch {
@@ -78,7 +72,7 @@ export interface TreeChangeBatch {
 
 // ── YOps Log ──
 
-export type YOpsSource = 'pipeline' | 'manual' | 'answer' | 'collapse' | 'commit_marker' | 'compress';
+export type YOpsSource = 'pipeline' | 'manual' | 'answer' | 'collapse' | 'compress';
 
 export interface YOpsLogEntry {
   id: string;
@@ -86,7 +80,6 @@ export interface YOpsLogEntry {
   turn_hash?: string;
   yops: unknown;
   created_at: string;
-  commit_hash?: string;
   model?: string;
   version?: number;
   pipeline_state?: 'completed' | 'failed';
