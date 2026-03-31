@@ -63,7 +63,15 @@ Read the conversation and extract ALL facts, details, and information into a str
 
 ## Output format: YOps YAML
 
-${hasSnapshot ? `Operations: set (update slot), add (new node), drop (remove node), unset (remove slot)` : `Operation: add (create nodes)`}
+${hasSnapshot ? `Operations:
+- set: Set or update a slot value on an existing node
+- unset: Remove a slot from a node
+- add: Create a new node with initial slots
+- drop: Remove a node and all its children
+- rename: Change a node's key name (path: current, to: new_name)
+- move: Move a node to a different parent (path: source, to: target_path/key)
+- relate: Add a semantic relation (from, to, type: causes|conditions|contrasts|follows|depends)
+- unrelate: Remove a semantic relation` : `Operation: add (create nodes with slots and source quotes)`}
 
 Each operation needs:
 - **source**: key phrase from the conversation that contains this fact (a few words are enough — does NOT need to be a complete sentence)
