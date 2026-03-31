@@ -14,6 +14,7 @@ import { registerImportCommands } from './commands/import.js';
 import { registerLeafCommands } from './commands/leaves.js';
 import { registerProjectCommands } from './commands/projects.js';
 import { registerShareCommands } from './commands/share.js';
+import { registerSchemaCommands } from './commands/schema.js';
 import { registerShowCommands } from './commands/show.js';
 import { registerStatusCommands } from './commands/status.js';
 
@@ -37,6 +38,7 @@ registerShareCommands(program);
 registerGateCommands(program);
 registerExportCommands(program);
 registerImportCommands(program);
+registerSchemaCommands(program);
 registerShowCommands(program);
 
 // Parse arguments
