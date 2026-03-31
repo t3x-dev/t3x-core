@@ -165,17 +165,19 @@ export const commitRewrites = pgTable(
     baseHash: text('base_hash'),
     opsReplayed: integer('ops_replayed').notNull(),
     yopsLogIds: jsonb('yops_log_ids').$type<string[]>().notNull(),
-    author: jsonb('author').$type<{
-      type: 'human' | 'agent' | 'system';
-      id?: string;
-      name?: string;
-    }>().notNull(),
+    author: jsonb('author')
+      .$type<{
+        type: 'human' | 'agent' | 'system';
+        id?: string;
+        name?: string;
+      }>()
+      .notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => ({
     projectIdx: index('idx_commit_rewrites_project').on(table.projectId),
     resultIdx: index('idx_commit_rewrites_result').on(table.resultHash),
-  }),
+  })
 );
 
 export type RewriteRecord = typeof commitRewrites.$inferSelect;

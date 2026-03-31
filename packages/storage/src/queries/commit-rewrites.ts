@@ -7,7 +7,7 @@
 import { randomUUID } from 'node:crypto';
 import { asc, eq } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
-import { type RewriteRecord, commitRewrites } from '../schema-commits';
+import { commitRewrites, type RewriteRecord } from '../schema-commits';
 
 // ── Types ──
 
@@ -25,10 +25,7 @@ export interface InsertRewriteInput {
 
 // ── Queries ──
 
-export async function insertRewrite(
-  db: AnyDB,
-  input: InsertRewriteInput,
-): Promise<RewriteRecord> {
+export async function insertRewrite(db: AnyDB, input: InsertRewriteInput): Promise<RewriteRecord> {
   const id = `rw_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
   const [row] = await db
     .insert(commitRewrites)
@@ -51,7 +48,7 @@ export async function insertRewrite(
 export async function isCommitSuperseded(
   db: AnyDB,
   projectId: string,
-  hash: string,
+  hash: string
 ): Promise<boolean> {
   const rewrites = await db
     .select({ sourceHashes: commitRewrites.sourceHashes })
@@ -64,10 +61,7 @@ export async function isCommitSuperseded(
   return false;
 }
 
-export async function getSupersededHashes(
-  db: AnyDB,
-  projectId: string,
-): Promise<Set<string>> {
+export async function getSupersededHashes(db: AnyDB, projectId: string): Promise<Set<string>> {
   const rewrites = await db
     .select({ sourceHashes: commitRewrites.sourceHashes })
     .from(commitRewrites)
@@ -82,10 +76,7 @@ export async function getSupersededHashes(
   return hashes;
 }
 
-export async function listRewrites(
-  db: AnyDB,
-  projectId: string,
-): Promise<RewriteRecord[]> {
+export async function listRewrites(db: AnyDB, projectId: string): Promise<RewriteRecord[]> {
   return db
     .select()
     .from(commitRewrites)

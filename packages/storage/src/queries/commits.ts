@@ -187,7 +187,7 @@ export async function deleteCommit(db: AnyDB, hash: string): Promise<boolean> {
  */
 export async function collectYOpsForCommitRange(
   db: AnyDB,
-  commitHashes: string[],
+  commitHashes: string[]
 ): Promise<string[]> {
   if (commitHashes.length === 0) return [];
 
@@ -204,7 +204,9 @@ export async function collectYOpsForCommitRange(
       throw new Error(`Commit not found: ${hash}`);
     }
     if (commit.yops_log_ids.length === 0) {
-      throw new Error(`Commit ${hash} has empty yops_log_ids — cannot squash pre-solidification commits`);
+      throw new Error(
+        `Commit ${hash} has empty yops_log_ids — cannot squash pre-solidification commits`
+      );
     }
     allIds.push(...commit.yops_log_ids);
   }

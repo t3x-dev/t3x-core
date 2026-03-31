@@ -6,9 +6,9 @@
 
 import { canonicalize } from 'json-canonicalize';
 import type { SemanticContent, TreeNode } from '../semantic/types';
-import type { YOp, YOpsError } from './types';
 import { applyYOps } from './engine';
 import { YOpSchema } from './schema';
+import type { YOp, YOpsError } from './types';
 
 // ── Types ──
 
@@ -51,9 +51,11 @@ export function replayYOps(input: ReplayInput): ReplayResult {
 
 // ── stripTree — strips metadata (source, slot_quotes, confidence), keeps key/slots/children ──
 
-function stripTree(
-  node: TreeNode,
-): { key: string; slots: Record<string, unknown>; children: ReturnType<typeof stripTree>[] } {
+function stripTree(node: TreeNode): {
+  key: string;
+  slots: Record<string, unknown>;
+  children: ReturnType<typeof stripTree>[];
+} {
   return {
     key: node.key,
     slots: node.slots as Record<string, unknown>,
@@ -77,7 +79,7 @@ function stripContent(content: SemanticContent): unknown {
 export function verifyReplay(
   baseContent: SemanticContent,
   ops: YOp[],
-  expectedContent: SemanticContent,
+  expectedContent: SemanticContent
 ): VerifyResult {
   const replay = replayYOps({ baseContent, ops });
 
@@ -126,21 +128,21 @@ export function verifyReplay(
  * The `yops` field is stored as `unknown` (jsonb) in the DB.
  * Validates each op against YOpSchema. Throws on invalid ops.
  */
-export function extractOpsFromEntries(
-  entries: Array<{ id: string; yops: unknown }>,
-): YOp[] {
+export function extractOpsFromEntries(entries: Array<{ id: string; yops: unknown }>): YOp[] {
   const allOps: YOp[] = [];
 
   for (const entry of entries) {
     if (!Array.isArray(entry.yops)) {
-      throw new Error(`Invalid yops field in entry ${entry.id}: expected array, got ${typeof entry.yops}`);
+      throw new Error(
+        `Invalid yops field in entry ${entry.id}: expected array, got ${typeof entry.yops}`
+      );
     }
 
     for (const rawOp of entry.yops) {
       const parsed = YOpSchema.safeParse(rawOp);
       if (!parsed.success) {
         throw new Error(
-          `Invalid YOp in entry ${entry.id}: ${parsed.error.issues.map((i) => i.message).join(', ')}`,
+          `Invalid YOp in entry ${entry.id}: ${parsed.error.issues.map((i) => i.message).join(', ')}`
         );
       }
       allOps.push(parsed.data as YOp);

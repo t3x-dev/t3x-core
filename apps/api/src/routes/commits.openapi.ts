@@ -13,6 +13,8 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
+import type { SemanticContent, YOp } from '@t3x-dev/core';
+import { extractOpsFromEntries, verifyReplay } from '@t3x-dev/core';
 import {
   clearManualEditedFlags,
   collectYOpsForCommitRange,
@@ -24,8 +26,6 @@ import {
   listCommits,
   updateCommitPosition,
 } from '@t3x-dev/storage';
-import { extractOpsFromEntries, verifyReplay } from '@t3x-dev/core';
-import type { SemanticContent, YOp } from '@t3x-dev/core';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import {
@@ -473,14 +473,23 @@ const squashRoute = createRoute({
               commit: z.unknown(),
               superseded: z.array(z.string()),
               ops_replayed: z.number(),
-            }),
+            })
           ),
         },
       },
     },
-    400: { description: 'Invalid input', content: { 'application/json': { schema: ErrorResponseSchema } } },
-    404: { description: 'Not found', content: { 'application/json': { schema: ErrorResponseSchema } } },
-    409: { description: 'Replay mismatch', content: { 'application/json': { schema: ErrorResponseSchema } } },
+    400: {
+      description: 'Invalid input',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    404: {
+      description: 'Not found',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    409: {
+      description: 'Replay mismatch',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
   },
 });
 
@@ -498,7 +507,11 @@ commitRoutes.openapi(squashRoute, async (c) => {
         return errorResponse(c, 'COMMIT_NOT_FOUND', `Commit not found: ${hash}`);
       }
       if (commit.branch !== branch) {
-        return errorResponse(c, 'INVALID_REQUEST', `Commit ${hash} is on branch '${commit.branch}', not '${branch}'`);
+        return errorResponse(
+          c,
+          'INVALID_REQUEST',
+          `Commit ${hash} is on branch '${commit.branch}', not '${branch}'`
+        );
       }
       if (commit.project_id !== project_id) {
         return errorResponse(c, 'INVALID_REQUEST', `Commit ${hash} belongs to different project`);
@@ -509,7 +522,11 @@ commitRoutes.openapi(squashRoute, async (c) => {
     // 1b. Check none are already superseded
     for (const hash of commit_hashes) {
       if (await isCommitSuperseded(db, project_id, hash)) {
-        return errorResponse(c, 'INVALID_REQUEST', `Commit ${hash} is already superseded by a previous rewrite`);
+        return errorResponse(
+          c,
+          'INVALID_REQUEST',
+          `Commit ${hash} is already superseded by a previous rewrite`
+        );
       }
     }
 
@@ -517,7 +534,11 @@ commitRoutes.openapi(squashRoute, async (c) => {
     for (let i = 1; i < commit_hashes.length; i++) {
       const current = commitMap.get(commit_hashes[i])!;
       if (!current.parents.includes(commit_hashes[i - 1])) {
-        return errorResponse(c, 'INVALID_REQUEST', `Commits are not consecutive: ${commit_hashes[i]} does not have ${commit_hashes[i - 1]} as parent`);
+        return errorResponse(
+          c,
+          'INVALID_REQUEST',
+          `Commits are not consecutive: ${commit_hashes[i]} does not have ${commit_hashes[i - 1]} as parent`
+        );
       }
     }
 
@@ -555,7 +576,12 @@ commitRoutes.openapi(squashRoute, async (c) => {
     const verification = verifyReplay(baseContent, ops, lastCommit.content);
 
     if (!verification.match) {
-      return errorResponse(c, 'CONFLICT', 'Replayed content does not match commit snapshot — pipeline bug detected', verification.mismatch ?? undefined);
+      return errorResponse(
+        c,
+        'CONFLICT',
+        'Replayed content does not match commit snapshot — pipeline bug detected',
+        verification.mismatch ?? undefined
+      );
     }
 
     // 6. Create squashed commit
@@ -583,14 +609,17 @@ commitRoutes.openapi(squashRoute, async (c) => {
       author: { type: 'human', name: 'api' },
     });
 
-    return c.json({
-      success: true as const,
-      data: {
-        commit: newCommit,
-        superseded: commit_hashes,
-        ops_replayed: verification.opsApplied,
+    return c.json(
+      {
+        success: true as const,
+        data: {
+          commit: newCommit,
+          superseded: commit_hashes,
+          ops_replayed: verification.opsApplied,
+        },
       },
-    }, 200);
+      200
+    );
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Squash failed';
     return errorResponse(c, 'INTERNAL_ERROR', msg);
