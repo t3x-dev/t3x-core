@@ -129,8 +129,6 @@ export function ChatWorkspace({
 
   // Track whether inheritance hydration has been done (prevents re-hydration loop)
   const inheritedRef = useRef(false);
-  // Lock conversation input after a commit has been made from it
-  const [isConversationCommitted, setIsConversationCommitted] = useState(false);
   // Parent conversation link (for child conversations created via "Create Unit")
   const [parentConversationId, setParentConversationId] = useState<string | null>(null);
 
@@ -229,10 +227,8 @@ export function ChatWorkspace({
           if (yopsEntries && yopsEntries.length > 0) {
             store.hydrateYOpsLog(yopsEntries);
           }
-          // Lock input if a commit was made from this conversation
-          if (store.lastCommitHash) {
-            setIsConversationCommitted(true);
-          }
+          // Note: we intentionally do NOT lock conversation after commit.
+          // Users should be able to continue chatting and extract more knowledge.
           if (topicsList && topicsList.length > 0) {
             store.setTopics(topicsList);
             // Auto-select the first active topic
@@ -635,12 +631,8 @@ export function ChatWorkspace({
             onStop={stopGenerating}
             isStreaming={isStreaming}
             provider={selectedProvider}
-            disabled={isLoading || isExtracting || isConversationCommitted}
-            placeholder={
-              isConversationCommitted
-                ? 'This conversation is locked — a commit was made from it'
-                : 'Message... (Enter to send, Shift+Enter for new line)'
-            }
+            disabled={isLoading || isExtracting}
+            placeholder="Message... (Enter to send, Shift+Enter for new line)"
           />
         </div>
       </div>

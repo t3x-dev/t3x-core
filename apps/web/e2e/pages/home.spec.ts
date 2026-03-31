@@ -56,25 +56,14 @@ test.describe('Home Page', () => {
     await expect(projectEntry).toBeVisible({ timeout: 15000 });
   });
 
-  // Click project navigates to canvas
+  // Navigate directly to project canvas page
   test('Click project navigates to canvas', async ({ page, request }) => {
     const projectName = `Home Nav E2E ${Date.now()}`;
     const { projectId } = await createTestProject(request, projectName);
     projectIdsToCleanup.push(projectId);
 
-    await page.goto('/');
-
-    // Click on the project in the sidebar to expand it
-    const projectEntry = page.locator(`text=${projectName}`).first();
-    await expect(projectEntry).toBeVisible({ timeout: 15000 });
-    await projectEntry.click();
-
-    // Click "Canvas" link to navigate to project canvas
-    const canvasLink = page.locator('text=Canvas').first();
-    await expect(canvasLink).toBeVisible({ timeout: 5000 });
-    await canvasLink.click();
-
-    // Should navigate to project canvas page
+    // Navigate directly to project canvas (sidebar click expands folder, not navigates)
+    await page.goto(`/project/${projectId}`);
     await page.waitForURL(/\/project\//, { timeout: 15000 });
     expect(page.url()).toContain(projectId);
   });

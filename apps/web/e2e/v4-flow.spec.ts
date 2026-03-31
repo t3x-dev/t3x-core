@@ -36,10 +36,10 @@ test.describe('V4 WebUI Flow', () => {
         branch: 'main',
         message: 'E2E test commit',
         content: {
-          frames: [
-            { id: 'f_001', type: 'legacy_sentence', slots: { text: 'User prefers dark mode' } },
-            { id: 'f_002', type: 'legacy_sentence', slots: { text: 'User speaks English' } },
-            { id: 'f_003', type: 'legacy_sentence', slots: { text: 'User timezone is UTC+8' } },
+          trees: [
+            { key: 't_001', type: 'legacy_sentence', slots: { text: 'User prefers dark mode' }, children: [] },
+            { key: 't_002', type: 'legacy_sentence', slots: { text: 'User speaks English' }, children: [] },
+            { key: 't_003', type: 'legacy_sentence', slots: { text: 'User timezone is UTC+8' }, children: [] },
           ],
           relations: [],
         },

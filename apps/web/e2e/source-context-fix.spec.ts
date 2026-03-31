@@ -101,9 +101,9 @@ test.describe('Source Context Fix Verification', () => {
         branch: 'main',
         message: 'Test commit with source context',
         content: {
-          frames: [
+          trees: [
             {
-              id: 'f_001',
+              key: 't_001',
               type: 'legacy_sentence',
               slots: {
                 text: 'I prefer dark mode for coding.',
@@ -114,9 +114,10 @@ test.describe('Source Context Fix Verification', () => {
                   end_char: 30,
                 },
               },
+              children: [],
             },
             {
-              id: 'f_002',
+              key: 't_002',
               type: 'legacy_sentence',
               slots: {
                 text: 'My budget is around $5000.',
@@ -127,6 +128,7 @@ test.describe('Source Context Fix Verification', () => {
                   end_char: 57,
                 },
               },
+              children: [],
             },
           ],
           relations: [],
@@ -144,18 +146,18 @@ test.describe('Source Context Fix Verification', () => {
     expect(getRes.ok()).toBe(true);
     const getData = await getRes.json();
 
-    const frames = getData.data.commit.content.frames;
-    expect(frames).toHaveLength(2);
+    const trees = getData.data.commit.content.trees;
+    expect(trees).toHaveLength(2);
 
-    // Verify frame 1
-    expect(frames[0].slots.source_ref.turn_hash).toBe(turnHash);
-    expect(frames[0].slots.source_ref.start_char).toBe(0);
-    expect(frames[0].slots.source_ref.end_char).toBe(30);
+    // Verify tree 1
+    expect(trees[0].slots.source_ref.turn_hash).toBe(turnHash);
+    expect(trees[0].slots.source_ref.start_char).toBe(0);
+    expect(trees[0].slots.source_ref.end_char).toBe(30);
 
-    // Verify frame 2
-    expect(frames[1].slots.source_ref.turn_hash).toBe(turnHash);
-    expect(frames[1].slots.source_ref.start_char).toBe(31);
-    expect(frames[1].slots.source_ref.end_char).toBe(57);
+    // Verify tree 2
+    expect(trees[1].slots.source_ref.turn_hash).toBe(turnHash);
+    expect(trees[1].slots.source_ref.start_char).toBe(31);
+    expect(trees[1].slots.source_ref.end_char).toBe(57);
 
     // Verify the positions match the actual text
     expect(turnContent.slice(0, 30)).toBe('I prefer dark mode for coding.');
