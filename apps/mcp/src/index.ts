@@ -8,9 +8,10 @@ import { checkTool, handleCheck } from './tools/check.js';
 import { commitTool, handleCommit } from './tools/commit.js';
 import { extractTool, handleExtract } from './tools/extract.js';
 import { generateTool, handleGenerate } from './tools/generate.js';
+import { handleSchema, schemaTool } from './tools/schema.js';
 import { handleShow, showTool } from './tools/show.js';
 
-const tools = [extractTool, commitTool, checkTool, generateTool, showTool];
+const tools = [extractTool, commitTool, checkTool, generateTool, showTool, schemaTool];
 
 const handlers: Record<
   string,
@@ -21,6 +22,7 @@ const handlers: Record<
   [checkTool.name]: handleCheck,
   [generateTool.name]: handleGenerate,
   [showTool.name]: handleShow,
+  [schemaTool.name]: handleSchema,
 };
 
 const server = new Server({ name: 't3x-mcp', version: '0.1.0' }, { capabilities: { tools: {} } });
