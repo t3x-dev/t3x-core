@@ -168,8 +168,14 @@ export class T3xClient {
     return this.request<Project>('PATCH', `/v1/projects/${id}`, input);
   }
 
-  async deleteProject(id: string): Promise<void> {
-    await this.request<void>('DELETE', `/v1/projects/${id}`);
+  async deleteProject(id: string, options?: { permanent?: boolean }): Promise<void> {
+    await this.request<void>('DELETE', `/v1/projects/${id}`, undefined,
+      options?.permanent ? { permanent: 'true' } : undefined
+    );
+  }
+
+  async restoreProject(id: string): Promise<Project> {
+    return this.request<Project>('POST', `/v1/projects/${id}/restore`);
   }
 
   // ============================================

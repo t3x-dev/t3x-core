@@ -215,6 +215,31 @@ describe('T3xClient', () => {
         expect.objectContaining({ method: 'DELETE' })
       );
     });
+
+    it('deleteProject with permanent=true adds query param', async () => {
+      const fn = mockFetch(successResponse(null));
+      const client = createTestClient(fn);
+
+      await client.deleteProject('proj_1', { permanent: true });
+      const url = (fn.mock.calls[0] as unknown[])[0] as string;
+      expect(url).toContain('permanent=true');
+      expect(fn).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ method: 'DELETE' })
+      );
+    });
+
+    it('restoreProject sends POST to restore endpoint', async () => {
+      const fn = mockFetch(successResponse({ project_id: 'proj_1', name: 'Restored', created_at: '2024-01-01T00:00:00Z' }));
+      const client = createTestClient(fn);
+
+      const result = await client.restoreProject('proj_1');
+      expect(fn).toHaveBeenCalledWith(
+        expect.stringContaining('/v1/projects/proj_1/restore'),
+        expect.objectContaining({ method: 'POST' })
+      );
+      expect(result.project_id).toBe('proj_1');
+    });
   });
 
   // =========================================================================
