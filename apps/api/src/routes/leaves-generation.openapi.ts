@@ -12,7 +12,7 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
   AllProvidersFailedError,
-  collectLessons,
+  collectLessonsFromAssertions,
   GenerationError,
   type GenerationMode,
   isGenerationConfigured,
@@ -278,7 +278,9 @@ leavesGenerationRoutes.openapi(generateLeafRoute, async (c) => {
 
     // Collect lessons from historical leaves on the same commit (#4 feedback loop)
     const historicalLeaves = await findLeavesByCommit(db, leaf.commit_hash);
-    const lessons = collectLessons(historicalLeaves);
+    const lessons = collectLessonsFromAssertions(
+      historicalLeaves.map((l) => ({ id: l.id, assertions: l.assertions }))
+    );
 
     // Multi-round generation when mode is 'standard' or 'thorough'
     let multiRoundResult:
@@ -640,7 +642,8 @@ leavesGenerationRoutes.openapi(batchGenerateRoute, async (c) => {
       try {
         // 3a. Create leaf (auto-generate title from commit message if not provided)
         const leafTitle =
-          leafConfig.title || `${unifiedCommit.message || decodedHash.slice(0, 16)} — ${leafConfig.type}`;
+          leafConfig.title ||
+          `${unifiedCommit.message || decodedHash.slice(0, 16)} — ${leafConfig.type}`;
         const leaf = await createLeaf(db, {
           commit_hash: decodedHash,
           type: leafConfig.type,
@@ -656,7 +659,9 @@ leavesGenerationRoutes.openapi(batchGenerateRoute, async (c) => {
           try {
             // Collect lessons from historical leaves on the same commit
             const batchHistLeaves = await findLeavesByCommit(db, leaf.commit_hash);
-            const batchLessons = collectLessons(batchHistLeaves);
+            const batchLessons = collectLessonsFromAssertions(
+              batchHistLeaves.map((l) => ({ id: l.id, assertions: l.assertions }))
+            );
 
             const result = await generateWithFallback({
               knowledge: batchKnowledge,

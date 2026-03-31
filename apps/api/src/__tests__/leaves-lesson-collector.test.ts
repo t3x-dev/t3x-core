@@ -16,11 +16,11 @@ import { setupTestDB, testData } from './setup';
 type ApiResponse = any;
 
 // Hoist the mocks so they can be referenced in vi.mock factories
-const { mockGenerateLeafOutput, mockIsGenerationConfigured, mockCollectLessons } = vi.hoisted(
+const { mockGenerateLeafOutput, mockIsGenerationConfigured, mockCollectLessonsFromAssertions } = vi.hoisted(
   () => ({
     mockGenerateLeafOutput: vi.fn(),
     mockIsGenerationConfigured: vi.fn(),
-    mockCollectLessons: vi.fn(),
+    mockCollectLessonsFromAssertions: vi.fn(),
   })
 );
 
@@ -39,7 +39,7 @@ vi.mock('@t3x-dev/core', async (importOriginal) => {
     ...actual,
     generateLeafOutput: mockGenerateLeafOutput,
     isGenerationConfigured: mockIsGenerationConfigured,
-    collectLessons: mockCollectLessons,
+    collectLessonsFromAssertions: mockCollectLessonsFromAssertions,
   };
 });
 
@@ -107,7 +107,7 @@ describe('POST /v1/leaves/:id/generate — lesson collector wiring', () => {
   beforeEach(() => {
     mockGenerateLeafOutput.mockReset();
     mockIsGenerationConfigured.mockReset();
-    mockCollectLessons.mockReset();
+    mockCollectLessonsFromAssertions.mockReset();
     mockGenerateWithFallback.mockReset();
 
     // Default: generation is configured
@@ -147,7 +147,7 @@ describe('POST /v1/leaves/:id/generate — lesson collector wiring', () => {
     });
 
     // collectLessons returns lessons extracted from historical leaves
-    mockCollectLessons.mockReturnValue(['Always include the main keyword in the first sentence']);
+    mockCollectLessonsFromAssertions.mockReturnValue(['Always include the main keyword in the first sentence']);
 
     // generateWithFallback returns a successful result
     mockGenerateWithFallback.mockResolvedValue({
@@ -166,8 +166,8 @@ describe('POST /v1/leaves/:id/generate — lesson collector wiring', () => {
     expect(res.status).toBe(200);
 
     // collectLessons should have been called with the array of all leaves on this commit
-    expect(mockCollectLessons).toHaveBeenCalledTimes(1);
-    const callArg = mockCollectLessons.mock.calls[0][0];
+    expect(mockCollectLessonsFromAssertions).toHaveBeenCalledTimes(1);
+    const callArg = mockCollectLessonsFromAssertions.mock.calls[0][0];
     expect(Array.isArray(callArg)).toBe(true);
     // The array should contain leaves from this commit (at least the two we created)
     expect(callArg.length).toBeGreaterThanOrEqual(2);
@@ -190,7 +190,7 @@ describe('POST /v1/leaves/:id/generate — lesson collector wiring', () => {
       'Do not exceed 280 characters for tweets',
       'Always include a call-to-action',
     ];
-    mockCollectLessons.mockReturnValue(fakeLessons);
+    mockCollectLessonsFromAssertions.mockReturnValue(fakeLessons);
 
     mockGenerateWithFallback.mockResolvedValue({
       output: 'Generated email output',
@@ -226,7 +226,7 @@ describe('POST /v1/leaves/:id/generate — lesson collector wiring', () => {
     });
 
     // collectLessons returns empty — no failed assertions with lessons
-    mockCollectLessons.mockReturnValue([]);
+    mockCollectLessonsFromAssertions.mockReturnValue([]);
 
     mockGenerateWithFallback.mockResolvedValue({
       output: 'Generated article output',
@@ -276,7 +276,7 @@ describe('POST /v1/leaves/:id/generate — lesson collector wiring', () => {
     });
 
     // collectLessons returns empty for a single leaf with no failed assertions
-    mockCollectLessons.mockReturnValue([]);
+    mockCollectLessonsFromAssertions.mockReturnValue([]);
 
     mockGenerateWithFallback.mockResolvedValue({
       output: 'Generated solo output',
@@ -298,8 +298,8 @@ describe('POST /v1/leaves/:id/generate — lesson collector wiring', () => {
     expect(data.data.output).toBe('Generated solo output');
 
     // collectLessons was still called (with the array containing just this one leaf)
-    expect(mockCollectLessons).toHaveBeenCalledTimes(1);
-    const callArg = mockCollectLessons.mock.calls[0][0];
+    expect(mockCollectLessonsFromAssertions).toHaveBeenCalledTimes(1);
+    const callArg = mockCollectLessonsFromAssertions.mock.calls[0][0];
     expect(callArg).toHaveLength(1);
     expect(callArg[0].id).toBe(leaf.id);
 
@@ -322,7 +322,7 @@ describe('POST /v1/leaves/:id/generate — lesson collector wiring', () => {
     });
 
     const fakeLessons = ['Keep it under 140 characters'];
-    mockCollectLessons.mockReturnValue(fakeLessons);
+    mockCollectLessonsFromAssertions.mockReturnValue(fakeLessons);
 
     mockGenerateWithFallback.mockResolvedValue({
       output: 'Concise weibo post',

@@ -24,13 +24,12 @@ export interface ListLeafHistoryOptions {
 }
 
 /**
- * Extended input that includes S16 columns (attempt_number, corrective_feedback, prompt_used).
+ * Extended input that includes S16 columns (attempt_number, prompt_used).
  * The base CreateLeafHistoryInput from @t3x-dev/core is not modified;
  * extra fields are handled at the storage layer only.
  */
 export type CreateLeafHistoryInputExtended = CreateLeafHistoryInput & {
   attempt_number?: number;
-  corrective_feedback?: string;
   prompt_used?: string;
 };
 
@@ -48,9 +47,7 @@ export type CreateLeafHistoryInputExtended = CreateLeafHistoryInput & {
 export async function createLeafHistory(
   db: AnyDB,
   input: CreateLeafHistoryInputExtended
-): Promise<
-  LeafHistory & { attempt_number: number; corrective_feedback?: string; prompt_used?: string }
-> {
+): Promise<LeafHistory & { attempt_number: number; prompt_used?: string }> {
   const id = generateLeafHistoryId();
   const now = new Date();
 
@@ -65,7 +62,6 @@ export async function createLeafHistory(
       generatedAt: now,
       createdBy: input.created_by ?? null,
       attemptNumber: input.attempt_number ?? 1,
-      correctiveFeedback: input.corrective_feedback ?? null,
       promptUsed: input.prompt_used ?? null,
     })
     .returning();
@@ -79,10 +75,7 @@ export async function createLeafHistory(
 export async function findLeafHistoryById(
   db: AnyDB,
   id: string
-): Promise<
-  | (LeafHistory & { attempt_number: number; corrective_feedback?: string; prompt_used?: string })
-  | null
-> {
+): Promise<(LeafHistory & { attempt_number: number; prompt_used?: string }) | null> {
   const [row] = await db.select().from(leafHistory).where(eq(leafHistory.id, id)).limit(1);
 
   return row ? rowToLeafHistory(row) : null;
@@ -98,9 +91,7 @@ export async function findHistoryByLeafId(
   db: AnyDB,
   leafId: string,
   options: ListLeafHistoryOptions = {}
-): Promise<
-  (LeafHistory & { attempt_number: number; corrective_feedback?: string; prompt_used?: string })[]
-> {
+): Promise<(LeafHistory & { attempt_number: number; prompt_used?: string })[]> {
   const limit = options.limit ?? 100;
   const offset = options.offset ?? 0;
 
@@ -157,9 +148,7 @@ export async function deleteHistoryByLeafId(db: AnyDB, leafId: string): Promise<
 export async function findHistoryByLeafIdOrderedByAttempt(
   db: AnyDB,
   leafId: string
-): Promise<
-  (LeafHistory & { attempt_number: number; corrective_feedback?: string; prompt_used?: string })[]
-> {
+): Promise<(LeafHistory & { attempt_number: number; prompt_used?: string })[]> {
   const rows = await db
     .select()
     .from(leafHistory)
@@ -178,7 +167,7 @@ export async function findHistoryByLeafIdOrderedByAttempt(
  */
 function rowToLeafHistory(
   row: LeafHistoryRecord
-): LeafHistory & { attempt_number: number; corrective_feedback?: string; prompt_used?: string } {
+): LeafHistory & { attempt_number: number; prompt_used?: string } {
   return {
     id: row.id,
     leaf_id: row.leafId,
@@ -188,7 +177,6 @@ function rowToLeafHistory(
     generated_at: row.generatedAt.toISOString(),
     created_by: row.createdBy ?? undefined,
     attempt_number: row.attemptNumber,
-    corrective_feedback: row.correctiveFeedback ?? undefined,
     prompt_used: row.promptUsed ?? undefined,
   };
 }

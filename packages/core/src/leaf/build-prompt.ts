@@ -189,7 +189,7 @@ export function buildLeafPrompt(options: BuildPromptOptions): BuiltPrompt {
     userPromptParts.push('## Lessons Learned\n');
     userPromptParts.push('From previous generation attempts, keep these lessons in mind:\n');
     for (const lesson of options.lessons) {
-      userPromptParts.push(`- ${lesson}`);
+      userPromptParts.push(`- ${lesson.signal}`);
     }
     userPromptParts.push('');
   }
