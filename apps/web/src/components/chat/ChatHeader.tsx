@@ -30,12 +30,18 @@ export function ChatHeader({
   const { activeProjectId, activeBranch, setActiveBranch } = useChatStore();
   const setCommitBranch = useExtractionPanelStore((s) => s.setCommitBranch);
 
+  const initCommitState = useExtractionPanelStore((s) => s.initCommitState);
+
   const handleBranchChange = useCallback(
     (branch: string) => {
       setActiveBranch(branch);
       setCommitBranch(branch);
+      // Re-initialize commit state (lastCommitHash, parent) for the new branch
+      if (activeProjectId) {
+        initCommitState(activeProjectId);
+      }
     },
-    [setActiveBranch, setCommitBranch]
+    [setActiveBranch, setCommitBranch, initCommitState, activeProjectId]
   );
 
   const handleCanvasClick = () => {
