@@ -19,5 +19,5 @@ export { YOPS_ERRORS, SNAKE_CASE_KEY } from './types';
 export { findNode, getNodeKey, getParentPath } from './helpers';
 
 // ── Replay ──
-export { replayYOps, extractOpsFromEntries } from './replay';
-export type { ReplayInput, ReplayResult } from './replay';
+export { replayYOps, verifyReplay, extractOpsFromEntries } from './replay';
+export type { ReplayInput, ReplayResult, VerifyResult } from './replay';

@@ -4,7 +4,8 @@
  * Pure functions, no DB, no side effects.
  */
 
-import type { SemanticContent } from '../semantic/types';
+import { canonicalize } from 'json-canonicalize';
+import type { SemanticContent, TreeNode } from '../semantic/types';
 import type { YOp, YOpsError } from './types';
 import { applyYOps } from './engine';
 import { YOpSchema } from './schema';
@@ -23,6 +24,19 @@ export interface ReplayResult {
   error?: YOpsError;
 }
 
+export interface VerifyResult {
+  match: boolean;
+  replayedContent: SemanticContent;
+  expectedContent: SemanticContent;
+  opsApplied: number;
+  mismatch?: {
+    replayed_tree_count: number;
+    expected_tree_count: number;
+    replayed_tree_keys: string[];
+    expected_tree_keys: string[];
+  };
+}
+
 // ── replayYOps ──
 
 export function replayYOps(input: ReplayInput): ReplayResult {
@@ -32,6 +46,76 @@ export function replayYOps(input: ReplayInput): ReplayResult {
     content: { trees: result.trees, relations: result.relations },
     opsApplied: result.applied,
     error: result.error,
+  };
+}
+
+// ── stripTree — strips metadata (source, slot_quotes, confidence), keeps key/slots/children ──
+
+function stripTree(
+  node: TreeNode,
+): { key: string; slots: Record<string, unknown>; children: ReturnType<typeof stripTree>[] } {
+  return {
+    key: node.key,
+    slots: node.slots as Record<string, unknown>,
+    children: node.children.map(stripTree),
+  };
+}
+
+function stripContent(content: SemanticContent): unknown {
+  return {
+    trees: content.trees.map(stripTree),
+    relations: content.relations.map((r) => ({
+      from: r.from,
+      to: r.to,
+      type: r.type,
+    })),
+  };
+}
+
+// ── verifyReplay ──
+
+export function verifyReplay(
+  baseContent: SemanticContent,
+  ops: YOp[],
+  expectedContent: SemanticContent,
+): VerifyResult {
+  const replay = replayYOps({ baseContent, ops });
+
+  if (!replay.ok) {
+    return {
+      match: false,
+      replayedContent: replay.content,
+      expectedContent,
+      opsApplied: replay.opsApplied,
+      mismatch: {
+        replayed_tree_count: replay.content.trees.length,
+        expected_tree_count: expectedContent.trees.length,
+        replayed_tree_keys: replay.content.trees.map((t) => t.key),
+        expected_tree_keys: expectedContent.trees.map((t) => t.key),
+      },
+    };
+  }
+
+  const replayedCanonical = canonicalize(stripContent(replay.content));
+  const expectedCanonical = canonicalize(stripContent(expectedContent));
+
+  const match = replayedCanonical === expectedCanonical;
+
+  return {
+    match,
+    replayedContent: replay.content,
+    expectedContent,
+    opsApplied: replay.opsApplied,
+    ...(!match
+      ? {
+          mismatch: {
+            replayed_tree_count: replay.content.trees.length,
+            expected_tree_count: expectedContent.trees.length,
+            replayed_tree_keys: replay.content.trees.map((t) => t.key),
+            expected_tree_keys: expectedContent.trees.map((t) => t.key),
+          },
+        }
+      : {}),
   };
 }
 

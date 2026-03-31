@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { SemanticContent } from '../../semantic/types';
 import type { YOp } from '../types';
-import { extractOpsFromEntries, replayYOps } from '../replay';
+import { extractOpsFromEntries, replayYOps, verifyReplay } from '../replay';
 
 const emptyContent: SemanticContent = { trees: [], relations: [] };
 
@@ -93,5 +93,90 @@ describe('extractOpsFromEntries', () => {
   it('throws on non-array yops field', () => {
     const entries = [{ id: 'yl_bad', yops: 'not an array' }];
     expect(() => extractOpsFromEntries(entries)).toThrow('yl_bad');
+  });
+});
+
+describe('verifyReplay', () => {
+  it('returns match:true when replay produces expected content', () => {
+    const base: SemanticContent = {
+      trees: [{ key: 'trip', slots: {}, children: [] }],
+      relations: [],
+    };
+    const ops: YOp[] = [
+      { set: { path: 'trip/budget', value: 5000, source: 'about 5k', from: 'T1' } },
+    ];
+    const expected: SemanticContent = {
+      trees: [{ key: 'trip', slots: { budget: 5000 }, children: [] }],
+      relations: [],
+    };
+    const result = verifyReplay(base, ops, expected);
+    expect(result.match).toBe(true);
+    expect(result.opsApplied).toBe(1);
+  });
+
+  it('ignores metadata fields (source, slot_quotes, confidence) in comparison', () => {
+    const base: SemanticContent = {
+      trees: [{ key: 'trip', slots: {}, children: [] }],
+      relations: [],
+    };
+    const ops: YOp[] = [
+      { set: { path: 'trip/budget', value: 5000, source: 'about 5k', from: 'T1', confidence: 0.9 } },
+    ];
+    const expected: SemanticContent = {
+      trees: [
+        {
+          key: 'trip',
+          slots: { budget: 5000 },
+          children: [],
+          source: 'different_source',
+          confidence: 0.5,
+          slot_quotes: { budget: 'something else' },
+        },
+      ],
+      relations: [],
+    };
+    const result = verifyReplay(base, ops, expected);
+    expect(result.match).toBe(true);
+  });
+
+  it('returns match:false with diagnostics when content differs', () => {
+    const base: SemanticContent = {
+      trees: [{ key: 'trip', slots: {}, children: [] }],
+      relations: [],
+    };
+    const ops: YOp[] = [
+      { set: { path: 'trip/budget', value: 5000, source: 'src', from: 'T1' } },
+    ];
+    const expected: SemanticContent = {
+      trees: [{ key: 'trip', slots: { budget: 9999 }, children: [] }],
+      relations: [],
+    };
+    const result = verifyReplay(base, ops, expected);
+    expect(result.match).toBe(false);
+    expect(result.mismatch).toBeDefined();
+    expect(result.mismatch!.replayed_tree_keys).toEqual(['trip']);
+    expect(result.mismatch!.expected_tree_keys).toEqual(['trip']);
+  });
+
+  it('detects tree count mismatch', () => {
+    const base: SemanticContent = { trees: [], relations: [] };
+    const ops: YOp[] = [
+      { add: { parent: '', node: { hotel: { name: 'H' } }, source: { name: 'H' }, from: 'T1' } },
+    ];
+    const expected: SemanticContent = { trees: [], relations: [] };
+    const result = verifyReplay(base, ops, expected);
+    expect(result.match).toBe(false);
+    expect(result.mismatch!.replayed_tree_count).toBe(1);
+    expect(result.mismatch!.expected_tree_count).toBe(0);
+  });
+
+  it('returns match:false when replay itself fails', () => {
+    const base: SemanticContent = { trees: [], relations: [] };
+    const ops: YOp[] = [
+      { set: { path: 'nonexistent/field', value: 1, source: 'src', from: 'T1' } },
+    ];
+    const expected: SemanticContent = { trees: [], relations: [] };
+    const result = verifyReplay(base, ops, expected);
+    expect(result.match).toBe(false);
   });
 });
