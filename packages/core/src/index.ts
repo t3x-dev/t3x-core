@@ -490,13 +490,17 @@ export type {
 // ═══════════════════════════════════════════════════════════════════════════
 export {
   applyYOps,
+  extractOpsFromEntries,
   findNode,
   formatYOpsLog,
   getNodeKey,
   getParentPath,
   parseYOpsYaml,
+  replayYOps,
   SNAKE_CASE_KEY,
+  verifyReplay,
   YOPS_ERRORS,
   YOpSchema,
   YOpsDocumentSchema,
 } from './yops';
+export type { ReplayInput, ReplayResult, VerifyResult } from './yops';
