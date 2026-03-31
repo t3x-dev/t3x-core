@@ -6,12 +6,10 @@ import { createClient } from '@t3x-dev/api-client';
 import type { Command } from 'commander';
 import { createSpinner, error, formatDate, getApiUrl, printTable, success } from '../utils.js';
 
-export function registerProjectCommands(program: Command): void {
-  const projects = program.command('projects').alias('p').description('Manage projects');
-
-  // List projects
-  projects
-    .command('list')
+/** Register: t3x list projects */
+export function registerListProjects(parent: Command): void {
+  parent
+    .command('projects')
     .alias('ls')
     .description('List all projects')
     .option('-l, --limit <number>', 'Maximum number of projects', '100')
@@ -44,10 +42,12 @@ export function registerProjectCommands(program: Command): void {
         process.exit(1);
       }
     });
+}
 
-  // Get project
-  projects
-    .command('get <id>')
+/** Register: t3x show project <id> */
+export function registerShowProject(parent: Command): void {
+  parent
+    .command('project <id>')
     .description('Get project details')
     .action(async (id: string) => {
       const spinner = createSpinner('Fetching project...');
@@ -76,10 +76,12 @@ export function registerProjectCommands(program: Command): void {
         process.exit(1);
       }
     });
+}
 
-  // Create project
-  projects
-    .command('create <name>')
+/** Register: t3x create project <name> */
+export function registerCreateProject(parent: Command): void {
+  parent
+    .command('project <name>')
     .description('Create a new project')
     .action(async (name: string) => {
       const spinner = createSpinner('Creating project...');
@@ -97,10 +99,12 @@ export function registerProjectCommands(program: Command): void {
         process.exit(1);
       }
     });
+}
 
-  // Delete project
-  projects
-    .command('delete <id>')
+/** Register: t3x delete project <id> */
+export function registerDeleteProject(parent: Command): void {
+  parent
+    .command('project <id>')
     .description('Delete a project')
     .option('-f, --force', 'Force deletion without confirmation')
     .action(async (id: string, options) => {
