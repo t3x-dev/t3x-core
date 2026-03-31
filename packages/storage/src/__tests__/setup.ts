@@ -179,7 +179,6 @@ CREATE TABLE IF NOT EXISTS leaf_history (
   generated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   created_by TEXT,
   attempt_number INTEGER NOT NULL DEFAULT 1,
-  corrective_feedback TEXT,
   prompt_used TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_leaf_history_leaf ON leaf_history(leaf_id);
