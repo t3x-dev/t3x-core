@@ -28,6 +28,7 @@ export interface CreateCommitInput {
   message?: string;
   branch?: string;
   provenance?: Provenance;
+  yops_log_ids?: string[];
 }
 
 export interface ListCommitsOptions {
@@ -74,6 +75,7 @@ export async function createCommit(db: AnyDB, input: CreateCommitInput): Promise
       message: input.message ?? null,
       branch,
       provenance: input.provenance ?? null,
+      yopsLogIds: input.yops_log_ids ?? [],
     })
     .returning();
 
@@ -229,5 +231,6 @@ function rowToCommit(row: CommitRecord): Commit {
     message: row.message ?? null,
     branch: row.branch ?? 'main',
     provenance: (row.provenance as Provenance | null) ?? null,
+    yops_log_ids: (row.yopsLogIds as string[]) ?? [],
   };
 }

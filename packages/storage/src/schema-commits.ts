@@ -92,6 +92,9 @@ export const commits = pgTable(
       extracted_at?: string;
     }>(),
 
+    /** YOps log entry IDs that contributed to this commit (second-class, not in hash) */
+    yopsLogIds: jsonb('yops_log_ids').$type<string[]>().default([]),
+
     /** Canvas position */
     positionX: real('position_x'),
     positionY: real('position_y'),

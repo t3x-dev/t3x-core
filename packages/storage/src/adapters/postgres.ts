@@ -67,7 +67,7 @@ export async function closePostgresStorage(): Promise<void> {
 /**
  * Schema version — bump this number whenever you add migrations below.
  */
-const SCHEMA_VERSION = 32;
+const SCHEMA_VERSION = 33;
 
 /**
  * Initialize database schema (skips if already at current version)
@@ -836,6 +836,7 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
       branch TEXT DEFAULT 'main',
       sources JSONB,
       provenance JSONB,
+      yops_log_ids JSONB DEFAULT '[]',
       position_x REAL,
       position_y REAL,
 
@@ -845,6 +846,9 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_commits_project ON commits(project_id);
     CREATE INDEX IF NOT EXISTS idx_commits_branch ON commits(branch);
     CREATE INDEX IF NOT EXISTS idx_commits_committed_at ON commits(committed_at);
+
+    -- Migration: add yops_log_ids to existing commits table
+    ALTER TABLE commits ADD COLUMN IF NOT EXISTS yops_log_ids JSONB DEFAULT '[]';
 
     CREATE TABLE IF NOT EXISTS frame_lineage (
       id TEXT PRIMARY KEY,
