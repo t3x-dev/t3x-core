@@ -497,8 +497,11 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
 
   initCommitState: async (projectId) => {
     try {
-      // Try to load the latest commit
-      const recentCommits = await listCommits(projectId, 'main', 1).catch(() => []);
+      // Load the latest commit on the active branch.
+      // commitBranch defaults to 'main' in store state; ChatHeader.BranchSwitcher
+      // updates it when the user switches. On fresh page load it will be 'main'.
+      const branch = get().commitBranch || 'main';
+      const recentCommits = await listCommits(projectId, branch, 1).catch(() => []);
       if (recentCommits.length > 0) {
         const head = recentCommits[0];
         set({ lastCommitHash: head.hash });

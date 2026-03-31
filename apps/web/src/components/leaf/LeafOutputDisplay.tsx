@@ -49,25 +49,104 @@ function buildConstraintMarkers(
 interface OutputSegment {
   text: string;
   nodeId?: string;
+  /** Constraint highlight: 'require' (green) or 'exclude' (red) */
+  constraintType?: 'require' | 'exclude';
+}
+
+/**
+ * Find all occurrences of constraint values in output text (case-insensitive).
+ * Returns non-overlapping ranges sorted by position.
+ */
+function buildConstraintRanges(
+  output: string,
+  markers: Array<{ constraint: Constraint; passed: boolean }>
+): Array<{ start: number; end: number; type: 'require' | 'exclude' }> {
+  const ranges: Array<{ start: number; end: number; type: 'require' | 'exclude' }> = [];
+  const lowerOutput = output.toLowerCase();
+
+  for (const { constraint, passed } of markers) {
+    // For REQUIRE: highlight when found (passed)
+    // For EXCLUDE: highlight when found (failed — it shouldn't be there)
+    const shouldHighlight =
+      (constraint.type === 'require' && passed) ||
+      (constraint.type === 'exclude' && !passed);
+    if (!shouldHighlight) continue;
+
+    const needle = constraint.value.toLowerCase();
+    if (needle.length < 2) continue;
+
+    let pos = 0;
+    while (pos < lowerOutput.length) {
+      const idx = lowerOutput.indexOf(needle, pos);
+      if (idx === -1) break;
+      ranges.push({
+        start: idx,
+        end: idx + needle.length,
+        type: constraint.type as 'require' | 'exclude',
+      });
+      pos = idx + needle.length;
+    }
+  }
+
+  // Sort by position, remove overlaps (keep first)
+  ranges.sort((a, b) => a.start - b.start);
+  const cleaned: typeof ranges = [];
+  let lastEnd = 0;
+  for (const r of ranges) {
+    if (r.start >= lastEnd) {
+      cleaned.push(r);
+      lastEnd = r.end;
+    }
+  }
+  return cleaned;
 }
 
 function buildHighlightedSegments(
   output: string,
-  coverage: Map<string, NodeCoverageEntry>
+  coverage: Map<string, NodeCoverageEntry> | null,
+  markers: Array<{ constraint: Constraint; passed: boolean }>
 ): OutputSegment[] {
-  // Collect all match ranges sorted by position
-  const ranges: Array<{ start: number; end: number; nodeId: string }> = [];
-  for (const [id, entry] of coverage.entries()) {
-    if (entry.reflected && entry.matchStart !== undefined && entry.matchEnd !== undefined) {
-      ranges.push({ start: entry.matchStart, end: entry.matchEnd, nodeId: id });
+  // Collect node coverage ranges
+  const nodeRanges: Array<{ start: number; end: number; nodeId: string }> = [];
+  if (coverage) {
+    for (const [id, entry] of coverage.entries()) {
+      if (entry.reflected && entry.matchStart !== undefined && entry.matchEnd !== undefined) {
+        nodeRanges.push({ start: entry.matchStart, end: entry.matchEnd, nodeId: id });
+      }
     }
   }
-  ranges.sort((a, b) => a.start - b.start);
 
-  // Remove overlaps (keep first match)
-  const cleaned: typeof ranges = [];
+  // Collect constraint ranges
+  const constraintRanges = buildConstraintRanges(output, markers);
+
+  // Merge all ranges into a unified structure, constraint ranges take priority
+  const allRanges: Array<{
+    start: number;
+    end: number;
+    nodeId?: string;
+    constraintType?: 'require' | 'exclude';
+  }> = [];
+
+  // Add constraint ranges first (higher priority)
+  for (const r of constraintRanges) {
+    allRanges.push({ start: r.start, end: r.end, constraintType: r.type });
+  }
+  // Add node ranges that don't overlap with constraint ranges
+  for (const r of nodeRanges) {
+    const overlaps = constraintRanges.some(
+      (cr) => r.start < cr.end && r.end > cr.start
+    );
+    if (!overlaps) {
+      allRanges.push({ start: r.start, end: r.end, nodeId: r.nodeId });
+    }
+  }
+
+  allRanges.sort((a, b) => a.start - b.start);
+
+  // Remove overlaps (keep first)
+  const cleaned: typeof allRanges = [];
   let lastEnd = 0;
-  for (const r of ranges) {
+  for (const r of allRanges) {
     if (r.start >= lastEnd) {
       cleaned.push(r);
       lastEnd = r.end;
@@ -81,7 +160,11 @@ function buildHighlightedSegments(
     if (r.start > cursor) {
       segments.push({ text: output.slice(cursor, r.start) });
     }
-    segments.push({ text: output.slice(r.start, r.end), nodeId: r.nodeId });
+    segments.push({
+      text: output.slice(r.start, r.end),
+      nodeId: r.nodeId,
+      constraintType: r.constraintType,
+    });
     cursor = r.end;
   }
   if (cursor < output.length) {
@@ -117,9 +200,14 @@ export function LeafOutputDisplay({
   );
 
   const highlightedSegments = useMemo(() => {
-    if (mode !== 'display' || !output || !nodeCoverage) return null;
-    return buildHighlightedSegments(output, nodeCoverage);
-  }, [mode, output, nodeCoverage]);
+    if (!output) return null;
+    // In display mode: node coverage + constraint highlights
+    // In generate mode: constraint highlights only (when assertions exist)
+    const hasConstraintHighlights = markers.length > 0;
+    const hasNodeCoverage = mode === 'display' && nodeCoverage;
+    if (!hasConstraintHighlights && !hasNodeCoverage) return null;
+    return buildHighlightedSegments(output, hasNodeCoverage ? nodeCoverage! : null, markers);
+  }, [mode, output, nodeCoverage, markers]);
 
   const handleSegmentHover = useCallback(
     (nodeId: string | null) => {
@@ -232,10 +320,21 @@ export function LeafOutputDisplay({
           allPassed && 'ring-2 ring-[var(--status-success)]/30'
         )}
       >
-        {mode === 'display' && highlightedSegments
-          ? // Display Mode: output with inline highlights
-            highlightedSegments.map((seg, i) =>
-              seg.nodeId ? (
+        {highlightedSegments
+          ? highlightedSegments.map((seg, i) =>
+              seg.constraintType ? (
+                <span
+                  key={`seg-${i}`}
+                  className={cn(
+                    'rounded px-0.5 -mx-0.5 transition-colors border-b',
+                    seg.constraintType === 'require'
+                      ? 'bg-[var(--status-success-muted)] border-[var(--status-success)]/40 text-[var(--text-primary)]'
+                      : 'bg-[var(--status-error-muted)] border-[var(--status-error)]/40 text-[var(--text-primary)]'
+                  )}
+                >
+                  {seg.text}
+                </span>
+              ) : seg.nodeId ? (
                 <span
                   key={`seg-${i}`}
                   className={cn(
@@ -252,8 +351,7 @@ export function LeafOutputDisplay({
                 <span key={`seg-${i}`}>{seg.text}</span>
               )
             )
-          : // Generate Mode: plain text
-            output}
+          : output}
       </div>
     </div>
   );

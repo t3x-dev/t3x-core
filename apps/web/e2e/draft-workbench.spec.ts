@@ -31,18 +31,20 @@ test.describe('Draft Workbench', () => {
       data: {
         project_id: projectId,
         content: {
-          frames: [
+          trees: [
             {
-              id: 'f_001',
+              key: 't_001',
               type: 'legacy_sentence',
               slots: { text: 'Product pricing starts at $29 per month' },
+              children: [],
             },
             {
-              id: 'f_002',
+              key: 't_002',
               type: 'legacy_sentence',
               slots: { text: 'Enterprise tier includes 99.9% SLA' },
+              children: [],
             },
-            { id: 'f_003', type: 'legacy_sentence', slots: { text: 'Free trial lasts 14 days' } },
+            { key: 't_003', type: 'legacy_sentence', slots: { text: 'Free trial lasts 14 days' }, children: [] },
           ],
           relations: [],
         },
@@ -245,7 +247,7 @@ test.describe('Draft Workbench', () => {
     await expect(page.locator('text=E2E Draft No Goal').first()).toBeVisible({ timeout: 15000 });
 
     // Without a goal, AutoSuggestPanel should show the dashed-border hint
-    await expect(page.locator('text=Set a goal to get sentence suggestions').first()).toBeVisible({
+    await expect(page.locator('text=Set a goal to get node suggestions from your knowledge base.').first()).toBeVisible({
       timeout: 10000,
     });
   });

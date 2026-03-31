@@ -35,21 +35,24 @@ test.describe('DiffDisplayView Integration', () => {
         message: 'Base commit',
         parents: [],
         content: {
-          frames: [
+          trees: [
             {
-              id: 'f_001',
+              key: 't_001',
               type: 'legacy_sentence',
               slots: { text: 'User prefers dark mode' },
+              children: [],
             },
             {
-              id: 'f_002',
+              key: 't_002',
               type: 'legacy_sentence',
               slots: { text: 'Budget is $3000' },
+              children: [],
             },
             {
-              id: 'f_003',
+              key: 't_003',
               type: 'legacy_sentence',
               slots: { text: 'Deadline is Friday' },
+              children: [],
             },
           ],
           relations: [],
@@ -69,23 +72,26 @@ test.describe('DiffDisplayView Integration', () => {
         message: 'Updated commit',
         parents: [commitHash1],
         content: {
-          frames: [
+          trees: [
             {
-              id: 'f_001',
+              key: 't_001',
               type: 'legacy_sentence',
               slots: { text: 'User prefers dark mode' },
+              children: [],
             },
             {
-              id: 'f_002',
+              key: 't_002',
               type: 'legacy_sentence',
               slots: { text: 'Budget is $5000' },
+              children: [],
             }, // Modified
             {
-              id: 'f_004',
+              key: 't_004',
               type: 'legacy_sentence',
               slots: { text: 'Meeting scheduled for Monday' },
+              children: [],
             }, // Added
-            // f_003 removed
+            // t_003 removed
           ],
           relations: [],
         },
@@ -105,19 +111,19 @@ test.describe('DiffDisplayView Integration', () => {
     const commit1Res = await request.get(`http://localhost:8000/api/v1/commits/${commitHash1}`);
     const commit1Data = await commit1Res.json();
     expect(commit1Data.success).toBe(true);
-    expect(commit1Data.data.commit.content.frames).toHaveLength(3);
+    expect(commit1Data.data.commit.content.trees).toHaveLength(3);
 
     // Fetch commit 2
     const commit2Res = await request.get(`http://localhost:8000/api/v1/commits/${commitHash2}`);
     const commit2Data = await commit2Res.json();
     expect(commit2Data.success).toBe(true);
-    expect(commit2Data.data.commit.content.frames).toHaveLength(3);
+    expect(commit2Data.data.commit.content.trees).toHaveLength(3);
 
     // Verify expected diff data:
-    const commit1Texts = commit1Data.data.commit.content.frames.map(
+    const commit1Texts = commit1Data.data.commit.content.trees.map(
       (f: { slots: { text: string } }) => f.slots.text
     );
-    const commit2Texts = commit2Data.data.commit.content.frames.map(
+    const commit2Texts = commit2Data.data.commit.content.trees.map(
       (f: { slots: { text: string } }) => f.slots.text
     );
 
@@ -150,7 +156,7 @@ test.describe('DiffDisplayView Integration', () => {
         message: 'Empty commit',
         parents: [],
         content: {
-          frames: [],
+          trees: [],
           relations: [],
         },
         author: { type: 'human', name: 'E2E Tester' },
@@ -163,7 +169,7 @@ test.describe('DiffDisplayView Integration', () => {
     // Verify empty commit has 0 frames
     const verifyRes = await request.get(`http://localhost:8000/api/v1/commits/${emptyCommitHash}`);
     const verifyData = await verifyRes.json();
-    expect(verifyData.data.commit.content.frames).toHaveLength(0);
+    expect(verifyData.data.commit.content.trees).toHaveLength(0);
   });
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -179,8 +185,8 @@ test.describe('DiffDisplayView Integration', () => {
     const data1 = await res1.json();
     const data2 = await res2.json();
 
-    const frames1 = data1.data.commit.content.frames;
-    const frames2 = data2.data.commit.content.frames;
+    const frames1 = data1.data.commit.content.trees;
+    const frames2 = data2.data.commit.content.trees;
 
     // Simulate the diff algorithm logic (same as DiffDisplayView uses)
     const texts1 = new Set(frames1.map((f: { slots: { text: string } }) => f.slots.text));
