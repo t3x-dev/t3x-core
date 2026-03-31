@@ -197,6 +197,9 @@ importers:
       '@t3x-dev/api-client':
         specifier: workspace:*
         version: link:../../packages/api-client
+      '@t3x-dev/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       open:
         specifier: ^11.0.0
         version: 11.0.0

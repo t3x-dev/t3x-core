@@ -346,6 +346,13 @@ export type {
   YOpsLogEntry,
   YOpsSource,
 } from './semantic';
+
+// JSON Schema export (Zod v4 native)
+export {
+  getSemanticContentJsonSchema,
+  getTreeNodeJsonSchema,
+} from './semantic/jsonSchema';
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Semantic Module (Tree-Primary: TreeNode + Relation + Diff + Merge)
 // ═══════════════════════════════════════════════════════════════════════════
