@@ -14,13 +14,10 @@ import {
   truncate,
 } from '../utils.js';
 
-export function registerLeafCommands(program: Command): void {
-  const leaves = program.command('leaves').alias('l').description('Manage leaves');
-
-  // List leaves
-  leaves
-    .command('list')
-    .alias('ls')
+/** Register: t3x list leaves */
+export function registerListLeaves(parent: Command): void {
+  parent
+    .command('leaves')
     .description('List leaves in a project')
     .requiredOption('-p, --project <id>', 'Project ID')
     .option('--json', 'Output as JSON')
@@ -60,10 +57,12 @@ export function registerLeafCommands(program: Command): void {
         process.exit(1);
       }
     });
+}
 
-  // Show leaf
-  leaves
-    .command('show <id>')
+/** Register: t3x show leaf <id> */
+export function registerShowLeaf(parent: Command): void {
+  parent
+    .command('leaf <id>')
     .description('Show leaf details')
     .option('--json', 'Output as JSON')
     .action(async (id: string, options) => {
@@ -100,10 +99,12 @@ export function registerLeafCommands(program: Command): void {
         process.exit(1);
       }
     });
+}
 
-  // Create leaf
-  leaves
-    .command('create')
+/** Register: t3x create leaf */
+export function registerCreateLeaf(parent: Command): void {
+  parent
+    .command('leaf')
     .description('Create a new leaf')
     .requiredOption('-p, --project <id>', 'Project ID')
     .requiredOption('-c, --commit <hash>', 'Commit hash')
@@ -137,10 +138,12 @@ export function registerLeafCommands(program: Command): void {
         process.exit(1);
       }
     });
+}
 
-  // Generate leaf output
-  leaves
-    .command('generate <id>')
+/** Register: t3x generate leaf <id> */
+export function registerGenerateLeaf(parent: Command): void {
+  parent
+    .command('leaf <id>')
     .description('Generate output for a leaf')
     .option('--model <model>', 'Model to use')
     .option('--provider <provider>', 'Provider to use')
@@ -174,10 +177,12 @@ export function registerLeafCommands(program: Command): void {
         process.exit(1);
       }
     });
+}
 
-  // Delete leaf
-  leaves
-    .command('delete <id>')
+/** Register: t3x delete leaf <id> */
+export function registerDeleteLeaf(parent: Command): void {
+  parent
+    .command('leaf <id>')
     .description('Delete a leaf')
     .option('--confirm', 'Confirm deletion')
     .action(async (id: string, options) => {
