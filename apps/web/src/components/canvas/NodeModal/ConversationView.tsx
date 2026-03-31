@@ -219,34 +219,49 @@ export function ConversationView({
           )}
 
           {/* ChatWorkspace replaces ConversationWorkspace */}
-          {data?.conversationId?.startsWith('orphan-') ? (
-            <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
-              <GitCommit className="h-10 w-10 text-[var(--text-tertiary)] mb-3" />
-              <p className="text-sm font-medium text-[var(--text-secondary)] mb-1">
-                No linked conversation
-              </p>
-              <p className="text-xs text-[var(--text-tertiary)] max-w-[320px] leading-relaxed">
-                This commit was created without a conversation source. Click <strong>Details</strong> on the commit card to view its content.
-              </p>
-            </div>
-          ) : (
-          <ChatWorkspace
-            conversationId={data?.conversationId || 'new'}
-            projectId={projectId}
-            className="flex-1"
-            inheritFromCommitHash={data?.inheritFromCommitHash}
-            onInheritComplete={() => {
-              // Clear the flag on the node to prevent re-hydration
-              onUpdate({ inheritFromCommitHash: undefined });
-            }}
-            onConversationCreated={(convId) => {
-              onUpdate({ conversationId: convId, sourceConversationId: convId });
-              if (node?.id && node.id !== convId) {
-                useCanvasStore.getState().updateNodeId(node.id, convId);
+          {(() => {
+            // Resolve conversation ID: use real source if conversationId is orphan
+            let resolvedConvId = data?.conversationId || 'new';
+            if (resolvedConvId.startsWith('orphan-') && data?.sources?.length) {
+              const convSource = data.sources.find((s) => s.type === 'conversation');
+              if (convSource?.id && !convSource.id.startsWith('orphan-')) {
+                resolvedConvId = convSource.id;
               }
-            }}
-          />
-          )}
+            }
+
+            // Only show fallback if truly no conversation available
+            if (resolvedConvId.startsWith('orphan-')) {
+              return (
+                <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
+                  <GitCommit className="h-10 w-10 text-[var(--text-tertiary)] mb-3" />
+                  <p className="text-sm font-medium text-[var(--text-secondary)] mb-1">
+                    No linked conversation
+                  </p>
+                  <p className="text-xs text-[var(--text-tertiary)] max-w-[320px] leading-relaxed">
+                    This commit was created without a conversation source. Click <strong>Details</strong> on the commit card to view its content.
+                  </p>
+                </div>
+              );
+            }
+
+            return (
+              <ChatWorkspace
+                conversationId={resolvedConvId}
+                projectId={projectId}
+                className="flex-1"
+                inheritFromCommitHash={data?.inheritFromCommitHash}
+                onInheritComplete={() => {
+                  onUpdate({ inheritFromCommitHash: undefined });
+                }}
+                onConversationCreated={(convId) => {
+                  onUpdate({ conversationId: convId, sourceConversationId: convId });
+                  if (node?.id && node.id !== convId) {
+                    useCanvasStore.getState().updateNodeId(node.id, convId);
+                  }
+                }}
+              />
+            );
+          })()}
         </div>
       </div>
     </div>
