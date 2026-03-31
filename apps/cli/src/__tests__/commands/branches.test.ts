@@ -25,21 +25,36 @@ vi.spyOn(console, 'error').mockImplementation(() => {});
 const mockExit = vi.spyOn(process, 'exit').mockImplementation((() => {}) as never);
 
 import { Command } from 'commander';
-import { registerBranchCommands } from '../../commands/branches.js';
+import {
+  registerListBranches,
+  registerCreateBranch,
+  registerSwitchBranch,
+  registerCurrentBranch,
+} from '../../commands/branches.js';
 
 function createProgram() {
   const program = new Command();
   program.exitOverride();
-  registerBranchCommands(program);
+
+  const listCmd = program.command('list');
+  registerListBranches(listCmd);
+
+  const createCmd = program.command('create');
+  registerCreateBranch(createCmd);
+
+  // switch-branch and current-branch are top-level
+  registerSwitchBranch(program);
+  registerCurrentBranch(program);
+
   return program;
 }
 
-describe('registerBranchCommands', () => {
+describe('Branch commands (kubectl-style)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  describe('branches list', () => {
+  describe('list branches', () => {
     it('prints table when branches exist', async () => {
       mockClient.listBranches.mockResolvedValue({
         branches: [
@@ -53,7 +68,7 @@ describe('registerBranchCommands', () => {
       });
 
       const program = createProgram();
-      await program.parseAsync(['node', 'test', 'branches', 'list', '-p', 'proj_1']);
+      await program.parseAsync(['node', 'test', 'list', 'branches', '-p', 'proj_1']);
 
       expect(mockClient.listBranches).toHaveBeenCalledWith('proj_1');
       expect(mockSpinner.stop).toHaveBeenCalled();
@@ -63,7 +78,7 @@ describe('registerBranchCommands', () => {
       mockClient.listBranches.mockResolvedValue({ branches: [] });
 
       const program = createProgram();
-      await program.parseAsync(['node', 'test', 'branches', 'list', '-p', 'proj_1']);
+      await program.parseAsync(['node', 'test', 'list', 'branches', '-p', 'proj_1']);
 
       expect(console.log).toHaveBeenCalledWith('No branches found.');
     });
@@ -72,7 +87,7 @@ describe('registerBranchCommands', () => {
       mockClient.listBranches.mockRejectedValue(new Error('Network error'));
 
       const program = createProgram();
-      await program.parseAsync(['node', 'test', 'branches', 'list', '-p', 'proj_1']);
+      await program.parseAsync(['node', 'test', 'list', 'branches', '-p', 'proj_1']);
 
       expect(mockExit).toHaveBeenCalledWith(1);
     });
@@ -90,18 +105,18 @@ describe('registerBranchCommands', () => {
       });
 
       const program = createProgram();
-      await program.parseAsync(['node', 'test', 'branches', 'list', '-p', 'proj_1']);
+      await program.parseAsync(['node', 'test', 'list', 'branches', '-p', 'proj_1']);
 
       expect(mockSpinner.stop).toHaveBeenCalled();
     });
   });
 
-  describe('branches create', () => {
+  describe('create branch', () => {
     it('creates branch', async () => {
       mockClient.createBranch.mockResolvedValue({ branch_id: 'br_2', name: 'feature' });
 
       const program = createProgram();
-      await program.parseAsync(['node', 'test', 'branches', 'create', 'feature', '-p', 'proj_1']);
+      await program.parseAsync(['node', 'test', 'create', 'branch', 'feature', '-p', 'proj_1']);
 
       expect(mockClient.createBranch).toHaveBeenCalledWith({
         project_id: 'proj_1',
@@ -117,8 +132,8 @@ describe('registerBranchCommands', () => {
       await program.parseAsync([
         'node',
         'test',
-        'branches',
         'create',
+        'branch',
         'fix',
         '-p',
         'proj_1',
@@ -137,18 +152,18 @@ describe('registerBranchCommands', () => {
       mockClient.createBranch.mockRejectedValue(new Error('Already exists'));
 
       const program = createProgram();
-      await program.parseAsync(['node', 'test', 'branches', 'create', 'dup', '-p', 'proj_1']);
+      await program.parseAsync(['node', 'test', 'create', 'branch', 'dup', '-p', 'proj_1']);
 
       expect(mockExit).toHaveBeenCalledWith(1);
     });
   });
 
-  describe('branches switch', () => {
+  describe('switch-branch', () => {
     it('switches branch', async () => {
       mockClient.switchBranch.mockResolvedValue({ name: 'dev' });
 
       const program = createProgram();
-      await program.parseAsync(['node', 'test', 'branches', 'switch', 'dev', '-p', 'proj_1']);
+      await program.parseAsync(['node', 'test', 'switch-branch', 'dev', '-p', 'proj_1']);
 
       expect(mockClient.switchBranch).toHaveBeenCalledWith('proj_1', 'dev');
     });
@@ -157,13 +172,13 @@ describe('registerBranchCommands', () => {
       mockClient.switchBranch.mockRejectedValue(new Error('Not found'));
 
       const program = createProgram();
-      await program.parseAsync(['node', 'test', 'branches', 'switch', 'missing', '-p', 'proj_1']);
+      await program.parseAsync(['node', 'test', 'switch-branch', 'missing', '-p', 'proj_1']);
 
       expect(mockExit).toHaveBeenCalledWith(1);
     });
   });
 
-  describe('branches current', () => {
+  describe('current-branch', () => {
     it('shows current branch', async () => {
       mockClient.getCurrentBranch.mockResolvedValue({
         branch_id: 'br_1',
@@ -172,7 +187,7 @@ describe('registerBranchCommands', () => {
       });
 
       const program = createProgram();
-      await program.parseAsync(['node', 'test', 'branches', 'current', '-p', 'proj_1']);
+      await program.parseAsync(['node', 'test', 'current-branch', '-p', 'proj_1']);
 
       expect(mockClient.getCurrentBranch).toHaveBeenCalledWith('proj_1');
       expect(mockSpinner.stop).toHaveBeenCalled();
@@ -186,7 +201,7 @@ describe('registerBranchCommands', () => {
       });
 
       const program = createProgram();
-      await program.parseAsync(['node', 'test', 'branches', 'current', '-p', 'proj_1']);
+      await program.parseAsync(['node', 'test', 'current-branch', '-p', 'proj_1']);
 
       expect(mockSpinner.stop).toHaveBeenCalled();
     });
@@ -195,7 +210,7 @@ describe('registerBranchCommands', () => {
       mockClient.getCurrentBranch.mockRejectedValue(new Error('Failed'));
 
       const program = createProgram();
-      await program.parseAsync(['node', 'test', 'branches', 'current', '-p', 'proj_1']);
+      await program.parseAsync(['node', 'test', 'current-branch', '-p', 'proj_1']);
 
       expect(mockExit).toHaveBeenCalledWith(1);
     });

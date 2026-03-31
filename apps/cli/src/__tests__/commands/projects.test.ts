@@ -30,28 +30,45 @@ vi.spyOn(console, 'error').mockImplementation(() => {});
 const mockExit = vi.spyOn(process, 'exit').mockImplementation((() => {}) as never);
 
 import { Command } from 'commander';
-import { registerProjectCommands } from '../../commands/projects.js';
+import {
+  registerListProjects,
+  registerShowProject,
+  registerCreateProject,
+  registerDeleteProject,
+} from '../../commands/projects.js';
 
 function createProgram() {
   const program = new Command();
-  program.exitOverride(); // Prevent actual exit
-  registerProjectCommands(program);
+  program.exitOverride();
+
+  const listCmd = program.command('list');
+  registerListProjects(listCmd);
+
+  const showCmd = program.command('show');
+  registerShowProject(showCmd);
+
+  const createCmd = program.command('create');
+  registerCreateProject(createCmd);
+
+  const deleteCmd = program.command('delete');
+  registerDeleteProject(deleteCmd);
+
   return program;
 }
 
-describe('registerProjectCommands', () => {
+describe('Project commands (kubectl-style)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  describe('projects list', () => {
+  describe('list projects', () => {
     it('prints table when projects exist', async () => {
       mockClient.listProjects.mockResolvedValue({
         projects: [{ project_id: 'proj_1', name: 'Test', created_at: '2024-01-01T00:00:00Z' }],
       });
 
       const program = createProgram();
-      await program.parseAsync(['node', 'test', 'projects', 'list']);
+      await program.parseAsync(['node', 'test', 'list', 'projects']);
 
       expect(mockClient.listProjects).toHaveBeenCalledWith({ limit: 100, offset: 0 });
       expect(mockSpinner.stop).toHaveBeenCalled();
@@ -61,7 +78,7 @@ describe('registerProjectCommands', () => {
       mockClient.listProjects.mockResolvedValue({ projects: [] });
 
       const program = createProgram();
-      await program.parseAsync(['node', 'test', 'projects', 'list']);
+      await program.parseAsync(['node', 'test', 'list', 'projects']);
 
       expect(console.log).toHaveBeenCalledWith('No projects found.');
     });
@@ -70,7 +87,7 @@ describe('registerProjectCommands', () => {
       mockClient.listProjects.mockRejectedValue(new Error('Connection refused'));
 
       const program = createProgram();
-      await program.parseAsync(['node', 'test', 'projects', 'list']);
+      await program.parseAsync(['node', 'test', 'list', 'projects']);
 
       expect(mockSpinner.stop).toHaveBeenCalled();
       expect(mockExit).toHaveBeenCalledWith(1);
@@ -80,13 +97,13 @@ describe('registerProjectCommands', () => {
       mockClient.listProjects.mockResolvedValue({ projects: [] });
 
       const program = createProgram();
-      await program.parseAsync(['node', 'test', 'projects', 'list', '-l', '10', '-o', '5']);
+      await program.parseAsync(['node', 'test', 'list', 'projects', '-l', '10', '-o', '5']);
 
       expect(mockClient.listProjects).toHaveBeenCalledWith({ limit: 10, offset: 5 });
     });
   });
 
-  describe('projects get', () => {
+  describe('show project', () => {
     it('prints project details', async () => {
       mockClient.getProject.mockResolvedValue({
         project_id: 'proj_1',
@@ -100,7 +117,7 @@ describe('registerProjectCommands', () => {
       });
 
       const program = createProgram();
-      await program.parseAsync(['node', 'test', 'projects', 'get', 'proj_1']);
+      await program.parseAsync(['node', 'test', 'show', 'project', 'proj_1']);
 
       expect(mockClient.getProject).toHaveBeenCalledWith('proj_1');
       expect(mockSpinner.stop).toHaveBeenCalled();
@@ -110,18 +127,18 @@ describe('registerProjectCommands', () => {
       mockClient.getProject.mockRejectedValue(new Error('Not found'));
 
       const program = createProgram();
-      await program.parseAsync(['node', 'test', 'projects', 'get', 'proj_bad']);
+      await program.parseAsync(['node', 'test', 'show', 'project', 'proj_bad']);
 
       expect(mockExit).toHaveBeenCalledWith(1);
     });
   });
 
-  describe('projects create', () => {
+  describe('create project', () => {
     it('creates project', async () => {
       mockClient.createProject.mockResolvedValue({ project_id: 'proj_new' });
 
       const program = createProgram();
-      await program.parseAsync(['node', 'test', 'projects', 'create', 'New Project']);
+      await program.parseAsync(['node', 'test', 'create', 'project', 'New Project']);
 
       expect(mockClient.createProject).toHaveBeenCalledWith({ name: 'New Project' });
     });
@@ -130,16 +147,16 @@ describe('registerProjectCommands', () => {
       mockClient.createProject.mockRejectedValue(new Error('Conflict'));
 
       const program = createProgram();
-      await program.parseAsync(['node', 'test', 'projects', 'create', 'Dup']);
+      await program.parseAsync(['node', 'test', 'create', 'project', 'Dup']);
 
       expect(mockExit).toHaveBeenCalledWith(1);
     });
   });
 
-  describe('projects delete', () => {
+  describe('delete project', () => {
     it('requires --force flag', async () => {
       const program = createProgram();
-      await program.parseAsync(['node', 'test', 'projects', 'delete', 'proj_1']);
+      await program.parseAsync(['node', 'test', 'delete', 'project', 'proj_1']);
 
       expect(console.log).toHaveBeenCalledWith('Use --force to confirm deletion');
       expect(mockExit).toHaveBeenCalledWith(1);
@@ -149,7 +166,7 @@ describe('registerProjectCommands', () => {
       mockClient.deleteProject.mockResolvedValue(undefined);
 
       const program = createProgram();
-      await program.parseAsync(['node', 'test', 'projects', 'delete', 'proj_1', '--force']);
+      await program.parseAsync(['node', 'test', 'delete', 'project', 'proj_1', '--force']);
 
       expect(mockClient.deleteProject).toHaveBeenCalledWith('proj_1');
     });
@@ -158,7 +175,7 @@ describe('registerProjectCommands', () => {
       mockClient.deleteProject.mockRejectedValue(new Error('Failed'));
 
       const program = createProgram();
-      await program.parseAsync(['node', 'test', 'projects', 'delete', 'proj_1', '-f']);
+      await program.parseAsync(['node', 'test', 'delete', 'project', 'proj_1', '-f']);
 
       expect(mockExit).toHaveBeenCalledWith(1);
     });

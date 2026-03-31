@@ -23,21 +23,27 @@ vi.spyOn(console, 'error').mockImplementation(() => {});
 const mockExit = vi.spyOn(process, 'exit').mockImplementation((() => {}) as never);
 
 import { Command } from 'commander';
-import { registerCommitCommands } from '../../commands/commits.js';
+import { registerListCommits, registerShowCommit } from '../../commands/commits.js';
 
 function createProgram() {
   const program = new Command();
   program.exitOverride();
-  registerCommitCommands(program);
+
+  const listCmd = program.command('list');
+  registerListCommits(listCmd);
+
+  const showCmd = program.command('show');
+  registerShowCommit(showCmd);
+
   return program;
 }
 
-describe('registerCommitCommands', () => {
+describe('Commit commands (kubectl-style)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  describe('commits list', () => {
+  describe('list commits', () => {
     it('prints table when commits exist', async () => {
       mockClient.listCommits.mockResolvedValue({
         commits: [
@@ -51,7 +57,7 @@ describe('registerCommitCommands', () => {
       });
 
       const program = createProgram();
-      await program.parseAsync(['node', 'test', 'commits', 'list', '-p', 'proj_1']);
+      await program.parseAsync(['node', 'test', 'list', 'commits', '-p', 'proj_1']);
 
       expect(mockClient.listCommits).toHaveBeenCalledWith('proj_1', undefined, {
         limit: 50,
@@ -64,7 +70,7 @@ describe('registerCommitCommands', () => {
       mockClient.listCommits.mockResolvedValue({ commits: [] });
 
       const program = createProgram();
-      await program.parseAsync(['node', 'test', 'commits', 'list', '-p', 'proj_1']);
+      await program.parseAsync(['node', 'test', 'list', 'commits', '-p', 'proj_1']);
 
       expect(console.log).toHaveBeenCalledWith('No commits found.');
     });
@@ -76,8 +82,8 @@ describe('registerCommitCommands', () => {
       await program.parseAsync([
         'node',
         'test',
-        'commits',
         'list',
+        'commits',
         '-p',
         'proj_1',
         '-b',
@@ -97,8 +103,8 @@ describe('registerCommitCommands', () => {
       await program.parseAsync([
         'node',
         'test',
-        'commits',
         'list',
+        'commits',
         '-p',
         'proj_1',
         '-l',
@@ -117,13 +123,13 @@ describe('registerCommitCommands', () => {
       mockClient.listCommits.mockRejectedValue(new Error('DB error'));
 
       const program = createProgram();
-      await program.parseAsync(['node', 'test', 'commits', 'list', '-p', 'proj_1']);
+      await program.parseAsync(['node', 'test', 'list', 'commits', '-p', 'proj_1']);
 
       expect(mockExit).toHaveBeenCalledWith(1);
     });
   });
 
-  describe('commits show', () => {
+  describe('show commit', () => {
     it('shows commit details', async () => {
       mockClient.getCommit.mockResolvedValue({
         commit_hash: 'sha256:abcdef123456',
@@ -138,7 +144,7 @@ describe('registerCommitCommands', () => {
       });
 
       const program = createProgram();
-      await program.parseAsync(['node', 'test', 'commits', 'show', 'sha256:abcdef123456']);
+      await program.parseAsync(['node', 'test', 'show', 'commit', 'sha256:abcdef123456']);
 
       expect(mockClient.getCommit).toHaveBeenCalledWith('sha256:abcdef123456');
       expect(mockSpinner.stop).toHaveBeenCalled();
@@ -158,7 +164,7 @@ describe('registerCommitCommands', () => {
       });
 
       const program = createProgram();
-      await program.parseAsync(['node', 'test', 'commits', 'show', 'sha256:root000000']);
+      await program.parseAsync(['node', 'test', 'show', 'commit', 'sha256:root000000']);
 
       expect(console.log).toHaveBeenCalledWith('  (root commit)');
     });
@@ -167,7 +173,7 @@ describe('registerCommitCommands', () => {
       mockClient.getCommit.mockRejectedValue(new Error('Not found'));
 
       const program = createProgram();
-      await program.parseAsync(['node', 'test', 'commits', 'show', 'sha256:bad']);
+      await program.parseAsync(['node', 'test', 'show', 'commit', 'sha256:bad']);
 
       expect(mockExit).toHaveBeenCalledWith(1);
     });
