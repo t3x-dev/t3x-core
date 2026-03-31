@@ -1,7 +1,6 @@
 'use client';
 
 import {
-  treeChangesToYOps,
   type YOp,
   type YOpsSource,
   RELATION_TYPES,
@@ -170,16 +169,17 @@ function TreeGraphInner({
       const nodes = treesToNodes(content.trees);
       const existingNode = nodes.find((f) => f.id === treeId);
       if (!existingNode) return;
-      const ops = treeChangesToYOps({
-        changes: [
-          { action: 'remove', target_path: treeId },
-          {
-            action: 'add',
-            parent_path: '',
-            node: { key: newType, slots: existingNode.slots, children: existingNode.children },
+      const ops: YOp[] = [
+        { drop: { path: treeId } },
+        {
+          add: {
+            parent: '',
+            node: { [newType]: Object.fromEntries(Object.entries(existingNode.slots)) },
+            source: {},
+            from: 'manual',
           },
-        ],
-      });
+        },
+      ];
       onBatchCreated(ops, 'manual');
     },
     [onBatchCreated, content.trees]
@@ -191,19 +191,16 @@ function TreeGraphInner({
     (_event: React.MouseEvent) => {
       if (!onBatchCreated) return;
       const newKey = nextNodeKey(content);
-      const ops = treeChangesToYOps({
-        changes: [
-          {
-            action: 'add',
-            parent_path: '',
-            node: {
-              key: newKey,
-              slots: { label: 'New Node' },
-              children: [],
-            },
+      const ops: YOp[] = [
+        {
+          add: {
+            parent: '',
+            node: { [newKey]: { label: 'New Node' } },
+            source: {},
+            from: 'manual',
           },
-        ],
-      });
+        },
+      ];
       onBatchCreated(ops, 'manual');
     },
     [onBatchCreated, content]
@@ -224,9 +221,7 @@ function TreeGraphInner({
 
       // Delete selected node
       if (selectedNodeId) {
-        const ops = treeChangesToYOps({
-          changes: [{ action: 'remove', target_path: selectedNodeId }],
-        });
+        const ops: YOp[] = [{ drop: { path: selectedNodeId } }];
         onBatchCreated(ops, 'manual');
         return;
       }
@@ -244,10 +239,9 @@ function TreeGraphInner({
           .filter(Boolean) as Relation[];
 
         if (removeRelations.length > 0) {
-          const ops = treeChangesToYOps({
-            changes: [{ action: 'update', target_path: removeRelations[0].from, slots: {} }],
-            remove_relations: removeRelations,
-          });
+          const ops: YOp[] = removeRelations.map((r) => ({
+            unrelate: { from: r.from, to: r.to, type: r.type },
+          }));
           onBatchCreated(ops, 'manual');
         }
       }
@@ -282,10 +276,9 @@ function TreeGraphInner({
   const handleRelationTypeSelect = useCallback(
     (type: SemanticRelationType) => {
       if (!pendingConnection || !onBatchCreated) return;
-      const ops = treeChangesToYOps({
-        changes: [{ action: 'update', target_path: pendingConnection.source, slots: {} }],
-        new_relations: [{ from: pendingConnection.source, to: pendingConnection.target, type }],
-      });
+      const ops: YOp[] = [
+        { relate: { from: pendingConnection.source, to: pendingConnection.target, type } },
+      ];
       onBatchCreated(ops, 'manual');
       setPendingConnection(null);
     },

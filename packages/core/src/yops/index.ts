@@ -21,6 +21,3 @@ export { findNode, getNodeKey, getParentPath } from './helpers';
 // ── Replay ──
 export { replayYOps, verifyReplay, extractOpsFromEntries } from './replay';
 export type { ReplayInput, ReplayResult, VerifyResult } from './replay';
-
-// ── Compat (legacy bridge) ──
-export { treeChangesToYOps } from './compat';

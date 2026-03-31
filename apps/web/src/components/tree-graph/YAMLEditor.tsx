@@ -1,7 +1,7 @@
 'use client';
 
-import type { YOp, YOpsSource, TreeDiff, SemanticContent, SlotValue, TreeChangeBatch } from '@t3x-dev/core';
-import { diffCommits, treeChangesToYOps } from '@t3x-dev/core';
+import type { YOp, YOpsSource, TreeDiff, SemanticContent, SlotValue } from '@t3x-dev/core';
+import { diffCommits } from '@t3x-dev/core';
 import { treesToNodes } from '@/lib/treeCompat';
 import yaml from 'js-yaml';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -17,64 +17,62 @@ interface YAMLEditorProps {
 
 // ── Helpers ──
 
-/** Convert a TreeDiff into YOp[] for the change pipeline. */
-function treeDiffToYOps(diff: TreeDiff, sourceContent: SemanticContent, targetContent: SemanticContent): YOp[] | null {
-  const batch: TreeChangeBatch = { changes: [] };
+/** Convert a TreeDiff into YOp[] directly. */
+function treeDiffToYOps(diff: TreeDiff, _sourceContent: SemanticContent, targetContent: SemanticContent): YOp[] | null {
+  const ops: YOp[] = [];
 
   // Added paths (only in target = new in edited version)
   for (const path of diff.onlyInTarget) {
     const nodes = treesToNodes(targetContent.trees);
-    const node = nodes.find(f => f.id === path);
+    const node = nodes.find((f) => f.id === path);
     if (node) {
       const parentPath = path.includes('.') ? path.slice(0, path.lastIndexOf('.')) : '';
-      batch.changes.push({
-        action: 'add',
-        parent_path: parentPath,
-        node: { key: node.key, slots: node.slots, children: node.children },
+      ops.push({
+        add: {
+          parent: parentPath,
+          node: { [node.key]: Object.fromEntries(Object.entries(node.slots)) },
+          source: {},
+          from: 'manual',
+        },
       });
     }
   }
 
   // Removed paths (only in source = deleted in edited version)
   for (const path of diff.onlyInSource) {
-    batch.changes.push({ action: 'remove', target_path: path });
+    ops.push({ drop: { path } });
   }
 
-  // Modified paths
+  // Modified paths — emit set/unset per slot
   for (const mod of diff.modified) {
-    const slots: Record<string, SlotValue | null> = {};
     for (const sd of mod.slotDiffs) {
-      switch (sd.type) {
-        case 'added':
-          slots[sd.key] = sd.newValue ?? null;
-          break;
-        case 'removed':
-          slots[sd.key] = null;
-          break;
-        case 'changed':
-          slots[sd.key] = sd.newValue ?? null;
-          break;
+      if (sd.type === 'removed') {
+        ops.push({ unset: { path: `${mod.path}/${sd.key}` } });
+      } else {
+        const value = sd.newValue;
+        if (value !== undefined) {
+          ops.push({
+            set: {
+              path: `${mod.path}/${sd.key}`,
+              value,
+              source: String(value),
+              from: 'manual',
+            },
+          });
+        }
       }
-    }
-    if (Object.keys(slots).length > 0) {
-      batch.changes.push({ action: 'update', target_path: mod.path, slots });
     }
   }
 
   // Relations
-  if (diff.relationsAdded.length > 0) {
-    batch.new_relations = diff.relationsAdded;
+  for (const rel of diff.relationsAdded) {
+    ops.push({ relate: { from: rel.from, to: rel.to, type: rel.type } });
   }
-  if (diff.relationsRemoved.length > 0) {
-    batch.remove_relations = diff.relationsRemoved;
-  }
-
-  // Return null if no changes
-  if (batch.changes.length === 0 && !batch.new_relations && !batch.remove_relations) {
-    return null;
+  for (const rel of diff.relationsRemoved) {
+    ops.push({ unrelate: { from: rel.from, to: rel.to, type: rel.type } });
   }
 
-  return treeChangesToYOps(batch);
+  return ops.length > 0 ? ops : null;
 }
 
 /** Minimal validation: must have a trees array. */

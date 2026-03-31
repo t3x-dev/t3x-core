@@ -129,7 +129,7 @@ function computeNodeSignals(
     const isManual = entry.source === 'manual';
     const framesMentioned = new Set<string>();
 
-    // Extract changes from yops (may be TreeChangeBatch format with .changes or YOp[] array)
+    // Extract changes from yops (YOp[] array)
     const yopsData = entry.yops as any;
     const changes: Array<{ action: string; target?: string; frame?: { id: string } }> =
       Array.isArray(yopsData) ? [] : (yopsData?.changes ?? []);
