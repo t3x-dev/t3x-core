@@ -67,7 +67,7 @@ export async function closePostgresStorage(): Promise<void> {
 /**
  * Schema version — bump this number whenever you add migrations below.
  */
-const SCHEMA_VERSION = 33;
+const SCHEMA_VERSION = 35;
 
 /**
  * Initialize database schema (skips if already at current version)
@@ -980,6 +980,25 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
   // ── Schema v34: Add slot_quotes column to trees table ──
   await sql.unsafe(`
     ALTER TABLE trees ADD COLUMN IF NOT EXISTS slot_quotes JSONB;
+  `);
+
+  // ── Schema v35: commit_rewrites — append-only rewrite log ──
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS commit_rewrites (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      branch TEXT NOT NULL,
+      operation TEXT NOT NULL,
+      source_hashes JSONB NOT NULL,
+      result_hash TEXT NOT NULL,
+      base_hash TEXT,
+      ops_replayed INTEGER NOT NULL,
+      yops_log_ids JSONB NOT NULL,
+      author JSONB NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_commit_rewrites_project ON commit_rewrites(project_id);
+    CREATE INDEX IF NOT EXISTS idx_commit_rewrites_result ON commit_rewrites(result_hash);
   `);
 
   // Record schema version so subsequent startups skip the init SQL.

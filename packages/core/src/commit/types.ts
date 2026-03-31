@@ -13,9 +13,11 @@ export interface Author {
 }
 
 export interface Provenance {
-  method: 'llm_extraction' | 'human_curation' | 'import' | 'merge';
+  method: 'llm_extraction' | 'human_curation' | 'import' | 'merge' | 'squash';
   model?: string;
   extracted_at?: string;
+  /** For squash/rebase: the original commit hashes that were replaced */
+  source_commits?: string[];
 }
 
 export interface Commit {

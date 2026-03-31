@@ -17,3 +17,7 @@ export { YOPS_ERRORS, SNAKE_CASE_KEY } from './types';
 
 // ── Helpers (public-facing only) ──
 export { findNode, getNodeKey, getParentPath } from './helpers';
+
+// ── Replay ──
+export { replayYOps, verifyReplay, extractOpsFromEntries } from './replay';
+export type { ReplayInput, ReplayResult, VerifyResult } from './replay';

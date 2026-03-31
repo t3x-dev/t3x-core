@@ -60,6 +60,7 @@ export {
 } from './business-rules';
 // Commits (tree-based)
 export {
+  collectYOpsForCommitRange,
   type CreateCommitInput,
   createCommit,
   deleteCommit,
@@ -109,6 +110,14 @@ export {
   listYOpsLogByConversation,
   listYOpsLogByTopic,
 } from './yops-log';
+// Commit Rewrites (append-only rewrite log)
+export {
+  getSupersededHashes,
+  type InsertRewriteInput,
+  insertRewrite,
+  isCommitSuperseded,
+  listRewrites,
+} from './commit-rewrites';
 // Deploy Agents (for Deploy page, different from agent layer)
 export {
   type CreateDeployAgentInput,
