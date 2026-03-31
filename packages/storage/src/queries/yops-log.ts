@@ -113,10 +113,7 @@ export async function listYOpsLogByTopic(
  * Retrieve YOps log entries by their IDs (for commit operations lookup).
  * Returns entries ordered by createdAt ASC.
  */
-export async function getYOpsForCommit(
-  db: AnyDB,
-  yopsLogIds: string[],
-): Promise<YOpsLogRecord[]> {
+export async function getYOpsForCommit(db: AnyDB, yopsLogIds: string[]): Promise<YOpsLogRecord[]> {
   if (yopsLogIds.length === 0) return [];
   return db
     .select()

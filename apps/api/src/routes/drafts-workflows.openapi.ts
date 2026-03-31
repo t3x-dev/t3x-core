@@ -11,11 +11,7 @@
 
 import { createHash } from 'node:crypto';
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import {
-  generateLeafOutput,
-  generateNodeId,
-  isGenerationConfigured,
-} from '@t3x-dev/core';
+import { generateLeafOutput, generateNodeId, isGenerationConfigured } from '@t3x-dev/core';
 import {
   commitDraft,
   createCommit,
@@ -458,23 +454,23 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
 
     if (draft.extraction_mode === 'llm') {
       // LLM mode: convert staged SemanticPoints directly to node-like records
-      const activeSPs = ((draft.semantic_points ?? []) as Array<{
-        id: string;
-        text: string;
-        confidence?: number;
-        zone: string;
-        status: string;
-        staged: boolean;
-        evidence?: Array<{
-          conversation_id?: string;
-          turn_hash?: string;
-          start_char?: number;
-          end_char?: number;
-          role?: string;
-        }>;
-      }>).filter(
-        (sp) => sp.zone === 'ready' && sp.status !== 'undone' && sp.staged
-      );
+      const activeSPs = (
+        (draft.semantic_points ?? []) as Array<{
+          id: string;
+          text: string;
+          confidence?: number;
+          zone: string;
+          status: string;
+          staged: boolean;
+          evidence?: Array<{
+            conversation_id?: string;
+            turn_hash?: string;
+            start_char?: number;
+            end_char?: number;
+            role?: string;
+          }>;
+        }>
+      ).filter((sp) => sp.zone === 'ready' && sp.status !== 'undone' && sp.staged);
 
       if (activeSPs.length === 0) {
         return errorResponse(c, 'INVALID_REQUEST', 'No staged semantic points to commit');
@@ -486,12 +482,14 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
           id: sp.id,
           text: sp.text,
           confidence: sp.confidence,
-          source_ref: primary ? {
-            conversation_id: primary.conversation_id!,
-            turn_hash: primary.turn_hash!,
-            start_char: primary.start_char ?? 0,
-            end_char: primary.end_char ?? sp.text.length,
-          } : undefined,
+          source_ref: primary
+            ? {
+                conversation_id: primary.conversation_id!,
+                turn_hash: primary.turn_hash!,
+                start_char: primary.start_char ?? 0,
+                end_char: primary.end_char ?? sp.text.length,
+              }
+            : undefined,
         };
       });
     } else {
@@ -544,7 +542,15 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
     const commit = await createCommit(db, {
       parents,
       author: { type: 'human' as const, name: 'workbench' },
-      content: { trees: commitFrames.map((f: any) => ({ key: f.id, slots: f.slots, children: [] as any[], confidence: f.confidence })), relations: [] },
+      content: {
+        trees: commitFrames.map((f: any) => ({
+          key: f.id,
+          slots: f.slots,
+          children: [] as any[],
+          confidence: f.confidence,
+        })),
+        relations: [],
+      },
       project_id: draft.project_id,
       message: body?.message ?? `Draft: ${draft.title}`,
       branch: draft.target_branch ?? 'main',
@@ -691,7 +697,8 @@ draftsWorkflowRoutes.openapi(suggestDraftRoute, async (c) => {
           success: false as const,
           error: {
             code: 'EMBEDDING_NOT_CONFIGURED',
-            message: 'Embedding service is not configured. Set GOOGLE_AI_STUDIO_KEY to enable suggestions.',
+            message:
+              'Embedding service is not configured. Set GOOGLE_AI_STUDIO_KEY to enable suggestions.',
           },
         },
         501

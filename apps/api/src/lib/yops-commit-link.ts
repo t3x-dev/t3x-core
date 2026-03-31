@@ -15,12 +15,10 @@ import { listCommits, listYOpsLogByConversation } from '@t3x-dev/storage';
 export async function findUncommittedYOpsIds(
   db: AnyDB,
   conversationId: string,
-  projectId: string,
+  projectId: string
 ): Promise<string[]> {
   const allYops = await listYOpsLogByConversation(db, conversationId);
   const allCommits = await listCommits(db, { projectId });
   const usedIds = new Set(allCommits.flatMap((c) => c.yops_log_ids));
-  return allYops
-    .filter((y) => !usedIds.has(y.id))
-    .map((y) => y.id);
+  return allYops.filter((y) => !usedIds.has(y.id)).map((y) => y.id);
 }

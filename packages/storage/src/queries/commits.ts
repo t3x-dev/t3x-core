@@ -206,7 +206,9 @@ function rowToCommit(row: CommitRecord): Commit {
   if (rawContent && Array.isArray(rawContent.trees)) {
     content = rawContent as unknown as SemanticContent;
   } else if (rawContent && Array.isArray((rawContent as { frames?: unknown[] }).frames)) {
-    const legacyFrames = (rawContent as { frames: Array<{ id: string; type: string; slots: Record<string, unknown> }> }).frames;
+    const legacyFrames = (
+      rawContent as { frames: Array<{ id: string; type: string; slots: Record<string, unknown> }> }
+    ).frames;
     content = {
       trees: legacyFrames.map((f) => ({
         key: f.id,
@@ -214,7 +216,9 @@ function rowToCommit(row: CommitRecord): Commit {
         slots: f.slots as Record<string, import('@t3x-dev/core').SlotValue>,
         children: [],
       })),
-      relations: (Array.isArray(rawContent.relations) ? rawContent.relations : []) as SemanticContent['relations'],
+      relations: (Array.isArray(rawContent.relations)
+        ? rawContent.relations
+        : []) as SemanticContent['relations'],
     };
   } else {
     content = { trees: [], relations: [] };

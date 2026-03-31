@@ -47,9 +47,7 @@ export type CreateLeafHistoryInputExtended = CreateLeafHistoryInput & {
 export async function createLeafHistory(
   db: AnyDB,
   input: CreateLeafHistoryInputExtended
-): Promise<
-  LeafHistory & { attempt_number: number; prompt_used?: string }
-> {
+): Promise<LeafHistory & { attempt_number: number; prompt_used?: string }> {
   const id = generateLeafHistoryId();
   const now = new Date();
 
@@ -77,10 +75,7 @@ export async function createLeafHistory(
 export async function findLeafHistoryById(
   db: AnyDB,
   id: string
-): Promise<
-  | (LeafHistory & { attempt_number: number; prompt_used?: string })
-  | null
-> {
+): Promise<(LeafHistory & { attempt_number: number; prompt_used?: string }) | null> {
   const [row] = await db.select().from(leafHistory).where(eq(leafHistory.id, id)).limit(1);
 
   return row ? rowToLeafHistory(row) : null;
@@ -96,9 +91,7 @@ export async function findHistoryByLeafId(
   db: AnyDB,
   leafId: string,
   options: ListLeafHistoryOptions = {}
-): Promise<
-  (LeafHistory & { attempt_number: number; prompt_used?: string })[]
-> {
+): Promise<(LeafHistory & { attempt_number: number; prompt_used?: string })[]> {
   const limit = options.limit ?? 100;
   const offset = options.offset ?? 0;
 
@@ -155,9 +148,7 @@ export async function deleteHistoryByLeafId(db: AnyDB, leafId: string): Promise<
 export async function findHistoryByLeafIdOrderedByAttempt(
   db: AnyDB,
   leafId: string
-): Promise<
-  (LeafHistory & { attempt_number: number; prompt_used?: string })[]
-> {
+): Promise<(LeafHistory & { attempt_number: number; prompt_used?: string })[]> {
   const rows = await db
     .select()
     .from(leafHistory)

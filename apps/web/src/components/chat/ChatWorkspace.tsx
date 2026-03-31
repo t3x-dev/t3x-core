@@ -5,23 +5,23 @@ import { AlertCircle, GitCommit, Loader2, MessageSquarePlus } from 'lucide-react
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DriftPopup } from '@/components/chat/DriftPopup';
 import { useAutoProject } from '@/hooks/useAutoProject';
-import { useTextSelection } from '@/hooks/useTextSelection';
 import { useConversationChat } from '@/hooks/useConversationChat';
+import { useTextSelection } from '@/hooks/useTextSelection';
 import { getCommitAsNodes } from '@/lib/api/commitUnified';
-import { extractNodes, getSemanticDraft, listYOpsLog } from '@/lib/api/trees';
 import { listTopics, updateTopicApi } from '@/lib/api/topics';
+import { extractNodes, getSemanticDraft, listYOpsLog } from '@/lib/api/trees';
 import { getIntentSummary } from '@/lib/intentSummary';
+import { buildSourceMap } from '@/lib/sourceMap';
+import { type CompatNode, contentToNodes, treesToNodes } from '@/lib/treeCompat';
 import { cn } from '@/lib/utils';
 import { useChatStore } from '@/store/chatStore';
 import { useExtractionPanelStore } from '@/store/extractionPanelStore';
 import { useSessionStore } from '@/store/sessionStore';
+import { ChatAddForm } from './ChatAddForm';
 import { ChatHeader } from './ChatHeader';
 import type { AttachedImage } from './ChatInput';
 import { ChatInput } from './ChatInput';
-import { ChatAddForm } from './ChatAddForm';
 import { ChatMessage } from './ChatMessage';
-import { buildSourceMap } from '@/lib/sourceMap';
-import { type CompatNode, contentToNodes, treesToNodes } from '@/lib/treeCompat';
 
 interface ChatWorkspaceProps {
   conversationId: string;
@@ -308,7 +308,8 @@ export function ChatWorkspace({
   // User-initiated extraction callback (called by ExtractionPanel's Extract button)
   const handleExtract = useCallback(async () => {
     // Use resolved ID, or fallback to store's active conversation
-    const extractConvId = resolvedConversationId ?? useChatStore.getState().activeConversationId ?? undefined;
+    const extractConvId =
+      resolvedConversationId ?? useChatStore.getState().activeConversationId ?? undefined;
     if (!extractConvId || isExtracting) return;
 
     startExtraction();
@@ -626,9 +627,7 @@ export function ChatWorkspace({
       </div>
 
       {/* Add-to-extraction form (visible in Review phase when text is selected) */}
-      {showAddForm && selection && (
-        <ChatAddForm selection={selection} onDone={clearSelection} />
-      )}
+      {showAddForm && selection && <ChatAddForm selection={selection} onDone={clearSelection} />}
 
       {/* Input area — centered like messages */}
       <div className="border-t border-[var(--stroke-divider)] shrink-0 py-3">

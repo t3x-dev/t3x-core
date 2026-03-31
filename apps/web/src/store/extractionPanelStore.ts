@@ -1,16 +1,16 @@
 import type {
-  TreeChangeBatch,
-  YOpsLogEntry,
-  YOpsSource,
   SemanticContent,
   TreeChange,
+  TreeChangeBatch,
   TreeNode,
+  YOpsLogEntry,
+  YOpsSource,
 } from '@t3x-dev/core';
 import { applyTreeChanges, flattenTrees } from '@t3x-dev/core';
 import { create } from 'zustand';
 import { createCommit, listCommits } from '@/lib/api/commits';
-import { createYOpsEntry } from '@/lib/api/trees';
 import type { Topic } from '@/lib/api/topics';
+import { createYOpsEntry } from '@/lib/api/trees';
 
 // Debounce helper for hover interactions — prevents rapid-fire re-renders
 // when mouse sweeps across YAML rows
@@ -393,7 +393,12 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
     if (hoverNodeTimer) clearTimeout(hoverNodeTimer);
     if (id === null) {
       // Clear immediately on mouse leave for snappy feel
-      set({ hoveredNodeId: null, hoveredSlotKey: null, scrollToCenter: false, hoveredFromChat: false });
+      set({
+        hoveredNodeId: null,
+        hoveredSlotKey: null,
+        scrollToCenter: false,
+        hoveredFromChat: false,
+      });
     } else {
       hoverNodeTimer = setTimeout(() => {
         set({ hoveredNodeId: id, hoveredSlotKey: slotKey ?? null });
@@ -428,14 +433,8 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
   },
 
   commitNodes: async (message) => {
-    const {
-      draft,
-      projectId,
-      conversationId,
-      conversationTitle,
-      lastCommitHash,
-      commitBranch,
-    } = get();
+    const { draft, projectId, conversationId, conversationTitle, lastCommitHash, commitBranch } =
+      get();
     if (!projectId) throw new Error('No project ID');
 
     set({ isCommitting: true, commitError: null });
