@@ -1,13 +1,14 @@
 /**
- * Show Command
+ * Show Command - Content Subcommand
+ * Register: t3x show content
  */
 
 import type { Command } from 'commander';
 import { createSpinner, error, getClientWithAuth } from '../utils.js';
 
-export function registerShowCommands(program: Command): void {
-  program
-    .command('show')
+export function registerShowContent(parent: Command): void {
+  parent
+    .command('content')
     .description('Show current project knowledge')
     .requiredOption('-p, --project <id>', 'Project ID')
     .option('-b, --branch <branch>', 'Branch name (default: main)')
