@@ -8,7 +8,6 @@ import {
   commits,
   conversations,
   deleteProject,
-  findProjectByIdIncludingDeleted,
   findProjects,
   findProjectWithStats,
   getBusinessRules,
@@ -21,7 +20,7 @@ import {
 } from '@t3x-dev/storage';
 import { eq, sql } from 'drizzle-orm';
 import { getDB } from '../lib/db';
-import { assertProjectAccess, getUserId } from '../lib/project-access';
+import { assertProjectAccess, assertProjectAccessIncludingDeleted, getUserId } from '../lib/project-access';
 import {
   CursorPageResponseSchema,
   ErrorResponseSchema,
@@ -442,6 +441,14 @@ const deleteProjectRoute = createRoute({
         },
       },
     },
+    403: {
+      description: 'Access denied',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
     404: {
       description: 'Project not found',
       content: {
@@ -470,24 +477,9 @@ projectRoutes.openapi(deleteProjectRoute, async (c) => {
     const db = await getDB();
 
     if (permanent === 'true') {
-      // Permanent delete: find even soft-deleted projects
-      const project = await findProjectByIdIncludingDeleted(db, id);
-      if (!project) {
-        return c.json(
-          { success: false as const, error: { code: 'NOT_FOUND', message: `Project ${id} not found` } },
-          404
-        );
-      }
-
-      // Access control on the actual project row
-      const apiKey = c.get('apiKey') as import('@t3x-dev/core').ApiKey | undefined;
-      const userId = apiKey?.user_id;
-      if (userId && project.ownerId && project.ownerId !== userId) {
-        return c.json(
-          { success: false as const, error: { code: 'FORBIDDEN', message: 'Access denied' } },
-          403
-        );
-      }
+      // Permanent delete: need access control including soft-deleted projects
+      const accessResult = await assertProjectAccessIncludingDeleted(c, db, id);
+      if (accessResult instanceof Response) return accessResult;
 
       const deleted = await permanentDeleteProject(db, id);
       if (!deleted) {
@@ -538,6 +530,14 @@ const restoreProjectRoute = createRoute({
         },
       },
     },
+    403: {
+      description: 'Access denied',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
     404: {
       description: 'Project not found or not deleted',
       content: {
@@ -565,22 +565,8 @@ projectRoutes.openapi(restoreProjectRoute, async (c) => {
     const db = await getDB();
 
     // Access control: must check against the deleted row
-    const project = await findProjectByIdIncludingDeleted(db, id);
-    if (!project) {
-      return c.json(
-        { success: false as const, error: { code: 'NOT_FOUND', message: `Project ${id} not found` } },
-        404
-      );
-    }
-
-    const apiKey = c.get('apiKey') as import('@t3x-dev/core').ApiKey | undefined;
-    const userId = apiKey?.user_id;
-    if (userId && project.ownerId && project.ownerId !== userId) {
-      return c.json(
-        { success: false as const, error: { code: 'FORBIDDEN', message: 'Access denied' } },
-        403
-      );
-    }
+    const accessResult = await assertProjectAccessIncludingDeleted(c, db, id);
+    if (accessResult instanceof Response) return accessResult;
 
     const restored = await restoreProject(db, id);
     if (!restored) {
