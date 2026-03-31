@@ -6,13 +6,10 @@ import { createClient } from '@t3x-dev/api-client';
 import type { Command } from 'commander';
 import { createSpinner, error, formatDate, getApiUrl, printTable, success } from '../utils.js';
 
-export function registerBranchCommands(program: Command): void {
-  const branches = program.command('branches').alias('b').description('Manage branches');
-
-  // List branches
-  branches
-    .command('list')
-    .alias('ls')
+/** Register: t3x list branches */
+export function registerListBranches(parent: Command): void {
+  parent
+    .command('branches')
     .description('List branches')
     .requiredOption('-p, --project <id>', 'Project ID')
     .action(async (options) => {
@@ -45,10 +42,12 @@ export function registerBranchCommands(program: Command): void {
         process.exit(1);
       }
     });
+}
 
-  // Create branch
-  branches
-    .command('create <name>')
+/** Register: t3x create branch <name> */
+export function registerCreateBranch(parent: Command): void {
+  parent
+    .command('branch <name>')
     .description('Create a new branch')
     .requiredOption('-p, --project <id>', 'Project ID')
     .option('-h, --head <hash>', 'Head commit hash')
@@ -72,10 +71,12 @@ export function registerBranchCommands(program: Command): void {
         process.exit(1);
       }
     });
+}
 
-  // Switch branch
-  branches
-    .command('switch <name>')
+/** Register: t3x switch-branch <name> (independent command) */
+export function registerSwitchBranch(program: Command): void {
+  program
+    .command('switch-branch <name>')
     .description('Switch to a branch')
     .requiredOption('-p, --project <id>', 'Project ID')
     .action(async (name: string, options) => {
@@ -94,10 +95,12 @@ export function registerBranchCommands(program: Command): void {
         process.exit(1);
       }
     });
+}
 
-  // Current branch
-  branches
-    .command('current')
+/** Register: t3x current-branch (independent command) */
+export function registerCurrentBranch(program: Command): void {
+  program
+    .command('current-branch')
     .description('Show current branch')
     .requiredOption('-p, --project <id>', 'Project ID')
     .action(async (options) => {
