@@ -42,7 +42,8 @@ CREATE TABLE IF NOT EXISTS projects (
   autopilot_config JSONB,
   business_rules JSONB DEFAULT '[]',
   extraction_style JSONB,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  deleted_at TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS idx_projects_owner ON projects(owner_id);
 
