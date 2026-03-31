@@ -13,8 +13,8 @@ import '@xyflow/react/dist/style.css';
 import { Loader2 } from 'lucide-react';
 import { useEffect, useMemo } from 'react';
 import { getLayoutedElements } from '@/lib/elkLayout';
-import { useExtractionPanelStore } from '@/store/extractionPanelStore';
 import { treesToNodes } from '@/lib/treeCompat';
+import { useExtractionPanelStore } from '@/store/extractionPanelStore';
 
 // ── Inline mini node ──
 
@@ -143,7 +143,7 @@ function TreeGraphMiniInner() {
     const map = new Map<string, 'add' | 'update' | 'remove'>();
     for (const op of yopsHistory[0] ?? []) {
       if ('add' in op) {
-        const nodeKey = op.add.node ? Object.keys(op.add.node)[0] ?? '' : '';
+        const nodeKey = op.add.node ? (Object.keys(op.add.node)[0] ?? '') : '';
         const parent = op.add.parent ?? '';
         map.set(parent ? `${parent}.${nodeKey}` : nodeKey, 'add');
       } else if ('set' in op) {
