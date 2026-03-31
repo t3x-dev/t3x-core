@@ -17,6 +17,7 @@ import {
   clearManualEditedFlags,
   createCommit,
   getCommit,
+  getYOpsForCommit,
   listCommits,
   updateCommitPosition,
 } from '@t3x-dev/storage';
@@ -348,4 +349,86 @@ commitRoutes.openapi(getHistoryRoute, async (c) => {
     { success: true as const, data: { commits, truncated: commits.length >= limit } },
     200
   );
+});
+
+// ============================================================
+// GET /v1/commits/:hash/operations — Get operations that produced a commit
+// ============================================================
+
+const getCommitOperationsRoute = createRoute({
+  method: 'get',
+  path: '/v1/commits/{hash}/operations',
+  tags: ['Commits'],
+  summary: 'Get operations that produced a commit',
+  request: {
+    params: HashParamSchema,
+  },
+  responses: {
+    200: {
+      description: 'Commit operations',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(
+            z.object({
+              commit_hash: z.string(),
+              operations: z.array(
+                z.object({
+                  id: z.string(),
+                  source: z.string(),
+                  turn_hash: z.string().nullable(),
+                  yops: z.unknown(),
+                  model: z.string().nullable(),
+                  created_at: z.string(),
+                })
+              ),
+            })
+          ),
+        },
+      },
+    },
+    404: {
+      description: 'Commit not found',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    500: {
+      description: 'Internal server error',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+commitRoutes.openapi(getCommitOperationsRoute, async (c) => {
+  const { hash } = c.req.valid('param');
+  const db = await getDB();
+  const decodedHash = decodeURIComponent(hash);
+
+  try {
+    const commit = await getCommit(db, decodedHash);
+    if (!commit) {
+      return errorResponse(c, 'COMMIT_NOT_FOUND', `Commit not found: ${decodedHash}`);
+    }
+
+    const operations = await getYOpsForCommit(db, commit.yops_log_ids);
+
+    return c.json(
+      {
+        success: true as const,
+        data: {
+          commit_hash: commit.hash,
+          operations: operations.map((op) => ({
+            id: op.id,
+            source: op.source,
+            turn_hash: op.turnHash ?? null,
+            yops: op.yops,
+            model: op.model ?? null,
+            created_at: op.createdAt.toISOString(),
+          })),
+        },
+      },
+      200
+    );
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to get commit operations';
+    return errorResponse(c, 'GET_FAILED', message);
+  }
 });
