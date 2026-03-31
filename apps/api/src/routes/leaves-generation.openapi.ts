@@ -12,7 +12,7 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
   AllProvidersFailedError,
-  collectLessons,
+  collectLessonsFromAssertions,
   GenerationError,
   type GenerationMode,
   isGenerationConfigured,
@@ -278,7 +278,9 @@ leavesGenerationRoutes.openapi(generateLeafRoute, async (c) => {
 
     // Collect lessons from historical leaves on the same commit (#4 feedback loop)
     const historicalLeaves = await findLeavesByCommit(db, leaf.commit_hash);
-    const lessons = collectLessons(historicalLeaves);
+    const lessons = collectLessonsFromAssertions(
+      historicalLeaves.map((l) => ({ id: l.id, assertions: l.assertions }))
+    );
 
     // Multi-round generation when mode is 'standard' or 'thorough'
     let multiRoundResult:
@@ -656,7 +658,9 @@ leavesGenerationRoutes.openapi(batchGenerateRoute, async (c) => {
           try {
             // Collect lessons from historical leaves on the same commit
             const batchHistLeaves = await findLeavesByCommit(db, leaf.commit_hash);
-            const batchLessons = collectLessons(batchHistLeaves);
+            const batchLessons = collectLessonsFromAssertions(
+              batchHistLeaves.map((l) => ({ id: l.id, assertions: l.assertions }))
+            );
 
             const result = await generateWithFallback({
               knowledge: batchKnowledge,
