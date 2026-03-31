@@ -1,0 +1,67 @@
+/**
+ * YOps Replay — Replay and verify YOps against commit snapshots.
+ *
+ * Pure functions, no DB, no side effects.
+ */
+
+import type { SemanticContent } from '../semantic/types';
+import type { YOp, YOpsError } from './types';
+import { applyYOps } from './engine';
+import { YOpSchema } from './schema';
+
+// ── Types ──
+
+export interface ReplayInput {
+  baseContent: SemanticContent;
+  ops: YOp[];
+}
+
+export interface ReplayResult {
+  ok: boolean;
+  content: SemanticContent;
+  opsApplied: number;
+  error?: YOpsError;
+}
+
+// ── replayYOps ──
+
+export function replayYOps(input: ReplayInput): ReplayResult {
+  const result = applyYOps(input.baseContent, input.ops);
+  return {
+    ok: result.ok,
+    content: { trees: result.trees, relations: result.relations },
+    opsApplied: result.applied,
+    error: result.error,
+  };
+}
+
+// ── extractOpsFromEntries ──
+
+/**
+ * Extract and validate YOp[] from raw yops_log entries.
+ * The `yops` field is stored as `unknown` (jsonb) in the DB.
+ * Validates each op against YOpSchema. Throws on invalid ops.
+ */
+export function extractOpsFromEntries(
+  entries: Array<{ id: string; yops: unknown }>,
+): YOp[] {
+  const allOps: YOp[] = [];
+
+  for (const entry of entries) {
+    if (!Array.isArray(entry.yops)) {
+      throw new Error(`Invalid yops field in entry ${entry.id}: expected array, got ${typeof entry.yops}`);
+    }
+
+    for (const rawOp of entry.yops) {
+      const parsed = YOpSchema.safeParse(rawOp);
+      if (!parsed.success) {
+        throw new Error(
+          `Invalid YOp in entry ${entry.id}: ${parsed.error.issues.map((i) => i.message).join(', ')}`,
+        );
+      }
+      allOps.push(parsed.data as YOp);
+    }
+  }
+
+  return allOps;
+}
