@@ -10,6 +10,7 @@ const mockClient = {
   getProject: vi.fn(),
   createProject: vi.fn(),
   deleteProject: vi.fn(),
+  restoreProject: vi.fn(),
 };
 
 vi.mock('@t3x-dev/api-client', () => ({
@@ -35,6 +36,7 @@ import {
   registerShowProject,
   registerCreateProject,
   registerDeleteProject,
+  registerRestoreProject,
 } from '../../commands/projects.js';
 
 function createProgram() {
@@ -52,6 +54,9 @@ function createProgram() {
 
   const deleteCmd = program.command('delete');
   registerDeleteProject(deleteCmd);
+
+  const restoreCmd = program.command('restore');
+  registerRestoreProject(restoreCmd);
 
   return program;
 }
@@ -162,13 +167,30 @@ describe('Project commands (kubectl-style)', () => {
       expect(mockExit).toHaveBeenCalledWith(1);
     });
 
+    it('requires --force with --permanent', async () => {
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'delete', 'project', 'proj_1', '--permanent']);
+
+      expect(console.log).toHaveBeenCalledWith('Use --force --permanent to confirm permanent deletion');
+      expect(mockExit).toHaveBeenCalledWith(1);
+    });
+
     it('deletes with --force', async () => {
       mockClient.deleteProject.mockResolvedValue(undefined);
 
       const program = createProgram();
       await program.parseAsync(['node', 'test', 'delete', 'project', 'proj_1', '--force']);
 
-      expect(mockClient.deleteProject).toHaveBeenCalledWith('proj_1');
+      expect(mockClient.deleteProject).toHaveBeenCalledWith('proj_1', { permanent: undefined });
+    });
+
+    it('permanently deletes with --force --permanent', async () => {
+      mockClient.deleteProject.mockResolvedValue(undefined);
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'delete', 'project', 'proj_1', '--force', '--permanent']);
+
+      expect(mockClient.deleteProject).toHaveBeenCalledWith('proj_1', { permanent: true });
     });
 
     it('handles error', async () => {
@@ -176,6 +198,26 @@ describe('Project commands (kubectl-style)', () => {
 
       const program = createProgram();
       await program.parseAsync(['node', 'test', 'delete', 'project', 'proj_1', '-f']);
+
+      expect(mockExit).toHaveBeenCalledWith(1);
+    });
+  });
+
+  describe('restore project', () => {
+    it('restores a project', async () => {
+      mockClient.restoreProject.mockResolvedValue({ project_id: 'proj_1', name: 'Restored' });
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'restore', 'project', 'proj_1']);
+
+      expect(mockClient.restoreProject).toHaveBeenCalledWith('proj_1');
+    });
+
+    it('handles error', async () => {
+      mockClient.restoreProject.mockRejectedValue(new Error('Not found'));
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'restore', 'project', 'proj_1']);
 
       expect(mockExit).toHaveBeenCalledWith(1);
     });

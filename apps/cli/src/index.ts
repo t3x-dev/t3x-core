@@ -15,7 +15,7 @@ import { Command } from 'commander';
 import { registerListBranches, registerCreateBranch, registerSwitchBranch, registerCurrentBranch } from './commands/branches.js';
 import { registerListCommits, registerShowCommit } from './commands/commits.js';
 import { registerListLeaves, registerShowLeaf, registerCreateLeaf, registerGenerateLeaf, registerDeleteLeaf } from './commands/leaves.js';
-import { registerListProjects, registerShowProject, registerCreateProject, registerDeleteProject } from './commands/projects.js';
+import { registerListProjects, registerShowProject, registerCreateProject, registerDeleteProject, registerRestoreProject } from './commands/projects.js';
 import { registerShowContent } from './commands/show.js';
 
 // New commit command
@@ -66,6 +66,10 @@ registerCreateLeaf(createCmd);
 const deleteCmd = program.command('delete').description('Delete a resource');
 registerDeleteProject(deleteCmd);
 registerDeleteLeaf(deleteCmd);
+
+// t3x restore <resource>
+const restoreCmd = program.command('restore').description('Restore a deleted resource');
+registerRestoreProject(restoreCmd);
 
 // t3x generate <resource>
 const generateCmd = program.command('generate').description('Generate output');
