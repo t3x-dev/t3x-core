@@ -126,6 +126,12 @@ export {
 } from './hash';
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Feedback Module (Lesson generation + collection)
+// ═══════════════════════════════════════════════════════════════════════════
+export { collectLessonsFromAssertions, generateLesson } from './feedback';
+export type { Lesson, LessonSource } from './feedback';
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Leaf Module (Generation + Validation)
 // ═══════════════════════════════════════════════════════════════════════════
 export {
