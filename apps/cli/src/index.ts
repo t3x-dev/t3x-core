@@ -17,6 +17,7 @@ import { registerShareCommands } from './commands/share.js';
 import { registerSchemaCommands } from './commands/schema.js';
 import { registerShowCommands } from './commands/show.js';
 import { registerStatusCommands } from './commands/status.js';
+import { registerValidateCommands } from './commands/validate.js';
 
 const program = new Command();
 
@@ -39,6 +40,7 @@ registerGateCommands(program);
 registerExportCommands(program);
 registerImportCommands(program);
 registerSchemaCommands(program);
+registerValidateCommands(program);
 registerShowCommands(program);
 
 // Parse arguments
