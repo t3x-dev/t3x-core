@@ -15,12 +15,17 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
   clearManualEditedFlags,
+  collectYOpsForCommitRange,
   createCommit,
   getCommit,
   getYOpsForCommit,
+  insertRewrite,
+  isCommitSuperseded,
   listCommits,
   updateCommitPosition,
 } from '@t3x-dev/storage';
+import { extractOpsFromEntries, verifyReplay } from '@t3x-dev/core';
+import type { SemanticContent, YOp } from '@t3x-dev/core';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import {
@@ -432,5 +437,162 @@ commitRoutes.openapi(getCommitOperationsRoute, async (c) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to get commit operations';
     return errorResponse(c, 'GET_FAILED', message);
+  }
+});
+
+// ============================================================
+// POST /v1/branches/:branch/squash — Squash consecutive commits
+// ============================================================
+
+const squashRoute = createRoute({
+  method: 'post',
+  path: '/v1/branches/{branch}/squash',
+  tags: ['Commits'],
+  summary: 'Squash consecutive commits by replaying their YOps',
+  request: {
+    params: z.object({ branch: z.string() }),
+    body: {
+      content: {
+        'application/json': {
+          schema: z.object({
+            project_id: z.string(),
+            commit_hashes: z.array(z.string()).min(2),
+            message: z.string().optional(),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Squash successful',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(
+            z.object({
+              commit: z.unknown(),
+              superseded: z.array(z.string()),
+              ops_replayed: z.number(),
+            }),
+          ),
+        },
+      },
+    },
+    400: { description: 'Invalid input', content: { 'application/json': { schema: ErrorResponseSchema } } },
+    404: { description: 'Not found', content: { 'application/json': { schema: ErrorResponseSchema } } },
+    409: { description: 'Replay mismatch', content: { 'application/json': { schema: ErrorResponseSchema } } },
+  },
+});
+
+commitRoutes.openapi(squashRoute, async (c) => {
+  const { branch } = c.req.valid('param');
+  const { project_id, commit_hashes, message } = c.req.valid('json');
+  const db = await getDB();
+
+  try {
+    // 1. Fetch all commits and validate
+    const commitMap = new Map<string, NonNullable<Awaited<ReturnType<typeof getCommit>>>>();
+    for (const hash of commit_hashes) {
+      const commit = await getCommit(db, hash);
+      if (!commit) {
+        return errorResponse(c, 'COMMIT_NOT_FOUND', `Commit not found: ${hash}`);
+      }
+      if (commit.branch !== branch) {
+        return errorResponse(c, 'INVALID_REQUEST', `Commit ${hash} is on branch '${commit.branch}', not '${branch}'`);
+      }
+      if (commit.project_id !== project_id) {
+        return errorResponse(c, 'INVALID_REQUEST', `Commit ${hash} belongs to different project`);
+      }
+      commitMap.set(hash, commit);
+    }
+
+    // 1b. Check none are already superseded
+    for (const hash of commit_hashes) {
+      if (await isCommitSuperseded(db, project_id, hash)) {
+        return errorResponse(c, 'INVALID_REQUEST', `Commit ${hash} is already superseded by a previous rewrite`);
+      }
+    }
+
+    // 2. Validate consecutive chain
+    for (let i = 1; i < commit_hashes.length; i++) {
+      const current = commitMap.get(commit_hashes[i])!;
+      if (!current.parents.includes(commit_hashes[i - 1])) {
+        return errorResponse(c, 'INVALID_REQUEST', `Commits are not consecutive: ${commit_hashes[i]} does not have ${commit_hashes[i - 1]} as parent`);
+      }
+    }
+
+    // 3. Find base content
+    const firstCommit = commitMap.get(commit_hashes[0])!;
+    let baseContent: SemanticContent = { trees: [], relations: [] };
+    if (firstCommit.parents.length > 0) {
+      const baseCommit = await getCommit(db, firstCommit.parents[0]);
+      if (baseCommit) {
+        baseContent = baseCommit.content;
+      }
+    }
+
+    // 4. Collect and extract ops
+    let allYopsLogIds: string[];
+    try {
+      allYopsLogIds = await collectYOpsForCommitRange(db, commit_hashes);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return errorResponse(c, 'INVALID_REQUEST', msg);
+    }
+
+    const yopsEntries = await getYOpsForCommit(db, allYopsLogIds);
+
+    let ops: YOp[];
+    try {
+      ops = extractOpsFromEntries(yopsEntries.map((e) => ({ id: e.id, yops: e.yops })));
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return errorResponse(c, 'CONFLICT', `Failed to parse YOps: ${msg}`);
+    }
+
+    // 5. Verify replay matches last commit's snapshot
+    const lastCommit = commitMap.get(commit_hashes[commit_hashes.length - 1])!;
+    const verification = verifyReplay(baseContent, ops, lastCommit.content);
+
+    if (!verification.match) {
+      return errorResponse(c, 'CONFLICT', 'Replayed content does not match commit snapshot — pipeline bug detected', verification.mismatch ?? undefined);
+    }
+
+    // 6. Create squashed commit
+    const newCommit = await createCommit(db, {
+      parents: firstCommit.parents,
+      author: { type: 'human', name: 'api' },
+      content: verification.replayedContent,
+      project_id,
+      message: message ?? `Squash ${commit_hashes.length} commits`,
+      branch,
+      provenance: { method: 'squash', source_commits: commit_hashes },
+      yops_log_ids: allYopsLogIds,
+    });
+
+    // 7. Record rewrite
+    await insertRewrite(db, {
+      projectId: project_id,
+      branch,
+      operation: 'squash',
+      sourceHashes: commit_hashes,
+      resultHash: newCommit.hash,
+      baseHash: firstCommit.parents[0] ?? null,
+      opsReplayed: verification.opsApplied,
+      yopsLogIds: allYopsLogIds,
+      author: { type: 'human', name: 'api' },
+    });
+
+    return c.json({
+      success: true as const,
+      data: {
+        commit: newCommit,
+        superseded: commit_hashes,
+        ops_replayed: verification.opsApplied,
+      },
+    }, 200);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Squash failed';
+    return errorResponse(c, 'INTERNAL_ERROR', msg);
   }
 });
