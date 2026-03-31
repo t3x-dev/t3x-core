@@ -11,6 +11,7 @@
  */
 
 import {
+  applyYOps,
   checkDiffCompatibility,
   checkReadiness,
   computeSessionContext,
@@ -454,16 +455,25 @@ export async function* runExtractionPipeline(
 
     // ── Code-based structure enforcement ──
     // Single-root: if multiple roots exist and no drift was detected, nest smaller roots under the largest
+    // Uses move YOps so the restructuring is captured in the yops log and replayable
     if (organizedSnapshot.trees.length > 1 && !driftDecision) {
       const countSlots = (node: { slots: Record<string, unknown>; children: Array<{ slots: Record<string, unknown>; children: any[] }> }): number =>
         Object.keys(node.slots).length + (node.children || []).reduce((sum: number, c: any) => sum + countSlots(c), 0);
 
       const sorted = [...organizedSnapshot.trees].sort((a, b) => countSlots(b) - countSlots(a));
-      const largest = sorted[0];
+      const largestKey = sorted[0].key;
+      const moveOps: import('@t3x-dev/core').YOp[] = [];
       for (let i = 1; i < sorted.length; i++) {
-        largest.children.push(sorted[i]);
+        moveOps.push({ move: { path: sorted[i].key, to: `${largestKey}/${sorted[i].key}` } });
       }
-      organizedSnapshot = { trees: [largest], relations: organizedSnapshot.relations };
+      if (moveOps.length > 0) {
+        const nestResult = applyYOps(organizedSnapshot, moveOps);
+        if (nestResult.ok) {
+          organizedSnapshot = { trees: nestResult.trees, relations: nestResult.relations };
+          // Prepend move ops to result.yops so they're persisted
+          result.yops.push(...moveOps);
+        }
+      }
     }
 
     yield {
