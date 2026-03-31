@@ -13,7 +13,7 @@
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import type { YOpsSource } from '@t3x-dev/core';
-import { flattenTrees } from '@t3x-dev/core';
+import { flattenTrees, YOpSchema } from '@t3x-dev/core';
 import {
   deleteYOpsLogEntry,
   findConversationById,
@@ -51,30 +51,10 @@ const YOpsIdParam = z.object({
 
 const YOpsSourceSchema = z.enum(['pipeline', 'manual', 'answer', 'collapse', 'compress']);
 
-const FrameChangeSchema = z
-  .object({
-    action: z.enum(['add', 'update', 'remove']),
-  })
-  .passthrough();
-
-const RelationInputSchema = z
-  .object({
-    from: z.string().min(1),
-    to: z.string().min(1),
-    type: z.enum(['causes', 'conditions', 'contrasts', 'follows', 'depends']),
-  })
-  .passthrough();
-
-const TreeChangeBatchSchema = z.object({
-  changes: z.array(FrameChangeSchema).min(1),
-  new_relations: z.array(RelationInputSchema).optional(),
-  remove_relations: z.array(RelationInputSchema).optional(),
-});
-
 const CreateYOpsRequest = z.object({
   source: YOpsSourceSchema,
   turn_hash: z.string().optional(),
-  yops: TreeChangeBatchSchema,
+  yops: z.array(YOpSchema),
 });
 
 const YOpsLogEntryResponse = z.object({
