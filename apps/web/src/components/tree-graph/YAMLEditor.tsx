@@ -1,6 +1,6 @@
 'use client';
 
-import type { TreeChangeBatch, YOpsSource, TreeDiff, SemanticContent, SlotValue } from '@t3x-dev/core';
+import type { YOp, YOpsSource, TreeDiff, SemanticContent, SlotValue } from '@t3x-dev/core';
 import { diffCommits } from '@t3x-dev/core';
 import { treesToNodes } from '@/lib/treeCompat';
 import yaml from 'js-yaml';
@@ -11,70 +11,68 @@ import { cn } from '@/lib/utils';
 
 interface YAMLEditorProps {
   content: SemanticContent;
-  onBatchCreated: (batch: TreeChangeBatch, source: YOpsSource) => void;
+  onBatchCreated: (ops: YOp[], source: YOpsSource) => void;
   className?: string;
 }
 
 // ── Helpers ──
 
-/** Convert a TreeDiff into a TreeChangeBatch for the change pipeline. */
-function treeDiffToBatch(diff: TreeDiff, sourceContent: SemanticContent, targetContent: SemanticContent): TreeChangeBatch | null {
-  const batch: TreeChangeBatch = { changes: [] };
+/** Convert a TreeDiff into YOp[] directly. */
+function treeDiffToYOps(diff: TreeDiff, _sourceContent: SemanticContent, targetContent: SemanticContent): YOp[] | null {
+  const ops: YOp[] = [];
 
   // Added paths (only in target = new in edited version)
   for (const path of diff.onlyInTarget) {
     const nodes = treesToNodes(targetContent.trees);
-    const node = nodes.find(f => f.id === path);
+    const node = nodes.find((f) => f.id === path);
     if (node) {
       const parentPath = path.includes('.') ? path.slice(0, path.lastIndexOf('.')) : '';
-      batch.changes.push({
-        action: 'add',
-        parent_path: parentPath,
-        node: { key: node.key, slots: node.slots, children: node.children },
+      ops.push({
+        add: {
+          parent: parentPath,
+          node: { [node.key]: Object.fromEntries(Object.entries(node.slots)) },
+          source: {},
+          from: 'manual',
+        },
       });
     }
   }
 
   // Removed paths (only in source = deleted in edited version)
   for (const path of diff.onlyInSource) {
-    batch.changes.push({ action: 'remove', target_path: path });
+    ops.push({ drop: { path } });
   }
 
-  // Modified paths
+  // Modified paths — emit set/unset per slot
   for (const mod of diff.modified) {
-    const slots: Record<string, SlotValue | null> = {};
     for (const sd of mod.slotDiffs) {
-      switch (sd.type) {
-        case 'added':
-          slots[sd.key] = sd.newValue ?? null;
-          break;
-        case 'removed':
-          slots[sd.key] = null;
-          break;
-        case 'changed':
-          slots[sd.key] = sd.newValue ?? null;
-          break;
+      if (sd.type === 'removed') {
+        ops.push({ unset: { path: `${mod.path}/${sd.key}` } });
+      } else {
+        const value = sd.newValue;
+        if (value !== undefined) {
+          ops.push({
+            set: {
+              path: `${mod.path}/${sd.key}`,
+              value,
+              source: String(value),
+              from: 'manual',
+            },
+          });
+        }
       }
-    }
-    if (Object.keys(slots).length > 0) {
-      batch.changes.push({ action: 'update', target_path: mod.path, slots });
     }
   }
 
   // Relations
-  if (diff.relationsAdded.length > 0) {
-    batch.new_relations = diff.relationsAdded;
+  for (const rel of diff.relationsAdded) {
+    ops.push({ relate: { from: rel.from, to: rel.to, type: rel.type } });
   }
-  if (diff.relationsRemoved.length > 0) {
-    batch.remove_relations = diff.relationsRemoved;
-  }
-
-  // Return null if no changes
-  if (batch.changes.length === 0 && !batch.new_relations && !batch.remove_relations) {
-    return null;
+  for (const rel of diff.relationsRemoved) {
+    ops.push({ unrelate: { from: rel.from, to: rel.to, type: rel.type } });
   }
 
-  return batch;
+  return ops.length > 0 ? ops : null;
 }
 
 /** Minimal validation: must have a trees array. */
@@ -125,15 +123,15 @@ export function YAMLEditor({ content, onBatchCreated, className }: YAMLEditorPro
     // 3. Diff against original
     const diff = diffCommits(contentRef.current, edited);
 
-    // 4. Convert to tree change batch
-    const batch = treeDiffToBatch(diff, contentRef.current, edited);
-    if (!batch) {
+    // 4. Convert to YOp[]
+    const ops = treeDiffToYOps(diff, contentRef.current, edited);
+    if (!ops) {
       setError('No changes detected');
       return;
     }
 
     // 5. Emit
-    onBatchCreated(batch, 'manual');
+    onBatchCreated(ops, 'manual');
   }, [text, onBatchCreated]);
 
   const handleKeyDown = useCallback(

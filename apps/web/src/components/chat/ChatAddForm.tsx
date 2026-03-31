@@ -1,5 +1,6 @@
 'use client';
 
+import type { YOp } from '@t3x-dev/core';
 import { Plus } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import type { TextSelectionResult } from '@/hooks/useTextSelection';
@@ -12,7 +13,7 @@ interface ChatAddFormProps {
 
 export function ChatAddForm({ selection, onDone }: ChatAddFormProps) {
   const draft = useExtractionPanelStore((s) => s.draft);
-  const applyTreeChanges = useExtractionPanelStore((s) => s.applyTreeChanges);
+  const applyYOps = useExtractionPanelStore((s) => s.applyYOps);
 
   const nodeOptions = useMemo(() => draft.trees.map((t) => t.key), [draft.trees]);
 
@@ -23,18 +24,18 @@ export function ChatAddForm({ selection, onDone }: ChatAddFormProps) {
   function handleAdd() {
     if (!targetNode || !slotKey) return;
 
-    const batch = {
-      changes: [
-        {
-          action: 'update' as const,
-          target_path: targetNode,
-          slots: { [slotKey]: slotValue },
-          slot_quotes: { [`${targetNode}.${slotKey}`]: selection.text },
+    const ops: YOp[] = [
+      {
+        set: {
+          path: `${targetNode}/${slotKey}`,
+          value: slotValue,
+          source: selection.text,
+          from: 'manual',
         },
-      ],
-    };
+      },
+    ];
 
-    applyTreeChanges(batch, 'manual');
+    applyYOps(ops, 'manual');
     onDone();
   }
 

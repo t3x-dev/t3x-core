@@ -350,11 +350,9 @@ export function ChatWorkspace({
         setDraft(result.snapshot);
       }
 
-      // delta can be YOp[] (raw array) or { changes: YOp[] } (TreeChangeBatch wrapper)
+      // delta is YOp[]
       const rawDelta = result.delta;
-      const deltaOps: unknown[] | undefined = Array.isArray(rawDelta)
-        ? rawDelta
-        : (rawDelta as { changes?: unknown[] } | undefined)?.changes;
+      const deltaOps: unknown[] | undefined = Array.isArray(rawDelta) ? rawDelta : undefined;
 
       if (deltaOps && deltaOps.length > 0) {
         // Has delta ops — show YOps feed animation first

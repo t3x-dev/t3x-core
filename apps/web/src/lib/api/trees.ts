@@ -2,7 +2,7 @@
  * Tree Semantic Engine API — extraction, yops log, gate check
  */
 
-import type { YOpsLogEntry, YOpsSource, SemanticContent } from '@t3x-dev/core';
+import type { YOp, YOpsLogEntry, YOpsSource, SemanticContent } from '@t3x-dev/core';
 import { API_V1, fetchWithTimeout, handleResponse } from './core';
 
 // ── Types ──
@@ -163,7 +163,7 @@ export async function getSemanticDraft(
 
 export async function createYOpsEntry(
   conversationId: string,
-  yops: unknown,
+  yops: YOp[],
   source: YOpsSource
 ): Promise<YOpsLogEntry> {
   const res = await fetchWithTimeout(

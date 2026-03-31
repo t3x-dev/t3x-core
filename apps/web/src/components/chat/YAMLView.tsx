@@ -172,7 +172,7 @@ function renderSlotLines(
 
 export function YAMLView() {
   const draft = useExtractionPanelStore((s) => s.draft);
-  const applyTreeChanges = useExtractionPanelStore((s) => s.applyTreeChanges);
+  const applyYOps = useExtractionPanelStore((s) => s.applyYOps);
   const yopsHistory = useExtractionPanelStore((s) => s.yopsHistory);
   const yopsLog = useExtractionPanelStore((s) => s.yopsLog);
   const confirmedNodeIds = useExtractionPanelStore((s) => s.confirmedNodeIds);
@@ -228,14 +228,10 @@ export function YAMLView() {
   }, [yamlText]);
 
   const handleSave = useCallback(() => {
-    const delta = parseDisplayYAML(editValue, draft);
-    const hasChanges =
-      delta.changes.length > 0 ||
-      (delta.new_relations?.length ?? 0) > 0 ||
-      (delta.remove_relations?.length ?? 0) > 0;
-    if (hasChanges) applyTreeChanges(delta, 'manual');
+    const ops = parseDisplayYAML(editValue, draft);
+    if (ops.length > 0) applyYOps(ops, 'manual');
     setIsEditing(false);
-  }, [editValue, draft, applyTreeChanges]);
+  }, [editValue, draft, applyYOps]);
 
   const handleCancel = useCallback(() => {
     setIsEditing(false);
@@ -247,11 +243,17 @@ export function YAMLView() {
     const map = new Map<string, { action: 'add' | 'update' | 'remove'; age: number }>();
     // Iterate oldest→newest so newer entries overwrite
     for (let age = yopsHistory.length - 1; age >= 0; age--) {
-      for (const c of yopsHistory[age]) {
-        const id = c.action === 'add'
-          ? (c.parent_path ? `${c.parent_path}.${c.node.key}` : c.node.key)
-          : c.target_path;
-        map.set(id, { action: c.action, age });
+      for (const op of yopsHistory[age]) {
+        if ('add' in op) {
+          const nodeKey = op.add.node ? Object.keys(op.add.node)[0] ?? '' : '';
+          const parent = op.add.parent ?? '';
+          const id = parent ? `${parent}.${nodeKey}` : nodeKey;
+          map.set(id, { action: 'add', age });
+        } else if ('set' in op) {
+          map.set(op.set.path, { action: 'update', age });
+        } else if ('drop' in op) {
+          map.set(op.drop.path, { action: 'remove', age });
+        }
       }
     }
     return map;

@@ -13,12 +13,14 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
   applyAnswer,
+  applyYOps,
   createMeaningPipeline,
   type ExtractionResult,
   type ExtractionTurn,
   Extractor,
   flattenTrees,
   RELATION_TYPES,
+  type RelationType,
   type UserAnswer,
 } from '@t3x-dev/core';
 import {
@@ -303,7 +305,7 @@ async function handleDriftChoice4(
     // Pipeline optional — flat frames still valid
   }
 
-  // 5. Build connecting relation between old root → new root
+  // 5. Build connecting relation between old root → new root as a relate YOp
   const currentFlat = flattenTrees(currentSnapshot.trees);
   const organizedFlat = flattenTrees(organizedSnapshot.trees);
   const oldRootId = currentFlat[0]?.id;
@@ -312,27 +314,37 @@ async function handleDriftChoice4(
     .map((f) => f.id);
   const newRootId = newNodeIds[0];
 
-  // Add connecting relation to the organized snapshot if both roots exist
-  const finalSnapshot = { ...organizedSnapshot, relations: [...organizedSnapshot.relations] };
+  // Append a relate YOp to the persisted ops (not direct mutation)
+  const allYops = [...extractResult.yops];
   if (oldRootId && newRootId) {
     const relationType =
       driftContext?.relation &&
       (RELATION_TYPES as readonly string[]).includes(driftContext.relation)
         ? driftContext.relation
         : 'follows';
-    finalSnapshot.relations.push({
-      from: oldRootId,
-      to: newRootId,
-      type: relationType as any,
+    allYops.push({
+      relate: {
+        from: oldRootId,
+        to: newRootId,
+        type: relationType as RelationType,
+      },
     });
   }
+
+  // Apply the relate op to get the final snapshot
+  const finalResult = allYops.length > extractResult.yops.length
+    ? applyYOps(organizedSnapshot, allYops.slice(extractResult.yops.length))
+    : null;
+  const finalSnapshot = finalResult?.ok
+    ? { trees: finalResult.trees, relations: finalResult.relations }
+    : organizedSnapshot;
 
   // 6. Persist yops + snapshot
   const record = await insertYOpsLogEntry(db, {
     conversationId: conversation.conversationId,
     projectId: conversation.projectId,
     source: 'pipeline',
-    yops: extractResult.yops,
+    yops: allYops,
     pipelineState: 'completed',
   });
 

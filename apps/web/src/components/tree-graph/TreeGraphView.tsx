@@ -1,7 +1,7 @@
 'use client';
 
 import {
-  type TreeChangeBatch,
+  type YOp,
   type YOpsSource,
   RELATION_TYPES,
   type Relation,
@@ -124,7 +124,7 @@ interface TreeGraphViewProps {
   content: SemanticContent;
   changeState?: Record<string, 'added' | 'updated' | 'removed'>;
   updatedSlots?: Record<string, string[]>;
-  onBatchCreated?: (batch: TreeChangeBatch, source: YOpsSource) => void;
+  onBatchCreated?: (ops: YOp[], source: YOpsSource) => void;
   className?: string;
 }
 
@@ -156,10 +156,8 @@ function TreeGraphInner({
   const handleSlotEdit = useCallback(
     (treeId: string, key: string, value: SlotValue) => {
       if (!onBatchCreated) return;
-      const batch: TreeChangeBatch = {
-        changes: [{ action: 'update', target_path: treeId, slots: { [key]: value } }],
-      };
-      onBatchCreated(batch, 'manual');
+      const ops: YOp[] = [{ set: { path: `${treeId}/${key}`, value: value as string, source: String(value), from: 'manual' } }];
+      onBatchCreated(ops, 'manual');
     },
     [onBatchCreated]
   );
@@ -167,23 +165,22 @@ function TreeGraphInner({
   const handleTypeEdit = useCallback(
     (treeId: string, newType: string) => {
       if (!onBatchCreated) return;
-      // Type change is modeled as an update with empty slots — the type itself is changed
-      // We need to include the new type in the update. Since TreeChange 'update' only has
-      // slots, we model type change as remove + add with same id.
+      // Type change: remove old node + add with new key
       const nodes = treesToNodes(content.trees);
       const existingNode = nodes.find((f) => f.id === treeId);
       if (!existingNode) return;
-      const batch: TreeChangeBatch = {
-        changes: [
-          { action: 'remove', target_path: treeId },
-          {
-            action: 'add',
-            parent_path: '',
-            node: { key: newType, slots: existingNode.slots, children: existingNode.children },
+      const ops: YOp[] = [
+        { drop: { path: treeId } },
+        {
+          add: {
+            parent: '',
+            node: { [newType]: Object.fromEntries(Object.entries(existingNode.slots)) },
+            source: {},
+            from: 'manual',
           },
-        ],
-      };
-      onBatchCreated(batch, 'manual');
+        },
+      ];
+      onBatchCreated(ops, 'manual');
     },
     [onBatchCreated, content.trees]
   );
@@ -194,20 +191,17 @@ function TreeGraphInner({
     (_event: React.MouseEvent) => {
       if (!onBatchCreated) return;
       const newKey = nextNodeKey(content);
-      const batch: TreeChangeBatch = {
-        changes: [
-          {
-            action: 'add',
-            parent_path: '',
-            node: {
-              key: newKey,
-              slots: { label: 'New Node' },
-              children: [],
-            },
+      const ops: YOp[] = [
+        {
+          add: {
+            parent: '',
+            node: { [newKey]: { label: 'New Node' } },
+            source: {},
+            from: 'manual',
           },
-        ],
-      };
-      onBatchCreated(batch, 'manual');
+        },
+      ];
+      onBatchCreated(ops, 'manual');
     },
     [onBatchCreated, content]
   );
@@ -227,10 +221,8 @@ function TreeGraphInner({
 
       // Delete selected node
       if (selectedNodeId) {
-        const batch: TreeChangeBatch = {
-          changes: [{ action: 'remove', target_path: selectedNodeId }],
-        };
-        onBatchCreated(batch, 'manual');
+        const ops: YOp[] = [{ drop: { path: selectedNodeId } }];
+        onBatchCreated(ops, 'manual');
         return;
       }
 
@@ -247,12 +239,10 @@ function TreeGraphInner({
           .filter(Boolean) as Relation[];
 
         if (removeRelations.length > 0) {
-          // Need at least one change for TreeChangeBatch; use a no-op comment via remove_relations
-          const batch: TreeChangeBatch = {
-            changes: [{ action: 'update', target_path: removeRelations[0].from, slots: {} }],
-            remove_relations: removeRelations,
-          };
-          onBatchCreated(batch, 'manual');
+          const ops: YOp[] = removeRelations.map((r) => ({
+            unrelate: { from: r.from, to: r.to, type: r.type },
+          }));
+          onBatchCreated(ops, 'manual');
         }
       }
     },
@@ -286,12 +276,10 @@ function TreeGraphInner({
   const handleRelationTypeSelect = useCallback(
     (type: SemanticRelationType) => {
       if (!pendingConnection || !onBatchCreated) return;
-      const batch: TreeChangeBatch = {
-        // Need at least one change; use no-op update on source
-        changes: [{ action: 'update', target_path: pendingConnection.source, slots: {} }],
-        new_relations: [{ from: pendingConnection.source, to: pendingConnection.target, type }],
-      };
-      onBatchCreated(batch, 'manual');
+      const ops: YOp[] = [
+        { relate: { from: pendingConnection.source, to: pendingConnection.target, type } },
+      ];
+      onBatchCreated(ops, 'manual');
       setPendingConnection(null);
     },
     [pendingConnection, onBatchCreated]

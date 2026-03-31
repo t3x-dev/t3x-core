@@ -129,17 +129,23 @@ function computeNodeSignals(
     const isManual = entry.source === 'manual';
     const framesMentioned = new Set<string>();
 
-    // Extract changes from yops (may be TreeChangeBatch format with .changes or YOp[] array)
-    const yopsData = entry.yops as any;
-    const changes: Array<{ action: string; target?: string; frame?: { id: string } }> =
-      Array.isArray(yopsData) ? [] : (yopsData?.changes ?? []);
-
-    for (const change of changes) {
+    // Extract touched node paths from YOp[] entries
+    const ops = Array.isArray(entry.yops) ? (entry.yops as Array<Record<string, unknown>>) : [];
+    for (const op of ops) {
       let targetId: string | undefined;
-      if (change.action === 'add' && change.frame) {
-        targetId = change.frame.id;
-      } else if ((change.action === 'update' || change.action === 'remove') && change.target) {
-        targetId = change.target;
+      if ('set' in op && op.set && typeof op.set === 'object') {
+        targetId = ((op.set as { path?: string }).path ?? '').split('/')[0];
+      } else if ('unset' in op && op.unset && typeof op.unset === 'object') {
+        targetId = ((op.unset as { path?: string }).path ?? '').split('/')[0];
+      } else if ('add' in op && op.add && typeof op.add === 'object') {
+        const node = (op.add as { node?: Record<string, unknown> }).node;
+        targetId = node ? Object.keys(node)[0] : undefined;
+      } else if ('drop' in op && op.drop && typeof op.drop === 'object') {
+        targetId = ((op.drop as { path?: string }).path ?? '').split('/')[0];
+      } else if ('move' in op && op.move && typeof op.move === 'object') {
+        targetId = ((op.move as { path?: string }).path ?? '').split('/')[0];
+      } else if ('rename' in op && op.rename && typeof op.rename === 'object') {
+        targetId = ((op.rename as { path?: string }).path ?? '').split('/')[0];
       }
 
       if (targetId && signals.has(targetId)) {

@@ -1,12 +1,11 @@
 import type {
   SemanticContent,
-  TreeChange,
-  TreeChangeBatch,
   TreeNode,
+  YOp,
   YOpsLogEntry,
   YOpsSource,
 } from '@t3x-dev/core';
-import { applyTreeChanges, flattenTrees } from '@t3x-dev/core';
+import { applyYOps as coreApplyYOps, flattenTrees } from '@t3x-dev/core';
 import { create } from 'zustand';
 import { createCommit, listCommits } from '@/lib/api/commits';
 import type { Topic } from '@/lib/api/topics';
@@ -32,7 +31,7 @@ interface ExtractionPanelState {
   confirmedSlotKeys: Record<string, Record<string, boolean>>; // nodeKey → { slotKey: true }
   focusIntentEnabled: boolean;
   llmHighlightedNodeIds: Record<string, boolean>;
-  yopsHistory: TreeChange[][];
+  yopsHistory: YOp[][];
   removedNodes: TreeNode[];
 
   // Compression
@@ -82,7 +81,7 @@ interface ExtractionPanelState {
   setPanelMode: (mode: PanelMode) => void;
   setActiveView: (view: ActiveView) => void;
   togglePanel: () => void;
-  applyTreeChanges: (batch: TreeChangeBatch, source: YOpsSource, turnHash?: string) => void;
+  applyYOps: (ops: YOp[], source: YOpsSource, turnHash?: string) => void;
   setDraft: (content: SemanticContent) => void;
   resetDraft: () => void;
   setExtracting: (extracting: boolean) => void;
@@ -293,15 +292,16 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
     set({ panelMode: current === 'collapsed' ? 'default' : 'collapsed' });
   },
 
-  applyTreeChanges: (batch, source, turnHash) => {
+  applyYOps: (ops, source, turnHash) => {
     const { draft, yopsLog } = get();
 
-    // Use core applyTreeChanges to properly update the tree structure
-    const newContent = applyTreeChanges(draft, batch);
+    const result = coreApplyYOps(draft, ops);
+    if (!result.ok) return;
+    const newContent: SemanticContent = { trees: result.trees, relations: result.relations };
 
     const entry: YOpsLogEntry = {
       id: crypto.randomUUID(),
-      yops: batch,
+      yops: ops,
       source,
       created_at: new Date().toISOString(),
       turn_hash: turnHash,
@@ -310,26 +310,31 @@ export const useExtractionPanelStore = create<ExtractionPanelState>((set, get) =
     set({
       draft: newContent,
       yopsLog: [...yopsLog, entry],
-      yopsHistory: [batch.changes, ...get().yopsHistory].slice(0, 3),
+      yopsHistory: [ops, ...get().yopsHistory].slice(0, 3),
     });
 
     // Track manual edits
     if (source === 'manual') {
       const ids = new Set(get().manualEditedNodeIds);
-      for (const change of batch.changes) {
-        if (change.action === 'add') ids.add(change.node.key);
-        else if (change.action === 'update') ids.add(change.target_path);
-        else if (change.action === 'remove') ids.add(change.target_path);
+      for (const op of ops) {
+        if ('add' in op) {
+          const nodeKey = Object.keys(op.add.node)[0];
+          if (nodeKey) ids.add(nodeKey);
+        } else if ('set' in op) {
+          ids.add(op.set.path.split('/')[0]);
+        } else if ('drop' in op) {
+          ids.add(op.drop.path.split('/')[0]);
+        } else if ('unset' in op) {
+          ids.add(op.unset.path.split('/')[0]);
+        }
       }
       set({ manualEditedNodeIds: ids });
     }
 
-    // Persist user edits to database (LLM extraction and compression are already saved by the API)
+    // Persist user edits to database
     const convId = get().conversationId;
     if (convId && source !== 'pipeline' && source !== 'compress') {
-      createYOpsEntry(convId, batch, source).catch(() => {
-        // Persist failed — non-critical, store has the data
-      });
+      createYOpsEntry(convId, ops, source).catch(() => {});
     }
   },
 

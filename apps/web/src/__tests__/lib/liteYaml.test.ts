@@ -51,22 +51,22 @@ describe('toDisplayYAML', () => {
 });
 
 describe('parseDisplayYAML', () => {
-  it('should detect added trees as add changes', () => {
+  it('should detect added trees as add YOps', () => {
     const currentContent: SemanticContent = { trees: [], relations: [] };
     const yamlWithNewNode = `new_node:\n  key: "value"\n`;
-    const delta = parseDisplayYAML(yamlWithNewNode, currentContent);
+    const ops = parseDisplayYAML(yamlWithNewNode, currentContent);
 
-    expect(delta.changes.length).toBe(1);
-    expect(delta.changes[0].action).toBe('add');
-    if (delta.changes[0].action === 'add') {
-      expect(delta.changes[0].node.key).toBe('new_node');
+    expect(ops.length).toBe(1);
+    expect('add' in ops[0]).toBe(true);
+    if ('add' in ops[0]) {
+      expect(ops[0].add.node).toHaveProperty('new_node');
     }
   });
 
-  it('should detect removed trees as remove changes', () => {
-    const delta = parseDisplayYAML('', sampleContent);
+  it('should detect removed trees as drop YOps', () => {
+    const ops = parseDisplayYAML('', sampleContent);
 
-    const removes = delta.changes.filter((c) => c.action === 'remove');
-    expect(removes.length).toBe(2);
+    const drops = ops.filter((op) => 'drop' in op);
+    expect(drops.length).toBe(2);
   });
 });
