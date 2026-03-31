@@ -55,7 +55,17 @@ export function buildAlignedNodes(
     });
   }
 
+  // Collapse child paths: skip paths whose ANY ancestor is already in the same set.
+  // e.g., if "a/b" is removed, skip "a/b/c" and "a/b/c/d".
+  const sourceSet = new Set(diff.onlyInSource);
   for (const path of diff.onlyInSource) {
+    let ancestor = path;
+    let skip = false;
+    while (ancestor.includes('/')) {
+      ancestor = ancestor.slice(0, ancestor.lastIndexOf('/'));
+      if (sourceSet.has(ancestor)) { skip = true; break; }
+    }
+    if (skip) continue;
     aligned.push({
       treeId: path,
       type: 'removed',
@@ -63,7 +73,15 @@ export function buildAlignedNodes(
     });
   }
 
+  const targetSet = new Set(diff.onlyInTarget);
   for (const path of diff.onlyInTarget) {
+    let ancestor = path;
+    let skip = false;
+    while (ancestor.includes('/')) {
+      ancestor = ancestor.slice(0, ancestor.lastIndexOf('/'));
+      if (targetSet.has(ancestor)) { skip = true; break; }
+    }
+    if (skip) continue;
     aligned.push({
       treeId: path,
       type: 'added',

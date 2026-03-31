@@ -88,21 +88,24 @@ test.describe('DiffDisplayView Full E2E', () => {
         message: 'Initial requirements',
         parents: [],
         content: {
-          frames: [
+          trees: [
             {
-              id: 'f_001',
+              key: 't_001',
               type: 'legacy_sentence',
               slots: { text: 'User prefers dark mode' },
+              children: [],
             },
             {
-              id: 'f_002',
+              key: 't_002',
               type: 'legacy_sentence',
               slots: { text: 'Budget is $3000' },
+              children: [],
             },
             {
-              id: 'f_003',
+              key: 't_003',
               type: 'legacy_sentence',
               slots: { text: 'Deadline is Friday' },
+              children: [],
             },
           ],
           relations: [],
@@ -123,23 +126,26 @@ test.describe('DiffDisplayView Full E2E', () => {
         message: 'Updated requirements',
         parents: [commit1Hash],
         content: {
-          frames: [
+          trees: [
             {
-              id: 'f_001',
+              key: 't_001',
               type: 'legacy_sentence',
               slots: { text: 'User prefers dark mode' },
+              children: [],
             },
             {
-              id: 'f_002',
+              key: 't_002',
               type: 'legacy_sentence',
               slots: { text: 'Budget is $3000' },
+              children: [],
             },
             {
-              id: 'f_004',
+              key: 't_004',
               type: 'legacy_sentence',
               slots: { text: 'Meeting scheduled for Monday' },
+              children: [],
             },
-            // f_003 (Deadline) removed
+            // t_003 (Deadline) removed
           ],
           relations: [],
         },
@@ -162,8 +168,8 @@ test.describe('DiffDisplayView Full E2E', () => {
     const data1 = await res1.json();
     const data2 = await res2.json();
 
-    expect(data1.data.commit.content.frames).toHaveLength(3);
-    expect(data2.data.commit.content.frames).toHaveLength(3);
+    expect(data1.data.commit.content.trees).toHaveLength(3);
+    expect(data2.data.commit.content.trees).toHaveLength(3);
 
     // Verify parent relationship
     expect(data2.data.commit.parents).toContain(commit1Hash);

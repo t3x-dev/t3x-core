@@ -61,8 +61,8 @@ test.describe('Canvas Workflow', () => {
     const commitLabel = page.locator(`text=${commitMessage}`);
     await expect(commitLabel.first()).toBeVisible({ timeout: 10000 });
 
-    // Should show node or frame count
-    const contentCount = page.locator('text=/\\d+ (nodes?|frames?)/');
+    // Should show node/frame/tree count
+    const contentCount = page.locator('text=/\\d+ (nodes?|frames?|trees?|evidence)/');
     await expect(contentCount.first()).toBeVisible({ timeout: 5000 });
   });
 

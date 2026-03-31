@@ -1,11 +1,14 @@
 'use client';
 
-import { GitBranch, LayoutDashboard, Settings } from 'lucide-react';
+import { LayoutDashboard, Settings } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import { useChatStore } from '@/store/chatStore';
+import { useExtractionPanelStore } from '@/store/extractionPanelStore';
+import { BranchSwitcher } from './BranchSwitcher';
 import { ChatModelSelector } from './ChatModelSelector';
 
 interface ChatHeaderProps {
@@ -24,7 +27,16 @@ export function ChatHeader({
   onModelChange,
 }: ChatHeaderProps) {
   const router = useRouter();
-  const { activeProjectId, activeBranch } = useChatStore();
+  const { activeProjectId, activeBranch, setActiveBranch } = useChatStore();
+  const setCommitBranch = useExtractionPanelStore((s) => s.setCommitBranch);
+
+  const handleBranchChange = useCallback(
+    (branch: string) => {
+      setActiveBranch(branch);
+      setCommitBranch(branch);
+    },
+    [setActiveBranch, setCommitBranch]
+  );
 
   const handleCanvasClick = () => {
     if (activeProjectId) {
@@ -61,16 +73,12 @@ export function ChatHeader({
               {projectName}
             </span>
           )}
-          {activeBranch && (
-            <span
-              className={cn(
-                'flex items-center gap-1 text-xs text-[var(--accent-commit)]',
-                'bg-[var(--accent-commit)]/10 px-2 py-0.5 rounded-md'
-              )}
-            >
-              <GitBranch className="h-3 w-3 shrink-0" />
-              <span className="truncate max-w-[80px]">{activeBranch}</span>
-            </span>
+          {activeBranch && activeProjectId && (
+            <BranchSwitcher
+              projectId={activeProjectId}
+              activeBranch={activeBranch}
+              onBranchChange={handleBranchChange}
+            />
           )}
         </div>
       )}

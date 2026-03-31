@@ -61,15 +61,16 @@ export async function createTestCommit(
   nodes: Array<{ id: string; text: string }>,
   options?: { branch?: string; message?: string; parents?: string[] }
 ): Promise<string> {
-  const frames = nodes.map((s, i) => ({
-    id: `f_${String(i + 1).padStart(3, '0')}`,
+  const trees = nodes.map((s) => ({
+    key: s.id,
     type: 'legacy_sentence',
     slots: { text: s.text },
+    children: [],
   }));
   const response = await request.post(`${API_BASE}/commits`, {
     data: {
       project_id: projectId,
-      content: { frames, relations: [] },
+      content: { trees, relations: [] },
       author: { type: 'human', name: 'E2E Tester' },
       branch: options?.branch || 'main',
       message: options?.message || 'E2E test commit',

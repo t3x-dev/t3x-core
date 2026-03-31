@@ -385,7 +385,7 @@ export function CommitYAMLDocument({ content, className, onSlotClick }: CommitYA
 
         return (
           <div
-            key={line.key}
+            key={`${line.key}-${i}`}
             className={`flex items-baseline transition-colors ${
               line.slotKey ? 'cursor-pointer hover:bg-[var(--hover-bg)] rounded-sm px-2 -mx-2' : ''
             } ${needsTopGap ? 'mt-3 pt-3 border-t border-[var(--stroke-divider)]' : ''}`}
