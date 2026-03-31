@@ -23,7 +23,7 @@ import { buildYOpsPrompt } from './yopsPrompt';
 
 const MAX_RETRIES = 1;
 const TEMPERATURE = 0.1;
-const MAX_TOKENS = 4096;
+const MAX_TOKENS = 8192;
 
 // ── Result Type ──
 

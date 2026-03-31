@@ -329,7 +329,6 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
       generated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       created_by TEXT,
       attempt_number INTEGER NOT NULL DEFAULT 1,
-      corrective_feedback TEXT,
       prompt_used TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_leaf_history_leaf ON leaf_history(leaf_id);
@@ -337,8 +336,10 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
 
     -- Migration: Add S16 columns to existing leaf_history tables
     ALTER TABLE leaf_history ADD COLUMN IF NOT EXISTS attempt_number INTEGER NOT NULL DEFAULT 1;
-    ALTER TABLE leaf_history ADD COLUMN IF NOT EXISTS corrective_feedback TEXT;
     ALTER TABLE leaf_history ADD COLUMN IF NOT EXISTS prompt_used TEXT;
+
+    -- Migration: Drop dead corrective_feedback column (feedback loop refactor)
+    ALTER TABLE leaf_history DROP COLUMN IF EXISTS corrective_feedback;
 
     -- Migration: Add provider/model columns to projects and conversations (PR #554)
     ALTER TABLE projects ADD COLUMN IF NOT EXISTS provider_config TEXT;

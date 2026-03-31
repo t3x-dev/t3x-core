@@ -19,6 +19,7 @@
  */
 
 import { nanoid } from 'nanoid';
+import { generateLesson } from '../feedback/generate';
 import type { EmbeddingProvider } from '../providers/embedding/base';
 import { cosineSimilarity } from '../providers/embedding/base';
 import type { Assertion, Constraint } from '../types';
@@ -254,6 +255,7 @@ export function validateConstraintsExactOnly(
       constraint_id: constraint.id,
       passed: checkResult.passed,
       details: checkResult.message,
+      lesson: checkResult.passed ? undefined : generateLesson(constraint, checkResult.message),
     };
 
     assertions.push(assertion);
@@ -331,6 +333,7 @@ export async function validateConstraints(options: ValidateOptions): Promise<Val
       constraint_id: constraint.id,
       passed: checkResult.passed,
       details: checkResult.message,
+      lesson: checkResult.passed ? undefined : generateLesson(constraint, checkResult.message),
     };
 
     assertions.push(assertion);

@@ -7,8 +7,7 @@ import remarkGfm from 'remark-gfm';
 import type { Citation } from '@/lib/api/chat';
 import type { SourceMapping } from '@/lib/sourceMap';
 import { cn } from '@/lib/utils';
-import { useExtractionStore } from '@/store/extractionStore';
-import { useExtractionUIStore } from '@/store/extractionUIStore';
+import { useExtractionPanelStore } from '@/store/extractionPanelStore';
 import { CitationChips } from './CitationChips';
 import { CodeBlock } from './CodeBlock';
 import { ThinkingSection } from './ThinkingSection';
@@ -132,7 +131,8 @@ function splitIntoSegments(content: string, mappings: SourceMapping[]): SourceSe
 
 /**
  * Render message content with source-mapped interactive spans.
- * Each extracted span gets a purple background and click/hover handlers.
+ * Each extracted span gets a purple background (default) or green underline (review phase)
+ * and click/hover handlers.
  */
 function SourceMappedText({
   content,
@@ -141,7 +141,7 @@ function SourceMappedText({
   onHoverSlot,
   onLeaveSlot,
   onClickSlot,
-  phase,
+  isReviewPhase,
 }: {
   content: string;
   mappings: SourceMapping[];
@@ -149,7 +149,7 @@ function SourceMappedText({
   onHoverSlot: (treePath: string, slotKey: string | null) => void;
   onLeaveSlot: () => void;
   onClickSlot: (treePath: string, slotKey: string | null) => void;
-  phase?: string;
+  isReviewPhase: boolean;
 }) {
   const segments = useMemo(() => splitIntoSegments(content, mappings), [content, mappings]);
 
@@ -162,34 +162,35 @@ function SourceMappedText({
 
         const m = seg.mapping;
         const isActive = hoveredNodeId === m.treePath;
-        const isReview = phase === 'review';
+
+        const spanStyle: React.CSSProperties = isReviewPhase
+          ? {
+              background: isActive ? 'rgba(74, 222, 128, 0.2)' : 'rgba(74, 222, 128, 0.12)',
+              borderBottom: '2px solid var(--status-success)',
+              borderRadius: 2,
+              padding: '1px 0',
+              color: 'inherit',
+              cursor: 'pointer',
+              transition: 'background 0.15s',
+            }
+          : {
+              background: isActive
+                ? 'rgba(139, 92, 246, 0.3)'
+                : 'rgba(139, 92, 246, 0.08)',
+              borderBottom: isActive ? '2px solid var(--accent)' : 'none',
+              borderRadius: 2,
+              padding: '1px 0',
+              color: 'inherit',
+              cursor: 'pointer',
+              transition: 'background 0.15s, border-bottom 0.15s',
+            };
 
         return (
           <span
             key={i}
             data-tree-path={m.treePath}
             data-slot-key={m.slotKey}
-            style={{
-              background: isReview
-                ? isActive
-                  ? 'rgba(139, 92, 246, 0.15)'
-                  : 'rgba(74, 222, 128, 0.12)'
-                : isActive
-                  ? 'rgba(139, 92, 246, 0.3)'
-                  : 'rgba(139, 92, 246, 0.08)',
-              borderBottom: isReview
-                ? isActive
-                  ? '2px solid #8b5cf6'
-                  : '2px solid #4ade80'
-                : isActive
-                  ? '2px solid rgba(139, 92, 246, 0.5)'
-                  : undefined,
-              borderRadius: 2,
-              padding: '0 1px',
-              color: 'inherit',
-              cursor: 'pointer',
-              transition: 'background 0.15s, border-bottom 0.15s',
-            }}
+            style={spanStyle}
             onMouseEnter={() => onHoverSlot(m.treePath, m.slotKey)}
             onMouseLeave={onLeaveSlot}
             onClick={(e) => {
@@ -222,12 +223,13 @@ export function ChatMessage({
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState('');
 
-  const phase = useExtractionUIStore((s) => s.phase);
-  const hoveredNodeId = useExtractionUIStore((s) => s.hoveredNodeId);
-  const hoveredSlotKey = useExtractionUIStore((s) => s.hoveredSlotKey);
-  const draft = useExtractionStore((s) => s.draft);
-  const setHoveredTurnIndex = useExtractionUIStore((s) => s.setHoveredTurnIndex);
-  const scrollToCenter = useExtractionUIStore((s) => s.scrollToCenter);
+  const hoveredNodeId = useExtractionPanelStore((s) => s.hoveredNodeId);
+  const hoveredSlotKey = useExtractionPanelStore((s) => s.hoveredSlotKey);
+  const draft = useExtractionPanelStore((s) => s.draft);
+  const extractionPhase = useExtractionPanelStore((s) => s.extractionPhase);
+  const isReviewPhase = extractionPhase === 'review' || extractionPhase === 'committing';
+  const setHoveredTurnIndex = useExtractionPanelStore((s) => s.setHoveredTurnIndex);
+  const scrollToCenter = useExtractionPanelStore((s) => s.scrollToCenter);
   const textRef = useRef<HTMLDivElement>(null);
   const messageRef = useRef<HTMLDivElement>(null);
 
@@ -270,20 +272,20 @@ export function ChatMessage({
 
   // ── Chat → YAML: source map interaction handlers ──
   const handleHoverSlot = useCallback((treePath: string, slotKey: string | null) => {
-    useExtractionUIStore.setState({ hoveredFromChat: true });
-    useExtractionUIStore.getState().setHoveredNodeId(treePath, slotKey);
+    useExtractionPanelStore.setState({ hoveredFromChat: true });
+    useExtractionPanelStore.getState().setHoveredNodeId(treePath, slotKey);
   }, []);
 
   const handleLeaveSlot = useCallback(() => {
-    useExtractionUIStore.getState().setHoveredNodeId(null);
+    useExtractionPanelStore.getState().setHoveredNodeId(null);
   }, []);
 
   const handleClickSlot = useCallback((treePath: string, slotKey: string | null) => {
-    useExtractionUIStore.setState({
+    useExtractionPanelStore.setState({
       hoveredFromChat: true,
       scrollToCenter: true,
     });
-    useExtractionUIStore.getState().setHoveredNodeId(treePath, slotKey);
+    useExtractionPanelStore.getState().setHoveredNodeId(treePath, slotKey);
   }, []);
 
   // Auto-scroll this message into view when it's the source of hovered YAML
@@ -402,7 +404,7 @@ export function ChatMessage({
                         onHoverSlot={handleHoverSlot}
                         onLeaveSlot={handleLeaveSlot}
                         onClickSlot={handleClickSlot}
-                        phase={phase}
+                        isReviewPhase={isReviewPhase}
                       />
                     ) : (
                       content
@@ -437,7 +439,7 @@ export function ChatMessage({
                         onHoverSlot={handleHoverSlot}
                         onLeaveSlot={handleLeaveSlot}
                         onClickSlot={handleClickSlot}
-                        phase={phase}
+                        isReviewPhase={isReviewPhase}
                       />
                     </div>
                   ) : (

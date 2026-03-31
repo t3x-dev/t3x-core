@@ -13,7 +13,7 @@
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
-  collectLessons,
+  collectLessonsFromAssertions,
   generateLeafOutput,
   suggestConstraints,
   suggestionsToConstraints,
@@ -667,7 +667,9 @@ leavesMLRoutes.openapi(reverseLearnRoute, async (c) => {
 
     // Collect lessons from failed assertions on this leaf and siblings
     const allLeaves = await findLeavesByCommit(db, leaf.commit_hash);
-    const lessons = collectLessons(allLeaves);
+    const lessons = collectLessonsFromAssertions(
+      allLeaves.map((l) => ({ id: l.id, assertions: l.assertions }))
+    );
 
     if (lessons.length === 0) {
       return c.json(
@@ -696,7 +698,7 @@ leavesMLRoutes.openapi(reverseLearnRoute, async (c) => {
     // Use suggestConstraints but augment the instructions with lessons
     const lessonsContext = lessons
       .slice(0, 10)
-      .map((l, i) => `${i + 1}. ${l}`)
+      .map((l, i) => `${i + 1}. ${l.signal}`)
       .join('\n');
 
     const { provider: trackedLlm, usage: rlUsage } = wrapWithUsageTracking(llm);
@@ -727,7 +729,7 @@ Focus on constraints that directly address these failures.`,
         success: true as const,
         data: {
           suggestions: result.suggestions,
-          lessons_used: lessons.slice(0, 10),
+          lessons_used: lessons.slice(0, 10).map((l) => l.signal),
           model: result.model,
         },
       },

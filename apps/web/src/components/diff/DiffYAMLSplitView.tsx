@@ -1,28 +1,25 @@
 'use client';
 
-import type { TreeDiff } from '@t3x-dev/core';
+import type { SemanticContent, TreeDiff } from '@t3x-dev/core';
 import { useCallback, useRef } from 'react';
 import { YAML_COLORS } from './DiffYAMLFormatters';
 import {
-  TreeSeparator,
   getTreeRelations,
   IdenticalCollapseBar,
   RelationAnnotation,
+  TreeSeparator,
   useDYTheme,
 } from './DiffYAMLShared';
 import { type AlignedNode, buildAlignedNodes, buildAlignedSlotKeys } from './DiffYAMLUtils';
-import {
-  treeLineCount,
-  SlotValueSpan,
-  WordDiffSpan,
-  YAMLNodeRenderer,
-} from './YAMLNodeRenderer';
 import { YAMLLine } from './YAMLLine';
+import { SlotValueSpan, treeLineCount, WordDiffSpan, YAMLNodeRenderer } from './YAMLNodeRenderer';
 
 // ── Props ──
 
 interface DiffYAMLSplitViewProps {
   diff: TreeDiff;
+  sourceContent?: SemanticContent;
+  targetContent?: SemanticContent;
   activeNodeId: string | null;
   onSelectNode: (id: string) => void;
   showIdentical: boolean;
@@ -274,6 +271,8 @@ function PaneContent({
 
 export function DiffYAMLSplitView({
   diff,
+  sourceContent,
+  targetContent,
   activeNodeId,
   onSelectNode,
   showIdentical,
@@ -297,7 +296,7 @@ export function DiffYAMLSplitView({
     });
   }, []);
 
-  const aligned = buildAlignedNodes(diff);
+  const aligned = buildAlignedNodes(diff, sourceContent, targetContent);
   const heightsMap = computeNodeHeightsMap(aligned, diff);
 
   return (

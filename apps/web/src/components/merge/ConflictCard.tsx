@@ -51,17 +51,17 @@ function renderSlotValue(value: SlotValue | undefined): React.ReactNode {
     return <span style={{ color: 'var(--text-tertiary)' }}>(none)</span>;
   }
   if (typeof value === 'string') {
-    return <span style={{ color: '#9ece6a' }}>&quot;{value}&quot;</span>;
+    return <span className="text-[var(--yaml-string,#16a34a)]">&quot;{value}&quot;</span>;
   }
   if (typeof value === 'number') {
-    return <span style={{ color: '#ff9e64' }}>{value}</span>;
+    return <span className="text-[var(--yaml-number,#d97706)]">{value}</span>;
   }
   if (Array.isArray(value)) {
     return (
       <span className="block">
         {(value as SlotValue[]).map((item, i) => (
           <span key={i} className="block pl-4 leading-relaxed">
-            <span style={{ color: '#89ddff' }}>- </span>
+            <span className="text-[var(--yaml-punctuation,#6b7280)]">- </span>
             {renderSlotValue(item)}
           </span>
         ))}
@@ -71,17 +71,17 @@ function renderSlotValue(value: SlotValue | undefined): React.ReactNode {
   if (value !== null && typeof value === 'object') {
     if ('ref' in value && typeof (value as { ref: string }).ref === 'string') {
       return (
-        <span style={{ color: '#bb9af7' }}>
+        <span className="text-[var(--yaml-ref,#7c3aed)]">
           {'{ '}ref: {(value as { ref: string }).ref}
           {' }'}
         </span>
       );
     }
     if ('type' in value && 'slots' in value) {
-      return <span style={{ color: '#89ddff' }}>{JSON.stringify(value)}</span>;
+      return <span className="text-[var(--yaml-punctuation,#6b7280)]">{JSON.stringify(value)}</span>;
     }
   }
-  return <span style={{ color: '#89ddff' }}>{JSON.stringify(value)}</span>;
+  return <span className="text-[var(--yaml-punctuation,#6b7280)]">{JSON.stringify(value)}</span>;
 }
 
 // ============================================================================
@@ -124,8 +124,8 @@ function YamlPreview({ node, conflictKeys, label, labelColor }: YamlPreviewProps
                   : { paddingLeft: '8px' }
               }
             >
-              <span style={{ color: '#7aa2f7' }}>{key}</span>
-              <span style={{ color: '#89ddff' }}>:</span>
+              <span className="text-[var(--yaml-key,#2563eb)]">{key}</span>
+              <span className="text-[var(--yaml-punctuation,#6b7280)]">:</span>
               {renderSlotValue(value)}
             </div>
           );
@@ -167,8 +167,8 @@ function PerSlotRow({ conflict, choice, treeId, onChoose }: PerSlotRowProps) {
           className={cn(
             'flex items-start gap-1.5 rounded border p-2 cursor-pointer transition-colors text-xs',
             choice === 'source'
-              ? 'border-blue-500/60 bg-blue-500/10 ring-1 ring-blue-500/40'
-              : 'border-[var(--stroke-divider)] hover:border-blue-400/40'
+              ? 'border-[var(--merge-source-accent)]/60 bg-[var(--merge-source-accent)]/10 ring-1 ring-[var(--merge-source-accent)]/40'
+              : 'border-[var(--stroke-divider)] hover:border-[var(--merge-source-accent)]/40'
           )}
         >
           <input
@@ -179,7 +179,7 @@ function PerSlotRow({ conflict, choice, treeId, onChoose }: PerSlotRowProps) {
             className="mt-0.5 shrink-0"
           />
           <div className="min-w-0 flex-1">
-            <div className="text-[10px] font-medium text-blue-400 mb-0.5">Source</div>
+            <div className="text-[10px] font-medium text-[var(--merge-source-accent)] mb-0.5">Source</div>
             <div className="font-mono break-words">{renderSlotValue(conflict.sourceValue)}</div>
           </div>
         </label>
@@ -189,8 +189,8 @@ function PerSlotRow({ conflict, choice, treeId, onChoose }: PerSlotRowProps) {
           className={cn(
             'flex items-start gap-1.5 rounded border p-2 cursor-pointer transition-colors text-xs',
             choice === 'target'
-              ? 'border-emerald-500/60 bg-emerald-500/10 ring-1 ring-emerald-500/40'
-              : 'border-[var(--stroke-divider)] hover:border-emerald-400/40'
+              ? 'border-[var(--merge-target-accent)]/60 bg-[var(--merge-target-accent)]/10 ring-1 ring-[var(--merge-target-accent)]/40'
+              : 'border-[var(--stroke-divider)] hover:border-[var(--merge-target-accent)]/40'
           )}
         >
           <input
@@ -201,7 +201,7 @@ function PerSlotRow({ conflict, choice, treeId, onChoose }: PerSlotRowProps) {
             className="mt-0.5 shrink-0"
           />
           <div className="min-w-0 flex-1">
-            <div className="text-[10px] font-medium text-emerald-400 mb-0.5">Target</div>
+            <div className="text-[10px] font-medium text-[var(--merge-target-accent)] mb-0.5">Target</div>
             <div className="font-mono break-words">{renderSlotValue(conflict.targetValue)}</div>
           </div>
         </label>
@@ -217,9 +217,9 @@ function PerSlotRow({ conflict, choice, treeId, onChoose }: PerSlotRowProps) {
 function AutoResolvedSlotRow({ slotKey, value }: { slotKey: string; value: SlotValue }) {
   return (
     <div className="flex flex-wrap items-baseline gap-x-1 font-mono text-[11px] leading-relaxed px-2 py-0.5 opacity-50">
-      <Check className="h-2.5 w-2.5 text-green-500 shrink-0 mt-0.5" />
-      <span style={{ color: '#7aa2f7' }}>{slotKey}</span>
-      <span style={{ color: '#89ddff' }}>:</span>
+      <Check className="h-2.5 w-2.5 text-[var(--diff-added-accent)] shrink-0 mt-0.5" />
+      <span className="text-[var(--yaml-key,#2563eb)]">{slotKey}</span>
+      <span className="text-[var(--yaml-punctuation,#6b7280)]">:</span>
       {renderSlotValue(value)}
       <span className="text-[9px] text-[var(--text-tertiary)] font-sans normal-case tracking-normal">
         auto
@@ -386,8 +386,8 @@ export function ConflictCard({
                 className={cn(
                   'rounded px-3 py-1.5 text-xs font-medium border transition-colors',
                   resolution?.type === 'source'
-                    ? 'bg-blue-500/20 border-blue-500/60 text-blue-300 ring-1 ring-blue-500/40'
-                    : 'border-[var(--stroke-divider)] text-[var(--text-secondary)] hover:border-blue-400/60 hover:text-blue-300'
+                    ? 'bg-[var(--merge-source-accent)]/20 border-[var(--merge-source-accent)]/60 text-[var(--merge-source-accent)] ring-1 ring-[var(--merge-source-accent)]/40'
+                    : 'border-[var(--stroke-divider)] text-[var(--text-secondary)] hover:border-[var(--merge-source-accent)]/60 hover:text-[var(--merge-source-accent)]'
                 )}
               >
                 Accept Source
@@ -398,8 +398,8 @@ export function ConflictCard({
                 className={cn(
                   'rounded px-3 py-1.5 text-xs font-medium border transition-colors',
                   resolution?.type === 'target'
-                    ? 'bg-emerald-500/20 border-emerald-500/60 text-emerald-300 ring-1 ring-emerald-500/40'
-                    : 'border-[var(--stroke-divider)] text-[var(--text-secondary)] hover:border-emerald-400/60 hover:text-emerald-300'
+                    ? 'bg-[var(--merge-target-accent)]/20 border-[var(--merge-target-accent)]/60 text-[var(--merge-target-accent)] ring-1 ring-[var(--merge-target-accent)]/40'
+                    : 'border-[var(--stroke-divider)] text-[var(--text-secondary)] hover:border-[var(--merge-target-accent)]/60 hover:text-[var(--merge-target-accent)]'
                 )}
               >
                 Accept Target
@@ -410,8 +410,8 @@ export function ConflictCard({
                 className={cn(
                   'rounded px-3 py-1.5 text-xs font-medium border transition-colors',
                   resolution?.type === 'both'
-                    ? 'bg-purple-500/20 border-purple-500/60 text-purple-300 ring-1 ring-purple-500/40'
-                    : 'border-[var(--stroke-divider)] text-[var(--text-secondary)] hover:border-purple-400/60 hover:text-purple-300'
+                    ? 'bg-[var(--merge-conflict-accent)]/20 border-[var(--merge-conflict-accent)]/60 text-[var(--merge-conflict-accent)] ring-1 ring-[var(--merge-conflict-accent)]/40'
+                    : 'border-[var(--stroke-divider)] text-[var(--text-secondary)] hover:border-[var(--merge-conflict-accent)]/60 hover:text-[var(--merge-conflict-accent)]'
                 )}
               >
                 Accept Both

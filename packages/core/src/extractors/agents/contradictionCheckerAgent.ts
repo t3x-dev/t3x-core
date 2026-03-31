@@ -1,118 +1,107 @@
 /**
- * Contradiction Checker Agent — LLM
+ * Contradiction Checker Agent — CODE
  *
- * ONE job: detect if any frame content contradicts the user's explicit statements.
- * Example: user says "avoid Hefang Street" but a frame includes Hefang Street in an itinerary.
+ * ONE job: detect if any tree content might contradict the user's explicit statements.
+ * Scans for negative keywords ("avoid", "no", "don't", "skip", "allergic", "not", "hate")
+ * in user messages, then checks if matching terms appear in tree slots.
  *
- * Runs LAST in the pipeline — needs the final structured content to check against.
+ * KEY PRINCIPLE: NEVER deletes data. Only ADDS a _conflicts metadata slot
+ * so the user can review in triage. The user decides what to keep.
  */
 
-import type { LLMProvider } from '../../llm/types';
-import type { FlatNode } from '../../semantic/types';
-import { flattenTrees, unflattenToTrees } from '../../semantic/tree';
+import type { TreeNode, SlotValue } from '../../semantic/types';
 import type { MeaningAgent, PipelineContext } from '../meaningPipeline';
 
-const SYSTEM_PROMPT = `You detect contradictions between the user's explicit statements and the extracted frames.
+/** Negative patterns: keyword + captured term */
+const NEGATIVE_PATTERNS = [
+  /\bavoid(?:ing)?\s+(.+?)(?:\.|,|$)/gi,
+  /\bdon'?t\s+(?:want|like|need|go to|visit|eat|use)\s+(.+?)(?:\.|,|$)/gi,
+  /\bskip(?:ping)?\s+(.+?)(?:\.|,|$)/gi,
+  /\ballergic\s+(?:to\s+)?(.+?)(?:\.|,|$)/gi,
+  /\bno\s+(.+?)(?:\.|,|$)/gi,
+  /\bhate\s+(.+?)(?:\.|,|$)/gi,
+  /\bnot\s+interested\s+in\s+(.+?)(?:\.|,|$)/gi,
+];
 
-Step 1: Extract all user CONSTRAINTS from their messages:
-- "avoid X", "don't want X", "allergic to X", "skip X", "not interested in X"
-- Budget limits, date restrictions, group limitations
-
-Step 2: Check each frame's slots for content that VIOLATES these constraints.
-
-A contradiction is when:
-- User said "avoid X" but a frame includes X in a list or recommendation
-- User said "allergic to X" but a frame suggests food containing X
-- User said "no more than $X" but a frame shows cost exceeding X
-- User rejected a suggestion but a frame still contains it
-
-Output JSON:
-{
-  "user_constraints": ["avoid Hefang Street", "peanut allergy"],
-  "contradictions": [
-    {
-      "user_said": "avoid the Hefang Street tourist area",
-      "frame_id": "f_003",
-      "slot_key": "activities",
-      "contradicting_value": "Hefang Street evening food tour",
-      "action": "remove_slot"
+/** Extract avoided terms from user messages */
+function extractAvoidedTerms(userMessages: string[]): string[] {
+  const terms: string[] = [];
+  for (const msg of userMessages) {
+    for (const pattern of NEGATIVE_PATTERNS) {
+      pattern.lastIndex = 0;
+      let match: RegExpExecArray | null;
+      while ((match = pattern.exec(msg)) !== null) {
+        const term = match[1].trim().toLowerCase();
+        if (term.length >= 2 && term.length <= 50) {
+          terms.push(term);
+        }
+      }
     }
-  ]
+  }
+  return [...new Set(terms)];
 }
 
-action must be one of:
-- "remove_slot" — delete just the contradicting slot from the frame
-- "remove_frame" — delete the entire frame (when the whole frame contradicts)
+/** Check if a slot value contains an avoided term */
+function slotContainsTerm(value: SlotValue, term: string): boolean {
+  const str = typeof value === 'string' ? value.toLowerCase() : JSON.stringify(value).toLowerCase();
+  return str.includes(term);
+}
 
-If no contradictions: { "user_constraints": [...], "contradictions": [] }
-Output ONLY JSON. No explanation.`;
+/** Scan a tree for conflicts */
+function findConflicts(
+  node: TreeNode,
+  avoidedTerms: string[]
+): Array<{ slotKey: string; term: string; value: string }> {
+  const conflicts: Array<{ slotKey: string; term: string; value: string }> = [];
+  for (const [key, value] of Object.entries(node.slots)) {
+    if (key === '_conflicts') continue;
+    for (const term of avoidedTerms) {
+      if (slotContainsTerm(value, term)) {
+        conflicts.push({ slotKey: key, term, value: String(value) });
+      }
+    }
+  }
+  return conflicts;
+}
 
 export const contradictionCheckerAgent: MeaningAgent = {
   name: 'contradiction_checker',
-  description: 'Detect and remove content that contradicts user statements',
-  usesLLM: true,
+  description: 'Flag (never delete) content that may contradict user statements',
+  usesLLM: false,
 
   shouldRun(ctx: PipelineContext): boolean {
     if (ctx.meta.mode === 'incremental') return false;
     return ctx.content.trees.length > 0 && ctx.turns.some((t) => t.role === 'user');
   },
 
-  async run(ctx: PipelineContext, provider: LLMProvider): Promise<PipelineContext> {
-    const frames: FlatNode[] = flattenTrees(ctx.content.trees);
-    const userTurns = ctx.turns
+  async run(ctx: PipelineContext): Promise<PipelineContext> {
+    const userMessages = ctx.turns
       .filter((t) => t.role === 'user')
-      .map((t, i) => `[U${i + 1}]: ${t.content}`)
-      .join('\n');
+      .map((t) => t.content);
 
-    const framesDescription = frames
-      .map((f: FlatNode) => `${f.id} ${f.type}: ${JSON.stringify(f.slots, null, 1).slice(0, 400)}`)
-      .join('\n\n');
+    const avoidedTerms = extractAvoidedTerms(userMessages);
+    if (avoidedTerms.length === 0) return ctx;
 
-    const userPrompt = `## User Messages\n${userTurns}\n\n## Current Frames\n${framesDescription}\n\nCheck for contradictions:`;
+    function flagTree(node: TreeNode): TreeNode {
+      const conflicts = findConflicts(node, avoidedTerms);
+      const flaggedChildren = node.children.map(flagTree);
 
-    const result = await provider.generate(`${SYSTEM_PROMPT}\n\n${userPrompt}`, {
-      temperature: 0.1,
-      maxTokens: 1024,
-    });
-
-    ctx.meta.totalUsage.inputTokens += result.usage.inputTokens;
-    ctx.meta.totalUsage.outputTokens += result.usage.outputTokens;
-
-    try {
-      const jsonMatch = result.text.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) return ctx;
-
-      const parsed = JSON.parse(jsonMatch[0]) as {
-        contradictions?: Array<{
-          frame_id: string;
-          slot_key: string;
-          action: 'remove_slot' | 'remove_frame';
-        }>;
-      };
-
-      if (!parsed.contradictions || parsed.contradictions.length === 0) return ctx;
-
-      let modifiedNodes = [...frames];
-
-      for (const c of parsed.contradictions) {
-        if (c.action === 'remove_frame') {
-          modifiedNodes = modifiedNodes.filter((f: FlatNode) => f.id !== c.frame_id);
-        } else if (c.action === 'remove_slot') {
-          const node = modifiedNodes.find((f: FlatNode) => f.id === c.frame_id);
-          if (node && c.slot_key in node.slots) {
-            const { [c.slot_key]: _, ...remainingSlots } = node.slots;
-            node.slots = remainingSlots;
-            if (Object.keys(node.slots).length === 0) {
-              modifiedNodes = modifiedNodes.filter((f: FlatNode) => f.id !== c.frame_id);
-            }
-          }
-        }
+      if (conflicts.length === 0) {
+        return { ...node, children: flaggedChildren };
       }
 
-      ctx.content = { trees: unflattenToTrees(modifiedNodes), relations: ctx.content.relations };
-    } catch {
-      // Parse failed — non-fatal, continue with what we have
+      const updatedSlots = { ...node.slots };
+      updatedSlots._conflicts = conflicts.map(
+        (c) => `${c.slotKey} contains "${c.term}" (user wants to avoid)`
+      ).join('; ');
+
+      return { ...node, slots: updatedSlots, children: flaggedChildren };
     }
+
+    ctx.content = {
+      trees: ctx.content.trees.map(flagTree),
+      relations: ctx.content.relations,
+    };
 
     return ctx;
   },

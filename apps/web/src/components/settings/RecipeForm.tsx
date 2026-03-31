@@ -120,7 +120,7 @@ export function RecipeForm({ recipe, onSubmit, onCancel, loading = false }: Reci
       {/* Name */}
       <div className="flex flex-col gap-2">
         <Label htmlFor="recipe-name">
-          Name <span className="text-red-500">*</span>
+          Name <span className="text-[var(--status-error)]">*</span>
         </Label>
         <Input
           id="recipe-name"
@@ -151,7 +151,7 @@ export function RecipeForm({ recipe, onSubmit, onCancel, loading = false }: Reci
       {/* Trigger Event */}
       <div className="flex flex-col gap-2">
         <Label>
-          Trigger Event <span className="text-red-500">*</span>
+          Trigger Event <span className="text-[var(--status-error)]">*</span>
         </Label>
         <Select value={triggerEvent} onValueChange={setTriggerEvent} disabled={loading}>
           <SelectTrigger className="w-full">
@@ -171,7 +171,7 @@ export function RecipeForm({ recipe, onSubmit, onCancel, loading = false }: Reci
       {/* Steps */}
       <div className="flex flex-col gap-2">
         <Label>
-          Steps <span className="text-red-500">*</span>
+          Steps <span className="text-[var(--status-error)]">*</span>
         </Label>
         <div className="flex flex-col gap-3">
           {steps.map((step, index) => (
@@ -192,7 +192,7 @@ export function RecipeForm({ recipe, onSubmit, onCancel, loading = false }: Reci
                     onClick={() => removeStep(index)}
                     disabled={loading}
                   >
-                    <Trash2 className="h-3.5 w-3.5 text-red-500" />
+                    <Trash2 className="h-3.5 w-3.5 text-[var(--status-error)]" />
                     <span className="sr-only">Remove step {index + 1}</span>
                   </Button>
                 )}

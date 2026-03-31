@@ -12,16 +12,11 @@
  * @see docs/plans/parallel-dev-guidelines.md
  */
 
+import type { Lesson } from '../feedback/types';
 import type { LLMProvider } from '../llm/types';
 import type { EmbeddingProvider } from '../providers/embedding/base';
 import type { SemanticContent } from '../semantic/types';
-import type {
-  AnyLeafType,
-  Assertion,
-  Constraint,
-  Leaf,
-  LeafType,
-} from '../types';
+import type { AnyLeafType, Assertion, Constraint, Leaf, LeafType } from '../types';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Generation Types (GEN-* uses)
@@ -41,7 +36,7 @@ export interface BuildPromptOptions {
   additionalInstructions?: string;
 
   /** Lessons learned from previous generation attempts (Upgrade #4: feedback loop) */
-  lessons?: string[];
+  lessons?: Lesson[];
 }
 
 /**

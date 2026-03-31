@@ -123,31 +123,31 @@ function confidencePercent(c?: number): string {
 }
 
 function Comment({ text }: { text: string }) {
-  return <span style={{ color: '#4b5563' }}>{text}</span>;
+  return <span className="text-[var(--yaml-comment,#6b7280)]">{text}</span>;
 }
 
 function YAMLKey({ text }: { text: string }) {
-  return <span style={{ color: '#7aa2f7' }}>{text}</span>;
+  return <span className="text-[var(--yaml-key,#2563eb)]">{text}</span>;
 }
 
 function Colon() {
-  return <span style={{ color: '#89ddff' }}>:&nbsp;</span>;
+  return <span className="text-[var(--yaml-punctuation,#6b7280)]">:&nbsp;</span>;
 }
 
 function StringValue({ text }: { text: string }) {
-  return <span style={{ color: '#9ece6a' }}>"{text}"</span>;
+  return <span className="text-[var(--yaml-string,#16a34a)]">"{text}"</span>;
 }
 
 function NumberValue({ value }: { value: number }) {
-  return <span style={{ color: '#ff9e64' }}>{value}</span>;
+  return <span className="text-[var(--yaml-number,#d97706)]">{value}</span>;
 }
 
 function RefValue({ ref: refId }: { ref: string }) {
-  return <span style={{ color: '#bb9af7' }}>*{refId}</span>;
+  return <span className="text-[var(--yaml-ref,#7c3aed)]">*{refId}</span>;
 }
 
 function ArrayDash() {
-  return <span style={{ color: '#89ddff' }}>- </span>;
+  return <span className="text-[var(--yaml-punctuation,#6b7280)]">- </span>;
 }
 
 // ============================================================================
@@ -239,7 +239,7 @@ function renderSlotValueLines(
     key: lineKeyPrefix,
     indent,
     elements: [
-      <span key="v" style={{ color: '#89ddff' }}>
+      <span key="v" className="text-[var(--yaml-punctuation,#6b7280)]">
         {JSON.stringify(value)}
       </span>,
     ],
@@ -376,7 +376,7 @@ export function CommitYAMLDocument({ content, className, onSlotClick }: CommitYA
 
   return (
     <div
-      className={`rounded-lg bg-[var(--surface-code,#0d1117)] px-6 py-5 font-mono text-[13px] leading-[1.9] ${className ?? ''}`}
+      className={`rounded-lg bg-[var(--surface-panel)] border border-[var(--stroke-divider)] px-6 py-5 font-mono text-[13px] leading-[1.9] text-[var(--text-primary)] ${className ?? ''}`}
     >
       {lines.map((line, i) => {
         // Add spacing before top-level tree headers (indent 0, not first line)
@@ -387,8 +387,8 @@ export function CommitYAMLDocument({ content, className, onSlotClick }: CommitYA
           <div
             key={line.key}
             className={`flex items-baseline transition-colors ${
-              line.slotKey ? 'cursor-pointer hover:bg-white/5 rounded-sm px-2 -mx-2' : ''
-            } ${needsTopGap ? 'mt-3 pt-3 border-t border-white/5' : ''}`}
+              line.slotKey ? 'cursor-pointer hover:bg-[var(--hover-bg)] rounded-sm px-2 -mx-2' : ''
+            } ${needsTopGap ? 'mt-3 pt-3 border-t border-[var(--stroke-divider)]' : ''}`}
             style={{ paddingLeft: `${line.indent * 24}px` }}
             onClick={line.slotKey ? () => handleClick(line.treeId, line.slotKey) : undefined}
           >

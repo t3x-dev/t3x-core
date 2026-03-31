@@ -59,7 +59,7 @@ describe('Extractor', () => {
     expect(provider.generate).toHaveBeenCalledTimes(1);
     expect(provider.generate).toHaveBeenCalledWith(
       expect.any(String),
-      expect.objectContaining({ temperature: 0.1, maxTokens: 4096 })
+      expect.objectContaining({ temperature: 0.1, maxTokens: 8192 })
     );
   });
 

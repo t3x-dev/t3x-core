@@ -18,7 +18,7 @@ const statusColors: Record<string, string> = {
   reviewed: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
   modified: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
   reinforced: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200',
-  undone: 'bg-red-100 text-red-800 line-through opacity-50',
+  undone: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200 line-through opacity-50',
 };
 
 export function SemanticPointCard({ point, onUndo, showUndo }: SemanticPointCardProps) {

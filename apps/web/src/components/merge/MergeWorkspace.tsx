@@ -586,7 +586,7 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
             {/* Center: Conflict cards + auto-kept */}
             <div ref={scrollContainerRef} className="flex-1 overflow-auto p-[var(--space-page)]">
               {treeError && (
-                <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-400">
+                <div className="mb-4 rounded-lg border border-[var(--status-error)]/30 bg-[var(--status-error-muted)] p-3 text-sm text-[var(--status-error)]">
                   {treeError}
                 </div>
               )}
@@ -655,9 +655,9 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
                             <div className="px-2 font-mono text-[11px] text-[var(--text-tertiary)]">
                               {Object.entries(node.slots).map(([key, value]) => (
                                 <div key={key} className="leading-relaxed">
-                                  <span style={{ color: '#7aa2f7' }}>{key}</span>
-                                  <span style={{ color: '#89ddff' }}>: </span>
-                                  <span style={{ color: '#9ece6a' }}>
+                                  <span className="text-[var(--yaml-key,#2563eb)]">{key}</span>
+                                  <span className="text-[var(--yaml-punctuation,#6b7280)]">: </span>
+                                  <span className="text-[var(--yaml-string,#16a34a)]">
                                     {typeof value === 'string' ? `"${value}"` : JSON.stringify(value)}
                                   </span>
                                 </div>
@@ -708,9 +708,9 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
                             <div className="px-2 font-mono text-[11px] text-[var(--text-tertiary)]">
                               {Object.entries(node.slots).map(([key, value]) => (
                                 <div key={key} className="leading-relaxed">
-                                  <span style={{ color: '#7aa2f7' }}>{key}</span>
-                                  <span style={{ color: '#89ddff' }}>: </span>
-                                  <span style={{ color: '#9ece6a' }}>
+                                  <span className="text-[var(--yaml-key,#2563eb)]">{key}</span>
+                                  <span className="text-[var(--yaml-punctuation,#6b7280)]">: </span>
+                                  <span className="text-[var(--yaml-string,#16a34a)]">
                                     {typeof value === 'string' ? `"${value}"` : JSON.stringify(value)}
                                   </span>
                                 </div>
@@ -761,9 +761,9 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
                             <div className="px-2 font-mono text-[11px] text-[var(--text-tertiary)]">
                               {Object.entries(node.slots).map(([key, value]) => (
                                 <div key={key} className="leading-relaxed">
-                                  <span style={{ color: '#7aa2f7' }}>{key}</span>
-                                  <span style={{ color: '#89ddff' }}>: </span>
-                                  <span style={{ color: '#9ece6a' }}>
+                                  <span className="text-[var(--yaml-key,#2563eb)]">{key}</span>
+                                  <span className="text-[var(--yaml-punctuation,#6b7280)]">: </span>
+                                  <span className="text-[var(--yaml-string,#16a34a)]">
                                     {typeof value === 'string' ? `"${value}"` : JSON.stringify(value)}
                                   </span>
                                 </div>
