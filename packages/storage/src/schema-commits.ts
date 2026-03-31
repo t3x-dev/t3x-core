@@ -87,9 +87,10 @@ export const commits = pgTable(
 
     /** Provenance: how this commit was created */
     provenance: jsonb('provenance').$type<{
-      method: 'llm_extraction' | 'human_curation' | 'import' | 'merge';
+      method: 'llm_extraction' | 'human_curation' | 'import' | 'merge' | 'squash';
       model?: string;
       extracted_at?: string;
+      source_commits?: string[];
     }>(),
 
     /** YOps log entry IDs that contributed to this commit (second-class, not in hash) */
