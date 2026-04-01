@@ -3,7 +3,7 @@
  *
  * Split from extractionPanelStore.ts (Task 4).
  * Owns: confirmed nodes/slots, commit state, commit actions.
- * Cross-store reads: useExtractionStore (draft, conversationId), useExtractionUIStore (panelMode).
+ * Cross-store reads: useDraftStore (draft, conversationId), useCommandStore (clearPending).
  */
 
 import type { TreeNode } from '@t3x-dev/core';
@@ -87,9 +87,9 @@ export const useCommitStore = create<CommitState>((set, get) => ({
     }),
 
   selectPendingNodes: () => {
-    // Cross-store read: draft from extractionStore
-    const { useExtractionStore } = require('./extractionStore');
-    const { draft } = useExtractionStore.getState();
+    // Cross-store read: draft from draftStore
+    const { useDraftStore } = require('./draftStore');
+    const { draft } = useDraftStore.getState();
     const { committedNodeIds, committedNodeSnapshot } = get();
     const flatNodes = flattenTrees(draft.trees);
     return draft.trees.filter((_t: TreeNode, i: number) => {
@@ -105,11 +105,8 @@ export const useCommitStore = create<CommitState>((set, get) => ({
 
   commitNodes: async (message) => {
     // Cross-store reads
-    const { useExtractionStore } = await import('./extractionStore');
-    const { useExtractionUIStore } = await import('./extractionUIStore');
-
-    const extractionState = useExtractionStore.getState();
-    const { draft, conversationId } = extractionState;
+    const { useDraftStore } = await import('./draftStore');
+    const { draft, conversationId } = useDraftStore.getState();
     const { projectId, lastCommitHash, commitBranch, conversationTitle } = get();
 
     if (!projectId) throw new Error('No project ID');
@@ -151,8 +148,9 @@ export const useCommitStore = create<CommitState>((set, get) => ({
         manualEditedNodeIds: new Set(),
       });
 
-      // Cross-store update: reset panel mode
-      useExtractionUIStore.getState().setPanelMode('default');
+      // Clear command pending state after successful commit
+      const { useCommandStore } = await import('./commandStore');
+      useCommandStore.getState().clearPending();
 
       return { hash: result.commit.hash };
     } catch (err) {
