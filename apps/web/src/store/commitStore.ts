@@ -116,10 +116,42 @@ export const useCommitStore = create<CommitState>((set, get) => ({
 
     set({ isCommitting: true, commitError: null });
     try {
+      // Enrich trees with source_ref before commit
+      let enrichedTrees = draft.trees;
+      if (conversationId && projectId) {
+        try {
+          const { enrichTreesWithSourceRefs } = await import('@/lib/enrichSourceRefs');
+          const { buildSourceMap } = await import('@/lib/sourceMap');
+          const { listTurns } = await import('@/lib/api/turns');
+
+          const turnData = await listTurns(projectId, conversationId);
+          const turns = turnData.turns;
+
+          if (turns.length > 0) {
+            const turnHashByIndex = new Map<number, string>();
+            const messages: Array<{ content: string; turnIndex: number }> = [];
+            for (let i = 0; i < turns.length; i++) {
+              turnHashByIndex.set(i + 1, turns[i].turn_hash);
+              messages.push({ content: turns[i].content, turnIndex: i + 1 });
+            }
+
+            const sourceMapByTurn = buildSourceMap(draft, messages);
+            enrichedTrees = enrichTreesWithSourceRefs(
+              draft.trees,
+              conversationId,
+              turnHashByIndex,
+              sourceMapByTurn
+            );
+          }
+        } catch {
+          // Silent fallback — commit without source_ref enrichment
+        }
+      }
+
       const result = await createCommit(
         projectId,
         {
-          trees: draft.trees,
+          trees: enrichedTrees,
           relations: draft.relations,
         },
         {
