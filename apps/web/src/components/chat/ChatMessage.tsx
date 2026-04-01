@@ -6,14 +6,16 @@ import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Citation } from '@/lib/api/chat';
 import type { CommittedHighlight } from '@/lib/committedHighlights';
+import { traceYamlToChat } from '@/lib/hoverTrace';
 import type { SourceMapping } from '@/lib/sourceMap';
 import { cn } from '@/lib/utils';
-import { useExtractionPanelStore } from '@/store/extractionPanelStore';
+import { useDraftStore } from '@/store/draftStore';
+import { useHoverStore } from '@/store/hoverStore';
+import { usePhaseStore } from '@/store/phaseStore';
 import { CitationChips } from './CitationChips';
 import { CodeBlock } from './CodeBlock';
 import { CommittedHighlightTooltip } from './CommittedHighlightTooltip';
 import { ThinkingSection } from './ThinkingSection';
-import { traceYamlToChat } from '@/lib/hoverTrace';
 
 interface ChatMessageProps {
   sender: 'user' | 'assistant';
@@ -177,9 +179,7 @@ function SourceMappedText({
               transition: 'background 0.15s',
             }
           : {
-              background: isActive
-                ? 'rgba(139, 92, 246, 0.3)'
-                : 'rgba(139, 92, 246, 0.08)',
+              background: isActive ? 'rgba(139, 92, 246, 0.3)' : 'rgba(139, 92, 246, 0.08)',
               borderBottom: isActive ? '2px solid var(--accent)' : 'none',
               borderRadius: 2,
               padding: '1px 0',
@@ -290,13 +290,13 @@ export function ChatMessage({
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState('');
 
-  const hoveredNodeId = useExtractionPanelStore((s) => s.hoveredNodeId);
-  const hoveredSlotKey = useExtractionPanelStore((s) => s.hoveredSlotKey);
-  const draft = useExtractionPanelStore((s) => s.draft);
-  const extractionPhase = useExtractionPanelStore((s) => s.extractionPhase);
-  const isReviewPhase = extractionPhase === 'review' || extractionPhase === 'committing';
-  const setHoveredTurnIndex = useExtractionPanelStore((s) => s.setHoveredTurnIndex);
-  const scrollToCenter = useExtractionPanelStore((s) => s.scrollToCenter);
+  const hoveredNodeId = useHoverStore((s) => s.hoveredNodeId);
+  const hoveredSlotKey = useHoverStore((s) => s.hoveredSlotKey);
+  const scrollToCenter = useHoverStore((s) => s.scrollToCenter);
+  const setHoveredTurnIndex = useHoverStore((s) => s.setHoveredTurnIndex);
+  const draft = useDraftStore((s) => s.draft);
+  const phase = usePhaseStore((s) => s.phase);
+  const isReviewPhase = phase === 'review';
   const textRef = useRef<HTMLDivElement>(null);
   const messageRef = useRef<HTMLDivElement>(null);
 
@@ -307,7 +307,8 @@ export function ChatMessage({
   }, [hoveredNodeId, hoveredSlotKey, draft]);
 
   // Does the hovered YAML node come from THIS message?
-  const isSourceMessage = trace?.sourceTurnIndex != null && turnIndex != null && trace.sourceTurnIndex === turnIndex;
+  const isSourceMessage =
+    trace?.sourceTurnIndex != null && turnIndex != null && trace.sourceTurnIndex === turnIndex;
 
   // Try to find quote text in this message for character-level highlighting (YAML → Chat)
   const highlightRanges = useMemo(() => {
@@ -340,20 +341,20 @@ export function ChatMessage({
 
   // ── Chat → YAML: source map interaction handlers ──
   const handleHoverSlot = useCallback((treePath: string, slotKey: string | null) => {
-    useExtractionPanelStore.setState({ hoveredFromChat: true });
-    useExtractionPanelStore.getState().setHoveredNodeId(treePath, slotKey);
+    useHoverStore.setState({ hoveredFromChat: true });
+    useHoverStore.getState().setHoveredNodeId(treePath, slotKey);
   }, []);
 
   const handleLeaveSlot = useCallback(() => {
-    useExtractionPanelStore.getState().setHoveredNodeId(null);
+    useHoverStore.getState().setHoveredNodeId(null);
   }, []);
 
   const handleClickSlot = useCallback((treePath: string, slotKey: string | null) => {
-    useExtractionPanelStore.setState({
+    useHoverStore.setState({
       hoveredFromChat: true,
       scrollToCenter: true,
     });
-    useExtractionPanelStore.getState().setHoveredNodeId(treePath, slotKey);
+    useHoverStore.getState().setHoveredNodeId(treePath, slotKey);
   }, []);
 
   // Auto-scroll this message into view when it's the source of hovered YAML
@@ -372,11 +373,14 @@ export function ChatMessage({
   // 3. Normal rendering otherwise
   const useYamlHighlights = hasCharHighlights;
   const useSourceMappedSpans = !useYamlHighlights && hasSourceMappings;
-  const useCommittedHighlightSpans = !useYamlHighlights && !useSourceMappedSpans && hasCommittedHighlights;
+  const useCommittedHighlightSpans =
+    !useYamlHighlights && !useSourceMappedSpans && hasCommittedHighlights;
 
   return (
     <div
       ref={messageRef}
+      data-turn-hash={turnHash}
+      data-turn-role={sender}
       className={cn(
         'group w-full py-4 transition-colors duration-200 relative',
         'animate-in fade-in duration-200'
@@ -461,7 +465,7 @@ export function ChatMessage({
                 ) : (
                   <div
                     ref={textRef}
-                                        className="text-sm leading-relaxed text-[var(--text-primary)] whitespace-pre-wrap"
+                    className="text-sm leading-relaxed text-[var(--text-primary)] whitespace-pre-wrap"
                   >
                     {useYamlHighlights ? (
                       <HighlightedText text={content} ranges={highlightRanges} />
@@ -490,7 +494,7 @@ export function ChatMessage({
                 )}
                 <div
                   ref={textRef}
-                                    className={cn(
+                  className={cn(
                     'prose-chat text-sm leading-relaxed text-[var(--text-primary)]',
                     isStreaming && 'streaming-text'
                   )}

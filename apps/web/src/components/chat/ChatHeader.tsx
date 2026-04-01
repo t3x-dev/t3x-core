@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import { useChatStore } from '@/store/chatStore';
-import { useExtractionPanelStore } from '@/store/extractionPanelStore';
+import { useCommitStore } from '@/store/commitStore';
 import { BranchSwitcher } from './BranchSwitcher';
 import { ChatModelSelector } from './ChatModelSelector';
 
@@ -28,9 +28,9 @@ export function ChatHeader({
 }: ChatHeaderProps) {
   const router = useRouter();
   const { activeProjectId, activeBranch, setActiveBranch } = useChatStore();
-  const setCommitBranch = useExtractionPanelStore((s) => s.setCommitBranch);
+  const setCommitBranch = useCommitStore((s) => s.setCommitBranch);
 
-  const initCommitState = useExtractionPanelStore((s) => s.initCommitState);
+  const initCommitState = useCommitStore((s) => s.initCommitState);
 
   const handleBranchChange = useCallback(
     (branch: string) => {

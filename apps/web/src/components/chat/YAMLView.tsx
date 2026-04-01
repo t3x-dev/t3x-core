@@ -1,15 +1,15 @@
 'use client';
 
-import type { TreeNode, SlotValue } from '@t3x-dev/core';
+import type { SlotValue, TreeNode } from '@t3x-dev/core';
 import { Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { nestNodes } from '@/lib/treeNesting';
-import { parseDisplayYAML, toDisplayYAML } from '@/lib/liteYaml';
 import { traceChatToYaml, traceYamlToChat } from '@/lib/hoverTrace';
-import { RELEVANCE_THRESHOLD, type RelevanceContext, relevanceScore } from '@/lib/relevanceScore';
+import { parseDisplayYAML, toDisplayYAML } from '@/lib/liteYaml';
+import { type RelevanceContext, relevanceScore } from '@/lib/relevanceScore';
+import { contentToNodes } from '@/lib/treeCompat';
 import { useExtractionPanelStore } from '@/store/extractionPanelStore';
+import { useHoverStore } from '@/store/hoverStore';
 import { TreeHistoryPopover } from './TreeHistoryPopover';
-import { type CompatNode, contentToNodes, treesToNodes } from '@/lib/treeCompat';
 
 // ── YAML Rendering Helpers ──
 
@@ -27,7 +27,13 @@ interface YAMLLine {
 function formatValue(value: SlotValue): string {
   if (typeof value === 'string') {
     // Only quote strings that need it (contain YAML special chars or could be misinterpreted)
-    const needsQuote = /[:#{}[\],&*?|>!%@`]/.test(value) || value === '' || value === 'true' || value === 'false' || value === 'null' || /^\d+$/.test(value);
+    const needsQuote =
+      /[:#{}[\],&*?|>!%@`]/.test(value) ||
+      value === '' ||
+      value === 'true' ||
+      value === 'false' ||
+      value === 'null' ||
+      /^\d+$/.test(value);
     return needsQuote ? `"${value}"` : value;
   }
   if (typeof value === 'number') return String(value);
@@ -182,15 +188,15 @@ export function YAMLView() {
   const confirmSlot = useExtractionPanelStore((s) => s.confirmSlot);
   const unconfirmSlot = useExtractionPanelStore((s) => s.unconfirmSlot);
   const committedNodeIds = useExtractionPanelStore((s) => s.committedNodeIds);
-  const llmHighlightedNodeIds = useExtractionPanelStore((s) => s.llmHighlightedNodeIds);
+  const llmHighlightedNodeIds = useHoverStore((s) => s.llmHighlightedNodeIds);
   const isExtracting = useExtractionPanelStore((s) => s.isExtracting);
-  const setHoveredNodeId = useExtractionPanelStore((s) => s.setHoveredNodeId);
-  const hoveredTurnIndex = useExtractionPanelStore((s) => s.hoveredTurnIndex);
+  const setHoveredNodeId = useHoverStore((s) => s.setHoveredNodeId);
+  const hoveredTurnIndex = useHoverStore((s) => s.hoveredTurnIndex);
   const gateIssues = useExtractionPanelStore((s) => s.gateIssues);
   const manualEditedNodeIds = useExtractionPanelStore((s) => s.manualEditedNodeIds);
-  const hoveredNodeId = useExtractionPanelStore((s) => s.hoveredNodeId);
-  const hoveredFromChat = useExtractionPanelStore((s) => s.hoveredFromChat);
-  const scrollToCenter = useExtractionPanelStore((s) => s.scrollToCenter);
+  const hoveredNodeId = useHoverStore((s) => s.hoveredNodeId);
+  const hoveredFromChat = useHoverStore((s) => s.hoveredFromChat);
+  const scrollToCenter = useHoverStore((s) => s.scrollToCenter);
 
   // Track DOM refs for each YAML line by treeId for Chat→YAML scrolling
   const lineRefs = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -206,7 +212,7 @@ export function YAMLView() {
         });
         // Reset scrollToCenter after scroll
         if (scrollToCenter) {
-          useExtractionPanelStore.setState({ scrollToCenter: false });
+          useHoverStore.setState({ scrollToCenter: false });
         }
       }
     }
@@ -245,7 +251,7 @@ export function YAMLView() {
     for (let age = yopsHistory.length - 1; age >= 0; age--) {
       for (const op of yopsHistory[age]) {
         if ('add' in op) {
-          const nodeKey = op.add.node ? Object.keys(op.add.node)[0] ?? '' : '';
+          const nodeKey = op.add.node ? (Object.keys(op.add.node)[0] ?? '') : '';
           const parent = op.add.parent ?? '';
           const id = parent ? `${parent}.${nodeKey}` : nodeKey;
           map.set(id, { action: 'add', age });
@@ -266,11 +272,21 @@ export function YAMLView() {
     const total = yopsLog.length;
     for (let i = yopsLog.length - 1; i >= 0; i--) {
       const turnsAgo = total - 1 - i;
-      const delta = yopsLog[i].yops as { changes?: Array<{ action: string; parent_path?: string; node?: { key: string }; target_path?: string }> };
+      const delta = yopsLog[i].yops as {
+        changes?: Array<{
+          action: string;
+          parent_path?: string;
+          node?: { key: string };
+          target_path?: string;
+        }>;
+      };
       for (const c of delta.changes ?? []) {
-        const fid = c.action === 'add'
-          ? (c.parent_path ? `${c.parent_path}.${c.node?.key}` : c.node?.key ?? '')
-          : (c.target_path ?? '');
+        const fid =
+          c.action === 'add'
+            ? c.parent_path
+              ? `${c.parent_path}.${c.node?.key}`
+              : (c.node?.key ?? '')
+            : (c.target_path ?? '');
         if (!(fid in turnsAgoMap)) turnsAgoMap[fid] = turnsAgo;
         touchCountMap[fid] = (touchCountMap[fid] ?? 0) + 1;
       }
@@ -492,7 +508,7 @@ export function YAMLView() {
                   // Click YAML slot → scroll source chat message into center view
                   const trace = traceYamlToChat(draft, line.treeId, line.slotKey);
                   if (trace.sourceTurnIndex != null) {
-                    useExtractionPanelStore.setState({ scrollToCenter: true });
+                    useHoverStore.setState({ scrollToCenter: true });
                     setHoveredNodeId(line.treeId, line.slotKey);
                   }
                 }}
@@ -592,7 +608,12 @@ export function YAMLView() {
                 >
                   {isNodeLine && committedNodeIds[line.treeId] && (
                     <span
-                      style={{ fontSize: 9, color: 'var(--status-success)', opacity: 0.6, marginRight: 4 }}
+                      style={{
+                        fontSize: 9,
+                        color: 'var(--status-success)',
+                        opacity: 0.6,
+                        marginRight: 4,
+                      }}
                       title="Committed"
                     >
                       ✓

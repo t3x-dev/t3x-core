@@ -3,13 +3,14 @@
 import { HelpCircle, X } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { answerTreeQuestion } from '@/lib/api/trees';
-import { useExtractionPanelStore } from '@/store/extractionPanelStore';
+import { useDraftStore } from '@/store/draftStore';
+import { usePhaseStore } from '@/store/phaseStore';
 
 export function AdvisoryPanel() {
-  const questions = useExtractionPanelStore((s) => s.advisoryQuestions);
-  const setAdvisoryQuestions = useExtractionPanelStore((s) => s.setAdvisoryQuestions);
-  const conversationId = useExtractionPanelStore((s) => s.conversationId);
-  const setDraft = useExtractionPanelStore((s) => s.setDraft);
+  const questions = usePhaseStore((s) => s.advisoryQuestions);
+  const setAdvisoryQuestions = usePhaseStore((s) => s.setAdvisoryQuestions);
+  const conversationId = useDraftStore((s) => s.conversationId);
+  const setDraft = useDraftStore((s) => s.setDraft);
 
   const [answerInputs, setAnswerInputs] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState<string | null>(null);
@@ -38,7 +39,7 @@ export function AdvisoryPanel() {
         );
 
         if (result.applied && result.snapshot) {
-          useExtractionPanelStore.getState().setDraft(result.snapshot);
+          useDraftStore.getState().setDraft(result.snapshot);
         }
 
         // Remove answered question
