@@ -51,6 +51,7 @@ describe('Diff Routes', () => {
           { key: 's_3', slots: { text: 'Unique to base' }, children: [] },
         ],
         relations: [],
+      // biome-ignore lint/suspicious/noExplicitAny: test data cast
       } as any,
       project_id: testProjectId,
     });
@@ -66,6 +67,7 @@ describe('Diff Routes', () => {
           { key: 's_6', slots: { text: 'Unique to target' }, children: [] },
         ],
         relations: [],
+      // biome-ignore lint/suspicious/noExplicitAny: test data cast
       } as any,
       project_id: testProjectId,
     });

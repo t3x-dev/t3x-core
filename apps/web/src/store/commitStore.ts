@@ -3,8 +3,7 @@
  *
  * Split from extractionPanelStore.ts (Task 4).
  * Owns: confirmed nodes/slots, commit state, commit actions.
- * Cross-store reads: extractionPanelStore (draft, conversationId, panelMode).
- * TODO(Person A): migrate to draftStore + phaseStore once implemented.
+ * Cross-store reads: useDraftStore (draft, conversationId), useCommandStore (clearPending).
  */
 
 import type { TreeNode } from '@t3x-dev/core';
@@ -88,9 +87,9 @@ export const useCommitStore = create<CommitState>((set, get) => ({
     }),
 
   selectPendingNodes: () => {
-    // TODO(Person A): migrate to draftStore once implemented
-    const { useExtractionPanelStore } = require('./extractionPanelStore');
-    const { draft } = useExtractionPanelStore.getState();
+    // Cross-store read: draft from draftStore
+    const { useDraftStore } = require('./draftStore');
+    const { draft } = useDraftStore.getState();
     const { committedNodeIds, committedNodeSnapshot } = get();
     const flatNodes = flattenTrees(draft.trees);
     return draft.trees.filter((_t: TreeNode, i: number) => {
@@ -105,54 +104,19 @@ export const useCommitStore = create<CommitState>((set, get) => ({
   },
 
   commitNodes: async (message) => {
-    // TODO(Person A): migrate to draftStore once implemented
-    // Temporary: read from extractionPanelStore (the old god store still alive)
-    const { useExtractionPanelStore } = await import('./extractionPanelStore');
-
-    const extractionState = useExtractionPanelStore.getState();
-    const { draft, conversationId } = extractionState;
+    // Cross-store reads
+    const { useDraftStore } = await import('./draftStore');
+    const { draft, conversationId } = useDraftStore.getState();
     const { projectId, lastCommitHash, commitBranch, conversationTitle } = get();
 
     if (!projectId) throw new Error('No project ID');
 
     set({ isCommitting: true, commitError: null });
     try {
-      // Enrich trees with source_ref before commit
-      let enrichedTrees = draft.trees;
-      if (conversationId && projectId) {
-        try {
-          const { enrichTreesWithSourceRefs } = await import('@/lib/enrichSourceRefs');
-          const { buildSourceMap } = await import('@/lib/sourceMap');
-          const { listTurns } = await import('@/lib/api/turns');
-
-          const turnData = await listTurns(projectId, conversationId);
-          const turns = turnData.turns;
-
-          if (turns.length > 0) {
-            const turnHashByIndex = new Map<number, string>();
-            const messages: Array<{ content: string; turnIndex: number }> = [];
-            for (let i = 0; i < turns.length; i++) {
-              turnHashByIndex.set(i + 1, turns[i].turn_hash);
-              messages.push({ content: turns[i].content, turnIndex: i + 1 });
-            }
-
-            const sourceMapByTurn = buildSourceMap(draft, messages);
-            enrichedTrees = enrichTreesWithSourceRefs(
-              draft.trees,
-              conversationId,
-              turnHashByIndex,
-              sourceMapByTurn
-            );
-          }
-        } catch {
-          // Silent fallback — commit without source_ref enrichment
-        }
-      }
-
       const result = await createCommit(
         projectId,
         {
-          trees: enrichedTrees,
+          trees: draft.trees,
           relations: draft.relations,
         },
         {
@@ -184,8 +148,9 @@ export const useCommitStore = create<CommitState>((set, get) => ({
         manualEditedNodeIds: new Set(),
       });
 
-      // TODO(Person A): migrate to phaseStore once implemented
-      useExtractionPanelStore.getState().setPanelMode('default');
+      // Clear command pending state after successful commit
+      const { useCommandStore } = await import('./commandStore');
+      useCommandStore.getState().clearPending();
 
       return { hash: result.commit.hash };
     } catch (err) {

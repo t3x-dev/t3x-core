@@ -307,6 +307,7 @@ function formatFrameToMarkdown(frame: { id: string; type: string; slots: Record<
   }
   if (frame.slot_sources) {
     lines.push(`${pad}  - **Slot Sources:**`);
+    // biome-ignore lint/suspicious/noExplicitAny: slot_sources has dynamic shape
     for (const [key, src] of Object.entries(frame.slot_sources) as [string, any][]) {
       lines.push(
         `${pad}    - \`${key}\` → Turn ${src.turn} [${src.start_char}:${src.end_char}] "${src.quote ?? ''}"`

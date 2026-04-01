@@ -14,7 +14,8 @@
       "!**/.next",
       "!**/.turbo",
       "!**/*.min.js",
-      "!**/pnpm-lock.yaml"
+      "!**/pnpm-lock.yaml",
+      "!**/preview"
     ]
   },
   "formatter": {

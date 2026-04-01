@@ -96,6 +96,7 @@ describe('POST /v1/leaves/:id/generate — lesson collector wiring', () => {
           { key: 's_lc2', slots: { text: 'User likes bullet points' }, children: [] },
         ],
         relations: [],
+      // biome-ignore lint/suspicious/noExplicitAny: test data cast
       } as any,
       project_id: testProjectId,
       branch: 'main',
@@ -261,6 +262,7 @@ describe('POST /v1/leaves/:id/generate — lesson collector wiring', () => {
           { key: 's_fresh1', slots: { text: 'A brand new sentence' }, children: [] },
         ],
         relations: [],
+      // biome-ignore lint/suspicious/noExplicitAny: test data cast
       } as any,
       project_id: testProjectId,
       branch: 'main',
