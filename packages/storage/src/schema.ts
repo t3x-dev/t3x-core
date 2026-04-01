@@ -43,6 +43,7 @@ export const projects = pgTable(
     /** Owner user ID. null = public/legacy data (AUTH_DISABLED era) */
     ownerId: text('owner_id'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
     metadataJson: text('metadata_json'),
     providerConfig: text('provider_config'), // JSON: project-level provider overrides
     defaultProvider: text('default_provider'), // "anthropic" | "openai" | "google"

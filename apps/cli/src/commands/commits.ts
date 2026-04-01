@@ -6,13 +6,11 @@ import { createClient } from '@t3x-dev/api-client';
 import type { Command } from 'commander';
 import { createSpinner, error, formatDate, getApiUrl, printTable, truncate } from '../utils.js';
 
-export function registerCommitCommands(program: Command): void {
-  const commits = program.command('commits').alias('c').description('Manage commits');
-
-  // List commits
-  commits
-    .command('list')
-    .alias('ls')
+/** Register: t3x list commits */
+export function registerListCommits(parent: Command): void {
+  parent
+    .command('commits')
+    .alias('c')
     .description('List commits')
     .requiredOption('-p, --project <id>', 'Project ID')
     .option('-b, --branch <name>', 'Filter by branch')
@@ -51,10 +49,12 @@ export function registerCommitCommands(program: Command): void {
         process.exit(1);
       }
     });
+}
 
-  // Get commit
-  commits
-    .command('show <hash>')
+/** Register: t3x show commit <hash> */
+export function registerShowCommit(parent: Command): void {
+  parent
+    .command('commit <hash>')
     .description('Show commit details')
     .action(async (hash: string) => {
       const spinner = createSpinner('Fetching commit...');

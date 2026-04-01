@@ -5,7 +5,7 @@
  */
 
 import { generateProjectId } from '@t3x-dev/core';
-import { and, desc, eq, lt, or, sql } from 'drizzle-orm';
+import { and, desc, eq, isNull, lt, or, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import {
   agentDrafts,
@@ -76,6 +76,23 @@ export async function findProjectById(db: AnyDB, projectId: string): Promise<Pro
   const [project] = await db
     .select()
     .from(projects)
+    .where(and(eq(projects.projectId, projectId), isNull(projects.deletedAt)))
+    .limit(1);
+
+  return project ?? null;
+}
+
+/**
+ * Find project by ID, including soft-deleted projects.
+ * Used by restore route for access control.
+ */
+export async function findProjectByIdIncludingDeleted(
+  db: AnyDB,
+  projectId: string
+): Promise<Project | null> {
+  const [project] = await db
+    .select()
+    .from(projects)
     .where(eq(projects.projectId, projectId))
     .limit(1);
 
@@ -106,7 +123,7 @@ export async function findProjects(
 
   if (options.cursor !== undefined) {
     // Cursor pagination mode
-    const conditions = [];
+    const conditions = [isNull(projects.deletedAt)];
 
     if (ownerCondition) conditions.push(ownerCondition);
 
@@ -140,7 +157,7 @@ export async function findProjects(
   return db
     .select()
     .from(projects)
-    .where(ownerCondition)
+    .where(ownerCondition ? and(ownerCondition, isNull(projects.deletedAt)) : isNull(projects.deletedAt))
     .orderBy(desc(projects.createdAt))
     .limit(limit)
     .offset(offset);
@@ -192,7 +209,7 @@ export async function updateProject(
   const [updated] = await db
     .update(projects)
     .set(updateData)
-    .where(eq(projects.projectId, projectId))
+    .where(and(eq(projects.projectId, projectId), isNull(projects.deletedAt)))
     .returning();
 
   return updated ?? null;
@@ -202,7 +219,36 @@ export async function updateProject(
  * Delete a project
  */
 export async function deleteProject(db: AnyDB, projectId: string): Promise<boolean> {
-  const result = await db.delete(projects).where(eq(projects.projectId, projectId)).returning();
+  const result = await db
+    .update(projects)
+    .set({ deletedAt: new Date() })
+    .where(and(eq(projects.projectId, projectId), isNull(projects.deletedAt)))
+    .returning();
+
+  return result.length > 0;
+}
+
+/**
+ * Restore a soft-deleted project
+ */
+export async function restoreProject(db: AnyDB, projectId: string): Promise<Project | null> {
+  const [restored] = await db
+    .update(projects)
+    .set({ deletedAt: null })
+    .where(and(eq(projects.projectId, projectId), sql`${projects.deletedAt} IS NOT NULL`))
+    .returning();
+
+  return restored ?? null;
+}
+
+/**
+ * Permanently delete a project (hard delete with cascade)
+ */
+export async function permanentDeleteProject(db: AnyDB, projectId: string): Promise<boolean> {
+  const result = await db
+    .delete(projects)
+    .where(eq(projects.projectId, projectId))
+    .returning();
 
   return result.length > 0;
 }

@@ -15,7 +15,7 @@
 
 import type { ApiKey } from '@t3x-dev/core';
 import type { AnyDB } from '@t3x-dev/storage';
-import { findProjectById } from '@t3x-dev/storage';
+import { findProjectById, findProjectByIdIncludingDeleted } from '@t3x-dev/storage';
 import type { Context } from 'hono';
 import { createError } from './errors';
 
@@ -42,6 +42,31 @@ export async function assertProjectAccess(c: Context, db: AnyDB, projectId: stri
   if (!project.ownerId) return project;
 
   // Ownership check
+  if (project.ownerId !== userId) {
+    return c.json(createError('FORBIDDEN', 'Access denied'), 403);
+  }
+
+  return project;
+}
+
+/**
+ * Assert access to a project that may be soft-deleted.
+ * Used by restore and permanent-delete routes where `findProjectById()`
+ * would return null for deleted projects.
+ */
+export async function assertProjectAccessIncludingDeleted(c: Context, db: AnyDB, projectId: string) {
+  const project = await findProjectByIdIncludingDeleted(db, projectId);
+
+  if (!project) {
+    return c.json(createError('NOT_FOUND', `Project ${projectId} not found`), 404);
+  }
+
+  const apiKey = c.get('apiKey') as ApiKey | undefined;
+  const userId = apiKey?.user_id;
+
+  if (!userId) return project;
+  if (!project.ownerId) return project;
+
   if (project.ownerId !== userId) {
     return c.json(createError('FORBIDDEN', 'Access denied'), 403);
   }

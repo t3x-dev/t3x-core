@@ -12,13 +12,15 @@ import {
   findProjectWithStats,
   getBusinessRules,
   insertProject,
+  permanentDeleteProject,
   putBusinessRules,
+  restoreProject,
   updateProject,
   verifyHashChain,
 } from '@t3x-dev/storage';
 import { eq, sql } from 'drizzle-orm';
 import { getDB } from '../lib/db';
-import { assertProjectAccess, getUserId } from '../lib/project-access';
+import { assertProjectAccess, assertProjectAccessIncludingDeleted, getUserId } from '../lib/project-access';
 import {
   CursorPageResponseSchema,
   ErrorResponseSchema,
@@ -421,8 +423,12 @@ const deleteProjectRoute = createRoute({
   path: '/v1/projects/{id}',
   tags: ['Projects'],
   summary: 'Delete a project',
+  description: 'Soft-deletes a project by default. Use ?permanent=true for irreversible hard deletion.',
   request: {
     params: IdParamSchema,
+    query: z.object({
+      permanent: z.string().optional(),
+    }),
   },
   responses: {
     200: {
@@ -432,6 +438,14 @@ const deleteProjectRoute = createRoute({
           schema: SuccessResponseSchema(
             z.object({ deleted: z.literal(true), project_id: z.string() })
           ),
+        },
+      },
+    },
+    403: {
+      description: 'Access denied',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -457,24 +471,35 @@ const deleteProjectRoute = createRoute({
 // @ts-expect-error - OpenAPI handler return type
 projectRoutes.openapi(deleteProjectRoute, async (c) => {
   const { id } = c.req.valid('param');
+  const { permanent } = c.req.valid('query');
 
   try {
     const db = await getDB();
 
-    // Access control check
-    const accessResult = await assertProjectAccess(c, db, id);
-    if (accessResult instanceof Response) return accessResult;
+    if (permanent === 'true') {
+      // Permanent delete: need access control including soft-deleted projects
+      const accessResult = await assertProjectAccessIncludingDeleted(c, db, id);
+      if (accessResult instanceof Response) return accessResult;
 
-    const deleted = await deleteProject(db, id);
+      const deleted = await permanentDeleteProject(db, id);
+      if (!deleted) {
+        return c.json(
+          { success: false as const, error: { code: 'NOT_FOUND', message: `Project ${id} not found` } },
+          404
+        );
+      }
+    } else {
+      // Soft delete
+      const accessResult = await assertProjectAccess(c, db, id);
+      if (accessResult instanceof Response) return accessResult;
 
-    if (!deleted) {
-      return c.json(
-        {
-          success: false as const,
-          error: { code: 'NOT_FOUND', message: `Project ${id} not found` },
-        },
-        404
-      );
+      const deleted = await deleteProject(db, id);
+      if (!deleted) {
+        return c.json(
+          { success: false as const, error: { code: 'NOT_FOUND', message: `Project ${id} not found` } },
+          404
+        );
+      }
     }
 
     return c.json(
@@ -484,6 +509,84 @@ projectRoutes.openapi(deleteProjectRoute, async (c) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return c.json({ success: false as const, error: { code: 'DELETE_FAILED', message } }, 500);
+  }
+});
+
+// Restore project route
+const restoreProjectRoute = createRoute({
+  method: 'post',
+  path: '/v1/projects/{id}/restore',
+  tags: ['Projects'],
+  summary: 'Restore a soft-deleted project',
+  request: {
+    params: IdParamSchema,
+  },
+  responses: {
+    200: {
+      description: 'Project restored',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(ProjectSchema),
+        },
+      },
+    },
+    403: {
+      description: 'Access denied',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+    404: {
+      description: 'Project not found or not deleted',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+    500: {
+      description: 'Server error',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+// @ts-expect-error - OpenAPI handler return type
+projectRoutes.openapi(restoreProjectRoute, async (c) => {
+  const { id } = c.req.valid('param');
+
+  try {
+    const db = await getDB();
+
+    // Access control: must check against the deleted row
+    const accessResult = await assertProjectAccessIncludingDeleted(c, db, id);
+    if (accessResult instanceof Response) return accessResult;
+
+    const restored = await restoreProject(db, id);
+    if (!restored) {
+      return c.json(
+        { success: false as const, error: { code: 'NOT_FOUND', message: `Project ${id} not found or not deleted` } },
+        404
+      );
+    }
+
+    const apiProject = {
+      project_id: restored.projectId,
+      name: restored.name,
+      created_at: restored.createdAt.toISOString(),
+      metadata: restored.metadataJson ? JSON.parse(restored.metadataJson) : null,
+    };
+
+    return c.json({ success: true as const, data: apiProject }, 200);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return c.json({ success: false as const, error: { code: 'RESTORE_FAILED', message } }, 500);
   }
 });
 

@@ -6,12 +6,10 @@ import { createClient } from '@t3x-dev/api-client';
 import type { Command } from 'commander';
 import { createSpinner, error, formatDate, getApiUrl, printTable, success } from '../utils.js';
 
-export function registerProjectCommands(program: Command): void {
-  const projects = program.command('projects').alias('p').description('Manage projects');
-
-  // List projects
-  projects
-    .command('list')
+/** Register: t3x list projects */
+export function registerListProjects(parent: Command): void {
+  parent
+    .command('projects')
     .alias('ls')
     .description('List all projects')
     .option('-l, --limit <number>', 'Maximum number of projects', '100')
@@ -44,10 +42,12 @@ export function registerProjectCommands(program: Command): void {
         process.exit(1);
       }
     });
+}
 
-  // Get project
-  projects
-    .command('get <id>')
+/** Register: t3x show project <id> */
+export function registerShowProject(parent: Command): void {
+  parent
+    .command('project <id>')
     .description('Get project details')
     .action(async (id: string) => {
       const spinner = createSpinner('Fetching project...');
@@ -76,10 +76,12 @@ export function registerProjectCommands(program: Command): void {
         process.exit(1);
       }
     });
+}
 
-  // Create project
-  projects
-    .command('create <name>')
+/** Register: t3x create project <name> */
+export function registerCreateProject(parent: Command): void {
+  parent
+    .command('project <name>')
     .description('Create a new project')
     .action(async (name: string) => {
       const spinner = createSpinner('Creating project...');
@@ -97,30 +99,63 @@ export function registerProjectCommands(program: Command): void {
         process.exit(1);
       }
     });
+}
 
-  // Delete project
-  projects
-    .command('delete <id>')
-    .description('Delete a project')
+/** Register: t3x delete project <id> */
+export function registerDeleteProject(parent: Command): void {
+  parent
+    .command('project <id>')
+    .description('Delete a project (soft-delete by default)')
     .option('-f, --force', 'Force deletion without confirmation')
+    .option('--permanent', 'Permanently delete (irreversible)')
     .action(async (id: string, options) => {
       if (!options.force) {
-        console.log('Use --force to confirm deletion');
+        const msg = options.permanent
+          ? 'Use --force --permanent to confirm permanent deletion'
+          : 'Use --force to confirm deletion';
+        console.log(msg);
         process.exit(1);
       }
 
-      const spinner = createSpinner('Deleting project...');
+      const spinner = createSpinner(options.permanent ? 'Permanently deleting project...' : 'Deleting project...');
       spinner.start();
 
       try {
         const client = createClient({ baseUrl: getApiUrl() });
-        await client.deleteProject(id);
+        await client.deleteProject(id, { permanent: options.permanent });
 
         spinner.stop();
-        success(`Project deleted: ${id}`);
+        if (options.permanent) {
+          success(`Project permanently deleted: ${id}`);
+        } else {
+          success(`Project deleted (can be restored): ${id}`);
+        }
       } catch (err) {
         spinner.stop();
         error(`Failed to delete project: ${err instanceof Error ? err.message : String(err)}`);
+        process.exit(1);
+      }
+    });
+}
+
+/** Register: t3x restore project <id> */
+export function registerRestoreProject(parent: Command): void {
+  parent
+    .command('project <id>')
+    .description('Restore a soft-deleted project')
+    .action(async (id: string) => {
+      const spinner = createSpinner('Restoring project...');
+      spinner.start();
+
+      try {
+        const client = createClient({ baseUrl: getApiUrl() });
+        const project = await client.restoreProject(id);
+
+        spinner.stop();
+        success(`Project restored: ${project.project_id}`);
+      } catch (err) {
+        spinner.stop();
+        error(`Failed to restore project: ${err instanceof Error ? err.message : String(err)}`);
         process.exit(1);
       }
     });

@@ -11,6 +11,7 @@ import {
   SemanticContentSchema,
   validateIntegrity,
   checkRelationSanity,
+  type SemanticContent,
 } from '@t3x-dev/core';
 import type { Command } from 'commander';
 import YAML from 'yaml';
@@ -69,7 +70,7 @@ export function parseAndValidate(
 
   // 3. Semantic validation (unless schema-only)
   if (!schemaOnly) {
-    const integrity = validateIntegrity(data);
+    const integrity = validateIntegrity(data as SemanticContent);
     for (const err of integrity.errors) {
       allErrors.push(`[${err.type}] ${err.message} (${err.location})`);
     }
@@ -77,7 +78,7 @@ export function parseAndValidate(
       allWarnings.push(`[${w.type}] ${w.message} (${w.location})`);
     }
 
-    const sanity = checkRelationSanity(data);
+    const sanity = checkRelationSanity(data as SemanticContent);
     for (const w of sanity) {
       allWarnings.push(`[${w.type}] ${w.message} (${w.location})`);
     }

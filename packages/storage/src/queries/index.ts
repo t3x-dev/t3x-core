@@ -309,12 +309,15 @@ export {
   type CreateProjectInput,
   deleteProject,
   findProjectById,
+  findProjectByIdIncludingDeleted,
   findProjects,
   findProjectWithStats,
   insertProject,
   type ListProjectsOptions,
+  permanentDeleteProject,
   type ProjectStats,
   type ProjectWithStats,
+  restoreProject,
   updateProject,
 } from './projects';
 // Recipes (workflow automation)
