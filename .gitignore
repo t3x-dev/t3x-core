@@ -78,4 +78,4 @@ coverage.xml
 next-env.d.ts
 .t3x/test-pg-data
 .worktrees/
-.worktrees/
+.superpowers/
