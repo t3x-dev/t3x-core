@@ -1,6 +1,9 @@
 'use client';
 
-import type { ExtractionPhase } from '@/store/extractionPanelStore';
+import type { Phase } from '@/types/goldStepContracts';
+
+/** Compat alias — ExtractionPanel still passes 'committing' from old store */
+type ExtractionPhase = Phase | 'committing';
 
 interface PhaseTabsProps {
   currentPhase: ExtractionPhase;

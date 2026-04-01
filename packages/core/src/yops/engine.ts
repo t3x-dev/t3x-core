@@ -165,6 +165,47 @@ function execUnset(
   return null;
 }
 
+/**
+ * Recursively distribute slot_quotes to a node and its children by dot-path matching.
+ * Same algorithm as applyMetadata() in yopsParser.ts.
+ *
+ * Example: source = { "duration": "seven days", "best_visit_times.fall": "Fall (Sep-Oct)" }
+ * → root node gets slot_quotes.duration = "seven days"
+ * → child "best_visit_times" gets slot_quotes.fall = "Fall (Sep-Oct)"
+ */
+function distributeSlotQuotes(
+  node: TreeNode,
+  source: Record<string, string>,
+  prefix: string,
+): void {
+  const nodeQuotes: Record<string, string> = {};
+  for (const [quotePath, quoteValue] of Object.entries(source)) {
+    const segments = quotePath.split('.');
+    if (prefix === '') {
+      if (segments.length === 1 && segments[0] in node.slots) {
+        nodeQuotes[segments[0]] = quoteValue;
+      }
+    } else {
+      const prefixSegments = prefix.split('.');
+      if (
+        segments.length === prefixSegments.length + 1 &&
+        segments.slice(0, prefixSegments.length).join('.') === prefix &&
+        segments[segments.length - 1] in node.slots
+      ) {
+        nodeQuotes[segments[segments.length - 1]] = quoteValue;
+      }
+    }
+  }
+  if (Object.keys(nodeQuotes).length > 0) {
+    node.slot_quotes = { ...node.slot_quotes, ...nodeQuotes };
+  }
+
+  for (const child of node.children) {
+    const childPrefix = prefix ? `${prefix}.${child.key}` : child.key;
+    distributeSlotQuotes(child, source, childPrefix);
+  }
+}
+
 // ── add ──
 
 function execAdd(
@@ -185,9 +226,9 @@ function execAdd(
   // Build tree node from YAML map
   const newNode = yamlToTree(nodeKey, op.node[nodeKey]);
 
-  // Set source quotes from the source map
+  // Distribute source quotes recursively to children by dot-path matching
   if (Object.keys(op.source).length > 0) {
-    newNode.slot_quotes = { ...op.source };
+    distributeSlotQuotes(newNode, op.source, '');
   }
 
   if (op.from) newNode.source = op.from;

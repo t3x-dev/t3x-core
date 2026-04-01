@@ -1,12 +1,28 @@
 'use client';
 
+/**
+ * ExtractionPanel — Gold Step top-level phase router.
+ *
+ * Collapsed rail (40px): icon + badge + vertical label
+ * Expanded (380px): header + PhaseTabs + phase content
+ *
+ * Refactored from 356 LOC → ~200 LOC:
+ *  - Keyboard shortcuts → useKeyboardNav
+ *  - Store reads split across phaseStore / draftStore / hoverStore
+ *  - Added ✏ pencil button (edit entry path)
+ */
+
 import type { TreeNode } from '@t3x-dev/core';
 import { motion } from 'framer-motion';
-import { GitCommit, LayoutGrid, Loader2, Sparkles } from 'lucide-react';
+import { GitCommit, LayoutGrid, Loader2, Pencil, Sparkles } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
+import { useKeyboardNav } from '@/hooks/useKeyboardNav';
+import { useCommandStore } from '@/store/commandStore';
+import { useDraftStore } from '@/store/draftStore';
 import { useExtractionPanelStore } from '@/store/extractionPanelStore';
+import { usePhaseStore } from '@/store/phaseStore';
 import { AdvisoryPanel } from './AdvisoryPanel';
 import { CommitBar } from './CommitBar';
 import { IdleView } from './IdleView';
@@ -15,12 +31,10 @@ import { TriageView } from './TriageView';
 import { YAMLView } from './YAMLView';
 import { YOpsFeed } from './YOpsFeed';
 
-// ── Panel widths ──
+// ── Constants ──
 
-const PANEL_WIDTHS = {
-  collapsed: 40,
-  expanded: 380,
-};
+const COLLAPSED_WIDTH = 40;
+const DEFAULT_WIDTH = 380;
 
 // ── Collapsed rail ──
 
@@ -52,7 +66,6 @@ function CollapsedRail({
           </span>
         )}
       </button>
-      {/* Vertical label */}
       <span
         className="text-[9px] font-medium uppercase tracking-widest text-[var(--text-tertiary)]"
         style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
@@ -63,175 +76,132 @@ function CollapsedRail({
   );
 }
 
-// ── Main ExtractionPanel ──
+// ── Main ──
 
 export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
   const router = useRouter();
 
-  // Panel chrome
-  const panelMode = useExtractionPanelStore((s) => s.panelMode);
-  const draft = useExtractionPanelStore((s) => s.draft);
-  const isExtracting = useExtractionPanelStore((s) => s.isExtracting);
-  const togglePanel = useExtractionPanelStore((s) => s.togglePanel);
-  const manualEditedNodeIds = useExtractionPanelStore((s) => s.manualEditedNodeIds);
+  // New stores
+  const _phase = usePhaseStore((s) => s.phase);
+  const _viewTab = usePhaseStore((s) => s.viewTab);
+  const panelMode = usePhaseStore((s) => s.panelMode);
+  const _entryPath = usePhaseStore((s) => s.entryPath);
+  const _setPanelMode = usePhaseStore((s) => s.setPanelMode);
+  const setPhase = usePhaseStore((s) => s.setPhase);
+  const setEntryPath = usePhaseStore((s) => s.setEntryPath);
+  const _setViewTab = usePhaseStore((s) => s.setViewTab);
+  const togglePanel = usePhaseStore((s) => s.togglePanel);
 
-  // V6 Phase state
-  const extractionPhase = useExtractionPanelStore((s) => s.extractionPhase);
-  const pendingYOps = useExtractionPanelStore((s) => s.pendingYOps);
-  const turnsSinceLastExtract = useExtractionPanelStore((s) => s.turnsSinceLastExtract);
-  const onExtractRequested = useExtractionPanelStore((s) => s.onExtractRequested);
+  // Draft store (mock → Person A replaces)
+  const draft = useDraftStore((s) => s.draft);
+  const isExtracting = useDraftStore((s) => s.isExtracting);
 
-  // V6 Phase transitions
-  const completeYOps = useExtractionPanelStore((s) => s.completeYOps);
-  const goToReview = useExtractionPanelStore((s) => s.goToReview);
-  const goBackToTriage = useExtractionPanelStore((s) => s.goBackToTriage);
-  const startCommitting = useExtractionPanelStore((s) => s.startCommitting);
-  const completeCommit = useExtractionPanelStore((s) => s.completeCommit);
-
-  // Commit state
+  // Old store — still needed for commit flow + triage until full migration
   const committedNodeSnapshot = useExtractionPanelStore((s) => s.committedNodeSnapshot);
   const lastCommitHash = useExtractionPanelStore((s) => s.lastCommitHash);
   const commitBranch = useExtractionPanelStore((s) => s.commitBranch);
   const projectId = useExtractionPanelStore((s) => s.projectId);
   const isCommitting = useExtractionPanelStore((s) => s.isCommitting);
   const commitNodes = useExtractionPanelStore((s) => s.commitNodes);
+  const manualEditedNodeIds = useExtractionPanelStore((s) => s.manualEditedNodeIds);
+  const pendingYOps = useExtractionPanelStore((s) => s.pendingYOps);
+  const completeYOps = useExtractionPanelStore((s) => s.completeYOps);
+  const goToReview = useExtractionPanelStore((s) => s.goToReview);
+  const goBackToTriage = useExtractionPanelStore((s) => s.goBackToTriage);
+  const startCommitting = useExtractionPanelStore((s) => s.startCommitting);
+  const completeCommit = useExtractionPanelStore((s) => s.completeCommit);
+  const extractionPhase = useExtractionPanelStore((s) => s.extractionPhase);
 
-
-  const nodeCount = draft.trees.length;
-  const committedNodes = useMemo(() => Object.values(committedNodeSnapshot), [committedNodeSnapshot]);
+  const nodeCount =
+    draft.trees.length > 0
+      ? draft.trees.length
+      : useExtractionPanelStore.getState().draft.trees.length;
+  const committedNodes = useMemo(
+    () => Object.values(committedNodeSnapshot),
+    [committedNodeSnapshot]
+  );
   const manualCount = manualEditedNodeIds.size;
 
-  // Count all draft trees + total slots for commit bar (use draft directly, not selectPendingNodes)
+  // Pending node/slot counts for commit bar
   const { pendingNodeCount, pendingSlotCount } = useMemo(() => {
-    if (extractionPhase !== 'review' && extractionPhase !== 'committing') {
-      return { pendingNodeCount: 0, pendingSlotCount: 0 };
-    }
-    // Count all trees and their total slots (including children)
+    const ep = extractionPhase;
+    if (ep !== 'review' && ep !== 'committing') return { pendingNodeCount: 0, pendingSlotCount: 0 };
+    const trees = useExtractionPanelStore.getState().draft.trees;
     let totalSlots = 0;
-    function countSlots(trees: import('@t3x-dev/core').TreeNode[]) {
-      for (const t of trees) {
-        totalSlots += Object.keys(t.slots).length;
-        if (t.children.length > 0) countSlots(t.children);
+    function countSlots(t: TreeNode[]) {
+      for (const node of t) {
+        totalSlots += Object.keys(node.slots).length;
+        if (node.children.length > 0) countSlots(node.children);
       }
     }
-    countSlots(draft.trees);
-    return { pendingNodeCount: draft.trees.length, pendingSlotCount: totalSlots };
-  }, [extractionPhase, draft.trees]);
+    countSlots(trees);
+    return { pendingNodeCount: trees.length, pendingSlotCount: totalSlots };
+  }, [extractionPhase]);
 
-  const targetWidth =
-    panelMode === 'collapsed' ? PANEL_WIDTHS.collapsed : (customWidth ?? PANEL_WIDTHS.expanded);
-
-  // Panel mode setter
-  const setPanelMode = useExtractionPanelStore((s) => s.setPanelMode);
-
-  // Handle commit flow
-  const handleCommit = useCallback(async (message: string) => {
-    startCommitting();
-    try {
-      const result = await commitNodes(message);
-      completeCommit();
-      const commitUrl = projectId
-        ? `/project/${projectId}/commit/${encodeURIComponent(result.hash)}`
-        : null;
-      toast.success(`Committed to ${commitBranch}`, {
-        description: result.hash.slice(0, 16),
-        action: commitUrl
-          ? {
-              label: 'View commit',
-              onClick: () => router.push(commitUrl),
-            }
-          : undefined,
-      });
-    } catch {
-      completeCommit();
-    }
-  }, [commitNodes, startCommitting, completeCommit, commitBranch, projectId, router]);
-
-  // Keyboard shortcuts
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      // Don't capture when focused on input/textarea
-      const tag = (e.target as HTMLElement)?.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-
-      // Cmd+E: Start extraction
-      if (e.metaKey && e.key === 'e') {
-        e.preventDefault();
-        if (extractionPhase === 'idle') {
-          window.dispatchEvent(new CustomEvent('t3x:extract-requested'));
-        }
-        return;
+  // Commit handler
+  const handleCommit = useCallback(
+    async (message: string) => {
+      startCommitting();
+      try {
+        const result = await commitNodes(message);
+        completeCommit();
+        const commitUrl = projectId
+          ? `/project/${projectId}/commit/${encodeURIComponent(result.hash)}`
+          : null;
+        toast.success(`Committed to ${commitBranch}`, {
+          description: result.hash.slice(0, 16),
+          action: commitUrl
+            ? { label: 'View commit', onClick: () => router.push(commitUrl) }
+            : undefined,
+        });
+      } catch {
+        completeCommit();
       }
+    },
+    [commitNodes, startCommitting, completeCommit, commitBranch, projectId, router]
+  );
 
-      // Cmd+]: Toggle panel
-      if (e.metaKey && e.key === ']') {
-        e.preventDefault();
-        if (panelMode === 'collapsed') {
-          setPanelMode('default');
-        } else {
-          setPanelMode('collapsed');
-        }
-        return;
-      }
-
-      // 'a' key: Accept All (in triage)
-      if (e.key === 'a' && !e.metaKey && !e.ctrlKey && extractionPhase === 'triage') {
-        e.preventDefault();
-        useExtractionPanelStore.getState().acceptAll();
-        return;
-      }
-
-      // Enter: Next phase (triage → review)
-      if (e.key === 'Enter' && !e.metaKey && extractionPhase === 'triage') {
-        e.preventDefault();
-        goToReview();
-        return;
-      }
-
-      // Cmd+Enter: Commit (in review)
-      if (e.metaKey && e.key === 'Enter' && extractionPhase === 'review') {
-        e.preventDefault();
-        handleCommit('');
-        return;
-      }
-
-      // Escape: Back / cancel
-      if (e.key === 'Escape' && extractionPhase === 'review') {
-        e.preventDefault();
-        goBackToTriage();
-        return;
-      }
-    }
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [
-    extractionPhase,
-    panelMode,
-    setPanelMode,
-    goToReview,
-    goBackToTriage,
-    handleCommit,
-    onExtractRequested,
-  ]);
-
-  // Handle extract button
+  // Extract handler
   const handleExtract = () => {
-    // Dispatch custom event — ChatWorkspace listens for it
     window.dispatchEvent(new CustomEvent('t3x:extract-requested'));
   };
 
-  // Phase tab navigation (only between done phases)
-  const handleTabClick = (phase: 'yops' | 'triage' | 'review') => {
-    if (phase === 'triage' && (extractionPhase === 'review' || extractionPhase === 'committing')) {
+  // ✏ Pencil — edit committed YAML directly
+  const handlePencilEdit = useCallback(() => {
+    const store = useExtractionPanelStore.getState();
+    const snapshot = store.committedNodeSnapshot;
+    const trees = Object.values(snapshot);
+    if (trees.length === 0) return;
+    // Load committed trees into draft — sync write to old store (YAMLView reads from it)
+    store.setDraft({ trees, relations: [] });
+    // Set phase on old store (ExtractionPanel routes by extractionPhase)
+    useExtractionPanelStore.setState({ extractionPhase: 'review' });
+    // Also sync new stores for useKeyboardNav and future consumers
+    setEntryPath('edit');
+    setPhase('review');
+  }, [setEntryPath, setPhase]);
+
+  // Keyboard shortcuts — injected actions
+  useKeyboardNav({
+    undo: useCommandStore.getState().undo,
+    redo: useCommandStore.getState().redo,
+    commit: () => handleCommit(''),
+    startExtraction: handleExtract,
+  });
+
+  // Phase tab clicks
+  const handleTabClick = (tab: 'yops' | 'triage' | 'review') => {
+    if (tab === 'triage' && (extractionPhase === 'review' || extractionPhase === 'committing')) {
       goBackToTriage();
-    } else if (phase === 'review' && extractionPhase === 'triage') {
+    } else if (tab === 'review' && extractionPhase === 'triage') {
       goToReview();
     }
   };
 
-  // Determine if we should show phase tabs (not in idle)
   const showPhaseTabs = extractionPhase !== 'idle';
+  const targetWidth = panelMode === 'collapsed' ? COLLAPSED_WIDTH : (customWidth ?? DEFAULT_WIDTH);
+  const hasCommittedNodes = Object.keys(committedNodeSnapshot).length > 0;
+  const turnsSinceLastExtract = useExtractionPanelStore((s) => s.turnsSinceLastExtract);
 
   return (
     <motion.div
@@ -239,15 +209,13 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
       transition={{ type: 'spring', stiffness: 300, damping: 30 }}
       className="relative flex h-full flex-shrink-0 flex-col border-l border-[var(--stroke-default)] bg-[var(--surface-panel)] overflow-hidden"
     >
-      {/* Collapsed rail */}
       {panelMode === 'collapsed' && (
         <CollapsedRail nodeCount={nodeCount} isExtracting={isExtracting} onExpand={togglePanel} />
       )}
 
-      {/* Expanded panel */}
       {panelMode !== 'collapsed' && (
         <div className="flex h-full flex-col min-w-0">
-          {/* Panel header — changes based on extractionPhase */}
+          {/* Header */}
           <div className="flex items-center justify-between border-b border-[var(--stroke-default)] px-3 py-2">
             <div className="flex items-center gap-1.5">
               {isExtracting ? (
@@ -264,37 +232,29 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
                       ? 'Triage'
                       : 'Knowledge'}
               </span>
-              {/* Node/slot count — always show when we have nodes */}
-              {nodeCount > 0 && !isExtracting && (
-                <span className="text-[10px] text-[var(--text-secondary)]">
-                  {extractionPhase === 'review' || extractionPhase === 'committing'
-                    ? `${pendingNodeCount} nodes · ${pendingSlotCount} slots`
-                    : extractionPhase === 'triage'
-                      ? `${nodeCount} topics`
-                      : String(nodeCount)}
-                </span>
-              )}
-              {/* Phase badge pill */}
-              {(extractionPhase === 'review' || extractionPhase === 'committing') && (
-                <span className="rounded-full bg-[var(--accent)]/15 px-2 py-0.5 text-[8px] font-bold uppercase tracking-wider text-[var(--accent)]">
-                  Review
-                </span>
-              )}
-              {extractionPhase === 'triage' && (
-                <span className="rounded-full bg-[var(--status-success)]/15 px-2 py-0.5 text-[8px] font-bold uppercase tracking-wider text-[var(--status-success)]">
-                  Triage
-                </span>
-              )}
-              {/* Extract button in idle phase */}
               {extractionPhase === 'idle' && !isExtracting && (
-                <button
-                  type="button"
-                  onClick={handleExtract}
-                  className="ml-1 flex items-center gap-1 rounded-full bg-[var(--accent-commit)]/10 px-2 py-0.5 text-[10px] font-medium text-[var(--accent-commit)] hover:bg-[var(--accent-commit)]/20 transition-colors"
-                >
-                  <Sparkles className="h-3 w-3" />
-                  Extract
-                </button>
+                <div className="flex items-center gap-1 ml-1">
+                  {/* ✏ Pencil — edit committed YAML */}
+                  {hasCommittedNodes && (
+                    <button
+                      type="button"
+                      onClick={handlePencilEdit}
+                      className="p-1 rounded text-[var(--text-secondary)] hover:text-[var(--accent)] hover:bg-[var(--hover-bg)] transition-colors"
+                      title="Edit committed YAML"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                  {/* Extract button */}
+                  <button
+                    type="button"
+                    onClick={handleExtract}
+                    className="flex items-center gap-1 rounded-full bg-[var(--accent-commit)]/10 px-2 py-0.5 text-[10px] font-medium text-[var(--accent-commit)] hover:bg-[var(--accent-commit)]/20 transition-colors"
+                  >
+                    <Sparkles className="h-3 w-3" />
+                    Extract
+                  </button>
+                </div>
               )}
             </div>
             <button
@@ -303,16 +263,16 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
               className="rounded p-0.5 text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]"
               aria-label="Collapse panel"
             >
-              ×
+              x
             </button>
           </div>
 
-          {/* Phase tabs (shown when not idle) */}
+          {/* Phase tabs */}
           {showPhaseTabs && (
             <PhaseTabs currentPhase={extractionPhase} onTabClick={handleTabClick} />
           )}
 
-          {/* Content area — routed by extractionPhase */}
+          {/* Content — routed by extractionPhase (old store) during migration */}
           {extractionPhase === 'idle' && (
             <IdleView
               committedNodes={committedNodes}
@@ -332,7 +292,6 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
 
           {(extractionPhase === 'review' || extractionPhase === 'committing') && (
             <div className="flex flex-1 flex-col overflow-hidden">
-              {/* Section header */}
               <div className="flex items-center justify-between px-3.5 py-[7px] text-[9px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)] bg-[var(--hover-bg)]/30 border-b border-[var(--stroke-default)]">
                 <span>Changes to commit</span>
               </div>

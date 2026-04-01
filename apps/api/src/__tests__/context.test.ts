@@ -60,6 +60,7 @@ describe('Context Routes', () => {
           },
         ],
         relations: [],
+      // biome-ignore lint/suspicious/noExplicitAny: test data cast
       } as any,
       project_id: testProjectId,
       message: 'First commit',
@@ -86,6 +87,7 @@ describe('Context Routes', () => {
           },
         ],
         relations: [],
+      // biome-ignore lint/suspicious/noExplicitAny: test data cast
       } as any,
       project_id: testProjectId,
       message: 'Second commit on main',
@@ -106,6 +108,7 @@ describe('Context Routes', () => {
           },
         ],
         relations: [],
+      // biome-ignore lint/suspicious/noExplicitAny: test data cast
       } as any,
       project_id: testProjectId,
       message: 'Commit on dev branch',

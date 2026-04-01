@@ -18,6 +18,7 @@ import { cn } from '@/lib/utils';
 import { useChatStore } from '@/store/chatStore';
 import { useExtractionPanelStore } from '@/store/extractionPanelStore';
 import { useSessionStore } from '@/store/sessionStore';
+import { useCommittedHighlights } from '@/hooks/useCommittedHighlights';
 import { ChatAddForm } from './ChatAddForm';
 import { ChatHeader } from './ChatHeader';
 import type { AttachedImage } from './ChatInput';
@@ -291,6 +292,12 @@ export function ChatWorkspace({
     return buildSourceMap(draft, msgInput);
   }, [draft, messages]);
 
+  // Load persistent committed highlights for this conversation
+  const committedHighlightsByTurn = useCommittedHighlights(
+    resolvedProjectId,
+    resolvedConversationId
+  );
+
   // Count turns since last extraction (for nudge badge)
   useEffect(() => {
     const prev = prevTurnsSavedRef.current;
@@ -553,6 +560,7 @@ export function ChatWorkspace({
                   msg.role === 'assistant' && i === messages.length - 1 ? citations : undefined
                 }
                 sourceMap={sourceMapByTurn.get(i + 1)}
+                committedHighlights={committedHighlightsByTurn.get(msg.id)}
               />
             ))}
 

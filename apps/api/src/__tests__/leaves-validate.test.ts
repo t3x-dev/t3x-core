@@ -65,6 +65,7 @@ describe('POST /v1/leaves/:id/validate', () => {
           { key: 's_2', slots: { text: 'User prefers premium quality' }, children: [] },
         ],
         relations: [],
+      // biome-ignore lint/suspicious/noExplicitAny: test data cast
       } as any,
       project_id: testProjectId,
       branch: 'main',

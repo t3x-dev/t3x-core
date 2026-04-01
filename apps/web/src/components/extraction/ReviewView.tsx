@@ -17,7 +17,7 @@ import { useCommandStore } from '@/store/commandStore';
 import { useCommitStore } from '@/store/commitStore';
 import { useDraftStore } from '@/store/draftStore';
 import { useEditingStore } from '@/store/editingStore';
-import { useExtractionUIStore } from '@/store/extractionUIStore';
+import { usePhaseStore } from '@/store/phaseStore';
 
 // ── Committed section ──
 
@@ -95,7 +95,7 @@ export function ReviewView() {
   const manualEditedNodeIds = useDraftStore((s) => s.manualEditedNodeIds);
   const adding = useEditingStore((s) => s.adding);
   const pendingOps = useCommandStore((s) => s.pendingOps);
-  const setPhase = useExtractionUIStore((s) => s.setPhase);
+  const setPhase = usePhaseStore((s) => s.setPhase);
 
   // Build change map from pendingOps
   const changeMap = new Map<string, SlotChange>();

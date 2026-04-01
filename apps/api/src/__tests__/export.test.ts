@@ -14,6 +14,7 @@ import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
 
+// biome-ignore lint/correctness/noUnusedVariables: kept for test typing
 type ApiResponse = Record<string, unknown>;
 
 let mockDB: AnyDB;

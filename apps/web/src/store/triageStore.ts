@@ -55,12 +55,13 @@ export function treesToTriageItems(trees: TreeNode[]): TriageItem[] {
     const slots = collectAllSlots(tree, '');
     const childCount = tree.children.length;
     const slotCount = Object.keys(slots).length;
-    const preview = childCount > 0
-      ? `${childCount} subtopics, ${slotCount} total slots`
-      : Object.entries(slots)
-          .slice(0, 2)
-          .map(([k, v]) => `${k}: ${v}`)
-          .join(', ');
+    const preview =
+      childCount > 0
+        ? `${childCount} subtopics, ${slotCount} total slots`
+        : Object.entries(slots)
+            .slice(0, 2)
+            .map(([k, v]) => `${k}: ${v}`)
+            .join(', ');
     return {
       id: tree.key,
       source,
@@ -79,13 +80,12 @@ let saveTimer: ReturnType<typeof setTimeout> | undefined;
 function debouncedSave() {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
-    const { conversationId, decisions, slotToggles, manualAdditions } =
-      useTriageStore.getState();
+    const { conversationId, decisions, slotToggles, manualAdditions } = useTriageStore.getState();
     if (!conversationId) return;
 
-    // Read current phase from extractionUIStore
-    import('@/store/extractionUIStore').then(({ useExtractionUIStore }) => {
-      const phase = useExtractionUIStore.getState().phase;
+    // TODO(Person A/B): migrate to phaseStore once implemented
+    import('@/store/extractionPanelStore').then(({ useExtractionPanelStore }) => {
+      const phase = useExtractionPanelStore.getState().extractionPhase;
       import('@/lib/api/conversations').then(({ updateConversation }) => {
         updateConversation(conversationId, {
           metadata: {
