@@ -14,8 +14,8 @@ import type { SemanticContent, TreeNode, YOp, YOpsLogEntry, YOpsSource } from '@
 // 共享类型
 // ─────────────────────────────────────────────
 
-/** 提取阶段（不含 'committing'，提交状态由 commitStore.isCommitting 管理） */
-export type Phase = 'idle' | 'yops' | 'triage' | 'review';
+/** 提取阶段（'committing' kept for legacy comparison compatibility） */
+export type Phase = 'idle' | 'yops' | 'triage' | 'review' | 'committing';
 
 /** 用户手动切换的 tab（可以独立于 phase） */
 export type ViewTab = 'yops' | 'triage' | 'review';
@@ -275,9 +275,8 @@ export interface Topic {
 }
 
 export interface GateIssue {
-  type: string;
-  message: string;
-  severity: 'warning' | 'error';
+  severity: 'error' | 'warning' | 'info';
+  description: string;
 }
 
 export interface DriftInfo {
@@ -292,5 +291,5 @@ export interface AdvisoryQuestion {
   treeId: string;
   slotKey?: string;
   question: string;
-  currentValue?: string;
+  currentValue?: unknown;
 }

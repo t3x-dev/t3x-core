@@ -6,14 +6,14 @@ import { ChatWorkspace } from '@/components/chat/ChatWorkspace';
 import { ExtractionPanel } from '@/components/chat/ExtractionPanel';
 import { getConversation } from '@/lib/api';
 import { useChatStore } from '@/store/chatStore';
-import { useExtractionPanelStore } from '@/store/extractionPanelStore';
+import { usePhaseStore } from '@/store/phaseStore';
 
 export default function ConversationPage() {
   const { conversationId } = useParams<{ conversationId: string }>();
   const searchParams = useSearchParams();
   const firstMessage = searchParams.get('firstMessage');
   const activeProjectId = useChatStore((s) => s.activeProjectId);
-  const panelMode = useExtractionPanelStore((s) => s.panelMode);
+  const panelMode = usePhaseStore((s) => s.panelMode);
 
   // Fetch parent commit hash for inheritance (when navigating from canvas "Create Unit")
   const [inheritFromCommitHash, setInheritFromCommitHash] = useState<string | undefined>();

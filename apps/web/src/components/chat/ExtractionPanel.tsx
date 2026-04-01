@@ -20,8 +20,8 @@ import { useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
 import { useKeyboardNav } from '@/hooks/useKeyboardNav';
 import { useCommandStore } from '@/store/commandStore';
+import { useCommitStore } from '@/store/commitStore';
 import { useDraftStore } from '@/store/draftStore';
-import { useExtractionPanelStore } from '@/store/extractionPanelStore';
 import { usePhaseStore } from '@/store/phaseStore';
 import { AdvisoryPanel } from './AdvisoryPanel';
 import { CommitBar } from './CommitBar';
@@ -96,26 +96,22 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
   const draft = useDraftStore((s) => s.draft);
   const isExtracting = useDraftStore((s) => s.isExtracting);
 
-  // Old store — still needed for commit flow + triage until full migration
-  const committedNodeSnapshot = useExtractionPanelStore((s) => s.committedNodeSnapshot);
-  const lastCommitHash = useExtractionPanelStore((s) => s.lastCommitHash);
-  const commitBranch = useExtractionPanelStore((s) => s.commitBranch);
-  const projectId = useExtractionPanelStore((s) => s.projectId);
-  const isCommitting = useExtractionPanelStore((s) => s.isCommitting);
-  const commitNodes = useExtractionPanelStore((s) => s.commitNodes);
-  const manualEditedNodeIds = useExtractionPanelStore((s) => s.manualEditedNodeIds);
-  const pendingYOps = useExtractionPanelStore((s) => s.pendingYOps);
-  const completeYOps = useExtractionPanelStore((s) => s.completeYOps);
-  const goToReview = useExtractionPanelStore((s) => s.goToReview);
-  const goBackToTriage = useExtractionPanelStore((s) => s.goBackToTriage);
-  const startCommitting = useExtractionPanelStore((s) => s.startCommitting);
-  const completeCommit = useExtractionPanelStore((s) => s.completeCommit);
-  const extractionPhase = useExtractionPanelStore((s) => s.extractionPhase);
+  // Commit store
+  const committedNodeSnapshot = useCommitStore((s) => s.committedNodeSnapshot);
+  const lastCommitHash = useCommitStore((s) => s.lastCommitHash);
+  const commitBranch = useCommitStore((s) => s.commitBranch);
+  const projectId = useCommitStore((s) => s.projectId);
+  const isCommitting = useCommitStore((s) => s.isCommitting);
+  const commitNodes = useCommitStore((s) => s.commitNodes);
 
-  const nodeCount =
-    draft.trees.length > 0
-      ? draft.trees.length
-      : useExtractionPanelStore.getState().draft.trees.length;
+  // Draft store
+  const manualEditedNodeIds = useDraftStore((s) => s.manualEditedNodeIds);
+  const feedYops = useDraftStore((s) => s.feedYops);
+
+  // Phase (use phaseStore directly)
+  const extractionPhase = usePhaseStore((s) => s.phase);
+
+  const nodeCount = draft.trees.length;
   const committedNodes = useMemo(
     () => Object.values(committedNodeSnapshot),
     [committedNodeSnapshot]
@@ -126,7 +122,7 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
   const { pendingNodeCount, pendingSlotCount } = useMemo(() => {
     const ep = extractionPhase;
     if (ep !== 'review' && ep !== 'committing') return { pendingNodeCount: 0, pendingSlotCount: 0 };
-    const trees = useExtractionPanelStore.getState().draft.trees;
+    const trees = draft.trees;
     let totalSlots = 0;
     function countSlots(t: TreeNode[]) {
       for (const node of t) {
@@ -136,15 +132,15 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
     }
     countSlots(trees);
     return { pendingNodeCount: trees.length, pendingSlotCount: totalSlots };
-  }, [extractionPhase]);
+  }, [extractionPhase, draft.trees]);
 
   // Commit handler
   const handleCommit = useCallback(
     async (message: string) => {
-      startCommitting();
+      useCommitStore.setState({ isCommitting: true });
       try {
         const result = await commitNodes(message);
-        completeCommit();
+        setPhase('idle');
         const commitUrl = projectId
           ? `/project/${projectId}/commit/${encodeURIComponent(result.hash)}`
           : null;
@@ -155,10 +151,10 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
             : undefined,
         });
       } catch {
-        completeCommit();
+        // commitNodes already sets isCommitting: false on error
       }
     },
-    [commitNodes, startCommitting, completeCommit, commitBranch, projectId, router]
+    [commitNodes, commitBranch, projectId, router, setPhase]
   );
 
   // Extract handler
@@ -166,17 +162,12 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
     window.dispatchEvent(new CustomEvent('t3x:extract-requested'));
   };
 
-  // ✏ Pencil — edit committed YAML directly
+  // Pencil — edit committed YAML directly
   const handlePencilEdit = useCallback(() => {
-    const store = useExtractionPanelStore.getState();
-    const snapshot = store.committedNodeSnapshot;
+    const snapshot = useCommitStore.getState().committedNodeSnapshot;
     const trees = Object.values(snapshot);
     if (trees.length === 0) return;
-    // Load committed trees into draft — sync write to old store (YAMLView reads from it)
-    store.setDraft({ trees, relations: [] });
-    // Set phase on old store (ExtractionPanel routes by extractionPhase)
-    useExtractionPanelStore.setState({ extractionPhase: 'review' });
-    // Also sync new stores for useKeyboardNav and future consumers
+    useDraftStore.getState().setDraft({ trees, relations: [] });
     setEntryPath('edit');
     setPhase('review');
   }, [setEntryPath, setPhase]);
@@ -192,16 +183,16 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
   // Phase tab clicks
   const handleTabClick = (tab: 'yops' | 'triage' | 'review') => {
     if (tab === 'triage' && (extractionPhase === 'review' || extractionPhase === 'committing')) {
-      goBackToTriage();
+      setPhase('triage');
     } else if (tab === 'review' && extractionPhase === 'triage') {
-      goToReview();
+      setPhase('review');
     }
   };
 
   const showPhaseTabs = extractionPhase !== 'idle';
   const targetWidth = panelMode === 'collapsed' ? COLLAPSED_WIDTH : (customWidth ?? DEFAULT_WIDTH);
   const hasCommittedNodes = Object.keys(committedNodeSnapshot).length > 0;
-  const turnsSinceLastExtract = useExtractionPanelStore((s) => s.turnsSinceLastExtract);
+  const turnsSinceLastExtract = useDraftStore((s) => s.turnsSinceLastExtract);
 
   return (
     <motion.div
@@ -283,12 +274,12 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
 
           {extractionPhase === 'yops' && (
             <YOpsFeed
-              ops={pendingYOps as import('@t3x-dev/core').YOp[]}
-              onComplete={completeYOps}
+              ops={feedYops as import('@t3x-dev/core').YOp[]}
+              onComplete={() => setPhase('triage')}
             />
           )}
 
-          {extractionPhase === 'triage' && <TriageView onGoToReview={goToReview} />}
+          {extractionPhase === 'triage' && <TriageView onGoToReview={() => setPhase('review')} />}
 
           {(extractionPhase === 'review' || extractionPhase === 'committing') && (
             <div className="flex flex-1 flex-col overflow-hidden">

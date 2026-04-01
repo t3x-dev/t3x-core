@@ -16,6 +16,7 @@ const PHASE_TO_TAB: Record<Phase, ViewTab> = {
   yops: 'yops',
   triage: 'triage',
   review: 'review',
+  committing: 'review',
 };
 
 export const usePhaseStore = create<PhaseStore>((set, get) => ({

@@ -2,10 +2,11 @@
 
 import type { TreeNode } from '@t3x-dev/core';
 import { AlertCircle, GitCommit, Loader2, MessageSquarePlus } from 'lucide-react';
-import { toast } from 'sonner';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { DriftPopup } from '@/components/chat/DriftPopup';
 import { useAutoProject } from '@/hooks/useAutoProject';
+import { useCommittedHighlights } from '@/hooks/useCommittedHighlights';
 import { useConversationChat } from '@/hooks/useConversationChat';
 import { useTextSelection } from '@/hooks/useTextSelection';
 import { getCommitAsNodes } from '@/lib/api/commitUnified';
@@ -13,12 +14,14 @@ import { listTopics, updateTopicApi } from '@/lib/api/topics';
 import { extractNodes, getSemanticDraft, listYOpsLog } from '@/lib/api/trees';
 import { getIntentSummary } from '@/lib/intentSummary';
 import { buildSourceMap } from '@/lib/sourceMap';
-import { type CompatNode, contentToNodes, treesToNodes } from '@/lib/treeCompat';
+import { treesToNodes } from '@/lib/treeCompat';
 import { cn } from '@/lib/utils';
 import { useChatStore } from '@/store/chatStore';
-import { useExtractionPanelStore } from '@/store/extractionPanelStore';
+import { useCommitStore } from '@/store/commitStore';
+import { useDraftStore } from '@/store/draftStore';
+import { useHoverStore } from '@/store/hoverStore';
+import { usePhaseStore } from '@/store/phaseStore';
 import { useSessionStore } from '@/store/sessionStore';
-import { useCommittedHighlights } from '@/hooks/useCommittedHighlights';
 import { ChatAddForm } from './ChatAddForm';
 import { ChatHeader } from './ChatHeader';
 import type { AttachedImage } from './ChatInput';
@@ -50,7 +53,7 @@ export function ChatWorkspace({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const { selection, clearSelection } = useTextSelection(chatContainerRef);
-  const extractionPhase = useExtractionPanelStore((s) => s.extractionPhase);
+  const extractionPhase = usePhaseStore((s) => s.phase);
   const isReviewPhase = extractionPhase === 'review' || extractionPhase === 'committing';
   const showAddForm = isReviewPhase && selection && selection.text.length > 3;
   const firstMessageSentRef = useRef(false);
@@ -140,19 +143,19 @@ export function ChatWorkspace({
     useChatStore.getState().setActiveConversation(convId, resolvedProjectId || null);
     // Skip resetDraft if we just hydrated from parent (prevents wipe on re-render)
     if (!inheritedRef.current) {
-      useExtractionPanelStore.getState().resetDraft();
+      useDraftStore.getState().resetDraft();
     }
-    useExtractionPanelStore.getState().setConversationId(convId === 'new' ? null : convId);
+    useDraftStore.getState().setConversationId(convId === 'new' ? null : convId);
     if (resolvedProjectId) {
       useSessionStore.getState().setLastSession(resolvedProjectId, convId);
     }
 
-    useExtractionPanelStore.getState().setProjectId(resolvedProjectId || null);
+    useCommitStore.getState().setProjectId(resolvedProjectId || null);
 
     // Initialize commit state (load branch head) — skip when inheriting
     // because inheritance sets lastCommitHash to the parent commit hash
     if (resolvedProjectId && !inheritFromCommitHash) {
-      useExtractionPanelStore.getState().initCommitState(resolvedProjectId);
+      useCommitStore.getState().initCommitState(resolvedProjectId);
     }
 
     // If no project ID yet, try to get it from the conversation
@@ -162,9 +165,9 @@ export function ChatWorkspace({
           .then((conv) => {
             if (conv?.project_id) {
               setResolvedProjectId(conv.project_id);
-              useExtractionPanelStore.getState().setProjectId(conv.project_id);
+              useCommitStore.getState().setProjectId(conv.project_id);
               if (!inheritFromCommitHash) {
-                useExtractionPanelStore.getState().initCommitState(conv.project_id);
+                useCommitStore.getState().initCommitState(conv.project_id);
               }
               useChatStore.getState().setActiveConversation(convId, conv.project_id);
             }
@@ -184,22 +187,21 @@ export function ChatWorkspace({
           if (parentConvSource?.id) {
             setParentConversationId(parentConvSource.id);
           }
-          const store = useExtractionPanelStore.getState();
           const trees = (parentCommit.content?.trees as TreeNode[]) ?? [];
           const relations = parentCommit.content?.relations ?? [];
           if (trees.length > 0) {
-            store.setDraft({ trees, relations });
+            useDraftStore.getState().setDraft({ trees, relations });
             // Set parent as lastCommitHash so commit B gets correct parent_hashes
-            useExtractionPanelStore.setState({ lastCommitHash: hash });
+            useCommitStore.setState({ lastCommitHash: hash });
             // Mark all inherited trees as confirmed
             const confirmed: Record<string, boolean> = {};
             const nodes = treesToNodes(trees);
             for (const f of nodes) {
               confirmed[f.id] = true;
             }
-            useExtractionPanelStore.setState({ confirmedNodeIds: confirmed });
-            if (store.panelMode === 'collapsed') {
-              store.setPanelMode('default');
+            useCommitStore.setState({ confirmedNodeIds: confirmed });
+            if (usePhaseStore.getState().panelMode === 'collapsed') {
+              usePhaseStore.getState().setPanelMode('default');
             }
           }
           // Mark as hydrated so resetDraft() is skipped on re-render
@@ -216,27 +218,26 @@ export function ChatWorkspace({
     if (convId && convId !== 'new') {
       Promise.all([getSemanticDraft(convId), listYOpsLog(convId), listTopics(convId)])
         .then(([draft, yopsEntries, topicsList]) => {
-          const store = useExtractionPanelStore.getState();
           if (draft && draft.trees.length > 0) {
-            store.setDraft(draft);
-            if (store.panelMode === 'collapsed') {
-              store.setPanelMode('default');
+            useDraftStore.getState().setDraft(draft);
+            if (usePhaseStore.getState().panelMode === 'collapsed') {
+              usePhaseStore.getState().setPanelMode('default');
             }
           } else if (inheritFromCommitHash) {
             // No existing draft — hydrate from parent commit
             hydrateFromParent(inheritFromCommitHash);
           }
           if (yopsEntries && yopsEntries.length > 0) {
-            store.hydrateYOpsLog(yopsEntries);
+            useDraftStore.getState().hydrateYOpsLog(yopsEntries);
           }
           // Note: we intentionally do NOT lock conversation after commit.
           // Users should be able to continue chatting and extract more knowledge.
           if (topicsList && topicsList.length > 0) {
-            store.setTopics(topicsList);
+            useDraftStore.getState().setTopics(topicsList);
             // Auto-select the first active topic
             const activeTopic = topicsList.find((t) => t.status === 'active');
             if (activeTopic) {
-              store.setActiveTopicId(activeTopic.id);
+              useDraftStore.getState().setActiveTopicId(activeTopic.id);
             }
           }
         })
@@ -245,7 +246,7 @@ export function ChatWorkspace({
         });
     } else if (inheritFromCommitHash) {
       // New conversation with inheritance — hydrate from parent commit
-      useExtractionPanelStore.getState().setProjectId(resolvedProjectId || null);
+      useCommitStore.getState().setProjectId(resolvedProjectId || null);
       hydrateFromParent(inheritFromCommitHash);
     }
   }, [
@@ -263,22 +264,18 @@ export function ChatWorkspace({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, streamingContent]);
 
-  const isExtracting = useExtractionPanelStore((s) => s.isExtracting);
-  const focusIntentEnabled = useExtractionPanelStore((s) => s.focusIntentEnabled);
-  const setLlmHighlightedNodeIds = useExtractionPanelStore((s) => s.setLlmHighlightedNodeIds);
-  const draft = useExtractionPanelStore((s) => s.draft);
-  const activeTopicId = useExtractionPanelStore((s) => s.activeTopicId);
-  const startExtraction = useExtractionPanelStore((s) => s.startExtraction);
-  const setPendingYOps = useExtractionPanelStore((s) => s.setPendingYOps);
-  const setNodeSourceTags = useExtractionPanelStore((s) => s.setNodeSourceTags);
-  const setOnExtractRequested = useExtractionPanelStore((s) => s.setOnExtractRequested);
-  const setDraft = useExtractionPanelStore((s) => s.setDraft);
-  const setDriftDetected = useExtractionPanelStore((s) => s.setDriftDetected);
-  const setAdvisoryQuestions = useExtractionPanelStore((s) => s.setAdvisoryQuestions);
-  const setGateIssues = useExtractionPanelStore((s) => s.setGateIssues);
-  const incrementTurnsSinceLastExtract = useExtractionPanelStore(
-    (s) => s.incrementTurnsSinceLastExtract
-  );
+  const isExtracting = useDraftStore((s) => s.isExtracting);
+  const focusIntentEnabled = useHoverStore((s) => s.focusIntentEnabled);
+  const setLlmHighlightedNodeIds = useHoverStore((s) => s.setLlmHighlightedNodeIds);
+  const draft = useDraftStore((s) => s.draft);
+  const activeTopicId = useDraftStore((s) => s.activeTopicId);
+  const startExtraction = useDraftStore((s) => s.startExtraction);
+  const setNodeSourceTags = useDraftStore((s) => s.setNodeSourceTags);
+  const setDraft = useDraftStore((s) => s.setDraft);
+  const setDriftDetected = usePhaseStore((s) => s.setDriftDetected);
+  const setAdvisoryQuestions = usePhaseStore((s) => s.setAdvisoryQuestions);
+  const setGateIssues = usePhaseStore((s) => s.setGateIssues);
+  const incrementTurnsSinceLastExtract = useDraftStore((s) => s.incrementTurnsSinceLastExtract);
 
   // Precompute source map: quote positions in all messages for bidirectional highlighting
   const sourceMapByTurn = useMemo(() => {
@@ -319,9 +316,8 @@ export function ChatWorkspace({
     startExtraction();
 
     // Expand panel if collapsed
-    const state = useExtractionPanelStore.getState();
-    if (state.panelMode === 'collapsed') {
-      state.setPanelMode('default');
+    if (usePhaseStore.getState().panelMode === 'collapsed') {
+      usePhaseStore.getState().setPanelMode('default');
     }
 
     try {
@@ -333,10 +329,8 @@ export function ChatWorkspace({
       );
 
       if (result.status === 'skipped') {
-        useExtractionPanelStore.setState({
-          extractionPhase: 'idle',
-          isExtracting: false,
-        });
+        usePhaseStore.getState().setPhase('idle');
+        useDraftStore.setState({ isExtracting: false });
         toast.info(
           result.reason || 'Not enough new content to extract. Continue the conversation first.'
         );
@@ -348,7 +342,8 @@ export function ChatWorkspace({
           result.drift ?? { new_topic: 'New topic' },
           result.choices ?? ['keep_current', 'switch_topic']
         );
-        useExtractionPanelStore.setState({ isExtracting: false, extractionPhase: 'idle' });
+        useDraftStore.setState({ isExtracting: false });
+        usePhaseStore.getState().setPhase('idle');
         return;
       }
 
@@ -363,9 +358,9 @@ export function ChatWorkspace({
 
       if (deltaOps && deltaOps.length > 0) {
         // Has delta ops — show YOps feed animation first
-        setPendingYOps(deltaOps);
+        useDraftStore.setState({ feedYops: deltaOps });
         // Now that ops are loaded, switch phase to yops for feed animation
-        useExtractionPanelStore.setState({ extractionPhase: 'yops' });
+        usePhaseStore.getState().setPhase('yops');
 
         // Derive source tags
         const { deriveSourceTags } = await import('@/lib/sourceTag');
@@ -375,15 +370,17 @@ export function ChatWorkspace({
         );
         setNodeSourceTags(tags);
 
-        // Auto-accept USER-sourced nodes
+        // Auto-accept USER-sourced nodes via triageStore
+        const { useTriageStore } = await import('@/store/triageStore');
         for (const [key, tag] of Object.entries(tags)) {
           if (tag === 'user' || tag === 'both') {
-            useExtractionPanelStore.getState().acceptNode(key);
+            useTriageStore.getState().acceptItem(key);
           }
         }
       } else {
         // No delta ops — skip YOps feed, go straight to triage
-        useExtractionPanelStore.setState({ extractionPhase: 'triage', isExtracting: false });
+        usePhaseStore.getState().setPhase('triage');
+        useDraftStore.setState({ isExtracting: false });
       }
 
       if (result.advisory_questions) {
@@ -421,15 +418,15 @@ export function ChatWorkspace({
       // Reload topics after extraction (new topic may have been auto-created)
       listTopics(extractConvId)
         .then((topicsList) => {
-          const s2 = useExtractionPanelStore.getState();
-          s2.setTopics(topicsList);
+          const ds = useDraftStore.getState();
+          ds.setTopics(topicsList);
           // Auto-sync topic name with root tree type
           if (result.snapshot && result.snapshot.trees.length > 0 && topicsList.length > 0) {
             const rootType = result.snapshot.trees[0].key;
-            const currentTopic = topicsList.find((t) => t.id === s2.activeTopicId);
+            const currentTopic = topicsList.find((t) => t.id === ds.activeTopicId);
             if (currentTopic && currentTopic.name !== rootType) {
               updateTopicApi(currentTopic.id, { name: rootType }).catch(() => {});
-              s2.setTopics(
+              ds.setTopics(
                 topicsList.map((t) => (t.id === currentTopic.id ? { ...t, name: rootType } : t))
               );
             }
@@ -440,11 +437,16 @@ export function ChatWorkspace({
       if (focusIntentEnabled && result.snapshot && result.snapshot.trees.length > 0) {
         const controller = new AbortController();
         getIntentSummary(result.snapshot.trees, controller.signal)
-          .then((intentResult) => setLlmHighlightedNodeIds(intentResult.coreNodeIds))
+          .then((intentResult) => {
+            const ids: Record<string, boolean> = {};
+            for (const id of intentResult.coreNodeIds) ids[id] = true;
+            setLlmHighlightedNodeIds(ids);
+          })
           .catch(() => {});
       }
-    } catch (err) {
-      useExtractionPanelStore.setState({ extractionPhase: 'idle', isExtracting: false });
+    } catch (_err) {
+      usePhaseStore.getState().setPhase('idle');
+      useDraftStore.setState({ isExtracting: false });
     }
   }, [
     resolvedConversationId,
@@ -452,7 +454,6 @@ export function ChatWorkspace({
     activeTopicId,
     messages,
     startExtraction,
-    setPendingYOps,
     setNodeSourceTags,
     setDraft,
     setDriftDetected,

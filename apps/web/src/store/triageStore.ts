@@ -83,9 +83,8 @@ function debouncedSave() {
     const { conversationId, decisions, slotToggles, manualAdditions } = useTriageStore.getState();
     if (!conversationId) return;
 
-    // TODO(Person A/B): migrate to phaseStore once implemented
-    import('@/store/extractionPanelStore').then(({ useExtractionPanelStore }) => {
-      const phase = useExtractionPanelStore.getState().extractionPhase;
+    import('@/store/phaseStore').then(({ usePhaseStore }) => {
+      const phase = usePhaseStore.getState().phase;
       import('@/lib/api/conversations').then(({ updateConversation }) => {
         updateConversation(conversationId, {
           metadata: {

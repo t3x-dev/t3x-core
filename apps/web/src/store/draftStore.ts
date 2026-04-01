@@ -22,6 +22,10 @@ interface DraftState {
         driftDecision?: { choice: string; relation?: string; new_topic?: string };
       }) => void);
   manualEditedNodeIds: Set<string>;
+  /** Source tags for triage (user/llm/both per node) */
+  nodeSourceTags: Record<string, 'user' | 'llm' | 'both'>;
+  /** Turns since last extraction (for ExtractNudge) */
+  turnsSinceLastExtract: number;
 
   setDraft: (content: SemanticContent) => void;
   applyYOps: (ops: YOp[], source: YOpsSource, turnHash?: string) => void;
@@ -39,6 +43,9 @@ interface DraftState {
           driftDecision?: { choice: string; relation?: string; new_topic?: string };
         }) => void)
   ) => void;
+  setNodeSourceTags: (tags: Record<string, 'user' | 'llm' | 'both'>) => void;
+  incrementTurnsSinceLastExtract: () => void;
+  startExtraction: () => void;
 }
 
 const emptyContent: SemanticContent = { trees: [], relations: [] };
@@ -56,6 +63,8 @@ export const useDraftStore = create<DraftState>((set, get) => ({
   activeTopicId: null,
   triggerExtract: null,
   manualEditedNodeIds: new Set(),
+  nodeSourceTags: {},
+  turnsSinceLastExtract: 0,
 
   setDraft: (content) => {
     set({ draft: content, manualEditedNodeIds: new Set() });
@@ -124,4 +133,9 @@ export const useDraftStore = create<DraftState>((set, get) => ({
   setActiveTopicId: (id) => set({ activeTopicId: id }),
   addTopic: (topic) => set((s) => ({ topics: [...s.topics, topic] })),
   setTriggerExtract: (fn) => set({ triggerExtract: fn }),
+  setNodeSourceTags: (tags) => set({ nodeSourceTags: tags }),
+  incrementTurnsSinceLastExtract: () =>
+    set((s) => ({ turnsSinceLastExtract: s.turnsSinceLastExtract + 1 })),
+  startExtraction: () =>
+    set({ isExtracting: true, feedYops: [], pipelineSteps: [], turnsSinceLastExtract: 0 }),
 }));

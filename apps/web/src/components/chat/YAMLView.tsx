@@ -7,8 +7,10 @@ import { traceChatToYaml, traceYamlToChat } from '@/lib/hoverTrace';
 import { parseDisplayYAML, toDisplayYAML } from '@/lib/liteYaml';
 import { type RelevanceContext, relevanceScore } from '@/lib/relevanceScore';
 import { contentToNodes } from '@/lib/treeCompat';
-import { useExtractionPanelStore } from '@/store/extractionPanelStore';
+import { useCommitStore } from '@/store/commitStore';
+import { useDraftStore } from '@/store/draftStore';
 import { useHoverStore } from '@/store/hoverStore';
+import { usePhaseStore } from '@/store/phaseStore';
 import { TreeHistoryPopover } from './TreeHistoryPopover';
 
 // ── YAML Rendering Helpers ──
@@ -177,23 +179,23 @@ function renderSlotLines(
 // ── Component ──
 
 export function YAMLView() {
-  const draft = useExtractionPanelStore((s) => s.draft);
-  const applyYOps = useExtractionPanelStore((s) => s.applyYOps);
-  const yopsHistory = useExtractionPanelStore((s) => s.yopsHistory);
-  const yopsLog = useExtractionPanelStore((s) => s.yopsLog);
-  const confirmedNodeIds = useExtractionPanelStore((s) => s.confirmedNodeIds);
-  const confirmedSlotKeys = useExtractionPanelStore((s) => s.confirmedSlotKeys);
-  const confirmNode = useExtractionPanelStore((s) => s.confirmNode);
-  const unconfirmNode = useExtractionPanelStore((s) => s.unconfirmNode);
-  const confirmSlot = useExtractionPanelStore((s) => s.confirmSlot);
-  const unconfirmSlot = useExtractionPanelStore((s) => s.unconfirmSlot);
-  const committedNodeIds = useExtractionPanelStore((s) => s.committedNodeIds);
+  const draft = useDraftStore((s) => s.draft);
+  const applyYOps = useDraftStore((s) => s.applyYOps);
+  const yopsHistory = useDraftStore((s) => s.yopsHistory);
+  const yopsLog = useDraftStore((s) => s.yopsLog);
+  const isExtracting = useDraftStore((s) => s.isExtracting);
+  const manualEditedNodeIds = useDraftStore((s) => s.manualEditedNodeIds);
+  const confirmedNodeIds = useCommitStore((s) => s.confirmedNodeIds);
+  const confirmedSlotKeys = useCommitStore((s) => s.confirmedSlotKeys);
+  const confirmNode = useCommitStore((s) => s.confirmNode);
+  const unconfirmNode = useCommitStore((s) => s.unconfirmNode);
+  const confirmSlot = useCommitStore((s) => s.confirmSlot);
+  const unconfirmSlot = useCommitStore((s) => s.unconfirmSlot);
+  const committedNodeIds = useCommitStore((s) => s.committedNodeIds);
+  const gateIssues = usePhaseStore((s) => s.gateIssues);
   const llmHighlightedNodeIds = useHoverStore((s) => s.llmHighlightedNodeIds);
-  const isExtracting = useExtractionPanelStore((s) => s.isExtracting);
   const setHoveredNodeId = useHoverStore((s) => s.setHoveredNodeId);
   const hoveredTurnIndex = useHoverStore((s) => s.hoveredTurnIndex);
-  const gateIssues = useExtractionPanelStore((s) => s.gateIssues);
-  const manualEditedNodeIds = useExtractionPanelStore((s) => s.manualEditedNodeIds);
   const hoveredNodeId = useHoverStore((s) => s.hoveredNodeId);
   const hoveredFromChat = useHoverStore((s) => s.hoveredFromChat);
   const scrollToCenter = useHoverStore((s) => s.scrollToCenter);

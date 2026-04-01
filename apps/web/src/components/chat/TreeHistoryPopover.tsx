@@ -2,7 +2,7 @@
 
 import { History } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { useExtractionPanelStore } from '@/store/extractionPanelStore';
+import { useDraftStore } from '@/store/draftStore';
 
 interface TreeHistoryPopoverProps {
   treeId: string;
@@ -22,7 +22,7 @@ function formatTime(iso: string): string {
 }
 
 export function TreeHistoryPopover({ treeId }: TreeHistoryPopoverProps) {
-  const yopsLog = useExtractionPanelStore((s) => s.yopsLog);
+  const yopsLog = useDraftStore((s) => s.yopsLog);
 
   // Filter entries that affect this tree
   const entries = yopsLog.filter((entry) => {

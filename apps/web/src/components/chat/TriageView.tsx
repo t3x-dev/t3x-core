@@ -1,8 +1,11 @@
 'use client';
 
 import type { TreeNode } from '@t3x-dev/core';
+import { useMemo } from 'react';
 import type { SourceTag } from '@/lib/sourceTag';
-import { useExtractionPanelStore } from '@/store/extractionPanelStore';
+import { useCommitStore } from '@/store/commitStore';
+import { useDraftStore } from '@/store/draftStore';
+import { useTriageStore } from '@/store/triageStore';
 import { CommittedNodesList } from './CommittedNodesList';
 import { TriageRow } from './TriageRow';
 
@@ -11,19 +14,28 @@ interface TriageViewProps {
 }
 
 export function TriageView({ onGoToReview }: TriageViewProps) {
-  const draft = useExtractionPanelStore((s) => s.draft);
-  const acceptedNodeIds = useExtractionPanelStore((s) => s.acceptedNodeIds);
-  const dismissedNodeIds = useExtractionPanelStore((s) => s.dismissedNodeIds);
-  const nodeSourceTags = useExtractionPanelStore((s) => s.nodeSourceTags);
-  const committedNodeSnapshot = useExtractionPanelStore((s) => s.committedNodeSnapshot);
-  const committedNodeIds = useExtractionPanelStore((s) => s.committedNodeIds);
-  const lastCommitHash = useExtractionPanelStore((s) => s.lastCommitHash);
-  const acceptNode = useExtractionPanelStore((s) => s.acceptNode);
-  const dismissNode = useExtractionPanelStore((s) => s.dismissNode);
-  const acceptAll = useExtractionPanelStore((s) => s.acceptAll);
-  const confirmSlot = useExtractionPanelStore((s) => s.confirmSlot);
-  const unconfirmSlot = useExtractionPanelStore((s) => s.unconfirmSlot);
-  const confirmedSlotKeys = useExtractionPanelStore((s) => s.confirmedSlotKeys);
+  const draft = useDraftStore((s) => s.draft);
+  const nodeSourceTags = useDraftStore((s) => s.nodeSourceTags);
+  const decisions = useTriageStore((s) => s.decisions);
+  const acceptItem = useTriageStore((s) => s.acceptItem);
+  const dismissItem = useTriageStore((s) => s.dismissItem);
+  const triageAcceptAll = useTriageStore((s) => s.acceptAll);
+  const committedNodeSnapshot = useCommitStore((s) => s.committedNodeSnapshot);
+  const committedNodeIds = useCommitStore((s) => s.committedNodeIds);
+  const lastCommitHash = useCommitStore((s) => s.lastCommitHash);
+  const confirmSlot = useCommitStore((s) => s.confirmSlot);
+  const unconfirmSlot = useCommitStore((s) => s.unconfirmSlot);
+  const confirmedSlotKeys = useCommitStore((s) => s.confirmedSlotKeys);
+
+  // Derive accepted/dismissed sets from triageStore decisions
+  const acceptedNodeIds = useMemo(
+    () => new Set(Object.entries(decisions).filter(([, v]) => v === 'accepted').map(([k]) => k)),
+    [decisions]
+  );
+  const dismissedNodeIds = useMemo(
+    () => new Set(Object.entries(decisions).filter(([, v]) => v === 'dismissed').map(([k]) => k)),
+    [decisions]
+  );
 
   const newOrChanged: TreeNode[] = [];
   const committedUnchanged: TreeNode[] = [];
@@ -73,8 +85,8 @@ export function TriageView({ onGoToReview }: TriageViewProps) {
             node={node}
             sourceTag={(nodeSourceTags[node.key] as SourceTag) ?? 'llm'}
             status={getStatus(node.key)}
-            onAccept={() => acceptNode(node.key)}
-            onDismiss={() => dismissNode(node.key)}
+            onAccept={() => acceptItem(node.key)}
+            onDismiss={() => dismissItem(node.key)}
             slotStates={confirmedSlotKeys[node.key]}
             onToggleSlot={(slotKey) => {
               const isOn = confirmedSlotKeys[node.key]?.[slotKey] !== false;
@@ -101,7 +113,7 @@ export function TriageView({ onGoToReview }: TriageViewProps) {
         </div>
         <button
           type="button"
-          onClick={() => acceptAll()}
+          onClick={() => triageAcceptAll()}
           className="px-3.5 py-1.5 rounded-md border border-[var(--stroke-default)] text-[10px] font-semibold text-[var(--text-tertiary)] hover:bg-white/[0.04] transition-colors"
         >
           Accept All
