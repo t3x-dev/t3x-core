@@ -145,10 +145,34 @@ export const useCommitStore = create<CommitState>((set, get) => ({
         }
       }
 
+      // Sanitize slot values: API only accepts string | number | SlotRef | Array.
+      // Nested objects from LLM extraction must be stringified.
+      function sanitizeSlots(slots: Record<string, unknown>): Record<string, unknown> {
+        const out: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(slots)) {
+          if (v !== null && typeof v === 'object' && !Array.isArray(v) && !('ref' in v)) {
+            out[k] = JSON.stringify(v);
+          } else {
+            out[k] = v;
+          }
+        }
+        return out;
+      }
+      function sanitizeTrees(trees: TreeNode[]): TreeNode[] {
+        return trees.map((t) =>
+          Object.assign({}, t, {
+            slots: sanitizeSlots(t.slots),
+            children: sanitizeTrees(t.children),
+          }) as TreeNode
+        );
+      }
+
+      const sanitizedTrees = sanitizeTrees(enrichedTrees);
+
       const result = await createCommit(
         projectId,
         {
-          trees: enrichedTrees,
+          trees: sanitizedTrees,
           relations: draft.relations,
         },
         {
@@ -158,7 +182,7 @@ export const useCommitStore = create<CommitState>((set, get) => ({
           sources: conversationId
             ? [{ type: 'conversation', id: conversationId, title: conversationTitle ?? undefined }]
             : undefined,
-          provenance: { method: 'pipeline' },
+          provenance: { method: 'llm_extraction' },
         }
       );
 

@@ -15,7 +15,9 @@ import { usePhaseStore } from '@/store/phaseStore';
 import { CitationChips } from './CitationChips';
 import { CodeBlock } from './CodeBlock';
 import { CommittedHighlightTooltip } from './CommittedHighlightTooltip';
+import { SourceHighlight } from './SourceHighlight';
 import { ThinkingSection } from './ThinkingSection';
+import { useSlotActions } from '@/hooks/useSlotActions';
 
 interface ChatMessageProps {
   sender: 'user' | 'assistant';
@@ -147,6 +149,7 @@ function SourceMappedText({
   onLeaveSlot,
   onClickSlot,
   isReviewPhase,
+  onDeleteSlot,
 }: {
   content: string;
   mappings: SourceMapping[];
@@ -155,6 +158,7 @@ function SourceMappedText({
   onLeaveSlot: () => void;
   onClickSlot: (treePath: string, slotKey: string | null) => void;
   isReviewPhase: boolean;
+  onDeleteSlot?: (nodeId: string, slotKey: string) => void;
 }) {
   const segments = useMemo(() => splitIntoSegments(content, mappings), [content, mappings]);
 
@@ -168,25 +172,31 @@ function SourceMappedText({
         const m = seg.mapping;
         const isActive = hoveredNodeId === m.treePath;
 
-        const spanStyle: React.CSSProperties = isReviewPhase
-          ? {
-              background: isActive ? 'rgba(74, 222, 128, 0.2)' : 'rgba(74, 222, 128, 0.12)',
-              borderBottom: '2px solid var(--status-success)',
-              borderRadius: 2,
-              padding: '1px 0',
-              color: 'inherit',
-              cursor: 'pointer',
-              transition: 'background 0.15s',
-            }
-          : {
-              background: isActive ? 'rgba(139, 92, 246, 0.3)' : 'rgba(139, 92, 246, 0.08)',
-              borderBottom: isActive ? '2px solid var(--accent)' : 'none',
-              borderRadius: 2,
-              padding: '1px 0',
-              color: 'inherit',
-              cursor: 'pointer',
-              transition: 'background 0.15s, border-bottom 0.15s',
-            };
+        // For review phase: use SourceHighlight with tooltip + edit/delete
+        if (isReviewPhase) {
+          return (
+            <SourceHighlight
+              key={i}
+              text={seg.text}
+              nodeId={m.treePath}
+              slotKey={m.slotKey ?? ''}
+              isActive={isActive}
+              onEdit={(nid, sk) => onClickSlot(nid, sk)}
+              onDelete={onDeleteSlot ? (nid, sk) => onDeleteSlot(nid, sk) : undefined}
+            />
+          );
+        }
+
+        // Non-review phase: keep existing inline span behavior
+        const spanStyle: React.CSSProperties = {
+          background: isActive ? 'rgba(139, 92, 246, 0.3)' : 'rgba(139, 92, 246, 0.08)',
+          borderBottom: isActive ? '2px solid var(--accent)' : 'none',
+          borderRadius: 2,
+          padding: '1px 0',
+          color: 'inherit',
+          cursor: 'pointer',
+          transition: 'background 0.15s, border-bottom 0.15s',
+        };
 
         return (
           <span
@@ -290,6 +300,7 @@ export function ChatMessage({
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState('');
 
+  const { deleteSlot } = useSlotActions();
   const hoveredNodeId = useHoverStore((s) => s.hoveredNodeId);
   const hoveredSlotKey = useHoverStore((s) => s.hoveredSlotKey);
   const scrollToCenter = useHoverStore((s) => s.scrollToCenter);
@@ -475,6 +486,7 @@ export function ChatMessage({
                         onLeaveSlot={handleLeaveSlot}
                         onClickSlot={handleClickSlot}
                         isReviewPhase={isReviewPhase}
+                        onDeleteSlot={deleteSlot}
                       />
                     ) : useCommittedHighlightSpans ? (
                       <CommittedHighlightText content={content} highlights={committedHighlights!} />
@@ -512,6 +524,7 @@ export function ChatMessage({
                         onLeaveSlot={handleLeaveSlot}
                         onClickSlot={handleClickSlot}
                         isReviewPhase={isReviewPhase}
+                        onDeleteSlot={deleteSlot}
                       />
                     </div>
                   ) : useCommittedHighlightSpans ? (

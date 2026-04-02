@@ -61,7 +61,7 @@ export function NewSlotRow({ nodeId }: NewSlotRowProps) {
           ref={keyRef}
           placeholder="key"
           onKeyDown={handleKeyDown}
-          className="bg-transparent border-none outline-none text-blue-400 w-20"
+          className="bg-transparent border-0 border-b-[1.5px] border-dashed border-b-blue-400 outline-none text-blue-400 w-20"
           style={{ fontFamily: 'inherit', fontSize: 'inherit' }}
         />
         <span className="text-blue-400">: </span>
@@ -69,7 +69,7 @@ export function NewSlotRow({ nodeId }: NewSlotRowProps) {
           ref={valueRef}
           placeholder="value"
           onKeyDown={handleKeyDown}
-          className="flex-1 bg-transparent border-none outline-none text-blue-400"
+          className="flex-1 bg-transparent border-0 border-b-[1.5px] border-dashed border-b-blue-400 outline-none text-blue-400"
           style={{ fontFamily: 'inherit', fontSize: 'inherit' }}
         />
         <span className="text-[8px] text-[var(--text-tertiary)] whitespace-nowrap">
