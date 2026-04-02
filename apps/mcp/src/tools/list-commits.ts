@@ -17,9 +17,10 @@ export const listCommitsTool = {
 
 export async function handleListCommits(args: Record<string, unknown>) {
   const client = getClient();
-  const result = await client.listCommits(args.project_id as string, {
-    branch: args.branch as string | undefined,
-    limit: args.limit as number | undefined,
-  });
+  const result = await client.listCommits(
+    args.project_id as string,
+    args.branch as string | undefined,
+    { limit: args.limit as number | undefined }
+  );
   return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
 }
