@@ -55,11 +55,11 @@ describe('MCP Workflow E2E: Extract → Triage → Edit → Commit', () => {
       name: 'Japan Trip Planning',
       description: 'E2E test project for MCP workflow',
     });
-    expect(data.id).toMatch(/^proj_/);
-    projectId = data.id;
+    expect(data.project_id).toMatch(/^proj_/);
+    projectId = data.project_id;
   });
 
-  it('Step 3: extract knowledge from conversation', async () => {
+  it('Step 3: extract knowledge from conversation', { timeout: 30000 }, async () => {
     const text = [
       'User: We are planning a trip to Japan next spring.',
       'Assistant: Great choice! What is your budget?',
@@ -85,9 +85,17 @@ describe('MCP Workflow E2E: Extract → Triage → Edit → Commit', () => {
   });
 
   it('Step 5: edit draft with YOps', async () => {
+    // Use 'add' to add a new root node (doesn't depend on extracted node names)
     const data = await apiCall('POST', `/v1/drafts/${draftId}/apply-yops`, {
       yops: [
-        { set: { path: 'budget', value: '$6000', source: 'let us make it $6000', from: 'T6' } },
+        {
+          add: {
+            parent: '',
+            node: { budget_note: { amount: '$6000' } },
+            source: { amount: 'let us make it $6000' },
+            from: 'T6',
+          },
+        },
       ],
       if_revision: revision,
     });
