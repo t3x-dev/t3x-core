@@ -367,10 +367,7 @@ export function ChatMessage({
     }
   }, [isSourceMessage, scrollToCenter]);
 
-  // Determine which rendering mode to use:
-  // 1. YAML→Chat highlights (blue) take priority when active
-  // 2. Source-mapped spans (purple) show by default when mappings exist
-  // 3. Normal rendering otherwise
+  // Rendering priority: YAML highlights > source-mapped spans > committed highlights > markdown
   const useYamlHighlights = hasCharHighlights;
   const useSourceMappedSpans = !useYamlHighlights && hasSourceMappings;
   const useCommittedHighlightSpans =
