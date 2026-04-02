@@ -7,7 +7,11 @@ export const exportTool = {
     type: 'object' as const,
     properties: {
       project_id: { type: 'string', description: 'Project ID' },
-      branch: { type: 'string', description: 'Branch to export (default: main)' },
+      format: {
+        type: 'string',
+        enum: ['jsonl', 'json'],
+        description: 'Export format (default: jsonl)',
+      },
     },
     required: ['project_id'],
   },
@@ -17,7 +21,7 @@ export async function handleExport(args: Record<string, unknown>) {
   const client = getClient();
   const result = await client.exportLedger({
     project_id: args.project_id as string,
-    branch: args.branch as string | undefined,
+    format: args.format as 'jsonl' | 'json' | undefined,
   });
   return { content: [{ type: 'text' as const, text: result }] };
 }
