@@ -53,19 +53,39 @@ vi.mock('@t3x-dev/api-client', () => ({
     listBranches: vi.fn().mockResolvedValue({
       branches: [{ name: 'main' }, { name: 'experiment' }],
     }),
+    deleteProject: vi.fn().mockResolvedValue(undefined),
+    listLeaves: vi.fn().mockResolvedValue({
+      leaves: [{ id: 'leaf_1', type: 'tweet', title: 'Test leaf' }],
+    }),
+    createLeaf: vi.fn().mockResolvedValue({
+      id: 'leaf_new',
+      type: 'tweet',
+      title: 'New leaf',
+      commit_hash: 'sha256:abc',
+    }),
+    importUrl: vi.fn().mockResolvedValue({
+      conversation_id: 'conv_imported',
+      turn_count: 5,
+    }),
+    exportLedger: vi.fn().mockResolvedValue('# Project Export\n...'),
   })),
 }));
 
 import { handleCheck } from '../tools/check.js';
 import { handleCommit } from '../tools/commit.js';
 import { handleCreateBranch } from '../tools/create-branch.js';
+import { handleCreateLeaf } from '../tools/create-leaf.js';
 import { handleCreateProject } from '../tools/create-project.js';
+import { handleDeleteProject } from '../tools/delete-project.js';
 import { handleDiff } from '../tools/diff.js';
 import { handleEditDraft } from '../tools/edit-draft.js';
+import { handleExport } from '../tools/export.js';
 import { handleExtract } from '../tools/extract.js';
 import { handleGenerate } from '../tools/generate.js';
+import { handleImportUrl } from '../tools/import-url.js';
 import { handleListBranches } from '../tools/list-branches.js';
 import { handleListCommits } from '../tools/list-commits.js';
+import { handleListLeaves } from '../tools/list-leaves.js';
 import { handleListProjects } from '../tools/list-projects.js';
 import { handleShow } from '../tools/show.js';
 import { handleShowDraft } from '../tools/show-draft.js';
@@ -231,5 +251,49 @@ describe('handleListBranches', () => {
     expect(data.branches).toHaveLength(2);
     expect(data.branches[0].name).toBe('main');
     expect(data.branches[1].name).toBe('experiment');
+  });
+});
+
+describe('handleDeleteProject', () => {
+  it('deletes project and returns confirmation', async () => {
+    const result = await handleDeleteProject({ project_id: 'proj_test' });
+    const data = JSON.parse(result.content[0].text);
+    expect(data.deleted).toBe(true);
+  });
+});
+
+describe('handleListLeaves', () => {
+  it('returns leaves list', async () => {
+    const result = await handleListLeaves({ project_id: 'proj_test' });
+    const data = JSON.parse(result.content[0].text);
+    expect(data.leaves).toHaveLength(1);
+  });
+});
+
+describe('handleCreateLeaf', () => {
+  it('creates leaf and returns result', async () => {
+    const result = await handleCreateLeaf({
+      project_id: 'proj_test',
+      commit_hash: 'sha256:abc',
+      type: 'tweet',
+      title: 'Test',
+    });
+    const data = JSON.parse(result.content[0].text);
+    expect(data.id).toBe('leaf_new');
+  });
+});
+
+describe('handleImportUrl', () => {
+  it('imports URL and returns result', async () => {
+    const result = await handleImportUrl({ project_id: 'proj_test', url: 'https://example.com' });
+    const data = JSON.parse(result.content[0].text);
+    expect(data.conversation_id).toBe('conv_imported');
+  });
+});
+
+describe('handleExport', () => {
+  it('exports project as text', async () => {
+    const result = await handleExport({ project_id: 'proj_test' });
+    expect(result.content[0].text).toContain('# Project Export');
   });
 });

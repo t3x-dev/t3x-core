@@ -7,13 +7,18 @@ import { getBaseUrl, getClient, updateToken } from './client.js';
 import { checkTool, handleCheck } from './tools/check.js';
 import { commitTool, handleCommit } from './tools/commit.js';
 import { createBranchTool, handleCreateBranch } from './tools/create-branch.js';
+import { createLeafTool, handleCreateLeaf } from './tools/create-leaf.js';
 import { createProjectTool, handleCreateProject } from './tools/create-project.js';
+import { deleteProjectTool, handleDeleteProject } from './tools/delete-project.js';
 import { diffTool, handleDiff } from './tools/diff.js';
 import { editDraftTool, handleEditDraft } from './tools/edit-draft.js';
+import { exportTool, handleExport } from './tools/export.js';
 import { extractTool, handleExtract } from './tools/extract.js';
 import { generateTool, handleGenerate } from './tools/generate.js';
+import { handleImportUrl, importUrlTool } from './tools/import-url.js';
 import { handleListBranches, listBranchesTool } from './tools/list-branches.js';
 import { handleListCommits, listCommitsTool } from './tools/list-commits.js';
+import { handleListLeaves, listLeavesTool } from './tools/list-leaves.js';
 import { handleListProjects, listProjectsTool } from './tools/list-projects.js';
 import { handleSchema, schemaTool } from './tools/schema.js';
 import { handleShow, showTool } from './tools/show.js';
@@ -32,6 +37,7 @@ const tools = [
   validateTool,
   listProjectsTool,
   createProjectTool,
+  deleteProjectTool,
   showDraftTool,
   editDraftTool,
   yopsSchemaTool,
@@ -40,6 +46,10 @@ const tools = [
   createBranchTool,
   switchBranchTool,
   listBranchesTool,
+  listLeavesTool,
+  createLeafTool,
+  importUrlTool,
+  exportTool,
 ];
 
 const handlers: Record<
@@ -63,6 +73,11 @@ const handlers: Record<
   [createBranchTool.name]: handleCreateBranch,
   [switchBranchTool.name]: handleSwitchBranch,
   [listBranchesTool.name]: handleListBranches,
+  [deleteProjectTool.name]: handleDeleteProject,
+  [listLeavesTool.name]: handleListLeaves,
+  [createLeafTool.name]: handleCreateLeaf,
+  [importUrlTool.name]: handleImportUrl,
+  [exportTool.name]: handleExport,
 };
 
 const server = new Server({ name: 't3x-mcp', version: '0.1.0' }, { capabilities: { tools: {} } });
