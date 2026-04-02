@@ -340,7 +340,7 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
 
     -- Migration: Drop dead columns
     ALTER TABLE leaf_history DROP COLUMN IF EXISTS corrective_feedback;
-    ALTER TABLE yops_log DROP COLUMN IF EXISTS commit_hash;
+    -- NOTE: yops_log DROP COLUMN moved after CREATE TABLE yops_log (see below)
 
     -- Migration: Add provider/model columns to projects and conversations (PR #554)
     ALTER TABLE projects ADD COLUMN IF NOT EXISTS provider_config TEXT;
@@ -662,7 +662,8 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     );
     CREATE INDEX IF NOT EXISTS idx_yops_log_conv ON yops_log(conversation_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_yops_log_project ON yops_log(project_id);
-    ALTER TABLE yops_log ADD COLUMN IF NOT EXISTS commit_hash TEXT;
+    -- commit_hash was added then removed; skip for new databases
+    ALTER TABLE yops_log DROP COLUMN IF EXISTS commit_hash;
     ALTER TABLE yops_log ADD COLUMN IF NOT EXISTS model TEXT;
     -- V2 columns (agentic pipeline)
     ALTER TABLE yops_log ADD COLUMN IF NOT EXISTS version INTEGER;

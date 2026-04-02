@@ -6,13 +6,51 @@ import { browserAuth, clearStoredToken, ensureAuth } from './auth.js';
 import { getBaseUrl, getClient, updateToken } from './client.js';
 import { checkTool, handleCheck } from './tools/check.js';
 import { commitTool, handleCommit } from './tools/commit.js';
+import { createBranchTool, handleCreateBranch } from './tools/create-branch.js';
+import { createLeafTool, handleCreateLeaf } from './tools/create-leaf.js';
+import { createProjectTool, handleCreateProject } from './tools/create-project.js';
+import { deleteProjectTool, handleDeleteProject } from './tools/delete-project.js';
+import { diffTool, handleDiff } from './tools/diff.js';
+import { editDraftTool, handleEditDraft } from './tools/edit-draft.js';
+import { exportTool, handleExport } from './tools/export.js';
 import { extractTool, handleExtract } from './tools/extract.js';
 import { generateTool, handleGenerate } from './tools/generate.js';
+import { handleImportUrl, importUrlTool } from './tools/import-url.js';
+import { handleListBranches, listBranchesTool } from './tools/list-branches.js';
+import { handleListCommits, listCommitsTool } from './tools/list-commits.js';
+import { handleListLeaves, listLeavesTool } from './tools/list-leaves.js';
+import { handleListProjects, listProjectsTool } from './tools/list-projects.js';
 import { handleSchema, schemaTool } from './tools/schema.js';
 import { handleShow, showTool } from './tools/show.js';
+import { handleShowDraft, showDraftTool } from './tools/show-draft.js';
+import { handleSwitchBranch, switchBranchTool } from './tools/switch-branch.js';
 import { handleValidate, validateTool } from './tools/validate.js';
+import { handleYopsSchema, yopsSchemaTool } from './tools/yops-schema.js';
 
-const tools = [extractTool, commitTool, checkTool, generateTool, showTool, schemaTool, validateTool];
+const tools = [
+  extractTool,
+  commitTool,
+  checkTool,
+  generateTool,
+  showTool,
+  schemaTool,
+  validateTool,
+  listProjectsTool,
+  createProjectTool,
+  deleteProjectTool,
+  showDraftTool,
+  editDraftTool,
+  yopsSchemaTool,
+  listCommitsTool,
+  diffTool,
+  createBranchTool,
+  switchBranchTool,
+  listBranchesTool,
+  listLeavesTool,
+  createLeafTool,
+  importUrlTool,
+  exportTool,
+];
 
 const handlers: Record<
   string,
@@ -25,6 +63,21 @@ const handlers: Record<
   [showTool.name]: handleShow,
   [schemaTool.name]: handleSchema,
   [validateTool.name]: handleValidate,
+  [listProjectsTool.name]: handleListProjects,
+  [createProjectTool.name]: handleCreateProject,
+  [showDraftTool.name]: handleShowDraft,
+  [editDraftTool.name]: handleEditDraft,
+  [yopsSchemaTool.name]: handleYopsSchema,
+  [listCommitsTool.name]: handleListCommits,
+  [diffTool.name]: handleDiff,
+  [createBranchTool.name]: handleCreateBranch,
+  [switchBranchTool.name]: handleSwitchBranch,
+  [listBranchesTool.name]: handleListBranches,
+  [deleteProjectTool.name]: handleDeleteProject,
+  [listLeavesTool.name]: handleListLeaves,
+  [createLeafTool.name]: handleCreateLeaf,
+  [importUrlTool.name]: handleImportUrl,
+  [exportTool.name]: handleExport,
 };
 
 const server = new Server({ name: 't3x-mcp', version: '0.1.0' }, { capabilities: { tools: {} } });

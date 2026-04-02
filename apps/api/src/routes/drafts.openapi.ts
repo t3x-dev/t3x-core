@@ -13,6 +13,7 @@ import { zodErrorHook } from '../lib/errors';
 import { draftsCrudRoutes } from './drafts-crud.openapi';
 import { draftsSpecialRoutes } from './drafts-special.openapi';
 import { draftsWorkflowRoutes } from './drafts-workflows.openapi';
+import { draftsYopsRoutes } from './drafts-yops.openapi';
 
 export const draftsRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
@@ -21,5 +22,6 @@ export const draftsRoutes = new OpenAPIHono({
 draftsRoutes.route('/', draftsCrudRoutes);
 draftsRoutes.route('/', draftsWorkflowRoutes);
 draftsRoutes.route('/', draftsSpecialRoutes);
+draftsRoutes.route('/', draftsYopsRoutes);
 
 export default draftsRoutes;
