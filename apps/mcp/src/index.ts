@@ -6,14 +6,19 @@ import { browserAuth, clearStoredToken, ensureAuth } from './auth.js';
 import { getBaseUrl, getClient, updateToken } from './client.js';
 import { checkTool, handleCheck } from './tools/check.js';
 import { commitTool, handleCommit } from './tools/commit.js';
+import { createBranchTool, handleCreateBranch } from './tools/create-branch.js';
 import { createProjectTool, handleCreateProject } from './tools/create-project.js';
+import { diffTool, handleDiff } from './tools/diff.js';
 import { editDraftTool, handleEditDraft } from './tools/edit-draft.js';
 import { extractTool, handleExtract } from './tools/extract.js';
 import { generateTool, handleGenerate } from './tools/generate.js';
+import { handleListBranches, listBranchesTool } from './tools/list-branches.js';
+import { handleListCommits, listCommitsTool } from './tools/list-commits.js';
 import { handleListProjects, listProjectsTool } from './tools/list-projects.js';
 import { handleSchema, schemaTool } from './tools/schema.js';
 import { handleShow, showTool } from './tools/show.js';
 import { handleShowDraft, showDraftTool } from './tools/show-draft.js';
+import { handleSwitchBranch, switchBranchTool } from './tools/switch-branch.js';
 import { handleValidate, validateTool } from './tools/validate.js';
 import { handleYopsSchema, yopsSchemaTool } from './tools/yops-schema.js';
 
@@ -30,6 +35,11 @@ const tools = [
   showDraftTool,
   editDraftTool,
   yopsSchemaTool,
+  listCommitsTool,
+  diffTool,
+  createBranchTool,
+  switchBranchTool,
+  listBranchesTool,
 ];
 
 const handlers: Record<
@@ -48,6 +58,11 @@ const handlers: Record<
   [showDraftTool.name]: handleShowDraft,
   [editDraftTool.name]: handleEditDraft,
   [yopsSchemaTool.name]: handleYopsSchema,
+  [listCommitsTool.name]: handleListCommits,
+  [diffTool.name]: handleDiff,
+  [createBranchTool.name]: handleCreateBranch,
+  [switchBranchTool.name]: handleSwitchBranch,
+  [listBranchesTool.name]: handleListBranches,
 };
 
 const server = new Server({ name: 't3x-mcp', version: '0.1.0' }, { capabilities: { tools: {} } });

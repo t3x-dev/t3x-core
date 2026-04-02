@@ -40,18 +40,36 @@ vi.mock('@t3x-dev/api-client', () => ({
       tree_count: 1,
       slot_count: 1,
     }),
+    listCommits: vi.fn().mockResolvedValue({
+      commits: [{ hash: 'sha256:abc', message: 'test', branch: 'main' }],
+      total: 1,
+    }),
+    twoWayDiff: vi.fn().mockResolvedValue({
+      changes: [{ type: 'added', path: 'budget' }],
+      stats: { added: 1, removed: 0, modified: 0 },
+    }),
+    createBranch: vi.fn().mockResolvedValue({ name: 'experiment', head_hash: 'sha256:abc' }),
+    switchBranch: vi.fn().mockResolvedValue({ name: 'experiment' }),
+    listBranches: vi.fn().mockResolvedValue({
+      branches: [{ name: 'main' }, { name: 'experiment' }],
+    }),
   })),
 }));
 
 import { handleCheck } from '../tools/check.js';
 import { handleCommit } from '../tools/commit.js';
+import { handleCreateBranch } from '../tools/create-branch.js';
 import { handleCreateProject } from '../tools/create-project.js';
+import { handleDiff } from '../tools/diff.js';
 import { handleEditDraft } from '../tools/edit-draft.js';
 import { handleExtract } from '../tools/extract.js';
 import { handleGenerate } from '../tools/generate.js';
+import { handleListBranches } from '../tools/list-branches.js';
+import { handleListCommits } from '../tools/list-commits.js';
 import { handleListProjects } from '../tools/list-projects.js';
 import { handleShow } from '../tools/show.js';
 import { handleShowDraft } from '../tools/show-draft.js';
+import { handleSwitchBranch } from '../tools/switch-branch.js';
 
 beforeEach(() => {
   // Reset the singleton client between tests so each test gets a fresh mock
@@ -157,5 +175,61 @@ describe('handleEditDraft', () => {
     const data = JSON.parse(result.content[0].text);
     expect(data.applied_count).toBe(1);
     expect(data.revision).toBe(4);
+  });
+});
+
+describe('handleListCommits', () => {
+  it('returns commits list with total', async () => {
+    const result = await handleListCommits({ project_id: 'proj_test' });
+    const data = JSON.parse(result.content[0].text);
+    expect(data.commits).toHaveLength(1);
+    expect(data.commits[0].hash).toBe('sha256:abc');
+    expect(data.total).toBe(1);
+  });
+});
+
+describe('handleDiff', () => {
+  it('returns diff with changes and stats', async () => {
+    const result = await handleDiff({
+      source_hash: 'sha256:aaa',
+      target_hash: 'sha256:bbb',
+    });
+    const data = JSON.parse(result.content[0].text);
+    expect(data.changes).toHaveLength(1);
+    expect(data.changes[0].type).toBe('added');
+    expect(data.stats.added).toBe(1);
+  });
+});
+
+describe('handleCreateBranch', () => {
+  it('creates branch and returns result', async () => {
+    const result = await handleCreateBranch({
+      project_id: 'proj_test',
+      name: 'experiment',
+    });
+    const data = JSON.parse(result.content[0].text);
+    expect(data.name).toBe('experiment');
+    expect(data.head_hash).toBe('sha256:abc');
+  });
+});
+
+describe('handleSwitchBranch', () => {
+  it('switches branch and returns result', async () => {
+    const result = await handleSwitchBranch({
+      project_id: 'proj_test',
+      branch: 'experiment',
+    });
+    const data = JSON.parse(result.content[0].text);
+    expect(data.name).toBe('experiment');
+  });
+});
+
+describe('handleListBranches', () => {
+  it('returns all branches', async () => {
+    const result = await handleListBranches({ project_id: 'proj_test' });
+    const data = JSON.parse(result.content[0].text);
+    expect(data.branches).toHaveLength(2);
+    expect(data.branches[0].name).toBe('main');
+    expect(data.branches[1].name).toBe('experiment');
   });
 });
