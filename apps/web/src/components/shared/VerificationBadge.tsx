@@ -14,9 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
-  backfillMerkle,
   type QuickVerifyResult,
-  quickVerifyProject,
   type VerifyResult,
   verifyProjectHashChain,
 } from '@/lib/api';
@@ -75,11 +73,18 @@ export function VerificationBadge({ projectId }: VerificationBadgeProps) {
     }
 
     let cancelled = false;
-    quickVerifyProject(projectId)
+    verifyProjectHashChain(projectId)
       .then((r) => {
         if (cancelled) return;
-        setQuickResult(r);
-        setCachedResult(projectId, r);
+        const quick: QuickVerifyResult = {
+          valid: r.valid,
+          checked: r.verified_depth,
+          mismatches: r.merkle_mismatches ?? [],
+          missing_roots: [],
+          verified_at: r.verified_at,
+        };
+        setQuickResult(quick);
+        setCachedResult(projectId, quick);
         setState(r.valid ? 'verified' : 'failed');
       })
       .catch(() => {
@@ -107,9 +112,16 @@ export function VerificationBadge({ projectId }: VerificationBadgeProps) {
   const handleQuickVerify = useCallback(async () => {
     setState('loading');
     try {
-      const r = await quickVerifyProject(projectId);
-      setQuickResult(r);
-      setCachedResult(projectId, r);
+      const r = await verifyProjectHashChain(projectId);
+      const quick: QuickVerifyResult = {
+        valid: r.valid,
+        checked: r.verified_depth,
+        mismatches: r.merkle_mismatches ?? [],
+        missing_roots: [],
+        verified_at: r.verified_at,
+      };
+      setQuickResult(quick);
+      setCachedResult(projectId, quick);
       setState(r.valid ? 'verified' : 'failed');
     } catch {
       setState('failed');
@@ -386,7 +398,6 @@ export function VerificationBadge({ projectId }: VerificationBadgeProps) {
                       className="h-6 text-xs"
                       onClick={async () => {
                         try {
-                          await backfillMerkle(projectId);
                           await handleQuickVerify();
                         } catch {
                           // silently ignore — user can retry
