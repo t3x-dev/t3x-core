@@ -7,6 +7,7 @@
 import type {
   ApiResponse,
   ApiSuccessResponse,
+  ApplyYOpsResult,
   Branch,
   ChatInput,
   ChatProvider,
@@ -300,6 +301,18 @@ export class T3xClient {
 
   async deleteDraft(id: string): Promise<void> {
     await this.request<void>('DELETE', `/v1/drafts/${id}`);
+  }
+
+  async applyYOps(
+    draftId: string,
+    yops: unknown[],
+    ifRevision: number
+  ): Promise<ApplyYOpsResult> {
+    return this.request<ApplyYOpsResult>(
+      'POST',
+      `/v1/drafts/${draftId}/apply-yops`,
+      { yops, if_revision: ifRevision }
+    );
   }
 
   // ============================================
