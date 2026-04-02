@@ -25,6 +25,8 @@ interface YamlSlotLineProps {
   change?: SlotChange;
 }
 
+const MONO = { fontFamily: 'var(--font-mono, ui-monospace, monospace)', fontSize: 11 } as const;
+
 export function YamlSlotLine({ nodeId, slotKey, value, change }: YamlSlotLineProps) {
   const { isEditing, inputRef, startEdit, cancelEdit, onKeyDown } = useInlineEdit(nodeId, slotKey);
   const { deleteSlot } = useSlotActions();
@@ -51,18 +53,15 @@ export function YamlSlotLine({ nodeId, slotKey, value, change }: YamlSlotLinePro
     return (
       <div className="group flex items-stretch" style={{ minHeight: 26 }}>
         <div className="shrink-0 w-1 bg-red-400" />
-        <div
-          className="flex-1 flex items-center gap-1 px-2 py-0.5"
-          style={{ fontFamily: 'var(--font-mono, ui-monospace, monospace)', fontSize: 11 }}
-        >
-          <span className="text-[var(--text-tertiary)] line-through opacity-50">
+        <div className="flex-1 min-w-0 flex items-center gap-1 px-2 py-0.5" style={MONO}>
+          <span className="text-[var(--text-tertiary)] line-through opacity-50 truncate">
             {'  '}
             {slotKey}: {value}
           </span>
           <button
             type="button"
             onClick={handleUndo}
-            className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity text-[var(--text-tertiary)] hover:text-[var(--text-primary)] cursor-pointer"
+            className="shrink-0 ml-auto opacity-0 group-hover:opacity-100 transition-opacity text-[var(--text-tertiary)] hover:text-[var(--text-primary)] cursor-pointer"
           >
             <Undo2 className="h-3 w-3" />
           </button>
@@ -76,11 +75,8 @@ export function YamlSlotLine({ nodeId, slotKey, value, change }: YamlSlotLinePro
     return (
       <div className="flex items-stretch" style={{ minHeight: 26 }}>
         <div className="shrink-0 w-1 bg-purple-400" />
-        <div
-          className="flex-1 flex items-center gap-1 px-2 py-0.5"
-          style={{ fontFamily: 'var(--font-mono, ui-monospace, monospace)', fontSize: 11 }}
-        >
-          <span className="text-[var(--text-secondary)]">
+        <div className="flex-1 min-w-0 flex items-center gap-1 px-2 py-0.5 bg-purple-400/[0.06]" style={MONO}>
+          <span className="shrink-0 text-[var(--text-secondary)]">
             {'  '}
             {slotKey}:{' '}
           </span>
@@ -88,14 +84,11 @@ export function YamlSlotLine({ nodeId, slotKey, value, change }: YamlSlotLinePro
             ref={inputRef}
             defaultValue={value}
             onKeyDown={onKeyDown}
-            onBlur={() => {
-              // Cancel on blur — saves are explicit via Enter
-              cancelEdit();
-            }}
-            className="flex-1 bg-transparent border-none outline-none text-[var(--text-primary)]"
+            onBlur={() => cancelEdit()}
+            className="flex-1 min-w-0 bg-transparent border-0 border-b-[1.5px] border-b-purple-400 outline-none text-[var(--text-primary)]"
             style={{ fontFamily: 'inherit', fontSize: 'inherit' }}
           />
-          <span className="text-[8px] text-[var(--text-tertiary)] whitespace-nowrap">
+          <span className="shrink-0 text-[8px] text-[var(--text-tertiary)] whitespace-nowrap">
             Enter ↵ · Esc ✕
           </span>
         </div>
@@ -109,20 +102,20 @@ export function YamlSlotLine({ nodeId, slotKey, value, change }: YamlSlotLinePro
       <div className="group flex items-stretch" style={{ minHeight: 26 }}>
         <div className="shrink-0 w-1 bg-green-400" />
         <div
-          className="flex-1 flex items-center gap-1 px-2 py-0.5 bg-green-400/5 cursor-text"
-          style={{ fontFamily: 'var(--font-mono, ui-monospace, monospace)', fontSize: 11 }}
+          className="flex-1 min-w-0 flex items-center gap-1 px-2 py-0.5 bg-green-400/5 cursor-text"
+          style={MONO}
           onClick={startEdit}
         >
-          <span className="text-[var(--text-secondary)]">
+          <span className="shrink-0 text-[var(--text-secondary)]">
             {'  '}
             {slotKey}:{' '}
           </span>
-          <span className="text-red-400/60 line-through mr-1">{change.oldValue}</span>
-          <span className="text-green-400">{value}</span>
+          <span className="text-red-400/60 line-through mr-1 truncate">{change.oldValue}</span>
+          <span className="text-green-400 truncate">{value}</span>
           <button
             type="button"
             onClick={handleUndo}
-            className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity text-[var(--text-tertiary)] hover:text-[var(--text-primary)] cursor-pointer"
+            className="shrink-0 ml-auto opacity-0 group-hover:opacity-100 transition-opacity text-[var(--text-tertiary)] hover:text-[var(--text-primary)] cursor-pointer"
           >
             <Undo2 className="h-3 w-3" />
           </button>
@@ -137,15 +130,15 @@ export function YamlSlotLine({ nodeId, slotKey, value, change }: YamlSlotLinePro
       <div className="group flex items-stretch" style={{ minHeight: 26 }}>
         <div className="shrink-0 w-1 bg-blue-400" />
         <div
-          className="flex-1 flex items-center gap-1 px-2 py-0.5 cursor-text"
-          style={{ fontFamily: 'var(--font-mono, ui-monospace, monospace)', fontSize: 11 }}
+          className="flex-1 min-w-0 flex items-center gap-1 px-2 py-0.5 cursor-text bg-blue-400/5"
+          style={MONO}
           onClick={startEdit}
         >
-          <span className="text-blue-400">
+          <span className="text-blue-400 truncate">
             {'  '}
             {slotKey}: {value}
           </span>
-          <span className="text-[8px] text-blue-400 bg-blue-400/15 px-1 py-0.5 rounded ml-1">
+          <span className="shrink-0 text-[8px] text-blue-400 bg-blue-400/15 px-1 py-0.5 rounded ml-1">
             manual
           </span>
         </div>
@@ -156,21 +149,21 @@ export function YamlSlotLine({ nodeId, slotKey, value, change }: YamlSlotLinePro
   // ── Default state (with hover ✕) ──
   return (
     <div className="group flex items-stretch" style={{ minHeight: 26 }}>
-      <div className="shrink-0 w-1 bg-green-400" />
+      <div className="shrink-0 w-1 bg-green-400 group-hover:bg-yellow-400 transition-colors" />
       <div
-        className="flex-1 flex items-center gap-1 px-2 py-0.5 cursor-text"
-        style={{ fontFamily: 'var(--font-mono, ui-monospace, monospace)', fontSize: 11 }}
+        className="flex-1 min-w-0 flex items-center gap-1 px-2 py-0.5 cursor-text group-hover:bg-white/[0.04] transition-colors"
+        style={MONO}
         onClick={startEdit}
       >
-        <span className="text-[var(--text-secondary)]">
+        <span className="shrink-0 text-[var(--text-secondary)]">
           {'  '}
           {slotKey}:{' '}
         </span>
-        <span className="text-[var(--text-primary)]">{value}</span>
+        <span className="text-[var(--text-primary)] truncate">{value}</span>
         <button
           type="button"
           onClick={handleDelete}
-          className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity text-[var(--text-tertiary)] hover:text-red-400 cursor-pointer"
+          className="shrink-0 ml-auto opacity-0 group-hover:opacity-100 transition-opacity text-[var(--text-tertiary)] hover:text-red-400 cursor-pointer"
         >
           <X className="h-3 w-3" />
         </button>

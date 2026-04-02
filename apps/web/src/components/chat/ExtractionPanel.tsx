@@ -12,7 +12,6 @@
  *  - Added ✏ pencil button (edit entry path)
  */
 
-import type { TreeNode } from '@t3x-dev/core';
 import { motion } from 'framer-motion';
 import { GitCommit, LayoutGrid, Loader2, Pencil, Sparkles } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -23,12 +22,10 @@ import { useCommandStore } from '@/store/commandStore';
 import { useCommitStore } from '@/store/commitStore';
 import { useDraftStore } from '@/store/draftStore';
 import { usePhaseStore } from '@/store/phaseStore';
-import { AdvisoryPanel } from './AdvisoryPanel';
-import { CommitBar } from './CommitBar';
 import { IdleView } from './IdleView';
 import { PhaseTabs } from './PhaseTabs';
+import { ReviewView } from './ReviewView';
 import { TriageView } from './TriageView';
-import { YAMLView } from './YAMLView';
 import { YOpsFeed } from './YOpsFeed';
 
 // ── Constants ──
@@ -101,11 +98,9 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
   const lastCommitHash = useCommitStore((s) => s.lastCommitHash);
   const commitBranch = useCommitStore((s) => s.commitBranch);
   const projectId = useCommitStore((s) => s.projectId);
-  const isCommitting = useCommitStore((s) => s.isCommitting);
   const commitNodes = useCommitStore((s) => s.commitNodes);
 
   // Draft store
-  const manualEditedNodeIds = useDraftStore((s) => s.manualEditedNodeIds);
   const feedYops = useDraftStore((s) => s.feedYops);
 
   // Phase (use phaseStore directly)
@@ -116,24 +111,6 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
     () => Object.values(committedNodeSnapshot),
     [committedNodeSnapshot]
   );
-  const manualCount = manualEditedNodeIds.size;
-
-  // Pending node/slot counts for commit bar
-  const { pendingNodeCount, pendingSlotCount } = useMemo(() => {
-    const ep = extractionPhase;
-    if (ep !== 'review' && ep !== 'committing') return { pendingNodeCount: 0, pendingSlotCount: 0 };
-    const trees = draft.trees;
-    let totalSlots = 0;
-    function countSlots(t: TreeNode[]) {
-      for (const node of t) {
-        totalSlots += Object.keys(node.slots).length;
-        if (node.children.length > 0) countSlots(node.children);
-      }
-    }
-    countSlots(trees);
-    return { pendingNodeCount: trees.length, pendingSlotCount: totalSlots };
-  }, [extractionPhase, draft.trees]);
-
   // Commit handler
   const handleCommit = useCallback(
     async (message: string) => {
@@ -240,7 +217,7 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
                   <button
                     type="button"
                     onClick={handleExtract}
-                    className="flex items-center gap-1 rounded-full bg-[var(--accent-commit)]/10 px-2 py-0.5 text-[10px] font-medium text-[var(--accent-commit)] hover:bg-[var(--accent-commit)]/20 transition-colors"
+                    className="flex items-center gap-1 rounded-full bg-[var(--accent-extract)]/10 px-2 py-0.5 text-[10px] font-medium text-[var(--accent-extract)] hover:bg-[var(--accent-extract)]/20 transition-colors"
                   >
                     <Sparkles className="h-3 w-3" />
                     Extract
@@ -282,22 +259,7 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
           {extractionPhase === 'triage' && <TriageView onGoToReview={() => setPhase('review')} />}
 
           {(extractionPhase === 'review' || extractionPhase === 'committing') && (
-            <div className="flex flex-1 flex-col overflow-hidden">
-              <div className="flex items-center justify-between px-3.5 py-[7px] text-[9px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)] bg-[var(--hover-bg)]/30 border-b border-[var(--stroke-default)]">
-                <span>Changes to commit</span>
-              </div>
-              <div className="flex-1 overflow-hidden">
-                <YAMLView />
-              </div>
-              <AdvisoryPanel />
-              <CommitBar
-                onCommit={handleCommit}
-                nodeCount={pendingNodeCount}
-                slotCount={pendingSlotCount}
-                manualCount={manualCount}
-                isCommitting={isCommitting || extractionPhase === 'committing'}
-              />
-            </div>
+            <ReviewView />
           )}
         </div>
       )}

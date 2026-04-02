@@ -8,8 +8,11 @@
  */
 
 import { useCallback } from 'react';
+import { toast } from 'sonner';
 import { useCommandStore } from '@/store/commandStore';
 import { useCommitStore } from '@/store/commitStore';
+import { useDraftStore } from '@/store/draftStore';
+import { usePhaseStore } from '@/store/phaseStore';
 
 interface PendingChangesBarProps {
   onBack?: () => void;
@@ -19,11 +22,19 @@ export function PendingChangesBar({ onBack }: PendingChangesBarProps) {
   const { hasPending, pendingSummary } = useCommandStore();
   const commitNodes = useCommitStore((s) => s.commitNodes);
   const isCommitting = useCommitStore((s) => s.isCommitting);
+  const treeCount = useDraftStore((s) => s.draft.trees.length);
+
+  // Commit is enabled if there are manual edits OR extracted trees to commit
+  const canCommit = hasPending || treeCount > 0;
 
   const handleCommit = useCallback(async () => {
     try {
-      await commitNodes('');
-      useCommandStore.getState().clearPending();
+      const result = await commitNodes('');
+      toast.success('Committed', {
+        description: result.hash ? `sha256:${result.hash.slice(0, 12)}...` : undefined,
+      });
+      // commitStore.commitNodes already calls commandStore.clearPending() internally
+      usePhaseStore.getState().setPhase('idle');
     } catch {
       // Error handled by store
     }
@@ -75,7 +86,10 @@ export function PendingChangesBar({ onBack }: PendingChangesBarProps) {
             {pendingSummary.adds} add{pendingSummary.adds !== 1 ? 's' : ''}
           </span>
         )}
-        {!hasPending && <span className="text-[var(--text-tertiary)]">No changes</span>}
+        {!hasPending && treeCount > 0 && (
+          <span className="text-[var(--text-tertiary)]">{treeCount} node{treeCount !== 1 ? 's' : ''} ready</span>
+        )}
+        {!hasPending && treeCount === 0 && <span className="text-[var(--text-tertiary)]">No changes</span>}
       </span>
 
       {/* Commit button */}
@@ -88,11 +102,11 @@ export function PendingChangesBar({ onBack }: PendingChangesBarProps) {
           border: 'none',
           fontSize: 11,
           fontWeight: 600,
-          background: hasPending ? 'var(--accent-extract)' : 'var(--text-tertiary)',
+          background: canCommit ? 'var(--accent-extract)' : 'var(--text-tertiary)',
           color: '#fff',
-          opacity: isCommitting || !hasPending ? 0.6 : 1,
+          opacity: isCommitting || !canCommit ? 0.6 : 1,
         }}
-        disabled={isCommitting || !hasPending}
+        disabled={isCommitting || !canCommit}
         onClick={handleCommit}
       >
         {isCommitting ? 'Committing...' : 'Commit'}

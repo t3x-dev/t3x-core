@@ -120,6 +120,14 @@ export function YOpsFeed({ ops, onComplete, paceMs = 350 }: YOpsFeedProps) {
         </div>
         {done && <span className="text-[var(--status-success)]">complete</span>}
       </div>
+      {done && (
+        <div
+          className="flex items-center gap-2 px-3.5 py-2 text-[10px] text-[var(--text-tertiary)]"
+          style={{ borderTop: '1px solid var(--stroke-default)', background: 'var(--hover-bg)' }}
+        >
+          Auto-transitioning to Triage...
+        </div>
+      )}
     </div>
   );
 }

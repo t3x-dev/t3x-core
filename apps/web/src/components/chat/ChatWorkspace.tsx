@@ -358,7 +358,7 @@ export function ChatWorkspace({
 
       if (deltaOps && deltaOps.length > 0) {
         // Has delta ops — show YOps feed animation first
-        useDraftStore.setState({ feedYops: deltaOps });
+        useDraftStore.setState({ feedYops: deltaOps, isExtracting: false });
         // Now that ops are loaded, switch phase to yops for feed animation
         usePhaseStore.getState().setPhase('yops');
 

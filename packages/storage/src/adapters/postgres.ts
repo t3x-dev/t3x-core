@@ -340,7 +340,11 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
 
     -- Migration: Drop dead columns
     ALTER TABLE leaf_history DROP COLUMN IF EXISTS corrective_feedback;
-    ALTER TABLE yops_log DROP COLUMN IF EXISTS commit_hash;
+    DO $$ BEGIN
+      IF EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'yops_log') THEN
+        ALTER TABLE yops_log DROP COLUMN IF EXISTS commit_hash;
+      END IF;
+    END $$;
 
     -- Migration: Add provider/model columns to projects and conversations (PR #554)
     ALTER TABLE projects ADD COLUMN IF NOT EXISTS provider_config TEXT;
