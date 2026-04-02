@@ -17,14 +17,41 @@ vi.mock('@t3x-dev/api-client', () => ({
     commitFromDraft: vi
       .fn()
       .mockResolvedValue({ commit_hash: 'sha256:def', tree_count: 3, branch: 'main' }),
+    listProjects: vi.fn().mockResolvedValue({
+      projects: [{ id: 'proj_1', name: 'Test Project', description: 'A test', commit_count: 3 }],
+      total: 1,
+    }),
+    createProject: vi.fn().mockResolvedValue({
+      id: 'proj_new',
+      name: 'New Project',
+      description: 'Created',
+    }),
+    getDraft: vi.fn().mockResolvedValue({
+      id: 'draft_test',
+      nodes: [{ key: 'budget', slots: { amount: { value: '$5000' } }, children: [] }],
+      revision: 3,
+      status: 'editing',
+    }),
+    applyYOps: vi.fn().mockResolvedValue({
+      draft_id: 'draft_test',
+      revision: 4,
+      trees: [{ key: 'budget', slots: { amount: { value: '$6000' } }, children: [] }],
+      applied_count: 1,
+      tree_count: 1,
+      slot_count: 1,
+    }),
   })),
 }));
 
 import { handleCheck } from '../tools/check.js';
 import { handleCommit } from '../tools/commit.js';
+import { handleCreateProject } from '../tools/create-project.js';
+import { handleEditDraft } from '../tools/edit-draft.js';
 import { handleExtract } from '../tools/extract.js';
 import { handleGenerate } from '../tools/generate.js';
+import { handleListProjects } from '../tools/list-projects.js';
 import { handleShow } from '../tools/show.js';
+import { handleShowDraft } from '../tools/show-draft.js';
 
 beforeEach(() => {
   // Reset the singleton client between tests so each test gets a fresh mock
@@ -87,5 +114,48 @@ describe('handleShow', () => {
     expect(data.commit_hash).toBe('sha256:abc');
     expect(data.branch).toBe('main');
     expect(Array.isArray(data.trees)).toBe(true);
+  });
+});
+
+describe('handleListProjects', () => {
+  it('returns project list', async () => {
+    const result = await handleListProjects({});
+    const data = JSON.parse(result.content[0].text);
+    expect(data.projects).toHaveLength(1);
+    expect(data.projects[0].id).toBe('proj_1');
+  });
+});
+
+describe('handleCreateProject', () => {
+  it('creates project and returns result', async () => {
+    const result = await handleCreateProject({ name: 'New Project' });
+    const data = JSON.parse(result.content[0].text);
+    expect(data.id).toBe('proj_new');
+    expect(data.name).toBe('New Project');
+  });
+});
+
+describe('handleShowDraft', () => {
+  it('returns draft with nodes and revision', async () => {
+    const result = await handleShowDraft({ draft_id: 'draft_test' });
+    const data = JSON.parse(result.content[0].text);
+    expect(data.nodes).toBeDefined();
+    expect(data.revision).toBe(3);
+    expect(data.status).toBe('editing');
+  });
+});
+
+describe('handleEditDraft', () => {
+  it('applies YOps and returns updated result', async () => {
+    const result = await handleEditDraft({
+      draft_id: 'draft_test',
+      yops: [
+        { set: { path: 'budget/amount', value: '$6000', source: 'make it $6000', from: 'T7' } },
+      ],
+      if_revision: 3,
+    });
+    const data = JSON.parse(result.content[0].text);
+    expect(data.applied_count).toBe(1);
+    expect(data.revision).toBe(4);
   });
 });

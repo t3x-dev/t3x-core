@@ -1,0 +1,170 @@
+/**
+ * Drafts YOps Routes
+ *
+ * Apply YAML Operations (YOps) to a draft's tree content.
+ * - POST /v1/drafts/:id/apply-yops — Apply YOps with optimistic locking
+ */
+
+import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
+import type { TreeNode } from '@t3x-dev/core';
+import { applyYOps, YOpSchema } from '@t3x-dev/core';
+import { ConflictError, findDraftById, updateDraft } from '@t3x-dev/storage';
+import { getDB } from '../lib/db';
+import { errorResponse, zodErrorHook } from '../lib/errors';
+import { ErrorResponseSchema, IdParamSchema, SuccessResponseSchema } from '../schemas/common';
+
+export const draftsYopsRoutes = new OpenAPIHono({
+  defaultHook: zodErrorHook,
+});
+
+// ============================================================
+// Schemas
+// ============================================================
+
+const ApplyYOpsRequest = z.object({
+  yops: z.array(YOpSchema).min(1),
+  if_revision: z.number().int().min(0),
+});
+
+/** Count total slots across all trees recursively */
+function countSlots(trees: TreeNode[]): number {
+  let total = 0;
+  for (const node of trees) {
+    total += Object.keys(node.slots).length;
+    total += countSlots(node.children);
+  }
+  return total;
+}
+
+const ApplyYOpsResponse = z.object({
+  draft_id: z.string(),
+  revision: z.number(),
+  trees: z.array(z.unknown()),
+  applied_count: z.number(),
+  tree_count: z.number(),
+  slot_count: z.number(),
+});
+
+// ============================================================
+// Route Definition
+// ============================================================
+
+const applyYOpsRoute = createRoute({
+  method: 'post',
+  path: '/v1/drafts/{id}/apply-yops',
+  tags: ['Drafts'],
+  summary: 'Apply YOps to a draft',
+  request: {
+    params: IdParamSchema,
+    body: {
+      content: { 'application/json': { schema: ApplyYOpsRequest } },
+    },
+  },
+  responses: {
+    200: {
+      description: 'YOps applied successfully',
+      content: { 'application/json': { schema: SuccessResponseSchema(ApplyYOpsResponse) } },
+    },
+    400: {
+      description: 'Invalid request or draft status',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    404: {
+      description: 'Draft not found',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    409: {
+      description: 'Revision conflict',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    500: {
+      description: 'Server error',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+// ============================================================
+// Route Handler
+// ============================================================
+
+draftsYopsRoutes.openapi(applyYOpsRoute, async (c) => {
+  const { id } = c.req.valid('param');
+  const { yops, if_revision } = c.req.valid('json');
+
+  try {
+    const db = await getDB();
+
+    // 1. Find draft
+    const draft = await findDraftById(db, id);
+    if (!draft) {
+      return errorResponse(c, 'DRAFT_NOT_FOUND', `Draft not found: ${id}`);
+    }
+
+    // 2. Check status — only 'editing' or 'auto' drafts can be modified
+    if (draft.status === 'committed') {
+      return errorResponse(c, 'ALREADY_COMMITTED', `Draft is already committed: ${id}`);
+    }
+
+    // 3. Check revision match before applying
+    if (draft.revision !== if_revision) {
+      return c.json(
+        {
+          success: false as const,
+          error: {
+            code: 'CONFLICT',
+            message: `Revision mismatch: expected ${if_revision}, actual ${draft.revision}`,
+          },
+        },
+        409
+      );
+    }
+
+    // 4. Apply YOps to draft's tree content
+    const trees = (draft.nodes ?? []) as TreeNode[];
+    const content = { trees, relations: [] };
+    const result = applyYOps(content, yops);
+
+    if (!result.ok) {
+      return errorResponse(
+        c,
+        'INVALID_REQUEST',
+        result.error?.message ?? 'YOps application failed',
+        {
+          yops_error: result.error,
+          applied_count: result.applied,
+        }
+      );
+    }
+
+    // 5. Persist updated nodes via optimistic lock
+    const updated = await updateDraft(db, id, { nodes: result.trees }, if_revision);
+
+    return c.json(
+      {
+        success: true as const,
+        data: {
+          draft_id: updated.id,
+          revision: updated.revision,
+          trees: result.trees,
+          applied_count: result.applied,
+          tree_count: result.trees.length,
+          slot_count: countSlots(result.trees),
+        },
+      },
+      200
+    );
+  } catch (err) {
+    if (err instanceof ConflictError) {
+      return c.json(
+        {
+          success: false as const,
+          error: { code: 'CONFLICT', message: err.message },
+        },
+        409
+      );
+    }
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return errorResponse(c, 'UPDATE_FAILED', message);
+  }
+});

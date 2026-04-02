@@ -194,6 +194,16 @@ export interface ListDraftsResponse {
   offset: number;
 }
 
+// Apply YOps
+export interface ApplyYOpsResult {
+  draft_id: string;
+  revision: number;
+  trees: unknown[];
+  applied_count: number;
+  tree_count: number;
+  slot_count: number;
+}
+
 // Diff types
 export interface DiffResult {
   changes: DiffChange[];

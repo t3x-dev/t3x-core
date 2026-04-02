@@ -6,13 +6,31 @@ import { browserAuth, clearStoredToken, ensureAuth } from './auth.js';
 import { getBaseUrl, getClient, updateToken } from './client.js';
 import { checkTool, handleCheck } from './tools/check.js';
 import { commitTool, handleCommit } from './tools/commit.js';
+import { createProjectTool, handleCreateProject } from './tools/create-project.js';
+import { editDraftTool, handleEditDraft } from './tools/edit-draft.js';
 import { extractTool, handleExtract } from './tools/extract.js';
 import { generateTool, handleGenerate } from './tools/generate.js';
+import { handleListProjects, listProjectsTool } from './tools/list-projects.js';
 import { handleSchema, schemaTool } from './tools/schema.js';
 import { handleShow, showTool } from './tools/show.js';
+import { handleShowDraft, showDraftTool } from './tools/show-draft.js';
 import { handleValidate, validateTool } from './tools/validate.js';
+import { handleYopsSchema, yopsSchemaTool } from './tools/yops-schema.js';
 
-const tools = [extractTool, commitTool, checkTool, generateTool, showTool, schemaTool, validateTool];
+const tools = [
+  extractTool,
+  commitTool,
+  checkTool,
+  generateTool,
+  showTool,
+  schemaTool,
+  validateTool,
+  listProjectsTool,
+  createProjectTool,
+  showDraftTool,
+  editDraftTool,
+  yopsSchemaTool,
+];
 
 const handlers: Record<
   string,
@@ -25,6 +43,11 @@ const handlers: Record<
   [showTool.name]: handleShow,
   [schemaTool.name]: handleSchema,
   [validateTool.name]: handleValidate,
+  [listProjectsTool.name]: handleListProjects,
+  [createProjectTool.name]: handleCreateProject,
+  [showDraftTool.name]: handleShowDraft,
+  [editDraftTool.name]: handleEditDraft,
+  [yopsSchemaTool.name]: handleYopsSchema,
 };
 
 const server = new Server({ name: 't3x-mcp', version: '0.1.0' }, { capabilities: { tools: {} } });
