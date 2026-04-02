@@ -8,7 +8,10 @@ export const createBranchTool = {
     properties: {
       project_id: { type: 'string', description: 'Project ID' },
       name: { type: 'string', description: 'New branch name' },
-      source_branch: { type: 'string', description: 'Branch to fork from (default: main)' },
+      head_commit_hash: {
+        type: 'string',
+        description: 'Commit hash to set as branch head (optional, defaults to current HEAD)',
+      },
     },
     required: ['project_id', 'name'],
   },
@@ -19,7 +22,7 @@ export async function handleCreateBranch(args: Record<string, unknown>) {
   const result = await client.createBranch({
     project_id: args.project_id as string,
     name: args.name as string,
-    source_branch: args.source_branch as string | undefined,
+    head_commit_hash: args.head_commit_hash as string | undefined,
   });
   return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
 }
