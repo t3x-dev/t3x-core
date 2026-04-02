@@ -67,7 +67,7 @@ export async function closePostgresStorage(): Promise<void> {
 /**
  * Schema version — bump this number whenever you add migrations below.
  */
-const SCHEMA_VERSION = 35;
+const SCHEMA_VERSION = 37;
 
 /**
  * Initialize database schema (skips if already at current version)
@@ -1001,7 +1001,9 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_commit_rewrites_project ON commit_rewrites(project_id);
     CREATE INDEX IF NOT EXISTS idx_commit_rewrites_result ON commit_rewrites(result_hash);
 
-    -- Migration: Soft delete support for projects
+    -- ═══════════════════════════════════════════════════════════════
+    -- Soft Delete support
+    -- ═══════════════════════════════════════════════════════════════
     ALTER TABLE projects ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
   `);
 
