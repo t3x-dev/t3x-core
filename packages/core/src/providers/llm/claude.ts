@@ -14,6 +14,9 @@ import {
   LLMProviderError,
   type LLMResult,
   type StructuredResult,
+  type ToolCall,
+  type ToolDefinition,
+  type ToolUseResult,
 } from '../../llm/types';
 import { zodToJsonSchema } from '../../llm/zodToJsonSchema';
 
@@ -316,6 +319,93 @@ export class ClaudeProvider implements LLMProvider {
       }
       if (error instanceof Error && error.name === 'AbortError') {
         throw new LLMProviderError(this.id, undefined, 'Request timeout after 60000ms');
+      }
+      throw new LLMProviderError(
+        this.id,
+        undefined,
+        `Request failed: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+
+  async generateWithTools(
+    prompt: LLMPrompt,
+    tools: ToolDefinition[],
+    options: LLMGenerateOptions
+  ): Promise<ToolUseResult> {
+    const temperature = options.temperature ?? 0.3;
+    const maxTokens = options.maxTokens ?? 8192;
+
+    const url = `${this.baseUrl}/v1/messages`;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 120_000);
+
+    try {
+      const response = await fetchWithProxy(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': this.apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: options.model,
+          max_tokens: maxTokens,
+          temperature,
+          ...(prompt.system && { system: prompt.system }),
+          messages: prompt.messages,
+          tools: tools.map((t) => ({
+            name: t.name,
+            description: t.description,
+            input_schema: t.input_schema,
+          })),
+          tool_choice: { type: 'auto' },
+          ...(options.stopSequences && { stop_sequences: options.stopSequences }),
+        }),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+      const responseText = await response.text();
+
+      if (!response.ok) {
+        throw new LLMProviderError(
+          this.id,
+          response.status,
+          `API request failed: ${response.status} ${responseText}`
+        );
+      }
+
+      const data = JSON.parse(responseText) as {
+        content: Array<{ type: string; id?: string; name?: string; input?: unknown; text?: string }>;
+        stop_reason?: string;
+        usage?: { input_tokens?: number; output_tokens?: number };
+      };
+
+      const usage = {
+        inputTokens: data.usage?.input_tokens ?? 0,
+        outputTokens: data.usage?.output_tokens ?? 0,
+      };
+
+      const toolCalls: ToolCall[] = data.content
+        .filter((c): c is typeof c & { id: string; name: string } =>
+          c.type === 'tool_use' && typeof c.name === 'string' && typeof c.id === 'string'
+        )
+        .map((c) => ({ id: c.id, name: c.name, input: c.input }));
+
+      const stopReason = data.stop_reason === 'tool_use'
+        ? 'tool_use' as const
+        : data.stop_reason === 'max_tokens'
+          ? 'max_tokens' as const
+          : 'end_turn' as const;
+
+      return { tool_calls: toolCalls, stop_reason: stopReason, usage };
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error instanceof LLMProviderError) throw error;
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new LLMProviderError(this.id, undefined, 'Request timeout after 120000ms');
       }
       throw new LLMProviderError(
         this.id,
