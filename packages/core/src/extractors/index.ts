@@ -75,6 +75,8 @@ export {
   yopToolDefinitions,
   toolCallToYOp,
 } from './strategies';
+// Benchmark
+export { runBenchmark, type BenchmarkResult, type BenchmarkComparison } from './benchmark';
 // Types
 export type {
   AnchorCandidate,
