@@ -103,9 +103,15 @@ export interface ModelInfo {
   maxOutputTokens: number;
 }
 
+/** A content block in a multi-turn tool-use conversation */
+export interface ContentBlock {
+  type: string;
+  [key: string]: unknown;
+}
+
 export interface LLMPrompt {
   system?: string;
-  messages: Array<{ role: 'user' | 'assistant'; content: string }>;
+  messages: Array<{ role: 'user' | 'assistant'; content: string | ContentBlock[] }>;
 }
 
 export interface LLMGenerateOptions {
@@ -146,6 +152,8 @@ export interface ToolUseResult {
   tool_calls: ToolCall[];
   stop_reason: 'end_turn' | 'tool_use' | 'max_tokens';
   usage: { inputTokens: number; outputTokens: number };
+  /** Raw assistant content blocks for multi-round continuation */
+  _rawAssistantContent?: ContentBlock[];
 }
 
 // ── Debug / Observability ──
