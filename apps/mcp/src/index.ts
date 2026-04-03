@@ -26,6 +26,8 @@ import { exportTool, handleExport } from './tools/export.js';
 import { extractTool, handleExtract } from './tools/extract.js';
 import { generateTool, handleGenerate } from './tools/generate.js';
 import { getConversationTool, handleGetConversation } from './tools/get-conversation.js';
+import { getTurnTool, handleGetTurn } from './tools/get-turn.js';
+import { getTurnChainTool, handleGetTurnChain } from './tools/get-turn-chain.js';
 import { handleImportUrl, importUrlTool } from './tools/import-url.js';
 import { handleListBranches, listBranchesTool } from './tools/list-branches.js';
 import { handleListCommits, listCommitsTool } from './tools/list-commits.js';
@@ -33,6 +35,7 @@ import { handleListConversations, listConversationsTool } from './tools/list-con
 import { handleListDrafts, listDraftsTool } from './tools/list-drafts.js';
 import { handleListLeaves, listLeavesTool } from './tools/list-leaves.js';
 import { handleListProjects, listProjectsTool } from './tools/list-projects.js';
+import { handleListProviders, listProvidersTool } from './tools/list-providers.js';
 import { handleListTurns, listTurnsTool } from './tools/list-turns.js';
 import { handleListWebhooks, listWebhooksTool } from './tools/list-webhooks.js';
 import { handleMergeExecute, mergeExecuteTool } from './tools/merge-execute.js';
@@ -45,6 +48,7 @@ import { handleShowDraft, showDraftTool } from './tools/show-draft.js';
 import { handleShowLeaf, showLeafTool } from './tools/show-leaf.js';
 import { handleShowProject, showProjectTool } from './tools/show-project.js';
 import { handleSwitchBranch, switchBranchTool } from './tools/switch-branch.js';
+import { handleUpdateProject, updateProjectTool } from './tools/update-project.js';
 import { handleValidate, validateTool } from './tools/validate.js';
 import { handleYopsSchema, yopsSchemaTool } from './tools/yops-schema.js';
 
@@ -92,6 +96,10 @@ const tools = [
   createWebhookTool,
   deleteWebhookTool,
   createShareTool,
+  updateProjectTool,
+  getTurnTool,
+  getTurnChainTool,
+  listProvidersTool,
 ];
 
 const handlers: Record<
@@ -141,6 +149,10 @@ const handlers: Record<
   [createWebhookTool.name]: handleCreateWebhook,
   [deleteWebhookTool.name]: handleDeleteWebhook,
   [createShareTool.name]: handleCreateShare,
+  [updateProjectTool.name]: handleUpdateProject,
+  [getTurnTool.name]: handleGetTurn,
+  [getTurnChainTool.name]: handleGetTurnChain,
+  [listProvidersTool.name]: handleListProviders,
 };
 
 const server = new Server({ name: 't3x-mcp', version: '0.1.0' }, { capabilities: { tools: {} } });
