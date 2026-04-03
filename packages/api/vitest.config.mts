@@ -16,7 +16,7 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['src/__tests__/**/*.test.ts'],
-    globalSetup: ['../../packages/storage/src/__tests__/globalSetup.ts'],
+    globalSetup: ['../storage/src/__tests__/globalSetup.ts'],
     setupFiles: ['src/__tests__/setup.ts'],
     coverage: {
       provider: 'v8',

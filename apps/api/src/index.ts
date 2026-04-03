@@ -1,17 +1,14 @@
 /**
- * T3X Standalone API Server
+ * T3X Standalone API Server — Thin Launcher
  *
- * Entry point: loads env, creates the app via createApp(), starts the server.
- * The app assembly is in app.ts so that the cloud repo can import and extend it.
+ * Loads environment variables, imports createApp from @t3x-dev/api, starts the server.
+ * All route/middleware assembly lives in packages/api (the @t3x-dev/api package).
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { serve } from '@hono/node-server';
-import { createApp } from './app';
-import { closeDB, getDB } from './lib/db';
-import { startTimeoutChecker, stopTimeoutChecker } from './lib/timeout-checker';
-import { pinoLogger } from './middleware/logger';
+import { closeDB, createApp, getDB, pinoLogger, startTimeoutChecker, stopTimeoutChecker } from '@t3x-dev/api';
 
 function loadEnvLocal(): void {
   // Load env from monorepo root (unified config)
