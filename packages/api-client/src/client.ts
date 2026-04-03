@@ -237,11 +237,12 @@ export class T3xClient {
     branch?: string,
     params?: PaginationParams
   ): Promise<ListCommitsResponse> {
-    return this.request<ListCommitsResponse>('GET', '/v1/commits', undefined, {
-      project_id: projectId,
-      branch,
-      ...params,
-    });
+    return this.request<ListCommitsResponse>(
+      'GET',
+      `/v1/projects/${projectId}/commits`,
+      undefined,
+      { branch, ...params }
+    );
   }
 
   async getCommit(hash: string): Promise<Commit> {
