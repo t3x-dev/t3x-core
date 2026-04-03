@@ -335,6 +335,25 @@ export class T3xClient {
   }
 
   // ============================================
+  // Merge
+  // ============================================
+
+  async prepareMerge(input: { source_hash: string; target_hash: string }): Promise<unknown> {
+    return this.request<unknown>('POST', '/v1/merge/prepare', input);
+  }
+
+  async executeMerge(input: {
+    source_hash: string;
+    target_hash: string;
+    prepared: unknown;
+    decisions: unknown;
+    message: string;
+    branch?: string;
+  }): Promise<unknown> {
+    return this.request<unknown>('POST', '/v1/merge/execute', input);
+  }
+
+  // ============================================
   // Diff
   // ============================================
 
