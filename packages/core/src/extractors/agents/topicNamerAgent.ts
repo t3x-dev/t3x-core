@@ -12,8 +12,8 @@
  */
 
 import type { LLMProvider } from '../../llm/types';
-import type { FlatNode } from '../../semantic/types';
 import { flattenTrees, unflattenToTrees } from '../../semantic/tree';
+import type { FlatNode } from '../../semantic/types';
 import type { MeaningAgent, PipelineContext } from '../meaningPipeline';
 
 const SYSTEM_PROMPT = `You name the main topic of a conversation based on extracted semantic frames.

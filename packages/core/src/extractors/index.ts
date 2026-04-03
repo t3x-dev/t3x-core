@@ -10,7 +10,6 @@ export {
   computeAdaptiveThresholds,
   type FeedbackStats,
 } from './adaptiveThresholds';
-export { type ConfidenceInput, computeConfidence } from './confidence';
 export {
   contradictionCheckerAgent,
   coverageCheckerAgent,
@@ -19,12 +18,21 @@ export {
   nesterAgent,
   topicNamerAgent,
 } from './agents';
+// Benchmark
+export { type BenchmarkComparison, type BenchmarkResult, runBenchmark } from './benchmark';
+// Compression
+export {
+  type CompressMetadata,
+  Compressor,
+  type CompressResult,
+} from './compressor';
 // Compression
 export {
   buildCompressPrompt,
   type CompressInput,
   type NodeWithSignals,
 } from './compressPrompt';
+export { type ConfidenceInput, computeConfidence } from './confidence';
 export { createMeaningPipeline } from './createMeaningPipeline';
 // extractionPrompt helpers — still used by yopsPrompt.ts internally
 export {
@@ -34,10 +42,6 @@ export {
   tier3Segment,
   updateStanceSegment,
 } from './extractionPrompt';
-// YOps Prompt Builder (YAML operations format for incremental extraction)
-export { buildYOpsPrompt } from './yopsPrompt';
-// YOps Parser
-export { parseYOpsOutput, type YOpsParseResult } from './yopsParser';
 // Extraction (Phase 2)
 export {
   type ExtractionInput,
@@ -45,12 +49,6 @@ export {
   type ExtractionTurn,
   Extractor,
 } from './extractor';
-// Compression
-export {
-  type CompressMetadata,
-  type CompressResult,
-  Compressor,
-} from './compressor';
 // Meaning Pipeline (multi-agent orchestration)
 export { type FuzzyLocateResult, fuzzyLocate } from './fuzzyLocate';
 export {
@@ -71,12 +69,10 @@ export { buildRelationPrompt } from './relationPrompt';
 export {
   type ExtractionStrategy,
   ToolUseExtractionStrategy,
+  toolCallToYOp,
   YamlExtractionStrategy,
   yopToolDefinitions,
-  toolCallToYOp,
 } from './strategies';
-// Benchmark
-export { runBenchmark, type BenchmarkResult, type BenchmarkComparison } from './benchmark';
 // Types
 export type {
   AnchorCandidate,
@@ -84,3 +80,7 @@ export type {
   AnchorType,
   Segment,
 } from './types';
+// YOps Parser
+export { parseYOpsOutput, type YOpsParseResult } from './yopsParser';
+// YOps Prompt Builder (YAML operations format for incremental extraction)
+export { buildYOpsPrompt } from './yopsPrompt';

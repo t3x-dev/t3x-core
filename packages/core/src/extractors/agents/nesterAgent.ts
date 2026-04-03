@@ -10,18 +10,12 @@
  */
 
 import type { LLMProvider } from '../../llm/types';
-import type { FlatNode, SemanticContent, SlotValue } from '../../semantic/types';
 import { flattenTrees, unflattenToTrees } from '../../semantic/tree';
+import type { FlatNode, SemanticContent, SlotValue } from '../../semantic/types';
 import type { MeaningAgent, PipelineContext } from '../meaningPipeline';
 
 /** Relations that indicate parent-child nesting */
-const NESTING_RELATIONS = new Set([
-  'conditions',
-  'depends',
-  'follows',
-  'causes',
-  'contrasts',
-]);
+const NESTING_RELATIONS = new Set(['conditions', 'depends', 'follows', 'causes', 'contrasts']);
 
 function buildNestedContent(content: SemanticContent): SemanticContent {
   const frames: FlatNode[] = flattenTrees(content.trees);

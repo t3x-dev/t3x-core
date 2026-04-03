@@ -10,8 +10,8 @@
  */
 
 import type { LLMProvider } from '../../llm/types';
-import type { FlatNode } from '../../semantic/types';
 import { flattenTrees } from '../../semantic/tree';
+import type { FlatNode } from '../../semantic/types';
 import type { MeaningAgent, PipelineContext } from '../meaningPipeline';
 
 /** If more than this fraction of frames are lost, flag as regression */

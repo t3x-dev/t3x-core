@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import type { TreeNode } from '../../../semantic/types';
-import { contradictionCheckerAgent } from '../contradictionCheckerAgent';
 import type { PipelineContext } from '../../meaningPipeline';
+import { contradictionCheckerAgent } from '../contradictionCheckerAgent';
 
 function makeCtx(trees: TreeNode[], userMessages: string[]): PipelineContext {
   return {

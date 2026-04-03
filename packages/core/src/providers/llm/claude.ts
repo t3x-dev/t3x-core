@@ -6,6 +6,7 @@
 
 import type { ZodType } from 'zod';
 import {
+  type ContentBlock,
   type LLMBasicGenerateOptions,
   type LLMGenerateOptions,
   type LLMGenerateResult,
@@ -14,7 +15,6 @@ import {
   LLMProviderError,
   type LLMResult,
   type StructuredResult,
-  type ContentBlock,
   type ToolCall,
   type ToolDefinition,
   type ToolUseResult,

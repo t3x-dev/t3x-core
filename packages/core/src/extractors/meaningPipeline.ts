@@ -16,8 +16,8 @@
  */
 
 import type { LLMCallLogger, LLMProvider } from '../llm/types';
-import type { FlatNode, SemanticContent, SlotValue } from '../semantic/types';
 import { flattenTrees } from '../semantic/tree';
+import type { FlatNode, SemanticContent, SlotValue } from '../semantic/types';
 import type { ExtractionTurn } from './extractionPrompt';
 
 // ── Pipeline Mode ──
@@ -317,7 +317,11 @@ export class MeaningPipeline {
     const ctx: PipelineContext = {
       turns,
       previousSnapshot,
-      content: { ...content, trees: content.trees.map((t) => JSON.parse(JSON.stringify(t))), relations: [...content.relations] },
+      content: {
+        ...content,
+        trees: content.trees.map((t) => JSON.parse(JSON.stringify(t))),
+        relations: [...content.relations],
+      },
       topicName: null,
       conversationSummary: turns
         .filter((t) => t.role === 'user')

@@ -5,7 +5,11 @@
  * then parsing and validating it. This is the original extraction approach.
  *
  * Gate integration: after parse, runs source + dedup gates to filter
- * invalid YOps before applying them. Structure gate runs post-apply (advisory).
+ * invalid YOps before applying them. Post-apply uses validateIntegrity
+ * (hard fail → retry) and ylint (advisory LintResult for API consumers)
+ * directly rather than the structure gate, because the strategy needs
+ * typed LintResult and retry-on-failure semantics that the advisory-only
+ * gate does not provide. The structure gate is for external/batch callers.
  */
 
 import type { LLMProvider } from '../../llm/types';
@@ -94,7 +98,7 @@ export class YamlExtractionStrategy implements ExtractionStrategy {
         relations: applyResult.relations,
       };
 
-      // Post-apply validation (same as before)
+      // Post-apply validation (integrity is hard fail, ylint is advisory)
       const validation = validateIntegrity(snapshot);
       if (!validation.valid) {
         lastError = `Validation failed: ${validation.errors.map((e) => e.message).join('; ')}`;

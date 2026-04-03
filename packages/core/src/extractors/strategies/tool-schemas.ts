@@ -42,17 +42,17 @@ const AddInputSchema = z
     parent: z
       .string()
       .describe(
-        'Parent node path. Use empty string "" for root-level nodes. Use "parent_key" to nest under an existing node.',
+        'Parent node path. Use empty string "" for root-level nodes. Use "parent_key" to nest under an existing node.'
       ),
     node: z
       .record(z.string(), z.unknown())
       .describe(
-        'Object with exactly ONE top-level key: {node_key: {slot: value, ...}}. Example: {hotel: {name: "Hilton", stars: 5}}. Do NOT put multiple keys — call yop_add once per node.',
+        'Object with exactly ONE top-level key: {node_key: {slot: value, ...}}. Example: {hotel: {name: "Hilton", stars: 5}}. Do NOT put multiple keys — call yop_add once per node.'
       ),
     source: z
       .union([z.record(z.string(), z.string()), z.string()])
       .describe(
-        'Source quotes. Preferred: object mapping slot keys to quotes, e.g. {name: "called Hilton", stars: "5 stars"}. Also accepts a single string if only one slot.',
+        'Source quotes. Preferred: object mapping slot keys to quotes, e.g. {name: "called Hilton", stars: "5 stars"}. Also accepts a single string if only one slot.'
       ),
     from: z.string().min(1).describe('Turn reference (e.g. T1, T3)'),
     confidence: z.number().min(0).max(1).optional().describe('Extraction confidence 0-1'),
@@ -246,7 +246,7 @@ export const yopToolDefinitions: ToolDefinition[] = TOOL_REGISTRY.map((entry) =>
 /** Validate a tool call and convert to YOp(s). May return multiple YOps for multi-key add nodes. */
 export function toolCallToYOps(
   toolName: string,
-  input: unknown,
+  input: unknown
 ): { ok: true; yops: YOp[] } | { ok: false; error: string } {
   const entry = TOOL_REGISTRY.find((e) => e.name === toolName);
   if (!entry) {
@@ -268,7 +268,7 @@ export function toolCallToYOps(
       // Normalize source
       const source =
         typeof raw.source === 'string'
-          ? ({} as Record<string, string>)
+          ? ({ _: raw.source } as Record<string, string>)
           : ((raw.source ?? {}) as Record<string, string>);
 
       const yops: YOp[] = keys.map((key) => ({
@@ -290,7 +290,7 @@ export function toolCallToYOps(
 /** Validate a tool call and convert to YOp (legacy single-return API) */
 export function toolCallToYOp(
   toolName: string,
-  input: unknown,
+  input: unknown
 ): { ok: true; yop: YOp } | { ok: false; error: string } {
   const result = toolCallToYOps(toolName, input);
   if (!result.ok) return result;

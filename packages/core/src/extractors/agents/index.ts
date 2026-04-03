@@ -9,17 +9,15 @@
  * Order matters — see createMeaningPipeline.ts for execution order.
  */
 
+export { contradictionCheckerAgent } from './contradictionCheckerAgent';
+export { coverageCheckerAgent } from './coverageCheckerAgent';
+export { dedupCheckerAgent } from './dedupCheckerAgent';
+export { fuzzyQuoteValidatorAgent } from './fuzzyQuoteValidator';
+export { nesterAgent } from './nesterAgent';
 // Code agents
 export { outputRegulatorAgent } from './outputRegulatorAgent';
-export { fuzzyQuoteValidatorAgent } from './fuzzyQuoteValidator';
-export { dedupCheckerAgent } from './dedupCheckerAgent';
-export { nesterAgent } from './nesterAgent';
-export { contradictionCheckerAgent } from './contradictionCheckerAgent';
 export { regressionCheckerAgent } from './regressionCheckerAgent';
-export { structuralValidatorAgent } from './structuralValidatorAgent';
 export { sourceTraceValidatorAgent } from './sourceTraceValidatorAgent';
-
+export { structuralValidatorAgent } from './structuralValidatorAgent';
 // LLM agents (kept — lightweight and additive)
 export { topicNamerAgent } from './topicNamerAgent';
-export { coverageCheckerAgent } from './coverageCheckerAgent';
-

@@ -1,9 +1,12 @@
 import { describe, expect, test } from 'vitest';
 import type { TreeNode } from '../../../semantic/types';
-import { fuzzyQuoteValidatorAgent } from '../fuzzyQuoteValidator';
 import type { PipelineContext } from '../../meaningPipeline';
+import { fuzzyQuoteValidatorAgent } from '../fuzzyQuoteValidator';
 
-function makeCtx(trees: TreeNode[], turns: Array<{ role: string; content: string }>): PipelineContext {
+function makeCtx(
+  trees: TreeNode[],
+  turns: Array<{ role: string; content: string }>
+): PipelineContext {
   return {
     content: { trees, relations: [] },
     turns,
@@ -27,9 +30,7 @@ describe('fuzzy quote validator', () => {
       slot_quotes: { budget: '$3000 budget' },
       confidence: 0.9,
     };
-    const ctx = makeCtx([tree], [
-      { role: 'user', content: 'I have a $3000 budget for this trip' },
-    ]);
+    const ctx = makeCtx([tree], [{ role: 'user', content: 'I have a $3000 budget for this trip' }]);
     const result = await fuzzyQuoteValidatorAgent.run(ctx, null as any);
     expect(result.content.trees[0].confidence).toBeCloseTo(0.9, 5);
   });
@@ -42,9 +43,7 @@ describe('fuzzy quote validator', () => {
       slot_quotes: { budget: 'completely made up text that is not in conversation' },
       confidence: 0.9,
     };
-    const ctx = makeCtx([tree], [
-      { role: 'user', content: 'I want to visit Beijing' },
-    ]);
+    const ctx = makeCtx([tree], [{ role: 'user', content: 'I want to visit Beijing' }]);
     const result = await fuzzyQuoteValidatorAgent.run(ctx, null as any);
     expect(result.content.trees[0].confidence).toBeLessThan(0.9);
   });
@@ -55,9 +54,7 @@ describe('fuzzy quote validator', () => {
       slots: { dest: 'Beijing' },
       children: [],
     };
-    const ctx = makeCtx([tree], [
-      { role: 'user', content: 'I want to visit Beijing' },
-    ]);
+    const ctx = makeCtx([tree], [{ role: 'user', content: 'I want to visit Beijing' }]);
     const result = await fuzzyQuoteValidatorAgent.run(ctx, null as any);
     expect(result.content.trees[0].key).toBe('trip');
   });
