@@ -120,7 +120,7 @@ describe('E2E: YOps Extraction Pipeline', () => {
       path: hangzhou_trip/dining/budget
       value: 2000
       source: "actually let's do 2000"
-      from: T3
+      from: T1
       confidence: 0.9
   - add:
       parent: hangzhou_trip
@@ -131,7 +131,7 @@ describe('E2E: YOps Extraction Pipeline', () => {
       source:
         west_lake: "walk around West Lake"
         hiking: "go hiking in the hills nearby"
-      from: T3
+      from: T1
       confidence: 0.85`;
 
     const provider2 = mockProvider([incrementalLLMOutput]);
@@ -179,7 +179,7 @@ describe('E2E: YOps Extraction Pipeline', () => {
       source:
         plan: "check out bars near West Lake instead"
         budget: "maybe 500 for drinks"
-      from: T5
+      from: T1
       confidence: 0.8`;
 
     const provider3 = mockProvider([thirdLLMOutput]);
