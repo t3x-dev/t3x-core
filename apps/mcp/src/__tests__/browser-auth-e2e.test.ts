@@ -151,7 +151,10 @@ describe('MCP Browser Auth E2E', () => {
     const tokenRes = await fetch(`${API_BASE}/v1/oauth/device/token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ device_code: 'test', grant_type: 'urn:ietf:params:oauth:grant-type:device_code' }),
+      body: JSON.stringify({
+        device_code: 'test',
+        grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
+      }),
     });
     expect(tokenRes.status).toBe(404);
   });

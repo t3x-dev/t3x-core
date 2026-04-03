@@ -630,3 +630,35 @@ describe('handleDeleteLeaf', () => {
     expect(data.leaf_id).toBe('leaf_1');
   });
 });
+
+// Local-only tools (no API client mock needed, they import from @t3x-dev/core)
+describe('handleSchema', () => {
+  it('returns JSON schema object', async () => {
+    const { handleSchema: handler } = await import('../tools/schema.js');
+    const result = await handler({});
+    const data = JSON.parse(result.content[0].text);
+    expect(data).toBeDefined();
+    expect(typeof data).toBe('object');
+  });
+});
+
+describe('handleValidate', () => {
+  it('returns validation result for valid content', async () => {
+    const { handleValidate: handler } = await import('../tools/validate.js');
+    const result = await handler({
+      content: { trees: [], relations: [] },
+    });
+    const data = JSON.parse(result.content[0].text);
+    expect(data).toBeDefined();
+  });
+});
+
+describe('handleYopsSchema', () => {
+  it('returns YOps JSON schema', async () => {
+    const { handleYopsSchema: handler } = await import('../tools/yops-schema.js');
+    const result = await handler({});
+    const data = JSON.parse(result.content[0].text);
+    expect(data).toBeDefined();
+    expect(typeof data).toBe('object');
+  });
+});
