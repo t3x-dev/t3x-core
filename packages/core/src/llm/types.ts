@@ -69,6 +69,13 @@ export interface LLMProvider {
     schema: import('zod').ZodType<T>,
     options: LLMGenerateOptions
   ): Promise<StructuredResult<T>>;
+
+  /** Generate with tool definitions, allowing multiple tool calls per response. Optional. */
+  generateWithTools?(
+    prompt: LLMPrompt,
+    tools: ToolDefinition[],
+    options: LLMGenerateOptions
+  ): Promise<ToolUseResult>;
 }
 
 /**
@@ -115,6 +122,29 @@ export interface LLMResult {
 
 export interface StructuredResult<T> {
   data: T;
+  usage: { inputTokens: number; outputTokens: number };
+}
+
+// ── Tool-Use Types ──
+
+/** A tool definition for LLM function calling */
+export interface ToolDefinition {
+  name: string;
+  description: string;
+  input_schema: Record<string, unknown>;
+}
+
+/** A single tool call returned by the LLM */
+export interface ToolCall {
+  id: string;
+  name: string;
+  input: unknown;
+}
+
+/** Result of a generateWithTools call */
+export interface ToolUseResult {
+  tool_calls: ToolCall[];
+  stop_reason: 'end_turn' | 'tool_use' | 'max_tokens';
   usage: { inputTokens: number; outputTokens: number };
 }
 
