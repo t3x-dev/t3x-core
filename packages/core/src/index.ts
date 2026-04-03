@@ -37,6 +37,12 @@ export {
 } from './commit';
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Ops (Operation types + runOperation pipeline runner)
+// ═══════════════════════════════════════════════════════════════════════════
+export type { Operation, OpsPipelineContext, PipelineEvent } from './ops';
+export { collectResult, runOperation } from './ops';
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Common utilities
 // ═══════════════════════════════════════════════════════════════════════════
 export { canonText, hashText, sha256 } from './common';
@@ -65,6 +71,9 @@ export {
   AgentRegistry,
   // Anchor types
   type AnchorCandidate,
+  // Confidence scoring
+  computeConfidence,
+  type ConfidenceInput,
   type AnchorSource,
   type AnchorType,
   // Relations

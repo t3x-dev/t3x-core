@@ -14,6 +14,7 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
 COPY packages/core/package.json ./packages/core/
 COPY packages/storage/package.json ./packages/storage/
+COPY packages/api/package.json ./packages/api/
 COPY apps/api/package.json ./apps/api/
 COPY apps/runner/package.json ./apps/runner/
 
@@ -23,6 +24,7 @@ RUN pnpm install --frozen-lockfile --shamefully-hoist
 # Copy source files
 COPY packages/core/ ./packages/core/
 COPY packages/storage/ ./packages/storage/
+COPY packages/api/ ./packages/api/
 COPY apps/api/ ./apps/api/
 COPY apps/runner/ ./apps/runner/
 
@@ -30,7 +32,8 @@ COPY apps/runner/ ./apps/runner/
 RUN pnpm --filter @t3x-dev/core build && \
     pnpm --filter @t3x-dev/storage build && \
     pnpm --filter @t3x-dev/runner build && \
-    pnpm --filter @t3x-dev/api build
+    pnpm --filter @t3x-dev/api build && \
+    pnpm --filter t3x-api-server build
 
 # Production stage
 FROM node:20-slim AS runner

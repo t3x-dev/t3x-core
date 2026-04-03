@@ -11,7 +11,7 @@
 import { randomBytes } from 'node:crypto';
 import { API_KEY_VALUE_PREFIX } from '@t3x-dev/core';
 import { createApiKey } from '@t3x-dev/storage';
-import { getDB } from '../lib/db';
+import { getDB } from '@t3x-dev/api';
 
 async function main() {
   const name = process.argv[2] || 'dev-bootstrap';

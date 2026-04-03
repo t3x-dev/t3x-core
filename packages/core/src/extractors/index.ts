@@ -10,6 +10,7 @@ export {
   computeAdaptiveThresholds,
   type FeedbackStats,
 } from './adaptiveThresholds';
+export { type ConfidenceInput, computeConfidence } from './confidence';
 export {
   contradictionCheckerAgent,
   coverageCheckerAgent,

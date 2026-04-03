@@ -47,95 +47,17 @@ importers:
     dependencies:
       '@hono/node-server':
         specifier: ^1.15.2
-        version: 1.19.7(hono@4.11.1)
-      '@hono/zod-openapi':
-        specifier: ^1.2.0
-        version: 1.2.0(hono@4.11.1)(zod@4.2.1)
-      '@hono/zod-validator':
-        specifier: ^0.7.6
-        version: 0.7.6(hono@4.11.1)(zod@4.2.1)
-      '@mozilla/readability':
-        specifier: ^0.6.0
-        version: 0.6.0
-      '@scalar/hono-api-reference':
-        specifier: ^0.9.30
-        version: 0.9.30(hono@4.11.1)
-      '@t3x-dev/core':
+        version: 1.19.7(hono@4.12.9)
+      '@t3x-dev/api':
         specifier: workspace:*
-        version: link:../../packages/core
-      '@t3x-dev/runner':
-        specifier: workspace:*
-        version: link:../runner
-      '@t3x-dev/storage':
-        specifier: workspace:*
-        version: link:../../packages/storage
-      bcryptjs:
-        specifier: ^3.0.3
-        version: 3.0.3
-      drizzle-orm:
-        specifier: ^0.38.3
-        version: 0.38.4(@electric-sql/pglite@0.3.14)(@types/react@19.2.7)(pg@8.20.0)(postgres@3.4.7)(react@19.2.3)
-      fflate:
-        specifier: ^0.8.2
-        version: 0.8.2
-      hono:
-        specifier: ^4.7.10
-        version: 4.11.1
-      jsdom:
-        specifier: ^28.0.0
-        version: 28.0.0
-      mammoth:
-        specifier: ^1.8.0
-        version: 1.11.0
-      nanoid:
-        specifier: ^5.1.6
-        version: 5.1.6
-      pdf-parse:
-        specifier: ^1.1.1
-        version: 1.1.4
-      pino:
-        specifier: ^9.14.0
-        version: 9.14.0
-      pino-pretty:
-        specifier: ^11.3.0
-        version: 11.3.0
-      turndown:
-        specifier: ^7.2.2
-        version: 7.2.2
-      turndown-plugin-gfm:
-        specifier: ^1.0.2
-        version: 1.0.2
-      undici:
-        specifier: ^7.16.0
-        version: 7.16.0
-      zod:
-        specifier: ^4.2.1
-        version: 4.2.1
+        version: link:../../packages/api
     devDependencies:
-      '@swc/core':
-        specifier: ^1.15.18
-        version: 1.15.18
-      '@types/bcryptjs':
-        specifier: ^3.0.0
-        version: 3.0.0
       '@types/node':
         specifier: ^22.10.0
         version: 22.19.3
-      '@types/pdf-parse':
-        specifier: ^1.1.4
-        version: 1.1.5
-      '@types/turndown':
-        specifier: ^5.0.6
-        version: 5.0.6
       dotenv:
         specifier: ^17.3.1
         version: 17.3.1
-      embedded-postgres:
-        specifier: 18.3.0-beta.16
-        version: 18.3.0-beta.16
-      postgres:
-        specifier: ^3.4.7
-        version: 3.4.7
       tsup:
         specifier: ^8.3.5
         version: 8.5.1(@swc/core@1.15.18)(jiti@2.6.1)(postcss@8.5.6)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.3)
@@ -145,9 +67,6 @@ importers:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
-      unplugin-swc:
-        specifier: ^1.5.9
-        version: 1.5.9(@swc/core@1.15.18)(rollup@4.54.0)
       vitest:
         specifier: ^2.1.9
         version: 2.1.9(@types/node@22.19.3)(jsdom@28.0.0)(lightningcss@1.30.2)
@@ -467,6 +386,115 @@ importers:
       tw-animate-css:
         specifier: ^1.4.0
         version: 1.4.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      unplugin-swc:
+        specifier: ^1.5.9
+        version: 1.5.9(@swc/core@1.15.18)(rollup@4.54.0)
+      vitest:
+        specifier: ^2.1.9
+        version: 2.1.9(@types/node@22.19.3)(jsdom@28.0.0)(lightningcss@1.30.2)
+
+  packages/api:
+    dependencies:
+      '@hono/node-server':
+        specifier: ^1.15.2
+        version: 1.19.11(hono@4.12.9)
+      '@hono/zod-openapi':
+        specifier: ^1.2.0
+        version: 1.2.0(hono@4.12.9)(zod@4.2.1)
+      '@hono/zod-validator':
+        specifier: ^0.7.6
+        version: 0.7.6(hono@4.12.9)(zod@4.2.1)
+      '@mozilla/readability':
+        specifier: ^0.6.0
+        version: 0.6.0
+      '@scalar/hono-api-reference':
+        specifier: ^0.9.30
+        version: 0.9.30(hono@4.12.9)
+      '@t3x-dev/core':
+        specifier: workspace:*
+        version: link:../core
+      '@t3x-dev/runner':
+        specifier: workspace:*
+        version: link:../../apps/runner
+      '@t3x-dev/storage':
+        specifier: workspace:*
+        version: link:../storage
+      bcryptjs:
+        specifier: ^3.0.3
+        version: 3.0.3
+      drizzle-orm:
+        specifier: ^0.38.3
+        version: 0.38.4(@electric-sql/pglite@0.3.14)(@types/react@19.2.7)(pg@8.20.0)(postgres@3.4.8)(react@19.2.3)
+      fflate:
+        specifier: ^0.8.2
+        version: 0.8.2
+      hono:
+        specifier: ^4.7.10
+        version: 4.12.9
+      jsdom:
+        specifier: ^28.0.0
+        version: 28.0.0
+      mammoth:
+        specifier: ^1.8.0
+        version: 1.11.0
+      nanoid:
+        specifier: ^5.1.6
+        version: 5.1.6
+      pdf-parse:
+        specifier: ^1.1.1
+        version: 1.1.4
+      pino:
+        specifier: ^9.14.0
+        version: 9.14.0
+      pino-pretty:
+        specifier: ^11.3.0
+        version: 11.3.0
+      turndown:
+        specifier: ^7.2.2
+        version: 7.2.2
+      turndown-plugin-gfm:
+        specifier: ^1.0.2
+        version: 1.0.2
+      undici:
+        specifier: ^7.16.0
+        version: 7.20.0
+      zod:
+        specifier: ^4.2.1
+        version: 4.2.1
+    devDependencies:
+      '@swc/core':
+        specifier: ^1.15.18
+        version: 1.15.18
+      '@types/bcryptjs':
+        specifier: ^3.0.0
+        version: 3.0.0
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.19.3
+      '@types/pdf-parse':
+        specifier: ^1.1.4
+        version: 1.1.5
+      '@types/turndown':
+        specifier: ^5.0.6
+        version: 5.0.6
+      dotenv:
+        specifier: ^17.3.1
+        version: 17.3.1
+      embedded-postgres:
+        specifier: 18.3.0-beta.16
+        version: 18.3.0-beta.16
+      postgres:
+        specifier: ^3.4.7
+        version: 3.4.8
+      tsup:
+        specifier: ^8.3.5
+        version: 8.5.1(@swc/core@1.15.18)(jiti@2.6.1)(postcss@8.5.6)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.3)
+      tsx:
+        specifier: ^4.19.2
+        version: 4.21.0
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -2777,6 +2805,7 @@ packages:
   '@xmldom/xmldom@0.8.11':
     resolution: {integrity: sha512-cQzWCtO6C8TQiYl1ruKNn2U6Ao4o4WBBcbL61yJl84x+j5sOWWFU9X7DpND8XZG3daDppSsigMdfAIl2upQBRw==}
     engines: {node: '>=10.0.0'}
+    deprecated: this version has critical issues, please update to the latest version
 
   '@xyflow/react@12.10.0':
     resolution: {integrity: sha512-eOtz3whDMWrB4KWVatIBrKuxECHqip6PfA8fTpaS2RUGVpiEAe+nqDKsLqkViVWxDGreq0lWX71Xth/SPAzXiw==}
@@ -3762,10 +3791,6 @@ packages:
 
   highlightjs-vue@1.0.0:
     resolution: {integrity: sha512-PDEfEF102G23vHmPhLyPboFCD+BkMGu+GuJe2d9/eH4FsCwvgBpnc9n0pGE+ffKdph38s6foEZiEjdgHdzp+IA==}
-
-  hono@4.11.1:
-    resolution: {integrity: sha512-KsFcH0xxHes0J4zaQgWbYwmz3UPOOskdqZmItstUG93+Wk1ePBLkLGwbP9zlmh1BFUiL8Qp+Xfu9P7feJWpGNg==}
-    engines: {node: '>=16.9.0'}
 
   hono@4.12.9:
     resolution: {integrity: sha512-wy3T8Zm2bsEvxKZM5w21VdHDDcwVS1yUFFY6i8UobSsKfFceT7TOwhbhfKsDyx7tYQlmRM5FLpIuYvNFyjctiA==}
@@ -5691,11 +5716,6 @@ packages:
     resolution: {integrity: sha512-LKYU1iAXJXUgAXn9URjiu+MWhyUXHsvfp7mcuYm9dSUKK0/CjtrUwFAxD82/mCWbtLsGjFIad0wIsod4zrTAEQ==}
     engines: {node: '>=0.4'}
 
-  yaml@2.8.2:
-    resolution: {integrity: sha512-mplynKqc1C2hTVYxd0PU2xQAc22TI1vShAYGksCCfxbn/dFwnHTNi1bvYsBTkhdUNtGIf5xNOg938rrSSYvS9A==}
-    engines: {node: '>= 14.6'}
-    hasBin: true
-
   yaml@2.8.3:
     resolution: {integrity: sha512-AvbaCLOO2Otw/lW5bmh9d/WEdcDFdQp2Z2ZUH3pX9U2ihyUY0nvLv7J6TrWowklRGPYbB/IuIMfYgxaCPg5Bpg==}
     engines: {node: '>= 14.6'}
@@ -6403,21 +6423,21 @@ snapshots:
     dependencies:
       hono: 4.12.9
 
-  '@hono/node-server@1.19.7(hono@4.11.1)':
+  '@hono/node-server@1.19.7(hono@4.12.9)':
     dependencies:
-      hono: 4.11.1
+      hono: 4.12.9
 
-  '@hono/zod-openapi@1.2.0(hono@4.11.1)(zod@4.2.1)':
+  '@hono/zod-openapi@1.2.0(hono@4.12.9)(zod@4.2.1)':
     dependencies:
       '@asteasolutions/zod-to-openapi': 8.2.0(zod@4.2.1)
-      '@hono/zod-validator': 0.7.6(hono@4.11.1)(zod@4.2.1)
-      hono: 4.11.1
+      '@hono/zod-validator': 0.7.6(hono@4.12.9)(zod@4.2.1)
+      hono: 4.12.9
       openapi3-ts: 4.5.0
       zod: 4.2.1
 
-  '@hono/zod-validator@0.7.6(hono@4.11.1)(zod@4.2.1)':
+  '@hono/zod-validator@0.7.6(hono@4.12.9)(zod@4.2.1)':
     dependencies:
-      hono: 4.11.1
+      hono: 4.12.9
       zod: 4.2.1
 
   '@img/colour@1.0.0':
@@ -7189,10 +7209,10 @@ snapshots:
 
   '@scalar/helpers@0.2.4': {}
 
-  '@scalar/hono-api-reference@0.9.30(hono@4.11.1)':
+  '@scalar/hono-api-reference@0.9.30(hono@4.12.9)':
     dependencies:
       '@scalar/core': 0.3.28
-      hono: 4.11.1
+      hono: 4.12.9
 
   '@scalar/types@0.5.4':
     dependencies:
@@ -8677,8 +8697,6 @@ snapshots:
 
   highlightjs-vue@1.0.0: {}
 
-  hono@4.11.1: {}
-
   hono@4.12.9: {}
 
   html-encoding-sniffer@6.0.0:
@@ -9539,7 +9557,7 @@ snapshots:
 
   openapi3-ts@4.5.0:
     dependencies:
-      yaml: 2.8.2
+      yaml: 2.8.3
 
   option@0.2.4: {}
 
@@ -10940,8 +10958,6 @@ snapshots:
   xmlchars@2.2.0: {}
 
   xtend@4.0.2: {}
-
-  yaml@2.8.2: {}
 
   yaml@2.8.3: {}
 

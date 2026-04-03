@@ -14,11 +14,13 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import type { MergeSummaryData, SlotValue } from '@t3x-dev/core';
 import {
+  collectResult,
   executeMerge,
   flattenTrees,
   type MergeDecision,
   type MergeResult,
   prepareMerge,
+  runOperation,
   type SemanticContent,
 } from '@t3x-dev/core';
 import {
@@ -39,6 +41,8 @@ import { assertProjectAccess } from '../lib/project-access';
 import { getLLMProvider } from '../lib/provider-registry';
 import { getUserId, recordUsageFireAndForget, wrapWithUsageTracking } from '../lib/usage-tracking';
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
+import { buildPipelineContext } from '../ops/context';
+import { MergeError, mergeExecuteOp, mergePrepareOp } from '../ops/merge';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 import {
   ExecuteMergeRequestSchema,
@@ -113,49 +117,27 @@ mergeRoutes.openapi(prepareMergeRoute, async (c) => {
   const { source_hash, target_hash } = c.req.valid('json');
 
   try {
+    // Project access check still needs the raw commit for project_id
     const db = await getDB();
-
-    // Load commits (unified, auto-upgrades V4)
     const sourceCommit = await getCommitUnified(db, source_hash);
-    if (!sourceCommit) {
-      return c.json(
-        {
-          success: false as const,
-          error: {
-            code: 'NOT_FOUND',
-            message: `Source commit not found: ${source_hash}`,
-          },
-        },
-        404
-      );
-    }
-
-    // Verify project ownership via source commit
-    if (sourceCommit.project_id) {
+    if (sourceCommit?.project_id) {
       const accessResult = await assertProjectAccess(c, db, sourceCommit.project_id);
       if (accessResult instanceof Response) return accessResult;
     }
 
-    const targetCommit = await getCommitUnified(db, target_hash);
-    if (!targetCommit) {
-      return c.json(
-        {
-          success: false as const,
-          error: {
-            code: 'NOT_FOUND',
-            message: `Target commit not found: ${target_hash}`,
-          },
-        },
-        404
-      );
-    }
-
-    // Prepare frame-level merge (empty base = two-way mode)
-    const baseContent: SemanticContent = { trees: [], relations: [] };
-    const prepared = prepareMerge(baseContent, sourceCommit.content, targetCommit.content);
+    const ctx = await buildPipelineContext(c, sourceCommit?.project_id ?? '');
+    const { prepared } = await collectResult(
+      runOperation(mergePrepareOp, { source_hash, target_hash }, ctx)
+    );
 
     return c.json({ success: true as const, data: prepared }, 200);
   } catch (error) {
+    if (error instanceof MergeError && error.code === 'NOT_FOUND') {
+      return c.json(
+        { success: false as const, error: { code: 'NOT_FOUND', message: error.message } },
+        404
+      );
+    }
     return c.json(
       {
         success: false as const,
@@ -236,102 +218,27 @@ Executes a frame merge after the user has made all resolution decisions.
 mergeRoutes.openapi(executeMergeRoute, async (c) => {
   const { source_hash, target_hash, prepared, decisions, message, branch } = c.req.valid('json');
 
-  // Validate all conflicts have resolutions
-  const unresolvedConflicts = prepared.conflicts.filter(
-    (conf: { path: string }) => !decisions.conflictResolutions[conf.path]
-  );
-  if (unresolvedConflicts.length > 0) {
-    return c.json(
-      {
-        success: false as const,
-        error: {
-          code: 'UNRESOLVED_CONFLICTS',
-          message: `${unresolvedConflicts.length} conflict(s) have no resolution`,
-        },
-      },
-      400
-    );
-  }
-
-  // Get author from context
   const author = await getAuthorFromContext(c);
-  const db = await getDB();
 
   try {
-    // Get project_id from source commit
-    const sourceCommit = await getCommitUnified(db, source_hash);
-    if (!sourceCommit) {
-      return c.json(
+    const ctx = await buildPipelineContext(c, '');
+    const { commit: savedCommit, merge_summary: mergeSummary } = await collectResult(
+      runOperation(
+        mergeExecuteOp,
         {
-          success: false as const,
-          error: {
-            code: 'NOT_FOUND',
-            message: `Source commit not found: ${source_hash}`,
-          },
+          source_hash,
+          target_hash,
+          prepared: prepared as unknown as MergeResult,
+          decisions: decisions as unknown as MergeDecision,
+          message,
+          branch,
+          author,
         },
-        404
-      );
-    }
-
-    if (!sourceCommit.project_id) {
-      return c.json(
-        {
-          success: false as const,
-          error: {
-            code: 'INVALID_REQUEST',
-            message: 'Source commit has no project_id',
-          },
-        },
-        400
-      );
-    }
-    const projectId = sourceCommit.project_id;
-
-    // Execute merge - returns SemanticContent directly
-    const targetCommit = await getCommitUnified(db, target_hash);
-    const emptyContent: SemanticContent = { trees: [], relations: [] };
-    const mergedContent = executeMerge(
-      emptyContent,
-      sourceCommit.content,
-      targetCommit?.content ?? emptyContent,
-      prepared as unknown as MergeResult,
-      decisions as unknown as MergeDecision
+        ctx
+      )
     );
 
-    // Compute merge summary
-    const keptFromSource = decisions.keepFromSource?.length ?? 0;
-    const keptFromTarget = decisions.keepFromTarget?.length ?? 0;
-    const discardedSource = prepared.onlyInSource.length - keptFromSource;
-    const discardedTarget = prepared.onlyInTarget.length - keptFromTarget;
-    const mergeSummary: MergeSummaryData = {
-      kept_identical: prepared.autoKept.length,
-      resolved_conflicts: prepared.conflicts.length,
-      kept_from_source: keptFromSource,
-      kept_from_target: keptFromTarget,
-      discarded: discardedSource + discardedTarget,
-      total_nodes: flattenTrees(mergedContent.trees).length,
-    };
-
-    // Save to storage as frame-based commit
-    const savedCommit = await createCommit(db, {
-      parents: [source_hash, target_hash],
-      author: {
-        type: author.type as 'human' | 'agent' | 'system',
-        name: author.name,
-        id: author.id,
-      },
-      content: mergedContent,
-      project_id: projectId,
-      message,
-      branch: branch || undefined,
-      provenance: { method: 'merge' },
-      yops_log_ids: [],
-    });
-
-    // Update branch head with the actual commit hash
-    if (branch && projectId) {
-      await updateBranchHead(db, projectId, branch, savedCommit.hash);
-    }
+    const projectId = savedCommit.project_id;
 
     // Fire webhook event (fire-and-forget)
     webhookDispatcher.dispatch(
@@ -362,8 +269,8 @@ mergeRoutes.openapi(executeMergeRoute, async (c) => {
           hash: savedCommit.hash,
           parents: [source_hash, target_hash],
           author,
-          committed_at: new Date().toISOString(),
-          content: mergedContent,
+          committed_at: savedCommit.committed_at,
+          content: savedCommit.content,
           message,
           branch: branch || undefined,
           merge_summary: mergeSummary,
@@ -372,6 +279,26 @@ mergeRoutes.openapi(executeMergeRoute, async (c) => {
       201
     );
   } catch (error) {
+    if (error instanceof MergeError) {
+      if (error.code === 'UNRESOLVED_CONFLICTS') {
+        return c.json(
+          { success: false as const, error: { code: error.code, message: error.message } },
+          400
+        );
+      }
+      if (error.code === 'NOT_FOUND') {
+        return c.json(
+          { success: false as const, error: { code: error.code, message: error.message } },
+          404
+        );
+      }
+      if (error.code === 'INVALID_REQUEST') {
+        return c.json(
+          { success: false as const, error: { code: error.code, message: error.message } },
+          400
+        );
+      }
+    }
     return c.json(
       {
         success: false as const,

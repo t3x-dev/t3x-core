@@ -9,7 +9,7 @@ import postgres from 'postgres';
 import { afterAll, beforeAll, vi } from 'vitest';
 
 // Import CREATE_TABLES_SQL from storage test setup
-import { CREATE_TABLES_SQL } from '../../../../packages/storage/src/__tests__/setup';
+import { CREATE_TABLES_SQL } from '../../../storage/src/__tests__/setup';
 
 const TEST_PORT = parseInt(process.env.T3X_TEST_PG_PORT || '', 10) || 5446;
 const TEST_PASSWORD = 'password';
