@@ -8,15 +8,19 @@
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
+  collectResult,
   createCachedEmbeddingProvider,
   createGoogleAIEmbeddingProvider,
   diffCommits,
+  runOperation,
   type TreeDiff,
   EmbeddingProviderError,
 } from '@t3x-dev/core';
 import { findSegmentEmbeddingsByTurn, findTurnByHash, getCommitUnified } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { buildPipelineContext } from '../ops/context';
+import { diffOp } from '../ops/diff';
 
 // ============================================================================
 // Types
@@ -634,6 +638,8 @@ diffRoutes.openapi(threeWayRoute, async (c) => {
 
 /**
  * POST /v1/diff/frame — Frame-based diff between two commits
+ *
+ * Delegates to diffOp via the unified pipeline.
  */
 diffRoutes.openapi(frameRoute, async (c) => {
   const body = c.req.valid('json');
@@ -646,35 +652,22 @@ diffRoutes.openapi(frameRoute, async (c) => {
     );
   }
 
-  const db = await getDB();
+  try {
+    // projectId is not relevant for diff (read-only, cross-project OK) — pass empty string
+    const ctx = await buildPipelineContext(c, '');
+    const result = await collectResult(
+      runOperation(diffOp, {
+        base_commit_hash: body.base_commit_hash,
+        target_commit_hash: body.target_commit_hash,
+      }, ctx),
+    );
 
-  const [baseCommit, targetCommit] = await Promise.all([
-    getCommitUnified(db, body.base_commit_hash),
-    getCommitUnified(db, body.target_commit_hash),
-  ]);
-
-  if (!baseCommit) {
-    return errorResponse(c, 'NOT_FOUND', `Base commit ${body.base_commit_hash} not found`);
+    return c.json({ success: true as const, data: result }, 200);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    if (message.includes('not found')) {
+      return errorResponse(c, 'NOT_FOUND', message);
+    }
+    return errorResponse(c, 'DIFF_FAILED', message);
   }
-  if (!targetCommit) {
-    return errorResponse(c, 'NOT_FOUND', `Target commit ${body.target_commit_hash} not found`);
-  }
-
-  const diff: TreeDiff = diffCommits(baseCommit.content, targetCommit.content);
-
-  const commitMeta = (commit: typeof baseCommit) => ({
-    hash: commit.hash,
-    message: commit.message ?? null,
-    author: commit.author,
-    committed_at: commit.committed_at,
-    branch: commit.branch,
-  });
-
-  return c.json(
-    {
-      success: true as const,
-      data: { diff, base: commitMeta(baseCommit), target: commitMeta(targetCommit) },
-    },
-    200
-  );
 });
