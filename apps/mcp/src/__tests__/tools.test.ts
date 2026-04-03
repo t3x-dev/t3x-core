@@ -68,6 +68,45 @@ vi.mock('@t3x-dev/api-client', () => ({
       turn_count: 5,
     }),
     exportLedger: vi.fn().mockResolvedValue('# Project Export\n...'),
+    getCommit: vi.fn().mockResolvedValue({
+      hash: 'sha256:abc',
+      message: 'test commit',
+      trees: [{ key: 'budget', slots: { amount: '$5000' }, children: [] }],
+      parents: [],
+      branch: 'main',
+    }),
+    prepareMerge: vi.fn().mockResolvedValue({
+      autoKept: [{ text: 'shared item' }],
+      conflicts: [],
+      onlyInSource: [],
+      onlyInTarget: [],
+    }),
+    executeMerge: vi.fn().mockResolvedValue({
+      commit_hash: 'sha256:merged',
+      message: 'Merge complete',
+    }),
+    listConversations: vi.fn().mockResolvedValue({
+      conversations: [{ conversation_id: 'conv_1', title: 'Test' }],
+      total: 1,
+    }),
+    createConversation: vi.fn().mockResolvedValue({
+      conversation_id: 'conv_new',
+      project_id: 'proj_1',
+      title: 'New conv',
+    }),
+    createTurn: vi.fn().mockResolvedValue({
+      turn_hash: 'sha256:t1',
+      role: 'user',
+      content: 'Hello',
+    }),
+    getLeaf: vi.fn().mockResolvedValue({
+      id: 'leaf_1',
+      type: 'tweet',
+      title: 'Test leaf',
+      constraints: [],
+      output: 'Generated output',
+    }),
+    deleteLeaf: vi.fn().mockResolvedValue(undefined),
     getProject: vi.fn().mockResolvedValue({
       id: 'proj_1',
       name: 'Test Project',
@@ -128,10 +167,12 @@ vi.mock('@t3x-dev/api-client', () => ({
   })),
 }));
 
+import { handleAddTurn } from '../tools/add-turn.js';
 import { handleChat } from '../tools/chat.js';
 import { handleCheck } from '../tools/check.js';
 import { handleCommit } from '../tools/commit.js';
 import { handleCreateBranch } from '../tools/create-branch.js';
+import { handleCreateConversation } from '../tools/create-conversation.js';
 import { handleCreateLeaf } from '../tools/create-leaf.js';
 import { handleCreateProject } from '../tools/create-project.js';
 import { handleCreateShare } from '../tools/create-share.js';
@@ -139,6 +180,7 @@ import { handleCreateWebhook } from '../tools/create-webhook.js';
 import { handleCurrentBranch } from '../tools/current-branch.js';
 import { handleDeleteConversation } from '../tools/delete-conversation.js';
 import { handleDeleteDraft } from '../tools/delete-draft.js';
+import { handleDeleteLeaf } from '../tools/delete-leaf.js';
 import { handleDeleteProject } from '../tools/delete-project.js';
 import { handleDeleteWebhook } from '../tools/delete-webhook.js';
 import { handleDiff } from '../tools/diff.js';
@@ -150,14 +192,19 @@ import { handleGetConversation } from '../tools/get-conversation.js';
 import { handleImportUrl } from '../tools/import-url.js';
 import { handleListBranches } from '../tools/list-branches.js';
 import { handleListCommits } from '../tools/list-commits.js';
+import { handleListConversations } from '../tools/list-conversations.js';
 import { handleListDrafts } from '../tools/list-drafts.js';
 import { handleListLeaves } from '../tools/list-leaves.js';
 import { handleListProjects } from '../tools/list-projects.js';
 import { handleListTurns } from '../tools/list-turns.js';
 import { handleListWebhooks } from '../tools/list-webhooks.js';
+import { handleMergeExecute } from '../tools/merge-execute.js';
+import { handleMergePrepare } from '../tools/merge-prepare.js';
 import { handleRestoreProject } from '../tools/restore-project.js';
 import { handleShow } from '../tools/show.js';
+import { handleShowCommit } from '../tools/show-commit.js';
 import { handleShowDraft } from '../tools/show-draft.js';
+import { handleShowLeaf } from '../tools/show-leaf.js';
 import { handleShowProject } from '../tools/show-project.js';
 import { handleSwitchBranch } from '../tools/switch-branch.js';
 
@@ -498,5 +545,88 @@ describe('handleCreateShare', () => {
     expect(data.token).toBe('share_abc123');
     expect(data.entity_type).toBe('project');
     expect(data.entity_id).toBe('proj_1');
+  });
+});
+
+describe('handleShowCommit', () => {
+  it('returns commit content with trees', async () => {
+    const result = await handleShowCommit({ hash: 'sha256:abc' });
+    const data = JSON.parse(result.content[0].text);
+    expect(data.hash).toBe('sha256:abc');
+    expect(data.trees).toHaveLength(1);
+  });
+});
+
+describe('handleMergePrepare', () => {
+  it('returns merge analysis', async () => {
+    const result = await handleMergePrepare({
+      source_hash: 'sha256:aaa',
+      target_hash: 'sha256:bbb',
+    });
+    const data = JSON.parse(result.content[0].text);
+    expect(data.autoKept).toBeDefined();
+    expect(data.conflicts).toBeDefined();
+  });
+});
+
+describe('handleMergeExecute', () => {
+  it('executes merge and returns commit', async () => {
+    const result = await handleMergeExecute({
+      source_hash: 'sha256:aaa',
+      target_hash: 'sha256:bbb',
+      prepared: {},
+      decisions: {},
+      message: 'Merge test',
+    });
+    const data = JSON.parse(result.content[0].text);
+    expect(data.commit_hash).toBe('sha256:merged');
+  });
+});
+
+describe('handleListConversations', () => {
+  it('returns conversations list', async () => {
+    const result = await handleListConversations({ project_id: 'proj_test' });
+    const data = JSON.parse(result.content[0].text);
+    expect(data.conversations).toHaveLength(1);
+  });
+});
+
+describe('handleCreateConversation', () => {
+  it('creates conversation', async () => {
+    const result = await handleCreateConversation({ project_id: 'proj_test' });
+    const data = JSON.parse(result.content[0].text);
+    expect(data.conversation_id).toBe('conv_new');
+  });
+});
+
+describe('handleAddTurn', () => {
+  it('adds turn to conversation', async () => {
+    const result = await handleAddTurn({
+      conversation_id: 'conv_1',
+      role: 'user',
+      content: 'Hello',
+    });
+    const data = JSON.parse(result.content[0].text);
+    expect(data.turn_hash).toBe('sha256:t1');
+    expect(data.role).toBe('user');
+  });
+});
+
+describe('handleShowLeaf', () => {
+  it('returns leaf details', async () => {
+    const result = await handleShowLeaf({ leaf_id: 'leaf_1' });
+    const data = JSON.parse(result.content[0].text);
+    expect(data.id).toBe('leaf_1');
+    expect(data.type).toBe('tweet');
+    expect(data.output).toBe('Generated output');
+  });
+});
+
+describe('handleDeleteLeaf', () => {
+  it('deletes leaf and returns confirmation', async () => {
+    const result = await handleDeleteLeaf({ leaf_id: 'leaf_1' });
+    const data = JSON.parse(result.content[0].text);
+    expect(data.deleted).toBe(true);
+    expect(data.leaf_id).toBe('leaf_1');
   });
 });
