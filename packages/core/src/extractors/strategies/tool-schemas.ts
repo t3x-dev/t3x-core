@@ -143,80 +143,80 @@ const TOOL_REGISTRY: ToolEntry[] = [
     description:
       'Set or update a slot value on an existing node. Use when a fact is stated or changed.',
     schema: SetInputSchema,
-    wrap: (input) => ({ set: input } as YOp),
+    wrap: (input) => ({ set: input }) as YOp,
   },
   {
     name: 'yop_unset',
     description: 'Remove a slot from a node. Use when a fact is retracted.',
     schema: UnsetInputSchema,
-    wrap: (input) => ({ unset: input } as YOp),
+    wrap: (input) => ({ unset: input }) as YOp,
   },
   {
     name: 'yop_add',
     description: 'Create a new node with initial slots. Use when a new topic is introduced.',
     schema: AddInputSchema,
-    wrap: (input) => ({ add: input } as YOp),
+    wrap: (input) => ({ add: input }) as YOp,
   },
   {
     name: 'yop_drop',
     description: 'Remove a node and all its children. Use when a topic is deleted.',
     schema: DropInputSchema,
-    wrap: (input) => ({ drop: input } as YOp),
+    wrap: (input) => ({ drop: input }) as YOp,
   },
   {
     name: 'yop_rename',
     description: 'Change a node key name. Use when the name needs a better label.',
     schema: RenameInputSchema,
-    wrap: (input) => ({ rename: input } as YOp),
+    wrap: (input) => ({ rename: input }) as YOp,
   },
   {
     name: 'yop_clone',
     description: 'Duplicate a node under a target parent.',
     schema: CloneInputSchema,
-    wrap: (input) => ({ clone: input } as YOp),
+    wrap: (input) => ({ clone: input }) as YOp,
   },
   {
     name: 'yop_move',
     description: 'Move a node to a different parent.',
     schema: MoveInputSchema,
-    wrap: (input) => ({ move: input } as YOp),
+    wrap: (input) => ({ move: input }) as YOp,
   },
   {
     name: 'yop_nest',
     description: 'Group sibling nodes under a new wrapper node.',
     schema: NestInputSchema,
-    wrap: (input) => ({ nest: input } as YOp),
+    wrap: (input) => ({ nest: input }) as YOp,
   },
   {
     name: 'yop_split',
     description: 'Break a node into multiple children by distributing its slots.',
     schema: SplitInputSchema,
-    wrap: (input) => ({ split: input } as YOp),
+    wrap: (input) => ({ split: input }) as YOp,
   },
   {
     name: 'yop_fold',
     description: 'Remove a wrapper node, promote its only child.',
     schema: FoldInputSchema,
-    wrap: (input) => ({ fold: input } as YOp),
+    wrap: (input) => ({ fold: input }) as YOp,
   },
   {
     name: 'yop_merge',
     description: 'Combine sibling nodes into one.',
     schema: MergeInputSchema,
-    wrap: (input) => ({ merge: input } as YOp),
+    wrap: (input) => ({ merge: input }) as YOp,
   },
   {
     name: 'yop_relate',
     description:
       'Add a semantic relation between two nodes (causes, conditions, contrasts, follows, depends).',
     schema: RelateInputSchema,
-    wrap: (input) => ({ relate: input } as YOp),
+    wrap: (input) => ({ relate: input }) as YOp,
   },
   {
     name: 'yop_unrelate',
     description: 'Remove a semantic relation between two nodes.',
     schema: UnrelateInputSchema,
-    wrap: (input) => ({ unrelate: input } as YOp),
+    wrap: (input) => ({ unrelate: input }) as YOp,
   },
 ];
 
@@ -232,7 +232,7 @@ export const yopToolDefinitions: ToolDefinition[] = TOOL_REGISTRY.map((entry) =>
 /** Validate a tool call and convert to YOp */
 export function toolCallToYOp(
   toolName: string,
-  input: unknown,
+  input: unknown
 ): { ok: true; yop: YOp } | { ok: false; error: string } {
   const entry = TOOL_REGISTRY.find((e) => e.name === toolName);
   if (!entry) {

@@ -8,10 +8,10 @@
 import type { LLMProvider } from '../../llm/types';
 import type { SemanticContent } from '../../semantic/types';
 import { validateIntegrity } from '../../semantic/validate';
-import { applyYOps } from '../../yops/engine';
 import { ylint } from '../../ylint';
-import type { ExtractionResult } from '../extractor';
+import { applyYOps } from '../../yops/engine';
 import type { ExtractionStyleConfig } from '../extractionStyleConfig';
+import type { ExtractionResult } from '../extractor';
 import { parseYOpsOutput } from '../yopsParser';
 import type { ExtractionInput } from '../yopsPrompt';
 import { buildYOpsPrompt } from '../yopsPrompt';
@@ -63,7 +63,10 @@ export class YamlExtractionStrategy implements ExtractionStrategy {
         continue;
       }
 
-      const snapshot: SemanticContent = { trees: applyResult.trees, relations: applyResult.relations };
+      const snapshot: SemanticContent = {
+        trees: applyResult.trees,
+        relations: applyResult.relations,
+      };
 
       const validation = validateIntegrity(snapshot);
       if (!validation.valid) {

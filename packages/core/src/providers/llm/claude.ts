@@ -378,7 +378,13 @@ export class ClaudeProvider implements LLMProvider {
       }
 
       const data = JSON.parse(responseText) as {
-        content: Array<{ type: string; id?: string; name?: string; input?: unknown; text?: string }>;
+        content: Array<{
+          type: string;
+          id?: string;
+          name?: string;
+          input?: unknown;
+          text?: string;
+        }>;
         stop_reason?: string;
         usage?: { input_tokens?: number; output_tokens?: number };
       };
@@ -389,16 +395,18 @@ export class ClaudeProvider implements LLMProvider {
       };
 
       const toolCalls: ToolCall[] = data.content
-        .filter((c): c is typeof c & { id: string; name: string } =>
-          c.type === 'tool_use' && typeof c.name === 'string' && typeof c.id === 'string'
+        .filter(
+          (c): c is typeof c & { id: string; name: string } =>
+            c.type === 'tool_use' && typeof c.name === 'string' && typeof c.id === 'string'
         )
         .map((c) => ({ id: c.id, name: c.name, input: c.input }));
 
-      const stopReason = data.stop_reason === 'tool_use'
-        ? 'tool_use' as const
-        : data.stop_reason === 'max_tokens'
-          ? 'max_tokens' as const
-          : 'end_turn' as const;
+      const stopReason =
+        data.stop_reason === 'tool_use'
+          ? ('tool_use' as const)
+          : data.stop_reason === 'max_tokens'
+            ? ('max_tokens' as const)
+            : ('end_turn' as const);
 
       return { tool_calls: toolCalls, stop_reason: stopReason, usage };
     } catch (error) {

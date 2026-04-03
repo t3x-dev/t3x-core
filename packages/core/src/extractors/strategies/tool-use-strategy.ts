@@ -6,14 +6,14 @@
  * to build the semantic tree incrementally.
  */
 
-import type { LLMProvider, LLMPrompt } from '../../llm/types';
+import type { LLMPrompt, LLMProvider } from '../../llm/types';
 import type { SemanticContent } from '../../semantic/types';
 import { validateIntegrity } from '../../semantic/validate';
+import { ylint } from '../../ylint';
 import { applyYOps } from '../../yops/engine';
 import type { YOp } from '../../yops/types';
-import { ylint } from '../../ylint';
-import type { ExtractionResult } from '../extractor';
 import type { ExtractionStyleConfig } from '../extractionStyleConfig';
+import type { ExtractionResult } from '../extractor';
 import type { ExtractionInput } from '../yopsPrompt';
 import { toolCallToYOp, yopToolDefinitions } from './tool-schemas';
 import type { ExtractionStrategy } from './types';
@@ -100,7 +100,10 @@ export class ToolUseExtractionStrategy implements ExtractionStrategy {
       };
     }
 
-    const snapshot: SemanticContent = { trees: applyResult.trees, relations: applyResult.relations };
+    const snapshot: SemanticContent = {
+      trees: applyResult.trees,
+      relations: applyResult.relations,
+    };
 
     // Validate integrity
     const validation = validateIntegrity(snapshot);

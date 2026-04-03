@@ -6,9 +6,9 @@
  */
 
 import type { LLMProvider } from '../../llm/types';
+import type { ExtractionStyleConfig } from '../extractionStyleConfig';
 import type { ExtractionResult } from '../extractor';
 import type { ExtractionInput } from '../yopsPrompt';
-import type { ExtractionStyleConfig } from '../extractionStyleConfig';
 
 export interface ExtractionStrategy {
   readonly name: string;

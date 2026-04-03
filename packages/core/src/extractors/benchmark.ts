@@ -7,11 +7,11 @@
 
 import type { LLMProvider } from '../llm/types';
 import type { SemanticContent, TreeNode } from '../semantic/types';
-import type { ExtractionResult } from './extractor';
 import type { ExtractionStyleConfig } from './extractionStyleConfig';
-import type { ExtractionInput } from './yopsPrompt';
+import type { ExtractionResult } from './extractor';
 import { ToolUseExtractionStrategy } from './strategies/tool-use-strategy';
 import { YamlExtractionStrategy } from './strategies/yaml-strategy';
+import type { ExtractionInput } from './yopsPrompt';
 
 // ── Metrics Helpers ──
 
@@ -85,8 +85,12 @@ export async function runBenchmark(
   const yamlTokens = totalTokens(yamlResult.usage);
   const toolUseTokens = totalTokens(toolUseResult.usage);
 
-  const yamlSnapshot: SemanticContent = yamlResult.ok ? yamlResult.snapshot : { trees: [], relations: [] };
-  const toolUseSnapshot: SemanticContent = toolUseResult.ok ? toolUseResult.snapshot : { trees: [], relations: [] };
+  const yamlSnapshot: SemanticContent = yamlResult.ok
+    ? yamlResult.snapshot
+    : { trees: [], relations: [] };
+  const toolUseSnapshot: SemanticContent = toolUseResult.ok
+    ? toolUseResult.snapshot
+    : { trees: [], relations: [] };
 
   const comparison: BenchmarkComparison = {
     yamlTotalTokens: yamlTokens,
