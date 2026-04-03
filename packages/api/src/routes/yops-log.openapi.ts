@@ -13,12 +13,11 @@
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import type { YOpsSource } from '@t3x-dev/core';
-import { flattenTrees, YOpSchema } from '@t3x-dev/core';
+import { collectResult, flattenTrees, runOperation, YOpSchema } from '@t3x-dev/core';
 import {
   deleteYOpsLogEntry,
   findConversationById,
   getYOpsLogEntry,
-  insertYOpsLogEntry,
   listYOpsLogByConversation,
   listYOpsLogByTopic,
 } from '@t3x-dev/storage';
@@ -27,9 +26,10 @@ import { errorResponse, zodErrorHook } from '../lib/errors';
 import {
   readDraftFromTrees,
   rebuildTreesFromSnapshot,
-  syncYOpsToTrees,
 } from '../lib/tree-state-sync';
 import { replayYOpsLog, toYOpsLogEntries } from '../lib/yops-log-utils';
+import { buildPipelineContext } from '../ops/context';
+import { yopsApplyOp } from '../ops/yops-apply';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
 export const yopsLogRoutes = new OpenAPIHono({
@@ -239,7 +239,7 @@ yopsLogRoutes.openapi(createYOpsRoute, async (c) => {
   try {
     const db = await getDB();
 
-    // Look up conversation to get projectId
+    // Look up conversation to get projectId for pipeline context
     const conversation = await findConversationById(db, conversationId);
     if (!conversation) {
       return errorResponse(
@@ -249,20 +249,17 @@ yopsLogRoutes.openapi(createYOpsRoute, async (c) => {
       );
     }
 
-    // Write yops_log + sync trees atomically
-    const record = await (db as any).transaction(async (tx: any) => {
-      const rec = await insertYOpsLogEntry(tx, {
+    const ctx = await buildPipelineContext(c, conversation.projectId);
+    const result = await collectResult(
+      runOperation(yopsApplyOp, {
         conversationId,
-        projectId: conversation.projectId,
         source: body.source,
         turnHash: body.turn_hash,
         yops: body.yops,
-      });
-      await syncYOpsToTrees(tx, conversationId, conversation.projectId);
-      return rec;
-    });
+      }, ctx),
+    );
 
-    return c.json({ success: true as const, data: toApiYOpsEntry(record) }, 201);
+    return c.json({ success: true as const, data: result }, 201);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return errorResponse(c, 'CREATE_FAILED', message);
