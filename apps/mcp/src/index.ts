@@ -4,26 +4,51 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { browserAuth, clearStoredToken, ensureAuth } from './auth.js';
 import { getBaseUrl, getClient, updateToken } from './client.js';
+import { addTurnTool, handleAddTurn } from './tools/add-turn.js';
+import { chatTool, handleChat } from './tools/chat.js';
 import { checkTool, handleCheck } from './tools/check.js';
 import { commitTool, handleCommit } from './tools/commit.js';
 import { createBranchTool, handleCreateBranch } from './tools/create-branch.js';
+import { createConversationTool, handleCreateConversation } from './tools/create-conversation.js';
 import { createLeafTool, handleCreateLeaf } from './tools/create-leaf.js';
 import { createProjectTool, handleCreateProject } from './tools/create-project.js';
+import { createShareTool, handleCreateShare } from './tools/create-share.js';
+import { createWebhookTool, handleCreateWebhook } from './tools/create-webhook.js';
+import { currentBranchTool, handleCurrentBranch } from './tools/current-branch.js';
+import { deleteConversationTool, handleDeleteConversation } from './tools/delete-conversation.js';
+import { deleteDraftTool, handleDeleteDraft } from './tools/delete-draft.js';
+import { deleteLeafTool, handleDeleteLeaf } from './tools/delete-leaf.js';
 import { deleteProjectTool, handleDeleteProject } from './tools/delete-project.js';
+import { deleteWebhookTool, handleDeleteWebhook } from './tools/delete-webhook.js';
 import { diffTool, handleDiff } from './tools/diff.js';
 import { editDraftTool, handleEditDraft } from './tools/edit-draft.js';
 import { exportTool, handleExport } from './tools/export.js';
 import { extractTool, handleExtract } from './tools/extract.js';
 import { generateTool, handleGenerate } from './tools/generate.js';
+import { getConversationTool, handleGetConversation } from './tools/get-conversation.js';
+import { getTurnTool, handleGetTurn } from './tools/get-turn.js';
+import { getTurnChainTool, handleGetTurnChain } from './tools/get-turn-chain.js';
 import { handleImportUrl, importUrlTool } from './tools/import-url.js';
 import { handleListBranches, listBranchesTool } from './tools/list-branches.js';
 import { handleListCommits, listCommitsTool } from './tools/list-commits.js';
+import { handleListConversations, listConversationsTool } from './tools/list-conversations.js';
+import { handleListDrafts, listDraftsTool } from './tools/list-drafts.js';
 import { handleListLeaves, listLeavesTool } from './tools/list-leaves.js';
 import { handleListProjects, listProjectsTool } from './tools/list-projects.js';
+import { handleListProviders, listProvidersTool } from './tools/list-providers.js';
+import { handleListTurns, listTurnsTool } from './tools/list-turns.js';
+import { handleListWebhooks, listWebhooksTool } from './tools/list-webhooks.js';
+import { handleMergeExecute, mergeExecuteTool } from './tools/merge-execute.js';
+import { handleMergePrepare, mergePrepareTool } from './tools/merge-prepare.js';
+import { handleRestoreProject, restoreProjectTool } from './tools/restore-project.js';
 import { handleSchema, schemaTool } from './tools/schema.js';
 import { handleShow, showTool } from './tools/show.js';
+import { handleShowCommit, showCommitTool } from './tools/show-commit.js';
 import { handleShowDraft, showDraftTool } from './tools/show-draft.js';
+import { handleShowLeaf, showLeafTool } from './tools/show-leaf.js';
+import { handleShowProject, showProjectTool } from './tools/show-project.js';
 import { handleSwitchBranch, switchBranchTool } from './tools/switch-branch.js';
+import { handleUpdateProject, updateProjectTool } from './tools/update-project.js';
 import { handleValidate, validateTool } from './tools/validate.js';
 import { handleYopsSchema, yopsSchemaTool } from './tools/yops-schema.js';
 
@@ -50,6 +75,31 @@ const tools = [
   createLeafTool,
   importUrlTool,
   exportTool,
+  showCommitTool,
+  mergePrepareTool,
+  mergeExecuteTool,
+  listConversationsTool,
+  createConversationTool,
+  addTurnTool,
+  showLeafTool,
+  deleteLeafTool,
+  showProjectTool,
+  restoreProjectTool,
+  getConversationTool,
+  deleteConversationTool,
+  listTurnsTool,
+  currentBranchTool,
+  listDraftsTool,
+  deleteDraftTool,
+  chatTool,
+  listWebhooksTool,
+  createWebhookTool,
+  deleteWebhookTool,
+  createShareTool,
+  updateProjectTool,
+  getTurnTool,
+  getTurnChainTool,
+  listProvidersTool,
 ];
 
 const handlers: Record<
@@ -78,6 +128,31 @@ const handlers: Record<
   [createLeafTool.name]: handleCreateLeaf,
   [importUrlTool.name]: handleImportUrl,
   [exportTool.name]: handleExport,
+  [showCommitTool.name]: handleShowCommit,
+  [mergePrepareTool.name]: handleMergePrepare,
+  [mergeExecuteTool.name]: handleMergeExecute,
+  [listConversationsTool.name]: handleListConversations,
+  [createConversationTool.name]: handleCreateConversation,
+  [addTurnTool.name]: handleAddTurn,
+  [showLeafTool.name]: handleShowLeaf,
+  [deleteLeafTool.name]: handleDeleteLeaf,
+  [showProjectTool.name]: handleShowProject,
+  [restoreProjectTool.name]: handleRestoreProject,
+  [getConversationTool.name]: handleGetConversation,
+  [deleteConversationTool.name]: handleDeleteConversation,
+  [listTurnsTool.name]: handleListTurns,
+  [currentBranchTool.name]: handleCurrentBranch,
+  [listDraftsTool.name]: handleListDrafts,
+  [deleteDraftTool.name]: handleDeleteDraft,
+  [chatTool.name]: handleChat,
+  [listWebhooksTool.name]: handleListWebhooks,
+  [createWebhookTool.name]: handleCreateWebhook,
+  [deleteWebhookTool.name]: handleDeleteWebhook,
+  [createShareTool.name]: handleCreateShare,
+  [updateProjectTool.name]: handleUpdateProject,
+  [getTurnTool.name]: handleGetTurn,
+  [getTurnChainTool.name]: handleGetTurnChain,
+  [listProvidersTool.name]: handleListProviders,
 };
 
 const server = new Server({ name: 't3x-mcp', version: '0.1.0' }, { capabilities: { tools: {} } });

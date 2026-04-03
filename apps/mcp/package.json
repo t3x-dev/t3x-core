@@ -2,11 +2,28 @@
   "name": "@t3x-dev/mcp",
   "version": "0.1.0",
   "description": "T3X MCP Server — semantic version control tools for AI agents",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/t3x-dev/t3x-core.git",
+    "directory": "apps/mcp"
+  },
+  "keywords": ["t3x", "mcp", "semantic", "version-control", "ai", "knowledge-management"],
   "type": "module",
   "bin": {
     "t3x-mcp": "./dist/index.js"
   },
   "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "publishConfig": {
+    "access": "restricted"
+  },
   "scripts": {
     "build": "tsup src/index.ts --format esm --dts --clean",
     "dev": "tsx src/index.ts",

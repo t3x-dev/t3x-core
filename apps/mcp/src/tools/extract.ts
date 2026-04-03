@@ -3,7 +3,7 @@ import { getClient } from '../client.js';
 export const extractTool = {
   name: 't3x_extract',
   description:
-    'Extract semantic knowledge from conversation text into structured YAML. Pass conversation_id for incremental extraction with drift detection.',
+    'Extract semantic knowledge (sentences, entities, relations) from raw conversation text. Returns a draft_id that can be passed to show_draft or edit_draft for review before committing. Pass conversation_id for incremental extraction with drift detection.',
   inputSchema: {
     type: 'object' as const,
     properties: {

@@ -6,11 +6,11 @@
  * Stores the token in a local file for reuse across sessions.
  */
 
-import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { randomBytes } from 'node:crypto';
-import { readFileSync, writeFileSync, mkdirSync, unlinkSync } from 'node:fs';
-import { join } from 'node:path';
+import { mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
+import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { homedir } from 'node:os';
+import { join } from 'node:path';
 
 const TOKEN_DIR = join(homedir(), '.t3x');
 const TOKEN_FILE = join(TOKEN_DIR, 'mcp-token.json');
@@ -40,7 +40,7 @@ function saveToken(serverUrl: string, accessToken: string): void {
   writeFileSync(
     TOKEN_FILE,
     JSON.stringify({ access_token: accessToken, server_url: serverUrl } satisfies StoredToken),
-    'utf-8'
+    { encoding: 'utf-8', mode: 0o600 }
   );
 }
 

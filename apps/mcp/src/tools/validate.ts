@@ -7,10 +7,10 @@
  */
 
 import {
-  SemanticContentSchema,
-  validateIntegrity,
   checkRelationSanity,
   type SemanticContent,
+  SemanticContentSchema,
+  validateIntegrity,
 } from '@t3x-dev/core';
 
 export const validateTool = {

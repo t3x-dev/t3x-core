@@ -627,6 +627,68 @@ docs: update CLAUDE.md with workflow rules
 
 Track markers: `[A1]`, `[A2]` = Track A (Storage/Core), `[B1]`, `[B2]` = Track B (API/UI)
 
+## MCP Server (@t3x-dev/mcp)
+
+T3X MCP Server exposes 47 tools for AI agents (Claude Code, Cursor, etc.) to perform semantic version control.
+
+### Setup
+
+```bash
+# 1. Build
+pnpm build:core && cd packages/api-client && pnpm build && cd ../../apps/mcp && pnpm build
+
+# 2. Start API server
+pnpm dev:api
+
+# 3. Configure Claude Code (project .mcp.json already exists at repo root)
+# Or add to ~/.claude.json:
+{
+  "mcpServers": {
+    "t3x": {
+      "command": "node",
+      "args": ["apps/mcp/dist/index.js"],
+      "env": {
+        "T3X_API_URL": "http://localhost:8000/api",
+        "T3X_WEB_URL": "http://localhost:3000"
+      }
+    }
+  }
+}
+```
+
+### Auth
+
+- **T3X_API_KEY env var** (highest priority): Set in MCP config, skips browser auth
+- **Browser auth**: MCP opens login page, receives token via callback, stores in `~/.t3x/mcp-token.json`
+- **401 auto-retry**: If token expires mid-session, MCP re-authenticates automatically
+
+### Agent Workflow
+
+```
+Extract → Triage → Edit → Commit:
+  t3x_create_project({ name })              → project_id
+  t3x_extract({ project_id, text })         → draft_id
+  t3x_show_draft({ draft_id })              → nodes, revision
+  t3x_yops_schema()                         → learn YOps format
+  t3x_edit_draft({ draft_id, yops, if_revision }) → updated trees
+  t3x_commit({ project_id, draft_id })      → commit_hash
+
+Merge:
+  t3x_merge_prepare({ source_hash, target_hash }) → autoKept, conflicts
+  t3x_merge_execute({ ..., decisions, message })   → merge commit_hash
+```
+
+### MCP Development
+
+```bash
+cd apps/mcp
+pnpm build                    # Build MCP server
+npx vitest run                # Run all tests (unit + E2E)
+pnpm dev                      # Run with tsx (dev mode)
+```
+
+Tool files are in `apps/mcp/src/tools/`, one file per tool. Register new tools in `apps/mcp/src/index.ts`.
+
 ## Quick Debug Commands
 
 ```bash
