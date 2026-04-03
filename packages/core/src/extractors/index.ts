@@ -67,6 +67,14 @@ export {
 export { createRelationExtractor, RelationExtractor } from './relationExtractor';
 export { parseRelationResponse, type RelationItem, RelationParseError } from './relationParser';
 export { buildRelationPrompt } from './relationPrompt';
+// Extraction Strategies
+export {
+  type ExtractionStrategy,
+  ToolUseExtractionStrategy,
+  YamlExtractionStrategy,
+  yopToolDefinitions,
+  toolCallToYOp,
+} from './strategies';
 // Types
 export type {
   AnchorCandidate,
