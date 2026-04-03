@@ -7,8 +7,8 @@
 
 import type { LLMProvider } from '../llm/types';
 import type { SemanticContent } from '../semantic/types';
-import type { YOp } from '../yops/types';
 import type { LintResult } from '../ylint/types';
+import type { YOp } from '../yops/types';
 import type { ExtractionStyleConfig } from './extractionStyleConfig';
 import type { ExtractionStrategy } from './strategies/types';
 import { YamlExtractionStrategy } from './strategies/yaml-strategy';
@@ -42,10 +42,7 @@ export class Extractor {
     this.strategy = strategy ?? new YamlExtractionStrategy();
   }
 
-  async extract(
-    input: ExtractionInput,
-    style?: ExtractionStyleConfig
-  ): Promise<ExtractionResult> {
+  async extract(input: ExtractionInput, style?: ExtractionStyleConfig): Promise<ExtractionResult> {
     return this.strategy.extract(input, this.provider, style);
   }
 }
