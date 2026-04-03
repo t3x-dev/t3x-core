@@ -13,10 +13,11 @@ import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
   AllProvidersFailedError,
   collectLessonsFromAssertions,
+  collectResult,
   GenerationError,
   type GenerationMode,
   isGenerationConfigured,
-  modeGenerate,
+  runOperation,
   validateConstraints,
   validateConstraintsExactOnly,
 } from '@t3x-dev/core';
@@ -36,11 +37,11 @@ import { assertProjectAccess } from '../lib/project-access';
 import {
   generateWithFallback,
   getLLMProvider,
-  getProviderRegistry,
 } from '../lib/provider-registry';
 import { getUserId, recordUsageFireAndForget } from '../lib/usage-tracking';
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
-import { pinoLogger } from '../middleware/logger';
+import { buildPipelineContext } from '../ops/context';
+import { leafGenerateOp } from '../ops/leaf-gen';
 import { ErrorResponseSchema, IdParamSchema } from '../schemas/common';
 import {
   BatchGenerateRequest,
@@ -259,176 +260,29 @@ leavesGenerationRoutes.openapi(generateLeafRoute, async (c) => {
 
     const db = await getDB();
 
-    // Get leaf by ID
+    // Pre-flight: verify leaf exists and project access before entering pipeline
     const leaf = await findLeafById(db, id);
     if (!leaf) {
       return errorResponse(c, 'LEAF_NOT_FOUND', `Leaf not found: ${id}`);
     }
-
-    // Verify project access
     const accessResult = await assertProjectAccess(c, db, leaf.project_id);
     if (accessResult instanceof Response) return accessResult;
 
-    // Get source commit by hash (unified, auto-upgrades V4)
-    const unifiedCommit = await getCommitUnified(db, leaf.commit_hash);
-    if (!unifiedCommit) {
-      return errorResponse(c, 'COMMIT_NOT_FOUND', `Source commit not found: ${leaf.commit_hash}`);
-    }
-    const knowledge = unifiedCommit.content;
-
-    // Collect lessons from historical leaves on the same commit (#4 feedback loop)
-    const historicalLeaves = await findLeavesByCommit(db, leaf.commit_hash);
-    const lessons = collectLessonsFromAssertions(
-      historicalLeaves.map((l) => ({ id: l.id, assertions: l.assertions }))
+    // Run the unified pipeline operation
+    const pipelineCtx = await buildPipelineContext(c, leaf.project_id);
+    const result = await collectResult(
+      runOperation(leafGenerateOp, {
+        leafId: id,
+        mode,
+        userId: getUserId(c) ?? undefined,
+        stylePreferences,
+      }, pipelineCtx)
     );
-
-    // Multi-round generation when mode is 'standard' or 'thorough'
-    let multiRoundResult:
-      | {
-          output: string;
-          rounds: Array<{
-            name: string;
-            round_number: number;
-            constraints_passed: boolean;
-            failed_constraints: string[];
-          }>;
-          total_rounds: number;
-          mode: GenerationMode;
-        }
-      | undefined;
-
-    if (mode !== 'fast') {
-      // Use multi-round pipeline via provider fallback
-      const reg = await getProviderRegistry();
-      multiRoundResult = await reg.tryWithFallback('generation', async (provider) => {
-        const mrResult = await modeGenerate({
-          knowledge,
-          leaf,
-          // biome-ignore lint/suspicious/noExplicitAny: generic error handler
-          provider: provider as any,
-          mode,
-          stylePreferences: stylePreferences
-            ? {
-                tone: stylePreferences.tone,
-                length: stylePreferences.length,
-                formality: stylePreferences.formality,
-              }
-            : undefined,
-        });
-        return { ...mrResult, mode };
-      });
-    }
-
-    // For 'fast' mode or when multi-round is not used, use existing generation path
-    let finalOutput: string;
-    let validationData:
-      | {
-          allPassed: boolean;
-          passedCount: number;
-          failedCount: number;
-          attempts: number;
-          assertions?: Array<{
-            id: string;
-            constraint_id: string;
-            passed: boolean;
-            details: string;
-            lesson?: string;
-          }>;
-        }
-      | undefined;
-    let generationModel = 'unknown';
-
-    if (multiRoundResult) {
-      finalOutput = multiRoundResult.output;
-      generationModel = 'multi-round';
-
-      // Record multi-round usage
-      // biome-ignore lint/suspicious/noExplicitAny: generic error handler
-      const mrUsage = (multiRoundResult as any).usage;
-      if (mrUsage?.inputTokens || mrUsage?.outputTokens) {
-        recordUsageFireAndForget(db, {
-          user_id: getUserId(c) ?? undefined,
-          project_id: leaf.project_id,
-          endpoint: 'leaf_generate',
-          model: generationModel,
-          input_tokens: mrUsage.inputTokens,
-          output_tokens: mrUsage.outputTokens,
-        });
-      }
-    } else {
-      // Generate with automatic provider fallback (existing single-round path)
-      const result = await generateWithFallback({
-        knowledge,
-        leaf,
-        lessons: lessons.length > 0 ? lessons : undefined,
-        additionalInstructions:
-          typeof leaf.config?.user_instruction === 'string'
-            ? leaf.config.user_instruction
-            : undefined,
-      });
-      finalOutput = result.output;
-      generationModel = result.model;
-
-      // Record single-round usage
-      if (result.usage.inputTokens || result.usage.outputTokens) {
-        recordUsageFireAndForget(db, {
-          user_id: getUserId(c) ?? undefined,
-          project_id: leaf.project_id,
-          endpoint: 'leaf_generate',
-          model: result.model,
-          input_tokens: result.usage.inputTokens,
-          output_tokens: result.usage.outputTokens,
-        });
-      }
-
-      if (result.validation) {
-        validationData = {
-          allPassed: result.validation.allPassed,
-          passedCount: result.validation.passedCount,
-          failedCount: result.validation.failedCount,
-          attempts: result.attempts,
-          assertions: result.validation.assertions,
-        };
-      }
-    }
-
-    // Update leaf with output (storage sets generated_at automatically)
-    const updatedLeaf = await updateLeafOutput(db, id, finalOutput);
-
-    if (!updatedLeaf) {
-      return errorResponse(c, 'UPDATE_FAILED', 'Failed to update leaf with generated output');
-    }
-
-    // If auto-validation produced assertions (fast mode), store them on the leaf
-    if (validationData?.assertions) {
-      const leafWithAssertions = await updateLeaf(db, id, {
-        assertions: validationData.assertions,
-      });
-      if (leafWithAssertions) {
-        Object.assign(updatedLeaf, leafWithAssertions);
-      }
-    }
-
-    // Save to generation history (non-blocking - don't fail if history save fails)
-    try {
-      await createLeafHistory(db, {
-        leaf_id: id,
-        output: finalOutput,
-        config: { ...(leaf.config ?? {}), generation_mode: mode },
-        model: generationModel,
-      });
-    } catch (historyErr) {
-      // Log but don't fail - history is supplementary
-      pinoLogger.warn({ err: historyErr }, 'failed to save generation history');
-    }
 
     // Fire webhook event (fire-and-forget)
     webhookDispatcher.dispatch(
       'leaf.generated',
-      {
-        leaf_id: id,
-        project_id: leaf.project_id,
-      },
+      { leaf_id: id, project_id: leaf.project_id },
       leaf.project_id
     );
 
@@ -446,28 +300,14 @@ leavesGenerationRoutes.openapi(generateLeafRoute, async (c) => {
       {
         success: true as const,
         data: {
-          output: finalOutput,
-          generated_at: updatedLeaf.generated_at ?? new Date().toISOString(),
-          ...(validationData
+          output: result.output,
+          generated_at: result.generated_at,
+          ...(result.validation ? { validation: result.validation } : {}),
+          ...(result.rounds
             ? {
-                validation: {
-                  all_passed: validationData.allPassed,
-                  passed_count: validationData.passedCount,
-                  failed_count: validationData.failedCount,
-                  attempts: 1,
-                },
-              }
-            : {}),
-          ...(multiRoundResult
-            ? {
-                rounds: multiRoundResult.rounds.map((r) => ({
-                  name: r.name,
-                  round_number: r.round_number,
-                  constraints_passed: r.constraints_passed,
-                  failed_constraints: r.failed_constraints,
-                })),
-                total_rounds: multiRoundResult.total_rounds,
-                mode: multiRoundResult.mode,
+                rounds: result.rounds,
+                total_rounds: result.total_rounds,
+                mode: result.mode,
               }
             : {}),
         },
