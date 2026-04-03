@@ -3,6 +3,10 @@
  *
  * Pure validation gates for the extraction pipeline.
  * Gates run after YAML parse, before MeaningPipeline.
+ *
+ * 3 gates (not 4): Schema validation (G1 in audit doc) is inherent in
+ * YAML parse + Zod safeParse — ops that fail schema never enter the
+ * gate pipeline. The remaining gates operate on structurally valid ops.
  */
 
 /** A single gate violation */

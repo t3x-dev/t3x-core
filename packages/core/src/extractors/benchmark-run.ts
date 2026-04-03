@@ -7,9 +7,9 @@
  */
 
 import { createClaudeProvider } from '../providers/llm/claude';
+import type { TreeNode } from '../semantic/types';
 import { runBenchmark } from './benchmark';
 import type { ExtractionInput } from './yopsPrompt';
-import type { TreeNode } from '../semantic/types';
 
 // ── Test Cases ──
 
@@ -18,11 +18,14 @@ const CASES: Array<{ name: string; input: ExtractionInput }> = [
     name: 'Simple (2 turns, travel)',
     input: {
       turns: [
-        { role: 'user', content: 'I want to plan a trip to Tokyo for 7 days with a budget of $3000' },
+        {
+          role: 'user',
+          content: 'I want to plan a trip to Tokyo for 7 days with a budget of $3000',
+        },
         {
           role: 'assistant',
           content:
-            'Great choice! For a 7-day Tokyo trip on $3000, here\'s what I recommend:\n- Flights: ~$800 round trip\n- Hotel: ~$100/night ($700 total), try Shinjuku area\n- Food: ~$50/day ($350 total)\n- JR Pass: $280 for 7 days\n- Activities: ~$500 for temples, museums, teamLab\n- Buffer: ~$370 for shopping and extras',
+            "Great choice! For a 7-day Tokyo trip on $3000, here's what I recommend:\n- Flights: ~$800 round trip\n- Hotel: ~$100/night ($700 total), try Shinjuku area\n- Food: ~$50/day ($350 total)\n- JR Pass: $280 for 7 days\n- Activities: ~$500 for temples, museums, teamLab\n- Buffer: ~$370 for shopping and extras",
         },
       ],
     },
@@ -31,11 +34,14 @@ const CASES: Array<{ name: string; input: ExtractionInput }> = [
     name: 'Medium (4 turns, tech comparison)',
     input: {
       turns: [
-        { role: 'user', content: 'Compare React and Vue for building a large enterprise dashboard' },
+        {
+          role: 'user',
+          content: 'Compare React and Vue for building a large enterprise dashboard',
+        },
         {
           role: 'assistant',
           content:
-            'Here\'s a comparison for enterprise dashboards:\n\nReact:\n- Ecosystem: Massive, 200k+ packages\n- Learning curve: Steeper, need to learn JSX, hooks, state management separately\n- Performance: Virtual DOM, good with React.memo and useMemo\n- TypeScript: Excellent support, first-class\n- Testing: Jest + React Testing Library\n- State management: Redux, Zustand, Jotai (many choices)\n\nVue:\n- Ecosystem: Growing, 50k+ packages\n- Learning curve: Gentler, template syntax familiar to HTML devs\n- Performance: Reactive system, automatic optimization\n- TypeScript: Good support since Vue 3, improving\n- Testing: Vitest + Vue Test Utils\n- State management: Pinia (official, simpler)',
+            "Here's a comparison for enterprise dashboards:\n\nReact:\n- Ecosystem: Massive, 200k+ packages\n- Learning curve: Steeper, need to learn JSX, hooks, state management separately\n- Performance: Virtual DOM, good with React.memo and useMemo\n- TypeScript: Excellent support, first-class\n- Testing: Jest + React Testing Library\n- State management: Redux, Zustand, Jotai (many choices)\n\nVue:\n- Ecosystem: Growing, 50k+ packages\n- Learning curve: Gentler, template syntax familiar to HTML devs\n- Performance: Reactive system, automatic optimization\n- TypeScript: Good support since Vue 3, improving\n- Testing: Vitest + Vue Test Utils\n- State management: Pinia (official, simpler)",
         },
         {
           role: 'user',
@@ -56,7 +62,8 @@ const CASES: Array<{ name: string; input: ExtractionInput }> = [
       turns: [
         {
           role: 'user',
-          content: 'We need to build a real-time collaborative document editor. What architecture should we use?',
+          content:
+            'We need to build a real-time collaborative document editor. What architecture should we use?',
         },
         {
           role: 'assistant',
@@ -65,8 +72,7 @@ const CASES: Array<{ name: string; input: ExtractionInput }> = [
         },
         {
           role: 'user',
-          content:
-            'We expect 500 concurrent users editing simultaneously. What about scaling?',
+          content: 'We expect 500 concurrent users editing simultaneously. What about scaling?',
         },
         {
           role: 'assistant',
@@ -115,18 +121,36 @@ async function main() {
       results.push({ name: testCase.name, result });
 
       // Print results
-      console.log(`\nYAML:     ${result.yaml.ok ? 'OK' : `FAIL: ${result.yaml.ok === false ? result.yaml.error : ''}`}`);
-      console.log(`Tool-Use: ${result.toolUse.ok ? 'OK' : `FAIL: ${result.toolUse.ok === false ? result.toolUse.error : ''}`}`);
+      console.log(
+        `\nYAML:     ${result.yaml.ok ? 'OK' : `FAIL: ${result.yaml.ok === false ? result.yaml.error : ''}`}`
+      );
+      console.log(
+        `Tool-Use: ${result.toolUse.ok ? 'OK' : `FAIL: ${result.toolUse.ok === false ? result.toolUse.error : ''}`}`
+      );
 
       console.log(`\n  Metric          | YAML    | Tool-Use | Ratio`);
       console.log(`  ────────────────|─────────|──────────|──────`);
-      console.log(`  Input tokens    | ${pad(result.comparison.yamlTotalTokens - (result.yaml.usage.outputTokens))} | ${pad(result.comparison.toolUseTotalTokens - (result.toolUse.usage.outputTokens))} | -`);
-      console.log(`  Output tokens   | ${pad(result.yaml.usage.outputTokens)} | ${pad(result.toolUse.usage.outputTokens)} | ${(result.toolUse.usage.outputTokens / Math.max(result.yaml.usage.outputTokens, 1)).toFixed(2)}x`);
-      console.log(`  Total tokens    | ${pad(result.comparison.yamlTotalTokens)} | ${pad(result.comparison.toolUseTotalTokens)} | ${result.comparison.tokenRatio.toFixed(2)}x`);
-      console.log(`  Nodes           | ${pad(result.comparison.yamlNodeCount)} | ${pad(result.comparison.toolUseNodeCount)} | -`);
-      console.log(`  Slots           | ${pad(result.comparison.yamlSlotCount)} | ${pad(result.comparison.toolUseSlotCount)} | -`);
-      console.log(`  YOps            | ${pad(result.comparison.yamlYopCount)} | ${pad(result.comparison.toolUseYopCount)} | -`);
-      console.log(`  Duration        | ${pad(result.yamlDurationMs)}ms | ${pad(result.toolUseDurationMs)}ms | ${(result.toolUseDurationMs / Math.max(result.yamlDurationMs, 1)).toFixed(2)}x`);
+      console.log(
+        `  Input tokens    | ${pad(result.comparison.yamlTotalTokens - result.yaml.usage.outputTokens)} | ${pad(result.comparison.toolUseTotalTokens - result.toolUse.usage.outputTokens)} | -`
+      );
+      console.log(
+        `  Output tokens   | ${pad(result.yaml.usage.outputTokens)} | ${pad(result.toolUse.usage.outputTokens)} | ${(result.toolUse.usage.outputTokens / Math.max(result.yaml.usage.outputTokens, 1)).toFixed(2)}x`
+      );
+      console.log(
+        `  Total tokens    | ${pad(result.comparison.yamlTotalTokens)} | ${pad(result.comparison.toolUseTotalTokens)} | ${result.comparison.tokenRatio.toFixed(2)}x`
+      );
+      console.log(
+        `  Nodes           | ${pad(result.comparison.yamlNodeCount)} | ${pad(result.comparison.toolUseNodeCount)} | -`
+      );
+      console.log(
+        `  Slots           | ${pad(result.comparison.yamlSlotCount)} | ${pad(result.comparison.toolUseSlotCount)} | -`
+      );
+      console.log(
+        `  YOps            | ${pad(result.comparison.yamlYopCount)} | ${pad(result.comparison.toolUseYopCount)} | -`
+      );
+      console.log(
+        `  Duration        | ${pad(result.yamlDurationMs)}ms | ${pad(result.toolUseDurationMs)}ms | ${(result.toolUseDurationMs / Math.max(result.yamlDurationMs, 1)).toFixed(2)}x`
+      );
 
       // Print tree snapshots for comparison
       if (result.yaml.ok) {
@@ -151,13 +175,19 @@ async function main() {
   for (const { name, result } of results) {
     const ratio = result.comparison.tokenRatio;
     const pass = ratio > 0 && ratio < 3 && result.toolUse.ok ? 'YES' : 'NO';
-    console.log(`${name.padEnd(30)}| ${result.yaml.ok ? ' OK ' : 'FAIL'} | ${result.toolUse.ok ? ' OK ' : 'FAIL'} | ${ratio.toFixed(2).padStart(11)} | ${pass}`);
+    console.log(
+      `${name.padEnd(30)}| ${result.yaml.ok ? ' OK ' : 'FAIL'} | ${result.toolUse.ok ? ' OK ' : 'FAIL'} | ${ratio.toFixed(2).padStart(11)} | ${pass}`
+    );
   }
 
-  const avgRatio = results.reduce((sum, r) => sum + r.result.comparison.tokenRatio, 0) / Math.max(results.length, 1);
+  const avgRatio =
+    results.reduce((sum, r) => sum + r.result.comparison.tokenRatio, 0) /
+    Math.max(results.length, 1);
   console.log(`\nAverage token ratio: ${avgRatio.toFixed(2)}x`);
   console.log(`Target: < 3.0x`);
-  console.log(`Verdict: ${avgRatio > 0 && avgRatio < 3 ? 'PASS — tool-use is viable' : 'FAIL — tool-use too expensive'}`);
+  console.log(
+    `Verdict: ${avgRatio > 0 && avgRatio < 3 ? 'PASS — tool-use is viable' : 'FAIL — tool-use too expensive'}`
+  );
 }
 
 function pad(n: number): string {
@@ -172,7 +202,10 @@ function printTree(trees: TreeNode[], indent: string, maxLines = 25): void {
     console.log(`${indent}${pad}${node.key}:`);
     lines++;
     for (const [k, v] of Object.entries(node.slots)) {
-      if (lines >= maxLines) { console.log(`${indent}${pad}  ...(truncated)`); return; }
+      if (lines >= maxLines) {
+        console.log(`${indent}${pad}  ...(truncated)`);
+        return;
+      }
       console.log(`${indent}${pad}  ${k}: ${JSON.stringify(v)}`);
       lines++;
     }

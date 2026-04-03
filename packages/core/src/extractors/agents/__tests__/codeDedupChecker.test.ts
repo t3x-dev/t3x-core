@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import type { TreeNode } from '../../../semantic/types';
-import { dedupCheckerAgent } from '../dedupCheckerAgent';
 import type { PipelineContext } from '../../meaningPipeline';
+import { dedupCheckerAgent } from '../dedupCheckerAgent';
 
 function makeCtx(trees: TreeNode[]): PipelineContext {
   return {

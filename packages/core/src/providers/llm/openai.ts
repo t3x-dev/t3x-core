@@ -140,7 +140,10 @@ export class OpenAIProvider implements LLMProvider {
       messages.push({ role: 'system', content: prompt.system });
     }
     for (const msg of prompt.messages) {
-      messages.push({ role: msg.role, content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content) });
+      messages.push({
+        role: msg.role,
+        content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
+      });
     }
 
     const controller = new AbortController();
@@ -219,7 +222,10 @@ export class OpenAIProvider implements LLMProvider {
       messages.push({ role: 'system', content: prompt.system });
     }
     for (const msg of prompt.messages) {
-      messages.push({ role: msg.role, content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content) });
+      messages.push({
+        role: msg.role,
+        content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
+      });
     }
 
     const controller = new AbortController();

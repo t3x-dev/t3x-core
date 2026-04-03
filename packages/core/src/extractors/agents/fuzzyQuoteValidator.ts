@@ -75,9 +75,8 @@ function validateTree(node: TreeNode, turnContents: string[]): TreeNode {
   // Scale confidence by match ratio: all matched = keep original, none matched = LOW_CONFIDENCE
   const baseConfidence = node.confidence ?? 0.8;
   const matchRatio = total > 0 ? matched / total : 1;
-  const adjustedConfidence = total > 0
-    ? LOW_CONFIDENCE + (baseConfidence - LOW_CONFIDENCE) * matchRatio
-    : baseConfidence;
+  const adjustedConfidence =
+    total > 0 ? LOW_CONFIDENCE + (baseConfidence - LOW_CONFIDENCE) * matchRatio : baseConfidence;
 
   return {
     ...node,

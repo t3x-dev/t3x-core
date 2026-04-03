@@ -9,7 +9,7 @@
  * so the user can review in triage. The user decides what to keep.
  */
 
-import type { TreeNode, SlotValue } from '../../semantic/types';
+import type { SlotValue, TreeNode } from '../../semantic/types';
 import type { MeaningAgent, PipelineContext } from '../meaningPipeline';
 
 /** Negative patterns: keyword + captured term */
@@ -75,9 +75,7 @@ export const contradictionCheckerAgent: MeaningAgent = {
   },
 
   async run(ctx: PipelineContext): Promise<PipelineContext> {
-    const userMessages = ctx.turns
-      .filter((t) => t.role === 'user')
-      .map((t) => t.content);
+    const userMessages = ctx.turns.filter((t) => t.role === 'user').map((t) => t.content);
 
     const avoidedTerms = extractAvoidedTerms(userMessages);
     if (avoidedTerms.length === 0) return ctx;
@@ -91,9 +89,9 @@ export const contradictionCheckerAgent: MeaningAgent = {
       }
 
       const updatedSlots = { ...node.slots };
-      updatedSlots._conflicts = conflicts.map(
-        (c) => `${c.slotKey} contains "${c.term}" (user wants to avoid)`
-      ).join('; ');
+      updatedSlots._conflicts = conflicts
+        .map((c) => `${c.slotKey} contains "${c.term}" (user wants to avoid)`)
+        .join('; ');
 
       return { ...node, slots: updatedSlots, children: flaggedChildren };
     }

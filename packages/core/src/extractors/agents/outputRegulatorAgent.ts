@@ -13,8 +13,8 @@
  */
 
 import type { LLMProvider } from '../../llm/types';
-import type { FlatNode, SlotValue } from '../../semantic/types';
 import { flattenTrees, unflattenToTrees } from '../../semantic/tree';
+import type { FlatNode, SlotValue } from '../../semantic/types';
 import type { MeaningAgent, PipelineContext } from '../meaningPipeline';
 
 /**

@@ -80,13 +80,25 @@ export class Compressor {
         return { ok: false, error: 'Compress output must not contain add actions', usage };
       }
       if (change.action === 'remove') {
-        yops.push({ drop: { path: change.target as string, reason: (change.reason as string) ?? 'compressed' } });
+        yops.push({
+          drop: {
+            path: change.target as string,
+            reason: (change.reason as string) ?? 'compressed',
+          },
+        });
       } else if (change.action === 'update') {
         const target = change.target as string;
         const slots = change.slots as Record<string, unknown> | undefined;
         if (slots) {
           for (const [key, value] of Object.entries(slots)) {
-            yops.push({ set: { path: `${target}/${key}`, value: value as string | number | boolean, source: 'compress', from: 'system' } });
+            yops.push({
+              set: {
+                path: `${target}/${key}`,
+                value: value as string | number | boolean,
+                source: 'compress',
+                from: 'system',
+              },
+            });
           }
         }
       }

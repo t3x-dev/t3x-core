@@ -40,21 +40,28 @@ function stripFences(raw: string): string {
  */
 function sanitizeYamlQuotes(text: string): string {
   // Replace smart/curly quotes with straight quotes first
-  let result = text.replace(/[\u201C\u201D\u201E\u201F\u2033]/g, '"').replace(/[\u2018\u2019\u201A\u201B\u2032]/g, "'");
+  let result = text
+    .replace(/[\u201C\u201D\u201E\u201F\u2033]/g, '"')
+    .replace(/[\u2018\u2019\u201A\u201B\u2032]/g, "'");
 
   // Fix nested double quotes inside YAML string values
   // Pattern: a line like `key: "text"nested"text"` → `key: "text「nested」text"`
-  result = result.replace(/^(\s*[\w.]+:\s*)"(.*)"$/gm, (_match, prefix: string, content: string) => {
-    // Check if the content itself contains unescaped double quotes
-    // (i.e., the outer quotes are the YAML delimiters, inner ones are problematic)
-    if (content.includes('"')) {
-      const fixed = content.replace(/"/g, '\u300C').replace(/\u300C([^\u300C]*?)$/g, (m) => m.replace(/\u300C/g, '"'));
-      // Actually, simpler: replace ALL inner quotes with corner brackets
-      const safeContent = content.replace(/"/g, '「').replace(/"/g, '」');
-      return `${prefix}"${safeContent}"`;
+  result = result.replace(
+    /^(\s*[\w.]+:\s*)"(.*)"$/gm,
+    (_match, prefix: string, content: string) => {
+      // Check if the content itself contains unescaped double quotes
+      // (i.e., the outer quotes are the YAML delimiters, inner ones are problematic)
+      if (content.includes('"')) {
+        const fixed = content
+          .replace(/"/g, '\u300C')
+          .replace(/\u300C([^\u300C]*?)$/g, (m) => m.replace(/\u300C/g, '"'));
+        // Actually, simpler: replace ALL inner quotes with corner brackets
+        const safeContent = content.replace(/"/g, '「').replace(/"/g, '」');
+        return `${prefix}"${safeContent}"`;
+      }
+      return `${prefix}"${content}"`;
     }
-    return `${prefix}"${content}"`;
-  });
+  );
 
   return result;
 }
@@ -83,7 +90,7 @@ function applyMetadata(
   slotQuotes: Record<string, string>,
   sourceMap: Record<string, string>,
   confidenceMap: Record<string, number>,
-  prefix: string,
+  prefix: string
 ): void {
   // Apply source and confidence for this node
   if (node.key in sourceMap) {

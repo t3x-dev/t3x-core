@@ -34,7 +34,7 @@ export class ToolUseExtractionStrategy implements ExtractionStrategy {
   async extract(
     input: ExtractionInput,
     provider: LLMProvider,
-    _style?: ExtractionStyleConfig,
+    _style?: ExtractionStyleConfig
   ): Promise<ExtractionResult> {
     if (!provider.generateWithTools) {
       return {
@@ -63,7 +63,7 @@ export class ToolUseExtractionStrategy implements ExtractionStrategy {
         result = await provider.generateWithTools(
           { system: prompt.system, messages },
           yopToolDefinitions,
-          { model: this.model, temperature: TEMPERATURE, maxTokens: MAX_TOKENS },
+          { model: this.model, temperature: TEMPERATURE, maxTokens: MAX_TOKENS }
         );
       } catch (err) {
         // If we already have some YOps from previous rounds, use them
