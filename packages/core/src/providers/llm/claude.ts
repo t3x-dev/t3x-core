@@ -14,6 +14,7 @@ import {
   LLMProviderError,
   type LLMResult,
   type StructuredResult,
+  type ContentBlock,
   type ToolCall,
   type ToolDefinition,
   type ToolUseResult,
@@ -408,7 +409,12 @@ export class ClaudeProvider implements LLMProvider {
             ? ('max_tokens' as const)
             : ('end_turn' as const);
 
-      return { tool_calls: toolCalls, stop_reason: stopReason, usage };
+      return {
+        tool_calls: toolCalls,
+        stop_reason: stopReason,
+        usage,
+        _rawAssistantContent: data.content as ContentBlock[],
+      };
     } catch (error) {
       clearTimeout(timeoutId);
       if (error instanceof LLMProviderError) throw error;

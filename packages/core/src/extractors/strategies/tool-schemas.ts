@@ -39,16 +39,21 @@ const UnsetInputSchema = z
 
 const AddInputSchema = z
   .object({
-    parent: z.string().describe('Parent node path ("" for root)'),
+    parent: z
+      .string()
+      .describe(
+        'Parent node path. Use empty string "" for root-level nodes. Use "parent_key" to nest under an existing node.',
+      ),
     node: z
       .record(z.string(), z.unknown())
-      .refine((n) => Object.keys(n).length === 1, {
-        message: 'node must have exactly one top-level key',
-      })
-      .describe('One-key object: {node_key: {slot: value, ...}}'),
+      .describe(
+        'Object with exactly ONE top-level key: {node_key: {slot: value, ...}}. Example: {hotel: {name: "Hilton", stars: 5}}. Do NOT put multiple keys — call yop_add once per node.',
+      ),
     source: z
-      .record(z.string(), z.string())
-      .describe('Quote per slot: {slot_key: "phrase from conversation"}'),
+      .union([z.record(z.string(), z.string()), z.string()])
+      .describe(
+        'Source quotes. Preferred: object mapping slot keys to quotes, e.g. {name: "called Hilton", stars: "5 stars"}. Also accepts a single string if only one slot.',
+      ),
     from: z.string().min(1).describe('Turn reference (e.g. T1, T3)'),
     confidence: z.number().min(0).max(1).optional().describe('Extraction confidence 0-1'),
   })
@@ -153,9 +158,18 @@ const TOOL_REGISTRY: ToolEntry[] = [
   },
   {
     name: 'yop_add',
-    description: 'Create a new node with initial slots. Use when a new topic is introduced.',
+    description:
+      'Create a new node with initial slots. Use when a new topic is introduced. Call once per node — put exactly ONE key in the node object.',
     schema: AddInputSchema,
-    wrap: (input) => ({ add: input }) as YOp,
+    wrap: (input) => {
+      const raw = input as Record<string, unknown>;
+      // Normalize source: string → Record
+      const source =
+        typeof raw.source === 'string'
+          ? { _: raw.source as string }
+          : (raw.source as Record<string, string>);
+      return { add: { ...raw, source } } as YOp;
+    },
   },
   {
     name: 'yop_drop',
@@ -229,11 +243,11 @@ export const yopToolDefinitions: ToolDefinition[] = TOOL_REGISTRY.map((entry) =>
   input_schema: zodToJsonSchema(entry.schema) as Record<string, unknown>,
 }));
 
-/** Validate a tool call and convert to YOp */
-export function toolCallToYOp(
+/** Validate a tool call and convert to YOp(s). May return multiple YOps for multi-key add nodes. */
+export function toolCallToYOps(
   toolName: string,
-  input: unknown
-): { ok: true; yop: YOp } | { ok: false; error: string } {
+  input: unknown,
+): { ok: true; yops: YOp[] } | { ok: false; error: string } {
   const entry = TOOL_REGISTRY.find((e) => e.name === toolName);
   if (!entry) {
     return { ok: false, error: `Unknown tool: ${toolName}` };
@@ -244,5 +258,41 @@ export function toolCallToYOp(
     return { ok: false, error: `Validation failed for ${toolName}: ${result.error.message}` };
   }
 
-  return { ok: true, yop: entry.wrap(result.data) };
+  // Special handling for add: split multi-key nodes into separate add ops
+  if (toolName === 'yop_add') {
+    const raw = result.data as Record<string, unknown>;
+    const node = raw.node as Record<string, unknown>;
+    const keys = Object.keys(node);
+
+    if (keys.length > 1) {
+      // Normalize source
+      const source =
+        typeof raw.source === 'string'
+          ? ({} as Record<string, string>)
+          : ((raw.source ?? {}) as Record<string, string>);
+
+      const yops: YOp[] = keys.map((key) => ({
+        add: {
+          parent: raw.parent as string,
+          node: { [key]: node[key] },
+          source,
+          from: raw.from as string,
+          ...(raw.confidence !== undefined ? { confidence: raw.confidence as number } : {}),
+        },
+      })) as YOp[];
+      return { ok: true, yops };
+    }
+  }
+
+  return { ok: true, yops: [entry.wrap(result.data)] };
+}
+
+/** Validate a tool call and convert to YOp (legacy single-return API) */
+export function toolCallToYOp(
+  toolName: string,
+  input: unknown,
+): { ok: true; yop: YOp } | { ok: false; error: string } {
+  const result = toolCallToYOps(toolName, input);
+  if (!result.ok) return result;
+  return { ok: true, yop: result.yops[0] };
 }
