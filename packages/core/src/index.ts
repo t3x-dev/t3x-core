@@ -65,6 +65,9 @@ export {
   AgentRegistry,
   // Anchor types
   type AnchorCandidate,
+  // Confidence scoring
+  computeConfidence,
+  type ConfidenceInput,
   type AnchorSource,
   type AnchorType,
   // Relations
