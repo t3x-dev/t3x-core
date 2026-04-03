@@ -3,7 +3,7 @@ import { getClient } from '../client.js';
 export const chatTool = {
   name: 't3x_chat',
   description:
-    'Send a chat message through T3X. Passes messages to the configured LLM provider and returns the response.',
+    'Send a raw LLM chat message through T3X and get a response. This is a plain LLM call -- it does NOT extract or store knowledge. Use t3x_extract instead if you want to capture semantic knowledge from conversation text.',
   inputSchema: {
     type: 'object' as const,
     properties: {

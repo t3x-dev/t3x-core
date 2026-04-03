@@ -3,8 +3,7 @@ import { getClient } from '../client.js';
 export const mergeExecuteTool = {
   name: 't3x_merge_execute',
   description:
-    'Execute a merge with user decisions. Requires the prepared result from t3x_merge_prepare. ' +
-    'Provide decisions for conflicts (source/target/both/edit) and which onlyInSource/onlyInTarget items to keep.',
+    'Execute a merge using the prepared result from t3x_merge_prepare. Decisions must include: conflict_resolutions (array of {index, pick: "source"|"target"|"both"|"edit", edited_text?} for each conflict), keep_only_in_source (boolean[] -- true to include each source-only sentence), and keep_only_in_target (boolean[] -- true to include each target-only sentence). Returns the new merge commit hash.',
   inputSchema: {
     type: 'object' as const,
     properties: {

@@ -2,7 +2,8 @@ import { getClient } from '../client.js';
 
 export const createLeafTool = {
   name: 't3x_create_leaf',
-  description: 'Create a leaf (output template with constraints).',
+  description:
+    'Create a leaf -- an output template attached to a commit that defines how knowledge should be rendered (e.g., as a tweet, email, or article). After creation, add "require" or "exclude" constraints to control content, then use t3x_generate to produce output. Returns the new leaf_id.',
   inputSchema: {
     type: 'object' as const,
     properties: {

@@ -3,8 +3,8 @@ import { getClient } from '../client.js';
 export const mergePrepareTool = {
   name: 't3x_merge_prepare',
   description:
-    'Prepare a merge between two commits. Returns auto-kept items, conflicts, and items only in source/target. ' +
-    'Use this before t3x_merge_execute to understand what needs resolution.',
+    'Prepare a three-way merge between two commits. Returns: autoKept (identical sentences kept automatically), conflicts (similar sentences needing resolution -- pick source, target, both, or edit), onlyInSource (sentences unique to source), and onlyInTarget (sentences unique to target). ' +
+    'Call this before t3x_merge_execute to understand what needs resolution.',
   inputSchema: {
     type: 'object' as const,
     properties: {

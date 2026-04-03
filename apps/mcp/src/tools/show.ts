@@ -2,7 +2,8 @@ import { getClient } from '../client.js';
 
 export const showTool = {
   name: 't3x_show',
-  description: 'Show the current semantic knowledge for a project.',
+  description:
+    'Show the latest committed knowledge for a project on a given branch (not drafts or pending extractions). Returns the accumulated sentences from the branch tip commit. Use t3x_show_commit to inspect a specific historical commit instead.',
   inputSchema: {
     type: 'object' as const,
     properties: {
