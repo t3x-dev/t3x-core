@@ -12,69 +12,69 @@
 
 import type { Operation, PipelineEvent } from '@t3x-dev/core';
 import {
-	runExtractionPipeline,
-	type ExtractionPipelineParams,
-	type PipelineEvent as ExtractionEvent,
+  type PipelineEvent as ExtractionEvent,
+  type ExtractionPipelineParams,
+  runExtractionPipeline,
 } from '../lib/extraction-pipeline';
 import type { ApiPipelineContext } from './context';
 
 export interface ExtractInput {
-	conversationId: string;
-	turnHashes?: string[];
-	driftDecision?: { choice: string; relation?: string; new_topic?: string };
-	topicId?: string;
-	forceExtract?: boolean;
+  conversationId: string;
+  turnHashes?: string[];
+  driftDecision?: { choice: string; relation?: string; new_topic?: string };
+  topicId?: string;
+  forceExtract?: boolean;
 }
 
 export interface ExtractOutput {
-	/** All extraction events collected during the pipeline run. */
-	events: ExtractionEvent[];
-	/** The final 'done' event containing the snapshot, if the pipeline completed. */
-	finalEvent?: ExtractionEvent;
+  /** All extraction events collected during the pipeline run. */
+  events: ExtractionEvent[];
+  /** The final 'done' event containing the snapshot, if the pipeline completed. */
+  finalEvent?: ExtractionEvent;
 }
 
 export const extractOp: Operation<ExtractInput, ExtractOutput> = {
-	name: 'extract',
-	async *run(input: ExtractInput, ctx): AsyncGenerator<PipelineEvent, ExtractOutput> {
-		const { conversationId, turnHashes, driftDecision, topicId, forceExtract } = input;
-		const { projectId, userId } = ctx as ApiPipelineContext;
+  name: 'extract',
+  async *run(input: ExtractInput, ctx): AsyncGenerator<PipelineEvent, ExtractOutput> {
+    const { conversationId, turnHashes, driftDecision, topicId, forceExtract } = input;
+    const { projectId, userId } = ctx as ApiPipelineContext;
 
-		yield { type: 'step_start', step: 'extract', timestamp: Date.now() };
+    yield { type: 'step_start', step: 'extract', timestamp: Date.now() };
 
-		const events: ExtractionEvent[] = [];
-		let finalEvent: ExtractionEvent | undefined;
+    const events: ExtractionEvent[] = [];
+    let finalEvent: ExtractionEvent | undefined;
 
-		const params: ExtractionPipelineParams = {
-			conversationId,
-			projectId,
-			turnHashes,
-			driftDecision,
-			topicId,
-			forceExtract,
-			userId,
-		};
+    const params: ExtractionPipelineParams = {
+      conversationId,
+      projectId,
+      turnHashes,
+      driftDecision,
+      topicId,
+      forceExtract,
+      userId,
+    };
 
-		const pipeline = runExtractionPipeline(params);
+    const pipeline = runExtractionPipeline(params);
 
-		for await (const event of pipeline) {
-			events.push(event);
+    for await (const event of pipeline) {
+      events.push(event);
 
-			// Re-yield each extraction event as a step_done with the extraction
-			// event type as the step name and its data in the data field.
-			yield {
-				type: 'step_done',
-				step: event.type,
-				data: event.data,
-				timestamp: Date.now(),
-			};
+      // Re-yield each extraction event as a step_done with the extraction
+      // event type as the step name and its data in the data field.
+      yield {
+        type: 'step_done',
+        step: event.type,
+        data: event.data,
+        timestamp: Date.now(),
+      };
 
-			if (event.type === 'done') {
-				finalEvent = event;
-			}
-		}
+      if (event.type === 'done') {
+        finalEvent = event;
+      }
+    }
 
-		yield { type: 'step_done', step: 'extract', timestamp: Date.now() };
+    yield { type: 'step_done', step: 'extract', timestamp: Date.now() };
 
-		return { events, finalEvent };
-	},
+    return { events, finalEvent };
+  },
 };

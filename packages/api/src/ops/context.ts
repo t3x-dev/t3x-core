@@ -7,8 +7,8 @@ import { getProviderRegistry } from '../lib/provider-registry';
  * Narrowed OpsPipelineContext with concrete types for the API layer.
  */
 export interface ApiPipelineContext extends OpsPipelineContext {
-	db: Awaited<ReturnType<typeof getDB>>;
-	providerRegistry: Awaited<ReturnType<typeof getProviderRegistry>>;
+  db: Awaited<ReturnType<typeof getDB>>;
+  providerRegistry: Awaited<ReturnType<typeof getProviderRegistry>>;
 }
 
 /**
@@ -16,18 +16,18 @@ export interface ApiPipelineContext extends OpsPipelineContext {
  * Called by route handlers before runOperation().
  */
 export async function buildPipelineContext(
-	c: HonoContext,
-	projectId: string,
+  c: HonoContext,
+  projectId: string
 ): Promise<ApiPipelineContext> {
-	const db = await getDB();
-	const providerRegistry = await getProviderRegistry();
-	const userId = c.get('userId') as string | undefined;
+  const db = await getDB();
+  const providerRegistry = await getProviderRegistry();
+  const userId = c.get('userId') as string | undefined;
 
-	return {
-		db,
-		projectId,
-		userId,
-		providerRegistry,
-		abortSignal: c.req.raw.signal,
-	};
+  return {
+    db,
+    projectId,
+    userId,
+    providerRegistry,
+    abortSignal: c.req.raw.signal,
+  };
 }

@@ -1,15 +1,16 @@
 // Unified Pipeline Operations — barrel export
-export { buildPipelineContext, type ApiPipelineContext } from './context';
-export { yopsApplyOp, type YopsApplyInput, type YopsApplyOutput } from './yops-apply';
-export { commitOp, type CommitInput, type CommitOutput } from './commit';
-export { diffOp, type DiffInput, type DiffOutput } from './diff';
-export { leafGenerateOp, type LeafGenInput, type LeafGenOutput } from './leaf-gen';
+
+export { type CommitInput, type CommitOutput, commitOp } from './commit';
+export { type ApiPipelineContext, buildPipelineContext } from './context';
+export { type DiffInput, type DiffOutput, diffOp } from './diff';
+export { type ExtractInput, type ExtractOutput, extractOp } from './extract';
+export { type LeafGenInput, type LeafGenOutput, leafGenerateOp } from './leaf-gen';
 export {
-	mergePrepareOp,
-	mergeExecuteOp,
-	type MergePrepareInput,
-	type MergePrepareOutput,
-	type MergeExecuteInput,
-	type MergeExecuteOutput,
+  type MergeExecuteInput,
+  type MergeExecuteOutput,
+  type MergePrepareInput,
+  type MergePrepareOutput,
+  mergeExecuteOp,
+  mergePrepareOp,
 } from './merge';
-export { extractOp, type ExtractInput, type ExtractOutput } from './extract';
+export { type YopsApplyInput, type YopsApplyOutput, yopsApplyOp } from './yops-apply';
