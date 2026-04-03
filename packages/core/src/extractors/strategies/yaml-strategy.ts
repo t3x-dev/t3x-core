@@ -27,85 +27,85 @@ const TEMPERATURE = 0.1;
 const MAX_TOKENS = 8192;
 
 export class YamlExtractionStrategy implements ExtractionStrategy {
-	readonly name = 'yaml';
+  readonly name = 'yaml';
 
-	async extract(
-		input: ExtractionInput,
-		provider: LLMProvider,
-		style?: ExtractionStyleConfig,
-	): Promise<ExtractionResult> {
-		const baseSnapshot: SemanticContent = input.snapshot ?? { trees: [], relations: [] };
-		let lastError = '';
-		const totalUsage = { inputTokens: 0, outputTokens: 0 };
+  async extract(
+    input: ExtractionInput,
+    provider: LLMProvider,
+    style?: ExtractionStyleConfig
+  ): Promise<ExtractionResult> {
+    const baseSnapshot: SemanticContent = input.snapshot ?? { trees: [], relations: [] };
+    let lastError = '';
+    const totalUsage = { inputTokens: 0, outputTokens: 0 };
 
-		for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-			const { systemPrompt, userPrompt } = buildYOpsPrompt(input, style);
-			const combinedPrompt = `${systemPrompt}\n\n---\n\n${userPrompt}`;
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      const { systemPrompt, userPrompt } = buildYOpsPrompt(input, style);
+      const combinedPrompt = `${systemPrompt}\n\n---\n\n${userPrompt}`;
 
-			let raw: string;
-			try {
-				const genResult = await provider.generate(combinedPrompt, {
-					temperature: TEMPERATURE,
-					maxTokens: MAX_TOKENS,
-				});
-				raw = genResult.text;
-				totalUsage.inputTokens += genResult.usage.inputTokens;
-				totalUsage.outputTokens += genResult.usage.outputTokens;
-			} catch (err) {
-				lastError = `LLM provider error: ${err instanceof Error ? err.message : String(err)}`;
-				continue;
-			}
+      let raw: string;
+      try {
+        const genResult = await provider.generate(combinedPrompt, {
+          temperature: TEMPERATURE,
+          maxTokens: MAX_TOKENS,
+        });
+        raw = genResult.text;
+        totalUsage.inputTokens += genResult.usage.inputTokens;
+        totalUsage.outputTokens += genResult.usage.outputTokens;
+      } catch (err) {
+        lastError = `LLM provider error: ${err instanceof Error ? err.message : String(err)}`;
+        continue;
+      }
 
-			const parseResult = parseYOpsOutput(raw);
-			if (!parseResult.ok) {
-				lastError = `Failed to parse LLM output: ${parseResult.error}`;
-				continue;
-			}
+      const parseResult = parseYOpsOutput(raw);
+      if (!parseResult.ok) {
+        lastError = `Failed to parse LLM output: ${parseResult.error}`;
+        continue;
+      }
 
-			// Pre-apply gates: source + dedup — filter out rejected YOps
-			const sourceGate = validateSources(parseResult.yops, input.turns);
-			const dedupGate = validateDedup(parseResult.yops);
+      // Pre-apply gates: source + dedup — filter out rejected YOps
+      const sourceGate = validateSources(parseResult.yops, input.turns);
+      const dedupGate = validateDedup(parseResult.yops);
 
-			const rejectedIndices = new Set(
-				[...sourceGate.violations, ...dedupGate.violations]
-					.filter((v) => v.severity === 'error' && v.opIndex >= 0)
-					.map((v) => v.opIndex),
-			);
+      const rejectedIndices = new Set(
+        [...sourceGate.violations, ...dedupGate.violations]
+          .filter((v) => v.severity === 'error' && v.opIndex >= 0)
+          .map((v) => v.opIndex)
+      );
 
-			const validYOps =
-				rejectedIndices.size > 0
-					? parseResult.yops.filter((_, i) => !rejectedIndices.has(i))
-					: parseResult.yops;
+      const validYOps =
+        rejectedIndices.size > 0
+          ? parseResult.yops.filter((_, i) => !rejectedIndices.has(i))
+          : parseResult.yops;
 
-			if (validYOps.length === 0 && parseResult.yops.length > 0) {
-				lastError = `All ${parseResult.yops.length} YOps rejected by gates: ${[...sourceGate.violations, ...dedupGate.violations].map((v) => v.message).join('; ')}`;
-				continue;
-			}
+      if (validYOps.length === 0 && parseResult.yops.length > 0) {
+        lastError = `All ${parseResult.yops.length} YOps rejected by gates: ${[...sourceGate.violations, ...dedupGate.violations].map((v) => v.message).join('; ')}`;
+        continue;
+      }
 
-			// Apply only validated YOps
-			const applyResult = applyYOps(baseSnapshot, validYOps);
-			if (!applyResult.ok) {
-				lastError = `Failed to apply YOps: ${applyResult.error?.message ?? 'unknown'}`;
-				continue;
-			}
+      // Apply only validated YOps
+      const applyResult = applyYOps(baseSnapshot, validYOps);
+      if (!applyResult.ok) {
+        lastError = `Failed to apply YOps: ${applyResult.error?.message ?? 'unknown'}`;
+        continue;
+      }
 
-			const snapshot: SemanticContent = {
-				trees: applyResult.trees,
-				relations: applyResult.relations,
-			};
+      const snapshot: SemanticContent = {
+        trees: applyResult.trees,
+        relations: applyResult.relations,
+      };
 
-			// Post-apply validation (same as before)
-			const validation = validateIntegrity(snapshot);
-			if (!validation.valid) {
-				lastError = `Validation failed: ${validation.errors.map((e) => e.message).join('; ')}`;
-				continue;
-			}
+      // Post-apply validation (same as before)
+      const validation = validateIntegrity(snapshot);
+      if (!validation.valid) {
+        lastError = `Validation failed: ${validation.errors.map((e) => e.message).join('; ')}`;
+        continue;
+      }
 
-			const lintResult = ylint(snapshot);
+      const lintResult = ylint(snapshot);
 
-			return { ok: true, yops: validYOps, snapshot, usage: totalUsage, lintResult };
-		}
+      return { ok: true, yops: validYOps, snapshot, usage: totalUsage, lintResult };
+    }
 
-		return { ok: false, error: lastError, usage: totalUsage };
-	}
+    return { ok: false, error: lastError, usage: totalUsage };
+  }
 }

@@ -1,5 +1,5 @@
-export type { GateReport, GateResult, GateViolation } from './types';
-export { validateSources } from './source';
 export { validateDedup } from './dedup';
-export { validateStructure } from './structure';
 export { runGates } from './runner';
+export { validateSources } from './source';
+export { validateStructure } from './structure';
+export type { GateReport, GateResult, GateViolation } from './types';

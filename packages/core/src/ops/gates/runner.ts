@@ -14,7 +14,7 @@ import type { GateReport } from './types';
 export function runGates(
   yops: YOp[],
   snapshot: SemanticContent,
-  turns: Array<{ role: string; content: string }>,
+  turns: Array<{ role: string; content: string }>
 ): GateReport {
   const source = validateSources(yops, turns);
   const dedup = validateDedup(yops);
@@ -24,9 +24,7 @@ export function runGates(
 
   const rejectedOpIndices = [
     ...new Set(
-      allViolations
-        .filter((v) => v.severity === 'error' && v.opIndex >= 0)
-        .map((v) => v.opIndex),
+      allViolations.filter((v) => v.severity === 'error' && v.opIndex >= 0).map((v) => v.opIndex)
     ),
   ].sort((a, b) => a - b);
 
