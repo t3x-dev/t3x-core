@@ -68,27 +68,97 @@ vi.mock('@t3x-dev/api-client', () => ({
       turn_count: 5,
     }),
     exportLedger: vi.fn().mockResolvedValue('# Project Export\n...'),
+    getProject: vi.fn().mockResolvedValue({
+      id: 'proj_1',
+      name: 'Test Project',
+      description: 'A test',
+      commit_count: 3,
+      conversation_count: 2,
+    }),
+    restoreProject: vi.fn().mockResolvedValue({
+      id: 'proj_1',
+      name: 'Test Project',
+      deleted_at: null,
+    }),
+    getConversation: vi.fn().mockResolvedValue({
+      id: 'conv_1',
+      project_id: 'proj_1',
+      title: 'Test Conversation',
+      turn_count: 5,
+    }),
+    deleteConversation: vi.fn().mockResolvedValue(undefined),
+    listTurns: vi.fn().mockResolvedValue({
+      turns: [
+        { turn_hash: 'sha256:t1', role: 'user', content: 'Hello' },
+        { turn_hash: 'sha256:t2', role: 'assistant', content: 'Hi there' },
+      ],
+      total: 2,
+    }),
+    getCurrentBranch: vi.fn().mockResolvedValue({
+      name: 'main',
+      head_hash: 'sha256:abc',
+    }),
+    listDrafts: vi.fn().mockResolvedValue({
+      drafts: [{ id: 'draft_1', status: 'editing', revision: 2 }],
+      total: 1,
+    }),
+    deleteDraft: vi.fn().mockResolvedValue(undefined),
+    chat: vi.fn().mockResolvedValue({
+      conversation_id: 'conv_1',
+      response: 'Hello from LLM',
+      turn_hash: 'sha256:t3',
+    }),
+    listWebhooks: vi
+      .fn()
+      .mockResolvedValue([
+        { id: 'wh_1', url: 'https://example.com/hook', events: ['commit.created'] },
+      ]),
+    createWebhook: vi.fn().mockResolvedValue({
+      id: 'wh_new',
+      url: 'https://example.com/hook',
+      events: ['commit.created'],
+    }),
+    deleteWebhook: vi.fn().mockResolvedValue(undefined),
+    createShareToken: vi.fn().mockResolvedValue({
+      token: 'share_abc123',
+      entity_type: 'project',
+      entity_id: 'proj_1',
+      expires_at: '2026-05-01T00:00:00Z',
+    }),
   })),
 }));
 
+import { handleChat } from '../tools/chat.js';
 import { handleCheck } from '../tools/check.js';
 import { handleCommit } from '../tools/commit.js';
 import { handleCreateBranch } from '../tools/create-branch.js';
 import { handleCreateLeaf } from '../tools/create-leaf.js';
 import { handleCreateProject } from '../tools/create-project.js';
+import { handleCreateShare } from '../tools/create-share.js';
+import { handleCreateWebhook } from '../tools/create-webhook.js';
+import { handleCurrentBranch } from '../tools/current-branch.js';
+import { handleDeleteConversation } from '../tools/delete-conversation.js';
+import { handleDeleteDraft } from '../tools/delete-draft.js';
 import { handleDeleteProject } from '../tools/delete-project.js';
+import { handleDeleteWebhook } from '../tools/delete-webhook.js';
 import { handleDiff } from '../tools/diff.js';
 import { handleEditDraft } from '../tools/edit-draft.js';
 import { handleExport } from '../tools/export.js';
 import { handleExtract } from '../tools/extract.js';
 import { handleGenerate } from '../tools/generate.js';
+import { handleGetConversation } from '../tools/get-conversation.js';
 import { handleImportUrl } from '../tools/import-url.js';
 import { handleListBranches } from '../tools/list-branches.js';
 import { handleListCommits } from '../tools/list-commits.js';
+import { handleListDrafts } from '../tools/list-drafts.js';
 import { handleListLeaves } from '../tools/list-leaves.js';
 import { handleListProjects } from '../tools/list-projects.js';
+import { handleListTurns } from '../tools/list-turns.js';
+import { handleListWebhooks } from '../tools/list-webhooks.js';
+import { handleRestoreProject } from '../tools/restore-project.js';
 import { handleShow } from '../tools/show.js';
 import { handleShowDraft } from '../tools/show-draft.js';
+import { handleShowProject } from '../tools/show-project.js';
 import { handleSwitchBranch } from '../tools/switch-branch.js';
 
 beforeEach(() => {
@@ -295,5 +365,138 @@ describe('handleExport', () => {
   it('exports project as text', async () => {
     const result = await handleExport({ project_id: 'proj_test' });
     expect(result.content[0].text).toContain('# Project Export');
+  });
+});
+
+describe('handleShowProject', () => {
+  it('returns project details with stats', async () => {
+    const result = await handleShowProject({ project_id: 'proj_1' });
+    const data = JSON.parse(result.content[0].text);
+    expect(data.id).toBe('proj_1');
+    expect(data.name).toBe('Test Project');
+    expect(data.commit_count).toBe(3);
+  });
+});
+
+describe('handleRestoreProject', () => {
+  it('restores project and returns result', async () => {
+    const result = await handleRestoreProject({ project_id: 'proj_1' });
+    const data = JSON.parse(result.content[0].text);
+    expect(data.id).toBe('proj_1');
+    expect(data.deleted_at).toBeNull();
+  });
+});
+
+describe('handleGetConversation', () => {
+  it('returns conversation details', async () => {
+    const result = await handleGetConversation({ conversation_id: 'conv_1' });
+    const data = JSON.parse(result.content[0].text);
+    expect(data.id).toBe('conv_1');
+    expect(data.title).toBe('Test Conversation');
+    expect(data.turn_count).toBe(5);
+  });
+});
+
+describe('handleDeleteConversation', () => {
+  it('deletes conversation and returns confirmation', async () => {
+    const result = await handleDeleteConversation({ conversation_id: 'conv_1' });
+    const data = JSON.parse(result.content[0].text);
+    expect(data.deleted).toBe(true);
+    expect(data.conversation_id).toBe('conv_1');
+  });
+});
+
+describe('handleListTurns', () => {
+  it('returns turns list with total', async () => {
+    const result = await handleListTurns({ conversation_id: 'conv_1' });
+    const data = JSON.parse(result.content[0].text);
+    expect(data.turns).toHaveLength(2);
+    expect(data.turns[0].role).toBe('user');
+    expect(data.turns[1].role).toBe('assistant');
+    expect(data.total).toBe(2);
+  });
+});
+
+describe('handleCurrentBranch', () => {
+  it('returns current branch info', async () => {
+    const result = await handleCurrentBranch({ project_id: 'proj_test' });
+    const data = JSON.parse(result.content[0].text);
+    expect(data.name).toBe('main');
+    expect(data.head_hash).toBe('sha256:abc');
+  });
+});
+
+describe('handleListDrafts', () => {
+  it('returns drafts list with total', async () => {
+    const result = await handleListDrafts({ project_id: 'proj_test' });
+    const data = JSON.parse(result.content[0].text);
+    expect(data.drafts).toHaveLength(1);
+    expect(data.drafts[0].id).toBe('draft_1');
+    expect(data.total).toBe(1);
+  });
+});
+
+describe('handleDeleteDraft', () => {
+  it('deletes draft and returns confirmation', async () => {
+    const result = await handleDeleteDraft({ draft_id: 'draft_1' });
+    const data = JSON.parse(result.content[0].text);
+    expect(data.deleted).toBe(true);
+    expect(data.draft_id).toBe('draft_1');
+  });
+});
+
+describe('handleChat', () => {
+  it('sends chat message and returns response', async () => {
+    const result = await handleChat({
+      project_id: 'proj_test',
+      message: 'Hello',
+    });
+    const data = JSON.parse(result.content[0].text);
+    expect(data.conversation_id).toBe('conv_1');
+    expect(data.response).toBe('Hello from LLM');
+  });
+});
+
+describe('handleListWebhooks', () => {
+  it('returns webhooks list', async () => {
+    const result = await handleListWebhooks({ project_id: 'proj_test' });
+    const data = JSON.parse(result.content[0].text);
+    expect(data).toHaveLength(1);
+    expect(data[0].id).toBe('wh_1');
+    expect(data[0].events).toContain('commit.created');
+  });
+});
+
+describe('handleCreateWebhook', () => {
+  it('creates webhook and returns result', async () => {
+    const result = await handleCreateWebhook({
+      url: 'https://example.com/hook',
+      events: ['commit.created'],
+    });
+    const data = JSON.parse(result.content[0].text);
+    expect(data.id).toBe('wh_new');
+    expect(data.url).toBe('https://example.com/hook');
+  });
+});
+
+describe('handleDeleteWebhook', () => {
+  it('deletes webhook and returns confirmation', async () => {
+    const result = await handleDeleteWebhook({ webhook_id: 'wh_1' });
+    const data = JSON.parse(result.content[0].text);
+    expect(data.deleted).toBe(true);
+    expect(data.webhook_id).toBe('wh_1');
+  });
+});
+
+describe('handleCreateShare', () => {
+  it('creates share token and returns result', async () => {
+    const result = await handleCreateShare({
+      entity_type: 'project',
+      entity_id: 'proj_1',
+    });
+    const data = JSON.parse(result.content[0].text);
+    expect(data.token).toBe('share_abc123');
+    expect(data.entity_type).toBe('project');
+    expect(data.entity_id).toBe('proj_1');
   });
 });
