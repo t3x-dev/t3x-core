@@ -4,11 +4,14 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { browserAuth, clearStoredToken, ensureAuth } from './auth.js';
 import { getBaseUrl, getClient, updateToken } from './client.js';
+import { addTurnTool, handleAddTurn } from './tools/add-turn.js';
 import { checkTool, handleCheck } from './tools/check.js';
 import { commitTool, handleCommit } from './tools/commit.js';
 import { createBranchTool, handleCreateBranch } from './tools/create-branch.js';
+import { createConversationTool, handleCreateConversation } from './tools/create-conversation.js';
 import { createLeafTool, handleCreateLeaf } from './tools/create-leaf.js';
 import { createProjectTool, handleCreateProject } from './tools/create-project.js';
+import { deleteLeafTool, handleDeleteLeaf } from './tools/delete-leaf.js';
 import { deleteProjectTool, handleDeleteProject } from './tools/delete-project.js';
 import { diffTool, handleDiff } from './tools/diff.js';
 import { editDraftTool, handleEditDraft } from './tools/edit-draft.js';
@@ -18,11 +21,16 @@ import { generateTool, handleGenerate } from './tools/generate.js';
 import { handleImportUrl, importUrlTool } from './tools/import-url.js';
 import { handleListBranches, listBranchesTool } from './tools/list-branches.js';
 import { handleListCommits, listCommitsTool } from './tools/list-commits.js';
+import { handleListConversations, listConversationsTool } from './tools/list-conversations.js';
 import { handleListLeaves, listLeavesTool } from './tools/list-leaves.js';
 import { handleListProjects, listProjectsTool } from './tools/list-projects.js';
+import { handleMergeExecute, mergeExecuteTool } from './tools/merge-execute.js';
+import { handleMergePrepare, mergePrepareTool } from './tools/merge-prepare.js';
 import { handleSchema, schemaTool } from './tools/schema.js';
 import { handleShow, showTool } from './tools/show.js';
+import { handleShowCommit, showCommitTool } from './tools/show-commit.js';
 import { handleShowDraft, showDraftTool } from './tools/show-draft.js';
+import { handleShowLeaf, showLeafTool } from './tools/show-leaf.js';
 import { handleSwitchBranch, switchBranchTool } from './tools/switch-branch.js';
 import { handleValidate, validateTool } from './tools/validate.js';
 import { handleYopsSchema, yopsSchemaTool } from './tools/yops-schema.js';
@@ -50,6 +58,14 @@ const tools = [
   createLeafTool,
   importUrlTool,
   exportTool,
+  showCommitTool,
+  mergePrepareTool,
+  mergeExecuteTool,
+  listConversationsTool,
+  createConversationTool,
+  addTurnTool,
+  showLeafTool,
+  deleteLeafTool,
 ];
 
 const handlers: Record<
@@ -78,6 +94,14 @@ const handlers: Record<
   [createLeafTool.name]: handleCreateLeaf,
   [importUrlTool.name]: handleImportUrl,
   [exportTool.name]: handleExport,
+  [showCommitTool.name]: handleShowCommit,
+  [mergePrepareTool.name]: handleMergePrepare,
+  [mergeExecuteTool.name]: handleMergeExecute,
+  [listConversationsTool.name]: handleListConversations,
+  [createConversationTool.name]: handleCreateConversation,
+  [addTurnTool.name]: handleAddTurn,
+  [showLeafTool.name]: handleShowLeaf,
+  [deleteLeafTool.name]: handleDeleteLeaf,
 };
 
 const server = new Server({ name: 't3x-mcp', version: '0.1.0' }, { capabilities: { tools: {} } });
