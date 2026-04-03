@@ -14,7 +14,7 @@
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import type { SemanticContent, YOp } from '@t3x-dev/core';
-import { extractOpsFromEntries, verifyReplay } from '@t3x-dev/core';
+import { collectResult, extractOpsFromEntries, runOperation, verifyReplay } from '@t3x-dev/core';
 import {
   clearManualEditedFlags,
   collectYOpsForCommitRange,
@@ -28,6 +28,8 @@ import {
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { commitOp } from '../ops/commit';
+import { buildPipelineContext } from '../ops/context';
 import {
   ErrorResponseSchema,
   HashParamSchema,
@@ -137,21 +139,23 @@ const createCommitRoute = createRoute({
 
 commitRoutes.openapi(createCommitRoute, async (c) => {
   const body = c.req.valid('json');
-  const db = await getDB();
 
   try {
-    const commit = await createCommit(db, {
-      project_id: body.project_id,
-      // biome-ignore lint/suspicious/noExplicitAny: generic error handler
-      content: body.content as any,
-      branch: body.branch,
-      parents: body.parents,
-      message: body.message,
-      author: body.author ?? { type: 'human' as const, name: 'cli' },
-      provenance: body.provenance,
-      yops_log_ids: body.yops_log_ids ?? [],
-      sources: body.sources,
-    });
+    const ctx = await buildPipelineContext(c, body.project_id);
+    const commit = await collectResult(
+      runOperation(commitOp, {
+        project_id: body.project_id,
+        // biome-ignore lint/suspicious/noExplicitAny: content schema validated by Zod
+        content: body.content as any,
+        branch: body.branch,
+        parents: body.parents,
+        message: body.message,
+        author: body.author,
+        provenance: body.provenance,
+        yops_log_ids: body.yops_log_ids,
+        sources: body.sources,
+      }, ctx),
+    );
 
     return c.json({ success: true as const, data: { commit } }, 200);
   } catch (err) {
