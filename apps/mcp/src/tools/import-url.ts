@@ -2,7 +2,8 @@ import { getClient } from '../client.js';
 
 export const importUrlTool = {
   name: 't3x_import_url',
-  description: 'Import a conversation from a URL into a project.',
+  description:
+    'Import a conversation from an external URL into a project. Supports ChatGPT share links (chatgpt.com/share/...) and other supported formats. The imported conversation is stored as turns and can then be extracted with t3x_extract.',
   inputSchema: {
     type: 'object' as const,
     properties: {

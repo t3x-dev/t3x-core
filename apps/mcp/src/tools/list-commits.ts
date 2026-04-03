@@ -3,7 +3,7 @@ import { getClient } from '../client.js';
 export const listCommitsTool = {
   name: 't3x_list_commits',
   description:
-    'List commits for a project. Returns commit hash, message, author, date, and tree count.',
+    "List commits for a project on a branch, ordered newest-first. Returns each commit's hash, message, author, date, and sentence count. Use the returned hashes with t3x_show_commit to inspect content or with t3x_merge_prepare to compare two commits.",
   inputSchema: {
     type: 'object' as const,
     properties: {

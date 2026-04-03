@@ -2,7 +2,8 @@ import { getClient } from '../client.js';
 
 export const generateTool = {
   name: 't3x_generate',
-  description: 'Generate output text from a leaf using committed knowledge as context.',
+  description:
+    'Generate output text from a leaf by sending its committed knowledge and constraints to an LLM. The leaf must already exist (use t3x_create_leaf) and be attached to a commit with sentences. Returns the generated text and assertion results for each constraint.',
   inputSchema: {
     type: 'object' as const,
     properties: {

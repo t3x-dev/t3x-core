@@ -40,7 +40,7 @@ function saveToken(serverUrl: string, accessToken: string): void {
   writeFileSync(
     TOKEN_FILE,
     JSON.stringify({ access_token: accessToken, server_url: serverUrl } satisfies StoredToken),
-    'utf-8'
+    { encoding: 'utf-8', mode: 0o600 }
   );
 }
 
