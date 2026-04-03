@@ -7,14 +7,17 @@
  * Pre-apply gate: operates on raw YOp[] before they're applied to the tree.
  */
 
-import type { GateResult, GateViolation } from './types';
 import type { YOp } from '../../yops/types';
+import type { GateResult, GateViolation } from './types';
 
 const TOKEN_OVERLAP_THRESHOLD = 0.5;
 
 function tokenize(text: string): Set<string> {
   return new Set(
-    text.toLowerCase().split(/\W+/).filter((w) => w.length >= 2),
+    text
+      .toLowerCase()
+      .split(/\W+/)
+      .filter((w) => w.length >= 2)
   );
 }
 
@@ -38,7 +41,7 @@ function quoteMatchesTurns(quote: string, turnContents: string[]): boolean {
 
 /** Extract source and from fields from a YOp (if present) */
 function getSourceFields(
-  op: YOp,
+  op: YOp
 ): { source?: string | Record<string, string>; from?: string } | null {
   if ('set' in op) return { source: op.set.source, from: op.set.from };
   if ('add' in op) return { source: op.add.source, from: op.add.from };
@@ -47,7 +50,7 @@ function getSourceFields(
 
 export function validateSources(
   yops: YOp[],
-  turns: Array<{ role: string; content: string }>,
+  turns: Array<{ role: string; content: string }>
 ): GateResult {
   const violations: GateViolation[] = [];
   const turnContents = turns.map((t) => t.content);
@@ -74,9 +77,7 @@ export function validateSources(
     // Validate source quotes
     if (fields.source) {
       const quotes: string[] =
-        typeof fields.source === 'string'
-          ? [fields.source]
-          : Object.values(fields.source);
+        typeof fields.source === 'string' ? [fields.source] : Object.values(fields.source);
 
       for (const quote of quotes) {
         if (quote.length > 0 && !quoteMatchesTurns(quote, turnContents)) {
