@@ -1,15 +1,15 @@
 /**
  * useRealtimeSync — WebSocket hook for real-time state sync.
  *
- * Opens a WebSocket connection to the API when viewing a conversation.
- * Receives events when backend state changes (extraction, yops, commits)
- * and triggers appropriate refetches to keep the UI in sync.
+ * Opens a WebSocket connection when viewing a conversation.
+ * Receives events when backend state changes from OTHER sources
+ * (CLI, MCP, another tab) and triggers appropriate state transitions.
  *
- * Works regardless of what triggered the change:
- *   - WebUI Extract button → still works as before (plus WS notification)
- *   - CLI extraction → WS pushes event → frontend refetches
- *   - MCP extraction → WS pushes event → frontend refetches
- *   - Another browser tab → WS pushes event → both tabs update
+ * Design principle:
+ *   - UI-initiated actions → use HTTP response directly (no WS needed)
+ *   - External actions → WS notification → refetch → same state machine
+ *   - The state machine is: idle → yops → triage → review → committing → idle
+ *   - WS events NEVER skip steps in the state machine
  */
 
 'use client';
@@ -40,7 +40,6 @@ export function useRealtimeSync(conversationId: string | null) {
     if (!conversationId || conversationId === 'new') return;
 
     function connect() {
-      // Clean up existing
       if (wsRef.current) {
         wsRef.current.close();
         wsRef.current = null;
@@ -51,34 +50,23 @@ export function useRealtimeSync(conversationId: string | null) {
       );
       wsRef.current = ws;
 
-      ws.onopen = () => {
-        console.debug('[ws] connected to room:', conversationId);
-      };
-
       ws.onmessage = (evt) => {
         try {
           const event: RealtimeEvent = JSON.parse(evt.data);
           handleEvent(event, conversationId!);
-        } catch {
-          // Ignore malformed messages
-        }
+        } catch {}
       };
 
       ws.onclose = () => {
-        console.debug('[ws] disconnected from room:', conversationId);
         wsRef.current = null;
-        // Auto-reconnect
         reconnectTimerRef.current = setTimeout(connect, RECONNECT_DELAY);
       };
 
-      ws.onerror = () => {
-        // onclose will fire after onerror, triggering reconnect
-      };
+      ws.onerror = () => {};
     }
 
     connect();
 
-    // Reconnect when tab becomes visible again
     const onVisibility = () => {
       if (document.visibilityState === 'visible') {
         if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
@@ -100,58 +88,68 @@ export function useRealtimeSync(conversationId: string | null) {
 }
 
 /**
- * Handle incoming WebSocket events by refetching relevant data.
+ * Handle incoming WebSocket events.
  *
- * The event tells us WHAT changed, not the actual data.
- * We refetch from the API to get the latest state.
- * This keeps the WebSocket protocol simple (notifications only).
+ * KEY RULE: Only act if the UI is NOT already handling this action.
+ * If the user clicked Extract in THIS tab, the HTTP response handles
+ * the state transition. WS events are for OTHER sources only.
  */
 function handleEvent(event: RealtimeEvent, conversationId: string) {
+  const store = useDraftStore.getState();
+  const phaseStore = usePhaseStore.getState();
+
   switch (event.type) {
+    case 'extraction.started': {
+      // Another source started extraction — show extracting state
+      // But only if WE didn't start it (check isExtracting flag)
+      if (!store.isExtracting) {
+        useDraftStore.setState({ isExtracting: true, feedYops: [], pipelineSteps: [] });
+      }
+      break;
+    }
+
     case 'extraction.done': {
-      // Extraction completed (by any source) — replicate the UI Extract flow:
-      // 1. Fetch draft snapshot + yops log
-      // 2. Set draft
-      // 3. Load YOps delta into feedYops for animation
-      // 4. Transition through yops → triage phases
+      // Another source finished extraction — load data and enter yops phase
+      // Skip if WE are currently extracting (our HTTP response will handle it)
+      if (store.isExtracting) break;
+
       Promise.all([
         getSemanticDraft(conversationId),
         listYOpsLog(conversationId),
       ]).then(([draft, yopsEntries]) => {
         if (!draft || draft.trees.length === 0) return;
 
-        // Update draft
+        // 1. Set draft
         useDraftStore.getState().setDraft(draft);
 
-        // Hydrate yops log
+        // 2. Hydrate yops log
         if (yopsEntries && yopsEntries.length > 0) {
           useDraftStore.getState().hydrateYOpsLog(yopsEntries);
 
-          // Get the latest entry's YOps as the "delta" for the feed
+          // 3. Load latest YOps delta into feedYops
           const latestEntry = yopsEntries[yopsEntries.length - 1];
-          const deltaOps = latestEntry?.yops;
-          if (Array.isArray(deltaOps) && deltaOps.length > 0) {
-            useDraftStore.setState({ feedYops: deltaOps, isExtracting: false });
+          if (Array.isArray(latestEntry?.yops) && latestEntry.yops.length > 0) {
+            useDraftStore.setState({ feedYops: latestEntry.yops, isExtracting: false });
           }
         }
 
-        // Expand panel if collapsed
+        // 4. Expand panel
         if (usePhaseStore.getState().panelMode === 'collapsed') {
           usePhaseStore.getState().setPanelMode('default');
         }
 
-        // Transition to yops feed (animation → auto-transitions to triage)
-        const phase = usePhaseStore.getState().phase;
-        if (phase === 'idle' || phase === 'yops') {
-          usePhaseStore.getState().setPhase('yops');
-        }
+        // 5. Enter yops phase (NOT triage — don't skip steps)
+        //    YOpsFeed will auto-transition to triage when animation completes
+        usePhaseStore.getState().setPhase('yops');
       });
       break;
     }
 
     case 'draft.changed':
     case 'yops.applied': {
-      // Draft modified (manual edit, another user, etc.) — refetch
+      // Draft modified by another source — refetch
+      if (store.isExtracting) break; // Don't interrupt active extraction
+
       getSemanticDraft(conversationId).then((draft) => {
         if (draft && draft.trees.length > 0) {
           useDraftStore.getState().setDraft(draft);
@@ -161,22 +159,8 @@ function handleEvent(event: RealtimeEvent, conversationId: string) {
     }
 
     case 'commit.created': {
-      // New commit — could refresh canvas or commit store
-      // For now, just log it. Canvas refresh will be added when needed.
-      console.debug('[ws] commit created in conversation:', conversationId);
-      break;
-    }
-
-    case 'presence.join':
-    case 'presence.leave': {
-      // Future: update presence UI
-      console.debug('[ws] presence:', event.type, event.payload);
-      break;
-    }
-
-    case 'connected': {
-      // Initial connection confirmation
-      console.debug('[ws] joined room:', conversationId, 'presence:', event.payload);
+      // Commit created by another source
+      // TODO: refresh canvas, update commitStore
       break;
     }
 

@@ -286,6 +286,9 @@ export async function* runExtractionPipeline(
     // ── Step 4: Extractor — LLM extraction via provider registry ──
     yield { type: 'status', data: { step: 'extracting' } };
 
+    // Broadcast extraction started (for other tabs/clients)
+    eventBus.notify('extraction.started', conversationId, conversation.projectId);
+
     const reg = await getProviderRegistry();
     const trackedUsage = { inputTokens: 0, outputTokens: 0 };
     let trackedModel = 'unknown';

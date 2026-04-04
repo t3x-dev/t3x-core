@@ -12,8 +12,8 @@ import { EventEmitter } from 'node:events';
 
 export type RealtimeEventType =
   | 'draft.changed'
-  | 'extraction.started'
-  | 'extraction.done'
+  | 'extraction.started'  // LLM extraction begins
+  | 'extraction.done'     // LLM extraction completed + persisted
   | 'yops.applied'
   | 'commit.created'
   | 'presence.join'
