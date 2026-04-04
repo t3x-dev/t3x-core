@@ -9,8 +9,8 @@ describe('getYOpsJsonSchema', () => {
 
   const variants = schema.anyOf ?? schema.oneOf ?? [];
 
-  it('returns a schema with 13 op variants', () => {
-    expect(variants.length).toBe(13);
+  it('returns a schema with 14 op variants', () => {
+    expect(variants.length).toBe(14);
   });
 
   it('every variant has a description on the op key', () => {
@@ -24,11 +24,11 @@ describe('getYOpsJsonSchema', () => {
   });
 
   const opNames = [
-    'set', 'unset', 'add', 'drop', 'rename', 'clone',
+    'set', 'unset', 'define', 'populate', 'drop', 'rename', 'clone',
     'move', 'nest', 'split', 'fold', 'merge', 'relate', 'unrelate',
   ];
 
-  it('contains all 13 op names', () => {
+  it('contains all 14 op names', () => {
     const foundOps = variants.map((v: any) => Object.keys(v.properties)[0]);
     for (const name of opNames) {
       expect(foundOps).toContain(name);
@@ -45,14 +45,22 @@ describe('getYOpsJsonSchema', () => {
     expect(setProps.from.description).toBeDefined();
   });
 
-  it('add variant has parent, node, source, from properties with descriptions', () => {
-    const addVariant = variants.find((v: any) => 'add' in v.properties) as any;
-    expect(addVariant).toBeDefined();
-    const addProps = addVariant.properties.add.properties;
-    expect(addProps.parent.description).toBeDefined();
-    expect(addProps.node.description).toBeDefined();
-    expect(addProps.source.description).toBeDefined();
-    expect(addProps.from.description).toBeDefined();
+  it('define variant has parent, key properties with descriptions', () => {
+    const defineVariant = variants.find((v: any) => 'define' in v.properties) as any;
+    expect(defineVariant).toBeDefined();
+    const defineProps = defineVariant.properties.define.properties;
+    expect(defineProps.parent.description).toBeDefined();
+    expect(defineProps.key.description).toBeDefined();
+  });
+
+  it('populate variant has path, slots, source, from properties with descriptions', () => {
+    const populateVariant = variants.find((v: any) => 'populate' in v.properties) as any;
+    expect(populateVariant).toBeDefined();
+    const populateProps = populateVariant.properties.populate.properties;
+    expect(populateProps.path.description).toBeDefined();
+    expect(populateProps.slots.description).toBeDefined();
+    expect(populateProps.source.description).toBeDefined();
+    expect(populateProps.from.description).toBeDefined();
   });
 
   it('drop variant has path property with description', () => {

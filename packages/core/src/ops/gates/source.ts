@@ -44,8 +44,8 @@ function getSourceFields(
   op: YOp
 ): { source?: string | Record<string, string>; from?: string } | null {
   if ('set' in op) return { source: op.set.source, from: op.set.from };
-  if ('add' in op) return { source: op.add.source, from: op.add.from };
-  return null; // unset, drop, rename, clone, move, nest, split, fold, merge, relate, unrelate
+  if ('populate' in op) return { source: op.populate.source, from: op.populate.from };
+  return null; // define, unset, drop, rename, clone, move, nest, split, fold, merge, relate, unrelate
 }
 
 export function validateSources(

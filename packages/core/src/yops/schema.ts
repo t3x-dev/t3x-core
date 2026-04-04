@@ -50,27 +50,30 @@ const UnsetOpSchema = z
   })
   .strict();
 
-const AddOpSchema = z
+const DefineOpSchema = z
   .object({
-    add: z
+    define: z
       .object({
-        parent: z.string().describe('Parent node path ("" for root, "trip" for child of trip)'),
-        node: z
-          .record(z.string(), z.unknown())
-          .refine((n) => Object.keys(n).length === 1, {
-            message: 'node must have exactly one top-level key',
-          })
-          .describe('One-key object: {node_key: {slot: value, ...}} e.g. {hotel: {name: "Hilton", stars: 5}}'),
-        source: z
-          .record(z.string(), z.string())
-          .describe('Quote per slot: {slot_key: "short phrase from conversation"}'),
+        parent: z.string().describe('Parent node path ("" for root)'),
+        key: z.string().regex(SNAKE_CASE).describe('Node key name (snake_case)'),
+      })
+      .strict()
+      .describe('Create an empty node in the tree. Structure operation (DDL).'),
+  })
+  .strict();
+
+const PopulateOpSchema = z
+  .object({
+    populate: z
+      .object({
+        path: z.string().min(1).describe('Node path to fill (e.g. "trip/accommodation")'),
+        slots: z.record(z.string(), SlotValueSchema).describe('Key-value pairs: {slot_key: value}'),
+        source: z.record(z.string(), z.string()).describe('Quote per slot: {slot_key: "phrase from conversation"}'),
         from: z.string().min(1).describe('Turn reference (e.g. T1, T3)'),
         confidence: z.number().min(0).max(1).optional().describe('Extraction confidence 0-1'),
       })
       .strict()
-      .describe(
-        'Create a new node with initial slots. Use when a new topic or subtopic is introduced.'
-      ),
+      .describe('Fill slots on an existing node. Content operation (DML). Node must exist.'),
   })
   .strict();
 
@@ -220,7 +223,8 @@ const UnrelateOpSchema = z
 export const YOpSchema = z.union([
   SetOpSchema,
   UnsetOpSchema,
-  AddOpSchema,
+  DefineOpSchema,
+  PopulateOpSchema,
   DropOpSchema,
   RenameOpSchema,
   CloneOpSchema,

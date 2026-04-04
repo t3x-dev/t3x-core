@@ -148,16 +148,16 @@ describe('autoFixPaths', () => {
     expect(result).toBeNull();
   });
 
-  it('returns null for empty parent path (root add)', () => {
-    const yop: YOp = { add: { parent: '', node: { new_node: {} }, source: {}, from: 'T1' } };
+  it('returns null for empty parent path (root define)', () => {
+    const yop: YOp = { define: { parent: '', key: 'new_node' } };
     const result = autoFixPaths(yop, trees);
     expect(result).toBeNull();
   });
 
-  it('resolves parent path in add operations', () => {
-    const yop: YOp = { add: { parent: 'company_info', node: { role: {} }, source: {}, from: 'T1' } };
+  it('resolves parent path in define operations', () => {
+    const yop: YOp = { define: { parent: 'company_info', key: 'role' } };
     const result = autoFixPaths(yop, trees);
     expect(result).not.toBeNull();
-    expect((result!.fixed as any).add.parent).toBe('construction_saas/company_info');
+    expect((result!.fixed as any).define.parent).toBe('construction_saas/company_info');
   });
 });

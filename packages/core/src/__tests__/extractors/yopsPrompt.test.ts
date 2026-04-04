@@ -36,7 +36,8 @@ describe('buildYOpsPrompt', () => {
     it('system prompt mentions extraction and yops format', () => {
       const result = buildYOpsPrompt({ turns: sampleTurns });
       expect(result.systemPrompt).toContain('extraction');
-      expect(result.systemPrompt).toContain('add');
+      expect(result.systemPrompt).toContain('define');
+      expect(result.systemPrompt).toContain('populate');
       expect(result.systemPrompt).toContain('source');
       expect(result.systemPrompt).toContain('yops:');
     });
@@ -60,7 +61,8 @@ describe('buildYOpsPrompt', () => {
         snapshot: sampleSnapshot,
       });
       expect(result.systemPrompt).toContain('set');
-      expect(result.systemPrompt).toContain('add');
+      expect(result.systemPrompt).toContain('define');
+      expect(result.systemPrompt).toContain('populate');
       expect(result.systemPrompt).toContain('drop');
       expect(result.systemPrompt).toContain('unset');
     });

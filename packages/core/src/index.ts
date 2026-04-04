@@ -481,13 +481,14 @@ export type { LintConfig, LintResult, LintWarning } from './ylint';
 // ═══════════════════════════════════════════════════════════════════════════
 export { DEFAULT_LINT_CONFIG, ylint } from './ylint';
 export type {
-  AddOp,
   CloneOp,
+  DefineOp,
   DropOp,
   FoldOp,
   MergeOp,
   MoveOp,
   NestOp,
+  PopulateOp,
   RelateOp,
   RenameOp,
   SetOp,
@@ -504,6 +505,7 @@ export type {
 // ═══════════════════════════════════════════════════════════════════════════
 export {
   applyYOps,
+  classifyYOp,
   extractOpsFromEntries,
   findNode,
   formatYOpsLog,
@@ -517,4 +519,4 @@ export {
   YOpSchema,
   YOpsDocumentSchema,
 } from './yops';
-export type { ReplayInput, ReplayResult, VerifyResult } from './yops';
+export type { ReplayInput, ReplayResult, VerifyResult, YOpCategory } from './yops';

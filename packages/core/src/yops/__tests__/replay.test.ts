@@ -42,9 +42,10 @@ describe('replayYOps', () => {
     expect(result.error!.op_index).toBe(1);
   });
 
-  it('replays add + set across multiple entries', () => {
+  it('replays define + populate + set across multiple entries', () => {
     const ops: YOp[] = [
-      { add: { parent: '', node: { hotel: { name: 'Hilton' } }, source: { name: 'Hilton hotel' }, from: 'T1' } },
+      { define: { parent: '', key: 'hotel' } },
+      { populate: { path: 'hotel', slots: { name: 'Hilton' }, source: { name: 'Hilton hotel' }, from: 'T1' } },
       { set: { path: 'hotel/stars', value: 5, source: 'five star', from: 'T2' } },
     ];
     const result = replayYOps({ baseContent: emptyContent, ops });
@@ -161,7 +162,8 @@ describe('verifyReplay', () => {
   it('detects tree count mismatch', () => {
     const base: SemanticContent = { trees: [], relations: [] };
     const ops: YOp[] = [
-      { add: { parent: '', node: { hotel: { name: 'H' } }, source: { name: 'H' }, from: 'T1' } },
+      { define: { parent: '', key: 'hotel' } },
+      { populate: { path: 'hotel', slots: { name: 'H' }, source: { name: 'H' }, from: 'T1' } },
     ];
     const expected: SemanticContent = { trees: [], relations: [] };
     const result = verifyReplay(base, ops, expected);

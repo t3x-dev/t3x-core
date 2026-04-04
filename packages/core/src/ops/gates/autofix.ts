@@ -74,6 +74,7 @@ function resolvePath(partialPath: string, allPaths: Array<{ path: string }>): st
 // ── Schema Fixes ──
 
 const FIELDS_ALLOWED: Record<string, string[]> = {
+  define: ['parent', 'key'],
   unset: ['path'],
   drop: ['path', 'reason'],
   rename: ['path', 'to'],
@@ -85,7 +86,7 @@ const FIELDS_ALLOWED: Record<string, string[]> = {
   merge: ['paths', 'into'],
 };
 
-const OP_TYPES = ['set', 'unset', 'add', 'drop', 'rename', 'clone', 'move', 'nest', 'split', 'fold', 'merge', 'relate', 'unrelate'];
+const OP_TYPES = ['set', 'unset', 'define', 'populate', 'drop', 'rename', 'clone', 'move', 'nest', 'split', 'fold', 'merge', 'relate', 'unrelate'];
 
 function detectOpType(rawOp: Record<string, unknown>): string | null {
   return Object.keys(rawOp).find(k => OP_TYPES.includes(k)) ?? null;
@@ -135,12 +136,34 @@ function fixPaths(opType: string, data: Record<string, unknown>, allPaths: Array
         fixes.push(`resolved path: "${fullPath}" → "${resolved}/${slotPart}"`);
       }
     }
+  } else if (opType === 'define') {
+    // define has parent field — resolve as node path
+    if ('parent' in data && typeof data.parent === 'string') {
+      const partial = data.parent as string;
+      if (partial !== '') { // empty parent is valid (root-level define)
+        const resolved = resolvePath(partial, allPaths);
+        if (resolved && resolved !== partial) {
+          data.parent = resolved;
+          fixes.push(`resolved parent: "${partial}" → "${resolved}"`);
+        }
+      }
+    }
+  } else if (opType === 'populate') {
+    // populate has path field — resolve as full node path (no slot suffix)
+    if ('path' in data && typeof data.path === 'string') {
+      const partial = data.path as string;
+      const resolved = resolvePath(partial, allPaths);
+      if (resolved && resolved !== partial) {
+        data.path = resolved;
+        fixes.push(`resolved path: "${partial}" → "${resolved}"`);
+      }
+    }
   } else {
     // For other ops: resolve full path
     for (const field of ['path', 'to', 'parent']) {
       if (field in data && typeof data[field] === 'string') {
         const partial = data[field] as string;
-        if (partial === '') continue; // empty parent is valid (root add)
+        if (partial === '') continue;
         const resolved = resolvePath(partial, allPaths);
         if (resolved && resolved !== partial) {
           data[field] = resolved;

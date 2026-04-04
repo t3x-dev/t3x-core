@@ -53,7 +53,7 @@ Rules:
 - Output ONLY valid YAML starting with "yops:"
 - Fix the specific errors mentioned
 - Keep the same intent — don't change what the operation is trying to do
-- Every set/add operation MUST have source (key phrase from conversation) and from (turn tag)
+- Every set/populate operation MUST have source (key phrase from conversation) and from (turn tag)
 - unset and drop operations need ONLY their required fields (path for unset; path and optional reason for drop)
 - Paths use / separator (not .), keys use snake_case
 - If a source quote was not found, find the correct quote from the provided turns`;

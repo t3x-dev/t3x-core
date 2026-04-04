@@ -9,11 +9,14 @@ export { YOpSchema, YOpsDocumentSchema } from './schema';
 
 // ── Types ──
 export type {
-  AddOp, CloneOp, DropOp, FoldOp, MergeOp, MoveOp, NestOp,
-  RelateOp, RenameOp, SetOp, SplitOp, UnrelateOp, UnsetOp,
+  CloneOp, DefineOp, DropOp, FoldOp, MergeOp, MoveOp, NestOp,
+  PopulateOp, RelateOp, RenameOp, SetOp, SplitOp, UnrelateOp, UnsetOp,
   YOp, YOpsDocument, YOpsError, YOpsResult,
 } from './types';
 export { YOPS_ERRORS, SNAKE_CASE_KEY } from './types';
+
+// ── Classify ──
+export { classifyYOp, type YOpCategory } from './classify';
 
 // ── Helpers (public-facing only) ──
 export { findNode, getNodeKey, getParentPath } from './helpers';

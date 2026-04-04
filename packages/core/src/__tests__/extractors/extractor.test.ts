@@ -23,11 +23,11 @@ function mockProvider(responses: string[]): LLMProvider {
 // YOps-format: first extraction (YAML tree + metadata)
 const validTreeOutput = `travel_plan:\n  destination: Tokyo\n---\n{"slot_quotes":{"destination":"travel to Tokyo"},"source_map":{"travel_plan":"T1"},"confidence_map":{"travel_plan":0.9}}`;
 
-// YOps-format: incremental add
-const validYOpsAdd = `yops:\n  - add:\n      parent: ""\n      node:\n        budget:\n          amount: 3000\n      source:\n        amount: "3000 dollars"\n      from: T1`;
+// YOps-format: incremental define + populate
+const validYOpsAdd = `yops:\n  - define:\n      parent: ""\n      key: budget\n  - populate:\n      path: budget\n      slots:\n        amount: 3000\n      source:\n        amount: "3000 dollars"\n      from: T1`;
 
-// YOps-format: incremental add with relation
-const validYOpsAddWithRelation = `yops:\n  - add:\n      parent: ""\n      node:\n        budget:\n          amount: 3000\n      source:\n        amount: "budget is 3000"\n      from: T1\n  - relate:\n      from: travel_plan\n      to: budget\n      type: depends`;
+// YOps-format: incremental define + populate with relation
+const validYOpsAddWithRelation = `yops:\n  - define:\n      parent: ""\n      key: budget\n  - populate:\n      path: budget\n      slots:\n        amount: 3000\n      source:\n        amount: "budget is 3000"\n      from: T1\n  - relate:\n      from: travel_plan\n      to: budget\n      type: depends`;
 
 const existingSnapshot: SemanticContent = {
   trees: [{ key: 'travel_plan', slots: { destination: 'Tokyo' }, children: [], confidence: 0.95 }],
@@ -112,7 +112,7 @@ describe('Extractor', () => {
 
   it('retries on validation failure then succeeds', async () => {
     // First response: valid parse but self-relation (applyYOps will reject)
-    const invalidYOps = `yops:\n  - add:\n      parent: ""\n      node:\n        travel_plan:\n          destination: Tokyo\n      source:\n        destination: "Tokyo"\n      from: T1\n  - relate:\n      from: travel_plan\n      to: travel_plan\n      type: causes`;
+    const invalidYOps = `yops:\n  - define:\n      parent: ""\n      key: travel_plan\n  - populate:\n      path: travel_plan\n      slots:\n        destination: Tokyo\n      source:\n        destination: "Tokyo"\n      from: T1\n  - relate:\n      from: travel_plan\n      to: travel_plan\n      type: causes`;
 
     const provider = mockProvider([invalidYOps, validTreeOutput]);
     const extractor = new Extractor(provider);

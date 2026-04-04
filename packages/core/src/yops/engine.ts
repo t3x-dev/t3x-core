@@ -5,7 +5,6 @@
  */
 
 import type { Relation, SemanticContent, TreeNode } from '../semantic/types';
-import { yamlToTree } from '../semantic/tree';
 import {
   cloneTree,
   findNode,
@@ -19,13 +18,14 @@ import {
   updateRelationPaths,
 } from './helpers';
 import type {
-  AddOp,
   CloneOp,
+  DefineOp,
   DropOp,
   FoldOp,
   MergeOp,
   MoveOp,
   NestOp,
+  PopulateOp,
   RelateOp,
   RenameOp,
   SetOp,
@@ -71,7 +71,8 @@ function executeOp(
 ): YOpsError | null {
   if ('set' in op) return execSet(trees, relations, op.set, setRelations, index);
   if ('unset' in op) return execUnset(trees, op.unset, index);
-  if ('add' in op) return execAdd(trees, op.add, index);
+  if ('define' in op) return execDefine(trees, op.define, index);
+  if ('populate' in op) return execPopulate(trees, op.populate, index);
   if ('drop' in op) return execDrop(trees, relations, op.drop, setRelations, index);
   if ('rename' in op) return execRename(trees, relations, op.rename, setRelations, index);
   if ('clone' in op) return execClone(trees, op.clone, index);
@@ -165,79 +166,22 @@ function execUnset(
   return null;
 }
 
-/**
- * Recursively distribute slot_quotes to a node and its children by dot-path matching.
- * Same algorithm as applyMetadata() in yopsParser.ts.
- *
- * Example: source = { "duration": "seven days", "best_visit_times.fall": "Fall (Sep-Oct)" }
- * → root node gets slot_quotes.duration = "seven days"
- * → child "best_visit_times" gets slot_quotes.fall = "Fall (Sep-Oct)"
- */
-function distributeSlotQuotes(
-  node: TreeNode,
-  source: Record<string, string>,
-  prefix: string,
-): void {
-  const nodeQuotes: Record<string, string> = {};
-  for (const [quotePath, quoteValue] of Object.entries(source)) {
-    const segments = quotePath.split('.');
-    if (prefix === '') {
-      if (segments.length === 1 && segments[0] in node.slots) {
-        nodeQuotes[segments[0]] = quoteValue;
-      }
-    } else {
-      const prefixSegments = prefix.split('.');
-      if (
-        segments.length === prefixSegments.length + 1 &&
-        segments.slice(0, prefixSegments.length).join('.') === prefix &&
-        segments[segments.length - 1] in node.slots
-      ) {
-        nodeQuotes[segments[segments.length - 1]] = quoteValue;
-      }
-    }
-  }
-  if (Object.keys(nodeQuotes).length > 0) {
-    node.slot_quotes = { ...node.slot_quotes, ...nodeQuotes };
-  }
+// ── define ──
 
-  for (const child of node.children) {
-    const childPrefix = prefix ? `${prefix}.${child.key}` : child.key;
-    distributeSlotQuotes(child, source, childPrefix);
-  }
-}
-
-// ── add ──
-
-function execAdd(
+function execDefine(
   trees: TreeNode[],
-  op: AddOp,
+  op: DefineOp,
   index: number,
 ): YOpsError | null {
-  const keys = Object.keys(op.node);
-  if (keys.length !== 1) {
-    return err(YOPS_ERRORS.INVALID_KEY, 'node must have exactly one top-level key', index);
+  if (!isValidKey(op.key)) {
+    return err(YOPS_ERRORS.INVALID_KEY, `Invalid key: ${op.key}`, index);
   }
 
-  const nodeKey = keys[0];
-  if (!isValidKey(nodeKey)) {
-    return err(YOPS_ERRORS.INVALID_KEY, `Invalid key: ${nodeKey}`, index);
-  }
-
-  // Build tree node from YAML map
-  const newNode = yamlToTree(nodeKey, op.node[nodeKey]);
-
-  // Distribute source quotes recursively to children by dot-path matching
-  if (Object.keys(op.source).length > 0) {
-    distributeSlotQuotes(newNode, op.source, '');
-  }
-
-  if (op.from) newNode.source = op.from;
-  if (op.confidence !== undefined) newNode.confidence = op.confidence;
+  const newNode: TreeNode = { key: op.key, slots: {}, children: [] };
 
   if (op.parent === '') {
-    // Root level
-    if (hasRootKey(trees, nodeKey)) {
-      return err(YOPS_ERRORS.DUPLICATE_KEY, `Root key already exists: ${nodeKey}`, index);
+    if (hasRootKey(trees, op.key)) {
+      return err(YOPS_ERRORS.DUPLICATE_KEY, `Root key already exists: ${op.key}`, index);
     }
     trees.push(newNode);
   } else {
@@ -245,11 +189,38 @@ function execAdd(
     if (!parent) {
       return err(YOPS_ERRORS.PARENT_NOT_FOUND, `Parent not found: ${op.parent}`, index);
     }
-    if (hasSiblingKey(parent, nodeKey)) {
-      return err(YOPS_ERRORS.DUPLICATE_KEY, `Sibling key already exists: ${nodeKey}`, index);
+    if (hasSiblingKey(parent, op.key)) {
+      return err(YOPS_ERRORS.DUPLICATE_KEY, `Sibling key already exists: ${op.key}`, index);
     }
     parent.children.push(newNode);
   }
+
+  return null;
+}
+
+// ── populate ──
+
+function execPopulate(
+  trees: TreeNode[],
+  op: PopulateOp,
+  index: number,
+): YOpsError | null {
+  const node = findNode(trees, op.path);
+  if (!node) {
+    return err(YOPS_ERRORS.NODE_NOT_FOUND, `Node not found: ${op.path}`, index);
+  }
+
+  for (const [key, value] of Object.entries(op.slots)) {
+    node.slots[key] = value;
+  }
+
+  if (!node.slot_quotes) node.slot_quotes = {};
+  for (const [key, quote] of Object.entries(op.source)) {
+    node.slot_quotes[key] = quote;
+  }
+
+  if (op.from) node.source = op.from;
+  if (op.confidence !== undefined) node.confidence = op.confidence;
 
   return null;
 }
