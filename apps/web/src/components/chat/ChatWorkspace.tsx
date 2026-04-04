@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { DriftPopup } from '@/components/chat/DriftPopup';
 import { useAutoProject } from '@/hooks/useAutoProject';
 import { useCommittedHighlights } from '@/hooks/useCommittedHighlights';
+import { useRealtimeSync } from '@/hooks/useRealtimeSync';
 import { useConversationChat } from '@/hooks/useConversationChat';
 import { useTextSelection } from '@/hooks/useTextSelection';
 import { getCommitAsNodes } from '@/lib/api/commitUnified';
@@ -67,6 +68,9 @@ export function ChatWorkspace({
     isNewChat ? undefined : conversationId
   );
   const pendingMessageRef = useRef<string | null>(null);
+
+  // Real-time sync — WebSocket connection to receive backend state changes
+  useRealtimeSync(resolvedConversationId ?? conversationId);
 
   // Model selection state
   const [selectedModel, setSelectedModel] = useState('claude-sonnet-4-20250514');
