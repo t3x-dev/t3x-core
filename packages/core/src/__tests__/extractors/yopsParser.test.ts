@@ -223,16 +223,16 @@ describe('parseYOpsOutput — yops list (incremental)', () => {
     expect(result.yops).toHaveLength(1);
   });
 
-  it('validates operations against schema (rejects invalid)', () => {
+  it('skips invalid operations instead of failing entire parse', () => {
     const raw = `yops:
   - set:
       path: trip/budget`;
 
-    // Missing required fields: value, source, from
+    // Missing required fields: value, source, from — op is skipped, parse succeeds
     const result = parseYOpsOutput(raw);
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.error).toContain('Invalid yop');
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.yops).toHaveLength(0); // invalid op skipped
     }
   });
 });

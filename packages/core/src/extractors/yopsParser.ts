@@ -10,6 +10,7 @@
 import * as yaml from 'js-yaml';
 import { yamlToTree } from '../semantic/tree';
 import type { SlotValue, TreeNode } from '../semantic/types';
+import { autoFixYOp } from '../ops/gates/autofix';
 import { YOpSchema } from '../yops/schema';
 import type { YOp } from '../yops/types';
 
@@ -287,14 +288,29 @@ function parseYopsList(cleaned: string): YOpsParseResult {
     return { ok: true, format: 'yops', yops: [] };
   }
 
-  // Validate each operation
+  // Validate each operation — try autofix before rejecting
   const validated: YOp[] = [];
   for (let i = 0; i < obj.yops.length; i++) {
     const result = YOpSchema.safeParse(obj.yops[i]);
-    if (!result.success) {
-      return { ok: false, error: `Invalid yop at index ${i}: ${result.error.message}` };
+    if (result.success) {
+      validated.push(result.data as YOp);
+      continue;
     }
-    validated.push(result.data as YOp);
+
+    // Schema validation failed — try autofix (strip extra fields, fix paths)
+    const rawOp = obj.yops[i] as Record<string, unknown>;
+    const fixResult = autoFixYOp(rawOp);
+    if (fixResult) {
+      const recheck = YOpSchema.safeParse(fixResult.fixed);
+      if (recheck.success) {
+        validated.push(recheck.data as YOp);
+        continue;
+      }
+    }
+
+    // Autofix didn't help — skip this op (don't fail the entire parse)
+    // The correction round in yaml-strategy will handle rejected ops
+    console.warn(`[yopsParser] Skipping invalid yop at index ${i}: ${result.error.message.slice(0, 200)}`);
   }
 
   return { ok: true, format: 'yops', yops: validated };
