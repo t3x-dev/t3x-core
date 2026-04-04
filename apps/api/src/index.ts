@@ -72,7 +72,7 @@ process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
 
 // Open-source: built-in local auth (username/password)
-const app = createApp();
+const { app, injectWebSocket } = createApp();
 
 // Server startup
 const port = parseInt(process.env.PORT || '8000', 10);
@@ -91,7 +91,10 @@ async function start() {
       port,
     });
 
-    pinoLogger.info({ port, url: `http://localhost:${port}` }, 'T3X API server running');
+    // Enable WebSocket connections on the HTTP server
+    injectWebSocket(server);
+
+    pinoLogger.info({ port, url: `http://localhost:${port}`, ws: `ws://localhost:${port}/ws` }, 'T3X API server running');
 
     return server;
   } catch (error) {

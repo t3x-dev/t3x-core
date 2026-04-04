@@ -10,6 +10,7 @@
  * events (collect into a response object, stream as SSE, etc.).
  */
 
+import { eventBus } from './event-bus';
 import {
   applyYOps,
   checkDiffCompatibility,
@@ -565,6 +566,15 @@ export async function* runExtractionPipeline(
       yops: result.yops,
       snapshot: organizedSnapshot,
       topicId: resolvedTopicId,
+    });
+
+    // Broadcast to WebSocket clients
+    eventBus.broadcast({
+      type: 'extraction.done',
+      conversationId,
+      projectId: conversation.projectId,
+      payload: { yopsLogId: record.id },
+      timestamp: Date.now(),
     });
 
     // ── Done ──
