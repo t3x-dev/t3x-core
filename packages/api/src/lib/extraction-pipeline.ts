@@ -15,7 +15,6 @@ import {
   checkDiffCompatibility,
   checkReadiness,
   computeSessionContext,
-  createMeaningPipeline,
   DEFAULT_STYLE,
   decideAction,
   detectAmbiguity,
@@ -26,9 +25,9 @@ import {
   Extractor,
   flattenTrees,
   GateRunner,
-  type LLMCallLogger,
   pipelineEmitter,
   preFilterDrift,
+  runTransforms,
   type SemanticContent,
 } from '@t3x-dev/core';
 import {
@@ -368,89 +367,36 @@ export async function* runExtractionPipeline(
       }
     }
 
-    // ── Step 5: MeaningPipeline — multi-agent post-processing ──
+    // ── Step 5: Post-extraction transforms (deterministic) ──
     yield { type: 'status', data: { step: 'reorganizing' } };
-
-    const debugPipeline = process.env.PIPELINE_DEBUG === 'true';
-    const llmLogger: LLMCallLogger | undefined = debugPipeline
-      ? (log) => {
-          console.info(
-            `[llm:${log.agent}] tokens: in=${log.usage.inputTokens} out=${log.usage.outputTokens} | ${log.durationMs}ms`
-          );
-          console.debug(`[llm:${log.agent}] prompt: ${log.prompt.slice(0, 200)}...`);
-          console.debug(`[llm:${log.agent}] response: ${log.response.slice(0, 300)}...`);
-        }
-      : undefined;
 
     let organizedSnapshot: SemanticContent = result.snapshot;
     let changesSummary: Record<string, unknown> | undefined;
 
     try {
-      const pipelineReg = await getProviderRegistry();
-      const pipelineResult = await pipelineReg.tryWithFallback(
-        'generation',
-        async (pipelineProvider) => {
-          // biome-ignore lint/suspicious/noExplicitAny: generic provider cast
-          const pipeline = createMeaningPipeline(pipelineProvider as any);
-          const isIncremental = currentFlat.length > 0;
-          return pipeline.run(
-            result.snapshot,
-            extractionTurns,
-            isIncremental ? currentSnapshot : undefined,
-            {
-              mode: isIncremental ? 'incremental' : 'full',
-              debug: debugPipeline,
-              llmLogger,
-            }
-          );
-        }
+      const isIncremental = currentFlat.length > 0;
+      const transformResult = runTransforms(
+        result.snapshot,
+        extractionTurns.map((t) => ({ role: t.role, content: t.content })),
+        isIncremental ? currentSnapshot : undefined,
       );
-      organizedSnapshot = pipelineResult.content;
+      organizedSnapshot = transformResult.content;
 
-      // Record pipeline usage
-      const pu = pipelineResult.meta.totalUsage;
-      if (pu.inputTokens || pu.outputTokens) {
-        recordUsageFireAndForget(db, {
-          user_id: userId ?? undefined,
-          project_id: conversation.projectId,
-          endpoint: 'meaning_pipeline',
-          model: trackedModel,
-          input_tokens: pu.inputTokens,
-          output_tokens: pu.outputTokens,
-        });
-      }
-
-      // Build changes summary
       changesSummary = {
-        completedAgents: pipelineResult.meta.completedAgents,
-        quality: pipelineResult.quality,
-        agentErrors: pipelineResult.meta.agentErrors,
+        transforms: ['consolidate', 'nest', 'flagContradictions', 'checkRegression'],
+        regressionWarnings: transformResult.regressionWarnings,
       };
 
-      // Log agent results
-      const completed = pipelineResult.meta.completedAgents;
-      const errors = pipelineResult.meta.agentErrors;
-      const snapshots = pipelineResult.meta.stepSnapshots;
-      const q = pipelineResult.quality;
-      console.info(`[meaning-pipeline] Completed: ${completed.join(' → ')}`);
-      console.info(
-        `[meaning-pipeline] Quality: score=${q.score} frames=${q.frameCount} depth=${q.maxDepth} dupes=${q.duplicateTypes}`
-      );
-      for (const snap of snapshots) {
-        console.info(
-          `[meaning-pipeline] Step "${snap.agent}": ${snap.frameCount} frames, score=${snap.quality.score}`
-        );
-      }
-      if (errors.length > 0) {
-        for (const ae of errors) {
-          console.warn(`[meaning-pipeline] Agent "${ae.agent}": ${ae.error}`);
+      if (transformResult.regressionWarnings.length > 0) {
+        for (const w of transformResult.regressionWarnings) {
+          console.warn(`[transforms] ${w.type}: ${w.message}`);
         }
       }
-    } catch (pipelineErr) {
+    } catch (transformErr) {
       console.warn(
-        `[meaning-pipeline] Pipeline error: ${pipelineErr instanceof Error ? pipelineErr.message : String(pipelineErr)}`
+        `[transforms] Error: ${transformErr instanceof Error ? transformErr.message : String(transformErr)}`
       );
-      // Pipeline is optional — flat frames are still valid
+      // Transforms are optional — raw extraction is still valid
     }
 
     // ── Code-based structure enforcement ──
