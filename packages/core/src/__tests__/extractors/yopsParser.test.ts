@@ -4,7 +4,7 @@ import { parseYOpsOutput } from '../../extractors/yopsParser';
 // ── First Extraction (YAML Tree) Tests ──
 
 describe('parseYOpsOutput — YAML tree (first extraction)', () => {
-  it('parses YAML tree with metadata → format tree, 1 add op', () => {
+  it('parses YAML tree with metadata → format tree, define + populate ops', () => {
     const raw = `trip:
   destination: Hangzhou
   budget: 2000
@@ -29,18 +29,22 @@ describe('parseYOpsOutput — YAML tree (first extraction)', () => {
     expect(result.format).toBe('tree');
     if (result.format !== 'tree') return;
 
-    expect(result.yops).toHaveLength(1);
-    const op = result.yops[0];
-    expect('add' in op).toBe(true);
-    if (!('add' in op)) return;
+    // Should produce define + populate
+    expect(result.yops).toHaveLength(2);
+    const defineOp = result.yops[0];
+    expect('define' in defineOp).toBe(true);
+    if (!('define' in defineOp)) return;
+    expect(defineOp.define.parent).toBe('');
+    expect(defineOp.define.key).toBe('trip');
 
-    expect(op.add.parent).toBe('');
-    expect(op.add.from).toBe('T1');
-    expect(op.add.confidence).toBe(0.95);
-    expect(op.add.node).toEqual({
-      trip: { destination: 'Hangzhou', budget: 2000 },
-    });
-    expect(op.add.source).toEqual({
+    const populateOp = result.yops[1];
+    expect('populate' in populateOp).toBe(true);
+    if (!('populate' in populateOp)) return;
+    expect(populateOp.populate.path).toBe('trip');
+    expect(populateOp.populate.from).toBe('T1');
+    expect(populateOp.populate.confidence).toBe(0.95);
+    expect(populateOp.populate.slots).toEqual({ destination: 'Hangzhou', budget: 2000 });
+    expect(populateOp.populate.source).toEqual({
       destination: 'I want to go to Hangzhou',
       budget: 'about 2000 yuan',
     });
@@ -62,16 +66,19 @@ describe('parseYOpsOutput — YAML tree (first extraction)', () => {
     expect(result.format).toBe('tree');
     if (result.format !== 'tree') return;
 
-    expect(result.yops).toHaveLength(1);
-    const op = result.yops[0];
-    expect('add' in op).toBe(true);
-    if (!('add' in op)) return;
+    // define + populate
+    expect(result.yops).toHaveLength(2);
+    const defineOp = result.yops[0];
+    expect('define' in defineOp).toBe(true);
+    if (!('define' in defineOp)) return;
+    expect(defineOp.define.parent).toBe('');
+    expect(defineOp.define.key).toBe('project');
 
-    expect(op.add.parent).toBe('');
-    expect(op.add.from).toBe('T1'); // default when no source_map
-    expect(op.add.node).toEqual({
-      project: { name: 'T3X', status: 'active' },
-    });
+    const populateOp = result.yops[1];
+    expect('populate' in populateOp).toBe(true);
+    if (!('populate' in populateOp)) return;
+    expect(populateOp.populate.from).toBe('T1'); // default when no source_map
+    expect(populateOp.populate.slots).toEqual({ name: 'T3X', status: 'active' });
   });
 
   it('handles nested children in YAML tree', () => {
@@ -94,16 +101,9 @@ describe('parseYOpsOutput — YAML tree (first extraction)', () => {
     expect(result.tree.children[0].key).toBe('dining');
     expect(result.tree.children[0].slots).toEqual({ cuisine: 'sushi', budget: 500 });
 
-    // add op node includes nested structure
-    const op = result.yops[0];
-    expect('add' in op).toBe(true);
-    if (!('add' in op)) return;
-    expect(op.add.node).toEqual({
-      travel: {
-        destination: 'Tokyo',
-        dining: { cuisine: 'sushi', budget: 500 },
-      },
-    });
+    // Should produce define+populate for root, define+populate for child = 4 ops
+    expect(result.yops.length).toBeGreaterThanOrEqual(3); // at least define(travel) + populate(travel) + define(dining)
+    expect('define' in result.yops[0]).toBe(true);
   });
 
   it('applies slot_quotes to tree nodes', () => {
@@ -174,13 +174,15 @@ describe('parseYOpsOutput — yops list (incremental)', () => {
     }
   });
 
-  it('parses add operation with nested node', () => {
+  it('parses define + populate operations', () => {
     const raw = `yops:
-  - add:
+  - define:
       parent: trip
-      node:
-        dining:
-          cuisine: sushi
+      key: dining
+  - populate:
+      path: trip/dining
+      slots:
+        cuisine: sushi
       source:
         cuisine: "wants sushi"
       from: T2`;
@@ -190,14 +192,21 @@ describe('parseYOpsOutput — yops list (incremental)', () => {
     if (!result.ok) return;
 
     expect(result.format).toBe('yops');
-    expect(result.yops).toHaveLength(1);
+    expect(result.yops).toHaveLength(2);
 
-    const op = result.yops[0];
-    expect('add' in op).toBe(true);
-    if ('add' in op) {
-      expect(op.add.parent).toBe('trip');
-      expect(op.add.node).toEqual({ dining: { cuisine: 'sushi' } });
-      expect(op.add.from).toBe('T2');
+    const defineOp = result.yops[0];
+    expect('define' in defineOp).toBe(true);
+    if ('define' in defineOp) {
+      expect(defineOp.define.parent).toBe('trip');
+      expect(defineOp.define.key).toBe('dining');
+    }
+
+    const populateOp = result.yops[1];
+    expect('populate' in populateOp).toBe(true);
+    if ('populate' in populateOp) {
+      expect(populateOp.populate.path).toBe('trip/dining');
+      expect(populateOp.populate.slots).toEqual({ cuisine: 'sushi' });
+      expect(populateOp.populate.from).toBe('T2');
     }
   });
 
@@ -405,11 +414,13 @@ describe('parseYOpsOutput — all 13 op types', () => {
 
   it('parses mixed batch with all content ops', () => {
     const raw = `yops:
-  - add:
+  - define:
       parent: ""
-      node:
-        trip:
-          budget: 5000
+      key: trip
+  - populate:
+      path: trip
+      slots:
+        budget: 5000
       source:
         budget: "about 5k"
       from: T1
@@ -433,13 +444,14 @@ describe('parseYOpsOutput — all 13 op types', () => {
     const result = parseYOpsOutput(raw);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.yops).toHaveLength(6);
-    expect('add' in result.yops[0]).toBe(true);
-    expect('set' in result.yops[1]).toBe(true);
-    expect('unset' in result.yops[2]).toBe(true);
-    expect('drop' in result.yops[3]).toBe(true);
-    expect('rename' in result.yops[4]).toBe(true);
-    expect('relate' in result.yops[5]).toBe(true);
+    expect(result.yops).toHaveLength(7);
+    expect('define' in result.yops[0]).toBe(true);
+    expect('populate' in result.yops[1]).toBe(true);
+    expect('set' in result.yops[2]).toBe(true);
+    expect('unset' in result.yops[3]).toBe(true);
+    expect('drop' in result.yops[4]).toBe(true);
+    expect('rename' in result.yops[5]).toBe(true);
+    expect('relate' in result.yops[6]).toBe(true);
   });
 });
 

@@ -10,7 +10,8 @@ const turns = [
 describe('validateSources', () => {
   it('passes when all sources match turns', () => {
     const yops: YOp[] = [
-      { add: { parent: '', node: { trip: { destination: 'Tokyo' } }, source: { destination: 'trip to Tokyo' }, from: 'T1' } },
+      { define: { parent: '', key: 'trip' } },
+      { populate: { path: 'trip', slots: { destination: 'Tokyo' }, source: { destination: 'trip to Tokyo' }, from: 'T1' } },
       { set: { path: 'trip/budget', value: 3000, source: 'budget of $3000', from: 'T1' } },
     ];
     const result = validateSources(yops, turns);
@@ -51,9 +52,9 @@ describe('validateSources', () => {
     expect(result.violations).toHaveLength(0);
   });
 
-  it('handles add op with record source', () => {
+  it('handles populate op with record source', () => {
     const yops: YOp[] = [
-      { add: { parent: '', node: { trip: { cost: 280 } }, source: { cost: 'JR Pass costs about $280' }, from: 'T2' } },
+      { populate: { path: 'trip', slots: { cost: 280 }, source: { cost: 'JR Pass costs about $280' }, from: 'T2' } },
     ];
     const result = validateSources(yops, turns);
     expect(result.passed).toBe(true);

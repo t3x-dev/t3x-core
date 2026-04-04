@@ -81,13 +81,15 @@ describe('Source Mapping E2E', () => {
     // The LLM extractor will produce YOps from the conversation.
     // We simulate the LLM's extraction output (what the extractor LLM returns).
     const extractorOutput = `yops:
-  - add:
+  - define:
       parent: ""
-      node:
-        australian_beef_taste:
-          flavor: clean and pure
-          texture: slightly leaner
-          farming: predominantly grass-fed
+      key: australian_beef_taste
+  - populate:
+      path: australian_beef_taste
+      slots:
+        flavor: clean and pure
+        texture: slightly leaner
+        farming: predominantly grass-fed
       source:
         flavor: "Clean, pure taste"
         texture: "Slightly leaner taste compared to heavily grain-fed beef"
@@ -120,13 +122,15 @@ describe('Source Mapping E2E', () => {
 
   it('slot_quotes contain text that exists in the conversation', async () => {
     const extractorOutput = `yops:
-  - add:
+  - define:
       parent: ""
-      node:
-        beef_taste:
-          flavor: clean and pure
-          farming: grass-fed
-          wagyu_flavor: buttery
+      key: beef_taste
+  - populate:
+      path: beef_taste
+      slots:
+        flavor: clean and pure
+        farming: grass-fed
+        wagyu_flavor: buttery
       source:
         flavor: "Clean, pure taste"
         farming: "Most Australian beef is grass-fed"
@@ -164,11 +168,13 @@ describe('Source Mapping E2E', () => {
     // BAD: "grass-fed beef" (paraphrase)
     // GOOD: "Most Australian beef is grass-fed" (verbatim from message)
     const extractorOutput = `yops:
-  - add:
+  - define:
       parent: ""
-      node:
-        beef:
-          type: grass-fed
+      key: beef
+  - populate:
+      path: beef
+      slots:
+        type: grass-fed
       source:
         type: "Most Australian beef is grass-fed, giving it a more natural, earthy flavor"
       from: T2
@@ -217,12 +223,14 @@ describe('Source Mapping E2E', () => {
 
     // User asks follow-up (T3), assistant answers (T4)
     const extractorOutput = `yops:
-  - add:
+  - define:
       parent: beef_topic
-      node:
-        cooking_tips:
-          method: medium-rare grilling
-          rest_time: 5 minutes
+      key: cooking_tips
+  - populate:
+      path: beef_topic/cooking_tips
+      slots:
+        method: medium-rare grilling
+        rest_time: 5 minutes
       source:
         method: "best served medium-rare on the grill"
         rest_time: "let it rest for about 5 minutes"
@@ -255,11 +263,13 @@ describe('Source Mapping E2E', () => {
 
   it('lintResult is attached to extraction result', async () => {
     const extractorOutput = `yops:
-  - add:
+  - define:
       parent: ""
-      node:
-        beef:
-          taste: clean
+      key: beef
+  - populate:
+      path: beef
+      slots:
+        taste: clean
       source:
         taste: "Clean, pure taste"
       from: T2

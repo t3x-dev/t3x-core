@@ -47,7 +47,7 @@ Priority rules:
    - Protected frames that are highly redundant with each other → merge (preserve all slots)
 4. When merging, the surviving frame keeps the HIGHER confidence of the two
 5. When merging, combine slot values from both frames (no information loss)
-6. Output 'remove' and 'update' actions only (no 'add')
+6. Output 'remove' and 'update' actions only (no 'add', 'define', or 'populate')
 7. Relations use field names 'from' and 'to' (NOT 'source'/'target')
 8. If there is nothing worth compressing, return an empty changes array
 

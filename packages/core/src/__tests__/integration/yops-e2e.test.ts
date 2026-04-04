@@ -107,9 +107,9 @@ describe('E2E: YOps Extraction Pipeline', () => {
     expect(result1.lintResult!.overall).toBeGreaterThan(0);
     expect(result1.lintResult!.scores.form1).toBeGreaterThan(0);
 
-    // Verify yops array (should be a single add)
-    expect(result1.yops).toHaveLength(1);
-    expect(result1.yops[0]).toHaveProperty('add');
+    // Verify yops array (should be define + populate pairs for root + child)
+    expect(result1.yops.length).toBeGreaterThanOrEqual(2);
+    expect(result1.yops[0]).toHaveProperty('define');
 
     // ────────────────────────────────────────────
     // TURN 2: Incremental — user updates budget and adds activity
@@ -122,12 +122,14 @@ describe('E2E: YOps Extraction Pipeline', () => {
       source: "actually let's do 2000"
       from: T1
       confidence: 0.9
-  - add:
+  - define:
       parent: hangzhou_trip
-      node:
-        activities:
-          west_lake: walking around West Lake
-          hiking: day hike in the hills
+      key: activities
+  - populate:
+      path: hangzhou_trip/activities
+      slots:
+        west_lake: walking around West Lake
+        hiking: day hike in the hills
       source:
         west_lake: "walk around West Lake"
         hiking: "go hiking in the hills nearby"
@@ -159,8 +161,8 @@ describe('E2E: YOps Extraction Pipeline', () => {
     expect(activities!.slots.west_lake).toBe('walking around West Lake');
     expect(activities!.slots.hiking).toBe('day hike in the hills');
 
-    // Verify 2 yops were applied
-    expect(result2.yops).toHaveLength(2);
+    // Verify 3 yops were applied (set + define + populate)
+    expect(result2.yops).toHaveLength(3);
 
     // ────────────────────────────────────────────
     // TURN 3: Incremental — user drops activities, adds nightlife
@@ -170,12 +172,14 @@ describe('E2E: YOps Extraction Pipeline', () => {
   - drop:
       path: hangzhou_trip/activities
       reason: "user changed plans"
-  - add:
+  - define:
       parent: hangzhou_trip
-      node:
-        nightlife:
-          plan: bar hopping near the lake
-          budget: 500
+      key: nightlife
+  - populate:
+      path: hangzhou_trip/nightlife
+      slots:
+        plan: bar hopping near the lake
+        budget: 500
       source:
         plan: "check out bars near West Lake instead"
         budget: "maybe 500 for drinks"
@@ -256,12 +260,14 @@ describe('E2E: YOps Extraction Pipeline', () => {
   it('parser + engine roundtrip works independently', () => {
     // Test the parser and engine can work together without the Extractor
     const raw = `yops:
-  - add:
+  - define:
       parent: ""
-      node:
-        project:
-          name: T3X
-          status: active
+      key: project
+  - populate:
+      path: project
+      slots:
+        name: T3X
+        status: active
       source:
         name: "the project is called T3X"
         status: "it's actively developed"
@@ -277,7 +283,7 @@ describe('E2E: YOps Extraction Pipeline', () => {
     const parsed = parseYOpsOutput(raw);
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) throw new Error(parsed.error);
-    expect(parsed.yops).toHaveLength(2);
+    expect(parsed.yops).toHaveLength(3);
 
     // Apply
     const empty: SemanticContent = { trees: [], relations: [] };

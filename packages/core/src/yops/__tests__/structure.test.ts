@@ -22,13 +22,14 @@ const sc = (
   relations,
 });
 
-// ── add ──
+// ── define + populate ──
 
-describe('add', () => {
+describe('define + populate', () => {
   it('creates a root node', () => {
     const content = sc([]);
     const result = applyYOps(content, [
-      { add: { parent: '', node: { trip: { budget: 2000 } }, source: { budget: 'about 2000' }, from: 'T1' } },
+      { define: { parent: '', key: 'trip' } },
+      { populate: { path: 'trip', slots: { budget: 2000 }, source: { budget: 'about 2000' }, from: 'T1' } },
     ]);
     expect(result.ok).toBe(true);
     expect(result.trees).toHaveLength(1);
@@ -39,7 +40,8 @@ describe('add', () => {
   it('creates a child node under existing parent', () => {
     const content = sc([t('trip', { name: 'Hangzhou' })]);
     const result = applyYOps(content, [
-      { add: { parent: 'trip', node: { dining: { budget: 500 } }, source: { budget: 'about 500' }, from: 'T2' } },
+      { define: { parent: 'trip', key: 'dining' } },
+      { populate: { path: 'trip/dining', slots: { budget: 500 }, source: { budget: 'about 500' }, from: 'T2' } },
     ]);
     expect(result.ok).toBe(true);
     expect(result.trees[0].children).toHaveLength(1);
@@ -50,7 +52,7 @@ describe('add', () => {
   it('rejects duplicate root key', () => {
     const content = sc([t('trip', {})]);
     const result = applyYOps(content, [
-      { add: { parent: '', node: { trip: { x: 1 } }, source: { x: 'q' }, from: 'T1' } },
+      { define: { parent: '', key: 'trip' } },
     ]);
     expect(result.ok).toBe(false);
     expect(result.error?.code).toBe('DUPLICATE_KEY');
@@ -59,7 +61,7 @@ describe('add', () => {
   it('rejects duplicate sibling key', () => {
     const content = sc([t('trip', {}, [t('dining', {})])]);
     const result = applyYOps(content, [
-      { add: { parent: 'trip', node: { dining: { x: 1 } }, source: { x: 'q' }, from: 'T1' } },
+      { define: { parent: 'trip', key: 'dining' } },
     ]);
     expect(result.ok).toBe(false);
     expect(result.error?.code).toBe('DUPLICATE_KEY');
@@ -68,7 +70,7 @@ describe('add', () => {
   it('rejects missing parent (PARENT_NOT_FOUND)', () => {
     const content = sc([t('trip', {})]);
     const result = applyYOps(content, [
-      { add: { parent: 'nonexistent', node: { x: { v: 1 } }, source: { v: 'q' }, from: 'T1' } },
+      { define: { parent: 'nonexistent', key: 'x' } },
     ]);
     expect(result.ok).toBe(false);
     expect(result.error?.code).toBe('PARENT_NOT_FOUND');
@@ -77,19 +79,20 @@ describe('add', () => {
   it('rejects invalid key (uppercase)', () => {
     const content = sc([]);
     const result = applyYOps(content, [
-      { add: { parent: '', node: { BadKey: { v: 1 } }, source: { v: 'q' }, from: 'T1' } },
+      { define: { parent: '', key: 'BadKey' } },
     ]);
     expect(result.ok).toBe(false);
     expect(result.error?.code).toBe('INVALID_KEY');
   });
 
-  it('attaches source, from, and confidence metadata', () => {
+  it('attaches source, from, and confidence metadata via populate', () => {
     const content = sc([]);
     const result = applyYOps(content, [
+      { define: { parent: '', key: 'trip' } },
       {
-        add: {
-          parent: '',
-          node: { trip: { budget: 2000 } },
+        populate: {
+          path: 'trip',
+          slots: { budget: 2000 },
           source: { budget: 'about 2000' },
           from: 'T3',
           confidence: 0.9,
@@ -102,17 +105,13 @@ describe('add', () => {
     expect(result.trees[0].confidence).toBe(0.9);
   });
 
-  it('creates node with nested children from YAML map', () => {
+  it('creates node with nested children via separate define+populate', () => {
     const content = sc([]);
     const result = applyYOps(content, [
-      {
-        add: {
-          parent: '',
-          node: { trip: { budget: 2000, dining: { style: 'casual' } } },
-          source: { budget: 'about 2000' },
-          from: 'T1',
-        },
-      },
+      { define: { parent: '', key: 'trip' } },
+      { populate: { path: 'trip', slots: { budget: 2000 }, source: { budget: 'about 2000' }, from: 'T1' } },
+      { define: { parent: 'trip', key: 'dining' } },
+      { populate: { path: 'trip/dining', slots: { style: 'casual' }, source: {}, from: 'T1' } },
     ]);
     expect(result.ok).toBe(true);
     expect(result.trees[0].children).toHaveLength(1);

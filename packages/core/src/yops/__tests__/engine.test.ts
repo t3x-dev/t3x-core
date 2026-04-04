@@ -30,13 +30,14 @@ describe('engine integration', () => {
   it('sequential execution: op 2 sees result of op 1', () => {
     const content = sc([]);
     const result = applyYOps(content, [
-      // Op 1: add root node
-      { add: { parent: '', node: { trip: { budget: 2000 } }, source: { budget: 'about 2000' }, from: 'T1' } },
-      // Op 2: set slot on newly added node (depends on op 1)
+      // Op 1-2: define + populate root node
+      { define: { parent: '', key: 'trip' } },
+      { populate: { path: 'trip', slots: { budget: 2000 }, source: { budget: 'about 2000' }, from: 'T1' } },
+      // Op 3: set slot on newly defined node (depends on op 1)
       { set: { path: 'trip/style', value: 'casual', source: 'keep it casual', from: 'T2' } },
     ]);
     expect(result.ok).toBe(true);
-    expect(result.applied).toBe(2);
+    expect(result.applied).toBe(3);
     expect(result.trees[0].slots.budget).toBe(2000);
     expect(result.trees[0].slots.style).toBe('casual');
   });
@@ -94,17 +95,19 @@ describe('engine integration', () => {
     expect(result.trees[0].slots.budget).toBe(1000);
   });
 
-  it('chain: add + rename + relate + move', () => {
+  it('chain: define + populate + rename + relate', () => {
     const content = sc([]);
     const result = applyYOps(content, [
-      { add: { parent: '', node: { trip: {} }, source: {}, from: 'T1' } },
-      { add: { parent: 'trip', node: { food: { budget: 500 } }, source: { budget: 'about 500' }, from: 'T1' } },
-      { add: { parent: 'trip', node: { budget: { total: 2000 } }, source: { total: 'about 2000' }, from: 'T1' } },
+      { define: { parent: '', key: 'trip' } },
+      { define: { parent: 'trip', key: 'food' } },
+      { populate: { path: 'trip/food', slots: { budget: 500 }, source: { budget: 'about 500' }, from: 'T1' } },
+      { define: { parent: 'trip', key: 'budget' } },
+      { populate: { path: 'trip/budget', slots: { total: 2000 }, source: { total: 'about 2000' }, from: 'T1' } },
       { rename: { path: 'trip/food', to: 'dining' } },
       { relate: { from: 'trip/dining', to: 'trip/budget', type: 'depends' } },
     ]);
     expect(result.ok).toBe(true);
-    expect(result.applied).toBe(5);
+    expect(result.applied).toBe(7);
     expect(result.trees[0].children[0].key).toBe('dining');
     expect(result.relations[0].from).toBe('trip/dining');
     expect(result.relations[0].to).toBe('trip/budget');
@@ -113,13 +116,14 @@ describe('engine integration', () => {
   it('returns partial state on error', () => {
     const content = sc([t('trip', {})]);
     const result = applyYOps(content, [
-      { add: { parent: 'trip', node: { dining: { budget: 500 } }, source: { budget: 'q' }, from: 'T1' } },
-      // This will fail: adding to nonexistent parent
-      { add: { parent: 'nonexistent', node: { x: { v: 1 } }, source: { v: 'q' }, from: 'T1' } },
+      { define: { parent: 'trip', key: 'dining' } },
+      { populate: { path: 'trip/dining', slots: { budget: 500 }, source: { budget: 'q' }, from: 'T1' } },
+      // This will fail: defining under nonexistent parent
+      { define: { parent: 'nonexistent', key: 'x' } },
     ]);
     expect(result.ok).toBe(false);
-    expect(result.applied).toBe(1);
-    // The first op was applied (dining exists in partial state)
+    expect(result.applied).toBe(2);
+    // The first two ops were applied (dining exists in partial state)
     expect(result.trees[0].children).toHaveLength(1);
     expect(result.trees[0].children[0].key).toBe('dining');
   });
@@ -131,14 +135,16 @@ describe('formatYOpsLog', () => {
   it('produces valid YAML containing operation keywords', () => {
     const ops: YOp[] = [
       { set: { path: 'trip/budget', value: 2000, source: 'about 2000', from: 'T3' } },
-      { add: { parent: '', node: { hotel: { stars: 4 } }, source: { stars: 'four star' }, from: 'T2' } },
+      { define: { parent: '', key: 'hotel' } },
+      { populate: { path: 'hotel', slots: { stars: 4 }, source: { stars: 'four star' }, from: 'T2' } },
       { drop: { path: 'trip/shopping' } },
       { relate: { from: 'trip', to: 'hotel', type: 'depends' } },
     ];
     const yaml = formatYOpsLog(ops);
     expect(yaml).toContain('yops:');
     expect(yaml).toContain('set:');
-    expect(yaml).toContain('add:');
+    expect(yaml).toContain('define:');
+    expect(yaml).toContain('populate:');
     expect(yaml).toContain('drop:');
     expect(yaml).toContain('relate:');
   });
@@ -159,7 +165,8 @@ describe('parseYOpsYaml', () => {
   it('roundtrips with formatYOpsLog', () => {
     const ops: YOp[] = [
       { set: { path: 'trip/budget', value: 2000, source: 'about 2000', from: 'T3' } },
-      { add: { parent: 'trip', node: { dining: { budget: 500 } }, source: { budget: 'about 500' }, from: 'T2' } },
+      { define: { parent: 'trip', key: 'dining' } },
+      { populate: { path: 'trip/dining', slots: { budget: 500 }, source: { budget: 'about 500' }, from: 'T2' } },
       { drop: { path: 'trip/shopping' } },
       { rename: { path: 'trip/food', to: 'dining' } },
       { clone: { path: 'trip/dining', to: 'reference' } },

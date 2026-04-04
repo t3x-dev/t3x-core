@@ -65,13 +65,16 @@ ${
     ? `Operations:
 - set: Set or update a slot value on an existing node
 - unset: Remove a slot from a node
-- add: Create a new node with initial slots
+- define: Create an empty node (structure operation)
+- populate: Fill slots on an existing node with extracted data
 - drop: Remove a node and all its children
 - rename: Change a node's key name (path: current, to: new_name)
 - move: Move a node to a different parent (path: source, to: target_path/key)
 - relate: Add a semantic relation (from, to, type: causes|conditions|contrasts|follows|depends)
 - unrelate: Remove a semantic relation`
-    : `Operation: add (create nodes with slots and source quotes)`
+    : `Operations:
+- define: Create an empty node (parent + key)
+- populate: Fill slots on a node with extracted data and source quotes`
 }
 
 Each operation needs:
@@ -94,39 +97,42 @@ ${
       value: 3000
       source: "let's cap it at 3000"
       from: T5
-
-  - add:
+  - define:
       parent: trip
-      node:
-        accommodation:
-          type: ryokan
-          budget: 200
+      key: accommodation
+  - populate:
+      path: trip/accommodation
+      slots:
+        type: ryokan
+        budget: 200
       source:
         type: "I want a ryokan"
         budget: "around 200 per night"
       from: T5`
     : `yops:
-  - add:
+  - define:
       parent: ""
-      node:
-        giant_panda:
-          classification: bear (Ursidae family)
-          scientific_name: Ailuropoda melanoleuca
-          diet:
-            primary: bamboo
-            percentage: 99
-          coloring:
-            pattern: black and white
-            purpose: camouflage
-          habitat: mountain forests of central China
+      key: giant_panda
+  - populate:
+      path: giant_panda
+      slots:
+        classification: bear (Ursidae family)
+        scientific_name: Ailuropoda melanoleuca
       source:
         classification: "Giant pandas belong to the bear family Ursidae"
         scientific_name: "Ailuropoda melanoleuca"
-        diet.primary: "Bamboo makes up about 99% of a giant panda's diet"
-        diet.percentage: "about 99% of a giant panda's diet"
-        coloring.pattern: "distinctive black and white coloring"
-        coloring.purpose: "camouflage in their natural habitat"
-        habitat: "mountain forests of central China"
+      from: T2
+  - define:
+      parent: giant_panda
+      key: diet
+  - populate:
+      path: giant_panda/diet
+      slots:
+        primary: bamboo
+        percentage: 99
+      source:
+        primary: "Bamboo makes up about 99% of a giant panda's diet"
+        percentage: "about 99% of a giant panda's diet"
       from: T2`
 }
 
@@ -187,7 +193,7 @@ ${snapshotYaml}
 
 ${turnsSection}
 
-Extract changes from the NEW turns only. Use set/add/drop/unset operations.`;
+Extract changes from the NEW turns only. Use set/define/populate/drop/unset operations.`;
 
     return { systemPrompt, userPrompt };
   }
@@ -196,7 +202,7 @@ Extract changes from the NEW turns only. Use set/add/drop/unset operations.`;
   const userPrompt = `## Conversation
 ${formatTurns(turns)}
 
-Extract ALL knowledge into a tree using add operations.
+Extract ALL knowledge into a tree using define + populate operations.
 Capture EVERY fact, number, list item, recommendation, and detail — both from user and assistant.
 Do NOT skip information because you're unsure about quoting. A short keyword source is enough.`;
 

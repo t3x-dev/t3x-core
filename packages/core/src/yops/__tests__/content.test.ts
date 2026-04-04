@@ -35,11 +35,12 @@ describe('YOp type shapes', () => {
     expect('set' in op).toBe(true);
   });
 
-  it('all 13 ops can be constructed', () => {
+  it('all 14 ops can be constructed', () => {
     const ops: YOp[] = [
       { set: { path: 'a/b', value: 1, source: 'q', from: 'T1' } },
       { unset: { path: 'a/b' } },
-      { add: { parent: '', node: { x: { v: 1 } }, source: { v: 'q' }, from: 'T1' } },
+      { define: { parent: '', key: 'x' } },
+      { populate: { path: 'x', slots: { v: 1 }, source: { v: 'q' }, from: 'T1' } },
       { drop: { path: 'a' } },
       { rename: { path: 'a', to: 'b' } },
       { clone: { path: 'a', to: '' } },
@@ -51,7 +52,7 @@ describe('YOp type shapes', () => {
       { relate: { from: 'a', to: 'b', type: 'causes' } },
       { unrelate: { from: 'a', to: 'b', type: 'causes' } },
     ];
-    expect(ops).toHaveLength(13);
+    expect(ops).toHaveLength(14);
   });
 });
 
@@ -96,11 +97,18 @@ describe('YOpSchema validation', () => {
     expect(r.success).toBe(true);
   });
 
-  it('validates add operation', () => {
+  it('validates define operation', () => {
     const r = YOpSchema.safeParse({
-      add: {
-        parent: 'trip',
-        node: { dining: { budget: 1000 } },
+      define: { parent: 'trip', key: 'dining' },
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it('validates populate operation', () => {
+    const r = YOpSchema.safeParse({
+      populate: {
+        path: 'trip/dining',
+        slots: { budget: 1000 },
         source: { budget: 'about 1000' },
         from: 'T3',
       },
@@ -182,14 +190,9 @@ describe('YOpSchema validation', () => {
     expect(r.success).toBe(false);
   });
 
-  it('rejects add with multiple top-level node keys', () => {
+  it('rejects define with missing key', () => {
     const r = YOpSchema.safeParse({
-      add: {
-        parent: '',
-        node: { a: { x: 1 }, b: { y: 2 } },
-        source: { x: 'q' },
-        from: 'T1',
-      },
+      define: { parent: '' },
     });
     expect(r.success).toBe(false);
   });
@@ -311,18 +314,12 @@ describe('applyYOps', () => {
     });
   });
 
-  describe('add', () => {
-    it('adds a new root node', () => {
+  describe('define + populate', () => {
+    it('defines a new root node and populates it', () => {
       const content = sc([t('trip', {})]);
       const result = applyYOps(content, [
-        {
-          add: {
-            parent: '',
-            node: { hotel: { stars: 4 } },
-            source: { stars: 'four star' },
-            from: 'T2',
-          },
-        },
+        { define: { parent: '', key: 'hotel' } },
+        { populate: { path: 'hotel', slots: { stars: 4 }, source: { stars: 'four star' }, from: 'T2' } },
       ]);
       expect(result.ok).toBe(true);
       expect(result.trees).toHaveLength(2);
@@ -330,34 +327,21 @@ describe('applyYOps', () => {
       expect(result.trees[1].slots.stars).toBe(4);
     });
 
-    it('adds a child node', () => {
+    it('defines and populates a child node', () => {
       const content = sc([t('trip', {})]);
       const result = applyYOps(content, [
-        {
-          add: {
-            parent: 'trip',
-            node: { dining: { budget: 500 } },
-            source: { budget: 'about 500' },
-            from: 'T2',
-          },
-        },
+        { define: { parent: 'trip', key: 'dining' } },
+        { populate: { path: 'trip/dining', slots: { budget: 500 }, source: { budget: 'about 500' }, from: 'T2' } },
       ]);
       expect(result.ok).toBe(true);
       expect(result.trees[0].children).toHaveLength(1);
       expect(result.trees[0].children[0].key).toBe('dining');
     });
 
-    it('rejects duplicate key', () => {
+    it('rejects duplicate key on define', () => {
       const content = sc([t('trip', {}, [t('dining', {})])]);
       const result = applyYOps(content, [
-        {
-          add: {
-            parent: 'trip',
-            node: { dining: { x: 1 } },
-            source: { x: 'q' },
-            from: 'T1',
-          },
-        },
+        { define: { parent: 'trip', key: 'dining' } },
       ]);
       expect(result.ok).toBe(false);
       expect(result.error?.code).toBe('DUPLICATE_KEY');

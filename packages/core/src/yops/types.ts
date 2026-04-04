@@ -24,9 +24,14 @@ export interface UnsetOp {
   path: string;
 }
 
-export interface AddOp {
+export interface DefineOp {
   parent: string;
-  node: Record<string, unknown>;
+  key: string;
+}
+
+export interface PopulateOp {
+  path: string;
+  slots: Record<string, SlotValue>;
   source: Record<string, string>;
   from: string;
   confidence?: number;
@@ -89,7 +94,8 @@ export interface UnrelateOp {
 export type YOp =
   | { set: SetOp }
   | { unset: UnsetOp }
-  | { add: AddOp }
+  | { define: DefineOp }
+  | { populate: PopulateOp }
   | { drop: DropOp }
   | { rename: RenameOp }
   | { clone: CloneOp }
