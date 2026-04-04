@@ -227,6 +227,13 @@ export function ChatWorkspace({
             if (usePhaseStore.getState().panelMode === 'collapsed') {
               usePhaseStore.getState().setPanelMode('default');
             }
+            // If draft exists but nothing committed yet → show triage
+            // This handles extraction triggered via API/CLI/MCP (not the UI Extract button)
+            const phase = usePhaseStore.getState().phase;
+            const hasCommits = useCommitStore.getState().lastCommitHash;
+            if (phase === 'idle' && !hasCommits) {
+              usePhaseStore.getState().setPhase('triage');
+            }
           } else if (inheritFromCommitHash) {
             // No existing draft — hydrate from parent commit
             hydrateFromParent(inheritFromCommitHash);
