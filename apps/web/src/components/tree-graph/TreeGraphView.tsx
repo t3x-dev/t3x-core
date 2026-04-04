@@ -169,16 +169,15 @@ function TreeGraphInner({
       const nodes = treesToNodes(content.trees);
       const existingNode = nodes.find((f) => f.id === treeId);
       if (!existingNode) return;
+      const slots = Object.fromEntries(Object.entries(existingNode.slots));
+      const source: Record<string, string> = {};
+      for (const k of Object.keys(slots)) {
+        source[k] = String(slots[k]);
+      }
       const ops: YOp[] = [
         { drop: { path: treeId } },
-        {
-          add: {
-            parent: '',
-            node: { [newType]: Object.fromEntries(Object.entries(existingNode.slots)) },
-            source: {},
-            from: 'manual',
-          },
-        },
+        { define: { parent: '', key: newType } },
+        { populate: { path: newType, slots, source, from: 'manual' } },
       ];
       onBatchCreated(ops, 'manual');
     },
@@ -192,14 +191,8 @@ function TreeGraphInner({
       if (!onBatchCreated) return;
       const newKey = nextNodeKey(content);
       const ops: YOp[] = [
-        {
-          add: {
-            parent: '',
-            node: { [newKey]: { label: 'New Node' } },
-            source: {},
-            from: 'manual',
-          },
-        },
+        { define: { parent: '', key: newKey } },
+        { populate: { path: newKey, slots: { label: 'New Node' }, source: { label: 'New Node' }, from: 'manual' } },
       ];
       onBatchCreated(ops, 'manual');
     },

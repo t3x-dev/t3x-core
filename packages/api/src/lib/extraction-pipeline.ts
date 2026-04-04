@@ -342,11 +342,16 @@ export async function* runExtractionPipeline(
       // so the YOpsFeed has items to display
       const synthYops = result.snapshot.trees.flatMap((tree) => {
         const yops: Record<string, unknown>[] = [
-          { add: { parent: '', node: { [tree.key]: Object.fromEntries(Object.entries(tree.slots).slice(0, 3)) }, source: {}, from: tree.source ?? 'T1' }, index: 0, total: 0 },
+          { define: { parent: '', key: tree.key }, index: 0, total: 0 },
+          { populate: { path: tree.key, slots: Object.fromEntries(Object.entries(tree.slots).slice(0, 3)), source: {}, from: tree.source ?? 'T1' }, index: 0, total: 0 },
         ];
         for (const child of tree.children) {
           yops.push({
-            add: { parent: tree.key, node: { [child.key]: Object.fromEntries(Object.entries(child.slots).slice(0, 3)) }, source: {}, from: child.source ?? 'T1' },
+            define: { parent: tree.key, key: child.key },
+            index: 0, total: 0,
+          });
+          yops.push({
+            populate: { path: `${tree.key}/${child.key}`, slots: Object.fromEntries(Object.entries(child.slots).slice(0, 3)), source: {}, from: child.source ?? 'T1' },
             index: 0, total: 0,
           });
         }

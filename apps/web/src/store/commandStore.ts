@@ -61,7 +61,9 @@ function computeSummary(ops: YOp[], draftAtStart: SemanticContent): PendingSumma
       }
     } else if ('unset' in op || 'drop' in op) {
       deletes++;
-    } else if ('add' in op) {
+    } else if ('define' in op) {
+      adds++;
+    } else if ('populate' in op) {
       adds++;
     }
     // Other ops (rename, clone, move, etc.) counted as edits

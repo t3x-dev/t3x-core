@@ -5,9 +5,10 @@ export const editDraftTool = {
   description:
     'Edit a draft by applying YOps (YAML Operations). ' +
     'Use t3x_yops_schema to see available operations. Common operations:\n' +
-    '- set: update a slot value (e.g. fix an extraction error)\n' +
-    '- add: add a new node (e.g. add missing knowledge)\n' +
-    '- drop: remove a node (e.g. delete irrelevant extraction)\n' +
+    '- define: create a new empty node (structure)\n' +
+    '- populate: fill slots on an existing node (data)\n' +
+    '- set: update a single slot value\n' +
+    '- drop: remove a node and all children\n' +
     '- rename: rename a node key\n' +
     '- merge: combine multiple nodes into one\n' +
     'Use t3x_show_draft after editing to verify the result.',

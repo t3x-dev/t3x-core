@@ -93,9 +93,11 @@ export const useDraftStore = create<DraftState>((set, get) => ({
     if (source === 'manual') {
       const ids = new Set(get().manualEditedNodeIds);
       for (const op of ops) {
-        if ('add' in op) {
-          const nodeKey = Object.keys(op.add.node)[0];
-          if (nodeKey) ids.add(nodeKey);
+        if ('define' in op) {
+          ids.add(op.define.key);
+        } else if ('populate' in op) {
+          const rootKey = op.populate.path.split('/')[0];
+          if (rootKey) ids.add(rootKey);
         } else if ('set' in op) {
           ids.add(op.set.path.split('/')[0]);
         } else if ('drop' in op) {

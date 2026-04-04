@@ -78,17 +78,17 @@ function buildChangeMap(
 
       if (!map[nodeKey]) map[nodeKey] = {};
       map[nodeKey][slotKey] = { type: 'deleted' };
-    } else if ('add' in op) {
-      // Entire new node — mark all its slots as added
-      const nodeKeys = Object.keys(op.add.node);
-      for (const nk of nodeKeys) {
-        const nodeData = op.add.node[nk];
-        if (!map[nk]) map[nk] = {};
-        if (nodeData && typeof nodeData === 'object' && !Array.isArray(nodeData)) {
-          for (const sk of Object.keys(nodeData as Record<string, unknown>)) {
-            map[nk][sk] = { type: 'added' };
-          }
-        }
+    } else if ('define' in op) {
+      // New node defined — no slots yet, just mark the node key
+      const nk = op.define.key;
+      if (!map[nk]) map[nk] = {};
+    } else if ('populate' in op) {
+      // Slots populated on a node — mark each slot as added
+      const slashIdx = op.populate.path.indexOf('/');
+      const nk = slashIdx === -1 ? op.populate.path : op.populate.path.slice(0, slashIdx);
+      if (!map[nk]) map[nk] = {};
+      for (const sk of Object.keys(op.populate.slots)) {
+        map[nk][sk] = { type: 'added' };
       }
     }
     // drop ops are handled separately via isNodeDeleted

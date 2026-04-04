@@ -8,10 +8,8 @@ function parseTurnTag(from: string): number | null {
 }
 
 function getRootKey(op: YOp): string | null {
-  if ('add' in op) {
-    const node = op.add.node as Record<string, unknown>;
-    return (node.key as string) ?? Object.keys(node)[0] ?? null;
-  }
+  if ('define' in op) return op.define.key;
+  if ('populate' in op) return op.populate.path.split('.')[0];
   if ('set' in op) return op.set.path.split('.')[0];
   if ('unset' in op) return op.unset.path.split('.')[0];
   if ('drop' in op) return op.drop.path.split('.')[0];
@@ -20,7 +18,7 @@ function getRootKey(op: YOp): string | null {
 }
 
 function getFrom(op: YOp): string | null {
-  if ('add' in op) return op.add.from ?? null;
+  if ('populate' in op) return op.populate.from ?? null;
   if ('set' in op) return op.set.from ?? null;
   return null;
 }

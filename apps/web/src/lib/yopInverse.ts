@@ -17,7 +17,7 @@ export type InverseResult = YOp | ContextInverse;
 
 export interface ContextInverse {
   _context: {
-    type: 'nest' | 'split' | 'fold' | 'merge';
+    type: 'nest' | 'split' | 'fold' | 'merge' | 'populate';
     /** Snapshot of affected subtrees before the operation */
     snapshot: TreeNode[];
     /** The original op for reference */
@@ -36,7 +36,8 @@ export function isContextInverse(inv: InverseResult): inv is ContextInverse {
 export function computeInverse(op: YOp, draft: SemanticContent): InverseResult {
   if ('set' in op) return invertSet(op, draft);
   if ('unset' in op) return invertUnset(op, draft);
-  if ('add' in op) return invertAdd(op);
+  if ('define' in op) return invertDefine(op);
+  if ('populate' in op) return invertPopulate(op);
   if ('drop' in op) return invertDrop(op, draft);
   if ('rename' in op) return invertRename(op);
   if ('clone' in op) return invertClone(op, draft);
@@ -77,28 +78,30 @@ function invertUnset(op: { unset: { path: string } }, draft: SemanticContent): Y
   return { set: { path: op.unset.path, value: oldValue, source: '', from: '' } };
 }
 
-function invertAdd(op: { add: { parent: string; node: Record<string, unknown> } }): YOp {
-  const nodeKey = Object.keys(op.add.node)[0];
-  const path = op.add.parent ? `${op.add.parent}/${nodeKey}` : nodeKey;
+function invertDefine(op: { define: { parent: string; key: string } }): YOp {
+  const path = op.define.parent ? `${op.define.parent}/${op.define.key}` : op.define.key;
   return { drop: { path } };
 }
 
-function invertDrop(op: { drop: { path: string } }, draft: SemanticContent): YOp {
-  const node = findNode(draft.trees, op.drop.path);
-  const parentPath = getParentPath(op.drop.path);
-  if (!node) {
-    // Node doesn't exist — inverse is a no-op add of empty node
-    const key = getNodeKey(op.drop.path);
-    return { add: { parent: parentPath, node: { [key]: {} }, source: {}, from: '' } };
-  }
-  // Reconstruct the node data for re-adding
-  const nodeData = treeNodeToYamlMap(node);
+function invertPopulate(op: { populate: { path: string; slots: Record<string, SlotValue> } }): ContextInverse {
+  // Inverse of populate requires multiple unset ops — use context-based inverse
   return {
-    add: {
-      parent: parentPath,
-      node: { [node.key]: nodeData },
-      source: node.slot_quotes ?? {},
-      from: node.source ?? '',
+    _context: {
+      type: 'populate',
+      snapshot: [],
+      originalOp: op as YOp,
+    },
+  };
+}
+
+function invertDrop(op: { drop: { path: string } }, draft: SemanticContent): ContextInverse {
+  const node = findNode(draft.trees, op.drop.path);
+  const snapshot = node ? [deepCloneNode(node)] : [];
+  return {
+    _context: {
+      type: 'nest', // Re-use 'nest' type — restoring a dropped subtree
+      snapshot,
+      originalOp: op as YOp,
     },
   };
 }
@@ -183,11 +186,3 @@ function deepCloneNode(node: TreeNode): TreeNode {
   };
 }
 
-/** Convert TreeNode slots back to the YAML map format used by AddOp.node */
-function treeNodeToYamlMap(node: TreeNode): Record<string, unknown> {
-  const result: Record<string, unknown> = { ...node.slots };
-  for (const child of node.children) {
-    result[child.key] = treeNodeToYamlMap(child);
-  }
-  return result;
-}
