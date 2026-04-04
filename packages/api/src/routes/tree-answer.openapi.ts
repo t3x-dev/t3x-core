@@ -14,13 +14,13 @@ import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
   applyAnswer,
   applyYOps,
-  createMeaningPipeline,
   type ExtractionResult,
   type ExtractionTurn,
   Extractor,
   flattenTrees,
   RELATION_TYPES,
   type RelationType,
+  runTransforms,
   type UserAnswer,
 } from '@t3x-dev/core';
 import {
@@ -290,19 +290,17 @@ async function handleDriftChoice4(
     return errorResponse(c, 'EXTRACTION_FAILED', extractResult.error);
   }
 
-  // 4. Run MeaningPipeline
+  // 4. Run post-extraction transforms (deterministic)
   let organizedSnapshot = extractResult.snapshot;
   try {
-    const pipelineResult = await reg.tryWithFallback('generation', async (pipelineProvider) => {
-      // biome-ignore lint/suspicious/noExplicitAny: generic error handler
-      const pipeline = createMeaningPipeline(pipelineProvider as any);
-      return pipeline.run(extractResult.snapshot, extractionTurns, currentSnapshot, {
-        mode: 'incremental',
-      });
-    });
-    organizedSnapshot = (pipelineResult as any).content;
+    const transformResult = runTransforms(
+      extractResult.snapshot,
+      extractionTurns.map((t) => ({ role: t.role, content: t.content })),
+      currentSnapshot,
+    );
+    organizedSnapshot = transformResult.content;
   } catch {
-    // Pipeline optional — flat frames still valid
+    // Transforms optional — raw extraction still valid
   }
 
   // 5. Build connecting relation between old root → new root as a relate YOp
