@@ -32,7 +32,8 @@ class RoomManager {
       this.rooms.set(conversationId, new Map());
       // Subscribe to EventBus when first client joins this room
       eventBus.on(`room:${conversationId}`, (event: RealtimeEvent) => {
-        this.broadcastToRoom(conversationId, event, conn.id);
+        // No exclusion — backend events go to ALL clients in the room
+        this.broadcastToRoom(conversationId, event);
       });
     }
 
