@@ -252,7 +252,7 @@ export function ExtractionPanel({ customWidth }: { customWidth?: number }) {
           {extractionPhase === 'yops' && (
             <YOpsFeed
               ops={feedYops as import('@t3x-dev/core').YOp[]}
-              onComplete={() => setPhase('triage')}
+              onGoToTriage={() => setPhase('triage')}
             />
           )}
 
