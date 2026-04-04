@@ -34,28 +34,36 @@ describe('computeInverse', () => {
     expect(inv).toEqual({ set: { path: 'trip/budget', value: '1000', source: '', from: '' } });
   });
 
-  it('inverts add to drop', () => {
+  it('inverts define to drop', () => {
     const draft = makeDraft();
-    const op: YOp = { add: { parent: '', node: { hotel: { stars: '5' } }, source: {}, from: '' } };
+    const op: YOp = { define: { parent: '', key: 'hotel' } };
     const inv = computeInverse(op, draft);
     expect(inv).toEqual({ drop: { path: 'hotel' } });
   });
 
-  it('inverts add under parent to drop with full path', () => {
+  it('inverts define under parent to drop with full path', () => {
     const draft = makeDraft(makeNode('trip', {}, []));
-    const op: YOp = { add: { parent: 'trip', node: { hotel: { stars: '5' } }, source: {}, from: '' } };
+    const op: YOp = { define: { parent: 'trip', key: 'hotel' } };
     const inv = computeInverse(op, draft);
     expect(inv).toEqual({ drop: { path: 'trip/hotel' } });
   });
 
-  it('inverts drop to add with original node data', () => {
+  it('inverts populate to context-based inverse', () => {
+    const draft = makeDraft(makeNode('hotel'));
+    const op: YOp = { populate: { path: 'hotel', slots: { stars: '5', name: 'Hilton' }, source: { stars: '5 stars', name: 'Hilton' }, from: 'T1' } };
+    const inv = computeInverse(op, draft);
+    expect(inv).toHaveProperty('_context');
+  });
+
+  it('inverts drop to context-based inverse with snapshot', () => {
     const draft = makeDraft(makeNode('hotel', { stars: '5', name: 'Hilton' }));
     const op: YOp = { drop: { path: 'hotel' } };
     const inv = computeInverse(op, draft);
-    expect(inv).toHaveProperty('add');
-    const addOp = (inv as { add: { parent: string; node: Record<string, unknown> } }).add;
-    expect(addOp.parent).toBe('');
-    expect(addOp.node).toEqual({ hotel: { stars: '5', name: 'Hilton' } });
+    expect(inv).toHaveProperty('_context');
+    const ctx = (inv as { _context: { snapshot: TreeNode[] } })._context;
+    expect(ctx.snapshot).toHaveLength(1);
+    expect(ctx.snapshot[0].key).toBe('hotel');
+    expect(ctx.snapshot[0].slots).toEqual({ stars: '5', name: 'Hilton' });
   });
 
   it('inverts rename', () => {
@@ -137,10 +145,12 @@ describe('computeInverse', () => {
     expect(restored.trees[0].slots.budget).toBe('1000');
   });
 
-  it('roundtrip: add + inverse restores original draft', () => {
+  it('roundtrip: define + inverse restores original draft', () => {
     const original = makeDraft(makeNode('trip'));
-    const op: YOp = { add: { parent: '', node: { hotel: { stars: '5' } }, source: {}, from: '' } };
+    const op: YOp = { define: { parent: '', key: 'hotel' } };
     const inv = computeInverse(op, original);
+    // define inverse is a drop
+    expect(inv).toEqual({ drop: { path: 'hotel' } });
     const after = applyYOps(original, [op]);
     expect(after.ok).toBe(true);
     expect(after.trees).toHaveLength(2);
@@ -150,17 +160,14 @@ describe('computeInverse', () => {
     expect(restored.trees[0].key).toBe('trip');
   });
 
-  it('roundtrip: drop + inverse restores original draft', () => {
+  it('drop inverse is context-based (snapshot for restoration)', () => {
     const original = makeDraft(makeNode('hotel', { stars: '5', name: 'Hilton' }));
     const op: YOp = { drop: { path: 'hotel' } };
     const inv = computeInverse(op, original);
-    const after = applyYOps(original, [op]);
-    expect(after.ok).toBe(true);
-    expect(after.trees).toHaveLength(0);
-    const restored = applyYOps({ trees: after.trees, relations: after.relations }, [inv as YOp]);
-    expect(restored.ok).toBe(true);
-    expect(restored.trees).toHaveLength(1);
-    expect(restored.trees[0].key).toBe('hotel');
-    expect(restored.trees[0].slots).toEqual({ stars: '5', name: 'Hilton' });
+    // Drop now returns a context inverse with snapshot (since add no longer exists)
+    expect(inv).toHaveProperty('_context');
+    const ctx = (inv as { _context: { snapshot: TreeNode[] } })._context;
+    expect(ctx.snapshot).toHaveLength(1);
+    expect(ctx.snapshot[0].key).toBe('hotel');
   });
 });

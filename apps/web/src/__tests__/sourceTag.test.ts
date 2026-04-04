@@ -10,23 +10,23 @@ describe('deriveSourceTags', () => {
     { role: 'assistant' as const },
   ];
 
-  test('add op from user turn → user tag', () => {
+  test('populate op from user turn → user tag', () => {
     const delta: YOp[] = [
-      { add: { parent: '', node: { key: 'budget' }, source: { budget: '$3000' }, from: 'T1' } },
+      { populate: { path: 'budget', slots: { amount: '$3000' }, source: { amount: '$3000' }, from: 'T1' } },
     ];
     expect(deriveSourceTags(delta, messages).budget).toBe('user');
   });
 
-  test('add op from assistant turn → llm tag', () => {
+  test('populate op from assistant turn → llm tag', () => {
     const delta: YOp[] = [
-      { add: { parent: '', node: { key: 'tips' }, source: { tip: 'use Suica' }, from: 'T2' } },
+      { populate: { path: 'tips', slots: { tip: 'use Suica' }, source: { tip: 'use Suica' }, from: 'T2' } },
     ];
     expect(deriveSourceTags(delta, messages).tips).toBe('llm');
   });
 
   test('set ops from both → both tag', () => {
     const delta: YOp[] = [
-      { add: { parent: '', node: { key: 'route' }, source: { cities: 'Tokyo' }, from: 'T1' } },
+      { populate: { path: 'route', slots: { cities: 'Tokyo' }, source: { cities: 'Tokyo' }, from: 'T1' } },
       { set: { path: 'route.details', value: 'Shinkansen', source: 'take Shinkansen', from: 'T2' } },
     ];
     expect(deriveSourceTags(delta, messages).route).toBe('both');
@@ -34,8 +34,8 @@ describe('deriveSourceTags', () => {
 
   test('multiple nodes get independent tags', () => {
     const delta: YOp[] = [
-      { add: { parent: '', node: { key: 'a' }, source: {}, from: 'T1' } },
-      { add: { parent: '', node: { key: 'b' }, source: {}, from: 'T2' } },
+      { populate: { path: 'a', slots: { x: '1' }, source: { x: '1' }, from: 'T1' } },
+      { populate: { path: 'b', slots: { y: '2' }, source: { y: '2' }, from: 'T2' } },
     ];
     const tags = deriveSourceTags(delta, messages);
     expect(tags.a).toBe('user');

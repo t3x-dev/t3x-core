@@ -10,18 +10,23 @@ interface YOpsFeedProps {
 }
 
 function describeOp(op: YOp): { type: 'add' | 'update' | 'remove'; path: string; value: string } {
-  if ('add' in op) {
-    const node = op.add.node as Record<string, unknown>;
-    const key = (node.key as string) ?? Object.keys(node)[0] ?? '?';
-    const slotPreview = Object.entries(node)
-      .filter(([k]) => k !== 'key')
-      .map(([, v]) => String(v))
+  if ('define' in op) {
+    const key = op.define.key;
+    return {
+      type: 'add',
+      path: op.define.parent ? `${op.define.parent}.${key}` : key,
+      value: 'new topic',
+    };
+  }
+  if ('populate' in op) {
+    const slotPreview = Object.values(op.populate.slots)
+      .map(String)
       .slice(0, 2)
       .join(', ');
     return {
-      type: 'add',
-      path: op.add.parent ? `${op.add.parent}.${key}` : key,
-      value: slotPreview || 'new topic',
+      type: 'update',
+      path: op.populate.path,
+      value: slotPreview || 'filled slots',
     };
   }
   if ('set' in op) return { type: 'update', path: op.set.path, value: String(op.set.value) };

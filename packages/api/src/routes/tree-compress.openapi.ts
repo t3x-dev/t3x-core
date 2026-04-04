@@ -137,9 +137,10 @@ function computeNodeSignals(
         targetId = ((op.set as { path?: string }).path ?? '').split('/')[0];
       } else if ('unset' in op && op.unset && typeof op.unset === 'object') {
         targetId = ((op.unset as { path?: string }).path ?? '').split('/')[0];
-      } else if ('add' in op && op.add && typeof op.add === 'object') {
-        const node = (op.add as { node?: Record<string, unknown> }).node;
-        targetId = node ? Object.keys(node)[0] : undefined;
+      } else if ('define' in op && op.define && typeof op.define === 'object') {
+        targetId = (op.define as { key?: string }).key;
+      } else if ('populate' in op && op.populate && typeof op.populate === 'object') {
+        targetId = ((op.populate as { path?: string }).path ?? '').split('/')[0];
       } else if ('drop' in op && op.drop && typeof op.drop === 'object') {
         targetId = ((op.drop as { path?: string }).path ?? '').split('/')[0];
       } else if ('move' in op && op.move && typeof op.move === 'object') {

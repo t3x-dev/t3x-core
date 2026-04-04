@@ -104,7 +104,7 @@ describe('commandStore', () => {
     ]);
     // Add new node
     useCommandStore.getState().execute([
-      { add: { parent: '', node: { hotel: { stars: '5' } }, source: {}, from: '' } },
+      { define: { parent: '', key: 'hotel' } },
     ]);
 
     const summary = useCommandStore.getState().pendingSummary;

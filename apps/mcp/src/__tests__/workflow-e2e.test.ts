@@ -88,10 +88,11 @@ describe('MCP Workflow E2E: Extract → Triage → Edit → Commit', () => {
     // Use 'add' to add a new root node (doesn't depend on extracted node names)
     const data = await apiCall('POST', `/v1/drafts/${draftId}/apply-yops`, {
       yops: [
+        { define: { parent: '', key: 'budget_note' } },
         {
-          add: {
-            parent: '',
-            node: { budget_note: { amount: '$6000' } },
+          populate: {
+            path: 'budget_note',
+            slots: { amount: '$6000' },
             source: { amount: 'let us make it $6000' },
             from: 'T6',
           },

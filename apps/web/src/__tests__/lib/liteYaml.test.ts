@@ -56,11 +56,12 @@ describe('parseDisplayYAML', () => {
     const yamlWithNewNode = `new_node:\n  key: "value"\n`;
     const ops = parseDisplayYAML(yamlWithNewNode, currentContent);
 
-    expect(ops.length).toBe(1);
-    expect('add' in ops[0]).toBe(true);
-    if ('add' in ops[0]) {
-      expect(ops[0].add.node).toHaveProperty('new_node');
+    expect(ops.length).toBe(2);
+    expect('define' in ops[0]).toBe(true);
+    if ('define' in ops[0]) {
+      expect(ops[0].define.key).toBe('new_node');
     }
+    expect('populate' in ops[1]).toBe(true);
   });
 
   it('should detect removed trees as drop YOps', () => {
