@@ -85,7 +85,7 @@ describe('MCP Workflow E2E: Extract → Triage → Edit → Commit', () => {
   });
 
   it('Step 5: edit draft with YOps', async () => {
-    // Use 'add' to add a new root node (doesn't depend on extracted node names)
+    // Use define+populate to add a new root node (doesn't depend on extracted node names)
     const data = await apiCall('POST', `/v1/drafts/${draftId}/apply-yops`, {
       yops: [
         { define: { parent: '', key: 'budget_note' } },
