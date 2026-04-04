@@ -10,6 +10,7 @@
  * events (collect into a response object, stream as SSE, etc.).
  */
 
+import { eventBus } from './event-bus';
 import {
   applyYOps,
   checkDiffCompatibility,
@@ -284,6 +285,9 @@ export async function* runExtractionPipeline(
 
     // ── Step 4: Extractor — LLM extraction via provider registry ──
     yield { type: 'status', data: { step: 'extracting' } };
+
+    // Broadcast extraction started (for other tabs/clients)
+    eventBus.notify('extraction.started', conversationId, conversation.projectId);
 
     const reg = await getProviderRegistry();
     const trackedUsage = { inputTokens: 0, outputTokens: 0 };
@@ -565,6 +569,15 @@ export async function* runExtractionPipeline(
       yops: result.yops,
       snapshot: organizedSnapshot,
       topicId: resolvedTopicId,
+    });
+
+    // Broadcast to WebSocket clients
+    eventBus.broadcast({
+      type: 'extraction.done',
+      conversationId,
+      projectId: conversation.projectId,
+      payload: { yopsLogId: record.id },
+      timestamp: Date.now(),
     });
 
     // ── Done ──

@@ -19,7 +19,9 @@ import { OpenAPIHono } from '@hono/zod-openapi';
 import { apiReference } from '@scalar/hono-api-reference';
 import type { MiddlewareHandler } from 'hono';
 import { Hono } from 'hono';
+import { setupWebSocket } from './lib/ws';
 import { authMiddleware } from './middleware/auth';
+import { createWsRoute } from './routes/ws';
 import { corsMiddleware } from './middleware/cors';
 import { loggerMiddleware, pinoLogger } from './middleware/logger';
 import { projectAccessMiddleware } from './middleware/project-access';
@@ -88,7 +90,13 @@ export interface CreateAppOptions {
   routes?: (api: OpenAPIHono) => void;
 }
 
-export function createApp(options?: CreateAppOptions): Hono {
+export interface CreateAppResult {
+  app: Hono;
+  /** Call with the HTTP server returned by @hono/node-server serve() */
+  injectWebSocket: ReturnType<typeof setupWebSocket>['injectWebSocket'];
+}
+
+export function createApp(options?: CreateAppOptions): CreateAppResult {
   const app = new Hono();
 
   // Global middleware (order: RequestId → CORS → Logger → L1 Rate Limit → [extensions] → L2 Rate Limit)
@@ -261,6 +269,10 @@ export function createApp(options?: CreateAppOptions): Hono {
   // Mount API routes under /api prefix
   app.route('/api', api);
 
+  // WebSocket — real-time event push (mounted at root, not under /api)
+  const { upgradeWebSocket, injectWebSocket } = setupWebSocket(app);
+  app.route('/', createWsRoute(upgradeWebSocket));
+
   // 404 handler
   app.notFound((c) => {
     return c.json(
@@ -290,13 +302,16 @@ export function createApp(options?: CreateAppOptions): Hono {
     );
   });
 
-  return app;
+  return { app, injectWebSocket };
 }
 
 // ── Re-exports for cloud repo (`import { ... } from '@t3x-dev/api'`) ──
 
 // Database
 export { closeDB, getDB } from './lib/db';
+// Real-time event bus
+export { eventBus, type RealtimeEvent, type RealtimeEventType } from './lib/event-bus';
+export { roomManager } from './lib/room-manager';
 // Error utilities
 export { createError, errorResponse, zodErrorHook } from './lib/errors';
 

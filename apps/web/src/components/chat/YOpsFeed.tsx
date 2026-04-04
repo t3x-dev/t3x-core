@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 
 interface YOpsFeedProps {
   ops: YOp[];
-  onComplete: () => void;
+  onGoToTriage: () => void;
   paceMs?: number;
 }
 
@@ -44,16 +44,13 @@ const TYPE_STYLES = {
   remove: { bg: 'bg-[rgba(248,113,113,0.15)]', text: 'text-[var(--status-error)]', icon: '−' },
 };
 
-export function YOpsFeed({ ops, onComplete, paceMs = 350 }: YOpsFeedProps) {
+export function YOpsFeed({ ops, onGoToTriage, paceMs = 350 }: YOpsFeedProps) {
   const [visibleCount, setVisibleCount] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const completedRef = useRef(false);
 
   useEffect(() => {
-    if (ops.length === 0) {
-      onComplete();
-      return;
-    }
+    if (ops.length === 0) return;
 
     completedRef.current = false;
     setVisibleCount(0);
@@ -69,15 +66,12 @@ export function YOpsFeed({ ops, onComplete, paceMs = 350 }: YOpsFeedProps) {
 
       if (idx >= ops.length) {
         clearInterval(timer);
-        if (!completedRef.current) {
-          completedRef.current = true;
-          setTimeout(onComplete, 600);
-        }
+        completedRef.current = true;
       }
     }, paceMs);
 
     return () => clearInterval(timer);
-  }, [ops, paceMs, onComplete]);
+  }, [ops, paceMs]);
 
   const total = ops.length;
   const done = visibleCount >= total;
@@ -127,10 +121,19 @@ export function YOpsFeed({ ops, onComplete, paceMs = 350 }: YOpsFeedProps) {
       </div>
       {done && (
         <div
-          className="flex items-center gap-2 px-3.5 py-2 text-[10px] text-[var(--text-tertiary)]"
+          className="flex items-center justify-between px-3.5 py-2"
           style={{ borderTop: '1px solid var(--stroke-default)', background: 'var(--hover-bg)' }}
         >
-          Auto-transitioning to Triage...
+          <span className="text-[10px] text-[var(--status-success)]">
+            {total} operations extracted
+          </span>
+          <button
+            type="button"
+            onClick={onGoToTriage}
+            className="px-3.5 py-1.5 rounded-md bg-[var(--status-success)] text-black text-[10px] font-semibold hover:opacity-90 transition-opacity"
+          >
+            Triage →
+          </button>
         </div>
       )}
     </div>

@@ -8,7 +8,7 @@
 import * as fs from 'node:fs';
 import { getSemanticContentJsonSchema, getTreeNodeJsonSchema } from '@t3x-dev/core';
 import type { Command } from 'commander';
-import { error, success } from '../utils.js';
+import { success } from '../utils.js';
 
 export function registerSchemaCommands(program: Command): void {
   program
@@ -22,7 +22,6 @@ export function registerSchemaCommands(program: Command): void {
         case 'tree':
           schema = getTreeNodeJsonSchema();
           break;
-        case 'content':
         default:
           schema = getSemanticContentJsonSchema();
           break;

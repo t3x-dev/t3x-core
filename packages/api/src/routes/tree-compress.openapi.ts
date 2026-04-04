@@ -16,8 +16,9 @@ import {
   listYOpsLogByConversation,
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
-import { replayYOpsLog, toYOpsLogEntries } from '../lib/yops-log-utils';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { eventBus } from '../lib/event-bus';
+import { replayYOpsLog, toYOpsLogEntries } from '../lib/yops-log-utils';
 import { rebuildTreesFromSnapshot } from '../lib/tree-state-sync';
 import { assertProjectAccess } from '../lib/project-access';
 import { getProviderRegistry } from '../lib/provider-registry';
@@ -294,6 +295,9 @@ treeCompressRoutes.openapi(compressTreesRoute, async (c) => {
       await rebuildTreesFromSnapshot(tx, conversationId, conversation.projectId, compressedSnapshot);
       return rec;
     });
+
+    // 9b. Notify draft changed
+    eventBus.notify('draft.changed', conversationId, conversation.projectId);
 
     // 10. Return yops + metadata + yops_log_id
     return c.json(

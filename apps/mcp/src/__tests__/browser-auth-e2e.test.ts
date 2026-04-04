@@ -69,7 +69,7 @@ describe('MCP Browser Auth E2E', () => {
     const expectedState = 'test_state_abc123';
     const expectedToken = 't3xk_fake_token_for_test';
 
-    const { token, state, port } = await new Promise<{
+    const { token, state } = await new Promise<{
       token: string;
       state: string;
       port: number;

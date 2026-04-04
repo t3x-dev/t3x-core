@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { DriftPopup } from '@/components/chat/DriftPopup';
 import { useAutoProject } from '@/hooks/useAutoProject';
 import { useCommittedHighlights } from '@/hooks/useCommittedHighlights';
+import { useRealtimeSync } from '@/hooks/useRealtimeSync';
 import { useConversationChat } from '@/hooks/useConversationChat';
 import { useTextSelection } from '@/hooks/useTextSelection';
 import { getCommitAsNodes } from '@/lib/api/commitUnified';
@@ -67,6 +68,9 @@ export function ChatWorkspace({
     isNewChat ? undefined : conversationId
   );
   const pendingMessageRef = useRef<string | null>(null);
+
+  // Real-time sync — WebSocket connection to receive backend state changes
+  useRealtimeSync(resolvedConversationId ?? conversationId);
 
   // Model selection state
   const [selectedModel, setSelectedModel] = useState('claude-sonnet-4-20250514');
@@ -222,6 +226,18 @@ export function ChatWorkspace({
             useDraftStore.getState().setDraft(draft);
             if (usePhaseStore.getState().panelMode === 'collapsed') {
               usePhaseStore.getState().setPanelMode('default');
+            }
+            // If draft exists but nothing committed yet → enter yops phase
+            // (follows state machine: idle → yops → triage, no skipping)
+            const phase = usePhaseStore.getState().phase;
+            const hasCommits = useCommitStore.getState().lastCommitHash;
+            if (phase === 'idle' && !hasCommits && yopsEntries && yopsEntries.length > 0) {
+              const latestEntry = yopsEntries[yopsEntries.length - 1];
+              if (Array.isArray(latestEntry?.yops) && latestEntry.yops.length > 0) {
+                useDraftStore.setState({ feedYops: latestEntry.yops });
+                usePhaseStore.getState().setPhase('yops');
+                // YOpsFeed auto-transitions to triage when animation completes
+              }
             }
           } else if (inheritFromCommitHash) {
             // No existing draft — hydrate from parent commit
