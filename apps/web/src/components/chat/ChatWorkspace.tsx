@@ -227,11 +227,18 @@ export function ChatWorkspace({
             if (usePhaseStore.getState().panelMode === 'collapsed') {
               usePhaseStore.getState().setPanelMode('default');
             }
-            // If draft exists but nothing committed yet → show triage
+            // If draft exists but nothing committed yet → load yops + show triage
             // This handles extraction triggered via API/CLI/MCP (not the UI Extract button)
             const phase = usePhaseStore.getState().phase;
             const hasCommits = useCommitStore.getState().lastCommitHash;
             if (phase === 'idle' && !hasCommits) {
+              // Load latest YOps into feedYops so triage has data
+              if (yopsEntries && yopsEntries.length > 0) {
+                const latestEntry = yopsEntries[yopsEntries.length - 1];
+                if (Array.isArray(latestEntry?.yops) && latestEntry.yops.length > 0) {
+                  useDraftStore.setState({ feedYops: latestEntry.yops });
+                }
+              }
               usePhaseStore.getState().setPhase('triage');
             }
           } else if (inheritFromCommitHash) {

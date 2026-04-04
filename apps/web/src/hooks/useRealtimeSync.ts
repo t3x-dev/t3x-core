@@ -109,25 +109,41 @@ export function useRealtimeSync(conversationId: string | null) {
 function handleEvent(event: RealtimeEvent, conversationId: string) {
   switch (event.type) {
     case 'extraction.done': {
-      // Extraction completed (by any source) — refetch draft
-      getSemanticDraft(conversationId).then((draft) => {
-        if (draft && draft.trees.length > 0) {
-          useDraftStore.getState().setDraft(draft);
-          // If panel is idle and we got new data, show it
-          const phase = usePhaseStore.getState().phase;
-          if (phase === 'idle') {
-            usePhaseStore.getState().setPhase('triage');
-          }
-          // Expand panel if collapsed
-          if (usePhaseStore.getState().panelMode === 'collapsed') {
-            usePhaseStore.getState().setPanelMode('default');
+      // Extraction completed (by any source) — replicate the UI Extract flow:
+      // 1. Fetch draft snapshot + yops log
+      // 2. Set draft
+      // 3. Load YOps delta into feedYops for animation
+      // 4. Transition through yops → triage phases
+      Promise.all([
+        getSemanticDraft(conversationId),
+        listYOpsLog(conversationId),
+      ]).then(([draft, yopsEntries]) => {
+        if (!draft || draft.trees.length === 0) return;
+
+        // Update draft
+        useDraftStore.getState().setDraft(draft);
+
+        // Hydrate yops log
+        if (yopsEntries && yopsEntries.length > 0) {
+          useDraftStore.getState().hydrateYOpsLog(yopsEntries);
+
+          // Get the latest entry's YOps as the "delta" for the feed
+          const latestEntry = yopsEntries[yopsEntries.length - 1];
+          const deltaOps = latestEntry?.yops;
+          if (Array.isArray(deltaOps) && deltaOps.length > 0) {
+            useDraftStore.setState({ feedYops: deltaOps, isExtracting: false });
           }
         }
-      });
-      // Also refresh yops log
-      listYOpsLog(conversationId).then((entries) => {
-        if (entries && entries.length > 0) {
-          useDraftStore.getState().hydrateYOpsLog(entries);
+
+        // Expand panel if collapsed
+        if (usePhaseStore.getState().panelMode === 'collapsed') {
+          usePhaseStore.getState().setPanelMode('default');
+        }
+
+        // Transition to yops feed (animation → auto-transitions to triage)
+        const phase = usePhaseStore.getState().phase;
+        if (phase === 'idle' || phase === 'yops') {
+          usePhaseStore.getState().setPhase('yops');
         }
       });
       break;
