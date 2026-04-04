@@ -1,4 +1,4 @@
-export { autoFixYOp, type AutoFixResult } from './autofix';
+export { autoFixPaths, autoFixYOp, type AutoFixResult } from './autofix';
 export { validateDedup } from './dedup';
 export { runGates } from './runner';
 export { validateSources } from './source';

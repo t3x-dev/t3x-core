@@ -16,7 +16,7 @@
  */
 
 import type { LLMProvider } from '../../llm/types';
-import { autoFixYOp } from '../../ops/gates/autofix';
+import { autoFixPaths, autoFixYOp } from '../../ops/gates/autofix';
 import { validateDedup } from '../../ops/gates/dedup';
 import { validateSources } from '../../ops/gates/source';
 import type { GateViolation } from '../../ops/gates/types';
@@ -101,7 +101,7 @@ export class YamlExtractionStrategy implements ExtractionStrategy {
         // If correction fails, we still proceed with what passed
       }
 
-      // ── Step 5: Combine passed + corrected, apply ──
+      // ── Step 5: Combine passed + corrected, resolve paths ──
       const allValidYOps = [...passed.map((g) => g.yop), ...correctedYOps];
 
       if (allValidYOps.length === 0 && parseResult.yops.length > 0) {
@@ -109,8 +109,14 @@ export class YamlExtractionStrategy implements ExtractionStrategy {
         continue;
       }
 
+      // ── Step 5b: Resolve partial paths (like Claude Code's backfillObservableInput) ──
+      const resolvedYOps = allValidYOps.map((yop) => {
+        const pathFix = autoFixPaths(yop, baseSnapshot.trees);
+        return pathFix ? pathFix.fixed : yop;
+      });
+
       // ── Step 6: Apply YOps → validate → ylint ──
-      const applyResult = applyYOps(baseSnapshot, allValidYOps);
+      const applyResult = applyYOps(baseSnapshot, resolvedYOps);
       if (!applyResult.ok) {
         lastError = `Failed to apply YOps: ${applyResult.error?.message ?? 'unknown'}`;
         continue;
@@ -129,7 +135,7 @@ export class YamlExtractionStrategy implements ExtractionStrategy {
 
       const lintResult = ylint(snapshot);
 
-      return { ok: true, yops: allValidYOps, snapshot, usage: totalUsage, lintResult };
+      return { ok: true, yops: resolvedYOps, snapshot, usage: totalUsage, lintResult };
     }
 
     return { ok: false, error: lastError, usage: totalUsage };

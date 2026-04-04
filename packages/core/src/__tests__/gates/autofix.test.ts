@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { autoFixYOp } from '../../ops/gates/autofix';
+import { autoFixPaths, autoFixYOp } from '../../ops/gates/autofix';
+import type { TreeNode } from '../../semantic/types';
+import type { YOp } from '../../yops/types';
 
 describe('autoFixYOp', () => {
   it('strips extra fields from unset (source/from)', () => {
@@ -97,5 +99,65 @@ describe('autoFixYOp', () => {
       rename: { path: 'tokyo_trip/accommodation', to: 'lodging' },
     });
     expect(result!.fixes.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe('autoFixPaths', () => {
+  const trees: TreeNode[] = [
+    {
+      key: 'construction_saas',
+      slots: { budget: 200000 },
+      children: [
+        {
+          key: 'company_info',
+          slots: { team_size: 3, runway: 200000 },
+          children: [],
+        },
+        {
+          key: 'tech_stack',
+          slots: { frontend: 'React Native' },
+          children: [
+            {
+              key: 'backend',
+              slots: { framework: 'Supabase' },
+              children: [],
+            },
+          ],
+        },
+      ],
+    },
+  ];
+
+  it('resolves partial path to full path (missing root)', () => {
+    const yop: YOp = { set: { path: 'company_info/team_size', value: 4, source: 'test', from: 'T1' } };
+    const result = autoFixPaths(yop, trees);
+    expect(result).not.toBeNull();
+    expect((result!.fixed as any).set.path).toBe('construction_saas/company_info/team_size');
+  });
+
+  it('resolves deeply nested partial path', () => {
+    const yop: YOp = { set: { path: 'backend/framework', value: 'AWS', source: 'test', from: 'T1' } };
+    const result = autoFixPaths(yop, trees);
+    expect(result).not.toBeNull();
+    expect((result!.fixed as any).set.path).toBe('construction_saas/tech_stack/backend/framework');
+  });
+
+  it('returns null when path is already correct', () => {
+    const yop: YOp = { set: { path: 'construction_saas/company_info/team_size', value: 4, source: 'test', from: 'T1' } };
+    const result = autoFixPaths(yop, trees);
+    expect(result).toBeNull();
+  });
+
+  it('returns null for empty parent path (root add)', () => {
+    const yop: YOp = { add: { parent: '', node: { new_node: {} }, source: {}, from: 'T1' } };
+    const result = autoFixPaths(yop, trees);
+    expect(result).toBeNull();
+  });
+
+  it('resolves parent path in add operations', () => {
+    const yop: YOp = { add: { parent: 'company_info', node: { role: {} }, source: {}, from: 'T1' } };
+    const result = autoFixPaths(yop, trees);
+    expect(result).not.toBeNull();
+    expect((result!.fixed as any).add.parent).toBe('construction_saas/company_info');
   });
 });

@@ -1,81 +1,116 @@
 /**
- * Auto-Fix — Deterministic corrections for common YOp schema issues.
+ * Auto-Fix — Deterministic corrections for common YOp issues.
  *
- * Fixes that don't change the LLM's intent:
- *   - Strip extra fields from ops that don't accept them (e.g., source/from on unset)
- *   - Replace path separator . with /
- *   - Convert keys to snake_case
+ * Two types of fixes:
+ *
+ * 1. Schema fixes (no tree context needed):
+ *    - Strip extra fields from ops that don't accept them
+ *    - Replace path separator . with /
+ *    - Convert keys to snake_case
+ *
+ * 2. Path resolution (needs tree context):
+ *    - Resolve partial paths to full paths
+ *    - e.g., "company_info/team_size" → "root_node/company_info/team_size"
+ *    - Like Claude Code's backfillObservableInput() for file paths
  *
  * Returns a new YOp (never mutates input) and a description of what was fixed.
- * Returns null if the op cannot be auto-fixed.
  */
 
+import type { TreeNode } from '../../semantic/types';
 import type { YOp } from '../../yops/types';
 
 export interface AutoFixResult {
-  /** The corrected YOp */
   fixed: YOp;
-  /** What was changed */
   fixes: string[];
 }
 
+// ── Path Resolution ──
+
 /**
- * Attempt to auto-fix a YOp that failed schema validation.
- * Returns null if the op type is unrecognized or the fix is ambiguous.
+ * Collect all node paths in a tree.
+ * e.g., [{path: "root", node}, {path: "root/child", node}, ...]
  */
-export function autoFixYOp(rawOp: Record<string, unknown>): AutoFixResult | null {
-  const fixes: string[] = [];
+function collectPaths(trees: TreeNode[]): Array<{ path: string; node: TreeNode }> {
+  const result: Array<{ path: string; node: TreeNode }> = [];
+  function walk(node: TreeNode, prefix: string) {
+    const fullPath = prefix ? `${prefix}/${node.key}` : node.key;
+    result.push({ path: fullPath, node });
+    for (const child of node.children) walk(child, fullPath);
+  }
+  for (const tree of trees) walk(tree, '');
+  return result;
+}
 
-  // Detect op type
-  const opType = Object.keys(rawOp).find((k) =>
-    ['set', 'unset', 'add', 'drop', 'rename', 'clone', 'move', 'nest', 'split', 'fold', 'merge', 'relate', 'unrelate'].includes(k)
-  );
-  if (!opType) return null;
+/**
+ * Try to resolve a partial path to a full path in the tree.
+ *
+ * Strategy:
+ *   1. Exact match → return as-is
+ *   2. Suffix match → if "a/b" matches the end of "root/a/b", resolve
+ *   3. Single-segment match → if "budget" exists under any parent, resolve
+ *
+ * Returns null if ambiguous (multiple matches) or no match found.
+ */
+function resolvePath(partialPath: string, allPaths: Array<{ path: string }>): string | null {
+  // 1. Exact match
+  if (allPaths.some(p => p.path === partialPath)) return partialPath;
 
-  const opData = rawOp[opType];
-  if (typeof opData !== 'object' || opData === null) return null;
+  // 2. Suffix match: find paths that end with /partialPath
+  const suffixMatches = allPaths.filter(p => p.path.endsWith(`/${partialPath}`));
+  if (suffixMatches.length === 1) return suffixMatches[0].path;
 
-  const data = { ...(opData as Record<string, unknown>) };
+  // 3. For slot paths like "company_info/team_size", try resolving parent
+  const lastSlash = partialPath.lastIndexOf('/');
+  if (lastSlash > 0) {
+    const parentPartial = partialPath.slice(0, lastSlash);
+    const slotKey = partialPath.slice(lastSlash + 1);
+    const parentMatches = allPaths.filter(p => p.path.endsWith(`/${parentPartial}`) || p.path === parentPartial);
+    if (parentMatches.length === 1) return `${parentMatches[0].path}/${slotKey}`;
+  }
 
-  // Fix 1: Strip extra fields from ops that don't accept them
-  const fieldsAllowed: Record<string, string[]> = {
-    unset: ['path'],
-    drop: ['path', 'reason'],
-    rename: ['path', 'to'],
-    clone: ['path', 'to'],
-    move: ['path', 'to'],
-    fold: ['path'],
-    nest: ['paths', 'under'],
-    split: ['path', 'into'],
-    merge: ['paths', 'into'],
-  };
+  return null; // ambiguous or not found
+}
 
-  if (fieldsAllowed[opType]) {
-    const allowed = new Set(fieldsAllowed[opType]);
-    const extra = Object.keys(data).filter((k) => !allowed.has(k));
+// ── Schema Fixes ──
+
+const FIELDS_ALLOWED: Record<string, string[]> = {
+  unset: ['path'],
+  drop: ['path', 'reason'],
+  rename: ['path', 'to'],
+  clone: ['path', 'to'],
+  move: ['path', 'to'],
+  fold: ['path'],
+  nest: ['paths', 'under'],
+  split: ['path', 'into'],
+  merge: ['paths', 'into'],
+};
+
+const OP_TYPES = ['set', 'unset', 'add', 'drop', 'rename', 'clone', 'move', 'nest', 'split', 'fold', 'merge', 'relate', 'unrelate'];
+
+function detectOpType(rawOp: Record<string, unknown>): string | null {
+  return Object.keys(rawOp).find(k => OP_TYPES.includes(k)) ?? null;
+}
+
+function fixSchema(opType: string, data: Record<string, unknown>, fixes: string[]): void {
+  // Strip extra fields
+  if (FIELDS_ALLOWED[opType]) {
+    const allowed = new Set(FIELDS_ALLOWED[opType]);
+    const extra = Object.keys(data).filter(k => !allowed.has(k));
     if (extra.length > 0) {
-      for (const key of extra) {
-        delete data[key];
-      }
+      for (const key of extra) delete data[key];
       fixes.push(`stripped extra fields [${extra.join(', ')}] from ${opType}`);
     }
   }
 
-  // Fix 2: Replace path separator . with /
-  if ('path' in data && typeof data.path === 'string' && data.path.includes('.')) {
-    data.path = (data.path as string).replace(/\./g, '/');
-    fixes.push('replaced . with / in path');
-  }
-  if ('to' in data && typeof data.to === 'string' && data.to.includes('.')) {
-    data.to = (data.to as string).replace(/\./g, '/');
-    fixes.push('replaced . with / in to');
-  }
-  if ('parent' in data && typeof data.parent === 'string' && data.parent.includes('.')) {
-    data.parent = (data.parent as string).replace(/\./g, '/');
-    fixes.push('replaced . with / in parent');
+  // Replace . with / in paths
+  for (const field of ['path', 'to', 'parent']) {
+    if (field in data && typeof data[field] === 'string' && (data[field] as string).includes('.')) {
+      data[field] = (data[field] as string).replace(/\./g, '/');
+      fixes.push(`replaced . with / in ${field}`);
+    }
   }
 
-  // Fix 3: Convert path keys to snake_case (only simple cases)
+  // Convert camelCase to snake_case in path
   if ('path' in data && typeof data.path === 'string') {
     const original = data.path as string;
     const fixed = original.replace(/([a-z])([A-Z])/g, '$1_$2').toLowerCase();
@@ -84,11 +119,94 @@ export function autoFixYOp(rawOp: Record<string, unknown>): AutoFixResult | null
       fixes.push(`converted path to snake_case: ${original} → ${fixed}`);
     }
   }
+}
+
+function fixPaths(opType: string, data: Record<string, unknown>, allPaths: Array<{ path: string }>, fixes: string[]): void {
+  // For set/unset: path = node_path/slot_key → only resolve the node_path part
+  if ((opType === 'set' || opType === 'unset') && 'path' in data && typeof data.path === 'string') {
+    const fullPath = data.path as string;
+    const lastSlash = fullPath.lastIndexOf('/');
+    if (lastSlash > 0) {
+      const nodePart = fullPath.slice(0, lastSlash);
+      const slotPart = fullPath.slice(lastSlash + 1);
+      const resolved = resolvePath(nodePart, allPaths);
+      if (resolved && resolved !== nodePart) {
+        data.path = `${resolved}/${slotPart}`;
+        fixes.push(`resolved path: "${fullPath}" → "${resolved}/${slotPart}"`);
+      }
+    }
+  } else {
+    // For other ops: resolve full path
+    for (const field of ['path', 'to', 'parent']) {
+      if (field in data && typeof data[field] === 'string') {
+        const partial = data[field] as string;
+        if (partial === '') continue; // empty parent is valid (root add)
+        const resolved = resolvePath(partial, allPaths);
+        if (resolved && resolved !== partial) {
+          data[field] = resolved;
+          fixes.push(`resolved ${field}: "${partial}" → "${resolved}"`);
+        }
+      }
+    }
+  }
+
+  // For relate/unrelate, resolve from/to
+  if (opType === 'relate' || opType === 'unrelate') {
+    for (const field of ['from', 'to']) {
+      if (field in data && typeof data[field] === 'string') {
+        const partial = data[field] as string;
+        const resolved = resolvePath(partial, allPaths.map(p => ({ path: p.path.split('/')[0] })));
+        if (resolved && resolved !== partial) {
+          data[field] = resolved;
+          fixes.push(`resolved ${field}: "${partial}" → "${resolved}"`);
+        }
+      }
+    }
+  }
+}
+
+// ── Public API ──
+
+/**
+ * Auto-fix a YOp that failed schema validation.
+ * Does not need tree context — only schema-level fixes.
+ */
+export function autoFixYOp(rawOp: Record<string, unknown>): AutoFixResult | null {
+  const opType = detectOpType(rawOp);
+  if (!opType) return null;
+
+  const opData = rawOp[opType];
+  if (typeof opData !== 'object' || opData === null) return null;
+
+  const data = { ...(opData as Record<string, unknown>) };
+  const fixes: string[] = [];
+
+  fixSchema(opType, data, fixes);
 
   if (fixes.length === 0) return null;
+  return { fixed: { [opType]: data } as unknown as YOp, fixes };
+}
 
-  return {
-    fixed: { [opType]: data } as unknown as YOp,
-    fixes,
-  };
+/**
+ * Auto-fix a validated YOp that has path issues (node not found).
+ * Needs tree context to resolve partial paths.
+ *
+ * This is the equivalent of Claude Code's backfillObservableInput():
+ * resolve relative/partial paths to full paths deterministically.
+ */
+export function autoFixPaths(yop: YOp, trees: TreeNode[]): AutoFixResult | null {
+  const opType = detectOpType(yop as unknown as Record<string, unknown>);
+  if (!opType) return null;
+
+  const opData = (yop as Record<string, unknown>)[opType];
+  if (typeof opData !== 'object' || opData === null) return null;
+
+  const data = { ...(opData as Record<string, unknown>) };
+  const fixes: string[] = [];
+  const allPaths = collectPaths(trees);
+
+  fixPaths(opType, data, allPaths, fixes);
+
+  if (fixes.length === 0) return null;
+  return { fixed: { [opType]: data } as unknown as YOp, fixes };
 }
