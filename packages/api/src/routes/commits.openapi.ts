@@ -28,6 +28,7 @@ import {
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { eventBus } from '../lib/event-bus';
 import { commitOp } from '../ops/commit';
 import { buildPipelineContext } from '../ops/context';
 import {
@@ -157,6 +158,7 @@ commitRoutes.openapi(createCommitRoute, async (c) => {
       }, ctx),
     );
 
+    eventBus.notify('commit.created', '', body.project_id);
     return c.json({ success: true as const, data: { commit } }, 200);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to create commit';

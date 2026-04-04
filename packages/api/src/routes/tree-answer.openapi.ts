@@ -33,8 +33,9 @@ import {
   listYOpsLogByConversation,
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
-import { replayYOpsLog, toYOpsLogEntries } from '../lib/yops-log-utils';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { eventBus } from '../lib/event-bus';
+import { replayYOpsLog, toYOpsLogEntries } from '../lib/yops-log-utils';
 import { assertProjectAccess } from '../lib/project-access';
 import { getProviderRegistry } from '../lib/provider-registry';
 import { wrapWithUsageTracking } from '../lib/usage-tracking';
@@ -207,6 +208,7 @@ treeAnswerRoutes.openapi(answerRoute, async (c) => {
         pipelineState: 'completed',
       });
       yopsLogId = record.id;
+      eventBus.notify('yops.applied', conversation_id, conversation.projectId);
     }
 
     // 5. Return result
@@ -345,6 +347,7 @@ async function handleDriftChoice4(
     yops: allYops,
     pipelineState: 'completed',
   });
+  eventBus.notify('yops.applied', conversation.conversationId, conversation.projectId);
 
   return c.json(
     {

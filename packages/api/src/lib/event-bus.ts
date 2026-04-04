@@ -32,6 +32,11 @@ class EventBus extends EventEmitter {
   broadcast(event: RealtimeEvent) {
     this.emit(`room:${event.conversationId}`, event);
   }
+
+  /** Shorthand: broadcast a typed event for a conversation */
+  notify(type: RealtimeEventType, conversationId: string, projectId?: string, payload?: Record<string, unknown>) {
+    this.broadcast({ type, conversationId, projectId, payload, timestamp: Date.now() });
+  }
 }
 
 export const eventBus = new EventBus();
