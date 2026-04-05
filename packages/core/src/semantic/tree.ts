@@ -209,8 +209,26 @@ function checkDepth(node: TreeNode, currentDepth: number, maxDepth: number): str
 }
 
 /**
+ * Known content blob types. An object with `_type` matching one of these
+ * is stored as a slot value (not expanded into a child node).
+ */
+export const BLOB_TYPES = ['code', 'plot', 'table', 'image', 'video'] as const;
+export type BlobType = (typeof BLOB_TYPES)[number];
+
+/**
+ * Check if a parsed object is a content blob (has `_type` field with known type).
+ * Blobs are atomic meaning blocks — code snippets, charts, media —
+ * stored as slot values rather than expanded into child nodes.
+ */
+export function isBlob(v: unknown): boolean {
+  if (typeof v !== 'object' || v === null || Array.isArray(v)) return false;
+  const obj = v as Record<string, unknown>;
+  return typeof obj._type === 'string' && (BLOB_TYPES as readonly string[]).includes(obj._type);
+}
+
+/**
  * Convert a YAML-parsed object to a TreeNode.
- * At each level: scalar values and arrays = slots; object values = children.
+ * At each level: scalar values, arrays, and blobs = slots; other objects = children.
  */
 export function yamlToTree(key: string, value: unknown): TreeNode {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
@@ -220,7 +238,7 @@ export function yamlToTree(key: string, value: unknown): TreeNode {
   const slots: Record<string, SlotValue> = {};
   const children: TreeNode[] = [];
   for (const [k, v] of Object.entries(obj)) {
-    if (typeof v === 'object' && v !== null && !Array.isArray(v)) {
+    if (typeof v === 'object' && v !== null && !Array.isArray(v) && !isBlob(v)) {
       children.push(yamlToTree(k, v));
     } else {
       slots[k] = v as SlotValue;

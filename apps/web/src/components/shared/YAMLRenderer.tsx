@@ -83,6 +83,86 @@ function renderSlotLines(
     return;
   }
 
+  // Content Blob: { _type: "code"|"plot"|"table"|"image"|"video", ... }
+  if (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    '_type' in value &&
+    typeof (value as Record<string, unknown>)._type === 'string'
+  ) {
+    const blob = value as Record<string, unknown>;
+    const blobType = blob._type as string;
+
+    if (blobType === 'code') {
+      const lang = blob.language ?? '';
+      lines.push({
+        text: `${pad}${key}: [code:${lang}]`,
+        treeId,
+        slotKey,
+        isNodeHeader: false,
+        indent,
+        isEmpty: false,
+      });
+      // Render code content as indented lines
+      const content = String(blob.content ?? '');
+      for (const codeLine of content.split('\n')) {
+        lines.push({
+          text: `${pad}  ${codeLine}`,
+          treeId,
+          slotKey,
+          isNodeHeader: false,
+          indent: indent + 1,
+          isEmpty: false,
+        });
+      }
+    } else if (blobType === 'plot') {
+      const format = blob.format ?? 'chart';
+      const desc = blob.description ?? '';
+      lines.push({
+        text: `${pad}${key}: [plot:${format}] ${desc}`,
+        treeId,
+        slotKey,
+        isNodeHeader: false,
+        indent,
+        isEmpty: false,
+      });
+    } else if (blobType === 'table') {
+      const headers = Array.isArray(blob.headers) ? blob.headers : [];
+      const rows = Array.isArray(blob.rows) ? blob.rows : [];
+      lines.push({
+        text: `${pad}${key}: [table] ${headers.join(' | ')}`,
+        treeId,
+        slotKey,
+        isNodeHeader: false,
+        indent,
+        isEmpty: false,
+      });
+      for (const row of rows) {
+        const cells = Array.isArray(row) ? row.join(' | ') : String(row);
+        lines.push({
+          text: `${pad}  ${cells}`,
+          treeId,
+          slotKey,
+          isNodeHeader: false,
+          indent: indent + 1,
+          isEmpty: false,
+        });
+      }
+    } else {
+      // Unknown blob type — show as labeled block
+      lines.push({
+        text: `${pad}${key}: [${blobType}]`,
+        treeId,
+        slotKey,
+        isNodeHeader: false,
+        indent,
+        isEmpty: false,
+      });
+    }
+    return;
+  }
+
   // InlineNode: nested object with type + slots
   if (
     typeof value === 'object' &&
