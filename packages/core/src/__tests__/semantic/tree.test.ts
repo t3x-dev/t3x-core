@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  BLOB_TYPES,
   buildSlotQuotesPath,
   flattenTree,
   isBlob,
@@ -261,5 +262,94 @@ describe('yamlToTree — blob support', () => {
     });
     expect(tree.children).toHaveLength(1);
     expect(tree.children[0].key).toBe('dependencies');
+  });
+});
+
+describe('yamlToTree — all blob types round-trip', () => {
+  const allBlobs: Record<string, Record<string, unknown>> = {
+    code: {
+      _type: 'code',
+      language: 'python',
+      content: 'def hello():\n    print("world")',
+    },
+    plot: {
+      _type: 'plot',
+      format: 'bar',
+      description: 'Sales by quarter',
+      data: { labels: ['Q1', 'Q2', 'Q3', 'Q4'], values: [100, 150, 120, 180] },
+    },
+    table: {
+      _type: 'table',
+      headers: ['Name', 'Age', 'City'],
+      rows: [['Alice', 30, 'NYC'], ['Bob', 25, 'LA']],
+    },
+    image: {
+      _type: 'image',
+      url: 'https://example.com/chart.png',
+      alt: 'Performance chart',
+    },
+    video: {
+      _type: 'video',
+      url: 'https://example.com/demo.mp4',
+      title: 'Feature walkthrough',
+    },
+  };
+
+  for (const [blobType, blobData] of Object.entries(allBlobs)) {
+    it(`${blobType} blob is stored as slot, not child`, () => {
+      const tree = yamlToTree('topic', {
+        summary: 'test',
+        content: blobData,
+      });
+
+      // Blob should be a slot value
+      expect(tree.slots.content).toEqual(blobData);
+      // No children created from blob
+      expect(tree.children).toHaveLength(0);
+      // Blob type is preserved
+      expect((tree.slots.content as Record<string, unknown>)._type).toBe(blobType);
+    });
+
+    it(`${blobType} blob survives flatten + unflatten`, () => {
+      const tree: TreeNode = {
+        key: 'topic',
+        slots: { summary: 'test', content: blobData as any },
+        children: [],
+      };
+
+      const flat = flattenTree(tree);
+      expect(flat).toHaveLength(1);
+      expect(flat[0].slots.content).toEqual(blobData);
+
+      const restored = unflattenToTree(flat);
+      expect(restored.slots.content).toEqual(blobData);
+    });
+  }
+
+  it('covers all BLOB_TYPES', () => {
+    // Ensure the test covers every registered blob type
+    for (const bt of BLOB_TYPES) {
+      expect(allBlobs).toHaveProperty(bt);
+    }
+  });
+
+  it('multiple blobs in one tree are all preserved', () => {
+    const tree = yamlToTree('lesson', {
+      title: 'Sorting Algorithms',
+      code_example: allBlobs.code,
+      performance_chart: allBlobs.plot,
+      comparison_table: allBlobs.table,
+      subtopic: {
+        detail: 'this is a child node',
+      },
+    });
+
+    expect(tree.slots.title).toBe('Sorting Algorithms');
+    expect(tree.slots.code_example).toEqual(allBlobs.code);
+    expect(tree.slots.performance_chart).toEqual(allBlobs.plot);
+    expect(tree.slots.comparison_table).toEqual(allBlobs.table);
+    // Regular object is still a child
+    expect(tree.children).toHaveLength(1);
+    expect(tree.children[0].key).toBe('subtopic');
   });
 });
