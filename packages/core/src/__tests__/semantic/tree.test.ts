@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   buildSlotQuotesPath,
   flattenTree,
+  isBlob,
   unflattenToTree,
+  yamlToTree,
 } from '../../semantic/tree';
 import type { FlatNode, TreeNode } from '../../semantic/types';
 
@@ -147,5 +149,117 @@ describe('buildSlotQuotesPath', () => {
     expect(buildSlotQuotesPath('hangzhou_trip/activity_plan/gear', 'rain_jacket')).toBe(
       'activity_plan.gear.rain_jacket'
     );
+  });
+});
+
+describe('isBlob', () => {
+  it('returns true for code blobs', () => {
+    expect(isBlob({ _type: 'code', language: 'python', content: 'print("hi")' })).toBe(true);
+  });
+
+  it('returns true for plot blobs', () => {
+    expect(isBlob({ _type: 'plot', format: 'bar', data: { labels: [], values: [] } })).toBe(true);
+  });
+
+  it('returns true for table blobs', () => {
+    expect(isBlob({ _type: 'table', headers: ['a'], rows: [['1']] })).toBe(true);
+  });
+
+  it('returns true for image and video blobs', () => {
+    expect(isBlob({ _type: 'image', url: 'https://...' })).toBe(true);
+    expect(isBlob({ _type: 'video', url: 'https://...' })).toBe(true);
+  });
+
+  it('returns false for unknown _type', () => {
+    expect(isBlob({ _type: 'unknown_thing' })).toBe(false);
+  });
+
+  it('returns false for regular objects', () => {
+    expect(isBlob({ destination: 'Tokyo', budget: 5000 })).toBe(false);
+  });
+
+  it('returns false for primitives and arrays', () => {
+    expect(isBlob('hello')).toBe(false);
+    expect(isBlob(42)).toBe(false);
+    expect(isBlob(null)).toBe(false);
+    expect(isBlob([1, 2, 3])).toBe(false);
+  });
+});
+
+describe('yamlToTree — blob support', () => {
+  it('stores code blob as slot value, not child node', () => {
+    const tree = yamlToTree('algorithm', {
+      approach: 'quicksort',
+      example: {
+        _type: 'code',
+        language: 'python',
+        content: 'def quicksort(arr): ...',
+      },
+    });
+
+    expect(tree.key).toBe('algorithm');
+    expect(tree.slots.approach).toBe('quicksort');
+    expect(tree.slots.example).toEqual({
+      _type: 'code',
+      language: 'python',
+      content: 'def quicksort(arr): ...',
+    });
+    expect(tree.children).toHaveLength(0);
+  });
+
+  it('stores plot blob as slot value', () => {
+    const tree = yamlToTree('analysis', {
+      summary: 'Performance comparison',
+      chart: {
+        _type: 'plot',
+        format: 'bar',
+        data: { labels: ['a', 'b'], values: [1, 2] },
+      },
+    });
+
+    expect(tree.slots.chart).toEqual({
+      _type: 'plot',
+      format: 'bar',
+      data: { labels: ['a', 'b'], values: [1, 2] },
+    });
+    expect(tree.children).toHaveLength(0);
+  });
+
+  it('treats regular objects as children, not blobs', () => {
+    const tree = yamlToTree('trip', {
+      destination: 'Tokyo',
+      budget: {
+        flights: 1200,
+        hotels: 1500,
+      },
+    });
+
+    expect(tree.slots.destination).toBe('Tokyo');
+    expect(tree.children).toHaveLength(1);
+    expect(tree.children[0].key).toBe('budget');
+  });
+
+  it('handles mixed blobs and children', () => {
+    const tree = yamlToTree('project', {
+      name: 'My App',
+      setup_script: {
+        _type: 'code',
+        language: 'bash',
+        content: 'npm install',
+      },
+      dependencies: {
+        react: '18.0',
+        next: '14.0',
+      },
+    });
+
+    expect(tree.slots.name).toBe('My App');
+    expect(tree.slots.setup_script).toEqual({
+      _type: 'code',
+      language: 'bash',
+      content: 'npm install',
+    });
+    expect(tree.children).toHaveLength(1);
+    expect(tree.children[0].key).toBe('dependencies');
   });
 });

@@ -407,6 +407,9 @@ export {
   validateIntegrity,
   validateTreeDepth,
   yamlToTree,
+  isBlob,
+  BLOB_TYPES,
+  type BlobType,
 } from './semantic';
 // ═══════════════════════════════════════════════════════════════════════════
 // Storage (types + pure utils only)

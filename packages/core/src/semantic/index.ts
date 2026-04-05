@@ -49,6 +49,9 @@ export {
   unflattenToTrees,
   validateTreeDepth,
   yamlToTree,
+  isBlob,
+  BLOB_TYPES,
+  type BlobType,
 } from './tree';
 
 // ── Types ──

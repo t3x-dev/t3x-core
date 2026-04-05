@@ -157,6 +157,14 @@ ${
 - Every list item, number, recommendation, and detail is worth capturing
 - A short keyword source is better than skipping the data entirely
 
+### Content Blobs (code, plots, tables)
+When the conversation contains code blocks, charts, or structured data,
+store them as blob objects with a \`_type\` field:
+- Code: \`{ _type: "code", language: "python", content: "def foo(): ..." }\`
+- Plot: \`{ _type: "plot", format: "bar", description: "...", data: { labels: [...], values: [...] } }\`
+- Table: \`{ _type: "table", headers: [...], rows: [[...], ...] }\`
+Blobs preserve complete meaning blocks — do NOT decompose code into separate slots.
+
 ### Rules
 - Output ONLY valid YAML starting with "yops:"
 - No markdown fences, no explanatory text
