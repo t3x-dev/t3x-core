@@ -11,8 +11,9 @@
 
 import type { z } from '@hono/zod-openapi';
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
-import type { ExtractionTurn, SemanticContent, TreeNode } from '@t3x-dev/core';
+import type { ExtractionStyleConfig, ExtractionTurn, SemanticContent, TreeNode } from '@t3x-dev/core';
 import { DEFAULT_STYLE, Extractor, serializeForPrompt } from '@t3x-dev/core';
+import { ExtractionStyleSchema } from '../schemas/contracts';
 import {
   findAutoDraftsByConversation,
   findConversationById,
@@ -231,6 +232,7 @@ async function extractWithLLM(
     allTurns?: ExtractionTurn[];
     snapshot?: SemanticContent;
     processedTurnCount?: number;
+    style?: ExtractionStyleConfig;
   }
 ): Promise<{ trees: TreeNode[]; yaml: string } | null> {
   try {
@@ -250,7 +252,7 @@ async function extractWithLLM(
         snapshot: options?.snapshot,
         processedTurnCount: options?.processedTurnCount,
       },
-      DEFAULT_STYLE
+      options?.style ?? DEFAULT_STYLE
     );
 
     if (!result.ok) {
@@ -354,14 +356,23 @@ extractRoutes.openapi(postExtractRoute, async (c) => {
     // Append new turn to allTurns for LLM context
     allTurns.push({ role: 'user', content: text, turn_hash: turn.turnHash });
 
-    // Step 4: Run extraction — try LLM first, fallback to regex
+    // Step 4: Resolve extraction style from project settings
+    let resolvedStyle: ExtractionStyleConfig = DEFAULT_STYLE;
+    if (project.extractionStyle) {
+      const parsed = ExtractionStyleSchema.safeParse(project.extractionStyle);
+      if (parsed.success) {
+        resolvedStyle = parsed.data;
+      }
+    }
+
+    // Step 5: Run extraction — try LLM first, fallback to regex
     let trees: TreeNodeResult[];
     let yaml: string;
     let extractionMode: 'llm' | 'regex';
     const incrementalOpts =
       existingSnapshot || allTurns.length > 1
-        ? { allTurns, snapshot: existingSnapshot, processedTurnCount }
-        : undefined;
+        ? { allTurns, snapshot: existingSnapshot, processedTurnCount, style: resolvedStyle }
+        : { style: resolvedStyle };
 
     const llmResult = await extractWithLLM(text, turn.turnHash, incrementalOpts);
     if (llmResult) {
