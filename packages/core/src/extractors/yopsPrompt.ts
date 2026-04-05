@@ -7,13 +7,20 @@
  */
 
 import type { SemanticContent, TreeNode } from '../semantic/types';
-import type { ExtractionStyleConfig } from './extractionStyleConfig';
+import { DEFAULT_STYLE, type ExtractionStyleConfig } from './extractionStyleConfig';
 
 // -- Re-export types that callers need --
 
 export type { ExtractionInput, ExtractionPromptResult, ExtractionTurn } from './extractionPrompt';
 
 import type { ExtractionInput, ExtractionPromptResult } from './extractionPrompt';
+import {
+  granularitySegment,
+  quoteLengthSegment,
+  tier3KeyDistinction,
+  tier3Segment,
+  updateStanceSegment,
+} from './extractionPrompt';
 
 // -- Internal Helpers --
 
@@ -48,15 +55,21 @@ function formatTurns(turns: { role: string; content: string; turn_hash?: string 
 
 // -- System Prompt --
 
-function buildSystemPrompt(hasSnapshot: boolean): string {
+function buildSystemPrompt(hasSnapshot: boolean, style: ExtractionStyleConfig): string {
   return `You are a knowledge extraction engine. Your job is simple:
 Read the conversation and extract ALL facts, details, and information into a structured YAML tree.
 
-## What to extract
-- Everything the assistant explains, lists, or describes
-- Everything the user states, asks about, or confirms
-- Categories, comparisons, attributes, numbers, lists
-- Do NOT extract: greetings, filler ("sure!", "let me help"), or meta-commentary
+## Three-Tier Extraction Rule
+
+| Tier | Description | Action | Confidence |
+|------|-------------|--------|------------|
+| TIER 1 | User explicitly stated (preferences, facts, decisions) | Always extract | 0.9-1.0 |
+| TIER 2 | User confirmed or agreed with AI suggestion | Extract it | 0.8-0.9 |
+${tier3Segment(style.tier3)}
+
+${tier3KeyDistinction(style.tier3)}
+
+Do NOT extract: greetings, filler ("sure!", "let me help"), or meta-commentary
 
 ## Output format: YOps YAML
 
@@ -79,13 +92,15 @@ ${
 
 Each operation needs:
 - **source**: key phrase from the conversation that contains this fact (a few words are enough — does NOT need to be a complete sentence)
+${quoteLengthSegment(style.quote_length)}
 - **from**: turn tag (T1, T2, etc.) where the information appears
 
 ### Structure
 - One root node named after the conversation topic (snake_case)
 - Children for subtopics (group related facts)
 - Values: clean data (numbers, short labels, booleans, arrays) — NOT full sentences
-- Depth: up to 3 levels
+
+${granularitySegment(style.granularity)}
 
 ### Example${hasSnapshot ? ' (incremental)' : ''}
 
@@ -147,19 +162,20 @@ ${
 - No markdown fences, no explanatory text
 - Every operation MUST have source and from
 - If nothing to extract: output "yops: []"
-- Keys use snake_case, paths use / separator`;
+- Keys use snake_case, paths use / separator${updateStanceSegment(style.update_stance)}`;
 }
 
 // -- Main Function --
 
 export function buildYOpsPrompt(
   input: ExtractionInput,
-  _style?: Partial<ExtractionStyleConfig>
+  style?: Partial<ExtractionStyleConfig>
 ): ExtractionPromptResult {
   const { turns, snapshot, processedTurnCount } = input;
   const hasSnapshot = !!snapshot && snapshot.trees.length > 0;
+  const resolved: ExtractionStyleConfig = { ...DEFAULT_STYLE, ...style };
 
-  const systemPrompt = buildSystemPrompt(hasSnapshot);
+  const systemPrompt = buildSystemPrompt(hasSnapshot, resolved);
 
   if (hasSnapshot) {
     // Incremental mode
