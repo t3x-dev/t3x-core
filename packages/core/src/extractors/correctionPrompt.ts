@@ -18,6 +18,8 @@ export interface CorrectionInput {
   rejectedYOps: Array<{ index: number; yop: YOp; violations: GateViolation[] }>;
   /** Turn contents for reference */
   turns: Array<{ role: string; content: string }>;
+  /** Optional one-line style hint so the LLM retains extraction style during correction */
+  styleSummary?: string;
 }
 
 export interface CorrectionPromptResult {
@@ -85,7 +87,9 @@ Rules:
     .map((i) => `[T${i + 1}] [${input.turns[i].role}]: ${input.turns[i].content}`)
     .join('\n');
 
-  const userPrompt = `## Failed Operations\n\n${rejectedSection}\n\n## Referenced Turns\n${turnsSection}\n\nFix ONLY the failed operations above. Output corrected versions as YAML.`;
+  const styleContext = input.styleSummary ? `\n## Active Style\n${input.styleSummary}\n` : '';
+
+  const userPrompt = `## Failed Operations\n\n${rejectedSection}\n\n## Referenced Turns\n${turnsSection}\n${styleContext}\nFix ONLY the failed operations above. Output corrected versions as YAML.`;
 
   return { systemPrompt, userPrompt };
 }

@@ -27,7 +27,7 @@ import { applyYOps } from '../../yops/engine';
 import type { YOp } from '../../yops/types';
 import { buildCorrectionPrompt } from '../correctionPrompt';
 import { buildRepairPrompt } from '../repairPrompt';
-import type { ExtractionStyleConfig } from '../extractionStyleConfig';
+import { DEFAULT_STYLE, type ExtractionStyleConfig, styleSummaryLine } from '../extractionStyleConfig';
 import type { ExtractionResult } from '../extractor';
 import { parseYOpsOutput } from '../yopsParser';
 import type { ExtractionInput } from '../yopsPrompt';
@@ -55,6 +55,8 @@ export class YamlExtractionStrategy implements ExtractionStrategy {
     style?: ExtractionStyleConfig,
   ): Promise<ExtractionResult> {
     const baseSnapshot: SemanticContent = input.snapshot ?? { trees: [], relations: [] };
+    const resolved: ExtractionStyleConfig = { ...DEFAULT_STYLE, ...style };
+    const styleSummary = styleSummaryLine(resolved);
     let lastError = '';
     const totalUsage = { inputTokens: 0, outputTokens: 0 };
 
@@ -80,7 +82,7 @@ export class YamlExtractionStrategy implements ExtractionStrategy {
       // ── Step 2: Parse YAML → YOps[] ──
       let parseResult = parseYOpsOutput(raw);
       if (!parseResult.ok) {
-        const repair = await this.repairRound('yaml_parse', raw, parseResult.error, input.turns, provider);
+        const repair = await this.repairRound('yaml_parse', raw, parseResult.error, input.turns, provider, styleSummary);
         totalUsage.inputTokens += repair.usage.inputTokens;
         totalUsage.outputTokens += repair.usage.outputTokens;
         if (!repair.ok) {
@@ -99,7 +101,7 @@ export class YamlExtractionStrategy implements ExtractionStrategy {
       // ── Step 4: Correction round if needed ──
       let correctedYOps: YOp[] = [];
       if (rejected.length > 0) {
-        const correctionResult = await this.correctionRound(rejected, input.turns, provider);
+        const correctionResult = await this.correctionRound(rejected, input.turns, provider, styleSummary);
         if (correctionResult.ok) {
           correctedYOps = correctionResult.yops;
           totalUsage.inputTokens += correctionResult.usage.inputTokens;
@@ -126,7 +128,7 @@ export class YamlExtractionStrategy implements ExtractionStrategy {
       let applyResult = applyYOps(baseSnapshot, resolvedYOps);
       if (!applyResult.ok) {
         const errorMsg = applyResult.error?.message ?? 'unknown';
-        const repair = await this.repairRound('yops_apply', raw, errorMsg, input.turns, provider);
+        const repair = await this.repairRound('yops_apply', raw, errorMsg, input.turns, provider, styleSummary);
         totalUsage.inputTokens += repair.usage.inputTokens;
         totalUsage.outputTokens += repair.usage.outputTokens;
         if (!repair.ok) {
@@ -238,6 +240,7 @@ export class YamlExtractionStrategy implements ExtractionStrategy {
     rejected: GatedYOp[],
     turns: Array<{ role: string; content: string }>,
     provider: LLMProvider,
+    styleSummary?: string,
   ): Promise<{
     ok: boolean;
     yops: YOp[];
@@ -250,6 +253,7 @@ export class YamlExtractionStrategy implements ExtractionStrategy {
         violations: r.violations ?? [],
       })),
       turns,
+      styleSummary,
     });
 
     try {
@@ -290,6 +294,7 @@ export class YamlExtractionStrategy implements ExtractionStrategy {
     errorMessage: string,
     turns: Array<{ role: string; content: string }>,
     provider: LLMProvider,
+    styleSummary?: string,
   ): Promise<{
     ok: boolean;
     yops: YOp[];
@@ -300,6 +305,7 @@ export class YamlExtractionStrategy implements ExtractionStrategy {
       rawOutput,
       errorMessage,
       turns,
+      styleSummary,
     });
 
     try {

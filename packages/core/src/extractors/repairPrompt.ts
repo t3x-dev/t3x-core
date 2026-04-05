@@ -17,6 +17,8 @@ export interface RepairInput {
   errorMessage: string;
   /** Conversation turns for context */
   turns: Array<{ role: string; content: string }>;
+  /** Optional one-line style hint so the LLM retains extraction style during repair */
+  styleSummary?: string;
 }
 
 export interface RepairPromptResult {
@@ -61,6 +63,7 @@ export function buildRepairPrompt(input: RepairInput): RepairPromptResult {
     .join('\n');
 
   const errorLabel = kind === 'yaml_parse' ? 'YAML Syntax Error' : 'Tree Application Error';
+  const styleContext = input.styleSummary ? `\n## Active Style\n\n${input.styleSummary}\n` : '';
 
   const userPrompt = `## ${errorLabel}
 
@@ -75,7 +78,7 @@ ${rawOutput}
 ## Conversation Context
 
 ${turnsSection}
-
+${styleContext}
 Fix the error above and reoutput the corrected YAML.`;
 
   return { systemPrompt, userPrompt };

@@ -108,4 +108,27 @@ describe('buildRepairPrompt', () => {
       expect(result.userPrompt).toContain('only turn');
     });
   });
+
+  describe('style summary', () => {
+    it('includes style summary in user prompt when provided', () => {
+      const result = buildRepairPrompt({
+        kind: 'yaml_parse',
+        rawOutput: 'bad: yaml',
+        errorMessage: 'parse error',
+        turns: [{ role: 'user', content: 'hello' }],
+        styleSummary: 'Extraction mode: concise — root-level facts only',
+      });
+      expect(result.userPrompt).toContain('Extraction mode: concise');
+    });
+
+    it('omits style section when not provided', () => {
+      const result = buildRepairPrompt({
+        kind: 'yaml_parse',
+        rawOutput: 'bad: yaml',
+        errorMessage: 'parse error',
+        turns: [{ role: 'user', content: 'hello' }],
+      });
+      expect(result.userPrompt).not.toContain('Active Style');
+    });
+  });
 });
