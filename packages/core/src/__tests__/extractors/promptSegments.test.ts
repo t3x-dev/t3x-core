@@ -17,16 +17,16 @@ describe('Prompt segment composition', () => {
       expect(systemPrompt).not.toContain('2 Levels');
     });
 
-    it('balanced: includes 3 Levels and comprehensive extraction (default)', () => {
+    it('balanced: includes 2 Levels and scannable tree guidance', () => {
       const { systemPrompt } = buildExtractionPrompt({ turns: baseTurns }, PRESETS.balanced);
-      expect(systemPrompt).toContain('3 Levels');
-      expect(systemPrompt).toContain('Extract ALL substantive information');
+      expect(systemPrompt).toContain('2 Levels');
+      expect(systemPrompt).toContain('scannable');
     });
 
-    it('detailed: includes 3 Levels and 1-3 slots for grandchildren', () => {
+    it('detailed: includes 3 Levels and every meaningful point', () => {
       const { systemPrompt } = buildExtractionPrompt({ turns: baseTurns }, PRESETS.detailed);
       expect(systemPrompt).toContain('3 Levels');
-      expect(systemPrompt).toContain('1-3 slots');
+      expect(systemPrompt).toContain('EVERY meaningful point');
     });
   });
 
@@ -34,7 +34,7 @@ describe('Prompt segment composition', () => {
     it('skip: tells LLM not to extract TIER 3', () => {
       const { systemPrompt } = buildExtractionPrompt(
         { turns: baseTurns },
-        PRESETS.concise // tier3: 'skip'
+        { ...PRESETS.concise, tier3: 'skip' } // explicit skip
       );
       expect(systemPrompt).toContain('Do NOT extract');
       expect(systemPrompt).not.toContain('0.4-0.5');

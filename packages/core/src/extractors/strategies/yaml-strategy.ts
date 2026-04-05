@@ -26,7 +26,8 @@ import { ylint } from '../../ylint';
 import { applyYOps } from '../../yops/engine';
 import type { YOp } from '../../yops/types';
 import { buildCorrectionPrompt } from '../correctionPrompt';
-import type { ExtractionStyleConfig } from '../extractionStyleConfig';
+import { buildRepairPrompt } from '../repairPrompt';
+import { DEFAULT_STYLE, type ExtractionStyleConfig, styleSummaryLine } from '../extractionStyleConfig';
 import type { ExtractionResult } from '../extractor';
 import { parseYOpsOutput } from '../yopsParser';
 import type { ExtractionInput } from '../yopsPrompt';
@@ -54,6 +55,8 @@ export class YamlExtractionStrategy implements ExtractionStrategy {
     style?: ExtractionStyleConfig,
   ): Promise<ExtractionResult> {
     const baseSnapshot: SemanticContent = input.snapshot ?? { trees: [], relations: [] };
+    const resolved: ExtractionStyleConfig = { ...DEFAULT_STYLE, ...style };
+    const styleSummary = styleSummaryLine(resolved);
     let lastError = '';
     const totalUsage = { inputTokens: 0, outputTokens: 0 };
 
@@ -77,10 +80,16 @@ export class YamlExtractionStrategy implements ExtractionStrategy {
       }
 
       // ── Step 2: Parse YAML → YOps[] ──
-      const parseResult = parseYOpsOutput(raw);
+      let parseResult = parseYOpsOutput(raw);
       if (!parseResult.ok) {
-        lastError = `Failed to parse LLM output: ${parseResult.error}`;
-        continue;
+        const repair = await this.repairRound('yaml_parse', raw, parseResult.error, input.turns, provider, styleSummary);
+        totalUsage.inputTokens += repair.usage.inputTokens;
+        totalUsage.outputTokens += repair.usage.outputTokens;
+        if (!repair.ok) {
+          lastError = `Failed to parse LLM output (repair failed): ${parseResult.error}`;
+          continue;
+        }
+        parseResult = { ok: true, format: 'yops', yops: repair.yops };
       }
 
       // ── Step 3: Per-YOp gate validation + auto-fix ──
@@ -92,7 +101,7 @@ export class YamlExtractionStrategy implements ExtractionStrategy {
       // ── Step 4: Correction round if needed ──
       let correctedYOps: YOp[] = [];
       if (rejected.length > 0) {
-        const correctionResult = await this.correctionRound(rejected, input.turns, provider);
+        const correctionResult = await this.correctionRound(rejected, input.turns, provider, styleSummary);
         if (correctionResult.ok) {
           correctedYOps = correctionResult.yops;
           totalUsage.inputTokens += correctionResult.usage.inputTokens;
@@ -110,16 +119,32 @@ export class YamlExtractionStrategy implements ExtractionStrategy {
       }
 
       // ── Step 5b: Resolve partial paths (like Claude Code's backfillObservableInput) ──
-      const resolvedYOps = allValidYOps.map((yop) => {
+      let resolvedYOps = allValidYOps.map((yop) => {
         const pathFix = autoFixPaths(yop, baseSnapshot.trees);
         return pathFix ? pathFix.fixed : yop;
       });
 
       // ── Step 6: Apply YOps → validate → ylint ──
-      const applyResult = applyYOps(baseSnapshot, resolvedYOps);
+      let applyResult = applyYOps(baseSnapshot, resolvedYOps);
       if (!applyResult.ok) {
-        lastError = `Failed to apply YOps: ${applyResult.error?.message ?? 'unknown'}`;
-        continue;
+        const errorMsg = applyResult.error?.message ?? 'unknown';
+        const repair = await this.repairRound('yops_apply', raw, errorMsg, input.turns, provider, styleSummary);
+        totalUsage.inputTokens += repair.usage.inputTokens;
+        totalUsage.outputTokens += repair.usage.outputTokens;
+        if (!repair.ok) {
+          lastError = `Failed to apply YOps (repair failed): ${errorMsg}`;
+          continue;
+        }
+        // Re-run path resolution and apply with repaired YOps
+        resolvedYOps = repair.yops.map((yop) => {
+          const pathFix = autoFixPaths(yop, baseSnapshot.trees);
+          return pathFix ? pathFix.fixed : yop;
+        });
+        applyResult = applyYOps(baseSnapshot, resolvedYOps);
+        if (!applyResult.ok) {
+          lastError = `Failed to apply repaired YOps: ${applyResult.error?.message ?? 'unknown'}`;
+          continue;
+        }
       }
 
       const snapshot: SemanticContent = {
@@ -215,6 +240,7 @@ export class YamlExtractionStrategy implements ExtractionStrategy {
     rejected: GatedYOp[],
     turns: Array<{ role: string; content: string }>,
     provider: LLMProvider,
+    styleSummary?: string,
   ): Promise<{
     ok: boolean;
     yops: YOp[];
@@ -227,6 +253,7 @@ export class YamlExtractionStrategy implements ExtractionStrategy {
         violations: r.violations ?? [],
       })),
       turns,
+      styleSummary,
     });
 
     try {
@@ -250,6 +277,49 @@ export class YamlExtractionStrategy implements ExtractionStrategy {
       });
 
       return { ok: true, yops: validYOps, usage: genResult.usage };
+    } catch {
+      return { ok: false, yops: [], usage: { inputTokens: 0, outputTokens: 0 } };
+    }
+  }
+
+  /**
+   * One targeted repair round: send the error + raw output back to LLM.
+   *
+   * Claude Code parallel: tool_result with is_error=true -> LLM self-corrects.
+   * We send the specific parse/apply error so the LLM knows what to fix.
+   */
+  private async repairRound(
+    kind: 'yaml_parse' | 'yops_apply',
+    rawOutput: string,
+    errorMessage: string,
+    turns: Array<{ role: string; content: string }>,
+    provider: LLMProvider,
+    styleSummary?: string,
+  ): Promise<{
+    ok: boolean;
+    yops: YOp[];
+    usage: { inputTokens: number; outputTokens: number };
+  }> {
+    const { systemPrompt, userPrompt } = buildRepairPrompt({
+      kind,
+      rawOutput,
+      errorMessage,
+      turns,
+      styleSummary,
+    });
+
+    try {
+      const genResult = await provider.generate(`${systemPrompt}\n\n---\n\n${userPrompt}`, {
+        temperature: TEMPERATURE,
+        maxTokens: MAX_TOKENS,
+      });
+
+      const parseResult = parseYOpsOutput(genResult.text);
+      if (!parseResult.ok) {
+        return { ok: false, yops: [], usage: genResult.usage };
+      }
+
+      return { ok: true, yops: parseResult.yops, usage: genResult.usage };
     } catch {
       return { ok: false, yops: [], usage: { inputTokens: 0, outputTokens: 0 } };
     }
