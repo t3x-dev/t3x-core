@@ -83,6 +83,7 @@ Rules:
   if (lastIdx >= 1) referencedTurnIndices.add(lastIdx - 1);
 
   const turnsSection = [...referencedTurnIndices]
+    .filter((i) => i >= 0 && i < input.turns.length)
     .sort((a, b) => a - b)
     .map((i) => `[T${i + 1}] [${input.turns[i].role}]: ${input.turns[i].content}`)
     .join('\n');

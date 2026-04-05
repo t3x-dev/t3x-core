@@ -42,7 +42,7 @@ describe('Extractor with YOps', () => {
     expect(result.snapshot.trees[0].slots.budget).toBe(2000);
   });
 
-  it('returns lintResult', async () => {
+  it('returns snapshot without lint scores', async () => {
     const raw = `trip:\n  destination: Hangzhou\n---\n{"slot_quotes":{"destination":"go"},"source_map":{"trip":"T1"},"confidence_map":{"trip":0.9}}`;
     const extractor = new Extractor(mockProvider(raw));
     const result = await extractor.extract({
@@ -50,8 +50,7 @@ describe('Extractor with YOps', () => {
     });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.lintResult).toBeDefined();
-    expect(result.lintResult?.overall).toBeGreaterThanOrEqual(0);
+    expect(result.snapshot.trees.length).toBeGreaterThan(0);
   });
 
   it('returns error on garbage output', async () => {

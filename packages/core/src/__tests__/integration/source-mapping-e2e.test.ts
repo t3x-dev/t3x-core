@@ -261,7 +261,7 @@ describe('Source Mapping E2E', () => {
     expect(cookingChild!.source).toBe('T4');
   });
 
-  it('lintResult is attached to extraction result', async () => {
+  it('extraction result has snapshot without lint scores', async () => {
     const extractorOutput = `yops:
   - define:
       parent: ""
@@ -288,9 +288,8 @@ describe('Source Mapping E2E', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
-    // ylint should run and produce scores
-    expect(result.lintResult).toBeDefined();
-    expect(result.lintResult!.overall).toBeGreaterThanOrEqual(0);
-    expect(result.lintResult!.scores.form1).toBeDefined();
+    // Pipeline produces tree without lint scores
+    expect(result.snapshot.trees.length).toBeGreaterThan(0);
+    expect(result.snapshot.trees[0].key).toBe('beef');
   });
 });

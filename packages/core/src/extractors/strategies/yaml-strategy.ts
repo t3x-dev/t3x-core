@@ -1,18 +1,23 @@
 /**
- * YAML Extraction Strategy — v2 with correction loop
+ * YAML Extraction Strategy — Zero-Trust Pipeline
  *
- * Zero-trust extraction pipeline inspired by Claude Code's tool validation:
- *   1. LLM outputs YAML (one-shot, efficient)
- *   2. Parse → YOps[]
- *   3. Per-YOp gate validation (source, dedup, structure)
- *   4. Auto-fix deterministic issues (extra fields, path separators)
- *   5. If unfixable rejections remain → one correction round with LLM
- *   6. Apply validated YOps → validate integrity → ylint
+ * Inspired by Claude Code's QueryEngine tool validation pattern.
+ * Every LLM output passes through 4 deterministic control layers
+ * before becoming a committed tree.
  *
- * Key difference from Claude Code: Claude validates per-tool-call in a loop.
- * We validate in batch after one-shot YAML output, then do one targeted
- * correction round if needed. Same zero-trust principle, adapted for
- * tree-building where YAML is more efficient than multi-round tool calls.
+ * ┌─────────────────────────────────────────────────┐
+ * │  L0: PARSE    "Is this valid YAML/YOps?"        │
+ * │  L1: GATE     "Are the ops well-formed?"        │
+ * │  L2: ENGINE   "Can the tree accept these ops?"  │
+ * └─────────────────────────────────────────────────┘
+ *
+ * Each layer is deterministic — pass or reject, no scores.
+ * LLM is only called for:
+ *   - Initial extraction (one-shot)
+ *   - Repair rounds (when L0 or L2 fails)
+ *   - Correction rounds (when L1 rejects ops)
+ *
+ * ylint is available as an on-demand quality check (not in pipeline).
  */
 
 import type { LLMProvider } from '../../llm/types';
@@ -22,14 +27,13 @@ import { validateSources } from '../../ops/gates/source';
 import type { GateViolation } from '../../ops/gates/types';
 import type { SemanticContent } from '../../semantic/types';
 import { validateIntegrity } from '../../semantic/validate';
-import { ylint } from '../../ylint';
 import { applyYOps } from '../../yops/engine';
-import type { YOp } from '../../yops/types';
+import type { YOp, YOpsResult } from '../../yops/types';
 import { buildCorrectionPrompt } from '../correctionPrompt';
 import { buildRepairPrompt } from '../repairPrompt';
 import { DEFAULT_STYLE, type ExtractionStyleConfig, styleSummaryLine } from '../extractionStyleConfig';
 import type { ExtractionResult } from '../extractor';
-import { parseYOpsOutput } from '../yopsParser';
+import { parseYOpsOutput, type YOpsParseResult } from '../yopsParser';
 import type { ExtractionInput } from '../yopsPrompt';
 import { buildYOpsPrompt } from '../yopsPrompt';
 import type { ExtractionStrategy } from './types';
@@ -38,6 +42,8 @@ const MAX_RETRIES = 1;
 const TEMPERATURE = 0.1;
 const MAX_TOKENS = 8192;
 
+// ── Types ──
+
 interface GatedYOp {
   index: number;
   yop: YOp;
@@ -45,6 +51,30 @@ interface GatedYOp {
   fixes?: string[];
   violations?: GateViolation[];
 }
+
+interface L0Result {
+  ok: true;
+  yops: YOp[];
+  parseResult: YOpsParseResult & { ok: true };
+}
+
+interface L1Result {
+  passed: YOp[];
+  rejected: GatedYOp[];
+}
+
+interface L2Result {
+  ok: true;
+  snapshot: SemanticContent;
+  resolvedYOps: YOp[];
+}
+
+interface LLMUsage {
+  inputTokens: number;
+  outputTokens: number;
+}
+
+// ── Strategy ──
 
 export class YamlExtractionStrategy implements ExtractionStrategy {
   readonly name = 'yaml';
@@ -58,10 +88,10 @@ export class YamlExtractionStrategy implements ExtractionStrategy {
     const resolved: ExtractionStyleConfig = { ...DEFAULT_STYLE, ...style };
     const styleSummary = styleSummaryLine(resolved);
     let lastError = '';
-    const totalUsage = { inputTokens: 0, outputTokens: 0 };
+    const totalUsage: LLMUsage = { inputTokens: 0, outputTokens: 0 };
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-      // ── Step 1: LLM generates YAML (one-shot) ──
+      // ── LLM generates YAML (one-shot) ──
       const { systemPrompt, userPrompt } = buildYOpsPrompt(input, style);
       const combinedPrompt = `${systemPrompt}\n\n---\n\n${userPrompt}`;
 
@@ -79,102 +109,164 @@ export class YamlExtractionStrategy implements ExtractionStrategy {
         continue;
       }
 
-      // ── Step 2: Parse YAML → YOps[] ──
-      let parseResult = parseYOpsOutput(raw);
-      if (!parseResult.ok) {
-        const repair = await this.repairRound('yaml_parse', raw, parseResult.error, input.turns, provider, styleSummary);
-        totalUsage.inputTokens += repair.usage.inputTokens;
-        totalUsage.outputTokens += repair.usage.outputTokens;
-        if (!repair.ok) {
-          lastError = `Failed to parse LLM output (repair failed): ${parseResult.error}`;
-          continue;
-        }
-        parseResult = { ok: true, format: 'yops', yops: repair.yops };
-      }
-
-      // ── Step 3: Per-YOp gate validation + auto-fix ──
-      const gated = this.runGatesWithAutoFix(parseResult.yops, input.turns);
-
-      const passed = gated.filter((g) => g.status === 'passed' || g.status === 'auto-fixed');
-      const rejected = gated.filter((g) => g.status === 'rejected');
-
-      // ── Step 4: Correction round if needed ──
-      let correctedYOps: YOp[] = [];
-      if (rejected.length > 0) {
-        const correctionResult = await this.correctionRound(rejected, input.turns, provider, styleSummary);
-        if (correctionResult.ok) {
-          correctedYOps = correctionResult.yops;
-          totalUsage.inputTokens += correctionResult.usage.inputTokens;
-          totalUsage.outputTokens += correctionResult.usage.outputTokens;
-        }
-        // If correction fails, we still proceed with what passed
-      }
-
-      // ── Step 5: Combine passed + corrected, resolve paths ──
-      const allValidYOps = [...passed.map((g) => g.yop), ...correctedYOps];
-
-      if (allValidYOps.length === 0 && parseResult.yops.length > 0) {
-        lastError = `All ${parseResult.yops.length} YOps rejected by gates: ${rejected.map((r) => r.violations?.map((v) => v.message).join('; ')).join(' | ')}`;
+      // ── L0: Parse — "Is this valid YAML/YOps?" ──
+      const l0 = await this.runL0Parse(raw, input.turns, provider, styleSummary, totalUsage);
+      if (!l0.ok) {
+        lastError = l0.error;
         continue;
       }
 
-      // ── Step 5b: Resolve partial paths (like Claude Code's backfillObservableInput) ──
-      let resolvedYOps = allValidYOps.map((yop) => {
-        const pathFix = autoFixPaths(yop, baseSnapshot.trees);
-        return pathFix ? pathFix.fixed : yop;
-      });
+      // ── L1: Gate — "Are the ops well-formed and sourced?" ──
+      const l1 = await this.runL1Gate(l0.yops, input.turns, provider, styleSummary, totalUsage);
 
-      // ── Step 6: Apply YOps → validate → ylint ──
-      let applyResult = applyYOps(baseSnapshot, resolvedYOps);
-      if (!applyResult.ok) {
-        const errorMsg = applyResult.error?.message ?? 'unknown';
-        const repair = await this.repairRound('yops_apply', raw, errorMsg, input.turns, provider, styleSummary);
-        totalUsage.inputTokens += repair.usage.inputTokens;
-        totalUsage.outputTokens += repair.usage.outputTokens;
-        if (!repair.ok) {
-          lastError = `Failed to apply YOps (repair failed): ${errorMsg}`;
-          continue;
-        }
-        // Re-run path resolution and apply with repaired YOps
-        resolvedYOps = repair.yops.map((yop) => {
-          const pathFix = autoFixPaths(yop, baseSnapshot.trees);
-          return pathFix ? pathFix.fixed : yop;
-        });
-        applyResult = applyYOps(baseSnapshot, resolvedYOps);
-        if (!applyResult.ok) {
-          lastError = `Failed to apply repaired YOps: ${applyResult.error?.message ?? 'unknown'}`;
-          continue;
-        }
-      }
-
-      const snapshot: SemanticContent = {
-        trees: applyResult.trees,
-        relations: applyResult.relations,
-      };
-
-      const validation = validateIntegrity(snapshot);
-      if (!validation.valid) {
-        lastError = `Validation failed: ${validation.errors.map((e) => e.message).join('; ')}`;
+      // All rejected and nothing passed?
+      if (l1.passed.length === 0 && l0.yops.length > 0) {
+        lastError = `All ${l0.yops.length} YOps rejected by gates: ${l1.rejected.map((r) => r.violations?.map((v) => v.message).join('; ')).join(' | ')}`;
         continue;
       }
 
-      const lintResult = ylint(snapshot);
+      // ── L2: Engine — "Can the tree accept these ops?" ──
+      const l2 = await this.runL2Engine(l1.passed, baseSnapshot, raw, input.turns, provider, styleSummary, totalUsage);
+      if (!l2.ok) {
+        lastError = l2.error;
+        continue;
+      }
 
-      return { ok: true, yops: resolvedYOps, snapshot, usage: totalUsage, lintResult };
+      return { ok: true, yops: l2.resolvedYOps, snapshot: l2.snapshot, usage: totalUsage };
     }
 
     return { ok: false, error: lastError, usage: totalUsage };
   }
 
-  /**
-   * Run gates on each YOp and attempt auto-fix for failures.
-   *
-   * For each YOp:
-   *   1. Run source + dedup gates
-   *   2. If errors → try autoFixYOp
-   *   3. If auto-fix succeeds → re-validate fixed version
-   *   4. If still fails → mark as rejected
-   */
+  // ═══════════════════════════════════════════════════════════════════════════
+  // L0: PARSE — Raw LLM text → YOp[]
+  //
+  // Checks: fence stripping, quote normalization, js-yaml syntax,
+  //         format detection (tree vs yops), Zod schema validation,
+  //         schema auto-fix (dot→slash, camelCase→snake_case)
+  // On failure: repair prompt → LLM fixes syntax → re-parse
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  private async runL0Parse(
+    raw: string,
+    turns: Array<{ role: string; content: string }>,
+    provider: LLMProvider,
+    styleSummary: string,
+    usage: LLMUsage,
+  ): Promise<L0Result | { ok: false; error: string }> {
+    let parseResult = parseYOpsOutput(raw);
+    if (!parseResult.ok) {
+      const repair = await this.repairRound('yaml_parse', raw, parseResult.error, turns, provider, styleSummary);
+      usage.inputTokens += repair.usage.inputTokens;
+      usage.outputTokens += repair.usage.outputTokens;
+      if (!repair.ok) {
+        return { ok: false, error: `Failed to parse LLM output (repair failed): ${parseResult.error}` };
+      }
+      parseResult = { ok: true, format: 'yops', yops: repair.yops };
+    }
+    return { ok: true, yops: parseResult.yops, parseResult };
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // L1: GATE — YOp[] → passed[] + rejected[]
+  //
+  // Checks: source validation (turn refs, quote matching),
+  //         dedup detection (duplicate defines),
+  //         path resolution (partial → full path)
+  // On failure: auto-fix → re-gate → correction prompt → LLM fixes ops
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  private async runL1Gate(
+    yops: YOp[],
+    turns: Array<{ role: string; content: string }>,
+    provider: LLMProvider,
+    styleSummary: string,
+    usage: LLMUsage,
+  ): Promise<L1Result> {
+    const gated = this.runGatesWithAutoFix(yops, turns);
+
+    const passed = gated.filter((g) => g.status === 'passed' || g.status === 'auto-fixed');
+    const rejected = gated.filter((g) => g.status === 'rejected');
+
+    // Correction round for rejected ops
+    let correctedYOps: YOp[] = [];
+    if (rejected.length > 0) {
+      const correctionResult = await this.correctionRound(rejected, turns, provider, styleSummary);
+      if (correctionResult.ok) {
+        correctedYOps = correctionResult.yops;
+        usage.inputTokens += correctionResult.usage.inputTokens;
+        usage.outputTokens += correctionResult.usage.outputTokens;
+      }
+    }
+
+    return {
+      passed: [...passed.map((g) => g.yop), ...correctedYOps],
+      rejected,
+    };
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // L2: ENGINE — YOp[] + tree → new tree
+  //
+  // Checks: key validity (snake_case), parent/node existence,
+  //         duplicate siblings, relation endpoints, cycle detection,
+  //         structural integrity (validateIntegrity)
+  // On failure: repair prompt → LLM fixes ops → re-apply
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  private async runL2Engine(
+    yops: YOp[],
+    baseSnapshot: SemanticContent,
+    raw: string,
+    turns: Array<{ role: string; content: string }>,
+    provider: LLMProvider,
+    styleSummary: string,
+    usage: LLMUsage,
+  ): Promise<L2Result | { ok: false; error: string }> {
+    // Resolve partial paths
+    let resolvedYOps = yops.map((yop) => {
+      const pathFix = autoFixPaths(yop, baseSnapshot.trees);
+      return pathFix ? pathFix.fixed : yop;
+    });
+
+    // Apply YOps to tree
+    let applyResult: YOpsResult = applyYOps(baseSnapshot, resolvedYOps);
+    if (!applyResult.ok) {
+      const errorMsg = applyResult.error?.message ?? 'unknown';
+      const repair = await this.repairRound('yops_apply', raw, errorMsg, turns, provider, styleSummary);
+      usage.inputTokens += repair.usage.inputTokens;
+      usage.outputTokens += repair.usage.outputTokens;
+      if (!repair.ok) {
+        return { ok: false, error: `Failed to apply YOps (repair failed): ${errorMsg}` };
+      }
+      resolvedYOps = repair.yops.map((yop) => {
+        const pathFix = autoFixPaths(yop, baseSnapshot.trees);
+        return pathFix ? pathFix.fixed : yop;
+      });
+      applyResult = applyYOps(baseSnapshot, resolvedYOps);
+      if (!applyResult.ok) {
+        return { ok: false, error: `Failed to apply repaired YOps: ${applyResult.error?.message ?? 'unknown'}` };
+      }
+    }
+
+    const snapshot: SemanticContent = {
+      trees: applyResult.trees,
+      relations: applyResult.relations,
+    };
+
+    // Integrity validation (part of L2 — structural correctness)
+    const validation = validateIntegrity(snapshot);
+    if (!validation.valid) {
+      return { ok: false, error: `Validation failed: ${validation.errors.map((e) => e.message).join('; ')}` };
+    }
+
+    return { ok: true, snapshot, resolvedYOps };
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Internal: Gate runner with auto-fix
+  // ═══════════════════════════════════════════════════════════════════════════
+
   private runGatesWithAutoFix(
     yops: YOp[],
     turns: Array<{ role: string; content: string }>,
@@ -182,7 +274,6 @@ export class YamlExtractionStrategy implements ExtractionStrategy {
     const sourceGate = validateSources(yops, turns);
     const dedupGate = validateDedup(yops);
 
-    // Build per-op violation map
     const violationsByOp = new Map<number, GateViolation[]>();
     for (const v of [...sourceGate.violations, ...dedupGate.violations]) {
       if (v.opIndex < 0) continue;
@@ -198,7 +289,6 @@ export class YamlExtractionStrategy implements ExtractionStrategy {
 
       const hasErrors = violations.some((v) => v.severity === 'error');
       if (!hasErrors) {
-        // Warnings only — pass with advisory
         return { index: i, yop, status: 'passed' as const };
       }
 
@@ -207,7 +297,6 @@ export class YamlExtractionStrategy implements ExtractionStrategy {
       const fixResult = autoFixYOp(rawOp);
 
       if (fixResult) {
-        // Re-validate the fixed version
         const recheck = validateSources([fixResult.fixed], turns);
         const recheckErrors = recheck.violations.filter((v) => v.severity === 'error');
         if (recheckErrors.length === 0) {
@@ -220,7 +309,6 @@ export class YamlExtractionStrategy implements ExtractionStrategy {
         }
       }
 
-      // Cannot auto-fix → rejected, needs LLM correction
       return {
         index: i,
         yop,
@@ -230,11 +318,13 @@ export class YamlExtractionStrategy implements ExtractionStrategy {
     });
   }
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Internal: LLM recovery rounds
+  // ═══════════════════════════════════════════════════════════════════════════
+
   /**
-   * One targeted correction round: send only the rejected YOps + errors to LLM.
-   *
+   * Correction round — fix rejected YOps by sending errors back to LLM.
    * Claude Code parallel: tool_result with is_error=true → LLM self-corrects.
-   * We batch all rejections into one correction prompt.
    */
   private async correctionRound(
     rejected: GatedYOp[],
@@ -244,7 +334,7 @@ export class YamlExtractionStrategy implements ExtractionStrategy {
   ): Promise<{
     ok: boolean;
     yops: YOp[];
-    usage: { inputTokens: number; outputTokens: number };
+    usage: LLMUsage;
   }> {
     const { systemPrompt, userPrompt } = buildCorrectionPrompt({
       rejectedYOps: rejected.map((r) => ({
@@ -259,7 +349,7 @@ export class YamlExtractionStrategy implements ExtractionStrategy {
     try {
       const genResult = await provider.generate(`${systemPrompt}\n\n---\n\n${userPrompt}`, {
         temperature: TEMPERATURE,
-        maxTokens: 2048, // Correction is small
+        maxTokens: 2048,
       });
 
       const parseResult = parseYOpsOutput(genResult.text);
@@ -267,7 +357,6 @@ export class YamlExtractionStrategy implements ExtractionStrategy {
         return { ok: false, yops: [], usage: genResult.usage };
       }
 
-      // Re-validate corrected YOps (no second correction — this is the final check)
       const sourceGate = validateSources(parseResult.yops, turns);
       const validYOps = parseResult.yops.filter((_, i) => {
         const errors = sourceGate.violations.filter(
@@ -283,10 +372,8 @@ export class YamlExtractionStrategy implements ExtractionStrategy {
   }
 
   /**
-   * One targeted repair round: send the error + raw output back to LLM.
-   *
-   * Claude Code parallel: tool_result with is_error=true -> LLM self-corrects.
-   * We send the specific parse/apply error so the LLM knows what to fix.
+   * Repair round — fix parse/apply errors by sending error back to LLM.
+   * Claude Code parallel: tool_result with is_error=true → LLM self-corrects.
    */
   private async repairRound(
     kind: 'yaml_parse' | 'yops_apply',
@@ -298,7 +385,7 @@ export class YamlExtractionStrategy implements ExtractionStrategy {
   ): Promise<{
     ok: boolean;
     yops: YOp[];
-    usage: { inputTokens: number; outputTokens: number };
+    usage: LLMUsage;
   }> {
     const { systemPrompt, userPrompt } = buildRepairPrompt({
       kind,
