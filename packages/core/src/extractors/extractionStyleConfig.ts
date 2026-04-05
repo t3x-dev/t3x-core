@@ -50,3 +50,18 @@ export function matchPreset(config: ExtractionStyleConfig): PresetName | null {
   }
   return null;
 }
+
+/** Returns a one-line human-readable summary of the extraction style. */
+export function styleSummaryLine(config: ExtractionStyleConfig): string {
+  const preset = matchPreset(config);
+  if (preset === 'concise') {
+    return 'Extraction mode: concise — root-level facts only, minimal quotes, skip AI content';
+  }
+  if (preset === 'balanced') {
+    return 'Extraction mode: balanced — 3 levels, contextual quotes, include AI content';
+  }
+  if (preset === 'detailed') {
+    return 'Extraction mode: detailed — 3 levels with nuance, contextual quotes, aggressive updates';
+  }
+  return `Extraction mode: custom — granularity=${config.granularity}, quotes=${config.quote_length}, stance=${config.update_stance}, ai_content=${config.tier3}`;
+}
