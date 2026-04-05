@@ -15,6 +15,7 @@ describe('runOperation', () => {
 	it('wraps operation with op_start and op_done events', async () => {
 		const op: Operation<string, string> = {
 			name: 'echo',
+			// biome-ignore lint/correctness/useYield: test intentionally returns without yielding
 			async *run(input) {
 				return input;
 			},
@@ -40,6 +41,7 @@ describe('runOperation', () => {
 	it('yields op_error on failure and re-throws', async () => {
 		const op: Operation<void, never> = {
 			name: 'fail',
+			// biome-ignore lint/correctness/useYield: test intentionally throws before yielding
 			async *run() {
 				throw new Error('boom');
 			},
@@ -100,6 +102,7 @@ describe('collectResult', () => {
 	it('consumes generator and returns final value', async () => {
 		const op: Operation<string, string> = {
 			name: 'upper',
+			// biome-ignore lint/correctness/useYield: test intentionally returns without yielding
 			async *run(input) {
 				return input.toUpperCase();
 			},
