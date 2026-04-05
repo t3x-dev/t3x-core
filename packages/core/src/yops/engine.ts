@@ -146,7 +146,7 @@ function execSet(
 function execUnset(
   trees: TreeNode[],
   op: UnsetOp,
-  index: number,
+  _index: number,
 ): YOpsError | null {
   const nodePath = getParentPath(op.path);
   const slotKey = getNodeKey(op.path);
