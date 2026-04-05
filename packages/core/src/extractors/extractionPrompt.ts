@@ -117,19 +117,24 @@ export function granularitySegment(g: Granularity): string {
       return `## Tree Depth: 1 Level (Root Only)
 - The tree has ONE level: the root node with flat slots only
 - Do NOT create child nodes \u2014 all information goes into root-level slots
-- 3-5 slots total. Prefer fewer, high-confidence slots.`;
+- 3-5 slots total. Capture only the most important facts.
+- Combine related details into a single slot (e.g., destinations: ["Tokyo", "Kyoto", "Osaka"])
+- AI answers are included but kept brief \u2014 extract the key fact, not the explanation`;
     case 'balanced':
-      return `## Tree Depth: 3 Levels (Root + Children + Grandchildren)
-- The tree has up to THREE levels: root, children, and grandchildren
-- Group related slots into child nodes when a subtopic has 2+ related slots
-- Use grandchildren for detailed breakdowns (hero list \u2192 individual heroes)
-- Root: 2-5 slots. Children: 2-6 slots. Grandchildren: 1-4 slots.
-- IMPORTANT: Extract ALL substantive information from the conversation, not just highlights`;
+      return `## Tree Depth: 2 Levels (Root + Children)
+- The tree has TWO levels: root node with children for subtopics
+- Group related facts into child nodes (e.g., budget_breakdown, itinerary, weather)
+- Root: 2-4 overview slots. Children: 2-5 slots each.
+- Extract key information from both user and assistant
+- Aim for a clean, scannable tree that captures the important points`;
     case 'detailed':
       return `## Tree Depth: 3 Levels (Root + Children + Grandchildren)
-- The tree has at most THREE levels: root, children, and grandchildren
-- Use grandchildren when a child node has a complex subtopic worth breaking out
-- Root: 1-3 slots. Children: 1-4 slots. Grandchildren: 1-3 slots.`;
+- The tree has up to THREE levels: root, children, and grandchildren
+- Extract EVERY meaningful point from the conversation \u2014 do not skip details
+- Create grandchildren when a child has 3+ related sub-facts (e.g., budget_breakdown/accommodation with type, cost, style)
+- Root: 2-4 slots. Children: 2-6 slots. Grandchildren: 1-4 slots.
+- Prefer depth over breadth \u2014 split large children into sub-nodes rather than flat slots
+- Every number, recommendation, comparison, and list item is worth capturing`;
     default:
       return granularitySegment('balanced');
   }

@@ -15,9 +15,9 @@ describe('buildYOpsPrompt — style integration', () => {
       expect(systemPrompt).not.toContain('3 Levels');
     });
 
-    it('balanced style produces 3-level depth guidance', () => {
+    it('balanced style produces 2-level depth guidance', () => {
       const { systemPrompt } = buildYOpsPrompt({ turns: baseTurns }, PRESETS.balanced);
-      expect(systemPrompt).toContain('3 Levels');
+      expect(systemPrompt).toContain('2 Levels');
     });
 
     it('detailed style produces 3-level depth guidance', () => {
@@ -27,16 +27,18 @@ describe('buildYOpsPrompt — style integration', () => {
   });
 
   describe('tier3', () => {
-    it('skip mode tells LLM to not extract AI content', () => {
-      const { systemPrompt } = buildYOpsPrompt({ turns: baseTurns }, PRESETS.concise);
-      expect(systemPrompt).toContain('Do NOT extract');
-      expect(systemPrompt).toContain('TIER 3');
+    it('all presets include AI content by default', () => {
+      const { systemPrompt: concise } = buildYOpsPrompt({ turns: baseTurns }, PRESETS.concise);
+      const { systemPrompt: detailed } = buildYOpsPrompt({ turns: baseTurns }, PRESETS.detailed);
+      expect(concise).toContain('TIER 3');
+      expect(concise).toContain('TIER 4');
+      expect(detailed).toContain('TIER 3');
+      expect(detailed).toContain('TIER 4');
     });
 
-    it('extract mode includes TIER 3 and TIER 4 rows', () => {
-      const { systemPrompt } = buildYOpsPrompt({ turns: baseTurns }, PRESETS.detailed);
-      expect(systemPrompt).toContain('TIER 3');
-      expect(systemPrompt).toContain('TIER 4');
+    it('skip mode tells LLM to not extract AI content when set explicitly', () => {
+      const { systemPrompt } = buildYOpsPrompt({ turns: baseTurns }, { ...PRESETS.balanced, tier3: 'skip' });
+      expect(systemPrompt).toContain('Do NOT extract');
     });
   });
 

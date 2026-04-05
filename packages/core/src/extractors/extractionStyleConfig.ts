@@ -18,7 +18,7 @@ export const PRESETS: Record<PresetName, ExtractionStyleConfig> = {
     granularity: 'concise',
     quote_length: 'minimal',
     update_stance: 'conservative',
-    tier3: 'skip',
+    tier3: 'extract',
   },
   balanced: {
     granularity: 'balanced',
@@ -55,7 +55,7 @@ export function matchPreset(config: ExtractionStyleConfig): PresetName | null {
 export function styleSummaryLine(config: ExtractionStyleConfig): string {
   const preset = matchPreset(config);
   if (preset === 'concise') {
-    return 'Extraction mode: concise — root-level facts only, minimal quotes, skip AI content';
+    return 'Extraction mode: concise — root-level key facts only, minimal quotes, flat structure';
   }
   if (preset === 'balanced') {
     return 'Extraction mode: balanced — 3 levels, contextual quotes, include AI content';
