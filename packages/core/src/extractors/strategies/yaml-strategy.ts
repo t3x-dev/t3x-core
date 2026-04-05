@@ -9,13 +9,15 @@
  * │  L0: PARSE    "Is this valid YAML/YOps?"        │
  * │  L1: GATE     "Are the ops well-formed?"        │
  * │  L2: ENGINE   "Can the tree accept these ops?"  │
- * │  L3: QUALITY  "Is the resulting tree good?"     │
  * └─────────────────────────────────────────────────┘
  *
- * Each layer is deterministic. LLM is only called for:
+ * Each layer is deterministic — pass or reject, no scores.
+ * LLM is only called for:
  *   - Initial extraction (one-shot)
  *   - Repair rounds (when L0 or L2 fails)
  *   - Correction rounds (when L1 rejects ops)
+ *
+ * ylint is available as an on-demand quality check (not in pipeline).
  */
 
 import type { LLMProvider } from '../../llm/types';
@@ -25,8 +27,6 @@ import { validateSources } from '../../ops/gates/source';
 import type { GateViolation } from '../../ops/gates/types';
 import type { SemanticContent } from '../../semantic/types';
 import { validateIntegrity } from '../../semantic/validate';
-import { ylint } from '../../ylint';
-import type { LintResult } from '../../ylint/types';
 import { applyYOps } from '../../yops/engine';
 import type { YOp, YOpsResult } from '../../yops/types';
 import { buildCorrectionPrompt } from '../correctionPrompt';
@@ -67,10 +67,6 @@ interface L2Result {
   ok: true;
   snapshot: SemanticContent;
   resolvedYOps: YOp[];
-}
-
-interface L3Result {
-  lintResult: LintResult;
 }
 
 interface LLMUsage {
@@ -136,10 +132,7 @@ export class YamlExtractionStrategy implements ExtractionStrategy {
         continue;
       }
 
-      // ── L3: Quality — "Is the resulting tree good?" ──
-      const l3 = this.runL3Quality(l2.snapshot);
-
-      return { ok: true, yops: l2.resolvedYOps, snapshot: l2.snapshot, usage: totalUsage, lintResult: l3.lintResult };
+      return { ok: true, yops: l2.resolvedYOps, snapshot: l2.snapshot, usage: totalUsage };
     }
 
     return { ok: false, error: lastError, usage: totalUsage };
@@ -268,19 +261,6 @@ export class YamlExtractionStrategy implements ExtractionStrategy {
     }
 
     return { ok: true, snapshot, resolvedYOps };
-  }
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // L3: QUALITY — tree → score + warnings
-  //
-  // Checks: ylint 4 Normal Forms (keys, scalars, lists, depth),
-  //         orphan trees, low confidence, relation sanity
-  // Never blocks — advisory only
-  // ═══════════════════════════════════════════════════════════════════════════
-
-  private runL3Quality(snapshot: SemanticContent): L3Result {
-    const lintResult = ylint(snapshot);
-    return { lintResult };
   }
 
   // ═══════════════════════════════════════════════════════════════════════════

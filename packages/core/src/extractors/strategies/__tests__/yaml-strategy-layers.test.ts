@@ -353,66 +353,11 @@ describe('L2: Engine', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// L3: QUALITY — "Is the resulting tree good?"
-// ═══════════════════════════════════════════════════════════════════════════
-
-describe('L3: Quality', () => {
-  it('returns lint result with quality scores', async () => {
-    const provider = mockProvider([validYOps]);
-    const result = await strategy.extract(baseInput, provider);
-
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.lintResult).toBeDefined();
-      expect(result.lintResult!.overall).toBeGreaterThanOrEqual(0);
-      expect(result.lintResult!.overall).toBeLessThanOrEqual(1);
-      expect(result.lintResult!.scores).toBeDefined();
-    }
-  });
-
-  it('quality warnings do not block extraction', async () => {
-    // Long key with verb — triggers ylint Form 1 warnings
-    const verbKey = `yops:
-  - define:
-      parent: ""
-      key: is_going_to_be_very_long_key_name
-  - populate:
-      path: is_going_to_be_very_long_key_name
-      slots:
-        destination: Tokyo
-      source:
-        destination: "trip to Tokyo"
-      from: T1`;
-
-    const provider = mockProvider([verbKey]);
-    const result = await strategy.extract(baseInput, provider);
-
-    // Should pass — ylint is advisory
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      // But quality score should be lower due to bad key
-      expect(result.lintResult).toBeDefined();
-      expect(result.lintResult!.warnings.length).toBeGreaterThan(0);
-    }
-  });
-
-  it('clean tree produces high quality score', async () => {
-    const provider = mockProvider([validYOps]);
-    const result = await strategy.extract(baseInput, provider);
-
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.lintResult!.overall).toBeGreaterThan(0.5);
-    }
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════════════════
 // Full pipeline — all layers working together
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe('Full pipeline integration', () => {
-  it('happy path: all 4 layers pass in one LLM call', async () => {
+  it('happy path: all layers pass in one LLM call', async () => {
     const provider = mockProvider([validTree]);
     const result = await strategy.extract(baseInput, provider);
 
@@ -421,7 +366,6 @@ describe('Full pipeline integration', () => {
     if (result.ok) {
       expect(result.snapshot.trees.length).toBeGreaterThan(0);
       expect(result.yops.length).toBeGreaterThan(0);
-      expect(result.lintResult).toBeDefined();
       expect(result.usage.inputTokens).toBeGreaterThan(0);
     }
   });

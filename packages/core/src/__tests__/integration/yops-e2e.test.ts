@@ -102,11 +102,6 @@ describe('E2E: YOps Extraction Pipeline', () => {
     expect(trip!.source).toBe('T1');
     expect(trip!.confidence).toBe(0.95);
 
-    // Verify ylint ran
-    expect(result1.lintResult).toBeDefined();
-    expect(result1.lintResult!.overall).toBeGreaterThan(0);
-    expect(result1.lintResult!.scores.form1).toBeGreaterThan(0);
-
     // Verify yops array (should be define + populate pairs for root + child)
     expect(result1.yops.length).toBeGreaterThanOrEqual(2);
     expect(result1.yops[0]).toHaveProperty('define');
@@ -228,11 +223,8 @@ describe('E2E: YOps Extraction Pipeline', () => {
     const finalDining = findChild(finalTree!, 'dining');
     expect(finalDining!.slots.budget).toBe(2000);
 
-    // Final ylint should be clean
-    const finalLint = result3.lintResult!;
-    expect(finalLint.overall).toBeGreaterThan(0.5);
-    console.log('Final ylint scores:', JSON.stringify(finalLint.scores));
-    console.log('Final ylint warnings:', finalLint.warnings.length);
+    // Final tree should have the updated content
+    expect(result3.snapshot.trees[0].key).toBeDefined();
   });
 
   it('handles drift detection (empty yops)', async () => {
