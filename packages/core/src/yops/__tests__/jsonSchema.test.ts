@@ -1,10 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { getYOpsJsonSchema } from '../jsonSchema';
 
+// JSON Schema variant shape — nested properties with descriptions
+interface SchemaVariant {
+  properties: Record<string, { description?: string; properties?: Record<string, { description?: string }> }>;
+}
+
 describe('getYOpsJsonSchema', () => {
   const schema = getYOpsJsonSchema() as {
-    anyOf?: Array<Record<string, unknown>>;
-    oneOf?: Array<Record<string, unknown>>;
+    anyOf?: SchemaVariant[];
+    oneOf?: SchemaVariant[];
   };
 
   const variants = schema.anyOf ?? schema.oneOf ?? [];
@@ -15,11 +20,11 @@ describe('getYOpsJsonSchema', () => {
 
   it('every variant has a description on the op key', () => {
     for (const variant of variants) {
-      const props = (variant as any).properties;
+      const props = variant.properties;
       const opKey = Object.keys(props)[0];
       expect(props[opKey].description).toBeDefined();
       expect(typeof props[opKey].description).toBe('string');
-      expect(props[opKey].description.length).toBeGreaterThan(10);
+      expect(props[opKey].description!.length).toBeGreaterThan(10);
     }
   });
 
@@ -29,16 +34,16 @@ describe('getYOpsJsonSchema', () => {
   ];
 
   it('contains all 14 op names', () => {
-    const foundOps = variants.map((v: any) => Object.keys(v.properties)[0]);
+    const foundOps = variants.map((v) => Object.keys(v.properties)[0]);
     for (const name of opNames) {
       expect(foundOps).toContain(name);
     }
   });
 
   it('set variant has path, value, source, from properties with descriptions', () => {
-    const setVariant = variants.find((v: any) => 'set' in v.properties) as any;
+    const setVariant = variants.find((v) => 'set' in v.properties)!;
     expect(setVariant).toBeDefined();
-    const setProps = setVariant.properties.set.properties;
+    const setProps = setVariant.properties.set.properties!;
     expect(setProps.path.description).toBeDefined();
     expect(setProps.value.description).toBeDefined();
     expect(setProps.source.description).toBeDefined();
@@ -46,17 +51,17 @@ describe('getYOpsJsonSchema', () => {
   });
 
   it('define variant has parent, key properties with descriptions', () => {
-    const defineVariant = variants.find((v: any) => 'define' in v.properties) as any;
+    const defineVariant = variants.find((v) => 'define' in v.properties)!;
     expect(defineVariant).toBeDefined();
-    const defineProps = defineVariant.properties.define.properties;
+    const defineProps = defineVariant.properties.define.properties!;
     expect(defineProps.parent.description).toBeDefined();
     expect(defineProps.key.description).toBeDefined();
   });
 
   it('populate variant has path, slots, source, from properties with descriptions', () => {
-    const populateVariant = variants.find((v: any) => 'populate' in v.properties) as any;
+    const populateVariant = variants.find((v) => 'populate' in v.properties)!;
     expect(populateVariant).toBeDefined();
-    const populateProps = populateVariant.properties.populate.properties;
+    const populateProps = populateVariant.properties.populate.properties!;
     expect(populateProps.path.description).toBeDefined();
     expect(populateProps.slots.description).toBeDefined();
     expect(populateProps.source.description).toBeDefined();
@@ -64,15 +69,15 @@ describe('getYOpsJsonSchema', () => {
   });
 
   it('drop variant has path property with description', () => {
-    const dropVariant = variants.find((v: any) => 'drop' in v.properties) as any;
+    const dropVariant = variants.find((v) => 'drop' in v.properties)!;
     expect(dropVariant).toBeDefined();
-    expect(dropVariant.properties.drop.properties.path.description).toBeDefined();
+    expect(dropVariant.properties.drop.properties!.path.description).toBeDefined();
   });
 
   it('relate variant has from, to, type properties with descriptions', () => {
-    const relateVariant = variants.find((v: any) => 'relate' in v.properties) as any;
+    const relateVariant = variants.find((v) => 'relate' in v.properties)!;
     expect(relateVariant).toBeDefined();
-    const relateProps = relateVariant.properties.relate.properties;
+    const relateProps = relateVariant.properties.relate.properties!;
     expect(relateProps.from.description).toBeDefined();
     expect(relateProps.to.description).toBeDefined();
     expect(relateProps.type.description).toBeDefined();

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Relation, SemanticContent, TreeNode } from '../../semantic/types';
+import type { SemanticContent, TreeNode } from '../../semantic/types';
 import { applyYOps } from '../engine';
 
 // ── Test Helpers ──

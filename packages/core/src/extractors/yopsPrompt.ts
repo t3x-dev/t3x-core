@@ -7,7 +7,7 @@
  */
 
 import type { SemanticContent, TreeNode } from '../semantic/types';
-import { DEFAULT_STYLE, type ExtractionStyleConfig } from './extractionStyleConfig';
+import type { ExtractionStyleConfig } from './extractionStyleConfig';
 
 // -- Re-export types that callers need --
 
@@ -154,7 +154,7 @@ ${
 
 export function buildYOpsPrompt(
   input: ExtractionInput,
-  style?: Partial<ExtractionStyleConfig>
+  _style?: Partial<ExtractionStyleConfig>
 ): ExtractionPromptResult {
   const { turns, snapshot, processedTurnCount } = input;
   const hasSnapshot = !!snapshot && snapshot.trees.length > 0;

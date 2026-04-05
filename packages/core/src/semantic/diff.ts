@@ -1,5 +1,5 @@
 import { flattenTrees } from './tree';
-import type { FlatNode, SemanticContent, SlotDiff, SlotValue, TreeDiff, WordDiffFn } from './types';
+import type { SemanticContent, SlotDiff, SlotValue, TreeDiff, WordDiffFn } from './types';
 import { deepEqual, relKey } from './utils';
 
 const WORD_DIFF_THRESHOLD = 5;
