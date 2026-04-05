@@ -107,7 +107,8 @@ describe('Extractor', () => {
     if (result.ok) return;
 
     expect(result.error).toContain('parse');
-    expect(provider.generate).toHaveBeenCalledTimes(2);
+    // 2 attempts (main + retry) x 2 calls each (extract + repair) = 4
+    expect(provider.generate).toHaveBeenCalledTimes(4);
   });
 
   it('retries on validation failure then succeeds', async () => {
