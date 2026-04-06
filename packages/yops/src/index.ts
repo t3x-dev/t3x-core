@@ -52,25 +52,17 @@ export { createEngine } from './engine';
 export { registerAllHandlers } from './handlers';
 
 // ── Bootstrap: spec -> registry -> engine ──
+// specData.ts is generated from yops.yaml at build time (pnpm generate:spec).
+// No fs.readFileSync at runtime — works in Node, browsers, and bundlers.
 
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { SPEC_YAML } from './specData';
 import { parseSpec } from './spec';
 import { OpRegistry } from './registry';
 import { registerAllHandlers } from './handlers';
 import { createEngine } from './engine';
 import { initClassify } from './classify';
 
-function loadSpecYaml(): string {
-  try {
-    return readFileSync(join(__dirname, 'yops.yaml'), 'utf-8');
-  } catch {
-    return readFileSync(join(__dirname, '..', 'yops.yaml'), 'utf-8');
-  }
-}
-
-const _specYaml = loadSpecYaml();
-const _spec = parseSpec(_specYaml);
+const _spec = parseSpec(SPEC_YAML);
 const _registry = new OpRegistry(_spec);
 registerAllHandlers(_registry);
 _registry.validate();
