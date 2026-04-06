@@ -14,10 +14,11 @@
     "clean": "rm -rf dist",
     "prepublishOnly": "npm run build"
   },
-  "dependencies": {},
-  "devDependencies": {
+  "dependencies": {
     "zod": "^4.2.1",
-    "js-yaml": "^4.1.1",
+    "js-yaml": "^4.1.1"
+  },
+  "devDependencies": {
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^20.12.7",
     "tsup": "^8.5.1",

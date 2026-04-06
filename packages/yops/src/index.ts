@@ -38,3 +38,12 @@ export {
 } from './paths';
 
 export { applyYOps } from './engine';
+
+export { validateOps, YOpSchema } from './schema';
+export type { ValidationResult } from './schema';
+
+export { parseYOpsYaml, formatYOps } from './format';
+export type { ParseResult } from './format';
+
+export { classifyYOp } from './classify';
+export type { YOpCategory } from './classify';
