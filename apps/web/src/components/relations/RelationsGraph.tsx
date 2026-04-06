@@ -7,6 +7,7 @@ import type { Edge, Node } from '@xyflow/react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { NodeRelation } from '@/lib/api/relations';
 import { getLayoutedElements } from '@/lib/elkLayout';
+import { truncate } from '@/lib/truncate';
 
 interface RelationsGraphProps {
   relations: NodeRelation[];
@@ -20,11 +21,6 @@ const edgeColors: Record<string, string> = {
   follows: '#a855f7',
   depends: '#06b6d4',
 };
-
-function truncate(text: string, maxLen: number): string {
-  if (text.length <= maxLen) return text;
-  return `${text.slice(0, maxLen)}...`;
-}
 
 export function RelationsGraph({ relations, nodes }: RelationsGraphProps) {
   const [layoutedNodes, setLayoutedNodes] = useState<Node[]>([]);

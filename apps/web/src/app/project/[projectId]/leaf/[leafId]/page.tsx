@@ -2,7 +2,7 @@
 
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useMemo, useState } from 'react';
-import { ErrorMessage, LoadingSpinner } from '@/components/ApiStatus';
+import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
 import { LeafComposerDock } from '@/components/leaf/LeafComposerDock';
 import { LeafExtractToDraft } from '@/components/leaf/LeafExtractToDraft';
 import { LeafInspector } from '@/components/leaf/LeafInspector';

@@ -2,6 +2,7 @@
 
 import { AlertTriangle, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { truncate } from '@/lib/truncate';
 import type { ConflictCandidate } from '@/lib/api/commits';
 
 interface CommitConflictBannerProps {
@@ -61,8 +62,4 @@ export function CommitConflictBanner({
       </div>
     </div>
   );
-}
-
-function truncate(s: string, maxLen: number): string {
-  return s.length <= maxLen ? s : `${s.slice(0, maxLen - 1)}\u2026`;
 }

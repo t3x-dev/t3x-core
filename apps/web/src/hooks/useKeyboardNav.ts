@@ -75,7 +75,7 @@ export function useKeyboardNav(actions: KeyboardNavActions) {
       // 'a' key — accept all (triage only)
       if (e.key === 'a' && !meta && viewTab === 'triage') {
         e.preventDefault();
-        // TODO: call triageStore.acceptAll() — keep here or inject?
+        // Accept-all not yet wired — inject via KeyboardNavActions when ready
         return;
       }
 

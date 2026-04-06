@@ -3,6 +3,7 @@
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
 import type { NodeRelation } from '@/lib/api/relations';
+import { truncate } from '@/lib/truncate';
 import { cn } from '@/lib/utils';
 
 interface RelationsListProps {
@@ -17,11 +18,6 @@ const typeColors: Record<string, string> = {
   follows: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
   depends: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400',
 };
-
-function truncate(text: string, maxLen: number): string {
-  if (text.length <= maxLen) return text;
-  return `${text.slice(0, maxLen)}...`;
-}
 
 function lookupNode(id: string, nodes: Array<{ id: string; text: string }>): string {
   const found = nodes.find((n) => n.id === id);

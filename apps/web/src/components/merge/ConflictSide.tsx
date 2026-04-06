@@ -5,7 +5,7 @@
  */
 
 import { useEffect } from 'react';
-import { SourceContextView } from '@/components/shared/SourceContextView';
+import { SourceContextView } from '@/components/source-context/SourceContextView';
 import { cn } from '@/lib/utils';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
 import type { ContentNode, WordDiffSegment } from '@/types/merge';

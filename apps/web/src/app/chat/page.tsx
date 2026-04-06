@@ -32,8 +32,7 @@ export default function ChatLandingPage() {
 
   const handleSend = async () => {
     if (!message.trim()) return;
-    // TODO: Wire to createConversation API in Task 7
-    // For now, navigate to a placeholder conversation
+    // Future: wire createConversation API
     router.push(`/chat/new?firstMessage=${encodeURIComponent(message)}`);
   };
 

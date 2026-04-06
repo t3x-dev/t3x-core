@@ -22,7 +22,7 @@ import {
   Square,
 } from 'lucide-react';
 import { useState } from 'react';
-import { SourceContextView } from '@/components/shared/SourceContextView';
+import { SourceContextView } from '@/components/source-context/SourceContextView';
 import type { ContentNode, TurnContextData } from '@/types/merge';
 
 type LineType = 'context' | 'added' | 'removed';

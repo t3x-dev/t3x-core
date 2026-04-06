@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildSourceUrl, parseHighlightParam } from '@/components/shared/ViewSourceLink';
+import { buildSourceUrl, parseHighlightParam } from '@/components/source-context/ViewSourceLink';
 
 describe('ViewSourceLink utilities', () => {
   describe('buildSourceUrl', () => {

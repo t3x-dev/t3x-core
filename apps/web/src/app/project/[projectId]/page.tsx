@@ -4,7 +4,7 @@ import { Activity, Cpu, Search, Settings, Zap } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ErrorMessage, LoadingSpinner } from '@/components/ApiStatus';
+import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
 import { CanvasWorkspace } from '@/components/canvas';
 import { TimelineView } from '@/components/project/TimelineView';
 import { ViewSwitcher } from '@/components/project/ViewSwitcher';
