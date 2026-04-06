@@ -83,6 +83,15 @@ operations:
     example:
       - define:
           path: config/database
+    tests:
+      - name: creates empty mapping at path
+        input: {}
+        ops: [{ define: { path: config/database } }]
+        output: { config: { database: {} } }
+      - name: errors if path already exists
+        input: { config: { database: {} } }
+        ops: [{ define: { path: config/database } }]
+        error: ALREADY_EXISTS
 
   drop:
     category: ddl
@@ -100,6 +109,15 @@ operations:
     example:
       - drop:
           path: config/legacy_settings
+    tests:
+      - name: removes a key and its subtree
+        input: { config: { host: x }, other: 1 }
+        ops: [{ drop: { path: config } }]
+        output: { other: 1 }
+      - name: errors if path does not exist
+        input: {}
+        ops: [{ drop: { path: missing } }]
+        error: PATH_NOT_FOUND
 
   rename:
     category: ddl
@@ -124,6 +142,15 @@ operations:
       - rename:
           path: config/db
           to: database
+    tests:
+      - name: changes a key name
+        input: { config: { old_name: value } }
+        ops: [{ rename: { path: config/old_name, to: new_name } }]
+        output: { config: { new_name: value } }
+      - name: errors if target already exists
+        input: { a: 1, b: 2 }
+        ops: [{ rename: { path: a, to: b } }]
+        error: ALREADY_EXISTS
 
   # ═══════════════════════════════════════════════════════════════════════════
   # DML — Data Manipulation (values)
@@ -150,6 +177,15 @@ operations:
       - set:
           path: config/database/host
           value: localhost
+    tests:
+      - name: sets a value at a path
+        input: { config: {} }
+        ops: [{ set: { path: config/host, value: localhost } }]
+        output: { config: { host: localhost } }
+      - name: creates intermediate mappings
+        input: {}
+        ops: [{ set: { path: a/b/c, value: 1 } }]
+        output: { a: { b: { c: 1 } } }
 
   unset:
     category: dml
@@ -167,6 +203,15 @@ operations:
     example:
       - unset:
           path: config/database/password
+    tests:
+      - name: removes a key
+        input: { a: 1, b: 2 }
+        ops: [{ unset: { path: b } }]
+        output: { a: 1 }
+      - name: no error on missing key
+        input: { a: 1 }
+        ops: [{ unset: { path: missing } }]
+        output: { a: 1 }
 
   populate:
     category: dml
@@ -193,6 +238,15 @@ operations:
             host: localhost
             port: 5432
             name: mydb
+    tests:
+      - name: sets multiple keys on a mapping
+        input: { config: {} }
+        ops: [{ populate: { path: config, values: { host: localhost, port: 5432 } } }]
+        output: { config: { host: localhost, port: 5432 } }
+      - name: errors if path does not exist
+        input: {}
+        ops: [{ populate: { path: missing, values: { a: 1 } } }]
+        error: PATH_NOT_FOUND
 
   append:
     category: dml
@@ -215,6 +269,15 @@ operations:
       - append:
           path: config/allowed_hosts
           value: "*.example.com"
+    tests:
+      - name: appends to a sequence
+        input: { tags: [a, b] }
+        ops: [{ append: { path: tags, value: c } }]
+        output: { tags: [a, b, c] }
+      - name: errors if not a sequence
+        input: { config: {} }
+        ops: [{ append: { path: config, value: x } }]
+        error: NOT_A_SEQUENCE
 
   # ═══════════════════════════════════════════════════════════════════════════
   # DTL — Data Transformation (restructure)
@@ -244,6 +307,15 @@ operations:
       - move:
           from: config/old_db
           to: config/database
+    tests:
+      - name: moves a subtree
+        input: { old: { data: 1 } }
+        ops: [{ move: { from: old, to: new } }]
+        output: { new: { data: 1 } }
+      - name: errors if source missing
+        input: {}
+        ops: [{ move: { from: missing, to: new } }]
+        error: PATH_NOT_FOUND
 
   clone:
     category: dtl
@@ -268,6 +340,15 @@ operations:
       - clone:
           from: config/production
           to: config/staging
+    tests:
+      - name: deep copies a subtree
+        input: { defaults: { timeout: 30 } }
+        ops: [{ clone: { from: defaults, to: production } }]
+        output: { defaults: { timeout: 30 }, production: { timeout: 30 } }
+      - name: errors if target exists
+        input: { a: 1, b: 2 }
+        ops: [{ clone: { from: a, to: b } }]
+        error: ALREADY_EXISTS
 
   nest:
     category: dtl
@@ -300,6 +381,11 @@ operations:
           path: config
           keys: [host, port, name]
           under: database
+    tests:
+      - name: wraps sibling keys
+        input: { config: { host: x, port: 5432, debug: true } }
+        ops: [{ nest: { path: config, keys: [host, port], under: database } }]
+        output: { config: { database: { host: x, port: 5432 }, debug: true } }
 
   split:
     category: dtl
@@ -327,6 +413,11 @@ operations:
           into:
             database: [host, port, name]
             cache: [redis_url, ttl]
+    tests:
+      - name: distributes keys into groups
+        input: { config: { host: x, port: 5432, level: debug } }
+        ops: [{ split: { path: config, into: { db: [host, port], log: [level] } } }]
+        output: { config: { db: { host: x, port: 5432 }, log: { level: debug } } }
 
   fold:
     category: dtl
@@ -348,6 +439,15 @@ operations:
     example:
       - fold:
           path: config/wrapper
+    tests:
+      - name: collapses single-child mapping
+        input: { config: { wrapper: { actual: { data: 1 } } } }
+        ops: [{ fold: { path: config/wrapper } }]
+        output: { config: { actual: { data: 1 } } }
+      - name: errors if multiple keys
+        input: { wrapper: { a: 1, b: 2 } }
+        ops: [{ fold: { path: wrapper } }]
+        error: NOT_FOLDABLE
 
   merge:
     category: dtl
@@ -379,6 +479,11 @@ operations:
           path: config
           keys: [db_primary, db_replica]
           into: database
+    tests:
+      - name: combines sibling mappings
+        input: { config: { a: { x: 1 }, b: { y: 2 } } }
+        ops: [{ merge: { path: config, keys: [a, b], into: merged } }]
+        output: { config: { merged: { x: 1, y: 2 } } }
 
   sort:
     category: dtl
@@ -411,6 +516,11 @@ operations:
           path: users
           by: name
           order: asc
+    tests:
+      - name: sorts sequence ascending
+        input: { items: [cherry, apple, banana] }
+        ops: [{ sort: { path: items } }]
+        output: { items: [apple, banana, cherry] }
 
   unique:
     category: dtl
@@ -435,6 +545,11 @@ operations:
     example:
       - unique:
           path: tags
+    tests:
+      - name: deduplicates sequence
+        input: { tags: [a, b, a, c, b] }
+        ops: [{ unique: { path: tags } }]
+        output: { tags: [a, b, c] }
 
   pick:
     category: dtl
@@ -460,6 +575,11 @@ operations:
       - pick:
           path: user
           keys: [name, email]
+    tests:
+      - name: keeps only listed keys
+        input: { config: { host: x, port: 5432, secret: abc } }
+        ops: [{ pick: { path: config, keys: [host, port] } }]
+        output: { config: { host: x, port: 5432 } }
 
   omit:
     category: dtl
@@ -485,6 +605,11 @@ operations:
       - omit:
           path: user
           keys: [password, internal_id]
+    tests:
+      - name: removes listed keys
+        input: { config: { host: x, secret: abc } }
+        ops: [{ omit: { path: config, keys: [secret, missing] } }]
+        output: { config: { host: x } }
 
   # ═══════════════════════════════════════════════════════════════════════════
   # DCL — Data Control (assertions)
@@ -525,6 +650,19 @@ operations:
           path: config/database/host
           exists: true
           type: scalar
+    tests:
+      - name: passes when value equals expected
+        input: { version: 2 }
+        ops: [{ assert: { path: version, equals: 2 } }]
+        output: { version: 2 }
+      - name: fails when value differs
+        input: { version: 1 }
+        ops: [{ assert: { path: version, equals: 2 } }]
+        error: ASSERTION_FAILED
+      - name: passes exists check
+        input: { config: {} }
+        ops: [{ assert: { path: config, exists: true } }]
+        output: { config: {} }
 
 # ----------------------------------------------------------------------------
 # Error Codes
