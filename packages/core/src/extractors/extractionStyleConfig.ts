@@ -1,7 +1,7 @@
 // packages/core/src/extractors/extractionStyleConfig.ts
 
 export type Granularity = 'concise' | 'balanced' | 'detailed';
-export type QuoteLength = 'minimal' | 'contextual';
+export type QuoteLength = 'minimal' | 'representative' | 'contextual';
 export type UpdateStance = 'conservative' | 'balanced' | 'aggressive';
 export type Tier3Behavior = 'skip' | 'extract';
 export type PresetName = 'concise' | 'balanced' | 'detailed';
@@ -22,7 +22,7 @@ export const PRESETS: Record<PresetName, ExtractionStyleConfig> = {
   },
   balanced: {
     granularity: 'balanced',
-    quote_length: 'contextual',
+    quote_length: 'representative',
     update_stance: 'balanced',
     tier3: 'extract',
   },
@@ -55,13 +55,13 @@ export function matchPreset(config: ExtractionStyleConfig): PresetName | null {
 export function styleSummaryLine(config: ExtractionStyleConfig): string {
   const preset = matchPreset(config);
   if (preset === 'concise') {
-    return 'Extraction mode: concise — root-level key facts only, minimal quotes, flat structure';
+    return 'Extraction mode: concise — 1-2 levels, few slots, minimal quotes, key facts only';
   }
   if (preset === 'balanced') {
-    return 'Extraction mode: balanced — 3 levels, contextual quotes, include AI content';
+    return 'Extraction mode: balanced — 2-3 levels, moderate detail, representative quotes';
   }
   if (preset === 'detailed') {
-    return 'Extraction mode: detailed — 3 levels with nuance, contextual quotes, aggressive updates';
+    return 'Extraction mode: detailed — 2-5 levels, rich detail, full-context quotes, aggressive updates';
   }
   return `Extraction mode: custom — granularity=${config.granularity}, quotes=${config.quote_length}, stance=${config.update_stance}, ai_content=${config.tier3}`;
 }

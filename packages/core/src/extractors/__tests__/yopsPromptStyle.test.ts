@@ -9,20 +9,20 @@ const baseTurns = [
 
 describe('buildYOpsPrompt — style integration', () => {
   describe('granularity', () => {
-    it('concise style produces root-only depth guidance', () => {
+    it('concise style produces flat depth guidance', () => {
       const { systemPrompt } = buildYOpsPrompt({ turns: baseTurns }, PRESETS.concise);
-      expect(systemPrompt).toContain('1 Level (Root Only)');
-      expect(systemPrompt).not.toContain('3 Levels');
+      expect(systemPrompt).toContain('1\u20132 Levels');
+      expect(systemPrompt).toContain('FLAT');
     });
 
-    it('balanced style produces 2-level depth guidance', () => {
+    it('balanced style produces 2-3 level depth guidance', () => {
       const { systemPrompt } = buildYOpsPrompt({ turns: baseTurns }, PRESETS.balanced);
-      expect(systemPrompt).toContain('2 Levels');
+      expect(systemPrompt).toContain('2\u20133 Levels');
     });
 
-    it('detailed style produces 3-level depth guidance', () => {
+    it('detailed style produces 2-5 level depth guidance', () => {
       const { systemPrompt } = buildYOpsPrompt({ turns: baseTurns }, PRESETS.detailed);
-      expect(systemPrompt).toContain('3 Levels');
+      expect(systemPrompt).toContain('2\u20135 Levels');
     });
   });
 
@@ -48,9 +48,9 @@ describe('buildYOpsPrompt — style integration', () => {
       expect(systemPrompt).toContain('MINIMAL');
     });
 
-    it('contextual style instructs enough context', () => {
+    it('contextual style instructs full context', () => {
       const { systemPrompt } = buildYOpsPrompt({ turns: baseTurns }, PRESETS.detailed);
-      expect(systemPrompt).toContain('enough context');
+      expect(systemPrompt).toContain('FULL CONTEXT');
     });
   });
 
@@ -69,7 +69,7 @@ describe('buildYOpsPrompt — style integration', () => {
   describe('defaults', () => {
     it('uses detailed style when no style provided', () => {
       const { systemPrompt } = buildYOpsPrompt({ turns: baseTurns });
-      expect(systemPrompt).toContain('3 Levels');
+      expect(systemPrompt).toContain('2\u20135 Levels');
       expect(systemPrompt).toContain('TIER 4');
     });
   });
@@ -84,7 +84,7 @@ describe('buildYOpsPrompt — style integration', () => {
         { turns: baseTurns, snapshot, processedTurnCount: 0 },
         PRESETS.concise,
       );
-      expect(systemPrompt).toContain('1 Level (Root Only)');
+      expect(systemPrompt).toContain('1\u20132 Levels');
     });
   });
 });

@@ -10,23 +10,22 @@ describe('Prompt segment composition', () => {
   ];
 
   describe('granularity', () => {
-    it('concise: includes 1 Level and 3-5 slots', () => {
+    it('concise: includes 1-2 Levels and flat tree guidance', () => {
       const { systemPrompt } = buildExtractionPrompt({ turns: baseTurns }, PRESETS.concise);
-      expect(systemPrompt).toContain('1 Level');
-      expect(systemPrompt).toContain('3-5 slots');
-      expect(systemPrompt).not.toContain('2 Levels');
+      expect(systemPrompt).toContain('1\u20132 Levels');
+      expect(systemPrompt).toContain('FLAT');
     });
 
-    it('balanced: includes 2 Levels and scannable tree guidance', () => {
+    it('balanced: includes 2-3 Levels and scannable tree guidance', () => {
       const { systemPrompt } = buildExtractionPrompt({ turns: baseTurns }, PRESETS.balanced);
-      expect(systemPrompt).toContain('2 Levels');
+      expect(systemPrompt).toContain('2\u20133 Levels');
       expect(systemPrompt).toContain('scannable');
     });
 
-    it('detailed: includes 3 Levels and every meaningful point', () => {
+    it('detailed: includes 2-5 Levels and every meaningful point', () => {
       const { systemPrompt } = buildExtractionPrompt({ turns: baseTurns }, PRESETS.detailed);
-      expect(systemPrompt).toContain('3 Levels');
-      expect(systemPrompt).toContain('EVERY meaningful point');
+      expect(systemPrompt).toContain('2\u20135 Levels');
+      expect(systemPrompt).toContain('every meaningful point');
     });
   });
 
@@ -115,8 +114,8 @@ describe('Prompt segment composition', () => {
         PRESETS.concise
       );
       // Tree depth content for concise
-      expect(systemPrompt).toContain('1 Level');
-      expect(systemPrompt).toContain('Do NOT extract');
+      expect(systemPrompt).toContain('1\u20132 Levels');
+      expect(systemPrompt).toContain('FLAT');
     });
   });
 });

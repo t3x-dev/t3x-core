@@ -44,7 +44,7 @@ describe('styleSummaryLine', () => {
   it('returns concise summary for concise preset', () => {
     const line = styleSummaryLine(PRESETS.concise);
     expect(line).toContain('concise');
-    expect(line).toContain('root-level');
+    expect(line).toContain('1-2 levels');
   });
 
   it('returns balanced summary for balanced preset', () => {
