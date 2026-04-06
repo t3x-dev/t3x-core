@@ -41,3 +41,6 @@ export type { ParseResult } from './format';
 
 export { classifyYOp } from './classify';
 export type { YOpCategory } from './classify';
+
+export { parseSpec } from './spec';
+export type { YOpsSpec, OpSpec, FieldSpec, TestCase } from './spec';
