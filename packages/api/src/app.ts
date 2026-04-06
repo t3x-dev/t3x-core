@@ -29,55 +29,54 @@ import { rateLimitL1, rateLimitL2 } from './middleware/rate-limit';
 import { requestIdMiddleware } from './middleware/request-id';
 import {
   agentDraftRoutes,
+  apiKeysRoutes,
+  authLocalRoutes,
+  authMeRoutes,
+  autopilotRoutes,
   branchRoutes,
   chatRoutes,
+  checkRoutes,
+  commitFromDraftRoutes,
   commitRoutes,
+  comparisonsRoutes,
+  contextRoutes,
   conversationRoutes,
   curateRoutes,
-  yopsLogRoutes,
   deployAgentRoutes,
   diffRoutes,
   draftsRoutes,
   exportRoutes,
   extractionFeedbackRoutes,
-  treeAnswerRoutes,
-  treeCompressRoutes,
-  treeExtractRoutes,
-  treeExtractStreamRoutes,
   gateRoutes,
   healthRoutes,
+  importRoutes,
+  ingestRoutes,
+  integrationExtractRoutes,
+  knowledgeGraphRoutes,
   leavesRoutes,
+  llmRoutes,
+  mergeRoutes,
+  notificationsRoutes,
   pinsRoutes,
+  projectRoutes,
+  providersRoutes,
+  recipesRoutes,
   relationsRoutes,
   runnerRoutes,
   runsRoutes,
+  searchRoutes,
+  shareRoutes,
   statusRoutes,
+  templatesRoutes,
   topicsRoutes,
+  treeAnswerRoutes,
+  treeCompressRoutes,
+  treeExtractRoutes,
   turnRoutes,
+  usageRoutes,
+  webhooksRoutes,
+  yopsLogRoutes,
 } from './routes';
-import { apiKeysRoutes } from './routes/api-keys.openapi';
-import { authLocalRoutes } from './routes/auth-local.openapi';
-import { authMeRoutes } from './routes/auth-me.openapi';
-import { autopilotRoutes } from './routes/autopilot.openapi';
-import { checkRoutes } from './routes/check.openapi';
-import { commitFromDraftRoutes } from './routes/commit-from-draft.openapi';
-import { comparisonsRoutes } from './routes/comparisons.openapi';
-import { contextRoutes } from './routes/context.openapi';
-import { extractRoutes as integrationExtractRoutes } from './routes/extract.openapi';
-import { importRoutes } from './routes/import.openapi';
-import { ingestRoutes } from './routes/ingest.openapi';
-import { knowledgeGraphRoutes } from './routes/knowledge-graph.openapi';
-import { llmRoutes } from './routes/llm.openapi';
-import { mergeRoutes } from './routes/merge.openapi';
-import { notificationsRoutes } from './routes/notifications.openapi';
-import { projectRoutes } from './routes/projects.openapi';
-import { providersRoutes } from './routes/providers.openapi';
-import { recipesRoutes } from './routes/recipes.openapi';
-import { searchRoutes } from './routes/search.openapi';
-import { shareRoutes } from './routes/share.openapi';
-import { templatesRoutes } from './routes/templates.openapi';
-import { usageRoutes } from './routes/usage.openapi';
-import { webhooksRoutes } from './routes/webhooks.openapi';
 
 export interface CreateAppOptions {
   /** Skip built-in local auth (username/password). Set true for SaaS with OAuth. */
@@ -162,8 +161,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   api.route('/', runnerRoutes);
   api.route('/', deployAgentRoutes);
   api.route('/', draftsRoutes);
-  api.route('/', treeExtractRoutes); // /v1/extract/trees
-  api.route('/', treeExtractStreamRoutes); // /v1/extract/trees/stream
+  api.route('/', treeExtractRoutes); // /v1/extract/trees + /v1/extract/trees/stream
   api.route('/', treeAnswerRoutes); // /v1/extract/trees/answer
   api.route('/', treeCompressRoutes); // /v1/conversations/:conversationId/compress
   api.route('/', gateRoutes); // /v1/gate/check

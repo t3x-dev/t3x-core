@@ -12,7 +12,7 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-// TODO: buildKnowledgeGraph was removed in tree-primary refactor
+// Note: buildKnowledgeGraph removed in tree-primary refactor — uses frame-based approach now
 // biome-ignore lint/suspicious/noExplicitAny: stub for removed function
 function buildKnowledgeGraph(input: any): any {
   // Placeholder: returns empty graph
