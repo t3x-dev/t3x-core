@@ -1,0 +1,66 @@
+<svg width="720" height="340" viewBox="0 0 720 340" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <linearGradient id="layer0" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+    <linearGradient id="layer1" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#1e3a5f"/>
+      <stop offset="100%" stop-color="#172554"/>
+    </linearGradient>
+    <linearGradient id="layer2" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#1e3a5f"/>
+      <stop offset="100%" stop-color="#1e40af"/>
+    </linearGradient>
+    <linearGradient id="layer3" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#2563eb"/>
+      <stop offset="100%" stop-color="#3b82f6"/>
+    </linearGradient>
+    <linearGradient id="coreGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#ea580c"/>
+      <stop offset="60%" stop-color="#f97316"/>
+      <stop offset="100%" stop-color="#fb923c"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="720" height="340" rx="16" fill="#020617"/>
+
+  <!-- Layer 4: Apps -->
+  <rect x="40" y="28" width="640" height="58" rx="10" fill="url(#layer3)" opacity="0.9"/>
+  <text x="80" y="64" fill="#ffffff" font-size="14" font-weight="600">WebUI</text>
+  <text x="175" y="64" fill="#93c5fd" font-size="14">·</text>
+  <text x="195" y="64" fill="#ffffff" font-size="14" font-weight="600">CLI</text>
+  <text x="255" y="64" fill="#93c5fd" font-size="14">·</text>
+  <text x="275" y="64" fill="#ffffff" font-size="14" font-weight="600">MCP Server</text>
+  <text x="415" y="64" fill="#93c5fd" font-size="14">·</text>
+  <text x="435" y="64" fill="#ffffff" font-size="14" font-weight="600">Runner</text>
+
+  <!-- Layer 3: API -->
+  <rect x="40" y="102" width="640" height="58" rx="10" fill="url(#layer2)" opacity="0.9"/>
+  <text x="80" y="138" fill="#ffffff" font-size="14" font-weight="600">API</text>
+  <text x="140" y="138" fill="#94a3b8" font-size="13">OpenAPI service layer</text>
+
+  <!-- Layer 2: Storage -->
+  <rect x="40" y="176" width="640" height="58" rx="10" fill="url(#layer1)" opacity="0.9"/>
+  <text x="80" y="212" fill="#ffffff" font-size="14" font-weight="600">Storage</text>
+  <text x="170" y="212" fill="#94a3b8" font-size="13">Versioned persistence</text>
+
+  <!-- Layer 1: Core Engine -->
+  <rect x="40" y="250" width="640" height="62" rx="10" fill="url(#layer0)" stroke="url(#coreGrad)" stroke-width="1.5" opacity="0.95"/>
+  <text x="80" y="288" fill="#ffffff" font-size="14" font-weight="700">Core Engine</text>
+  <text x="210" y="288" fill="#fdba74" font-size="13">deterministic</text>
+
+  <!-- Core capabilities -->
+  <rect x="430" y="268" width="72" height="26" rx="6" fill="#7c2d12" opacity="0.6"/>
+  <text x="466" y="286" fill="#fdba74" font-size="11" font-weight="500" text-anchor="middle">Extract</text>
+
+  <rect x="510" y="268" width="52" height="26" rx="6" fill="#7c2d12" opacity="0.6"/>
+  <text x="536" y="286" fill="#fdba74" font-size="11" font-weight="500" text-anchor="middle">Diff</text>
+
+  <rect x="570" y="268" width="60" height="26" rx="6" fill="#7c2d12" opacity="0.6"/>
+  <text x="600" y="286" fill="#fdba74" font-size="11" font-weight="500" text-anchor="middle">Merge</text>
+
+  <rect x="638" y="268" width="30" height="26" rx="6" fill="#7c2d12" opacity="0.6"/>
+  <text x="653" y="286" fill="#fdba74" font-size="11" font-weight="500" text-anchor="middle">#</text>
+</svg>
