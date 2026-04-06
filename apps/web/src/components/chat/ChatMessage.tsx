@@ -10,8 +10,7 @@ import { traceYamlToChat } from '@/lib/hoverTrace';
 import type { SourceMapping } from '@/lib/sourceMap';
 import { cn } from '@/lib/utils';
 import { useDraftStore } from '@/store/draftStore';
-import { useHoverStore } from '@/store/hoverStore';
-import { usePhaseStore } from '@/store/phaseStore';
+import { useWorkspaceStore } from '@/store/workspaceStore';
 import { CitationChips } from './CitationChips';
 import { CodeBlock } from './CodeBlock';
 import { CommittedHighlightTooltip } from './CommittedHighlightTooltip';
@@ -301,13 +300,12 @@ export function ChatMessage({
   const [editContent, setEditContent] = useState('');
 
   const { deleteSlot } = useSlotActions();
-  const hoveredNodeId = useHoverStore((s) => s.hoveredNodeId);
-  const hoveredSlotKey = useHoverStore((s) => s.hoveredSlotKey);
-  const scrollToCenter = useHoverStore((s) => s.scrollToCenter);
-  const setHoveredTurnIndex = useHoverStore((s) => s.setHoveredTurnIndex);
+  const hoveredNodeId = useWorkspaceStore((s) => s.selectedNodePath);
+  const hoveredSlotKey = useWorkspaceStore((s) => s.selectedSlotKey);
+  const scrollToCenter = useWorkspaceStore((s) => s.scrollToCenter);
   const draft = useDraftStore((s) => s.draft);
-  const phase = usePhaseStore((s) => s.phase);
-  const isReviewPhase = phase === 'review';
+  const wsMode = useWorkspaceStore((s) => s.mode);
+  const isReviewPhase = wsMode === 'executed' || wsMode === 'committing';
   const textRef = useRef<HTMLDivElement>(null);
   const messageRef = useRef<HTMLDivElement>(null);
 
@@ -352,20 +350,15 @@ export function ChatMessage({
 
   // ── Chat → YAML: source map interaction handlers ──
   const handleHoverSlot = useCallback((treePath: string, slotKey: string | null) => {
-    useHoverStore.setState({ hoveredFromChat: true });
-    useHoverStore.getState().setHoveredNodeId(treePath, slotKey);
+    useWorkspaceStore.getState().select('chat', { nodePath: treePath, slotKey: slotKey ?? undefined });
   }, []);
 
   const handleLeaveSlot = useCallback(() => {
-    useHoverStore.getState().setHoveredNodeId(null);
+    useWorkspaceStore.getState().clearSelection();
   }, []);
 
   const handleClickSlot = useCallback((treePath: string, slotKey: string | null) => {
-    useHoverStore.setState({
-      hoveredFromChat: true,
-      scrollToCenter: true,
-    });
-    useHoverStore.getState().setHoveredNodeId(treePath, slotKey);
+    useWorkspaceStore.getState().select('chat', { nodePath: treePath, slotKey: slotKey ?? undefined });
   }, []);
 
   // Auto-scroll this message into view when it's the source of hovered YAML
@@ -401,8 +394,8 @@ export function ChatMessage({
             : 'transparent',
         borderLeft: isSourceMessage ? '3px solid rgba(96, 165, 250, 0.5)' : undefined,
       }}
-      onMouseEnter={() => turnIndex != null && setHoveredTurnIndex(turnIndex)}
-      onMouseLeave={() => setHoveredTurnIndex(null)}
+      onMouseEnter={() => turnIndex != null && useWorkspaceStore.getState().select('chat', { turnIndex })}
+      onMouseLeave={() => useWorkspaceStore.getState().clearSelection()}
     >
       <div className="mx-auto max-w-3xl px-4">
         <div className="flex gap-3">

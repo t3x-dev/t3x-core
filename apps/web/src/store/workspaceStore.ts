@@ -10,11 +10,23 @@ export interface ExecError {
   message: string;
 }
 
+export interface DriftInfo {
+  relation?: string;
+  new_topic?: string;
+  old_topic?: string;
+}
+
+export interface GateIssue {
+  severity: 'error' | 'warning' | 'info';
+  description: string;
+}
+
 type WorkspaceMode = 'idle' | 'streaming' | 'executed' | 'committing';
 type SelectionSource = 'chat' | 'script' | 'after' | null;
 
 interface WorkspaceState {
   mode: WorkspaceMode;
+  panelExpanded: boolean;
   base: SemanticContent;
   baseCommitHash: string | null;
   scriptText: string;
@@ -24,11 +36,20 @@ interface WorkspaceState {
   result: SemanticContent | null;
   appliedCount: number;
   execError: ExecError | null;
+  // Selection (replaces hoverStore bidirectional hover)
   selectedNodePath: string | null;
   selectedSlotKey: string | null;
   selectedTurnIndex: number | null;
   selectedSource: SelectionSource;
-  panelExpanded: boolean;
+  scrollToCenter: boolean;
+  // Drift detection (replaces phaseStore drift fields)
+  driftDetected: boolean;
+  driftInfo: DriftInfo | null;
+  driftChoices: string[];
+  // Gate issues (replaces phaseStore gateIssues)
+  gateIssues: Record<string, GateIssue[]>;
+  // Advisory questions (replaces phaseStore advisoryQuestions)
+  advisoryQuestions: Array<{ id: string; type: string; treeId: string; slotKey?: string; question: string; currentValue?: unknown }>;
 
   snapshotBase(content: SemanticContent, commitHash: string | null): void;
   setScriptText(text: string): void;
@@ -39,6 +60,10 @@ interface WorkspaceState {
   clearSelection(): void;
   setMode(mode: WorkspaceMode): void;
   setPanelExpanded(expanded: boolean): void;
+  setDriftDetected(info: DriftInfo, choices: string[]): void;
+  clearDrift(): void;
+  setGateIssues(issues: Record<string, GateIssue[]>): void;
+  setAdvisoryQuestions(questions: Array<{ id: string; type: string; treeId: string; slotKey?: string; question: string; currentValue?: unknown }>): void;
   reset(): void;
 }
 
@@ -46,6 +71,7 @@ const EMPTY_CONTENT: SemanticContent = { trees: [], relations: [] };
 
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   mode: 'idle',
+  panelExpanded: true,
   base: EMPTY_CONTENT,
   baseCommitHash: null,
   scriptText: '',
@@ -59,7 +85,12 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   selectedSlotKey: null,
   selectedTurnIndex: null,
   selectedSource: null,
-  panelExpanded: true,
+  scrollToCenter: false,
+  driftDetected: false,
+  driftInfo: null,
+  driftChoices: [],
+  gateIssues: {},
+  advisoryQuestions: [],
 
   snapshotBase(content, commitHash) {
     set({
@@ -124,6 +155,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       selectedSlotKey: slotKey ?? null,
       selectedTurnIndex: turnIndex ?? null,
       selectedSource: source as SelectionSource,
+      scrollToCenter: true,
     });
   },
 
@@ -133,6 +165,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       selectedSlotKey: null,
       selectedTurnIndex: null,
       selectedSource: null,
+      scrollToCenter: false,
     });
   },
 
@@ -144,9 +177,26 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     set({ panelExpanded: expanded });
   },
 
+  setDriftDetected(info, choices) {
+    set({ driftDetected: true, driftInfo: info, driftChoices: choices });
+  },
+
+  clearDrift() {
+    set({ driftDetected: false, driftInfo: null, driftChoices: [] });
+  },
+
+  setGateIssues(issues) {
+    set({ gateIssues: issues });
+  },
+
+  setAdvisoryQuestions(questions) {
+    set({ advisoryQuestions: questions });
+  },
+
   reset() {
     set({
       mode: 'idle',
+      panelExpanded: true,
       base: EMPTY_CONTENT,
       baseCommitHash: null,
       scriptText: '',
@@ -160,7 +210,12 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       selectedSlotKey: null,
       selectedTurnIndex: null,
       selectedSource: null,
-      panelExpanded: true,
+      scrollToCenter: false,
+      driftDetected: false,
+      driftInfo: null,
+      driftChoices: [],
+      gateIssues: {},
+      advisoryQuestions: [],
     });
   },
 }));

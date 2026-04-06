@@ -12,7 +12,7 @@ import { toast } from 'sonner';
 import { useCommandStore } from '@/store/commandStore';
 import { useCommitStore } from '@/store/commitStore';
 import { useDraftStore } from '@/store/draftStore';
-import { usePhaseStore } from '@/store/phaseStore';
+import { useWorkspaceStore } from '@/store/workspaceStore';
 
 interface PendingChangesBarProps {
   onBack?: () => void;
@@ -34,7 +34,7 @@ export function PendingChangesBar({ onBack }: PendingChangesBarProps) {
         description: result.hash ? `sha256:${result.hash.slice(0, 12)}...` : undefined,
       });
       // commitStore.commitNodes already calls commandStore.clearPending() internally
-      usePhaseStore.getState().setPhase('idle');
+      useWorkspaceStore.getState().setMode('idle');
     } catch {
       // Error handled by store
     }

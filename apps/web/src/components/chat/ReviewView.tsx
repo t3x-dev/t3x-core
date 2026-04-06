@@ -21,8 +21,7 @@ import { useCommandStore } from '@/store/commandStore';
 import { useCommitStore } from '@/store/commitStore';
 import { useDraftStore } from '@/store/draftStore';
 import { useEditingStore } from '@/store/editingStore';
-import { useHoverStore } from '@/store/hoverStore';
-import { usePhaseStore } from '@/store/phaseStore';
+import { useWorkspaceStore } from '@/store/workspaceStore';
 
 // ── Helpers ──
 
@@ -104,20 +103,12 @@ export function ReviewView() {
   const pendingOps = useCommandStore((s) => s.pendingOps);
   const committedSnapshot = useCommitStore((s) => s.committedNodeSnapshot);
   const addingNodeId = useEditingStore((s) => s.adding?.nodeId ?? null);
-  const entryPath = usePhaseStore((s) => s.entryPath);
-  const hoveredNodeId = useHoverStore((s) => s.hoveredNodeId);
+  const hoveredNodeId = useWorkspaceStore((s) => s.selectedNodePath);
 
   const changeMap = useMemo(
     () => buildChangeMap(trees, committedSnapshot, pendingOps),
     [trees, committedSnapshot, pendingOps]
   );
-
-  const handleBack = useMemo(() => {
-    if (entryPath !== 'extract') return undefined;
-    return () => {
-      usePhaseStore.getState().setPhase('triage');
-    };
-  }, [entryPath]);
 
   return (
     <div className="flex flex-col h-full">
@@ -194,7 +185,7 @@ export function ReviewView() {
       </div>
 
       {/* Bottom bar */}
-      <PendingChangesBar onBack={handleBack} />
+      <PendingChangesBar />
     </div>
   );
 }

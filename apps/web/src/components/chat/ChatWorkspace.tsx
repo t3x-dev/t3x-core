@@ -11,7 +11,7 @@ import { useTextSelection } from '@/hooks/useTextSelection';
 import { buildSourceMap } from '@/lib/sourceMap';
 import { cn } from '@/lib/utils';
 import { useDraftStore } from '@/store/draftStore';
-import { usePhaseStore } from '@/store/phaseStore';
+import { useWorkspaceStore } from '@/store/workspaceStore';
 import { ChatAddForm } from './ChatAddForm';
 import { ChatHeader } from './ChatHeader';
 import type { AttachedImage } from './ChatInput';
@@ -45,8 +45,8 @@ export function ChatWorkspace({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const { selection, clearSelection } = useTextSelection(chatContainerRef);
-  const extractionPhase = usePhaseStore((s) => s.phase);
-  const isReviewPhase = extractionPhase === 'review' || extractionPhase === 'committing';
+  const wsMode = useWorkspaceStore((s) => s.mode);
+  const isReviewPhase = wsMode === 'executed' || wsMode === 'committing';
   const showAddForm = isReviewPhase && selection && selection.text.length > 3;
   const firstMessageSentRef = useRef(false);
   const prevTurnsSavedRef = useRef(0);
@@ -178,7 +178,7 @@ export function ChatWorkspace({
     incrementTurnsSinceLastExtract();
   }, [resolvedConversationId, turnsSavedCounter, incrementTurnsSinceLastExtract]);
 
-  // Listen for extraction request from ExtractionPanel (via custom event)
+  // Listen for extraction request (via custom event)
   useEffect(() => {
     const handler = () => handleExtract();
     window.addEventListener('t3x:extract-requested', handler);
