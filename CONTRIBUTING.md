@@ -4,29 +4,16 @@ Thank you for your interest in contributing to T3X! We welcome contributions fro
 
 ## Licensing
 
-T3X uses a dual-license model:
+T3X is licensed under the [Apache License 2.0](./LICENSE). This is a permissive open-source license that lets you freely use, modify, distribute, and build on T3X — including in commercial projects.
 
-| Package | License | SPDX |
-|---------|---------|------|
-| `packages/core` | GNU Affero General Public License v3.0 | `AGPL-3.0-only` |
-| `packages/storage` | GNU Affero General Public License v3.0 | `AGPL-3.0-only` |
-| `packages/api` | GNU Affero General Public License v3.0 | `AGPL-3.0-only` |
-| `apps/api` | GNU Affero General Public License v3.0 | `AGPL-3.0-only` |
-| `apps/web` | GNU Affero General Public License v3.0 | `AGPL-3.0-only` |
-| `apps/cli` | GNU Affero General Public License v3.0 | `AGPL-3.0-only` |
-| `apps/runner` | GNU Affero General Public License v3.0 | `AGPL-3.0-only` |
-| `packages/api-client` | Apache License 2.0 | `Apache-2.0` |
-| `apps/mcp` | Apache License 2.0 | `Apache-2.0` |
-| `apps/agent-demo` | Apache License 2.0 | `Apache-2.0` |
-
-By submitting a pull request, you agree that your contributions will be licensed under the same license as the package you are contributing to.
+By submitting a pull request, you agree that your contributions will be licensed under the Apache License 2.0.
 
 ### What does this mean for you?
 
-- **As a contributor**: You can fork, modify, and submit PRs exactly like any open-source project. No difference from MIT in practice.
-- **As a self-hoster**: You can run T3X internally for your team with no restrictions.
-- **As an integrator**: The API client and MCP server are Apache-2.0 — build whatever you want on top.
-- **AGPL only applies** if you distribute a modified version of T3X or offer it as a network service to others. In that case, you must share your modifications under AGPL.
+- **Use freely**: Use T3X in personal, commercial, or enterprise projects with no restrictions.
+- **Fork and build**: Create your own version, modify anything, distribute it however you like.
+- **Contribute back**: Your PRs help everyone — and you keep full rights to your own work.
+- **Only requirement**: Keep the copyright notice and license text when redistributing.
 
 ## Getting Started
 
