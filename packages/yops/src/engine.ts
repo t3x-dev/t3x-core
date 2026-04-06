@@ -10,6 +10,7 @@ import type { YValue, YOp, YOpsResult } from './types';
 import { deepClone } from './paths';
 import { yopsError, YOPS_ERRORS } from './errors';
 import { applyDefine, applyDrop, applyRename } from './ops/ddl';
+import { applySet, applyUnset, applyPopulate, applyAppend } from './ops/dml';
 
 export function applyYOps(doc: YValue, ops: YOp[]): YOpsResult {
   // Deep clone so the caller's document is never mutated
@@ -26,6 +27,14 @@ export function applyYOps(doc: YValue, ops: YOp[]): YOpsResult {
       result = applyDrop(current, op.drop, i);
     } else if ('rename' in op) {
       result = applyRename(current, op.rename, i);
+    } else if ('set' in op) {
+      result = applySet(current, op.set, i);
+    } else if ('unset' in op) {
+      result = applyUnset(current, op.unset, i);
+    } else if ('populate' in op) {
+      result = applyPopulate(current, op.populate, i);
+    } else if ('append' in op) {
+      result = applyAppend(current, op.append, i);
     } else {
       // Unknown op
       return {
