@@ -1,0 +1,603 @@
+# ============================================================================
+# YOps — Declarative YAML Operations Specification
+# ============================================================================
+#
+# This file IS the YOps specification. It is declarative, machine-readable,
+# and self-describing. Any YAML parser can read it. Any language can
+# implement an engine from it.
+#
+# TypeScript, Python, Rust, Go implementations derive from this file.
+# The TypeScript reference implementation lives in this package (@t3x-dev/yops).
+# ============================================================================
+
+name: yops
+version: "1.0"
+description: Declarative YAML-to-YAML operations
+
+# ----------------------------------------------------------------------------
+# Value — what YOps operates on
+# ----------------------------------------------------------------------------
+value:
+  type: any
+  description: >
+    Any valid YAML value. A YOps document is any YValue — scalar, sequence,
+    or mapping. Operations address locations within the document via paths.
+  variants:
+    - string
+    - number
+    - boolean
+    - "null"
+    - sequence    # ordered list of YValues
+    - mapping     # key-value pairs where keys are strings
+
+# ----------------------------------------------------------------------------
+# Path — how YOps addresses locations in a document
+# ----------------------------------------------------------------------------
+path:
+  separator: "/"
+  description: >
+    Slash-separated address into a YAML document. Supports three segment types
+    that can be freely combined in a single path.
+  segments:
+    key:
+      syntax: "name"
+      description: Mapping key lookup
+      example: config/database/host
+    index:
+      syntax: "[n]"
+      description: Sequence index (0-based)
+      example: items/[0]/name
+    match:
+      syntax: "[key=value]"
+      description: >
+        Find first item in a sequence where item.key equals value.
+        Type coercion: [id=1] matches both "1" and 1.
+      example: users/[name=alice]/role
+
+# ----------------------------------------------------------------------------
+# Operations — 18 atomic YAML operations in 4 categories
+# ----------------------------------------------------------------------------
+operations:
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # DDL — Data Definition (structure)
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  define:
+    category: ddl
+    description: Create an empty mapping at a path
+    fields:
+      path:
+        type: string
+        required: true
+        description: >
+          Path to create. Parent must exist and be a mapping.
+          Creates the final segment as an empty mapping {}.
+    rules:
+      - parent path must exist and be a mapping
+      - final key must not already exist
+    errors:
+      PATH_NOT_FOUND: parent path does not exist
+      ALREADY_EXISTS: key already exists at path
+      NOT_A_MAPPING: parent is not a mapping
+    example:
+      - define:
+          path: config/database
+
+  drop:
+    category: ddl
+    description: Remove a key and its entire subtree from a mapping
+    fields:
+      path:
+        type: string
+        required: true
+        description: Path to the key to remove. Must exist.
+    rules:
+      - path must exist
+      - removes the key and all nested values
+    errors:
+      PATH_NOT_FOUND: path does not exist
+    example:
+      - drop:
+          path: config/legacy_settings
+
+  rename:
+    category: ddl
+    description: Change a key name without moving its value
+    fields:
+      path:
+        type: string
+        required: true
+        description: Path to the key to rename
+      to:
+        type: string
+        required: true
+        description: New key name
+    rules:
+      - path must exist
+      - new key must not already exist among siblings
+      - value and all children are preserved
+    errors:
+      PATH_NOT_FOUND: path does not exist
+      ALREADY_EXISTS: target key already exists
+    example:
+      - rename:
+          path: config/db
+          to: database
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # DML — Data Manipulation (values)
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  set:
+    category: dml
+    description: Set a value at a path, creating intermediate mappings as needed
+    fields:
+      path:
+        type: string
+        required: true
+        description: Target path (e.g., config/database/host)
+      value:
+        type: any
+        required: true
+        description: Value to set (any YValue)
+    rules:
+      - creates intermediate mapping keys if they don't exist
+      - overwrites existing value at the final path segment
+    errors:
+      INVALID_PATH: cannot traverse path (e.g., intermediate is a scalar)
+    example:
+      - set:
+          path: config/database/host
+          value: localhost
+
+  unset:
+    category: dml
+    description: Remove a key from a mapping
+    fields:
+      path:
+        type: string
+        required: true
+        description: Path to the key to remove
+    rules:
+      - idempotent — no error if key is already absent
+      - parent must be a mapping
+    errors:
+      NOT_A_MAPPING: parent is not a mapping
+    example:
+      - unset:
+          path: config/database/password
+
+  populate:
+    category: dml
+    description: Set multiple keys on a mapping at once
+    fields:
+      path:
+        type: string
+        required: true
+        description: Path to the target mapping
+      values:
+        type: mapping
+        required: true
+        description: "Key-value pairs to set: {key: value, ...}"
+    rules:
+      - target must exist and be a mapping
+      - each key in values is set on the mapping (overwrites if exists)
+    errors:
+      PATH_NOT_FOUND: path does not exist
+      NOT_A_MAPPING: target is not a mapping
+    example:
+      - populate:
+          path: config/database
+          values:
+            host: localhost
+            port: 5432
+            name: mydb
+
+  append:
+    category: dml
+    description: Add a value to the end of a sequence
+    fields:
+      path:
+        type: string
+        required: true
+        description: Path to the target sequence
+      value:
+        type: any
+        required: true
+        description: Value to append
+    rules:
+      - target must exist and be a sequence
+    errors:
+      PATH_NOT_FOUND: path does not exist
+      NOT_A_SEQUENCE: target is not a sequence
+    example:
+      - append:
+          path: config/allowed_hosts
+          value: "*.example.com"
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # DTL — Data Transformation (restructure)
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  move:
+    category: dtl
+    description: Relocate a subtree from one path to another
+    fields:
+      from:
+        type: string
+        required: true
+        description: Source path
+      to:
+        type: string
+        required: true
+        description: Destination path
+    rules:
+      - source must exist
+      - destination must not exist
+      - removes from source, creates at destination
+      - cannot move into own subtree
+    errors:
+      PATH_NOT_FOUND: source path does not exist
+      ALREADY_EXISTS: destination path already exists
+    example:
+      - move:
+          from: config/old_db
+          to: config/database
+
+  clone:
+    category: dtl
+    description: Deep copy a subtree to a new path
+    fields:
+      from:
+        type: string
+        required: true
+        description: Source path to copy
+      to:
+        type: string
+        required: true
+        description: Destination path for the copy
+    rules:
+      - source must exist
+      - destination must not exist
+      - deep copy — independent of original
+    errors:
+      PATH_NOT_FOUND: source path does not exist
+      ALREADY_EXISTS: destination path already exists
+    example:
+      - clone:
+          from: config/production
+          to: config/staging
+
+  nest:
+    category: dtl
+    description: Group sibling keys under a new parent mapping
+    fields:
+      path:
+        type: string
+        required: true
+        description: Path to the parent mapping containing the siblings
+      keys:
+        type: sequence
+        item_type: string
+        required: true
+        description: Keys to group (must be siblings in the parent)
+      under:
+        type: string
+        required: true
+        description: New key name for the wrapper mapping
+    rules:
+      - all keys must exist in the parent mapping
+      - wrapper key must not already exist
+      - listed keys are moved under the new wrapper
+    errors:
+      PATH_NOT_FOUND: parent path does not exist
+      NOT_A_MAPPING: parent is not a mapping
+      NOT_SIBLINGS: one or more keys not found in parent
+      ALREADY_EXISTS: wrapper key already exists
+    example:
+      - nest:
+          path: config
+          keys: [host, port, name]
+          under: database
+
+  split:
+    category: dtl
+    description: Distribute a mapping's keys into new child mappings
+    fields:
+      path:
+        type: string
+        required: true
+        description: Path to the mapping to split
+      into:
+        type: mapping
+        required: true
+        description: "{new_child_key: [key_names]} — which keys go into which child"
+    rules:
+      - path must exist and be a mapping
+      - all referenced keys must exist in the mapping
+      - a key cannot appear in multiple children
+      - unlisted keys stay on the original mapping
+    errors:
+      PATH_NOT_FOUND: path does not exist
+      NOT_A_MAPPING: target is not a mapping
+    example:
+      - split:
+          path: config
+          into:
+            database: [host, port, name]
+            cache: [redis_url, ttl]
+
+  fold:
+    category: dtl
+    description: >
+      Collapse a single-child mapping by promoting its only child.
+      The wrapper key is removed and the child takes its place.
+    fields:
+      path:
+        type: string
+        required: true
+        description: Path to the wrapper mapping (must have exactly one child key)
+    rules:
+      - path must exist and be a mapping
+      - must have exactly one key
+      - the single child replaces the wrapper
+    errors:
+      PATH_NOT_FOUND: path does not exist
+      NOT_FOLDABLE: mapping has zero or more than one key
+    example:
+      - fold:
+          path: config/wrapper
+
+  merge:
+    category: dtl
+    description: Combine sibling keys into one mapping
+    fields:
+      path:
+        type: string
+        required: true
+        description: Path to the parent mapping
+      keys:
+        type: sequence
+        item_type: string
+        required: true
+        description: Sibling keys to combine
+      into:
+        type: string
+        required: true
+        description: Key name for the merged result
+    rules:
+      - all keys must exist as siblings in the parent
+      - values are combined (last wins on key conflict)
+      - original keys are removed, merged key takes their place
+    errors:
+      PATH_NOT_FOUND: parent path does not exist
+      NOT_A_MAPPING: parent is not a mapping
+      NOT_SIBLINGS: one or more keys not found
+    example:
+      - merge:
+          path: config
+          keys: [db_primary, db_replica]
+          into: database
+
+  sort:
+    category: dtl
+    description: Sort a sequence in place
+    fields:
+      path:
+        type: string
+        required: true
+        description: Path to the sequence to sort
+      by:
+        type: string
+        required: false
+        description: >
+          Key to sort by (for sequences of mappings).
+          Omit for sequences of scalars.
+      order:
+        type: string
+        required: false
+        default: asc
+        enum: [asc, desc]
+        description: Sort direction
+    rules:
+      - target must exist and be a sequence
+      - if 'by' is provided, items must be mappings with that key
+    errors:
+      PATH_NOT_FOUND: path does not exist
+      NOT_A_SEQUENCE: target is not a sequence
+    example:
+      - sort:
+          path: users
+          by: name
+          order: asc
+
+  unique:
+    category: dtl
+    description: Deduplicate a sequence, keeping first occurrence
+    fields:
+      path:
+        type: string
+        required: true
+        description: Path to the sequence to deduplicate
+      by:
+        type: string
+        required: false
+        description: >
+          Key to deduplicate by (for sequences of mappings).
+          Omit for sequences of scalars.
+    rules:
+      - target must exist and be a sequence
+      - keeps first occurrence, removes subsequent duplicates
+    errors:
+      PATH_NOT_FOUND: path does not exist
+      NOT_A_SEQUENCE: target is not a sequence
+    example:
+      - unique:
+          path: tags
+
+  pick:
+    category: dtl
+    description: Keep only specified keys in a mapping, remove the rest
+    fields:
+      path:
+        type: string
+        required: true
+        description: Path to the mapping to filter
+      keys:
+        type: sequence
+        item_type: string
+        required: true
+        description: Keys to keep
+    rules:
+      - target must exist and be a mapping
+      - keys not in the list are removed
+      - keys in the list that don't exist are ignored
+    errors:
+      PATH_NOT_FOUND: path does not exist
+      NOT_A_MAPPING: target is not a mapping
+    example:
+      - pick:
+          path: user
+          keys: [name, email]
+
+  omit:
+    category: dtl
+    description: Remove specified keys from a mapping, keep the rest
+    fields:
+      path:
+        type: string
+        required: true
+        description: Path to the mapping to filter
+      keys:
+        type: sequence
+        item_type: string
+        required: true
+        description: Keys to remove
+    rules:
+      - target must exist and be a mapping
+      - keys in the list are removed
+      - keys not found are ignored (idempotent)
+    errors:
+      PATH_NOT_FOUND: path does not exist
+      NOT_A_MAPPING: target is not a mapping
+    example:
+      - omit:
+          path: user
+          keys: [password, internal_id]
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # DCL — Data Control (assertions)
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  assert:
+    category: dcl
+    description: >
+      Validate a condition against the document. Read-only — never mutates.
+      Fail-fast: if the assertion fails, execution stops.
+    fields:
+      path:
+        type: string
+        required: true
+        description: Path to check
+      equals:
+        type: any
+        required: false
+        description: Expected value (deep equality check)
+      exists:
+        type: boolean
+        required: false
+        description: "true: path must exist. false: path must NOT exist."
+      type:
+        type: string
+        required: false
+        enum: [mapping, sequence, scalar]
+        description: Expected type of the value at path
+    rules:
+      - at least one condition (equals, exists, type) must be provided
+      - all provided conditions must pass
+      - does not mutate the document
+      - on failure, stops execution with ASSERTION_FAILED
+    errors:
+      ASSERTION_FAILED: condition not met (message includes details)
+    example:
+      - assert:
+          path: config/database/host
+          exists: true
+          type: scalar
+
+# ----------------------------------------------------------------------------
+# Error Codes
+# ----------------------------------------------------------------------------
+errors:
+  PATH_NOT_FOUND:
+    description: The specified path does not exist in the document
+  ALREADY_EXISTS:
+    description: A key or path already exists where a new one is expected
+  NOT_A_MAPPING:
+    description: Expected a mapping (object) but found a different type
+  NOT_A_SEQUENCE:
+    description: Expected a sequence (array) but found a different type
+  NOT_SIBLINGS:
+    description: Referenced keys are not siblings in the same mapping
+  NOT_FOLDABLE:
+    description: Mapping cannot be folded (has zero or more than one key)
+  INVALID_PATH:
+    description: Path could not be traversed (intermediate is wrong type)
+  ASSERTION_FAILED:
+    description: An assert condition was not met
+  UNKNOWN_OP:
+    description: Operation name not recognized
+
+# ----------------------------------------------------------------------------
+# Execution
+# ----------------------------------------------------------------------------
+execution:
+  order: sequential          # operations execute top to bottom
+  on_error: stop             # stop at first failed operation
+  immutable_input: true      # engine deep clones input, never mutates original
+  idempotent_ops: [unset, omit]  # no error on missing target
+  strict_ops:
+    - define
+    - drop
+    - rename
+    - set
+    - populate
+    - append
+    - move
+    - clone
+    - nest
+    - split
+    - fold
+    - merge
+    - sort
+    - unique
+    - pick
+  readonly_ops: [assert]     # never mutates the document
+
+# ----------------------------------------------------------------------------
+# Document Format
+# ----------------------------------------------------------------------------
+document:
+  root_key: yops
+  type: sequence of operations
+  description: >
+    A YOps document is a YAML file with a single root key "yops"
+    containing a sequence of operations. Each operation is a mapping
+    with exactly one key (the operation name) whose value contains
+    the operation's fields.
+  example:
+    yops:
+      - define:
+          path: config/database
+      - populate:
+          path: config/database
+          values:
+            host: localhost
+            port: 5432
+      - set:
+          path: config/database/pool_size
+          value: 10
+      - assert:
+          path: config/database/host
+          exists: true

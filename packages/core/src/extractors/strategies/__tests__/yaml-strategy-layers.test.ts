@@ -59,17 +59,12 @@ const validTree = `trip:
 
 const validYOps = `yops:
   - define:
-      parent: ""
-      key: trip
+      path: trip
   - populate:
       path: trip
-      slots:
+      values:
         destination: Tokyo
-        budget: 5000
-      source:
-        destination: "trip to Tokyo"
-        budget: "budget of 5000 dollars"
-      from: T1`;
+        budget: 5000`;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // L0: PARSE — "Is this valid YAML/YOps?"
@@ -151,7 +146,7 @@ describe('L0: Parse', () => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe('L1: Gate', () => {
-  it('passes YOps with valid source references', async () => {
+  it('passes YOps with valid ops', async () => {
     const provider = mockProvider([validYOps]);
     const result = await strategy.extract(baseInput, provider);
 
@@ -161,61 +156,21 @@ describe('L1: Gate', () => {
     }
   });
 
-  it('rejects YOps with invalid turn references and triggers correction', async () => {
-    const badTurnRef = `yops:
-  - define:
-      parent: ""
-      key: trip
-  - populate:
-      path: trip
-      slots:
-        destination: Tokyo
-      source:
-        destination: "trip to Tokyo"
-      from: T5`;
-
-    // Correction round gets the rejected ops + errors, LLM returns fixed version
-    const correctedPopulate = `yops:
-  - populate:
-      path: trip
-      slots:
-        destination: Tokyo
-      source:
-        destination: "trip to Tokyo"
-      from: T1`;
-
-    const provider = mockProvider([badTurnRef, correctedPopulate]);
-    const result = await strategy.extract(baseInput, provider);
-
-    // At least 2 calls: main + correction round
-    expect((provider.generate as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThanOrEqual(2);
-
-    // Correction prompt should mention the bad turn reference
-    const correctionCall = (provider.generate as ReturnType<typeof vi.fn>).mock.calls[1][0] as string;
-    expect(correctionCall).toContain('T5');
-  });
-
   it('detects duplicate define operations and triggers correction', async () => {
     const dupDefine = `yops:
   - define:
-      parent: ""
-      key: trip
+      path: trip
   - define:
-      parent: ""
-      key: trip
+      path: trip
   - populate:
       path: trip
-      slots:
-        destination: Tokyo
-      source:
-        destination: "trip to Tokyo"
-      from: T1`;
+      values:
+        destination: Tokyo`;
 
     // Correction round receives the rejected duplicate define
     const correctedDefine = `yops:
   - define:
-      parent: ""
-      key: trip`;
+      path: trip`;
 
     const provider = mockProvider([dupDefine, correctedDefine]);
     const result = await strategy.extract(baseInput, provider);
@@ -232,40 +187,15 @@ describe('L1: Gate', () => {
     // Dot paths should be auto-fixed to slash paths by autoFixYOp
     const dotPaths = `yops:
   - define:
-      parent: ""
-      key: trip
+      path: trip
   - populate:
       path: trip
-      slots:
-        destination: Tokyo
-      source:
-        destination: "trip to Tokyo"
-      from: T1`;
+      values:
+        destination: Tokyo`;
 
     const provider = mockProvider([dotPaths]);
     const result = await strategy.extract(baseInput, provider);
 
-    expect(result.ok).toBe(true);
-  });
-
-  it('warns but passes on mismatched source quotes', async () => {
-    // Quote doesn't match turn content — warning, not error
-    const mismatchedQuote = `yops:
-  - define:
-      parent: ""
-      key: trip
-  - populate:
-      path: trip
-      slots:
-        destination: Tokyo
-      source:
-        destination: "completely fabricated quote that does not exist in conversation"
-      from: T1`;
-
-    const provider = mockProvider([mismatchedQuote]);
-    const result = await strategy.extract(baseInput, provider);
-
-    // Source quote mismatch is a warning, not error — should still pass
     expect(result.ok).toBe(true);
   });
 });
@@ -293,11 +223,8 @@ describe('L2: Engine', () => {
     const missingDefine = `yops:
   - populate:
       path: trip
-      slots:
-        destination: Tokyo
-      source:
-        destination: "trip to Tokyo"
-      from: T1`;
+      values:
+        destination: Tokyo`;
 
     // First: fails at applyYOps (NODE_NOT_FOUND) → repair → second response fixes it
     const provider = mockProvider([missingDefine, validYOps]);
@@ -315,15 +242,11 @@ describe('L2: Engine', () => {
   it('catches self-relation and triggers repair', async () => {
     const selfRelation = `yops:
   - define:
-      parent: ""
-      key: trip
+      path: trip
   - populate:
       path: trip
-      slots:
+      values:
         destination: Tokyo
-      source:
-        destination: "trip to Tokyo"
-      from: T1
   - relate:
       from: trip
       to: trip
@@ -377,9 +300,7 @@ describe('Full pipeline integration', () => {
     const incrementalYOps = `yops:
   - set:
       path: trip/budget
-      value: 5000
-      source: "budget of 5000 dollars"
-      from: T1`;
+      value: 5000`;
 
     // This should fail because trip/budget path doesn't exist (no budget child defined)
     // But the main purpose is testing incremental mode works through the pipeline

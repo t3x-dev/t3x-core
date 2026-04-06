@@ -15,7 +15,7 @@ export function useSlotActions() {
 
   const updateSlot = useCallback(
     (nodeId: string, slotKey: string, value: string) => {
-      execute([{ set: { path: `${nodeId}/${slotKey}`, value, source: '', from: '' } }]);
+      execute([{ set: { path: `${nodeId}/${slotKey}`, value } }]);
     },
     [execute]
   );
@@ -36,7 +36,7 @@ export function useSlotActions() {
 
   const addSlot = useCallback(
     (nodeId: string, key: string, value: string) => {
-      execute([{ set: { path: `${nodeId}/${key}`, value, source: '', from: '' } }]);
+      execute([{ set: { path: `${nodeId}/${key}`, value } }]);
     },
     [execute]
   );

@@ -34,21 +34,23 @@ export function isContextInverse(inv: InverseResult): inv is ContextInverse {
  * Must be called BEFORE the op is applied to the draft.
  */
 export function computeInverse(op: YOp, draft: SemanticContent): InverseResult {
-  if ('set' in op) return invertSet(op, draft);
-  if ('unset' in op) return invertUnset(op, draft);
-  if ('define' in op) return invertDefine(op);
-  if ('populate' in op) return invertPopulate(op);
-  if ('drop' in op) return invertDrop(op, draft);
-  if ('rename' in op) return invertRename(op);
-  if ('clone' in op) return invertClone(op, draft);
-  if ('move' in op) return invertMove(op);
-  if ('relate' in op) return invertRelate(op);
-  if ('unrelate' in op) return invertUnrelate(op);
+  // biome-ignore lint/suspicious/noExplicitAny: YValue includes null but SlotValue does not; bridging with any
+  const a = op as any;
+  if ('set' in op) return invertSet(a, draft);
+  if ('unset' in op) return invertUnset(a, draft);
+  if ('define' in op) return invertDefine(a);
+  if ('populate' in op) return invertPopulate(a);
+  if ('drop' in op) return invertDrop(a, draft);
+  if ('rename' in op) return invertRename(a);
+  if ('clone' in op) return invertClone(a, draft);
+  if ('move' in op) return invertMove(a);
+  if ('relate' in op) return invertRelate(a);
+  if ('unrelate' in op) return invertUnrelate(a);
   // Context-based: nest, split, fold, merge
-  if ('nest' in op) return invertNest(op, draft);
-  if ('split' in op) return invertSplit(op, draft);
-  if ('fold' in op) return invertFold(op, draft);
-  if ('merge' in op) return invertMerge(op, draft);
+  if ('nest' in op) return invertNest(a, draft);
+  if ('split' in op) return invertSplit(a, draft);
+  if ('fold' in op) return invertFold(a, draft);
+  if ('merge' in op) return invertMerge(a, draft);
   // Fallback (should never hit)
   return op;
 }
@@ -56,7 +58,7 @@ export function computeInverse(op: YOp, draft: SemanticContent): InverseResult {
 // ── Exact inverses ──
 
 function invertSet(
-  op: { set: { path: string; value: SlotValue; source: string; from: string } },
+  op: { set: { path: string; value: SlotValue } },
   draft: SemanticContent
 ): YOp {
   const nodePath = getParentPath(op.set.path);
@@ -64,7 +66,7 @@ function invertSet(
   const node = nodePath ? findNode(draft.trees, nodePath) : undefined;
   if (node && slotKey in node.slots) {
     // Existing slot → set back to old value
-    return { set: { path: op.set.path, value: node.slots[slotKey], source: '', from: '' } };
+    return { set: { path: op.set.path, value: node.slots[slotKey] } };
   }
   // New slot → unset
   return { unset: { path: op.set.path } };
@@ -75,15 +77,14 @@ function invertUnset(op: { unset: { path: string } }, draft: SemanticContent): Y
   const slotKey = getNodeKey(op.unset.path);
   const node = nodePath ? findNode(draft.trees, nodePath) : undefined;
   const oldValue = node?.slots[slotKey] ?? '';
-  return { set: { path: op.unset.path, value: oldValue, source: '', from: '' } };
+  return { set: { path: op.unset.path, value: oldValue } };
 }
 
-function invertDefine(op: { define: { parent: string; key: string } }): YOp {
-  const path = op.define.parent ? `${op.define.parent}/${op.define.key}` : op.define.key;
-  return { drop: { path } };
+function invertDefine(op: { define: { path: string } }): YOp {
+  return { drop: { path: op.define.path } };
 }
 
-function invertPopulate(op: { populate: { path: string; slots: Record<string, SlotValue> } }): ContextInverse {
+function invertPopulate(op: { populate: { path: string; values: Record<string, SlotValue> } }): ContextInverse {
   // Inverse of populate requires multiple unset ops — use context-based inverse
   return {
     _context: {
@@ -113,15 +114,15 @@ function invertRename(op: { rename: { path: string; to: string } }): YOp {
   return { rename: { path: newPath, to: oldKey } };
 }
 
-function invertClone(op: { clone: { path: string; to: string } }, draft: SemanticContent): YOp {
-  const sourceNode = findNode(draft.trees, op.clone.path);
-  const sourceKey = sourceNode?.key ?? getNodeKey(op.clone.path);
+function invertClone(op: { clone: { from: string; to: string } }, draft: SemanticContent): YOp {
+  const sourceNode = findNode(draft.trees, op.clone.from);
+  const sourceKey = sourceNode?.key ?? getNodeKey(op.clone.from);
   const clonedPath = op.clone.to ? `${op.clone.to}/${sourceKey}` : sourceKey;
   return { drop: { path: clonedPath } };
 }
 
-function invertMove(op: { move: { path: string; to: string } }): YOp {
-  return { move: { path: op.move.to, to: op.move.path } };
+function invertMove(op: { move: { from: string; to: string } }): YOp {
+  return { move: { from: op.move.to, to: op.move.from } };
 }
 
 function invertRelate(op: { relate: { from: string; to: string; type: string } }): YOp {
@@ -137,11 +138,11 @@ function invertUnrelate(op: { unrelate: { from: string; to: string; type: string
 // ── Context-based inverses ──
 
 function invertNest(
-  op: { nest: { paths: string[]; under: string } },
+  op: { nest: { path: string; keys: string[]; under: string } },
   draft: SemanticContent
 ): ContextInverse {
-  const snapshot = op.nest.paths
-    .map((p) => findNode(draft.trees, p))
+  const snapshot = op.nest.keys
+    .map((k) => findNode(draft.trees, `${op.nest.path}/${k}`))
     .filter((n): n is TreeNode => n !== undefined)
     .map(deepCloneNode);
   return { _context: { type: 'nest', snapshot, originalOp: op } };
@@ -163,11 +164,11 @@ function invertFold(op: { fold: { path: string } }, draft: SemanticContent): Con
 }
 
 function invertMerge(
-  op: { merge: { paths: string[]; into: string } },
+  op: { merge: { path: string; keys: string[]; into: string } },
   draft: SemanticContent
 ): ContextInverse {
-  const snapshot = op.merge.paths
-    .map((p) => findNode(draft.trees, p))
+  const snapshot = op.merge.keys
+    .map((k) => findNode(draft.trees, `${op.merge.path}/${k}`))
     .filter((n): n is TreeNode => n !== undefined)
     .map(deepCloneNode);
   return { _context: { type: 'merge', snapshot, originalOp: op } };

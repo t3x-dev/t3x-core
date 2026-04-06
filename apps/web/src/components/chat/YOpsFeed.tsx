@@ -11,15 +11,14 @@ interface YOpsFeedProps {
 
 function describeOp(op: YOp): { type: 'add' | 'update' | 'remove'; path: string; value: string } {
   if ('define' in op) {
-    const key = op.define.key;
     return {
       type: 'add',
-      path: op.define.parent ? `${op.define.parent}.${key}` : key,
+      path: op.define.path,
       value: 'new topic',
     };
   }
   if ('populate' in op) {
-    const slotPreview = Object.values(op.populate.slots)
+    const slotPreview = Object.values(op.populate.values)
       .map(String)
       .slice(0, 2)
       .join(', ');
@@ -31,7 +30,7 @@ function describeOp(op: YOp): { type: 'add' | 'update' | 'remove'; path: string;
   }
   if ('set' in op) return { type: 'update', path: op.set.path, value: String(op.set.value) };
   if ('drop' in op)
-    return { type: 'remove', path: op.drop.path, value: op.drop.reason ?? 'removed' };
+    return { type: 'remove', path: op.drop.path, value: 'removed' };
   if ('unset' in op) return { type: 'remove', path: op.unset.path, value: 'cleared' };
   if ('rename' in op) return { type: 'update', path: op.rename.path, value: `→ ${op.rename.to}` };
   const key = Object.keys(op)[0];

@@ -43,29 +43,29 @@ describe('Squash E2E', () => {
       projectId,
       source: 'pipeline',
       yops: [
-        { define: { parent: '', key: 'trip' } },
-        { populate: { path: 'trip', slots: { budget: 5000 }, source: { budget: 'about 5k' }, from: 'T1' } },
+        { define: { path: 'trip' } },
+        { populate: { path: 'trip', values: { budget: 5000 } } },
       ],
     });
     const yl2 = await insertYOpsLogEntry(db, {
       conversationId,
       projectId,
       source: 'pipeline',
-      yops: [{ set: { path: 'trip/style', value: 'casual', source: 'casual style', from: 'T2' } }],
+      yops: [{ set: { path: 'trip/style', value: 'casual' } }],
     });
     const yl3 = await insertYOpsLogEntry(db, {
       conversationId,
       projectId,
       source: 'pipeline',
-      yops: [{ set: { path: 'trip/duration', value: 7, source: 'seven days', from: 'T3' } }],
+      yops: [{ set: { path: 'trip/duration', value: 7 } }],
     });
 
     // 2. Build commits incrementally (each commit applies its yops to previous state)
     const base: SemanticContent = { trees: [], relations: [] };
 
     const r1 = applyYOps(base, [
-      { define: { parent: '', key: 'trip' } },
-      { populate: { path: 'trip', slots: { budget: 5000 }, source: { budget: 'about 5k' }, from: 'T1' } },
+      { define: { path: 'trip' } },
+      { populate: { path: 'trip', values: { budget: 5000 } } },
     ]);
     const c1 = await createCommit(db, {
       author: { type: 'human', name: 'test' },
@@ -76,7 +76,7 @@ describe('Squash E2E', () => {
       yops_log_ids: [yl1.id],
     });
 
-    const r2 = applyYOps({ trees: r1.trees, relations: r1.relations }, [{ set: { path: 'trip/style', value: 'casual', source: 'casual style', from: 'T2' } }]);
+    const r2 = applyYOps({ trees: r1.trees, relations: r1.relations }, [{ set: { path: 'trip/style', value: 'casual' } }]);
     const c2 = await createCommit(db, {
       author: { type: 'human', name: 'test' },
       content: { trees: r2.trees, relations: r2.relations },
@@ -87,7 +87,7 @@ describe('Squash E2E', () => {
       yops_log_ids: [yl2.id],
     });
 
-    const r3 = applyYOps({ trees: r2.trees, relations: r2.relations }, [{ set: { path: 'trip/duration', value: 7, source: 'seven days', from: 'T3' } }]);
+    const r3 = applyYOps({ trees: r2.trees, relations: r2.relations }, [{ set: { path: 'trip/duration', value: 7 } }]);
     const c3 = await createCommit(db, {
       author: { type: 'human', name: 'test' },
       content: { trees: r3.trees, relations: r3.relations },
@@ -176,8 +176,8 @@ describe('Squash E2E', () => {
       projectId,
       source: 'pipeline',
       yops: [
-        { define: { parent: '', key: 'food' } },
-        { populate: { path: 'food', slots: { type: 'pizza' }, source: { type: 'pizza' }, from: 'T1' } },
+        { define: { path: 'food' } },
+        { populate: { path: 'food', values: { type: 'pizza' } } },
       ],
     });
 

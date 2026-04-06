@@ -2,9 +2,13 @@
  * E2E Test: Source Mapping Accuracy
  *
  * Verifies that extraction produces correct source mapping:
- * 1. `from` tag matches the turn where information ACTUALLY appears
- * 2. `source` (slot_quotes) contains VERBATIM text from the conversation
- * 3. Slot quotes are searchable in the original conversation text
+ * 1. slot_quotes are populated from tree-format metadata (--- JSON section)
+ * 2. Slot quotes contain VERBATIM text from the conversation
+ * 3. source_map tags are propagated to tree nodes
+ *
+ * Note: After migration to @t3x-dev/yops, source/from metadata is no longer
+ * carried in individual ops. Source mapping comes from the tree-format metadata
+ * section (slot_quotes + source_map in the --- JSON block).
  */
 
 import { describe, expect, it, vi } from 'vitest';
@@ -78,24 +82,22 @@ function collectSources(tree: TreeNode, prefix = ''): Record<string, string> {
 
 describe('Source Mapping E2E', () => {
   it('extraction tags assistant content with T2, not T1', async () => {
-    // The LLM extractor will produce YOps from the conversation.
-    // We simulate the LLM's extraction output (what the extractor LLM returns).
-    const extractorOutput = `yops:
-  - define:
-      parent: ""
-      key: australian_beef_taste
-  - populate:
-      path: australian_beef_taste
-      slots:
-        flavor: clean and pure
-        texture: slightly leaner
-        farming: predominantly grass-fed
-      source:
-        flavor: "Clean, pure taste"
-        texture: "Slightly leaner taste compared to heavily grain-fed beef"
-        farming: "Most Australian beef is grass-fed"
-      from: T2
-`;
+    // Tree format extraction — source_map comes from --- JSON metadata
+    const extractorOutput = `australian_beef_taste:
+  flavor: clean and pure
+  texture: slightly leaner
+  farming: predominantly grass-fed
+---
+{
+  "slot_quotes": {
+    "flavor": "Clean, pure taste",
+    "texture": "Slightly leaner taste compared to heavily grain-fed beef",
+    "farming": "Most Australian beef is grass-fed"
+  },
+  "source_map": {
+    "australian_beef_taste": "T2"
+  }
+}`;
 
     const provider = mockProvider(extractorOutput);
     const extractor = new Extractor(provider);
@@ -121,22 +123,21 @@ describe('Source Mapping E2E', () => {
   });
 
   it('slot_quotes contain text that exists in the conversation', async () => {
-    const extractorOutput = `yops:
-  - define:
-      parent: ""
-      key: beef_taste
-  - populate:
-      path: beef_taste
-      slots:
-        flavor: clean and pure
-        farming: grass-fed
-        wagyu_flavor: buttery
-      source:
-        flavor: "Clean, pure taste"
-        farming: "Most Australian beef is grass-fed"
-        wagyu_flavor: "Wagyu - exceptionally tender with buttery flavor"
-      from: T2
-`;
+    const extractorOutput = `beef_taste:
+  flavor: clean and pure
+  farming: grass-fed
+  wagyu_flavor: buttery
+---
+{
+  "slot_quotes": {
+    "flavor": "Clean, pure taste",
+    "farming": "Most Australian beef is grass-fed",
+    "wagyu_flavor": "Wagyu - exceptionally tender with buttery flavor"
+  },
+  "source_map": {
+    "beef_taste": "T2"
+  }
+}`;
 
     const provider = mockProvider(extractorOutput);
     const extractor = new Extractor(provider);
@@ -165,20 +166,17 @@ describe('Source Mapping E2E', () => {
   });
 
   it('slot_quotes are NOT paraphrases — they are verbatim', async () => {
-    // BAD: "grass-fed beef" (paraphrase)
-    // GOOD: "Most Australian beef is grass-fed" (verbatim from message)
-    const extractorOutput = `yops:
-  - define:
-      parent: ""
-      key: beef
-  - populate:
-      path: beef
-      slots:
-        type: grass-fed
-      source:
-        type: "Most Australian beef is grass-fed, giving it a more natural, earthy flavor"
-      from: T2
-`;
+    const extractorOutput = `beef:
+  type: grass-fed
+---
+{
+  "slot_quotes": {
+    "type": "Most Australian beef is grass-fed, giving it a more natural, earthy flavor"
+  },
+  "source_map": {
+    "beef": "T2"
+  }
+}`;
 
     const provider = mockProvider(extractorOutput);
     const extractor = new Extractor(provider);
@@ -198,7 +196,7 @@ describe('Source Mapping E2E', () => {
 
     // Each quote should be a substring of the actual conversation
     for (const [, quote] of Object.entries(quotes)) {
-      // Must be at least 10 chars (not too short to be meaningless)
+      // Must be at least 5 chars (not too short to be meaningless)
       expect(quote.length).toBeGreaterThanOrEqual(5);
       // Must be findable in the original text
       expect(
@@ -208,7 +206,7 @@ describe('Source Mapping E2E', () => {
     }
   });
 
-  it('incremental extraction also uses correct from tags', async () => {
+  it('incremental extraction applies set ops to existing snapshot', async () => {
     const existingSnapshot: SemanticContent = {
       trees: [{
         key: 'beef_topic',
@@ -220,21 +218,15 @@ describe('Source Mapping E2E', () => {
       relations: [],
     };
 
-    // User asks follow-up (T3), assistant answers (T4)
+    // Incremental: add a child node
     const extractorOutput = `yops:
   - define:
-      parent: beef_topic
-      key: cooking_tips
+      path: beef_topic/cooking_tips
   - populate:
       path: beef_topic/cooking_tips
-      slots:
+      values:
         method: medium-rare grilling
-        rest_time: 5 minutes
-      source:
-        method: "best served medium-rare on the grill"
-        rest_time: "let it rest for about 5 minutes"
-      from: T4
-`;
+        rest_time: 5 minutes`;
 
     const provider = mockProvider(extractorOutput);
     const extractor = new Extractor(provider);
@@ -253,26 +245,26 @@ describe('Source Mapping E2E', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
-    // The new child should have source T4 (second assistant answer)
+    // The new child should exist with correct slots
     const root = result.snapshot.trees[0];
     const cookingChild = root.children.find(c => c.key === 'cooking_tips');
     expect(cookingChild).toBeDefined();
-    expect(cookingChild!.source).toBe('T4');
+    expect(cookingChild!.slots.method).toBe('medium-rare grilling');
+    expect(cookingChild!.slots.rest_time).toBe('5 minutes');
   });
 
   it('extraction result has snapshot without lint scores', async () => {
-    const extractorOutput = `yops:
-  - define:
-      parent: ""
-      key: beef
-  - populate:
-      path: beef
-      slots:
-        taste: clean
-      source:
-        taste: "Clean, pure taste"
-      from: T2
-`;
+    const extractorOutput = `beef:
+  taste: clean
+---
+{
+  "slot_quotes": {
+    "taste": "Clean, pure taste"
+  },
+  "source_map": {
+    "beef": "T2"
+  }
+}`;
 
     const provider = mockProvider(extractorOutput);
     const extractor = new Extractor(provider);

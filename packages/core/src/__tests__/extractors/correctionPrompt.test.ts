@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildCorrectionPrompt } from '../../extractors/correctionPrompt';
 import type { GateViolation } from '../../ops/gates/types';
-import type { YOp } from '../../yops/types';
+import type { YOp } from '../../t3x-yops/types';
 
 describe('buildCorrectionPrompt', () => {
   const turns = [

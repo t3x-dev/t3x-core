@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { autoFixPaths, autoFixYOp } from '../../ops/gates/autofix';
 import type { TreeNode } from '../../semantic/types';
-import type { YOp } from '../../yops/types';
+import type { YOp } from '../../t3x-yops/types';
 
 describe('autoFixYOp', () => {
   it('strips extra fields from unset (source/from)', () => {
@@ -21,7 +21,7 @@ describe('autoFixYOp', () => {
     expect(result!.fixes).toContain('stripped extra fields [source, from] from unset');
   });
 
-  it('strips extra fields from drop (source/from)', () => {
+  it('strips extra fields from drop (source/from/reason)', () => {
     const raw = {
       drop: {
         path: 'tokyo_trip/old_node',
@@ -34,7 +34,7 @@ describe('autoFixYOp', () => {
     const result = autoFixYOp(raw);
     expect(result).not.toBeNull();
     expect(result!.fixed).toEqual({
-      drop: { path: 'tokyo_trip/old_node', reason: 'outdated' },
+      drop: { path: 'tokyo_trip/old_node' },
     });
   });
 
@@ -68,8 +68,6 @@ describe('autoFixYOp', () => {
       set: {
         path: 'tokyo_trip/budget',
         value: 7000,
-        source: 'increase budget',
-        from: 'T5',
       },
     };
 
@@ -129,35 +127,35 @@ describe('autoFixPaths', () => {
   ];
 
   it('resolves partial path to full path (missing root)', () => {
-    const yop: YOp = { set: { path: 'company_info/team_size', value: 4, source: 'test', from: 'T1' } };
+    const yop: YOp = { set: { path: 'company_info/team_size', value: 4 } };
     const result = autoFixPaths(yop, trees);
     expect(result).not.toBeNull();
     expect((result!.fixed as any).set.path).toBe('construction_saas/company_info/team_size');
   });
 
   it('resolves deeply nested partial path', () => {
-    const yop: YOp = { set: { path: 'backend/framework', value: 'AWS', source: 'test', from: 'T1' } };
+    const yop: YOp = { set: { path: 'backend/framework', value: 'AWS' } };
     const result = autoFixPaths(yop, trees);
     expect(result).not.toBeNull();
     expect((result!.fixed as any).set.path).toBe('construction_saas/tech_stack/backend/framework');
   });
 
   it('returns null when path is already correct', () => {
-    const yop: YOp = { set: { path: 'construction_saas/company_info/team_size', value: 4, source: 'test', from: 'T1' } };
+    const yop: YOp = { set: { path: 'construction_saas/company_info/team_size', value: 4 } };
     const result = autoFixPaths(yop, trees);
     expect(result).toBeNull();
   });
 
-  it('returns null for empty parent path (root define)', () => {
-    const yop: YOp = { define: { parent: '', key: 'new_node' } };
+  it('returns null for root-level define', () => {
+    const yop: YOp = { define: { path: 'new_node' } };
     const result = autoFixPaths(yop, trees);
     expect(result).toBeNull();
   });
 
-  it('resolves parent path in define operations', () => {
-    const yop: YOp = { define: { parent: 'company_info', key: 'role' } };
+  it('resolves partial path in define operations', () => {
+    const yop: YOp = { define: { path: 'company_info/role' } };
     const result = autoFixPaths(yop, trees);
     expect(result).not.toBeNull();
-    expect((result!.fixed as any).define.parent).toBe('construction_saas/company_info');
+    expect((result!.fixed as any).define.path).toBe('construction_saas/company_info/role');
   });
 });

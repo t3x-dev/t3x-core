@@ -7,13 +7,16 @@
  * Pre-apply gate: operates on raw YOp[] before they're applied.
  */
 
-import type { YOp } from '../../yops/types';
+import type { YOp } from '../../t3x-yops/types';
 import type { GateResult, GateViolation } from './types';
 
-/** Extract the node key from a define op */
+/** Extract the parent and key from a define op's path */
 function getDefineKey(op: YOp): { parent: string; key: string } | null {
   if (!('define' in op)) return null;
-  return { parent: op.define.parent, key: op.define.key };
+  const path = op.define.path;
+  const lastSlash = path.lastIndexOf('/');
+  if (lastSlash === -1) return { parent: '', key: path };
+  return { parent: path.slice(0, lastSlash), key: path.slice(lastSlash + 1) };
 }
 
 export function validateDedup(yops: YOp[]): GateResult {

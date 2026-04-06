@@ -11,7 +11,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { Extractor } from '../../extractors/extractor';
 import { ylint } from '../../ylint';
-import { applyYOps } from '../../yops/engine';
+import { applyYOps } from '../../t3x-yops/engine';
 import { parseYOpsOutput } from '../../extractors/yopsParser';
 import type { SemanticContent, TreeNode } from '../../semantic/types';
 import type { LLMProvider } from '../../llm/types';
@@ -108,20 +108,13 @@ describe('E2E: YOps Extraction Pipeline', () => {
   - set:
       path: hangzhou_trip/dining/budget
       value: 2000
-      source: "actually let's do 2000"
-      from: T1
   - define:
-      parent: hangzhou_trip
-      key: activities
+      path: hangzhou_trip/activities
   - populate:
       path: hangzhou_trip/activities
-      slots:
+      values:
         west_lake: walking around West Lake
-        hiking: day hike in the hills
-      source:
-        west_lake: "walk around West Lake"
-        hiking: "go hiking in the hills nearby"
-      from: T1`;
+        hiking: day hike in the hills`;
 
     const provider2 = mockProvider([incrementalLLMOutput]);
     const extractor2 = new Extractor(provider2);
@@ -158,19 +151,13 @@ describe('E2E: YOps Extraction Pipeline', () => {
     const thirdLLMOutput = `yops:
   - drop:
       path: hangzhou_trip/activities
-      reason: "user changed plans"
   - define:
-      parent: hangzhou_trip
-      key: nightlife
+      path: hangzhou_trip/nightlife
   - populate:
       path: hangzhou_trip/nightlife
-      slots:
+      values:
         plan: bar hopping near the lake
         budget: 500
-      source:
-        plan: "check out bars near West Lake instead"
-        budget: "maybe 500 for drinks"
-      from: T1
 `;
 
     const provider3 = mockProvider([thirdLLMOutput]);
@@ -245,22 +232,15 @@ describe('E2E: YOps Extraction Pipeline', () => {
     // Test the parser and engine can work together without the Extractor
     const raw = `yops:
   - define:
-      parent: ""
-      key: project
+      path: project
   - populate:
       path: project
-      slots:
+      values:
         name: T3X
         status: active
-      source:
-        name: "the project is called T3X"
-        status: "it's actively developed"
-      from: T15
   - set:
       path: project/version
-      value: 2.0
-      source: "we're on version 2"
-      from: T1`;
+      value: 2.0`;
 
     // Parse
     const parsed = parseYOpsOutput(raw);

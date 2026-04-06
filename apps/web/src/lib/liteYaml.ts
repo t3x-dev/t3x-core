@@ -187,20 +187,14 @@ export function parseDisplayYAML(yaml: string, currentContent: SemanticContent):
   for (const [name, slots] of parsedNodes) {
     if (!currentKeys.has(name)) {
       const cleanKey = name.replace(/_\d+$/, ''); // Strip suffix
-      ops.push({ define: { parent: '', key: cleanKey } });
+      ops.push({ define: { path: cleanKey } });
       // If slots exist, populate them
       const slotEntries = Object.entries(slots);
       if (slotEntries.length > 0) {
-        const source: Record<string, string> = {};
-        for (const [k, v] of slotEntries) {
-          source[k] = String(v);
-        }
         ops.push({
           populate: {
             path: cleanKey,
-            slots: slots as Record<string, string>,
-            source,
-            from: 'manual',
+            values: slots as Record<string, string>,
           },
         });
       }
@@ -219,8 +213,6 @@ export function parseDisplayYAML(yaml: string, currentContent: SemanticContent):
               set: {
                 path: `${name}/${slotKey}`,
                 value: newValue as SlotValue,
-                source: String(newValue),
-                from: 'manual',
               },
             });
           }

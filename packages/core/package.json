@@ -21,6 +21,7 @@
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
+    "@t3x-dev/yops": "workspace:*",
     "js-yaml": "^4.1.1",
     "json-canonicalize": "^2.0.0",
     "nanoid": "^5.1.6",

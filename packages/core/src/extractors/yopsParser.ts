@@ -11,8 +11,8 @@ import * as yaml from 'js-yaml';
 import { yamlToTree } from '../semantic/tree';
 import type { SlotValue, TreeNode } from '../semantic/types';
 import { autoFixYOp } from '../ops/gates/autofix';
-import { YOpSchema } from '../yops/schema';
-import type { YOp } from '../yops/types';
+import { YOpSchema } from '../t3x-yops/schema';
+import type { YOp } from '../t3x-yops/types';
 
 // ── Result type ──
 
@@ -139,7 +139,7 @@ function treeToOps(
   const nodePath = parentPath ? `${parentPath}/${tree.key}` : tree.key;
 
   // Define the node
-  yops.push({ define: { parent: parentPath, key: tree.key } });
+  yops.push({ define: { path: nodePath } });
 
   // Populate if has slots
   if (Object.keys(tree.slots).length > 0) {
@@ -155,9 +155,7 @@ function treeToOps(
     yops.push({
       populate: {
         path: nodePath,
-        slots: tree.slots as Record<string, SlotValue>,
-        source: Object.keys(nodeQuotes).length > 0 ? nodeQuotes : {},
-        from: sourceMap[tree.key] ?? 'T1',
+        values: tree.slots as Record<string, SlotValue>,
       },
     });
   }

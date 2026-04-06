@@ -1,10 +1,3 @@
-/**
- * YOps JSON Schema export.
- *
- * Converts YOpSchema (Zod with .describe()) to JSON Schema.
- * Descriptions flow through automatically — no post-processing needed.
- */
-
 import { z } from 'zod';
 import { YOpSchema } from './schema';
 
