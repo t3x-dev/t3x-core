@@ -36,3 +36,5 @@ export {
   deepClone,
   type PathSegment,
 } from './paths';
+
+export { applyYOps } from './engine';
