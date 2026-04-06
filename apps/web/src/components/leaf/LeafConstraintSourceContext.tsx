@@ -14,18 +14,24 @@
 
 import {
   AlertTriangle,
-  CheckCircle,
   ChevronDown,
   ChevronRight,
   Loader2,
   MessageSquare,
   ShieldCheck,
   ShieldX,
-  Trash2,
   XCircle,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { ConstraintList } from '@/components/leaf/ConstraintList';
+import {
+  buildColoredHighlights,
+  findNodeAtTurnOffset,
+  getAbsoluteOffset,
+  groupNodesByTurn,
+  type NodeWithHighlight,
+} from '@/components/leaf/highlightBuilder';
 import { TurnBubble } from '@/components/shared/TurnBubble';
 import { Button } from '@/components/ui/button';
 import type { Constraint, TurnContextData } from '@/lib/api';
@@ -39,9 +45,7 @@ import {
 } from '@/lib/truncationUtils';
 import { cn } from '@/lib/utils';
 import type {
-  ColoredHighlightRange,
   ContentIntegrityStatus,
-  HighlightColor,
   HighlightRange,
   NodeWithSource,
   TurnBubbleData,
@@ -87,12 +91,6 @@ interface LeafConstraintSourceContextProps {
 // Internal Types
 // ═══════════════════════════════════════════════════════════════════════════
 
-interface NodeWithHighlight {
-  node: NodeWithSource;
-  turnHash: string;
-  highlight: HighlightRange;
-}
-
 interface TurnWithHighlights {
   turnHash: string;
   context: TurnContextData | null;
@@ -104,209 +102,8 @@ interface TurnWithHighlights {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Helpers
-// ═══════════════════════════════════════════════════════════════════════════
-
-function groupNodesByTurn(nodes: NodeWithSource[]): {
-  byTurn: Map<string, NodeWithHighlight[]>;
-  withoutSource: NodeWithSource[];
-} {
-  const byTurn = new Map<string, NodeWithHighlight[]>();
-  const withoutSource: NodeWithSource[] = [];
-
-  for (const node of nodes) {
-    if (!node.source || !node.source.turn_hash) {
-      withoutSource.push(node);
-      continue;
-    }
-
-    const turnHash = node.source.turn_hash;
-    const group = byTurn.get(turnHash) || [];
-    group.push({
-      node,
-      turnHash,
-      highlight: {
-        start: node.source.start_char,
-        end: node.source.end_char,
-      },
-    });
-    byTurn.set(turnHash, group);
-  }
-
-  return { byTurn, withoutSource };
-}
-
-/**
- * Build ColoredHighlightRange[] for a single turn, merging node highlights
- * with constraint highlights. Constraint colors override node green.
- */
-export function buildColoredHighlights(
-  turnContent: string,
-  nodeHighlights: NodeWithHighlight[],
-  constraints: Constraint[],
-  nodes: NodeWithSource[]
-): ColoredHighlightRange[] {
-  // Step 1: Find constraint match ranges within this turn
-  const constraintRanges: { start: number; end: number; color: HighlightColor }[] = [];
-
-  for (const c of constraints) {
-    const color: HighlightColor = c.type === 'require' ? 'deepGreen' : 'deepRed';
-    let found = false;
-
-    // Strategy 1: Try linked node first (most precise)
-    const linkedId = (c.type === 'require' && c.source_node) || null;
-    const linkedByDesc = c.description
-      ? nodes.find((s) => c.description?.includes(s.id))?.id
-      : null;
-    const linkedByReason =
-      c.type === 'exclude' && c.reason ? nodes.find((s) => c.reason?.includes(s.id))?.id : null;
-    const targetNodeId = linkedId || linkedByDesc || linkedByReason;
-
-    if (targetNodeId) {
-      const sh = nodeHighlights.find((s) => s.node.id === targetNodeId);
-      if (sh) {
-        const nodeText = turnContent.slice(sh.highlight.start, sh.highlight.end);
-        let searchFrom = 0;
-        while (searchFrom < nodeText.length) {
-          const idx = nodeText.indexOf(c.value, searchFrom);
-          if (idx === -1) break;
-          constraintRanges.push({
-            start: sh.highlight.start + idx,
-            end: sh.highlight.start + idx + c.value.length,
-            color,
-          });
-          found = true;
-          searchFrom = idx + c.value.length;
-        }
-      }
-    }
-
-    // Strategy 2: Search all node ranges in this turn
-    if (!found) {
-      for (const sh of nodeHighlights) {
-        const nodeText = turnContent.slice(sh.highlight.start, sh.highlight.end);
-        let searchFrom = 0;
-        while (searchFrom < nodeText.length) {
-          const idx = nodeText.indexOf(c.value, searchFrom);
-          if (idx === -1) break;
-          constraintRanges.push({
-            start: sh.highlight.start + idx,
-            end: sh.highlight.start + idx + c.value.length,
-            color,
-          });
-          found = true;
-          searchFrom = idx + c.value.length;
-        }
-      }
-    }
-
-    // Strategy 3: Search entire turn content (last resort, for text between nodes)
-    if (!found) {
-      let searchFrom = 0;
-      while (searchFrom < turnContent.length) {
-        const idx = turnContent.indexOf(c.value, searchFrom);
-        if (idx === -1) break;
-        constraintRanges.push({
-          start: idx,
-          end: idx + c.value.length,
-          color,
-        });
-        searchFrom = idx + c.value.length;
-      }
-    }
-  }
-
-  // Step 2: Build base green ranges from node highlights
-  const baseRanges: { start: number; end: number }[] = nodeHighlights.map((sh) => ({
-    start: sh.highlight.start,
-    end: sh.highlight.end,
-  }));
-
-  // Step 3: Split base green ranges, removing portions covered by constraints
-  const result: ColoredHighlightRange[] = [];
-
-  for (const base of baseRanges) {
-    // Collect constraint ranges that overlap with this base range
-    const overlapping = constraintRanges
-      .filter((cr) => cr.start < base.end && cr.end > base.start)
-      .sort((a, b) => a.start - b.start);
-
-    if (overlapping.length === 0) {
-      // No constraints overlap — entire range stays green
-      result.push({ start: base.start, end: base.end, color: 'green' });
-      continue;
-    }
-
-    // Walk through the base range, filling gaps with green
-    let cursor = base.start;
-    for (const cr of overlapping) {
-      const crStart = Math.max(cr.start, base.start);
-      const crEnd = Math.min(cr.end, base.end);
-
-      if (crStart > cursor) {
-        result.push({ start: cursor, end: crStart, color: 'green' });
-      }
-      result.push({ start: crStart, end: crEnd, color: cr.color });
-      cursor = Math.max(cursor, crEnd);
-    }
-    if (cursor < base.end) {
-      result.push({ start: cursor, end: base.end, color: 'green' });
-    }
-  }
-
-  // Step 4: Add constraint ranges not fully inside any node range
-  // (from Strategy 3 — full turn content search)
-  // Partial overlaps with base ranges may cause duplicate coverage, but
-  // TurnBubble's overlap handling (Math.max(rawStart, lastEnd)) resolves this.
-  for (const cr of constraintRanges) {
-    const insideBase = baseRanges.some((b) => cr.start >= b.start && cr.end <= b.end);
-    if (!insideBase) {
-      result.push({ start: cr.start, end: cr.end, color: cr.color });
-    }
-  }
-
-  // Sort by start position
-  result.sort((a, b) => a.start - b.start);
-  return result;
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
 // Component
 // ═══════════════════════════════════════════════════════════════════════════
-
-/**
- * Find which node a character offset belongs to within a turn.
- * Returns the node ID or null if not within any node range.
- */
-function findNodeAtTurnOffset(
-  offset: number,
-  nodeHighlights: NodeWithHighlight[]
-): string | null {
-  for (const sh of nodeHighlights) {
-    if (offset >= sh.highlight.start && offset < sh.highlight.end) {
-      return sh.node.id;
-    }
-  }
-  return null;
-}
-
-/**
- * Calculate the absolute character offset of a DOM selection point
- * within a container element. Handles text split across <mark> tags.
- */
-function getAbsoluteOffset(container: Node, targetNode: Node, targetOffset: number): number {
-  let offset = 0;
-  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
-  let node = walker.nextNode();
-  while (node) {
-    if (node === targetNode) {
-      return offset + targetOffset;
-    }
-    offset += node.textContent?.length ?? 0;
-    node = walker.nextNode();
-  }
-  return offset + targetOffset;
-}
 
 export function LeafConstraintSourceContext({
   nodes,
@@ -980,117 +777,3 @@ export function LeafConstraintSourceContext({
   );
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Constraint List (inline, for viewing and deleting)
-// ═══════════════════════════════════════════════════════════════════════════
-
-function ConstraintList({
-  constraints,
-  onRemove,
-  onHover,
-  saving,
-}: {
-  constraints: Constraint[];
-  onRemove?: (id: string) => void;
-  onHover: (id: string | null) => void;
-  saving?: boolean;
-}) {
-  const requireConstraints = constraints.filter((c) => c.type === 'require');
-  const excludeConstraints = constraints.filter((c) => c.type === 'exclude');
-
-  return (
-    <div className="mt-3 pt-3 border-t border-[var(--color-border)] space-y-3">
-      {requireConstraints.length > 0 && (
-        <div>
-          <h4 className="text-xs font-semibold text-[var(--status-success)] uppercase tracking-wide mb-1.5">
-            Must Have ({requireConstraints.length})
-          </h4>
-          <div className="space-y-1">
-            {requireConstraints.map((c) => (
-              <ConstraintRow
-                key={c.id}
-                constraint={c}
-                onRemove={onRemove ? () => onRemove(c.id) : undefined}
-                onHover={onHover}
-                disabled={saving}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-      {excludeConstraints.length > 0 && (
-        <div>
-          <h4 className="text-xs font-semibold text-[var(--status-error)] uppercase tracking-wide mb-1.5">
-            Must Not Have ({excludeConstraints.length})
-          </h4>
-          <div className="space-y-1">
-            {excludeConstraints.map((c) => (
-              <ConstraintRow
-                key={c.id}
-                constraint={c}
-                onRemove={onRemove ? () => onRemove(c.id) : undefined}
-                onHover={onHover}
-                disabled={saving}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ConstraintRow({
-  constraint,
-  onRemove,
-  onHover,
-  disabled,
-}: {
-  constraint: Constraint;
-  onRemove?: () => void;
-  onHover: (id: string | null) => void;
-  disabled?: boolean;
-}) {
-  const isRequire = constraint.type === 'require';
-
-  return (
-    <div
-      className={cn(
-        'flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-sm',
-        isRequire
-          ? 'border-[var(--status-success)]/20 bg-[var(--status-success-muted)]'
-          : 'border-[var(--status-error)]/20 bg-[var(--status-error-muted)]'
-      )}
-      onMouseEnter={() => onHover(constraint.id)}
-      onMouseLeave={() => onHover(null)}
-    >
-      {isRequire ? (
-        <CheckCircle className="h-3.5 w-3.5 text-[var(--status-success)] shrink-0" />
-      ) : (
-        <XCircle className="h-3.5 w-3.5 text-[var(--status-error)] shrink-0" />
-      )}
-      <span
-        className={cn(
-          'flex-1 truncate font-medium',
-          isRequire ? 'text-[var(--status-success)]' : 'text-[var(--status-error)]'
-        )}
-      >
-        {constraint.value}
-      </span>
-      <span className="text-xs px-1.5 py-0.5 bg-[var(--color-bg-white)]/60 rounded text-[var(--color-text-muted)]">
-        {constraint.match_mode}
-      </span>
-      {onRemove && (
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-5 w-5 shrink-0"
-          onClick={onRemove}
-          disabled={disabled}
-        >
-          <Trash2 className="h-3 w-3" />
-        </Button>
-      )}
-    </div>
-  );
-}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildColoredHighlights } from '@/components/leaf/LeafConstraintSourceContext';
+import { buildColoredHighlights } from '@/components/leaf/highlightBuilder';
 import type { Constraint } from '@/lib/api';
 import type { NodeWithSource } from '@/types/sourceContext';
 
