@@ -12,6 +12,7 @@ export const YOPS_ERRORS = {
   INVALID_PATH: 'INVALID_PATH',
   ASSERTION_FAILED: 'ASSERTION_FAILED',
   UNKNOWN_OP: 'UNKNOWN_OP',
+  INVALID_OP: 'INVALID_OP',
 } as const;
 
 export type YOpsErrorCode = (typeof YOPS_ERRORS)[keyof typeof YOPS_ERRORS];

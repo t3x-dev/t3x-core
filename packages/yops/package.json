@@ -5,7 +5,7 @@
   "license": "Apache-2.0",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "files": ["dist"],
+  "files": ["dist", "yops.yaml"],
   "scripts": {
     "build": "tsup",
     "test": "vitest run",

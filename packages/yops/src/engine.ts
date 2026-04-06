@@ -1,89 +1,91 @@
 /**
- * @yops-dev/core — Sequential YOps Executor
+ * @yops-dev/core — Spec-Driven Engine
  *
- * Applies a list of YOp operations to a document in order.
- * Deep clones the input so the original is never mutated.
+ * Factory that creates an engine from an OpRegistry.
+ * Dispatches ops via registry lookup with field validation.
+ * Deep clones input so the original is never mutated.
  * Fail-fast: stops at the first error and returns partial state.
  */
 
 import type { YValue, YOp, YOpsResult, YOpsError } from './types';
 import { deepClone } from './paths';
 import { yopsError, YOPS_ERRORS } from './errors';
-import { applyDefine, applyDrop, applyRename } from './ops/ddl';
-import { applySet, applyUnset, applyPopulate, applyAppend } from './ops/dml';
-import { applyMove, applyClone, applyNest, applySplit, applyFold, applyMerge, applySort, applyUnique, applyPick, applyOmit } from './ops/dtl';
-import { applyAssert } from './ops/dcl';
+import type { OpRegistry } from './registry';
+import type { OpSpec } from './spec';
 
-export function applyYOps(doc: YValue, ops: YOp[]): YOpsResult {
-  // Deep clone so the caller's document is never mutated
-  let current = deepClone(doc);
+// ── Field Validation ──
 
-  for (let i = 0; i < ops.length; i++) {
-    const op = ops[i];
+function validateFields(
+  opName: string,
+  fields: Record<string, unknown>,
+  spec: OpSpec,
+  index: number,
+): { code: string; message: string; op_index: number } | null {
+  // Check required fields present
+  for (const [name, fieldSpec] of Object.entries(spec.fields)) {
+    if (fieldSpec.required && !(name in fields)) {
+      return { code: 'INVALID_OP', message: `${opName}: missing required field "${name}"`, op_index: index };
+    }
+  }
+  // Check no extra fields
+  for (const key of Object.keys(fields)) {
+    if (!(key in spec.fields)) {
+      return { code: 'INVALID_OP', message: `${opName}: unknown field "${key}"`, op_index: index };
+    }
+  }
+  // Check enum constraints
+  for (const [name, fieldSpec] of Object.entries(spec.fields)) {
+    if (fieldSpec.enum && name in fields) {
+      if (!fieldSpec.enum.includes(fields[name] as string)) {
+        return { code: 'INVALID_OP', message: `${opName}: field "${name}" must be one of [${fieldSpec.enum.join(', ')}]`, op_index: index };
+      }
+    }
+  }
+  return null;
+}
 
-    let result: { doc: YValue; error?: YOpsError };
+// ── Engine Factory ──
 
-    if ('define' in op) {
-      result = applyDefine(current, op.define, i);
-    } else if ('drop' in op) {
-      result = applyDrop(current, op.drop, i);
-    } else if ('rename' in op) {
-      result = applyRename(current, op.rename, i);
-    } else if ('set' in op) {
-      result = applySet(current, op.set, i);
-    } else if ('unset' in op) {
-      result = applyUnset(current, op.unset, i);
-    } else if ('populate' in op) {
-      result = applyPopulate(current, op.populate, i);
-    } else if ('append' in op) {
-      result = applyAppend(current, op.append, i);
-    } else if ('move' in op) {
-      result = applyMove(current, op.move, i);
-    } else if ('clone' in op) {
-      result = applyClone(current, op.clone, i);
-    } else if ('nest' in op) {
-      result = applyNest(current, op.nest, i);
-    } else if ('split' in op) {
-      result = applySplit(current, op.split, i);
-    } else if ('fold' in op) {
-      result = applyFold(current, op.fold, i);
-    } else if ('merge' in op) {
-      result = applyMerge(current, op.merge, i);
-    } else if ('sort' in op) {
-      result = applySort(current, op.sort, i);
-    } else if ('unique' in op) {
-      result = applyUnique(current, op.unique, i);
-    } else if ('pick' in op) {
-      result = applyPick(current, op.pick, i);
-    } else if ('omit' in op) {
-      result = applyOmit(current, op.omit, i);
-    } else if ('assert' in op) {
-      result = applyAssert(current, op.assert, i);
-    } else {
-      // Unknown op
-      return {
-        ok: false,
-        doc: current,
-        applied: i,
-        error: yopsError(YOPS_ERRORS.UNKNOWN_OP, `Unknown operation at index ${i}`, i),
-      };
+export function createEngine(registry: OpRegistry) {
+  function applyYOps(doc: YValue, ops: YOp[]): YOpsResult {
+    let current = deepClone(doc);
+
+    for (let i = 0; i < ops.length; i++) {
+      const op = ops[i];
+      const opName = Object.keys(op)[0];
+      const fields = (op as Record<string, unknown>)[opName] as Record<string, unknown>;
+
+      // 1. Registry lookup
+      const handler = registry.getHandler(opName);
+      if (!handler) {
+        return {
+          ok: false, doc: current, applied: i,
+          error: yopsError(YOPS_ERRORS.UNKNOWN_OP, `Unknown operation: ${opName}`, i),
+        };
+      }
+
+      // 2. Field validation against spec
+      const opSpec = registry.getOpSpec(opName)!;
+      const fieldError = validateFields(opName, fields, opSpec, i);
+      if (fieldError) {
+        return { ok: false, doc: current, applied: i, error: fieldError };
+      }
+
+      // 3. Execute handler
+      const result = handler(current, fields, i);
+      if (result.error) {
+        return {
+          ok: false,
+          doc: current,
+          applied: i,
+          error: result.error,
+        };
+      }
+      current = result.doc;
     }
 
-    if (result.error) {
-      return {
-        ok: false,
-        doc: current,
-        applied: i,
-        error: result.error,
-      };
-    }
-
-    current = result.doc;
+    return { ok: true, doc: current, applied: ops.length };
   }
 
-  return {
-    ok: true,
-    doc: current,
-    applied: ops.length,
-  };
+  return { applyYOps };
 }

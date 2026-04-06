@@ -3,7 +3,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { applyYOps } from '../src/engine';
+import { applyYOps } from '../src/index';
 import type { YValue, YOp } from '../src/types';
 
 describe('applyYOps — engine behavior', () => {
