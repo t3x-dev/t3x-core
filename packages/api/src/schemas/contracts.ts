@@ -96,11 +96,11 @@ export const ConstraintSchema = z.object({
   id: z.string().optional(), // Optional on create, required on response
   type: z.enum(['require', 'exclude']),
   match_mode: z.enum(['exact', 'semantic']),
-  value: z.string().min(1),
-  description: z.string().optional(),
+  value: z.string().min(1).max(5000),
+  description: z.string().max(2000).optional(),
   /** Link to source frame + slot (frame-based traceability) */
   source_frame: ConstraintSourceFrameSchema.optional(),
-  reason: z.string().optional(), // For exclude constraints
+  reason: z.string().max(2000).optional(), // For exclude constraints
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -147,7 +147,7 @@ export const CreateCommitRequest = z
       .array(z.string())
       .default([])
       .describe('Parent commit hashes (empty for root commit)'),
-    message: z.string().optional().describe('Human-readable commit message'),
+    message: z.string().max(2000).optional().describe('Human-readable commit message'),
     branch: z.string().optional().describe('Branch name (defaults to main)'),
 
     // V3/V4 detection fields (for validation error handling)
@@ -598,7 +598,7 @@ export const ExecuteMergeRequest = z.object({
   source_hash: z.string().min(1),
   target_hash: z.string().min(1),
   prepared: MergeResultSchema,
-  message: z.string().min(1),
+  message: z.string().min(1).max(2000),
   branch: z.string().optional(),
   project_id: z.string().min(1),
 });
@@ -654,8 +654,8 @@ export const DraftConstraintSchema = z.object({
   id: z.string(),
   type: z.enum(['require', 'exclude']),
   match_mode: z.enum(['exact', 'semantic']),
-  value: z.string().min(1),
-  reason: z.string().optional(),
+  value: z.string().min(1).max(5000),
+  reason: z.string().max(2000).optional(),
 });
 
 // POST /v1/drafts

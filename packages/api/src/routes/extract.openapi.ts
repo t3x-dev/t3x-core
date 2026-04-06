@@ -2,7 +2,7 @@
  * Extract Route — Integration Layer "Extract" Verb
  *
  * Composite endpoint that takes raw text, creates a conversation + turn,
- * runs tree extraction, stores results as a draft, and optionally
+ * runs the extraction pipeline, stores results as a draft, and optionally
  * detects drift from previous extractions.
  *
  * Endpoints:
@@ -11,15 +11,10 @@
 
 import type { z } from '@hono/zod-openapi';
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
-import type { ExtractionStyleConfig, ExtractionTurn, SemanticContent, TreeNode } from '@t3x-dev/core';
-import { DEFAULT_STYLE, Extractor, serializeForPrompt } from '@t3x-dev/core';
-import { ExtractionStyleSchema } from '../schemas/contracts';
+import { serializeForPrompt } from '@t3x-dev/core';
 import {
-  findAutoDraftsByConversation,
   findConversationById,
   findProjectById,
-  findTurnsByConversation,
-  insertAutoDraft,
   insertConversation,
   insertDraft,
   insertTurn,
@@ -27,7 +22,7 @@ import {
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
-import { getLLMProvider } from '../lib/provider-registry';
+import { type PipelineEvent, runExtractionPipeline } from '../lib/extraction-pipeline';
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 import {
@@ -46,122 +41,6 @@ export const extractRoutes = new OpenAPIHono({
 
 /** TreeNode shape used in the integration layer */
 type TreeNodeResult = z.infer<typeof ExtractTree>;
-
-/**
- * Split text into tree nodes using a simple regex heuristic.
- *
- * Each text segment becomes a TreeNode with key 's_N' and slots: { text: '...' }.
- * This is the pragmatic extraction approach (Option B). A full Ring-based
- * pipeline can be wired in later without changing the API contract.
- */
-function extractTreesFromText(
-  text: string,
-  _conversationId: string,
-  _turnHash: string
-): TreeNodeResult[] {
-  const trees: TreeNodeResult[] = [];
-  const segmentRegex = /[^.!?。！？]+[.!?。！？]+[\s]*/g;
-
-  let match: RegExpExecArray | null;
-  let idx = 0;
-  let lastEnd = 0;
-
-  while ((match = segmentRegex.exec(text)) !== null) {
-    const segment = match[0].trim();
-    if (segment.length > 0) {
-      trees.push({
-        key: `s_${idx++}`,
-        slots: { text: segment },
-        children: [],
-        confidence: 1.0,
-      });
-      lastEnd = match.index + match[0].length;
-    }
-  }
-
-  // Handle remaining text (no segment-ending punctuation)
-  if (lastEnd < text.length) {
-    const remaining = text.slice(lastEnd).trim();
-    if (remaining.length > 0) {
-      trees.push({
-        key: `s_${idx}`,
-        slots: { text: remaining },
-        children: [],
-        confidence: 1.0,
-      });
-    }
-  }
-
-  return trees;
-}
-
-/**
- * Serialize trees to a YAML string.
- */
-function treesToYaml(trees: TreeNodeResult[]): string {
-  if (trees.length === 0) return 'trees: []\n';
-
-  const items = trees
-    .map((t: any) => {
-      const slotText = typeof t.slots?.text === 'string' ? t.slots.text : '';
-      const escapedText = slotText.replace(/"/g, '\\"');
-      let entry = `  - key: ${t.key}\n    slots:\n      text: "${escapedText}"`;
-      if (t.confidence !== undefined) {
-        entry += `\n    confidence: ${t.confidence}`;
-      }
-      return entry;
-    })
-    .join('\n');
-
-  return `trees:\n${items}\n`;
-}
-
-/**
- * Detect drift between previous and current extractions.
- *
- * Drift occurs when a tree node's text in the new extraction is similar to
- * but different from a node in the previous extraction. Uses simple
- * Jaccard word overlap to find matching pairs, then reports changed text.
- */
-function detectDrift(
-  previousTrees: TreeNodeResult[],
-  currentTrees: TreeNodeResult[]
-): { node_path: string; before: string; after: string }[] {
-  const drift: { node_path: string; before: string; after: string }[] = [];
-
-  for (const current of currentTrees) {
-    const currentText = String((current as any).slots?.text ?? '');
-    const currentWords = new Set(currentText.toLowerCase().split(/\s+/));
-
-    let bestMatch: TreeNodeResult | null = null;
-    let bestJaccard = 0;
-
-    for (const prev of previousTrees) {
-      const prevText = String((prev as any).slots?.text ?? '');
-      const prevWords = new Set(prevText.toLowerCase().split(/\s+/));
-      const intersection = new Set([...currentWords].filter((w) => prevWords.has(w)));
-      const union = new Set([...currentWords, ...prevWords]);
-      const jaccard = union.size > 0 ? intersection.size / union.size : 0;
-
-      if (jaccard > bestJaccard) {
-        bestJaccard = jaccard;
-        bestMatch = prev;
-      }
-    }
-
-    // Similar enough to be the "same" node (Jaccard >= 0.3) but text changed
-    const bestMatchText = bestMatch ? String((bestMatch as any).slots?.text ?? '') : '';
-    if (bestMatch && bestJaccard >= 0.3 && bestMatchText !== currentText) {
-      drift.push({
-        node_path: String((current as any).key),
-        before: bestMatchText,
-        after: currentText,
-      });
-    }
-  }
-
-  return drift;
-}
 
 // ============================================================
 // Route Definition
@@ -214,61 +93,6 @@ const postExtractRoute = createRoute({
 });
 
 // ============================================================
-// LLM Extraction (with regex fallback)
-// ============================================================
-
-/**
- * Try LLM-based semantic extraction via Extractor.
- * Returns TreeNode[] on success, null on failure (caller should fallback to regex).
- *
- * When `options` is provided with allTurns + snapshot, uses incremental mode:
- * the LLM sees the full conversation history and existing tree, and produces
- * targeted updates (set/add/drop) rather than extracting from scratch.
- */
-async function extractWithLLM(
-  text: string,
-  turnHash: string,
-  options?: {
-    allTurns?: ExtractionTurn[];
-    snapshot?: SemanticContent;
-    processedTurnCount?: number;
-    style?: ExtractionStyleConfig;
-  }
-): Promise<{ trees: TreeNode[]; yaml: string } | null> {
-  try {
-    const provider = await getLLMProvider();
-    if (!provider) return null;
-
-    const extractor = new Extractor(provider);
-
-    // Build ExtractionInput — incremental when snapshot provided, one-shot otherwise
-    const turns: ExtractionTurn[] = options?.allTurns ?? [
-      { role: 'user', content: text, turn_hash: turnHash },
-    ];
-
-    const result = await extractor.extract(
-      {
-        turns,
-        snapshot: options?.snapshot,
-        processedTurnCount: options?.processedTurnCount,
-      },
-      options?.style ?? DEFAULT_STYLE
-    );
-
-    if (!result.ok) {
-      console.warn('[extract] LLM extraction failed:', result.error);
-      return null;
-    }
-
-    const yaml = serializeForPrompt(result.snapshot);
-    return { trees: result.snapshot.trees, yaml };
-  } catch (err) {
-    console.warn('[extract] LLM extraction error:', err instanceof Error ? err.message : err);
-    return null;
-  }
-}
-
-// ============================================================
 // Route Handler
 // ============================================================
 
@@ -284,14 +108,8 @@ extractRoutes.openapi(postExtractRoute, async (c) => {
       return errorResponse(c, 'NOT_FOUND', `Project ${project_id} not found`);
     }
 
-    // Step 2: Create or reuse conversation, load incremental context
+    // Step 2: Create or reuse conversation
     let conversationId: string;
-    let previousTrees: TreeNodeResult[] = [];
-    let existingSnapshot: SemanticContent | undefined;
-    let allTurns: ExtractionTurn[] = [];
-    let processedTurnCount = 0;
-    let autoDraftId: string | undefined;
-    let autoDraftRevision: number | undefined;
 
     if (conversation_id) {
       // Incremental mode: verify conversation exists and belongs to project
@@ -307,34 +125,6 @@ extractRoutes.openapi(postExtractRoute, async (c) => {
         );
       }
       conversationId = conversation_id;
-
-      // Load previous auto-draft (stores LLM-extracted trees from prior calls)
-      const autoDrafts = await findAutoDraftsByConversation(db, project_id, conversation_id);
-      const autoDraft = autoDrafts[0]; // Most recent
-
-      if (autoDraft) {
-        // Convert stored nodes back to SemanticContent snapshot
-        const storedTrees = (autoDraft.nodes ?? []) as TreeNode[];
-        existingSnapshot = { trees: storedTrees, relations: [] };
-        previousTrees = storedTrees as TreeNodeResult[];
-        autoDraftId = autoDraft.id;
-        autoDraftRevision = autoDraft.revision;
-      }
-
-      // Build ExtractionTurn[] from existing turns (for LLM context)
-      const existingTurns = await findTurnsByConversation(db, {
-        conversationId,
-        limit: 1000,
-      });
-      processedTurnCount = existingTurns.length;
-
-      for (const t of existingTurns) {
-        allTurns.push({
-          role: t.role as ExtractionTurn['role'],
-          content: t.content,
-          turn_hash: t.turnHash,
-        });
-      }
     } else {
       // One-shot mode: create a new conversation
       const title = source ? `API extract: ${source}` : 'API extract';
@@ -353,55 +143,50 @@ extractRoutes.openapi(postExtractRoute, async (c) => {
       content: text,
     });
 
-    // Append new turn to allTurns for LLM context
-    allTurns.push({ role: 'user', content: text, turn_hash: turn.turnHash });
-
-    // Step 4: Resolve extraction style from project settings
-    let resolvedStyle: ExtractionStyleConfig = DEFAULT_STYLE;
-    if (project.extractionStyle) {
-      const parsed = ExtractionStyleSchema.safeParse(project.extractionStyle);
-      if (parsed.success) {
-        resolvedStyle = parsed.data;
-      }
+    // Step 4: Run the extraction pipeline
+    const events: PipelineEvent[] = [];
+    for await (const event of runExtractionPipeline({
+      conversationId,
+      projectId: project_id,
+      turnHashes: [turn.turnHash],
+      forceExtract: true, // Skip session/readiness gates for API calls
+    })) {
+      events.push(event);
     }
 
-    // Step 5: Run extraction — try LLM first, fallback to regex
-    let trees: TreeNodeResult[];
-    let yaml: string;
-    let extractionMode: 'llm' | 'regex';
-    const incrementalOpts =
-      existingSnapshot || allTurns.length > 1
-        ? { allTurns, snapshot: existingSnapshot, processedTurnCount, style: resolvedStyle }
-        : { style: resolvedStyle };
-
-    const llmResult = await extractWithLLM(text, turn.turnHash, incrementalOpts);
-    if (llmResult) {
-      // LLM extraction succeeded — map TreeNode[] to API tree format
-      trees = llmResult.trees as TreeNodeResult[];
-      yaml = llmResult.yaml;
-      extractionMode = 'llm';
-    } else {
-      // Fallback to regex segmentation
-      trees = extractTreesFromText(text, conversationId, turn.turnHash);
-      yaml = treesToYaml(trees);
-      extractionMode = 'regex';
+    // Check for pipeline errors
+    const errorEvent = events.find((e) => e.type === 'error');
+    if (errorEvent) {
+      const code = String(errorEvent.data.code ?? 'EXTRACTION_FAILED');
+      const message = String(errorEvent.data.message ?? 'Pipeline extraction failed');
+      return errorResponse(c, code, message);
     }
 
-    // Step 5: Save/update auto-draft for future incremental calls
-    if (autoDraftId && autoDraftRevision !== undefined) {
-      // Update existing auto-draft with merged trees
-      await updateDraft(db, autoDraftId, { nodes: trees }, autoDraftRevision);
-    } else {
-      // Create new auto-draft (for both one-shot and first incremental call)
-      await insertAutoDraft(db, {
-        project_id,
-        conversation_id: conversationId,
-        title: source ? `Auto: ${source}` : 'Auto extraction',
-        nodes: trees,
-      });
+    // Get final snapshot from the done event
+    const doneEvent = events.find((e) => e.type === 'done');
+    if (!doneEvent || !doneEvent.data.snapshot) {
+      return errorResponse(c, 'EXTRACTION_FAILED', 'Pipeline did not produce a result');
     }
 
-    // Step 6: Create a user-facing draft with extracted trees
+    const snapshot = doneEvent.data.snapshot as { trees: TreeNodeResult[]; relations: unknown[] };
+    const trees = snapshot.trees;
+    const yaml = serializeForPrompt(snapshot as Parameters<typeof serializeForPrompt>[0]);
+
+    // Check for drift events from the pipeline
+    const driftEvent = events.find((e) => e.type === 'drift');
+    let drift: { node_path: string; before: string; after: string }[] | undefined;
+    if (driftEvent) {
+      // Map pipeline drift info to API response format
+      drift = [
+        {
+          node_path: String(driftEvent.data.old_topic ?? ''),
+          before: String(driftEvent.data.old_topic ?? ''),
+          after: String(driftEvent.data.new_topic ?? ''),
+        },
+      ];
+    }
+
+    // Step 5: Create a user-facing draft with extracted trees
     const draft = await insertDraft(db, {
       project_id,
       title: source ? `Extract: ${source}` : 'API extraction',
@@ -410,16 +195,7 @@ extractRoutes.openapi(postExtractRoute, async (c) => {
     // Store trees into the draft
     await updateDraft(db, draft.id, { nodes: trees }, draft.revision);
 
-    // Step 7: Detect drift (incremental mode only)
-    let drift: { node_path: string; before: string; after: string }[] | undefined;
-    if (conversation_id && previousTrees.length > 0) {
-      const driftItems = detectDrift(previousTrees, trees);
-      if (driftItems.length > 0) {
-        drift = driftItems;
-      }
-    }
-
-    // Step 8: Fire webhooks
+    // Step 6: Fire webhooks
     webhookDispatcher.dispatch(
       'draft.ready',
       {
@@ -444,14 +220,14 @@ extractRoutes.openapi(postExtractRoute, async (c) => {
       );
     }
 
-    // Step 9: Build response
+    // Step 7: Build response
     const result: z.infer<typeof ExtractResponse> = {
       conversation_id: conversationId,
       draft_id: draft.id,
       trees,
       yaml,
       drift,
-      extraction_mode: extractionMode,
+      extraction_mode: 'llm',
     };
 
     return c.json({ success: true as const, data: result }, 200);

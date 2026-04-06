@@ -26,7 +26,7 @@ export const CreateTurnSchema = z.object({
   project_id: z.string().min(1),
   conversation_id: z.string().min(1),
   role: TurnRoleSchema,
-  content: z.string().min(1),
+  content: z.string().min(1).max(100_000),
   parent_turn_hash: z.string().optional(),
   metadata: z.record(z.string(), z.any()).optional(),
 });

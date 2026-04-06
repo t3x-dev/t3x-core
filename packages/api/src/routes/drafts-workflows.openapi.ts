@@ -37,6 +37,7 @@ import {
   SuggestDraftRequest,
   SuggestDraftResponse,
 } from '../schemas/contracts';
+import { previewCache, previewDebounce } from '../lib/drafts-preview';
 import { toApiDraft } from './drafts-crud.openapi';
 
 export const draftsWorkflowRoutes = new OpenAPIHono({
@@ -44,15 +45,8 @@ export const draftsWorkflowRoutes = new OpenAPIHono({
 });
 
 // ============================================================
-// In-memory state (shared with CRUD for delete cleanup)
+// In-memory state constants
 // ============================================================
-
-export const previewDebounce = new Map<string, number>();
-
-export const previewCache = new Map<
-  string,
-  { hash: string; output: string; model: string; tokens: number; time: number }
->();
 
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 const DEBOUNCE_MS = 1000; // 1 second

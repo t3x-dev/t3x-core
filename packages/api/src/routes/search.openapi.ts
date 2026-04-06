@@ -4,7 +4,7 @@
  * Search endpoint stub. Tree-based search pending implementation.
  * Search now operates on tree-based semantic content.
  *
- * TODO: Implement tree-based search using commit content.trees
+ * Future: implement tree-based search using commit content.trees
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';

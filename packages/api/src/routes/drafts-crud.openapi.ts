@@ -23,7 +23,7 @@ import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { ErrorResponseSchema, IdParamSchema, SuccessResponseSchema } from '../schemas/common';
 import { CreateDraftRequest, DraftResponse, UpdateDraftRequest } from '../schemas/contracts';
-import { previewCache, previewDebounce } from './drafts-workflows.openapi';
+import { previewCache, previewDebounce } from '../lib/drafts-preview';
 
 export const draftsCrudRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
