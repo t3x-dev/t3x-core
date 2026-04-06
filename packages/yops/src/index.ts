@@ -28,14 +28,8 @@ export type {
 
 export { YOPS_ERRORS, type YOpsErrorCode } from './errors';
 
-export {
-  parsePath,
-  resolvePath,
-  setAtPath,
-  deleteAtPath,
-  deepClone,
-  type PathSegment,
-} from './paths';
+export { parsePath, resolvePath } from './paths';
+export type { PathSegment } from './paths';
 
 export { applyYOps } from './engine';
 
