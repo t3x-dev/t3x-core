@@ -5,9 +5,10 @@
   "license": "Apache-2.0",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "files": ["dist"],
+  "files": ["dist", "yops.yaml"],
   "scripts": {
-    "build": "tsup",
+    "generate:spec": "tsx scripts/generate-spec-data.ts",
+    "build": "tsx scripts/generate-spec-data.ts && tsup",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
@@ -20,6 +21,7 @@
     "js-yaml": "^4.1.1",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^20.12.7",
+    "tsx": "^4.21.0",
     "tsup": "^8.5.1",
     "typescript": "^5.9.3",
     "vitest": "^2.1.9"

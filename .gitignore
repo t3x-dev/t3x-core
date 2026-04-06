@@ -88,3 +88,6 @@ specs/
 .claude/
 .gitmodules
 
+# Generated files
+packages/yops/src/specData.ts
+
