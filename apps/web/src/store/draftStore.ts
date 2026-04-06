@@ -10,8 +10,6 @@ interface DraftState {
   yopsLog: YOpsLogEntry[];
   yopsHistory: YOp[][];
   removedNodes: TreeNode[];
-  feedYops: unknown[];
-  pipelineSteps: Array<{ step: string; result?: string; timestamp: number }>;
   isExtracting: boolean;
   conversationId: string | null;
   topics: Topic[];
@@ -22,10 +20,6 @@ interface DraftState {
         driftDecision?: { choice: string; relation?: string; new_topic?: string };
       }) => void);
   manualEditedNodeIds: Set<string>;
-  /** Source tags for triage (user/llm/both per node) */
-  nodeSourceTags: Record<string, 'user' | 'llm' | 'both'>;
-  /** Turns since last extraction (for ExtractNudge) */
-  turnsSinceLastExtract: number;
 
   setDraft: (content: SemanticContent) => void;
   applyYOps: (ops: YOp[], source: YOpsSource, turnHash?: string) => void;
@@ -43,8 +37,6 @@ interface DraftState {
           driftDecision?: { choice: string; relation?: string; new_topic?: string };
         }) => void)
   ) => void;
-  setNodeSourceTags: (tags: Record<string, 'user' | 'llm' | 'both'>) => void;
-  incrementTurnsSinceLastExtract: () => void;
   startExtraction: () => void;
 }
 
@@ -55,16 +47,12 @@ export const useDraftStore = create<DraftState>((set, get) => ({
   yopsLog: [],
   yopsHistory: [],
   removedNodes: [],
-  feedYops: [],
-  pipelineSteps: [],
   isExtracting: false,
   conversationId: null,
   topics: [],
   activeTopicId: null,
   triggerExtract: null,
   manualEditedNodeIds: new Set(),
-  nodeSourceTags: {},
-  turnsSinceLastExtract: 0,
 
   setDraft: (content) => {
     set({ draft: content, manualEditedNodeIds: new Set() });
@@ -118,14 +106,12 @@ export const useDraftStore = create<DraftState>((set, get) => ({
   },
 
   resetDraft: () => {
-    const wasExtracting = get().isExtracting;
     set({
       draft: emptyContent,
       yopsLog: [],
       removedNodes: [],
       yopsHistory: [],
       manualEditedNodeIds: new Set(),
-      ...(wasExtracting ? {} : { feedYops: [], pipelineSteps: [] }),
     });
   },
 
@@ -136,9 +122,6 @@ export const useDraftStore = create<DraftState>((set, get) => ({
   setActiveTopicId: (id) => set({ activeTopicId: id }),
   addTopic: (topic) => set((s) => ({ topics: [...s.topics, topic] })),
   setTriggerExtract: (fn) => set({ triggerExtract: fn }),
-  setNodeSourceTags: (tags) => set({ nodeSourceTags: tags }),
-  incrementTurnsSinceLastExtract: () =>
-    set((s) => ({ turnsSinceLastExtract: s.turnsSinceLastExtract + 1 })),
   startExtraction: () =>
-    set({ isExtracting: true, feedYops: [], pipelineSteps: [], turnsSinceLastExtract: 0 }),
+    set({ isExtracting: true }),
 }));

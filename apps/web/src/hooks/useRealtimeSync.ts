@@ -102,7 +102,7 @@ function handleEvent(event: RealtimeEvent, conversationId: string) {
       // Another source started extraction — show extracting state
       // But only if WE didn't start it (check isExtracting flag)
       if (!store.isExtracting) {
-        useDraftStore.setState({ isExtracting: true, feedYops: [], pipelineSteps: [] });
+        useDraftStore.setState({ isExtracting: true });
       }
       break;
     }
@@ -125,10 +125,10 @@ function handleEvent(event: RealtimeEvent, conversationId: string) {
         if (yopsEntries && yopsEntries.length > 0) {
           useDraftStore.getState().hydrateYOpsLog(yopsEntries);
 
-          // 3. Load latest YOps delta into feedYops
+          // 3. Mark extraction done
           const latestEntry = yopsEntries[yopsEntries.length - 1];
           if (Array.isArray(latestEntry?.yops) && latestEntry.yops.length > 0) {
-            useDraftStore.setState({ feedYops: latestEntry.yops, isExtracting: false });
+            useDraftStore.setState({ isExtracting: false });
           }
         }
 

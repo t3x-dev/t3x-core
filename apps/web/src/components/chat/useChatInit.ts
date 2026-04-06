@@ -130,9 +130,7 @@ export function useChatInit({
             if (wsMode === 'idle' && !hasCommits && yopsEntries && yopsEntries.length > 0) {
               const latestEntry = yopsEntries[yopsEntries.length - 1];
               if (Array.isArray(latestEntry?.yops) && latestEntry.yops.length > 0) {
-                useDraftStore.setState({ feedYops: latestEntry.yops });
                 useWorkspaceStore.getState().setMode('streaming');
-                // YOpsFeed auto-transitions to executed when animation completes
               }
             }
           } else if (inheritFromCommitHash) {

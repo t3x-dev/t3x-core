@@ -8,7 +8,6 @@ import { useWorkspaceStore } from '@/store/workspaceStore';
 
 interface UseExtractionParams {
   resolvedConversationId: string | undefined;
-  messages: Array<{ role: string; content: string; id: string }>;
 }
 
 /**
@@ -18,12 +17,11 @@ interface UseExtractionParams {
  * - handleExtract: the user-initiated extraction callback
  * - isExtracting: whether extraction is in progress
  */
-export function useExtraction({ resolvedConversationId, messages }: UseExtractionParams) {
+export function useExtraction({ resolvedConversationId }: UseExtractionParams) {
   const isExtracting = useDraftStore((s) => s.isExtracting);
   const draft = useDraftStore((s) => s.draft);
   const activeTopicId = useDraftStore((s) => s.activeTopicId);
   const startExtraction = useDraftStore((s) => s.startExtraction);
-  const setNodeSourceTags = useDraftStore((s) => s.setNodeSourceTags);
   const setDraft = useDraftStore((s) => s.setDraft);
   const setDriftDetected = useWorkspaceStore((s) => s.setDriftDetected);
   const setAdvisoryQuestions = useWorkspaceStore((s) => s.setAdvisoryQuestions);
@@ -81,16 +79,8 @@ export function useExtraction({ resolvedConversationId, messages }: UseExtractio
 
       if (deltaOps && deltaOps.length > 0) {
         // Has delta ops — show streaming mode
-        useDraftStore.setState({ feedYops: deltaOps, isExtracting: false });
+        useDraftStore.setState({ isExtracting: false });
         useWorkspaceStore.getState().setMode('streaming');
-
-        // Derive source tags
-        const { deriveSourceTags } = await import('@/lib/sourceTag');
-        const tags = deriveSourceTags(
-          deltaOps as import('@t3x-dev/core').YOp[],
-          messages.map((m) => ({ role: m.role }))
-        );
-        setNodeSourceTags(tags);
       } else {
         // No delta ops — go directly to executed mode
         useWorkspaceStore.getState().setMode('executed');
@@ -156,9 +146,7 @@ export function useExtraction({ resolvedConversationId, messages }: UseExtractio
     resolvedConversationId,
     isExtracting,
     activeTopicId,
-    messages,
     startExtraction,
-    setNodeSourceTags,
     setDraft,
     setDriftDetected,
     setAdvisoryQuestions,

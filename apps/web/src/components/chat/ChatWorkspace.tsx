@@ -49,7 +49,6 @@ export function ChatWorkspace({
   const isReviewPhase = wsMode === 'executed' || wsMode === 'committing';
   const showAddForm = isReviewPhase && selection && selection.text.length > 3;
   const firstMessageSentRef = useRef(false);
-  const prevTurnsSavedRef = useRef(0);
 
   // For "/chat/new" routes: auto-create project + conversation
   const isNewChat = conversationId === 'new';
@@ -85,7 +84,6 @@ export function ChatWorkspace({
     regenerate,
     editAndResend,
     stopGenerating,
-    turnsSavedCounter,
     searchQuery,
     citations,
     thinkingContent,
@@ -145,9 +143,7 @@ export function ChatWorkspace({
   // Extraction handler + related state
   const { handleExtract, isExtracting, draft } = useExtraction({
     resolvedConversationId,
-    messages,
   });
-  const incrementTurnsSinceLastExtract = useDraftStore((s) => s.incrementTurnsSinceLastExtract);
 
   // Precompute source map: quote positions in all messages for bidirectional highlighting
   const sourceMapByTurn = useMemo(() => {
@@ -166,17 +162,6 @@ export function ChatWorkspace({
     resolvedProjectId,
     resolvedConversationId
   );
-
-  // Count turns since last extraction (for nudge badge)
-  useEffect(() => {
-    const prev = prevTurnsSavedRef.current;
-    prevTurnsSavedRef.current = turnsSavedCounter;
-
-    if (turnsSavedCounter === 0 || turnsSavedCounter === prev) return;
-    if (!resolvedConversationId) return;
-
-    incrementTurnsSinceLastExtract();
-  }, [resolvedConversationId, turnsSavedCounter, incrementTurnsSinceLastExtract]);
 
   // Listen for extraction request (via custom event)
   useEffect(() => {

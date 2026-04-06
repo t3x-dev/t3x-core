@@ -1,7 +1,7 @@
 /**
  * Hover Trace — bidirectional mapping between YAML tree and conversation text.
  *
- * Pure functions, no state. Caching is managed externally by useSourceTrace hook.
+ * Pure functions, no state.
  *
  * YAML → Chat: given a hovered YAML path + slot, find the source turn and quote text
  * Chat → YAML: given a hovered turn index, find all YAML paths sourced from that turn
