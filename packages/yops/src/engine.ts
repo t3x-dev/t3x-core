@@ -1,0 +1,89 @@
+/**
+ * @yops-dev/core — Sequential YOps Executor
+ *
+ * Applies a list of YOp operations to a document in order.
+ * Deep clones the input so the original is never mutated.
+ * Fail-fast: stops at the first error and returns partial state.
+ */
+
+import type { YValue, YOp, YOpsResult, YOpsError } from './types';
+import { deepClone } from './paths';
+import { yopsError, YOPS_ERRORS } from './errors';
+import { applyDefine, applyDrop, applyRename } from './ops/ddl';
+import { applySet, applyUnset, applyPopulate, applyAppend } from './ops/dml';
+import { applyMove, applyClone, applyNest, applySplit, applyFold, applyMerge, applySort, applyUnique, applyPick, applyOmit } from './ops/dtl';
+import { applyAssert } from './ops/dcl';
+
+export function applyYOps(doc: YValue, ops: YOp[]): YOpsResult {
+  // Deep clone so the caller's document is never mutated
+  let current = deepClone(doc);
+
+  for (let i = 0; i < ops.length; i++) {
+    const op = ops[i];
+
+    let result: { doc: YValue; error?: YOpsError };
+
+    if ('define' in op) {
+      result = applyDefine(current, op.define, i);
+    } else if ('drop' in op) {
+      result = applyDrop(current, op.drop, i);
+    } else if ('rename' in op) {
+      result = applyRename(current, op.rename, i);
+    } else if ('set' in op) {
+      result = applySet(current, op.set, i);
+    } else if ('unset' in op) {
+      result = applyUnset(current, op.unset, i);
+    } else if ('populate' in op) {
+      result = applyPopulate(current, op.populate, i);
+    } else if ('append' in op) {
+      result = applyAppend(current, op.append, i);
+    } else if ('move' in op) {
+      result = applyMove(current, op.move, i);
+    } else if ('clone' in op) {
+      result = applyClone(current, op.clone, i);
+    } else if ('nest' in op) {
+      result = applyNest(current, op.nest, i);
+    } else if ('split' in op) {
+      result = applySplit(current, op.split, i);
+    } else if ('fold' in op) {
+      result = applyFold(current, op.fold, i);
+    } else if ('merge' in op) {
+      result = applyMerge(current, op.merge, i);
+    } else if ('sort' in op) {
+      result = applySort(current, op.sort, i);
+    } else if ('unique' in op) {
+      result = applyUnique(current, op.unique, i);
+    } else if ('pick' in op) {
+      result = applyPick(current, op.pick, i);
+    } else if ('omit' in op) {
+      result = applyOmit(current, op.omit, i);
+    } else if ('assert' in op) {
+      result = applyAssert(current, op.assert, i);
+    } else {
+      // Unknown op
+      return {
+        ok: false,
+        doc: current,
+        applied: i,
+        error: yopsError(YOPS_ERRORS.UNKNOWN_OP, `Unknown operation at index ${i}`, i),
+      };
+    }
+
+    if (result.error) {
+      return {
+        ok: false,
+        doc: current,
+        applied: i,
+        error: result.error,
+      };
+    }
+
+    current = result.doc;
+  }
+
+  return {
+    ok: true,
+    doc: current,
+    applied: ops.length,
+  };
+}
