@@ -18,7 +18,7 @@ import { LeafSelector } from '@/components/optimiser/LeafSelector';
 import { QuickStatsBar } from '@/components/optimiser/metrics/QuickStatsBar';
 import { RunsTable } from '@/components/optimiser/RunsTable';
 import { KeyboardHintBar } from '@/components/shared/KeyboardHintBar';
-import { showToast } from '@/components/Toast';
+import { showToast } from '@/components/layout/Toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';

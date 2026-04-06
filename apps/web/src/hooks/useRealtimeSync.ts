@@ -160,7 +160,7 @@ function handleEvent(event: RealtimeEvent, conversationId: string) {
 
     case 'commit.created': {
       // Commit created by another source
-      // TODO: refresh canvas, update commitStore
+      // Future: refresh canvas and update commitStore
       break;
     }
 

@@ -3,13 +3,13 @@
 import { useParams, usePathname } from 'next/navigation';
 import { ThemeProvider } from 'next-themes';
 import { useCallback, useEffect, useState } from 'react';
-import { CommandPalette } from '@/components/CommandPalette';
-import { ErrorBoundary } from '@/components/ErrorBoundary';
-import { KeyboardShortcutsDialog } from '@/components/KeyboardShortcutsDialog';
-import { Sidebar } from '@/components/Sidebar';
+import { CommandPalette } from '@/components/layout/CommandPalette';
+import { ErrorBoundary } from '@/components/layout/ErrorBoundary';
+import { KeyboardShortcutsDialog } from '@/components/layout/KeyboardShortcutsDialog';
+import { Sidebar } from '@/components/layout/Sidebar';
 import { NotificationBell } from '@/components/shared/NotificationBell';
 import { VerificationBadge } from '@/components/shared/VerificationBadge';
-import { showToast } from '@/components/Toast';
+import { showToast } from '@/components/layout/Toast';
 import { Toaster } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import { useCanvasStore } from '@/store/canvasStore';

@@ -7,6 +7,7 @@
 
 import type { MergeResult } from '@t3x-dev/core';
 import type { MergeSummary } from '@/lib/mergeSummary';
+import { truncate } from '@/lib/truncate';
 import type { ExtendedResolutionData } from '@/store/mergeWorkspaceStore';
 
 // ============================================================================
@@ -161,11 +162,3 @@ export function formatReleaseNoteAsMarkdown(note: MergeReleaseNote): string {
   return lines.join('\n');
 }
 
-// ============================================================================
-// Helpers
-// ============================================================================
-
-function truncate(text: string, max = 80): string {
-  if (text.length <= max) return text;
-  return `${text.slice(0, max)}...`;
-}

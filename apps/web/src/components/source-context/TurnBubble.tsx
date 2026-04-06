@@ -19,8 +19,8 @@ import type {
   TurnBubbleData,
   TurnBubbleProps,
 } from '@/types/sourceContext';
-import { type ContentBlock, ContentBlockRenderer } from './ContentBlockRenderer';
-import { ImageLightbox } from './ImageLightbox';
+import { type ContentBlock, ContentBlockRenderer } from '@/components/shared/ContentBlockRenderer';
+import { ImageLightbox } from '@/components/shared/ImageLightbox';
 
 // Re-export types for backward compatibility
 export type { ColoredHighlightRange, HighlightColor, TurnBubbleData, TurnBubbleProps };

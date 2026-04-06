@@ -5,6 +5,7 @@ import type { NodeProps } from '@xyflow/react';
 import { Handle, Position } from '@xyflow/react';
 import { Box, Link as LinkIcon, Paperclip, Shield } from 'lucide-react';
 import { memo, useCallback, useRef, useState } from 'react';
+import { truncate } from '@/lib/truncate';
 import { cn } from '@/lib/utils';
 import type { TreeNodeData } from './treeGraphUtils';
 
@@ -37,11 +38,6 @@ function toSnakeCase(s: string): string {
 /** Format a number with locale separators */
 function formatNumber(n: number): string {
   return n.toLocaleString();
-}
-
-/** Truncate string to maxLen, appending ellipsis */
-function truncate(s: string, maxLen: number): string {
-  return s.length > maxLen ? `${s.slice(0, maxLen)}…` : s;
 }
 
 /** Parse a string as a number if it looks numeric, otherwise return as string */

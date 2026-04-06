@@ -12,7 +12,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { TurnBubble } from '@/components/shared/TurnBubble';
+import { TurnBubble } from '@/components/source-context/TurnBubble';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {

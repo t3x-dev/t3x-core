@@ -15,7 +15,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useMemo } from 'react';
 import { ProjectDraftsSection } from '@/components/ProjectDraftsSection';
-import { UserMenu } from '@/components/UserMenu';
+import { UserMenu } from './UserMenu';
 import { Button } from '@/components/ui/button';
 import { Kbd } from '@/components/ui/kbd';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';

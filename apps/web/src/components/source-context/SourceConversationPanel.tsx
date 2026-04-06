@@ -11,7 +11,7 @@
 import { AlertTriangle, ChevronDown, ChevronRight } from 'lucide-react';
 import { useMemo } from 'react';
 
-import { TurnBubble } from '@/components/shared/TurnBubble';
+import { TurnBubble } from './TurnBubble';
 import type { TurnContextData } from '@/lib/api';
 import {
   adjustHighlightsForTruncation,

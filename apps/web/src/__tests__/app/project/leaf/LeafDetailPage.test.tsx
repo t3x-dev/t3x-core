@@ -31,7 +31,7 @@ vi.mock('@/components/ui/PinButton', () => ({
 }));
 
 // Mock ApiStatus components
-vi.mock('@/components/ApiStatus', () => ({
+vi.mock('@/components/layout/ApiStatus', () => ({
   LoadingSpinner: vi.fn(({ message }: { message: string }) => message),
   ErrorMessage: vi.fn(({ error }: { error: string }) => error),
 }));

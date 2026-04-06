@@ -32,7 +32,7 @@ import {
   groupNodesByTurn,
   type NodeWithHighlight,
 } from '@/components/leaf/highlightBuilder';
-import { TurnBubble } from '@/components/shared/TurnBubble';
+import { TurnBubble } from '@/components/source-context/TurnBubble';
 import { Button } from '@/components/ui/button';
 import type { Constraint, TurnContextData } from '@/lib/api';
 import * as api from '@/lib/api';

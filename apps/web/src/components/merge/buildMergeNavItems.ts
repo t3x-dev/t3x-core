@@ -4,6 +4,7 @@
  */
 
 import type { MergeResult } from '@t3x-dev/core';
+import { truncate } from '@/lib/truncate';
 import type { ExtendedResolutionData } from '@/store/mergeWorkspaceStore';
 import { isConflictResolved } from '@/store/mergeWorkspaceStore';
 
@@ -19,11 +20,6 @@ export interface MergeNavItem {
 }
 
 const MAX_LABEL_LENGTH = 50;
-
-function truncate(text: string): string {
-  if (text.length <= MAX_LABEL_LENGTH) return text;
-  return `${text.slice(0, MAX_LABEL_LENGTH - 1)}\u2026`;
-}
 
 export function buildMergeNavItems(
   prepared: MergeResult,
@@ -54,7 +50,7 @@ export function buildMergeNavItems(
     items.push({
       id: `conflict-${i}`,
       type: 'conflict',
-      label: truncate(conflict.path),
+      label: truncate(conflict.path, MAX_LABEL_LENGTH),
       status: resolved ? 'resolved' : 'unresolved',
       conflictIndex: i,
     });
@@ -67,7 +63,7 @@ export function buildMergeNavItems(
     items.push({
       id: `source-${i}`,
       type: 'source-only',
-      label: truncate(path),
+      label: truncate(path, MAX_LABEL_LENGTH),
       status: kept ? 'kept' : 'discarded',
     });
   }
@@ -79,7 +75,7 @@ export function buildMergeNavItems(
     items.push({
       id: `target-${i}`,
       type: 'target-only',
-      label: truncate(path),
+      label: truncate(path, MAX_LABEL_LENGTH),
       status: kept ? 'kept' : 'discarded',
     });
   }

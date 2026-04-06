@@ -14,7 +14,7 @@
 
 import { useState } from 'react';
 
-import { SourceContextView } from '@/components/shared/SourceContextView';
+import { SourceContextView } from '@/components/source-context/SourceContextView';
 import type { TurnContextData } from '@/types/merge';
 
 // Mock data for testing without API
