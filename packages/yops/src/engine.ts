@@ -12,6 +12,7 @@ import { yopsError, YOPS_ERRORS } from './errors';
 import { applyDefine, applyDrop, applyRename } from './ops/ddl';
 import { applySet, applyUnset, applyPopulate, applyAppend } from './ops/dml';
 import { applyMove, applyClone, applyNest, applySplit, applyFold, applyMerge, applySort, applyUnique, applyPick, applyOmit } from './ops/dtl';
+import { applyAssert } from './ops/dcl';
 
 export function applyYOps(doc: YValue, ops: YOp[]): YOpsResult {
   // Deep clone so the caller's document is never mutated
@@ -56,6 +57,8 @@ export function applyYOps(doc: YValue, ops: YOp[]): YOpsResult {
       result = applyPick(current, op.pick, i);
     } else if ('omit' in op) {
       result = applyOmit(current, op.omit, i);
+    } else if ('assert' in op) {
+      result = applyAssert(current, op.assert, i);
     } else {
       // Unknown op
       return {
