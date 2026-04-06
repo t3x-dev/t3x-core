@@ -44,3 +44,6 @@ export type { YOpCategory } from './classify';
 
 export { parseSpec } from './spec';
 export type { YOpsSpec, OpSpec, FieldSpec, TestCase } from './spec';
+
+export { OpRegistry } from './registry';
+export type { OpHandler, OpResult } from './registry';
