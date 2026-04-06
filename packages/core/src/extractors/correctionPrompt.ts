@@ -11,7 +11,7 @@
  */
 
 import type { GateViolation } from '../ops/gates/types';
-import type { YOp } from '../yops/types';
+import type { YOp } from '../t3x-yops/types';
 
 export interface CorrectionInput {
   /** The YOps that failed validation */

@@ -31,19 +31,13 @@ describe('parseYOpsOutput — YAML tree (first extraction)', () => {
     const defineOp = result.yops[0];
     expect('define' in defineOp).toBe(true);
     if (!('define' in defineOp)) return;
-    expect(defineOp.define.parent).toBe('');
-    expect(defineOp.define.key).toBe('trip');
+    expect(defineOp.define.path).toBe('trip');
 
     const populateOp = result.yops[1];
     expect('populate' in populateOp).toBe(true);
     if (!('populate' in populateOp)) return;
     expect(populateOp.populate.path).toBe('trip');
-    expect(populateOp.populate.from).toBe('T1');
-    expect(populateOp.populate.slots).toEqual({ destination: 'Hangzhou', budget: 2000 });
-    expect(populateOp.populate.source).toEqual({
-      destination: 'I want to go to Hangzhou',
-      budget: 'about 2000 yuan',
-    });
+    expect(populateOp.populate.values).toEqual({ destination: 'Hangzhou', budget: 2000 });
 
     // Tree structure
     expect(result.tree.key).toBe('trip');
@@ -67,14 +61,12 @@ describe('parseYOpsOutput — YAML tree (first extraction)', () => {
     const defineOp = result.yops[0];
     expect('define' in defineOp).toBe(true);
     if (!('define' in defineOp)) return;
-    expect(defineOp.define.parent).toBe('');
-    expect(defineOp.define.key).toBe('project');
+    expect(defineOp.define.path).toBe('project');
 
     const populateOp = result.yops[1];
     expect('populate' in populateOp).toBe(true);
     if (!('populate' in populateOp)) return;
-    expect(populateOp.populate.from).toBe('T1'); // default when no source_map
-    expect(populateOp.populate.slots).toEqual({ name: 'T3X', status: 'active' });
+    expect(populateOp.populate.values).toEqual({ name: 'T3X', status: 'active' });
   });
 
   it('handles nested children in YAML tree', () => {
@@ -143,8 +135,6 @@ describe('parseYOpsOutput — yops list (incremental)', () => {
   - set:
       path: trip/budget
       value: 2000
-      source: "budget is 2000"
-      from: T3
   - drop:
       path: trip/old_plan`;
 
@@ -160,7 +150,6 @@ describe('parseYOpsOutput — yops list (incremental)', () => {
     if ('set' in first) {
       expect(first.set.path).toBe('trip/budget');
       expect(first.set.value).toBe(2000);
-      expect(first.set.from).toBe('T3');
     }
 
     const second = result.yops[1];
@@ -173,15 +162,11 @@ describe('parseYOpsOutput — yops list (incremental)', () => {
   it('parses define + populate operations', () => {
     const raw = `yops:
   - define:
-      parent: trip
-      key: dining
+      path: trip/dining
   - populate:
       path: trip/dining
-      slots:
-        cuisine: sushi
-      source:
-        cuisine: "wants sushi"
-      from: T2`;
+      values:
+        cuisine: sushi`;
 
     const result = parseYOpsOutput(raw);
     expect(result.ok).toBe(true);
@@ -193,16 +178,14 @@ describe('parseYOpsOutput — yops list (incremental)', () => {
     const defineOp = result.yops[0];
     expect('define' in defineOp).toBe(true);
     if ('define' in defineOp) {
-      expect(defineOp.define.parent).toBe('trip');
-      expect(defineOp.define.key).toBe('dining');
+      expect(defineOp.define.path).toBe('trip/dining');
     }
 
     const populateOp = result.yops[1];
     expect('populate' in populateOp).toBe(true);
     if ('populate' in populateOp) {
       expect(populateOp.populate.path).toBe('trip/dining');
-      expect(populateOp.populate.slots).toEqual({ cuisine: 'sushi' });
-      expect(populateOp.populate.from).toBe('T2');
+      expect(populateOp.populate.values).toEqual({ cuisine: 'sushi' });
     }
   });
 
@@ -218,7 +201,7 @@ describe('parseYOpsOutput — yops list (incremental)', () => {
   });
 
   it('strips markdown fences', () => {
-    const raw = '```yaml\nyops:\n  - set:\n      path: trip/budget\n      value: 3000\n      source: "updated budget"\n      from: T4\n```';
+    const raw = '```yaml\nyops:\n  - set:\n      path: trip/budget\n      value: 3000\n```';
 
     const result = parseYOpsOutput(raw);
     expect(result.ok).toBe(true);
@@ -233,7 +216,7 @@ describe('parseYOpsOutput — yops list (incremental)', () => {
   - set:
       path: trip/budget`;
 
-    // Missing required fields: value, source, from — op is skipped, parse succeeds
+    // Missing required field: value — op is skipped, parse succeeds
     const result = parseYOpsOutput(raw);
     expect(result.ok).toBe(true);
     if (result.ok) {
@@ -277,14 +260,14 @@ describe('parseYOpsOutput — all 13 op types', () => {
   it('parses move op', () => {
     const raw = `yops:
   - move:
-      path: hotel
+      from: hotel
       to: trip/hotel`;
     const result = parseYOpsOutput(raw);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect('move' in result.yops[0]).toBe(true);
     if ('move' in result.yops[0]) {
-      expect(result.yops[0].move.path).toBe('hotel');
+      expect(result.yops[0].move.from).toBe('hotel');
       expect(result.yops[0].move.to).toBe('trip/hotel');
     }
   });
@@ -292,22 +275,23 @@ describe('parseYOpsOutput — all 13 op types', () => {
   it('parses clone op', () => {
     const raw = `yops:
   - clone:
-      path: trip_plan
-      to: ""`;
+      from: trip_plan
+      to: trip_plan_copy`;
     const result = parseYOpsOutput(raw);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect('clone' in result.yops[0]).toBe(true);
     if ('clone' in result.yops[0]) {
-      expect(result.yops[0].clone.path).toBe('trip_plan');
-      expect(result.yops[0].clone.to).toBe('');
+      expect(result.yops[0].clone.from).toBe('trip_plan');
+      expect(result.yops[0].clone.to).toBe('trip_plan_copy');
     }
   });
 
   it('parses nest op', () => {
     const raw = `yops:
   - nest:
-      paths:
+      path: trip
+      keys:
         - flight
         - hotel
       under: logistics`;
@@ -316,7 +300,7 @@ describe('parseYOpsOutput — all 13 op types', () => {
     if (!result.ok) return;
     expect('nest' in result.yops[0]).toBe(true);
     if ('nest' in result.yops[0]) {
-      expect(result.yops[0].nest.paths).toEqual(['flight', 'hotel']);
+      expect(result.yops[0].nest.keys).toEqual(['flight', 'hotel']);
       expect(result.yops[0].nest.under).toBe('logistics');
     }
   });
@@ -360,7 +344,8 @@ describe('parseYOpsOutput — all 13 op types', () => {
   it('parses merge op', () => {
     const raw = `yops:
   - merge:
-      paths:
+      path: trip
+      keys:
         - hotel_a
         - hotel_b
       into: accommodation`;
@@ -369,7 +354,7 @@ describe('parseYOpsOutput — all 13 op types', () => {
     if (!result.ok) return;
     expect('merge' in result.yops[0]).toBe(true);
     if ('merge' in result.yops[0]) {
-      expect(result.yops[0].merge.paths).toEqual(['hotel_a', 'hotel_b']);
+      expect(result.yops[0].merge.keys).toEqual(['hotel_a', 'hotel_b']);
       expect(result.yops[0].merge.into).toBe('accommodation');
     }
   });
@@ -411,25 +396,18 @@ describe('parseYOpsOutput — all 13 op types', () => {
   it('parses mixed batch with all content ops', () => {
     const raw = `yops:
   - define:
-      parent: ""
-      key: trip
+      path: trip
   - populate:
       path: trip
-      slots:
+      values:
         budget: 5000
-      source:
-        budget: "about 5k"
-      from: T1
   - set:
       path: trip/style
       value: casual
-      source: "casual vibe"
-      from: T2
   - unset:
       path: trip/budget
   - drop:
       path: trip
-      reason: changed mind
   - rename:
       path: hotel
       to: accommodation

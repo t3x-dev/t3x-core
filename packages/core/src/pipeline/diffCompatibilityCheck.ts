@@ -14,8 +14,8 @@
 
 import type { SemanticContent } from '../semantic/types';
 import { validateIntegrity } from '../semantic/validate';
-import { applyYOps } from '../yops/engine';
-import type { YOp } from '../yops/types';
+import { applyYOps } from '../t3x-yops/engine';
+import type { YOp } from '../t3x-yops/types';
 
 export interface DiffCheckResult {
   compatible: boolean;

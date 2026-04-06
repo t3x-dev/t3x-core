@@ -7,7 +7,7 @@
 
 import type { LLMProvider } from '../llm/types';
 import type { SemanticContent } from '../semantic/types';
-import type { YOp } from '../yops/types';
+import type { YOp } from '../t3x-yops/types';
 import type { ExtractionStyleConfig } from './extractionStyleConfig';
 import type { ExtractionStrategy } from './strategies/types';
 import { YamlExtractionStrategy } from './strategies/yaml-strategy';

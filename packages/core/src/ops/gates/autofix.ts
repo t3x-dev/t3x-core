@@ -17,7 +17,7 @@
  */
 
 import type { TreeNode } from '../../semantic/types';
-import type { YOp } from '../../yops/types';
+import type { YOp } from '../../t3x-yops/types';
 
 export interface AutoFixResult {
   fixed: YOp;
@@ -74,16 +74,16 @@ function resolvePath(partialPath: string, allPaths: Array<{ path: string }>): st
 // ── Schema Fixes ──
 
 const FIELDS_ALLOWED: Record<string, string[]> = {
-  define: ['parent', 'key'],
+  define: ['path'],
   unset: ['path'],
-  drop: ['path', 'reason'],
+  drop: ['path'],
   rename: ['path', 'to'],
-  clone: ['path', 'to'],
-  move: ['path', 'to'],
+  clone: ['from', 'to'],
+  move: ['from', 'to'],
   fold: ['path'],
-  nest: ['paths', 'under'],
+  nest: ['path', 'keys', 'under'],
   split: ['path', 'into'],
-  merge: ['paths', 'into'],
+  merge: ['path', 'keys', 'into'],
 };
 
 const OP_TYPES = ['set', 'unset', 'define', 'populate', 'drop', 'rename', 'clone', 'move', 'nest', 'split', 'fold', 'merge', 'relate', 'unrelate'];
@@ -104,7 +104,7 @@ function fixSchema(opType: string, data: Record<string, unknown>, fixes: string[
   }
 
   // Replace . with / in paths
-  for (const field of ['path', 'to', 'parent']) {
+  for (const field of ['path', 'to', 'from']) {
     if (field in data && typeof data[field] === 'string' && (data[field] as string).includes('.')) {
       data[field] = (data[field] as string).replace(/\./g, '/');
       fixes.push(`replaced . with / in ${field}`);
@@ -137,14 +137,14 @@ function fixPaths(opType: string, data: Record<string, unknown>, allPaths: Array
       }
     }
   } else if (opType === 'define') {
-    // define has parent field — resolve as node path
-    if ('parent' in data && typeof data.parent === 'string') {
-      const partial = data.parent as string;
-      if (partial !== '') { // empty parent is valid (root-level define)
+    // define has path field — resolve as full node path
+    if ('path' in data && typeof data.path === 'string') {
+      const partial = data.path as string;
+      if (partial !== '') {
         const resolved = resolvePath(partial, allPaths);
         if (resolved && resolved !== partial) {
-          data.parent = resolved;
-          fixes.push(`resolved parent: "${partial}" → "${resolved}"`);
+          data.path = resolved;
+          fixes.push(`resolved path: "${partial}" → "${resolved}"`);
         }
       }
     }

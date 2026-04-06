@@ -38,7 +38,7 @@ describe('commandStore', () => {
 
   it('execute applies ops, pushes to undoStack, clears redoStack', () => {
     useCommandStore.getState().execute([
-      { set: { path: 'trip/budget', value: '2000', source: '', from: '' } },
+      { set: { path: 'trip/budget', value: '2000' } },
     ]);
 
     expect(useDraftStore.getState().draft.trees[0].slots.budget).toBe('2000');
@@ -48,7 +48,7 @@ describe('commandStore', () => {
 
   it('execute tracks pendingOps', () => {
     useCommandStore.getState().execute([
-      { set: { path: 'trip/budget', value: '2000', source: '', from: '' } },
+      { set: { path: 'trip/budget', value: '2000' } },
     ]);
 
     expect(useCommandStore.getState().pendingOps).toHaveLength(1);
@@ -57,7 +57,7 @@ describe('commandStore', () => {
 
   it('undo restores previous state', () => {
     useCommandStore.getState().execute([
-      { set: { path: 'trip/budget', value: '2000', source: '', from: '' } },
+      { set: { path: 'trip/budget', value: '2000' } },
     ]);
     expect(useDraftStore.getState().draft.trees[0].slots.budget).toBe('2000');
 
@@ -69,7 +69,7 @@ describe('commandStore', () => {
 
   it('redo re-applies undone operation', () => {
     useCommandStore.getState().execute([
-      { set: { path: 'trip/budget', value: '2000', source: '', from: '' } },
+      { set: { path: 'trip/budget', value: '2000' } },
     ]);
     useCommandStore.getState().undo();
     useCommandStore.getState().redo();
@@ -81,12 +81,12 @@ describe('commandStore', () => {
 
   it('new execute after undo clears redoStack', () => {
     useCommandStore.getState().execute([
-      { set: { path: 'trip/budget', value: '2000', source: '', from: '' } },
+      { set: { path: 'trip/budget', value: '2000' } },
     ]);
     useCommandStore.getState().undo();
 
     useCommandStore.getState().execute([
-      { set: { path: 'trip/budget', value: '3000', source: '', from: '' } },
+      { set: { path: 'trip/budget', value: '3000' } },
     ]);
 
     expect(useCommandStore.getState().redoStack).toHaveLength(0);
@@ -96,7 +96,7 @@ describe('commandStore', () => {
   it('pendingSummary counts edits/deletes/adds', () => {
     // Edit existing slot
     useCommandStore.getState().execute([
-      { set: { path: 'trip/budget', value: '2000', source: '', from: '' } },
+      { set: { path: 'trip/budget', value: '2000' } },
     ]);
     // Delete slot
     useCommandStore.getState().execute([
@@ -104,7 +104,7 @@ describe('commandStore', () => {
     ]);
     // Add new node
     useCommandStore.getState().execute([
-      { define: { parent: '', key: 'hotel' } },
+      { define: { path: 'hotel' } },
     ]);
 
     const summary = useCommandStore.getState().pendingSummary;
@@ -116,7 +116,7 @@ describe('commandStore', () => {
 
   it('clearPending resets all stacks', () => {
     useCommandStore.getState().execute([
-      { set: { path: 'trip/budget', value: '2000', source: '', from: '' } },
+      { set: { path: 'trip/budget', value: '2000' } },
     ]);
     useCommandStore.getState().clearPending();
 
@@ -128,7 +128,7 @@ describe('commandStore', () => {
 
   it('undo removes ops from pendingOps', () => {
     useCommandStore.getState().execute([
-      { set: { path: 'trip/budget', value: '2000', source: '', from: '' } },
+      { set: { path: 'trip/budget', value: '2000' } },
     ]);
     expect(useCommandStore.getState().pendingOps).toHaveLength(1);
 

@@ -18,8 +18,8 @@
 import type { FlatNode, SemanticContent } from '../semantic/types';
 import { flattenTrees } from '../semantic/tree';
 import { validateIntegrity } from '../semantic/validate';
-import { applyYOps } from '../yops/engine';
-import type { YOp } from '../yops/types';
+import { applyYOps } from '../t3x-yops/engine';
+import type { YOp } from '../t3x-yops/types';
 import type { UserAnswer } from './types';
 
 // ── Result types ──
@@ -56,7 +56,7 @@ export function applyVaguenessAnswer(
     typeof newValue === 'string' || typeof newValue === 'number' ? newValue : String(newValue);
 
   const yops: YOp[] = [
-    { set: { path: `${nodeId}/${slotKey}`, value: resolvedValue, source: String(newValue), from: 'user' } },
+    { set: { path: `${nodeId}/${slotKey}`, value: resolvedValue } },
   ];
 
   return applyAndValidate(snapshot, yops);
@@ -104,7 +104,7 @@ export function applyStructuralAnswer(
  * Drops all root trees from the snapshot.
  */
 export function generateCollapseYOps(snapshot: SemanticContent): YOp[] {
-  return snapshot.trees.map((tree): YOp => ({ drop: { path: tree.key, reason: 'drift collapse' } }));
+  return snapshot.trees.map((tree): YOp => ({ drop: { path: tree.key } }));
 }
 
 // ── Dispatch answer ──

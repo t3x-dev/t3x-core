@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { runGates } from '../../ops/gates/runner';
-import type { YOp } from '../../yops/types';
+import type { YOp } from '../../t3x-yops/types';
 import type { SemanticContent } from '../../semantic/types';
 
 const turns = [
@@ -11,8 +11,8 @@ const turns = [
 describe('runGates', () => {
   it('returns clean report for valid yops and snapshot', () => {
     const yops: YOp[] = [
-      { define: { parent: '', key: 'trip' } },
-      { populate: { path: 'trip', slots: { dest: 'Tokyo' }, source: { dest: 'go to Tokyo' }, from: 'T1' } },
+      { define: { path: 'trip' } },
+      { populate: { path: 'trip', values: { dest: 'Tokyo' } } },
     ];
     const snapshot: SemanticContent = {
       trees: [{ key: 'trip', slots: { dest: 'Tokyo' }, children: [] }],
@@ -26,28 +26,29 @@ describe('runGates', () => {
     expect(report.rejectedOpIndices).toHaveLength(0);
   });
 
-  it('collects rejected op indices from all gates', () => {
+  it('collects rejected op indices from dedup gate', () => {
     const yops: YOp[] = [
-      { set: { path: 'trip/x', value: 1, source: 'x', from: 'T99' } }, // bad turn ref → rejected
-      { define: { parent: '', key: 'trip' } },
-      { define: { parent: '', key: 'trip' } }, // dup → rejected
+      { set: { path: 'trip/x', value: 1 } },
+      { define: { path: 'trip' } },
+      { define: { path: 'trip' } }, // dup → rejected
     ];
     const snapshot: SemanticContent = { trees: [], relations: [] };
 
     const report = runGates(yops, snapshot, turns);
-    expect(report.rejectedOpIndices).toContain(0); // bad turn ref
     expect(report.rejectedOpIndices).toContain(2); // dup define
+    expect(report.rejectedOpIndices).not.toContain(0); // valid
     expect(report.rejectedOpIndices).not.toContain(1); // valid
   });
 
   it('aggregates allViolations from all gates', () => {
     const yops: YOp[] = [
-      { set: { path: 'trip/x', value: 1, source: 'x', from: 'T99' } },
+      { define: { path: 'trip' } },
+      { define: { path: 'trip' } }, // dup
     ];
     const snapshot: SemanticContent = { trees: [], relations: [] };
 
     const report = runGates(yops, snapshot, turns);
     expect(report.allViolations.length).toBeGreaterThan(0);
-    expect(report.allViolations[0].gate).toBe('source');
+    expect(report.allViolations[0].gate).toBe('dedup');
   });
 });

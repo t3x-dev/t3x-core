@@ -56,7 +56,7 @@ describe('parseDisplayYAML', () => {
     expect(ops.length).toBe(2);
     expect('define' in ops[0]).toBe(true);
     if ('define' in ops[0]) {
-      expect(ops[0].define.key).toBe('new_node');
+      expect(ops[0].define.path).toBe('new_node');
     }
     expect('populate' in ops[1]).toBe(true);
   });

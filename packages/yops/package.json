@@ -1,5 +1,5 @@
 {
-  "name": "@yops-dev/core",
+  "name": "@t3x-dev/yops",
   "version": "0.1.0",
   "description": "Declarative YAML operations — 18 atomic ops for any YAML document",
   "license": "Apache-2.0",
@@ -30,7 +30,8 @@
   "keywords": ["yaml", "operations", "declarative", "atomic", "patch"],
   "repository": {
     "type": "git",
-    "url": "https://github.com/yops-dev/core.git"
+    "url": "https://github.com/t3x-dev/t3x-core.git",
+    "directory": "packages/yops"
   },
   "publishConfig": {
     "access": "public"

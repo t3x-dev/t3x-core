@@ -7,7 +7,7 @@
  * Pre-apply gate: operates on raw YOp[] before they're applied to the tree.
  */
 
-import type { YOp } from '../../yops/types';
+import type { YOp } from '../../t3x-yops/types';
 import type { GateResult, GateViolation } from './types';
 
 const TOKEN_OVERLAP_THRESHOLD = 0.5;
@@ -39,13 +39,14 @@ function quoteMatchesTurns(quote: string, turnContents: string[]): boolean {
   return false;
 }
 
-/** Extract source and from fields from a YOp (if present) */
+/** Extract source and from fields from a YOp (if present).
+ *  Since the migration to @t3x-dev/yops generic types, ops no longer carry
+ *  source/from metadata — so this always returns null. Gate is kept for
+ *  backward compatibility but is effectively a no-op. */
 function getSourceFields(
-  op: YOp
+  _op: YOp
 ): { source?: string | Record<string, string>; from?: string } | null {
-  if ('set' in op) return { source: op.set.source, from: op.set.from };
-  if ('populate' in op) return { source: op.populate.source, from: op.populate.from };
-  return null; // define, unset, drop, rename, clone, move, nest, split, fold, merge, relate, unrelate
+  return null;
 }
 
 export function validateSources(

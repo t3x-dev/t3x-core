@@ -80,14 +80,14 @@ function buildChangeMap(
       map[nodeKey][slotKey] = { type: 'deleted' };
     } else if ('define' in op) {
       // New node defined — no slots yet, just mark the node key
-      const nk = op.define.key;
+      const nk = op.define.path.split('/')[0] ?? op.define.path;
       if (!map[nk]) map[nk] = {};
     } else if ('populate' in op) {
       // Slots populated on a node — mark each slot as added
       const slashIdx = op.populate.path.indexOf('/');
       const nk = slashIdx === -1 ? op.populate.path : op.populate.path.slice(0, slashIdx);
       if (!map[nk]) map[nk] = {};
-      for (const sk of Object.keys(op.populate.slots)) {
+      for (const sk of Object.keys(op.populate.values)) {
         map[nk][sk] = { type: 'added' };
       }
     }

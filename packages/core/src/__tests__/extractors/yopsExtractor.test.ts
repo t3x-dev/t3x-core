@@ -30,7 +30,7 @@ describe('Extractor with YOps', () => {
   });
 
   it('incremental returns yops', async () => {
-    const raw = `yops:\n  - set:\n      path: trip/budget\n      value: 2000\n      source: "do 2000"\n      from: T1`;
+    const raw = `yops:\n  - set:\n      path: trip/budget\n      value: 2000`;
     const snapshot: SemanticContent = { trees: [t('trip', { budget: 1000 })], relations: [] };
     const extractor = new Extractor(mockProvider(raw));
     const result = await extractor.extract({

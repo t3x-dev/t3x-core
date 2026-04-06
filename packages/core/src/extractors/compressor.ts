@@ -5,7 +5,7 @@
  */
 
 import type { LLMProvider } from '../llm/types';
-import type { YOp } from '../yops/types';
+import type { YOp } from '../t3x-yops/types';
 import type { CompressInput } from './compressPrompt';
 import { buildCompressPrompt } from './compressPrompt';
 
@@ -83,7 +83,6 @@ export class Compressor {
         yops.push({
           drop: {
             path: change.target as string,
-            reason: (change.reason as string) ?? 'compressed',
           },
         });
       } else if (change.action === 'update') {
@@ -95,8 +94,6 @@ export class Compressor {
               set: {
                 path: `${target}/${key}`,
                 value: value as string | number | boolean,
-                source: 'compress',
-                from: 'system',
               },
             });
           }
