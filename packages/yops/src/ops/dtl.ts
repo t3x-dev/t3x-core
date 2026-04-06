@@ -121,6 +121,19 @@ export function applyNest(doc: YValue, op: NestOp, index: number): OpResult {
     }
   }
 
+  // Check wrapper key doesn't already exist (unless it's one of the keys being nested)
+  const keysSet = new Set(keys);
+  if (under in targetMap && !keysSet.has(under)) {
+    return {
+      doc,
+      error: yopsError(
+        YOPS_ERRORS.ALREADY_EXISTS,
+        `Key "${under}" already exists in mapping at "${path}"`,
+        index,
+      ),
+    };
+  }
+
   // Build the nested object from listed keys
   const nested: { [key: string]: YValue } = {};
   for (const key of keys) {
@@ -174,8 +187,20 @@ export function applySplit(doc: YValue, op: SplitOp, index: number): OpResult {
     }
   }
 
-  // Collect all keys that will be moved
+  // Check group names don't collide with existing keys not being moved
   const allMovedKeys = new Set(Object.values(into).flat());
+  for (const groupName of Object.keys(into)) {
+    if (groupName in targetMap && !allMovedKeys.has(groupName)) {
+      return {
+        doc,
+        error: yopsError(
+          YOPS_ERRORS.ALREADY_EXISTS,
+          `Group name "${groupName}" already exists in mapping at "${path}"`,
+          index,
+        ),
+      };
+    }
+  }
 
   // Deep clone doc, create child mappings, delete originals
   let cloned = deepClone(doc);
@@ -291,13 +316,26 @@ export function applyMerge(doc: YValue, op: MergeOp, index: number): OpResult {
     }
   }
 
+  // Verify all values are mappings
+  for (const key of keys) {
+    const val = targetMap[key];
+    if (val === null || typeof val !== 'object' || Array.isArray(val)) {
+      return {
+        doc,
+        error: yopsError(
+          YOPS_ERRORS.NOT_A_MAPPING,
+          `Key "${key}" in "${path}" is not a mapping`,
+          index,
+        ),
+      };
+    }
+  }
+
   // Merge all mappings — last wins on key conflicts
   const merged: { [key: string]: YValue } = {};
   for (const key of keys) {
     const val = targetMap[key];
-    if (val !== null && typeof val === 'object' && !Array.isArray(val)) {
-      Object.assign(merged, deepClone(val));
-    }
+    Object.assign(merged, deepClone(val as { [k: string]: YValue }));
   }
 
   // Deep clone doc, delete original keys, set merged

@@ -11,6 +11,25 @@
 
 import type { YValue } from './types';
 
+/** Compare a match segment's string value against a YAML value with type coercion.
+ *  `[id=1]` matches both `{ id: "1" }` and `{ id: 1 }`. */
+function matchEquals(actual: YValue, expected: string): boolean {
+  if (actual === expected) return true;
+  if (typeof actual === 'number' && String(actual) === expected) return true;
+  if (typeof actual === 'boolean' && String(actual) === expected) return true;
+  return false;
+}
+
+/** Predicate: does this array item match a key-match segment? */
+function itemMatchesSeg(item: YValue, seg: { key: string; value: string }): boolean {
+  return (
+    item !== null &&
+    typeof item === 'object' &&
+    !Array.isArray(item) &&
+    matchEquals((item as { [key: string]: YValue })[seg.key], seg.value)
+  );
+}
+
 // ── Types ──────────────────────────────────────────────────────────────────
 
 export type PathSegment =
@@ -91,13 +110,7 @@ export function resolvePath(doc: YValue, path: string): YValue | undefined {
     } else {
       // match
       if (!Array.isArray(current)) return undefined;
-      const found = current.find(
-        (item) =>
-          item !== null &&
-          typeof item === 'object' &&
-          !Array.isArray(item) &&
-          (item as { [key: string]: YValue })[seg.key] === seg.value,
-      );
+      const found = current.find((item) => itemMatchesSeg(item, seg));
       if (found === undefined) return undefined;
       current = found;
     }
@@ -155,13 +168,7 @@ function _setRecursive(current: YValue, segments: PathSegment[], idx: number, va
     if (!Array.isArray(current)) {
       throw new Error(`Cannot use key-match on non-array value`);
     }
-    const matchIdx = current.findIndex(
-      (item) =>
-        item !== null &&
-        typeof item === 'object' &&
-        !Array.isArray(item) &&
-        (item as { [key: string]: YValue })[seg.key] === seg.value,
-    );
+    const matchIdx = current.findIndex((item) => itemMatchesSeg(item, seg));
     if (matchIdx === -1) {
       throw new Error(`No item found where ${seg.key}=${seg.value}`);
     }
@@ -223,13 +230,7 @@ function _deleteRecursive(current: YValue, segments: PathSegment[], idx: number)
   } else {
     // match
     if (!Array.isArray(current)) return false;
-    const matchIdx = current.findIndex(
-      (item) =>
-        item !== null &&
-        typeof item === 'object' &&
-        !Array.isArray(item) &&
-        (item as { [key: string]: YValue })[seg.key] === seg.value,
-    );
+    const matchIdx = current.findIndex((item) => itemMatchesSeg(item, seg));
     if (matchIdx === -1) return false;
     if (isLast) {
       current.splice(matchIdx, 1);

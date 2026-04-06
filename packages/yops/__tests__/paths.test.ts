@@ -93,6 +93,17 @@ describe('resolvePath', () => {
     expect(resolvePath(doc, 'items/[99]')).toBeUndefined();
   });
 
+  it('key match with numeric coercion', () => {
+    const numDoc: YValue = { items: [{ id: 1, name: 'first' }, { id: 2, name: 'second' }] };
+    expect(resolvePath(numDoc, 'items/[id=1]/name')).toBe('first');
+    expect(resolvePath(numDoc, 'items/[id=2]/name')).toBe('second');
+  });
+
+  it('key match with boolean coercion', () => {
+    const boolDoc: YValue = { flags: [{ name: 'debug', enabled: true }] };
+    expect(resolvePath(boolDoc, 'flags/[enabled=true]/name')).toBe('debug');
+  });
+
   it('key access on non-mapping returns undefined', () => {
     expect(resolvePath(doc, 'items/foo')).toBeUndefined();
   });

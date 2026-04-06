@@ -516,3 +516,38 @@ describe('omit', () => {
     expect(result.error?.op_index).toBe(0);
   });
 });
+
+// ── Review fix: edge cases ───────────────────────────────────────────────────
+
+describe('nest — ALREADY_EXISTS guard', () => {
+  it('errors if wrapper key already exists', () => {
+    const doc: YValue = { config: { host: 'x', port: 5432, database: {} } };
+    const result = applyYOps(doc, [{
+      nest: { path: 'config', keys: ['host', 'port'], under: 'database' },
+    }]);
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe('ALREADY_EXISTS');
+  });
+});
+
+describe('split — ALREADY_EXISTS guard', () => {
+  it('errors if group name already exists as a non-moved key', () => {
+    const doc: YValue = { config: { host: 'x', port: 5432, db: 'existing' } };
+    const result = applyYOps(doc, [{
+      split: { path: 'config', into: { db: ['host', 'port'] } },
+    }]);
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe('ALREADY_EXISTS');
+  });
+});
+
+describe('merge — NOT_A_MAPPING guard', () => {
+  it('errors if a listed key is not a mapping', () => {
+    const doc: YValue = { config: { a: { x: 1 }, b: 'scalar' } };
+    const result = applyYOps(doc, [{
+      merge: { path: 'config', keys: ['a', 'b'], into: 'merged' },
+    }]);
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe('NOT_A_MAPPING');
+  });
+});
