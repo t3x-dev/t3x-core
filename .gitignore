@@ -84,5 +84,7 @@ next-env.d.ts
 scratchpad/
 preview/
 docs/
+specs/
+.claude/
 .gitmodules
 
