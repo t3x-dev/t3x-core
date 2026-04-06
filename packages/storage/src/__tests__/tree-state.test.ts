@@ -110,7 +110,6 @@ describe('Tree State Queries', () => {
       fromTreeId: 'f_001',
       toTreeId: 'f_003',
       type: 'elaborates',
-      confidence: 0.9,
     });
     const rels = await listTreeRelationsByConversation(db, conversationId);
     expect(rels.length).toBe(1);

@@ -84,11 +84,9 @@ export function AutopilotSettings({ projectId }: { projectId: string }) {
 
   const handleApplyAdaptive = useCallback(async () => {
     if (!adaptiveResult?.adaptive || !config) return;
-    const delta = adaptiveResult.adaptive.cosineThresholdDelta;
-    const newConfidence = Math.max(0, Math.min(1, config.min_confidence + delta));
-    const rounded = Math.round(newConfidence * 20) / 20; // round to nearest 0.05
-    handleChange('min_confidence', rounded);
-  }, [adaptiveResult, config, handleChange]);
+    // Apply adaptive suggestions (cosine threshold delta)
+    // Future: implement specific adaptive actions
+  }, [adaptiveResult, config]);
 
   if (loading) {
     return (
@@ -114,7 +112,7 @@ export function AutopilotSettings({ projectId }: { projectId: string }) {
         <label htmlFor="autopilot-enabled" className="flex flex-col gap-1">
           <span className="text-sm font-medium text-[var(--text-primary)]">Enable Autopilot</span>
           <span className="text-xs text-[var(--text-tertiary)]">
-            Automatically commit knowledge when confidence thresholds are met
+            Automatically commit knowledge when thresholds are met
           </span>
         </label>
         <Switch
@@ -122,32 +120,6 @@ export function AutopilotSettings({ projectId }: { projectId: string }) {
           checked={config.enabled}
           onCheckedChange={(v) => handleChange('enabled', v)}
         />
-      </div>
-
-      {/* Min Confidence slider */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <Label className="text-sm text-[var(--text-primary)]">Minimum Confidence</Label>
-          <span className="text-sm font-mono text-[var(--text-secondary)]">
-            {config.min_confidence.toFixed(2)}
-          </span>
-        </div>
-        <input
-          type="range"
-          min={0}
-          max={1}
-          step={0.05}
-          value={config.min_confidence}
-          onChange={(e) => handleChange('min_confidence', Number(e.target.value))}
-          className={cn(
-            'w-full h-2 rounded-lg appearance-none cursor-pointer',
-            'bg-[var(--surface-app)] accent-[var(--accent-blue)]'
-          )}
-        />
-        <div className="flex justify-between text-xs text-[var(--text-tertiary)]">
-          <span>0</span>
-          <span>1</span>
-        </div>
       </div>
 
       {/* Min Nodes */}
@@ -218,7 +190,7 @@ export function AutopilotSettings({ projectId }: { projectId: string }) {
                 const editRate =
                   totalCount > 0 ? ((stats?.edited as number) ?? 0) / totalCount : null;
                 const byType = (stats?.by_type as Record<string, { accept_rate?: number }>) ?? {};
-                const { suppressedTypes, confidenceMultipliers, cosineThresholdDelta } =
+                const { suppressedTypes, cosineThresholdDelta } =
                   adaptiveResult.adaptive;
 
                 return (
@@ -255,59 +227,13 @@ export function AutopilotSettings({ projectId }: { projectId: string }) {
                       </div>
                     )}
 
-                    {/* Confidence multipliers with acceptance rate bars */}
-                    {Object.keys(confidenceMultipliers).length > 0 && (
-                      <div className="space-y-1.5">
-                        <span className="text-xs text-[var(--text-tertiary)]">
-                          Confidence multipliers:
-                        </span>
-                        {Object.entries(confidenceMultipliers).map(([key, multiplier]) => {
-                          const isSuppressed = suppressedTypes.includes(key);
-                          const acceptRate = byType[key]?.accept_rate ?? null;
-                          const barColor =
-                            acceptRate == null
-                              ? 'bg-[var(--text-tertiary)]'
-                              : acceptRate >= 0.8
-                                ? 'bg-emerald-500'
-                                : acceptRate >= 0.5
-                                  ? 'bg-amber-500'
-                                  : 'bg-red-500';
-
-                          return (
-                            <div key={key} className="flex items-center gap-2 text-xs">
-                              <span className="w-24 font-mono text-[var(--text-secondary)] truncate">
-                                {key}
-                              </span>
-                              <span className="w-8 font-mono text-right text-[var(--text-primary)]">
-                                {isSuppressed ? 'off' : multiplier.toFixed(1)}
-                              </span>
-                              <div className="flex-1 h-1.5 bg-[var(--surface-app)] rounded-full overflow-hidden">
-                                <div
-                                  className={cn('h-full rounded-full', barColor)}
-                                  style={{
-                                    width: `${acceptRate != null ? Math.round(acceptRate * 100) : 0}%`,
-                                  }}
-                                />
-                              </div>
-                              {acceptRate != null && (
-                                <span className="w-10 text-right text-[var(--text-tertiary)]">
-                                  {Math.round(acceptRate * 100)}%
-                                </span>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-
                     <Button variant="outline" size="sm" onClick={handleApplyAdaptive}>
                       Apply Suggestions
                     </Button>
 
                     {/* Rule explanation */}
                     <p className="text-xs text-[var(--text-tertiary)] mt-2">
-                      Types with accept rate below 50% and 20+ samples are disabled. Accept rate
-                      50-70% reduces confidence to 0.7.
+                      Types with accept rate below 50% and 20+ samples are disabled.
                     </p>
                   </div>
                 );

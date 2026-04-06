@@ -568,7 +568,6 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
       action TEXT NOT NULL,
       original_text TEXT,
       inference_type TEXT,
-      confidence REAL,
       zone TEXT,
       low_coverage BOOLEAN DEFAULT FALSE,
       edited_text TEXT,
@@ -689,7 +688,6 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
       source_id TEXT NOT NULL,
       target_id TEXT NOT NULL,
       type TEXT NOT NULL,
-      confidence REAL NOT NULL,
       reasoning TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
@@ -905,7 +903,6 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
       type TEXT NOT NULL,
       slots JSONB NOT NULL,
       status TEXT NOT NULL DEFAULT 'active',
-      confidence REAL,
       source TEXT NOT NULL,
       slot_quotes JSONB,
       slot_sources JSONB,
@@ -926,7 +923,6 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
       from_tree_id TEXT NOT NULL,
       to_tree_id TEXT NOT NULL,
       type TEXT NOT NULL,
-      confidence REAL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
     CREATE INDEX IF NOT EXISTS idx_trel_conversation ON tree_relations(conversation_id);

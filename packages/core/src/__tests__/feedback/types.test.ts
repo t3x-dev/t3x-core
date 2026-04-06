@@ -9,7 +9,6 @@ describe('Feedback types', () => {
       signal: 'Output must include exact text: "hello"',
       constraint_id: 'cst_xyz',
       leaf_id: 'leaf_abc',
-      confidence: 0.9,
       created_at: '2026-03-31T00:00:00.000Z',
     };
     expect(lesson.source).toBe('assertion');
@@ -22,7 +21,6 @@ describe('Feedback types', () => {
       source: 'edit',
       signal: 'Prefer casual tone',
       leaf_id: 'leaf_abc',
-      confidence: 0.7,
       created_at: '2026-03-31T00:00:00.000Z',
     };
     expect(lesson.constraint_id).toBeUndefined();

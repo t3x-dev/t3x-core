@@ -242,7 +242,7 @@ export function CommitSourceContent({ commit }: { commit: CommitDisplay }) {
   const nodes = commit.content?.trees
     ? (() => {
         type TreeNodeLike = import('@t3x-dev/core').TreeNode;
-        const entries: Array<{ id: string; text: string; confidence: number; source_ref?: { turn_hash?: string; start_char?: number; end_char?: number } }> = [];
+        const entries: Array<{ id: string; text: string; source_ref?: { turn_hash?: string; start_char?: number; end_char?: number } }> = [];
         function walk(nodes: TreeNodeLike[], prefix = '') {
           for (const node of nodes) {
             const path = prefix ? `${prefix}.${node.key}` : node.key;
@@ -252,7 +252,6 @@ export function CommitSourceContent({ commit }: { commit: CommitDisplay }) {
             entries.push({
               id: path,
               text,
-              confidence: node.confidence ?? 1.0,
               source_ref: node.source ? { turn_hash: node.source } : undefined,
             });
             if (node.children?.length) walk(node.children, path);
@@ -299,30 +298,16 @@ export function CommitSourceContent({ commit }: { commit: CommitDisplay }) {
       </div>
       <ul className="space-y-[var(--space-item)]">
         {nodes.map((s) => {
-          const confidence = 'confidence' in s ? (s.confidence as number | undefined) : undefined;
-          const barColor =
-            confidence === undefined
-              ? 'bg-muted'
-              : confidence >= 0.8
-                ? 'bg-[var(--status-success)]'
-                : confidence >= 0.5
-                  ? 'bg-amber-500'
-                  : 'bg-[var(--status-error)]';
           return (
             <li
               key={s.id}
               className={cn(
                 'flex items-start gap-2 p-2 rounded border',
-                confidence !== undefined && confidence < 0.7
-                  ? 'bg-amber-50 dark:bg-amber-950/20 border-amber-300/30'
-                  : 'bg-background border-border'
+                'bg-background border-border'
               )}
             >
               <div
-                className={cn('w-1 self-stretch rounded-full shrink-0', barColor)}
-                title={
-                  confidence !== undefined ? `Confidence: ${confidence.toFixed(2)}` : undefined
-                }
+                className={cn('w-1 self-stretch rounded-full shrink-0', 'bg-muted')}
               />
               <span className="text-xs font-mono text-muted-foreground/70 bg-muted px-1.5 py-0.5 rounded shrink-0">
                 {s.id}
@@ -330,20 +315,6 @@ export function CommitSourceContent({ commit }: { commit: CommitDisplay }) {
               <span className="text-[0.875rem] leading-relaxed text-foreground break-words flex-1">
                 {s.text}
               </span>
-              {confidence !== undefined && (
-                <span
-                  className={cn(
-                    'text-[10px] font-mono shrink-0 px-1 py-0.5 rounded',
-                    confidence >= 0.8
-                      ? 'text-[var(--status-success)]'
-                      : confidence >= 0.5
-                        ? 'text-amber-600 dark:text-amber-400'
-                        : 'text-[var(--status-error)]'
-                  )}
-                >
-                  {Math.round(confidence * 100)}%
-                </span>
-              )}
             </li>
           );
         })}

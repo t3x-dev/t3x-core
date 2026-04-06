@@ -41,7 +41,6 @@ const OapiTreeNodeSchema: z.ZodType<{
   children: unknown[];
   slot_quotes?: Record<string, string>;
   source?: string;
-  confidence?: number;
 }> = z.lazy(() =>
   z.object({
     key: z.string().min(1),
@@ -49,7 +48,6 @@ const OapiTreeNodeSchema: z.ZodType<{
     children: z.array(OapiTreeNodeSchema).default([]),
     slot_quotes: z.record(z.string(), z.string()).optional(),
     source: z.string().optional(),
-    confidence: z.number().min(0).max(1).optional(),
   })
 );
 
@@ -65,7 +63,6 @@ const OapiRelationSchema = z.object({
   from: z.string(),
   to: z.string(),
   type: OapiRelationTypeSchema,
-  confidence: z.number().min(0).max(1).optional(),
 });
 
 const OapiSemanticContentSchema = z.object({
@@ -563,7 +560,6 @@ const WordDiffSegmentSchema = z.object({
 const MergeNodeSchema = z.object({
   id: z.string(),
   text: z.string(),
-  confidence: z.number().min(0).max(1).optional(),
 });
 
 const MergeSimilarPairSchema = z.object({
@@ -626,7 +622,6 @@ export const DraftNodeOriginSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('extracted'),
     segment_id: z.string(),
-    confidence: z.number().min(0).max(1),
   }),
   z.object({ type: z.literal('selected') }),
   z.object({ type: z.literal('manual') }),
@@ -797,7 +792,6 @@ export const SemanticPointSchema = z.object({
   routing_reason: z.string().optional(),
   inherited_from: z.string().optional(),
   evidence: z.array(LocatedEvidenceSchema),
-  confidence: z.number().optional(),
   low_coverage: z.boolean().optional(),
   position: z.number().int(),
   staged: z.boolean(),

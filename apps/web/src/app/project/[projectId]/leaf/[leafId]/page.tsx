@@ -75,7 +75,6 @@ export default function LeafDetailPage() {
     mode,
     setMode,
     nodeCoverage,
-    nodeConfidence,
     handleUpdateConstraints,
     handleRemoveConstraint,
     handleAddConstraint,

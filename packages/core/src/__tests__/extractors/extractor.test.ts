@@ -21,7 +21,7 @@ function mockProvider(responses: string[]): LLMProvider {
 // ── Fixtures ──
 
 // YOps-format: first extraction (YAML tree + metadata)
-const validTreeOutput = `travel_plan:\n  destination: Tokyo\n---\n{"slot_quotes":{"destination":"travel to Tokyo"},"source_map":{"travel_plan":"T1"},"confidence_map":{"travel_plan":0.9}}`;
+const validTreeOutput = `travel_plan:\n  destination: Tokyo\n---\n{"slot_quotes":{"destination":"travel to Tokyo"},"source_map":{"travel_plan":"T1"}}`;
 
 // YOps-format: incremental define + populate
 const validYOpsAdd = `yops:\n  - define:\n      parent: ""\n      key: budget\n  - populate:\n      path: budget\n      slots:\n        amount: 3000\n      source:\n        amount: "3000 dollars"\n      from: T1`;
@@ -30,7 +30,7 @@ const validYOpsAdd = `yops:\n  - define:\n      parent: ""\n      key: budget\n 
 const validYOpsAddWithRelation = `yops:\n  - define:\n      parent: ""\n      key: budget\n  - populate:\n      path: budget\n      slots:\n        amount: 3000\n      source:\n        amount: "budget is 3000"\n      from: T1\n  - relate:\n      from: travel_plan\n      to: budget\n      type: depends`;
 
 const existingSnapshot: SemanticContent = {
-  trees: [{ key: 'travel_plan', slots: { destination: 'Tokyo' }, children: [], confidence: 0.95 }],
+  trees: [{ key: 'travel_plan', slots: { destination: 'Tokyo' }, children: [] }],
   relations: [],
 };
 

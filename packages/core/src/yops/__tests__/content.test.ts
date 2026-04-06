@@ -164,7 +164,7 @@ describe('YOpSchema validation', () => {
 
   it('validates relate operation', () => {
     const r = YOpSchema.safeParse({
-      relate: { from: 'trip/dining', to: 'trip/budget', type: 'depends', confidence: 0.8 },
+      relate: { from: 'trip/dining', to: 'trip/budget', type: 'depends' },
     });
     expect(r.success).toBe(true);
   });
@@ -427,12 +427,11 @@ describe('applyYOps', () => {
     it('adds a relation between existing nodes', () => {
       const content = sc([t('trip', {}, [t('dining', {}), t('budget', {})])]);
       const result = applyYOps(content, [
-        { relate: { from: 'trip/dining', to: 'trip/budget', type: 'depends', confidence: 0.8 } },
+        { relate: { from: 'trip/dining', to: 'trip/budget', type: 'depends' } },
       ]);
       expect(result.ok).toBe(true);
       expect(result.relations).toHaveLength(1);
       expect(result.relations[0].type).toBe('depends');
-      expect(result.relations[0].confidence).toBe(0.8);
     });
 
     it('rejects self-relation', () => {

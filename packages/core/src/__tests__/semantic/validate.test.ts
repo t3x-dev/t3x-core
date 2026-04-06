@@ -83,15 +83,6 @@ describe('validateIntegrity', () => {
     expect(result.warnings.some((w) => w.type === 'orphan_tree')).toBe(true);
   });
 
-  it('warns on low confidence', () => {
-    const content: SemanticContent = {
-      trees: [{ key: 'topic_a', slots: { a: 1 }, children: [], confidence: 0.3 }],
-      relations: [],
-    };
-    const result = validateIntegrity(content);
-    expect(result.warnings.some((w) => w.type === 'low_confidence')).toBe(true);
-  });
-
   it('no orphan warning for single tree', () => {
     const content: SemanticContent = {
       trees: [tree('topic_a')],

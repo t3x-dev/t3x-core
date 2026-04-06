@@ -109,7 +109,6 @@ export function LearnFromEditSuggestion({ leafId, onAddConstraint }: LearnFromEd
             >
               {s.type} ({s.match_mode})
             </span>
-            <span className="text-[var(--text-tertiary)]">{(s.confidence * 100).toFixed(0)}%</span>
           </div>
           <div className="text-[var(--text-primary)]">{s.value}</div>
           {s.reason && <div className="text-[var(--text-tertiary)] italic">{s.reason}</div>}

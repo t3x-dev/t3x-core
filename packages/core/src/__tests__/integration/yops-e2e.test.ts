@@ -64,10 +64,6 @@ describe('E2E: YOps Extraction Pipeline', () => {
   "source_map": {
     "hangzhou_trip": "T1",
     "dining": "T1"
-  },
-  "confidence_map": {
-    "hangzhou_trip": 0.95,
-    "dining": 0.85
   }
 }`;
 
@@ -100,8 +96,6 @@ describe('E2E: YOps Extraction Pipeline', () => {
 
     // Verify metadata propagated
     expect(trip!.source).toBe('T1');
-    expect(trip!.confidence).toBe(0.95);
-
     // Verify yops array (should be define + populate pairs for root + child)
     expect(result1.yops.length).toBeGreaterThanOrEqual(2);
     expect(result1.yops[0]).toHaveProperty('define');
@@ -116,7 +110,6 @@ describe('E2E: YOps Extraction Pipeline', () => {
       value: 2000
       source: "actually let's do 2000"
       from: T1
-      confidence: 0.9
   - define:
       parent: hangzhou_trip
       key: activities
@@ -128,8 +121,7 @@ describe('E2E: YOps Extraction Pipeline', () => {
       source:
         west_lake: "walk around West Lake"
         hiking: "go hiking in the hills nearby"
-      from: T1
-      confidence: 0.85`;
+      from: T1`;
 
     const provider2 = mockProvider([incrementalLLMOutput]);
     const extractor2 = new Extractor(provider2);
@@ -179,7 +171,7 @@ describe('E2E: YOps Extraction Pipeline', () => {
         plan: "check out bars near West Lake instead"
         budget: "maybe 500 for drinks"
       from: T1
-      confidence: 0.8`;
+`;
 
     const provider3 = mockProvider([thirdLLMOutput]);
     const extractor3 = new Extractor(provider3);
@@ -263,8 +255,7 @@ describe('E2E: YOps Extraction Pipeline', () => {
       source:
         name: "the project is called T3X"
         status: "it's actively developed"
-      from: T1
-      confidence: 0.95
+      from: T15
   - set:
       path: project/version
       value: 2.0

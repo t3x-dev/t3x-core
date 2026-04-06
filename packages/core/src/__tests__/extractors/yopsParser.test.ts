@@ -16,9 +16,6 @@ describe('parseYOpsOutput — YAML tree (first extraction)', () => {
   },
   "source_map": {
     "trip": "T1"
-  },
-  "confidence_map": {
-    "trip": 0.95
   }
 }`;
 
@@ -42,7 +39,6 @@ describe('parseYOpsOutput — YAML tree (first extraction)', () => {
     if (!('populate' in populateOp)) return;
     expect(populateOp.populate.path).toBe('trip');
     expect(populateOp.populate.from).toBe('T1');
-    expect(populateOp.populate.confidence).toBe(0.95);
     expect(populateOp.populate.slots).toEqual({ destination: 'Hangzhou', budget: 2000 });
     expect(populateOp.populate.source).toEqual({
       destination: 'I want to go to Hangzhou',

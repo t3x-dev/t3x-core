@@ -17,7 +17,6 @@ function makeSemanticPoint(overrides: Partial<SemanticPointAPI> = {}): SemanticP
     status: 'auto_landed',
     zone: 'ready',
     evidence: [],
-    confidence: 0.9,
     position: 0,
     staged: true,
     ...overrides,

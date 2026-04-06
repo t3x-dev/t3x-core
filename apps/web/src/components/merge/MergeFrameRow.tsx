@@ -18,7 +18,6 @@ interface Frame {
   type: string;
   slots: Record<string, SlotValue>;
   source?: string;
-  confidence?: number;
 }
 import { useState } from 'react';
 import { SlotValueSpan } from '@/components/diff/YAMLNodeRenderer';

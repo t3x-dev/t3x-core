@@ -47,7 +47,6 @@ function consolidateDuplicateTypes(frames: FlatNode[]): FlatNode[] {
       type: pluralType,
       slots: { items },
       source: group[0].source,
-      confidence: Math.min(...group.map((f) => f.confidence ?? 1)),
     });
   }
 

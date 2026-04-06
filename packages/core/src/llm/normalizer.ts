@@ -23,10 +23,9 @@ function normalizeFrameId(id: string): string {
 
 /** Strip non-schema fields from a frame object */
 function stripFrameExtras(frame: Record<string, unknown>): Record<string, unknown> {
-  const { id, type, slots, source, confidence } = frame;
+  const { id, type, slots, source } = frame;
   const result: Record<string, unknown> = { id, type, slots };
   if (source !== undefined) result.source = source;
-  if (confidence !== undefined) result.confidence = confidence;
   return result;
 }
 

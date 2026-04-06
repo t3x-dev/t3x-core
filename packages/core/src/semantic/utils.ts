@@ -32,8 +32,6 @@ export function deepEqual(a: SlotValue | undefined, b: SlotValue | undefined, de
 
 /**
  * Relation identity key (from|to|type).
- * Confidence is treated as metadata — two relations with the same
- * from/to/type but different confidence are considered the same relation.
  */
 export function relKey(r: Relation): string {
   return `${r.from}|${r.to}|${r.type}`;

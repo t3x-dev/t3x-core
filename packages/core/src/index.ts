@@ -81,11 +81,8 @@ export {
   type CorrectionInput,
   type CorrectionPromptResult,
   Compressor,
-  // Confidence scoring
   computeAdaptiveConfig,
   computeAdaptiveThresholds,
-  computeConfidence,
-  type ConfidenceInput,
   createRelationExtractor,
   type ExtractionInput,
   type ExtractionPromptResult,

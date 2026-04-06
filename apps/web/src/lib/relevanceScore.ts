@@ -3,7 +3,6 @@ import type { TreeNode } from '@t3x-dev/core';
 /** Compatibility alias: FlatNode-like shape with an id field for relevance scoring */
 interface TreeNodeLike {
   id: string;
-  confidence?: number;
 }
 
 export interface RelevanceContext {
@@ -39,7 +38,6 @@ const RELATION_DEGREE_CAP = 3;
  * - recency: 1.0 * RECENCY_DECAY^turnsAgo
  * - touch_frequency: min(touchCount/5, 1.0) * 0.7
  * - relation_degree: min(degree/3, 1.0) * 0.6
- * - confidence: node.confidence * 0.5
  *
  * Score = max of all signal values.
  * Tier thresholds: >= 0.6 → highlighted, < 0.6 → faded
@@ -92,17 +90,7 @@ export function relevanceScore(node: TreeNodeLike, context: RelevanceContext): R
     });
   }
 
-  // Signal 6: LLM-assigned confidence
-  const confidence = (node.confidence ?? 0) * 0.5;
-  if (confidence > 0) {
-    reasons.push({
-      signal: 'confidence',
-      value: confidence,
-      reason: `Extraction confidence: ${Math.round((node.confidence ?? 0) * 100)}%`,
-    });
-  }
-
-  const score = Math.max(confirmed, llmBoost, recency, touchFreq, relationScore, confidence);
+  const score = Math.max(confirmed, llmBoost, recency, touchFreq, relationScore);
 
   // Sort reasons by value descending — top reason explains the score
   reasons.sort((a, b) => b.value - a.value);

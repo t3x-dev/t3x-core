@@ -42,7 +42,10 @@ describe('Squash E2E', () => {
       conversationId,
       projectId,
       source: 'pipeline',
-      yops: [{ add: { parent: '', node: { trip: { budget: 5000 } }, source: { budget: 'about 5k' }, from: 'T1' } }],
+      yops: [
+        { define: { parent: '', key: 'trip' } },
+        { populate: { path: 'trip', slots: { budget: 5000 }, source: { budget: 'about 5k' }, from: 'T1' } },
+      ],
     });
     const yl2 = await insertYOpsLogEntry(db, {
       conversationId,
@@ -60,7 +63,10 @@ describe('Squash E2E', () => {
     // 2. Build commits incrementally (each commit applies its yops to previous state)
     const base: SemanticContent = { trees: [], relations: [] };
 
-    const r1 = applyYOps(base, [{ add: { parent: '', node: { trip: { budget: 5000 } }, source: { budget: 'about 5k' }, from: 'T1' } }]);
+    const r1 = applyYOps(base, [
+      { define: { parent: '', key: 'trip' } },
+      { populate: { path: 'trip', slots: { budget: 5000 }, source: { budget: 'about 5k' }, from: 'T1' } },
+    ]);
     const c1 = await createCommit(db, {
       author: { type: 'human', name: 'test' },
       content: { trees: r1.trees, relations: r1.relations },
@@ -99,12 +105,12 @@ describe('Squash E2E', () => {
     // 4. Fetch yops entries and extract ops
     const entries = await getYOpsForCommit(db, allYopsIds);
     const ops = extractOpsFromEntries(entries.map((e) => ({ id: e.id, yops: e.yops })));
-    expect(ops).toHaveLength(3);
+    expect(ops).toHaveLength(4);
 
     // 5. Verify replay matches c3's content
     const verification = verifyReplay(base, ops, c3.content);
     expect(verification.match).toBe(true);
-    expect(verification.opsApplied).toBe(3);
+    expect(verification.opsApplied).toBe(4);
 
     // 6. Create squashed commit
     const squashed = await createCommit(db, {
@@ -126,7 +132,7 @@ describe('Squash E2E', () => {
       sourceHashes: [c1.hash, c2.hash, c3.hash],
       resultHash: squashed.hash,
       baseHash: null,
-      opsReplayed: 3,
+      opsReplayed: 4,
       yopsLogIds: allYopsIds,
       author: { type: 'human', name: 'test' },
     });
@@ -160,7 +166,7 @@ describe('Squash E2E', () => {
     const rewrites = await listRewrites(db, projectId);
     const squashRewrites = rewrites.filter((r) => r.resultHash === squashed.hash);
     expect(squashRewrites).toHaveLength(1);
-    expect(squashRewrites[0].opsReplayed).toBe(3);
+    expect(squashRewrites[0].opsReplayed).toBe(4);
   });
 
   it('replay mismatch is detected when content diverges', async () => {
@@ -169,7 +175,10 @@ describe('Squash E2E', () => {
       conversationId,
       projectId,
       source: 'pipeline',
-      yops: [{ add: { parent: '', node: { food: { type: 'pizza' } }, source: { type: 'pizza' }, from: 'T1' } }],
+      yops: [
+        { define: { parent: '', key: 'food' } },
+        { populate: { path: 'food', slots: { type: 'pizza' }, source: { type: 'pizza' }, from: 'T1' } },
+      ],
     });
 
     // Create commit with DIFFERENT content than what the ops would produce

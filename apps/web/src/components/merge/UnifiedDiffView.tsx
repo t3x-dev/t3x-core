@@ -298,9 +298,8 @@ export function UnifiedDiffView({
       const text = `[${node.key}] ${Object.entries(node.slots)
         .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : String(v)}`)
         .join('; ')}`;
-      const confidence = node.confidence ?? 1.0;
       const source: ContentNode['source'] | undefined = undefined;
-      return { id, text, confidence, source };
+      return { id, text, source };
     });
   }, [sourceCommit]);
 

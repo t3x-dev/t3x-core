@@ -416,17 +416,6 @@ describe('merge', () => {
     expect(merged.children.find((c) => c.key === 'extra')).toBeDefined();
   });
 
-  it('uses min confidence', () => {
-    const nodeA: TreeNode = { key: 'a', slots: {}, children: [], confidence: 0.9 };
-    const nodeB: TreeNode = { key: 'b', slots: {}, children: [], confidence: 0.7 };
-    const content = sc([t('trip', {}, [nodeA, nodeB])]);
-    const result = applyYOps(content, [
-      { merge: { paths: ['trip/a', 'trip/b'], into: 'merged' } },
-    ]);
-    expect(result.ok).toBe(true);
-    expect(result.trees[0].children[0].confidence).toBe(0.7);
-  });
-
   it('updates relations to point to merged node', () => {
     const content = sc(
       [t('trip', {}, [t('a', {}), t('b', {}), t('budget', {})])],

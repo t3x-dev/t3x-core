@@ -29,7 +29,6 @@ export interface EdgeEvidence {
   source_node: string;
   target_node_key: string;
   relation_type: string;
-  confidence: number;
 }
 
 export interface KnowledgeEdge {

@@ -8,7 +8,6 @@
 interface SemanticPoint {
   id: string;
   text: string;
-  confidence?: number;
   zone: string;
   status: string;
   staged: boolean;
@@ -66,7 +65,6 @@ describe('POST /v1/drafts/{id}/review-action', () => {
     status: 'auto_landed',
     zone: 'review',
     evidence: [],
-    confidence: 0.9,
     position: 0,
     staged: false,
     ...overrides,

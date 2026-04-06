@@ -25,14 +25,12 @@ describe('RelationExtractor', () => {
         source_id: 's_aaa',
         target_id: 's_bbb',
         type: 'supports',
-        confidence: 0.9,
         reasoning: 'S_bbb explains why S_aaa',
       },
       {
         source_id: 's_aaa',
         target_id: 's_ccc',
         type: 'contrasts',
-        confidence: 0.85,
         reasoning: 'S_ccc qualifies S_aaa',
       },
     ]);
@@ -44,7 +42,6 @@ describe('RelationExtractor', () => {
     expect(result.relations[1].type).toBe('contrasts');
     expect(result.stats.total_nodes).toBe(3);
     expect(result.stats.relations_found).toBe(2);
-    expect(result.stats.avg_confidence).toBeCloseTo(0.875);
     expect(result.stats.extraction_time_ms).toBeGreaterThanOrEqual(0);
   });
 
@@ -74,14 +71,12 @@ describe('RelationExtractor', () => {
         source_id: 's_aaa',
         target_id: 's_bbb',
         type: 'supports',
-        confidence: 0.9,
         reasoning: 'ok',
       },
       {
         source_id: 's_aaa',
         target_id: 's_zzz',
         type: 'causes',
-        confidence: 0.9,
         reasoning: 'bad id',
       },
     ]);
@@ -97,7 +92,6 @@ describe('RelationExtractor', () => {
         source_id: 's_aaa',
         target_id: 's_bbb',
         type: 'supports',
-        confidence: 0.9,
         reasoning: 'test',
       },
     ]);

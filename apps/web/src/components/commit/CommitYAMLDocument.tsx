@@ -117,11 +117,6 @@ interface YAMLLine {
 // Rendering helpers
 // ============================================================================
 
-function confidencePercent(c?: number): string {
-  if (c == null) return '';
-  return `${Math.round(c * 100)}%`;
-}
-
 function Comment({ text }: { text: string }) {
   return <span className="text-[var(--yaml-comment,#6b7280)]">{text}</span>;
 }
@@ -304,9 +299,6 @@ function treeToLines(nodes: TreeGraphNode[], baseIndent: number, lines: YAMLLine
     // Tree header line: type_name:  # f_001 · 85%  (elaborates → parent)
     const commentParts: string[] = [];
     commentParts.push(`# ${node.id}`);
-    if (node.confidence != null) {
-      commentParts.push(` · ${confidencePercent(node.confidence)}`);
-    }
     if (relationType) {
       commentParts.push(`  (${relationType})`);
     }

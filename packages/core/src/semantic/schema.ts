@@ -21,7 +21,6 @@ export const TreeNodeSchema: z.ZodType<unknown> = z.lazy(() =>
     children: z.array(TreeNodeSchema),
     slot_quotes: z.record(z.string(), z.string()).optional(),
     source: z.string().optional(),
-    confidence: z.number().min(0).max(1).optional(),
   })
 );
 
@@ -39,7 +38,6 @@ export const RelationSchema = z.object({
   from: z.string(),
   to: z.string(),
   type: RelationTypeSchema,
-  confidence: z.number().min(0).max(1).optional(),
 });
 
 // ── SemanticContent ──
@@ -58,5 +56,4 @@ export const FlatNodeSchema = z.object({
   slots: z.record(z.string(), SlotValueSchema)
     .refine((s) => Object.keys(s).length >= 1, { message: 'FlatNode must have at least one slot' }),
   source: z.string().optional(),
-  confidence: z.number().min(0).max(1).optional(),
 });

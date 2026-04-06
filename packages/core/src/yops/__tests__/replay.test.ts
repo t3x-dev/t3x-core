@@ -115,13 +115,13 @@ describe('verifyReplay', () => {
     expect(result.opsApplied).toBe(1);
   });
 
-  it('ignores metadata fields (source, slot_quotes, confidence) in comparison', () => {
+  it('ignores metadata fields (source, slot_quotes) in comparison', () => {
     const base: SemanticContent = {
       trees: [{ key: 'trip', slots: {}, children: [] }],
       relations: [],
     };
     const ops: YOp[] = [
-      { set: { path: 'trip/budget', value: 5000, source: 'about 5k', from: 'T1', confidence: 0.9 } },
+      { set: { path: 'trip/budget', value: 5000, source: 'about 5k', from: 'T1' } },
     ];
     const expected: SemanticContent = {
       trees: [
@@ -130,7 +130,6 @@ describe('verifyReplay', () => {
           slots: { budget: 5000 },
           children: [],
           source: 'different_source',
-          confidence: 0.5,
           slot_quotes: { budget: 'something else' },
         },
       ],

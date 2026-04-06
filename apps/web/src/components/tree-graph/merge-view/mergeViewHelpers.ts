@@ -6,7 +6,6 @@ export interface FlatNode {
   type: string;
   slots: Record<string, SlotValue>;
   source?: string;
-  confidence?: number;
 }
 
 // ── Slot conflict resolution state ──

@@ -22,10 +22,9 @@ export interface YAMLRendererProps {
   renderNodeActions?: (treeId: string, treeType: string) => ReactNode;
   /** Optional: highlighted tree ID */
   highlightNodeId?: string | null;
-  /** Optional: metadata per  node (confidence, change type) */
+  /** Optional: metadata per  node (change type) */
   getTreeMeta?: (treeId: string) =>
     | {
-        confidence?: number;
         changeType?: 'add' | 'update' | 'remove' | null;
       }
     | undefined;
@@ -366,7 +365,6 @@ export function YAMLRenderer({
 
         const meta = getTreeMeta?.(line.treeId);
         const changeType = meta?.changeType ?? null;
-        const confidence = line.isNodeHeader ? (meta?.confidence ?? null) : null;
         const isHighlighted = highlightNodeId != null && highlightNodeId === line.treeId;
 
         const borderLeft =
@@ -406,18 +404,6 @@ export function YAMLRenderer({
               }}
             >
               {line.text}
-              {confidence != null && (
-                <span
-                  style={{
-                    marginLeft: 8,
-                    fontSize: 9,
-                    color: 'var(--text-tertiary)',
-                    fontWeight: 400,
-                  }}
-                >
-                  {Math.round(confidence * 100)}%
-                </span>
-              )}
             </pre>
           </div>
         );

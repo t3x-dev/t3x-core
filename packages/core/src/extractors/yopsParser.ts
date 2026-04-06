@@ -80,21 +80,17 @@ function isYopsList(cleaned: string): boolean {
 }
 
 /**
- * Apply metadata (slot_quotes, source_map, confidence_map) to a tree node recursively.
+ * Apply metadata (slot_quotes, source_map) to a tree node recursively.
  */
 function applyMetadata(
   node: TreeNode,
   slotQuotes: Record<string, string>,
   sourceMap: Record<string, string>,
-  confidenceMap: Record<string, number>,
   prefix: string
 ): void {
-  // Apply source and confidence for this node
+  // Apply source for this node
   if (node.key in sourceMap) {
     node.source = sourceMap[node.key];
-  }
-  if (node.key in confidenceMap) {
-    node.confidence = confidenceMap[node.key];
   }
 
   // Apply slot_quotes for this node
@@ -125,7 +121,7 @@ function applyMetadata(
   // Recursively apply to children
   for (const child of node.children) {
     const childPrefix = prefix ? `${prefix}.${child.key}` : child.key;
-    applyMetadata(child, slotQuotes, sourceMap, confidenceMap, childPrefix);
+    applyMetadata(child, slotQuotes, sourceMap, childPrefix);
   }
 }
 
@@ -138,7 +134,6 @@ function treeToOps(
   parentPath: string,
   slotQuotes: Record<string, string>,
   sourceMap: Record<string, string>,
-  confidenceMap: Record<string, number>,
 ): YOp[] {
   const yops: YOp[] = [];
   const nodePath = parentPath ? `${parentPath}/${tree.key}` : tree.key;
@@ -163,7 +158,6 @@ function treeToOps(
         slots: tree.slots as Record<string, SlotValue>,
         source: Object.keys(nodeQuotes).length > 0 ? nodeQuotes : {},
         from: sourceMap[tree.key] ?? 'T1',
-        ...(confidenceMap[tree.key] !== undefined ? { confidence: confidenceMap[tree.key] } : {}),
       },
     });
   }
@@ -182,7 +176,7 @@ function treeToOps(
         childQuotes[stripped] = quoteValue;
       }
     }
-    yops.push(...treeToOps(child, nodePath, childQuotes, sourceMap, confidenceMap));
+    yops.push(...treeToOps(child, nodePath, childQuotes, sourceMap));
   }
 
   return yops;
@@ -252,7 +246,6 @@ function parseYamlTree(cleaned: string): YOpsParseResult {
   // Parse metadata (JSON after ---)
   let slotQuotes: Record<string, string> = {};
   let sourceMap: Record<string, string> = {};
-  let confidenceMap: Record<string, number> = {};
 
   if (metadataPart) {
     try {
@@ -265,9 +258,6 @@ function parseYamlTree(cleaned: string): YOpsParseResult {
         if (metadata.source_map && typeof metadata.source_map === 'object') {
           sourceMap = metadata.source_map;
         }
-        if (metadata.confidence_map && typeof metadata.confidence_map === 'object') {
-          confidenceMap = metadata.confidence_map;
-        }
       }
     } catch {
       // Metadata parsing failure is non-fatal
@@ -275,13 +265,13 @@ function parseYamlTree(cleaned: string): YOpsParseResult {
   }
 
   // Apply metadata to tree
-  applyMetadata(tree, slotQuotes, sourceMap, confidenceMap, '');
+  applyMetadata(tree, slotQuotes, sourceMap, '');
 
   // Rebuild slot_quotes from tree (includes any applied metadata)
   const finalSlotQuotes = collectSlotQuotes(tree, '');
 
   // Build define + populate YOps from tree
-  const yops = treeToOps(tree, '', slotQuotes, sourceMap, confidenceMap);
+  const yops = treeToOps(tree, '', slotQuotes, sourceMap);
 
   return { ok: true, format: 'tree', yops, tree, slotQuotes: finalSlotQuotes };
 }

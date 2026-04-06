@@ -64,7 +64,7 @@ export function RelationsGraph({ relations, nodes }: RelationsGraphProps) {
         label: rel.type.replace('_', ' '),
         style: { stroke: edgeColors[rel.type] ?? '#6b7280', strokeWidth: 2 },
         labelStyle: { fontSize: 10, fill: 'var(--text-tertiary)' },
-        animated: (rel.confidence ?? 0) >= 0.8,
+        animated: false,
       })),
     [relations]
   );

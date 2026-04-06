@@ -53,25 +53,22 @@ export const testSegments = {
 };
 
 export const testFacets = {
-  goal: (text: string, confidence = 0.9) => ({
+  goal: (text: string) => ({
     type: 'goal' as const,
     facet: 'goal',
     text,
-    confidence,
     keywords: text.split(' ').slice(0, 3),
   }),
-  constraint: (text: string, confidence = 0.9) => ({
+  constraint: (text: string) => ({
     type: 'constraint' as const,
     facet: 'constraint',
     text,
-    confidence,
     keywords: [],
   }),
-  preference: (text: string, confidence = 0.8) => ({
+  preference: (text: string) => ({
     type: 'preference' as const,
     facet: 'preference',
     text,
-    confidence,
     keywords: [],
   }),
 };

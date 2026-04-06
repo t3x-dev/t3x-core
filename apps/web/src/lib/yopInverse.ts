@@ -182,7 +182,6 @@ function deepCloneNode(node: TreeNode): TreeNode {
     children: node.children.map(deepCloneNode),
     ...(node.slot_quotes ? { slot_quotes: { ...node.slot_quotes } } : {}),
     ...(node.source !== undefined ? { source: node.source } : {}),
-    ...(node.confidence !== undefined ? { confidence: node.confidence } : {}),
   };
 }
 

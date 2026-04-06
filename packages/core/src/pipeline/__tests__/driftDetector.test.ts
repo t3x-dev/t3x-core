@@ -76,33 +76,23 @@ describe('preFilterDrift', () => {
 describe('parseDriftResponse', () => {
   it('parses same_topic response', () => {
     const result = parseDriftResponse(
-      '{"same_topic": true, "confidence": 0.9, "relation": "none", "new_topic": ""}'
+      '{"same_topic": true, "relation": "none", "new_topic": ""}'
     );
     expect(result.drifted).toBe(false);
-    expect(result.confidence).toBe(0.9);
   });
 
   it('parses drift_detected response with valid relation', () => {
     const result = parseDriftResponse(
-      '{"same_topic": false, "confidence": 0.85, "relation": "causes", "new_topic": "cooking_techniques"}'
+      '{"same_topic": false, "relation": "causes", "new_topic": "cooking_techniques"}'
     );
     expect(result.drifted).toBe(true);
-    expect(result.confidence).toBe(0.85);
     expect(result.relationType).toBe('causes');
     expect(result.newTopicName).toBe('cooking_techniques');
-  });
-
-  it('defaults to same_topic when confidence < 0.7', () => {
-    const result = parseDriftResponse(
-      '{"same_topic": false, "confidence": 0.5, "relation": "none", "new_topic": "something"}'
-    );
-    expect(result.drifted).toBe(false);
   });
 
   it('defaults to same_topic on invalid JSON', () => {
     const result = parseDriftResponse('This is not JSON at all');
     expect(result.drifted).toBe(false);
-    expect(result.confidence).toBe(1);
   });
 
   it('defaults to same_topic on empty string', () => {
@@ -112,7 +102,7 @@ describe('parseDriftResponse', () => {
 
   it('handles JSON wrapped in markdown code block', () => {
     const result = parseDriftResponse(
-      '```json\n{"same_topic": false, "confidence": 0.9, "relation": "contrasts", "new_topic": "budget_analysis"}\n```'
+      '```json\n{"same_topic": false, "relation": "contrasts", "new_topic": "budget_analysis"}\n```'
     );
     expect(result.drifted).toBe(true);
     expect(result.relationType).toBe('contrasts');
@@ -120,7 +110,7 @@ describe('parseDriftResponse', () => {
 
   it('rejects invalid relation type', () => {
     const result = parseDriftResponse(
-      '{"same_topic": false, "confidence": 0.9, "relation": "INVALID_TYPE", "new_topic": "test"}'
+      '{"same_topic": false, "relation": "INVALID_TYPE", "new_topic": "test"}'
     );
     expect(result.drifted).toBe(true);
     expect(result.relationType).toBeUndefined(); // invalid → stripped
@@ -128,7 +118,7 @@ describe('parseDriftResponse', () => {
 
   it('rejects invalid topic name pattern', () => {
     const result = parseDriftResponse(
-      '{"same_topic": false, "confidence": 0.9, "relation": "depends", "new_topic": "has spaces and !special"}'
+      '{"same_topic": false, "relation": "depends", "new_topic": "has spaces and !special"}'
     );
     expect(result.drifted).toBe(true);
     expect(result.newTopicName).toBeUndefined(); // invalid → stripped
@@ -136,28 +126,15 @@ describe('parseDriftResponse', () => {
 
   it('accepts CJK topic names', () => {
     const result = parseDriftResponse(
-      '{"same_topic": false, "confidence": 0.85, "relation": "depends", "new_topic": "杭帮菜技法"}'
+      '{"same_topic": false, "relation": "depends", "new_topic": "杭帮菜技法"}'
     );
     expect(result.drifted).toBe(true);
     expect(result.newTopicName).toBe('杭帮菜技法');
   });
 
-  it('clamps confidence to 0-1 range', () => {
-    const result = parseDriftResponse(
-      '{"same_topic": true, "confidence": 1.5, "relation": "none", "new_topic": ""}'
-    );
-    expect(result.confidence).toBe(1);
-  });
-
-  it('handles missing confidence field', () => {
-    const result = parseDriftResponse('{"same_topic": true, "relation": "none", "new_topic": ""}');
-    expect(result.drifted).toBe(false);
-    // Missing confidence defaults to 0.5, but same_topic=true → no drift anyway
-  });
-
   it('relation "none" maps to undefined relationType', () => {
     const result = parseDriftResponse(
-      '{"same_topic": false, "confidence": 0.9, "relation": "none", "new_topic": "unrelated_topic"}'
+      '{"same_topic": false, "relation": "none", "new_topic": "unrelated_topic"}'
     );
     expect(result.drifted).toBe(true);
     expect(result.relationType).toBeUndefined();
@@ -166,7 +143,7 @@ describe('parseDriftResponse', () => {
   it('accepts all 5 valid relation types', () => {
     for (const rel of ['causes', 'conditions', 'contrasts', 'follows', 'depends']) {
       const result = parseDriftResponse(
-        `{"same_topic": false, "confidence": 0.9, "relation": "${rel}", "new_topic": "test"}`
+        `{"same_topic": false, "relation": "${rel}", "new_topic": "test"}`
       );
       expect(result.relationType).toBe(rel);
     }

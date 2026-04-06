@@ -17,7 +17,6 @@ export interface SetOp {
   value: SlotValue;
   source: string;
   from: string;
-  confidence?: number;
 }
 
 export interface UnsetOp {
@@ -34,7 +33,6 @@ export interface PopulateOp {
   slots: Record<string, SlotValue>;
   source: Record<string, string>;
   from: string;
-  confidence?: number;
 }
 
 export interface DropOp {
@@ -80,7 +78,6 @@ export interface RelateOp {
   from: string;
   to: string;
   type: RelationType;
-  confidence?: number;
 }
 
 export interface UnrelateOp {

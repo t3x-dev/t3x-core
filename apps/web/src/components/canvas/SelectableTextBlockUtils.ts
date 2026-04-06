@@ -28,7 +28,6 @@ export function isTokenInAnchorCandidate(
   threshold: number
 ): AnchorCandidate | null {
   for (const candidate of candidates) {
-    if (candidate.confidence < threshold) continue;
     // Check if token overlaps with candidate's character range
     if (token.charStart < candidate.endChar && token.charEnd > candidate.startChar) {
       return candidate;

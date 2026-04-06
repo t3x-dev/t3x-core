@@ -70,9 +70,6 @@ function serializeSnapshotForContext(snapshot: SemanticContent): string {
         );
       }
     }
-    if (node.confidence !== undefined) {
-      lines.push(`  # confidence: ${node.confidence}`);
-    }
   }
 
   if (snapshot.relations.length > 0) {

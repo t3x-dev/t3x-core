@@ -76,24 +76,6 @@ describe('computeCommitHash', () => {
     expect(computeCommitHash(baseCommit)).toBe(computeCommitHash(withSource));
   });
 
-  it('excludes confidence from hash', () => {
-    const withConfidence: CommitFirstClass = {
-      ...baseCommit,
-      content: {
-        trees: [
-          {
-            key: 'trip_plan',
-            slots: { destination: 'Tokyo', budget: 5000 },
-            children: [],
-            confidence: 0.9,
-          },
-        ],
-        relations: [],
-      },
-    };
-    expect(computeCommitHash(baseCommit)).toBe(computeCommitHash(withConfidence));
-  });
-
   it('includes relations in hash', () => {
     const withRelation: CommitFirstClass = {
       ...baseCommit,

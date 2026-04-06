@@ -3,7 +3,7 @@
 import type { SlotValue } from '@t3x-dev/core';
 import type { NodeProps } from '@xyflow/react';
 import { Handle, Position } from '@xyflow/react';
-import { Box, Link as LinkIcon, Paperclip, Shield } from 'lucide-react';
+import { Box, Link as LinkIcon, Paperclip } from 'lucide-react';
 import { memo, useCallback, useRef, useState } from 'react';
 import { truncate } from '@/lib/truncate';
 import { cn } from '@/lib/utils';
@@ -233,7 +233,7 @@ function EditableSlotValue({
 // ── TreeNodeView Component ──
 
 function TreeNodeComponent({ data, selected, id }: TreeNodeProps) {
-  const { treeType, slots, source, confidence, state, updatedSlots, onSlotEdit, onTypeEdit } =
+  const { treeType, slots, source, state, updatedSlots, onSlotEdit, onTypeEdit } =
     data;
   const updatedSet = new Set(updatedSlots ?? []);
 
@@ -350,20 +350,12 @@ function TreeNodeComponent({ data, selected, id }: TreeNodeProps) {
       )}
 
       {/* Footer */}
-      {(source || confidence !== undefined) && (
+      {source && (
         <div className="flex items-center justify-between px-3 py-1 text-[10px] text-zinc-400 dark:text-zinc-500">
-          {source && (
-            <span className="inline-flex items-center gap-0.5">
-              <Paperclip className="h-2.5 w-2.5" />
-              <span>{source}</span>
-            </span>
-          )}
-          {confidence !== undefined && (
-            <span className="inline-flex items-center gap-0.5">
-              <Shield className="h-2.5 w-2.5" />
-              <span>{confidence.toFixed(2)}</span>
-            </span>
-          )}
+          <span className="inline-flex items-center gap-0.5">
+            <Paperclip className="h-2.5 w-2.5" />
+            <span>{source}</span>
+          </span>
         </div>
       )}
     </div>

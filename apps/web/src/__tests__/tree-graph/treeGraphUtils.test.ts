@@ -64,7 +64,6 @@ describe('semanticToFlowElements', () => {
         mkNode('preference', {
           slots: { item: 'coffee' },
           source: 'turn_abc',
-          confidence: 0.9,
         }),
       ],
       relations: [],
@@ -79,7 +78,6 @@ describe('semanticToFlowElements', () => {
       treeType: 'preference',
       slots: { item: 'coffee' },
       source: 'turn_abc',
-      confidence: 0.9,
     });
   });
 

@@ -14,7 +14,6 @@ export interface TreeNodeData {
   treeType: string;
   slots: Record<string, SlotValue>;
   source?: string;
-  confidence?: number;
   // Gate status fields
   gateStatus?: 'passed' | 'warning' | 'error' | 'unchecked';
   gateIssueCount?: number;
@@ -26,8 +25,6 @@ export interface RelationEdgeData {
   relationType: RelationType;
   /** When true, the edge plays a stroke-dashoffset draw animation */
   isNew?: boolean;
-  /** Relation confidence score (0-1). Affects opacity and dash style. */
-  confidence?: number;
   [key: string]: unknown;
 }
 
@@ -74,7 +71,6 @@ export function semanticToFlowElements(content: SemanticContent): {
       treeType: node.key,
       slots: node.slots,
       source: node.source,
-      confidence: node.confidence,
     },
   }));
 
@@ -86,7 +82,7 @@ export function semanticToFlowElements(content: SemanticContent): {
       source: rel.from,
       target: rel.to,
       type: 'relationEdge',
-      data: { relationType: rel.type, confidence: rel.confidence },
+      data: { relationType: rel.type },
     }));
 
   return { nodes, edges };

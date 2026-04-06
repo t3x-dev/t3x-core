@@ -54,26 +54,6 @@ describe('TreeNodeSchema', () => {
     expect(result.success).toBe(true);
   });
 
-  it('accepts optional confidence', () => {
-    const result = TreeNodeSchema.safeParse({
-      key: 'topic',
-      slots: { a: 1 },
-      children: [],
-      confidence: 0.9,
-    });
-    expect(result.success).toBe(true);
-  });
-
-  it('rejects confidence > 1', () => {
-    const result = TreeNodeSchema.safeParse({
-      key: 'topic',
-      slots: { a: 1 },
-      children: [],
-      confidence: 1.5,
-    });
-    expect(result.success).toBe(false);
-  });
-
   it('accepts optional slot_quotes', () => {
     const result = TreeNodeSchema.safeParse({
       key: 'topic',
@@ -113,25 +93,6 @@ describe('FlatNodeSchema (internal)', () => {
     expect(result.success).toBe(false);
   });
 
-  it('accepts optional confidence', () => {
-    const result = FlatNodeSchema.safeParse({
-      id: 'f_001',
-      type: 'x',
-      slots: { a: 1 },
-      confidence: 0.9,
-    });
-    expect(result.success).toBe(true);
-  });
-
-  it('rejects confidence > 1', () => {
-    const result = FlatNodeSchema.safeParse({
-      id: 'f_001',
-      type: 'x',
-      slots: { a: 1 },
-      confidence: 1.5,
-    });
-    expect(result.success).toBe(false);
-  });
 });
 
 describe('SemanticContentSchema', () => {

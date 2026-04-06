@@ -40,7 +40,7 @@ describe('Prompt segment composition', () => {
       expect(systemPrompt).not.toContain('0.4-0.5');
     });
 
-    it('extract: includes TIER 3 with confidence range', () => {
+    it('extract: includes TIER 3 with score range', () => {
       const { systemPrompt } = buildExtractionPrompt(
         { turns: baseTurns },
         PRESETS.balanced // tier3: 'extract'

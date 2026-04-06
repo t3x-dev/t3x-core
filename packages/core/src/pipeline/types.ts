@@ -30,7 +30,6 @@ export interface DriftDecision {
 
 export interface DriftResult {
   drifted: boolean;
-  confidence: number;
   relationType?: RelationType;
   newTopicName?: string;
 }

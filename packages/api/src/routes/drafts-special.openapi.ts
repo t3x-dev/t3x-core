@@ -185,7 +185,6 @@ draftsSpecialRoutes.openapi(reviewActionRoute, async (c) => {
     const sps = [...((draft.semantic_points ?? []) as Array<{
       id: string;
       text: string;
-      confidence?: number;
       zone: string;
       status: string;
       staged: boolean;
@@ -256,7 +255,6 @@ draftsSpecialRoutes.openapi(reviewActionRoute, async (c) => {
         action: feedbackAction,
         original_text: sp.text,
         inference_type: sp.inference_type,
-        confidence: sp.confidence,
         zone: sp.zone,
         low_coverage: sp.low_coverage,
         edited_text: edited_text,

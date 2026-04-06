@@ -25,7 +25,6 @@ export class RelationExtractor {
       stats: {
         total_nodes: nodes.length,
         relations_found: 0,
-        avg_confidence: 0,
         extraction_time_ms: 0,
       },
       usage: { inputTokens: 0, outputTokens: 0 },
@@ -50,22 +49,16 @@ export class RelationExtractor {
       source_id: item.source_id,
       target_id: item.target_id,
       type: item.type,
-      confidence: item.confidence,
       reasoning: item.reasoning,
     }));
 
     const extractionTimeMs = Date.now() - startTime;
-    const avgConfidence =
-      relations.length > 0
-        ? relations.reduce((sum, r) => sum + r.confidence, 0) / relations.length
-        : 0;
 
     return {
       relations,
       stats: {
         total_nodes: nodes.length,
         relations_found: relations.length,
-        avg_confidence: avgConfidence,
         extraction_time_ms: extractionTimeMs,
       },
       usage: genResult.usage,

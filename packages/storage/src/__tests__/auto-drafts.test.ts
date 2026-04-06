@@ -21,7 +21,7 @@ function makeNodes(texts: string[]): unknown[] {
   return texts.map((text, i) => ({
     id: `ds_auto_${i}`,
     text,
-    origin: { type: 'extracted' as const, segment_id: `seg_${i}`, confidence: 0.85 },
+    origin: { type: 'extracted' as const, segment_id: `seg_${i}` },
     position: i,
     included: true,
   }));

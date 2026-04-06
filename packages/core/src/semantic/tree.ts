@@ -34,7 +34,6 @@ function flattenNode(node: TreeNode, parentPath: string, out: FlatNode[]): void 
     slots: { ...node.slots },
   };
   if (node.source) flat.source = node.source;
-  if (node.confidence !== undefined) flat.confidence = node.confidence;
 
   out.push(flat);
 
@@ -67,7 +66,6 @@ export function unflattenToTree(flatNodes: FlatNode[]): TreeNode {
     slots: { ...root.slots },
     children: [],
     ...(root.source ? { source: root.source } : {}),
-    ...(root.confidence !== undefined ? { confidence: root.confidence } : {}),
   };
 
   // Map path → TreeNode for parent lookups
@@ -84,7 +82,6 @@ export function unflattenToTree(flatNodes: FlatNode[]): TreeNode {
       slots: { ...flatNode.slots },
       children: [],
       ...(flatNode.source ? { source: flatNode.source } : {}),
-      ...(flatNode.confidence !== undefined ? { confidence: flatNode.confidence } : {}),
     };
 
     const parent = nodeMap.get(parentPath);

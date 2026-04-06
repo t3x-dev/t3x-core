@@ -130,11 +130,6 @@ function execSet(
   if (!node.slot_quotes) node.slot_quotes = {};
   node.slot_quotes[slotKey] = op.source;
 
-  // Set confidence if provided
-  if (op.confidence !== undefined) {
-    node.confidence = op.confidence;
-  }
-
   // Store 'from' in node source
   node.source = op.from;
 
@@ -220,7 +215,6 @@ function execPopulate(
   }
 
   if (op.from) node.source = op.from;
-  if (op.confidence !== undefined) node.confidence = op.confidence;
 
   return null;
 }
@@ -620,7 +614,6 @@ function execMerge(
   const mergedSlots: Record<string, unknown> = {};
   const mergedQuotes: Record<string, string> = {};
   const mergedChildren: TreeNode[] = [];
-  let minConfidence: number | undefined;
 
   for (const node of nodesToMerge) {
     Object.assign(mergedSlots, node.slots);
@@ -634,11 +627,6 @@ function execMerge(
         mergedChildren.push(child);
       }
     }
-    if (node.confidence !== undefined) {
-      minConfidence = minConfidence === undefined
-        ? node.confidence
-        : Math.min(minConfidence, node.confidence);
-    }
   }
 
   const mergedNode: TreeNode = {
@@ -647,7 +635,6 @@ function execMerge(
     children: mergedChildren,
   };
   if (Object.keys(mergedQuotes).length > 0) mergedNode.slot_quotes = mergedQuotes;
-  if (minConfidence !== undefined) mergedNode.confidence = minConfidence;
 
   // Remove original nodes
   const keysToRemove = new Set(op.paths.map(getNodeKey));
@@ -715,7 +702,6 @@ function execRelate(
     to: op.to,
     type: op.type,
   };
-  if (op.confidence !== undefined) newRel.confidence = op.confidence;
 
   setRelations([...relations, newRel]);
   return null;

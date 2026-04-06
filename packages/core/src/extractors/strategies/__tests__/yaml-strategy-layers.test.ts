@@ -55,9 +55,7 @@ const validTree = `trip:
     destination: "trip to Tokyo"
     budget: "budget of 5000 dollars"
   source_map:
-    trip: T1
-  confidence_map:
-    trip: 0.9`;
+    trip: T1`;
 
 const validYOps = `yops:
   - define:
@@ -372,7 +370,7 @@ describe('Full pipeline integration', () => {
 
   it('incremental extraction with existing snapshot', async () => {
     const existingSnapshot = {
-      trees: [{ key: 'trip', slots: { destination: 'Tokyo' }, children: [], confidence: 0.9 }],
+      trees: [{ key: 'trip', slots: { destination: 'Tokyo' }, children: [] }],
       relations: [],
     };
 

@@ -30,7 +30,6 @@ const SetOpSchema = z
           .min(1)
           .describe('Short verbatim phrase from conversation (a few words, not full sentences)'),
         from: z.string().min(1).describe('Turn reference (e.g. T1, T3)'),
-        confidence: z.number().min(0).max(1).optional().describe('Extraction confidence 0-1'),
       })
       .strict()
       .describe(
@@ -70,7 +69,6 @@ const PopulateOpSchema = z
         slots: z.record(z.string(), SlotValueSchema).describe('Key-value pairs: {slot_key: value}'),
         source: z.record(z.string(), z.string()).describe('Quote per slot: {slot_key: "phrase from conversation"}'),
         from: z.string().min(1).describe('Turn reference (e.g. T1, T3)'),
-        confidence: z.number().min(0).max(1).optional().describe('Extraction confidence 0-1'),
       })
       .strict()
       .describe('Fill slots on an existing node. Content operation (DML). Node must exist.'),
@@ -196,7 +194,6 @@ const RelateOpSchema = z
         type: RelationTypeSchema.describe(
           'causes (A→B), conditions (if A then B), contrasts (A vs B), follows (A after B), depends (A needs B)'
         ),
-        confidence: z.number().min(0).max(1).optional().describe('Relation confidence 0-1'),
       })
       .strict()
       .describe(

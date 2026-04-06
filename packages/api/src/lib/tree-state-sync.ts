@@ -65,7 +65,6 @@ export async function rebuildTreesFromSnapshot(
       type: node.key,
       slots: node.slots,
       status: 'active',
-      confidence: node.confidence,
       source: node.source ?? 'unknown',
       slotQuotes: node.slot_quotes ?? null,
       manualEdited: false,
@@ -87,7 +86,6 @@ export async function rebuildTreesFromSnapshot(
       fromTreeId: rel.from,
       toTreeId: rel.to,
       type: rel.type,
-      confidence: rel.confidence,
     });
   }
 }
@@ -118,7 +116,6 @@ export async function readDraftFromTrees(
       slots: (r.slots ?? {}) as Record<string, import('@t3x-dev/core').SlotValue>,
       children: [],
       source: r.source !== 'unknown' ? r.source : undefined,
-      confidence: r.confidence ?? undefined,
       slot_quotes: (r.slotQuotes ?? undefined) as Record<string, string> | undefined,
     });
   }
@@ -148,7 +145,6 @@ export async function readDraftFromTrees(
     from: r.fromTreeId,
     to: r.toTreeId,
     type: r.type as Relation['type'],
-    confidence: r.confidence ?? undefined,
   }));
 
   return { trees: rootTrees, relations: relationsResult };

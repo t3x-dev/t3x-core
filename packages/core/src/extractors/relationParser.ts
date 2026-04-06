@@ -13,7 +13,6 @@ export interface RelationItem {
   source_id: string;
   target_id: string;
   type: RelationType;
-  confidence: number;
   reasoning: string;
 }
 
@@ -42,7 +41,6 @@ function validateItem(item: unknown, validIds: Set<string>): RelationItem | null
   if (typeof obj.source_id !== 'string' || obj.source_id.length === 0) return null;
   if (typeof obj.target_id !== 'string' || obj.target_id.length === 0) return null;
   if (typeof obj.type !== 'string' || !VALID_TYPES.has(obj.type)) return null;
-  if (typeof obj.confidence !== 'number' || !Number.isFinite(obj.confidence)) return null;
   if (typeof obj.reasoning !== 'string' || obj.reasoning.length === 0) return null;
   if (obj.source_id === obj.target_id) return null;
   if (!validIds.has(obj.source_id) || !validIds.has(obj.target_id)) return null;
@@ -50,7 +48,6 @@ function validateItem(item: unknown, validIds: Set<string>): RelationItem | null
     source_id: obj.source_id,
     target_id: obj.target_id,
     type: obj.type as RelationType,
-    confidence: Math.max(0, Math.min(1, obj.confidence)),
     reasoning: (obj.reasoning as string).slice(0, 500),
   };
 }

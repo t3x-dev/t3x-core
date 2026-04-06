@@ -44,14 +44,12 @@ const FrameSchema = z.object({
   type: z.string().min(1),
   slots: z.record(z.string(), z.any()),
   source: z.string().optional(),
-  confidence: z.number().min(0).max(1).optional(),
 });
 
 const RelationSchema = z.object({
   from: z.string().min(1),
   to: z.string().min(1),
   type: z.enum(['causes', 'conditions', 'contrasts', 'follows', 'depends']),
-  confidence: z.number().min(0).max(1).optional(),
 });
 
 const GateCheckRequest = z.object({

@@ -39,15 +39,6 @@ describe('relate', () => {
     });
   });
 
-  it('attaches confidence to relation', () => {
-    const content = sc([t('trip', {}, [t('dining', {}), t('budget', {})])]);
-    const result = applyYOps(content, [
-      { relate: { from: 'trip/dining', to: 'trip/budget', type: 'causes', confidence: 0.8 } },
-    ]);
-    expect(result.ok).toBe(true);
-    expect(result.relations[0].confidence).toBe(0.8);
-  });
-
   it('rejects self-relation', () => {
     const content = sc([t('trip', {})]);
     const result = applyYOps(content, [

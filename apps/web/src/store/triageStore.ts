@@ -50,7 +50,7 @@ function collectAllSlots(node: TreeNode, prefix: string): Record<string, string>
  *  with dot-path keys so the full tree content is visible in triage. */
 export function treesToTriageItems(trees: TreeNode[]): TriageItem[] {
   return trees.map((tree) => {
-    const source: TriageSource = tree.confidence && tree.confidence >= 0.8 ? 'both' : 'llm';
+    const source: TriageSource = 'llm';
     // Include root slots + all children slots
     const slots = collectAllSlots(tree, '');
     const childCount = tree.children.length;

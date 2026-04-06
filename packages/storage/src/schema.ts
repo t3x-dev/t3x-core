@@ -50,7 +50,6 @@ export const projects = pgTable(
     defaultModel: text('default_model'), // model ID from catalog
     autopilotConfig: jsonb('autopilot_config').$type<{
       enabled: boolean;
-      min_confidence: number;
       min_nodes: number;
       auto_create_leaf: boolean;
       target_branch: string;

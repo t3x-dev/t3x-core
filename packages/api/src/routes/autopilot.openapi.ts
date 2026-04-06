@@ -47,7 +47,6 @@ const DraftIdParam = z.object({
 
 const AutopilotConfigSchema = z.object({
   enabled: z.boolean(),
-  min_confidence: z.number(),
   min_nodes: z.number(),
   auto_create_leaf: z.boolean(),
   target_branch: z.string(),
@@ -101,7 +100,6 @@ autopilotRoutes.openapi(getConfigRoute, async (c) => {
 
 const UpdateConfigBodySchema = z.object({
   enabled: z.boolean().optional(),
-  min_confidence: z.number().min(0).max(1).optional(),
   min_nodes: z.number().int().min(1).optional(),
   auto_create_leaf: z.boolean().optional(),
   target_branch: z.string().min(1).optional(),
@@ -167,7 +165,6 @@ const AdaptiveResponseSchema = z.object({
   data: z.object({
     adaptive: z
       .object({
-        confidenceMultipliers: z.record(z.string(), z.number()),
         suppressedTypes: z.array(z.string()),
         cosineThresholdDelta: z.number(),
       })
@@ -348,7 +345,6 @@ autopilotRoutes.openapi(autoCommitRoute, async (c) => {
     const sps = (draft.semantic_points ?? []) as Array<{
       id: string;
       text: string;
-      confidence?: number;
       zone: string;
       status: string;
       staged: boolean;
@@ -356,7 +352,6 @@ autopilotRoutes.openapi(autoCommitRoute, async (c) => {
     const candidates = sps.map((sp) => ({
       id: sp.id,
       text: sp.text,
-      confidence: sp.confidence ?? 0,
       zone: sp.zone as 'ready' | 'review',
       status: sp.status,
       staged: sp.staged,
@@ -401,7 +396,6 @@ autopilotRoutes.openapi(autoCommitRoute, async (c) => {
       key: sp.id || 'legacy_node',
       slots: { text: sp.text } as Record<string, string>,
       children: [] as import('@t3x-dev/core').TreeNode[],
-      confidence: sp.confidence,
     }));
 
     // Find uncommitted yops for this conversation

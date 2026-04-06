@@ -21,7 +21,6 @@ export {
   type CompressInput,
   type NodeWithSignals,
 } from './compressPrompt';
-export { type ConfidenceInput, computeConfidence } from './confidence';
 // Correction prompt (batch validation feedback loop)
 export { buildCorrectionPrompt, type CorrectionInput, type CorrectionPromptResult } from './correctionPrompt';
 // extractionPrompt helpers — still used by yopsPrompt.ts internally
