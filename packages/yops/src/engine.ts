@@ -6,7 +6,7 @@
  * Fail-fast: stops at the first error and returns partial state.
  */
 
-import type { YValue, YOp, YOpsResult } from './types';
+import type { YValue, YOp, YOpsResult, YOpsError } from './types';
 import { deepClone } from './paths';
 import { yopsError, YOPS_ERRORS } from './errors';
 import { applyDefine, applyDrop, applyRename } from './ops/ddl';
@@ -21,7 +21,7 @@ export function applyYOps(doc: YValue, ops: YOp[]): YOpsResult {
   for (let i = 0; i < ops.length; i++) {
     const op = ops[i];
 
-    let result: { doc: YValue; error?: ReturnType<typeof yopsError> };
+    let result: { doc: YValue; error?: YOpsError };
 
     if ('define' in op) {
       result = applyDefine(current, op.define, i);
