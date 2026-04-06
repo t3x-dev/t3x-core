@@ -1,6 +1,7 @@
 {
   "name": "@t3x-dev/api",
   "version": "0.0.4",
+  "license": "Apache-2.0",
   "type": "module",
   "exports": {
     ".": {

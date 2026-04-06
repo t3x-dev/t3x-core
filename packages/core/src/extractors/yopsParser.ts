@@ -53,10 +53,6 @@ function sanitizeYamlQuotes(text: string): string {
       // Check if the content itself contains unescaped double quotes
       // (i.e., the outer quotes are the YAML delimiters, inner ones are problematic)
       if (content.includes('"')) {
-        const fixed = content
-          .replace(/"/g, '\u300C')
-          .replace(/\u300C([^\u300C]*?)$/g, (m) => m.replace(/\u300C/g, '"'));
-        // Actually, simpler: replace ALL inner quotes with corner brackets
         const safeContent = content.replace(/"/g, '「').replace(/"/g, '」');
         return `${prefix}"${safeContent}"`;
       }

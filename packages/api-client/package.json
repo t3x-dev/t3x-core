@@ -1,6 +1,7 @@
 {
   "name": "@t3x-dev/api-client",
   "version": "0.0.1",
+  "license": "Apache-2.0",
   "description": "TypeScript client for T3X API",
   "type": "module",
   "main": "dist/index.js",
@@ -35,7 +36,6 @@
     "client",
     "typescript"
   ],
-  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/t3x-dev/t3x.git",

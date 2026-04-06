@@ -2,6 +2,7 @@
   "name": "t3x",
   "version": "0.1.0",
   "private": true,
+  "license": "Apache-2.0",
   "description": "T3X - Semantic extraction, diff, and merge for conversational AI",
   "packageManager": "pnpm@10.26.2",
   "scripts": {
