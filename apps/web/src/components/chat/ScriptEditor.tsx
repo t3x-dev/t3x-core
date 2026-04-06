@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef } from 'react';
 import { EditorView, keymap, lineNumbers, placeholder as cmPlaceholder } from '@codemirror/view';
-import { EditorState } from '@codemirror/state';
+import { Compartment, EditorState } from '@codemirror/state';
 import { yaml } from '@codemirror/lang-yaml';
 import { oneDark } from '@codemirror/theme-one-dark';
 import { lintGutter } from '@codemirror/lint';
@@ -24,6 +24,7 @@ export function ScriptEditor() {
   const execError = useWorkspaceStore((s) => s.execError);
   const setScriptText = useWorkspaceStore((s) => s.setScriptText);
   const isExternalUpdate = useRef(false);
+  const readOnlyCompartment = useRef(new Compartment());
 
   // Initialize CodeMirror
   useEffect(() => {
@@ -37,6 +38,7 @@ export function ScriptEditor() {
         lintGutter(),
         keymap.of(defaultKeymap),
         cmPlaceholder(PLACEHOLDER),
+        readOnlyCompartment.current.of(EditorState.readOnly.of(false)),
         EditorView.updateListener.of((update) => {
           if (update.docChanged && !isExternalUpdate.current) {
             setScriptText(update.state.doc.toString());
@@ -74,7 +76,9 @@ export function ScriptEditor() {
   useEffect(() => {
     const view = viewRef.current;
     if (!view) return;
-    view.dispatch({ effects: EditorState.readOnly.of(mode === 'streaming') });
+    view.dispatch({
+      effects: readOnlyCompartment.current.reconfigure(EditorState.readOnly.of(mode === 'streaming')),
+    });
   }, [mode]);
 
   return (
