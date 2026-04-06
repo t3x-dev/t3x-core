@@ -28,9 +28,17 @@
 
 <br/>
 
-T3X is a standalone, deterministic engine for YAML-structured context. Write or generate YAML, transform it with [YOps](https://t3x.dev/docs/yops) (13 YAML-native operations), and version it with commit, diff, and three-way merge.
+T3X is a standalone, deterministic engine for YAML-structured context. Write or generate YAML, transform it with [YOps](https://t3x.dev/docs/yops), and version it with commit, diff, and three-way merge.
 
 T3X also includes an LLM-powered extraction module that builds YAML incrementally from conversations, documents, and transcripts &mdash; so you don't have to write it by hand.
+
+### YOps &mdash; Declarative YAML Operations
+
+<p align="center">
+  <img src=".github/assets/yops-architecture.svg" alt="YOps Architecture" width="680" />
+</p>
+
+**YOps** is the operation layer &mdash; a spec-driven engine where `yops.yaml` defines the operations, the **Registry** validates inputs against the spec, and the **Engine** dispatches to handlers.
 
 <br/>
 
@@ -121,7 +129,8 @@ Requires Node.js 20+ and pnpm 10+.
 ### Project structure
 
 ```
-packages/core        # Deterministic engine — diff, merge, hash chains, YOps
+packages/yops        # YOps — 18 declarative YAML operations (spec-driven engine)
+packages/core        # T3X engine — diff, merge, hash chains, extraction
 packages/storage     # PostgreSQL persistence layer
 packages/api         # API library (Hono + OpenAPI)
 packages/api-client  # TypeScript client
@@ -149,7 +158,8 @@ pnpm check:fix       # Auto-fix
 
 | Package | |
 |:--------|:--|
-| [`@t3x-dev/core`](https://www.npmjs.com/package/@t3x-dev/core) | Deterministic engine |
+| [`@t3x-dev/yops`](https://www.npmjs.com/package/@t3x-dev/yops) | YOps — 18 declarative YAML operations |
+| [`@t3x-dev/core`](https://www.npmjs.com/package/@t3x-dev/core) | T3X engine — diff, merge, extraction |
 | [`@t3x-dev/storage`](https://www.npmjs.com/package/@t3x-dev/storage) | Persistence layer |
 | [`@t3x-dev/api`](https://www.npmjs.com/package/@t3x-dev/api) | API server |
 | [`@t3x-dev/api-client`](https://www.npmjs.com/package/@t3x-dev/api-client) | TypeScript client |
