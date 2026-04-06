@@ -11,6 +11,7 @@ import { deepClone } from './paths';
 import { yopsError, YOPS_ERRORS } from './errors';
 import { applyDefine, applyDrop, applyRename } from './ops/ddl';
 import { applySet, applyUnset, applyPopulate, applyAppend } from './ops/dml';
+import { applyMove, applyClone, applyNest, applySplit, applyFold, applyMerge, applySort, applyUnique, applyPick, applyOmit } from './ops/dtl';
 
 export function applyYOps(doc: YValue, ops: YOp[]): YOpsResult {
   // Deep clone so the caller's document is never mutated
@@ -35,6 +36,26 @@ export function applyYOps(doc: YValue, ops: YOp[]): YOpsResult {
       result = applyPopulate(current, op.populate, i);
     } else if ('append' in op) {
       result = applyAppend(current, op.append, i);
+    } else if ('move' in op) {
+      result = applyMove(current, op.move, i);
+    } else if ('clone' in op) {
+      result = applyClone(current, op.clone, i);
+    } else if ('nest' in op) {
+      result = applyNest(current, op.nest, i);
+    } else if ('split' in op) {
+      result = applySplit(current, op.split, i);
+    } else if ('fold' in op) {
+      result = applyFold(current, op.fold, i);
+    } else if ('merge' in op) {
+      result = applyMerge(current, op.merge, i);
+    } else if ('sort' in op) {
+      result = applySort(current, op.sort, i);
+    } else if ('unique' in op) {
+      result = applyUnique(current, op.unique, i);
+    } else if ('pick' in op) {
+      result = applyPick(current, op.pick, i);
+    } else if ('omit' in op) {
+      result = applyOmit(current, op.omit, i);
     } else {
       // Unknown op
       return {
