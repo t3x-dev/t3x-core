@@ -1,19 +1,13 @@
-/**
- * @yops-dev/core — DCL Operations
- *
- * assert: Validate a condition against the document. Fail-fast — no mutation.
- */
-
-import { yopsError, YOPS_ERRORS } from '../errors';
+import type { OpHandler } from '../registry';
 import { resolvePath } from '../paths';
-import type { YValue, YOpsError, AssertOp } from '../types';
+import { yopsError, YOPS_ERRORS } from '../errors';
+import type { YValue } from '../types';
 
-type OpResult = { doc: YValue; error?: YOpsError };
-
-// ── assert ───────────────────────────────────────────────────────────────────
-
-export function applyAssert(doc: YValue, op: AssertOp, index: number): OpResult {
-  const { path, equals, exists, type } = op;
+export const assertHandler: OpHandler = (doc, fields, index) => {
+  const path = fields.path as string;
+  const equals = fields.equals as YValue | undefined;
+  const exists = fields.exists as boolean | undefined;
+  const type = fields.type as string | undefined;
 
   // equals condition
   if (equals !== undefined) {
@@ -21,11 +15,7 @@ export function applyAssert(doc: YValue, op: AssertOp, index: number): OpResult 
     if (value === undefined) {
       return {
         doc,
-        error: yopsError(
-          YOPS_ERRORS.ASSERTION_FAILED,
-          `Path "${path}" does not exist`,
-          index,
-        ),
+        error: yopsError(YOPS_ERRORS.ASSERTION_FAILED, `Path "${path}" does not exist`, index),
       };
     }
     if (JSON.stringify(value) !== JSON.stringify(equals)) {
@@ -74,11 +64,7 @@ export function applyAssert(doc: YValue, op: AssertOp, index: number): OpResult 
     if (value === undefined) {
       return {
         doc,
-        error: yopsError(
-          YOPS_ERRORS.ASSERTION_FAILED,
-          `Path "${path}" does not exist`,
-          index,
-        ),
+        error: yopsError(YOPS_ERRORS.ASSERTION_FAILED, `Path "${path}" does not exist`, index),
       };
     }
     const actualType = Array.isArray(value)
@@ -101,4 +87,4 @@ export function applyAssert(doc: YValue, op: AssertOp, index: number): OpResult 
 
   // No condition — pass through
   return { doc };
-}
+};
