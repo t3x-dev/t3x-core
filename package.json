@@ -2,6 +2,7 @@
   "name": "t3x",
   "version": "0.1.0",
   "private": true,
+  "license": "AGPL-3.0-only",
   "description": "T3X - Semantic extraction, diff, and merge for conversational AI",
   "packageManager": "pnpm@10.26.2",
   "scripts": {
