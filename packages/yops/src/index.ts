@@ -27,3 +27,12 @@ export type {
 } from './types';
 
 export { YOPS_ERRORS, type YOpsErrorCode } from './errors';
+
+export {
+  parsePath,
+  resolvePath,
+  setAtPath,
+  deleteAtPath,
+  deepClone,
+  type PathSegment,
+} from './paths';
