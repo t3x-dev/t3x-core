@@ -152,9 +152,6 @@ export function SuggestConstraintsDialog({
                       <Badge variant="secondary" className="text-xs">
                         {s.match_mode}
                       </Badge>
-                      <span className="text-xs text-muted-foreground ml-auto">
-                        {Math.round(s.confidence * 100)}%
-                      </span>
                     </div>
                     <p className="text-sm">{s.value}</p>
                     {s.reason && <p className="text-xs text-muted-foreground">{s.reason}</p>}

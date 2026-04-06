@@ -17,7 +17,7 @@ const mockProvider = (text: string) => ({
 
 describe('Extractor with YOps', () => {
   it('first extraction returns yops with add op', async () => {
-    const raw = `trip:\n  destination: Hangzhou\n---\n{"slot_quotes":{"destination":"go to HZ"},"source_map":{"trip":"T1"},"confidence_map":{"trip":0.9}}`;
+    const raw = `trip:\n  destination: Hangzhou\n---\n{"slot_quotes":{"destination":"go to HZ"},"source_map":{"trip":"T1"}}`;
     const extractor = new Extractor(mockProvider(raw));
     const result = await extractor.extract({
       turns: [{ role: 'user', content: 'Plan trip', turn_hash: 'T1' }],
@@ -43,7 +43,7 @@ describe('Extractor with YOps', () => {
   });
 
   it('returns snapshot without lint scores', async () => {
-    const raw = `trip:\n  destination: Hangzhou\n---\n{"slot_quotes":{"destination":"go"},"source_map":{"trip":"T1"},"confidence_map":{"trip":0.9}}`;
+    const raw = `trip:\n  destination: Hangzhou\n---\n{"slot_quotes":{"destination":"go"},"source_map":{"trip":"T1"}}`;
     const extractor = new Extractor(mockProvider(raw));
     const result = await extractor.extract({
       turns: [{ role: 'user', content: 'Hi', turn_hash: 'T1' }],
@@ -62,7 +62,7 @@ describe('Extractor with YOps', () => {
   });
 
   it('retries once on parse failure then succeeds', async () => {
-    const validOutput = `trip:\n  destination: Tokyo\n---\n{"slot_quotes":{"destination":"travel to Tokyo"},"source_map":{"trip":"T1"},"confidence_map":{"trip":0.9}}`;
+    const validOutput = `trip:\n  destination: Tokyo\n---\n{"slot_quotes":{"destination":"travel to Tokyo"},"source_map":{"trip":"T1"}}`;
     let callCount = 0;
     const provider = {
       id: 'test-provider',
@@ -102,7 +102,7 @@ describe('Extractor with YOps', () => {
   });
 
   it('accumulates usage across retries', async () => {
-    const validOutput = `trip:\n  destination: Tokyo\n---\n{"slot_quotes":{"destination":"Tokyo"},"source_map":{"trip":"T1"},"confidence_map":{"trip":0.9}}`;
+    const validOutput = `trip:\n  destination: Tokyo\n---\n{"slot_quotes":{"destination":"Tokyo"},"source_map":{"trip":"T1"}}`;
     let callCount = 0;
     const provider = {
       id: 'test-provider',

@@ -431,7 +431,6 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
     let nodes: Array<{
       id: string;
       text: string;
-      confidence?: number;
       source_ref?: {
         conversation_id: string;
         turn_hash: string;
@@ -453,7 +452,6 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
         (draft.semantic_points ?? []) as Array<{
           id: string;
           text: string;
-          confidence?: number;
           zone: string;
           status: string;
           staged: boolean;
@@ -476,7 +474,6 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
         return {
           id: sp.id,
           text: sp.text,
-          confidence: sp.confidence,
           source_ref: primary
             ? {
                 conversation_id: primary.conversation_id!,
@@ -496,8 +493,6 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
       }
 
       nodes = includedNodes.map((ds: any) => {
-        const confidence = ds.origin.type === 'extracted' ? ds.origin.confidence : 1.0;
-
         const sourceRef =
           ds.source && (ds.origin.type === 'extracted' || ds.origin.type === 'selected')
             ? {
@@ -511,7 +506,6 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
         return {
           id: generateNodeId(),
           text: ds.text,
-          confidence,
           source_ref: sourceRef,
         };
       });
@@ -525,7 +519,6 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
       id: s.id || `f_${String(i + 1).padStart(3, '0')}`,
       type: 'legacy_sentence' as const,
       slots: { text: s.text },
-      confidence: s.confidence,
     }));
 
     // Find uncommitted yops for this conversation
@@ -542,7 +535,6 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
           key: f.id,
           slots: f.slots,
           children: [] as any[],
-          confidence: f.confidence,
         })),
         relations: [],
       },

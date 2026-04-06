@@ -251,7 +251,6 @@ describe('Knowledge Graph Queries', () => {
           source_node_key: 's_ea1',
           target_node_key: 's_eb1',
           relation_type: 'supports',
-          confidence: 0.9,
         },
       ];
 
@@ -273,7 +272,6 @@ describe('Knowledge Graph Queries', () => {
       expect(edge.weight).toBeCloseTo(0.85);
       expect(edge.evidence).toHaveLength(1);
       expect(edge.evidence![0].relation_type).toBe('supports');
-      expect(edge.evidence![0].confidence).toBeCloseTo(0.9);
       expect(edge.created_at).toBeTruthy();
     });
 

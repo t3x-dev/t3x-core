@@ -12,7 +12,6 @@ describe('buildLeafPrompt with Lesson[] support', () => {
         signal: 'Always include greeting',
         constraint_id: 'cst_1',
         leaf_id: 'leaf_1',
-        confidence: 1.0,
         created_at: '2026-03-31T00:00:00Z',
       },
       {
@@ -20,7 +19,6 @@ describe('buildLeafPrompt with Lesson[] support', () => {
         source: 'edit',
         signal: 'Keep casual tone',
         leaf_id: 'leaf_1',
-        confidence: 0.8,
         created_at: '2026-03-31T00:00:00Z',
       },
     ];

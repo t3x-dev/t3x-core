@@ -60,17 +60,15 @@ describe('flattenTree', () => {
     expect(frames[2].slots).toEqual({ rain_jacket: true });
   });
 
-  it('preserves source and confidence on flattened frames', () => {
+  it('preserves source on flattened frames', () => {
     const tree: TreeNode = {
       key: 'topic',
       slots: { a: 1 },
       children: [],
       source: 'T1',
-      confidence: 0.9,
     };
     const frames = flattenTree(tree);
     expect(frames[0].source).toBe('T1');
-    expect(frames[0].confidence).toBe(0.9);
   });
 
   it('converts slot_quotes to slot_sources paths', () => {

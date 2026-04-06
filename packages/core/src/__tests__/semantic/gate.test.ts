@@ -23,13 +23,11 @@ const sampleContent: SemanticContent = {
       key: 'project_goal',
       slots: { description: 'mobile app for tracking expenses' },
       children: [],
-      confidence: 0.95,
     },
     {
       key: 'constraint',
       slots: { platform: 'iOS', budget: 50000, deadline: 'March 2026' },
       children: [],
-      confidence: 0.9,
     },
   ],
   relations: [{ from: 'project_goal', to: 'constraint', type: 'causes' }],

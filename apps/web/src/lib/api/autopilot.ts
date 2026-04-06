@@ -10,7 +10,6 @@ import { API_V1, fetchWithTimeout, handleResponse } from './core';
 
 export interface AutopilotConfig {
   enabled: boolean;
-  min_confidence: number;
   min_nodes: number;
   auto_create_leaf: boolean;
   target_branch: string;
@@ -18,7 +17,6 @@ export interface AutopilotConfig {
 
 export interface AdaptiveResult {
   adaptive: {
-    confidenceMultipliers: Record<string, number>;
     suppressedTypes: string[];
     cosineThresholdDelta: number;
   } | null;
@@ -83,7 +81,7 @@ export async function getAdaptiveThreshold(projectId: string): Promise<AdaptiveR
 }
 
 /**
- * Auto-commit a draft using autopilot rules (confidence filtering, etc.).
+ * Auto-commit a draft using autopilot rules.
  */
 export async function autoCommitDraft(draftId: string): Promise<AutoCommitResult> {
   const res = await fetchWithTimeout(

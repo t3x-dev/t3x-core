@@ -3,7 +3,7 @@
  *
  * Design: Simple prompt for high recall. Code enforces structure.
  * The LLM's job: extract ALL facts into a YAML tree with source quotes.
- * Post-processing code handles: single-root enforcement, confidence, validation.
+ * Post-processing code handles: single-root enforcement, validation.
  */
 
 import type { SemanticContent, TreeNode } from '../semantic/types';

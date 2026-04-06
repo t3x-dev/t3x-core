@@ -146,11 +146,10 @@ export function YAMLTreePanel({
   );
 
   const getTreeMeta = useCallback(
-    (treeId: string) => {
-      const node = content.trees.find((f) => f.key === treeId);
-      return node?.confidence != null ? { confidence: node.confidence } : undefined;
+    (_treeId: string) => {
+      return undefined;
     },
-    [content.trees]
+    []
   );
 
   return (

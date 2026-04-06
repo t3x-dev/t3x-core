@@ -26,7 +26,6 @@ function findNodeByPath(trees: CoreTreeNode[], path: string): CoreTreeNode | und
     slots: f.slots,
     children: f.children,
     source: f.source,
-    confidence: f.confidence,
     slot_quotes: f.slot_quotes,
   };
 }

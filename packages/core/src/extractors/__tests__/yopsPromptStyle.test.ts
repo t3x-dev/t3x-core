@@ -77,7 +77,7 @@ describe('buildYOpsPrompt — style integration', () => {
   describe('incremental mode', () => {
     it('includes style segments in incremental mode too', () => {
       const snapshot = {
-        trees: [{ key: 'trip', slots: { destination: 'Tokyo' }, children: [], confidence: 0.9 }],
+        trees: [{ key: 'trip', slots: { destination: 'Tokyo' }, children: [] }],
         relations: [],
       };
       const { systemPrompt } = buildYOpsPrompt(

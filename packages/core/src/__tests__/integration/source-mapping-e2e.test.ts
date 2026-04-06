@@ -95,7 +95,7 @@ describe('Source Mapping E2E', () => {
         texture: "Slightly leaner taste compared to heavily grain-fed beef"
         farming: "Most Australian beef is grass-fed"
       from: T2
-      confidence: 0.45`;
+`;
 
     const provider = mockProvider(extractorOutput);
     const extractor = new Extractor(provider);
@@ -136,7 +136,7 @@ describe('Source Mapping E2E', () => {
         farming: "Most Australian beef is grass-fed"
         wagyu_flavor: "Wagyu - exceptionally tender with buttery flavor"
       from: T2
-      confidence: 0.45`;
+`;
 
     const provider = mockProvider(extractorOutput);
     const extractor = new Extractor(provider);
@@ -178,7 +178,7 @@ describe('Source Mapping E2E', () => {
       source:
         type: "Most Australian beef is grass-fed, giving it a more natural, earthy flavor"
       from: T2
-      confidence: 0.45`;
+`;
 
     const provider = mockProvider(extractorOutput);
     const extractor = new Extractor(provider);
@@ -215,7 +215,6 @@ describe('Source Mapping E2E', () => {
         slots: { interest: 'Australian beef taste' },
         children: [],
         source: 'T1',
-        confidence: 0.9,
         slot_quotes: { interest: "i want to know the australian beef's taste" },
       }],
       relations: [],
@@ -235,7 +234,7 @@ describe('Source Mapping E2E', () => {
         method: "best served medium-rare on the grill"
         rest_time: "let it rest for about 5 minutes"
       from: T4
-      confidence: 0.45`;
+`;
 
     const provider = mockProvider(extractorOutput);
     const extractor = new Extractor(provider);
@@ -273,7 +272,7 @@ describe('Source Mapping E2E', () => {
       source:
         taste: "Clean, pure taste"
       from: T2
-      confidence: 0.9`;
+`;
 
     const provider = mockProvider(extractorOutput);
     const extractor = new Extractor(provider);

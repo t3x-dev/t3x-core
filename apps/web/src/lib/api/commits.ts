@@ -39,7 +39,6 @@ export interface NodeSourceRef {
 export interface CommitContentNode {
   id: string;
   text: string;
-  confidence?: number;
   source_ref?: NodeSourceRef;
   inherited_from?: string;
 }

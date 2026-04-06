@@ -195,7 +195,7 @@ describe('YAMLRendererProps interface', () => {
       nodes,
       renderNodeActions: (_treeId, _treeType) => null,
       highlightNodeId: 'f_001',
-      getTreeMeta: (_treeId) => ({ confidence: 0.9, changeType: 'add' }),
+      getTreeMeta: (_treeId) => ({ changeType: 'add' }),
       onHoverNode: (_treeId) => {},
       className: 'my-class',
     };
@@ -223,11 +223,10 @@ describe('YAMLRendererProps interface', () => {
   });
 
   test('getTreeMeta returns correct shape for add change', () => {
-    const meta = { confidence: 0.85, changeType: 'add' as const };
+    const meta = { changeType: 'add' as const };
     const getTreeMeta = (_treeId: string) => meta;
 
     const result = getTreeMeta('f_001');
-    expect(result.confidence).toBe(0.85);
     expect(result.changeType).toBe('add');
   });
 

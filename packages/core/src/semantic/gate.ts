@@ -51,7 +51,7 @@ export function buildSemanticGatePrompt(
 ## 2. 准确性 (Accuracy)
 提取的 slot 值是否和原文一致？
 - 检查：数字、名称、日期等是否准确
-- 检查：推断性内容是否标注了较低的 confidence
+- 检查：推断性内容是否有明确的 source 引用
 
 ## 3. 关系正确性 (Relations)
 tree 之间的关系类型是否正确？

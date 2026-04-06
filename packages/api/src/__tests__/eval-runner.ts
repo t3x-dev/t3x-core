@@ -118,7 +118,7 @@ const SCENARIOS: Scenario[] = [
     name: 'Vague/Sparse — Career Decision',
     description:
       'Friend asks for advice about switching jobs. Lots of hedging, uncertainty, and low information density. Tests extraction quality with vague input.',
-    tests: 'Low-confidence extraction, hedged preferences, implicit constraints',
+    tests: 'Hedged preferences, implicit constraints, vague input',
     turns: [
       {
         role: 'user',
@@ -292,11 +292,11 @@ const SCENARIOS: Scenario[] = [
 // Markdown Formatter
 // ============================================================
 
-function formatFrameToMarkdown(frame: { id: string; type: string; slots: Record<string, unknown>; confidence?: number; slot_sources?: Record<string, unknown>; source?: string }, indent = 0): string {
+function formatFrameToMarkdown(frame: { id: string; type: string; slots: Record<string, unknown>; slot_sources?: Record<string, unknown>; source?: string }, indent = 0): string {
   const pad = '  '.repeat(indent);
   const lines: string[] = [];
   lines.push(
-    `${pad}- **${frame.type}** (id: \`${frame.id}\`, confidence: ${frame.confidence ?? 'N/A'})`
+    `${pad}- **${frame.type}** (id: \`${frame.id}\`)`
   );
   if (frame.source) {
     lines.push(`${pad}  - Source: ${frame.source}`);
@@ -334,7 +334,7 @@ function formatSnapshotToMarkdown(snapshot: SemanticContent): string {
   } else {
     for (const rel of snapshot.relations) {
       lines.push(
-        `- \`${rel.from}\` → \`${rel.to}\` (${rel.type}, confidence: ${rel.confidence ?? 'N/A'})`
+        `- \`${rel.from}\` → \`${rel.to}\` (${rel.type})`
       );
     }
     lines.push('');

@@ -8,14 +8,12 @@ const sampleContent: SemanticContent = {
       key: 'decision_pending',
       slots: { choice: 'launch API', timeline: 'Q2 2026' },
       source: 'sha256:abc',
-      confidence: 0.92,
       children: [],
     },
     {
       key: 'target_audience',
       slots: { segment: 'mid-size SaaS', size: '50-500' },
       source: 'sha256:def',
-      confidence: 0.88,
       children: [],
     },
   ],
@@ -31,16 +29,15 @@ describe('toDisplayYAML', () => {
     expect(yaml).toContain('  timeline: Q2 2026');
     expect(yaml).toContain('target_audience:');
     expect(yaml).toContain('target_audience → decision_pending (depends)');
-    // Should NOT contain source, confidence
+    // Should NOT contain source
     expect(yaml).not.toContain('sha256');
-    expect(yaml).not.toContain('0.92');
   });
 
   it('should handle duplicate types with suffixes', () => {
     const content: SemanticContent = {
       trees: [
-        { key: 'symptom', slots: { desc: 'headache' }, source: '', confidence: 1, children: [] },
-        { key: 'symptom_2', slots: { desc: 'nausea' }, source: '', confidence: 1, children: [] },
+        { key: 'symptom', slots: { desc: 'headache' }, source: '', children: [] },
+        { key: 'symptom_2', slots: { desc: 'nausea' }, source: '', children: [] },
       ],
       relations: [],
     };

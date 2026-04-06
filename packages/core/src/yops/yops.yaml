@@ -38,12 +38,6 @@ tree:
         type: string
         description: source turn identifier (e.g., T3)
         required: true
-      confidence:
-        type: number
-        min: 0
-        max: 1
-        default: 1.0
-        description: extraction certainty
 
   path:
     separator: "/"
@@ -79,11 +73,6 @@ operations:
         type: string
         required: true
         description: source turn identifier
-      confidence:
-        type: number
-        min: 0
-        max: 1
-        required: false
     rules:
       - parent node must exist
       - creates slot if absent, overwrites if present
@@ -136,12 +125,6 @@ operations:
         type: string
         required: true
         description: source turn identifier
-      confidence:
-        type: number
-        min: 0
-        max: 1
-        required: false
-        default: 1.0
     rules:
       - node must have exactly one top-level key
       - key must be snake_case
@@ -165,7 +148,6 @@ operations:
             budget: "about 1000 yuan"
             style: "keep it casual"
           from: T3
-          confidence: 0.85
 
   drop:
     description: remove a node, its children, and referencing relations
@@ -359,7 +341,6 @@ operations:
       - slots combined (last listed wins on conflict)
       - children combined (kept as-is on key conflict)
       - source quotes combined
-      - confidence set to minimum of all merged nodes
       - original nodes removed, merged node takes their place
     errors:
       NODE_NOT_FOUND: one or more paths missing
@@ -385,12 +366,6 @@ operations:
         type: string
         required: true
         enum: [causes, conditions, contrasts, follows, depends]
-      confidence:
-        type: number
-        min: 0
-        max: 1
-        required: false
-        default: 1.0
     rules:
       - both nodes must exist
       - no self-relations
@@ -406,7 +381,6 @@ operations:
           from: trip/dining
           to: trip/budget
           type: depends
-          confidence: 0.8
 
   unrelate:
     description: remove a relation

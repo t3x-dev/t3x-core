@@ -47,9 +47,7 @@ const goodTreeYaml = `trip:
   slot_quotes:
     destination: "trip to Tokyo"
   source_map:
-    trip: T1
-  confidence_map:
-    trip: 0.9`;
+    trip: T1`;
 
 describe('YamlExtractionStrategy — smart repair', () => {
   const strategy = new YamlExtractionStrategy();

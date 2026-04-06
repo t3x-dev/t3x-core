@@ -152,11 +152,9 @@ export {
 // Extraction Feedback (Anchoring L4)
 export {
   type AdaptiveFeedbackStats,
-  type CosineBucketRow,
   type ExtractionFeedbackStats,
   getAdaptiveFeedbackStats,
   getExtractionFeedbackStats,
-  getFeedbackByCosineBucket,
   type InsertExtractionFeedbackInput,
   insertExtractionFeedback,
   listExtractionFeedback,

@@ -49,7 +49,7 @@ export function replayYOps(input: ReplayInput): ReplayResult {
   };
 }
 
-// ── stripTree — strips metadata (source, slot_quotes, confidence), keeps key/slots/children ──
+// ── stripTree — strips metadata (source, slot_quotes), keeps key/slots/children ──
 
 function stripTree(node: TreeNode): {
   key: string;

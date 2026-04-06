@@ -85,8 +85,8 @@ describe('Suggest Constraints', () => {
       author: { type: 'human', name: 'test' },
       content: {
         trees: [
-          { key: 's_test001', slots: { text: 'The user prefers budget-friendly travel.' }, children: [], confidence: 0.9 },
-          { key: 's_test002', slots: { text: 'The user wants to visit Japan in spring.' }, children: [], confidence: 0.95 },
+          { key: 's_test001', slots: { text: 'The user prefers budget-friendly travel.' }, children: [] },
+          { key: 's_test002', slots: { text: 'The user wants to visit Japan in spring.' }, children: [] },
         ],
         relations: [],
       } as any,
@@ -117,14 +117,12 @@ describe('Suggest Constraints', () => {
         match_mode: 'semantic',
         value: 'budget-friendly travel',
         reason: 'Core user preference',
-        confidence: 0.95,
       },
       {
         type: 'exclude',
         match_mode: 'exact',
         value: 'luxury resort',
         reason: 'Contradicts budget preference',
-        confidence: 0.8,
       },
     ]);
 

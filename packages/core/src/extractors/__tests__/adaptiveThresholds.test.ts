@@ -119,9 +119,8 @@ describe('computeAdaptiveConfig', () => {
     };
   }
 
-  it('returns default multipliers when no feedback data', () => {
+  it('returns defaults when no feedback data', () => {
     const config = computeAdaptiveConfig(makeStats());
-    expect(config.confidenceMultipliers).toEqual({});
     expect(config.suppressedTypes).toEqual([]);
     expect(config.cosineThresholdDelta).toBe(0);
   });
@@ -136,10 +135,9 @@ describe('computeAdaptiveConfig', () => {
 
     const config = computeAdaptiveConfig(stats);
     expect(config.suppressedTypes).toContain('implicit');
-    expect(config.confidenceMultipliers.implicit).toBe(0);
   });
 
-  it('reduces confidence multiplier for 50-70% accept rate', () => {
+  it('does not suppress inference type with 50-70% accept rate', () => {
     const stats = makeStats({
       byInferenceType: {
         cross_turn: { total: 25, accepted: 15, edited: 5, rejected: 5 },
@@ -148,12 +146,11 @@ describe('computeAdaptiveConfig', () => {
     });
 
     const config = computeAdaptiveConfig(stats);
-    // 60% accept → reduce but don't suppress
+    // 60% accept → not suppressed
     expect(config.suppressedTypes).not.toContain('cross_turn');
-    expect(config.confidenceMultipliers.cross_turn).toBe(0.7);
   });
 
-  it('keeps default multiplier for >= 70% accept rate', () => {
+  it('does not suppress inference type with >= 70% accept rate', () => {
     const stats = makeStats({
       byInferenceType: {
         direct: { total: 50, accepted: 40, edited: 5, rejected: 5 },
@@ -163,7 +160,6 @@ describe('computeAdaptiveConfig', () => {
 
     const config = computeAdaptiveConfig(stats);
     expect(config.suppressedTypes).not.toContain('direct');
-    expect(config.confidenceMultipliers.direct).toBe(1.0);
   });
 
   it('ignores inference types with fewer than 20 samples', () => {
@@ -175,9 +171,8 @@ describe('computeAdaptiveConfig', () => {
     });
 
     const config = computeAdaptiveConfig(stats);
-    // Not enough data → default multiplier
+    // Not enough data → not suppressed
     expect(config.suppressedTypes).not.toContain('implicit');
-    expect(config.confidenceMultipliers.implicit).toBe(1.0);
   });
 
   it('suggests cosine threshold adjustment when edit rate > 30%', () => {
@@ -216,10 +211,7 @@ describe('computeAdaptiveConfig', () => {
 
     const config = computeAdaptiveConfig(stats);
 
-    expect(config.confidenceMultipliers.direct).toBe(1.0);
-    expect(config.confidenceMultipliers.paraphrase).toBe(0.7);
-    expect(config.confidenceMultipliers.implicit).toBe(0);
-
+    // Only implicit is suppressed (< 50% accept rate)
     expect(config.suppressedTypes).toEqual(['implicit']);
   });
 

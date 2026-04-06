@@ -64,17 +64,6 @@ export function RelationsList({ relations, nodes }: RelationsListProps) {
                 {truncate(lookupNode(rel.to, nodes), 60)}
               </span>
 
-              {/* Confidence bar */}
-              {rel.confidence != null && (
-                <div className="shrink-0 flex items-center gap-1.5">
-                  <div className="w-16 h-2 rounded-full bg-[var(--surface-app)] overflow-hidden border border-[var(--stroke-divider)]">
-                    <div
-                      className="h-full rounded-full bg-blue-500 transition-all"
-                      style={{ width: `${Math.round(rel.confidence * 100)}%` }}
-                    />
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         );

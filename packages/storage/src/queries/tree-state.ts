@@ -26,7 +26,6 @@ export interface UpsertTreeInput {
   type: string;
   slots: unknown;
   status?: string;
-  confidence?: number;
   source: string;
   slotQuotes?: unknown;
   slotSources?: unknown;
@@ -39,7 +38,6 @@ export interface UpsertTreeRelationInput {
   fromTreeId: string;
   toTreeId: string;
   type: string;
-  confidence?: number;
 }
 
 // ── Tree Queries ──
@@ -53,7 +51,6 @@ export async function upsertTree(db: AnyDB, input: UpsertTreeInput): Promise<Tre
     type: input.type,
     slots: input.slots,
     status: input.status ?? 'active',
-    confidence: input.confidence ?? null,
     source: input.source,
     slotQuotes: input.slotQuotes ?? null,
     slotSources: input.slotSources ?? null,
@@ -69,7 +66,6 @@ export async function upsertTree(db: AnyDB, input: UpsertTreeInput): Promise<Tre
         type: input.type,
         slots: input.slots,
         status: input.status ?? 'active',
-        confidence: input.confidence ?? null,
         source: input.source,
         slotQuotes: input.slotQuotes ?? null,
         slotSources: input.slotSources ?? null,
@@ -149,7 +145,6 @@ export async function upsertTreeRelation(
     fromTreeId: input.fromTreeId,
     toTreeId: input.toTreeId,
     type: input.type,
-    confidence: input.confidence ?? null,
   };
 
   const [result] = await db.insert(treeRelations).values(row).returning();

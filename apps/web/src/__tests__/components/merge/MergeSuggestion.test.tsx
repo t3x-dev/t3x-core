@@ -42,13 +42,11 @@ function createPair(overrides?: Partial<MergeSimilarPair>): MergeSimilarPair {
     source: {
       id: 's1',
       text: 'Budget is $3000 per month.',
-      confidence: 0.92,
       source: { turn_hash: 't1' },
     },
     target: {
       id: 's2',
       text: 'Budget is $3500 per month.',
-      confidence: 0.88,
       source: { turn_hash: 't2' },
     },
     wordDiff: [

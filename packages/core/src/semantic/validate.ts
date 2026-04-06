@@ -104,17 +104,6 @@ export function validateIntegrity(content: SemanticContent): ValidationResult {
     }
   }
 
-  // 6. Low confidence
-  for (const node of nodes) {
-    if (node.confidence !== undefined && node.confidence < 0.5) {
-      warnings.push({
-        type: 'low_confidence',
-        message: `Node "${node.id}" confidence: ${node.confidence}`,
-        location: node.id,
-      });
-    }
-  }
-
   return { valid: errors.length === 0, errors, warnings };
 }
 

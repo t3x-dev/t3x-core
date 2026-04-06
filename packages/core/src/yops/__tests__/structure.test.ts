@@ -85,7 +85,7 @@ describe('define + populate', () => {
     expect(result.error?.code).toBe('INVALID_KEY');
   });
 
-  it('attaches source, from, and confidence metadata via populate', () => {
+  it('attaches source, from metadata via populate', () => {
     const content = sc([]);
     const result = applyYOps(content, [
       { define: { parent: '', key: 'trip' } },
@@ -95,14 +95,12 @@ describe('define + populate', () => {
           slots: { budget: 2000 },
           source: { budget: 'about 2000' },
           from: 'T3',
-          confidence: 0.9,
         },
       },
     ]);
     expect(result.ok).toBe(true);
     expect(result.trees[0].slot_quotes?.budget).toBe('about 2000');
     expect(result.trees[0].source).toBe('T3');
-    expect(result.trees[0].confidence).toBe(0.9);
   });
 
   it('creates node with nested children via separate define+populate', () => {
@@ -269,14 +267,13 @@ describe('clone', () => {
     expect(result.trees[1].slots.budget).toBe(500);
   });
 
-  it('preserves metadata (confidence, source, slot_quotes)', () => {
+  it('preserves metadata (source, slot_quotes)', () => {
     const node: TreeNode = {
       key: 'dining',
       slots: { budget: 500 },
       children: [],
       slot_quotes: { budget: 'about 500' },
       source: 'T2',
-      confidence: 0.85,
     };
     const content = sc([t('trip', {}, [node]), t('ref', {})]);
     const result = applyYOps(content, [{ clone: { path: 'trip/dining', to: 'ref' } }]);
@@ -284,7 +281,6 @@ describe('clone', () => {
     const cloned = result.trees[1].children[0];
     expect(cloned.slot_quotes?.budget).toBe('about 500');
     expect(cloned.source).toBe('T2');
-    expect(cloned.confidence).toBe(0.85);
   });
 
   it('preserves deep children', () => {

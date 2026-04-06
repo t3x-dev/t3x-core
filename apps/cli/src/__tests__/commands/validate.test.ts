@@ -191,7 +191,6 @@ relations: []`;
           from: 'cause',
           to: 'effect',
           type: 'causes',
-          confidence: 0.9,
         },
       ],
     });

@@ -54,11 +54,6 @@ export function ReviewItem({ point, currentText, onAccept, onDismiss, onEdit }: 
                 {point.inference_type}
               </Badge>
             )}
-            {point.confidence != null && (
-              <span className="text-[10px] text-muted-foreground">
-                {Math.round(point.confidence * 100)}%
-              </span>
-            )}
             {point.low_coverage && (
               <span className="inline-flex items-center gap-0.5 text-[10px] text-amber-600 dark:text-amber-400">
                 <AlertTriangle className="h-2.5 w-2.5" /> Low coverage

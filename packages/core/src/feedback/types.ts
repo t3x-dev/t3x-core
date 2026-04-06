@@ -16,9 +16,6 @@ export interface Lesson {
   /** Which leaf this lesson belongs to */
   leaf_id: string;
 
-  /** Confidence 0-1 */
-  confidence: number;
-
   /** ISO8601 timestamp */
   created_at: string;
 }

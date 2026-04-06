@@ -23,7 +23,7 @@ export function renderNodeSlots(node: { slots: Record<string, SlotValue> }): str
 }
 
 export function formatRelation(r: Relation): string {
-  return `${r.from} -[${r.type}]-> ${r.to}${r.confidence != null ? ` (${Math.round(r.confidence * 100)}%)` : ''}`;
+  return `${r.from} -[${r.type}]-> ${r.to}`;
 }
 
 /** YAML syntax color tokens — reused across all YAML diff views */

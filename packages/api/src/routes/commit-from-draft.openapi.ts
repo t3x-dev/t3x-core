@@ -117,7 +117,6 @@ commitFromDraftRoutes.openapi(postCommitFromDraftRoute, async (c) => {
       id?: string;
       slots?: Record<string, unknown>;
       text?: string;
-      confidence?: number;
       children?: unknown[];
     }>;
 
@@ -133,7 +132,6 @@ commitFromDraftRoutes.openapi(postCommitFromDraftRoute, async (c) => {
       key: node.key || node.id || `s_${i}`,
       slots: node.slots || (node.text ? { text: node.text } : {}),
       children: (node.children ?? []) as any[],
-      confidence: node.confidence,
     }));
 
     // Find uncommitted yops for this conversation (if draft is from a conversation)

@@ -28,7 +28,6 @@ const RelationSchema = z.object({
     'follows',
     'depends',
   ]),
-  confidence: z.number().optional(),
 });
 
 const CommitHashParam = z.object({

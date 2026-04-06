@@ -647,7 +647,7 @@ export const drafts = pgTable(
           id: string;
           text: string;
           origin:
-            | { type: 'extracted'; segment_id: string; confidence: number }
+            | { type: 'extracted'; segment_id: string }
             | { type: 'selected' }
             | { type: 'manual' };
           source?: {
@@ -997,7 +997,6 @@ export const knowledgeEdges = pgTable(
           source_node_key: string;
           target_node_key: string;
           relation_type: string;
-          confidence: number;
         }>
       >(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

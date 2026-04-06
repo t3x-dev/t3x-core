@@ -307,7 +307,6 @@ export interface SuggestedConstraint {
   match_mode: 'exact' | 'semantic';
   value: string;
   reason: string;
-  confidence: number;
 }
 
 /** Constraint suggestion response */
@@ -389,15 +388,14 @@ export interface LearnFromEditsResult {
  */
 export async function learnFromEdits(
   leafId: string,
-  maxSuggestions = 5,
-  minConfidence = 0.8
+  maxSuggestions = 5
 ): Promise<LearnFromEditsResult> {
   const res = await fetchWithTimeout(
     `${API_V1}/leaves/${encodeURIComponent(leafId)}/learn-from-edits`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ max_suggestions: maxSuggestions, min_confidence: minConfidence }),
+      body: JSON.stringify({ max_suggestions: maxSuggestions }),
     },
     30_000
   );
@@ -439,7 +437,6 @@ export interface ApiAnchorCandidate {
   type: 'number' | 'money' | 'duration' | 'percent' | 'date' | 'entity' | 'term' | 'phrase';
   start_char: number;
   end_char: number;
-  confidence: number;
   source: 'token' | 'entity' | 'phrase';
 }
 
@@ -452,7 +449,6 @@ export function parseApiAnchorCandidate(api: ApiAnchorCandidate): AnchorCandidat
     type: api.type,
     startChar: api.start_char,
     endChar: api.end_char,
-    confidence: api.confidence,
     source: api.source,
   };
 }

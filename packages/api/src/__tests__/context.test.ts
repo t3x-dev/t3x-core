@@ -56,7 +56,6 @@ describe('Context Routes', () => {
             key: 'preference',
             slots: { topic: 'cats', sentiment: 'positive' },
             children: [],
-            confidence: 0.9,
           },
         ],
         relations: [],
@@ -77,13 +76,11 @@ describe('Context Routes', () => {
             key: 'preference',
             slots: { topic: 'cats', sentiment: 'positive' },
             children: [],
-            confidence: 0.9,
           },
           {
             key: 'fact',
             slots: { subject: 'user', predicate: 'lives_in', object: 'Tokyo' },
             children: [],
-            confidence: 0.85,
           },
         ],
         relations: [],
@@ -104,7 +101,6 @@ describe('Context Routes', () => {
             key: 'opinion',
             slots: { topic: 'dogs', stance: 'neutral' },
             children: [],
-            confidence: 0.75,
           },
         ],
         relations: [],
@@ -134,9 +130,7 @@ describe('Context Routes', () => {
       expect(data.data.trees).toHaveLength(2);
       expect(data.data.trees[0].key).toBe('preference');
       expect(data.data.trees[0].slots).toBeTruthy();
-      expect(data.data.trees[0].confidence).toBe(0.9);
       expect(data.data.trees[1].key).toBe('fact');
-      expect(data.data.trees[1].confidence).toBe(0.85);
     });
 
     it('returns empty when project has no commits', async () => {

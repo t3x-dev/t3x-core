@@ -24,7 +24,6 @@ function makePoint(overrides: Partial<SemanticPointAPI> = {}): SemanticPointAPI 
         enabled: true,
       },
     ],
-    confidence: 0.85,
     position: 0,
     staged: true,
     ...overrides,
@@ -61,14 +60,12 @@ describe('ReviewItem', () => {
     expect(isModify).toBe(true);
   });
 
-  test('metadata line includes inference_type and confidence', () => {
+  test('metadata line includes inference_type', () => {
     const point = makePoint({
       inference_type: 'cross_turn',
-      confidence: 0.78,
       routing_reason: 'Matched across turns',
     });
     expect(point.inference_type).toBe('cross_turn');
-    expect(point.confidence).toBe(0.78);
     expect(point.routing_reason).toBe('Matched across turns');
   });
 

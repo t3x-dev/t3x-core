@@ -131,9 +131,6 @@ const FIRST_EXTRACTION_FRAMES = `trip_plan:
   "source_map": {
     "trip_plan": "[T1:abc12345]"
   },
-  "confidence_map": {
-    "trip_plan": 0.95
-  }
 }`;
 
 /** Incremental extraction: Extractor returns YOps list format (no --- metadata block) */

@@ -252,8 +252,7 @@ If new turns discuss a topic UNRELATED to the current tree:
         "transportation.mode": "take the high-speed rail",
         "transportation.duration": "about an hour and a half"
       },
-      "source": "T4",
-      "confidence": 0.9
+      "source": "T4"
     },
     {
       "action": "update",
@@ -370,11 +369,6 @@ hangzhou_trip:
     "activity_plan": "T2",
     "dining": "T3"
   },
-  "confidence_map": {
-    "hangzhou_trip": 0.95,
-    "activity_plan": 0.85,
-    "dining": 0.9
-  }
 }
 \`\`\`
 Output the YAML tree first (no fences), then --- on its own line, then the JSON block (no fences). No other text.`;

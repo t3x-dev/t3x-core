@@ -19,7 +19,6 @@ export interface NodeRelation {
   from: string;
   to: string;
   type: RelationType;
-  confidence?: number;
 }
 
 // ============================================================================

@@ -28,7 +28,6 @@ export const ExtractTree: z.ZodType<unknown> = z.lazy(() =>
       slots: z.record(z.string(), z.unknown()),
       children: z.array(ExtractTree).default([]),
       source: z.string().optional(),
-      confidence: z.number().optional(),
     })
     .openapi('ExtractTree')
 );

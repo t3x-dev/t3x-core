@@ -5,7 +5,7 @@ vi.mock('@t3x-dev/api-client', () => ({
     extract: vi.fn().mockResolvedValue({
       conversation_id: 'conv_test',
       draft_id: 'draft_test',
-      trees: [{ key: 's_0', slots: { text: 'Test tree node' }, children: [], confidence: 0.9 }],
+      trees: [{ key: 's_0', slots: { text: 'Test tree node' }, children: [] }],
     }),
     check: vi.fn().mockResolvedValue({ passed: true, violations: [] }),
     context: vi.fn().mockResolvedValue({
@@ -222,7 +222,6 @@ describe('handleExtract', () => {
     expect(data.draft_id).toBe('draft_test');
     expect(Array.isArray(data.trees)).toBe(true);
     expect(data.trees[0].key).toBe('s_0');
-    expect(data.trees[0].confidence).toBe(0.9);
   });
 });
 

@@ -52,7 +52,7 @@ describe('Relations Routes', () => {
             { key: 'f_002', slots: { text: 'Cherry blossoms' }, children: [] },
           ],
           relations: [
-            { from: 'f_001', to: 'f_002', type: 'causes', confidence: 0.9 },
+            { from: 'f_001', to: 'f_002', type: 'causes' },
           ],
         },
         project_id: testProjectId,

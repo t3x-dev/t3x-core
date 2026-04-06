@@ -727,7 +727,6 @@ export interface NodeRelation {
   source_id: string; // node key
   target_id: string; // node key
   type: RelationType;
-  confidence: number; // 0.0 - 1.0
   reasoning: string; // LLM explanation
 }
 
@@ -736,7 +735,6 @@ export interface RelationExtractionResult {
   stats: {
     total_nodes: number;
     relations_found: number;
-    avg_confidence: number;
     extraction_time_ms: number;
   };
   usage: { inputTokens: number; outputTokens: number };

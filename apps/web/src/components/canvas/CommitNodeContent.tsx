@@ -52,7 +52,6 @@ export const CommitContentSection = memo(function CommitContentSection({
     id: string;
     type: string;
     slots: Record<string, unknown>;
-    confidence?: number;
   }>;
   const remainingNodes = nodes.length - PREVIEW_MAX_FRAMES;
 
@@ -103,19 +102,6 @@ export const CommitContentSection = memo(function CommitContentSection({
                       key={f.id}
                       className="flex items-start gap-1 text-xs text-[var(--text-secondary)]"
                     >
-                      {f.confidence !== undefined && (
-                        <span
-                          className={cn(
-                            'inline-block w-1.5 h-1.5 rounded-full mt-1 shrink-0',
-                            f.confidence >= 0.8
-                              ? 'bg-[var(--status-success)]'
-                              : f.confidence >= 0.5
-                                ? 'bg-amber-500'
-                                : 'bg-[var(--status-error)]'
-                          )}
-                          title={`${Math.round(f.confidence * 100)}%`}
-                        />
-                      )}
                       <span className="text-[var(--text-tertiary)] font-mono text-[11px] shrink-0">
                         {f.type}
                       </span>

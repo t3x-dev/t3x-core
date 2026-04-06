@@ -27,7 +27,6 @@ export interface CompatNode {
   key: string;
   slots: Record<string, SlotValue>;
   source?: string;
-  confidence?: number;
   children: TreeNode[];
   /** Original slot_quotes from TreeNode */
   slot_quotes?: Record<string, string>;
@@ -51,7 +50,6 @@ export function treesToNodes(trees: TreeNode[], prefix = ''): CompatNode[] {
       type: node.key,
       slots: node.slots,
       source: node.source,
-      confidence: node.confidence,
       children: node.children,
       slot_quotes: node.slot_quotes,
     });
@@ -97,7 +95,6 @@ function treeToNode(node: CompatNode): TreeNode {
     slots: node.slots,
     children: (node.children ?? []),
     source: node.source,
-    confidence: node.confidence,
     slot_quotes: node.slot_quotes,
   };
 }

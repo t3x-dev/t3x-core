@@ -102,7 +102,6 @@ export interface Branch {
 // Base fields that all facets have
 export interface FacetBase {
   facet: string;
-  confidence?: number;
   source_turn?: string;
   // Additional fields from CLI FacetRecord
   key?: string;

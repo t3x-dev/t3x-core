@@ -71,7 +71,6 @@ const EdgeEvidenceSchema = z.object({
   source_node_key: z.string(),
   target_node_key: z.string(),
   relation_type: z.string(),
-  confidence: z.number(),
 });
 
 const KnowledgeEdgeSchema = z.object({

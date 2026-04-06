@@ -19,13 +19,11 @@ describe('MergeSimilarPairCard', () => {
       source: {
         id: 's1',
         text: 'Budget is $3000',
-        confidence: 0.9,
         source: { turn_hash: 't1' },
       },
       target: {
         id: 's2',
         text: 'Budget is $3500',
-        confidence: 0.9,
         source: { turn_hash: 't2' },
       },
       wordDiff: [
@@ -46,13 +44,11 @@ describe('MergeSimilarPairCard', () => {
       source: {
         id: 's1',
         text: 'Source text',
-        confidence: 0.9,
         source: { turn_hash: 't1' },
       },
       target: {
         id: 's2',
         text: 'Target text',
-        confidence: 0.9,
         source: { turn_hash: 't2' },
       },
       wordDiff: [],
@@ -67,13 +63,11 @@ describe('MergeSimilarPairCard', () => {
       source: {
         id: 's1',
         text: 'Source text',
-        confidence: 0.9,
         source: { turn_hash: 't1' },
       },
       target: {
         id: 's2',
         text: 'Target text',
-        confidence: 0.9,
         source: { turn_hash: 't2' },
       },
       wordDiff: [],
@@ -88,13 +82,11 @@ describe('MergeSimilarPairCard', () => {
       source: {
         id: 's1',
         text: 'Source text',
-        confidence: 0.9,
         source: { turn_hash: 't1' },
       },
       target: {
         id: 's2',
         text: 'Target text',
-        confidence: 0.9,
         source: { turn_hash: 't2' },
       },
       wordDiff: [],
@@ -109,13 +101,11 @@ describe('MergeSimilarPairCard', () => {
       source: {
         id: 's1',
         text: 'text',
-        confidence: 0.9,
         source: { turn_hash: 't1' },
       },
       target: {
         id: 's2',
         text: 'text',
-        confidence: 0.9,
         source: { turn_hash: 't2' },
       },
       wordDiff: [

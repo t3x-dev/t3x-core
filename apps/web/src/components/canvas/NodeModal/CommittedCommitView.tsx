@@ -619,11 +619,6 @@ export function CommittedCommitView({
                                       <span className="ml-0.5">{String(facet.value)}</span>
                                     </span>
                                   )}
-                                  {facet.confidence !== undefined && facet.confidence < 1 && (
-                                    <span className="text-xs opacity-60 font-medium">
-                                      {Math.round(facet.confidence * 100)}%
-                                    </span>
-                                  )}
                                 </div>
                               );
                             })}

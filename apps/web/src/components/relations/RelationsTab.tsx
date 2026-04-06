@@ -26,8 +26,6 @@ export function RelationsTab({ commitHash, nodes }: RelationsTabProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [typeFilters, setTypeFilters] = useState<Set<RelationType>>(() => new Set(ALL_TYPES));
-  const [confidenceThreshold, setConfidenceThreshold] = useState(0);
-
   const fetchRelations = useCallback(async () => {
     if (!commitHash) return;
     setLoading(true);
@@ -50,9 +48,9 @@ export function RelationsTab({ commitHash, nodes }: RelationsTabProps) {
   const filtered = useMemo(
     () =>
       relations.filter(
-        (r) => typeFilters.has(r.type) && (r.confidence ?? 1) >= confidenceThreshold
+        (r) => typeFilters.has(r.type)
       ),
-    [relations, typeFilters, confidenceThreshold]
+    [relations, typeFilters]
   );
 
   const toggleType = useCallback((type: RelationType) => {
@@ -116,21 +114,6 @@ export function RelationsTab({ commitHash, nodes }: RelationsTabProps) {
             ))}
           </div>
 
-          <div className="flex items-center gap-3">
-            <span className="text-xs text-[var(--text-tertiary)] shrink-0">Min confidence</span>
-            <input
-              type="range"
-              min={0}
-              max={1}
-              step={0.05}
-              value={confidenceThreshold}
-              onChange={(e) => setConfidenceThreshold(Number.parseFloat(e.target.value))}
-              className="flex-1 h-1.5 accent-blue-500"
-            />
-            <span className="text-xs text-[var(--text-secondary)] font-mono w-8 text-right">
-              {confidenceThreshold.toFixed(2)}
-            </span>
-          </div>
         </div>
       )}
 

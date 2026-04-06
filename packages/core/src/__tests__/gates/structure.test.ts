@@ -5,7 +5,7 @@ import type { SemanticContent } from '../../semantic/types';
 describe('validateStructure', () => {
   it('passes for valid tree', () => {
     const content: SemanticContent = {
-      trees: [{ key: 'trip', slots: { destination: 'Tokyo' }, children: [], confidence: 0.9 }],
+      trees: [{ key: 'trip', slots: { destination: 'Tokyo' }, children: [] }],
       relations: [],
     };
     const result = validateStructure(content);

@@ -339,7 +339,6 @@ vi.mock('@/lib/db', () => ({
       {
         "id": "s_abc123",
         "text": "...",
-        "confidence": 0.95,
         "source_ref": {
           "conversation_id": "conv_...",
           "turn_hash": "sha256:...",
@@ -425,7 +424,7 @@ vi.mock('@/lib/db', () => ({
 1. **Determinism**: Core algorithms must be 100% reproducible — same inputs always produce same outputs
 2. **Append-only**: Hash chains are immutable; any modification breaks integrity
 3. **Plugin architecture**: Extractors and embedders are pluggable
-4. **Evidence-backed**: Every semantic finding traces to source turns with confidence scores
+4. **Evidence-backed**: Every semantic finding traces to source turns with verbatim quotes
 
 ## Environment Variables
 

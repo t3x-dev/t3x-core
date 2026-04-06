@@ -6,7 +6,7 @@ function makeNode(overrides: Partial<DraftNode> = {}): DraftNode {
   return {
     id: 's_abc',
     text: 'Test node',
-    origin: { type: 'extracted', segment_id: 'seg1', confidence: 0.9 },
+    origin: { type: 'extracted', segment_id: 'seg1' },
     position: 0,
     included: true,
     ...overrides,

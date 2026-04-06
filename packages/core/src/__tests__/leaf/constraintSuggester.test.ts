@@ -70,21 +70,18 @@ describe('suggestConstraints', () => {
         match_mode: 'semantic',
         value: 'budget-friendly travel',
         reason: 'Core user preference for affordable travel',
-        confidence: 0.95,
       },
       {
         type: 'require',
         match_mode: 'exact',
         value: 'Japan',
         reason: 'Key destination mentioned by user',
-        confidence: 0.9,
       },
       {
         type: 'exclude',
         match_mode: 'semantic',
         value: 'seafood recommendations',
         reason: 'User is allergic to shellfish',
-        confidence: 0.85,
       },
     ]);
 
@@ -110,7 +107,7 @@ describe('suggestConstraints', () => {
 
   it('handles markdown code fences in response', async () => {
     const mockResponse =
-      '```json\n[{"type":"require","match_mode":"exact","value":"Japan","reason":"dest","confidence":0.9}]\n```';
+      '```json\n[{"type":"require","match_mode":"exact","value":"Japan","reason":"dest"}]\n```';
     const provider = createMockProvider(mockResponse);
     const result = await suggestConstraints(provider, sampleKnowledge, 'article');
 
@@ -127,9 +124,9 @@ describe('suggestConstraints', () => {
 
   it('filters out invalid items from response', async () => {
     const mockResponse = JSON.stringify([
-      { type: 'require', match_mode: 'exact', value: 'Japan', reason: 'dest', confidence: 0.9 },
-      { type: 'invalid_type', match_mode: 'exact', value: 'bad', reason: 'bad', confidence: 0.5 },
-      { type: 'require', match_mode: 'exact', value: '', reason: 'empty value', confidence: 0.5 },
+      { type: 'require', match_mode: 'exact', value: 'Japan', reason: 'dest' },
+      { type: 'invalid_type', match_mode: 'exact', value: 'bad', reason: 'bad' },
+      { type: 'require', match_mode: 'exact', value: '', reason: 'empty value' },
     ]);
 
     const provider = createMockProvider(mockResponse);
@@ -170,14 +167,12 @@ describe('suggestionsToConstraints', () => {
         match_mode: 'exact' as const,
         value: 'Japan',
         reason: 'dest',
-        confidence: 0.9,
       },
       {
         type: 'exclude' as const,
         match_mode: 'semantic' as const,
         value: 'seafood',
         reason: 'allergy',
-        confidence: 0.85,
       },
     ];
 

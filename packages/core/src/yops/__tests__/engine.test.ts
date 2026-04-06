@@ -171,7 +171,7 @@ describe('parseYOpsYaml', () => {
       { rename: { path: 'trip/food', to: 'dining' } },
       { clone: { path: 'trip/dining', to: 'reference' } },
       { move: { path: 'trip/dining', to: 'trip/food/dining' } },
-      { relate: { from: 'trip', to: 'hotel', type: 'depends', confidence: 0.8 } },
+      { relate: { from: 'trip', to: 'hotel', type: 'depends' } },
       { unrelate: { from: 'trip', to: 'hotel', type: 'depends' } },
     ];
     const yaml = formatYOpsLog(ops);

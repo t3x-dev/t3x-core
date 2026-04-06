@@ -26,7 +26,6 @@ export function createNode(overrides: Partial<FlatNode> & { type: string }): Fla
     id: overrides.id ?? nextId(),
     type: overrides.type,
     slots: overrides.slots ?? {},
-    confidence: overrides.confidence ?? 0.9,
   };
 }
 /** @deprecated Use createNode */
@@ -42,7 +41,6 @@ export function createNodeWithSlots(
     id: id ?? nextId(),
     type,
     slots,
-    confidence: 0.9,
   };
 }
 /** @deprecated Use createNodeWithSlots */
@@ -122,7 +120,6 @@ export function createConciseTree(): TreeNode {
     key: 'travel_planning',
     slots: { destination: 'Tokyo', duration: '2 weeks', budget: 5000 },
     children: [],
-    confidence: 0.9,
     source: 'T1',
   };
 }
@@ -133,11 +130,10 @@ export function createBalancedTree(): TreeNode {
     key: 'hangzhou_trip',
     slots: { destination: 'Hangzhou', dates: 'May 1-3' },
     children: [
-      { key: 'activity_plan', slots: { activities: ['West Lake', 'hiking'], duration: '2 days' }, children: [], source: 'T2', confidence: 0.85 },
-      { key: 'dining', slots: { cuisine: 'local Hangzhou cuisine', budget: 500 }, children: [], source: 'T3', confidence: 0.9 },
+      { key: 'activity_plan', slots: { activities: ['West Lake', 'hiking'], duration: '2 days' }, children: [], source: 'T2' },
+      { key: 'dining', slots: { cuisine: 'local Hangzhou cuisine', budget: 500 }, children: [], source: 'T3' },
     ],
     source: 'T1',
-    confidence: 0.95,
   };
 }
 
