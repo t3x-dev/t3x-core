@@ -10,7 +10,7 @@
  * Mode is determined by whether treeMergeResult is set in the store.
  */
 
-import type { MergeResult, SemanticContent, TreeNode } from '@t3x-dev/core';
+import type { MergeResult, SemanticContent } from '@t3x-dev/core';
 import { prepareMerge } from '@t3x-dev/core';
 import { motion } from 'framer-motion';
 import { GitMerge, Loader2 } from 'lucide-react';
@@ -28,13 +28,16 @@ import { fullScreenEnter, reducedMotion } from '@/lib/motion';
 import { useCanvasStore } from '@/store/canvasStore';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
 import { buildMergeNavItems } from './buildMergeNavItems';
-import { ConflictCard, type TreeResolution } from './ConflictCard';
-import { MergeSection } from './MergeSection';
+import { ConflictCard } from './ConflictCard';
 import { MergeActionBar } from './MergeActionBar';
+import { MergeContextPanel } from './MergeContextPanel';
 import { MergeNavigator } from './MergeNavigator';
 import { MergeNavSidebar } from './MergeNavSidebar';
 import { MergePreview } from './MergePreview';
 import { MergeReviewDialog } from './MergeReviewDialog';
+import { MergeSection } from './MergeSection';
+import { buildMergedContent, findNode, findNodeByPath } from './mergeWorkspaceHelpers';
+import { useMergeKeyboard } from './useMergeKeyboard';
 import type { ViewMode } from './UnifiedDiffView';
 import { UnifiedDiffView } from './UnifiedDiffView';
 
@@ -43,138 +46,6 @@ interface MergeWorkspaceProps {
   onClose: () => void;
   /** Called after a successful merge commit with the new commit hash */
   onMergeCommitted?: (commitHash: string) => void;
-}
-
-/**
- * Find a TreeNode by slash-delimited path (e.g. "hangzhou_trip/dining")
- */
-function findNodeByPath(trees: TreeNode[], path: string): TreeNode | null {
-  const segments = path.split('/');
-  const root = trees.find((t) => t.key === segments[0]);
-  if (!root) return null;
-  let current = root;
-  for (let i = 1; i < segments.length; i++) {
-    const child = current.children.find((c) => c.key === segments[i]);
-    if (!child) return null;
-    current = child;
-  }
-  return current;
-}
-
-/**
- * Look up a TreeNode from source or target content by path
- */
-function findNode(
-  sourceContent: SemanticContent | undefined,
-  targetContent: SemanticContent | undefined,
-  path: string
-): TreeNode | null {
-  if (sourceContent) {
-    const node = findNodeByPath(sourceContent.trees, path);
-    if (node) return node;
-  }
-  if (targetContent) {
-    const node = findNodeByPath(targetContent.trees, path);
-    if (node) return node;
-  }
-  return null;
-}
-
-/**
- * Build merged SemanticContent from tree resolutions (tree-primary)
- */
-function buildMergedContent(
-  mergeResult: MergeResult,
-  resolutions: Map<string, TreeResolution>,
-  keepSource: Set<string>,
-  keepTarget: Set<string>,
-  sourceContent?: SemanticContent,
-  targetContent?: SemanticContent
-): SemanticContent {
-  const trees: TreeNode[] = [];
-
-  // Auto-kept nodes (take from source since they're identical)
-  for (const path of mergeResult.autoKept) {
-    const node = findNode(sourceContent, targetContent, path);
-    if (node) trees.push(node);
-  }
-
-  // Resolved conflicts
-  for (const conflict of mergeResult.conflicts) {
-    const resolution = resolutions.get(conflict.path);
-    if (!resolution) continue;
-
-    const sourceNode = sourceContent
-      ? findNodeByPath(sourceContent.trees, conflict.path)
-      : null;
-    const targetNode = targetContent
-      ? findNodeByPath(targetContent.trees, conflict.path)
-      : null;
-
-    switch (resolution.type) {
-      case 'source':
-        if (sourceNode) trees.push(sourceNode);
-        break;
-      case 'target':
-        if (targetNode) trees.push(targetNode);
-        break;
-      case 'both':
-        if (sourceNode) trees.push(sourceNode);
-        if (targetNode) trees.push(targetNode);
-        break;
-      case 'per-slot': {
-        // Build a merged node from per-slot choices
-        const mergedSlots: Record<string, unknown> = {};
-        const srcSlots = sourceNode?.slots ?? {};
-        const tgtSlots = targetNode?.slots ?? {};
-        const allKeys = new Set([...Object.keys(srcSlots), ...Object.keys(tgtSlots)]);
-        const conflictKeySet = new Set(conflict.slotConflicts.map((sc) => sc.key));
-        for (const key of allKeys) {
-          if (conflictKeySet.has(key)) {
-            const choice = resolution.slotChoices[key];
-            if (choice === 'source') {
-              mergedSlots[key] = srcSlots[key];
-            } else {
-              mergedSlots[key] = tgtSlots[key];
-            }
-          } else {
-            mergedSlots[key] = srcSlots[key] ?? tgtSlots[key];
-          }
-        }
-        trees.push({
-          key: conflict.path.split('/').pop() ?? conflict.path,
-          slots: mergedSlots as TreeNode['slots'],
-          children: sourceNode?.children ?? targetNode?.children ?? [],
-        });
-        break;
-      }
-    }
-  }
-
-  // Source-only nodes (user toggleable)
-  for (const path of mergeResult.onlyInSource) {
-    if (keepSource.has(path)) {
-      const node = sourceContent ? findNodeByPath(sourceContent.trees, path) : null;
-      if (node) trees.push(node);
-    }
-  }
-
-  // Target-only nodes (user toggleable)
-  for (const path of mergeResult.onlyInTarget) {
-    if (keepTarget.has(path)) {
-      const node = targetContent ? findNodeByPath(targetContent.trees, path) : null;
-      if (node) trees.push(node);
-    }
-  }
-
-  // Union all relations
-  const relations = [
-    ...mergeResult.relationsInBoth,
-    ...mergeResult.relationsOnlyInSource,
-    ...mergeResult.relationsOnlyInTarget,
-  ];
-
-  return { trees, relations };
 }
 
 export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWorkspaceProps) {
@@ -359,55 +230,17 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
   }, [cancelMerge, onClose]);
 
   // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Cmd/Ctrl + S to save
-      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
-        e.preventDefault();
-        saveDraft();
-      }
-
-      // Cmd/Ctrl + Enter to open review dialog
-      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-        e.preventDefault();
-        if (isTreeMode ? allTreeConflictsResolved() && message.trim() : canCommit()) {
-          setShowReviewDialog(true);
-        }
-      }
-
-      // Cmd/Ctrl + B to toggle sidebar
-      if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
-        e.preventDefault();
-        setSidebarCollapsed((prev) => !prev);
-      }
-
-      // Escape to cancel merge (only if dialog is not open)
-      if (e.key === 'Escape' && !showReviewDialog) {
-        // Don't cancel if user is typing in an input
-        const active = document.activeElement;
-        if (
-          active &&
-          (active.tagName === 'INPUT' ||
-            active.tagName === 'TEXTAREA' ||
-            active.getAttribute('contenteditable'))
-        ) {
-          return; // let the input handle Escape
-        }
-        handleCancel();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [
+  useMergeKeyboard({
     saveDraft,
     canCommit,
     handleCancel,
     showReviewDialog,
+    setShowReviewDialog,
+    setSidebarCollapsed,
     isTreeMode,
     allTreeConflictsResolved,
     message,
-  ]);
+  });
 
   const handleOpenReview = useCallback(() => {
     setShowReviewDialog(true);
@@ -792,92 +625,16 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
             </div>
 
             {/* Right: Merge context panel (280px) */}
-            <div className="hidden lg:flex w-[280px] shrink-0 flex-col border-l border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-4 overflow-y-auto">
-              {/* Source / Target info */}
-              <div className="mb-4">
-                <h4 className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)] mb-2">
-                  Merge Info
-                </h4>
-                <div className="space-y-1.5 text-xs">
-                  <div className="flex justify-between">
-                    <span className="text-[var(--text-tertiary)]">Source</span>
-                    <span className="font-mono text-[var(--text-secondary)] truncate ml-2 max-w-[160px]">
-                      {sourceBranch || sourceHash?.slice(0, 12) || '?'}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-[var(--text-tertiary)]">Target</span>
-                    <span className="font-mono text-[var(--text-secondary)] truncate ml-2 max-w-[160px]">
-                      {targetBranch || targetHash?.slice(0, 12) || '?'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Validation summary */}
-              <div className="mb-4">
-                <h4 className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)] mb-2">
-                  Validation
-                </h4>
-                <div className="space-y-1 text-xs">
-                  <div className="flex items-center gap-1.5">
-                    <span
-                      className={`h-1.5 w-1.5 rounded-full ${
-                        frameUnresolvedCount === 0
-                          ? 'bg-[var(--diff-added-accent)]'
-                          : 'bg-[var(--diff-removed-accent)]'
-                      }`}
-                    />
-                    <span className="text-[var(--text-secondary)]">
-                      {frameUnresolvedCount === 0
-                        ? 'All conflicts resolved'
-                        : `${frameUnresolvedCount} unresolved`}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span
-                      className={`h-1.5 w-1.5 rounded-full ${
-                        message.trim()
-                          ? 'bg-[var(--diff-added-accent)]'
-                          : 'bg-[var(--diff-removed-accent)]'
-                      }`}
-                    />
-                    <span className="text-[var(--text-secondary)]">
-                      {message.trim() ? 'Message provided' : 'Message required'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Tree count summary */}
-              <div className="mb-4">
-                <h4 className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)] mb-2">
-                  Summary
-                </h4>
-                <div className="space-y-1 text-xs text-[var(--text-secondary)]">
-                  <div className="flex justify-between">
-                    <span>Auto-kept</span>
-                    <span className="font-mono">{treeMergeResult.autoKept.length}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Conflicts</span>
-                    <span className="font-mono">{treeMergeResult.conflicts.length}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Source only</span>
-                    <span className="font-mono">{treeMergeResult.onlyInSource.length}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Target only</span>
-                    <span className="font-mono">{treeMergeResult.onlyInTarget.length}</span>
-                  </div>
-                  <div className="flex justify-between pt-1 border-t border-[var(--stroke-divider)]">
-                    <span className="font-medium">Preview total</span>
-                    <span className="font-mono font-medium">{framePreviewPaths.length}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <MergeContextPanel
+              sourceBranch={sourceBranch}
+              targetBranch={targetBranch}
+              sourceHash={sourceHash}
+              targetHash={targetHash}
+              treeMergeResult={treeMergeResult}
+              unresolvedCount={frameUnresolvedCount}
+              message={message}
+              previewTotalCount={framePreviewPaths.length}
+            />
           </div>
 
           {/* Preview Panel */}
