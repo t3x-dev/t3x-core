@@ -428,17 +428,25 @@ vi.mock('@/lib/db', () => ({
 
 ## Environment Variables
 
-Copy `.env.example` to `.env`:
+### User-facing (`.env` or shell)
 
+- `ANTHROPIC_API_KEY`: Required for extraction, chat, and generation
+- `GOOGLE_AI_STUDIO_KEY`: Optional — Gemini models and embeddings
+
+### Docker-internal (defaults in `docker-compose.yml`)
+
+- `DATABASE_URL`: PostgreSQL connection string (auto-set in Docker)
 - `NEXT_PUBLIC_API_URL`: T3X API server URL (default: http://localhost:8000)
-- `DATABASE_URL`: PostgreSQL connection string (production/Docker)
-- `ANTHROPIC_API_KEY`: For Claude API access (optional, for LLM features)
-- `GOOGLE_AI_STUDIO_KEY`: For Google AI features (optional)
-- `GOOGLE_CLOUD_NLP_KEY`: For Google Cloud NLP features (optional)
-- `N8N_BASE_URL`: n8n workflow engine URL (default: http://localhost:5678)
-- `N8N_API_KEY`: n8n API key (optional)
-- `RUNNER_BASE_URL`: Runner service URL (default: http://localhost:8080)
-- `TRACE_POLICY`: Runner trace policy: `always` | `on_failure` | `on_violation`
+- `AUTH_DISABLED`: Set `true` for self-hosted (default), `false` for production
+
+### Runner/n8n (optional profiles)
+
+- `N8N_API_KEY`: n8n API key
+- `TRACE_POLICY`: `always` | `on_failure` | `on_violation`
+
+### Cloud-only (in `t3x_cloud` repo, not here)
+
+- `GITHUB_CLIENT_ID/SECRET`, `GOOGLE_CLIENT_ID/SECRET`, `NEXTAUTH_SECRET` — OAuth for SaaS
 
 ## ID Conventions
 
