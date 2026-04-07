@@ -47,7 +47,7 @@ export function ScriptEditor() {
         EditorView.theme({
           '&': { height: '100%', fontSize: '11px' },
           '.cm-scroller': { overflow: 'auto', fontFamily: "'SF Mono', 'Fira Code', 'Cascadia Code', monospace" },
-          '.cm-gutters': { backgroundColor: '#191c27', borderRight: '1px solid #2a2d3a' },
+          '.cm-gutters': { backgroundColor: 'var(--editor-gutter)', borderRight: '1px solid var(--stroke-default)' },
         }),
       ],
     });
@@ -82,12 +82,12 @@ export function ScriptEditor() {
   }, [mode]);
 
   return (
-    <div className="flex flex-col h-full bg-[#13151e]">
-      <div className="flex items-center justify-between px-3 py-1.5 border-b border-[var(--stroke)] bg-[#191c27]">
+    <div className="flex flex-col h-full bg-[var(--editor-bg)]">
+      <div className="flex items-center justify-between px-3 py-1.5 border-b border-[var(--stroke-default)] bg-[var(--editor-gutter)]">
         <span className="text-[9px] font-bold uppercase tracking-wider text-[var(--text-tertiary)]">
           Script
           {mode === 'streaming' && (
-            <span className="ml-2 text-[7px] font-bold px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-400 uppercase">
+            <span className="ml-2 text-[7px] font-bold px-1.5 py-0.5 rounded bg-[var(--source-dim)] text-[var(--source)] uppercase">
               streaming
             </span>
           )}
@@ -98,16 +98,16 @@ export function ScriptEditor() {
       </div>
       <div ref={editorRef} className="flex-1 min-h-0 overflow-hidden" />
       {(parseErrors.length > 0 || execError) && (
-        <div className="border-t border-red-900/30 bg-red-950/20 px-3 py-1.5 text-[10px] font-mono max-h-20 overflow-y-auto">
+        <div className="border-t border-[var(--status-error)]/30 bg-[var(--status-error-muted)] px-3 py-1.5 text-[10px] font-mono max-h-20 overflow-y-auto">
           {parseErrors.map((err, i) => (
-            <div key={i} className="text-red-400 py-px">
-              <span className="text-red-500">Line {err.line}:</span> {err.message}
+            <div key={i} className="text-[var(--status-error)] py-px">
+              <span className="text-[var(--status-error)] font-semibold">Line {err.line}:</span> {err.message}
             </div>
           ))}
           {execError && (
-            <div className="text-red-400 py-px">
-              <span className="text-red-500">Op {execError.op_index + 1}</span>
-              <span className="text-red-600 ml-1">({execError.code})</span>
+            <div className="text-[var(--status-error)] py-px">
+              <span className="text-[var(--status-error)] font-semibold">Op {execError.op_index + 1}</span>
+              <span className="text-[var(--status-error)] opacity-70 ml-1">({execError.code})</span>
               <span className="ml-1">— {execError.message}</span>
             </div>
           )}

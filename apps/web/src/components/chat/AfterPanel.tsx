@@ -63,11 +63,11 @@ function SlotRow({ nodeKey: _nodeKey, slotKey, value, diffType, oldValue, onDele
   // Gutter color
   const gutterColor =
     diffType === 'added'
-      ? 'bg-green-400'
+      ? 'bg-[var(--status-success)]'
       : diffType === 'modified'
-        ? 'bg-yellow-400'
+        ? 'bg-[var(--status-warning)]'
         : diffType === 'removed'
-          ? 'bg-red-400'
+          ? 'bg-[var(--status-error)]'
           : 'bg-transparent';
 
   // Editing state
@@ -76,7 +76,7 @@ function SlotRow({ nodeKey: _nodeKey, slotKey, value, diffType, oldValue, onDele
       <div className="flex items-stretch" style={{ minHeight: 24 }}>
         <div className={`shrink-0 w-[3px] ${gutterColor}`} />
         <div
-          className="flex-1 min-w-0 flex items-center gap-1 px-2 py-0.5 bg-yellow-400/[0.06]"
+          className="flex-1 min-w-0 flex items-center gap-1 px-2 py-0.5 bg-[var(--status-warning)]/[0.06]"
           style={MONO}
         >
           <span className="shrink-0 text-[var(--text-secondary)]">{slotKey}: </span>
@@ -85,7 +85,7 @@ function SlotRow({ nodeKey: _nodeKey, slotKey, value, diffType, oldValue, onDele
             defaultValue={value}
             onKeyDown={handleKeyDown}
             onBlur={handleSave}
-            className="flex-1 min-w-0 bg-transparent border-0 border-b-[1.5px] border-b-yellow-400 outline-none text-[var(--text-primary)]"
+            className="flex-1 min-w-0 bg-transparent border-0 border-b-[1.5px] border-b-[var(--status-warning)] outline-none text-[var(--text-primary)]"
             style={{ fontFamily: 'inherit', fontSize: 'inherit' }}
           />
           <span className="shrink-0 text-[8px] text-[var(--text-tertiary)] whitespace-nowrap">
@@ -100,22 +100,22 @@ function SlotRow({ nodeKey: _nodeKey, slotKey, value, diffType, oldValue, onDele
     <div className="group flex items-stretch" style={{ minHeight: 24 }}>
       <div className={`shrink-0 w-[3px] ${gutterColor}`} />
       <div
-        className="flex-1 min-w-0 flex items-center gap-1 px-2 py-0.5 cursor-text hover:bg-white/[0.03] transition-colors"
+        className="flex-1 min-w-0 flex items-center gap-1 px-2 py-0.5 cursor-text hover:bg-[var(--hover-bg)] transition-colors"
         style={MONO}
         onDoubleClick={handleDoubleClick}
       >
         <span className="shrink-0 text-[var(--text-secondary)]">{slotKey}: </span>
         {diffType === 'modified' && oldValue && (
-          <span className="text-red-400/50 line-through mr-1 truncate text-[10px]">{oldValue}</span>
+          <span className="text-[var(--status-error)] opacity-50 line-through mr-1 truncate text-[10px]">{oldValue}</span>
         )}
         <span
           className={
             diffType === 'added'
-              ? 'text-green-400 truncate'
+              ? 'text-[var(--status-success)] truncate'
               : diffType === 'modified'
-                ? 'text-yellow-300 truncate'
+                ? 'text-[var(--status-warning)] truncate'
                 : diffType === 'removed'
-                  ? 'text-red-400/50 line-through truncate'
+                  ? 'text-[var(--status-error)] opacity-50 line-through truncate'
                   : 'text-[var(--text-primary)] truncate'
           }
         >
@@ -127,7 +127,7 @@ function SlotRow({ nodeKey: _nodeKey, slotKey, value, diffType, oldValue, onDele
             type="button"
             title="Delete slot"
             onClick={(e) => { e.stopPropagation(); onDelete(); }}
-            className="text-[var(--text-tertiary)] hover:text-red-400 cursor-pointer"
+            className="text-[var(--text-tertiary)] hover:text-[var(--status-error)] cursor-pointer"
           >
             <X className="h-2.5 w-2.5" />
           </button>
@@ -171,20 +171,20 @@ function NodeRow({
 
   const nodeGutterColor =
     diffType === 'added'
-      ? 'bg-green-400'
+      ? 'bg-[var(--status-success)]'
       : diffType === 'removed'
-        ? 'bg-red-400'
+        ? 'bg-[var(--status-error)]'
         : hasChanges
-          ? 'bg-yellow-400'
+          ? 'bg-[var(--status-warning)]'
           : 'bg-transparent';
 
   const nodeBg =
     diffType === 'added'
-      ? 'bg-green-400/[0.04]'
+      ? 'bg-[var(--status-success)]/[0.04]'
       : diffType === 'removed'
-        ? 'bg-red-400/[0.04]'
+        ? 'bg-[var(--status-error)]/[0.04]'
         : hasChanges
-          ? 'bg-yellow-400/[0.03]'
+          ? 'bg-[var(--status-warning)]/[0.03]'
           : '';
 
   return (
@@ -196,25 +196,25 @@ function NodeRow({
       >
         <div className={`shrink-0 w-[3px] ${nodeGutterColor}`} />
         <div
-          className="flex-1 flex items-center gap-1 px-2 py-0.5 hover:bg-white/[0.03] transition-colors"
+          className="flex-1 flex items-center gap-1 px-2 py-0.5 hover:bg-[var(--hover-bg)] transition-colors"
           style={{ ...MONO, paddingLeft: `${8 + depth * 14}px` }}
         >
-          <span className="w-3 h-3 rounded flex items-center justify-center text-[7px] font-bold bg-purple-500/10 text-purple-400 shrink-0">
+          <span className="w-3 h-3 rounded flex items-center justify-center text-[7px] font-bold bg-[var(--source-dim)] text-[var(--source)] shrink-0">
             ◆
           </span>
           <span
             className={
               diffType === 'added'
-                ? 'text-green-400 font-semibold'
+                ? 'text-[var(--status-success)] font-semibold'
                 : diffType === 'removed'
-                  ? 'text-red-400/60 line-through font-semibold'
+                  ? 'text-[var(--status-error)]/60 line-through font-semibold'
                   : 'text-[var(--text-primary)] font-semibold'
             }
           >
             {node.key}:
           </span>
           {diffType === 'added' && (
-            <span className="text-[8px] text-green-400 bg-green-400/15 px-1 py-0.5 rounded ml-1">new</span>
+            <span className="text-[8px] text-[var(--status-success)] bg-[var(--status-success)]/15 px-1 py-0.5 rounded ml-1">new</span>
           )}
           {hasChanges && diffType !== 'removed' && (
             <div className="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -222,7 +222,7 @@ function NodeRow({
                 type="button"
                 title="Keep changes"
                 onClick={(e) => { e.stopPropagation(); onAccept(); }}
-                className="text-[var(--text-tertiary)] hover:text-green-400 cursor-pointer"
+                className="text-[var(--text-tertiary)] hover:text-[var(--status-success)] cursor-pointer"
               >
                 <Check className="h-2.5 w-2.5" />
               </button>
@@ -230,7 +230,7 @@ function NodeRow({
                 type="button"
                 title="Dismiss changes"
                 onClick={(e) => { e.stopPropagation(); onDismiss(); }}
-                className="text-[var(--text-tertiary)] hover:text-red-400 cursor-pointer"
+                className="text-[var(--text-tertiary)] hover:text-[var(--status-error)] cursor-pointer"
               >
                 <X className="h-2.5 w-2.5" />
               </button>
@@ -276,7 +276,7 @@ function NodeRow({
         .map((key) => (
           <div key={`removed-${key}`} style={{ paddingLeft: `${depth * 14}px` }}>
             <div className="flex items-stretch" style={{ minHeight: 24 }}>
-              <div className="shrink-0 w-[3px] bg-red-400" />
+              <div className="shrink-0 w-[3px] bg-[var(--status-error)]" />
               <div className="flex-1 min-w-0 flex items-center gap-1 px-2 py-0.5 opacity-50" style={MONO}>
                 <span className="text-[var(--text-secondary)] line-through">{key}: —</span>
               </div>
@@ -313,10 +313,10 @@ function AfterNodeRecursive({ node, depth }: AfterNodeRecursiveProps) {
       <div className="group flex items-stretch" style={{ minHeight: 26 }}>
         <div className="shrink-0 w-[3px] bg-transparent" />
         <div
-          className="flex-1 flex items-center gap-1 py-0.5 hover:bg-white/[0.03] transition-colors"
+          className="flex-1 flex items-center gap-1 py-0.5 hover:bg-[var(--hover-bg)] transition-colors"
           style={{ ...MONO, paddingLeft: `${8 + depth * 14}px` }}
         >
-          <span className="w-3 h-3 rounded flex items-center justify-center text-[7px] font-bold bg-purple-500/10 text-purple-400 shrink-0">
+          <span className="w-3 h-3 rounded flex items-center justify-center text-[7px] font-bold bg-[var(--source-dim)] text-[var(--source)] shrink-0">
             ◆
           </span>
           <span className="text-[var(--text-primary)] font-semibold">{node.key}:</span>
@@ -401,29 +401,29 @@ export function AfterPanel() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-1.5 border-b border-[var(--stroke)] bg-[var(--panel-alt)] shrink-0">
+      <div className="flex items-center justify-between px-3 py-1.5 border-b border-[var(--stroke-default)] bg-[var(--panel-alt)] shrink-0">
         <span className="text-[9px] font-bold uppercase tracking-wider text-[var(--text-tertiary)]">
           After
         </span>
         {diff && (
           <div className="flex items-center gap-1">
             {diff.summary.nodesAdded > 0 && (
-              <span className="text-[8px] font-semibold px-1 py-0.5 rounded bg-green-500/15 text-green-400">
+              <span className="text-[8px] font-semibold px-1 py-0.5 rounded bg-[var(--status-success)]/15 text-[var(--status-success)]">
                 +{diff.summary.nodesAdded}n
               </span>
             )}
             {diff.summary.slotsAdded > 0 && (
-              <span className="text-[8px] font-semibold px-1 py-0.5 rounded bg-green-500/15 text-green-400">
+              <span className="text-[8px] font-semibold px-1 py-0.5 rounded bg-[var(--status-success)]/15 text-[var(--status-success)]">
                 +{diff.summary.slotsAdded}s
               </span>
             )}
             {diff.summary.slotsModified > 0 && (
-              <span className="text-[8px] font-semibold px-1 py-0.5 rounded bg-yellow-500/15 text-yellow-400">
+              <span className="text-[8px] font-semibold px-1 py-0.5 rounded bg-[var(--status-warning)]/15 text-[var(--status-warning)]">
                 ~{diff.summary.slotsModified}
               </span>
             )}
             {diff.summary.nodesRemoved > 0 && (
-              <span className="text-[8px] font-semibold px-1 py-0.5 rounded bg-red-500/15 text-red-400">
+              <span className="text-[8px] font-semibold px-1 py-0.5 rounded bg-[var(--status-error)]/15 text-[var(--status-error)]">
                 -{diff.summary.nodesRemoved}
               </span>
             )}

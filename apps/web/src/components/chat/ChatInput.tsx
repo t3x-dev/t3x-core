@@ -203,7 +203,7 @@ export function ChatInput({
               <button
                 type="button"
                 onClick={() => removeImage(img.id)}
-                className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-red-500 text-white text-[10px] flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-opacity"
+                className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-[var(--status-error)] text-white text-[10px] flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-opacity"
               >
                 &times;
               </button>
@@ -295,8 +295,8 @@ export function ChatInput({
             onClick={onStop}
             className={cn(
               'h-8 w-8 shrink-0 rounded-lg',
-              'bg-red-500/10 text-red-500',
-              'hover:bg-red-500/20 transition-colors duration-[var(--motion-base)]'
+              'bg-[var(--status-error)]/10 text-[var(--status-error)]',
+              'hover:bg-[var(--status-error)]/20 transition-colors duration-[var(--motion-base)]'
             )}
             aria-label="Stop generation"
           >
