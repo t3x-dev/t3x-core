@@ -521,18 +521,29 @@ export async function* runExtractionPipeline(
     }
 
     // 8b. Check for drift_detected via empty extraction result
+    // Only flag drift if there was previously extracted content — on first
+    // extraction, empty result means extraction failed, not drift.
     if (result.yops.length === 0 && organizedSnapshot.trees.length === 0) {
-      pipelineEmitter.emit('topic.changed', {
-        conversationId,
-        oldTopic: currentFlat[0]?.type,
-        newTopic: 'unknown',
-      });
+      if (currentFlat.length > 0) {
+        // Existing content + empty new result → possible topic shift
+        pipelineEmitter.emit('topic.changed', {
+          conversationId,
+          oldTopic: currentFlat[0]?.type,
+          newTopic: 'unknown',
+        });
+        yield {
+          type: 'drift',
+          data: {
+            old_topic: currentFlat[0]?.type,
+            choices: ['keep_old', 'keep_new', 'keep_both_separate', 'keep_both_together'],
+          },
+        };
+        return;
+      }
+      // First extraction returned nothing — skip, not drift
       yield {
-        type: 'drift',
-        data: {
-          old_topic: currentFlat[0]?.type,
-          choices: ['keep_old', 'keep_new', 'keep_both_separate', 'keep_both_together'],
-        },
+        type: 'skipped',
+        data: { reason: 'No extractable content found in the conversation.' },
       };
       return;
     }

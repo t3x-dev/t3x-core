@@ -3,6 +3,7 @@
 import { GitBranch, X } from 'lucide-react';
 import { useCallback } from 'react';
 import { extractNodes } from '@/lib/api/trees';
+import { useChatStore } from '@/store/chatStore';
 import { useDraftStore } from '@/store/draftStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 
@@ -21,7 +22,9 @@ export function DriftPopup() {
   const driftInfo = useWorkspaceStore((s) => s.driftInfo);
   const driftChoices = useWorkspaceStore((s) => s.driftChoices);
   const clearDrift = useWorkspaceStore((s) => s.clearDrift);
-  const conversationId = useDraftStore((s) => s.conversationId);
+  const draftConvId = useDraftStore((s) => s.conversationId);
+  const activeConvId = useChatStore((s) => s.activeConversationId);
+  const conversationId = draftConvId ?? activeConvId;
 
   const handleChoice = useCallback(
     async (choice: string) => {
