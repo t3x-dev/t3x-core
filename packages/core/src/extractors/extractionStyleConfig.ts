@@ -16,7 +16,7 @@ export interface ExtractionStyleConfig {
 export const PRESETS: Record<PresetName, ExtractionStyleConfig> = {
   concise: {
     granularity: 'concise',
-    quote_length: 'minimal',
+    quote_length: 'representative',
     update_stance: 'conservative',
     tier3: 'extract',
   },
@@ -28,7 +28,7 @@ export const PRESETS: Record<PresetName, ExtractionStyleConfig> = {
   },
   detailed: {
     granularity: 'detailed',
-    quote_length: 'contextual',
+    quote_length: 'representative',
     update_stance: 'aggressive',
     tier3: 'extract',
   },
@@ -55,13 +55,13 @@ export function matchPreset(config: ExtractionStyleConfig): PresetName | null {
 export function styleSummaryLine(config: ExtractionStyleConfig): string {
   const preset = matchPreset(config);
   if (preset === 'concise') {
-    return 'Extraction mode: concise — key facts only (~30% coverage), minimal quotes, flat tree';
+    return 'Extraction mode: concise — key points from user + LLM (~30% coverage), flat tree';
   }
   if (preset === 'balanced') {
-    return 'Extraction mode: balanced — all substantive content (~70-80% coverage), representative quotes';
+    return 'Extraction mode: balanced — all substantive content from user + LLM (~70-80% coverage)';
   }
   if (preset === 'detailed') {
-    return 'Extraction mode: detailed — everything including nuance (~95% coverage), full-context quotes';
+    return 'Extraction mode: detailed — everything including nuance (~95% coverage), deep tree';
   }
   return `Extraction mode: custom — granularity=${config.granularity}, quotes=${config.quote_length}, stance=${config.update_stance}, ai_content=${config.tier3}`;
 }

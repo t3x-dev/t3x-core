@@ -12,7 +12,7 @@ describe('Prompt segment composition', () => {
   describe('granularity', () => {
     it('concise: includes key facts coverage guidance', () => {
       const { systemPrompt } = buildExtractionPrompt({ turns: baseTurns }, PRESETS.concise);
-      expect(systemPrompt).toContain('Key Facts Only');
+      expect(systemPrompt).toContain('Key Points');
       expect(systemPrompt).toContain('30%');
     });
 
@@ -49,21 +49,19 @@ describe('Prompt segment composition', () => {
   });
 
   describe('quote_length', () => {
-    it('minimal: includes shortest substring rule', () => {
-      const { systemPrompt } = buildExtractionPrompt(
-        { turns: baseTurns },
-        PRESETS.concise // quote_length: 'minimal'
-      );
-      expect(systemPrompt).toContain('MINIMAL');
+    it('all presets use representative quotes (for click-to-highlight)', () => {
+      for (const preset of Object.values(PRESETS)) {
+        const { systemPrompt } = buildExtractionPrompt({ turns: baseTurns }, preset);
+        expect(systemPrompt).toContain('REPRESENTATIVE');
+      }
     });
 
-    it('contextual: includes context guidance', () => {
+    it('minimal option still works when set explicitly', () => {
       const { systemPrompt } = buildExtractionPrompt(
         { turns: baseTurns },
-        PRESETS.detailed // quote_length: 'contextual'
+        { ...PRESETS.concise, quote_length: 'minimal' }
       );
-      expect(systemPrompt).toContain('context');
-      expect(systemPrompt).not.toContain('MINIMAL');
+      expect(systemPrompt).toContain('MINIMAL');
     });
   });
 
@@ -114,7 +112,7 @@ describe('Prompt segment composition', () => {
         PRESETS.concise
       );
       // Coverage content for concise
-      expect(systemPrompt).toContain('Key Facts Only');
+      expect(systemPrompt).toContain('Key Points');
       expect(systemPrompt).toContain('30%');
     });
   });

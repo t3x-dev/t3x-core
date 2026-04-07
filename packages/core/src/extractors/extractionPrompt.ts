@@ -114,25 +114,24 @@ export function tier3KeyDistinction(t3: Tier3Behavior): string {
 export function granularitySegment(g: Granularity): string {
   switch (g) {
     case 'concise':
-      return `## Coverage: Key Facts Only (~30%)
-- Extract only the key decisions and confirmed facts \u2014 what a busy person needs to know
-- Skip elaboration, examples, alternatives discussed, and reasoning
-- Keep the tree flat: 1\u20132 levels. Use children only when a subtopic has 3+ distinct facts.
-- Combine related details into a single slot (e.g., "vegetarian, peanut allergy")
-- If a node grows beyond 6 slots, decompose into children \u2014 but prefer fewer nodes overall`;
+      return `## Coverage: Key Points (~30%)
+- Extract the main points from both user and assistant \u2014 what a busy person needs to know
+- Include the LLM\u2019s key recommendations and answers, not just user statements
+- Skip supporting details, examples, alternatives, and reasoning \u2014 capture the conclusion
+- Keep the tree flat: 1\u20132 levels. Group related facts under natural subtopics.
+- Combine closely related details into a single slot when they belong together`;
     case 'balanced':
       return `## Coverage: All Substantive Content (~70\u201380%)
-- Surface EVERY fact, preference, recommendation, and decision from the conversation
+- Surface EVERY fact, preference, recommendation, and decision from both user and assistant
 - If someone said it and it\u2019s substantive, it belongs in the tree \u2014 nothing important is lost
-- Let tree depth follow the content naturally: 2\u20133 levels typical, deeper if the domain requires it
-- Decompose any node with 6+ slots into children \u2014 prefer structured depth over wide flat lists
+- Include the LLM\u2019s recommendations, suggestions, and answers alongside user statements
+- Let tree depth follow the content naturally: group related facts under subtopics
 - Skip only redundant restatements and conversational filler`;
     case 'detailed':
       return `## Coverage: Everything Including Nuance (~95%)
 - The tree is a complete mirror of the conversation \u2014 almost nothing is left behind
-- Capture alternatives considered, reasoning, caveats, conditions, examples, and context
-- Let depth grow as deep as the content demands: 3\u20134 levels typical, deeper for complex domains
-- Decompose aggressively \u2014 any node with 5+ slots should become a sub-tree
+- Capture everything from both user and assistant: facts, recommendations, alternatives considered, reasoning, caveats, conditions, and examples
+- Let depth grow as deep as the content demands \u2014 group related facts under subtopics naturally
 - Every number, name, date, recommendation, comparison, and list item is worth capturing
 - Create separate branches for distinct aspects (e.g., trip/logistics vs trip/experiences)`;
     default:

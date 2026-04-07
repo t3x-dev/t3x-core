@@ -14,9 +14,9 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 const PRESET_DESCRIPTIONS: Record<PresetName, string> = {
-  concise: 'Key facts only (~30%). Quick summary for busy readers.',
+  concise: 'Key points from user + LLM (~30%). Quick summary.',
   balanced: 'All substantive content (~70-80%). Nothing important is lost. Default.',
-  detailed: 'Everything including nuance (~95%). Complete mirror of the conversation.',
+  detailed: 'Everything including nuance (~95%). Complete mirror of the chat.',
 };
 
 interface ExtractionStylePanelProps {

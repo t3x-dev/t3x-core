@@ -11,7 +11,7 @@ describe('buildYOpsPrompt — style integration', () => {
   describe('granularity', () => {
     it('concise style produces key-facts coverage guidance', () => {
       const { systemPrompt } = buildYOpsPrompt({ turns: baseTurns }, PRESETS.concise);
-      expect(systemPrompt).toContain('Key Facts Only');
+      expect(systemPrompt).toContain('Key Points');
       expect(systemPrompt).toContain('30%');
     });
 
@@ -43,14 +43,11 @@ describe('buildYOpsPrompt — style integration', () => {
   });
 
   describe('quote_length', () => {
-    it('minimal style instructs shortest substring', () => {
-      const { systemPrompt } = buildYOpsPrompt({ turns: baseTurns }, PRESETS.concise);
-      expect(systemPrompt).toContain('MINIMAL');
-    });
-
-    it('contextual style instructs full context quotes', () => {
-      const { systemPrompt } = buildYOpsPrompt({ turns: baseTurns }, PRESETS.detailed);
-      expect(systemPrompt).toContain('FULL CONTEXT');
+    it('all presets use representative quotes for click-to-highlight', () => {
+      for (const preset of Object.values(PRESETS)) {
+        const { systemPrompt } = buildYOpsPrompt({ turns: baseTurns }, preset);
+        expect(systemPrompt).toContain('REPRESENTATIVE');
+      }
     });
   });
 
@@ -84,7 +81,7 @@ describe('buildYOpsPrompt — style integration', () => {
         { turns: baseTurns, snapshot, processedTurnCount: 0 },
         PRESETS.concise,
       );
-      expect(systemPrompt).toContain('Key Facts Only');
+      expect(systemPrompt).toContain('Key Points');
     });
   });
 });
