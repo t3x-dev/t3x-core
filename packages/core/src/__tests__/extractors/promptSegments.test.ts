@@ -10,22 +10,22 @@ describe('Prompt segment composition', () => {
   ];
 
   describe('granularity', () => {
-    it('concise: includes 1-2 Levels and flat tree guidance', () => {
+    it('concise: includes key facts coverage guidance', () => {
       const { systemPrompt } = buildExtractionPrompt({ turns: baseTurns }, PRESETS.concise);
-      expect(systemPrompt).toContain('1\u20132 Levels');
-      expect(systemPrompt).toContain('FLAT');
+      expect(systemPrompt).toContain('Key Facts Only');
+      expect(systemPrompt).toContain('30%');
     });
 
-    it('balanced: includes 2-3 Levels and scannable tree guidance', () => {
+    it('balanced: includes all substantive content guidance', () => {
       const { systemPrompt } = buildExtractionPrompt({ turns: baseTurns }, PRESETS.balanced);
-      expect(systemPrompt).toContain('2\u20133 Levels');
-      expect(systemPrompt).toContain('scannable');
+      expect(systemPrompt).toContain('All Substantive Content');
+      expect(systemPrompt).toContain('nothing important is lost');
     });
 
-    it('detailed: includes 2-5 Levels and every meaningful point', () => {
+    it('detailed: includes everything including nuance guidance', () => {
       const { systemPrompt } = buildExtractionPrompt({ turns: baseTurns }, PRESETS.detailed);
-      expect(systemPrompt).toContain('2\u20135 Levels');
-      expect(systemPrompt).toContain('every meaningful point');
+      expect(systemPrompt).toContain('Everything Including Nuance');
+      expect(systemPrompt).toContain('complete mirror');
     });
   });
 
@@ -94,11 +94,11 @@ describe('Prompt segment composition', () => {
   });
 
   describe('backward compatibility', () => {
-    it('no style param produces same output as detailed', () => {
+    it('no style param produces same output as balanced (default)', () => {
       const withoutStyle = buildExtractionPrompt({ turns: baseTurns });
-      const withDetailed = buildExtractionPrompt({ turns: baseTurns }, PRESETS.detailed);
-      expect(withoutStyle.systemPrompt).toEqual(withDetailed.systemPrompt);
-      expect(withoutStyle.userPrompt).toEqual(withDetailed.userPrompt);
+      const withBalanced = buildExtractionPrompt({ turns: baseTurns }, PRESETS.balanced);
+      expect(withoutStyle.systemPrompt).toEqual(withBalanced.systemPrompt);
+      expect(withoutStyle.userPrompt).toEqual(withBalanced.userPrompt);
     });
   });
 
@@ -113,9 +113,9 @@ describe('Prompt segment composition', () => {
         { turns: baseTurns, snapshot },
         PRESETS.concise
       );
-      // Tree depth content for concise
-      expect(systemPrompt).toContain('1\u20132 Levels');
-      expect(systemPrompt).toContain('FLAT');
+      // Coverage content for concise
+      expect(systemPrompt).toContain('Key Facts Only');
+      expect(systemPrompt).toContain('30%');
     });
   });
 });

@@ -114,26 +114,26 @@ export function tier3KeyDistinction(t3: Tier3Behavior): string {
 export function granularitySegment(g: Granularity): string {
   switch (g) {
     case 'concise':
-      return `## Tree Depth: 1\u20132 Levels
-- Keep the tree FLAT: root node with 1\u20133 slots, optionally ONE level of children
-- Only create a child node when a subtopic has 3+ distinct facts \u2014 otherwise keep as a root slot
-- Root: 1\u20133 slots. Children (if any): 1\u20133 slots each.
-- Capture only confirmed, important facts \u2014 skip elaboration and examples
-- Combine related details into a single slot value when possible`;
+      return `## Coverage: Key Facts Only (~30%)
+- Extract only the key decisions and confirmed facts \u2014 what a busy person needs to know
+- Skip elaboration, examples, alternatives discussed, and reasoning
+- Keep the tree flat: 1\u20132 levels. Use children only when a subtopic has 3+ distinct facts.
+- Combine related details into a single slot (e.g., "vegetarian, peanut allergy")
+- If a node grows beyond 6 slots, decompose into children \u2014 but prefer fewer nodes overall`;
     case 'balanced':
-      return `## Tree Depth: 2\u20133 Levels
-- Build a structured tree: root with children, and grandchildren where natural
-- Create children for each distinct subtopic. Nest grandchildren when a child has 3+ related sub-facts.
-- Root: 2\u20134 overview slots. Children: 2\u20135 slots each. Grandchildren: 1\u20133 slots.
-- Extract key information from both user and assistant
-- Aim for a clean, scannable tree \u2014 group related facts but don\u2019t over-split`;
+      return `## Coverage: All Substantive Content (~70\u201380%)
+- Surface EVERY fact, preference, recommendation, and decision from the conversation
+- If someone said it and it\u2019s substantive, it belongs in the tree \u2014 nothing important is lost
+- Let tree depth follow the content naturally: 2\u20133 levels typical, deeper if the domain requires it
+- Decompose any node with 6+ slots into children \u2014 prefer structured depth over wide flat lists
+- Skip only redundant restatements and conversational filler`;
     case 'detailed':
-      return `## Tree Depth: 2\u20135 Levels
-- Build a DEEP, comprehensive tree \u2014 extract every meaningful point
-- Nest aggressively: grandchildren, great-grandchildren when the domain is complex
-- Root: 2\u20134 slots. Children: 3\u20138 slots. Deeper nodes: 1\u20134 slots each.
-- Prefer depth over breadth \u2014 split large nodes into sub-trees rather than flat slots
-- Every number, recommendation, comparison, date, name, and list item is worth capturing
+      return `## Coverage: Everything Including Nuance (~95%)
+- The tree is a complete mirror of the conversation \u2014 almost nothing is left behind
+- Capture alternatives considered, reasoning, caveats, conditions, examples, and context
+- Let depth grow as deep as the content demands: 3\u20134 levels typical, deeper for complex domains
+- Decompose aggressively \u2014 any node with 5+ slots should become a sub-tree
+- Every number, name, date, recommendation, comparison, and list item is worth capturing
 - Create separate branches for distinct aspects (e.g., trip/logistics vs trip/experiences)`;
     default:
       return granularitySegment('balanced');

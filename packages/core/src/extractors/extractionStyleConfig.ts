@@ -34,7 +34,7 @@ export const PRESETS: Record<PresetName, ExtractionStyleConfig> = {
   },
 };
 
-export const DEFAULT_STYLE: ExtractionStyleConfig = PRESETS.detailed;
+export const DEFAULT_STYLE: ExtractionStyleConfig = PRESETS.balanced;
 
 /** Returns the preset name if config matches a preset exactly, else null. */
 export function matchPreset(config: ExtractionStyleConfig): PresetName | null {
@@ -55,13 +55,13 @@ export function matchPreset(config: ExtractionStyleConfig): PresetName | null {
 export function styleSummaryLine(config: ExtractionStyleConfig): string {
   const preset = matchPreset(config);
   if (preset === 'concise') {
-    return 'Extraction mode: concise — 1-2 levels, few slots, minimal quotes, key facts only';
+    return 'Extraction mode: concise — key facts only (~30% coverage), minimal quotes, flat tree';
   }
   if (preset === 'balanced') {
-    return 'Extraction mode: balanced — 2-3 levels, moderate detail, representative quotes';
+    return 'Extraction mode: balanced — all substantive content (~70-80% coverage), representative quotes';
   }
   if (preset === 'detailed') {
-    return 'Extraction mode: detailed — 2-5 levels, rich detail, full-context quotes, aggressive updates';
+    return 'Extraction mode: detailed — everything including nuance (~95% coverage), full-context quotes';
   }
   return `Extraction mode: custom — granularity=${config.granularity}, quotes=${config.quote_length}, stance=${config.update_stance}, ai_content=${config.tier3}`;
 }
