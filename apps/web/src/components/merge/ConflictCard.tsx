@@ -391,6 +391,7 @@ export function ConflictCard({
                 )}
               >
                 Accept Source
+                <kbd className="ml-1 text-[0.65rem] font-mono bg-[var(--hover-bg)] px-1 rounded opacity-60">A</kbd>
               </button>
               <button
                 type="button"
@@ -403,6 +404,7 @@ export function ConflictCard({
                 )}
               >
                 Accept Target
+                <kbd className="ml-1 text-[0.65rem] font-mono bg-[var(--hover-bg)] px-1 rounded opacity-60">B</kbd>
               </button>
               <button
                 type="button"
@@ -415,6 +417,7 @@ export function ConflictCard({
                 )}
               >
                 Accept Both
+                <kbd className="ml-1 text-[0.65rem] font-mono bg-[var(--hover-bg)] px-1 rounded opacity-60">X</kbd>
               </button>
 
               {/* Mode toggle */}

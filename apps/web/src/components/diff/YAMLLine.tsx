@@ -50,7 +50,7 @@ export function YAMLLine({ lineNumber, status, children }: YAMLLineProps) {
       {/* Marker strip */}
       <div
         className={cn(
-          'w-1 min-w-1 shrink-0',
+          'w-px min-w-px shrink-0',
           status === 'added' && 'bg-[var(--dy-added-accent)]',
           status === 'removed' && 'bg-[var(--dy-removed-accent)]',
           status === 'modified' && 'bg-[var(--dy-modified-accent)]',
