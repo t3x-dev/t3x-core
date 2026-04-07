@@ -370,7 +370,7 @@ export function YAMLRenderer({
         const borderLeft =
           line.isNodeHeader && changeType ? changeTypeBorder[changeType] : undefined;
 
-        const bg = isHighlighted ? 'rgba(96, 165, 250, 0.1)' : 'transparent';
+        const bg = isHighlighted ? 'color-mix(in srgb, var(--status-info) 10%, transparent)' : 'transparent';
 
         return (
           <div

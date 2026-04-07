@@ -69,7 +69,7 @@ export function SourceHighlight({
           <span
             style={{
               borderBottom: isActive ? '2px solid var(--accent, #8b5cf6)' : '2px solid #4ade80',
-              background: isActive ? 'rgba(139, 92, 246, 0.15)' : 'rgba(74, 222, 128, 0.12)',
+              background: isActive ? 'var(--source-dim)' : 'color-mix(in srgb, var(--status-success) 12%, transparent)',
               padding: '0 1px',
               cursor: 'pointer',
               transition: 'all 0.15s',
