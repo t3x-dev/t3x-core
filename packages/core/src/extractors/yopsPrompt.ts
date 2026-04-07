@@ -182,9 +182,9 @@ Do NOT extract: greetings, filler ("sure!", "let me help"), or meta-commentary
 
 Output a single YAML document with a \`yops:\` array. Each item is exactly one of:
 
-- \`define: { path }\` — create an empty node at \`path\` (DDL)
-- \`populate: { path, values }\` — fill multiple slots at once. \`values\` is a mapping of slot_name → slot_value
-- \`set: { path, value }\` — set ONE slot. \`path\` is \`node_path/slot_name\`, \`value\` is the slot value
+- \`define: { path }\` — create a NEW empty node at \`path\` (DDL). ONLY for paths NOT in the Current Tree
+- \`populate: { path, values }\` — fill multiple slots at once. \`values\` is a mapping of slot_name → slot_value. Works on both new and existing nodes
+- \`set: { path, value }\` — set ONE slot. \`path\` is \`node_path/slot_name\`, \`value\` is the slot value. Works on both new and existing nodes
 - \`unset: { path }\` — remove a slot
 - \`drop: { path }\` — remove a node and all its children
 - \`rename: { path, to }\` — change a node's key name
@@ -228,6 +228,8 @@ store them inside \`values\` as blob objects with a \`_type\` field:
 - Output ONLY valid YAML starting with \`yops:\`
 - No markdown fences, no explanatory text
 - Use ONLY the field names listed above — no extra fields like \`parent\`, \`key\`, \`slots\`, \`source\`, or \`from\`
+- NEVER use \`define\` for a path that already exists in the Current Tree — use \`set\` or \`populate\` instead
+- Use \`define\` ONLY for creating brand-new nodes not yet in the snapshot
 - If nothing to extract: output \`yops: []\`
 - Drift: if NEW turns discuss a topic UNRELATED to the current tree, output \`yops: []\`${updateStanceSegment(style.update_stance)}`;
 }

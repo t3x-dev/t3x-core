@@ -90,6 +90,15 @@ export function ScriptEditor() {
     });
     const view = new EditorView({ state, parent: editorRef.current });
     viewRef.current = view;
+    // Ensure correct theme after hydration (resolvedTheme may change after mount)
+    requestAnimationFrame(() => {
+      if (viewRef.current) {
+        const currentIsDark = document.documentElement.classList.contains('dark');
+        viewRef.current.dispatch({
+          effects: themeCompartment.current.reconfigure(currentIsDark ? oneDark : lightTheme),
+        });
+      }
+    });
     return () => view.destroy();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

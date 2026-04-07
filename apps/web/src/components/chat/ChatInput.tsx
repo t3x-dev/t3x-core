@@ -228,17 +228,18 @@ export function ChatInput({
         <Button
           type="button"
           variant="ghost"
-          size="icon"
           onClick={() => window.dispatchEvent(new CustomEvent('t3x:extract-requested'))}
           disabled={disabled}
           className={cn(
-            'h-8 w-8 shrink-0 rounded-lg transition-colors duration-[var(--motion-base)]',
-            'bg-[var(--source-dim)] text-[var(--source)] hover:bg-[var(--source)]/20'
+            'h-8 shrink-0 rounded-lg px-2.5 gap-1.5 transition-colors duration-[var(--motion-base)]',
+            'bg-[var(--source)]/15 text-[var(--source)] border border-[var(--source)]/30',
+            'hover:bg-[var(--source)]/25'
           )}
           aria-label="Extract to YOps"
           title="Extract to YOps"
         >
-          <Hexagon className="h-4 w-4" />
+          <Hexagon className="h-3.5 w-3.5" />
+          <span className="text-[10px] font-semibold tracking-wide">Extract</span>
         </Button>
 
         {/* Textarea */}
