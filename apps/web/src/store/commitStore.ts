@@ -104,9 +104,12 @@ export const useCommitStore = create<CommitState>((set, get) => ({
   },
 
   commitNodes: async (message) => {
-    // Cross-store reads
+    // Cross-store reads — workspace result is source of truth if available
     const { useDraftStore } = await import('./draftStore');
-    const { draft, conversationId } = useDraftStore.getState();
+    const { useWorkspaceStore } = await import('./workspaceStore');
+    const wsResult = useWorkspaceStore.getState().result;
+    const { draft: draftFallback, conversationId } = useDraftStore.getState();
+    const draft = wsResult ?? draftFallback;
     const { projectId, lastCommitHash, commitBranch, conversationTitle } = get();
 
     if (!projectId) throw new Error('No project ID');

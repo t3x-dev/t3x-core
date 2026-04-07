@@ -112,16 +112,17 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     if (scriptOps.length === 0) return;
     const enabledOps = scriptOps.filter((_, i) => !disabledOpIndices.has(i));
     const result = applyYOps(base, enabledOps);
+    const content = { trees: result.trees, relations: result.relations };
     if (result.ok) {
       set({
-        result: { trees: result.trees, relations: result.relations },
+        result: content,
         appliedCount: result.applied,
         execError: null,
         mode: 'executed',
       });
     } else {
       set({
-        result: { trees: result.trees, relations: result.relations },
+        result: content,
         appliedCount: result.applied,
         execError: result.error
           ? {
@@ -133,6 +134,10 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         mode: 'executed',
       });
     }
+    // Sync result to draftStore so commit pipeline and source maps work
+    import('./draftStore').then(({ useDraftStore }) => {
+      useDraftStore.getState().setDraft(content);
+    });
   },
 
   toggleOp(index) {
