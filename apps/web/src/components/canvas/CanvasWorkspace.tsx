@@ -292,8 +292,6 @@ function CanvasWorkspaceInner({
         branchNames={branchNames}
         hasMainCommits={hasMainCommits}
         hasBranchCommits={hasBranchCommits}
-        onShowMemoryModal={() => setShowMemoryModal(true)}
-        onShowImportDialog={() => setShowImportDialog(true)}
         onAutoLayout={handleAutoLayout}
         onAddNode={() => handleAddNode('unit')}
         isLayouting={isLayouting}

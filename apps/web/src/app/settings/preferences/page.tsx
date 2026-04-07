@@ -187,47 +187,7 @@ export default function PreferencesPage() {
         </div>
       </section>
 
-      {/* Density */}
-      <section className="mb-8">
-        <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-1">Display Density</h2>
-        <p className="text-xs text-[var(--text-tertiary)] mb-3">Adjust spacing across the UI.</p>
-        <div className="flex gap-3">
-          <Button
-            variant={density === 'comfortable' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setDensity('comfortable')}
-          >
-            Comfortable
-          </Button>
-          <Button
-            variant={density === 'compact' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setDensity('compact')}
-          >
-            Compact
-          </Button>
-        </div>
-      </section>
-
-      {/* Extraction Style */}
-      {styleLoaded && <ExtractionStylePanel value={extractionStyle} onChange={handleStyleChange} />}
-
-      {/* Developer Mode */}
-      <section className="mb-8">
-        <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-1">Developer Mode</h2>
-        <p className="text-xs text-[var(--text-tertiary)] mb-3">
-          Show commit hashes, debug info, and advanced options.
-        </p>
-        <div className="flex gap-3">
-          <Button
-            variant={developerMode ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setDeveloperMode(!developerMode)}
-          >
-            {developerMode ? 'Enabled' : 'Disabled'}
-          </Button>
-        </div>
-      </section>
+      {/* Density, Extraction Style, Developer Mode — removed (non-core) */}
     </div>
   );
 }

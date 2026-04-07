@@ -2,12 +2,9 @@
 
 import {
   Blocks,
-  HelpCircle,
   LogOut,
   Settings,
   SlidersHorizontal,
-  Webhook,
-  Workflow,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -18,9 +15,6 @@ import { cn } from '@/lib/utils';
 const NAV_ITEMS = [
   { href: '/settings/preferences', label: 'Preferences', icon: SlidersHorizontal },
   { href: '/settings/providers', label: 'Providers', icon: Blocks },
-  { href: '/settings/webhooks', label: 'Webhooks', icon: Webhook },
-  { href: '/settings/recipes', label: 'Recipes', icon: Workflow },
-  { href: '/settings/help', label: 'Help & Resources', icon: HelpCircle },
 ] as const;
 
 interface SettingsLayoutProps {

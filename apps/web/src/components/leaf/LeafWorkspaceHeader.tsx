@@ -73,9 +73,7 @@ export function LeafWorkspaceHeader({
           <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
             {leaf.type}
           </span>
-          <span className="text-[11px] text-[var(--text-tertiary)]">
-            {new Date(leaf.created_at).toLocaleDateString()}
-          </span>
+          {/* Created date removed — available in footer */}
         </div>
       </div>
 
@@ -110,7 +108,6 @@ export function LeafWorkspaceHeader({
           </div>
         )}
 
-        <PinButton projectId={projectId} type="leaf" refId={leaf.id} />
         <ShareLinkButton entityType="leaf" entityId={leaf.id} />
 
         {/* Export dropdown */}

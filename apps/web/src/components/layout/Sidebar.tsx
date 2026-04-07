@@ -1,14 +1,10 @@
 'use client';
 
 import {
-  BarChart3,
   ChevronLeft,
   ChevronRight,
   Command,
   Home,
-  LayoutGrid,
-  Rocket,
-  Search,
   Settings,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -120,10 +116,7 @@ interface SidebarProps {
 
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const pathname = usePathname();
-  const isDeploy = pathname.startsWith('/deploy');
-  const isInsights = pathname.startsWith('/insights');
-  const isSearch = pathname.startsWith('/search');
-  const isTemplates = pathname.startsWith('/templates');
+  // Removed: Deploy, Insights, Search, Templates — not core workflow
   const isSettings = pathname.startsWith('/settings');
   const isHome = pathname === '/' || pathname.startsWith('/project');
 
@@ -195,24 +188,6 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         <nav className={cn('flex flex-col gap-1', collapsed ? 'items-center' : '')}>
           <NavItem href="/" label="Projects" isActive={isHome} collapsed={collapsed}>
             <Home className="h-5 w-5" />
-          </NavItem>
-
-          <NavItem href="/search" label="Search" isActive={isSearch} collapsed={collapsed}>
-            <Search className="h-5 w-5" />
-          </NavItem>
-
-          <NavItem href="/templates" label="Templates" isActive={isTemplates} collapsed={collapsed}>
-            <LayoutGrid className="h-5 w-5" />
-          </NavItem>
-
-          {process.env.NEXT_PUBLIC_RUNNER_ENABLED === 'true' && (
-            <NavItem href="/deploy" label="Deploy & Eval" isActive={isDeploy} collapsed={collapsed}>
-              <Rocket className="h-5 w-5" />
-            </NavItem>
-          )}
-
-          <NavItem href="/insights" label="Insights" isActive={isInsights} collapsed={collapsed}>
-            <BarChart3 className="h-5 w-5" />
           </NavItem>
 
           <NavItem href="/settings" label="Settings" isActive={isSettings} collapsed={collapsed}>
