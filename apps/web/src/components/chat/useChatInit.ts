@@ -45,6 +45,7 @@ export function useChatInit({
     // Skip resetDraft if we just hydrated from parent (prevents wipe on re-render)
     if (!inheritedRef.current) {
       useDraftStore.getState().resetDraft();
+      useWorkspaceStore.getState().reset();
     }
     useDraftStore.getState().setConversationId(convId === 'new' ? null : convId);
     if (resolvedProjectId) {
@@ -91,7 +92,10 @@ export function useChatInit({
           const trees = (parentCommit.content?.trees as TreeNode[]) ?? [];
           const relations = parentCommit.content?.relations ?? [];
           if (trees.length > 0) {
-            useDraftStore.getState().setDraft({ trees, relations });
+            const content = { trees, relations };
+            useDraftStore.getState().setDraft(content);
+            // Snapshot parent as workspace base
+            useWorkspaceStore.getState().snapshotBase(content, hash);
             // Set parent as lastCommitHash so commit B gets correct parent_hashes
             useCommitStore.setState({ lastCommitHash: hash });
             // Mark all inherited trees as confirmed
@@ -118,19 +122,27 @@ export function useChatInit({
     // Load existing semantic draft + full yops history + topics for this conversation
     if (convId && convId !== 'new') {
       Promise.all([getSemanticDraft(convId), listYOpsLog(convId), listTopics(convId)])
-        .then(([draft, yopsEntries, topicsList]) => {
+        .then(async ([draft, yopsEntries, topicsList]) => {
           if (draft && draft.trees.length > 0) {
             useDraftStore.getState().setDraft(draft);
+            // Snapshot committed state as workspace base
+            const commitHash = useCommitStore.getState().lastCommitHash;
+            useWorkspaceStore.getState().snapshotBase(draft, commitHash ?? null);
             if (!useWorkspaceStore.getState().panelExpanded) {
               useWorkspaceStore.getState().setPanelExpanded(true);
             }
-            // If draft exists but nothing committed yet → enter streaming mode
-            const wsMode = useWorkspaceStore.getState().mode;
-            const hasCommits = useCommitStore.getState().lastCommitHash;
-            if (wsMode === 'idle' && !hasCommits && yopsEntries && yopsEntries.length > 0) {
-              const latestEntry = yopsEntries[yopsEntries.length - 1];
-              if (Array.isArray(latestEntry?.yops) && latestEntry.yops.length > 0) {
-                useWorkspaceStore.getState().setMode('streaming');
+            // Hydrate workspace script from YOps log
+            if (yopsEntries && yopsEntries.length > 0) {
+              const allOps: import('@t3x-dev/core').YOp[] = [];
+              for (const entry of yopsEntries) {
+                if (Array.isArray(entry.yops)) {
+                  allOps.push(...(entry.yops as import('@t3x-dev/core').YOp[]));
+                }
+              }
+              if (allOps.length > 0) {
+                const { opsToYaml } = await import('@/lib/scriptParser');
+                useWorkspaceStore.getState().setScriptText(opsToYaml(allOps));
+                useWorkspaceStore.getState().setMode('executed');
               }
             }
           } else if (inheritFromCommitHash) {
