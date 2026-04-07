@@ -114,26 +114,28 @@ export function tier3KeyDistinction(t3: Tier3Behavior): string {
 export function granularitySegment(g: Granularity): string {
   switch (g) {
     case 'concise':
-      return `## Coverage: Key Points (~30%)
-- Extract the main points from both user and assistant \u2014 what a busy person needs to know
-- Include the LLM\u2019s key recommendations and answers, not just user statements
-- Skip supporting details, examples, and alternatives \u2014 but KEEP root causes and key reasoning
-- A conclusion without its reason is useless: "use eager loading" needs "because N+1 query"
-- Keep the tree compact: 2\u20133 levels. Group related facts under natural subtopics.
-- Combine closely related details into a single slot when they belong together`;
+      return `## Coverage: Concise — Conclusions + Why (~30%)
+- Extract ONLY: final decisions, root causes, key recommendations, and confirmed outcomes
+- Each conclusion MUST include its reason: "fix: eager loading" needs "because: N+1 query"
+- SKIP: step-by-step instructions, diagnostic commands, alternative options not chosen, examples, configuration details
+- SKIP: lists of potential causes — only include the ACTUAL cause that was confirmed
+- Keep the tree compact: 2\u20133 levels, aim for under 20 lines of YAML
+- If a busy person has 10 seconds, this tree should tell them what happened and what to do`;
     case 'balanced':
-      return `## Coverage: All Substantive Content (~70\u201380%)
+      return `## Coverage: Balanced — All Substantive Content (~70\u201380%)
 - Surface EVERY fact, preference, recommendation, and decision from both user and assistant
 - If someone said it and it\u2019s substantive, it belongs in the tree \u2014 nothing important is lost
 - Include the LLM\u2019s recommendations, suggestions, and answers alongside user statements
+- Include step-by-step instructions, diagnostic commands, and all options discussed
 - Let tree depth follow the content naturally: group related facts under subtopics
 - Skip only redundant restatements and conversational filler`;
     case 'detailed':
-      return `## Coverage: Everything Including Nuance (~95%)
+      return `## Coverage: Detailed — Everything Including Nuance (~95%)
 - The tree is a complete mirror of the conversation \u2014 almost nothing is left behind
 - Capture everything from both user and assistant: facts, recommendations, alternatives considered, reasoning, caveats, conditions, and examples
 - Let depth grow as deep as the content demands \u2014 group related facts under subtopics naturally
 - Every number, name, date, recommendation, comparison, and list item is worth capturing
+- Break compound values into separate slots (e.g., separate nodes for each option with full pros/cons)
 - Create separate branches for distinct aspects (e.g., trip/logistics vs trip/experiences)`;
     default:
       return granularitySegment('balanced');
