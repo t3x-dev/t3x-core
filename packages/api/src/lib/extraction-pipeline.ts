@@ -10,7 +10,6 @@
  * events (collect into a response object, stream as SSE, etc.).
  */
 
-import { eventBus } from './event-bus';
 import {
   applyYOps,
   checkDiffCompatibility,
@@ -44,6 +43,7 @@ import {
 } from '@t3x-dev/storage';
 import { ExtractionStyleSchema } from '../schemas/contracts';
 import { getDB } from './db';
+import { eventBus } from './event-bus';
 import { getProviderRegistry } from './provider-registry';
 import { rebuildTreesFromSnapshot } from './tree-state-sync';
 import { recordUsageFireAndForget, wrapWithUsageTracking } from './usage-tracking';
@@ -213,7 +213,11 @@ export async function* runExtractionPipeline(
 
       yield {
         type: 'status',
-        data: { step: 'readiness_gate', result: readiness.pass ? 'proceed' : 'blocked', reason: readiness.reason },
+        data: {
+          step: 'readiness_gate',
+          result: readiness.pass ? 'proceed' : 'blocked',
+          reason: readiness.reason,
+        },
       };
 
       if (!readiness.pass) {
@@ -347,16 +351,32 @@ export async function* runExtractionPipeline(
       const synthYops = result.snapshot.trees.flatMap((tree) => {
         const yops: Record<string, unknown>[] = [
           { define: { parent: '', key: tree.key }, index: 0, total: 0 },
-          { populate: { path: tree.key, slots: Object.fromEntries(Object.entries(tree.slots).slice(0, 3)), source: {}, from: tree.source ?? 'T1' }, index: 0, total: 0 },
+          {
+            populate: {
+              path: tree.key,
+              slots: Object.fromEntries(Object.entries(tree.slots).slice(0, 3)),
+              source: {},
+              from: tree.source ?? 'T1',
+            },
+            index: 0,
+            total: 0,
+          },
         ];
         for (const child of tree.children) {
           yops.push({
             define: { parent: tree.key, key: child.key },
-            index: 0, total: 0,
+            index: 0,
+            total: 0,
           });
           yops.push({
-            populate: { path: `${tree.key}/${child.key}`, slots: Object.fromEntries(Object.entries(child.slots).slice(0, 3)), source: {}, from: child.source ?? 'T1' },
-            index: 0, total: 0,
+            populate: {
+              path: `${tree.key}/${child.key}`,
+              slots: Object.fromEntries(Object.entries(child.slots).slice(0, 3)),
+              source: {},
+              from: child.source ?? 'T1',
+            },
+            index: 0,
+            total: 0,
           });
         }
         return yops;
@@ -372,7 +392,10 @@ export async function* runExtractionPipeline(
       }
     } else {
       for (let i = 0; i < result.yops.length; i++) {
-        yield { type: 'yop' as const, data: { ...result.yops[i], index: i, total: result.yops.length } };
+        yield {
+          type: 'yop' as const,
+          data: { ...result.yops[i], index: i, total: result.yops.length },
+        };
       }
     }
 
@@ -387,7 +410,7 @@ export async function* runExtractionPipeline(
       const transformResult = runTransforms(
         result.snapshot,
         extractionTurns.map((t) => ({ role: t.role, content: t.content })),
-        isIncremental ? currentSnapshot : undefined,
+        isIncremental ? currentSnapshot : undefined
       );
       organizedSnapshot = transformResult.content;
 
@@ -412,8 +435,12 @@ export async function* runExtractionPipeline(
     // Single-root: if multiple roots exist and no drift was detected, nest smaller roots under the largest
     // Uses move YOps so the restructuring is captured in the yops log and replayable
     if (organizedSnapshot.trees.length > 1 && !driftDecision) {
-      const countSlots = (node: { slots: Record<string, unknown>; children: Array<{ slots: Record<string, unknown>; children: any[] }> }): number =>
-        Object.keys(node.slots).length + (node.children || []).reduce((sum: number, c: any) => sum + countSlots(c), 0);
+      const countSlots = (node: {
+        slots: Record<string, unknown>;
+        children: Array<{ slots: Record<string, unknown>; children: any[] }>;
+      }): number =>
+        Object.keys(node.slots).length +
+        (node.children || []).reduce((sum: number, c: any) => sum + countSlots(c), 0);
 
       const sorted = [...organizedSnapshot.trees].sort((a, b) => countSlots(b) - countSlots(a));
       const largestKey = sorted[0].key;
