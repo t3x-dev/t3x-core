@@ -117,8 +117,9 @@ export function granularitySegment(g: Granularity): string {
       return `## Coverage: Key Points (~30%)
 - Extract the main points from both user and assistant \u2014 what a busy person needs to know
 - Include the LLM\u2019s key recommendations and answers, not just user statements
-- Skip supporting details, examples, alternatives, and reasoning \u2014 capture the conclusion
-- Keep the tree flat: 1\u20132 levels. Group related facts under natural subtopics.
+- Skip supporting details, examples, and alternatives \u2014 but KEEP root causes and key reasoning
+- A conclusion without its reason is useless: "use eager loading" needs "because N+1 query"
+- Keep the tree compact: 2\u20133 levels. Group related facts under natural subtopics.
 - Combine closely related details into a single slot when they belong together`;
     case 'balanced':
       return `## Coverage: All Substantive Content (~70\u201380%)
