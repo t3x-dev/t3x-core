@@ -92,9 +92,9 @@ function slotValueToString(val: unknown): string {
 function StatusBadge({ status }: { status: 'changed' | 'added' | 'source' }) {
   const styles = {
     changed:
-      'bg-amber-100 text-amber-800 border border-amber-300 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-700',
+      'bg-[var(--status-warning-muted)] text-[var(--status-warning)] border border-[var(--status-warning)]/30',
     added:
-      'bg-emerald-100 text-emerald-800 border border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-700',
+      'bg-[var(--status-success-muted)] text-[var(--status-success)] border border-[var(--status-success)]/30',
     source:
       'bg-[var(--surface-card)] text-[var(--text-tertiary)] border border-[var(--stroke-divider)]',
   } as const;
@@ -334,12 +334,12 @@ export function SourceSlideIn({ projectId }: SourceSlideInProps) {
           {diffStatus === 'modified' && previousSlotValue && currentSlotValue && (
             <div className="flex items-center gap-1.5 rounded-md bg-[var(--surface-card)] px-2 py-1.5 text-[11px]">
               <span className="text-[var(--text-tertiary)] font-medium shrink-0">was:</span>
-              <span className="text-amber-700 dark:text-amber-400 truncate max-w-[140px]">
+              <span className="text-[var(--status-warning)] truncate max-w-[140px]">
                 {previousSlotValue}
               </span>
               <ChevronRight size={11} className="text-[var(--text-tertiary)] shrink-0" />
               <span className="text-[var(--text-tertiary)] font-medium shrink-0">now:</span>
-              <span className="text-emerald-700 dark:text-emerald-400 truncate max-w-[140px]">
+              <span className="text-[var(--status-success)] truncate max-w-[140px]">
                 {currentSlotValue}
               </span>
             </div>
@@ -356,8 +356,8 @@ export function SourceSlideIn({ projectId }: SourceSlideInProps) {
           )}
 
           {error && (
-            <div className="mx-4 my-6 rounded-md border border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20 px-3 py-2.5">
-              <p className="text-[12px] text-red-700 dark:text-red-400">{error}</p>
+            <div className="mx-4 my-6 rounded-md border border-[var(--status-error)]/30 bg-[var(--status-error-muted)] px-3 py-2.5">
+              <p className="text-[12px] text-[var(--status-error)]">{error}</p>
             </div>
           )}
 

@@ -97,7 +97,7 @@ function CommitHistoryRow({
               </span>
             )}
             {commit.branch && (
-              <span className="rounded bg-blue-500/10 px-1 py-0.5 text-[10px] font-medium text-[var(--status-info)]">
+              <span className="rounded bg-[var(--status-info)]/10 px-1 py-0.5 text-[10px] font-medium text-[var(--status-info)]">
                 {commit.branch}
               </span>
             )}

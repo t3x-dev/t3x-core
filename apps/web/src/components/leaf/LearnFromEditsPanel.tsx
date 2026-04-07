@@ -14,18 +14,18 @@ import { cn } from '@/lib/utils';
 const DIMENSION_LABELS: Record<string, { label: string; bg: string; text: string }> = {
   style: {
     label: 'Style',
-    bg: 'bg-blue-100 dark:bg-blue-900/30',
-    text: 'text-blue-700 dark:text-blue-400',
+    bg: 'bg-[var(--status-info-muted)]',
+    text: 'text-[var(--status-info)]',
   },
   content: {
     label: 'Content',
-    bg: 'bg-amber-100 dark:bg-amber-900/30',
-    text: 'text-amber-700 dark:text-amber-400',
+    bg: 'bg-[var(--status-warning-muted)]',
+    text: 'text-[var(--status-warning)]',
   },
   format: {
     label: 'Format',
-    bg: 'bg-teal-100 dark:bg-teal-900/30',
-    text: 'text-teal-700 dark:text-teal-400',
+    bg: 'bg-[var(--status-success-muted)]',
+    text: 'text-[var(--status-success)]',
   },
 };
 
@@ -86,11 +86,11 @@ export function LearnFromEditsPanel({
 
   if (suggestions !== null && suggestions.length > 0) {
     return (
-      <div className="p-3 rounded-lg border border-indigo-500/30 bg-indigo-50 dark:bg-indigo-950/20 space-y-2">
+      <div className="p-3 rounded-lg border border-[var(--accent-conversation)]/30 bg-[var(--accent-conversation-soft)] space-y-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
-            <Edit3 size={14} className="text-indigo-600 dark:text-indigo-400" />
-            <span className="text-xs font-semibold text-indigo-700 dark:text-indigo-300">
+            <Edit3 size={14} className="text-[var(--accent-conversation)]" />
+            <span className="text-xs font-semibold text-[var(--accent-conversation)]">
               {suggestions.length} pattern{suggestions.length !== 1 ? 's' : ''} from {editsAnalyzed}{' '}
               edit
               {editsAnalyzed !== 1 ? 's' : ''}
@@ -114,8 +114,8 @@ export function LearnFromEditsPanel({
                     className={cn(
                       'font-medium px-1.5 py-0.5 rounded text-[10px]',
                       s.type === 'require'
-                        ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
-                        : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+                        ? 'bg-[var(--status-success-muted)] text-[var(--status-success)]'
+                        : 'bg-[var(--status-error-muted)] text-[var(--status-error)]'
                     )}
                   >
                     {s.type}
@@ -165,7 +165,7 @@ export function LearnFromEditsPanel({
           Analyze edits
         </Button>
       </div>
-      {error && <p className="mt-2 text-xs text-red-500">{error}</p>}
+      {error && <p className="mt-2 text-xs text-[var(--status-error)]">{error}</p>}
     </div>
   );
 }

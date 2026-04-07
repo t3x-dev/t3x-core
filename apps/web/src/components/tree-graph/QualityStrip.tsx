@@ -33,13 +33,13 @@ export function QualityStrip({ projectId }: QualityStripProps) {
   if (loading || !stats || stats.overall.total === 0) return null;
 
   const rate = stats.overall.accept_rate;
-  const barColor = rate >= 0.8 ? 'bg-emerald-500' : rate >= 0.6 ? 'bg-amber-500' : 'bg-red-500';
+  const barColor = rate >= 0.8 ? 'bg-[var(--status-success)]' : rate >= 0.6 ? 'bg-[var(--status-warning)]' : 'bg-[var(--status-error)]';
   const textColor =
     rate >= 0.8
-      ? 'text-emerald-600 dark:text-emerald-400'
+      ? 'text-[var(--status-success)]'
       : rate >= 0.6
-        ? 'text-amber-600 dark:text-amber-400'
-        : 'text-red-600 dark:text-red-400';
+        ? 'text-[var(--status-warning)]'
+        : 'text-[var(--status-error)]';
 
   return (
     <div className="px-3 py-2 border-b">

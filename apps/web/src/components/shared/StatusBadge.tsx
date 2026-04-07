@@ -11,11 +11,11 @@ import { cn } from '@/lib/utils';
  */
 
 const statusConfig = {
-  active: { className: 'border-green-500/30 bg-green-500/10 text-[var(--status-success)]' },
-  draft: { className: 'border-amber-500/30 bg-amber-500/10 text-[var(--status-warning)]' },
-  paused: { className: 'border-gray-500/30 bg-gray-500/10 text-[var(--color-text-secondary)]' },
+  active: { className: 'border-[var(--status-success)]/30 bg-[var(--status-success)]/10 text-[var(--status-success)]' },
+  draft: { className: 'border-[var(--status-warning)]/30 bg-[var(--status-warning)]/10 text-[var(--status-warning)]' },
+  paused: { className: 'border-[var(--stroke-divider)] bg-[var(--color-bg-subtle)] text-[var(--color-text-secondary)]' },
   running: {
-    className: 'border-blue-500/30 bg-blue-500/10 text-[var(--status-info)] animate-pulse',
+    className: 'border-[var(--status-info)]/30 bg-[var(--status-info)]/10 text-[var(--status-info)] animate-pulse',
   },
 } as const;
 

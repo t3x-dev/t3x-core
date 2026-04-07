@@ -140,7 +140,7 @@ function DraftDiffContent({ diff }: { diff: CommitDiff }) {
       <div className="flex items-center gap-4 text-xs text-muted-foreground">
         {identical.length > 0 && <span>{identical.length} identical</span>}
         {equivalent.length > 0 && (
-          <span className="flex items-center gap-1 text-green-600 dark:text-green-400">
+          <span className="flex items-center gap-1 text-[var(--status-success)]">
             <Equal size={12} />
             {equivalent.length} equivalent
           </span>
@@ -185,11 +185,11 @@ function DraftDiffContent({ diff }: { diff: CommitDiff }) {
       {equivalent.map((pair) => (
         <div
           key={`eq-${pair.source.id}-${pair.target.id}`}
-          className="rounded-md border-l-4 border-green-500 bg-green-50 dark:bg-green-950/20 px-3 py-2 text-sm"
+          className="rounded-md border-l-4 border-[var(--status-success)] bg-[var(--status-success-muted)] px-3 py-2 text-sm"
         >
           <Badge
             variant="outline"
-            className="text-[10px] px-1 py-0 mb-1 text-green-700 dark:text-green-300"
+            className="text-[10px] px-1 py-0 mb-1 text-[var(--status-success)]"
           >
             Equivalent
           </Badge>
@@ -223,11 +223,11 @@ function DraftDiffContent({ diff }: { diff: CommitDiff }) {
       {similar.map((pair) => (
         <div
           key={`mod-${pair.source.id}-${pair.target.id}`}
-          className="rounded-md border-l-4 border-amber-500 bg-[var(--diff-modified-bg)] px-3 py-2 text-sm"
+          className="rounded-md border-l-4 border-[var(--status-warning)] bg-[var(--diff-modified-bg)] px-3 py-2 text-sm"
         >
           <Badge
             variant="outline"
-            className="text-[10px] px-1 py-0 mb-1 text-amber-700 dark:text-amber-300"
+            className="text-[10px] px-1 py-0 mb-1 text-[var(--status-warning)]"
           >
             Modified
           </Badge>

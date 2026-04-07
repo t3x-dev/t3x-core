@@ -97,7 +97,7 @@ function getStatusBadge(status: EngineRun['status'], passed: boolean | null) {
     return passed ? (
       <Badge
         variant="outline"
-        className="gap-1 border-green-500/30 bg-green-500/10 text-[var(--status-success)]"
+        className="gap-1 border-[var(--status-success)]/30 bg-[var(--status-success)]/10 text-[var(--status-success)]"
       >
         <Check className="h-3 w-3" aria-hidden="true" />
         <span>passed</span>
@@ -106,7 +106,7 @@ function getStatusBadge(status: EngineRun['status'], passed: boolean | null) {
     ) : (
       <Badge
         variant="outline"
-        className="gap-1 border-red-500/30 bg-red-500/10 text-[var(--status-error)]"
+        className="gap-1 border-[var(--status-error)]/30 bg-[var(--status-error)]/10 text-[var(--status-error)]"
       >
         <X className="h-3 w-3" aria-hidden="true" />
         <span>failed</span>
@@ -118,23 +118,23 @@ function getStatusBadge(status: EngineRun['status'], passed: boolean | null) {
   // Otherwise show status with icon
   const variants: Record<string, { className: string; icon: React.ReactNode }> = {
     queued: {
-      className: 'border-gray-500/30 bg-gray-500/10 text-[var(--color-text-secondary)]',
+      className: 'border-[var(--stroke-divider)] bg-[var(--color-bg-subtle)] text-[var(--color-text-secondary)]',
       icon: <Clock className="h-3 w-3" />,
     },
     running: {
-      className: 'border-blue-500/30 bg-blue-500/10 text-[var(--status-info)]',
+      className: 'border-[var(--status-info)]/30 bg-[var(--status-info)]/10 text-[var(--status-info)]',
       icon: <Loader2 className="h-3 w-3 animate-spin" />,
     },
     completed: {
-      className: 'border-green-500/30 bg-green-500/10 text-[var(--status-success)]',
+      className: 'border-[var(--status-success)]/30 bg-[var(--status-success)]/10 text-[var(--status-success)]',
       icon: <Check className="h-3 w-3" />,
     },
     failed: {
-      className: 'border-red-500/30 bg-red-500/10 text-[var(--status-error)]',
+      className: 'border-[var(--status-error)]/30 bg-[var(--status-error)]/10 text-[var(--status-error)]',
       icon: <X className="h-3 w-3" />,
     },
     timeout: {
-      className: 'border-yellow-500/30 bg-yellow-500/10 text-[var(--status-warning)]',
+      className: 'border-[var(--status-warning)]/30 bg-[var(--status-warning)]/10 text-[var(--status-warning)]',
       icon: <Clock className="h-3 w-3" />,
     },
   };

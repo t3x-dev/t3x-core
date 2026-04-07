@@ -71,7 +71,7 @@ export function TurnBubble({
             }
             if (seg.type === 'added') {
               return (
-                <mark key={i} className="bg-green-500 text-white font-medium px-0.5 rounded-sm">
+                <mark key={i} className="bg-[var(--status-success)] text-white font-medium px-0.5 rounded-sm">
                   {seg.text}
                 </mark>
               );
@@ -80,7 +80,7 @@ export function TurnBubble({
               return (
                 <mark
                   key={i}
-                  className="bg-red-500 text-white font-medium px-0.5 rounded-sm line-through"
+                  className="bg-[var(--status-error)] text-white font-medium px-0.5 rounded-sm line-through"
                 >
                   {seg.text}
                 </mark>
@@ -98,7 +98,7 @@ export function TurnBubble({
     return (
       <>
         {before}
-        <mark className="bg-amber-200 dark:bg-amber-500/40 text-[var(--text-primary)] font-medium px-1 py-0.5 rounded border-b-2 border-amber-400 dark:border-amber-500">
+        <mark className="bg-[var(--status-warning-muted)] text-[var(--text-primary)] font-medium px-1 py-0.5 rounded border-b-2 border-[var(--status-warning)]">
           {highlighted}
         </mark>
         {after}

@@ -67,8 +67,8 @@ export function AssertionsSection({ violations, suggestion, className }: Asserti
               className={cn(
                 'flex items-start gap-3 rounded-lg border p-3',
                 v.severity === 'error'
-                  ? 'border-red-500/30 bg-red-500/5'
-                  : 'border-yellow-500/30 bg-yellow-500/5'
+                  ? 'border-[var(--status-error)]/30 bg-[var(--status-error)]/5'
+                  : 'border-[var(--status-warning)]/30 bg-[var(--status-warning)]/5'
               )}
             >
               {v.severity === 'error' ? (
@@ -86,8 +86,8 @@ export function AssertionsSection({ violations, suggestion, className }: Asserti
                     className={cn(
                       'text-xs',
                       v.severity === 'error'
-                        ? 'border-red-500/30 text-[var(--status-error)]'
-                        : 'border-yellow-500/30 text-[var(--status-warning)]'
+                        ? 'border-[var(--status-error)]/30 text-[var(--status-error)]'
+                        : 'border-[var(--status-warning)]/30 text-[var(--status-warning)]'
                     )}
                   >
                     {v.severity}
@@ -100,7 +100,7 @@ export function AssertionsSection({ violations, suggestion, className }: Asserti
 
           {/* Prompt Improvement Suggestion */}
           {suggestionText && (
-            <div className="rounded-lg border border-blue-500/30 bg-blue-500/5 p-[var(--space-group)]">
+            <div className="rounded-lg border border-[var(--status-info)]/30 bg-[var(--status-info)]/5 p-[var(--space-group)]">
               <div className="flex items-start gap-3">
                 <Lightbulb className="mt-0.5 h-4 w-4 shrink-0 text-[var(--status-info)]" />
                 <div className="flex-1 min-w-0">

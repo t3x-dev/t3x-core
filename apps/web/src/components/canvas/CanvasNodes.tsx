@@ -375,7 +375,7 @@ const UnitNode = memo(function UnitNode(props: Props) {
         {/* Staging border — static dashed outline */}
         {isStaging && (
           <div
-            className="pointer-events-none absolute inset-0 rounded-[16px] border-2 border-dashed border-orange-500/60"
+            className="pointer-events-none absolute inset-0 rounded-[16px] border-2 border-dashed border-[var(--accent-pending)]/60"
             style={{ zIndex: 1 }}
           />
         )}
@@ -530,7 +530,7 @@ const UnitNode = memo(function UnitNode(props: Props) {
           {/* Import source badge */}
           {data.importSource && (
             <div className="flex items-center gap-1 mb-[var(--space-item)]">
-              <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full border border-blue-500/30 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/30">
+              <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full border border-[var(--status-info)]/30 text-[var(--status-info)] bg-[var(--status-info-muted)]">
                 {data.importSource.source_type === 'url' ? (
                   <Globe size={10} />
                 ) : data.importSource.source_type === 'platform' ? (

@@ -98,7 +98,7 @@ export function BusinessRuleEditor({
               placeholder="my_rule_name"
             />
             {rule.id !== initial.id && existingIds.includes(rule.id) && (
-              <p className="text-[10px] text-amber-600 mt-1">
+              <p className="text-[10px] text-[var(--status-warning)] mt-1">
                 A rule with this ID already exists and will be overwritten.
               </p>
             )}
@@ -113,7 +113,7 @@ export function BusinessRuleEditor({
                 className={cn(
                   'flex-1 rounded-md border px-3 py-2 text-xs font-medium transition-colors',
                   rule.type === 'llm'
-                    ? 'bg-purple-50 border-purple-200 text-purple-700 dark:bg-purple-950/30 dark:border-purple-800 dark:text-purple-300'
+                    ? 'bg-[var(--source)]/10 border-[var(--source)]/30 text-[var(--source)]'
                     : 'hover:bg-muted'
                 )}
                 onClick={() => updateField('type', 'llm')}
@@ -125,7 +125,7 @@ export function BusinessRuleEditor({
                 className={cn(
                   'flex-1 rounded-md border px-3 py-2 text-xs font-medium transition-colors',
                   rule.type === 'rule'
-                    ? 'bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-950/30 dark:border-blue-800 dark:text-blue-300'
+                    ? 'bg-[var(--status-info)]/10 border-[var(--status-info)]/30 text-[var(--status-info)]'
                     : 'hover:bg-muted'
                 )}
                 onClick={() => updateField('type', 'rule')}
@@ -192,7 +192,7 @@ export function BusinessRuleEditor({
                 className={cn(
                   'flex items-center gap-1.5 rounded-md border px-3 py-2 text-xs font-medium transition-colors',
                   rule.severity === 'warning'
-                    ? 'bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-300'
+                    ? 'bg-[var(--status-warning)]/10 border-[var(--status-warning)]/30 text-[var(--status-warning)]'
                     : 'hover:bg-muted'
                 )}
                 onClick={() => updateField('severity', 'warning')}
@@ -205,7 +205,7 @@ export function BusinessRuleEditor({
                 className={cn(
                   'flex items-center gap-1.5 rounded-md border px-3 py-2 text-xs font-medium transition-colors',
                   rule.severity === 'error'
-                    ? 'bg-red-50 border-red-200 text-red-700 dark:bg-red-950/30 dark:border-red-800 dark:text-red-300'
+                    ? 'bg-[var(--status-error)]/10 border-[var(--status-error)]/30 text-[var(--status-error)]'
                     : 'hover:bg-muted'
                 )}
                 onClick={() => updateField('severity', 'error')}
@@ -237,8 +237,8 @@ export function BusinessRuleEditor({
                 className={cn(
                   'mt-2 rounded-md border p-2 text-xs',
                   testResult.passed
-                    ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/20 dark:text-emerald-300'
-                    : 'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950/20 dark:text-red-300'
+                    ? 'border-[var(--status-success)]/30 bg-[var(--status-success-muted)] text-[var(--status-success)]'
+                    : 'border-[var(--status-error)]/30 bg-[var(--status-error-muted)] text-[var(--status-error)]'
                 )}
               >
                 {testResult.passed ? 'Passed' : 'Failed'}

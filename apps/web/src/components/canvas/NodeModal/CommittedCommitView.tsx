@@ -362,7 +362,7 @@ export function CommittedCommitView({
 
           {/* Left Divider */}
           <div
-            className="w-1.5 bg-[var(--hover-bg)] cursor-col-resize shrink-0 hover:bg-[var(--color-border)] active:bg-blue-500 transition-colors"
+            className="w-1.5 bg-[var(--hover-bg)] cursor-col-resize shrink-0 hover:bg-[var(--color-border)] active:bg-[var(--status-info)] transition-colors"
             onMouseDown={handleCommitLeftDivider}
           />
 
@@ -638,7 +638,7 @@ export function CommittedCommitView({
 
           {/* Right Divider */}
           <div
-            className="w-1.5 bg-[var(--hover-bg)] cursor-col-resize shrink-0 hover:bg-[var(--color-border)] active:bg-blue-500 transition-colors"
+            className="w-1.5 bg-[var(--hover-bg)] cursor-col-resize shrink-0 hover:bg-[var(--color-border)] active:bg-[var(--status-info)] transition-colors"
             onMouseDown={handleCommitRightDivider}
           />
 
@@ -684,7 +684,7 @@ export function CommittedCommitView({
 
               <div className="flex flex-col gap-2">
                 <select
-                  className="w-full py-2 px-3 border border-[var(--color-border)] rounded-md text-sm bg-[var(--surface-card)] text-[var(--text-primary)] cursor-pointer focus:outline-none focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full py-2 px-3 border border-[var(--color-border)] rounded-md text-sm bg-[var(--surface-card)] text-[var(--text-primary)] cursor-pointer focus:outline-none focus:border-[var(--status-info)] disabled:opacity-50 disabled:cursor-not-allowed"
                   value={diffTargetCommit}
                   disabled={allCommittedCommits.length <= 1 || isDiffLoading}
                   onChange={(e) => {

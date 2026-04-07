@@ -54,15 +54,15 @@ export function LearnFromEditSuggestion({ leafId, onAddConstraint }: LearnFromEd
             Learn
           </Button>
         </div>
-        {error && <p className="mt-2 text-xs text-red-500">{error}</p>}
+        {error && <p className="mt-2 text-xs text-[var(--status-error)]">{error}</p>}
       </div>
     );
   }
 
   if (result.suggestions.length === 0) {
     return (
-      <div className="p-3 rounded-lg border border-green-500/20 bg-green-50 dark:bg-green-950/20">
-        <span className="text-xs text-green-700 dark:text-green-400">
+      <div className="p-3 rounded-lg border border-[var(--status-success)]/20 bg-[var(--status-success-muted)]">
+        <span className="text-xs text-[var(--status-success)]">
           No constraint suggestions from past failures
         </span>
       </div>
@@ -70,10 +70,10 @@ export function LearnFromEditSuggestion({ leafId, onAddConstraint }: LearnFromEd
   }
 
   return (
-    <div className="p-3 rounded-lg border border-purple-500/30 bg-purple-50 dark:bg-purple-950/20 space-y-2">
+    <div className="p-3 rounded-lg border border-[var(--source)]/30 bg-[var(--source-dim)] space-y-2">
       <div className="flex items-center gap-1.5">
-        <BookOpen size={14} className="text-purple-600 dark:text-purple-400" />
-        <span className="text-xs font-semibold text-purple-700 dark:text-purple-300">
+        <BookOpen size={14} className="text-[var(--source)]" />
+        <span className="text-xs font-semibold text-[var(--source)]">
           {result.suggestions.length} learned constraint
           {result.suggestions.length !== 1 ? 's' : ''}
         </span>
@@ -103,8 +103,8 @@ export function LearnFromEditSuggestion({ leafId, onAddConstraint }: LearnFromEd
               className={cn(
                 'font-medium px-1.5 py-0.5 rounded text-[10px]',
                 s.type === 'require'
-                  ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
-                  : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+                  ? 'bg-[var(--status-success-muted)] text-[var(--status-success)]'
+                  : 'bg-[var(--status-error-muted)] text-[var(--status-error)]'
               )}
             >
               {s.type} ({s.match_mode})

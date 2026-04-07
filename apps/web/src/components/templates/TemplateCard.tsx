@@ -27,10 +27,10 @@ const LEAF_TYPE_ICONS: Record<string, React.ElementType> = {
 };
 
 const CATEGORY_COLORS: Record<string, string> = {
-  social: 'bg-blue-500/10 text-blue-600 border-blue-500/20 dark:text-blue-400',
-  business: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:text-emerald-400',
-  technical: 'bg-purple-500/10 text-purple-600 border-purple-500/20 dark:text-purple-400',
-  creative: 'bg-orange-500/10 text-orange-600 border-orange-500/20 dark:text-orange-400',
+  social: 'bg-[var(--status-info)]/10 text-[var(--status-info)] border-[var(--status-info)]/20',
+  business: 'bg-[var(--status-success)]/10 text-[var(--status-success)] border-[var(--status-success)]/20',
+  technical: 'bg-[var(--source)]/10 text-[var(--source)] border-[var(--source)]/20',
+  creative: 'bg-[var(--accent-pending)]/10 text-[var(--accent-pending)] border-[var(--accent-pending)]/20',
 };
 
 interface TemplateCardProps {
@@ -106,7 +106,7 @@ export function TemplateCard({ template, onPreview, onUse, onDelete }: TemplateC
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 w-7 p-0 text-[var(--text-tertiary)] hover:text-red-500"
+              className="h-7 w-7 p-0 text-[var(--text-tertiary)] hover:text-[var(--status-error)]"
               onClick={() => onDelete(template)}
             >
               <Trash2 className="h-3 w-3" />

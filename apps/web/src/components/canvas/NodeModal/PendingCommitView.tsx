@@ -162,7 +162,7 @@ export function PendingCommitView({
 
           {/* Sidebar | SOURCE Divider */}
           <div
-            className="w-1.5 bg-[var(--stroke-divider)] cursor-col-resize shrink-0 hover:bg-[var(--hover-bg-strong)] active:bg-blue-500 dark:active:bg-blue-400 transition-colors relative group"
+            className="w-1.5 bg-[var(--stroke-divider)] cursor-col-resize shrink-0 hover:bg-[var(--hover-bg-strong)] active:bg-[var(--status-info)] transition-colors relative group"
             onMouseDown={state.handleSidebarSourceDivider}
           >
             <div className="draft-svtz__divider-handle" />

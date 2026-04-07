@@ -138,12 +138,12 @@ export function ReportHeader({
 
   const statusColor =
     status === 'completed'
-      ? 'border-green-500/30 bg-green-500/10 text-[var(--status-success)]'
+      ? 'border-[var(--status-success)]/30 bg-[var(--status-success)]/10 text-[var(--status-success)]'
       : status === 'failed'
-        ? 'border-red-500/30 bg-red-500/10 text-[var(--status-error)]'
+        ? 'border-[var(--status-error)]/30 bg-[var(--status-error)]/10 text-[var(--status-error)]'
         : status === 'running'
-          ? 'border-blue-500/30 bg-blue-500/10 text-[var(--status-info)]'
-          : 'border-gray-500/30 bg-gray-500/10 text-muted-foreground';
+          ? 'border-[var(--status-info)]/30 bg-[var(--status-info)]/10 text-[var(--status-info)]'
+          : 'border-[var(--stroke-divider)] bg-[var(--color-bg-subtle)] text-muted-foreground';
 
   return (
     <div className="space-y-2">

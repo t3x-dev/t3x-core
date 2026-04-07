@@ -42,12 +42,12 @@ const roleLabels: Record<string, string> = {
 
 const highlightColors: Record<HighlightColor, string> = {
   yellow: 'bg-[var(--status-warning-muted)]',
-  green: 'bg-[var(--status-success-muted)] dark:text-emerald-200',
-  deepGreen: 'bg-emerald-200 text-emerald-900 dark:bg-emerald-800 dark:text-emerald-100',
-  deepRed: 'bg-red-200 text-red-900 dark:bg-red-800 dark:text-red-100',
+  green: 'bg-[var(--status-success-muted)]',
+  deepGreen: 'bg-[var(--status-success)] text-white',
+  deepRed: 'bg-[var(--status-error)] text-white',
   amber:
-    'bg-amber-100 border border-dashed border-amber-400 dark:bg-amber-900/30 dark:text-amber-200',
-  blue: 'bg-blue-100 border border-dotted border-blue-400 dark:bg-blue-900/30 dark:text-blue-200',
+    'bg-[var(--status-warning-muted)] border border-dashed border-[var(--status-warning)]/40',
+  blue: 'bg-[var(--status-info)]/10 border border-dotted border-[var(--status-info)]/40',
 };
 
 export function TurnBubble({
@@ -158,8 +158,8 @@ export function TurnBubble({
     green: 'ring-2 ring-[var(--status-success)] ring-offset-2',
     deepGreen: 'ring-2 ring-[var(--status-success)] ring-offset-2',
     deepRed: 'ring-2 ring-[var(--status-error)] ring-offset-2',
-    amber: 'ring-2 ring-amber-400 ring-offset-2',
-    blue: 'ring-2 ring-blue-400 ring-offset-2',
+    amber: 'ring-2 ring-[var(--status-warning)] ring-offset-2',
+    blue: 'ring-2 ring-[var(--status-info)] ring-offset-2',
   };
 
   const ringClass = showTargetRing && turn.is_target ? ringColorMap[highlightColor] : '';
@@ -169,14 +169,14 @@ export function TurnBubble({
       className={`
         flex gap-3 p-3 rounded-lg
         ${ringClass}
-        ${isUser ? 'bg-blue-50 dark:bg-[var(--surface-elevated)] dark:border-l-2 dark:border-l-[var(--accent-commit)]' : 'bg-muted dark:bg-[var(--surface-card)]'}
+        ${isUser ? 'bg-[var(--status-info-muted)] dark:bg-[var(--surface-elevated)] dark:border-l-2 dark:border-l-[var(--accent-commit)]' : 'bg-muted dark:bg-[var(--surface-card)]'}
       `}
     >
       {/* Role Icon */}
       <div
         className={`
           shrink-0 w-8 h-8 rounded-full flex items-center justify-center
-          ${isUser ? 'bg-blue-100 dark:bg-[var(--accent-commit)]/15 text-blue-600 dark:text-[var(--accent-commit)]' : 'bg-muted-foreground/20 text-muted-foreground'}
+          ${isUser ? 'bg-[var(--accent-commit)]/15 text-[var(--accent-commit)]' : 'bg-muted-foreground/20 text-muted-foreground'}
         `}
       >
         {roleIcons[turn.role] || <User className="h-4 w-4" />}

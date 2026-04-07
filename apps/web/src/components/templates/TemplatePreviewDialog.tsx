@@ -40,7 +40,7 @@ function HighlightedPrompt({ text }: { text: string }) {
           return (
             <span
               key={i}
-              className="rounded bg-blue-500/10 px-1 py-0.5 text-blue-600 dark:text-blue-400"
+              className="rounded bg-[var(--status-info)]/10 px-1 py-0.5 text-[var(--status-info)]"
             >
               {part}
             </span>
@@ -130,7 +130,7 @@ export function TemplatePreviewDialog({
                     key={v.name}
                     className="flex items-start gap-3 rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-base)] p-3"
                   >
-                    <code className="rounded bg-blue-500/10 px-1.5 py-0.5 text-xs text-blue-600 dark:text-blue-400 shrink-0">
+                    <code className="rounded bg-[var(--status-info)]/10 px-1.5 py-0.5 text-xs text-[var(--status-info)] shrink-0">
                       {`{{${v.name}}}`}
                     </code>
                     <div className="min-w-0 flex-1">

@@ -120,8 +120,8 @@ export function NodeCard({
                 key={r.constraint_id}
                 className={`flex items-center gap-1.5 text-xs ${
                   r.type === 'match'
-                    ? 'text-emerald-600 dark:text-emerald-400'
-                    : 'text-red-600 dark:text-red-400'
+                    ? 'text-[var(--status-success)]'
+                    : 'text-[var(--status-error)]'
                 }`}
               >
                 {r.type === 'match' ? (

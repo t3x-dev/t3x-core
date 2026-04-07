@@ -20,11 +20,11 @@ export interface ProjectFolderProps {
 
 // Project icon colors — cycle through based on project index
 export const PROJECT_ICON_COLORS = [
-  { bg: 'bg-blue-500/15', text: 'text-blue-400' },
-  { bg: 'bg-purple-500/15', text: 'text-purple-400' },
-  { bg: 'bg-green-500/15', text: 'text-green-400' },
-  { bg: 'bg-orange-500/15', text: 'text-orange-400' },
-  { bg: 'bg-pink-500/15', text: 'text-pink-400' },
+  { bg: 'bg-[var(--accent-commit)]/15', text: 'text-[var(--accent-commit)]' },
+  { bg: 'bg-[var(--source)]/15', text: 'text-[var(--source)]' },
+  { bg: 'bg-[var(--status-success)]/15', text: 'text-[var(--status-success)]' },
+  { bg: 'bg-[var(--accent-pending)]/15', text: 'text-[var(--accent-pending)]' },
+  { bg: 'bg-[var(--status-error)]/15', text: 'text-[var(--status-error)]' },
 ];
 
 export function ProjectFolder({

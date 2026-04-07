@@ -182,8 +182,8 @@ function ConstraintRow({
             variant="outline"
             className={
               isRequire
-                ? 'border-green-500/50 text-green-600 dark:text-green-400 text-xs'
-                : 'border-red-500/50 text-red-600 dark:text-red-400 text-xs'
+                ? 'border-[var(--status-success)]/50 text-[var(--status-success)] text-xs'
+                : 'border-[var(--status-error)]/50 text-[var(--status-error)] text-xs'
             }
           >
             {isRequire ? 'require' : 'exclude'}

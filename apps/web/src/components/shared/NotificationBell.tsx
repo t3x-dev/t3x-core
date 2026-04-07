@@ -91,7 +91,7 @@ export function NotificationBell({ projectId, pollIntervalMs = 30_000 }: Notific
       >
         <Bell size={16} />
         {unreadCount > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 h-4 w-4 rounded-full bg-red-500 text-[10px] font-bold text-white flex items-center justify-center">
+          <span className="absolute -top-0.5 -right-0.5 h-4 w-4 rounded-full bg-[var(--status-error)] text-[10px] font-bold text-white flex items-center justify-center">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
@@ -141,7 +141,7 @@ export function NotificationBell({ projectId, pollIntervalMs = 30_000 }: Notific
                   tabIndex={0}
                   className={cn(
                     'w-full text-left p-3 text-xs hover:bg-[var(--color-bg-subtle)] transition-colors focus-visible:outline-none focus-visible:bg-[var(--color-bg-subtle)]',
-                    !n.read && 'bg-blue-50 dark:bg-blue-950/25'
+                    !n.read && 'bg-[var(--status-info-muted)]'
                   )}
                   onClick={() => !n.read && markRead(n.id)}
                   onKeyDown={(e) => {
@@ -157,7 +157,7 @@ export function NotificationBell({ projectId, pollIntervalMs = 30_000 }: Notific
                       <div className="text-[var(--text-secondary)] mt-0.5">{n.message}</div>
                     </div>
                     {!n.read && (
-                      <span className="h-2 w-2 rounded-full bg-blue-500 mt-1 flex-shrink-0" />
+                      <span className="h-2 w-2 rounded-full bg-[var(--status-info)] mt-1 flex-shrink-0" />
                     )}
                   </div>
                   <div className="text-[var(--text-tertiary)] mt-1">

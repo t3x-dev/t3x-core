@@ -43,7 +43,7 @@ function HighlightedText({
   return (
     <span>
       {before}
-      <mark className="rounded-sm bg-yellow-200 px-0.5 dark:bg-yellow-800/50">{marked}</mark>
+      <mark className="rounded-sm bg-[var(--status-warning-muted)] px-0.5">{marked}</mark>
       {after}
     </span>
   );

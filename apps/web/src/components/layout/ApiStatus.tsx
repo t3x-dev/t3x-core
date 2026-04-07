@@ -38,7 +38,7 @@ export function ApiStatus() {
     <div className="flex items-center gap-2 text-sm">
       <Badge
         variant="outline"
-        className="gap-1.5 border-green-500/30 bg-green-500/10 text-[var(--status-success)]"
+        className="gap-1.5 border-[var(--status-success)]/30 bg-[var(--status-success)]/10 text-[var(--status-success)]"
       >
         <CheckCircle2 className="h-3 w-3" />
         Connected

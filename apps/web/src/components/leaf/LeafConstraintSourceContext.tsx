@@ -481,7 +481,7 @@ export function LeafConstraintSourceContext({
           <Button
             size="sm"
             variant={mode === 'require' ? 'default' : 'outline'}
-            className={cn(mode === 'require' && 'bg-green-600 hover:bg-green-700 text-white')}
+            className={cn(mode === 'require' && 'bg-[var(--status-success)] hover:bg-[var(--status-success)] text-white')}
             onClick={() => setMode('require')}
           >
             <ShieldCheck className="h-3.5 w-3.5 mr-1.5" />
@@ -490,7 +490,7 @@ export function LeafConstraintSourceContext({
           <Button
             size="sm"
             variant={mode === 'exclude' ? 'default' : 'outline'}
-            className={cn(mode === 'exclude' && 'bg-red-600 hover:bg-red-700 text-white')}
+            className={cn(mode === 'exclude' && 'bg-[var(--status-error)] hover:bg-[var(--status-error)] text-white')}
             onClick={() => setMode('exclude')}
           >
             <ShieldX className="h-3.5 w-3.5 mr-1.5" />
@@ -512,11 +512,11 @@ export function LeafConstraintSourceContext({
           {constraintCount > 0 && (
             <>
               <span className="flex items-center gap-1.5">
-                <span className="inline-block w-3 h-3 rounded-sm bg-emerald-200 dark:bg-emerald-800" />
+                <span className="inline-block w-3 h-3 rounded-sm bg-[var(--status-success)]/30" />
                 Must Have
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="inline-block w-3 h-3 rounded-sm bg-red-200 dark:bg-red-800" />
+                <span className="inline-block w-3 h-3 rounded-sm bg-[var(--status-error)]/30" />
                 Must Not Have
               </span>
             </>
@@ -762,7 +762,7 @@ export function LeafConstraintSourceContext({
           </label>
           <textarea
             id="user-instruction"
-            className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg-white)] px-3 py-2 text-sm text-[var(--color-text-secondary)] placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:border-blue-400 dark:focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-400 dark:focus:ring-blue-600 resize-y"
+            className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg-white)] px-3 py-2 text-sm text-[var(--color-text-secondary)] placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:border-[var(--status-info)] focus:outline-none focus:ring-1 focus:ring-[var(--status-info)] resize-y"
             rows={3}
             placeholder="Add custom guidance for the LLM (e.g., tone, format, focus areas)..."
             value={userInstruction ?? ''}

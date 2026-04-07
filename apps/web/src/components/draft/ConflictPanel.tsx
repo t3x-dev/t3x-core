@@ -51,24 +51,24 @@ export function ConflictPanel({ commitHash }: ConflictPanelProps) {
             Check
           </Button>
         </div>
-        {error && <p className="mt-2 text-xs text-red-500">{error}</p>}
+        {error && <p className="mt-2 text-xs text-[var(--status-error)]">{error}</p>}
       </div>
     );
   }
 
   if (conflicts.length === 0) {
     return (
-      <div className="p-3 rounded-lg border border-green-500/20 bg-green-50 dark:bg-green-950/20">
-        <span className="text-xs text-green-700 dark:text-green-400">No conflicts detected</span>
+      <div className="p-3 rounded-lg border border-[var(--status-success)]/20 bg-[var(--status-success-muted)]">
+        <span className="text-xs text-[var(--status-success)]">No conflicts detected</span>
       </div>
     );
   }
 
   return (
-    <div className="p-3 rounded-lg border border-amber-500/30 bg-amber-50 dark:bg-amber-950/20 space-y-2">
+    <div className="p-3 rounded-lg border border-[var(--status-warning)]/30 bg-[var(--status-warning-muted)] space-y-2">
       <div className="flex items-center gap-1.5">
-        <AlertTriangle size={14} className="text-amber-600 dark:text-amber-400" />
-        <span className="text-xs font-semibold text-amber-700 dark:text-amber-300">
+        <AlertTriangle size={14} className="text-[var(--status-warning)]" />
+        <span className="text-xs font-semibold text-[var(--status-warning)]">
           {conflicts.length} potential conflict{conflicts.length !== 1 ? 's' : ''}
         </span>
       </div>

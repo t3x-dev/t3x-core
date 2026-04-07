@@ -255,9 +255,9 @@ export function CreateTemplateDialog({ open, onOpenChange, onCreated }: CreateTe
 
           {/* Syntax Errors */}
           {syntaxErrors.length > 0 && (
-            <div className="rounded-md border border-red-500/20 bg-red-500/5 p-3">
+            <div className="rounded-md border border-[var(--status-error)]/20 bg-[var(--status-error)]/5 p-3">
               {syntaxErrors.map((err, i) => (
-                <p key={i} className="text-xs text-red-500">
+                <p key={i} className="text-xs text-[var(--status-error)]">
                   {err}
                 </p>
               ))}

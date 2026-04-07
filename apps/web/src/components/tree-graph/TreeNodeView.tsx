@@ -103,7 +103,7 @@ function InlineEdit({
         onBlur={commitEdit}
         onKeyDown={handleKeyDown}
         className={cn(
-          'bg-white dark:bg-zinc-800 border border-blue-400 rounded px-1 py-0 text-xs outline-none w-full min-w-[60px]',
+          'bg-white dark:bg-zinc-800 border border-[var(--status-info)] rounded px-1 py-0 text-xs outline-none w-full min-w-[60px]',
           inputClassName
         )}
         // Prevent ReactFlow from capturing key events
@@ -115,7 +115,7 @@ function InlineEdit({
   return (
     <span
       className={cn(
-        'cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-950/30 rounded px-0.5',
+        'cursor-pointer hover:bg-[var(--hover-bg)] rounded px-0.5',
         className
       )}
       onDoubleClick={startEdit}
@@ -158,12 +158,12 @@ function SlotValueDisplay({ value }: { value: unknown }) {
   }
 
   if (typeof value === 'number') {
-    return <span className="text-blue-600 dark:text-blue-400">{formatNumber(value)}</span>;
+    return <span className="text-[var(--status-info)]">{formatNumber(value)}</span>;
   }
 
   if (isSlotRef(value)) {
     return (
-      <span className="text-purple-600 dark:text-purple-400 inline-flex items-center gap-0.5">
+      <span className="text-[var(--source)] inline-flex items-center gap-0.5">
         <LinkIcon className="h-3 w-3" />
         <span>{value.ref}</span>
       </span>
@@ -244,12 +244,12 @@ function TreeNodeComponent({ data, selected, id }: TreeNodeProps) {
     // Normal border
     !state && !selected && 'border-zinc-200 dark:border-zinc-700',
     // Selected
-    selected && 'border-blue-500 bg-blue-50/50 dark:bg-blue-950/30',
+    selected && 'border-[var(--status-info)] bg-[var(--status-info-muted)]',
     // State markers
-    state === 'added' && 'border-l-4 border-l-green-500',
-    state === 'updated' && 'border-l-4 border-l-orange-500',
+    state === 'added' && 'border-l-4 border-l-[var(--status-success)]',
+    state === 'updated' && 'border-l-4 border-l-[var(--accent-pending)]',
     state === 'removed' && 'opacity-40 line-through',
-    state === 'conflict' && 'border-2 border-red-500'
+    state === 'conflict' && 'border-2 border-[var(--status-error)]'
   );
 
   // Inline style for the origin-pulse glow on newly added nodes
@@ -276,7 +276,7 @@ function TreeNodeComponent({ data, selected, id }: TreeNodeProps) {
       {/* Gate status badge */}
       {data.gateStatus === 'warning' && (
         <div
-          className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-amber-500 flex items-center justify-center z-10"
+          className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-[var(--status-warning)] flex items-center justify-center z-10"
           title={data.gateIssueSummary ?? 'Quality warning'}
           aria-label={`${data.gateIssueCount ?? 0} quality warnings`}
         >
@@ -285,7 +285,7 @@ function TreeNodeComponent({ data, selected, id }: TreeNodeProps) {
       )}
       {data.gateStatus === 'error' && (
         <div
-          className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-red-500 flex items-center justify-center z-10"
+          className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-[var(--status-error)] flex items-center justify-center z-10"
           title={data.gateIssueSummary ?? 'Quality error'}
           aria-label={`${data.gateIssueCount ?? 0} quality errors`}
         >
@@ -339,7 +339,7 @@ function TreeNodeComponent({ data, selected, id }: TreeNodeProps) {
               key={key}
               className={cn(
                 'flex items-start gap-1.5 text-xs font-mono',
-                updatedSet.has(key) && 'bg-orange-50 dark:bg-orange-950/30 -mx-1 px-1 rounded'
+                updatedSet.has(key) && 'bg-[var(--status-warning-muted)] -mx-1 px-1 rounded'
               )}
             >
               <span className="text-zinc-500 dark:text-zinc-400 shrink-0">{key}:</span>

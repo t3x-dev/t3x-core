@@ -96,13 +96,13 @@ function getSpanColor(spanKind: SpanKind | undefined): string {
 function getSpanBadgeClass(spanKind: SpanKind | undefined): string {
   switch (spanKind) {
     case 'llm':
-      return 'bg-purple-500/10 text-[var(--accent-conversation)] border-purple-500/30';
+      return 'bg-[var(--accent-conversation)]/10 text-[var(--accent-conversation)] border-[var(--accent-conversation)]/30';
     case 'tool':
-      return 'bg-blue-500/10 text-[var(--status-info)] border-blue-500/30';
+      return 'bg-[var(--status-info)]/10 text-[var(--status-info)] border-[var(--status-info)]/30';
     case 'retriever':
-      return 'bg-green-500/10 text-[var(--status-success)] border-green-500/30';
+      return 'bg-[var(--status-success)]/10 text-[var(--status-success)] border-[var(--status-success)]/30';
     case 'workflow':
-      return 'bg-orange-500/10 text-[var(--accent-pending)] border-orange-500/30';
+      return 'bg-[var(--accent-pending)]/10 text-[var(--accent-pending)] border-[var(--accent-pending)]/30';
     default:
       return 'bg-gray-500/10 text-[var(--color-text-secondary)] border-gray-500/30';
   }
@@ -193,7 +193,7 @@ export function TraceTimeline({ steps, className }: TraceTimelineProps) {
                 className={cn(
                   'flex items-center gap-3 rounded-lg border p-3 transition-colors cursor-pointer',
                   'hover:bg-muted/50',
-                  step.status === 'error' && 'border-red-500/30 bg-red-500/5',
+                  step.status === 'error' && 'border-[var(--status-error)]/30 bg-[var(--status-error)]/5',
                   isExpanded && 'bg-muted/30'
                 )}
                 onClick={() => toggleSpan(step.step_id)}
@@ -220,7 +220,7 @@ export function TraceTimeline({ steps, className }: TraceTimelineProps) {
                       {step.span_kind || 'chain'}
                     </span>
                     {step.status === 'error' && (
-                      <span className="text-xs px-1.5 py-0.5 rounded border border-red-500/30 bg-red-500/10 text-[var(--status-error)]">
+                      <span className="text-xs px-1.5 py-0.5 rounded border border-[var(--status-error)]/30 bg-[var(--status-error)]/10 text-[var(--status-error)]">
                         error
                       </span>
                     )}

@@ -30,21 +30,21 @@ export function ReviewItem({ point, currentText, onAccept, onDismiss, onEdit }: 
   const isModify = !!currentText;
 
   return (
-    <div className="space-y-2 rounded-md border border-amber-200 dark:border-amber-800 p-3">
+    <div className="space-y-2 rounded-md border border-[var(--status-warning)]/30 p-3">
       {!editing ? (
         <>
           <div className="flex items-center gap-1.5 mb-1">
             {isModify ? (
               <Badge
                 variant="outline"
-                className="bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300 text-[10px]"
+                className="bg-[var(--status-warning-muted)] text-[var(--status-warning)] text-[10px]"
               >
                 <Pencil className="mr-0.5 h-2.5 w-2.5" /> Modify
               </Badge>
             ) : (
               <Badge
                 variant="outline"
-                className="bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300 text-[10px]"
+                className="bg-[var(--status-info-muted)] text-[var(--status-info)] text-[10px]"
               >
                 <Plus className="mr-0.5 h-2.5 w-2.5" /> New
               </Badge>
@@ -55,7 +55,7 @@ export function ReviewItem({ point, currentText, onAccept, onDismiss, onEdit }: 
               </Badge>
             )}
             {point.low_coverage && (
-              <span className="inline-flex items-center gap-0.5 text-[10px] text-amber-600 dark:text-amber-400">
+              <span className="inline-flex items-center gap-0.5 text-[10px] text-[var(--status-warning)]">
                 <AlertTriangle className="h-2.5 w-2.5" /> Low coverage
               </span>
             )}
@@ -72,7 +72,7 @@ export function ReviewItem({ point, currentText, onAccept, onDismiss, onEdit }: 
                 {currentText}
               </span>
               <ArrowRight className="mt-1 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-              <span className="rounded bg-green-50 dark:bg-green-950/30 px-1.5 py-0.5 font-medium">
+              <span className="rounded bg-[var(--status-success-muted)] px-1.5 py-0.5 font-medium">
                 {point.text}
               </span>
             </div>
@@ -86,7 +86,7 @@ export function ReviewItem({ point, currentText, onAccept, onDismiss, onEdit }: 
             <Button
               size="sm"
               variant="outline"
-              className="text-green-700 border-green-300 hover:bg-green-50 dark:text-green-400 dark:border-green-700 dark:hover:bg-green-950/30"
+              className="text-[var(--status-success)] border-[var(--status-success)]/30 hover:bg-[var(--status-success-muted)]"
               onClick={() => onAccept(point.id)}
             >
               <Check className="mr-1 h-3 w-3" /> {isModify ? 'Accept Change' : 'Accept'}
@@ -94,7 +94,7 @@ export function ReviewItem({ point, currentText, onAccept, onDismiss, onEdit }: 
             <Button
               size="sm"
               variant="outline"
-              className="text-blue-700 border-blue-300 hover:bg-blue-50 dark:text-blue-400 dark:border-blue-700 dark:hover:bg-blue-950/30"
+              className="text-[var(--status-info)] border-[var(--status-info)]/30 hover:bg-[var(--status-info-muted)]"
               onClick={() => setEditing(true)}
             >
               <Pencil className="mr-1 h-3 w-3" /> Edit
