@@ -73,9 +73,17 @@ export function useExtraction({ resolvedConversationId }: UseExtractionParams) {
         setDraft(result.snapshot);
       }
 
-      // delta is YOp[]
+      // delta is YOp[] (may include index/total metadata from API — strip before use)
       const rawDelta = result.delta;
-      const deltaOps: unknown[] | undefined = Array.isArray(rawDelta) ? rawDelta : undefined;
+      const deltaOps: unknown[] | undefined = Array.isArray(rawDelta)
+        ? rawDelta.map((op: unknown) => {
+            if (typeof op === 'object' && op !== null) {
+              const { index, total, ...cleanOp } = op as Record<string, unknown>;
+              return cleanOp;
+            }
+            return op;
+          })
+        : undefined;
 
       if (deltaOps && deltaOps.length > 0) {
         // Feed delta ops into workspace script editor

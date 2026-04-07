@@ -25,21 +25,21 @@ export function GateIssueCard({ issue, onLocate, onApply }: GateIssueCardProps) 
 
   const iconColor =
     issue.severity === 'error'
-      ? 'text-red-500'
+      ? 'text-[var(--status-error)]'
       : issue.severity === 'warning'
-        ? 'text-amber-500'
-        : 'text-blue-500';
+        ? 'text-[var(--status-warning)]'
+        : 'text-[var(--status-info)]';
 
   return (
     <div
       className={cn(
         'rounded-md border p-3 text-sm space-y-2',
         issue.severity === 'error' &&
-          'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950/20',
+          'border-[var(--status-error)]/30 bg-[var(--status-error-muted)]',
         issue.severity === 'warning' &&
-          'border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/20',
+          'border-[var(--status-warning)]/30 bg-[var(--status-warning-muted)]',
         issue.severity === 'info' &&
-          'border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/20'
+          'border-[var(--status-info)]/30 bg-[var(--status-info-muted)]'
       )}
     >
       <div className="flex items-start gap-2">
@@ -87,7 +87,7 @@ export function GateIssueCard({ issue, onLocate, onApply }: GateIssueCardProps) 
           </Button>
         )}
         {applied && (
-          <span className="flex items-center gap-1 text-xs text-emerald-600">
+          <span className="flex items-center gap-1 text-xs text-[var(--status-success)]">
             <Check className="h-3 w-3" /> Applied
           </span>
         )}

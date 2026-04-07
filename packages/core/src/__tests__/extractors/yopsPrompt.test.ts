@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { buildYOpsPrompt } from '../../extractors/yopsPrompt';
 import type { ExtractionTurn } from '../../extractors/yopsPrompt';
+import { buildYOpsPrompt } from '../../extractors/yopsPrompt';
 import type { SemanticContent } from '../../semantic/types';
 
 const sampleTurns: ExtractionTurn[] = [

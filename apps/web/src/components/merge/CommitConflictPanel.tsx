@@ -39,8 +39,8 @@ export function CommitConflictPanel({
           const cosine = c.cosine ?? 0;
           const simColor =
             cosine >= 0.8
-              ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
-              : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300';
+              ? 'bg-[var(--status-error-muted)] text-[var(--status-error)]'
+              : 'bg-[var(--status-warning-muted)] text-[var(--status-warning)]';
           return (
             <div
               key={`conflict-${c.new_node_id}-${c.existing_node_id}`}

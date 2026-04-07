@@ -343,7 +343,6 @@ export function ChatWorkspace({
             onSend={handleSend}
             onStop={stopGenerating}
             isStreaming={isStreaming}
-            provider={selectedProvider}
             disabled={isLoading || isExtracting}
             placeholder="Message... (Enter to send, Shift+Enter for new line)"
           />

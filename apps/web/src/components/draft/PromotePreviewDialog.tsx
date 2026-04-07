@@ -83,7 +83,7 @@ export function PromotePreviewDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-purple-500" />
+            <Sparkles className="h-4 w-4 text-[var(--source)]" />
             Auto-Draft Preview
           </DialogTitle>
           <DialogDescription>
@@ -135,7 +135,7 @@ export function PromotePreviewDialog({
               <Button
                 variant="ghost"
                 size="sm"
-                className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30"
+                className="text-[var(--status-error)] hover:text-[var(--status-error)] hover:bg-[var(--status-error-muted)]"
                 disabled={discarding}
                 onClick={async () => {
                   if (!window.confirm('Discard this auto-draft? This cannot be undone.')) return;

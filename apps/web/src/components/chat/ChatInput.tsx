@@ -1,10 +1,9 @@
 'use client';
 
-import { Brain, Globe, Paperclip, Send, Square } from 'lucide-react';
+import { Hexagon, Paperclip, Send, Square } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { useChatSessionStore } from '@/store/chatSessionStore';
 
 export interface AttachedImage {
   id: string;
@@ -72,7 +71,6 @@ interface ChatInputProps {
   isStreaming?: boolean;
   disabled?: boolean;
   placeholder?: string;
-  provider?: string;
 }
 
 export function ChatInput({
@@ -81,12 +79,7 @@ export function ChatInput({
   isStreaming = false,
   disabled = false,
   placeholder = 'Message...',
-  provider,
 }: ChatInputProps) {
-  const webSearchEnabled = useChatSessionStore((s) => s.webSearchEnabled);
-  const toggleWebSearch = useChatSessionStore((s) => s.toggleWebSearch);
-  const thinkingEnabled = useChatSessionStore((s) => s.thinkingEnabled);
-  const toggleThinking = useChatSessionStore((s) => s.toggleThinking);
   const [value, setValue] = useState('');
   const [attachedImages, setAttachedImages] = useState<AttachedImage[]>([]);
   const [isDragging, setIsDragging] = useState(false);
@@ -203,7 +196,7 @@ export function ChatInput({
               <button
                 type="button"
                 onClick={() => removeImage(img.id)}
-                className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-red-500 text-white text-[10px] flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-opacity"
+                className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-[var(--status-error)] text-white text-[10px] flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-opacity"
               >
                 &times;
               </button>
@@ -231,43 +224,23 @@ export function ChatInput({
           <Paperclip className="h-4 w-4" />
         </Button>
 
-        {/* Web search toggle — Claude only */}
-        {(!provider || provider === 'claude' || provider === 'anthropic') && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={toggleWebSearch}
-            className={cn(
-              'h-8 w-8 shrink-0 rounded-lg transition-colors duration-[var(--motion-base)]',
-              webSearchEnabled
-                ? 'bg-[var(--accent-commit)]/15 text-[var(--accent-commit)]'
-                : 'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]'
-            )}
-            aria-label="Toggle web search"
-          >
-            <Globe className="h-4 w-4" />
-          </Button>
-        )}
-
-        {/* Extended thinking toggle — Claude only */}
-        {(!provider || provider === 'claude' || provider === 'anthropic') && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={toggleThinking}
-            className={cn(
-              'h-8 w-8 shrink-0 rounded-lg transition-colors duration-[var(--motion-base)]',
-              thinkingEnabled
-                ? 'bg-[var(--accent-commit)]/15 text-[var(--accent-commit)]'
-                : 'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]'
-            )}
-            aria-label="Toggle extended thinking"
-          >
-            <Brain className="h-4 w-4" />
-          </Button>
-        )}
+        {/* Extract button */}
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={() => window.dispatchEvent(new CustomEvent('t3x:extract-requested'))}
+          disabled={disabled}
+          className={cn(
+            'h-8 shrink-0 rounded-lg px-2.5 gap-1.5 transition-colors duration-[var(--motion-base)]',
+            'bg-[var(--source)]/15 text-[var(--source)] border border-[var(--source)]/30',
+            'hover:bg-[var(--source)]/25'
+          )}
+          aria-label="Extract to YOps"
+          title="Extract to YOps"
+        >
+          <Hexagon className="h-3.5 w-3.5" />
+          <span className="text-[10px] font-semibold tracking-wide">Extract</span>
+        </Button>
 
         {/* Textarea */}
         <textarea
@@ -295,8 +268,8 @@ export function ChatInput({
             onClick={onStop}
             className={cn(
               'h-8 w-8 shrink-0 rounded-lg',
-              'bg-red-500/10 text-red-500',
-              'hover:bg-red-500/20 transition-colors duration-[var(--motion-base)]'
+              'bg-[var(--status-error)]/10 text-[var(--status-error)]',
+              'hover:bg-[var(--status-error)]/20 transition-colors duration-[var(--motion-base)]'
             )}
             aria-label="Stop generation"
           >

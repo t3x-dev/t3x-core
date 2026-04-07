@@ -138,7 +138,7 @@ export function CommitConfigStep({
                   {branchesLoading && <Loader2 size={12} className="animate-spin ml-1" />}
                 </label>
                 <select
-                  className="w-full py-2 px-3 border border-[var(--stroke-default)] rounded-md text-[0.85rem] bg-[var(--surface-card)] text-[var(--text-primary)] cursor-pointer focus:outline-none focus:border-indigo-500 dark:focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 dark:focus:ring-indigo-900/30"
+                  className="w-full py-2 px-3 border border-[var(--stroke-default)] rounded-md text-[0.85rem] bg-[var(--surface-card)] text-[var(--text-primary)] cursor-pointer focus:outline-none focus:border-[var(--accent-conversation)] focus:ring-2 focus:ring-[var(--accent-conversation-soft)]"
                   value={
                     data.pendingBranch !== 'branch'
                       ? 'main'
@@ -211,7 +211,7 @@ export function CommitConfigStep({
                 Template
               </label>
               <select
-                className="w-full py-2 px-3 border border-[var(--stroke-default)] rounded-md text-[0.85rem] bg-[var(--surface-card)] text-[var(--text-primary)] cursor-pointer focus:outline-none focus:border-indigo-500 dark:focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 dark:focus:ring-indigo-900/30"
+                className="w-full py-2 px-3 border border-[var(--stroke-default)] rounded-md text-[0.85rem] bg-[var(--surface-card)] text-[var(--text-primary)] cursor-pointer focus:outline-none focus:border-[var(--accent-conversation)] focus:ring-2 focus:ring-[var(--accent-conversation-soft)]"
                 value={template}
                 onChange={(e) => setTemplate(e.target.value)}
               >

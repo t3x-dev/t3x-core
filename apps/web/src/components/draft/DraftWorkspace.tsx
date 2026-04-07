@@ -208,9 +208,9 @@ export function DraftWorkspace({ projectId, onClose }: DraftWorkspaceProps) {
 
       {/* Auto-draft promotion banner */}
       {draft.status === 'auto' && (
-        <div className="flex items-center gap-2 border-b border-amber-500/50 bg-amber-50 dark:bg-amber-950/30 px-6 py-2.5 text-sm">
-          <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
-          <span className="flex-1 text-amber-800 dark:text-amber-200">
+        <div className="flex items-center gap-2 border-b border-[var(--status-warning)]/50 bg-[var(--status-warning-muted)] px-6 py-2.5 text-sm">
+          <AlertTriangle className="h-4 w-4 shrink-0 text-[var(--status-warning)]" />
+          <span className="flex-1 text-[var(--status-warning)]">
             Auto-extracted draft — read-only until promoted.
           </span>
           <Button size="sm" variant="outline" onClick={() => setShowPromoteDialog(true)}>
@@ -225,12 +225,12 @@ export function DraftWorkspace({ projectId, onClose }: DraftWorkspaceProps) {
           <div className="mx-auto max-w-3xl px-6 py-6 space-y-6">
             {isLLMMode ? (
               <>
-                <div className="flex items-center gap-2 rounded-lg bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200/50 dark:border-blue-800/30 px-4 py-2 text-xs text-blue-700 dark:text-blue-300">
+                <div className="flex items-center gap-2 rounded-lg bg-[var(--status-info-muted)] border border-[var(--status-info)]/30 px-4 py-2 text-xs text-[var(--status-info)]">
                   <Sparkles className="h-3.5 w-3.5" />
                   <span className="font-medium">LLM Extraction</span>
-                  <span className="text-blue-400 dark:text-blue-600">&middot;</span>
+                  <span className="text-[var(--status-info)]/50">&middot;</span>
                   <span>{readyCount} ready</span>
-                  <span className="text-blue-400 dark:text-blue-600">&middot;</span>
+                  <span className="text-[var(--status-info)]/50">&middot;</span>
                   <span>{reviewCount} to review</span>
                 </div>
                 <DraftWorkbenchLLM

@@ -144,13 +144,13 @@ export function VerificationBadge({ projectId }: VerificationBadgeProps) {
         icon: ShieldCheck,
         label: 'Verified',
         className:
-          'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800',
+          'bg-[var(--status-success-muted)] text-[var(--status-success)] border-[var(--status-success)]/30',
       },
       failed: {
         icon: ShieldAlert,
         label: developerMode ? 'Failed' : 'Issues Found',
         className:
-          'bg-red-50 text-red-700 border-red-200 dark:bg-red-950 dark:text-red-300 dark:border-red-800',
+          'bg-[var(--status-error-muted)] text-[var(--status-error)] border-[var(--status-error)]/30',
       },
     }),
     [developerMode]
@@ -181,8 +181,8 @@ export function VerificationBadge({ projectId }: VerificationBadgeProps) {
           <IconComponent
             className={cn(
               'h-5 w-5',
-              state === 'verified' && 'text-emerald-500',
-              state === 'failed' && 'text-red-500',
+              state === 'verified' && 'text-[var(--status-success)]',
+              state === 'failed' && 'text-[var(--status-error)]',
               state === 'idle' && 'text-muted-foreground',
               isLoading && 'animate-spin text-muted-foreground'
             )}
@@ -226,7 +226,7 @@ export function VerificationBadge({ projectId }: VerificationBadgeProps) {
 
         {state === 'verified' && activeResult && (
           <>
-            <div className="rounded-md bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800 p-2.5 text-xs mb-3">
+            <div className="rounded-md bg-[var(--status-success-muted)] border border-[var(--status-success)]/30 p-2.5 text-xs mb-3">
               {developerMode ? (
                 <div className="grid grid-cols-2 gap-1 font-mono text-muted-foreground">
                   {'total' in activeResult && (
@@ -247,7 +247,7 @@ export function VerificationBadge({ projectId }: VerificationBadgeProps) {
                   )}
                 </div>
               ) : (
-                <p className="text-emerald-700 dark:text-emerald-300">
+                <p className="text-[var(--status-success)]">
                   {'total' in activeResult
                     ? `All ${(activeResult as VerifyResult).total} snapshots verified — data is intact.`
                     : `${(activeResult as QuickVerifyResult).checked} recent snapshots verified — data is intact.`}
@@ -268,9 +268,9 @@ export function VerificationBadge({ projectId }: VerificationBadgeProps) {
         {state === 'failed' && (
           <>
             {fullResult && !fullResult.valid && (
-              <div className="rounded-md bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 p-2.5 text-xs mb-3 space-y-1">
+              <div className="rounded-md bg-[var(--status-error-muted)] border border-[var(--status-error)]/30 p-2.5 text-xs mb-3 space-y-1">
                 {fullResult.errors.hash_mismatch.length > 0 && (
-                  <div className="flex items-start gap-1.5 text-red-700 dark:text-red-300">
+                  <div className="flex items-start gap-1.5 text-[var(--status-error)]">
                     <XCircle className="h-3 w-3 mt-0.5 shrink-0" />
                     <span>
                       {developerMode
@@ -283,7 +283,7 @@ export function VerificationBadge({ projectId }: VerificationBadgeProps) {
                   </div>
                 )}
                 {fullResult.errors.parent_not_found.length > 0 && (
-                  <div className="flex items-start gap-1.5 text-red-700 dark:text-red-300">
+                  <div className="flex items-start gap-1.5 text-[var(--status-error)]">
                     <XCircle className="h-3 w-3 mt-0.5 shrink-0" />
                     <span>
                       {developerMode
@@ -296,8 +296,8 @@ export function VerificationBadge({ projectId }: VerificationBadgeProps) {
             )}
 
             {!fullResult && quickResult && !quickResult.valid && (
-              <div className="rounded-md bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 p-2.5 text-xs mb-3">
-                <p className="text-red-700 dark:text-red-300">
+              <div className="rounded-md bg-[var(--status-error-muted)] border border-[var(--status-error)]/30 p-2.5 text-xs mb-3">
+                <p className="text-[var(--status-error)]">
                   {developerMode
                     ? `${quickResult.mismatches.length} Merkle mismatch(es), ${quickResult.missing_roots.length} missing root(s)`
                     : 'Integrity issues detected. Run a full verification for details.'}
@@ -306,8 +306,8 @@ export function VerificationBadge({ projectId }: VerificationBadgeProps) {
             )}
 
             {!fullResult && !quickResult && (
-              <div className="rounded-md bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 p-2.5 text-xs mb-3">
-                <p className="text-red-700 dark:text-red-300">
+              <div className="rounded-md bg-[var(--status-error-muted)] border border-[var(--status-error)]/30 p-2.5 text-xs mb-3">
+                <p className="text-[var(--status-error)]">
                   Verification failed. Try again or run a full verification.
                 </p>
               </div>
@@ -374,7 +374,7 @@ export function VerificationBadge({ projectId }: VerificationBadgeProps) {
             </button>
             {showTechDetails && (
               <div className="mt-2 space-y-2 text-xs font-mono text-muted-foreground">
-                {fullResult.truncated && <p className="text-amber-600">Truncated (100K limit)</p>}
+                {fullResult.truncated && <p className="text-[var(--status-warning)]">Truncated (100K limit)</p>}
                 {fullResult.merkle_mismatches && fullResult.merkle_mismatches.length > 0 && (
                   <div>
                     <p className="font-sans font-medium text-foreground">

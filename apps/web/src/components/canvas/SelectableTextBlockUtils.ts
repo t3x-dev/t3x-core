@@ -133,12 +133,12 @@ export function getTokenClasses(state: TokenState, isDragging: boolean, isSepara
   return cn(
     'inline py-0.5 rounded transition-colors cursor-pointer',
     state === 'normal' && 'hover:bg-[var(--hover-bg)]',
-    state === 'selected' &&
-      'bg-[var(--status-success-muted)] hover:bg-green-200 dark:hover:bg-green-700',
-    state === 'excluded' &&
-      'bg-[var(--status-error-muted)] hover:bg-red-200/60 dark:hover:bg-red-800/30',
-    state === 'keyword-must' && 'bg-green-500 text-white font-medium hover:bg-green-600',
-    state === 'keyword-mustnt' && 'bg-red-500 text-white font-medium hover:bg-red-600',
+    state === 'selected' && 'bg-[var(--status-success-muted)] hover:bg-[var(--status-success)]/20',
+    state === 'excluded' && 'bg-[var(--status-error-muted)] hover:bg-[var(--status-error)]/15',
+    state === 'keyword-must' &&
+      'bg-[var(--status-success)] text-white font-medium hover:bg-[var(--status-success)]',
+    state === 'keyword-mustnt' &&
+      'bg-[var(--status-error)] text-white font-medium hover:bg-[var(--status-error)]',
     // Anchor candidate: dotted underline (unconfirmed)
     state === 'anchor-candidate' &&
       'underline decoration-dotted decoration-amber-500 underline-offset-2 hover:bg-amber-50 dark:hover:bg-amber-800',
@@ -148,7 +148,7 @@ export function getTokenClasses(state: TokenState, isDragging: boolean, isSepara
     state === 'anchor-mustnt' &&
       'bg-rose-100 dark:bg-rose-900/30 text-rose-800 dark:text-rose-200 font-medium underline decoration-rose-500 underline-offset-2 hover:bg-rose-200 dark:hover:bg-rose-700',
     state === 'anchor-preferred' &&
-      'bg-[var(--status-info-muted)] text-[var(--status-info)] font-medium underline decoration-blue-500 underline-offset-2 hover:bg-blue-200 dark:hover:bg-blue-700',
+      'bg-[var(--status-info-muted)] text-[var(--status-info)] font-medium underline decoration-[var(--status-info)] underline-offset-2 hover:bg-[var(--status-info)]/20',
     isDragging && state === 'normal' && 'bg-[var(--status-info-muted)]'
   );
 }

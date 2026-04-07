@@ -74,7 +74,9 @@ function resolvePath(partialPath: string, allPaths: Array<{ path: string }>): st
 // ── Schema Fixes ──
 
 const FIELDS_ALLOWED: Record<string, string[]> = {
-  define: ['path'],
+  set: ['path', 'value'],
+  populate: ['path', 'values'],
+  define: ['path', 'parent', 'key'],
   unset: ['path'],
   drop: ['path'],
   rename: ['path', 'to'],
@@ -93,6 +95,22 @@ function detectOpType(rawOp: Record<string, unknown>): string | null {
 }
 
 function fixSchema(opType: string, data: Record<string, unknown>, fixes: string[]): void {
+  // Rename LLM field aliases before stripping
+  if (opType === 'populate' && 'slots' in data && !('values' in data)) {
+    data.values = data.slots;
+    delete data.slots;
+    fixes.push('renamed populate.slots → populate.values');
+  }
+  if (opType === 'define' && 'parent' in data && 'key' in data && !('path' in data)) {
+    // LLM uses { parent, key } but schema expects { path } where path = parent/key or key
+    const parent = data.parent as string;
+    const key = data.key as string;
+    data.path = parent ? `${parent}/${key}` : key;
+    delete data.parent;
+    delete data.key;
+    fixes.push(`converted define {parent:"${parent}", key:"${key}"} → {path:"${data.path}"}`);
+  }
+
   // Strip extra fields
   if (FIELDS_ALLOWED[opType]) {
     const allowed = new Set(FIELDS_ALLOWED[opType]);

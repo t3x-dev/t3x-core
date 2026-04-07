@@ -125,7 +125,7 @@ export function BusinessRulesSection({ projectId }: BusinessRulesSectionProps) {
           <h2 className="text-sm font-semibold text-[var(--text-primary)]">Business Rules</h2>
           <p className="text-xs text-[var(--text-tertiary)] mt-0.5">
             Define quality rules that are automatically checked during gate checks.
-            {saving && <span className="ml-2 text-amber-500">Saving...</span>}
+            {saving && <span className="ml-2 text-[var(--status-warning)]">Saving...</span>}
           </p>
         </div>
         <div className="flex gap-2">
@@ -146,7 +146,7 @@ export function BusinessRulesSection({ projectId }: BusinessRulesSectionProps) {
       </div>
 
       {error && (
-        <div className="rounded-md border border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950/20 p-3 text-sm text-red-700 dark:text-red-300 mb-4">
+        <div className="rounded-md border border-[var(--status-error)]/30 bg-[var(--status-error-muted)] p-3 text-sm text-[var(--status-error)] mb-4">
           {error}
         </div>
       )}
@@ -178,9 +178,9 @@ export function BusinessRulesSection({ projectId }: BusinessRulesSectionProps) {
           {rules.map((rule) => (
             <div key={rule.id} className="flex items-center gap-3 rounded-md border px-3 py-2.5">
               {rule.severity === 'error' ? (
-                <XCircle className="h-4 w-4 text-red-500 shrink-0" />
+                <XCircle className="h-4 w-4 text-[var(--status-error)] shrink-0" />
               ) : (
-                <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
+                <AlertTriangle className="h-4 w-4 text-[var(--status-warning)] shrink-0" />
               )}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
@@ -189,8 +189,8 @@ export function BusinessRulesSection({ projectId }: BusinessRulesSectionProps) {
                     className={cn(
                       'text-[10px] px-1.5 py-0.5 rounded font-medium',
                       rule.type === 'llm'
-                        ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300'
-                        : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+                        ? 'bg-[var(--source)]/10 text-[var(--source)]'
+                        : 'bg-[var(--status-info)]/10 text-[var(--status-info)]'
                     )}
                   >
                     {rule.type === 'llm' ? 'AI' : 'expr'}
@@ -212,7 +212,7 @@ export function BusinessRulesSection({ projectId }: BusinessRulesSectionProps) {
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-7 w-7 p-0 text-red-500 hover:text-red-600"
+                  className="h-7 w-7 p-0 text-[var(--status-error)] hover:text-[var(--status-error)]"
                   onClick={() => handleDelete(rule.id)}
                 >
                   <Trash2 className="h-3.5 w-3.5" />

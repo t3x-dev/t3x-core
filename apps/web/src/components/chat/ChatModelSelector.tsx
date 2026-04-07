@@ -53,9 +53,9 @@ export function ChatModelSelector({ selectedModel, onModelChange }: ChatModelSel
         onClick={() => setOpen(!open)}
         className="text-xs px-2 py-0.5 rounded border cursor-pointer"
         style={{
-          background: 'rgba(139,92,246,0.15)',
-          color: 'rgb(167,139,250)',
-          borderColor: 'rgba(139,92,246,0.3)',
+          background: 'var(--source-dim)',
+          color: 'var(--source)',
+          borderColor: 'color-mix(in srgb, var(--source) 30%, transparent)',
         }}
       >
         ⚡ {currentLabel} ▾

@@ -29,7 +29,7 @@ export function AutoDraftBadge({ autoDraftId, onPromoted }: AutoDraftBadgeProps)
           <TooltipTrigger asChild>
             <button
               type="button"
-              className="inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full border border-purple-500/40 text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/30 hover:bg-purple-100 dark:hover:bg-purple-950/50 transition-colors nodrag"
+              className="inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full border border-[var(--source)]/40 text-[var(--source)] bg-[var(--source-dim)] hover:bg-[var(--source)]/15 transition-colors nodrag"
               onClick={handleClick}
             >
               <Sparkles size={10} />

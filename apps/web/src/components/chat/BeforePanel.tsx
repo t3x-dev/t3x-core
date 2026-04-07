@@ -14,22 +14,22 @@ function TreeRow({ node, depth = 0 }: { node: TreeNode; depth?: number }) {
   return (
     <>
       <div
-        className={`flex items-center gap-1 px-3 py-0.5 text-[10px] font-mono cursor-pointer hover:bg-white/[0.03] ${isSelected ? 'bg-purple-500/[0.06]' : ''}`}
+        className={`flex items-center gap-1 px-3 py-0.5 text-[10px] font-mono cursor-pointer hover:bg-[var(--hover-bg)] ${isSelected ? 'bg-[var(--source-dim)]' : ''}`}
         style={{ paddingLeft: `${12 + depth * 14}px` }}
         onClick={() => select('before', { nodePath: node.key })}
       >
         <span className="text-[8px] text-[var(--text-tertiary)] w-2">{hasChildren ? '▾' : ''}</span>
-        <span className="w-3 h-3 rounded flex items-center justify-center text-[7px] font-bold bg-purple-500/10 text-purple-400">◆</span>
+        <span className="w-3 h-3 rounded flex items-center justify-center text-[7px] font-bold bg-[var(--source-dim)] text-[var(--source)]">◆</span>
         <span className="text-[var(--text-primary)]">{node.key}</span>
       </div>
       {slotEntries.map(([key, value]) => (
         <div
           key={key}
-          className="flex items-center gap-1 px-3 py-0.5 text-[10px] font-mono hover:bg-white/[0.03]"
+          className="flex items-center gap-1 px-3 py-0.5 text-[10px] font-mono hover:bg-[var(--hover-bg)]"
           style={{ paddingLeft: `${12 + (depth + 1) * 14}px` }}
         >
           <span className="w-2" />
-          <span className="w-3 h-3 rounded flex items-center justify-center text-[12px] bg-blue-500/[0.06] text-blue-400">·</span>
+          <span className="w-3 h-3 rounded flex items-center justify-center text-[12px] bg-[var(--slot-dim)] text-[var(--slot)]">·</span>
           <span className="text-[var(--text-primary)]">{key}</span>
           <span className="ml-auto text-[9px] text-[var(--text-tertiary)] truncate max-w-[100px]">{String(value)}</span>
         </div>
@@ -48,9 +48,9 @@ export function BeforePanel() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between px-3 py-1.5 border-b border-[var(--stroke)] bg-[var(--panel-alt)]">
+      <div className="flex items-center justify-between px-3 py-1.5 border-b border-[var(--stroke-default)] bg-[var(--panel-alt)]">
         <span className="text-[9px] font-bold uppercase tracking-wider text-[var(--text-tertiary)]">
-          Before <span className="opacity-50">🔒</span>
+          Before <span className="opacity-80">🔒</span>
         </span>
         <span className="text-[9px] font-mono text-[var(--text-tertiary)] opacity-60">
           {baseCommitHash ? baseCommitHash.slice(0, 6) : 'empty'}

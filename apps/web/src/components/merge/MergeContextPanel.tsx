@@ -36,13 +36,17 @@ export function MergeContextPanel({
           <div className="flex justify-between">
             <span className="text-[var(--text-tertiary)]">Source</span>
             <span className="font-mono text-[var(--text-secondary)] truncate ml-2 max-w-[160px]">
-              {sourceBranch || sourceHash?.slice(0, 12) || '?'}
+              {sourceBranch && sourceHash
+                ? `${sourceBranch} (${sourceHash.slice(0, 8)})`
+                : sourceBranch || sourceHash?.slice(0, 12) || '—'}
             </span>
           </div>
           <div className="flex justify-between">
             <span className="text-[var(--text-tertiary)]">Target</span>
             <span className="font-mono text-[var(--text-secondary)] truncate ml-2 max-w-[160px]">
-              {targetBranch || targetHash?.slice(0, 12) || '?'}
+              {targetBranch && targetHash
+                ? `${targetBranch} (${targetHash.slice(0, 8)})`
+                : targetBranch || targetHash?.slice(0, 12) || '—'}
             </span>
           </div>
         </div>
@@ -91,18 +95,18 @@ export function MergeContextPanel({
         <div className="space-y-1 text-xs text-[var(--text-secondary)]">
           <div className="flex justify-between">
             <span>Auto-kept</span>
-            <span className="font-mono">{treeMergeResult.autoKept.length}</span>
+            <span className="font-mono">{treeMergeResult?.autoKept?.length ?? 0}</span>
           </div>
           <div className="flex justify-between">
             <span>Conflicts</span>
-            <span className="font-mono">{treeMergeResult.conflicts.length}</span>
+            <span className="font-mono">{treeMergeResult?.conflicts?.length ?? 0}</span>
           </div>
           <div className="flex justify-between">
-            <span>Source only</span>
+            <span>Added in source</span>
             <span className="font-mono">{treeMergeResult.onlyInSource.length}</span>
           </div>
           <div className="flex justify-between">
-            <span>Target only</span>
+            <span>Added in target</span>
             <span className="font-mono">{treeMergeResult.onlyInTarget.length}</span>
           </div>
           <div className="flex justify-between pt-1 border-t border-[var(--stroke-divider)]">

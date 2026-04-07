@@ -107,8 +107,8 @@ export function ConflictCard({
       className={cn(
         'rounded-lg border-2 overflow-hidden',
         allResolved
-          ? 'border-green-400 dark:border-green-600'
-          : 'border-red-400 dark:border-red-600'
+          ? 'border-[var(--status-success)]'
+          : 'border-[var(--status-error)]'
       )}
     >
       {/* Header */}
@@ -117,11 +117,11 @@ export function ConflictCard({
         onClick={() => setExpanded((p) => !p)}
         className={cn(
           'w-full flex items-center gap-2 px-3 py-2 text-sm font-medium cursor-pointer',
-          'bg-red-50 dark:bg-red-950/40 hover:bg-red-100 dark:hover:bg-red-950/60 transition-colors'
+          'bg-[var(--status-error-muted)] hover:bg-[var(--status-error-muted)] transition-colors'
         )}
       >
         {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-        <span className="font-mono text-red-700 dark:text-red-400">{path}</span>
+        <span className="font-mono text-[var(--status-error)]">{path}</span>
         <span className="text-zinc-500 dark:text-zinc-400">{toTitleCase(displayType)}</span>
         <span className="ml-auto text-xs text-zinc-500 dark:text-zinc-400">
           {resolvedCount}/{slotConflicts.length} resolved
@@ -168,10 +168,10 @@ export function ConflictCard({
                   AI Suggestion
                 </Button>
               )}
-              {suggestError && <p className="text-xs text-red-500 mt-1">{suggestError}</p>}
+              {suggestError && <p className="text-xs text-[var(--status-error)] mt-1">{suggestError}</p>}
               {suggestion && (
-                <div className="text-xs space-y-2 p-2 rounded bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800/30">
-                  <div className="font-medium text-purple-700 dark:text-purple-300 flex items-center gap-1">
+                <div className="text-xs space-y-2 p-2 rounded bg-[var(--source-dim)] border border-[var(--source)]/30">
+                  <div className="font-medium text-[var(--source)] flex items-center gap-1">
                     <Sparkles size={10} /> AI Suggestion
                   </div>
                   <div className="space-y-0.5">
@@ -191,13 +191,13 @@ export function ConflictCard({
                           </span>
                           <span>{formatSlotValue(value as SlotValue)}</span>
                           {matchesSource && (
-                            <span className="text-[10px] text-blue-500 font-sans">(source)</span>
+                            <span className="text-[10px] text-[var(--status-info)] font-sans">(source)</span>
                           )}
                           {matchesTarget && (
-                            <span className="text-[10px] text-emerald-500 font-sans">(target)</span>
+                            <span className="text-[10px] text-[var(--status-success)] font-sans">(target)</span>
                           )}
                           {isNovel && (
-                            <span className="text-[10px] text-amber-600 dark:text-amber-400 font-sans">
+                            <span className="text-[10px] text-[var(--status-warning)] font-sans">
                               (merged — choose manually)
                             </span>
                           )}
@@ -214,7 +214,7 @@ export function ConflictCard({
                     variant="outline"
                     size="sm"
                     onClick={handleApplySuggestion}
-                    className="text-xs mt-1 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-700 hover:bg-purple-100 dark:hover:bg-purple-900/30"
+                    className="text-xs mt-1 text-[var(--source)] border-[var(--source)]/30 hover:bg-[var(--source-dim)]"
                   >
                     <Check size={12} className="mr-1" />
                     Apply Suggestion

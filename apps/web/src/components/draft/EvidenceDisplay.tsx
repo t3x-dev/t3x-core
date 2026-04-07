@@ -18,7 +18,7 @@ function MatchScoreBar({ score }: { score: number }) {
     <div className="flex items-center gap-1">
       <div className="h-1.5 w-12 rounded-full bg-muted overflow-hidden">
         <div
-          className="h-full rounded-full bg-blue-500 transition-all"
+          className="h-full rounded-full bg-[var(--status-info)] transition-all"
           style={{ width: `${pct}%` }}
         />
       </div>
@@ -69,7 +69,7 @@ export function EvidenceDisplay({
                   {projectId ? (
                     <Link
                       href={`/chat/${e.conversation_id}#turn_${e.turn_hash}`}
-                      className="inline-flex items-center gap-0.5 text-[10px] text-blue-600 dark:text-blue-400 hover:underline"
+                      className="inline-flex items-center gap-0.5 text-[10px] text-[var(--status-info)] hover:underline"
                     >
                       <ExternalLink className="h-2.5 w-2.5" />
                       Conv ...{e.conversation_id.slice(-4)} · Turn ...
@@ -81,7 +81,7 @@ export function EvidenceDisplay({
                     </span>
                   )}
                   <p
-                    className={`italic${anchorType === 'paraphrase' ? ' underline decoration-dotted decoration-yellow-500' : ''}`}
+                    className={`italic${anchorType === 'paraphrase' ? ' underline decoration-dotted decoration-[var(--status-warning)]' : ''}`}
                   >
                     &ldquo;{e.quoted_text}&rdquo;
                   </p>
@@ -92,7 +92,7 @@ export function EvidenceDisplay({
                     {anchorType === 'paraphrase' && (
                       <Badge
                         variant="outline"
-                        className="text-[10px] px-1 py-0 bg-yellow-50 text-yellow-700 dark:bg-yellow-950 dark:text-yellow-300"
+                        className="text-[10px] px-1 py-0 bg-[var(--status-warning-muted)] text-[var(--status-warning)]"
                       >
                         Paraphrased
                       </Badge>
@@ -100,7 +100,7 @@ export function EvidenceDisplay({
                     {anchorType === 'inference' && (
                       <Badge
                         variant="outline"
-                        className="text-[10px] px-1 py-0 bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300"
+                        className="text-[10px] px-1 py-0 bg-[var(--status-info-muted)] text-[var(--status-info)]"
                       >
                         Inferred
                       </Badge>

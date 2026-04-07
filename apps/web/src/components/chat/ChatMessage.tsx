@@ -80,7 +80,7 @@ function HighlightedText({
           <mark
             key={i}
             style={{
-              background: 'rgba(96, 165, 250, 0.25)',
+              background: 'var(--slot-dim)',
               borderRadius: 2,
               padding: '1px 0',
               color: 'inherit',
@@ -186,10 +186,10 @@ function SourceMappedText({
           );
         }
 
-        // Non-review phase: keep existing inline span behavior
+        // Non-review phase: green underline default, purple when active
         const spanStyle: React.CSSProperties = {
-          background: isActive ? 'rgba(139, 92, 246, 0.3)' : 'rgba(139, 92, 246, 0.08)',
-          borderBottom: isActive ? '2px solid var(--accent)' : 'none',
+          background: isActive ? 'color-mix(in srgb, var(--source) 30%, transparent)' : 'color-mix(in srgb, var(--status-success) 12%, transparent)',
+          borderBottom: isActive ? '2px solid var(--source)' : '2px solid var(--status-success)',
           borderRadius: 2,
           padding: '1px 0',
           color: 'inherit',
@@ -256,17 +256,17 @@ function CommittedHighlightText({
           <CommittedHighlightTooltip key={i} highlight={p.highlight}>
             <span
               style={{
-                borderBottom: '2px solid rgba(74, 222, 128, 0.6)',
+                borderBottom: '2px solid color-mix(in srgb, var(--status-success) 60%, transparent)',
                 paddingBottom: 1,
                 cursor: 'default',
                 transition: 'border-color 0.15s, background 0.15s',
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = 'rgba(74, 222, 128, 1)';
-                e.currentTarget.style.background = 'rgba(74, 222, 128, 0.08)';
+                e.currentTarget.style.borderColor = 'var(--status-success)';
+                e.currentTarget.style.background = 'color-mix(in srgb, var(--status-success) 8%, transparent)';
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = 'rgba(74, 222, 128, 0.6)';
+                e.currentTarget.style.borderColor = 'color-mix(in srgb, var(--status-success) 60%, transparent)';
                 e.currentTarget.style.background = 'transparent';
               }}
             >
@@ -388,11 +388,11 @@ export function ChatMessage({
       )}
       style={{
         background: isWholeMessageHighlight
-          ? 'rgba(96, 165, 250, 0.15)'
+          ? 'color-mix(in srgb, var(--source) 15%, transparent)'
           : isSourceMessage && hasCharHighlights
-            ? 'rgba(96, 165, 250, 0.06)'
+            ? 'color-mix(in srgb, var(--source) 6%, transparent)'
             : 'transparent',
-        borderLeft: isSourceMessage ? '3px solid rgba(96, 165, 250, 0.5)' : undefined,
+        borderLeft: isSourceMessage ? '3px solid color-mix(in srgb, var(--source) 50%, transparent)' : undefined,
       }}
       onMouseEnter={() => turnIndex != null && useWorkspaceStore.getState().select('chat', { turnIndex })}
       onMouseLeave={() => useWorkspaceStore.getState().clearSelection()}
@@ -405,7 +405,7 @@ export function ChatMessage({
               'flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-medium mt-0.5',
               isUser
                 ? 'bg-[var(--accent-commit)] text-white'
-                : 'bg-gradient-to-br from-[var(--accent-commit)]/20 to-indigo-500/20 text-[var(--accent-commit)] ring-1 ring-[var(--accent-commit)]/20'
+                : 'bg-gradient-to-br from-[var(--accent-commit)]/20 to-[var(--source)]/20 text-[var(--accent-commit)] ring-1 ring-[var(--accent-commit)]/20'
             )}
           >
             {isUser ? <User className="h-3.5 w-3.5" /> : 'T3'}

@@ -143,8 +143,8 @@ export function SuggestConstraintsDialog({
                         className={cn(
                           'text-xs',
                           s.type === 'require'
-                            ? 'border-emerald-500/50 text-emerald-600 dark:text-emerald-400'
-                            : 'border-red-500/50 text-red-600 dark:text-red-400'
+                            ? 'border-[var(--status-success)]/50 text-[var(--status-success)]'
+                            : 'border-[var(--status-error)]/50 text-[var(--status-error)]'
                         )}
                       >
                         {s.type}

@@ -14,11 +14,11 @@ interface SemanticPointCardProps {
 
 const statusColors: Record<string, string> = {
   inherited: 'bg-muted text-muted-foreground',
-  auto_landed: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-  reviewed: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-  modified: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
-  reinforced: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200',
-  undone: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200 line-through opacity-50',
+  auto_landed: 'bg-[var(--status-success-muted)] text-[var(--status-success)]',
+  reviewed: 'bg-[var(--status-info-muted)] text-[var(--status-info)]',
+  modified: 'bg-[var(--status-warning-muted)] text-[var(--status-warning)]',
+  reinforced: 'bg-[var(--status-success-muted)] text-[var(--status-success)]',
+  undone: 'bg-[var(--status-error-muted)] text-[var(--status-error)] line-through opacity-50',
 };
 
 export function SemanticPointCard({ point, onUndo, showUndo }: SemanticPointCardProps) {
@@ -41,7 +41,7 @@ export function SemanticPointCard({ point, onUndo, showUndo }: SemanticPointCard
             <Tooltip>
               <TooltipTrigger asChild>
                 <AlertTriangle
-                  className="h-3 w-3 text-amber-500 cursor-help"
+                  className="h-3 w-3 text-[var(--status-warning)] cursor-help"
                   aria-label="Low evidence coverage"
                 />
               </TooltipTrigger>

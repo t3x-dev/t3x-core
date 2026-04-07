@@ -76,7 +76,7 @@ export function ContextMenuPortal({
           className={cn(
             'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors',
             item.danger
-              ? 'text-red-500 hover:bg-red-500/10'
+              ? 'text-[var(--status-error)] hover:bg-[var(--status-error)]/10'
               : 'text-[var(--text-primary)] hover:bg-[var(--hover-bg)]'
           )}
           onClick={() => {

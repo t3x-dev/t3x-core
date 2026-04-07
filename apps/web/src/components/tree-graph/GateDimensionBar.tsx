@@ -20,7 +20,7 @@ export function GateDimensionBar({
 }: GateDimensionBarProps) {
   const [expanded, setExpanded] = useState(false);
   const pct = Math.round(score * 100);
-  const colorClass = score >= 0.9 ? 'bg-emerald-500' : score >= 0.7 ? 'bg-amber-500' : 'bg-red-500';
+  const colorClass = score >= 0.9 ? 'bg-[var(--status-success)]' : score >= 0.7 ? 'bg-[var(--status-warning)]' : 'bg-[var(--status-error)]';
   const hasUncovered = uncoveredSegments && uncoveredSegments.length > 0;
 
   return (

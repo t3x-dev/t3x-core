@@ -293,6 +293,27 @@
   --fx-shadow-hover: 0 6px 16px oklch(0 0 0 / 10%), 0 0 0 1px oklch(0 0 0 / 8%);
   --fx-highlight-inset: inset 0 1px 0 oklch(1 0 0 / 60%), inset 0 -1px 0 oklch(0 0 0 / 5%);
 
+  /* ===== YOps IDE — workspace panels & editor (light mode) ===== */
+  --panel: #f5f7fa;
+  --panel-alt: #edf0f5;
+  --editor-bg: #ffffff;
+  --editor-gutter: #f5f7fa;
+  --slot: #0ea5e9;
+  --slot-dim: rgba(14, 165, 233, 0.08);
+  --source: #7c3aed;
+  --source-dim: rgba(124, 58, 237, 0.06);
+  --action: #3b82f6;
+  --action-hover: #2563eb;
+  --commit: #16a34a;
+  --commit-hover: #15803d;
+  --commit-text: #ffffff;
+  --syn-key: #7c3aed;
+  --syn-string: #059669;
+  --syn-op: #c026d3;
+  --syn-path: #2563eb;
+  --syn-tag: #0d9488;
+  --syn-comment: #9ca3af;
+
   /* ===== Interaction — light mode: darken on hover ===== */
   --hover-bg: oklch(0 0 0 / 5%);
   --hover-bg-strong: oklch(0 0 0 / 8%);
@@ -417,6 +438,27 @@
   --fx-shadow-hover: 0 6px 16px oklch(0 0 0 / 35%), 0 0 0 1px oklch(1 0 0 / 8%);
   --fx-highlight-inset:
     inset 0 1px 0 var(--stroke-highlight-top), inset 0 -1px 0 var(--stroke-shadow-bottom);
+
+  /* ===== YOps IDE — workspace panels & editor (dark mode) ===== */
+  --panel: #1a1d28;
+  --panel-alt: #1e2130;
+  --editor-bg: #13151e;
+  --editor-gutter: #191c27;
+  --slot: #60a5fa;
+  --slot-dim: rgba(96, 165, 250, 0.08);
+  --source: #8b5cf6;
+  --source-dim: rgba(139, 92, 246, 0.08);
+  --action: #fb923c;
+  --action-hover: #f59e0b;
+  --commit: #4ade80;
+  --commit-hover: #22c55e;
+  --commit-text: #111111;
+  --syn-key: #c084fc;
+  --syn-string: #86efac;
+  --syn-op: #f0abfc;
+  --syn-path: #93c5fd;
+  --syn-tag: #6ee7b7;
+  --syn-comment: #4a4d5e;
 
   /* ===== Interaction ===== */
   --hover-bg: oklch(1 0 0 / 8%);

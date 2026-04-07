@@ -29,7 +29,7 @@ export function ImportProgress({
       className={cn(
         'flex flex-col gap-2 rounded-lg border p-3 text-sm',
         (status === 'loading' || status === 'streaming') && 'border-primary/30 bg-primary/5',
-        status === 'success' && 'border-green-500/30 bg-green-500/5',
+        status === 'success' && 'border-[var(--status-success)]/30 bg-[var(--status-success)]/5',
         status === 'error' && 'border-destructive/30 bg-destructive/5'
       )}
     >
@@ -37,7 +37,7 @@ export function ImportProgress({
         {(status === 'loading' || status === 'streaming') && (
           <Loader2 className="h-4 w-4 animate-spin text-primary shrink-0" />
         )}
-        {status === 'success' && <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />}
+        {status === 'success' && <CheckCircle2 className="h-4 w-4 text-[var(--status-success)] shrink-0" />}
         {status === 'error' && <XCircle className="h-4 w-4 text-destructive shrink-0" />}
         <div className="flex-1 min-w-0">
           {message && <p className="truncate">{message}</p>}

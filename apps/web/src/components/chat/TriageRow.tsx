@@ -16,9 +16,9 @@ interface TriageRowProps {
 }
 
 const SOURCE_TAG_STYLES: Record<SourceTag, { bg: string; text: string; label: string }> = {
-  user: { bg: 'bg-[rgba(139,92,246,0.15)]', text: 'text-[var(--accent)]', label: 'USER' },
-  llm: { bg: 'bg-[rgba(96,165,250,0.15)]', text: 'text-[rgba(96,165,250,1)]', label: 'LLM' },
-  both: { bg: 'bg-[rgba(250,204,21,0.15)]', text: 'text-[rgba(250,204,21,1)]', label: 'BOTH' },
+  user: { bg: 'bg-[var(--source-dim)]', text: 'text-[var(--source)]', label: 'USER' },
+  llm: { bg: 'bg-[var(--slot-dim)]', text: 'text-[var(--slot)]', label: 'LLM' },
+  both: { bg: 'bg-[var(--status-warning)]/15', text: 'text-[var(--status-warning)]', label: 'BOTH' },
 };
 
 function slotPreview(node: TreeNode, maxSlots = 2): string {
@@ -51,8 +51,8 @@ export function TriageRow({
   return (
     <div>
       <div
-        className={`flex items-center min-h-[36px] border-b border-white/[0.03] transition-all cursor-pointer hover:bg-white/[0.04] ${
-          status === 'accepted' ? 'bg-[rgba(74,222,128,0.02)]' : ''
+        className={`flex items-center min-h-[36px] border-b border-[var(--stroke-divider)] transition-all cursor-pointer hover:bg-[var(--hover-bg)] ${
+          status === 'accepted' ? 'bg-[var(--status-success)]/[0.02]' : ''
         } ${status === 'dismissed' ? 'opacity-20' : ''}`}
       >
         <div className={`w-1 self-stretch shrink-0 ${barColor}`} />
@@ -92,7 +92,7 @@ export function TriageRow({
             className={`w-[26px] h-[26px] flex items-center justify-center rounded-[5px] text-xs transition-all ${
               status === 'accepted'
                 ? 'text-[var(--status-success)] opacity-100'
-                : 'text-[var(--status-success)] opacity-40 hover:opacity-100 hover:bg-[rgba(74,222,128,0.15)]'
+                : 'text-[var(--status-success)] opacity-40 hover:opacity-100 hover:bg-[var(--status-success)]/15'
             }`}
           >
             <Check className="w-3 h-3" />
@@ -103,7 +103,7 @@ export function TriageRow({
               e.stopPropagation();
               onDismiss();
             }}
-            className="w-[26px] h-[26px] flex items-center justify-center rounded-[5px] text-xs text-[var(--status-error)] opacity-20 hover:opacity-70 hover:bg-[rgba(248,113,113,0.15)] transition-all"
+            className="w-[26px] h-[26px] flex items-center justify-center rounded-[5px] text-xs text-[var(--status-error)] opacity-20 hover:opacity-70 hover:bg-[var(--status-error)]/15 transition-all"
           >
             <X className="w-3 h-3" />
           </button>
@@ -111,13 +111,13 @@ export function TriageRow({
       </div>
 
       {expanded && (
-        <div className="py-0 pl-3.5 border-b border-white/[0.03] bg-white/[0.01]">
+        <div className="py-0 pl-3.5 border-b border-[var(--stroke-divider)] bg-[var(--hover-bg)]/25">
           {Object.entries(node.slots).map(([slotKey, slotValue]) => {
             const isOn = slotStates ? slotStates[slotKey] !== false : true;
             return (
               <div
                 key={slotKey}
-                className={`flex items-center gap-1.5 px-2.5 py-0.5 text-[10px] font-mono cursor-pointer rounded-[3px] hover:bg-white/[0.04] ${
+                className={`flex items-center gap-1.5 px-2.5 py-0.5 text-[10px] font-mono cursor-pointer rounded-[3px] hover:bg-[var(--hover-bg)] ${
                   isOn ? '' : 'opacity-30'
                 }`}
                 onClick={() => onToggleSlot?.(slotKey)}
@@ -125,7 +125,7 @@ export function TriageRow({
                 <div
                   className={`w-3 h-3 rounded-[3px] flex items-center justify-center text-[7px] shrink-0 ${
                     isOn
-                      ? 'bg-[var(--status-success)] border-[var(--status-success)] text-black'
+                      ? 'bg-[var(--status-success)] border-[var(--status-success)] text-white'
                       : 'border border-[var(--stroke-light)]'
                   }`}
                 >

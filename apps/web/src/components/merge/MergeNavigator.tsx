@@ -202,7 +202,7 @@ export function MergeNavigator({
       {/* Source only */}
       {mergeResult.onlyInSource.length > 0 && (
         <>
-          <SectionHeader label="Source only" count={mergeResult.onlyInSource.length} color="blue" />
+          <SectionHeader label="Added in source" count={mergeResult.onlyInSource.length} color="blue" />
           {mergeResult.onlyInSource.map((path) => {
             const isKept = keepSource.has(path);
             return (
@@ -231,7 +231,7 @@ export function MergeNavigator({
       {/* Target only */}
       {mergeResult.onlyInTarget.length > 0 && (
         <>
-          <SectionHeader label="Target only" count={mergeResult.onlyInTarget.length} color="blue" />
+          <SectionHeader label="Added in target" count={mergeResult.onlyInTarget.length} color="blue" />
           {mergeResult.onlyInTarget.map((path) => {
             const isKept = keepTarget.has(path);
             return (

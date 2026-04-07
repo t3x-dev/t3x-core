@@ -41,9 +41,9 @@ import { useProjectStore } from '@/store/projectStore';
 import { DraftQuickSheet } from '../draft/DraftQuickSheet';
 import { ImportDialog } from '../import/ImportDialog';
 import { MemoryContextModal } from '../memory/MemoryContextModal';
-import { MergePanel } from '../merge/MergePanel';
 import { CommitConflictBanner } from '../merge/CommitConflictBanner';
 import { CommitConflictPanel } from '../merge/CommitConflictPanel';
+import { MergePanel } from '../merge/MergePanel';
 import { DeletionConfirmDialog } from './DeletionConfirmDialog';
 import { LeafPanel } from './LeafPanel';
 import { NodeModal, type NodeQuickAction } from './NodeModal';
@@ -292,8 +292,6 @@ function CanvasWorkspaceInner({
         branchNames={branchNames}
         hasMainCommits={hasMainCommits}
         hasBranchCommits={hasBranchCommits}
-        onShowMemoryModal={() => setShowMemoryModal(true)}
-        onShowImportDialog={() => setShowImportDialog(true)}
         onAutoLayout={handleAutoLayout}
         onAddNode={() => handleAddNode('unit')}
         isLayouting={isLayouting}

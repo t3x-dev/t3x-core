@@ -198,7 +198,7 @@ export function E2ETestCard({ agents, runnerHealthy, onRunComplete }: E2ETestCar
 
         {/* Error Message */}
         {error && (
-          <div className="rounded-md bg-red-500/10 border border-red-500/30 p-3 text-sm text-[var(--status-error)]">
+          <div className="rounded-md bg-[var(--status-error)]/10 border border-[var(--status-error)]/30 p-3 text-sm text-[var(--status-error)]">
             {error}
           </div>
         )}
@@ -212,11 +212,11 @@ export function E2ETestCard({ agents, runnerHealthy, onRunComplete }: E2ETestCar
                 variant="outline"
                 className={cn(
                   lastRun.status === 'completed' &&
-                    'border-green-500/30 bg-green-500/10 text-[var(--status-success)]',
+                    'border-[var(--status-success)]/30 bg-[var(--status-success)]/10 text-[var(--status-success)]',
                   lastRun.status === 'failed' &&
-                    'border-red-500/30 bg-red-500/10 text-[var(--status-error)]',
+                    'border-[var(--status-error)]/30 bg-[var(--status-error)]/10 text-[var(--status-error)]',
                   lastRun.status === 'running' &&
-                    'border-blue-500/30 bg-blue-500/10 text-[var(--status-info)]'
+                    'border-[var(--status-info)]/30 bg-[var(--status-info)]/10 text-[var(--status-info)]'
                 )}
               >
                 {lastRun.status === 'running' && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
@@ -242,7 +242,7 @@ export function E2ETestCard({ agents, runnerHealthy, onRunComplete }: E2ETestCar
 
         {/* Runner Status Warning */}
         {!runnerHealthy && (
-          <div className="rounded-md bg-yellow-500/10 border border-yellow-500/30 p-3 text-sm text-[var(--status-warning)]">
+          <div className="rounded-md bg-[var(--status-warning)]/10 border border-[var(--status-warning)]/30 p-3 text-sm text-[var(--status-warning)]">
             Runner is not available. Start it with{' '}
             <code className="rounded bg-muted px-1">pnpm dev:runner</code>
           </div>

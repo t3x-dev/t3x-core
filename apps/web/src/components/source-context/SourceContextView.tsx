@@ -98,14 +98,14 @@ export interface SourceContextViewProps {
 
 const highlightColorClasses: Record<HighlightColor, string> = {
   yellow:
-    'bg-amber-200 dark:bg-amber-500/40 text-amber-950 dark:text-amber-50 font-medium border-b-2 border-amber-400 dark:border-amber-500',
+    'bg-[var(--status-warning-muted)] font-medium border-b-2 border-[var(--status-warning)]',
   green:
-    'bg-emerald-200 dark:bg-emerald-500/40 text-emerald-950 dark:text-emerald-50 font-medium border-b-2 border-emerald-400 dark:border-emerald-500',
-  deepGreen: 'bg-green-500 text-white font-medium',
-  deepRed: 'bg-red-500 text-white font-medium',
+    'bg-[var(--status-success-muted)] font-medium border-b-2 border-[var(--status-success)]',
+  deepGreen: 'bg-[var(--status-success)] text-white font-medium',
+  deepRed: 'bg-[var(--status-error)] text-white font-medium',
   amber:
-    'bg-amber-100 border border-dashed border-amber-400 dark:bg-amber-900/30 dark:text-amber-200 font-medium',
-  blue: 'bg-blue-100 border border-dotted border-blue-400 dark:bg-blue-900/30 dark:text-blue-200 font-medium',
+    'bg-[var(--status-warning-muted)] border border-dashed border-[var(--status-warning)]/40 font-medium',
+  blue: 'bg-[var(--status-info)]/10 border border-dotted border-[var(--status-info)]/40 font-medium',
 };
 
 // ============================================================================
@@ -362,7 +362,7 @@ export function SourceContextView({
         <button
           type="button"
           onClick={() => setExpanded(!expanded)}
-          className="flex items-center gap-0.5 text-[0.65rem] text-[var(--status-info)] hover:text-blue-700 dark:hover:text-blue-300"
+          className="flex items-center gap-0.5 text-[0.65rem] text-[var(--status-info)] hover:text-[var(--status-info)]"
         >
           {expanded ? (
             <>

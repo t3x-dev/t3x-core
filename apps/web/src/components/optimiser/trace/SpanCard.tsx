@@ -125,9 +125,9 @@ function LLMDetails({ llm }: { llm: NonNullable<StepRecord['llm']> }) {
               key={i}
               className={cn(
                 'rounded-lg border p-3',
-                msg.role === 'user' && 'bg-blue-500/5 border-blue-500/20',
-                msg.role === 'assistant' && 'bg-green-500/5 border-green-500/20',
-                msg.role === 'system' && 'bg-yellow-500/5 border-yellow-500/20'
+                msg.role === 'user' && 'bg-[var(--status-info)]/5 border-[var(--status-info)]/20',
+                msg.role === 'assistant' && 'bg-[var(--status-success)]/5 border-[var(--status-success)]/20',
+                msg.role === 'system' && 'bg-[var(--status-warning)]/5 border-[var(--status-warning)]/20'
               )}
             >
               <div className="mb-1 text-xs font-medium uppercase text-muted-foreground">
@@ -156,8 +156,8 @@ function ToolDetails({ tool }: { tool: NonNullable<StepRecord['tool']> }) {
             className={cn(
               'text-xs px-2 py-0.5 rounded border',
               tool.was_expected
-                ? 'bg-green-500/10 text-[var(--status-success)] border-green-500/30'
-                : 'bg-yellow-500/10 text-[var(--status-warning)] border-yellow-500/30'
+                ? 'bg-[var(--status-success)]/10 text-[var(--status-success)] border-[var(--status-success)]/30'
+                : 'bg-[var(--status-warning)]/10 text-[var(--status-warning)] border-[var(--status-warning)]/30'
             )}
           >
             {tool.was_expected ? 'Expected' : 'Unexpected'}
@@ -217,7 +217,7 @@ export function SpanCard({ step, className }: SpanCardProps) {
     >
       {/* Error Message */}
       {step.error && (
-        <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-3">
+        <div className="rounded-lg border border-[var(--status-error)]/30 bg-[var(--status-error)]/5 p-3">
           <p className="text-xs font-medium text-[var(--status-error)] mb-1">Error</p>
           <p className="text-sm text-[var(--status-error)]">{step.error}</p>
         </div>

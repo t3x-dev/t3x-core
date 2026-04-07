@@ -117,11 +117,11 @@ export function DraftActionBar({
 
       {/* Status badge */}
       {draft?.status === 'auto' ? (
-        <Badge variant="outline" className="border-blue-500/50 text-blue-600 dark:text-blue-400">
+        <Badge variant="outline" className="border-[var(--status-info)]/50 text-[var(--status-info)]">
           Auto
         </Badge>
       ) : (
-        <Badge variant="outline" className="border-amber-500/50 text-amber-600 dark:text-amber-400">
+        <Badge variant="outline" className="border-[var(--status-warning)]/50 text-[var(--status-warning)]">
           {t('draft')}
         </Badge>
       )}

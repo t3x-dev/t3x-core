@@ -143,7 +143,7 @@ export function BusinessRuleTemplates({ onAdd, onClose }: BusinessRuleTemplatesP
       >
         <div className="px-5 py-4 border-b flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-amber-500" />
+            <Sparkles className="h-4 w-4 text-[var(--status-warning)]" />
             <h3 className="text-sm font-semibold">Rule Templates</h3>
           </div>
           <button
@@ -202,8 +202,8 @@ function TemplateCard({ template, onAdd }: { template: RuleTemplate; onAdd: () =
             className={cn(
               'text-[10px] px-1.5 py-0.5 rounded font-medium',
               template.config.type === 'llm'
-                ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300'
-                : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+                ? 'bg-[var(--source)]/10 text-[var(--source)]'
+                : 'bg-[var(--status-info)]/10 text-[var(--status-info)]'
             )}
           >
             {template.config.type === 'llm' ? 'AI' : 'expr'}
@@ -212,8 +212,8 @@ function TemplateCard({ template, onAdd }: { template: RuleTemplate; onAdd: () =
             className={cn(
               'text-[10px] px-1.5 py-0.5 rounded font-medium',
               template.config.severity === 'error'
-                ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
-                : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
+                ? 'bg-[var(--status-error)]/10 text-[var(--status-error)]'
+                : 'bg-[var(--status-warning)]/10 text-[var(--status-warning)]'
             )}
           >
             {template.config.severity}

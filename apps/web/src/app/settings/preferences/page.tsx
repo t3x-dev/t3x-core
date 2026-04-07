@@ -1,11 +1,8 @@
 'use client';
 
-import type { ExtractionStyleConfig } from '@t3x-dev/core';
 import { Code, Layout, Monitor, Moon, Sun, Users } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useEffect, useState } from 'react';
-import { ExtractionStylePanel } from '@/components/settings/ExtractionStylePanel';
-import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { type UserExperience, useSettingsStore, type ViewMode } from '@/store/settingsStore';
 
@@ -59,38 +56,10 @@ export default function PreferencesPage() {
   const setUserExperience = useSettingsStore((s) => s.setUserExperience);
   const defaultView = useSettingsStore((s) => s.defaultView);
   const setDefaultView = useSettingsStore((s) => s.setDefaultView);
-  const density = useSettingsStore((s) => s.density);
-  const setDensity = useSettingsStore((s) => s.setDensity);
-  const developerMode = useSettingsStore((s) => s.developerMode);
-  const setDeveloperMode = useSettingsStore((s) => s.setDeveloperMode);
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
-  const [extractionStyle, setExtractionStyle] = useState<ExtractionStyleConfig | null>(null);
-  const [styleLoaded, setStyleLoaded] = useState(false);
 
   useEffect(() => setMounted(true), []);
-
-  useEffect(() => {
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/v1/auth/me`, { credentials: 'include' })
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.success) {
-          setExtractionStyle(data.data.default_extraction_style ?? null);
-        }
-        setStyleLoaded(true);
-      })
-      .catch(() => setStyleLoaded(true));
-  }, []);
-
-  const handleStyleChange = (style: ExtractionStyleConfig | null) => {
-    setExtractionStyle(style);
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/v1/auth/me`, {
-      method: 'PATCH',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ default_extraction_style: style }),
-    });
-  };
 
   return (
     <div className="mx-auto max-w-2xl px-8 py-8">
@@ -187,47 +156,7 @@ export default function PreferencesPage() {
         </div>
       </section>
 
-      {/* Density */}
-      <section className="mb-8">
-        <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-1">Display Density</h2>
-        <p className="text-xs text-[var(--text-tertiary)] mb-3">Adjust spacing across the UI.</p>
-        <div className="flex gap-3">
-          <Button
-            variant={density === 'comfortable' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setDensity('comfortable')}
-          >
-            Comfortable
-          </Button>
-          <Button
-            variant={density === 'compact' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setDensity('compact')}
-          >
-            Compact
-          </Button>
-        </div>
-      </section>
-
-      {/* Extraction Style */}
-      {styleLoaded && <ExtractionStylePanel value={extractionStyle} onChange={handleStyleChange} />}
-
-      {/* Developer Mode */}
-      <section className="mb-8">
-        <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-1">Developer Mode</h2>
-        <p className="text-xs text-[var(--text-tertiary)] mb-3">
-          Show commit hashes, debug info, and advanced options.
-        </p>
-        <div className="flex gap-3">
-          <Button
-            variant={developerMode ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setDeveloperMode(!developerMode)}
-          >
-            {developerMode ? 'Enabled' : 'Disabled'}
-          </Button>
-        </div>
-      </section>
+      {/* Density, Extraction Style, Developer Mode — removed (non-core) */}
     </div>
   );
 }

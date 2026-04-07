@@ -61,13 +61,13 @@ export function ChatAddForm({ selection, onDone }: ChatAddFormProps) {
   }
 
   return (
-    <div className="mx-3 my-2 p-2.5 bg-[var(--surface-panel)] border border-[rgba(96,165,250,0.3)] rounded-lg">
+    <div className="mx-3 my-2 p-2.5 bg-[var(--surface-panel)] border border-[var(--status-info)]/30 rounded-lg">
       {/* Header */}
-      <div className="flex items-center gap-1 text-[10px] font-semibold text-[rgba(96,165,250,1)] mb-1.5">
+      <div className="flex items-center gap-1 text-[10px] font-semibold text-[var(--status-info)] mb-1.5">
         <Plus className="w-3 h-3" />
         Add to extraction
         {showLlmAssist && (
-          <span className="ml-auto text-[8px] px-1.5 py-px rounded bg-[rgba(251,146,60,0.15)] text-[rgba(251,146,60,1)]">
+          <span className="ml-auto text-[8px] px-1.5 py-px rounded bg-[var(--accent-pending)]/15 text-[var(--accent-pending)]">
             AI suggested
           </span>
         )}
@@ -105,7 +105,7 @@ export function ChatAddForm({ selection, onDone }: ChatAddFormProps) {
                 <button
                   type="button"
                   onClick={handleAddAll}
-                  className="px-2.5 py-1 rounded bg-[rgba(96,165,250,1)] text-white text-[9px] font-semibold"
+                  className="px-2.5 py-1 rounded bg-[var(--status-info)] text-white text-[9px] font-semibold"
                 >
                   Add all
                 </button>
@@ -144,7 +144,7 @@ export function ChatAddForm({ selection, onDone }: ChatAddFormProps) {
             <select
               value={targetNode}
               onChange={(e) => setTargetNode(e.target.value)}
-              className="flex-1 px-2 py-1 border border-[var(--stroke-default)] rounded bg-[var(--surface-panel-alt)] text-[10px] font-mono text-[var(--text-primary)] outline-none focus:border-[rgba(96,165,250,1)]"
+              className="flex-1 px-2 py-1 border border-[var(--stroke-default)] rounded bg-[var(--surface-panel-alt)] text-[10px] font-mono text-[var(--text-primary)] outline-none focus:border-[var(--status-info)]"
             >
               {nodeOptions.map((key) => (
                 <option key={key} value={key}>
@@ -160,7 +160,7 @@ export function ChatAddForm({ selection, onDone }: ChatAddFormProps) {
               value={slotKey}
               onChange={(e) => setSlotKey(e.target.value)}
               placeholder="slot_key"
-              className="flex-1 px-2 py-1 border border-[var(--stroke-default)] rounded bg-[var(--surface-panel-alt)] text-[10px] font-mono text-[var(--text-primary)] outline-none focus:border-[rgba(96,165,250,1)]"
+              className="flex-1 px-2 py-1 border border-[var(--stroke-default)] rounded bg-[var(--surface-panel-alt)] text-[10px] font-mono text-[var(--text-primary)] outline-none focus:border-[var(--status-info)]"
             />
           </div>
 
@@ -169,7 +169,7 @@ export function ChatAddForm({ selection, onDone }: ChatAddFormProps) {
             <input
               value={slotValue}
               onChange={(e) => setSlotValue(e.target.value)}
-              className="flex-1 px-2 py-1 border border-[var(--stroke-default)] rounded bg-[var(--surface-panel-alt)] text-[10px] font-mono text-[var(--text-primary)] outline-none focus:border-[rgba(96,165,250,1)]"
+              className="flex-1 px-2 py-1 border border-[var(--stroke-default)] rounded bg-[var(--surface-panel-alt)] text-[10px] font-mono text-[var(--text-primary)] outline-none focus:border-[var(--status-info)]"
             />
           </div>
 
@@ -185,7 +185,7 @@ export function ChatAddForm({ selection, onDone }: ChatAddFormProps) {
               type="button"
               onClick={handleAdd}
               disabled={!targetNode || !slotKey}
-              className="px-2.5 py-1 rounded bg-[rgba(96,165,250,1)] text-white text-[9px] font-semibold disabled:opacity-50"
+              className="px-2.5 py-1 rounded bg-[var(--status-info)] text-white text-[9px] font-semibold disabled:opacity-50"
             >
               Add
             </button>

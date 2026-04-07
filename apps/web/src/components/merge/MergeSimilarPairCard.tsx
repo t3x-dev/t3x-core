@@ -141,10 +141,10 @@ export function MergeSimilarPairCard({ pair, index, mergeDraftId }: MergeSimilar
               AI Suggestion
             </Button>
           )}
-          {suggestError && <p className="text-xs text-red-500 mt-1">{suggestError}</p>}
+          {suggestError && <p className="text-xs text-[var(--status-error)] mt-1">{suggestError}</p>}
           {suggestion && (
-            <div className="text-xs space-y-1 p-2 rounded bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800/30">
-              <div className="font-medium text-purple-700 dark:text-purple-300 flex items-center gap-1">
+            <div className="text-xs space-y-1 p-2 rounded bg-[var(--source-dim)] border border-[var(--source)]/30">
+              <div className="font-medium text-[var(--source)] flex items-center gap-1">
                 <Sparkles size={10} /> AI Suggestion
               </div>
               <div className="text-[var(--text-primary)]">{suggestion.suggestion}</div>

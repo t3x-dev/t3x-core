@@ -12,11 +12,11 @@ interface RelationsListProps {
 }
 
 const typeColors: Record<string, string> = {
-  causes: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
-  conditions: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
-  contrasts: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
-  follows: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
-  depends: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400',
+  causes: 'bg-[var(--status-info)]/10 text-[var(--status-info)]',
+  conditions: 'bg-[var(--accent-pending)]/10 text-[var(--accent-pending)]',
+  contrasts: 'bg-[var(--status-error)]/10 text-[var(--status-error)]',
+  follows: 'bg-[var(--source)]/10 text-[var(--source)]',
+  depends: 'bg-[var(--status-info)]/10 text-[var(--status-info)]',
 };
 
 function lookupNode(id: string, nodes: Array<{ id: string; text: string }>): string {
