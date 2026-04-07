@@ -181,6 +181,10 @@ function NodeRow({
   onEditSlot,
   onDeleteSlot,
 }: NodeRowProps) {
+  const selectedNodePath = useWorkspaceStore((s) => s.selectedNodePath);
+  const select = useWorkspaceStore((s) => s.select);
+  const clearSelection = useWorkspaceStore((s) => s.clearSelection);
+  const isSelected = selectedNodePath === node.key;
   const slots = node.slots || {};
   const slotEntries = Object.entries(slots).filter(([k]) => !k.startsWith('_'));
   const hasChanges =
@@ -208,12 +212,13 @@ function NodeRow({
     <>
       {/* Node header */}
       <div
-        className={`group flex items-stretch ${nodeBg}`}
+        className={`group flex items-stretch ${nodeBg} ${isSelected ? 'ring-1 ring-[var(--source)]/40 bg-[var(--source-dim)]' : ''}`}
         style={{ minHeight: 26 }}
       >
-        <div className={`shrink-0 w-[3px] ${nodeGutterColor}`} />
+        <div className={`shrink-0 w-[3px] ${isSelected ? 'bg-[var(--source)]' : nodeGutterColor}`} />
         <div
-          className="flex-1 flex items-center gap-1 px-2 py-0.5 hover:bg-[var(--hover-bg)] transition-colors"
+          className="flex-1 flex items-center gap-1 px-2 py-0.5 hover:bg-[var(--hover-bg)] transition-colors cursor-pointer"
+          onClick={() => isSelected ? clearSelection() : select('after', { nodePath: node.key })}
           style={{ ...MONO, paddingLeft: `${8 + depth * 14}px` }}
         >
           <span className="w-3 h-3 rounded flex items-center justify-center text-[7px] font-bold bg-[var(--source-dim)] text-[var(--source)] shrink-0">
@@ -232,6 +237,14 @@ function NodeRow({
           </span>
           {diffType === 'added' && (
             <span className="text-[8px] text-[var(--status-success)] bg-[var(--status-success)]/15 px-1 py-0.5 rounded ml-1">new</span>
+          )}
+          {node.source && (
+            <span
+              className="text-[7px] font-bold px-1 py-px rounded-sm bg-[var(--source-dim)] text-[var(--source)] cursor-pointer hover:bg-[var(--source)]/20 shrink-0 ml-1 tracking-wide"
+              onClick={(e) => { e.stopPropagation(); select('after', { nodePath: node.key, turnTag: node.source }); }}
+            >
+              {node.source}
+            </span>
           )}
           {hasChanges && diffType !== 'removed' && (
             <div className="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -280,7 +293,7 @@ function NodeRow({
               value={String(val)}
               diffType={slotDiff}
               oldValue={mod?.oldValue}
-              sourceTag={slots._source?.[key] ? String(slots._source[key]) : undefined}
+              sourceTag={node.source}
               onDelete={() => onDeleteSlot(key)}
               onEdit={(newValue) => onEditSlot(key, newValue)}
             />
