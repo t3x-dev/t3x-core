@@ -241,7 +241,7 @@ function NodeRow({
           {node.source && (
             <span
               className="text-[7px] font-bold px-1 py-px rounded-sm bg-[var(--source-dim)] text-[var(--source)] cursor-pointer hover:bg-[var(--source)]/20 shrink-0 ml-1 tracking-wide"
-              onClick={(e) => { e.stopPropagation(); select('after', { nodePath: node.key, turnTag: node.source }); }}
+              onClick={(e) => { e.stopPropagation(); select('after', { nodePath: node.key }); }}
             >
               {node.source}
             </span>
