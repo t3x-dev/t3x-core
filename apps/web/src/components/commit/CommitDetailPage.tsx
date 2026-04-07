@@ -21,7 +21,6 @@
  *  └─────────────────────────────────────────────────────────────────┘
  */
 
-import type { WebCommit } from '@/lib/api/commitUnified';
 import {
   ArrowLeft,
   ExternalLink,
@@ -37,22 +36,23 @@ import {
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { TreeGraphView } from '@/components/tree-graph';
 import { Breadcrumb } from '@/components/shared/Breadcrumb';
 import { KeyboardHintBar } from '@/components/shared/KeyboardHintBar';
 import { ShareLinkButton } from '@/components/shared/ShareLinkButton';
+import { TreeGraphView } from '@/components/tree-graph';
 import { useKeyboardNavigation } from '@/hooks/useKeyboardNavigation';
 import type { Leaf } from '@/lib/api';
 import { getProject, listLeavesByCommit } from '@/lib/api';
+import type { WebCommit } from '@/lib/api/commitUnified';
 import { getCommitAsNodes, getCommitHistoryAsNodes } from '@/lib/api/commitUnified';
 import { relativeTime, shortHash } from '@/lib/formatters';
 import { PAGE_ANIMATION_STYLES } from '@/lib/pageAnimations';
 import { useCommitDetailStore } from '@/store/commitDetailStore';
 import { useProjectStore } from '@/store/projectStore';
 import { CopyButton, useCountUp } from './CommitDetailHelpers';
-import { CommitTreeIndex } from './CommitTreeIndex';
 import { CommitOperationsSidebar } from './CommitOperationsSidebar';
 import { ProvenanceGraph } from './CommitProvenanceGraph';
+import { CommitTreeIndex } from './CommitTreeIndex';
 import { CommitYAMLDocument } from './CommitYAMLDocument';
 import { SourceSlideIn } from './SourceSlideIn';
 
@@ -234,7 +234,7 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
       <style>{PAGE_ANIMATION_STYLES}</style>
 
       {/* ═══════ HEADER ═══════ */}
-      <header className="flex h-14 shrink-0 items-center justify-between border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-4">
+      <header className="flex h-[var(--h-header)] shrink-0 items-center justify-between border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-4">
         <div className="flex items-center gap-3">
           <button
             type="button"
@@ -292,13 +292,13 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
       </header>
 
       {/* ═══════ COMPACT HERO + STATS ═══════ */}
-      <div className="shrink-0 border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-[var(--space-page)] py-3">
+      <div className="shrink-0 border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-[var(--space-page)] py-2.5">
         <div className="mx-auto max-w-6xl flex items-center justify-between gap-4">
           <div className="min-w-0 flex-1">
-            <h1 className="text-[16px] font-semibold leading-tight text-[var(--text-primary)] tracking-[-0.01em] truncate">
+            <h1 className="text-[15px] font-semibold leading-tight text-[var(--text-primary)] tracking-[-0.01em] truncate">
               {commit.message || 'No message'}
             </h1>
-            <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[12px] text-[var(--text-secondary)]">
+            <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px] text-[var(--text-secondary)]">
               <span className="inline-flex items-center gap-1">
                 <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[var(--accent-commit)]/10 text-[var(--accent-commit)]">
                   {commit.author?.type === 'agent' ? (

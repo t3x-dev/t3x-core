@@ -155,7 +155,7 @@ export function ChatSidebar() {
           )}
         </div>
 
-        {/* + New Chat button */}
+        {/* + New Project button */}
         <div className={cn('mb-3', collapsed ? 'flex justify-center' : '')}>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -168,15 +168,15 @@ export function ChatSidebar() {
                   'transition-all duration-[var(--motion-base)]',
                   collapsed ? 'h-10 w-10' : 'h-10 w-full justify-start gap-2 px-3'
                 )}
-                aria-label="New chat"
+                aria-label="New project"
               >
                 <Plus className="h-4 w-4 shrink-0" />
-                {!collapsed && <span className="text-sm font-medium">New Chat</span>}
+                {!collapsed && <span className="text-sm font-medium">New Project</span>}
               </Button>
             </TooltipTrigger>
             {collapsed && (
               <TooltipContent side="right" sideOffset={8}>
-                New Chat
+                New Project
               </TooltipContent>
             )}
           </Tooltip>

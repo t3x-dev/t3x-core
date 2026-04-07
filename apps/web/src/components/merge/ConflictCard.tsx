@@ -12,11 +12,11 @@
  * Toggle between modes via the "Resolve per slot →" / "← Back to per-tree" link.
  */
 
-import type { TreeNode, SlotConflict, SlotValue } from '@t3x-dev/core';
+import type { SlotConflict, SlotValue, TreeNode } from '@t3x-dev/core';
 import { Check } from 'lucide-react';
 import { useState } from 'react';
-import { cn } from '@/lib/utils';
 import type { CompatNode } from '@/lib/treeCompat';
+import { cn } from '@/lib/utils';
 
 // ============================================================================
 // Types
@@ -78,7 +78,9 @@ function renderSlotValue(value: SlotValue | undefined): React.ReactNode {
       );
     }
     if ('type' in value && 'slots' in value) {
-      return <span className="text-[var(--yaml-punctuation,#6b7280)]">{JSON.stringify(value)}</span>;
+      return (
+        <span className="text-[var(--yaml-punctuation,#6b7280)]">{JSON.stringify(value)}</span>
+      );
     }
   }
   return <span className="text-[var(--yaml-punctuation,#6b7280)]">{JSON.stringify(value)}</span>;
@@ -90,12 +92,14 @@ function renderSlotValue(value: SlotValue | undefined): React.ReactNode {
 
 interface YamlPreviewProps {
   node: TreeNode;
+  otherNode: TreeNode;
   conflictKeys: Set<string>;
   label: string;
   labelColor: string;
 }
 
-function YamlPreview({ node, conflictKeys, label, labelColor }: YamlPreviewProps) {
+function YamlPreview({ node, otherNode, conflictKeys, label, labelColor }: YamlPreviewProps) {
+  const otherSlotKeys = new Set(Object.keys(otherNode.slots));
   return (
     <div className="flex-1 min-w-0 rounded border border-[var(--stroke-divider)] bg-[var(--surface-app)]/60 overflow-hidden">
       {/* Side label */}
@@ -110,10 +114,15 @@ function YamlPreview({ node, conflictKeys, label, labelColor }: YamlPreviewProps
       <div className="px-3 py-2 space-y-0.5">
         {Object.entries(node.slots).map(([key, value]) => {
           const isConflicting = conflictKeys.has(key);
+          const isOnlyInThisSide = !otherSlotKeys.has(key);
           return (
             <div
               key={key}
-              className="flex flex-wrap items-baseline gap-x-1 font-mono text-[11px] leading-relaxed rounded py-0.5"
+              className={cn(
+                'flex flex-wrap items-baseline gap-x-1 font-mono text-[11px] leading-relaxed rounded py-0.5',
+                isOnlyInThisSide &&
+                  'line-through decoration-[var(--diff-removed-accent)]/40 opacity-60'
+              )}
               style={
                 isConflicting
                   ? {
@@ -179,7 +188,9 @@ function PerSlotRow({ conflict, choice, treeId, onChoose }: PerSlotRowProps) {
             className="mt-0.5 shrink-0"
           />
           <div className="min-w-0 flex-1">
-            <div className="text-[10px] font-medium text-[var(--merge-source-accent)] mb-0.5">Source</div>
+            <div className="text-[10px] font-medium text-[var(--merge-source-accent)] mb-0.5">
+              Source
+            </div>
             <div className="font-mono break-words">{renderSlotValue(conflict.sourceValue)}</div>
           </div>
         </label>
@@ -201,7 +212,9 @@ function PerSlotRow({ conflict, choice, treeId, onChoose }: PerSlotRowProps) {
             className="mt-0.5 shrink-0"
           />
           <div className="min-w-0 flex-1">
-            <div className="text-[10px] font-medium text-[var(--merge-target-accent)] mb-0.5">Target</div>
+            <div className="text-[10px] font-medium text-[var(--merge-target-accent)] mb-0.5">
+              Target
+            </div>
             <div className="font-mono break-words">{renderSlotValue(conflict.targetValue)}</div>
           </div>
         </label>
@@ -268,10 +281,7 @@ export function ConflictCard({
   const resolvedSlotCount = slotConflicts.filter((sc) => slotChoices[sc.key]).length;
 
   // Non-conflicting slots (agreed upon): present in source, not in slotConflicts
-  const allSlotKeys = new Set([
-    ...Object.keys(sourceNode.slots),
-    ...Object.keys(targetNode.slots),
-  ]);
+  const allSlotKeys = new Set([...Object.keys(sourceNode.slots), ...Object.keys(targetNode.slots)]);
   const agreedSlots: Array<{ key: string; value: SlotValue }> = [];
   for (const key of allSlotKeys) {
     if (!conflictKeys.has(key)) {
@@ -366,12 +376,14 @@ export function ConflictCard({
             <div className="flex gap-3">
               <YamlPreview
                 node={sourceNode}
+                otherNode={targetNode}
                 conflictKeys={conflictKeys}
                 label="Source"
                 labelColor="var(--diff-added-accent)"
               />
               <YamlPreview
                 node={targetNode}
+                otherNode={sourceNode}
                 conflictKeys={conflictKeys}
                 label="Target"
                 labelColor="var(--accent-pending, #e0af68)"
@@ -391,7 +403,9 @@ export function ConflictCard({
                 )}
               >
                 Accept Source
-                <kbd className="ml-1 text-[0.65rem] font-mono bg-[var(--hover-bg)] px-1 rounded opacity-60">A</kbd>
+                <kbd className="ml-1 text-[0.65rem] font-mono bg-[var(--hover-bg)] px-1 rounded opacity-60">
+                  A
+                </kbd>
               </button>
               <button
                 type="button"
@@ -404,7 +418,9 @@ export function ConflictCard({
                 )}
               >
                 Accept Target
-                <kbd className="ml-1 text-[0.65rem] font-mono bg-[var(--hover-bg)] px-1 rounded opacity-60">B</kbd>
+                <kbd className="ml-1 text-[0.65rem] font-mono bg-[var(--hover-bg)] px-1 rounded opacity-60">
+                  B
+                </kbd>
               </button>
               <button
                 type="button"
@@ -417,7 +433,9 @@ export function ConflictCard({
                 )}
               >
                 Accept Both
-                <kbd className="ml-1 text-[0.65rem] font-mono bg-[var(--hover-bg)] px-1 rounded opacity-60">X</kbd>
+                <kbd className="ml-1 text-[0.65rem] font-mono bg-[var(--hover-bg)] px-1 rounded opacity-60">
+                  X
+                </kbd>
               </button>
 
               {/* Mode toggle */}

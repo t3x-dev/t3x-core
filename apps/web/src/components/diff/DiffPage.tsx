@@ -328,7 +328,7 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
       <style>{PAGE_ANIMATION_STYLES}</style>
 
       {/* ═══════ HEADER ═══════ */}
-      <header className="flex h-14 shrink-0 items-center justify-between border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-4">
+      <header className="flex h-[var(--h-header)] shrink-0 items-center justify-between border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-4">
         <div className="flex items-center gap-3">
           {/* Back button */}
           <button

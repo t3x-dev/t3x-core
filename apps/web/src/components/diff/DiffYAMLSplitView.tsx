@@ -147,7 +147,7 @@ function PaneContent({
       const lines: React.ReactNode[] = [];
       // Tree type header
       lines.push(
-        <YAMLLine key="header" lineNumber={lineNum++} status="modified">
+        <YAMLLine key="header" lineNumber={lineNum++} status="unchanged">
           <span style={{ color: YAML_COLORS.type, fontWeight: 600 }}>{node!.key}</span>
           <span style={{ color: YAML_COLORS.bracket }}>:</span>
         </YAMLLine>
@@ -168,13 +168,12 @@ function PaneContent({
 
         const value = side === 'left' ? af.leftNode.slots[as.key] : af.rightNode.slots[as.key];
 
-        // Line status: both sides stay 'modified' (subtle amber) for changed slots
-        // The VALUE itself gets colored, not the whole line
+        // Line status: changed slots use removed (left) / added (right) — no yellow
         let lineStatus: 'added' | 'removed' | 'modified' | 'unchanged' = 'unchanged';
         if (sd) {
           if (sd.type === 'added') lineStatus = 'added';
           else if (sd.type === 'removed') lineStatus = 'removed';
-          else lineStatus = 'modified'; // both sides get subtle amber line
+          else lineStatus = side === 'left' ? 'removed' : 'added';
         }
 
         // Value rendering: highlight the changed VALUE, not the line
