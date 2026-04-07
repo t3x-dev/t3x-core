@@ -338,7 +338,17 @@ leavesGenerationRoutes.openapi(generateLeafRoute, async (c) => {
       return errorResponse(c, 'GENERATION_FAILED', err.message);
     }
 
+    // Pipeline ops throw plain Errors for not-found resources — map to 404
     const message = err instanceof Error ? err.message : 'Unknown error';
+    if (message.includes('not found')) {
+      if (message.includes('Leaf not found')) {
+        return errorResponse(c, 'LEAF_NOT_FOUND', message);
+      }
+      if (message.includes('commit not found') || message.includes('Commit not found')) {
+        return errorResponse(c, 'COMMIT_NOT_FOUND', message);
+      }
+    }
+
     return errorResponse(c, 'GENERATION_FAILED', message);
   }
 });

@@ -2,15 +2,14 @@
  * Extraction Feedback Routes (OpenAPI)
  *
  * Adaptive learning loop: exposes feedback statistics and
- * confidence-bucket analysis for extraction calibration.
+ * cosine-bucket analysis for extraction calibration.
  *
  * Endpoints:
  * - GET /v1/projects/:projectId/extraction-feedback/stats
- * - GET /v1/projects/:projectId/extraction-feedback/cosine-buckets
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { getAdaptiveFeedbackStats, getFeedbackByCosineBucket } from '@t3x-dev/storage';
+import { getAdaptiveFeedbackStats } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { zodErrorHook } from '../lib/errors';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
@@ -46,16 +45,6 @@ const FeedbackStatsResponseSchema = z
   })
   .openapi('ExtractionFeedbackStats');
 
-const CosineBucketSchema = z.object({
-  bucket: z.string(),
-  total: z.number(),
-  accepted: z.number(),
-  edited: z.number(),
-  rejected: z.number(),
-  accept_rate: z.number(),
-});
-
-const CosineBucketsResponseSchema = z.array(CosineBucketSchema).openapi('CosineBuckets');
 
 // ============================================================
 // GET /v1/projects/:projectId/extraction-feedback/stats
@@ -112,46 +101,3 @@ extractionFeedbackRoutes.openapi(feedbackStatsRoute, async (c) => {
   }
 });
 
-// ============================================================
-// GET /v1/projects/:projectId/extraction-feedback/cosine-buckets
-// ============================================================
-
-const cosineBucketsRoute = createRoute({
-  method: 'get',
-  path: '/v1/projects/{projectId}/extraction-feedback/cosine-buckets',
-  tags: ['Extraction Feedback'],
-  summary: 'Get feedback bucketed by confidence ranges',
-  description:
-    'Returns accept/edit/reject counts grouped into 0.1-wide confidence buckets. ' +
-    'Helps identify confidence ranges that correlate with user corrections.',
-  request: {
-    params: ProjectIdParam,
-  },
-  responses: {
-    200: {
-      description: 'Confidence-bucketed feedback',
-      content: {
-        'application/json': {
-          schema: SuccessResponseSchema(CosineBucketsResponseSchema),
-        },
-      },
-    },
-    500: {
-      description: 'Internal error',
-      content: { 'application/json': { schema: ErrorResponseSchema } },
-    },
-  },
-});
-
-extractionFeedbackRoutes.openapi(cosineBucketsRoute, async (c) => {
-  try {
-    const { projectId } = c.req.valid('param');
-    const db = await getDB();
-    const buckets = await getFeedbackByCosineBucket(db, projectId);
-
-    return c.json({ success: true as const, data: buckets }, 200);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Failed to fetch cosine buckets';
-    return c.json({ success: false as const, error: { code: 'INTERNAL_ERROR', message } }, 500);
-  }
-});

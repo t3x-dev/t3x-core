@@ -156,7 +156,7 @@ function TreeGraphInner({
   const handleSlotEdit = useCallback(
     (treeId: string, key: string, value: SlotValue) => {
       if (!onBatchCreated) return;
-      const ops: YOp[] = [{ set: { path: `${treeId}/${key}`, value: value as string, source: String(value), from: 'manual' } }];
+      const ops: YOp[] = [{ set: { path: `${treeId}/${key}`, value: value as string } }];
       onBatchCreated(ops, 'manual');
     },
     [onBatchCreated]
@@ -169,16 +169,11 @@ function TreeGraphInner({
       const nodes = treesToNodes(content.trees);
       const existingNode = nodes.find((f) => f.id === treeId);
       if (!existingNode) return;
+      const slots = Object.fromEntries(Object.entries(existingNode.slots));
       const ops: YOp[] = [
         { drop: { path: treeId } },
-        {
-          add: {
-            parent: '',
-            node: { [newType]: Object.fromEntries(Object.entries(existingNode.slots)) },
-            source: {},
-            from: 'manual',
-          },
-        },
+        { define: { path: newType } },
+        { populate: { path: newType, values: slots } },
       ];
       onBatchCreated(ops, 'manual');
     },
@@ -192,14 +187,8 @@ function TreeGraphInner({
       if (!onBatchCreated) return;
       const newKey = nextNodeKey(content);
       const ops: YOp[] = [
-        {
-          add: {
-            parent: '',
-            node: { [newKey]: { label: 'New Node' } },
-            source: {},
-            from: 'manual',
-          },
-        },
+        { define: { path: newKey } },
+        { populate: { path: newKey, values: { label: 'New Node' } } },
       ];
       onBatchCreated(ops, 'manual');
     },

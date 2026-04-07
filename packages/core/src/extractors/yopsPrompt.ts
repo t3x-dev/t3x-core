@@ -3,7 +3,7 @@
  *
  * Design: Simple prompt for high recall. Code enforces structure.
  * The LLM's job: extract ALL facts into a YAML tree with source quotes.
- * Post-processing code handles: single-root enforcement, confidence, validation.
+ * Post-processing code handles: single-root enforcement, validation.
  */
 
 import type { SemanticContent, TreeNode } from '../semantic/types';
@@ -14,6 +14,13 @@ import { DEFAULT_STYLE, type ExtractionStyleConfig } from './extractionStyleConf
 export type { ExtractionInput, ExtractionPromptResult, ExtractionTurn } from './extractionPrompt';
 
 import type { ExtractionInput, ExtractionPromptResult } from './extractionPrompt';
+import {
+  granularitySegment,
+  quoteLengthSegment,
+  tier3KeyDistinction,
+  tier3Segment,
+  updateStanceSegment,
+} from './extractionPrompt';
 
 // -- Internal Helpers --
 
@@ -48,15 +55,21 @@ function formatTurns(turns: { role: string; content: string; turn_hash?: string 
 
 // -- System Prompt --
 
-function buildSystemPrompt(hasSnapshot: boolean): string {
+function buildSystemPrompt(hasSnapshot: boolean, style: ExtractionStyleConfig): string {
   return `You are a knowledge extraction engine. Your job is simple:
 Read the conversation and extract ALL facts, details, and information into a structured YAML tree.
 
-## What to extract
-- Everything the assistant explains, lists, or describes
-- Everything the user states, asks about, or confirms
-- Categories, comparisons, attributes, numbers, lists
-- Do NOT extract: greetings, filler ("sure!", "let me help"), or meta-commentary
+## Three-Tier Extraction Rule
+
+| Tier | Description | Action | Confidence |
+|------|-------------|--------|------------|
+| TIER 1 | User explicitly stated (preferences, facts, decisions) | Always extract | 0.9-1.0 |
+| TIER 2 | User confirmed or agreed with AI suggestion | Extract it | 0.8-0.9 |
+${tier3Segment(style.tier3)}
+
+${tier3KeyDistinction(style.tier3)}
+
+Do NOT extract: greetings, filler ("sure!", "let me help"), or meta-commentary
 
 ## Output format: YOps YAML
 
@@ -65,24 +78,29 @@ ${
     ? `Operations:
 - set: Set or update a slot value on an existing node
 - unset: Remove a slot from a node
-- add: Create a new node with initial slots
+- define: Create an empty node (structure operation)
+- populate: Fill slots on an existing node with extracted data
 - drop: Remove a node and all its children
 - rename: Change a node's key name (path: current, to: new_name)
 - move: Move a node to a different parent (path: source, to: target_path/key)
 - relate: Add a semantic relation (from, to, type: causes|conditions|contrasts|follows|depends)
 - unrelate: Remove a semantic relation`
-    : `Operation: add (create nodes with slots and source quotes)`
+    : `Operations:
+- define: Create an empty node (parent + key)
+- populate: Fill slots on a node with extracted data and source quotes`
 }
 
 Each operation needs:
 - **source**: key phrase from the conversation that contains this fact (a few words are enough — does NOT need to be a complete sentence)
+${quoteLengthSegment(style.quote_length)}
 - **from**: turn tag (T1, T2, etc.) where the information appears
 
 ### Structure
 - One root node named after the conversation topic (snake_case)
 - Children for subtopics (group related facts)
 - Values: clean data (numbers, short labels, booleans, arrays) — NOT full sentences
-- Depth: up to 3 levels
+
+${granularitySegment(style.granularity)}
 
 ### Example${hasSnapshot ? ' (incremental)' : ''}
 
@@ -94,39 +112,42 @@ ${
       value: 3000
       source: "let's cap it at 3000"
       from: T5
-
-  - add:
+  - define:
       parent: trip
-      node:
-        accommodation:
-          type: ryokan
-          budget: 200
+      key: accommodation
+  - populate:
+      path: trip/accommodation
+      slots:
+        type: ryokan
+        budget: 200
       source:
         type: "I want a ryokan"
         budget: "around 200 per night"
       from: T5`
     : `yops:
-  - add:
+  - define:
       parent: ""
-      node:
-        giant_panda:
-          classification: bear (Ursidae family)
-          scientific_name: Ailuropoda melanoleuca
-          diet:
-            primary: bamboo
-            percentage: 99
-          coloring:
-            pattern: black and white
-            purpose: camouflage
-          habitat: mountain forests of central China
+      key: giant_panda
+  - populate:
+      path: giant_panda
+      slots:
+        classification: bear (Ursidae family)
+        scientific_name: Ailuropoda melanoleuca
       source:
         classification: "Giant pandas belong to the bear family Ursidae"
         scientific_name: "Ailuropoda melanoleuca"
-        diet.primary: "Bamboo makes up about 99% of a giant panda's diet"
-        diet.percentage: "about 99% of a giant panda's diet"
-        coloring.pattern: "distinctive black and white coloring"
-        coloring.purpose: "camouflage in their natural habitat"
-        habitat: "mountain forests of central China"
+      from: T2
+  - define:
+      parent: giant_panda
+      key: diet
+  - populate:
+      path: giant_panda/diet
+      slots:
+        primary: bamboo
+        percentage: 99
+      source:
+        primary: "Bamboo makes up about 99% of a giant panda's diet"
+        percentage: "about 99% of a giant panda's diet"
       from: T2`
 }
 
@@ -136,12 +157,20 @@ ${
 - Every list item, number, recommendation, and detail is worth capturing
 - A short keyword source is better than skipping the data entirely
 
+### Content Blobs (code, plots, tables)
+When the conversation contains code blocks, charts, or structured data,
+store them as blob objects with a \`_type\` field:
+- Code: \`{ _type: "code", language: "python", content: "def foo(): ..." }\`
+- Plot: \`{ _type: "plot", format: "bar", description: "...", data: { labels: [...], values: [...] } }\`
+- Table: \`{ _type: "table", headers: [...], rows: [[...], ...] }\`
+Blobs preserve complete meaning blocks — do NOT decompose code into separate slots.
+
 ### Rules
 - Output ONLY valid YAML starting with "yops:"
 - No markdown fences, no explanatory text
 - Every operation MUST have source and from
 - If nothing to extract: output "yops: []"
-- Keys use snake_case, paths use / separator`;
+- Keys use snake_case, paths use / separator${updateStanceSegment(style.update_stance)}`;
 }
 
 // -- Main Function --
@@ -152,8 +181,9 @@ export function buildYOpsPrompt(
 ): ExtractionPromptResult {
   const { turns, snapshot, processedTurnCount } = input;
   const hasSnapshot = !!snapshot && snapshot.trees.length > 0;
+  const resolved: ExtractionStyleConfig = { ...DEFAULT_STYLE, ...style };
 
-  const systemPrompt = buildSystemPrompt(hasSnapshot);
+  const systemPrompt = buildSystemPrompt(hasSnapshot, resolved);
 
   if (hasSnapshot) {
     // Incremental mode
@@ -187,7 +217,7 @@ ${snapshotYaml}
 
 ${turnsSection}
 
-Extract changes from the NEW turns only. Use set/add/drop/unset operations.`;
+Extract changes from the NEW turns only. Use set/define/populate/drop/unset operations.`;
 
     return { systemPrompt, userPrompt };
   }
@@ -196,7 +226,7 @@ Extract changes from the NEW turns only. Use set/add/drop/unset operations.`;
   const userPrompt = `## Conversation
 ${formatTurns(turns)}
 
-Extract ALL knowledge into a tree using add operations.
+Extract ALL knowledge into a tree using define + populate operations.
 Capture EVERY fact, number, list item, recommendation, and detail — both from user and assistant.
 Do NOT skip information because you're unsure about quoting. A short keyword source is enough.`;
 

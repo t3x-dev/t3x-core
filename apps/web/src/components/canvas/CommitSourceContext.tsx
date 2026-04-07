@@ -35,9 +35,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   NodeWithHighlight,
   TurnWithHighlights,
-} from '@/components/shared/SourceConversationPanel';
-import { SourceConversationPanel } from '@/components/shared/SourceConversationPanel';
-import { SourceNodeList } from '@/components/shared/SourceNodeList';
+} from '@/components/source-context/SourceConversationPanel';
+import { SourceConversationPanel } from '@/components/source-context/SourceConversationPanel';
+import { SourceNodeList } from '@/components/source-context/SourceNodeList';
 import type { Leaf } from '@/lib/api';
 import * as api from '@/lib/api';
 import { checkContentIntegrity } from '@/lib/truncationUtils';

@@ -11,7 +11,6 @@ function makePoint(overrides: Partial<SemanticPointAPI> = {}): SemanticPointAPI 
     status: 'auto_landed',
     zone: 'ready',
     evidence: [],
-    confidence: 0.9,
     position: 0,
     staged: true,
     ...overrides,
@@ -91,8 +90,8 @@ describe('SemanticPointCard', () => {
   });
 
   test('accepts routing_reason in point data', () => {
-    const point = makePoint({ routing_reason: 'High confidence direct extraction' });
-    expect(point.routing_reason).toBe('High confidence direct extraction');
+    const point = makePoint({ routing_reason: 'Direct extraction' });
+    expect(point.routing_reason).toBe('Direct extraction');
   });
 
   test('point without routing_reason is valid', () => {

@@ -2,6 +2,7 @@
   "name": "t3x",
   "version": "0.1.0",
   "private": true,
+  "license": "Apache-2.0",
   "description": "T3X - Semantic extraction, diff, and merge for conversational AI",
   "packageManager": "pnpm@10.26.2",
   "scripts": {
@@ -12,6 +13,7 @@
     "build:runner": "turbo run build --filter=@t3x-dev/runner",
     "build:api": "turbo run build --filter=@t3x-dev/api",
     "build:api-server": "turbo run build --filter=t3x-api-server",
+    "build:yops": "turbo run build --filter=@t3x-dev/yops",
     "test:api": "turbo run test --filter=@t3x-dev/api",
     "clean": "turbo run clean",
     "test": "turbo run test",
@@ -20,6 +22,7 @@
     "test:webui": "turbo run test --filter=t3x-webui",
     "test:webui:no-deps": "pnpm --filter t3x-webui exec vitest run",
     "test:runner": "turbo run test --filter=@t3x-dev/runner",
+    "test:yops": "turbo run test --filter=@t3x-dev/yops",
     "typecheck": "turbo run typecheck",
     "lint": "biome lint .",
     "lint:fix": "biome lint --write .",

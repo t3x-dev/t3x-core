@@ -23,6 +23,7 @@ import {
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { eventBus } from '../lib/event-bus';
 import {
   readDraftFromTrees,
   rebuildTreesFromSnapshot,
@@ -259,6 +260,7 @@ yopsLogRoutes.openapi(createYOpsRoute, async (c) => {
       }, ctx),
     );
 
+    eventBus.notify('yops.applied', conversationId, conversation.projectId);
     return c.json({ success: true as const, data: result }, 201);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
@@ -350,6 +352,7 @@ yopsLogRoutes.openapi(deleteYOpsRoute, async (c) => {
       await rebuildTreesFromSnapshot(tx, conversationId, existing.projectId, rebuilt);
     });
 
+    eventBus.notify('yops.applied', conversationId, existing.projectId);
     return c.json({ success: true as const, data: null }, 200);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';

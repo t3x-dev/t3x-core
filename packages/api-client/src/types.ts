@@ -438,7 +438,6 @@ export interface ExtractTree {
   slots: Record<string, unknown>;
   children: ExtractTree[];
   source?: string;
-  confidence?: number;
 }
 
 export interface DriftItem {

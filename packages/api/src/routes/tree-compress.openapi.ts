@@ -16,8 +16,9 @@ import {
   listYOpsLogByConversation,
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
-import { replayYOpsLog, toYOpsLogEntries } from '../lib/yops-log-utils';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { eventBus } from '../lib/event-bus';
+import { replayYOpsLog, toYOpsLogEntries } from '../lib/yops-log-utils';
 import { rebuildTreesFromSnapshot } from '../lib/tree-state-sync';
 import { assertProjectAccess } from '../lib/project-access';
 import { getProviderRegistry } from '../lib/provider-registry';
@@ -137,9 +138,10 @@ function computeNodeSignals(
         targetId = ((op.set as { path?: string }).path ?? '').split('/')[0];
       } else if ('unset' in op && op.unset && typeof op.unset === 'object') {
         targetId = ((op.unset as { path?: string }).path ?? '').split('/')[0];
-      } else if ('add' in op && op.add && typeof op.add === 'object') {
-        const node = (op.add as { node?: Record<string, unknown> }).node;
-        targetId = node ? Object.keys(node)[0] : undefined;
+      } else if ('define' in op && op.define && typeof op.define === 'object') {
+        targetId = (op.define as { key?: string }).key;
+      } else if ('populate' in op && op.populate && typeof op.populate === 'object') {
+        targetId = ((op.populate as { path?: string }).path ?? '').split('/')[0];
       } else if ('drop' in op && op.drop && typeof op.drop === 'object') {
         targetId = ((op.drop as { path?: string }).path ?? '').split('/')[0];
       } else if ('move' in op && op.move && typeof op.move === 'object') {
@@ -293,6 +295,9 @@ treeCompressRoutes.openapi(compressTreesRoute, async (c) => {
       await rebuildTreesFromSnapshot(tx, conversationId, conversation.projectId, compressedSnapshot);
       return rec;
     });
+
+    // 9b. Notify draft changed
+    eventBus.notify('draft.changed', conversationId, conversation.projectId);
 
     // 10. Return yops + metadata + yops_log_id
     return c.json(

@@ -1,0 +1,42 @@
+{
+  "name": "@t3x-dev/yops",
+  "version": "0.1.0",
+  "description": "Declarative YAML operations — 18 atomic ops for any YAML document",
+  "license": "Apache-2.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist", "yops.yaml"],
+  "scripts": {
+    "generate:spec": "tsx scripts/generate-spec-data.ts",
+    "generate:schema": "tsx scripts/generate-json-schema.ts",
+    "build": "tsx scripts/generate-spec-data.ts && tsup && tsx scripts/generate-json-schema.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "zod": "^4.2.1",
+    "js-yaml": "^4.1.1",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^20.12.7",
+    "tsx": "^4.21.0",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3",
+    "vitest": "^2.1.9"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": ["yaml", "operations", "declarative", "atomic", "patch"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/t3x-dev/t3x-core.git",
+    "directory": "packages/yops"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

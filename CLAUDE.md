@@ -23,7 +23,8 @@ Core packages are published to npm as `@t3x-dev/*` via [Changesets](https://gith
 
 | Package | Source | Description |
 |---------|--------|-------------|
-| `@t3x-dev/core` | `packages/core` | Deterministic semantic engine |
+| `@t3x-dev/yops` | `packages/yops` | YOps — 18 declarative YAML operations (spec-driven) |
+| `@t3x-dev/core` | `packages/core` | T3X engine — diff, merge, hash chains, extraction |
 | `@t3x-dev/storage` | `packages/storage` | PostgreSQL persistence (Drizzle ORM) |
 | `@t3x-dev/api` | `apps/api` | Hono API server with `createApp()` factory |
 
@@ -64,7 +65,8 @@ This is a pnpm monorepo managed by Turborepo:
 ```
 t3x/
 ├── packages/
-│   ├── core/           # @t3x-dev/core - Deterministic semantic engine
+│   ├── yops/           # @t3x-dev/yops - YOps: 18 declarative YAML operations (spec-driven)
+│   ├── core/           # @t3x-dev/core - T3X engine: diff, merge, hash chains, extraction
 │   ├── storage/        # @t3x-dev/storage - PostgreSQL persistence (Drizzle ORM)
 │   ├── api-client/     # @t3x-dev/api-client - TypeScript API client
 │   └── runner/         # @t3x-dev/runner - Shared runner library (schemas, evaluator, trace)
@@ -136,9 +138,14 @@ Ports: WebUI (3000), API (8000), PostgreSQL (5432), Runner (8080), Agent Demo (9
 ### Package Dependencies
 
 ```
+packages/yops (@t3x-dev/yops)          ← standalone, zero deps
+
+packages/core (@t3x-dev/core)
+  └─► packages/yops
+
 apps/web (t3x-webui)
   └─► packages/storage (@t3x-dev/storage)
-        └─► packages/core (@t3x-dev/core)
+        └─► packages/core
 
 apps/api (@t3x-dev/api)
   ├─► packages/storage
@@ -150,11 +157,33 @@ apps/cli (@t3x-dev/cli)
   └─► packages/api-client (@t3x-dev/api-client)
 ```
 
+### YOps Architecture (packages/yops)
+
+YOps is the declarative YAML operation engine. Three layers, like OpenAPI / Zod / Hono:
+
+| Layer | File(s) | Role | Analogy |
+|-------|---------|------|---------|
+| **YOps** | `yops.yaml` | Operation spec — fields, rules, errors, test cases | OpenAPI |
+| **Registry** | `registry.ts`, `spec.ts` | Parse spec, validate handlers, enforce field contracts | Zod |
+| **Engine** | `engine.ts`, `handlers/` | Dispatch and execute operations | Hono |
+
+```
+yops.yaml (spec)  →  Registry (validates)  →  Engine (executes)
+```
+
+- `yops.yaml` is the runtime source of truth — parsed at init, not just documentation
+- Registry validates every spec op has a handler, and validates fields before every handler call
+- 18 ops organized into DDL (structure), DML (data), DTL (transform), DCL (control)
+- Conformance tests in `yops.yaml` — any language can run them to verify their engine
+
+`@t3x-dev/core` imports `@t3x-dev/yops` and extends it with `relate`/`unrelate` (T3X-specific semantic operations).
+
 ### Three-Layer Design
 
 | Layer | Package | LLM Required? |
 |-------|---------|---------------|
-| **Framework Core** | `@t3x-dev/core` | No (deterministic) |
+| **YOps Engine** | `@t3x-dev/yops` | No (deterministic) |
+| **T3X Core** | `@t3x-dev/core` | No (deterministic) |
 | **Storage Layer** | `@t3x-dev/storage` | No |
 | **Agentic Layer** | SummaryAgent/MergeAgent plugins | Optional |
 | **Product Layer** | `t3x-webui`, `@t3x-dev/api`, `@t3x-dev/runner` | No |
@@ -339,7 +368,6 @@ vi.mock('@/lib/db', () => ({
       {
         "id": "s_abc123",
         "text": "...",
-        "confidence": 0.95,
         "source_ref": {
           "conversation_id": "conv_...",
           "turn_hash": "sha256:...",
@@ -425,21 +453,29 @@ vi.mock('@/lib/db', () => ({
 1. **Determinism**: Core algorithms must be 100% reproducible — same inputs always produce same outputs
 2. **Append-only**: Hash chains are immutable; any modification breaks integrity
 3. **Plugin architecture**: Extractors and embedders are pluggable
-4. **Evidence-backed**: Every semantic finding traces to source turns with confidence scores
+4. **Evidence-backed**: Every semantic finding traces to source turns with verbatim quotes
 
 ## Environment Variables
 
-Copy `.env.example` to `.env`:
+### User-facing (`.env` or shell)
 
+- `ANTHROPIC_API_KEY`: Required for extraction, chat, and generation
+- `GOOGLE_AI_STUDIO_KEY`: Optional — Gemini models and embeddings
+
+### Docker-internal (defaults in `docker-compose.yml`)
+
+- `DATABASE_URL`: PostgreSQL connection string (auto-set in Docker)
 - `NEXT_PUBLIC_API_URL`: T3X API server URL (default: http://localhost:8000)
-- `DATABASE_URL`: PostgreSQL connection string (production/Docker)
-- `ANTHROPIC_API_KEY`: For Claude API access (optional, for LLM features)
-- `GOOGLE_AI_STUDIO_KEY`: For Google AI features (optional)
-- `GOOGLE_CLOUD_NLP_KEY`: For Google Cloud NLP features (optional)
-- `N8N_BASE_URL`: n8n workflow engine URL (default: http://localhost:5678)
-- `N8N_API_KEY`: n8n API key (optional)
-- `RUNNER_BASE_URL`: Runner service URL (default: http://localhost:8080)
-- `TRACE_POLICY`: Runner trace policy: `always` | `on_failure` | `on_violation`
+- `AUTH_DISABLED`: Set `true` for self-hosted (default), `false` for production
+
+### Runner/n8n (optional profiles)
+
+- `N8N_API_KEY`: n8n API key
+- `TRACE_POLICY`: `always` | `on_failure` | `on_violation`
+
+### Cloud-only (in `t3x_cloud` repo, not here)
+
+- `GITHUB_CLIENT_ID/SECRET`, `GOOGLE_CLIENT_ID/SECRET`, `NEXTAUTH_SECRET` — OAuth for SaaS
 
 ## ID Conventions
 

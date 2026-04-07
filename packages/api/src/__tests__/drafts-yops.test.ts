@@ -130,10 +130,11 @@ describe('POST /v1/drafts/:id/apply-yops', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         yops: [
+          { define: { parent: '', key: 'hotel' } },
           {
-            add: {
-              parent: '',
-              node: { hotel: { name: 'Hilton', stars: 5 } },
+            populate: {
+              path: 'hotel',
+              slots: { name: 'Hilton', stars: 5 },
               source: { name: 'called Hilton', stars: 'five stars' },
               from: 'T2',
             },
@@ -146,7 +147,7 @@ describe('POST /v1/drafts/:id/apply-yops', () => {
     expect(res.status).toBe(200);
     const json = (await res.json()) as ApiResponse;
     expect(json.success).toBe(true);
-    expect(json.data.applied_count).toBe(1);
+    expect(json.data.applied_count).toBe(2);
     expect(json.data.tree_count).toBe(1);
     expect(json.data.trees[0].key).toBe('hotel');
     expect(json.data.trees[0].slots.name).toBe('Hilton');
@@ -158,10 +159,11 @@ describe('POST /v1/drafts/:id/apply-yops', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         yops: [
+          { define: { parent: '', key: 'test' } },
           {
-            add: {
-              parent: '',
-              node: { test: { val: 1 } },
+            populate: {
+              path: 'test',
+              slots: { val: 1 },
               source: { val: 'one' },
               from: 'T1',
             },
@@ -274,10 +276,11 @@ describe('POST /v1/drafts/:id/apply-yops', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         yops: [
+          { define: { parent: '', key: 'trip' } },
           {
-            add: {
-              parent: '',
-              node: { trip: { destination: 'Berlin' } },
+            populate: {
+              path: 'trip',
+              slots: { destination: 'Berlin' },
               source: { destination: 'going to Berlin' },
               from: 'T1',
             },
@@ -297,7 +300,7 @@ describe('POST /v1/drafts/:id/apply-yops', () => {
 
     expect(res.status).toBe(200);
     const json = (await res.json()) as ApiResponse;
-    expect(json.data.applied_count).toBe(2);
+    expect(json.data.applied_count).toBe(3);
     expect(json.data.tree_count).toBe(1);
     expect(json.data.slot_count).toBe(2);
     expect(json.data.trees[0].slots.destination).toBe('Berlin');

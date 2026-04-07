@@ -57,13 +57,6 @@ export const PAGE_ANIMATION_STYLES = `
     0%, 100% { box-shadow: 0 0 0 0 rgba(34,197,94,0); }
     50% { box-shadow: 0 0 0 3px rgba(34,197,94,0.08); }
   }
-  .confidence-pulse {
-    animation: confPulse 2s ease-in-out infinite;
-  }
-  @keyframes confPulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.7; }
-  }
   .glass-panel {
     background: color-mix(in srgb, var(--surface-panel) 85%, transparent);
     backdrop-filter: blur(8px);

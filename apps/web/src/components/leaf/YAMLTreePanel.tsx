@@ -15,6 +15,7 @@ import { type ReactNode, useCallback, useMemo } from 'react';
 import { YAMLRenderer } from '@/components/shared/YAMLRenderer';
 import type { WorkspaceMode } from '@/hooks/useLeafPageData';
 import type { Assertion, Constraint } from '@/lib/api/leaves';
+import { contentToNodes } from '@/lib/treeCompat';
 import { nestNodes } from '@/lib/treeNesting';
 import { cn } from '@/lib/utils';
 
@@ -57,7 +58,6 @@ export function YAMLTreePanel({
   onHoverNode,
 }: YAMLTreePanelProps) {
   const nested = useMemo(() => {
-    const { contentToNodes } = require('@/lib/treeCompat') as typeof import('@/lib/treeCompat');
     return contentToNodes(content);
   }, [content]);
 
@@ -146,11 +146,10 @@ export function YAMLTreePanel({
   );
 
   const getTreeMeta = useCallback(
-    (treeId: string) => {
-      const node = content.trees.find((f) => f.key === treeId);
-      return node?.confidence != null ? { confidence: node.confidence } : undefined;
+    (_treeId: string) => {
+      return undefined;
     },
-    [content.trees]
+    []
   );
 
   return (

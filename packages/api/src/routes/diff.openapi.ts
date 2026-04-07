@@ -460,8 +460,7 @@ diffRoutes.openapi(twoWayRoute, async (c) => {
       embeddingProvider = baseProvider;
     }
 
-    // TODO: Legacy node-level DiffEngine has been removed in tree-primary refactor.
-    // Return a simple text comparison for now.
+    // Legacy node-level diff removed — use /v1/diff/frame endpoint instead
     return c.json(
       {
         success: true as const,
@@ -601,7 +600,7 @@ diffRoutes.openapi(threeWayRoute, async (c) => {
       embeddingProvider = baseProvider;
     }
 
-    // TODO: Legacy node-level DiffEngine has been removed in tree-primary refactor.
+    // Legacy node-level diff removed — use /v1/diff/frame endpoint instead
     return c.json(
       {
         success: true as const,

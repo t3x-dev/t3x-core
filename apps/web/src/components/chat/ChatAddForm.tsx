@@ -47,8 +47,6 @@ export function ChatAddForm({ selection, onDone }: ChatAddFormProps) {
         set: {
           path: `${targetNode}/${slotKey}`,
           value: slotValue,
-          source: selection.text,
-          from: 'manual',
         },
       },
     ];

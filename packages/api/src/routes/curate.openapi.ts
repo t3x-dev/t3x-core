@@ -102,7 +102,6 @@ interface ChunkAnchorCandidate {
   start: number;
   /** End offset relative to chunk start (not global) */
   end: number;
-  confidence: number;
   source: AnchorSource;
 }
 
@@ -117,7 +116,6 @@ interface ApiAnchorCandidate {
   start_char: number;
   /** End offset (global position in source_text) */
   end_char: number;
-  confidence: number;
   source: AnchorSource;
 }
 
@@ -164,7 +162,6 @@ interface LegacyAnchorCandidate {
   start_char?: number;
   endChar?: number;
   end_char?: number;
-  confidence: number;
   source: AnchorSource;
 }
 
@@ -418,7 +415,6 @@ function extractChunksFromTurns(
         const type = candidate.type;
         const startChar = candidate.startChar ?? candidate.start_char;
         const endChar = candidate.endChar ?? candidate.end_char;
-        const confidence = candidate.confidence;
         const source = candidate.source;
 
         // Validate ALL required fields - strict fail-fast
@@ -434,8 +430,6 @@ function extractChunksFromTurns(
           issues.push('startChar/start_char: required, got ' + typeof startChar);
         if (typeof endChar !== 'number')
           issues.push('endChar/end_char: required, got ' + typeof endChar);
-        if (typeof confidence !== 'number')
-          issues.push('confidence: required, got ' + typeof confidence);
         if (typeof source !== 'string') {
           issues.push('source: required, got ' + typeof source);
         } else if (!VALID_ANCHOR_SOURCES.includes(source)) {
@@ -456,7 +450,6 @@ function extractChunksFromTurns(
           // Adjust offset: prefix length + candidate's startChar + global offset
           startChar: globalOffset + prefix.length + startChar!,
           endChar: globalOffset + prefix.length + endChar!,
-          confidence, // Already validated as number
           source: source as AnchorSource, // Already validated as valid AnchorSource
         });
       }
@@ -796,7 +789,6 @@ curateRoutes.openapi(curatePreviewRoute, async (c) => {
               type: ac.type,
               start_char: ac.startChar,
               end_char: ac.endChar,
-              confidence: ac.confidence,
               source: ac.source,
             })),
             warnings: extractionWarnings.length > 0 ? extractionWarnings : undefined,
@@ -870,7 +862,6 @@ curateRoutes.openapi(curatePreviewRoute, async (c) => {
             // Convert to chunk-relative positions (clamped)
             start: clampedStart - x.start,
             end: clampedEnd - x.start,
-            confidence: ac.confidence,
             source: ac.source,
           };
         })
@@ -906,7 +897,6 @@ curateRoutes.openapi(curatePreviewRoute, async (c) => {
       type: ac.type,
       start_char: ac.startChar,
       end_char: ac.endChar,
-      confidence: ac.confidence,
       source: ac.source,
     }));
 

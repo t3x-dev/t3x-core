@@ -70,7 +70,7 @@ export async function updateDraft(
 // ============================================================================
 
 export type DraftNodeOrigin =
-  | { type: 'extracted'; segment_id: string; confidence: number }
+  | { type: 'extracted'; segment_id: string }
   | { type: 'selected' }
   | { type: 'manual' };
 
@@ -346,7 +346,6 @@ export interface SemanticPointAPI {
   routing_reason?: string;
   inherited_from?: string;
   evidence: LocatedEvidenceAPI[];
-  confidence?: number;
   low_coverage?: boolean;
   position: number;
   staged: boolean;

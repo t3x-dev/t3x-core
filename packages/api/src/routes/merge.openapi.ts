@@ -981,8 +981,7 @@ mergeRoutes.openapi(suggestRoute, async (c) => {
     );
   }
 
-  // TODO: suggestFrameMerge was removed in tree-primary refactor
-  // For now, return null suggestion (user must resolve manually)
+  // suggestFrameMerge removed in tree-primary refactor — merge uses direct tree comparison
   const conflict = prepared.conflicts[idx];
   const { provider: trackedLlm, usage } = wrapWithUsageTracking(llm);
   const suggestion = null;
@@ -1093,7 +1092,7 @@ mergeRoutes.openapi(suggestFrameRoute, async (c) => {
     );
   }
 
-  // TODO: suggestFrameMerge was removed in tree-primary refactor
+  // suggestFrameMerge removed in tree-primary refactor — merge uses direct tree comparison
   const { provider: trackedLlm, usage } = wrapWithUsageTracking(llm);
   const suggestion = null;
 

@@ -73,7 +73,7 @@ interface CommitData {
   author: { type?: string; name?: string; id?: string };
   committed_at: string;
   content: {
-    nodes?: Array<{ id: string; text: string; confidence?: number }>;
+    nodes?: Array<{ id: string; text: string }>;
     trees?: Array<{ id: string; type: string; slots: Record<string, unknown>; key?: string; children?: unknown[] }>;
     relations?: Array<{ from: string; to: string; type: string }>;
   };
@@ -635,11 +635,6 @@ function SharedCommitView({ commit }: { commit: CommitData }) {
                     </span>
                     <p className="text-sm text-[var(--text-primary)] leading-relaxed">{s.text}</p>
                   </div>
-                  {s.confidence !== undefined && (
-                    <div className="mt-1 text-[10px] text-[var(--text-tertiary)]">
-                      confidence: {(s.confidence * 100).toFixed(0)}%
-                    </div>
-                  )}
                 </div>
               ))}
             </div>

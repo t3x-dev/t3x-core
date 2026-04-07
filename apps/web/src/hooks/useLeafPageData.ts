@@ -127,7 +127,6 @@ export interface UseLeafPageDataReturn {
   mode: WorkspaceMode;
   setMode: (mode: WorkspaceMode) => void;
   nodeCoverage: Map<string, NodeCoverageEntry>;
-  nodeConfidence: Map<string, number>;
 
   // Handlers
   handleUpdateConstraints: (constraints: Constraint[], optimisticLeaf?: Leaf) => Promise<void>;
@@ -350,18 +349,6 @@ export function useLeafPageData(projectId: string, leafId: string): UseLeafPageD
         .join('; ')}`,
       source: undefined, // tree source tracing handled differently
     }));
-  }, [semanticContent]);
-
-  // Memoize confidence scores from commit data
-  const nodeConfidence = useMemo((): Map<string, number> => {
-    if (!semanticContent) return new Map();
-    const { treesToNodes } = require('@/lib/treeCompat');
-    const nodes = treesToNodes(semanticContent.trees);
-    const m = new Map<string, number>();
-    for (const f of nodes) {
-      if (f.confidence != null) m.set(f.id, f.confidence);
-    }
-    return m;
   }, [semanticContent]);
 
   // Compute node coverage (for Display Mode)
@@ -626,7 +613,6 @@ export function useLeafPageData(projectId: string, leafId: string): UseLeafPageD
     mode,
     setMode,
     nodeCoverage,
-    nodeConfidence,
 
     // Handlers
     handleUpdateConstraints,

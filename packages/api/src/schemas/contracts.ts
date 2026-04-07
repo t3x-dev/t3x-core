@@ -41,7 +41,6 @@ const OapiTreeNodeSchema: z.ZodType<{
   children: unknown[];
   slot_quotes?: Record<string, string>;
   source?: string;
-  confidence?: number;
 }> = z.lazy(() =>
   z.object({
     key: z.string().min(1),
@@ -49,7 +48,6 @@ const OapiTreeNodeSchema: z.ZodType<{
     children: z.array(OapiTreeNodeSchema).default([]),
     slot_quotes: z.record(z.string(), z.string()).optional(),
     source: z.string().optional(),
-    confidence: z.number().min(0).max(1).optional(),
   })
 );
 
@@ -65,7 +63,6 @@ const OapiRelationSchema = z.object({
   from: z.string(),
   to: z.string(),
   type: OapiRelationTypeSchema,
-  confidence: z.number().min(0).max(1).optional(),
 });
 
 const OapiSemanticContentSchema = z.object({
@@ -96,11 +93,11 @@ export const ConstraintSchema = z.object({
   id: z.string().optional(), // Optional on create, required on response
   type: z.enum(['require', 'exclude']),
   match_mode: z.enum(['exact', 'semantic']),
-  value: z.string().min(1),
-  description: z.string().optional(),
+  value: z.string().min(1).max(5000),
+  description: z.string().max(2000).optional(),
   /** Link to source frame + slot (frame-based traceability) */
   source_frame: ConstraintSourceFrameSchema.optional(),
-  reason: z.string().optional(), // For exclude constraints
+  reason: z.string().max(2000).optional(), // For exclude constraints
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -147,7 +144,7 @@ export const CreateCommitRequest = z
       .array(z.string())
       .default([])
       .describe('Parent commit hashes (empty for root commit)'),
-    message: z.string().optional().describe('Human-readable commit message'),
+    message: z.string().max(2000).optional().describe('Human-readable commit message'),
     branch: z.string().optional().describe('Branch name (defaults to main)'),
 
     // V3/V4 detection fields (for validation error handling)
@@ -563,7 +560,6 @@ const WordDiffSegmentSchema = z.object({
 const MergeNodeSchema = z.object({
   id: z.string(),
   text: z.string(),
-  confidence: z.number().min(0).max(1).optional(),
 });
 
 const MergeSimilarPairSchema = z.object({
@@ -598,7 +594,7 @@ export const ExecuteMergeRequest = z.object({
   source_hash: z.string().min(1),
   target_hash: z.string().min(1),
   prepared: MergeResultSchema,
-  message: z.string().min(1),
+  message: z.string().min(1).max(2000),
   branch: z.string().optional(),
   project_id: z.string().min(1),
 });
@@ -626,7 +622,6 @@ export const DraftNodeOriginSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('extracted'),
     segment_id: z.string(),
-    confidence: z.number().min(0).max(1),
   }),
   z.object({ type: z.literal('selected') }),
   z.object({ type: z.literal('manual') }),
@@ -654,8 +649,8 @@ export const DraftConstraintSchema = z.object({
   id: z.string(),
   type: z.enum(['require', 'exclude']),
   match_mode: z.enum(['exact', 'semantic']),
-  value: z.string().min(1),
-  reason: z.string().optional(),
+  value: z.string().min(1).max(5000),
+  reason: z.string().max(2000).optional(),
 });
 
 // POST /v1/drafts
@@ -797,7 +792,6 @@ export const SemanticPointSchema = z.object({
   routing_reason: z.string().optional(),
   inherited_from: z.string().optional(),
   evidence: z.array(LocatedEvidenceSchema),
-  confidence: z.number().optional(),
   low_coverage: z.boolean().optional(),
   position: z.number().int(),
   staged: z.boolean(),

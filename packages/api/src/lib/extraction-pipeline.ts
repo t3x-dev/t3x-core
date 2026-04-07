@@ -10,12 +10,12 @@
  * events (collect into a response object, stream as SSE, etc.).
  */
 
+import { eventBus } from './event-bus';
 import {
   applyYOps,
   checkDiffCompatibility,
   checkReadiness,
   computeSessionContext,
-  createMeaningPipeline,
   DEFAULT_STYLE,
   decideAction,
   detectAmbiguity,
@@ -26,9 +26,9 @@ import {
   Extractor,
   flattenTrees,
   GateRunner,
-  type LLMCallLogger,
   pipelineEmitter,
   preFilterDrift,
+  runTransforms,
   type SemanticContent,
 } from '@t3x-dev/core';
 import {
@@ -286,6 +286,9 @@ export async function* runExtractionPipeline(
     // ── Step 4: Extractor — LLM extraction via provider registry ──
     yield { type: 'status', data: { step: 'extracting' } };
 
+    // Broadcast extraction started (for other tabs/clients)
+    eventBus.notify('extraction.started', conversationId, conversation.projectId);
+
     const reg = await getProviderRegistry();
     const trackedUsage = { inputTokens: 0, outputTokens: 0 };
     let trackedModel = 'unknown';
@@ -343,11 +346,16 @@ export async function* runExtractionPipeline(
       // so the YOpsFeed has items to display
       const synthYops = result.snapshot.trees.flatMap((tree) => {
         const yops: Record<string, unknown>[] = [
-          { add: { parent: '', node: { [tree.key]: Object.fromEntries(Object.entries(tree.slots).slice(0, 3)) }, source: {}, from: tree.source ?? 'T1' }, index: 0, total: 0 },
+          { define: { parent: '', key: tree.key }, index: 0, total: 0 },
+          { populate: { path: tree.key, slots: Object.fromEntries(Object.entries(tree.slots).slice(0, 3)), source: {}, from: tree.source ?? 'T1' }, index: 0, total: 0 },
         ];
         for (const child of tree.children) {
           yops.push({
-            add: { parent: tree.key, node: { [child.key]: Object.fromEntries(Object.entries(child.slots).slice(0, 3)) }, source: {}, from: child.source ?? 'T1' },
+            define: { parent: tree.key, key: child.key },
+            index: 0, total: 0,
+          });
+          yops.push({
+            populate: { path: `${tree.key}/${child.key}`, slots: Object.fromEntries(Object.entries(child.slots).slice(0, 3)), source: {}, from: child.source ?? 'T1' },
             index: 0, total: 0,
           });
         }
@@ -368,89 +376,36 @@ export async function* runExtractionPipeline(
       }
     }
 
-    // ── Step 5: MeaningPipeline — multi-agent post-processing ──
+    // ── Step 5: Post-extraction transforms (deterministic) ──
     yield { type: 'status', data: { step: 'reorganizing' } };
-
-    const debugPipeline = process.env.PIPELINE_DEBUG === 'true';
-    const llmLogger: LLMCallLogger | undefined = debugPipeline
-      ? (log) => {
-          console.info(
-            `[llm:${log.agent}] tokens: in=${log.usage.inputTokens} out=${log.usage.outputTokens} | ${log.durationMs}ms`
-          );
-          console.debug(`[llm:${log.agent}] prompt: ${log.prompt.slice(0, 200)}...`);
-          console.debug(`[llm:${log.agent}] response: ${log.response.slice(0, 300)}...`);
-        }
-      : undefined;
 
     let organizedSnapshot: SemanticContent = result.snapshot;
     let changesSummary: Record<string, unknown> | undefined;
 
     try {
-      const pipelineReg = await getProviderRegistry();
-      const pipelineResult = await pipelineReg.tryWithFallback(
-        'generation',
-        async (pipelineProvider) => {
-          // biome-ignore lint/suspicious/noExplicitAny: generic provider cast
-          const pipeline = createMeaningPipeline(pipelineProvider as any);
-          const isIncremental = currentFlat.length > 0;
-          return pipeline.run(
-            result.snapshot,
-            extractionTurns,
-            isIncremental ? currentSnapshot : undefined,
-            {
-              mode: isIncremental ? 'incremental' : 'full',
-              debug: debugPipeline,
-              llmLogger,
-            }
-          );
-        }
+      const isIncremental = currentFlat.length > 0;
+      const transformResult = runTransforms(
+        result.snapshot,
+        extractionTurns.map((t) => ({ role: t.role, content: t.content })),
+        isIncremental ? currentSnapshot : undefined,
       );
-      organizedSnapshot = pipelineResult.content;
+      organizedSnapshot = transformResult.content;
 
-      // Record pipeline usage
-      const pu = pipelineResult.meta.totalUsage;
-      if (pu.inputTokens || pu.outputTokens) {
-        recordUsageFireAndForget(db, {
-          user_id: userId ?? undefined,
-          project_id: conversation.projectId,
-          endpoint: 'meaning_pipeline',
-          model: trackedModel,
-          input_tokens: pu.inputTokens,
-          output_tokens: pu.outputTokens,
-        });
-      }
-
-      // Build changes summary
       changesSummary = {
-        completedAgents: pipelineResult.meta.completedAgents,
-        quality: pipelineResult.quality,
-        agentErrors: pipelineResult.meta.agentErrors,
+        transforms: ['consolidate', 'nest', 'flagContradictions', 'checkRegression'],
+        regressionWarnings: transformResult.regressionWarnings,
       };
 
-      // Log agent results
-      const completed = pipelineResult.meta.completedAgents;
-      const errors = pipelineResult.meta.agentErrors;
-      const snapshots = pipelineResult.meta.stepSnapshots;
-      const q = pipelineResult.quality;
-      console.info(`[meaning-pipeline] Completed: ${completed.join(' → ')}`);
-      console.info(
-        `[meaning-pipeline] Quality: score=${q.score} frames=${q.frameCount} depth=${q.maxDepth} dupes=${q.duplicateTypes}`
-      );
-      for (const snap of snapshots) {
-        console.info(
-          `[meaning-pipeline] Step "${snap.agent}": ${snap.frameCount} frames, score=${snap.quality.score}`
-        );
-      }
-      if (errors.length > 0) {
-        for (const ae of errors) {
-          console.warn(`[meaning-pipeline] Agent "${ae.agent}": ${ae.error}`);
+      if (transformResult.regressionWarnings.length > 0) {
+        for (const w of transformResult.regressionWarnings) {
+          console.warn(`[transforms] ${w.type}: ${w.message}`);
         }
       }
-    } catch (pipelineErr) {
+    } catch (transformErr) {
       console.warn(
-        `[meaning-pipeline] Pipeline error: ${pipelineErr instanceof Error ? pipelineErr.message : String(pipelineErr)}`
+        `[transforms] Error: ${transformErr instanceof Error ? transformErr.message : String(transformErr)}`
       );
-      // Pipeline is optional — flat frames are still valid
+      // Transforms are optional — raw extraction is still valid
     }
 
     // ── Code-based structure enforcement ──
@@ -614,6 +569,15 @@ export async function* runExtractionPipeline(
       yops: result.yops,
       snapshot: organizedSnapshot,
       topicId: resolvedTopicId,
+    });
+
+    // Broadcast to WebSocket clients
+    eventBus.broadcast({
+      type: 'extraction.done',
+      conversationId,
+      projectId: conversation.projectId,
+      payload: { yopsLogId: record.id },
+      timestamp: Date.now(),
     });
 
     // ── Done ──

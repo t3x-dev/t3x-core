@@ -2,7 +2,7 @@
 
 import { FileText, Leaf, Loader2, Play } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
-import { showToast } from '@/components/Toast';
+import { showToast } from '@/components/layout/Toast';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';

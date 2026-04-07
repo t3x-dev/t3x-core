@@ -5,12 +5,13 @@ import {
   type ExtractionStyleConfig,
   matchPreset,
   PRESETS,
+  styleSummaryLine,
   type PresetName,
 } from '../../extractors/extractionStyleConfig';
 
 describe('ExtractionStyleConfig', () => {
-  it('DEFAULT_STYLE equals detailed preset', () => {
-    expect(DEFAULT_STYLE).toEqual(PRESETS.detailed);
+  it('DEFAULT_STYLE equals balanced preset', () => {
+    expect(DEFAULT_STYLE).toEqual(PRESETS.balanced);
   });
 
   it('all presets have valid fields', () => {
@@ -36,5 +37,34 @@ describe('ExtractionStyleConfig', () => {
       tier3: 'extract',
     };
     expect(matchPreset(custom)).toBeNull();
+  });
+});
+
+describe('styleSummaryLine', () => {
+  it('returns concise summary for concise preset', () => {
+    const line = styleSummaryLine(PRESETS.concise);
+    expect(line).toContain('concise');
+    expect(line).toContain('30%');
+  });
+
+  it('returns balanced summary for balanced preset', () => {
+    const line = styleSummaryLine(PRESETS.balanced);
+    expect(line).toContain('balanced');
+  });
+
+  it('returns detailed summary for detailed preset', () => {
+    const line = styleSummaryLine(PRESETS.detailed);
+    expect(line).toContain('detailed');
+  });
+
+  it('returns custom summary for non-preset config', () => {
+    const line = styleSummaryLine({
+      granularity: 'concise',
+      quote_length: 'contextual',
+      update_stance: 'aggressive',
+      tier3: 'extract',
+    });
+    expect(line).toContain('custom');
+    expect(line).toContain('concise');
   });
 });

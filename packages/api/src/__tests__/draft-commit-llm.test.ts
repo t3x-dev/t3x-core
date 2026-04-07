@@ -8,7 +8,6 @@
 interface SemanticPoint {
   id: string;
   text: string;
-  confidence?: number;
   zone: string;
   status: string;
   staged: boolean;
@@ -84,7 +83,6 @@ describe('POST /v1/drafts/{id}/commit (LLM mode)', () => {
         enabled: true,
       },
     ],
-    confidence: 0.95,
     position: 0,
     staged: true,
     ...overrides,

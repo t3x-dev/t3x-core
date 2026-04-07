@@ -11,7 +11,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { Extractor } from '../../extractors/extractor';
 import { ylint } from '../../ylint';
-import { applyYOps } from '../../yops/engine';
+import { applyYOps } from '../../t3x-yops/engine';
 import { parseYOpsOutput } from '../../extractors/yopsParser';
 import type { SemanticContent, TreeNode } from '../../semantic/types';
 import type { LLMProvider } from '../../llm/types';
@@ -64,10 +64,6 @@ describe('E2E: YOps Extraction Pipeline', () => {
   "source_map": {
     "hangzhou_trip": "T1",
     "dining": "T1"
-  },
-  "confidence_map": {
-    "hangzhou_trip": 0.95,
-    "dining": 0.85
   }
 }`;
 
@@ -100,16 +96,9 @@ describe('E2E: YOps Extraction Pipeline', () => {
 
     // Verify metadata propagated
     expect(trip!.source).toBe('T1');
-    expect(trip!.confidence).toBe(0.95);
-
-    // Verify ylint ran
-    expect(result1.lintResult).toBeDefined();
-    expect(result1.lintResult!.overall).toBeGreaterThan(0);
-    expect(result1.lintResult!.scores.form1).toBeGreaterThan(0);
-
-    // Verify yops array (should be a single add)
-    expect(result1.yops).toHaveLength(1);
-    expect(result1.yops[0]).toHaveProperty('add');
+    // Verify yops array (should be define + populate pairs for root + child)
+    expect(result1.yops.length).toBeGreaterThanOrEqual(2);
+    expect(result1.yops[0]).toHaveProperty('define');
 
     // ────────────────────────────────────────────
     // TURN 2: Incremental — user updates budget and adds activity
@@ -119,20 +108,13 @@ describe('E2E: YOps Extraction Pipeline', () => {
   - set:
       path: hangzhou_trip/dining/budget
       value: 2000
-      source: "actually let's do 2000"
-      from: T1
-      confidence: 0.9
-  - add:
-      parent: hangzhou_trip
-      node:
-        activities:
-          west_lake: walking around West Lake
-          hiking: day hike in the hills
-      source:
-        west_lake: "walk around West Lake"
-        hiking: "go hiking in the hills nearby"
-      from: T1
-      confidence: 0.85`;
+  - define:
+      path: hangzhou_trip/activities
+  - populate:
+      path: hangzhou_trip/activities
+      values:
+        west_lake: walking around West Lake
+        hiking: day hike in the hills`;
 
     const provider2 = mockProvider([incrementalLLMOutput]);
     const extractor2 = new Extractor(provider2);
@@ -159,8 +141,8 @@ describe('E2E: YOps Extraction Pipeline', () => {
     expect(activities!.slots.west_lake).toBe('walking around West Lake');
     expect(activities!.slots.hiking).toBe('day hike in the hills');
 
-    // Verify 2 yops were applied
-    expect(result2.yops).toHaveLength(2);
+    // Verify 3 yops were applied (set + define + populate)
+    expect(result2.yops).toHaveLength(3);
 
     // ────────────────────────────────────────────
     // TURN 3: Incremental — user drops activities, adds nightlife
@@ -169,18 +151,14 @@ describe('E2E: YOps Extraction Pipeline', () => {
     const thirdLLMOutput = `yops:
   - drop:
       path: hangzhou_trip/activities
-      reason: "user changed plans"
-  - add:
-      parent: hangzhou_trip
-      node:
-        nightlife:
-          plan: bar hopping near the lake
-          budget: 500
-      source:
-        plan: "check out bars near West Lake instead"
-        budget: "maybe 500 for drinks"
-      from: T1
-      confidence: 0.8`;
+  - define:
+      path: hangzhou_trip/nightlife
+  - populate:
+      path: hangzhou_trip/nightlife
+      values:
+        plan: bar hopping near the lake
+        budget: 500
+`;
 
     const provider3 = mockProvider([thirdLLMOutput]);
     const extractor3 = new Extractor(provider3);
@@ -224,11 +202,8 @@ describe('E2E: YOps Extraction Pipeline', () => {
     const finalDining = findChild(finalTree!, 'dining');
     expect(finalDining!.slots.budget).toBe(2000);
 
-    // Final ylint should be clean
-    const finalLint = result3.lintResult!;
-    expect(finalLint.overall).toBeGreaterThan(0.5);
-    console.log('Final ylint scores:', JSON.stringify(finalLint.scores));
-    console.log('Final ylint warnings:', finalLint.warnings.length);
+    // Final tree should have the updated content
+    expect(result3.snapshot.trees[0].key).toBeDefined();
   });
 
   it('handles drift detection (empty yops)', async () => {
@@ -256,28 +231,22 @@ describe('E2E: YOps Extraction Pipeline', () => {
   it('parser + engine roundtrip works independently', () => {
     // Test the parser and engine can work together without the Extractor
     const raw = `yops:
-  - add:
-      parent: ""
-      node:
-        project:
-          name: T3X
-          status: active
-      source:
-        name: "the project is called T3X"
-        status: "it's actively developed"
-      from: T1
-      confidence: 0.95
+  - define:
+      path: project
+  - populate:
+      path: project
+      values:
+        name: T3X
+        status: active
   - set:
       path: project/version
-      value: 2.0
-      source: "we're on version 2"
-      from: T1`;
+      value: 2.0`;
 
     // Parse
     const parsed = parseYOpsOutput(raw);
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) throw new Error(parsed.error);
-    expect(parsed.yops).toHaveLength(2);
+    expect(parsed.yops).toHaveLength(3);
 
     // Apply
     const empty: SemanticContent = { trees: [], relations: [] };

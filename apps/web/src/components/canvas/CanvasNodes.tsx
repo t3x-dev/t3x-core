@@ -1,13 +1,10 @@
 import type { Node, NodeProps } from '@xyflow/react';
-import { Handle, NodeToolbar, Position } from '@xyflow/react';
+import { Handle, Position } from '@xyflow/react';
 import { motion } from 'framer-motion';
 import {
   ArrowRight,
-  CheckCircle,
   ChevronDown,
   ChevronRight,
-  Copy,
-  FileOutput,
   FileText,
   GitBranch,
   GitCommit,
@@ -17,7 +14,6 @@ import {
   MessageSquare,
   MessageSquarePlus,
   PenSquare,
-  Pin,
   Plus,
   Rocket,
 } from 'lucide-react';
@@ -25,7 +21,6 @@ import { useParams, useRouter } from 'next/navigation';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { AutoDraftBadge } from '@/components/canvas/AutoDraftBadge';
 import { SealAnimation } from '@/components/canvas/SealAnimation';
-import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { leafContextMenuHandlerRef } from '@/hooks/useContextMenu';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
@@ -39,14 +34,9 @@ import { usePinsStore } from '@/store/pinsStore';
 import { useProjectStore } from '@/store/projectStore';
 import type { CanvasNodeData, EmbeddedLeaf } from '@/types/nodes';
 
-import {
-  constellationColors,
-  getToneAccentKey,
-  SOURCE_ICONS,
-  useSemanticZoom,
-} from './CanvasNodeUtils';
-import { CommitContentSection, PREVIEW_MAX_NODES } from './CommitNodeContent';
+import { constellationColors, getToneAccentKey, useSemanticZoom } from './CanvasNodeUtils';
 import { NodeLeavesSection } from './NodeLeavesSection';
+import { getNextStep, NodeDetailsSection, NodeSourcesHeader, NodeToolbar } from './node-parts';
 
 // Re-export LEAF_TYPES for backward compatibility
 export { LEAF_TYPES } from './CanvasNodeUtils';
@@ -255,40 +245,22 @@ const UnitNode = memo(function UnitNode(props: Props) {
   };
 
   // B-4: Next Step button logic
-  const getNextStep = (): { label: string; icon: typeof ArrowRight; action: () => void } | null => {
-    // Draft nodes: navigate to draft workspace
-    if (isDraft && data.draftId && projectId) {
-      return {
-        label: 'Open Draft',
-        icon: PenSquare,
-        action: () => router.push(`/project/${projectId}/draft/${data.draftId}`),
-      };
-    }
-    if (isStaging && !data.conversationId) {
-      return {
-        label: 'Start Conversation',
-        icon: MessageSquarePlus,
-        action: () => openNodeModal(id, 'conversation'),
-      };
-    }
-    if (isStaging && data.conversationId) {
-      return {
-        label: t('create_commit'),
-        icon: GitCommit,
-        action: () => openNodeModal(id, 'commit'),
-      };
-    }
-    if (isCommitted) {
-      return {
-        label: 'Create Output',
-        icon: Plus,
-        action: () => openLeafPanel(id),
-      };
-    }
-    return null;
-  };
-
-  const nextStep = getNextStep();
+  const nextStep = getNextStep({
+    isDraft,
+    isStaging,
+    isCommitted,
+    draftId: data.draftId,
+    projectId,
+    conversationId: data.conversationId,
+    nodeId: id,
+    t,
+    icons: { PenSquare, MessageSquarePlus, GitCommit, Plus },
+    actions: {
+      navigateToDraft: (pId, dId) => router.push(`/project/${pId}/draft/${dId}`),
+      openNodeModal,
+      openLeafPanel,
+    },
+  });
 
   // B-8: Compute stats for collapsed view
   const nodeCount = isDraft
@@ -490,59 +462,12 @@ const UnitNode = memo(function UnitNode(props: Props) {
             SECTION 1: SOURCES (if any)
             ═══════════════════════════════════════════ */}
         {data.sources && data.sources.length > 0 && (
-          <div
-            className="px-3 py-2 border-b border-[var(--stroke-divider)] rounded-t-[11px] cursor-pointer hover:bg-[var(--hover-bg)] transition-colors nodrag"
-            onClick={(e) => {
-              e.stopPropagation();
-              openNodeModal(id, 'conversation');
-            }}
-          >
-            <div className="flex items-center gap-1.5 text-xs text-[var(--text-tertiary)]">
-              <span className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-tertiary)]">
-                SOURCES
-              </span>
-              {/* Context indicator */}
-              {(() => {
-                const ctxLabel = getContextLabel();
-                return ctxLabel ? (
-                  <>
-                    <span className="text-[var(--text-tertiary)]/50">·</span>
-                    <span className="text-[var(--text-tertiary)] font-medium">{ctxLabel}</span>
-                  </>
-                ) : null;
-              })()}
-              <span className="text-[var(--text-tertiary)]/50">·</span>
-              <TooltipProvider delayDuration={200}>
-                {data.sources.map((source, idx) => {
-                  const Icon = SOURCE_ICONS[source.type] || FileText;
-                  const sourceIsPinned =
-                    source.type === 'conversation' && isPinned('conversation', source.id);
-                  return (
-                    <span key={source.id} className="inline-flex items-center gap-0.5">
-                      {idx > 0 && <span className="text-[var(--text-tertiary)]/50 mx-0.5">·</span>}
-                      {sourceIsPinned && (
-                        <Pin
-                          size={10}
-                          className="text-amber-500 dark:text-amber-400 fill-amber-500 dark:fill-amber-400"
-                        />
-                      )}
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <span className="inline-flex items-center gap-0.5">
-                            <Icon size={10} className="text-[var(--text-tertiary)]" />
-                            <span>{source.label}</span>
-                          </span>
-                        </TooltipTrigger>
-                        <TooltipContent side="top" className="text-xs">
-                          {source.title || source.label}
-                        </TooltipContent>
-                      </Tooltip>
-                    </span>
-                  );
-                })}
-              </TooltipProvider>
-            </div>
-          </div>
+          <NodeSourcesHeader
+            sources={data.sources}
+            contextLabel={getContextLabel()}
+            isPinned={isPinned}
+            onOpenModal={() => openNodeModal(id, 'conversation')}
+          />
         )}
 
         {/* ═══════════════════════════════════════════
@@ -668,144 +593,26 @@ const UnitNode = memo(function UnitNode(props: Props) {
 
           {/* B-8: Expandable detail content */}
           {contentExpanded && (
-            <>
-              {/* Hash + copy button */}
-              <div className="flex items-center gap-1.5 text-[0.7rem] text-[var(--text-tertiary)] mb-[var(--space-item)] mt-2 nodrag">
-                <TooltipProvider delayDuration={200}>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        type="button"
-                        onClick={handleCopyHash}
-                        className="inline-flex items-center gap-1 font-mono text-[var(--text-tertiary)] bg-[var(--hover-bg)] hover:bg-[var(--hover-bg-strong)] px-1.5 py-0.5 rounded text-xs transition-colors cursor-pointer"
-                      >
-                        {(data.commit?.hash || data.commitHash || data.entryId || '')
-                          .replace('sha256:', 'sha:')
-                          .slice(0, 11)}
-                        {copiedHash ? (
-                          <CheckCircle size={10} className="text-[var(--status-success)]" />
-                        ) : (
-                          <Copy size={10} className="text-[var(--text-tertiary)]" />
-                        )}
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent side="top" className="text-xs">
-                      {copiedHash ? 'Copied!' : 'Click to copy hash'}
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-                {data.isMergeCommit && (
-                  <>
-                    <span className="text-[var(--text-tertiary)]/50">·</span>
-                    <span className={cn('font-medium', toneAccent.conversation.text)}>
-                      {t('merge').toLowerCase()}
-                    </span>
-                  </>
-                )}
-              </div>
-
-              {/* Merge summary one-liner */}
-              {data.isMergeCommit &&
-                data.commit?.merge_summary &&
-                (() => {
-                  const ms = data.commit.merge_summary;
-                  const parts = [
-                    `${ms.total_nodes} kept`,
-                    `${ms.resolved_conflicts} ${t('resolved').toLowerCase()}`,
-                  ];
-                  if (ms.discarded > 0) parts.push(`${ms.discarded} discarded`);
-                  return (
-                    <div className="text-[10px] text-[var(--text-tertiary)] mb-1 flex items-center gap-1.5">
-                      <span className="truncate">{parts.join(' · ')}</span>
-                      {ms.release_note && (
-                        <TooltipProvider delayDuration={200}>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <button
-                                type="button"
-                                className="shrink-0 p-0.5 rounded hover:bg-[var(--hover-bg)] text-[var(--text-tertiary)] hover:text-[var(--accent-commit)] transition-colors"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  const note = ms.release_note!;
-                                  const md = [
-                                    `# ${note.title}`,
-                                    '',
-                                    `**Summary:** ${note.summary}`,
-                                    '',
-                                  ];
-                                  for (const sec of note.sections) {
-                                    md.push(`## ${sec.heading}`, '');
-                                    for (const item of sec.items) md.push(`- ${item}`);
-                                    md.push('');
-                                  }
-                                  navigator.clipboard.writeText(md.join('\n')).then(
-                                    () => notify?.('Release note copied', 'success'),
-                                    () => notify?.('Failed to copy', 'error')
-                                  );
-                                }}
-                              >
-                                <FileOutput size={10} />
-                              </button>
-                            </TooltipTrigger>
-                            <TooltipContent side="top" className="text-xs">
-                              Copy release note
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      )}
-                    </div>
-                  );
-                })()}
-
-              {/* Status indicator */}
-              <div className="flex items-center justify-between mb-[var(--space-item)]">
-                <div className="flex items-center gap-1.5">
-                  {isStaging ? (
-                    <span className="inline-flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
-                      <PenSquare size={12} className={toneAccent.pending.text} />
-                      <span>{t('draft')}</span>
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
-                      <GitCommit
-                        size={12}
-                        className={
-                          data.branchType === 'main'
-                            ? toneAccent.commit.text
-                            : toneAccent.branch.text
-                        }
-                      />
-                      <span>{t('committed')}</span>
-                    </span>
-                  )}
-                </div>
-                {isStaging && (data.mustHave?.length || 0) + (data.mustntHave?.length || 0) > 0 && (
-                  <span className="text-xs font-medium">
-                    <span className="text-[var(--status-success)]">
-                      {data.mustHave?.length || 0}✓
-                    </span>{' '}
-                    <span className="text-[var(--status-error)]">
-                      {data.mustntHave?.length || 0}✗
-                    </span>
-                  </span>
-                )}
-                {!isStaging && data.summary && (
-                  <span className="text-xs text-[var(--text-tertiary)] truncate max-w-[100px]">
-                    {data.summary}
-                  </span>
-                )}
-              </div>
-
-              {/* V4: ContentNodes content */}
-              {data.commit && (
-                <CommitContentSection
-                  commit={data.commit}
-                  onViewFull={() => openNodeModal(id, 'commit')}
-                  projectId={projectId}
-                  maxContentNodes={isDetail ? Number.MAX_SAFE_INTEGER : PREVIEW_MAX_NODES}
-                />
-              )}
-            </>
+            <NodeDetailsSection
+              hashDisplay={(data.commit?.hash || data.commitHash || data.entryId || '')
+                .replace('sha256:', 'sha:')
+                .slice(0, 11)}
+              copiedHash={copiedHash}
+              onCopyHash={handleCopyHash}
+              isMergeCommit={data.isMergeCommit}
+              mergeSummary={data.commit?.merge_summary}
+              isStaging={isStaging}
+              branchType={data.branchType}
+              summary={data.summary}
+              mustHaveCount={data.mustHave?.length || 0}
+              mustntHaveCount={data.mustntHave?.length || 0}
+              commit={data.commit}
+              isDetail={isDetail}
+              projectId={projectId}
+              onViewFull={() => openNodeModal(id, 'commit')}
+              t={t}
+              notify={notify}
+            />
           )}
         </div>
 
@@ -832,49 +639,13 @@ const UnitNode = memo(function UnitNode(props: Props) {
       <Handle type="source" position={Position.Right} style={sourceHandleStyle} />
 
       {/* NodeToolbar - appears on hover/selection */}
-      <NodeToolbar position={Position.Right} offset={8} className="flex gap-1.5 nodrag">
-        <TooltipProvider delayDuration={300}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="canvas-outline"
-                size="icon-sm"
-                className="rounded-full hover:border-[var(--status-info)]/60 hover:bg-[var(--status-info-muted)] hover:text-[var(--status-info)]"
-                onClick={handleAddUnit}
-                aria-label="Add Unit"
-              >
-                <MessageSquarePlus size={14} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="right" sideOffset={4}>
-              <p className="text-xs">Continue conversation</p>
-            </TooltipContent>
-          </Tooltip>
-          {data.branchType === 'branch' && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="canvas-outline"
-                  size="icon-sm"
-                  className="rounded-full hover:border-[var(--accent-pending)]/60 hover:bg-[var(--accent-pending)]/10 hover:text-[var(--accent-pending)] disabled:opacity-40 disabled:cursor-not-allowed"
-                  onClick={handleMerge}
-                  aria-label="Start Merge"
-                  disabled={!canTriggerMerge}
-                >
-                  <GitMerge size={14} />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="right" sideOffset={4}>
-                <p className="text-xs">
-                  {canTriggerMerge
-                    ? `${t('merge')} ${t('branch')} to main`
-                    : `${t('merge')} requires main ${t('branch')} ${t('commit')}`}
-                </p>
-              </TooltipContent>
-            </Tooltip>
-          )}
-        </TooltipProvider>
-      </NodeToolbar>
+      <NodeToolbar
+        branchType={data.branchType}
+        canTriggerMerge={canTriggerMerge}
+        onAddUnit={handleAddUnit}
+        onMerge={handleMerge}
+        t={t}
+      />
     </>
   );
 });

@@ -21,7 +21,6 @@ export interface SuggestedConstraint {
   match_mode: 'exact' | 'semantic';
   value: string;
   reason: string;
-  confidence: number;
 }
 
 export interface ConstraintSuggestionResult {
@@ -72,7 +71,6 @@ ${typeGuidance}
 - Suggest EXCLUDE constraints for common pitfalls (e.g., exceeding character limits, including inappropriate content)
 - Prefer "semantic" match_mode for meaning-based constraints, "exact" for keywords/names
 - Each constraint should have a clear reason explaining why it matters
-- confidence: 0.9-1.0 (essential), 0.7-0.9 (recommended), 0.5-0.7 (nice-to-have)
 - Suggest at most ${maxSuggestions} constraints
 ${options?.instructions ? `\n## Additional Instructions\n${options.instructions}` : ''}
 
@@ -88,8 +86,7 @@ Return a JSON array:
     "type": "require" | "exclude",
     "match_mode": "exact" | "semantic",
     "value": "the constraint value",
-    "reason": "why this constraint matters",
-    "confidence": 0.0-1.0
+    "reason": "why this constraint matters"
   }
 ]
 
@@ -151,10 +148,7 @@ function parseConstraintSuggestions(raw: string): SuggestedConstraint[] {
       (obj.match_mode !== 'exact' && obj.match_mode !== 'semantic') ||
       typeof obj.value !== 'string' ||
       obj.value.length === 0 ||
-      typeof obj.reason !== 'string' ||
-      typeof obj.confidence !== 'number' ||
-      obj.confidence < 0 ||
-      obj.confidence > 1
+      typeof obj.reason !== 'string'
     ) {
       continue;
     }
@@ -164,7 +158,6 @@ function parseConstraintSuggestions(raw: string): SuggestedConstraint[] {
       match_mode: obj.match_mode,
       value: obj.value,
       reason: obj.reason,
-      confidence: obj.confidence,
     });
   }
 
@@ -196,7 +189,7 @@ async function getNanoid(): Promise<(size: number) => string> {
  * @param knowledge - Semantic knowledge (frames + relations)
  * @param leafType - Type of the leaf (determines output format guidance)
  * @param options - Optional configuration
- * @returns Suggested constraints with confidence scores
+ * @returns Suggested constraints
  */
 export async function suggestConstraints(
   provider: LLMProvider,

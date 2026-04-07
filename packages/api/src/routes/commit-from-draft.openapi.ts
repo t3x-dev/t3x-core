@@ -13,6 +13,7 @@ import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import { commitDraft, createCommit, findDraftById } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { eventBus } from '../lib/event-bus';
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
 import { findUncommittedYOpsIds } from '../lib/yops-commit-link';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
@@ -116,7 +117,6 @@ commitFromDraftRoutes.openapi(postCommitFromDraftRoute, async (c) => {
       id?: string;
       slots?: Record<string, unknown>;
       text?: string;
-      confidence?: number;
       children?: unknown[];
     }>;
 
@@ -132,7 +132,6 @@ commitFromDraftRoutes.openapi(postCommitFromDraftRoute, async (c) => {
       key: node.key || node.id || `s_${i}`,
       slots: node.slots || (node.text ? { text: node.text } : {}),
       children: (node.children ?? []) as any[],
-      confidence: node.confidence,
     }));
 
     // Find uncommitted yops for this conversation (if draft is from a conversation)
@@ -151,6 +150,9 @@ commitFromDraftRoutes.openapi(postCommitFromDraftRoute, async (c) => {
       provenance: { method: 'human_curation' },
       yops_log_ids: yopsLogIds,
     });
+
+    // Step 5b: Notify commit created
+    eventBus.notify('commit.created', conversationId ?? '', project_id);
 
     // Step 6: Mark draft as committed
     await commitDraft(db, draft_id, commit.hash);

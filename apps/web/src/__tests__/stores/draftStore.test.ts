@@ -16,8 +16,6 @@ describe('draftStore', () => {
       yopsLog: [],
       yopsHistory: [],
       removedNodes: [],
-      feedYops: [],
-      pipelineSteps: [],
       isExtracting: false,
       conversationId: null,
       topics: [],
@@ -46,7 +44,7 @@ describe('draftStore', () => {
     useDraftStore.getState().setConversationId('conv_test');
 
     useDraftStore.getState().applyYOps(
-      [{ set: { path: 'trip/budget', value: '2000', source: '', from: '' } }],
+      [{ set: { path: 'trip/budget', value: '2000' } }],
       'manual',
     );
 
@@ -66,7 +64,7 @@ describe('draftStore', () => {
     useDraftStore.getState().setConversationId('conv_test');
 
     useDraftStore.getState().applyYOps(
-      [{ set: { path: 'trip/budget', value: '2000', source: '', from: '' } }],
+      [{ set: { path: 'trip/budget', value: '2000' } }],
       'pipeline',
     );
 
@@ -85,7 +83,7 @@ describe('draftStore', () => {
     useDraftStore.getState().setDraft(content);
 
     useDraftStore.getState().applyYOps(
-      [{ set: { path: 'trip/budget', value: '2000', source: '', from: '' } }],
+      [{ set: { path: 'trip/budget', value: '2000' } }],
       'manual',
     );
 
@@ -100,7 +98,7 @@ describe('draftStore', () => {
     useDraftStore.getState().setDraft(content);
 
     useDraftStore.getState().applyYOps(
-      [{ set: { path: 'trip/budget', value: '2000', source: '', from: '' } }],
+      [{ set: { path: 'trip/budget', value: '2000' } }],
       'pipeline',
     );
 
@@ -116,7 +114,7 @@ describe('draftStore', () => {
 
     for (let i = 0; i < 5; i++) {
       useDraftStore.getState().applyYOps(
-        [{ set: { path: 'trip/budget', value: String(i), source: '', from: '' } }],
+        [{ set: { path: 'trip/budget', value: String(i) } }],
         'manual',
       );
     }
@@ -149,8 +147,9 @@ describe('draftStore', () => {
     };
     useDraftStore.getState().setDraft(content);
 
+    // append to a non-sequence path → fails
     useDraftStore.getState().applyYOps(
-      [{ set: { path: 'nonexistent/budget', value: '1000', source: '', from: '' } }],
+      [{ append: { path: 'trip', value: 'invalid' } }],
       'manual',
     );
 

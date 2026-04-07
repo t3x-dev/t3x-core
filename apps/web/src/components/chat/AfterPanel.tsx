@@ -1,0 +1,475 @@
+'use client';
+
+import type { TreeNode, YOp } from '@t3x-dev/core';
+import { Check, Play, X } from 'lucide-react';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import { computeTreeDiff } from '@/lib/treeDiff';
+import { useWorkspaceStore } from '@/store/workspaceStore';
+
+// ── Constants ──
+
+const MONO = { fontFamily: 'var(--font-mono, ui-monospace, monospace)', fontSize: 11 } as const;
+
+// ── Helpers ──
+
+/** Extract the node-level key from an op's path (before first slash). */
+function opNodeKey(op: YOp): string | null {
+  if ('set' in op) return op.set.path.split('/')[0] ?? null;
+  if ('unset' in op) return op.unset.path.split('/')[0] ?? null;
+  if ('drop' in op) return op.drop.path.split('/')[0] ?? null;
+  if ('define' in op) return op.define.path.split('/')[0] ?? null;
+  if ('populate' in op) return op.populate.path.split('/')[0] ?? null;
+  if ('rename' in op) return op.rename.path.split('/')[0] ?? null;
+  return null;
+}
+
+// ── SlotRow ──
+
+interface SlotRowProps {
+  nodeKey: string;
+  slotKey: string;
+  value: string;
+  diffType: 'added' | 'modified' | 'removed' | null;
+  oldValue?: string;
+  onDelete: () => void;
+  onEdit: (newValue: string) => void;
+}
+
+function SlotRow({ nodeKey: _nodeKey, slotKey, value, diffType, oldValue, onDelete, onEdit }: SlotRowProps) {
+  const [editing, setEditing] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleDoubleClick = useCallback(() => {
+    setEditing(true);
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }, []);
+
+  const handleSave = useCallback(() => {
+    const newValue = inputRef.current?.value.trim() ?? '';
+    if (newValue && newValue !== value) {
+      onEdit(newValue);
+    }
+    setEditing(false);
+  }, [value, onEdit]);
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === 'Enter') handleSave();
+      if (e.key === 'Escape') setEditing(false);
+    },
+    [handleSave]
+  );
+
+  // Gutter color
+  const gutterColor =
+    diffType === 'added'
+      ? 'bg-green-400'
+      : diffType === 'modified'
+        ? 'bg-yellow-400'
+        : diffType === 'removed'
+          ? 'bg-red-400'
+          : 'bg-transparent';
+
+  // Editing state
+  if (editing) {
+    return (
+      <div className="flex items-stretch" style={{ minHeight: 24 }}>
+        <div className={`shrink-0 w-[3px] ${gutterColor}`} />
+        <div
+          className="flex-1 min-w-0 flex items-center gap-1 px-2 py-0.5 bg-yellow-400/[0.06]"
+          style={MONO}
+        >
+          <span className="shrink-0 text-[var(--text-secondary)]">{slotKey}: </span>
+          <input
+            ref={inputRef}
+            defaultValue={value}
+            onKeyDown={handleKeyDown}
+            onBlur={handleSave}
+            className="flex-1 min-w-0 bg-transparent border-0 border-b-[1.5px] border-b-yellow-400 outline-none text-[var(--text-primary)]"
+            style={{ fontFamily: 'inherit', fontSize: 'inherit' }}
+          />
+          <span className="shrink-0 text-[8px] text-[var(--text-tertiary)] whitespace-nowrap">
+            Enter ↵ · Esc ✕
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="group flex items-stretch" style={{ minHeight: 24 }}>
+      <div className={`shrink-0 w-[3px] ${gutterColor}`} />
+      <div
+        className="flex-1 min-w-0 flex items-center gap-1 px-2 py-0.5 cursor-text hover:bg-white/[0.03] transition-colors"
+        style={MONO}
+        onDoubleClick={handleDoubleClick}
+      >
+        <span className="shrink-0 text-[var(--text-secondary)]">{slotKey}: </span>
+        {diffType === 'modified' && oldValue && (
+          <span className="text-red-400/50 line-through mr-1 truncate text-[10px]">{oldValue}</span>
+        )}
+        <span
+          className={
+            diffType === 'added'
+              ? 'text-green-400 truncate'
+              : diffType === 'modified'
+                ? 'text-yellow-300 truncate'
+                : diffType === 'removed'
+                  ? 'text-red-400/50 line-through truncate'
+                  : 'text-[var(--text-primary)] truncate'
+          }
+        >
+          {value}
+        </span>
+        {/* Source tag placeholder — rendered from node.slots._source if present */}
+        <div className="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button
+            type="button"
+            title="Delete slot"
+            onClick={(e) => { e.stopPropagation(); onDelete(); }}
+            className="text-[var(--text-tertiary)] hover:text-red-400 cursor-pointer"
+          >
+            <X className="h-2.5 w-2.5" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── NodeRow ──
+
+interface NodeRowProps {
+  node: TreeNode;
+  depth: number;
+  diffType: 'added' | 'removed' | null;
+  addedSlots: string[];
+  removedSlots: string[];
+  modifiedSlots: Array<{ key: string; oldValue: string; newValue: string }>;
+  onDismiss: () => void;
+  onAccept: () => void;
+  onEditSlot: (slotKey: string, newValue: string) => void;
+  onDeleteSlot: (slotKey: string) => void;
+}
+
+function NodeRow({
+  node,
+  depth,
+  diffType,
+  addedSlots,
+  removedSlots,
+  modifiedSlots,
+  onDismiss,
+  onAccept,
+  onEditSlot,
+  onDeleteSlot,
+}: NodeRowProps) {
+  const slots = node.slots || {};
+  const slotEntries = Object.entries(slots).filter(([k]) => !k.startsWith('_'));
+  const hasChanges =
+    diffType !== null || addedSlots.length > 0 || removedSlots.length > 0 || modifiedSlots.length > 0;
+
+  const nodeGutterColor =
+    diffType === 'added'
+      ? 'bg-green-400'
+      : diffType === 'removed'
+        ? 'bg-red-400'
+        : hasChanges
+          ? 'bg-yellow-400'
+          : 'bg-transparent';
+
+  const nodeBg =
+    diffType === 'added'
+      ? 'bg-green-400/[0.04]'
+      : diffType === 'removed'
+        ? 'bg-red-400/[0.04]'
+        : hasChanges
+          ? 'bg-yellow-400/[0.03]'
+          : '';
+
+  return (
+    <>
+      {/* Node header */}
+      <div
+        className={`group flex items-stretch ${nodeBg}`}
+        style={{ minHeight: 26 }}
+      >
+        <div className={`shrink-0 w-[3px] ${nodeGutterColor}`} />
+        <div
+          className="flex-1 flex items-center gap-1 px-2 py-0.5 hover:bg-white/[0.03] transition-colors"
+          style={{ ...MONO, paddingLeft: `${8 + depth * 14}px` }}
+        >
+          <span className="w-3 h-3 rounded flex items-center justify-center text-[7px] font-bold bg-purple-500/10 text-purple-400 shrink-0">
+            ◆
+          </span>
+          <span
+            className={
+              diffType === 'added'
+                ? 'text-green-400 font-semibold'
+                : diffType === 'removed'
+                  ? 'text-red-400/60 line-through font-semibold'
+                  : 'text-[var(--text-primary)] font-semibold'
+            }
+          >
+            {node.key}:
+          </span>
+          {diffType === 'added' && (
+            <span className="text-[8px] text-green-400 bg-green-400/15 px-1 py-0.5 rounded ml-1">new</span>
+          )}
+          {hasChanges && diffType !== 'removed' && (
+            <div className="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button
+                type="button"
+                title="Keep changes"
+                onClick={(e) => { e.stopPropagation(); onAccept(); }}
+                className="text-[var(--text-tertiary)] hover:text-green-400 cursor-pointer"
+              >
+                <Check className="h-2.5 w-2.5" />
+              </button>
+              <button
+                type="button"
+                title="Dismiss changes"
+                onClick={(e) => { e.stopPropagation(); onDismiss(); }}
+                className="text-[var(--text-tertiary)] hover:text-red-400 cursor-pointer"
+              >
+                <X className="h-2.5 w-2.5" />
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Slot rows */}
+      {slotEntries.map(([key, val]) => {
+        const isAdded = addedSlots.includes(key);
+        const isRemoved = removedSlots.includes(key);
+        const mod = modifiedSlots.find((m) => m.key === key);
+
+        const slotDiff = isAdded
+          ? 'added'
+          : isRemoved
+            ? 'removed'
+            : mod
+              ? 'modified'
+              : diffType === 'added'
+                ? 'added'
+                : null;
+
+        return (
+          <div key={key} style={{ paddingLeft: `${depth * 14}px` }}>
+            <SlotRow
+              nodeKey={node.key}
+              slotKey={key}
+              value={String(val)}
+              diffType={slotDiff}
+              oldValue={mod?.oldValue}
+              onDelete={() => onDeleteSlot(key)}
+              onEdit={(newValue) => onEditSlot(key, newValue)}
+            />
+          </div>
+        );
+      })}
+
+      {/* Removed slots (exist in base, not in result) */}
+      {removedSlots
+        .filter((k) => !(k in slots))
+        .map((key) => (
+          <div key={`removed-${key}`} style={{ paddingLeft: `${depth * 14}px` }}>
+            <div className="flex items-stretch" style={{ minHeight: 24 }}>
+              <div className="shrink-0 w-[3px] bg-red-400" />
+              <div className="flex-1 min-w-0 flex items-center gap-1 px-2 py-0.5 opacity-50" style={MONO}>
+                <span className="text-[var(--text-secondary)] line-through">{key}: —</span>
+              </div>
+            </div>
+          </div>
+        ))}
+
+      {/* Children */}
+      {node.children?.map((child: TreeNode) => (
+        <AfterNodeRecursive
+          key={child.key}
+          node={child}
+          depth={depth + 1}
+        />
+      ))}
+    </>
+  );
+}
+
+// ── AfterNodeRecursive — re-uses diff from parent context ──
+
+interface AfterNodeRecursiveProps {
+  node: TreeNode;
+  depth: number;
+}
+
+function AfterNodeRecursive({ node, depth }: AfterNodeRecursiveProps) {
+  // Children don't need full diff context — just render slots plainly
+  const slots = node.slots || {};
+  const slotEntries = Object.entries(slots).filter(([k]) => !k.startsWith('_'));
+
+  return (
+    <>
+      <div className="group flex items-stretch" style={{ minHeight: 26 }}>
+        <div className="shrink-0 w-[3px] bg-transparent" />
+        <div
+          className="flex-1 flex items-center gap-1 py-0.5 hover:bg-white/[0.03] transition-colors"
+          style={{ ...MONO, paddingLeft: `${8 + depth * 14}px` }}
+        >
+          <span className="w-3 h-3 rounded flex items-center justify-center text-[7px] font-bold bg-purple-500/10 text-purple-400 shrink-0">
+            ◆
+          </span>
+          <span className="text-[var(--text-primary)] font-semibold">{node.key}:</span>
+        </div>
+      </div>
+      {slotEntries.map(([key, val]) => (
+        <div key={key} style={{ paddingLeft: `${depth * 14}px` }}>
+          <div className="flex items-stretch" style={{ minHeight: 24 }}>
+            <div className="shrink-0 w-[3px] bg-transparent" />
+            <div className="flex-1 min-w-0 flex items-center gap-1 px-2 py-0.5" style={MONO}>
+              <span className="shrink-0 text-[var(--text-secondary)]">{key}: </span>
+              <span className="text-[var(--text-primary)] truncate">{String(val)}</span>
+            </div>
+          </div>
+        </div>
+      ))}
+      {node.children?.map((child: TreeNode) => (
+        <AfterNodeRecursive key={child.key} node={child} depth={depth + 1} />
+      ))}
+    </>
+  );
+}
+
+// ── AfterPanel ──
+
+export function AfterPanel() {
+  const base = useWorkspaceStore((s) => s.base);
+  const result = useWorkspaceStore((s) => s.result);
+  const scriptOps = useWorkspaceStore((s) => s.scriptOps);
+  const disabledOpIndices = useWorkspaceStore((s) => s.disabledOpIndices);
+  const toggleOp = useWorkspaceStore((s) => s.toggleOp);
+  const appendOp = useWorkspaceStore((s) => s.appendOp);
+  const execute = useWorkspaceStore((s) => s.execute);
+
+  const trees = result?.trees as TreeNode[] | undefined;
+
+  const diff = useMemo(() => {
+    if (!result || !trees) return null;
+    return computeTreeDiff(base.trees as TreeNode[], trees);
+  }, [base.trees, result, trees]);
+
+  // ── Dismiss a node: disable all ops that target that node key ──
+  const handleDismiss = useCallback(
+    (nodeKey: string) => {
+      scriptOps.forEach((op, i) => {
+        if (disabledOpIndices.has(i)) return;
+        const key = opNodeKey(op);
+        if (key === nodeKey) {
+          toggleOp(i);
+        }
+      });
+      execute();
+    },
+    [scriptOps, disabledOpIndices, toggleOp, execute]
+  );
+
+  // ── Accept: no-op for now (changes are already applied) ──
+  const handleAccept = useCallback((_nodeKey: string) => {
+    // Changes are already in the result; accept is a visual confirmation only.
+  }, []);
+
+  // ── Edit slot inline: generate a set YOp ──
+  const handleEditSlot = useCallback(
+    (nodeKey: string, slotKey: string, newValue: string) => {
+      const op: YOp = { set: { path: `${nodeKey}/${slotKey}`, value: newValue } };
+      appendOp(op);
+      execute();
+    },
+    [appendOp, execute]
+  );
+
+  // ── Delete slot inline: generate an unset YOp ──
+  const handleDeleteSlot = useCallback(
+    (nodeKey: string, slotKey: string) => {
+      const op: YOp = { unset: { path: `${nodeKey}/${slotKey}` } };
+      appendOp(op);
+      execute();
+    },
+    [appendOp, execute]
+  );
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Header */}
+      <div className="flex items-center justify-between px-3 py-1.5 border-b border-[var(--stroke)] bg-[var(--panel-alt)] shrink-0">
+        <span className="text-[9px] font-bold uppercase tracking-wider text-[var(--text-tertiary)]">
+          After
+        </span>
+        {diff && (
+          <div className="flex items-center gap-1">
+            {diff.summary.nodesAdded > 0 && (
+              <span className="text-[8px] font-semibold px-1 py-0.5 rounded bg-green-500/15 text-green-400">
+                +{diff.summary.nodesAdded}n
+              </span>
+            )}
+            {diff.summary.slotsAdded > 0 && (
+              <span className="text-[8px] font-semibold px-1 py-0.5 rounded bg-green-500/15 text-green-400">
+                +{diff.summary.slotsAdded}s
+              </span>
+            )}
+            {diff.summary.slotsModified > 0 && (
+              <span className="text-[8px] font-semibold px-1 py-0.5 rounded bg-yellow-500/15 text-yellow-400">
+                ~{diff.summary.slotsModified}
+              </span>
+            )}
+            {diff.summary.nodesRemoved > 0 && (
+              <span className="text-[8px] font-semibold px-1 py-0.5 rounded bg-red-500/15 text-red-400">
+                -{diff.summary.nodesRemoved}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Body */}
+      <div className="flex-1 overflow-y-auto py-1">
+        {!result ? (
+          // Empty state
+          <div className="flex flex-col items-center justify-center h-full gap-2 py-8 opacity-40">
+            <Play className="h-5 w-5 text-[var(--text-tertiary)]" />
+            <span className="text-[10px] text-[var(--text-tertiary)] italic">Click Run to apply</span>
+          </div>
+        ) : trees && trees.length === 0 ? (
+          <div className="text-center text-[10px] text-[var(--text-tertiary)] opacity-40 italic py-5">
+            No nodes in result
+          </div>
+        ) : (
+          trees?.map((node) => {
+            const nodePath = node.key;
+            const nodeIsAdded = diff?.added.includes(nodePath) ?? false;
+            const nodeIsRemoved = diff?.removed.includes(nodePath) ?? false;
+            const addedSlots = diff?.addedSlots[nodePath] ?? [];
+            const removedSlots = diff?.removedSlots[nodePath] ?? [];
+            const modifiedSlots = diff?.modifiedSlots[nodePath] ?? [];
+
+            return (
+              <NodeRow
+                key={node.key}
+                node={node}
+                depth={0}
+                diffType={nodeIsAdded ? 'added' : nodeIsRemoved ? 'removed' : null}
+                addedSlots={addedSlots}
+                removedSlots={removedSlots}
+                modifiedSlots={modifiedSlots}
+                onDismiss={() => handleDismiss(node.key)}
+                onAccept={() => handleAccept(node.key)}
+                onEditSlot={(slotKey, newValue) => handleEditSlot(node.key, slotKey, newValue)}
+                onDeleteSlot={(slotKey) => handleDeleteSlot(node.key, slotKey)}
+              />
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+}

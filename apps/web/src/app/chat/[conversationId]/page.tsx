@@ -3,17 +3,17 @@
 import { useParams, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChatWorkspace } from '@/components/chat/ChatWorkspace';
-import { ExtractionPanel } from '@/components/chat/ExtractionPanel';
+import { YOpsWorkspace } from '@/components/chat/YOpsWorkspace';
 import { getConversation } from '@/lib/api';
 import { useChatStore } from '@/store/chatStore';
-import { usePhaseStore } from '@/store/phaseStore';
+import { useWorkspaceStore } from '@/store/workspaceStore';
 
 export default function ConversationPage() {
   const { conversationId } = useParams<{ conversationId: string }>();
   const searchParams = useSearchParams();
   const firstMessage = searchParams.get('firstMessage');
   const activeProjectId = useChatStore((s) => s.activeProjectId);
-  const panelMode = usePhaseStore((s) => s.panelMode);
+  const panelExpanded = useWorkspaceStore((s) => s.panelExpanded);
 
   // Fetch parent commit hash for inheritance (when navigating from canvas "Create Unit")
   const [inheritFromCommitHash, setInheritFromCommitHash] = useState<string | undefined>();
@@ -30,7 +30,7 @@ export default function ConversationPage() {
   }, [conversationId]);
 
   // Resizable panel via drag handle
-  const [panelWidth, setPanelWidth] = useState(380);
+  const [panelWidth, setPanelWidth] = useState(550);
   const isDragging = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -42,7 +42,7 @@ export default function ConversationPage() {
       if (!isDragging.current || !containerRef.current) return;
       const containerRect = containerRef.current.getBoundingClientRect();
       const newWidth = containerRect.right - ev.clientX;
-      setPanelWidth(Math.max(240, Math.min(600, newWidth)));
+      setPanelWidth(Math.max(400, Math.min(800, newWidth)));
     };
 
     const handleMouseUp = () => {
@@ -59,7 +59,7 @@ export default function ConversationPage() {
     document.addEventListener('mouseup', handleMouseUp);
   }, []);
 
-  const isExpanded = panelMode !== 'collapsed';
+  const isExpanded = panelExpanded;
 
   return (
     <div ref={containerRef} className="flex h-full overflow-hidden">
@@ -82,8 +82,8 @@ export default function ConversationPage() {
         />
       )}
 
-      {/* Extraction panel */}
-      <ExtractionPanel customWidth={isExpanded ? panelWidth : undefined} />
+      {/* YOps workspace panel */}
+      <YOpsWorkspace customWidth={isExpanded ? panelWidth : undefined} />
     </div>
   );
 }

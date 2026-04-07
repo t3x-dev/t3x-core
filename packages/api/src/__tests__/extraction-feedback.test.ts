@@ -10,7 +10,7 @@
 
 // SemanticPoint removed from core; define locally
 // biome-ignore lint/suspicious/noExplicitAny: legacy test interface
-interface SemanticPoint { id: string; text: string; confidence?: number; zone: string; status: string; staged: boolean; evidence?: any[]; extraction_mode?: string; inference_type?: string; position?: number; routing_reason?: string; inherited_from?: string; low_coverage?: boolean }
+interface SemanticPoint { id: string; text: string; zone: string; status: string; staged: boolean; evidence?: any[]; extraction_mode?: string; inference_type?: string; position?: number; routing_reason?: string; inherited_from?: string; low_coverage?: boolean }
 import type { AnyDB } from '@t3x-dev/storage';
 import { insertDraft, insertProject, updateDraft } from '@t3x-dev/storage';
 import { Hono } from 'hono';
@@ -69,7 +69,6 @@ describe('Extraction feedback recording in review-action', () => {
     status: 'auto_landed',
     zone: 'review',
     evidence: [],
-    confidence: 0.9,
     position: 0,
     staged: false,
     ...overrides,
@@ -119,7 +118,6 @@ describe('Extraction feedback recording in review-action', () => {
       zone: 'review',
       status: 'auto_landed',
       inference_type: 'direct',
-      confidence: 0.92,
     });
     const draftId = await createDraftWithSPs([sp]);
 
@@ -143,7 +141,6 @@ describe('Extraction feedback recording in review-action', () => {
     expect(feedbackInput.sp_id).toBe('sp_fb_accept');
     expect(feedbackInput.action).toBe('accept');
     expect(feedbackInput.inference_type).toBe('direct');
-    expect(feedbackInput.confidence).toBe(0.92);
     expect(feedbackInput.zone).toBe('review');
     expect(feedbackInput.id).toMatch(/^ef_/);
   });
@@ -153,7 +150,6 @@ describe('Extraction feedback recording in review-action', () => {
       id: 'sp_fb_dismiss',
       zone: 'review',
       inference_type: 'paraphrase',
-      confidence: 0.75,
     });
     const draftId = await createDraftWithSPs([sp]);
 
@@ -173,7 +169,6 @@ describe('Extraction feedback recording in review-action', () => {
     // dismiss is mapped to 'reject' by the review-action route handler
     expect(feedbackInput.action).toBe('reject');
     expect(feedbackInput.inference_type).toBe('paraphrase');
-    expect(feedbackInput.confidence).toBe(0.75);
     expect(feedbackInput.zone).toBe('review');
   });
 
@@ -183,7 +178,6 @@ describe('Extraction feedback recording in review-action', () => {
       zone: 'review',
       text: 'Original extraction text',
       inference_type: 'cross_turn',
-      confidence: 0.65,
     });
     const draftId = await createDraftWithSPs([sp]);
 
@@ -207,7 +201,6 @@ describe('Extraction feedback recording in review-action', () => {
     expect(feedbackInput.action).toBe('edit');
     expect(feedbackInput.edited_text).toBe('Corrected extraction text');
     expect(feedbackInput.inference_type).toBe('cross_turn');
-    expect(feedbackInput.confidence).toBe(0.65);
     expect(feedbackInput.zone).toBe('review');
   });
 
@@ -218,7 +211,6 @@ describe('Extraction feedback recording in review-action', () => {
       status: 'auto_landed',
       staged: true,
       inference_type: 'implicit',
-      confidence: 0.55,
     });
     const draftId = await createDraftWithSPs([sp]);
 
@@ -237,7 +229,6 @@ describe('Extraction feedback recording in review-action', () => {
     expect(feedbackInput.sp_id).toBe('sp_fb_undo');
     expect(feedbackInput.action).toBe('undo');
     expect(feedbackInput.inference_type).toBe('implicit');
-    expect(feedbackInput.confidence).toBe(0.55);
     expect(feedbackInput.zone).toBe('ready');
   });
 
@@ -249,7 +240,6 @@ describe('Extraction feedback recording in review-action', () => {
       id: 'sp_fb_error',
       zone: 'review',
       inference_type: 'direct',
-      confidence: 0.88,
     });
     const draftId = await createDraftWithSPs([sp]);
 
@@ -282,7 +272,6 @@ describe('Extraction feedback recording in review-action', () => {
       id: 'sp_fb_zone_check',
       zone: 'review',
       inference_type: 'direct',
-      confidence: 0.9,
     });
     const draftId = await createDraftWithSPs([sp]);
 
@@ -304,7 +293,6 @@ describe('Extraction feedback recording in review-action', () => {
       id: 'sp_fb_no_edit',
       zone: 'review',
       inference_type: 'direct',
-      confidence: 0.9,
     });
     const draftId = await createDraftWithSPs([sp]);
 

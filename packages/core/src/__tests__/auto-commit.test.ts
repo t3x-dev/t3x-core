@@ -12,7 +12,6 @@ const makeCandidate = (
   overrides: Partial<AutoCommitCandidate> & { id: string }
 ): AutoCommitCandidate => ({
   text: `node ${overrides.id}`,
-  confidence: 0.9,
   zone: 'ready',
   status: 'active',
   staged: true,
@@ -81,27 +80,10 @@ describe('evaluateAutoCommit', () => {
     expect(plan.skipped[0]).toEqual({ id: 's_1', reason: 'not_staged' });
   });
 
-  it('skips candidates below confidence threshold', () => {
-    const candidates = [
-      makeCandidate({ id: 's_1', confidence: 0.5 }),
-      makeCandidate({ id: 's_2', confidence: 0.9 }),
-    ];
-    const plan = evaluateAutoCommit(candidates, enabledConfig);
-
-    expect(plan.should_commit).toBe(true);
-    expect(plan.nodes).toHaveLength(1);
-    expect(plan.nodes[0].id).toBe('s_2');
-    expect(plan.skipped).toHaveLength(1);
-    expect(plan.skipped[0]).toEqual({
-      id: 's_1',
-      reason: 'below_confidence_threshold',
-    });
-  });
-
   it('returns should_commit=true when enough qualifying nodes', () => {
     const candidates = [
-      makeCandidate({ id: 's_1', confidence: 0.9 }),
-      makeCandidate({ id: 's_2', confidence: 0.95 }),
+      makeCandidate({ id: 's_1' }),
+      makeCandidate({ id: 's_2' }),
     ];
     const plan = evaluateAutoCommit(candidates, enabledConfig);
 
@@ -112,7 +94,7 @@ describe('evaluateAutoCommit', () => {
   });
 
   it('returns should_commit=false when insufficient nodes', () => {
-    const candidates = [makeCandidate({ id: 's_1', confidence: 0.9 })];
+    const candidates = [makeCandidate({ id: 's_1' })];
     const config: AutopilotConfig = {
       ...enabledConfig,
       min_nodes: 3,
@@ -128,18 +110,18 @@ describe('evaluateAutoCommit', () => {
 
   it('returns all qualifying nodes in plan', () => {
     const candidates = [
-      makeCandidate({ id: 's_1', text: 'alpha', confidence: 0.9 }),
-      makeCandidate({ id: 's_2', text: 'beta', confidence: 0.95 }),
-      makeCandidate({ id: 's_3', text: 'gamma', confidence: 0.88 }),
+      makeCandidate({ id: 's_1', text: 'alpha' }),
+      makeCandidate({ id: 's_2', text: 'beta' }),
+      makeCandidate({ id: 's_3', text: 'gamma' }),
     ];
     const plan = evaluateAutoCommit(candidates, enabledConfig);
 
     expect(plan.should_commit).toBe(true);
     expect(plan.nodes).toHaveLength(3);
     expect(plan.nodes).toEqual([
-      { id: 's_1', text: 'alpha', confidence: 0.9 },
-      { id: 's_2', text: 'beta', confidence: 0.95 },
-      { id: 's_3', text: 'gamma', confidence: 0.88 },
+      { id: 's_1', text: 'alpha' },
+      { id: 's_2', text: 'beta' },
+      { id: 's_3', text: 'gamma' },
     ]);
   });
 
@@ -152,23 +134,22 @@ describe('evaluateAutoCommit', () => {
     expect(plan.skipped).toHaveLength(0);
   });
 
-  it('handles mixed candidates (some ready, some review, some low-confidence)', () => {
+  it('handles mixed candidates (some ready, some review, some unstaged)', () => {
     const candidates = [
-      makeCandidate({ id: 's_1', zone: 'ready', confidence: 0.95 }), // eligible
-      makeCandidate({ id: 's_2', zone: 'review', confidence: 0.99 }), // skipped: not_in_ready_zone
-      makeCandidate({ id: 's_3', zone: 'ready', confidence: 0.5 }), // skipped: below_confidence_threshold
-      makeCandidate({ id: 's_4', zone: 'ready', staged: false }), // skipped: not_staged
-      makeCandidate({ id: 's_5', zone: 'ready', status: 'undone' }), // skipped: undone
-      makeCandidate({ id: 's_6', zone: 'ready', confidence: 0.91 }), // eligible
+      makeCandidate({ id: 's_1', zone: 'ready' }), // eligible
+      makeCandidate({ id: 's_2', zone: 'review' }), // skipped: not_in_ready_zone
+      makeCandidate({ id: 's_3', zone: 'ready', staged: false }), // skipped: not_staged
+      makeCandidate({ id: 's_4', zone: 'ready', status: 'undone' }), // skipped: undone
+      makeCandidate({ id: 's_5', zone: 'ready' }), // eligible
     ];
     const plan = evaluateAutoCommit(candidates, enabledConfig);
 
     expect(plan.should_commit).toBe(true);
     expect(plan.reason).toBe('auto_commit_ready');
     expect(plan.nodes).toHaveLength(2);
-    expect(plan.nodes.map((s) => s.id)).toEqual(['s_1', 's_6']);
-    expect(plan.skipped).toHaveLength(4);
-    expect(plan.skipped.map((s) => s.id).sort()).toEqual(['s_2', 's_3', 's_4', 's_5']);
+    expect(plan.nodes.map((s) => s.id)).toEqual(['s_1', 's_5']);
+    expect(plan.skipped).toHaveLength(3);
+    expect(plan.skipped.map((s) => s.id).sort()).toEqual(['s_2', 's_3', 's_4']);
   });
 });
 
@@ -186,11 +167,9 @@ describe('mergeAutopilotConfig', () => {
   it('overrides specific fields while keeping defaults for others', () => {
     const result = mergeAutopilotConfig({
       enabled: true,
-      min_confidence: 0.7,
     });
     expect(result).toEqual({
       enabled: true,
-      min_confidence: 0.7,
       min_nodes: 1,
       auto_create_leaf: false,
       target_branch: 'main',
@@ -200,7 +179,6 @@ describe('mergeAutopilotConfig', () => {
   it('overrides all fields when all provided', () => {
     const full: AutopilotConfig = {
       enabled: true,
-      min_confidence: 0.6,
       min_nodes: 5,
       auto_create_leaf: true,
       target_branch: 'develop',

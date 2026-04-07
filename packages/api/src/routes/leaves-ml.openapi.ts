@@ -55,7 +55,6 @@ const SuggestedConstraintSchema = z.object({
   match_mode: z.enum(['exact', 'semantic']),
   value: z.string(),
   reason: z.string(),
-  confidence: z.number(),
 });
 
 const SuggestConstraintsResponse = z.object({
@@ -92,7 +91,6 @@ const ExtractFromLeafResponse = z.object({
         origin: z.object({
           type: z.literal('extracted'),
           segment_id: z.string(),
-          confidence: z.number(),
         }),
         position: z.number(),
         included: z.boolean(),
@@ -118,13 +116,6 @@ const LearnFromEditsRequest = z
       .optional()
       .default(5)
       .openapi({ description: 'Max number of constraint suggestions' }),
-    min_confidence: z
-      .number()
-      .min(0)
-      .max(1)
-      .optional()
-      .default(0.8)
-      .openapi({ description: 'Minimum confidence threshold for suggestions' }),
   })
   .openapi('LearnFromEditsRequest');
 
@@ -136,7 +127,6 @@ const LearnFromEditsResponse = SuccessResponseSchema(
         match_mode: z.enum(['exact', 'semantic']),
         value: z.string(),
         reason: z.string(),
-        confidence: z.number(),
         dimension: z.enum(['style', 'content', 'format']),
       })
     ),
@@ -166,7 +156,6 @@ const ReverseLearningResponse = SuccessResponseSchema(
         match_mode: z.enum(['exact', 'semantic']),
         value: z.string(),
         reason: z.string(),
-        confidence: z.number(),
       })
     ),
     lessons_used: z.array(z.string()),
@@ -554,14 +543,12 @@ For each pattern you find, suggest a constraint:
 - match_mode: "exact" (literal string match) or "semantic" (meaning-based)
 - value: the constraint text
 - reason: why you inferred this from the edits
-- confidence: 0.0-1.0 (how confident you are based on consistency across edits)
 - dimension: "style", "content", or "format"
 
-Only suggest constraints with confidence >= ${body.min_confidence}.
 Return at most ${body.max_suggestions} suggestions.
 
 Respond with ONLY a JSON array of constraint objects, no markdown or explanation:
-[{"type": "require", "match_mode": "semantic", "value": "...", "reason": "...", "confidence": 0.95, "dimension": "style"}, ...]`;
+[{"type": "require", "match_mode": "semantic", "value": "...", "reason": "...", "dimension": "style"}, ...]`;
 
     const genResult = await llm.generate(prompt, { temperature: 0.3, maxTokens: 2000 });
     const raw = genResult.text;
@@ -584,7 +571,6 @@ Respond with ONLY a JSON array of constraint objects, no markdown or explanation
       match_mode: 'exact' | 'semantic';
       value: string;
       reason: string;
-      confidence: number;
       dimension: 'style' | 'content' | 'format';
     }> = [];
 
@@ -601,9 +587,7 @@ Respond with ONLY a JSON array of constraint objects, no markdown or explanation
             (s: Record<string, unknown>) =>
               ['require', 'exclude'].includes(s.type as string) &&
               ['exact', 'semantic'].includes(s.match_mode as string) &&
-              s.value &&
-              typeof s.confidence === 'number' &&
-              s.confidence >= body.min_confidence
+              s.value
           )
           .slice(0, body.max_suggestions)
           .map((s: Record<string, unknown>) => ({
@@ -611,7 +595,6 @@ Respond with ONLY a JSON array of constraint objects, no markdown or explanation
             match_mode: s.match_mode as 'exact' | 'semantic',
             value: String(s.value),
             reason: String(s.reason || ''),
-            confidence: Number(s.confidence),
             dimension: (['style', 'content', 'format'].includes(s.dimension as string)
               ? s.dimension
               : 'content') as 'style' | 'content' | 'format',

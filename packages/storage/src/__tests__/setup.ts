@@ -330,7 +330,6 @@ CREATE TABLE IF NOT EXISTS extraction_feedback (
   action TEXT NOT NULL,
   original_text TEXT,
   inference_type TEXT,
-  confidence REAL,
   zone TEXT,
   low_coverage BOOLEAN DEFAULT FALSE,
   edited_text TEXT,
@@ -431,7 +430,6 @@ CREATE TABLE IF NOT EXISTS node_relations (
   source_id TEXT NOT NULL,
   target_id TEXT NOT NULL,
   type TEXT NOT NULL,
-  confidence REAL NOT NULL,
   reasoning TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -483,7 +481,6 @@ CREATE TABLE IF NOT EXISTS trees (
   type TEXT NOT NULL,
   slots JSONB NOT NULL,
   status TEXT NOT NULL DEFAULT 'active',
-  confidence REAL,
   source TEXT NOT NULL,
   slot_sources JSONB,
   manual_edited BOOLEAN NOT NULL DEFAULT FALSE,
@@ -504,7 +501,6 @@ CREATE TABLE IF NOT EXISTS tree_relations (
   from_tree_id TEXT NOT NULL,
   to_tree_id TEXT NOT NULL,
   type TEXT NOT NULL,
-  confidence REAL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_trel_conversation ON tree_relations(conversation_id);

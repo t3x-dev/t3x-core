@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useState } from 'react';
-import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { ErrorBoundary } from '@/components/layout/ErrorBoundary';
 import { MetricsDelta } from '@/components/optimiser/metrics/MetricsDelta';
 import { ShareLinkButton } from '@/components/shared/ShareLinkButton';
 import { Badge } from '@/components/ui/badge';
@@ -60,18 +60,12 @@ import {
 } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
-/**
- * 格式化配置为显示字符串
- * Format configuration as display string
- */
+/** Format configuration as display string */
 function formatConfig(config: ConfigurationStats): string {
   return `${config.model} + ${config.prompt_version}`;
 }
 
-/**
- * 解析 URL 参数为配置对象
- * Parse URL param to config object (format: "model|version")
- */
+/** Parse URL param to config object (format: "model|version") */
 function parseConfigParam(param: string | null): { model: string; prompt_version: string } | null {
   if (!param) return null;
   const [model, version] = param.split('|');
@@ -79,27 +73,22 @@ function parseConfigParam(param: string | null): { model: string; prompt_version
   return { model, prompt_version: version };
 }
 
-/**
- * 编码配置为 URL 参数
- * Encode config to URL param (format: "model|version")
- */
+/** Encode config to URL param (format: "model|version") */
 function encodeConfigParam(config: { model: string; prompt_version: string }): string {
   return `${config.model}|${config.prompt_version}`;
 }
 
-/**
- * 格式化延迟显示
- */
+/** Format latency for display */
 function formatLatency(ms: number): string {
   if (ms < 1000) return `${Math.round(ms)}ms`;
   return `${(ms / 1000).toFixed(1)}s`;
 }
 
 /**
- * 计算比例的 95% 置信区间 (Wilson score interval)
- * 用于 Pass Rate 等二项分布数据
- * @param p - 比例 (0-1)
- * @param n - 样本量
+ * 95% confidence interval for a proportion (Wilson score interval).
+ * Used for pass rate and other binomial data.
+ * @param p - proportion (0-1)
+ * @param n - sample size
  * @returns [lower, upper] 95% CI bounds
  */
 function calculateProportionCI(p: number, n: number): [number, number] {
@@ -117,11 +106,11 @@ function calculateProportionCI(p: number, n: number): [number, number] {
 }
 
 /**
- * 计算均值的 95% 置信区间
- * 用于 Avg Score 等连续数据
- * @param mean - 均值
- * @param std - 标准差 (估计值，默认使用 mean * 0.2)
- * @param n - 样本量
+ * 95% confidence interval for a mean.
+ * Used for avg score and other continuous data.
+ * @param mean - sample mean
+ * @param n - sample size
+ * @param std - standard deviation estimate (defaults to mean * 0.2)
  * @returns [lower, upper] 95% CI bounds
  */
 function calculateMeanCI(mean: number, n: number, std?: number): [number, number] {
@@ -134,9 +123,7 @@ function calculateMeanCI(mean: number, n: number, std?: number): [number, number
   return [Math.max(0, mean - margin), mean + margin];
 }
 
-/**
- * 格式化置信区间为字符串
- */
+/** Format confidence interval as a display string */
 function formatCI(ci: [number, number], asPercent: boolean = true): string {
   if (asPercent) {
     return `${Math.round(ci[0] * 100)}-${Math.round(ci[1] * 100)}%`;

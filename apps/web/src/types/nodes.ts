@@ -51,7 +51,6 @@ export interface NodeSourceRef {
 export interface ContentNode {
   id: string;
   text: string;
-  confidence?: number;
   source_ref?: NodeSourceRef;
 }
 
@@ -208,7 +207,6 @@ export interface AnchorCandidate {
   type: AnchorType;
   startChar: number; // Global position in source text
   endChar: number;
-  confidence: number; // 0-1 confidence/salience score
   source: 'token' | 'entity' | 'phrase';
 }
 
@@ -513,7 +511,6 @@ export interface CanvasNodeData {
     key?: string;
     value?: unknown;
     entity_type?: string;
-    confidence?: number;
     polarity?: -1 | 0 | 1;
     polarity_label?: 'positive' | 'negative' | 'neutral';
     pos?: string;

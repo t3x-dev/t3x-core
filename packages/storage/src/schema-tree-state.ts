@@ -12,7 +12,6 @@ import {
   jsonb,
   pgTable,
   primaryKey,
-  real,
   text,
   timestamp,
 } from 'drizzle-orm/pg-core';
@@ -34,7 +33,6 @@ export const trees = pgTable(
     type: text('type').notNull(),
     slots: jsonb('slots').notNull(),
     status: text('status').notNull().default('active'),
-    confidence: real('confidence'),
     source: text('source').notNull(),
     slotQuotes: jsonb('slot_quotes'),
     slotSources: jsonb('slot_sources'),
@@ -69,7 +67,6 @@ export const treeRelations = pgTable(
     fromTreeId: text('from_tree_id').notNull(),
     toTreeId: text('to_tree_id').notNull(),
     type: text('type').notNull(),
-    confidence: real('confidence'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({

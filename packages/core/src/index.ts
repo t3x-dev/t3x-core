@@ -68,22 +68,21 @@ export {
   type AdaptiveConfig,
   type AdaptiveFeedbackStats,
   type AdaptiveThresholds,
-  AgentRegistry,
   // Anchor types
   type AnchorCandidate,
-  // Confidence scoring
-  computeConfidence,
-  type ConfidenceInput,
   type AnchorSource,
   type AnchorType,
   // Relations
   buildRelationPrompt,
   // YOps extraction pipeline
   buildYOpsPrompt,
+  // Correction prompt (batch validation feedback loop)
+  buildCorrectionPrompt,
+  type CorrectionInput,
+  type CorrectionPromptResult,
   Compressor,
   computeAdaptiveConfig,
   computeAdaptiveThresholds,
-  createMeaningPipeline,
   createRelationExtractor,
   type ExtractionInput,
   type ExtractionPromptResult,
@@ -92,16 +91,17 @@ export {
   Extractor,
   type FuzzyLocateResult,
   fuzzyLocate,
-  type MeaningAgent,
-  MeaningPipeline,
   type NodeWithSignals,
-  type PipelineContext,
-  type PipelineMode,
-  type PipelineOptions,
-  type PipelineResult,
   parseRelationResponse,
   parseYOpsOutput,
-  type QualityMetrics,
+  // Post-extraction transforms (deterministic, replaces MeaningPipeline)
+  checkRegression,
+  consolidate,
+  flagContradictions,
+  nest,
+  type RegressionWarning,
+  runTransforms,
+  type TransformResult,
   RelationExtractor,
   type RelationItem,
   RelationParseError,
@@ -359,7 +359,7 @@ export {
   getSemanticContentJsonSchema,
   getTreeNodeJsonSchema,
 } from './semantic/jsonSchema';
-export { getYOpsJsonSchema } from './yops/jsonSchema';
+export { getYOpsJsonSchema } from './t3x-yops/jsonSchema';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Semantic Module (Tree-Primary: TreeNode + Relation + Diff + Merge)
@@ -404,6 +404,9 @@ export {
   validateIntegrity,
   validateTreeDepth,
   yamlToTree,
+  isBlob,
+  BLOB_TYPES,
+  type BlobType,
 } from './semantic';
 // ═══════════════════════════════════════════════════════════════════════════
 // Storage (types + pure utils only)
@@ -478,13 +481,14 @@ export type { LintConfig, LintResult, LintWarning } from './ylint';
 // ═══════════════════════════════════════════════════════════════════════════
 export { DEFAULT_LINT_CONFIG, ylint } from './ylint';
 export type {
-  AddOp,
   CloneOp,
+  DefineOp,
   DropOp,
   FoldOp,
   MergeOp,
   MoveOp,
   NestOp,
+  PopulateOp,
   RelateOp,
   RenameOp,
   SetOp,
@@ -495,12 +499,13 @@ export type {
   YOpsDocument,
   YOpsError,
   YOpsResult,
-} from './yops';
+} from './t3x-yops';
 // ═══════════════════════════════════════════════════════════════════════════
 // YOps — YAML Operations for Knowledge Trees
 // ═══════════════════════════════════════════════════════════════════════════
 export {
   applyYOps,
+  classifyYOp,
   extractOpsFromEntries,
   findNode,
   formatYOpsLog,
@@ -513,5 +518,5 @@ export {
   YOPS_ERRORS,
   YOpSchema,
   YOpsDocumentSchema,
-} from './yops';
-export type { ReplayInput, ReplayResult, VerifyResult } from './yops';
+} from './t3x-yops';
+export type { ReplayInput, ReplayResult, VerifyResult, YOpCategory } from './t3x-yops';

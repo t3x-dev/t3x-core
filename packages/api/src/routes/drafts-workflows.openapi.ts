@@ -24,6 +24,7 @@ import {
 import { getDB } from '../lib/db';
 import { getEmbedder } from '../lib/embedder';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { eventBus } from '../lib/event-bus';
 import { findUncommittedYOpsIds } from '../lib/yops-commit-link';
 import { pinoLogger } from '../middleware/logger';
 import { ErrorResponseSchema, IdParamSchema, SuccessResponseSchema } from '../schemas/common';
@@ -36,6 +37,7 @@ import {
   SuggestDraftRequest,
   SuggestDraftResponse,
 } from '../schemas/contracts';
+import { previewCache, previewDebounce } from '../lib/drafts-preview';
 import { toApiDraft } from './drafts-crud.openapi';
 
 export const draftsWorkflowRoutes = new OpenAPIHono({
@@ -43,15 +45,8 @@ export const draftsWorkflowRoutes = new OpenAPIHono({
 });
 
 // ============================================================
-// In-memory state (shared with CRUD for delete cleanup)
+// In-memory state constants
 // ============================================================
-
-export const previewDebounce = new Map<string, number>();
-
-export const previewCache = new Map<
-  string,
-  { hash: string; output: string; model: string; tokens: number; time: number }
->();
 
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 const DEBOUNCE_MS = 1000; // 1 second
@@ -436,7 +431,6 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
     let nodes: Array<{
       id: string;
       text: string;
-      confidence?: number;
       source_ref?: {
         conversation_id: string;
         turn_hash: string;
@@ -458,7 +452,6 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
         (draft.semantic_points ?? []) as Array<{
           id: string;
           text: string;
-          confidence?: number;
           zone: string;
           status: string;
           staged: boolean;
@@ -481,7 +474,6 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
         return {
           id: sp.id,
           text: sp.text,
-          confidence: sp.confidence,
           source_ref: primary
             ? {
                 conversation_id: primary.conversation_id!,
@@ -501,8 +493,6 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
       }
 
       nodes = includedNodes.map((ds: any) => {
-        const confidence = ds.origin.type === 'extracted' ? ds.origin.confidence : 1.0;
-
         const sourceRef =
           ds.source && (ds.origin.type === 'extracted' || ds.origin.type === 'selected')
             ? {
@@ -516,7 +506,6 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
         return {
           id: generateNodeId(),
           text: ds.text,
-          confidence,
           source_ref: sourceRef,
         };
       });
@@ -530,7 +519,6 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
       id: s.id || `f_${String(i + 1).padStart(3, '0')}`,
       type: 'legacy_sentence' as const,
       slots: { text: s.text },
-      confidence: s.confidence,
     }));
 
     // Find uncommitted yops for this conversation
@@ -547,7 +535,6 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
           key: f.id,
           slots: f.slots,
           children: [] as any[],
-          confidence: f.confidence,
         })),
         relations: [],
       },
@@ -557,6 +544,9 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
       provenance: { method: 'human_curation' },
       yops_log_ids: yopsLogIds,
     });
+
+    // 5a. Notify commit created
+    eventBus.notify('commit.created', draftConversationId ?? '', draft.project_id);
 
     // 5b. Best-effort: populate node vectors (skip on failure)
     const embedder = getEmbedder();

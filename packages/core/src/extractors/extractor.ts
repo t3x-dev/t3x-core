@@ -7,8 +7,7 @@
 
 import type { LLMProvider } from '../llm/types';
 import type { SemanticContent } from '../semantic/types';
-import type { LintResult } from '../ylint/types';
-import type { YOp } from '../yops/types';
+import type { YOp } from '../t3x-yops/types';
 import type { ExtractionStyleConfig } from './extractionStyleConfig';
 import type { ExtractionStrategy } from './strategies/types';
 import { YamlExtractionStrategy } from './strategies/yaml-strategy';
@@ -22,7 +21,6 @@ export type ExtractionResult =
       yops: YOp[];
       snapshot: SemanticContent;
       usage: { inputTokens: number; outputTokens: number };
-      lintResult?: LintResult;
     }
   | { ok: false; error: string; usage: { inputTokens: number; outputTokens: number } };
 

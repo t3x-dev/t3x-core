@@ -82,7 +82,7 @@ describe('Extract Routes', () => {
       for (const node of data.data.trees) {
         expect(node.key).toBeTruthy();
         expect(node.slots).toBeTruthy();
-        expect(typeof node.confidence).toBe('number');
+        expect(node.slots).toBeDefined();
       }
     });
 

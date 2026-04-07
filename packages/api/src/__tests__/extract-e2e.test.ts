@@ -131,9 +131,6 @@ const FIRST_EXTRACTION_FRAMES = `trip_plan:
   "source_map": {
     "trip_plan": "[T1:abc12345]"
   },
-  "confidence_map": {
-    "trip_plan": 0.95
-  }
 }`;
 
 /** Incremental extraction: Extractor returns YOps list format (no --- metadata block) */
@@ -142,12 +139,12 @@ const INCREMENTAL_DELTA = `yops:
       path: trip_plan/budget_per_person
       value: 5000
       source: "预算提高到每人 5000"
-      from: "[T11:def67890]"
+      from: T11
   - set:
       path: trip_plan/transportation
       value: 自驾
       source: "打算自驾去杭州"
-      from: "[T11:def67890]"`;
+      from: T11`;
 
 // ── Pipeline agent mock responses ──
 
@@ -191,9 +188,9 @@ function createMockProvider(mode: 'full' | 'incremental' = 'full') {
       const usage = { inputTokens: 100, outputTokens: 50 };
 
       // ── FrameExtractor ──
-      // Prompt contains extraction priority markers from frameExtractionPrompt.ts
-      if (prompt.includes('semantic extraction engine') || prompt.includes('EXTRACTION PRIORITY')) {
-        if (mode === 'incremental' || prompt.includes('CURRENT SNAPSHOT')) {
+      // Prompt contains extraction markers from yopsPrompt.ts
+      if (prompt.includes('knowledge extraction engine') || prompt.includes('Extraction Priority')) {
+        if (mode === 'incremental' || prompt.includes('Current Tree')) {
           return { text: INCREMENTAL_DELTA, usage: { inputTokens: 800, outputTokens: 300 } };
         }
         return { text: FIRST_EXTRACTION_FRAMES, usage: { inputTokens: 600, outputTokens: 400 } };
@@ -339,10 +336,10 @@ describe('Tree Extraction E2E — Hangzhou Trip', () => {
     // Snapshot should have trees from pipeline processing
     expect(snapshot.trees.length).toBeGreaterThanOrEqual(1);
 
-    // After pipeline processing (nesting + topic naming):
-    // - topic_namer renames root to 'hangzhou_spring_trip'
+    // After pipeline processing (nesting + deterministic transforms):
+    // Root key comes from YAML tree extraction (trip_plan)
     const frameKeys = snapshot.trees.map((f: { key: string }) => f.key);
-    expect(frameKeys).toContain('hangzhou_spring_trip');
+    expect(frameKeys).toContain('trip_plan');
 
     // Delta log entry should be created
     expect(yops_log_id).toBeTruthy();

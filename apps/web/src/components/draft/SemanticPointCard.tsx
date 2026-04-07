@@ -37,11 +37,6 @@ export function SemanticPointCard({ point, onUndo, showUndo }: SemanticPointCard
               {point.inference_type}
             </Badge>
           )}
-          {point.confidence != null && (
-            <Badge variant="outline" className="text-[10px] px-1 py-0 font-mono">
-              {point.confidence.toFixed(2)}
-            </Badge>
-          )}
           {point.low_coverage && (
             <Tooltip>
               <TooltipTrigger asChild>

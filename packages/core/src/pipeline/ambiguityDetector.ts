@@ -22,9 +22,6 @@ import type { FlatNode, SemanticContent } from '../semantic/types';
 import { flattenTrees } from '../semantic/tree';
 import type { AdvisoryQuestion } from './types';
 
-/** Confidence below this → silently discard (prevent LLM hallucinated questions) */
-const CONFIDENCE_THRESHOLD = 0.8;
-
 /** Valid ambiguity types */
 const VALID_TYPES = new Set(['vagueness', 'structural']);
 
@@ -53,7 +50,6 @@ Output ONLY JSON:
       "type": "vagueness",
       "frame_id": "f_001",
       "slot_key": "budget",
-      "confidence": 0.9,
       "question": "The budget is '5000左右'. Do you have an exact number?",
       "current_value": "5000左右"
     }
@@ -123,7 +119,6 @@ export function parseAmbiguityResponse(raw: string, validNodeIds: Set<string>): 
         type?: string;
         frame_id?: string;
         slot_key?: string;
-        confidence?: number;
         question?: string;
         current_value?: unknown;
       }>;
@@ -144,11 +139,6 @@ export function parseAmbiguityResponse(raw: string, validNodeIds: Set<string>): 
 
       // Validate question text
       if (typeof amb.question !== 'string' || amb.question.length === 0) continue;
-
-      // Confidence threshold — discard low-confidence detections
-      const confidence =
-        typeof amb.confidence === 'number' ? Math.max(0, Math.min(1, amb.confidence)) : 0.5;
-      if (confidence < CONFIDENCE_THRESHOLD) continue;
 
       questions.push({
         id: `aq_${nanoid(12)}`,

@@ -17,7 +17,7 @@ const mockProvider = (text: string) => ({
 
 describe('Extractor with YOps', () => {
   it('first extraction returns yops with add op', async () => {
-    const raw = `trip:\n  destination: Hangzhou\n---\n{"slot_quotes":{"destination":"go to HZ"},"source_map":{"trip":"T1"},"confidence_map":{"trip":0.9}}`;
+    const raw = `trip:\n  destination: Hangzhou\n---\n{"slot_quotes":{"destination":"go to HZ"},"source_map":{"trip":"T1"}}`;
     const extractor = new Extractor(mockProvider(raw));
     const result = await extractor.extract({
       turns: [{ role: 'user', content: 'Plan trip', turn_hash: 'T1' }],
@@ -30,7 +30,7 @@ describe('Extractor with YOps', () => {
   });
 
   it('incremental returns yops', async () => {
-    const raw = `yops:\n  - set:\n      path: trip/budget\n      value: 2000\n      source: "do 2000"\n      from: T1`;
+    const raw = `yops:\n  - set:\n      path: trip/budget\n      value: 2000`;
     const snapshot: SemanticContent = { trees: [t('trip', { budget: 1000 })], relations: [] };
     const extractor = new Extractor(mockProvider(raw));
     const result = await extractor.extract({
@@ -42,16 +42,15 @@ describe('Extractor with YOps', () => {
     expect(result.snapshot.trees[0].slots.budget).toBe(2000);
   });
 
-  it('returns lintResult', async () => {
-    const raw = `trip:\n  destination: Hangzhou\n---\n{"slot_quotes":{"destination":"go"},"source_map":{"trip":"T1"},"confidence_map":{"trip":0.9}}`;
+  it('returns snapshot without lint scores', async () => {
+    const raw = `trip:\n  destination: Hangzhou\n---\n{"slot_quotes":{"destination":"go"},"source_map":{"trip":"T1"}}`;
     const extractor = new Extractor(mockProvider(raw));
     const result = await extractor.extract({
       turns: [{ role: 'user', content: 'Hi', turn_hash: 'T1' }],
     });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.lintResult).toBeDefined();
-    expect(result.lintResult?.overall).toBeGreaterThanOrEqual(0);
+    expect(result.snapshot.trees.length).toBeGreaterThan(0);
   });
 
   it('returns error on garbage output', async () => {
@@ -63,7 +62,7 @@ describe('Extractor with YOps', () => {
   });
 
   it('retries once on parse failure then succeeds', async () => {
-    const validOutput = `trip:\n  destination: Tokyo\n---\n{"slot_quotes":{"destination":"travel to Tokyo"},"source_map":{"trip":"T1"},"confidence_map":{"trip":0.9}}`;
+    const validOutput = `trip:\n  destination: Tokyo\n---\n{"slot_quotes":{"destination":"travel to Tokyo"},"source_map":{"trip":"T1"}}`;
     let callCount = 0;
     const provider = {
       id: 'test-provider',
@@ -98,11 +97,12 @@ describe('Extractor with YOps', () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error).toContain('parse');
-    expect(provider.generate).toHaveBeenCalledTimes(2);
+    // 2 attempts (main + retry) x 2 calls each (extract + repair) = 4
+    expect(provider.generate).toHaveBeenCalledTimes(4);
   });
 
   it('accumulates usage across retries', async () => {
-    const validOutput = `trip:\n  destination: Tokyo\n---\n{"slot_quotes":{"destination":"Tokyo"},"source_map":{"trip":"T1"},"confidence_map":{"trip":0.9}}`;
+    const validOutput = `trip:\n  destination: Tokyo\n---\n{"slot_quotes":{"destination":"Tokyo"},"source_map":{"trip":"T1"}}`;
     let callCount = 0;
     const provider = {
       id: 'test-provider',

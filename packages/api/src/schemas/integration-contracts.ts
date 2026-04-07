@@ -8,12 +8,16 @@ import { z } from '@hono/zod-openapi';
 export const ExtractRequest = z
   .object({
     project_id: z.string().min(1).describe('Project ID'),
-    text: z.string().min(1).describe('Raw conversation text to extract from'),
+    text: z
+      .string()
+      .min(1)
+      .max(100_000)
+      .describe('Raw conversation text to extract from (max 100KB)'),
     conversation_id: z
       .string()
       .optional()
       .describe('Omit for one-shot, include for incremental extraction'),
-    source: z.string().optional().describe('Source label (e.g. "slack", "email")'),
+    source: z.string().max(200).optional().describe('Source label (e.g. "slack", "email")'),
   })
   .openapi('ExtractRequest');
 
@@ -24,7 +28,6 @@ export const ExtractTree: z.ZodType<unknown> = z.lazy(() =>
       slots: z.record(z.string(), z.unknown()),
       children: z.array(ExtractTree).default([]),
       source: z.string().optional(),
-      confidence: z.number().optional(),
     })
     .openapi('ExtractTree')
 );
@@ -55,7 +58,7 @@ export const ExtractResponse = z
 export const CheckRequest = z
   .object({
     project_id: z.string().min(1).describe('Project ID'),
-    text: z.string().min(1).describe('Text to validate against constraints'),
+    text: z.string().min(1).max(100_000).describe('Text to validate against constraints'),
     leaf_ids: z
       .array(z.string())
       .optional()
@@ -108,7 +111,7 @@ export const CommitFromDraftRequest = z
   .object({
     project_id: z.string().min(1).describe('Project ID'),
     draft_id: z.string().min(1).describe('Draft ID from extract'),
-    message: z.string().optional().describe('Commit message'),
+    message: z.string().max(2000).optional().describe('Commit message'),
     branch: z.string().optional().default('main').describe('Branch to commit on'),
   })
   .openapi('CommitFromDraftRequest');

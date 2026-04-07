@@ -4,7 +4,7 @@ import { GitBranch, X } from 'lucide-react';
 import { useCallback } from 'react';
 import { extractNodes } from '@/lib/api/trees';
 import { useDraftStore } from '@/store/draftStore';
-import { usePhaseStore } from '@/store/phaseStore';
+import { useWorkspaceStore } from '@/store/workspaceStore';
 
 const CHOICE_LABELS: Record<string, { label: string; description: string }> = {
   keep_old: { label: 'Keep Current', description: 'Ignore the new topic, YAML unchanged' },
@@ -17,10 +17,10 @@ const CHOICE_LABELS: Record<string, { label: string; description: string }> = {
 };
 
 export function DriftPopup() {
-  const driftDetected = usePhaseStore((s) => s.driftDetected);
-  const driftInfo = usePhaseStore((s) => s.driftInfo);
-  const driftChoices = usePhaseStore((s) => s.driftChoices);
-  const clearDrift = usePhaseStore((s) => s.clearDrift);
+  const driftDetected = useWorkspaceStore((s) => s.driftDetected);
+  const driftInfo = useWorkspaceStore((s) => s.driftInfo);
+  const driftChoices = useWorkspaceStore((s) => s.driftChoices);
+  const clearDrift = useWorkspaceStore((s) => s.clearDrift);
   const conversationId = useDraftStore((s) => s.conversationId);
 
   const handleChoice = useCallback(

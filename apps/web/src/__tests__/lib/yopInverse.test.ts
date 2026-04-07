@@ -15,14 +15,14 @@ function makeNode(key: string, slots: Record<string, string> = {}, children: Tre
 describe('computeInverse', () => {
   it('inverts set on existing slot to set with old value', () => {
     const draft = makeDraft(makeNode('trip', { budget: '1000' }));
-    const op: YOp = { set: { path: 'trip/budget', value: '2000', source: '', from: '' } };
+    const op: YOp = { set: { path: 'trip/budget', value: '2000' } };
     const inv = computeInverse(op, draft);
-    expect(inv).toEqual({ set: { path: 'trip/budget', value: '1000', source: '', from: '' } });
+    expect(inv).toEqual({ set: { path: 'trip/budget', value: '1000' } });
   });
 
   it('inverts set on new slot to unset', () => {
     const draft = makeDraft(makeNode('trip', {}));
-    const op: YOp = { set: { path: 'trip/budget', value: '1000', source: '', from: '' } };
+    const op: YOp = { set: { path: 'trip/budget', value: '1000' } };
     const inv = computeInverse(op, draft);
     expect(inv).toEqual({ unset: { path: 'trip/budget' } });
   });
@@ -31,31 +31,39 @@ describe('computeInverse', () => {
     const draft = makeDraft(makeNode('trip', { budget: '1000' }));
     const op: YOp = { unset: { path: 'trip/budget' } };
     const inv = computeInverse(op, draft);
-    expect(inv).toEqual({ set: { path: 'trip/budget', value: '1000', source: '', from: '' } });
+    expect(inv).toEqual({ set: { path: 'trip/budget', value: '1000' } });
   });
 
-  it('inverts add to drop', () => {
+  it('inverts define to drop', () => {
     const draft = makeDraft();
-    const op: YOp = { add: { parent: '', node: { hotel: { stars: '5' } }, source: {}, from: '' } };
+    const op: YOp = { define: { path: 'hotel' } };
     const inv = computeInverse(op, draft);
     expect(inv).toEqual({ drop: { path: 'hotel' } });
   });
 
-  it('inverts add under parent to drop with full path', () => {
+  it('inverts define under parent to drop with full path', () => {
     const draft = makeDraft(makeNode('trip', {}, []));
-    const op: YOp = { add: { parent: 'trip', node: { hotel: { stars: '5' } }, source: {}, from: '' } };
+    const op: YOp = { define: { path: 'trip/hotel' } };
     const inv = computeInverse(op, draft);
     expect(inv).toEqual({ drop: { path: 'trip/hotel' } });
   });
 
-  it('inverts drop to add with original node data', () => {
+  it('inverts populate to context-based inverse', () => {
+    const draft = makeDraft(makeNode('hotel'));
+    const op: YOp = { populate: { path: 'hotel', values: { stars: '5', name: 'Hilton' } } };
+    const inv = computeInverse(op, draft);
+    expect(inv).toHaveProperty('_context');
+  });
+
+  it('inverts drop to context-based inverse with snapshot', () => {
     const draft = makeDraft(makeNode('hotel', { stars: '5', name: 'Hilton' }));
     const op: YOp = { drop: { path: 'hotel' } };
     const inv = computeInverse(op, draft);
-    expect(inv).toHaveProperty('add');
-    const addOp = (inv as { add: { parent: string; node: Record<string, unknown> } }).add;
-    expect(addOp.parent).toBe('');
-    expect(addOp.node).toEqual({ hotel: { stars: '5', name: 'Hilton' } });
+    expect(inv).toHaveProperty('_context');
+    const ctx = (inv as { _context: { snapshot: TreeNode[] } })._context;
+    expect(ctx.snapshot).toHaveLength(1);
+    expect(ctx.snapshot[0].key).toBe('hotel');
+    expect(ctx.snapshot[0].slots).toEqual({ stars: '5', name: 'Hilton' });
   });
 
   it('inverts rename', () => {
@@ -67,16 +75,16 @@ describe('computeInverse', () => {
 
   it('inverts clone to drop at target', () => {
     const draft = makeDraft(makeNode('hotel', { stars: '5' }));
-    const op: YOp = { clone: { path: 'hotel', to: '' } };
+    const op: YOp = { clone: { from: 'hotel', to: '' } };
     const inv = computeInverse(op, draft);
     expect(inv).toHaveProperty('drop');
   });
 
   it('inverts move to move back to original position', () => {
     const draft = makeDraft(makeNode('parent', {}, [makeNode('child')]));
-    const op: YOp = { move: { path: 'parent/child', to: 'child' } };
+    const op: YOp = { move: { from: 'parent/child', to: 'child' } };
     const inv = computeInverse(op, draft);
-    expect(inv).toEqual({ move: { path: 'child', to: 'parent/child' } });
+    expect(inv).toEqual({ move: { from: 'child', to: 'parent/child' } });
   });
 
   it('inverts relate to unrelate', () => {
@@ -97,8 +105,8 @@ describe('computeInverse', () => {
   });
 
   it('returns context-based inverse for nest', () => {
-    const draft = makeDraft(makeNode('a', { x: '1' }), makeNode('b', { y: '2' }));
-    const op: YOp = { nest: { paths: ['a', 'b'], under: 'group' } };
+    const draft = makeDraft(makeNode('group', {}, [makeNode('a', { x: '1' }), makeNode('b', { y: '2' })]));
+    const op: YOp = { nest: { path: 'group', keys: ['a', 'b'], under: 'subgroup' } };
     const result = computeInverse(op, draft);
     expect(result).toHaveProperty('_context');
   });
@@ -118,8 +126,8 @@ describe('computeInverse', () => {
   });
 
   it('returns context-based inverse for merge', () => {
-    const draft = makeDraft(makeNode('a', { x: '1' }), makeNode('b', { y: '2' }));
-    const op: YOp = { merge: { paths: ['a', 'b'], into: 'combined' } };
+    const draft = makeDraft(makeNode('group', {}, [makeNode('a', { x: '1' }), makeNode('b', { y: '2' })]));
+    const op: YOp = { merge: { path: 'group', keys: ['a', 'b'], into: 'combined' } };
     const result = computeInverse(op, draft);
     expect(result).toHaveProperty('_context');
   });
@@ -128,7 +136,7 @@ describe('computeInverse', () => {
 
   it('roundtrip: set + inverse restores original draft', () => {
     const original = makeDraft(makeNode('trip', { budget: '1000' }));
-    const op: YOp = { set: { path: 'trip/budget', value: '2000', source: '', from: '' } };
+    const op: YOp = { set: { path: 'trip/budget', value: '2000' } };
     const inv = computeInverse(op, original);
     const after = applyYOps(original, [op]);
     expect(after.ok).toBe(true);
@@ -137,10 +145,12 @@ describe('computeInverse', () => {
     expect(restored.trees[0].slots.budget).toBe('1000');
   });
 
-  it('roundtrip: add + inverse restores original draft', () => {
+  it('roundtrip: define + inverse restores original draft', () => {
     const original = makeDraft(makeNode('trip'));
-    const op: YOp = { add: { parent: '', node: { hotel: { stars: '5' } }, source: {}, from: '' } };
+    const op: YOp = { define: { path: 'hotel' } };
     const inv = computeInverse(op, original);
+    // define inverse is a drop
+    expect(inv).toEqual({ drop: { path: 'hotel' } });
     const after = applyYOps(original, [op]);
     expect(after.ok).toBe(true);
     expect(after.trees).toHaveLength(2);
@@ -150,17 +160,14 @@ describe('computeInverse', () => {
     expect(restored.trees[0].key).toBe('trip');
   });
 
-  it('roundtrip: drop + inverse restores original draft', () => {
+  it('drop inverse is context-based (snapshot for restoration)', () => {
     const original = makeDraft(makeNode('hotel', { stars: '5', name: 'Hilton' }));
     const op: YOp = { drop: { path: 'hotel' } };
     const inv = computeInverse(op, original);
-    const after = applyYOps(original, [op]);
-    expect(after.ok).toBe(true);
-    expect(after.trees).toHaveLength(0);
-    const restored = applyYOps({ trees: after.trees, relations: after.relations }, [inv as YOp]);
-    expect(restored.ok).toBe(true);
-    expect(restored.trees).toHaveLength(1);
-    expect(restored.trees[0].key).toBe('hotel');
-    expect(restored.trees[0].slots).toEqual({ stars: '5', name: 'Hilton' });
+    // Drop now returns a context inverse with snapshot (since add no longer exists)
+    expect(inv).toHaveProperty('_context');
+    const ctx = (inv as { _context: { snapshot: TreeNode[] } })._context;
+    expect(ctx.snapshot).toHaveLength(1);
+    expect(ctx.snapshot[0].key).toBe('hotel');
   });
 });

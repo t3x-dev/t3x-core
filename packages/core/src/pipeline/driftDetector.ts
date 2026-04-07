@@ -16,9 +16,6 @@ import type { LLMProvider } from '../llm/types';
 import { RELATION_TYPES, type RelationType } from '../semantic/types';
 import type { DriftResult } from './types';
 
-/** Confidence below this → default to same_topic */
-const CONFIDENCE_THRESHOLD = 0.7;
-
 /** Allowed relation values in LLM output (FRAME_RELATION_TYPES + 'none') */
 const VALID_RELATIONS = new Set<string>([...RELATION_TYPES, 'none']);
 
@@ -30,14 +27,12 @@ const SYSTEM_PROMPT = `You are a topic drift detector. Given the current topic, 
 Output ONLY JSON in this exact format:
 {
   "same_topic": true/false,
-  "confidence": 0.0-1.0,
   "relation": "causes|conditions|contrasts|follows|depends|none",
   "new_topic": "snake_case_topic_name"
 }
 
 Rules:
 - same_topic: true if conversation is still about the same general subject
-- confidence: how confident you are in your assessment
 - relation: if drifted, what is the semantic relation between old and new topic? Use "none" if completely unrelated
 - new_topic: if drifted, suggest a snake_case name for the new topic (or "" if same_topic)
 - Prefer false negatives: when unsure, say same_topic
@@ -45,7 +40,7 @@ Rules:
 
 Output ONLY JSON. No explanation.`;
 
-const NO_DRIFT: DriftResult = { drifted: false, confidence: 1 };
+const NO_DRIFT: DriftResult = { drifted: false };
 
 /**
  * Detect topic drift using LLM.
@@ -54,7 +49,7 @@ const NO_DRIFT: DriftResult = { drifted: false, confidence: 1 };
  * @param currentTopicName - Name of the current root topic (or first frame type)
  * @param existingFrameTypes - Type names of existing frames
  * @param recentTurns - Last 2-3 conversation turns
- * @returns DriftResult with drifted flag, confidence, relation, new topic
+ * @returns DriftResult with drifted flag, relation, new topic
  */
 export async function detectDrift(
   provider: LLMProvider,
@@ -99,18 +94,13 @@ export function parseDriftResponse(raw: string): DriftResult {
 
     const parsed = JSON.parse(jsonMatch[0]) as {
       same_topic?: boolean;
-      confidence?: number;
       relation?: string;
       new_topic?: string;
     };
 
-    // Validate confidence
-    const confidence =
-      typeof parsed.confidence === 'number' ? Math.max(0, Math.min(1, parsed.confidence)) : 0.5;
-
-    // If same_topic or low confidence → no drift
-    if (parsed.same_topic !== false || confidence < CONFIDENCE_THRESHOLD) {
-      return { drifted: false, confidence };
+    // If same_topic → no drift
+    if (parsed.same_topic !== false) {
+      return { drifted: false };
     }
 
     // Validate relation type
@@ -128,7 +118,6 @@ export function parseDriftResponse(raw: string): DriftResult {
 
     return {
       drifted: true,
-      confidence,
       relationType,
       newTopicName,
     };

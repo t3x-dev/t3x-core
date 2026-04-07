@@ -24,16 +24,13 @@ const basicInput: ExtractionInput = {
 describe('YamlExtractionStrategy', () => {
   it('extracts from a YOps list response', async () => {
     const yamlResponse = `yops:
-  - add:
-      parent: ""
-      node:
-        trip:
-          destination: Tokyo
-          budget: 3000
-      source:
-        destination: "trip to Tokyo"
-        budget: "around $3000"
-      from: T1`;
+  - define:
+      path: trip
+  - populate:
+      path: trip
+      values:
+        destination: Tokyo
+        budget: 3000`;
 
     const provider = mockProvider(yamlResponse);
     const strategy = new YamlExtractionStrategy();
@@ -55,14 +52,12 @@ describe('YamlExtractionStrategy', () => {
       })
       .mockResolvedValueOnce({
         text: `yops:
-  - add:
-      parent: ""
-      node:
-        trip:
-          destination: Tokyo
-      source:
-        destination: "trip to Tokyo"
-      from: T1`,
+  - define:
+      path: trip
+  - populate:
+      path: trip
+      values:
+        destination: Tokyo`,
         usage: { inputTokens: 50, outputTokens: 30 },
       });
 

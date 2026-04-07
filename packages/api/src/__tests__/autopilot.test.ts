@@ -71,7 +71,6 @@ describe('Autopilot Routes', () => {
       expect(json.success).toBe(true);
       expect(json.data.config).toEqual({
         enabled: false,
-        min_confidence: 0.85,
         min_nodes: 1,
         auto_create_leaf: false,
         target_branch: 'main',
@@ -83,7 +82,7 @@ describe('Autopilot Routes', () => {
       await app.request(`/v1/projects/${testProjectId}/autopilot/config`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled: true, min_confidence: 0.9 }),
+        body: JSON.stringify({ enabled: true }),
       });
 
       // Now GET should return the updated config
@@ -95,7 +94,6 @@ describe('Autopilot Routes', () => {
       const json: ApiResponse = await res.json();
       expect(json.success).toBe(true);
       expect(json.data.config.enabled).toBe(true);
-      expect(json.data.config.min_confidence).toBe(0.9);
       // Defaults preserved
       expect(json.data.config.min_nodes).toBe(1);
       expect(json.data.config.target_branch).toBe('main');
@@ -117,7 +115,6 @@ describe('Autopilot Routes', () => {
       expect(json.success).toBe(true);
       expect(json.data.config.enabled).toBe(true);
       // Other fields preserved from defaults or previous config
-      expect(json.data.config.min_confidence).toBeGreaterThan(0);
       expect(json.data.config.min_nodes).toBeGreaterThanOrEqual(1);
       expect(json.data.config.target_branch).toBe('main');
     });
@@ -185,7 +182,6 @@ describe('Autopilot Routes', () => {
             {
               id: 'sp_test1',
               text: 'Test sentence one',
-              confidence: 0.9,
               zone: 'ready',
               status: 'auto_landed',
               staged: true,
@@ -240,7 +236,6 @@ describe('Autopilot Routes', () => {
       // Enable autopilot
       await updateAutopilotConfig(mockDB, testProjectId, {
         enabled: true,
-        min_confidence: 0.8,
         min_nodes: 1,
         target_branch: 'main',
       });
@@ -260,7 +255,6 @@ describe('Autopilot Routes', () => {
             {
               id: 'sp_auto1',
               text: 'High confidence sentence',
-              confidence: 0.95,
               zone: 'ready',
               status: 'auto_landed',
               staged: true,
@@ -271,7 +265,6 @@ describe('Autopilot Routes', () => {
             {
               id: 'sp_auto2',
               text: 'Low confidence sentence',
-              confidence: 0.5,
               zone: 'ready',
               status: 'auto_landed',
               staged: true,

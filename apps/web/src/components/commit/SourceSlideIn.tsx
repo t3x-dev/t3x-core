@@ -13,7 +13,7 @@
 import { ChevronRight, ExternalLink, MessageSquare, X } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { TurnBubble } from '@/components/shared/TurnBubble';
+import { TurnBubble } from '@/components/source-context/TurnBubble';
 import { listTurns } from '@/lib/api/turns';
 import { useCommitDetailStore } from '@/store/commitDetailStore';
 import type { TurnBubbleData } from '@/types/sourceContext';

@@ -3,6 +3,7 @@
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
 import type { NodeRelation } from '@/lib/api/relations';
+import { truncate } from '@/lib/truncate';
 import { cn } from '@/lib/utils';
 
 interface RelationsListProps {
@@ -17,11 +18,6 @@ const typeColors: Record<string, string> = {
   follows: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
   depends: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400',
 };
-
-function truncate(text: string, maxLen: number): string {
-  if (text.length <= maxLen) return text;
-  return `${text.slice(0, maxLen)}...`;
-}
 
 function lookupNode(id: string, nodes: Array<{ id: string; text: string }>): string {
   const found = nodes.find((n) => n.id === id);
@@ -68,17 +64,6 @@ export function RelationsList({ relations, nodes }: RelationsListProps) {
                 {truncate(lookupNode(rel.to, nodes), 60)}
               </span>
 
-              {/* Confidence bar */}
-              {rel.confidence != null && (
-                <div className="shrink-0 flex items-center gap-1.5">
-                  <div className="w-16 h-2 rounded-full bg-[var(--surface-app)] overflow-hidden border border-[var(--stroke-divider)]">
-                    <div
-                      className="h-full rounded-full bg-blue-500 transition-all"
-                      style={{ width: `${Math.round(rel.confidence * 100)}%` }}
-                    />
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         );

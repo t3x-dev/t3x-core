@@ -100,7 +100,7 @@ describe('MCP Versioning E2E: Diff + Branch', () => {
 
   it('Step 5: list all branches', async () => {
     const data = await apiCall('GET', `/v1/branches?project_id=${projectId}`);
-    const names = data.branches.map((b: any) => b.name);
+    const names = data.branches.map((b: { name: string }) => b.name);
     expect(names).toContain('experiment');
     expect(data.branches.length).toBeGreaterThanOrEqual(1);
   });

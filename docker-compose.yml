@@ -1,34 +1,20 @@
-# T3X Full Stack (root compose = 唯一入口)
+# T3X Full Stack
 #
-# 默认启动：
-# - postgres   (5432)  PostgreSQL database
-# - t3x-api    (8000)  Core API (Hono + Zod OpenAPI)
-# - t3x-webui  (3000)  WebUI (Next.js)
+# Default services:
+#   postgres   (5432)  PostgreSQL database
+#   t3x-api    (8000)  Core API (Hono + Zod OpenAPI)
+#   t3x-webui  (3000)  WebUI (Next.js)
 #
-# 可选组件通过 profiles 启动：
-# - t3x-runner   profile: runner   (8080)
-# - agent-demo   profile: agent-demo (9000)
-# - n8n          profile: n8n      (5678)
-#
-# Database Modes:
-#   Default (docker): Uses PostgreSQL container
-#   Local dev:        Uses embedded PostgreSQL (run webui directly with pnpm dev)
-#   Cloud:            Uses Supabase (set SUPABASE_DATABASE_URL)
+# Optional services (via profiles):
+#   t3x-runner   profile: runner      (8080)
+#   agent-demo   profile: agent-demo  (9000)
+#   n8n          profile: n8n         (5678)
 #
 # Usage:
+#   cp .env.example .env              # Add your ANTHROPIC_API_KEY
 #   docker compose up -d --build
 #   docker compose --profile runner up -d --build
-#   docker compose --profile agent-demo up -d --build
-#   docker compose --profile n8n up -d
 #   docker compose down
-#
-# Ports:
-#   3000 - WebUI
-#   5432 - PostgreSQL
-#   8000 - API
-#   8080 - Runner
-#   9000 - Agent Demo
-#   5678 - n8n
 
 services:
   # ============================================
@@ -107,14 +93,10 @@ services:
       - NEXT_PUBLIC_RUNNER_API_URL=http://localhost:8080
       # HOSTNAME must be 0.0.0.0 to override Docker's default container hostname
       - HOSTNAME=0.0.0.0
-      # Auth configuration
+      # Auth (disabled by default for local/self-hosted use)
+      # For team deployments, set AUTH_DISABLED=false in .env
+      # Users register via built-in username/password at /login
       - AUTH_DISABLED=${AUTH_DISABLED:-true}
-      - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID:-}
-      - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET:-}
-      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
-      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
-      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-}
-      - NEXTAUTH_URL=${NEXTAUTH_URL:-http://localhost:3000}
       # API keys for chat functionality (chat/stream is handled by WebUI's API route)
       - ANTHROPIC_API_KEY
     depends_on:

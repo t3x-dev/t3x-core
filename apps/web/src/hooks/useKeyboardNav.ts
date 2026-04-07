@@ -1,20 +1,19 @@
 /**
- * useKeyboardNav — Global keyboard shortcuts for the Gold Step panel.
+ * useKeyboardNav — Global keyboard shortcuts for the YOps Workspace panel.
  *
  * Actions are injected via params so this hook stays decoupled from
- * Person A's stores (commandStore, commitStore, draftStore).
- * During migration, callers can pass no-ops for unimplemented actions.
+ * the store implementations.
  */
 
 import { useEffect } from 'react';
-import { usePhaseStore } from '@/store/phaseStore';
+import { useWorkspaceStore } from '@/store/workspaceStore';
 
 interface KeyboardNavActions {
-  /** Cmd+Z — undo last YOp (review only) */
+  /** Cmd+Z — undo last YOp (executed only) */
   undo?: () => void;
-  /** Cmd+Shift+Z — redo (review only) */
+  /** Cmd+Shift+Z — redo (executed only) */
   redo?: () => void;
-  /** Cmd+Enter — commit all pending changes (review only) */
+  /** Cmd+Enter — commit all pending changes (executed only) */
   commit?: () => void;
   /** Cmd+E — start extraction (idle only) */
   startExtraction?: () => void;
@@ -23,11 +22,9 @@ interface KeyboardNavActions {
 }
 
 export function useKeyboardNav(actions: KeyboardNavActions) {
-  const phase = usePhaseStore((s) => s.phase);
-  const viewTab = usePhaseStore((s) => s.viewTab);
-  const setPhase = usePhaseStore((s) => s.setPhase);
-  const setViewTab = usePhaseStore((s) => s.setViewTab);
-  const togglePanel = usePhaseStore((s) => s.togglePanel);
+  const mode = useWorkspaceStore((s) => s.mode);
+  const panelExpanded = useWorkspaceStore((s) => s.panelExpanded);
+  const setPanelExpanded = useWorkspaceStore((s) => s.setPanelExpanded);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -40,66 +37,46 @@ export function useKeyboardNav(actions: KeyboardNavActions) {
       // Cmd+] — toggle panel collapsed/expanded
       if (meta && e.key === ']') {
         e.preventDefault();
-        togglePanel();
+        setPanelExpanded(!panelExpanded);
         return;
       }
 
       // Cmd+E — start extraction (idle only)
-      if (meta && e.key === 'e' && phase === 'idle') {
+      if (meta && e.key === 'e' && mode === 'idle') {
         e.preventDefault();
         actions.startExtraction?.();
         return;
       }
 
-      // Cmd+Z — undo (review only)
-      if (meta && e.key === 'z' && !e.shiftKey && phase === 'review') {
+      // Cmd+Z — undo (executed only)
+      if (meta && e.key === 'z' && !e.shiftKey && mode === 'executed') {
         e.preventDefault();
         actions.undo?.();
         return;
       }
 
-      // Cmd+Shift+Z — redo (review only)
-      if (meta && e.key === 'z' && e.shiftKey && phase === 'review') {
+      // Cmd+Shift+Z — redo (executed only)
+      if (meta && e.key === 'z' && e.shiftKey && mode === 'executed') {
         e.preventDefault();
         actions.redo?.();
         return;
       }
 
-      // Cmd+Enter — commit (review only)
-      if (meta && e.key === 'Enter' && phase === 'review') {
+      // Cmd+Enter — commit (executed only)
+      if (meta && e.key === 'Enter' && mode === 'executed') {
         e.preventDefault();
         actions.commit?.();
         return;
       }
 
-      // 'a' key — accept all (triage only)
-      if (e.key === 'a' && !meta && viewTab === 'triage') {
+      // Escape — cancel current edit
+      if (e.key === 'Escape' && mode === 'executed') {
         e.preventDefault();
-        // TODO: call triageStore.acceptAll() — keep here or inject?
-        return;
-      }
-
-      // Enter — proceed to next phase (triage → review)
-      if (e.key === 'Enter' && !meta && viewTab === 'triage') {
-        e.preventDefault();
-        setPhase('review');
-        return;
-      }
-
-      // Escape — back / cancel edit
-      if (e.key === 'Escape') {
-        if (viewTab === 'review') {
-          e.preventDefault();
-          const entryPath = usePhaseStore.getState().entryPath;
-          if (entryPath === 'extract') {
-            setViewTab('triage');
-          }
-          actions.stopEdit?.();
-        }
+        actions.stopEdit?.();
       }
     };
 
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [phase, viewTab, actions, setPhase, setViewTab, togglePanel]);
+  }, [mode, panelExpanded, actions, setPanelExpanded]);
 }

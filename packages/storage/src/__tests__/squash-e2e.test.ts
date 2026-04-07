@@ -42,25 +42,31 @@ describe('Squash E2E', () => {
       conversationId,
       projectId,
       source: 'pipeline',
-      yops: [{ add: { parent: '', node: { trip: { budget: 5000 } }, source: { budget: 'about 5k' }, from: 'T1' } }],
+      yops: [
+        { define: { path: 'trip' } },
+        { populate: { path: 'trip', values: { budget: 5000 } } },
+      ],
     });
     const yl2 = await insertYOpsLogEntry(db, {
       conversationId,
       projectId,
       source: 'pipeline',
-      yops: [{ set: { path: 'trip/style', value: 'casual', source: 'casual style', from: 'T2' } }],
+      yops: [{ set: { path: 'trip/style', value: 'casual' } }],
     });
     const yl3 = await insertYOpsLogEntry(db, {
       conversationId,
       projectId,
       source: 'pipeline',
-      yops: [{ set: { path: 'trip/duration', value: 7, source: 'seven days', from: 'T3' } }],
+      yops: [{ set: { path: 'trip/duration', value: 7 } }],
     });
 
     // 2. Build commits incrementally (each commit applies its yops to previous state)
     const base: SemanticContent = { trees: [], relations: [] };
 
-    const r1 = applyYOps(base, [{ add: { parent: '', node: { trip: { budget: 5000 } }, source: { budget: 'about 5k' }, from: 'T1' } }]);
+    const r1 = applyYOps(base, [
+      { define: { path: 'trip' } },
+      { populate: { path: 'trip', values: { budget: 5000 } } },
+    ]);
     const c1 = await createCommit(db, {
       author: { type: 'human', name: 'test' },
       content: { trees: r1.trees, relations: r1.relations },
@@ -70,7 +76,7 @@ describe('Squash E2E', () => {
       yops_log_ids: [yl1.id],
     });
 
-    const r2 = applyYOps({ trees: r1.trees, relations: r1.relations }, [{ set: { path: 'trip/style', value: 'casual', source: 'casual style', from: 'T2' } }]);
+    const r2 = applyYOps({ trees: r1.trees, relations: r1.relations }, [{ set: { path: 'trip/style', value: 'casual' } }]);
     const c2 = await createCommit(db, {
       author: { type: 'human', name: 'test' },
       content: { trees: r2.trees, relations: r2.relations },
@@ -81,7 +87,7 @@ describe('Squash E2E', () => {
       yops_log_ids: [yl2.id],
     });
 
-    const r3 = applyYOps({ trees: r2.trees, relations: r2.relations }, [{ set: { path: 'trip/duration', value: 7, source: 'seven days', from: 'T3' } }]);
+    const r3 = applyYOps({ trees: r2.trees, relations: r2.relations }, [{ set: { path: 'trip/duration', value: 7 } }]);
     const c3 = await createCommit(db, {
       author: { type: 'human', name: 'test' },
       content: { trees: r3.trees, relations: r3.relations },
@@ -99,12 +105,12 @@ describe('Squash E2E', () => {
     // 4. Fetch yops entries and extract ops
     const entries = await getYOpsForCommit(db, allYopsIds);
     const ops = extractOpsFromEntries(entries.map((e) => ({ id: e.id, yops: e.yops })));
-    expect(ops).toHaveLength(3);
+    expect(ops).toHaveLength(4);
 
     // 5. Verify replay matches c3's content
     const verification = verifyReplay(base, ops, c3.content);
     expect(verification.match).toBe(true);
-    expect(verification.opsApplied).toBe(3);
+    expect(verification.opsApplied).toBe(4);
 
     // 6. Create squashed commit
     const squashed = await createCommit(db, {
@@ -126,7 +132,7 @@ describe('Squash E2E', () => {
       sourceHashes: [c1.hash, c2.hash, c3.hash],
       resultHash: squashed.hash,
       baseHash: null,
-      opsReplayed: 3,
+      opsReplayed: 4,
       yopsLogIds: allYopsIds,
       author: { type: 'human', name: 'test' },
     });
@@ -160,7 +166,7 @@ describe('Squash E2E', () => {
     const rewrites = await listRewrites(db, projectId);
     const squashRewrites = rewrites.filter((r) => r.resultHash === squashed.hash);
     expect(squashRewrites).toHaveLength(1);
-    expect(squashRewrites[0].opsReplayed).toBe(3);
+    expect(squashRewrites[0].opsReplayed).toBe(4);
   });
 
   it('replay mismatch is detected when content diverges', async () => {
@@ -169,7 +175,10 @@ describe('Squash E2E', () => {
       conversationId,
       projectId,
       source: 'pipeline',
-      yops: [{ add: { parent: '', node: { food: { type: 'pizza' } }, source: { type: 'pizza' }, from: 'T1' } }],
+      yops: [
+        { define: { path: 'food' } },
+        { populate: { path: 'food', values: { type: 'pizza' } } },
+      ],
     });
 
     // Create commit with DIFFERENT content than what the ops would produce

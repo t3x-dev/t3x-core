@@ -3,7 +3,6 @@ import type { AnyDB } from '../adapters';
 import {
   getAdaptiveFeedbackStats,
   getExtractionFeedbackStats,
-  getFeedbackByCosineBucket,
   insertExtractionFeedback,
   listExtractionFeedback,
 } from '../queries/extraction-feedback';
@@ -36,7 +35,6 @@ describe('extraction feedback (L4)', () => {
       sp_id: 'sp_abc',
       action: 'accept',
       inference_type: 'direct',
-      confidence: 0.92,
       zone: 'ready',
     });
 
@@ -54,7 +52,6 @@ describe('extraction feedback (L4)', () => {
       sp_id: 'sp_def',
       action: 'undo',
       inference_type: 'direct',
-      confidence: 0.88,
       zone: 'ready',
     });
     await insertExtractionFeedback(db, {
@@ -64,7 +61,6 @@ describe('extraction feedback (L4)', () => {
       sp_id: 'sp_ghi',
       action: 'edit',
       inference_type: 'inference',
-      confidence: 0.7,
       zone: 'review',
       edited_text: 'Corrected text',
     });
@@ -87,7 +83,6 @@ describe('extraction feedback (L4)', () => {
       sp_id: 'sp_jkl',
       action: 'reject',
       inference_type: 'paraphrase',
-      confidence: 0.5,
       zone: 'review',
     });
 
@@ -114,7 +109,6 @@ describe('extraction feedback (L4)', () => {
       action: 'edit',
       original_text: 'Original sentence text',
       inference_type: 'cross_turn',
-      confidence: 0.65,
       zone: 'review',
       low_coverage: true,
       edited_text: 'Corrected sentence text',
@@ -147,12 +141,12 @@ describe('getAdaptiveFeedbackStats', () => {
 
     // Insert varied feedback data
     const entries = [
-      { id: 'aef_01', action: 'accept' as const, inference_type: 'direct', confidence: 0.95 },
-      { id: 'aef_02', action: 'accept' as const, inference_type: 'direct', confidence: 0.92 },
-      { id: 'aef_03', action: 'edit' as const, inference_type: 'direct', confidence: 0.85 },
-      { id: 'aef_04', action: 'reject' as const, inference_type: 'paraphrase', confidence: 0.6 },
-      { id: 'aef_05', action: 'accept' as const, inference_type: 'paraphrase', confidence: 0.7 },
-      { id: 'aef_06', action: 'undo' as const, inference_type: 'direct', confidence: 0.8 },
+      { id: 'aef_01', action: 'accept' as const, inference_type: 'direct' },
+      { id: 'aef_02', action: 'accept' as const, inference_type: 'direct' },
+      { id: 'aef_03', action: 'edit' as const, inference_type: 'direct' },
+      { id: 'aef_04', action: 'reject' as const, inference_type: 'paraphrase' },
+      { id: 'aef_05', action: 'accept' as const, inference_type: 'paraphrase' },
+      { id: 'aef_06', action: 'undo' as const, inference_type: 'direct' },
     ];
 
     for (const e of entries) {
@@ -204,98 +198,3 @@ describe('getAdaptiveFeedbackStats', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════════════════════
-// getFeedbackByCosineBucket
-// ═══════════════════════════════════════════════════════════════════════════
-
-describe('getFeedbackByCosineBucket', () => {
-  let db: AnyDB;
-  let cleanup: () => Promise<void>;
-  let projectId: string;
-
-  beforeAll(async () => {
-    const env = await createTestDB();
-    db = env.db;
-    cleanup = env.cleanup;
-
-    const project = await insertProject(db, { name: 'Cosine Bucket Test' });
-    projectId = project.projectId;
-
-    // Insert feedback with varied confidence values
-    const entries = [
-      { id: 'cb_01', action: 'accept' as const, confidence: 0.95 },
-      { id: 'cb_02', action: 'accept' as const, confidence: 0.92 },
-      { id: 'cb_03', action: 'edit' as const, confidence: 0.85 },
-      { id: 'cb_04', action: 'reject' as const, confidence: 0.62 },
-      { id: 'cb_05', action: 'accept' as const, confidence: 0.55 },
-    ];
-
-    for (const e of entries) {
-      await insertExtractionFeedback(db, {
-        ...e,
-        project_id: projectId,
-        draft_id: 'draft_bucket',
-        sp_id: `sp_${e.id}`,
-        inference_type: 'direct',
-        zone: 'ready',
-      });
-    }
-  });
-
-  afterAll(async () => {
-    await cleanup();
-  });
-
-  it('returns 10 confidence buckets', async () => {
-    const buckets = await getFeedbackByCosineBucket(db, projectId);
-    expect(buckets).toHaveLength(10);
-
-    // First bucket: 0.0-0.1
-    expect(buckets[0].bucket).toBe('0.0-0.1');
-    // Last bucket: 0.9-1.0
-    expect(buckets[9].bucket).toBe('0.9-1.0');
-  });
-
-  it('groups feedback into correct buckets', async () => {
-    const buckets = await getFeedbackByCosineBucket(db, projectId);
-
-    // 0.9-1.0 bucket: conf 0.95, 0.92
-    const bucket9 = buckets.find((b) => b.bucket === '0.9-1.0');
-    expect(bucket9?.total).toBe(2);
-    expect(bucket9?.accepted).toBe(2);
-
-    // 0.8-0.9 bucket: conf 0.85
-    const bucket8 = buckets.find((b) => b.bucket === '0.8-0.9');
-    expect(bucket8?.total).toBe(1);
-    expect(bucket8?.edited).toBe(1);
-
-    // 0.6-0.7 bucket: conf 0.62
-    const bucket6 = buckets.find((b) => b.bucket === '0.6-0.7');
-    expect(bucket6?.total).toBe(1);
-    expect(bucket6?.rejected).toBe(1);
-
-    // 0.5-0.6 bucket: conf 0.55
-    const bucket5 = buckets.find((b) => b.bucket === '0.5-0.6');
-    expect(bucket5?.total).toBe(1);
-    expect(bucket5?.accepted).toBe(1);
-  });
-
-  it('calculates accept_rate per bucket', async () => {
-    const buckets = await getFeedbackByCosineBucket(db, projectId);
-
-    const bucket9 = buckets.find((b) => b.bucket === '0.9-1.0');
-    expect(bucket9?.accept_rate).toBe(1.0); // 2/2
-
-    const bucket6 = buckets.find((b) => b.bucket === '0.6-0.7');
-    expect(bucket6?.accept_rate).toBe(0); // 0/1
-  });
-
-  it('returns zero counts for empty project', async () => {
-    const buckets = await getFeedbackByCosineBucket(db, 'proj_empty');
-    expect(buckets).toHaveLength(10);
-    for (const b of buckets) {
-      expect(b.total).toBe(0);
-      expect(b.accept_rate).toBe(0);
-    }
-  });
-});

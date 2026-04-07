@@ -45,8 +45,6 @@ export interface AnchorCandidate {
   startChar: number;
   /** End character offset in original input text */
   endChar: number;
-  /** Confidence/salience score [0, 1] */
-  confidence: number;
   /** Where this candidate was derived from */
   source: AnchorSource;
 }

@@ -61,12 +61,12 @@ const GENERAL_TEMPLATES: RuleTemplate[] = [
     },
   },
   {
-    name: 'High Confidence',
-    description: 'All trees must have confidence above 0.7',
+    name: 'Minimum Slots',
+    description: 'All trees must have at least one slot',
     config: {
       type: 'rule',
-      rule: 'nodes.every(f => f.confidence > 0.7)',
-      message: 'One or more trees have low confidence',
+      rule: 'nodes.every(f => Object.keys(f.slots).length > 0)',
+      message: 'One or more trees have no slots',
       severity: 'warning',
     },
   },

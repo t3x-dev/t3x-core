@@ -27,14 +27,12 @@ function treeDiffToYOps(diff: TreeDiff, _sourceContent: SemanticContent, targetC
     const node = nodes.find((f) => f.id === path);
     if (node) {
       const parentPath = path.includes('.') ? path.slice(0, path.lastIndexOf('.')) : '';
-      ops.push({
-        add: {
-          parent: parentPath,
-          node: { [node.key]: Object.fromEntries(Object.entries(node.slots)) },
-          source: {},
-          from: 'manual',
-        },
-      });
+      const nodePath = parentPath ? `${parentPath}/${node.key}` : node.key;
+      ops.push({ define: { path: nodePath } });
+      const slots = Object.fromEntries(Object.entries(node.slots));
+      if (Object.keys(slots).length > 0) {
+        ops.push({ populate: { path: nodePath, values: slots } });
+      }
     }
   }
 
@@ -55,8 +53,6 @@ function treeDiffToYOps(diff: TreeDiff, _sourceContent: SemanticContent, targetC
             set: {
               path: `${mod.path}/${sd.key}`,
               value,
-              source: String(value),
-              from: 'manual',
             },
           });
         }

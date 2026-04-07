@@ -33,7 +33,6 @@ export function collectLessonsFromAssertions(
           signal: a.lesson,
           constraint_id: a.constraint_id,
           leaf_id: leaf.id,
-          confidence: 1.0,
           created_at: new Date().toISOString(),
         });
         if (lessons.length >= max) return lessons;

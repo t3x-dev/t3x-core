@@ -15,6 +15,7 @@ import {
   selectUnresolvedCount,
 } from '@/store/canvasMergeSlice';
 import { useCanvasStore } from '@/store/canvasStore';
+import type { MergeState } from '@/types/merge';
 import type { CanvasNodeData } from '@/types/nodes';
 
 // Mock API module
@@ -107,7 +108,7 @@ describe('Merge Selectors', () => {
     });
 
     it('returns true when mergeState exists', () => {
-      useCanvasStore.setState({ mergeState: makeMergeState() as any });
+      useCanvasStore.setState({ mergeState: makeMergeState() as unknown as MergeState });
       expect(selectIsMerging(useCanvasStore.getState())).toBe(true);
     });
   });
@@ -121,20 +122,20 @@ describe('Merge Selectors', () => {
     });
 
     it('returns false when conflicts exist', () => {
-      useCanvasStore.setState({ mergeState: makeMergeState() as any });
+      useCanvasStore.setState({ mergeState: makeMergeState() as unknown as MergeState });
       // conflicts array has one entry
       expect(selectCanExecuteMerge(useCanvasStore.getState())).toBe(false);
     });
 
     it('returns true when all conflicts resolved', () => {
       const state = makeMergeState({ prepared: { ...makeMergeState().prepared, conflicts: [] } });
-      useCanvasStore.setState({ mergeState: state as any });
+      useCanvasStore.setState({ mergeState: state as unknown as MergeState });
       expect(selectCanExecuteMerge(useCanvasStore.getState())).toBe(true);
     });
 
     it('returns true when no conflicts exist', () => {
       const state = makeMergeState({ prepared: { ...makeMergeState().prepared, conflicts: [] } });
-      useCanvasStore.setState({ mergeState: state as any });
+      useCanvasStore.setState({ mergeState: state as unknown as MergeState });
       expect(selectCanExecuteMerge(useCanvasStore.getState())).toBe(true);
     });
   });
@@ -148,14 +149,14 @@ describe('Merge Selectors', () => {
     });
 
     it('counts unresolved conflicts', () => {
-      useCanvasStore.setState({ mergeState: makeMergeState() as any });
+      useCanvasStore.setState({ mergeState: makeMergeState() as unknown as MergeState });
       // 1 conflict in default state
       expect(selectUnresolvedCount(useCanvasStore.getState())).toBe(1);
     });
 
     it('returns 0 when no conflicts', () => {
       const state = makeMergeState({ prepared: { ...makeMergeState().prepared, conflicts: [] } });
-      useCanvasStore.setState({ mergeState: state as any });
+      useCanvasStore.setState({ mergeState: state as unknown as MergeState });
       expect(selectUnresolvedCount(useCanvasStore.getState())).toBe(0);
     });
   });
@@ -169,7 +170,7 @@ describe('Merge Selectors', () => {
     });
 
     it('returns correct counts', () => {
-      useCanvasStore.setState({ mergeState: makeMergeState() as any });
+      useCanvasStore.setState({ mergeState: makeMergeState() as unknown as MergeState });
       const counts = selectMergeCounts(useCanvasStore.getState());
       expect(counts).toEqual({
         identical: 1,

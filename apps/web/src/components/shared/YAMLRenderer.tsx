@@ -22,10 +22,9 @@ export interface YAMLRendererProps {
   renderNodeActions?: (treeId: string, treeType: string) => ReactNode;
   /** Optional: highlighted tree ID */
   highlightNodeId?: string | null;
-  /** Optional: metadata per  node (confidence, change type) */
+  /** Optional: metadata per  node (change type) */
   getTreeMeta?: (treeId: string) =>
     | {
-        confidence?: number;
         changeType?: 'add' | 'update' | 'remove' | null;
       }
     | undefined;
@@ -80,6 +79,86 @@ function renderSlotLines(
       indent,
       isEmpty: false,
     });
+    return;
+  }
+
+  // Content Blob: { _type: "code"|"plot"|"table"|"image"|"video", ... }
+  if (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    '_type' in value &&
+    typeof (value as Record<string, unknown>)._type === 'string'
+  ) {
+    const blob = value as Record<string, unknown>;
+    const blobType = blob._type as string;
+
+    if (blobType === 'code') {
+      const lang = blob.language ?? '';
+      lines.push({
+        text: `${pad}${key}: [code:${lang}]`,
+        treeId,
+        slotKey,
+        isNodeHeader: false,
+        indent,
+        isEmpty: false,
+      });
+      // Render code content as indented lines
+      const content = String(blob.content ?? '');
+      for (const codeLine of content.split('\n')) {
+        lines.push({
+          text: `${pad}  ${codeLine}`,
+          treeId,
+          slotKey,
+          isNodeHeader: false,
+          indent: indent + 1,
+          isEmpty: false,
+        });
+      }
+    } else if (blobType === 'plot') {
+      const format = blob.format ?? 'chart';
+      const desc = blob.description ?? '';
+      lines.push({
+        text: `${pad}${key}: [plot:${format}] ${desc}`,
+        treeId,
+        slotKey,
+        isNodeHeader: false,
+        indent,
+        isEmpty: false,
+      });
+    } else if (blobType === 'table') {
+      const headers = Array.isArray(blob.headers) ? blob.headers : [];
+      const rows = Array.isArray(blob.rows) ? blob.rows : [];
+      lines.push({
+        text: `${pad}${key}: [table] ${headers.join(' | ')}`,
+        treeId,
+        slotKey,
+        isNodeHeader: false,
+        indent,
+        isEmpty: false,
+      });
+      for (const row of rows) {
+        const cells = Array.isArray(row) ? row.join(' | ') : String(row);
+        lines.push({
+          text: `${pad}  ${cells}`,
+          treeId,
+          slotKey,
+          isNodeHeader: false,
+          indent: indent + 1,
+          isEmpty: false,
+        });
+      }
+    } else {
+      // Unknown blob type — show as labeled block
+      lines.push({
+        text: `${pad}${key}: [${blobType}]`,
+        treeId,
+        slotKey,
+        isNodeHeader: false,
+        indent,
+        isEmpty: false,
+      });
+    }
     return;
   }
 
@@ -286,7 +365,6 @@ export function YAMLRenderer({
 
         const meta = getTreeMeta?.(line.treeId);
         const changeType = meta?.changeType ?? null;
-        const confidence = line.isNodeHeader ? (meta?.confidence ?? null) : null;
         const isHighlighted = highlightNodeId != null && highlightNodeId === line.treeId;
 
         const borderLeft =
@@ -326,18 +404,6 @@ export function YAMLRenderer({
               }}
             >
               {line.text}
-              {confidence != null && (
-                <span
-                  style={{
-                    marginLeft: 8,
-                    fontSize: 9,
-                    color: 'var(--text-tertiary)',
-                    fontWeight: 400,
-                  }}
-                >
-                  {Math.round(confidence * 100)}%
-                </span>
-              )}
             </pre>
           </div>
         );

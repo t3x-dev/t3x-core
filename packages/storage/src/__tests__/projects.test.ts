@@ -364,7 +364,7 @@ describe('Projects Storage', () => {
           project_id: projectId,
           branch: 'main',
           message: 'Initial',
-        } as any,
+        } as Parameters<typeof createCommit>[1],
         { strictParents: false }
       );
 

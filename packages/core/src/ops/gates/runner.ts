@@ -5,7 +5,7 @@
  */
 
 import type { SemanticContent } from '../../semantic/types';
-import type { YOp } from '../../yops/types';
+import type { YOp } from '../../t3x-yops/types';
 import { validateDedup } from './dedup';
 import { validateSources } from './source';
 import { validateStructure } from './structure';

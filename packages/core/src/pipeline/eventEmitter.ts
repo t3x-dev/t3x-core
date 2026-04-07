@@ -6,7 +6,7 @@
  */
 
 import type { SemanticContent } from '../semantic/types';
-import type { YOp } from '../yops/types';
+import type { YOp } from '../t3x-yops/types';
 import type { AdvisoryQuestion } from './types';
 
 // ── Event Payload Types ──

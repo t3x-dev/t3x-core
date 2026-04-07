@@ -26,7 +26,6 @@ export interface WordDiffSegment {
 export interface ContentNode {
   id: string;
   text: string;
-  confidence?: number;
   source?: {
     conversation_id?: string;
     turn_hash?: string;
@@ -60,7 +59,6 @@ export interface Merge2WayResult {
 /** LLM-suggested merge text */
 export interface MergeSuggestion {
   text: string;
-  confidence?: number;
 }
 
 // ============================================================================

@@ -26,7 +26,6 @@ export const FrameSchema = z.object({
     example: { amount: '$3000', currency: 'USD' },
   }),
   source: z.string().optional().openapi({ description: 'Source turn reference' }),
-  confidence: z.number().min(0).max(1).optional().openapi({ description: 'Confidence 0-1' }),
   slot_sources: z.record(z.string(), z.any()).optional().openapi({
     description: 'Per-slot source references',
   }),
@@ -44,7 +43,6 @@ export const RelationSchema = z.object({
   type: z
     .enum(['causes', 'conditions', 'contrasts', 'elaborates', 'follows', 'depends'])
     .openapi({ description: 'Relation type' }),
-  confidence: z.number().optional().openapi({ description: 'Confidence 0-1' }),
 });
 
 /**

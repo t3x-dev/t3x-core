@@ -23,8 +23,6 @@ export interface TreeNode {
   slot_quotes?: Record<string, string>;
   /** Source turn reference (e.g., "T3") */
   source?: string;
-  /** Extraction confidence 0-1 */
-  confidence?: number;
 }
 
 // ── Relation ──
@@ -42,7 +40,6 @@ export interface Relation {
   from: string;
   to: string;
   type: RelationType;
-  confidence?: number;
 }
 
 // ── SemanticContent ──
@@ -78,7 +75,7 @@ export interface ValidationError {
 }
 
 export interface ValidationWarning {
-  type: 'orphan_tree' | 'low_confidence' | 'same_type_contrast';
+  type: 'orphan_tree' | 'same_type_contrast';
   message: string;
   location: string;
 }
@@ -244,5 +241,4 @@ export interface FlatNode {
   type: string;
   slots: Record<string, SlotValue>;
   source?: string;
-  confidence?: number;
 }

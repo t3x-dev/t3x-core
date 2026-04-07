@@ -10,30 +10,19 @@ export {
   computeAdaptiveThresholds,
   type FeedbackStats,
 } from './adaptiveThresholds';
-export {
-  contradictionCheckerAgent,
-  coverageCheckerAgent,
-  dedupCheckerAgent,
-  fuzzyQuoteValidatorAgent,
-  nesterAgent,
-  topicNamerAgent,
-} from './agents';
-// Benchmark
-export { type BenchmarkComparison, type BenchmarkResult, runBenchmark } from './benchmark';
 // Compression
 export {
   type CompressMetadata,
   Compressor,
   type CompressResult,
 } from './compressor';
-// Compression
 export {
   buildCompressPrompt,
   type CompressInput,
   type NodeWithSignals,
 } from './compressPrompt';
-export { type ConfidenceInput, computeConfidence } from './confidence';
-export { createMeaningPipeline } from './createMeaningPipeline';
+// Correction prompt (batch validation feedback loop)
+export { buildCorrectionPrompt, type CorrectionInput, type CorrectionPromptResult } from './correctionPrompt';
 // extractionPrompt helpers — still used by yopsPrompt.ts internally
 export {
   type ExtractionPromptResult,
@@ -42,25 +31,14 @@ export {
   tier3Segment,
   updateStanceSegment,
 } from './extractionPrompt';
-// Extraction (Phase 2)
+// Extraction
 export {
   type ExtractionInput,
   type ExtractionResult,
   type ExtractionTurn,
   Extractor,
 } from './extractor';
-// Meaning Pipeline (multi-agent orchestration)
 export { type FuzzyLocateResult, fuzzyLocate } from './fuzzyLocate';
-export {
-  AgentRegistry,
-  type MeaningAgent,
-  MeaningPipeline,
-  type PipelineContext,
-  type PipelineMode,
-  type PipelineOptions,
-  type PipelineResult,
-  type QualityMetrics,
-} from './meaningPipeline';
 // Relation Extraction (Inter-node Relations)
 export { createRelationExtractor, RelationExtractor } from './relationExtractor';
 export { parseRelationResponse, type RelationItem, RelationParseError } from './relationParser';
@@ -68,11 +46,18 @@ export { buildRelationPrompt } from './relationPrompt';
 // Extraction Strategies
 export {
   type ExtractionStrategy,
-  ToolUseExtractionStrategy,
-  toolCallToYOp,
   YamlExtractionStrategy,
-  yopToolDefinitions,
 } from './strategies';
+// Post-extraction transforms (deterministic, replaces MeaningPipeline)
+export {
+  checkRegression,
+  consolidate,
+  flagContradictions,
+  nest,
+  type RegressionWarning,
+  runTransforms,
+  type TransformResult,
+} from './transforms';
 // Types
 export type {
   AnchorCandidate,

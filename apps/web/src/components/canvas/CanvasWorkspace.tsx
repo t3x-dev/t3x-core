@@ -7,32 +7,25 @@ import {
   ReactFlowProvider,
   useReactFlow,
 } from '@xyflow/react';
-import { motion } from 'framer-motion';
-import {
-  FileOutput,
-  GitCommit,
-  GitCommitHorizontal,
-  HelpCircle,
-  Loader2,
-  MessageSquare,
-  MessageSquarePlus,
-} from 'lucide-react';
+import { GitCommit, HelpCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useContextMenu } from '@/hooks/useContextMenu';
 import { usePathHighlight } from '@/hooks/usePathHighlight';
-import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useTerminology } from '@/hooks/useTerminology';
 import '@xyflow/react/dist/style.css';
 import { useTheme } from 'next-themes';
 import { AnimatedEdge } from './AnimatedEdge';
 import { useCanvasKeyboardShortcuts } from './CanvasKeyboardShortcuts';
 import { canvasNodeTypes } from './CanvasNodes';
+import { CanvasOnboarding } from './CanvasOnboarding';
+import { CanvasShortcutsDialog } from './CanvasShortcutsContent';
 import { CanvasStatusBar } from './CanvasStatusBar';
 import { CanvasToolbar } from './CanvasToolbar';
 import { useCanvasHandlers } from './CanvasWorkspaceHandlers';
 import { NodeContextMenu } from './NodeContextMenu';
 import { NodePalette } from './NodePalette';
+import { useBranchFilter } from './useBranchFilter';
 
 // Custom edge types for xyflow
 const edgeTypes = {
@@ -40,8 +33,6 @@ const edgeTypes = {
 };
 
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ZoomSlider } from '@/components/ui/zoom-slider';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
@@ -51,8 +42,8 @@ import { DraftQuickSheet } from '../draft/DraftQuickSheet';
 import { ImportDialog } from '../import/ImportDialog';
 import { MemoryContextModal } from '../memory/MemoryContextModal';
 import { MergePanel } from '../merge/MergePanel';
-import { CommitConflictBanner } from './CommitConflictBanner';
-import { CommitConflictPanel } from './CommitConflictPanel';
+import { CommitConflictBanner } from '../merge/CommitConflictBanner';
+import { CommitConflictPanel } from '../merge/CommitConflictPanel';
 import { DeletionConfirmDialog } from './DeletionConfirmDialog';
 import { LeafPanel } from './LeafPanel';
 import { NodeModal, type NodeQuickAction } from './NodeModal';
@@ -89,7 +80,6 @@ function CanvasWorkspaceInner({
   viewSwitcher,
 }: CanvasWorkspaceProps) {
   const [isPanMode, setIsPanMode] = useState(false);
-  const [branchFilter, setBranchFilter] = useState<'all' | string>('all');
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showMemoryModal, setShowMemoryModal] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
@@ -99,8 +89,7 @@ function CanvasWorkspaceInner({
   const router = useRouter();
   const [isAdding, setIsAdding] = useState(false);
   const [isLayouting, setIsLayouting] = useState(false);
-  const prefersReducedMotion = useReducedMotion();
-  const { t, isDeveloperMode } = useTerminology();
+  const { isDeveloperMode } = useTerminology();
 
   // Map next-themes to xyflow colorMode
   const colorMode: ColorMode = resolvedTheme === 'dark' ? 'dark' : 'light';
@@ -282,35 +271,10 @@ function CanvasWorkspaceInner({
     setShowShortcuts,
   });
 
-  const branchNames = useMemo(() => {
-    const names = new Set<string>();
-    for (const node of nodes) {
-      if (node.data.kind === 'unit' && node.data.branchType === 'branch' && node.data.branchName) {
-        names.add(node.data.branchName);
-      }
-    }
-    return Array.from(names).sort((a, b) => a.localeCompare(b));
-  }, [nodes]);
-
-  // Reset branch filter when branch is removed - using a ref to avoid synchronous setState in effect
-  const prevBranchNamesRef = useRef(branchNames);
-  useEffect(() => {
-    const prevBranchNames = prevBranchNamesRef.current;
-    prevBranchNamesRef.current = branchNames;
-
-    // Only check if branch was removed (not on initial render)
-    if (
-      branchFilter !== 'all' &&
-      !branchNames.includes(branchFilter) &&
-      prevBranchNames.includes(branchFilter)
-    ) {
-      // Use queueMicrotask to batch state updates after current render cycle
-      queueMicrotask(() => {
-        setBranchFilter('all');
-        setHighlight((current) => (current?.mode === 'branch' ? null : current));
-      });
-    }
-  }, [branchFilter, branchNames, setHighlight]);
+  const { branchNames, branchFilter, setBranchFilter } = useBranchFilter({
+    nodes,
+    setHighlight,
+  });
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
@@ -429,93 +393,14 @@ function CanvasWorkspaceInner({
 
         {/* Empty state overlay - guided 3-step onboarding card */}
         {nodes.length === 0 && !canvasLoading && !onboardingDismissed && (
-          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
-            <Card
-              className={cn(
-                'pointer-events-auto border-dashed border-2 border-[var(--stroke-default)]/60 px-10 py-8 max-w-lg',
-                glass.cardBase,
-                glass.highlight
-              )}
-            >
-              <p className="text-lg font-semibold text-[var(--text-primary)] mb-[var(--space-section)]">
-                Get started with T3X
-              </p>
-              <div className="flex flex-col gap-5">
-                {[
-                  {
-                    icon: MessageSquare,
-                    title: 'Add Conversation',
-                    desc: 'Start by adding a conversation to extract knowledge from',
-                  },
-                  {
-                    icon: GitCommitHorizontal,
-                    title: 'Extract Knowledge',
-                    desc: `${t('commitAction')} semantic content from your conversations`,
-                  },
-                  {
-                    icon: FileOutput,
-                    title: 'Create Outputs',
-                    desc: 'Generate outputs for different platforms',
-                  },
-                ].map((step, i) => (
-                  <div key={step.title} className="flex items-start gap-4 text-left">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--accent-commit)] text-white text-sm font-bold">
-                      {i + 1}
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <motion.div
-                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--accent-commit)]/10"
-                        animate={prefersReducedMotion ? undefined : { y: [0, -2, 0] }}
-                        transition={
-                          prefersReducedMotion
-                            ? undefined
-                            : {
-                                duration: 3,
-                                delay: i * 0.5,
-                                ease: 'easeInOut',
-                              }
-                        }
-                      >
-                        <step.icon className="h-5 w-5 text-[var(--accent-commit)]" />
-                      </motion.div>
-                      <div>
-                        <p className="text-sm font-medium text-[var(--text-primary)]">
-                          {step.title}
-                        </p>
-                        <p className="text-xs text-[var(--text-secondary)] mt-0.5">{step.desc}</p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-6 flex items-center justify-center gap-3">
-                <Button
-                  variant="default"
-                  size="sm"
-                  onClick={() => handleAddNode('unit')}
-                  disabled={isAdding}
-                  className="gap-1.5"
-                >
-                  {isAdding ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <MessageSquarePlus className="h-4 w-4" />
-                  )}
-                  Create Your First Conversation
-                </Button>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setOnboardingDismissed(true);
-                  localStorage.setItem('t3x_onboarded', 'true');
-                }}
-                className="mt-3 text-xs text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] transition-colors"
-              >
-                Don&apos;t show again
-              </button>
-            </Card>
-          </div>
+          <CanvasOnboarding
+            onAddNode={() => handleAddNode('unit')}
+            onDismiss={() => {
+              setOnboardingDismissed(true);
+              localStorage.setItem('t3x_onboarded', 'true');
+            }}
+            isAdding={isAdding}
+          />
         )}
 
         {/* Conflict detection banner */}
@@ -642,115 +527,7 @@ function CanvasWorkspaceInner({
       </Button>
 
       {/* Keyboard shortcuts dialog */}
-      <Dialog open={showShortcuts} onOpenChange={setShowShortcuts}>
-        <DialogContent className={cn('sm:max-w-md rounded-2xl', glass.cardBase, glass.highlight)}>
-          <DialogHeader>
-            <DialogTitle className="text-[var(--text-primary)]">Keyboard Shortcuts</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-[var(--space-group)] py-2">
-            {/* Navigation */}
-            <div>
-              <h4 className="text-[10px] font-medium text-[var(--text-tertiary)] uppercase tracking-wider mb-[var(--space-item)]">
-                Navigation
-              </h4>
-              <div className="grid gap-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-[var(--text-secondary)]">Show this help</span>
-                  <kbd className="rounded border border-[var(--stroke-divider)] bg-[var(--hover-bg)] px-1.5 py-0.5 text-xs font-mono text-[var(--text-secondary)]">
-                    ?
-                  </kbd>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-[var(--text-secondary)]">Command palette</span>
-                  <kbd className="rounded border border-[var(--stroke-divider)] bg-[var(--hover-bg)] px-1.5 py-0.5 text-xs font-mono text-[var(--text-secondary)]">
-                    {'\u2318'}K
-                  </kbd>
-                </div>
-              </div>
-            </div>
-            <div className="h-px bg-[var(--stroke-divider)]" />
-            {/* Canvas */}
-            <div>
-              <h4 className="text-[10px] font-medium text-[var(--text-tertiary)] uppercase tracking-wider mb-[var(--space-item)]">
-                Canvas
-              </h4>
-              <div className="grid gap-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-[var(--text-secondary)]">Select all</span>
-                  <div className="flex items-center gap-1">
-                    <kbd className="rounded border border-[var(--stroke-divider)] bg-[var(--hover-bg)] px-1.5 py-0.5 text-xs font-mono text-[var(--text-secondary)]">
-                      {'\u2318'}A
-                    </kbd>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-[var(--text-secondary)]">Deselect all</span>
-                  <kbd className="rounded border border-[var(--stroke-divider)] bg-[var(--hover-bg)] px-1.5 py-0.5 text-xs font-mono text-[var(--text-secondary)]">
-                    Escape
-                  </kbd>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-[var(--text-secondary)]">Cycle nodes</span>
-                  <div className="flex items-center gap-1">
-                    <kbd className="rounded border border-[var(--stroke-divider)] bg-[var(--hover-bg)] px-1.5 py-0.5 text-xs font-mono text-[var(--text-secondary)]">
-                      Tab
-                    </kbd>
-                    <span className="text-[10px] text-[var(--text-tertiary)]">/</span>
-                    <kbd className="rounded border border-[var(--stroke-divider)] bg-[var(--hover-bg)] px-1.5 py-0.5 text-xs font-mono text-[var(--text-secondary)]">
-                      {'\u21E7'}Tab
-                    </kbd>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-[var(--text-secondary)]">Navigate nodes</span>
-                  <kbd className="rounded border border-[var(--stroke-divider)] bg-[var(--hover-bg)] px-1.5 py-0.5 text-xs font-mono text-[var(--text-secondary)]">
-                    Arrow keys
-                  </kbd>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-[var(--text-secondary)]">Open node</span>
-                  <kbd className="rounded border border-[var(--stroke-divider)] bg-[var(--hover-bg)] px-1.5 py-0.5 text-xs font-mono text-[var(--text-secondary)]">
-                    Enter
-                  </kbd>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-[var(--text-secondary)]">Toggle pan mode</span>
-                  <kbd className="rounded border border-[var(--stroke-divider)] bg-[var(--hover-bg)] px-1.5 py-0.5 text-xs font-mono text-[var(--text-secondary)]">
-                    Space
-                  </kbd>
-                </div>
-              </div>
-            </div>
-            <div className="h-px bg-[var(--stroke-divider)]" />
-            {/* Actions */}
-            <div>
-              <h4 className="text-[10px] font-medium text-[var(--text-tertiary)] uppercase tracking-wider mb-[var(--space-item)]">
-                Actions
-              </h4>
-              <div className="grid gap-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-[var(--text-secondary)]">Delete selected node</span>
-                  <div className="flex items-center gap-1">
-                    <kbd className="rounded border border-[var(--stroke-divider)] bg-[var(--hover-bg)] px-1.5 py-0.5 text-xs font-mono text-[var(--text-secondary)]">
-                      {'\u232B'}
-                    </kbd>
-                    <span className="text-[10px] text-[var(--text-tertiary)]">/</span>
-                    <kbd className="rounded border border-[var(--stroke-divider)] bg-[var(--hover-bg)] px-1.5 py-0.5 text-xs font-mono text-[var(--text-secondary)]">
-                      Del
-                    </kbd>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-[var(--text-secondary)]">Toggle sidebar</span>
-                  <kbd className="rounded border border-[var(--stroke-divider)] bg-[var(--hover-bg)] px-1.5 py-0.5 text-xs font-mono text-[var(--text-secondary)]">
-                    {'\u2318'}\
-                  </kbd>
-                </div>
-              </div>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <CanvasShortcutsDialog open={showShortcuts} onOpenChange={setShowShortcuts} />
     </div>
   );
 }

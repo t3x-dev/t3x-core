@@ -1,11 +1,11 @@
 /**
  * Compressor Orchestrator
  *
- * buildPrompt → LLM generate → parse JSON → validate (no 'add' YOps) → return yops + metadata
+ * buildPrompt → LLM generate → parse JSON → validate (no 'define'/'populate' YOps) → return yops + metadata
  */
 
 import type { LLMProvider } from '../llm/types';
-import type { YOp } from '../yops/types';
+import type { YOp } from '../t3x-yops/types';
 import type { CompressInput } from './compressPrompt';
 import { buildCompressPrompt } from './compressPrompt';
 
@@ -73,17 +73,16 @@ export class Compressor {
     }
 
     // Convert legacy delta changes to YOps
-    // Compress only allows: update → set, remove → drop (reject 'add')
+    // Compress only allows: update → set, remove → drop (reject 'define'/'populate')
     const yops: YOp[] = [];
     for (const change of changes as Array<Record<string, unknown>>) {
-      if (change.action === 'add') {
-        return { ok: false, error: 'Compress output must not contain add actions', usage };
+      if (change.action === 'add' || change.action === 'define' || change.action === 'populate') {
+        return { ok: false, error: 'Compress output must not contain add/define/populate actions', usage };
       }
       if (change.action === 'remove') {
         yops.push({
           drop: {
             path: change.target as string,
-            reason: (change.reason as string) ?? 'compressed',
           },
         });
       } else if (change.action === 'update') {
@@ -95,8 +94,6 @@ export class Compressor {
               set: {
                 path: `${target}/${key}`,
                 value: value as string | number | boolean,
-                source: 'compress',
-                from: 'system',
               },
             });
           }

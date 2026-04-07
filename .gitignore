@@ -79,3 +79,15 @@ next-env.d.ts
 .t3x/test-pg-data
 .worktrees/
 .superpowers/
+
+# Local-only directories (not for git)
+scratchpad/
+preview/
+docs/
+specs/
+.claude/
+.gitmodules
+
+# Generated files
+packages/yops/src/specData.ts
+

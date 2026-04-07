@@ -3,15 +3,16 @@
  *
  * Parses raw LLM text output into YOp[] operations.
  * Handles two formats:
- * 1. YAML tree (first extraction) → single `add` YOp
+ * 1. YAML tree (first extraction) → `define` + `populate` YOps
  * 2. YOps list (incremental) → validated YOp[]
  */
 
 import * as yaml from 'js-yaml';
 import { yamlToTree } from '../semantic/tree';
 import type { SlotValue, TreeNode } from '../semantic/types';
-import { YOpSchema } from '../yops/schema';
-import type { YOp } from '../yops/types';
+import { autoFixYOp } from '../ops/gates/autofix';
+import { YOpSchema } from '../t3x-yops/schema';
+import type { YOp } from '../t3x-yops/types';
 
 // ── Result type ──
 
@@ -52,10 +53,6 @@ function sanitizeYamlQuotes(text: string): string {
       // Check if the content itself contains unescaped double quotes
       // (i.e., the outer quotes are the YAML delimiters, inner ones are problematic)
       if (content.includes('"')) {
-        const fixed = content
-          .replace(/"/g, '\u300C')
-          .replace(/\u300C([^\u300C]*?)$/g, (m) => m.replace(/\u300C/g, '"'));
-        // Actually, simpler: replace ALL inner quotes with corner brackets
         const safeContent = content.replace(/"/g, '「').replace(/"/g, '」');
         return `${prefix}"${safeContent}"`;
       }
@@ -83,21 +80,17 @@ function isYopsList(cleaned: string): boolean {
 }
 
 /**
- * Apply metadata (slot_quotes, source_map, confidence_map) to a tree node recursively.
+ * Apply metadata (slot_quotes, source_map) to a tree node recursively.
  */
 function applyMetadata(
   node: TreeNode,
   slotQuotes: Record<string, string>,
   sourceMap: Record<string, string>,
-  confidenceMap: Record<string, number>,
   prefix: string
 ): void {
-  // Apply source and confidence for this node
+  // Apply source for this node
   if (node.key in sourceMap) {
     node.source = sourceMap[node.key];
-  }
-  if (node.key in confidenceMap) {
-    node.confidence = confidenceMap[node.key];
   }
 
   // Apply slot_quotes for this node
@@ -128,29 +121,63 @@ function applyMetadata(
   // Recursively apply to children
   for (const child of node.children) {
     const childPrefix = prefix ? `${prefix}.${child.key}` : child.key;
-    applyMetadata(child, slotQuotes, sourceMap, confidenceMap, childPrefix);
+    applyMetadata(child, slotQuotes, sourceMap, childPrefix);
   }
 }
 
 /**
- * Convert a TreeNode back to a plain YAML-like object for the `add` op's `node` field.
- * Returns { [node.key]: value } where value contains slots + nested children.
+ * Convert a TreeNode into define + populate YOps recursively.
+ * Each node becomes a `define` (create empty node) + optional `populate` (fill slots).
  */
-function rebuildNodeValue(node: TreeNode): Record<string, unknown> {
-  const value: Record<string, unknown> = {};
+function treeToOps(
+  tree: TreeNode,
+  parentPath: string,
+  slotQuotes: Record<string, string>,
+  sourceMap: Record<string, string>,
+): YOp[] {
+  const yops: YOp[] = [];
+  const nodePath = parentPath ? `${parentPath}/${tree.key}` : tree.key;
 
-  // Add slots
-  for (const [k, v] of Object.entries(node.slots)) {
-    value[k] = v;
+  // Define the node
+  yops.push({ define: { path: nodePath } });
+
+  // Populate if has slots
+  if (Object.keys(tree.slots).length > 0) {
+    // Collect quotes for this node's slots
+    const nodeQuotes: Record<string, string> = {};
+    for (const [quotePath, quoteValue] of Object.entries(slotQuotes)) {
+      const segments = quotePath.split('.');
+      if (segments.length === 1 && segments[0] in tree.slots) {
+        nodeQuotes[segments[0]] = quoteValue;
+      }
+    }
+
+    yops.push({
+      populate: {
+        path: nodePath,
+        values: tree.slots as Record<string, SlotValue>,
+      },
+    });
   }
 
-  // Add children recursively
-  for (const child of node.children) {
-    const childObj = rebuildNodeValue(child);
-    value[child.key] = childObj[child.key];
+  // Recurse children
+  for (const child of tree.children) {
+    const childQuotes: Record<string, string> = {};
+    for (const [quotePath, quoteValue] of Object.entries(slotQuotes)) {
+      const prefix = tree.key;
+      if (quotePath.startsWith(`${child.key}.`) || quotePath === child.key) {
+        childQuotes[quotePath] = quoteValue;
+      }
+      // Also try with parent prefix stripped
+      if (quotePath.startsWith(`${prefix}.${child.key}.`)) {
+        const stripped = quotePath.slice(prefix.length + 1);
+        childQuotes[stripped] = quoteValue;
+      }
+    }
+    yops.push(...treeToOps(child, nodePath, childQuotes, sourceMap));
   }
 
-  return { [node.key]: value };
+  return yops;
 }
 
 /**
@@ -217,7 +244,6 @@ function parseYamlTree(cleaned: string): YOpsParseResult {
   // Parse metadata (JSON after ---)
   let slotQuotes: Record<string, string> = {};
   let sourceMap: Record<string, string> = {};
-  let confidenceMap: Record<string, number> = {};
 
   if (metadataPart) {
     try {
@@ -230,9 +256,6 @@ function parseYamlTree(cleaned: string): YOpsParseResult {
         if (metadata.source_map && typeof metadata.source_map === 'object') {
           sourceMap = metadata.source_map;
         }
-        if (metadata.confidence_map && typeof metadata.confidence_map === 'object') {
-          confidenceMap = metadata.confidence_map;
-        }
       }
     } catch {
       // Metadata parsing failure is non-fatal
@@ -240,23 +263,15 @@ function parseYamlTree(cleaned: string): YOpsParseResult {
   }
 
   // Apply metadata to tree
-  applyMetadata(tree, slotQuotes, sourceMap, confidenceMap, '');
+  applyMetadata(tree, slotQuotes, sourceMap, '');
 
   // Rebuild slot_quotes from tree (includes any applied metadata)
   const finalSlotQuotes = collectSlotQuotes(tree, '');
 
-  // Build the add YOp
-  const addOp: YOp = {
-    add: {
-      parent: '',
-      node: rebuildNodeValue(tree),
-      source: finalSlotQuotes,
-      from: sourceMap[rootKey] ?? 'T1',
-      ...(confidenceMap[rootKey] !== undefined ? { confidence: confidenceMap[rootKey] } : {}),
-    },
-  };
+  // Build define + populate YOps from tree
+  const yops = treeToOps(tree, '', slotQuotes, sourceMap);
 
-  return { ok: true, format: 'tree', yops: [addOp], tree, slotQuotes: finalSlotQuotes };
+  return { ok: true, format: 'tree', yops, tree, slotQuotes: finalSlotQuotes };
 }
 
 // ── Case 2: YOps List ──
@@ -287,14 +302,29 @@ function parseYopsList(cleaned: string): YOpsParseResult {
     return { ok: true, format: 'yops', yops: [] };
   }
 
-  // Validate each operation
+  // Validate each operation — try autofix before rejecting
   const validated: YOp[] = [];
   for (let i = 0; i < obj.yops.length; i++) {
     const result = YOpSchema.safeParse(obj.yops[i]);
-    if (!result.success) {
-      return { ok: false, error: `Invalid yop at index ${i}: ${result.error.message}` };
+    if (result.success) {
+      validated.push(result.data as YOp);
+      continue;
     }
-    validated.push(result.data as YOp);
+
+    // Schema validation failed — try autofix (strip extra fields, fix paths)
+    const rawOp = obj.yops[i] as Record<string, unknown>;
+    const fixResult = autoFixYOp(rawOp);
+    if (fixResult) {
+      const recheck = YOpSchema.safeParse(fixResult.fixed);
+      if (recheck.success) {
+        validated.push(recheck.data as YOp);
+        continue;
+      }
+    }
+
+    // Autofix didn't help — skip this op (don't fail the entire parse)
+    // The correction round in yaml-strategy will handle rejected ops
+    console.warn(`[yopsParser] Skipping invalid yop at index ${i}: ${result.error.message.slice(0, 200)}`);
   }
 
   return { ok: true, format: 'yops', yops: validated };

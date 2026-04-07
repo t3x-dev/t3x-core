@@ -19,7 +19,9 @@ import { OpenAPIHono } from '@hono/zod-openapi';
 import { apiReference } from '@scalar/hono-api-reference';
 import type { MiddlewareHandler } from 'hono';
 import { Hono } from 'hono';
+import { setupWebSocket } from './lib/ws';
 import { authMiddleware } from './middleware/auth';
+import { createWsRoute } from './routes/ws';
 import { corsMiddleware } from './middleware/cors';
 import { loggerMiddleware, pinoLogger } from './middleware/logger';
 import { projectAccessMiddleware } from './middleware/project-access';
@@ -27,55 +29,55 @@ import { rateLimitL1, rateLimitL2 } from './middleware/rate-limit';
 import { requestIdMiddleware } from './middleware/request-id';
 import {
   agentDraftRoutes,
+  apiKeysRoutes,
+  authLocalRoutes,
+  authMeRoutes,
+  autopilotRoutes,
   branchRoutes,
   chatRoutes,
+  checkRoutes,
+  commitFromDraftRoutes,
   commitRoutes,
+  comparisonsRoutes,
+  contextRoutes,
   conversationRoutes,
   curateRoutes,
-  yopsLogRoutes,
   deployAgentRoutes,
   diffRoutes,
   draftsRoutes,
   exportRoutes,
   extractionFeedbackRoutes,
-  treeAnswerRoutes,
-  treeCompressRoutes,
-  treeExtractRoutes,
-  treeExtractStreamRoutes,
   gateRoutes,
   healthRoutes,
+  importRoutes,
+  ingestRoutes,
+  integrationExtractRoutes,
+  knowledgeGraphRoutes,
   leavesRoutes,
+  llmRoutes,
+  mergeRoutes,
+  notificationsRoutes,
   pinsRoutes,
+  projectRoutes,
+  providersRoutes,
+  recipesRoutes,
   relationsRoutes,
   runnerRoutes,
   runsRoutes,
+  searchRoutes,
+  shareRoutes,
   statusRoutes,
+  templatesRoutes,
   topicsRoutes,
+  treeAnswerRoutes,
+  treeCompressRoutes,
+  treeExtractRoutes,
   turnRoutes,
+  usageRoutes,
+  webhooksRoutes,
+  yopsLogRoutes,
+  yopsValidateRoutes,
 } from './routes';
-import { apiKeysRoutes } from './routes/api-keys.openapi';
-import { authLocalRoutes } from './routes/auth-local.openapi';
-import { authMeRoutes } from './routes/auth-me.openapi';
-import { autopilotRoutes } from './routes/autopilot.openapi';
-import { checkRoutes } from './routes/check.openapi';
-import { commitFromDraftRoutes } from './routes/commit-from-draft.openapi';
-import { comparisonsRoutes } from './routes/comparisons.openapi';
-import { contextRoutes } from './routes/context.openapi';
-import { extractRoutes as integrationExtractRoutes } from './routes/extract.openapi';
-import { importRoutes } from './routes/import.openapi';
-import { ingestRoutes } from './routes/ingest.openapi';
-import { knowledgeGraphRoutes } from './routes/knowledge-graph.openapi';
-import { llmRoutes } from './routes/llm.openapi';
-import { mergeRoutes } from './routes/merge.openapi';
-import { notificationsRoutes } from './routes/notifications.openapi';
-import { projectRoutes } from './routes/projects.openapi';
-import { providersRoutes } from './routes/providers.openapi';
-import { recipesRoutes } from './routes/recipes.openapi';
-import { searchRoutes } from './routes/search.openapi';
-import { shareRoutes } from './routes/share.openapi';
-import { templatesRoutes } from './routes/templates.openapi';
-import { usageRoutes } from './routes/usage.openapi';
-import { webhooksRoutes } from './routes/webhooks.openapi';
 
 export interface CreateAppOptions {
   /** Skip built-in local auth (username/password). Set true for SaaS with OAuth. */
@@ -88,7 +90,13 @@ export interface CreateAppOptions {
   routes?: (api: OpenAPIHono) => void;
 }
 
-export function createApp(options?: CreateAppOptions): Hono {
+export interface CreateAppResult {
+  app: Hono;
+  /** Call with the HTTP server returned by @hono/node-server serve() */
+  injectWebSocket: ReturnType<typeof setupWebSocket>['injectWebSocket'];
+}
+
+export function createApp(options?: CreateAppOptions): CreateAppResult {
   const app = new Hono();
 
   // Global middleware (order: RequestId → CORS → Logger → L1 Rate Limit → [extensions] → L2 Rate Limit)
@@ -154,12 +162,12 @@ export function createApp(options?: CreateAppOptions): Hono {
   api.route('/', runnerRoutes);
   api.route('/', deployAgentRoutes);
   api.route('/', draftsRoutes);
-  api.route('/', treeExtractRoutes); // /v1/extract/trees
-  api.route('/', treeExtractStreamRoutes); // /v1/extract/trees/stream
+  api.route('/', treeExtractRoutes); // /v1/extract/trees + /v1/extract/trees/stream
   api.route('/', treeAnswerRoutes); // /v1/extract/trees/answer
   api.route('/', treeCompressRoutes); // /v1/conversations/:conversationId/compress
   api.route('/', gateRoutes); // /v1/gate/check
   api.route('/', yopsLogRoutes); // /v1/conversations/:conversationId/yops
+  api.route('/', yopsValidateRoutes); // /v1/yops/validate
   api.route('/', runsRoutes);
   api.route('/', leavesRoutes);
   api.route('/', pinsRoutes);
@@ -261,6 +269,10 @@ export function createApp(options?: CreateAppOptions): Hono {
   // Mount API routes under /api prefix
   app.route('/api', api);
 
+  // WebSocket — real-time event push (mounted at root, not under /api)
+  const { upgradeWebSocket, injectWebSocket } = setupWebSocket(app);
+  app.route('/', createWsRoute(upgradeWebSocket));
+
   // 404 handler
   app.notFound((c) => {
     return c.json(
@@ -290,13 +302,16 @@ export function createApp(options?: CreateAppOptions): Hono {
     );
   });
 
-  return app;
+  return { app, injectWebSocket };
 }
 
 // ── Re-exports for cloud repo (`import { ... } from '@t3x-dev/api'`) ──
 
 // Database
 export { closeDB, getDB } from './lib/db';
+// Real-time event bus
+export { eventBus, type RealtimeEvent, type RealtimeEventType } from './lib/event-bus';
+export { roomManager } from './lib/room-manager';
 // Error utilities
 export { createError, errorResponse, zodErrorHook } from './lib/errors';
 

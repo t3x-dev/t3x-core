@@ -7,7 +7,7 @@
  * @see docs/llm-extraction-anchoring-assessment.md (Layer 4: User Feedback)
  */
 
-import { boolean, index, pgTable, real, text, timestamp } from 'drizzle-orm/pg-core';
+import { boolean, index, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
 import { projects } from './schema';
 
 export const extractionFeedback = pgTable(
@@ -22,7 +22,6 @@ export const extractionFeedback = pgTable(
     action: text('action').notNull(), // accept | reject | edit | undo
     originalText: text('original_text'),
     inferenceType: text('inference_type'), // direct | paraphrase | cross_turn | implicit
-    confidence: real('confidence'),
     zone: text('zone'), // ready | review
     lowCoverage: boolean('low_coverage').default(false),
     editedText: text('edited_text'),

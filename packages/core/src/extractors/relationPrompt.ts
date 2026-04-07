@@ -25,10 +25,9 @@ export function buildRelationPrompt(nodes: Array<{ id: string; text: string }>):
 ## Rules
 1. Only identify relationships where there is clear semantic evidence.
 2. Each relation needs a brief reasoning explaining WHY this relation exists.
-3. Confidence: 0.9+ for explicit markers ("because", "however"), 0.7-0.9 for implicit but clear, 0.5-0.7 for inferred.
-4. A node can participate in multiple relations.
-5. Do NOT force relations — if nodes are independent, return fewer or zero relations.
-6. Relations are directional: source → target.
+3. A node can participate in multiple relations.
+4. Do NOT force relations — if nodes are independent, return fewer or zero relations.
+5. Relations are directional: source → target.
 
 ## Output Format
 Return a JSON array:
@@ -37,7 +36,6 @@ Return a JSON array:
     "source_id": "s_xxx",
     "target_id": "s_yyy",
     "type": "supports",
-    "confidence": 0.85,
     "reasoning": "S_yyy provides a concrete example that backs the claim in S_xxx"
   }
 ]

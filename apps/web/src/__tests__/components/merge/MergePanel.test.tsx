@@ -68,11 +68,11 @@ describe('MergePanel', () => {
 
   test('handles merge counts calculation', () => {
     const prepared = {
-      identical: [{ id: '1', text: 'Same', confidence: 0.9, source: { type: 'turn', id: 't1' } }],
+      identical: [{ id: '1', text: 'Same', source: { type: 'turn', id: 't1' } }],
       similarPairs: [
         {
-          source: { id: 's1', text: 'Source', confidence: 0.9, source: { type: 'turn', id: 't1' } },
-          target: { id: 's2', text: 'Target', confidence: 0.9, source: { type: 'turn', id: 't2' } },
+          source: { id: 's1', text: 'Source', source: { type: 'turn', id: 't1' } },
+          target: { id: 's2', text: 'Target', source: { type: 'turn', id: 't2' } },
           wordDiff: [],
           resolution: 'source',
         },
@@ -82,7 +82,6 @@ describe('MergePanel', () => {
           node: {
             id: '2',
             text: 'Only in source',
-            confidence: 0.9,
             source: { type: 'turn', id: 't1' },
           },
           keep: true,
@@ -93,7 +92,6 @@ describe('MergePanel', () => {
           node: {
             id: '3',
             text: 'Only in target',
-            confidence: 0.9,
             source: { type: 'turn', id: 't2' },
           },
           keep: false,
@@ -119,14 +117,14 @@ describe('MergePanel', () => {
   test('handles unresolved count calculation', () => {
     const similarPairs = [
       {
-        source: { id: 's1', text: 'S', confidence: 0.9, source: { type: 'turn', id: 't1' } },
-        target: { id: 's2', text: 'T', confidence: 0.9, source: { type: 'turn', id: 't2' } },
+        source: { id: 's1', text: 'S', source: { type: 'turn', id: 't1' } },
+        target: { id: 's2', text: 'T', source: { type: 'turn', id: 't2' } },
         wordDiff: [],
         resolution: undefined,
       },
       {
-        source: { id: 's3', text: 'S2', confidence: 0.9, source: { type: 'turn', id: 't1' } },
-        target: { id: 's4', text: 'T2', confidence: 0.9, source: { type: 'turn', id: 't2' } },
+        source: { id: 's3', text: 'S2', source: { type: 'turn', id: 't1' } },
+        target: { id: 's4', text: 'T2', source: { type: 'turn', id: 't2' } },
         wordDiff: [],
         resolution: 'source',
       },
@@ -139,8 +137,8 @@ describe('MergePanel', () => {
   test('can execute merge when all pairs resolved', () => {
     const similarPairs = [
       {
-        source: { id: 's1', text: 'S', confidence: 0.9, source: { type: 'turn', id: 't1' } },
-        target: { id: 's2', text: 'T', confidence: 0.9, source: { type: 'turn', id: 't2' } },
+        source: { id: 's1', text: 'S', source: { type: 'turn', id: 't1' } },
+        target: { id: 's2', text: 'T', source: { type: 'turn', id: 't2' } },
         wordDiff: [],
         resolution: 'source',
       },
@@ -153,8 +151,8 @@ describe('MergePanel', () => {
   test('cannot execute merge when pairs unresolved', () => {
     const similarPairs = [
       {
-        source: { id: 's1', text: 'S', confidence: 0.9, source: { type: 'turn', id: 't1' } },
-        target: { id: 's2', text: 'T', confidence: 0.9, source: { type: 'turn', id: 't2' } },
+        source: { id: 's1', text: 'S', source: { type: 'turn', id: 't1' } },
+        target: { id: 's2', text: 'T', source: { type: 'turn', id: 't2' } },
         wordDiff: [],
         resolution: undefined,
       },

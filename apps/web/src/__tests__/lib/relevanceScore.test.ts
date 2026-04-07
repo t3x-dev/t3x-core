@@ -1,11 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { type RelevanceContext, relevanceScore } from '@/lib/relevanceScore';
 
-const makeNode = (id: string, confidence?: number) => ({
+const makeNode = (id: string) => ({
   id,
   type: 'test',
   slots: { val: 'x' },
-  ...(confidence != null ? { confidence } : {}),
 });
 
 const emptyCtx: RelevanceContext = {
@@ -97,14 +96,6 @@ describe('relevanceScore', () => {
     expect(result.reasons[0].reason).toBe('Connected to 2 other trees');
   });
 
-  it('tree confidence contributes to score', () => {
-    const ctx: RelevanceContext = { ...emptyCtx };
-    const result = relevanceScore(makeNode('f_001', 0.9), ctx);
-    // 0.9 * 0.5 = 0.45
-    expect(result.score).toBeCloseTo(0.45, 2);
-    expect(result.reasons[0].signal).toBe('confidence');
-  });
-
   it('reasons are sorted by value descending', () => {
     const ctx: RelevanceContext = {
       ...emptyCtx,
@@ -112,7 +103,7 @@ describe('relevanceScore', () => {
       touchCountMap: { f_001: 5 }, // 0.7
       relationDegreeMap: { f_001: 3 }, // 0.6
     };
-    const result = relevanceScore(makeNode('f_001', 0.8), ctx);
+    const result = relevanceScore(makeNode('f_001'), ctx);
     expect(result.reasons[0].value).toBeGreaterThanOrEqual(result.reasons[1].value);
     expect(result.reasons[1].value).toBeGreaterThanOrEqual(result.reasons[2].value);
   });
@@ -124,8 +115,8 @@ describe('relevanceScore', () => {
       touchCountMap: { f_001: 3 }, // 0.42
       relationDegreeMap: { f_001: 2 }, // 0.4
     };
-    const result = relevanceScore(makeNode('f_001', 0.6), ctx);
-    // max(0.343, 0.42, 0.4, 0.3) = 0.42 (touch_frequency wins)
+    const result = relevanceScore(makeNode('f_001'), ctx);
+    // max(0.343, 0.42, 0.4) = 0.42 (touch_frequency wins)
     expect(result.score).toBeCloseTo(0.42, 2);
     expect(result.reasons[0].signal).toBe('touch_frequency');
   });

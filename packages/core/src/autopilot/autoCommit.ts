@@ -7,8 +7,6 @@
 export interface AutopilotConfig {
   /** Master toggle for auto-commit */
   enabled: boolean;
-  /** Minimum confidence for a SP to qualify (default 0.85) */
-  min_confidence: number;
   /** Minimum qualifying nodes to trigger commit (default 1) */
   min_nodes: number;
   /** Also create a leaf on auto-commit (default false) */
@@ -19,7 +17,6 @@ export interface AutopilotConfig {
 
 export const DEFAULT_AUTOPILOT_CONFIG: AutopilotConfig = {
   enabled: false,
-  min_confidence: 0.85,
   min_nodes: 1,
   auto_create_leaf: false,
   target_branch: 'main',
@@ -28,7 +25,6 @@ export const DEFAULT_AUTOPILOT_CONFIG: AutopilotConfig = {
 export interface AutoCommitCandidate {
   id: string;
   text: string;
-  confidence: number;
   zone: 'ready' | 'review';
   status: string;
   staged: boolean;
@@ -36,7 +32,7 @@ export interface AutoCommitCandidate {
 
 export interface AutoCommitPlan {
   should_commit: boolean;
-  nodes: Array<{ id: string; text: string; confidence: number }>;
+  nodes: Array<{ id: string; text: string }>;
   skipped: Array<{ id: string; reason: string }>;
   reason: string;
 }
@@ -47,8 +43,7 @@ export interface AutoCommitPlan {
  * Rules:
  * 1. If autopilot disabled -> no commit
  * 2. Filter: zone === 'ready' && staged === true && status !== 'undone'
- * 3. Check confidence >= min_confidence for each
- * 4. Need at least min_nodes qualifying nodes -> otherwise no commit
+ * 3. Need at least min_nodes qualifying nodes -> otherwise no commit
  */
 export function evaluateAutoCommit(
   candidates: AutoCommitCandidate[],
@@ -66,7 +61,7 @@ export function evaluateAutoCommit(
     };
   }
 
-  const eligible: Array<{ id: string; text: string; confidence: number }> = [];
+  const eligible: Array<{ id: string; text: string }> = [];
   const skipped: Array<{ id: string; reason: string }> = [];
 
   for (const c of candidates) {
@@ -82,11 +77,7 @@ export function evaluateAutoCommit(
       skipped.push({ id: c.id, reason: 'undone' });
       continue;
     }
-    if (c.confidence < config.min_confidence) {
-      skipped.push({ id: c.id, reason: 'below_confidence_threshold' });
-      continue;
-    }
-    eligible.push({ id: c.id, text: c.text, confidence: c.confidence });
+    eligible.push({ id: c.id, text: c.text });
   }
 
   if (eligible.length < config.min_nodes) {
@@ -113,7 +104,6 @@ export function mergeAutopilotConfig(partial?: Partial<AutopilotConfig>): Autopi
   if (!partial) return { ...DEFAULT_AUTOPILOT_CONFIG };
   return {
     enabled: partial.enabled ?? DEFAULT_AUTOPILOT_CONFIG.enabled,
-    min_confidence: partial.min_confidence ?? DEFAULT_AUTOPILOT_CONFIG.min_confidence,
     min_nodes: partial.min_nodes ?? DEFAULT_AUTOPILOT_CONFIG.min_nodes,
     auto_create_leaf: partial.auto_create_leaf ?? DEFAULT_AUTOPILOT_CONFIG.auto_create_leaf,
     target_branch: partial.target_branch ?? DEFAULT_AUTOPILOT_CONFIG.target_branch,

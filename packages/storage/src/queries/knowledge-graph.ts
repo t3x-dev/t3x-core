@@ -49,7 +49,6 @@ export interface KnowledgeEdgeOutput {
     source_node_key: string;
     target_node_key: string;
     relation_type: string;
-    confidence: number;
   }> | null;
   created_at: string;
 }
@@ -292,7 +291,6 @@ export async function insertKnowledgeEdge(
       source_node_key: string;
       target_node_key: string;
       relation_type: string;
-      confidence: number;
     }>;
   }
 ): Promise<KnowledgeEdgeOutput> {
@@ -329,7 +327,6 @@ export async function insertKnowledgeEdges(
       source_node_key: string;
       target_node_key: string;
       relation_type: string;
-      confidence: number;
     }>;
   }>
 ): Promise<KnowledgeEdgeOutput[]> {
