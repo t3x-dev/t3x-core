@@ -31,11 +31,12 @@ interface SlotRowProps {
   value: string;
   diffType: 'added' | 'modified' | 'removed' | null;
   oldValue?: string;
+  sourceTag?: string;
   onDelete: () => void;
   onEdit: (newValue: string) => void;
 }
 
-function SlotRow({ nodeKey: _nodeKey, slotKey, value, diffType, oldValue, onDelete, onEdit }: SlotRowProps) {
+function SlotRow({ nodeKey: _nodeKey, slotKey, value, diffType, oldValue, sourceTag, onDelete, onEdit }: SlotRowProps) {
   const [editing, setEditing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -121,8 +122,24 @@ function SlotRow({ nodeKey: _nodeKey, slotKey, value, diffType, oldValue, onDele
         >
           {value}
         </span>
-        {/* Source tag placeholder — rendered from node.slots._source if present */}
+        {/* Source tag — turn reference if available */}
+        {sourceTag && (
+          <span
+            className="text-[7px] font-bold px-1 py-px rounded-sm bg-[var(--source-dim)] text-[var(--source)] cursor-pointer hover:bg-[var(--source)]/20 shrink-0 ml-1 tracking-wide"
+            title={`Source: ${sourceTag}`}
+          >
+            {sourceTag}
+          </span>
+        )}
         <div className="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button
+            type="button"
+            title="Accept slot"
+            onClick={(e) => { e.stopPropagation(); }}
+            className="text-[var(--text-tertiary)] hover:text-[var(--status-success)] cursor-pointer"
+          >
+            <Check className="h-2.5 w-2.5" />
+          </button>
           <button
             type="button"
             title="Delete slot"
@@ -263,6 +280,7 @@ function NodeRow({
               value={String(val)}
               diffType={slotDiff}
               oldValue={mod?.oldValue}
+              sourceTag={slots._source?.[key] ? String(slots._source[key]) : undefined}
               onDelete={() => onDeleteSlot(key)}
               onEdit={(newValue) => onEditSlot(key, newValue)}
             />

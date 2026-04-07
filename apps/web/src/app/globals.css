@@ -306,6 +306,7 @@
   --action-hover: #2563eb;
   --commit: #16a34a;
   --commit-hover: #15803d;
+  --commit-text: #ffffff;
   --syn-key: #7c3aed;
   --syn-string: #059669;
   --syn-op: #c026d3;
@@ -451,6 +452,7 @@
   --action-hover: #f59e0b;
   --commit: #4ade80;
   --commit-hover: #22c55e;
+  --commit-text: #111111;
   --syn-key: #c084fc;
   --syn-string: #86efac;
   --syn-op: #f0abfc;

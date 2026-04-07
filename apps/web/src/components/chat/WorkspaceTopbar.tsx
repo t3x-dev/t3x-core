@@ -58,22 +58,22 @@ export function WorkspaceTopbar() {
       {diff && (
         <div className="flex items-center gap-1 ml-2">
           {diff.summary.nodesAdded > 0 && (
-            <span className="text-[8px] font-semibold px-1.5 py-0.5 rounded bg-[var(--status-success)]/15 text-[var(--status-success)]">
+            <span className="text-[8px] font-semibold font-mono px-1.5 py-0.5 rounded bg-[var(--status-success)]/15 text-[var(--status-success)]">
               +{diff.summary.nodesAdded} node{diff.summary.nodesAdded !== 1 ? 's' : ''}
             </span>
           )}
           {diff.summary.slotsAdded > 0 && (
-            <span className="text-[8px] font-semibold px-1.5 py-0.5 rounded bg-[var(--status-success)]/15 text-[var(--status-success)]">
+            <span className="text-[8px] font-semibold font-mono px-1.5 py-0.5 rounded bg-[var(--status-success)]/15 text-[var(--status-success)]">
               +{diff.summary.slotsAdded} slot{diff.summary.slotsAdded !== 1 ? 's' : ''}
             </span>
           )}
           {diff.summary.slotsModified > 0 && (
-            <span className="text-[8px] font-semibold px-1.5 py-0.5 rounded bg-[var(--status-warning)]/15 text-[var(--status-warning)]">
+            <span className="text-[8px] font-semibold font-mono px-1.5 py-0.5 rounded bg-[var(--status-warning)]/15 text-[var(--status-warning)]">
               ~{diff.summary.slotsModified}
             </span>
           )}
           {diff.summary.nodesRemoved > 0 && (
-            <span className="text-[8px] font-semibold px-1.5 py-0.5 rounded bg-[var(--status-error)]/15 text-[var(--status-error)]">
+            <span className="text-[8px] font-semibold font-mono px-1.5 py-0.5 rounded bg-[var(--status-error)]/15 text-[var(--status-error)]">
               -{diff.summary.nodesRemoved}
             </span>
           )}
@@ -94,7 +94,7 @@ export function WorkspaceTopbar() {
           type="button"
           onClick={handleCommit}
           disabled={!canCommit}
-          className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-semibold rounded bg-[var(--commit)] text-white hover:bg-[var(--commit-hover)] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-semibold rounded bg-[var(--commit)] text-[var(--commit-text)] hover:bg-[var(--commit-hover)] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
         >
           <GitCommit className="h-2.5 w-2.5" />
           {isCommitting ? 'Committing...' : 'Commit'}

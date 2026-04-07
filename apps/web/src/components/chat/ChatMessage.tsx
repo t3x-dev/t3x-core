@@ -186,10 +186,10 @@ function SourceMappedText({
           );
         }
 
-        // Non-review phase: keep existing inline span behavior
+        // Non-review phase: green underline default, purple when active
         const spanStyle: React.CSSProperties = {
-          background: isActive ? 'color-mix(in srgb, var(--source) 30%, transparent)' : 'var(--source-dim)',
-          borderBottom: isActive ? '2px solid var(--source)' : 'none',
+          background: isActive ? 'color-mix(in srgb, var(--source) 30%, transparent)' : 'color-mix(in srgb, var(--status-success) 12%, transparent)',
+          borderBottom: isActive ? '2px solid var(--source)' : '2px solid var(--status-success)',
           borderRadius: 2,
           padding: '1px 0',
           color: 'inherit',
@@ -388,11 +388,11 @@ export function ChatMessage({
       )}
       style={{
         background: isWholeMessageHighlight
-          ? 'color-mix(in srgb, var(--slot) 15%, transparent)'
+          ? 'color-mix(in srgb, var(--source) 15%, transparent)'
           : isSourceMessage && hasCharHighlights
-            ? 'color-mix(in srgb, var(--slot) 6%, transparent)'
+            ? 'color-mix(in srgb, var(--source) 6%, transparent)'
             : 'transparent',
-        borderLeft: isSourceMessage ? '3px solid color-mix(in srgb, var(--slot) 50%, transparent)' : undefined,
+        borderLeft: isSourceMessage ? '3px solid color-mix(in srgb, var(--source) 50%, transparent)' : undefined,
       }}
       onMouseEnter={() => turnIndex != null && useWorkspaceStore.getState().select('chat', { turnIndex })}
       onMouseLeave={() => useWorkspaceStore.getState().clearSelection()}

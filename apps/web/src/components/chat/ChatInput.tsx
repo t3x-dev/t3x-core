@@ -1,6 +1,6 @@
 'use client';
 
-import { Brain, Globe, Paperclip, Send, Square } from 'lucide-react';
+import { Brain, Globe, Hexagon, Paperclip, Send, Square } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -268,6 +268,23 @@ export function ChatInput({
             <Brain className="h-4 w-4" />
           </Button>
         )}
+
+        {/* Extract button */}
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          onClick={() => window.dispatchEvent(new CustomEvent('t3x:extract-requested'))}
+          disabled={disabled}
+          className={cn(
+            'h-8 w-8 shrink-0 rounded-lg transition-colors duration-[var(--motion-base)]',
+            'bg-[var(--source-dim)] text-[var(--source)] hover:bg-[var(--source)]/20'
+          )}
+          aria-label="Extract to YOps"
+          title="Extract to YOps"
+        >
+          <Hexagon className="h-4 w-4" />
+        </Button>
 
         {/* Textarea */}
         <textarea

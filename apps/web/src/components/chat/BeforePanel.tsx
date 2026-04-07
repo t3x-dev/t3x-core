@@ -50,7 +50,7 @@ export function BeforePanel() {
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between px-3 py-1.5 border-b border-[var(--stroke-default)] bg-[var(--panel-alt)]">
         <span className="text-[9px] font-bold uppercase tracking-wider text-[var(--text-tertiary)]">
-          Before <span className="opacity-50">🔒</span>
+          Before <span className="opacity-80">🔒</span>
         </span>
         <span className="text-[9px] font-mono text-[var(--text-tertiary)] opacity-60">
           {baseCommitHash ? baseCommitHash.slice(0, 6) : 'empty'}

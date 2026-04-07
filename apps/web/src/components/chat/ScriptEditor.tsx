@@ -7,6 +7,7 @@ import { yaml } from '@codemirror/lang-yaml';
 import { oneDark } from '@codemirror/theme-one-dark';
 import { lintGutter } from '@codemirror/lint';
 import { defaultKeymap } from '@codemirror/commands';
+import { useTheme } from 'next-themes';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 
 const PLACEHOLDER = `yops:
@@ -15,16 +16,42 @@ const PLACEHOLDER = `yops:
       value: "new value"
       from: T1`;
 
+// Light theme using CSS variable tokens from globals.css
+const lightTheme = EditorView.theme(
+  {
+    '&': { backgroundColor: 'var(--editor-bg)', color: 'var(--text-primary)' },
+    '.cm-gutters': { backgroundColor: 'var(--editor-gutter)', borderRight: '1px solid var(--stroke-default)', color: 'var(--text-tertiary)' },
+    '.cm-activeLineGutter': { backgroundColor: 'var(--hover-bg)' },
+    '.cm-activeLine': { backgroundColor: 'var(--hover-bg)' },
+    '.cm-selectionBackground': { backgroundColor: 'rgba(59,130,246,0.15) !important' },
+    '.cm-cursor': { borderLeftColor: 'var(--text-primary)' },
+    '.cm-matchingBracket': { backgroundColor: 'rgba(59,130,246,0.2)', outline: 'none' },
+    // Syntax token overrides for light mode
+    '.ͼb': { color: 'var(--syn-key)' },       // def (keywords)
+    '.ͼd': { color: 'var(--syn-string)' },     // string
+    '.ͼc': { color: 'var(--syn-op)' },         // keyword
+    '.ͼe': { color: 'var(--syn-comment)' },    // comment
+    '.ͼi': { color: 'var(--syn-path)' },       // meta
+    '.ͼ7': { color: 'var(--syn-tag)' },        // atom
+  },
+  { dark: false }
+);
+
 export function ScriptEditor() {
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const mode = useWorkspaceStore((s) => s.mode);
   const scriptText = useWorkspaceStore((s) => s.scriptText);
+  const scriptOps = useWorkspaceStore((s) => s.scriptOps);
   const parseErrors = useWorkspaceStore((s) => s.parseErrors);
   const execError = useWorkspaceStore((s) => s.execError);
+  const baseCommitHash = useWorkspaceStore((s) => s.baseCommitHash);
   const setScriptText = useWorkspaceStore((s) => s.setScriptText);
   const isExternalUpdate = useRef(false);
   const readOnlyCompartment = useRef(new Compartment());
+  const themeCompartment = useRef(new Compartment());
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
 
   // Initialize CodeMirror
   useEffect(() => {
@@ -34,7 +61,7 @@ export function ScriptEditor() {
       extensions: [
         lineNumbers(),
         yaml(),
-        oneDark,
+        themeCompartment.current.of(isDark ? oneDark : lightTheme),
         lintGutter(),
         keymap.of(defaultKeymap),
         cmPlaceholder(PLACEHOLDER),
@@ -56,6 +83,15 @@ export function ScriptEditor() {
     return () => view.destroy();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Switch theme when dark/light changes
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    view.dispatch({
+      effects: themeCompartment.current.reconfigure(isDark ? oneDark : lightTheme),
+    });
+  }, [isDark]);
 
   // Sync store → editor
   useEffect(() => {
@@ -81,8 +117,12 @@ export function ScriptEditor() {
     });
   }, [mode]);
 
+  const hasErrors = parseErrors.length > 0 || !!execError;
+  const opsCount = scriptOps.length;
+
   return (
     <div className="flex flex-col h-full bg-[var(--editor-bg)]">
+      {/* Header */}
       <div className="flex items-center justify-between px-3 py-1.5 border-b border-[var(--stroke-default)] bg-[var(--editor-gutter)]">
         <span className="text-[9px] font-bold uppercase tracking-wider text-[var(--text-tertiary)]">
           Script
@@ -96,8 +136,12 @@ export function ScriptEditor() {
           {mode === 'streaming' ? 'read-only' : 'editable'}
         </span>
       </div>
+
+      {/* Editor */}
       <div ref={editorRef} className="flex-1 min-h-0 overflow-hidden" />
-      {(parseErrors.length > 0 || execError) && (
+
+      {/* Error panel */}
+      {hasErrors && (
         <div className="border-t border-[var(--status-error)]/30 bg-[var(--status-error-muted)] px-3 py-1.5 text-[10px] font-mono max-h-20 overflow-y-auto">
           {parseErrors.map((err, i) => (
             <div key={i} className="text-[var(--status-error)] py-px">
@@ -113,6 +157,20 @@ export function ScriptEditor() {
           )}
         </div>
       )}
+
+      {/* Status bar (Fix 3) */}
+      <div className="flex items-center gap-2 px-3 py-1 border-t border-[var(--stroke-default)] bg-[var(--editor-gutter)] text-[9px] text-[var(--text-tertiary)]">
+        {hasErrors ? (
+          <span className="text-[var(--status-error)]">✗ {parseErrors.length + (execError ? 1 : 0)} error(s)</span>
+        ) : opsCount > 0 ? (
+          <span className="text-[var(--status-success)]">✓ {opsCount} ops{mode === 'executed' ? ' applied' : ''}</span>
+        ) : (
+          <span>no ops</span>
+        )}
+        {baseCommitHash && (
+          <span className="ml-auto font-mono">base: {baseCommitHash.slice(0, 6)}</span>
+        )}
+      </div>
     </div>
   );
 }
