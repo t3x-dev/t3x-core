@@ -8,6 +8,7 @@ import {
   commits,
   conversations,
   deleteProject,
+  ensureMainBranch,
   findProjects,
   findProjectWithStats,
   getBusinessRules,
@@ -197,6 +198,12 @@ projectRoutes.openapi(createProjectRoute, async (c) => {
       metadata: body.metadata,
       ownerId: userId,
     });
+
+    // Bootstrap the default 'main' branch so it always exists from day one.
+    // Every commit defaults to `branch: 'main'`, so the branches table must
+    // reflect that contract from the moment the project is created.
+    // `ensureMainBranch` is idempotent, so retries are safe.
+    await ensureMainBranch(db, project.projectId);
 
     const apiProject = {
       project_id: project.projectId,
