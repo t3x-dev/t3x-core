@@ -1,9 +1,11 @@
 'use client';
 
-import { Loader2, Play } from 'lucide-react';
-import { useMemo } from 'react';
+import { GitCommit, Loader2, Play } from 'lucide-react';
+import { useCallback, useMemo, useState } from 'react';
 import type { TreeNode } from '@t3x-dev/core';
+import { toast } from 'sonner';
 import { computeTreeDiff } from '@/lib/treeDiff';
+import { useCommitStore } from '@/store/commitStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 
 export function WorkspaceTopbar() {
@@ -13,6 +15,8 @@ export function WorkspaceTopbar() {
   const parseErrors = useWorkspaceStore((s) => s.parseErrors);
   const scriptOps = useWorkspaceStore((s) => s.scriptOps);
   const execute = useWorkspaceStore((s) => s.execute);
+  const isCommitting = useCommitStore((s) => s.isCommitting);
+  const [commitMessage, setCommitMessage] = useState('');
 
   const diff = useMemo(() => {
     if (!result) return null;
@@ -20,6 +24,25 @@ export function WorkspaceTopbar() {
   }, [base.trees, result]);
 
   const canRun = mode !== 'streaming' && mode !== 'committing' && parseErrors.length === 0 && scriptOps.length > 0;
+  const canCommit = result !== null && mode === 'executed' && !isCommitting;
+
+  const handleCommit = useCallback(async () => {
+    try {
+      useWorkspaceStore.getState().setMode('committing');
+      await useCommitStore.getState().commitNodes(commitMessage || 'Extract knowledge');
+      // After commit, snapshot new state as base
+      if (result) {
+        useWorkspaceStore.getState().snapshotBase(result, useCommitStore.getState().lastCommitHash);
+      }
+      useWorkspaceStore.getState().setMode('idle');
+      useWorkspaceStore.getState().setScriptText('');
+      setCommitMessage('');
+      toast.success('Committed successfully');
+    } catch (err: unknown) {
+      useWorkspaceStore.getState().setMode('executed');
+      toast.error(`Commit failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+  }, [commitMessage, result]);
 
   return (
     <div className="flex items-center gap-2 px-3 py-1.5 border-b border-[var(--stroke)] bg-[var(--panel-alt)]">
@@ -66,6 +89,15 @@ export function WorkspaceTopbar() {
         >
           <Play className="h-2.5 w-2.5" />
           {result ? 'Re-run' : 'Run'}
+        </button>
+        <button
+          type="button"
+          onClick={handleCommit}
+          disabled={!canCommit}
+          className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-semibold rounded bg-green-500 text-black hover:bg-green-400 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+        >
+          <GitCommit className="h-2.5 w-2.5" />
+          {isCommitting ? 'Committing...' : 'Commit'}
         </button>
       </div>
     </div>

@@ -78,9 +78,13 @@ export function useExtraction({ resolvedConversationId }: UseExtractionParams) {
       const deltaOps: unknown[] | undefined = Array.isArray(rawDelta) ? rawDelta : undefined;
 
       if (deltaOps && deltaOps.length > 0) {
-        // Has delta ops — show streaming mode
+        // Feed delta ops into workspace script editor
+        const { opsToYaml } = await import('@/lib/scriptParser');
+        const yamlText = opsToYaml(deltaOps as import('@t3x-dev/core').YOp[]);
+        useWorkspaceStore.getState().setScriptText(yamlText);
+        // Auto-execute to populate result + After panel
+        useWorkspaceStore.getState().execute();
         useDraftStore.setState({ isExtracting: false });
-        useWorkspaceStore.getState().setMode('streaming');
       } else {
         // No delta ops — go directly to executed mode
         useWorkspaceStore.getState().setMode('executed');

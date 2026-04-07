@@ -25,7 +25,7 @@ const TreeNodeSchema = z.object({
 });
 
 const ValidateRequestSchema = z.object({
-  trees: z.array(TreeNodeSchema).min(1),
+  trees: z.array(TreeNodeSchema).min(1).max(500),
   relations: z
     .array(
       z.object({
@@ -34,8 +34,9 @@ const ValidateRequestSchema = z.object({
         type: z.string(),
       }),
     )
-    .default([]),
-  yops: z.array(z.record(z.string(), z.any())).min(1),
+    .default([])
+    .pipe(z.array(z.any()).max(2000)),
+  yops: z.array(z.record(z.string(), z.any())).min(1).max(5000),
 });
 
 const ValidateResponseSchema = z.object({
