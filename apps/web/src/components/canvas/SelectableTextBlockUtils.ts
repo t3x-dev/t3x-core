@@ -133,12 +133,12 @@ export function getTokenClasses(state: TokenState, isDragging: boolean, isSepara
   return cn(
     'inline py-0.5 rounded transition-colors cursor-pointer',
     state === 'normal' && 'hover:bg-[var(--hover-bg)]',
-    state === 'selected' &&
-      'bg-[var(--status-success-muted)] hover:bg-[var(--status-success)]/20',
-    state === 'excluded' &&
-      'bg-[var(--status-error-muted)] hover:bg-[var(--status-error)]/15',
-    state === 'keyword-must' && 'bg-[var(--status-success)] text-white font-medium hover:bg-[var(--status-success)]',
-    state === 'keyword-mustnt' && 'bg-[var(--status-error)] text-white font-medium hover:bg-[var(--status-error)]',
+    state === 'selected' && 'bg-[var(--status-success-muted)] hover:bg-[var(--status-success)]/20',
+    state === 'excluded' && 'bg-[var(--status-error-muted)] hover:bg-[var(--status-error)]/15',
+    state === 'keyword-must' &&
+      'bg-[var(--status-success)] text-white font-medium hover:bg-[var(--status-success)]',
+    state === 'keyword-mustnt' &&
+      'bg-[var(--status-error)] text-white font-medium hover:bg-[var(--status-error)]',
     // Anchor candidate: dotted underline (unconfirmed)
     state === 'anchor-candidate' &&
       'underline decoration-dotted decoration-amber-500 underline-offset-2 hover:bg-amber-50 dark:hover:bg-amber-800',
