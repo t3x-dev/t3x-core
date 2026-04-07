@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, Plus, Settings, Trash2 } from 'lucide-react'
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { UserMenu } from '@/components/layout/UserMenu';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -231,6 +232,9 @@ export function ChatSidebar() {
             collapsed ? 'items-center' : ''
           )}
         >
+          {/* User Menu */}
+          <UserMenu collapsed={collapsed} />
+
           {/* Settings */}
           <Tooltip>
             <TooltipTrigger asChild>
