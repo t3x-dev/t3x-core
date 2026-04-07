@@ -7,8 +7,8 @@ import { treesToNodes } from '@/lib/treeCompat';
 import { useChatStore } from '@/store/chatStore';
 import { useCommitStore } from '@/store/commitStore';
 import { useDraftStore } from '@/store/draftStore';
-import { usePhaseStore } from '@/store/phaseStore';
 import { useSessionStore } from '@/store/sessionStore';
+import { useWorkspaceStore } from '@/store/workspaceStore';
 
 interface UseChatInitParams {
   conversationId: string;
@@ -101,8 +101,8 @@ export function useChatInit({
               confirmed[f.id] = true;
             }
             useCommitStore.setState({ confirmedNodeIds: confirmed });
-            if (usePhaseStore.getState().panelMode === 'collapsed') {
-              usePhaseStore.getState().setPanelMode('default');
+            if (!useWorkspaceStore.getState().panelExpanded) {
+              useWorkspaceStore.getState().setPanelExpanded(true);
             }
           }
           // Mark as hydrated so resetDraft() is skipped on re-render
@@ -121,19 +121,16 @@ export function useChatInit({
         .then(([draft, yopsEntries, topicsList]) => {
           if (draft && draft.trees.length > 0) {
             useDraftStore.getState().setDraft(draft);
-            if (usePhaseStore.getState().panelMode === 'collapsed') {
-              usePhaseStore.getState().setPanelMode('default');
+            if (!useWorkspaceStore.getState().panelExpanded) {
+              useWorkspaceStore.getState().setPanelExpanded(true);
             }
-            // If draft exists but nothing committed yet → enter yops phase
-            // (follows state machine: idle → yops → triage, no skipping)
-            const phase = usePhaseStore.getState().phase;
+            // If draft exists but nothing committed yet → enter streaming mode
+            const wsMode = useWorkspaceStore.getState().mode;
             const hasCommits = useCommitStore.getState().lastCommitHash;
-            if (phase === 'idle' && !hasCommits && yopsEntries && yopsEntries.length > 0) {
+            if (wsMode === 'idle' && !hasCommits && yopsEntries && yopsEntries.length > 0) {
               const latestEntry = yopsEntries[yopsEntries.length - 1];
               if (Array.isArray(latestEntry?.yops) && latestEntry.yops.length > 0) {
-                useDraftStore.setState({ feedYops: latestEntry.yops });
-                usePhaseStore.getState().setPhase('yops');
-                // YOpsFeed auto-transitions to triage when animation completes
+                useWorkspaceStore.getState().setMode('streaming');
               }
             }
           } else if (inheritFromCommitHash) {

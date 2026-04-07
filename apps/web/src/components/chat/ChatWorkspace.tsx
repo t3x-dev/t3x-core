@@ -11,7 +11,7 @@ import { useTextSelection } from '@/hooks/useTextSelection';
 import { buildSourceMap } from '@/lib/sourceMap';
 import { cn } from '@/lib/utils';
 import { useDraftStore } from '@/store/draftStore';
-import { usePhaseStore } from '@/store/phaseStore';
+import { useWorkspaceStore } from '@/store/workspaceStore';
 import { ChatAddForm } from './ChatAddForm';
 import { ChatHeader } from './ChatHeader';
 import type { AttachedImage } from './ChatInput';
@@ -45,11 +45,10 @@ export function ChatWorkspace({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const { selection, clearSelection } = useTextSelection(chatContainerRef);
-  const extractionPhase = usePhaseStore((s) => s.phase);
-  const isReviewPhase = extractionPhase === 'review' || extractionPhase === 'committing';
+  const wsMode = useWorkspaceStore((s) => s.mode);
+  const isReviewPhase = wsMode === 'executed' || wsMode === 'committing';
   const showAddForm = isReviewPhase && selection && selection.text.length > 3;
   const firstMessageSentRef = useRef(false);
-  const prevTurnsSavedRef = useRef(0);
 
   // For "/chat/new" routes: auto-create project + conversation
   const isNewChat = conversationId === 'new';
@@ -85,7 +84,6 @@ export function ChatWorkspace({
     regenerate,
     editAndResend,
     stopGenerating,
-    turnsSavedCounter,
     searchQuery,
     citations,
     thinkingContent,
@@ -145,9 +143,7 @@ export function ChatWorkspace({
   // Extraction handler + related state
   const { handleExtract, isExtracting, draft } = useExtraction({
     resolvedConversationId,
-    messages,
   });
-  const incrementTurnsSinceLastExtract = useDraftStore((s) => s.incrementTurnsSinceLastExtract);
 
   // Precompute source map: quote positions in all messages for bidirectional highlighting
   const sourceMapByTurn = useMemo(() => {
@@ -167,18 +163,7 @@ export function ChatWorkspace({
     resolvedConversationId
   );
 
-  // Count turns since last extraction (for nudge badge)
-  useEffect(() => {
-    const prev = prevTurnsSavedRef.current;
-    prevTurnsSavedRef.current = turnsSavedCounter;
-
-    if (turnsSavedCounter === 0 || turnsSavedCounter === prev) return;
-    if (!resolvedConversationId) return;
-
-    incrementTurnsSinceLastExtract();
-  }, [resolvedConversationId, turnsSavedCounter, incrementTurnsSinceLastExtract]);
-
-  // Listen for extraction request from ExtractionPanel (via custom event)
+  // Listen for extraction request (via custom event)
   useEffect(() => {
     const handler = () => handleExtract();
     window.addEventListener('t3x:extract-requested', handler);

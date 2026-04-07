@@ -19,8 +19,6 @@ describe('commandStore', () => {
       yopsLog: [],
       yopsHistory: [],
       removedNodes: [],
-      feedYops: [],
-      pipelineSteps: [],
       isExtracting: false,
       conversationId: 'conv_test',
       topics: [],

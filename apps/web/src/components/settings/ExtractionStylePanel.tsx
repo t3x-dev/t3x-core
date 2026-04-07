@@ -14,9 +14,9 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 const PRESET_DESCRIPTIONS: Record<PresetName, string> = {
-  concise: 'Fewer nodes, only confirmed facts. Best for simple conversations.',
-  balanced: 'Standard extraction with moderate detail. Works for most cases.',
-  detailed: 'More nodes, captures AI suggestions. Best for complex planning.',
+  concise: 'Key points from user + LLM (~30%). Quick summary.',
+  balanced: 'All substantive content (~70-80%). Nothing important is lost. Default.',
+  detailed: 'Everything including nuance (~95%). Complete mirror of the chat.',
 };
 
 interface ExtractionStylePanelProps {
@@ -127,7 +127,7 @@ export function ExtractionStylePanel({
             <div className="flex items-center justify-between">
               <span className="text-xs text-[var(--text-secondary)]">Quote Length</span>
               <div className="flex gap-1">
-                {(['minimal', 'contextual'] as QuoteLength[]).map((v) => (
+                {(['minimal', 'representative', 'contextual'] as QuoteLength[]).map((v) => (
                   <Button
                     key={v}
                     variant={current.quote_length === v ? 'default' : 'outline'}

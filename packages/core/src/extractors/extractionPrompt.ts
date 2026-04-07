@@ -114,27 +114,26 @@ export function tier3KeyDistinction(t3: Tier3Behavior): string {
 export function granularitySegment(g: Granularity): string {
   switch (g) {
     case 'concise':
-      return `## Tree Depth: 1 Level (Root Only)
-- The tree has ONE level: the root node with flat slots only
-- Do NOT create child nodes \u2014 all information goes into root-level slots
-- 3-5 slots total. Capture only the most important facts.
-- Combine related details into a single slot (e.g., destinations: ["Tokyo", "Kyoto", "Osaka"])
-- AI answers are included but kept brief \u2014 extract the key fact, not the explanation`;
+      return `## Coverage: Key Points (~30%)
+- Extract the main points from both user and assistant \u2014 what a busy person needs to know
+- Include the LLM\u2019s key recommendations and answers, not just user statements
+- Skip supporting details, examples, alternatives, and reasoning \u2014 capture the conclusion
+- Keep the tree flat: 1\u20132 levels. Group related facts under natural subtopics.
+- Combine closely related details into a single slot when they belong together`;
     case 'balanced':
-      return `## Tree Depth: 2 Levels (Root + Children)
-- The tree has TWO levels: root node with children for subtopics
-- Group related facts into child nodes (e.g., budget_breakdown, itinerary, weather)
-- Root: 2-4 overview slots. Children: 2-5 slots each.
-- Extract key information from both user and assistant
-- Aim for a clean, scannable tree that captures the important points`;
+      return `## Coverage: All Substantive Content (~70\u201380%)
+- Surface EVERY fact, preference, recommendation, and decision from both user and assistant
+- If someone said it and it\u2019s substantive, it belongs in the tree \u2014 nothing important is lost
+- Include the LLM\u2019s recommendations, suggestions, and answers alongside user statements
+- Let tree depth follow the content naturally: group related facts under subtopics
+- Skip only redundant restatements and conversational filler`;
     case 'detailed':
-      return `## Tree Depth: 3 Levels (Root + Children + Grandchildren)
-- The tree has up to THREE levels: root, children, and grandchildren
-- Extract EVERY meaningful point from the conversation \u2014 do not skip details
-- Create grandchildren when a child has 3+ related sub-facts (e.g., budget_breakdown/accommodation with type, cost, style)
-- Root: 2-4 slots. Children: 2-6 slots. Grandchildren: 1-4 slots.
-- Prefer depth over breadth \u2014 split large children into sub-nodes rather than flat slots
-- Every number, recommendation, comparison, and list item is worth capturing`;
+      return `## Coverage: Everything Including Nuance (~95%)
+- The tree is a complete mirror of the conversation \u2014 almost nothing is left behind
+- Capture everything from both user and assistant: facts, recommendations, alternatives considered, reasoning, caveats, conditions, and examples
+- Let depth grow as deep as the content demands \u2014 group related facts under subtopics naturally
+- Every number, name, date, recommendation, comparison, and list item is worth capturing
+- Create separate branches for distinct aspects (e.g., trip/logistics vs trip/experiences)`;
     default:
       return granularitySegment('balanced');
   }
@@ -148,13 +147,19 @@ export function quoteLengthSegment(ql: QuoteLength): string {
   BAD:  "We're vegetarian and my partner is allergic to peanuts" (entire clause)
   GOOD: "vegetarian" (just the value)
   GOOD: "allergic to peanuts" (just the relevant part)`;
+    case 'representative':
+      return `- Use REPRESENTATIVE quotes: short phrases that capture the fact with enough context to scan
+  BAD:  "vegetarian" (too terse, no context)
+  BAD:  "We're vegetarian and my partner is allergic to peanuts so we need to be careful" (too long)
+  GOOD: "We're vegetarian" (short phrase with context)
+  GOOD: "allergic to peanuts" (representative fragment)`;
     case 'contextual':
-      return `- Include enough context in quotes to make the slot value unambiguous
-  BAD:  "vegetarian" (too short, loses context)
-  GOOD: "We're vegetarian" (includes context for clarity)
-  GOOD: "allergic to peanuts" (sufficient context)`;
+      return `- Include FULL CONTEXT in quotes to make the slot value unambiguous and traceable
+  BAD:  "vegetarian" (too short, loses who and context)
+  GOOD: "We're vegetarian and my partner is allergic to peanuts" (full clause, traceable)
+  GOOD: "budget is about 3000 CNY for the whole trip" (includes scope)`;
     default:
-      return quoteLengthSegment('minimal');
+      return quoteLengthSegment('representative');
   }
 }
 

@@ -9,12 +9,12 @@
  *  3. Active:   purple background (YAML side hover matching this slot)
  *  4. Deleted:  strikethrough + faded (pending unset/drop YOp)
  *
- * Hover triggers hoverStore.setHoveredNodeId() → YAML side highlights.
+ * Hover triggers workspaceStore.select() → YAML side highlights.
  * Tooltip shows YAML path + ✏ (edit) + ✕ (delete) action buttons.
  */
 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { useHoverStore } from '@/store/hoverStore';
+import { useWorkspaceStore } from '@/store/workspaceStore';
 
 interface SourceHighlightProps {
   /** The display text (verbatim from chat message) */
@@ -42,7 +42,6 @@ export function SourceHighlight({
   onEdit,
   onDelete,
 }: SourceHighlightProps) {
-  const setHoveredNodeId = useHoverStore((s) => s.setHoveredNodeId);
   const yamlPath = `${nodeId}.${slotKey}`;
 
   // State 4: deleted — no tooltip, just visual feedback
@@ -77,10 +76,9 @@ export function SourceHighlight({
               color: 'inherit',
             }}
             onMouseEnter={() => {
-              useHoverStore.setState({ hoveredFromChat: true });
-              setHoveredNodeId(nodeId, slotKey);
+              useWorkspaceStore.getState().select('chat', { nodePath: nodeId, slotKey });
             }}
-            onMouseLeave={() => setHoveredNodeId(null)}
+            onMouseLeave={() => useWorkspaceStore.getState().clearSelection()}
           >
             {text}
           </span>

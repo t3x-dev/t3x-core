@@ -16,8 +16,6 @@ describe('draftStore', () => {
       yopsLog: [],
       yopsHistory: [],
       removedNodes: [],
-      feedYops: [],
-      pipelineSteps: [],
       isExtracting: false,
       conversationId: null,
       topics: [],

@@ -76,6 +76,7 @@ import {
   usageRoutes,
   webhooksRoutes,
   yopsLogRoutes,
+  yopsValidateRoutes,
 } from './routes';
 
 export interface CreateAppOptions {
@@ -166,6 +167,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   api.route('/', treeCompressRoutes); // /v1/conversations/:conversationId/compress
   api.route('/', gateRoutes); // /v1/gate/check
   api.route('/', yopsLogRoutes); // /v1/conversations/:conversationId/yops
+  api.route('/', yopsValidateRoutes); // /v1/yops/validate
   api.route('/', runsRoutes);
   api.route('/', leavesRoutes);
   api.route('/', pinsRoutes);

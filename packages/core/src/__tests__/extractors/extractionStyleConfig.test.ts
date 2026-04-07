@@ -10,8 +10,8 @@ import {
 } from '../../extractors/extractionStyleConfig';
 
 describe('ExtractionStyleConfig', () => {
-  it('DEFAULT_STYLE equals detailed preset', () => {
-    expect(DEFAULT_STYLE).toEqual(PRESETS.detailed);
+  it('DEFAULT_STYLE equals balanced preset', () => {
+    expect(DEFAULT_STYLE).toEqual(PRESETS.balanced);
   });
 
   it('all presets have valid fields', () => {
@@ -44,7 +44,7 @@ describe('styleSummaryLine', () => {
   it('returns concise summary for concise preset', () => {
     const line = styleSummaryLine(PRESETS.concise);
     expect(line).toContain('concise');
-    expect(line).toContain('root-level');
+    expect(line).toContain('30%');
   });
 
   it('returns balanced summary for balanced preset', () => {

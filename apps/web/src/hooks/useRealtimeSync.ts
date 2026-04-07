@@ -17,7 +17,7 @@
 import { useEffect, useRef } from 'react';
 import { getSemanticDraft, listYOpsLog } from '@/lib/api/trees';
 import { useDraftStore } from '@/store/draftStore';
-import { usePhaseStore } from '@/store/phaseStore';
+import { useWorkspaceStore } from '@/store/workspaceStore';
 
 const WS_BASE = typeof window !== 'undefined'
   ? `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`
@@ -96,20 +96,19 @@ export function useRealtimeSync(conversationId: string | null) {
  */
 function handleEvent(event: RealtimeEvent, conversationId: string) {
   const store = useDraftStore.getState();
-  const phaseStore = usePhaseStore.getState();
 
   switch (event.type) {
     case 'extraction.started': {
       // Another source started extraction — show extracting state
       // But only if WE didn't start it (check isExtracting flag)
       if (!store.isExtracting) {
-        useDraftStore.setState({ isExtracting: true, feedYops: [], pipelineSteps: [] });
+        useDraftStore.setState({ isExtracting: true });
       }
       break;
     }
 
     case 'extraction.done': {
-      // Another source finished extraction — load data and enter yops phase
+      // Another source finished extraction — load data and enter streaming mode
       // Skip if WE are currently extracting (our HTTP response will handle it)
       if (store.isExtracting) break;
 
@@ -126,21 +125,20 @@ function handleEvent(event: RealtimeEvent, conversationId: string) {
         if (yopsEntries && yopsEntries.length > 0) {
           useDraftStore.getState().hydrateYOpsLog(yopsEntries);
 
-          // 3. Load latest YOps delta into feedYops
+          // 3. Mark extraction done
           const latestEntry = yopsEntries[yopsEntries.length - 1];
           if (Array.isArray(latestEntry?.yops) && latestEntry.yops.length > 0) {
-            useDraftStore.setState({ feedYops: latestEntry.yops, isExtracting: false });
+            useDraftStore.setState({ isExtracting: false });
           }
         }
 
         // 4. Expand panel
-        if (usePhaseStore.getState().panelMode === 'collapsed') {
-          usePhaseStore.getState().setPanelMode('default');
+        if (!useWorkspaceStore.getState().panelExpanded) {
+          useWorkspaceStore.getState().setPanelExpanded(true);
         }
 
-        // 5. Enter yops phase (NOT triage — don't skip steps)
-        //    YOpsFeed will auto-transition to triage when animation completes
-        usePhaseStore.getState().setPhase('yops');
+        // 5. Enter streaming mode — YOpsFeed will auto-transition to executed when done
+        useWorkspaceStore.getState().setMode('streaming');
       });
       break;
     }

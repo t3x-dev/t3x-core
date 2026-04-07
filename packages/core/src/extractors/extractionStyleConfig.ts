@@ -1,7 +1,7 @@
 // packages/core/src/extractors/extractionStyleConfig.ts
 
 export type Granularity = 'concise' | 'balanced' | 'detailed';
-export type QuoteLength = 'minimal' | 'contextual';
+export type QuoteLength = 'minimal' | 'representative' | 'contextual';
 export type UpdateStance = 'conservative' | 'balanced' | 'aggressive';
 export type Tier3Behavior = 'skip' | 'extract';
 export type PresetName = 'concise' | 'balanced' | 'detailed';
@@ -16,25 +16,25 @@ export interface ExtractionStyleConfig {
 export const PRESETS: Record<PresetName, ExtractionStyleConfig> = {
   concise: {
     granularity: 'concise',
-    quote_length: 'minimal',
+    quote_length: 'representative',
     update_stance: 'conservative',
     tier3: 'extract',
   },
   balanced: {
     granularity: 'balanced',
-    quote_length: 'contextual',
+    quote_length: 'representative',
     update_stance: 'balanced',
     tier3: 'extract',
   },
   detailed: {
     granularity: 'detailed',
-    quote_length: 'contextual',
+    quote_length: 'representative',
     update_stance: 'aggressive',
     tier3: 'extract',
   },
 };
 
-export const DEFAULT_STYLE: ExtractionStyleConfig = PRESETS.detailed;
+export const DEFAULT_STYLE: ExtractionStyleConfig = PRESETS.balanced;
 
 /** Returns the preset name if config matches a preset exactly, else null. */
 export function matchPreset(config: ExtractionStyleConfig): PresetName | null {
@@ -55,13 +55,13 @@ export function matchPreset(config: ExtractionStyleConfig): PresetName | null {
 export function styleSummaryLine(config: ExtractionStyleConfig): string {
   const preset = matchPreset(config);
   if (preset === 'concise') {
-    return 'Extraction mode: concise — root-level key facts only, minimal quotes, flat structure';
+    return 'Extraction mode: concise — key points from user + LLM (~30% coverage), flat tree';
   }
   if (preset === 'balanced') {
-    return 'Extraction mode: balanced — 3 levels, contextual quotes, include AI content';
+    return 'Extraction mode: balanced — all substantive content from user + LLM (~70-80% coverage)';
   }
   if (preset === 'detailed') {
-    return 'Extraction mode: detailed — 3 levels with nuance, contextual quotes, aggressive updates';
+    return 'Extraction mode: detailed — everything including nuance (~95% coverage), deep tree';
   }
   return `Extraction mode: custom — granularity=${config.granularity}, quotes=${config.quote_length}, stance=${config.update_stance}, ai_content=${config.tier3}`;
 }

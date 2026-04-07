@@ -2,15 +2,12 @@ import { useCallback } from 'react';
 import { toast } from 'sonner';
 import { listTopics, updateTopicApi } from '@/lib/api/topics';
 import { extractNodes } from '@/lib/api/trees';
-import { getIntentSummary } from '@/lib/intentSummary';
 import { useChatStore } from '@/store/chatStore';
 import { useDraftStore } from '@/store/draftStore';
-import { useHoverStore } from '@/store/hoverStore';
-import { usePhaseStore } from '@/store/phaseStore';
+import { useWorkspaceStore } from '@/store/workspaceStore';
 
 interface UseExtractionParams {
   resolvedConversationId: string | undefined;
-  messages: Array<{ role: string; content: string; id: string }>;
 }
 
 /**
@@ -20,20 +17,17 @@ interface UseExtractionParams {
  * - handleExtract: the user-initiated extraction callback
  * - isExtracting: whether extraction is in progress
  */
-export function useExtraction({ resolvedConversationId, messages }: UseExtractionParams) {
+export function useExtraction({ resolvedConversationId }: UseExtractionParams) {
   const isExtracting = useDraftStore((s) => s.isExtracting);
-  const focusIntentEnabled = useHoverStore((s) => s.focusIntentEnabled);
-  const setLlmHighlightedNodeIds = useHoverStore((s) => s.setLlmHighlightedNodeIds);
   const draft = useDraftStore((s) => s.draft);
   const activeTopicId = useDraftStore((s) => s.activeTopicId);
   const startExtraction = useDraftStore((s) => s.startExtraction);
-  const setNodeSourceTags = useDraftStore((s) => s.setNodeSourceTags);
   const setDraft = useDraftStore((s) => s.setDraft);
-  const setDriftDetected = usePhaseStore((s) => s.setDriftDetected);
-  const setAdvisoryQuestions = usePhaseStore((s) => s.setAdvisoryQuestions);
-  const setGateIssues = usePhaseStore((s) => s.setGateIssues);
+  const setDriftDetected = useWorkspaceStore((s) => s.setDriftDetected);
+  const setAdvisoryQuestions = useWorkspaceStore((s) => s.setAdvisoryQuestions);
+  const setGateIssues = useWorkspaceStore((s) => s.setGateIssues);
 
-  // User-initiated extraction callback (called by ExtractionPanel's Extract button)
+  // User-initiated extraction callback
   const handleExtract = useCallback(async () => {
     // Use resolved ID, or fallback to store's active conversation
     const extractConvId =
@@ -43,8 +37,8 @@ export function useExtraction({ resolvedConversationId, messages }: UseExtractio
     startExtraction();
 
     // Expand panel if collapsed
-    if (usePhaseStore.getState().panelMode === 'collapsed') {
-      usePhaseStore.getState().setPanelMode('default');
+    if (!useWorkspaceStore.getState().panelExpanded) {
+      useWorkspaceStore.getState().setPanelExpanded(true);
     }
 
     try {
@@ -56,7 +50,7 @@ export function useExtraction({ resolvedConversationId, messages }: UseExtractio
       );
 
       if (result.status === 'skipped') {
-        usePhaseStore.getState().setPhase('idle');
+        useWorkspaceStore.getState().setMode('idle');
         useDraftStore.setState({ isExtracting: false });
         toast.info(
           result.reason || 'Not enough new content to extract. Continue the conversation first.'
@@ -70,7 +64,7 @@ export function useExtraction({ resolvedConversationId, messages }: UseExtractio
           result.choices ?? ['keep_current', 'switch_topic']
         );
         useDraftStore.setState({ isExtracting: false });
-        usePhaseStore.getState().setPhase('idle');
+        useWorkspaceStore.getState().setMode('idle');
         return;
       }
 
@@ -84,29 +78,12 @@ export function useExtraction({ resolvedConversationId, messages }: UseExtractio
       const deltaOps: unknown[] | undefined = Array.isArray(rawDelta) ? rawDelta : undefined;
 
       if (deltaOps && deltaOps.length > 0) {
-        // Has delta ops — show YOps feed animation first
-        useDraftStore.setState({ feedYops: deltaOps, isExtracting: false });
-        // Now that ops are loaded, switch phase to yops for feed animation
-        usePhaseStore.getState().setPhase('yops');
-
-        // Derive source tags
-        const { deriveSourceTags } = await import('@/lib/sourceTag');
-        const tags = deriveSourceTags(
-          deltaOps as import('@t3x-dev/core').YOp[],
-          messages.map((m) => ({ role: m.role }))
-        );
-        setNodeSourceTags(tags);
-
-        // Auto-accept USER-sourced nodes via triageStore
-        const { useTriageStore } = await import('@/store/triageStore');
-        for (const [key, tag] of Object.entries(tags)) {
-          if (tag === 'user' || tag === 'both') {
-            useTriageStore.getState().acceptItem(key);
-          }
-        }
+        // Has delta ops — show streaming mode
+        useDraftStore.setState({ isExtracting: false });
+        useWorkspaceStore.getState().setMode('streaming');
       } else {
-        // No delta ops — skip YOps feed, go straight to triage
-        usePhaseStore.getState().setPhase('triage');
+        // No delta ops — go directly to executed mode
+        useWorkspaceStore.getState().setMode('executed');
         useDraftStore.setState({ isExtracting: false });
       }
 
@@ -161,33 +138,19 @@ export function useExtraction({ resolvedConversationId, messages }: UseExtractio
         })
         .catch(() => {});
 
-      if (focusIntentEnabled && result.snapshot && result.snapshot.trees.length > 0) {
-        const controller = new AbortController();
-        getIntentSummary(result.snapshot.trees, controller.signal)
-          .then((intentResult) => {
-            const ids: Record<string, boolean> = {};
-            for (const id of intentResult.coreNodeIds) ids[id] = true;
-            setLlmHighlightedNodeIds(ids);
-          })
-          .catch(() => {});
-      }
     } catch (_err) {
-      usePhaseStore.getState().setPhase('idle');
+      useWorkspaceStore.getState().setMode('idle');
       useDraftStore.setState({ isExtracting: false });
     }
   }, [
     resolvedConversationId,
     isExtracting,
     activeTopicId,
-    messages,
     startExtraction,
-    setNodeSourceTags,
     setDraft,
     setDriftDetected,
     setAdvisoryQuestions,
     setGateIssues,
-    focusIntentEnabled,
-    setLlmHighlightedNodeIds,
   ]);
 
   return { handleExtract, isExtracting, draft, activeTopicId };

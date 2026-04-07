@@ -9,20 +9,20 @@ const baseTurns = [
 
 describe('buildYOpsPrompt — style integration', () => {
   describe('granularity', () => {
-    it('concise style produces root-only depth guidance', () => {
+    it('concise style produces key-facts coverage guidance', () => {
       const { systemPrompt } = buildYOpsPrompt({ turns: baseTurns }, PRESETS.concise);
-      expect(systemPrompt).toContain('1 Level (Root Only)');
-      expect(systemPrompt).not.toContain('3 Levels');
+      expect(systemPrompt).toContain('Key Points');
+      expect(systemPrompt).toContain('30%');
     });
 
-    it('balanced style produces 2-level depth guidance', () => {
+    it('balanced style produces all-substantive coverage guidance', () => {
       const { systemPrompt } = buildYOpsPrompt({ turns: baseTurns }, PRESETS.balanced);
-      expect(systemPrompt).toContain('2 Levels');
+      expect(systemPrompt).toContain('All Substantive Content');
     });
 
-    it('detailed style produces 3-level depth guidance', () => {
+    it('detailed style produces everything-including-nuance guidance', () => {
       const { systemPrompt } = buildYOpsPrompt({ turns: baseTurns }, PRESETS.detailed);
-      expect(systemPrompt).toContain('3 Levels');
+      expect(systemPrompt).toContain('Everything Including Nuance');
     });
   });
 
@@ -43,14 +43,11 @@ describe('buildYOpsPrompt — style integration', () => {
   });
 
   describe('quote_length', () => {
-    it('minimal style instructs shortest substring', () => {
-      const { systemPrompt } = buildYOpsPrompt({ turns: baseTurns }, PRESETS.concise);
-      expect(systemPrompt).toContain('MINIMAL');
-    });
-
-    it('contextual style instructs enough context', () => {
-      const { systemPrompt } = buildYOpsPrompt({ turns: baseTurns }, PRESETS.detailed);
-      expect(systemPrompt).toContain('enough context');
+    it('all presets use representative quotes for click-to-highlight', () => {
+      for (const preset of Object.values(PRESETS)) {
+        const { systemPrompt } = buildYOpsPrompt({ turns: baseTurns }, preset);
+        expect(systemPrompt).toContain('REPRESENTATIVE');
+      }
     });
   });
 
@@ -67,9 +64,9 @@ describe('buildYOpsPrompt — style integration', () => {
   });
 
   describe('defaults', () => {
-    it('uses detailed style when no style provided', () => {
+    it('uses balanced style when no style provided', () => {
       const { systemPrompt } = buildYOpsPrompt({ turns: baseTurns });
-      expect(systemPrompt).toContain('3 Levels');
+      expect(systemPrompt).toContain('All Substantive Content');
       expect(systemPrompt).toContain('TIER 4');
     });
   });
@@ -84,7 +81,7 @@ describe('buildYOpsPrompt — style integration', () => {
         { turns: baseTurns, snapshot, processedTurnCount: 0 },
         PRESETS.concise,
       );
-      expect(systemPrompt).toContain('1 Level (Root Only)');
+      expect(systemPrompt).toContain('Key Points');
     });
   });
 });

@@ -30,6 +30,7 @@ import { registerShareCommands } from './commands/share.js';
 import { registerSchemaCommands } from './commands/schema.js';
 import { registerStatusCommands } from './commands/status.js';
 import { registerValidateCommands } from './commands/validate.js';
+import { registerYopsCommands } from './commands/yops.js';
 
 const program = new Command();
 
@@ -93,6 +94,7 @@ registerExportCommands(program);
 registerImportCommands(program);
 registerSchemaCommands(program);
 registerValidateCommands(program);
+registerYopsCommands(program);
 
 // Parse arguments
 program.parse();
