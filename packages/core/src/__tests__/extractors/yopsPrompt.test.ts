@@ -31,13 +31,13 @@ const sampleSnapshot: SemanticContent = {
 
 describe('buildYOpsPrompt', () => {
   describe('first extraction mode (no snapshot)', () => {
-    it('system prompt mentions extraction and yops format', () => {
+    it('system prompt mentions extraction and YAML tree contract', () => {
       const result = buildYOpsPrompt({ turns: sampleTurns });
       expect(result.systemPrompt).toContain('extraction');
-      expect(result.systemPrompt).toContain('define');
-      expect(result.systemPrompt).toContain('populate');
-      expect(result.systemPrompt).toContain('source');
-      expect(result.systemPrompt).toContain('yops:');
+      expect(result.systemPrompt).toContain('YAML tree');
+      expect(result.systemPrompt).toContain('slot_quotes');
+      expect(result.systemPrompt).toContain('source_map');
+      expect(result.systemPrompt).toContain('---');
     });
 
     it('user prompt contains turns', () => {
