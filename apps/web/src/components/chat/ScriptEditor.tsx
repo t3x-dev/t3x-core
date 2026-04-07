@@ -1,13 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useRef } from 'react';
-import { EditorView, keymap, lineNumbers, placeholder as cmPlaceholder } from '@codemirror/view';
-import { Compartment, EditorState } from '@codemirror/state';
-import { yaml } from '@codemirror/lang-yaml';
-import { oneDark } from '@codemirror/theme-one-dark';
-import { lintGutter } from '@codemirror/lint';
 import { defaultKeymap } from '@codemirror/commands';
+import { yaml } from '@codemirror/lang-yaml';
+import { lintGutter } from '@codemirror/lint';
+import { Compartment, EditorState } from '@codemirror/state';
+import { oneDark } from '@codemirror/theme-one-dark';
+import { placeholder as cmPlaceholder, EditorView, keymap, lineNumbers } from '@codemirror/view';
 import { useTheme } from 'next-themes';
+import { useEffect, useRef } from 'react';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 
 const PLACEHOLDER = `yops:
@@ -20,19 +20,23 @@ const PLACEHOLDER = `yops:
 const lightTheme = EditorView.theme(
   {
     '&': { backgroundColor: 'var(--editor-bg)', color: 'var(--text-primary)' },
-    '.cm-gutters': { backgroundColor: 'var(--editor-gutter)', borderRight: '1px solid var(--stroke-default)', color: 'var(--text-tertiary)' },
+    '.cm-gutters': {
+      backgroundColor: 'var(--editor-gutter)',
+      borderRight: '1px solid var(--stroke-default)',
+      color: 'var(--text-tertiary)',
+    },
     '.cm-activeLineGutter': { backgroundColor: 'var(--hover-bg)' },
     '.cm-activeLine': { backgroundColor: 'var(--hover-bg)' },
     '.cm-selectionBackground': { backgroundColor: 'rgba(59,130,246,0.15) !important' },
     '.cm-cursor': { borderLeftColor: 'var(--text-primary)' },
     '.cm-matchingBracket': { backgroundColor: 'rgba(59,130,246,0.2)', outline: 'none' },
     // Syntax token overrides for light mode
-    '.ͼb': { color: 'var(--syn-key)' },       // def (keywords)
-    '.ͼd': { color: 'var(--syn-string)' },     // string
-    '.ͼc': { color: 'var(--syn-op)' },         // keyword
-    '.ͼe': { color: 'var(--syn-comment)' },    // comment
-    '.ͼi': { color: 'var(--syn-path)' },       // meta
-    '.ͼ7': { color: 'var(--syn-tag)' },        // atom
+    '.ͼb': { color: 'var(--syn-key)' }, // def (keywords)
+    '.ͼd': { color: 'var(--syn-string)' }, // string
+    '.ͼc': { color: 'var(--syn-op)' }, // keyword
+    '.ͼe': { color: 'var(--syn-comment)' }, // comment
+    '.ͼi': { color: 'var(--syn-path)' }, // meta
+    '.ͼ7': { color: 'var(--syn-tag)' }, // atom
   },
   { dark: false }
 );
@@ -73,8 +77,14 @@ export function ScriptEditor() {
         }),
         EditorView.theme({
           '&': { height: '100%', fontSize: '11px' },
-          '.cm-scroller': { overflow: 'auto', fontFamily: "'SF Mono', 'Fira Code', 'Cascadia Code', monospace" },
-          '.cm-gutters': { backgroundColor: 'var(--editor-gutter)', borderRight: '1px solid var(--stroke-default)' },
+          '.cm-scroller': {
+            overflow: 'auto',
+            fontFamily: "'SF Mono', 'Fira Code', 'Cascadia Code', monospace",
+          },
+          '.cm-gutters': {
+            backgroundColor: 'var(--editor-gutter)',
+            borderRight: '1px solid var(--stroke-default)',
+          },
         }),
       ],
     });
@@ -113,7 +123,9 @@ export function ScriptEditor() {
     const view = viewRef.current;
     if (!view) return;
     view.dispatch({
-      effects: readOnlyCompartment.current.reconfigure(EditorState.readOnly.of(mode === 'streaming')),
+      effects: readOnlyCompartment.current.reconfigure(
+        EditorState.readOnly.of(mode === 'streaming')
+      ),
     });
   }, [mode]);
 
@@ -145,12 +157,15 @@ export function ScriptEditor() {
         <div className="border-t border-[var(--status-error)]/30 bg-[var(--status-error-muted)] px-3 py-1.5 text-[10px] font-mono max-h-20 overflow-y-auto">
           {parseErrors.map((err, i) => (
             <div key={i} className="text-[var(--status-error)] py-px">
-              <span className="text-[var(--status-error)] font-semibold">Line {err.line}:</span> {err.message}
+              <span className="text-[var(--status-error)] font-semibold">Line {err.line}:</span>{' '}
+              {err.message}
             </div>
           ))}
           {execError && (
             <div className="text-[var(--status-error)] py-px">
-              <span className="text-[var(--status-error)] font-semibold">Op {execError.op_index + 1}</span>
+              <span className="text-[var(--status-error)] font-semibold">
+                Op {execError.op_index + 1}
+              </span>
               <span className="text-[var(--status-error)] opacity-70 ml-1">({execError.code})</span>
               <span className="ml-1">— {execError.message}</span>
             </div>
@@ -161,9 +176,13 @@ export function ScriptEditor() {
       {/* Status bar (Fix 3) */}
       <div className="flex items-center gap-2 px-3 py-1 border-t border-[var(--stroke-default)] bg-[var(--editor-gutter)] text-[9px] text-[var(--text-tertiary)]">
         {hasErrors ? (
-          <span className="text-[var(--status-error)]">✗ {parseErrors.length + (execError ? 1 : 0)} error(s)</span>
+          <span className="text-[var(--status-error)]">
+            ✗ {parseErrors.length + (execError ? 1 : 0)} error(s)
+          </span>
         ) : opsCount > 0 ? (
-          <span className="text-[var(--status-success)]">✓ {opsCount} ops{mode === 'executed' ? ' applied' : ''}</span>
+          <span className="text-[var(--status-success)]">
+            ✓ {opsCount} ops{mode === 'executed' ? ' applied' : ''}
+          </span>
         ) : (
           <span>no ops</span>
         )}

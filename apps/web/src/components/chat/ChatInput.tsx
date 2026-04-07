@@ -4,7 +4,6 @@ import { Hexagon, Paperclip, Send, Square } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { useChatSessionStore } from '@/store/chatSessionStore';
 
 export interface AttachedImage {
   id: string;

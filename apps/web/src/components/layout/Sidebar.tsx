@@ -1,22 +1,16 @@
 'use client';
 
-import {
-  ChevronLeft,
-  ChevronRight,
-  Command,
-  Home,
-  Settings,
-} from 'lucide-react';
+import { ChevronLeft, ChevronRight, Command, Home, Settings } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useMemo } from 'react';
 import { ProjectDraftsSection } from '@/components/ProjectDraftsSection';
-import { UserMenu } from './UserMenu';
 import { Button } from '@/components/ui/button';
 import { Kbd } from '@/components/ui/kbd';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
+import { UserMenu } from './UserMenu';
 
 // T3X Logo - Bowtie shape with radial gradient (Blue center → Orange outer)
 function LogoIcon() {
