@@ -1,6 +1,5 @@
 'use client';
 
-import { FolderOpen } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { Conversation, Project } from '@/lib/api/types';
 import { cn } from '@/lib/utils';
@@ -47,6 +46,32 @@ export function ProjectFolder({
   const convCount = project.conversations_count ?? conversations.length;
   const commitCount = project.commits_count ?? 0;
 
+  // Determine icon: emoji from metadata > auto-detect from name > default
+  const projectIcon = (() => {
+    try {
+      if (project.metadata) {
+        const meta =
+          typeof project.metadata === 'string' ? JSON.parse(project.metadata) : project.metadata;
+        if (meta?.icon) return meta.icon;
+      }
+    } catch {
+      /* ignore parse errors */
+    }
+    // Auto-detect emoji from project name keywords
+    const name = project.name.toLowerCase();
+    if (name.includes('beijing') || name.includes('北京')) return '🏛️';
+    if (name.includes('hangzhou') || name.includes('杭州')) return '🚗';
+    if (name.includes('japan') || name.includes('日本')) return '🗾';
+    if (name.includes('trip') || name.includes('travel') || name.includes('旅')) return '✈️';
+    if (name.includes('meeting') || name.includes('会议')) return '📋';
+    if (name.includes('product') || name.includes('strategy') || name.includes('产品')) return '📊';
+    if (name.includes('writing') || name.includes('write') || name.includes('写')) return '✏️';
+    if (name.includes('research') || name.includes('研究')) return '🔬';
+    if (name.includes('idea') || name.includes('explore') || name.includes('想法')) return '💡';
+    return '📁';
+  })();
+  const isEmoji = /\p{Emoji_Presentation}/u.test(projectIcon);
+
   const folderButton = (
     <button
       type="button"
@@ -63,22 +88,33 @@ export function ProjectFolder({
           : 'text-[var(--text-secondary)]'
       )}
     >
-      {/* Colored project icon */}
-      <div
+      {/* Project icon — emoji or first letter */}
+      <span
         className={cn(
-          'flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-sm',
-          iconColor.bg,
-          iconColor.text
+          'flex h-7 w-7 shrink-0 items-center justify-center rounded-lg',
+          isEmoji
+            ? 'bg-[var(--hover-bg)] text-base'
+            : cn('text-xs font-bold', iconColor.bg, iconColor.text)
         )}
       >
-        <FolderOpen className="h-3.5 w-3.5" />
-      </div>
+        {projectIcon}
+      </span>
       {!collapsed && (
         <div className="flex flex-1 flex-col min-w-0">
           <span className="text-xs font-semibold truncate">{project.name}</span>
           <span className="text-[9px] text-[var(--text-tertiary)]">
-            {convCount} conversation{convCount !== 1 ? 's' : ''}
-            {commitCount > 0 ? ` · ${commitCount} commit${commitCount !== 1 ? 's' : ''}` : ''}
+            {commitCount > 0 && (
+              <>
+                <span className="inline-flex items-center gap-0.5">
+                  <span className="h-1 w-1 rounded-full bg-[var(--status-success)]" />
+                  main
+                </span>
+                {' · '}
+              </>
+            )}
+            {commitCount} {commitCount === 1 ? 'commit' : 'commits'}
+            {' · '}
+            {convCount} {convCount === 1 ? 'source' : 'sources'}
           </span>
         </div>
       )}

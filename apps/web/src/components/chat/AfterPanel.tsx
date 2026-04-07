@@ -3,7 +3,9 @@
 import type { TreeNode, YOp } from '@t3x-dev/core';
 import { Check, Play, X } from 'lucide-react';
 import { useCallback, useMemo, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { computeTreeDiff } from '@/lib/treeDiff';
+import { useCommitStore } from '@/store/commitStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 
 // ── Constants ──
@@ -36,7 +38,16 @@ interface SlotRowProps {
   onEdit: (newValue: string) => void;
 }
 
-function SlotRow({ nodeKey: _nodeKey, slotKey, value, diffType, oldValue, sourceTag, onDelete, onEdit }: SlotRowProps) {
+function SlotRow({
+  nodeKey: _nodeKey,
+  slotKey,
+  value,
+  diffType,
+  oldValue,
+  sourceTag,
+  onDelete,
+  onEdit,
+}: SlotRowProps) {
   const [editing, setEditing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -107,7 +118,9 @@ function SlotRow({ nodeKey: _nodeKey, slotKey, value, diffType, oldValue, source
       >
         <span className="shrink-0 text-[var(--text-secondary)]">{slotKey}: </span>
         {diffType === 'modified' && oldValue && (
-          <span className="text-[var(--status-error)] opacity-50 line-through mr-1 truncate text-[10px]">{oldValue}</span>
+          <span className="text-[var(--status-error)] opacity-50 line-through mr-1 truncate text-[10px]">
+            {oldValue}
+          </span>
         )}
         <span
           className={
@@ -135,7 +148,9 @@ function SlotRow({ nodeKey: _nodeKey, slotKey, value, diffType, oldValue, source
           <button
             type="button"
             title="Accept slot"
-            onClick={(e) => { e.stopPropagation(); }}
+            onClick={(e) => {
+              e.stopPropagation();
+            }}
             className="text-[var(--text-tertiary)] hover:text-[var(--status-success)] cursor-pointer"
           >
             <Check className="h-2.5 w-2.5" />
@@ -143,7 +158,10 @@ function SlotRow({ nodeKey: _nodeKey, slotKey, value, diffType, oldValue, source
           <button
             type="button"
             title="Delete slot"
-            onClick={(e) => { e.stopPropagation(); onDelete(); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
             className="text-[var(--text-tertiary)] hover:text-[var(--status-error)] cursor-pointer"
           >
             <X className="h-2.5 w-2.5" />
@@ -188,7 +206,10 @@ function NodeRow({
   const slots = node.slots || {};
   const slotEntries = Object.entries(slots).filter(([k]) => !k.startsWith('_'));
   const hasChanges =
-    diffType !== null || addedSlots.length > 0 || removedSlots.length > 0 || modifiedSlots.length > 0;
+    diffType !== null ||
+    addedSlots.length > 0 ||
+    removedSlots.length > 0 ||
+    modifiedSlots.length > 0;
 
   const nodeGutterColor =
     diffType === 'added'
@@ -215,10 +236,12 @@ function NodeRow({
         className={`group flex items-stretch ${nodeBg} ${isSelected ? 'ring-1 ring-[var(--source)]/40 bg-[var(--source-dim)]' : ''}`}
         style={{ minHeight: 26 }}
       >
-        <div className={`shrink-0 w-[3px] ${isSelected ? 'bg-[var(--source)]' : nodeGutterColor}`} />
+        <div
+          className={`shrink-0 w-[3px] ${isSelected ? 'bg-[var(--source)]' : nodeGutterColor}`}
+        />
         <div
           className="flex-1 flex items-center gap-1 px-2 py-0.5 hover:bg-[var(--hover-bg)] transition-colors cursor-pointer"
-          onClick={() => isSelected ? clearSelection() : select('after', { nodePath: node.key })}
+          onClick={() => (isSelected ? clearSelection() : select('after', { nodePath: node.key }))}
           style={{ ...MONO, paddingLeft: `${8 + depth * 14}px` }}
         >
           <span className="w-3 h-3 rounded flex items-center justify-center text-[7px] font-bold bg-[var(--source-dim)] text-[var(--source)] shrink-0">
@@ -236,12 +259,17 @@ function NodeRow({
             {node.key}:
           </span>
           {diffType === 'added' && (
-            <span className="text-[8px] text-[var(--status-success)] bg-[var(--status-success)]/15 px-1 py-0.5 rounded ml-1">new</span>
+            <span className="text-[8px] text-[var(--status-success)] bg-[var(--status-success)]/15 px-1 py-0.5 rounded ml-1">
+              new
+            </span>
           )}
           {node.source && (
             <span
               className="text-[7px] font-bold px-1 py-px rounded-sm bg-[var(--source-dim)] text-[var(--source)] cursor-pointer hover:bg-[var(--source)]/20 shrink-0 ml-1 tracking-wide"
-              onClick={(e) => { e.stopPropagation(); select('after', { nodePath: node.key }); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                select('after', { nodePath: node.key });
+              }}
             >
               {node.source}
             </span>
@@ -251,7 +279,10 @@ function NodeRow({
               <button
                 type="button"
                 title="Keep changes"
-                onClick={(e) => { e.stopPropagation(); onAccept(); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onAccept();
+                }}
                 className="text-[var(--text-tertiary)] hover:text-[var(--status-success)] cursor-pointer"
               >
                 <Check className="h-2.5 w-2.5" />
@@ -259,7 +290,10 @@ function NodeRow({
               <button
                 type="button"
                 title="Dismiss changes"
-                onClick={(e) => { e.stopPropagation(); onDismiss(); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDismiss();
+                }}
                 className="text-[var(--text-tertiary)] hover:text-[var(--status-error)] cursor-pointer"
               >
                 <X className="h-2.5 w-2.5" />
@@ -308,7 +342,10 @@ function NodeRow({
           <div key={`removed-${key}`} style={{ paddingLeft: `${depth * 14}px` }}>
             <div className="flex items-stretch" style={{ minHeight: 24 }}>
               <div className="shrink-0 w-[3px] bg-[var(--status-error)]" />
-              <div className="flex-1 min-w-0 flex items-center gap-1 px-2 py-0.5 opacity-50" style={MONO}>
+              <div
+                className="flex-1 min-w-0 flex items-center gap-1 px-2 py-0.5 opacity-50"
+                style={MONO}
+              >
                 <span className="text-[var(--text-secondary)] line-through">{key}: —</span>
               </div>
             </div>
@@ -317,11 +354,7 @@ function NodeRow({
 
       {/* Children */}
       {node.children?.map((child: TreeNode) => (
-        <AfterNodeRecursive
-          key={child.key}
-          node={child}
-          depth={depth + 1}
-        />
+        <AfterNodeRecursive key={child.key} node={child} depth={depth + 1} />
       ))}
     </>
   );
@@ -382,6 +415,8 @@ export function AfterPanel() {
   const appendOp = useWorkspaceStore((s) => s.appendOp);
   const execute = useWorkspaceStore((s) => s.execute);
 
+  const isCommitting = useCommitStore((s) => s.isCommitting);
+
   const trees = result?.trees as TreeNode[] | undefined;
 
   const diff = useMemo(() => {
@@ -429,6 +464,29 @@ export function AfterPanel() {
     [appendOp, execute]
   );
 
+  // ── Commit: persist current result ──
+  const handleCommit = useCallback(async () => {
+    try {
+      useWorkspaceStore.getState().setMode('committing');
+      await useCommitStore.getState().commitNodes('Extract knowledge');
+      if (result) {
+        useWorkspaceStore.getState().snapshotBase(result, useCommitStore.getState().lastCommitHash);
+      }
+      useWorkspaceStore.getState().setMode('idle');
+      useWorkspaceStore.getState().setScriptText('');
+      toast.success('Committed successfully');
+    } catch (err: unknown) {
+      useWorkspaceStore.getState().setMode('executed');
+      toast.error(`Commit failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+  }, [result]);
+
+  // ── Discard: reset workspace ──
+  const handleClear = useCallback(() => {
+    useWorkspaceStore.getState().setMode('idle');
+    useWorkspaceStore.getState().setScriptText('');
+  }, []);
+
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
@@ -468,7 +526,9 @@ export function AfterPanel() {
           // Empty state
           <div className="flex flex-col items-center justify-center h-full gap-2 py-8 opacity-40">
             <Play className="h-5 w-5 text-[var(--text-tertiary)]" />
-            <span className="text-[10px] text-[var(--text-tertiary)] italic">Click Run to apply</span>
+            <span className="text-[10px] text-[var(--text-tertiary)] italic">
+              Click Run to apply
+            </span>
           </div>
         ) : trees && trees.length === 0 ? (
           <div className="text-center text-[10px] text-[var(--text-tertiary)] opacity-40 italic py-5">
@@ -501,6 +561,32 @@ export function AfterPanel() {
           })
         )}
       </div>
+
+      {/* Commit footer */}
+      {result && trees && trees.length > 0 && (
+        <div className="flex shrink-0 items-center justify-between border-t border-[var(--stroke-default)] bg-[var(--panel-alt)] px-3 py-1.5">
+          <span className="text-[9px] text-[var(--text-tertiary)]">
+            {diff ? `${diff.summary.nodesAdded + diff.summary.slotsAdded} changes` : 'Ready'}
+          </span>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={handleClear}
+              className="rounded px-2 py-1 text-[10px] font-medium text-[var(--text-tertiary)] border border-[var(--stroke-default)] hover:bg-[var(--hover-bg)]"
+            >
+              Discard
+            </button>
+            <button
+              type="button"
+              onClick={handleCommit}
+              disabled={isCommitting}
+              className="flex items-center gap-1 rounded bg-[var(--commit)] px-2.5 py-1 text-[10px] font-semibold text-[var(--commit-text)] hover:bg-[var(--commit-hover)] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >
+              {isCommitting ? 'Committing...' : '\u2192 Commit'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

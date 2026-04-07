@@ -64,7 +64,8 @@ export function YAMLLine({ lineNumber, status, children }: YAMLLineProps) {
         className={cn(
           'flex-1 px-[10px] whitespace-pre overflow-hidden text-ellipsis',
           status === 'added' && 'bg-[var(--dy-added-bg)]',
-          status === 'removed' && 'bg-[var(--dy-removed-bg)]',
+          status === 'removed' &&
+            'bg-[var(--dy-removed-bg)] line-through decoration-[var(--dy-removed-accent)]/40 opacity-70',
           status === 'modified' && 'bg-[var(--dy-modified-bg)]',
           status === 'source' && 'bg-[var(--merge-source-bg)]',
           status === 'target' && 'bg-[var(--merge-target-bg)]'

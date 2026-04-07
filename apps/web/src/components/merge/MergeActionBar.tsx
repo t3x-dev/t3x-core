@@ -52,7 +52,7 @@ export function MergeActionBar({
   return (
     <header
       className={cn(
-        'flex h-14 shrink-0 items-center gap-4 px-4',
+        'flex h-[var(--h-header)] shrink-0 items-center gap-4 px-4',
         glass.panelBase,
         'border-t-0 border-x-0 rounded-none'
       )}

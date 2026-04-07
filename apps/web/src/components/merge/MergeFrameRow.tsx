@@ -19,6 +19,7 @@ interface Frame {
   slots: Record<string, SlotValue>;
   source?: string;
 }
+
 import { useState } from 'react';
 import { SlotValueSpan } from '@/components/diff/YAMLNodeRenderer';
 import { cn } from '@/lib/utils';
@@ -88,7 +89,8 @@ function DiffSlotRow({
         className={cn(
           'flex-1 min-w-0 py-[2px] px-2',
           type === 'changed' && 'bg-[var(--merge-source-bg)] rounded',
-          type === 'only-source' && 'text-[var(--merge-source-accent)] opacity-80'
+          type === 'only-source' &&
+            'text-[var(--merge-source-accent)] opacity-70 line-through decoration-[var(--merge-source-accent)]/40'
         )}
       >
         {sourceValue !== undefined ? (

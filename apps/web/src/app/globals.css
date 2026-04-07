@@ -104,6 +104,10 @@
   --space-group: var(--spacing-lg); /* 16px — between related items */
   --space-item: var(--spacing-sm); /* 8px  — between tightly coupled elements */
 
+  /* Fixed component heights */
+  --h-header: 42px;
+  --h-toolbar: 36px;
+
   /* Border Radius - rounder, modern */
   --radius: 0.75rem;
   --radius-sm: 6px;

@@ -42,7 +42,7 @@ export function LeafWorkspaceHeader({
   return (
     <header
       className={cn(
-        'flex h-14 shrink-0 items-center justify-between border-b border-[var(--stroke-divider)] px-4',
+        'flex h-[var(--h-header)] shrink-0 items-center justify-between border-b border-[var(--stroke-divider)] px-4',
         'bg-[color-mix(in_srgb,var(--surface-panel)_90%,transparent)]',
         'backdrop-blur-[6px]',
         className
@@ -83,9 +83,9 @@ export function LeafWorkspaceHeader({
             <button
               type="button"
               className={cn(
-                'px-3 py-1 text-xs font-medium transition-all',
+                'px-3 py-1 text-[10px] font-medium transition-all',
                 mode === 'generate'
-                  ? 'bg-[var(--accent-leaf)] text-white'
+                  ? 'bg-[var(--accent-leaf)]/10 text-[var(--accent-leaf)]'
                   : 'text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]'
               )}
               onClick={() => onModeChange('generate')}
@@ -95,9 +95,9 @@ export function LeafWorkspaceHeader({
             <button
               type="button"
               className={cn(
-                'px-3 py-1 text-xs font-medium transition-all',
+                'px-3 py-1 text-[10px] font-medium transition-all',
                 mode === 'display'
-                  ? 'bg-[var(--accent-leaf)] text-white'
+                  ? 'bg-[var(--accent-leaf)]/10 text-[var(--accent-leaf)]'
                   : 'text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]'
               )}
               onClick={() => onModeChange('display')}
