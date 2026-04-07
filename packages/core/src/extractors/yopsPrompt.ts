@@ -109,35 +109,48 @@ For each tree node, map its key to the turn tag (T1, T2, ...) where the topic wa
 ### Example
 
 \`\`\`
-giant_panda:
-  classification: bear
-  scientific_name: Ailuropoda melanoleuca
-  diet:
-    primary: bamboo
-    percentage: 99
-  habitat:
-    region: central China
-    type: temperate forests
+api_latency_fix:
+  diagnosis:
+    symptom: p95 latency spike after deploy
+    root_cause: N+1 query in order list endpoint
+    evidence: "each order loads customer separately"
+  solution:
+    approach: eager loading
+    steps:
+      - "add includes(:customer) to Order query"
+      - "verify with query log — should drop from 50 to 1"
+    key_insight: "fix the query, not the cache — caching hides the real cost"
+  prevention:
+    tool: bullet gem
+    config: "raise in development, log in production"
 ---
 {
   "slot_quotes": {
-    "classification": "Giant pandas belong to the bear family",
-    "scientific_name": "Ailuropoda melanoleuca",
-    "diet.primary": "bamboo makes up about 99%",
-    "diet.percentage": "about 99% of a giant panda's diet",
-    "habitat.region": "native to central China",
-    "habitat.type": "temperate forests"
+    "diagnosis.symptom": "p95 latency spiked right after the deploy",
+    "diagnosis.root_cause": "N+1 query loading each customer separately",
+    "diagnosis.evidence": "each order loads customer separately",
+    "solution.approach": "use eager loading",
+    "solution.steps.0": "add includes(:customer) to the Order query",
+    "solution.steps.1": "check the query log, should drop from 50 queries to 1",
+    "solution.key_insight": "fix the query, not the cache",
+    "prevention.tool": "bullet gem catches N+1s",
+    "prevention.config": "raise in development, log in production"
   },
   "source_map": {
-    "giant_panda": "T1",
-    "diet": "T2",
-    "habitat": "T2"
+    "api_latency_fix": "T1",
+    "diagnosis": "T1",
+    "solution": "T2",
+    "prevention": "T3"
   }
 }
 \`\`\`
 
-### Extraction Priority
-- Extract MORE rather than less — code will clean up duplicates
+### Structure — Read the Keys, Get the Story
+A reader scanning ONLY the node keys (not slot values) should understand the narrative.
+Nest effects under causes, steps under solutions, details under decisions.
+If the conversation has reasoning, the tree should reflect it — not flatten it into peer slots.
+
+### Extraction Recall
 - Do NOT skip a fact because you can't find a perfect quote — use the closest matching phrase
 - Every list item, number, recommendation, and detail is worth capturing
 - A short keyword quote is better than skipping the data entirely
@@ -223,6 +236,13 @@ store them inside \`values\` as blob objects with a \`_type\` field:
 - Code: \`{ _type: "code", language: "python", content: "def foo(): ..." }\`
 - Plot: \`{ _type: "plot", format: "bar", description: "...", data: { labels: [...], values: [...] } }\`
 - Table: \`{ _type: "table", headers: [...], rows: [[...], ...] }\`
+
+### Structure Priority — Skeleton Before Detail
+When new turns contain reasoning, step-by-step logic, or cause-effect chains:
+- Create child nodes that reflect the logical structure (diagnosis/solution, steps, conditions)
+- Use ordered children (step_1, step_2) for sequential processes
+- Nest effects under causes, conclusions under evidence
+- Give key insights and root causes their own nodes — don't bury them as peer slots
 
 ### Rules
 - Output ONLY valid YAML starting with \`yops:\`
