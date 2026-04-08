@@ -52,6 +52,8 @@ export function ChatWorkspace({
   const pins = usePinsStore((s) => s.pins);
   const fetchPins = usePinsStore((s) => s.fetchPins);
   const [showSourcePanel, setShowSourcePanel] = useState(false);
+  const quoteValidation = useWorkspaceStore((s) => s.quoteValidation);
+  const [coverageMode, setCoverageMode] = useState(false);
   const [enrichedPinData, setEnrichedPinData] = useState<
     Map<string, { title: string; assertionLessons?: string[]; turnCount?: number }>
   >(new Map());
@@ -293,7 +295,22 @@ export function ChatWorkspace({
       />
 
       {/* Message list */}
-      <div ref={chatContainerRef} className="flex-1 overflow-y-auto overflow-x-hidden">
+      <div ref={chatContainerRef} className="flex-1 overflow-y-auto overflow-x-hidden relative">
+        {/* Coverage view toggle — visible after extraction */}
+        {quoteValidation && quoteValidation.total > 0 && (
+          <button
+            type="button"
+            onClick={() => setCoverageMode((prev) => !prev)}
+            className={cn(
+              'absolute top-2 right-4 z-10 flex items-center gap-1 px-2 py-1 text-[10px] font-medium rounded-md border transition-colors',
+              coverageMode
+                ? 'bg-[var(--status-warning)]/10 border-[var(--status-warning)]/30 text-[var(--status-warning)]'
+                : 'bg-[var(--surface-elevated)] border-[var(--stroke-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]'
+            )}
+          >
+            {coverageMode ? 'Hide coverage' : 'Show coverage'}
+          </button>
+        )}
         {/* Parent conversation banner */}
         {parentConversationId && (
           <div className="w-full py-2 bg-[var(--accent-commit)]/5 border-b border-[var(--accent-commit)]/10">
@@ -342,6 +359,7 @@ export function ChatWorkspace({
                 }
                 sourceMap={sourceMapByTurn.get(i + 1)}
                 committedHighlights={committedHighlightsByTurn.get(msg.id)}
+                coverageMode={coverageMode}
               />
             ))}
 

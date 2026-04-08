@@ -4,8 +4,10 @@ import { Pencil, RefreshCw, User } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { useSlotActions } from '@/hooks/useSlotActions';
 import type { Citation } from '@/lib/api/chat';
 import type { CommittedHighlight } from '@/lib/committedHighlights';
+import { collectQuotesByTurn, computeUncoveredRanges } from '@/lib/coverageRanges';
 import { traceYamlToChat } from '@/lib/hoverTrace';
 import type { SourceMapping } from '@/lib/sourceMap';
 import { cn } from '@/lib/utils';
@@ -16,7 +18,6 @@ import { CodeBlock } from './CodeBlock';
 import { CommittedHighlightTooltip } from './CommittedHighlightTooltip';
 import { SourceHighlight } from './SourceHighlight';
 import { ThinkingSection } from './ThinkingSection';
-import { useSlotActions } from '@/hooks/useSlotActions';
 
 interface ChatMessageProps {
   sender: 'user' | 'assistant';
@@ -31,6 +32,7 @@ interface ChatMessageProps {
   onEdit?: (newContent: string) => void;
   sourceMap?: SourceMapping[];
   committedHighlights?: CommittedHighlight[];
+  coverageMode?: boolean;
 }
 
 /**
@@ -188,7 +190,9 @@ function SourceMappedText({
 
         // Non-review phase: green underline default, purple when active
         const spanStyle: React.CSSProperties = {
-          background: isActive ? 'color-mix(in srgb, var(--source) 30%, transparent)' : 'color-mix(in srgb, var(--status-success) 12%, transparent)',
+          background: isActive
+            ? 'color-mix(in srgb, var(--source) 30%, transparent)'
+            : 'color-mix(in srgb, var(--status-success) 12%, transparent)',
           borderBottom: isActive ? '2px solid var(--source)' : '2px solid var(--status-success)',
           borderRadius: 2,
           padding: '1px 0',
@@ -256,23 +260,77 @@ function CommittedHighlightText({
           <CommittedHighlightTooltip key={i} highlight={p.highlight}>
             <span
               style={{
-                borderBottom: '2px solid color-mix(in srgb, var(--status-success) 60%, transparent)',
+                borderBottom:
+                  '2px solid color-mix(in srgb, var(--status-success) 60%, transparent)',
                 paddingBottom: 1,
                 cursor: 'default',
                 transition: 'border-color 0.15s, background 0.15s',
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.borderColor = 'var(--status-success)';
-                e.currentTarget.style.background = 'color-mix(in srgb, var(--status-success) 8%, transparent)';
+                e.currentTarget.style.background =
+                  'color-mix(in srgb, var(--status-success) 8%, transparent)';
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = 'color-mix(in srgb, var(--status-success) 60%, transparent)';
+                e.currentTarget.style.borderColor =
+                  'color-mix(in srgb, var(--status-success) 60%, transparent)';
                 e.currentTarget.style.background = 'transparent';
               }}
             >
               {p.text}
             </span>
           </CommittedHighlightTooltip>
+        ) : (
+          <span key={i}>{p.text}</span>
+        )
+      )}
+    </>
+  );
+}
+
+/**
+ * Render text with uncovered ranges highlighted in gray dashed style.
+ * Used in coverage mode to show what was NOT extracted.
+ */
+function CoverageText({
+  text,
+  uncoveredRanges,
+}: {
+  text: string;
+  uncoveredRanges: Array<{ start: number; end: number }>;
+}) {
+  if (uncoveredRanges.length === 0) return <>{text}</>;
+
+  const parts: Array<{ text: string; uncovered: boolean }> = [];
+  let cursor = 0;
+  for (const r of uncoveredRanges) {
+    const start = Math.max(0, r.start);
+    const end = Math.min(text.length, r.end);
+    if (cursor < start) {
+      parts.push({ text: text.slice(cursor, start), uncovered: false });
+    }
+    parts.push({ text: text.slice(start, end), uncovered: true });
+    cursor = end;
+  }
+  if (cursor < text.length) {
+    parts.push({ text: text.slice(cursor), uncovered: false });
+  }
+
+  return (
+    <>
+      {parts.map((p, i) =>
+        p.uncovered ? (
+          <span
+            key={i}
+            style={{
+              background: 'color-mix(in srgb, var(--text-tertiary) 8%, transparent)',
+              borderBottom: '1px dashed var(--text-tertiary)',
+              borderRadius: 2,
+              padding: '1px 0',
+            }}
+          >
+            {p.text}
+          </span>
         ) : (
           <span key={i}>{p.text}</span>
         )
@@ -294,6 +352,7 @@ export function ChatMessage({
   onEdit,
   sourceMap,
   committedHighlights,
+  coverageMode,
 }: ChatMessageProps) {
   const isUser = sender === 'user';
   const [isEditing, setIsEditing] = useState(false);
@@ -342,6 +401,15 @@ export function ChatMessage({
     return ranges;
   }, [isSourceMessage, trace, content]);
 
+  // ── Coverage mode: compute uncovered ranges ──
+  const uncoveredRanges = useMemo(() => {
+    if (!coverageMode || !content || turnIndex == null) return [];
+    const draftTrees = useDraftStore.getState().draft.trees;
+    const quotesByTurn = collectQuotesByTurn(draftTrees);
+    const quotes = quotesByTurn.get(turnIndex) ?? [];
+    return computeUncoveredRanges(content, quotes);
+  }, [coverageMode, content, turnIndex]);
+
   const hasCharHighlights = highlightRanges.length > 0;
   const hasSourceMappings = (sourceMap?.length ?? 0) > 0;
   const hasCommittedHighlights = (committedHighlights?.length ?? 0) > 0;
@@ -350,7 +418,9 @@ export function ChatMessage({
 
   // ── Chat → YAML: source map interaction handlers ──
   const handleHoverSlot = useCallback((treePath: string, slotKey: string | null) => {
-    useWorkspaceStore.getState().select('chat', { nodePath: treePath, slotKey: slotKey ?? undefined });
+    useWorkspaceStore
+      .getState()
+      .select('chat', { nodePath: treePath, slotKey: slotKey ?? undefined });
   }, []);
 
   const handleLeaveSlot = useCallback(() => {
@@ -358,7 +428,9 @@ export function ChatMessage({
   }, []);
 
   const handleClickSlot = useCallback((treePath: string, slotKey: string | null) => {
-    useWorkspaceStore.getState().select('chat', { nodePath: treePath, slotKey: slotKey ?? undefined });
+    useWorkspaceStore
+      .getState()
+      .select('chat', { nodePath: treePath, slotKey: slotKey ?? undefined });
   }, []);
 
   // Auto-scroll this message into view when it's the source of hovered YAML
@@ -372,10 +444,11 @@ export function ChatMessage({
   }, [isSourceMessage, scrollToCenter]);
 
   // Rendering priority: YAML highlights > source-mapped spans > committed highlights > markdown
-  const useYamlHighlights = hasCharHighlights;
-  const useSourceMappedSpans = !useYamlHighlights && hasSourceMappings;
+  const useCoverageHighlights = coverageMode && uncoveredRanges.length > 0;
+  const useYamlHighlights = hasCharHighlights && !useCoverageHighlights;
+  const useSourceMappedSpans = !useYamlHighlights && !useCoverageHighlights && hasSourceMappings;
   const useCommittedHighlightSpans =
-    !useYamlHighlights && !useSourceMappedSpans && hasCommittedHighlights;
+    !useYamlHighlights && !useSourceMappedSpans && !useCoverageHighlights && hasCommittedHighlights;
 
   return (
     <div
@@ -392,9 +465,13 @@ export function ChatMessage({
           : isSourceMessage && hasCharHighlights
             ? 'color-mix(in srgb, var(--source) 6%, transparent)'
             : 'transparent',
-        borderLeft: isSourceMessage ? '3px solid color-mix(in srgb, var(--source) 50%, transparent)' : undefined,
+        borderLeft: isSourceMessage
+          ? '3px solid color-mix(in srgb, var(--source) 50%, transparent)'
+          : undefined,
       }}
-      onMouseEnter={() => turnIndex != null && useWorkspaceStore.getState().select('chat', { turnIndex })}
+      onMouseEnter={() =>
+        turnIndex != null && useWorkspaceStore.getState().select('chat', { turnIndex })
+      }
       onMouseLeave={() => useWorkspaceStore.getState().clearSelection()}
     >
       <div className="mx-auto max-w-3xl px-4">
@@ -468,7 +545,9 @@ export function ChatMessage({
                     ref={textRef}
                     className="text-sm leading-relaxed text-[var(--text-primary)] whitespace-pre-wrap"
                   >
-                    {useYamlHighlights ? (
+                    {useCoverageHighlights ? (
+                      <CoverageText text={content} uncoveredRanges={uncoveredRanges} />
+                    ) : useYamlHighlights ? (
                       <HighlightedText text={content} ranges={highlightRanges} />
                     ) : useSourceMappedSpans ? (
                       <SourceMappedText
@@ -501,7 +580,11 @@ export function ChatMessage({
                     isStreaming && 'streaming-text'
                   )}
                 >
-                  {useYamlHighlights ? (
+                  {useCoverageHighlights ? (
+                    <div className="whitespace-pre-wrap">
+                      <CoverageText text={content} uncoveredRanges={uncoveredRanges} />
+                    </div>
+                  ) : useYamlHighlights ? (
                     // YAML→Chat highlights: render as plain text to preserve character offsets
                     <div className="whitespace-pre-wrap">
                       <HighlightedText text={content} ranges={highlightRanges} />
