@@ -38,7 +38,7 @@ export function createWsRoute(upgradeWebSocket: UpgradeWebSocket) {
             return;
           }
 
-          roomManager.join(conversationId, {
+          roomManager.join(`conv:${conversationId}`, {
             id: connectionId,
             ws,
             userId: userId || undefined,
@@ -46,7 +46,7 @@ export function createWsRoute(upgradeWebSocket: UpgradeWebSocket) {
           });
 
           // Send initial presence state
-          const presence = roomManager.getPresence(conversationId);
+          const presence = roomManager.getPresence(`conv:${conversationId}`);
           ws.send(JSON.stringify({
             type: 'connected',
             connectionId,
@@ -75,13 +75,13 @@ export function createWsRoute(upgradeWebSocket: UpgradeWebSocket) {
 
         onClose() {
           if (conversationId) {
-            roomManager.leave(conversationId, connectionId);
+            roomManager.leave(`conv:${conversationId}`, connectionId);
           }
         },
 
         onError() {
           if (conversationId) {
-            roomManager.leave(conversationId, connectionId);
+            roomManager.leave(`conv:${conversationId}`, connectionId);
           }
         },
       };
