@@ -148,9 +148,17 @@ export function useExtraction({ resolvedConversationId }: UseExtractionParams) {
               slot_quotes?: Record<string, string>;
               children?: AnyNode[];
             };
-            const treesToValidate = (result.snapshot?.trees ??
-              useWorkspaceStore.getState().result?.trees ??
-              useDraftStore.getState().draft.trees) as AnyNode[];
+            const snapshotTrees = result.snapshot?.trees ?? [];
+            const resultTrees = useWorkspaceStore.getState().result?.trees ?? [];
+            const draftTrees = useDraftStore.getState().draft.trees ?? [];
+            // Use the first non-empty trees source
+            const treesToValidate = (
+              snapshotTrees.length > 0
+                ? snapshotTrees
+                : resultTrees.length > 0
+                  ? resultTrees
+                  : draftTrees
+            ) as AnyNode[];
             if (treesToValidate.length > 0) {
               const missing: string[] = [];
               let total = 0;
