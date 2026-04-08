@@ -29,7 +29,7 @@ export function validateSlotQuotes(trees: TreeNode[]): QuoteValidationResult {
       }
     }
 
-    for (const child of node.children) {
+    for (const child of node.children ?? []) {
       walk(child, path);
     }
   }

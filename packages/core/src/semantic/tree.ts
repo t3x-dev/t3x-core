@@ -37,7 +37,7 @@ function flattenNode(node: TreeNode, parentPath: string, out: FlatNode[]): void 
 
   out.push(flat);
 
-  for (const child of node.children) {
+  for (const child of node.children ?? []) {
     flattenNode(child, path, out);
   }
 }
