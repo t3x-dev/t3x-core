@@ -38,6 +38,7 @@ const TreeExtractRequest = z.object({
   drift_decision: DriftDecisionSchema.optional(),
   topic_id: z.string().optional(),
   force_extract: z.boolean().optional(),
+  source_pin_ids: z.array(z.string().min(1)).optional(),
 });
 
 const DeltaResponseSchema = z.object({
@@ -116,7 +117,7 @@ const extractTreesRoute = createRoute({
 // ============================================================
 
 treeExtractRoutes.openapi(extractTreesRoute, async (c) => {
-  const { conversation_id, turn_hashes, drift_decision, topic_id, force_extract } =
+  const { conversation_id, turn_hashes, drift_decision, topic_id, force_extract, source_pin_ids } =
     c.req.valid('json');
 
   const db = await getDB();
@@ -147,6 +148,7 @@ treeExtractRoutes.openapi(extractTreesRoute, async (c) => {
       topicId: topic_id,
       forceExtract: force_extract,
       userId: getUserId(c) ?? undefined,
+      sourcePinIds: source_pin_ids,
     });
 
     for await (const event of pipeline) {
@@ -241,7 +243,7 @@ function encodeSseEvent(event: string, payload: string): Uint8Array {
 
 treeExtractRoutes.post('/v1/extract/trees/stream', async (c) => {
   const body = await c.req.json();
-  const { conversation_id, turn_hashes, drift_decision, topic_id, force_extract } = body;
+  const { conversation_id, turn_hashes, drift_decision, topic_id, force_extract, source_pin_ids } = body;
 
   // Validate conversation + project access
   const db = await getDB();
@@ -266,6 +268,7 @@ treeExtractRoutes.post('/v1/extract/trees/stream', async (c) => {
           topicId: topic_id,
           forceExtract: force_extract,
           userId: getUserId(c) ?? undefined,
+          sourcePinIds: source_pin_ids,
         });
 
         for await (const event of pipeline) {
