@@ -396,15 +396,14 @@ export function ChatWorkspace({
         onModelChange={handleModelChange}
       />
 
-      {/* Message list */}
-      <div ref={chatContainerRef} className="flex-1 overflow-y-auto overflow-x-hidden relative">
-        {/* Coverage view toggle — visible after extraction */}
-        {quoteValidation && quoteValidation.total > 0 && (
+      {/* Coverage view toggle — below header, above messages */}
+      {quoteValidation && quoteValidation.total > 0 && (
+        <div className="flex items-center justify-end px-4 py-1 border-b border-[var(--stroke-divider)]">
           <button
             type="button"
             onClick={() => setCoverageMode((prev) => !prev)}
             className={cn(
-              'absolute top-2 right-4 z-10 flex items-center gap-1 px-2 py-1 text-[10px] font-medium rounded-md border transition-colors',
+              'flex items-center gap-1 px-2 py-1 text-[10px] font-medium rounded-md border transition-colors',
               coverageMode
                 ? 'bg-[var(--status-warning)]/10 border-[var(--status-warning)]/30 text-[var(--status-warning)]'
                 : 'bg-[var(--surface-elevated)] border-[var(--stroke-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]'
@@ -412,7 +411,11 @@ export function ChatWorkspace({
           >
             {coverageMode ? 'Hide coverage' : 'Show coverage'}
           </button>
-        )}
+        </div>
+      )}
+
+      {/* Message list */}
+      <div ref={chatContainerRef} className="flex-1 overflow-y-auto overflow-x-hidden">
         {/* Parent conversation banner */}
         {parentConversationId && (
           <div className="w-full py-2 bg-[var(--accent-commit)]/5 border-b border-[var(--accent-commit)]/10">
