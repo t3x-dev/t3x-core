@@ -2,6 +2,7 @@
 
 import { AlertCircle, GitCommit, Loader2, MessageSquarePlus } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { DriftPopup } from '@/components/chat/DriftPopup';
 import { useAutoProject } from '@/hooks/useAutoProject';
 import { useCommittedHighlights } from '@/hooks/useCommittedHighlights';
@@ -251,6 +252,61 @@ export function ChatWorkspace({
   useEffect(() => {
     if (isExtracting) setShowSourcePanel(false);
   }, [isExtracting]);
+
+  // Handle Audit button — run semantic gate check
+  useEffect(() => {
+    const handler = async () => {
+      const draftData = useDraftStore.getState().draft;
+      if (draftData.trees.length === 0 || messages.length === 0) {
+        toast.info('Nothing to audit — extract first');
+        return;
+      }
+      toast.loading('Running audit...', { id: 'audit' });
+      try {
+        const { API_V1, fetchWithTimeout, handleResponse } = await import('@/lib/api/core');
+        const res = await fetchWithTimeout(`${API_V1}/gate/check`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            content: { trees: draftData.trees, relations: draftData.relations },
+            turns: messages.map((m) => ({ role: m.role, content: m.content })),
+            gates: ['semantic'],
+          }),
+        });
+        const result = await handleResponse<{
+          semantic?: {
+            dimensions?: Record<string, number>;
+            issues?: Array<{ dimension?: string; severity: string; description: string }>;
+          };
+        }>(res);
+        const issues = result.semantic?.issues ?? [];
+        const completeness = result.semantic?.dimensions?.completeness;
+        const issuesByDim: Record<
+          string,
+          Array<{ severity: 'error' | 'warning' | 'info'; description: string }>
+        > = {};
+        for (const issue of issues) {
+          const key = issue.dimension || '_general';
+          if (!issuesByDim[key]) issuesByDim[key] = [];
+          issuesByDim[key].push({
+            severity: (issue.severity as 'error' | 'warning' | 'info') || 'warning',
+            description: issue.description,
+          });
+        }
+        useWorkspaceStore.getState().setGateIssues(issuesByDim);
+        toast.success(
+          `Audit complete${completeness != null ? ` — completeness: ${Math.round(completeness * 100)}%` : ''}`,
+          { id: 'audit' }
+        );
+      } catch (err) {
+        toast.error(`Audit failed: ${err instanceof Error ? err.message : 'Unknown error'}`, {
+          id: 'audit',
+        });
+      }
+    };
+    window.addEventListener('t3x:audit-requested', handler);
+    return () => window.removeEventListener('t3x:audit-requested', handler);
+  }, [messages]);
 
   // Send firstMessage on mount (once only)
   useEffect(() => {
