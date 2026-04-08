@@ -102,16 +102,39 @@ export function useExtraction({ resolvedConversationId }: UseExtractionParams) {
               .getState()
               .snapshotBase(result.snapshot, useWorkspaceStore.getState().baseCommitHash);
           }
-          // Validate slot_quotes coverage (use snapshot if available, else workspace result)
+          // Validate slot_quotes coverage (inline, safe against missing children)
           {
-            const { validateSlotQuotes } = await import('@t3x-dev/core');
-            const treesToValidate =
-              result.snapshot?.trees ??
+            type AnyNode = {
+              key: string;
+              slots: Record<string, unknown>;
+              slot_quotes?: Record<string, string>;
+              children?: AnyNode[];
+            };
+            const treesToValidate = (result.snapshot?.trees ??
               useWorkspaceStore.getState().result?.trees ??
-              useDraftStore.getState().draft.trees;
+              useDraftStore.getState().draft.trees) as AnyNode[];
             if (treesToValidate.length > 0) {
+              const missing: string[] = [];
+              let total = 0;
+              let quoted = 0;
+              const walk = (node: AnyNode, prefix: string) => {
+                const path = prefix ? `${prefix}.${node.key}` : node.key;
+                const quotes = node.slot_quotes ?? {};
+                for (const k of Object.keys(node.slots)) {
+                  total++;
+                  if (k in quotes) quoted++;
+                  else missing.push(`${path}.${k}`);
+                }
+                for (const child of node.children ?? []) walk(child, path);
+              };
+              for (const tree of treesToValidate) walk(tree, '');
               useWorkspaceStore.setState({
-                quoteValidation: validateSlotQuotes(treesToValidate),
+                quoteValidation: {
+                  total,
+                  quoted,
+                  missing,
+                  coverage: total === 0 ? 1 : quoted / total,
+                },
               });
             }
           }

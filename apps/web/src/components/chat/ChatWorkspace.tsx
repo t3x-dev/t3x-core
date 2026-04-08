@@ -264,16 +264,30 @@ export function ChatWorkspace({
       toast.loading('Running audit...', { id: 'audit' });
       try {
         const { API_V1, fetchWithTimeout, handleResponse } = await import('@/lib/api/core');
-        const { flattenTrees } = await import('@t3x-dev/core');
-        // Ensure all tree nodes have children arrays (DB-loaded trees may lack them)
-        const safeTrees = JSON.parse(JSON.stringify(draftData.trees));
-        const ensureChildren = (node: Record<string, unknown>) => {
-          if (!Array.isArray(node.children)) node.children = [];
-          (node.children as Record<string, unknown>[]).forEach(ensureChildren);
+        // Flatten TreeNode[] to FlatNode[] inline (safe against missing children)
+        type AnyNode = {
+          key: string;
+          slots: Record<string, unknown>;
+          source?: string;
+          children?: AnyNode[];
         };
-        safeTrees.forEach(ensureChildren);
-        // Gate API expects FlatNode[] format ({ id, type, slots }), not TreeNode[]
-        const flatFrames = flattenTrees(safeTrees);
+        const flatFrames: Array<{
+          id: string;
+          type: string;
+          slots: Record<string, unknown>;
+          source?: string;
+        }> = [];
+        const flatten = (node: AnyNode, parentPath: string) => {
+          const path = parentPath ? `${parentPath}/${node.key}` : node.key;
+          flatFrames.push({
+            id: path,
+            type: node.key,
+            slots: { ...node.slots },
+            ...(node.source ? { source: node.source } : {}),
+          });
+          for (const child of node.children ?? []) flatten(child, path);
+        };
+        for (const tree of draftData.trees as AnyNode[]) flatten(tree, '');
         const res = await fetchWithTimeout(`${API_V1}/gate/check`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
