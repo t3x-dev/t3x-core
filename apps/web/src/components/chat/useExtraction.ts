@@ -92,6 +92,14 @@ export function useExtraction({ resolvedConversationId }: UseExtractionParams) {
         useWorkspaceStore.getState().setScriptText(yamlText);
         // Auto-execute to populate result + After panel
         useWorkspaceStore.getState().execute();
+        // Re-apply extraction snapshot to preserve slot_quotes/source metadata
+        // (execute() strips them during the YValue round-trip)
+        if (result.snapshot) {
+          setDraft(result.snapshot);
+          useWorkspaceStore
+            .getState()
+            .snapshotBase(result.snapshot, useWorkspaceStore.getState().baseCommitHash);
+        }
         useDraftStore.setState({ isExtracting: false });
       } else {
         // No delta ops — go directly to executed mode
@@ -149,7 +157,6 @@ export function useExtraction({ resolvedConversationId }: UseExtractionParams) {
           }
         })
         .catch(() => {});
-
     } catch (_err) {
       useWorkspaceStore.getState().setMode('idle');
       useDraftStore.setState({ isExtracting: false });
