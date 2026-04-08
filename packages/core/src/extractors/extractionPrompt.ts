@@ -131,13 +131,14 @@ export function granularitySegment(g: Granularity): string {
 - Skip redundant restatements and conversational filler`;
     case 'detailed':
       return `## Coverage: Detailed — Everything Including Reasoning (~95%)
-- The tree is a complete mirror of the conversation \u2014 almost nothing is left behind
+- The tree MUST contain MORE content than balanced mode, not less — more slots, more detail per slot
 - Include everything balanced mode captures, PLUS:
   - WHY each option was recommended or rejected (reasoning, not just the conclusion)
   - Warnings, caveats, and edge cases ("if X then Y", "watch out for Z")
   - Examples and analogies used to explain concepts
   - Conditional advice and fallback strategies
   - Timeline estimates, team size considerations, risk assessments
+- Keep slot values as readable strings — do NOT compress them into terse snake_case labels
 - Every number, name, date, comparison, and list item is worth capturing
 - Create separate branches for distinct aspects (e.g., trip/logistics vs trip/experiences)`;
     default:
