@@ -5,18 +5,20 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DriftPopup } from '@/components/chat/DriftPopup';
 import { useAutoProject } from '@/hooks/useAutoProject';
 import { useCommittedHighlights } from '@/hooks/useCommittedHighlights';
-import { useRealtimeSync } from '@/hooks/useRealtimeSync';
 import { useConversationChat } from '@/hooks/useConversationChat';
+import { useRealtimeSync } from '@/hooks/useRealtimeSync';
 import { useTextSelection } from '@/hooks/useTextSelection';
 import { buildSourceMap } from '@/lib/sourceMap';
 import { cn } from '@/lib/utils';
 import { useDraftStore } from '@/store/draftStore';
+import { usePinsStore } from '@/store/pinsStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { ChatAddForm } from './ChatAddForm';
 import { ChatHeader } from './ChatHeader';
 import type { AttachedImage } from './ChatInput';
 import { ChatInput } from './ChatInput';
 import { ChatMessage } from './ChatMessage';
+import { SourceMaterialPanel } from './SourceMaterialPanel';
 import { useChatInit } from './useChatInit';
 import { useExtraction } from './useExtraction';
 
@@ -47,6 +49,8 @@ export function ChatWorkspace({
   const { selection, clearSelection } = useTextSelection(chatContainerRef);
   const wsMode = useWorkspaceStore((s) => s.mode);
   const isReviewPhase = wsMode === 'executed' || wsMode === 'committing';
+  const pins = usePinsStore((s) => s.pins);
+  const [showSourcePanel, setShowSourcePanel] = useState(false);
   const showAddForm = isReviewPhase && selection && selection.text.length > 3;
   const firstMessageSentRef = useRef(false);
 
@@ -165,10 +169,27 @@ export function ChatWorkspace({
 
   // Listen for extraction request (via custom event)
   useEffect(() => {
-    const handler = () => handleExtract();
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.sourcePinIds) {
+        // Came from source panel confirm — extract with selected pins
+        handleExtract(detail.sourcePinIds);
+      } else if (pins.length > 0) {
+        // Has pins — show source panel instead of extracting directly
+        setShowSourcePanel(true);
+      } else {
+        // No pins — extract directly (current behavior)
+        handleExtract();
+      }
+    };
     window.addEventListener('t3x:extract-requested', handler);
     return () => window.removeEventListener('t3x:extract-requested', handler);
-  }, [handleExtract]);
+  }, [handleExtract, pins.length]);
+
+  // Hide source panel when extraction starts
+  useEffect(() => {
+    if (isExtracting) setShowSourcePanel(false);
+  }, [isExtracting]);
 
   // Send firstMessage on mount (once only)
   useEffect(() => {
@@ -326,6 +347,25 @@ export function ChatWorkspace({
                   </div>
                 </div>
               </div>
+            )}
+
+            {/* Pinned source material panel */}
+            {showSourcePanel && pins.length > 0 && (
+              <SourceMaterialPanel
+                pins={pins.map((p) => ({
+                  ...p,
+                  title: p.ref_id.slice(0, 16),
+                }))}
+                onConfirm={(selectedPinIds) => {
+                  setShowSourcePanel(false);
+                  window.dispatchEvent(
+                    new CustomEvent('t3x:extract-requested', {
+                      detail: { sourcePinIds: selectedPinIds },
+                    })
+                  );
+                }}
+                onCancel={() => setShowSourcePanel(false)}
+              />
             )}
           </div>
         )}
