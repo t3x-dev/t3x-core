@@ -52,8 +52,20 @@ const ApplyYOpsResponse = z.object({
 const applyYOpsRoute = createRoute({
   method: 'post',
   path: '/v1/drafts/{id}/apply-yops',
-  tags: ['Drafts'],
+  tags: ['Drafts', 'YOps'],
+  operationId: 'applyYOpsToDraft',
   summary: 'Apply YOps to a draft',
+  description:
+    'Apply YAML Operations (YOps) to mutate a draft\'s semantic tree. ' +
+    'Use `GET /v1/docs/yops` to see all 18 available operations.\n\n' +
+    '**Common operations:**\n' +
+    '- `set: { path: "trip/budget", value: 5000 }` — update a single slot\n' +
+    '- `populate: { path: "trip/hotel", values: { type: "ryokan", area: "Asakusa" } }` — fill multiple slots\n' +
+    '- `define: { path: "trip/activities" }` — create a new empty node\n' +
+    '- `drop: { path: "trip/old_plan" }` — remove a node and all children\n' +
+    '- `unset: { path: "trip/budget/misc" }` — remove a single slot\n\n' +
+    'Paths use `/` separator. Keys are `snake_case`. ' +
+    'Requires `if_revision` for optimistic locking — get the current revision from `GET /v1/drafts/{id}`.',
   request: {
     params: IdParamSchema,
     body: {
