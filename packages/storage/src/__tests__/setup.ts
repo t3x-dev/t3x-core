@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS conversations (
   conversation_id TEXT PRIMARY KEY,
   project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
   title TEXT,
-  alias TEXT CHECK (alias IS NULL OR alias ~ '^[a-z][a-z0-9_]{0,63}$'),
+  alias TEXT CONSTRAINT conversations_alias_format CHECK (alias IS NULL OR alias ~ '^[a-z][a-z0-9_]{0,63}$'),
   parent_commit_hash TEXT,
   position_x REAL,
   position_y REAL,

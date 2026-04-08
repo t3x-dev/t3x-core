@@ -10,6 +10,7 @@
 import type { ContentBlock } from '@t3x-dev/core';
 import {
   boolean,
+  check,
   customType,
   index,
   integer,
@@ -113,6 +114,14 @@ export const conversations = pgTable(
     uniqueIndex('idx_conversations_project_alias')
       .on(table.projectId, table.alias)
       .where(sql`alias IS NOT NULL`),
+    // Mirrors the production migration constraint declared in
+    // adapters/postgres.ts (schema v38). Format: `^[a-z][a-z0-9_]{0,63}$`.
+    // Keeping this in the Drizzle schema ensures all three places
+    // (Drizzle, test SQL, production migration) agree on both shape AND name.
+    check(
+      'conversations_alias_format',
+      sql`${table.alias} IS NULL OR ${table.alias} ~ '^[a-z][a-z0-9_]{0,63}$'`
+    ),
   ]
 );
 

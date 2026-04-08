@@ -136,6 +136,132 @@ describe('Conversations Storage', () => {
 
         expect(rows).toHaveLength(2);
       });
+
+      describe('alias format constraint', () => {
+        // Negative cases: each must be rejected by the
+        // `conversations_alias_format` CHECK constraint.
+        // Regex: ^[a-z][a-z0-9_]{0,63}$
+        it('rejects uppercase letters', async () => {
+          const conv = await insertConversation(db, { projectId: testProjectId });
+
+          await expect(
+            db
+              .update(conversations)
+              .set({ alias: 'Tokyo_Trip' })
+              .where(eq(conversations.conversationId, conv.conversationId))
+          ).rejects.toThrow();
+        });
+
+        it('rejects aliases starting with a digit', async () => {
+          const conv = await insertConversation(db, { projectId: testProjectId });
+
+          await expect(
+            db
+              .update(conversations)
+              .set({ alias: '1tokyo_trip' })
+              .where(eq(conversations.conversationId, conv.conversationId))
+          ).rejects.toThrow();
+        });
+
+        it('rejects hyphens', async () => {
+          const conv = await insertConversation(db, { projectId: testProjectId });
+
+          await expect(
+            db
+              .update(conversations)
+              .set({ alias: 'tokyo-trip' })
+              .where(eq(conversations.conversationId, conv.conversationId))
+          ).rejects.toThrow();
+        });
+
+        it('rejects whitespace', async () => {
+          const conv = await insertConversation(db, { projectId: testProjectId });
+
+          await expect(
+            db
+              .update(conversations)
+              .set({ alias: 'tokyo trip' })
+              .where(eq(conversations.conversationId, conv.conversationId))
+          ).rejects.toThrow();
+        });
+
+        it('rejects empty string', async () => {
+          const conv = await insertConversation(db, { projectId: testProjectId });
+
+          await expect(
+            db
+              .update(conversations)
+              .set({ alias: '' })
+              .where(eq(conversations.conversationId, conv.conversationId))
+          ).rejects.toThrow();
+        });
+
+        it('rejects aliases longer than 64 characters', async () => {
+          const conv = await insertConversation(db, { projectId: testProjectId });
+          // 65 chars: 'a' + 64 'b's = 65 total
+          const tooLong = `a${'b'.repeat(64)}`;
+          expect(tooLong.length).toBe(65);
+
+          await expect(
+            db
+              .update(conversations)
+              .set({ alias: tooLong })
+              .where(eq(conversations.conversationId, conv.conversationId))
+          ).rejects.toThrow();
+        });
+
+        // Positive boundary cases — must be accepted by the constraint.
+        it('accepts a single lowercase letter (1 char minimum)', async () => {
+          const conv = await insertConversation(db, { projectId: testProjectId });
+
+          await db
+            .update(conversations)
+            .set({ alias: 'a' })
+            .where(eq(conversations.conversationId, conv.conversationId));
+
+          const [row] = await db
+            .select()
+            .from(conversations)
+            .where(eq(conversations.conversationId, conv.conversationId));
+
+          expect(row.alias).toBe('a');
+        });
+
+        it('accepts letter + underscore + digit', async () => {
+          const conv = await insertConversation(db, { projectId: testProjectId });
+
+          await db
+            .update(conversations)
+            .set({ alias: 'a_1' })
+            .where(eq(conversations.conversationId, conv.conversationId));
+
+          const [row] = await db
+            .select()
+            .from(conversations)
+            .where(eq(conversations.conversationId, conv.conversationId));
+
+          expect(row.alias).toBe('a_1');
+        });
+
+        it('accepts a 64-character alias at the upper boundary', async () => {
+          const conv = await insertConversation(db, { projectId: testProjectId });
+          // 64 chars: 'a' + 63 'b's = 64 total
+          const maxAlias = `a${'b'.repeat(63)}`;
+          expect(maxAlias.length).toBe(64);
+
+          await db
+            .update(conversations)
+            .set({ alias: maxAlias })
+            .where(eq(conversations.conversationId, conv.conversationId));
+
+          const [row] = await db
+            .select()
+            .from(conversations)
+            .where(eq(conversations.conversationId, conv.conversationId));
+
+          expect(row.alias).toBe(maxAlias);
+        });
+      });
     });
   });
 
