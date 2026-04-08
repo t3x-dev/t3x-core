@@ -11,8 +11,11 @@ import {
   deleteConversation,
   findConversationById,
   findConversationsByProject,
+  findConversationByAliasOrId,
   getConversationTurnCount,
   insertConversation,
+  renameConversation,
+  setAliasIfNull,
   updateConversation,
 } from '../queries/conversations';
 import { insertProject } from '../queries/projects';
@@ -500,6 +503,108 @@ describe('Conversations Storage', () => {
 
       expect(Array.isArray(result)).toBe(true);
       expect((result as Conversation[]).length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  describe('findConversationByAliasOrId', () => {
+    it('finds by conversation_id', async () => {
+      const created = await insertConversation(db, { projectId: testProjectId });
+
+      const found = await findConversationByAliasOrId(
+        db,
+        testProjectId,
+        created.conversationId
+      );
+
+      expect(found).not.toBeNull();
+      expect(found?.conversationId).toBe(created.conversationId);
+    });
+
+    it('finds by alias scoped to project', async () => {
+      const created = await insertConversation(db, { projectId: testProjectId });
+      await db
+        .update(conversations)
+        .set({ alias: 'lookup_me' })
+        .where(eq(conversations.conversationId, created.conversationId));
+
+      const found = await findConversationByAliasOrId(db, testProjectId, 'lookup_me');
+
+      expect(found?.conversationId).toBe(created.conversationId);
+    });
+
+    it('returns null when alias does not exist in project', async () => {
+      const found = await findConversationByAliasOrId(
+        db,
+        testProjectId,
+        'nonexistent_alias'
+      );
+
+      expect(found).toBeNull();
+    });
+  });
+
+  describe('setAliasIfNull', () => {
+    it('sets the base alias when row.alias is NULL and no collision', async () => {
+      const created = await insertConversation(db, { projectId: testProjectId });
+
+      const result = await setAliasIfNull(db, created.conversationId, 'fresh_topic');
+
+      expect(result).toBe('fresh_topic');
+    });
+
+    it('appends _2 when base alias is already taken in same project', async () => {
+      const a = await insertConversation(db, { projectId: testProjectId });
+      const b = await insertConversation(db, { projectId: testProjectId });
+
+      await setAliasIfNull(db, a.conversationId, 'collide');
+      const result = await setAliasIfNull(db, b.conversationId, 'collide');
+
+      expect(result).toBe('collide_2');
+    });
+
+    it('returns existing alias when row already has one (no overwrite)', async () => {
+      const created = await insertConversation(db, { projectId: testProjectId });
+      await db
+        .update(conversations)
+        .set({ alias: 'already_set' })
+        .where(eq(conversations.conversationId, created.conversationId));
+
+      const result = await setAliasIfNull(db, created.conversationId, 'new_attempt');
+
+      expect(result).toBe('already_set');
+    });
+  });
+
+  describe('renameConversation', () => {
+    it('updates alias on a conversation', async () => {
+      const created = await insertConversation(db, { projectId: testProjectId });
+
+      await renameConversation(db, created.conversationId, 'manual_rename');
+
+      const [row] = await db
+        .select()
+        .from(conversations)
+        .where(eq(conversations.conversationId, created.conversationId));
+      expect(row.alias).toBe('manual_rename');
+    });
+
+    it('throws on invalid alias format', async () => {
+      const created = await insertConversation(db, { projectId: testProjectId });
+
+      await expect(
+        renameConversation(db, created.conversationId, 'BadAlias')
+      ).rejects.toThrow(/format/);
+    });
+
+    it('throws on collision within the same project', async () => {
+      const a = await insertConversation(db, { projectId: testProjectId });
+      const b = await insertConversation(db, { projectId: testProjectId });
+
+      await renameConversation(db, a.conversationId, 'taken_name');
+
+      await expect(
+        renameConversation(db, b.conversationId, 'taken_name')
+      ).rejects.toThrow();
     });
   });
 });
