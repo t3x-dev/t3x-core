@@ -88,16 +88,11 @@ export function ChatWorkspace({
       for (const pin of pins) {
         try {
           if (pin.type === 'conversation') {
-            const res = await fetchWithTimeout(
-              `${API_V1}/conversations/${pin.ref_id}`
-            );
+            const res = await fetchWithTimeout(`${API_V1}/conversations/${pin.ref_id}`);
             const conv = await handleResponse<{ title?: string }>(res);
-            if (!stale)
-              data.set(pin.id, { title: conv.title || pin.ref_id.slice(0, 12) });
+            if (!stale) data.set(pin.id, { title: conv.title || pin.ref_id.slice(0, 12) });
           } else if (pin.type === 'leaf') {
-            const res = await fetchWithTimeout(
-              `${API_V1}/leaves/${pin.ref_id}`
-            );
+            const res = await fetchWithTimeout(`${API_V1}/leaves/${pin.ref_id}`);
             const leaf = await handleResponse<{
               title?: string;
               assertions?: Array<{ lesson?: string }>;
@@ -105,9 +100,7 @@ export function ChatWorkspace({
             }>(res);
             if (!stale) {
               const allAssertions = leaf.runner_assertions ?? leaf.assertions ?? [];
-              const lessons = allAssertions
-                .filter((a) => a.lesson)
-                .map((a) => a.lesson as string);
+              const lessons = allAssertions.filter((a) => a.lesson).map((a) => a.lesson as string);
               data.set(pin.id, {
                 title: leaf.title || pin.ref_id.slice(0, 12),
                 assertionLessons: lessons.length > 0 ? lessons : undefined,
@@ -419,11 +412,7 @@ export function ChatWorkspace({
                 }))}
                 onConfirm={(selectedPinIds) => {
                   setShowSourcePanel(false);
-                  window.dispatchEvent(
-                    new CustomEvent('t3x:extract-requested', {
-                      detail: { sourcePinIds: selectedPinIds },
-                    })
-                  );
+                  handleExtract(selectedPinIds);
                 }}
                 onCancel={() => setShowSourcePanel(false)}
               />
