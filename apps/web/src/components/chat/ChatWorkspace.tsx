@@ -229,6 +229,13 @@ export function ChatWorkspace({
       } else if (pins.length > 0) {
         // Has pins — show source panel instead of extracting directly
         setShowSourcePanel(true);
+        // Scroll chat area to bottom so user can see the source panel
+        requestAnimationFrame(() => {
+          chatContainerRef.current?.scrollTo({
+            top: chatContainerRef.current.scrollHeight,
+            behavior: 'smooth',
+          });
+        });
       } else {
         // No pins — extract directly (current behavior)
         handleExtract();
