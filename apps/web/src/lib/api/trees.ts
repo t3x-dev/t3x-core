@@ -2,13 +2,12 @@
  * Tree Semantic Engine API — extraction, yops log, gate check
  */
 
-import type { YOp, YOpsLogEntry, YOpsSource, SemanticContent } from '@t3x-dev/core';
+import type { SemanticContent, YOp, YOpsLogEntry, YOpsSource } from '@t3x-dev/core';
 import { API_V1, fetchWithTimeout, handleResponse } from './core';
 
 // ── Types ──
 
 export type { YOpsSource, YOpsLogEntry };
-
 
 export interface AdvisoryQuestion {
   id: string;
@@ -86,7 +85,7 @@ export async function extractNodes(
   conversationId: string,
   turnHashes?: string[],
   driftDecision?: { choice: string; relation?: string; new_topic?: string },
-  opts?: { topicId?: string; forceExtract?: boolean }
+  opts?: { topicId?: string; forceExtract?: boolean; sourcePinIds?: string[] }
 ): Promise<TreeExtractResult> {
   const res = await fetchWithTimeout(
     `${API_V1}/extract/trees`,
@@ -99,6 +98,7 @@ export async function extractNodes(
         ...(driftDecision && { drift_decision: driftDecision }),
         ...(opts?.topicId && { topic_id: opts.topicId }),
         ...(opts?.forceExtract && { force_extract: opts.forceExtract }),
+        ...(opts?.sourcePinIds?.length && { source_pin_ids: opts.sourcePinIds }),
       }),
     },
     60_000
@@ -177,7 +177,6 @@ export async function createYOpsEntry(
   return handleResponse<YOpsLogEntry>(res);
 }
 
-
 export async function deleteYOpsEntry(conversationId: string, yopsId: string): Promise<void> {
   const res = await fetchWithTimeout(
     `${API_V1}/conversations/${encodeURIComponent(conversationId)}/yops/${encodeURIComponent(yopsId)}`,
@@ -185,7 +184,6 @@ export async function deleteYOpsEntry(conversationId: string, yopsId: string): P
   );
   await handleResponse<unknown>(res);
 }
-
 
 // ── Compression ──
 
