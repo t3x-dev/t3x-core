@@ -122,20 +122,23 @@ export function granularitySegment(g: Granularity): string {
 - Keep the tree compact: 2\u20133 levels, aim for under 20 lines of YAML
 - If a busy person has 10 seconds, this tree should tell them what happened and what to do`;
     case 'balanced':
-      return `## Coverage: Balanced — All Substantive Content (~70\u201380%)
-- Surface EVERY fact, preference, recommendation, and decision from both user and assistant
-- If someone said it and it\u2019s substantive, it belongs in the tree \u2014 nothing important is lost
-- Include the LLM\u2019s recommendations, suggestions, and answers alongside user statements
-- Include step-by-step instructions, diagnostic commands, and all options discussed
+      return `## Coverage: Balanced — Decisions + Options + Steps (~70\u201380%)
+- Surface EVERY fact, recommendation, and decision from both user and assistant
+- Include all options discussed, with their trade-offs (pros/cons as lists)
+- Include step-by-step instructions, diagnostic commands, and implementation details
+- SKIP: warnings about edge cases, caveats, conditional advice ("if X then Y"), examples used to illustrate a point, and the reasoning behind why rejected options were rejected
 - Let tree depth follow the content naturally: group related facts under subtopics
-- Skip only redundant restatements and conversational filler`;
+- Skip redundant restatements and conversational filler`;
     case 'detailed':
-      return `## Coverage: Detailed — Everything Including Nuance (~95%)
+      return `## Coverage: Detailed — Everything Including Reasoning (~95%)
 - The tree is a complete mirror of the conversation \u2014 almost nothing is left behind
-- Capture everything from both user and assistant: facts, recommendations, alternatives considered, reasoning, caveats, conditions, and examples
-- Let depth grow as deep as the content demands \u2014 group related facts under subtopics naturally
-- Every number, name, date, recommendation, comparison, and list item is worth capturing
-- Break compound values into separate slots (e.g., separate nodes for each option with full pros/cons)
+- Include everything balanced mode captures, PLUS:
+  - WHY each option was recommended or rejected (reasoning, not just the conclusion)
+  - Warnings, caveats, and edge cases ("if X then Y", "watch out for Z")
+  - Examples and analogies used to explain concepts
+  - Conditional advice and fallback strategies
+  - Timeline estimates, team size considerations, risk assessments
+- Every number, name, date, comparison, and list item is worth capturing
 - Create separate branches for distinct aspects (e.g., trip/logistics vs trip/experiences)`;
     default:
       return granularitySegment('balanced');
