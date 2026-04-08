@@ -23,7 +23,7 @@ const YOPS_REFERENCE = {
   name: 'YOps — YAML Operations',
   version: '1.0',
   description:
-    '18 declarative operations for mutating semantic trees. ' +
+    '18 base operations + 2 T3X extensions (relate/unrelate) for mutating semantic trees. ' +
     'YOps is to YAML what SQL is to tables — a standard language for tree manipulation.',
 
   path_syntax: {
@@ -73,6 +73,10 @@ const YOPS_REFERENCE = {
     dcl: {
       name: 'DCL — Data Constraint',
       operations: ['assert'],
+    },
+    t3x: {
+      name: 'T3X — Semantic Relations (T3X extensions)',
+      operations: ['relate', 'unrelate'],
     },
   },
 
@@ -223,6 +227,30 @@ const YOPS_REFERENCE = {
       fields: { path: 'string (required)', operator: '"exists" | "equals" | "type"', value: 'any (optional)' },
       example: [{ assert: { path: 'config/database', operator: 'exists' } }],
       errors: ['ASSERTION_FAILED — condition not met'],
+    },
+    {
+      name: 'relate',
+      category: 't3x',
+      description: 'Add a semantic relation between two tree nodes (T3X extension)',
+      fields: {
+        from: 'string (required) — source node path',
+        to: 'string (required) — target node path',
+        type: 'string (required) — relation type: causes | conditions | contrasts | follows | depends',
+      },
+      example: [{ relate: { from: 'diagnosis/root_cause', to: 'solution/approach', type: 'causes' } }],
+      errors: ['PATH_NOT_FOUND — endpoint path does not exist'],
+    },
+    {
+      name: 'unrelate',
+      category: 't3x',
+      description: 'Remove a semantic relation between two tree nodes (T3X extension)',
+      fields: {
+        from: 'string (required) — source node path',
+        to: 'string (required) — target node path',
+        type: 'string (required) — relation type to remove',
+      },
+      example: [{ unrelate: { from: 'diagnosis/root_cause', to: 'solution/approach', type: 'causes' } }],
+      errors: [],
     },
   ],
 };

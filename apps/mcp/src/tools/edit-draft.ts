@@ -10,7 +10,8 @@ export const editDraftTool = {
     'DDL (structure): define, drop, rename\n' +
     'DML (values): set, unset, populate, append\n' +
     'DTL (transform): move, clone, nest, split, fold, merge, sort, unique, pick, omit\n' +
-    'DCL (constraint): assert\n\n' +
+    'DCL (constraint): assert\n' +
+    'T3X (semantic relations): relate, unrelate\n\n' +
     '**Path syntax:** slash-separated (e.g., `trip/budget`). Keys are snake_case.\n\n' +
     '**Common examples:**\n' +
     '- Update a slot: `{ set: { path: "trip/budget", value: 5000 } }`\n' +
