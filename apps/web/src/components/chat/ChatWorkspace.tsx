@@ -50,7 +50,11 @@ export function ChatWorkspace({
   const wsMode = useWorkspaceStore((s) => s.mode);
   const isReviewPhase = wsMode === 'executed' || wsMode === 'committing';
   const pins = usePinsStore((s) => s.pins);
+  const fetchPins = usePinsStore((s) => s.fetchPins);
   const [showSourcePanel, setShowSourcePanel] = useState(false);
+  const [enrichedPinData, setEnrichedPinData] = useState<
+    Map<string, { title: string; assertionLessons?: string[]; turnCount?: number }>
+  >(new Map());
   const showAddForm = isReviewPhase && selection && selection.text.length > 3;
   const firstMessageSentRef = useRef(false);
 
@@ -65,6 +69,61 @@ export function ChatWorkspace({
 
   // Real-time sync — WebSocket connection to receive backend state changes
   useRealtimeSync(resolvedConversationId ?? conversationId);
+
+  // Load project pins for multi-source extraction
+  useEffect(() => {
+    if (resolvedProjectId) fetchPins(resolvedProjectId);
+  }, [resolvedProjectId, fetchPins]);
+
+  // Enrich pins with real titles when source panel opens
+  useEffect(() => {
+    if (!showSourcePanel || pins.length === 0) return;
+    let stale = false;
+    (async () => {
+      const { API_V1, fetchWithTimeout, handleResponse } = await import('@/lib/api/core');
+      const data = new Map<
+        string,
+        { title: string; assertionLessons?: string[]; turnCount?: number }
+      >();
+      for (const pin of pins) {
+        try {
+          if (pin.type === 'conversation') {
+            const res = await fetchWithTimeout(
+              `${API_V1}/conversations/${pin.ref_id}`
+            );
+            const conv = await handleResponse<{ title?: string }>(res);
+            if (!stale)
+              data.set(pin.id, { title: conv.title || pin.ref_id.slice(0, 12) });
+          } else if (pin.type === 'leaf') {
+            const res = await fetchWithTimeout(
+              `${API_V1}/leaves/${pin.ref_id}`
+            );
+            const leaf = await handleResponse<{
+              title?: string;
+              assertions?: Array<{ lesson?: string }>;
+              runner_assertions?: Array<{ lesson?: string }>;
+            }>(res);
+            if (!stale) {
+              const allAssertions = leaf.runner_assertions ?? leaf.assertions ?? [];
+              const lessons = allAssertions
+                .filter((a) => a.lesson)
+                .map((a) => a.lesson as string);
+              data.set(pin.id, {
+                title: leaf.title || pin.ref_id.slice(0, 12),
+                assertionLessons: lessons.length > 0 ? lessons : undefined,
+              });
+            }
+          }
+        } catch {
+          if (!stale) data.set(pin.id, { title: pin.ref_id.slice(0, 12) });
+        }
+      }
+      if (!stale) setEnrichedPinData(data);
+    })();
+    return () => {
+      stale = true;
+    };
+  }, [showSourcePanel, pins, resolvedProjectId]);
 
   // Model selection state
   const [selectedModel, setSelectedModel] = useState('claude-sonnet-4-20250514');
@@ -354,7 +413,9 @@ export function ChatWorkspace({
               <SourceMaterialPanel
                 pins={pins.map((p) => ({
                   ...p,
-                  title: p.ref_id.slice(0, 16),
+                  title: enrichedPinData.get(p.id)?.title ?? p.ref_id.slice(0, 12),
+                  assertionLessons: enrichedPinData.get(p.id)?.assertionLessons,
+                  turnCount: enrichedPinData.get(p.id)?.turnCount,
                 }))}
                 onConfirm={(selectedPinIds) => {
                   setShowSourcePanel(false);
