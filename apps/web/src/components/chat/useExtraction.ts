@@ -92,15 +92,53 @@ export function useExtraction({ resolvedConversationId }: UseExtractionParams) {
           const { opsToYaml } = await import('@/lib/scriptParser');
           const yamlText = opsToYaml(deltaOps as import('@t3x-dev/core').YOp[]);
           useWorkspaceStore.getState().setScriptText(yamlText);
+
+          // Save slot_quotes from base trees BEFORE execute (execute strips metadata)
+          type AnyTree = {
+            key: string;
+            slots: Record<string, unknown>;
+            slot_quotes?: Record<string, string>;
+            source?: string;
+            children?: AnyTree[];
+          };
+          const savedMeta = new Map<
+            string,
+            { slot_quotes?: Record<string, string>; source?: string }
+          >();
+          const collectMeta = (node: AnyTree, prefix: string) => {
+            const path = prefix ? `${prefix}/${node.key}` : node.key;
+            if (node.slot_quotes || node.source) {
+              savedMeta.set(path, { slot_quotes: node.slot_quotes, source: node.source });
+            }
+            for (const child of node.children ?? []) collectMeta(child, path);
+          };
+          for (const tree of useDraftStore.getState().draft.trees as AnyTree[]) {
+            collectMeta(tree, '');
+          }
+
           // Auto-execute to populate result + After panel
           useWorkspaceStore.getState().execute();
-          // Re-apply extraction snapshot to preserve slot_quotes/source metadata
-          // (execute() strips them during the YValue round-trip)
+
+          // Re-apply metadata: use snapshot if available, else restore saved metadata
           if (result.snapshot) {
             setDraft(result.snapshot);
             useWorkspaceStore
               .getState()
               .snapshotBase(result.snapshot, useWorkspaceStore.getState().baseCommitHash);
+          } else if (savedMeta.size > 0) {
+            // Incremental extraction: restore slot_quotes from pre-execute trees
+            const currentDraft = useDraftStore.getState().draft;
+            const restoreMeta = (node: AnyTree, prefix: string) => {
+              const path = prefix ? `${prefix}/${node.key}` : node.key;
+              const meta = savedMeta.get(path);
+              if (meta) {
+                if (meta.slot_quotes && !node.slot_quotes) node.slot_quotes = meta.slot_quotes;
+                if (meta.source && !node.source) node.source = meta.source;
+              }
+              for (const child of node.children ?? []) restoreMeta(child, path);
+            };
+            for (const tree of currentDraft.trees as AnyTree[]) restoreMeta(tree, '');
+            setDraft({ ...currentDraft });
           }
           // Validate slot_quotes coverage (inline, safe against missing children)
           {
