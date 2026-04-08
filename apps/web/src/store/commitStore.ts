@@ -162,15 +162,48 @@ export const useCommitStore = create<CommitState>((set, get) => ({
         return out;
       }
       function sanitizeTrees(trees: TreeNode[]): TreeNode[] {
-        return trees.map((t) =>
-          Object.assign({}, t, {
-            slots: sanitizeSlots(t.slots),
-            children: sanitizeTrees(t.children),
-          }) as TreeNode
+        return trees.map(
+          (t) =>
+            Object.assign({}, t, {
+              slots: sanitizeSlots(t.slots),
+              children: sanitizeTrees(t.children),
+            }) as TreeNode
         );
       }
 
       const sanitizedTrees = sanitizeTrees(enrichedTrees);
+
+      // Build sources array: active conversation + selected pins
+      const sources: Array<{
+        type: string;
+        id: string;
+        title?: string;
+        assertion_lessons?: string[];
+      }> = [];
+
+      if (conversationId) {
+        sources.push({
+          type: 'conversation',
+          id: conversationId,
+          title: conversationTitle ?? undefined,
+        });
+      }
+
+      // Add pinned sources that were used in extraction
+      const { usePinsStore } = await import('@/store/pinsStore');
+      const allPins = usePinsStore.getState().pins;
+      for (const pin of allPins) {
+        if (pin.type === 'conversation' && pin.ref_id !== conversationId) {
+          sources.push({ type: 'conversation', id: pin.ref_id });
+        } else if (pin.type === 'leaf') {
+          const lessons = (pin.selected_assertion_ids ?? []).map((id) => id);
+          sources.push({
+            type: 'leaf',
+            id: pin.ref_id,
+            assertion_lessons: lessons.length > 0 ? lessons : undefined,
+          });
+        }
+      }
 
       const result = await createCommit(
         projectId,
@@ -182,9 +215,7 @@ export const useCommitStore = create<CommitState>((set, get) => ({
           parents: lastCommitHash ? [lastCommitHash] : [],
           branch: commitBranch,
           message: message || undefined,
-          sources: conversationId
-            ? [{ type: 'conversation', id: conversationId, title: conversationTitle ?? undefined }]
-            : undefined,
+          sources: sources.length > 0 ? sources : undefined,
           provenance: { method: 'llm_extraction' },
         }
       );
