@@ -3,15 +3,22 @@ import { getClient } from '../client.js';
 export const editDraftTool = {
   name: 't3x_edit_draft',
   description:
-    'Edit a draft by applying YOps (YAML Operations). ' +
-    'Use t3x_yops_schema to see available operations. Common operations:\n' +
-    '- define: create a new empty node (structure)\n' +
-    '- populate: fill slots on an existing node (data)\n' +
-    '- set: update a single slot value\n' +
-    '- drop: remove a node and all children\n' +
-    '- rename: rename a node key\n' +
-    '- merge: combine multiple nodes into one\n' +
-    'Use t3x_show_draft after editing to verify the result.',
+    'Edit a draft\'s semantic tree by applying YOps (YAML Operations). ' +
+    'Prefer updating existing nodes (set/populate) over adding new ones (define).\n\n' +
+    '**Workflow:** t3x_show_draft → t3x_edit_draft → t3x_show_draft (verify) → t3x_commit\n\n' +
+    '**18 operations in 4 categories:**\n' +
+    'DDL (structure): define, drop, rename\n' +
+    'DML (values): set, unset, populate, append\n' +
+    'DTL (transform): move, clone, nest, split, fold, merge, sort, unique, pick, omit\n' +
+    'DCL (constraint): assert\n\n' +
+    '**Path syntax:** slash-separated (e.g., `trip/budget`). Keys are snake_case.\n\n' +
+    '**Common examples:**\n' +
+    '- Update a slot: `{ set: { path: "trip/budget", value: 5000 } }`\n' +
+    '- Fill multiple slots: `{ populate: { path: "trip/hotel", values: { type: "ryokan", area: "Asakusa" } } }`\n' +
+    '- Create new node: `{ define: { path: "trip/activities" } }`\n' +
+    '- Remove a node: `{ drop: { path: "trip/old_plan" } }`\n' +
+    '- Remove a slot: `{ unset: { path: "trip/budget/misc" } }`\n\n' +
+    'Use t3x_yops_schema for the full JSON Schema. Use t3x_show_draft to get current revision for if_revision.',
   inputSchema: {
     type: 'object' as const,
     properties: {

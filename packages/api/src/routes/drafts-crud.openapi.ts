@@ -69,6 +69,7 @@ const createDraftRoute = createRoute({
   method: 'post',
   path: '/v1/drafts',
   tags: ['Drafts'],
+  operationId: 'createDraft',
   summary: 'Create a new draft',
   request: {
     body: {
@@ -96,6 +97,7 @@ const listDraftsRoute = createRoute({
   method: 'get',
   path: '/v1/drafts',
   tags: ['Drafts'],
+  operationId: 'listDrafts',
   summary: 'List drafts by project',
   request: {
     query: z.object({
@@ -122,7 +124,11 @@ const getDraftRoute = createRoute({
   method: 'get',
   path: '/v1/drafts/{id}',
   tags: ['Drafts'],
+  operationId: 'getDraft',
   summary: 'Get draft by ID',
+  description:
+    'Returns the draft including its semantic tree (`nodes`), revision number, and status. ' +
+    'Use the `revision` field as `if_revision` when calling `POST /v1/drafts/{id}/apply-yops`.',
   request: { params: IdParamSchema },
   responses: {
     200: {
@@ -145,7 +151,8 @@ const updateDraftRoute = createRoute({
   method: 'patch',
   path: '/v1/drafts/{id}',
   tags: ['Drafts'],
-  summary: 'Update draft (optimistic lock)',
+  operationId: 'updateDraft',
+  summary: 'Update draft metadata (optimistic lock)',
   request: {
     params: IdParamSchema,
     body: {
@@ -177,6 +184,7 @@ const deleteDraftRoute = createRoute({
   method: 'delete',
   path: '/v1/drafts/{id}',
   tags: ['Drafts'],
+  operationId: 'deleteDraft',
   summary: 'Delete draft',
   request: { params: IdParamSchema },
   responses: {

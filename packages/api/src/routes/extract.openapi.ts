@@ -50,11 +50,20 @@ const postExtractRoute = createRoute({
   method: 'post',
   path: '/v1/extract',
   tags: ['Integration'],
+  operationId: 'extractSemanticTrees',
   summary: 'Extract semantic trees from raw text',
   description:
-    'Composite endpoint: creates a conversation and turn from raw text, ' +
-    'extracts trees, stores them as a draft, and optionally detects drift ' +
-    'from previous extractions in incremental mode.',
+    'Main entry point for the T3X workflow. Takes raw text and produces a structured semantic tree.\n\n' +
+    '**What it does:**\n' +
+    '1. Creates a conversation + turn from the raw text\n' +
+    '2. Runs the LLM extraction pipeline (structure-aware, evidence-backed)\n' +
+    '3. Stores the result as a draft\n' +
+    '4. Detects drift from previous extractions in incremental mode\n\n' +
+    '**After extraction:** Use `GET /v1/drafts/{draft_id}` to see the extracted tree, ' +
+    'then `POST /v1/drafts/{draft_id}/apply-yops` to edit it, ' +
+    'then `POST /v1/drafts/{draft_id}/commit` to save it.\n\n' +
+    '**Extraction modes:** concise (~30% coverage), balanced (~70-80%), detailed (~95%). ' +
+    'Set via project\'s `extraction_style` or pass `style` in the request body.',
   request: {
     body: {
       content: {

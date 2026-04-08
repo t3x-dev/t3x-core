@@ -18,6 +18,7 @@ export { conversationRoutes } from './conversations.openapi';
 export { curateRoutes } from './curate.openapi';
 export { deployAgentRoutes } from './deploy-agents.openapi';
 export { diffRoutes } from './diff.openapi';
+export { docsYopsRoutes } from './docs-yops.openapi';
 export { draftsRoutes } from './drafts.openapi';
 export { exportRoutes } from './export.openapi';
 export { extractRoutes as integrationExtractRoutes } from './extract.openapi';

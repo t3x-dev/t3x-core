@@ -75,6 +75,7 @@ import {
   turnRoutes,
   usageRoutes,
   webhooksRoutes,
+  docsYopsRoutes,
   yopsLogRoutes,
   yopsValidateRoutes,
 } from './routes';
@@ -168,6 +169,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   api.route('/', gateRoutes); // /v1/gate/check
   api.route('/', yopsLogRoutes); // /v1/conversations/:conversationId/yops
   api.route('/', yopsValidateRoutes); // /v1/yops/validate
+  api.route('/', docsYopsRoutes); // /v1/docs/yops
   api.route('/', runsRoutes);
   api.route('/', leavesRoutes);
   api.route('/', pinsRoutes);
