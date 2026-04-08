@@ -88,7 +88,7 @@ export function collectQuotesByTurn(trees: TreeNode[]): Map<number, string[]> {
       result.set(turnIndex, existing);
     }
 
-    for (const child of node.children) {
+    for (const child of node.children ?? []) {
       walk(child, turnIndex);
     }
   }

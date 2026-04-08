@@ -104,7 +104,7 @@ function renderNode(node: TreeNode, indent: number, lines: string[]): void {
     }
   }
 
-  for (const child of node.children) {
+  for (const child of node.children ?? []) {
     renderNode(child, indent + 1, lines);
   }
 }
