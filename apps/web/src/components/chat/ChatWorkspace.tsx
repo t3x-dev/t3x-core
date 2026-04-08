@@ -13,7 +13,7 @@ import { buildSourceMap } from '@/lib/sourceMap';
 import { cn } from '@/lib/utils';
 import { useDraftStore } from '@/store/draftStore';
 import { usePinsStore } from '@/store/pinsStore';
-import { useWorkspaceStore } from '@/store/workspaceStore';
+import { type GateIssue, useWorkspaceStore } from '@/store/workspaceStore';
 import { ChatAddForm } from './ChatAddForm';
 import { ChatHeader } from './ChatHeader';
 import type { AttachedImage } from './ChatInput';
@@ -305,15 +305,12 @@ export function ChatWorkspace({
           semantic?: {
             score?: number;
             dimensions?: Record<string, { score: number; details: string }>;
-            issues?: Array<{ dimension?: string; severity: string; description: string }>;
+            issues?: Array<{ dimension?: string; severity: string; description: string; suggestion?: string }>;
           };
         }>(res);
 
         // Build issues from dimensions details + explicit issues
-        const issuesByDim: Record<
-          string,
-          Array<{ severity: 'error' | 'warning' | 'info'; description: string }>
-        > = {};
+        const issuesByDim: Record<string, GateIssue[]> = {};
 
         // Convert dimension details into displayable issues
         const dims = result.semantic?.dimensions ?? {};
@@ -323,6 +320,7 @@ export function ChatWorkspace({
             issuesByDim[dimName].push({
               severity: dim.score < 0.5 ? 'error' : 'warning',
               description: `[${Math.round(dim.score * 100)}%] ${dim.details}`,
+              dimension: dimName,
             });
           }
         }
@@ -334,6 +332,8 @@ export function ChatWorkspace({
           issuesByDim[key].push({
             severity: (issue.severity as 'error' | 'warning' | 'info') || 'warning',
             description: issue.description,
+            dimension: issue.dimension,
+            suggestion: issue.suggestion,
           });
         }
 
