@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS conversations (
   conversation_id TEXT PRIMARY KEY,
   project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
   title TEXT,
+  alias TEXT CHECK (alias IS NULL OR alias ~ '^[a-z][a-z0-9_]{0,63}$'),
   parent_commit_hash TEXT,
   position_x REAL,
   position_y REAL,
@@ -156,6 +157,8 @@ CREATE TABLE IF NOT EXISTS conversation_contexts (
 
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_conversations_project ON conversations(project_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_conversations_project_alias
+  ON conversations (project_id, alias) WHERE alias IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_turns_conversation ON turns(conversation_id);
 CREATE INDEX IF NOT EXISTS idx_turns_project ON turns(project_id);
 CREATE INDEX IF NOT EXISTS idx_turns_parent ON turns(parent_turn_hash);

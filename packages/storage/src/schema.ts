@@ -19,7 +19,9 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 
 // Custom type for vector embeddings (bytea in Postgres)
 const bytea = customType<{ data: Buffer; driverData: Buffer }>({
@@ -97,6 +99,7 @@ export const conversations = pgTable(
       .notNull()
       .references(() => projects.projectId, { onDelete: 'cascade' }),
     title: text('title'),
+    alias: text('alias'),
     parentCommitHash: text('parent_commit_hash'),
     positionX: real('position_x'),
     positionY: real('position_y'),
@@ -105,7 +108,12 @@ export const conversations = pgTable(
     provider: text('provider'), // override, null = inherit project default
     model: text('model'), // override, null = inherit project default
   },
-  (table) => [index('idx_conversations_project').on(table.projectId)]
+  (table) => [
+    index('idx_conversations_project').on(table.projectId),
+    uniqueIndex('idx_conversations_project_alias')
+      .on(table.projectId, table.alias)
+      .where(sql`alias IS NOT NULL`),
+  ]
 );
 
 /**

@@ -76,6 +76,67 @@ describe('Conversations Storage', () => {
 
       expect(result.title).toBeNull();
     });
+
+    describe('alias column', () => {
+      it('stores and retrieves an alias', async () => {
+        const result = await insertConversation(db, { projectId: testProjectId });
+
+        // Manually update via raw Drizzle since insertConversation does not yet take alias
+        await db
+          .update(conversations)
+          .set({ alias: 'tokyo_trip' })
+          .where(eq(conversations.conversationId, result.conversationId));
+
+        const [row] = await db
+          .select()
+          .from(conversations)
+          .where(eq(conversations.conversationId, result.conversationId));
+
+        expect(row.alias).toBe('tokyo_trip');
+      });
+
+      it('enforces (project_id, alias) uniqueness', async () => {
+        const a = await insertConversation(db, { projectId: testProjectId });
+        const b = await insertConversation(db, { projectId: testProjectId });
+
+        await db
+          .update(conversations)
+          .set({ alias: 'duplicate_alias' })
+          .where(eq(conversations.conversationId, a.conversationId));
+
+        await expect(
+          db
+            .update(conversations)
+            .set({ alias: 'duplicate_alias' })
+            .where(eq(conversations.conversationId, b.conversationId))
+        ).rejects.toThrow();
+      });
+
+      it('allows the same alias under different projects', async () => {
+        const otherProject = await insertProject(
+          db,
+          testData.project({ name: 'Other Project' })
+        );
+        const c1 = await insertConversation(db, { projectId: testProjectId });
+        const c2 = await insertConversation(db, { projectId: otherProject.projectId });
+
+        await db
+          .update(conversations)
+          .set({ alias: 'shared_name' })
+          .where(eq(conversations.conversationId, c1.conversationId));
+        await db
+          .update(conversations)
+          .set({ alias: 'shared_name' })
+          .where(eq(conversations.conversationId, c2.conversationId));
+
+        const rows = await db
+          .select()
+          .from(conversations)
+          .where(eq(conversations.alias, 'shared_name'));
+
+        expect(rows).toHaveLength(2);
+      });
+    });
   });
 
   describe('findConversationById', () => {
