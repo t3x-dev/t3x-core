@@ -189,19 +189,19 @@ export const useCommitStore = create<CommitState>((set, get) => ({
         });
       }
 
-      // Add pinned sources that were used in extraction
+      // Add pinned sources that were actually selected during extraction
+      const { useWorkspaceStore } = await import('@/store/workspaceStore');
       const { usePinsStore } = await import('@/store/pinsStore');
-      const allPins = usePinsStore.getState().pins;
-      for (const pin of allPins) {
-        if (pin.type === 'conversation' && pin.ref_id !== conversationId) {
-          sources.push({ type: 'conversation', id: pin.ref_id });
-        } else if (pin.type === 'leaf') {
-          const lessons = (pin.selected_assertion_ids ?? []).map((id) => id);
-          sources.push({
-            type: 'leaf',
-            id: pin.ref_id,
-            assertion_lessons: lessons.length > 0 ? lessons : undefined,
-          });
+      const selectedPinIds = useWorkspaceStore.getState().lastExtractionPinIds;
+      if (selectedPinIds.length > 0) {
+        const allPins = usePinsStore.getState().pins;
+        const selectedPins = allPins.filter((p) => selectedPinIds.includes(p.id));
+        for (const pin of selectedPins) {
+          if (pin.type === 'conversation' && pin.ref_id !== conversationId) {
+            sources.push({ type: 'conversation', id: pin.ref_id });
+          } else if (pin.type === 'leaf') {
+            sources.push({ type: 'leaf', id: pin.ref_id });
+          }
         }
       }
 
