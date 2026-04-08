@@ -264,11 +264,14 @@ export function ChatWorkspace({
       toast.loading('Running audit...', { id: 'audit' });
       try {
         const { API_V1, fetchWithTimeout, handleResponse } = await import('@/lib/api/core');
+        const { flattenTrees } = await import('@t3x-dev/core');
+        // Gate API expects FlatNode[] format ({ id, type, slots }), not TreeNode[]
+        const flatFrames = flattenTrees(draftData.trees);
         const res = await fetchWithTimeout(`${API_V1}/gate/check`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            content: { trees: draftData.trees, relations: draftData.relations },
+            content: { trees: flatFrames, relations: draftData.relations },
             turns: messages.map((m) => ({ role: m.role, content: m.content })),
             gates: ['semantic'],
           }),
