@@ -4,6 +4,7 @@ import { LayoutDashboard } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback } from 'react';
 import { Button } from '@/components/ui/button';
+import { PinButton } from '@/components/ui/PinButton';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import { useChatStore } from '@/store/chatStore';
@@ -89,7 +90,10 @@ export function ChatHeader({
         </div>
       )}
 
-      {/* Right: Canvas link */}
+      {/* Right: Pin + Canvas link */}
+      {activeProjectId && conversationId && (
+        <PinButton projectId={activeProjectId} type="conversation" refId={conversationId} />
+      )}
       <Button
         type="button"
         variant="ghost"
