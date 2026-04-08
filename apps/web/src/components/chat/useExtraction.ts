@@ -4,6 +4,7 @@ import { listTopics, updateTopicApi } from '@/lib/api/topics';
 import { extractNodes } from '@/lib/api/trees';
 import { useChatStore } from '@/store/chatStore';
 import { useDraftStore } from '@/store/draftStore';
+import type { GateIssue } from '@/store/workspaceStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 
 interface UseExtractionParams {
@@ -198,29 +199,43 @@ export function useExtraction({ resolvedConversationId }: UseExtractionParams) {
         if (result.gate_result) {
           const gate = result.gate_result as {
             semantic?: {
+              dimensions?: Record<string, { score: number; details: string }>;
               issues?: Array<{
-                tree_id?: string;
+                dimension?: string;
                 severity: 'error' | 'warning' | 'info';
                 description: string;
+                suggestion?: string;
               }>;
             };
           };
-          if (gate.semantic?.issues) {
-            const issuesByNode: Record<
-              string,
-              { severity: 'error' | 'warning' | 'info'; description: string }[]
-            > = {};
-            for (const issue of gate.semantic.issues) {
-              if (issue.tree_id) {
-                if (!issuesByNode[issue.tree_id]) issuesByNode[issue.tree_id] = [];
-                issuesByNode[issue.tree_id].push({
-                  severity: issue.severity,
-                  description: issue.description,
-                });
-              }
+          const issuesByDim: Record<string, GateIssue[]> = {};
+
+          // Convert dimension details into displayable issues
+          const dims = gate.semantic?.dimensions ?? {};
+          for (const [dimName, dim] of Object.entries(dims)) {
+            if (dim.score < 1 && dim.details) {
+              if (!issuesByDim[dimName]) issuesByDim[dimName] = [];
+              issuesByDim[dimName].push({
+                severity: dim.score < 0.5 ? 'error' : 'warning',
+                description: `[${Math.round(dim.score * 100)}%] ${dim.details}`,
+                dimension: dimName,
+              });
             }
-            setGateIssues(issuesByNode);
           }
+
+          // Also include explicit issues
+          for (const issue of gate.semantic?.issues ?? []) {
+            const key = issue.dimension || '_general';
+            if (!issuesByDim[key]) issuesByDim[key] = [];
+            issuesByDim[key].push({
+              severity: issue.severity,
+              description: issue.description,
+              dimension: issue.dimension,
+              suggestion: issue.suggestion,
+            });
+          }
+
+          setGateIssues(issuesByDim);
         }
 
         // Reload topics after extraction (new topic may have been auto-created)

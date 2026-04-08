@@ -19,6 +19,8 @@ export interface DriftInfo {
 export interface GateIssue {
   severity: 'error' | 'warning' | 'info';
   description: string;
+  dimension?: string;
+  suggestion?: string;
 }
 
 type WorkspaceMode = 'idle' | 'streaming' | 'executed' | 'committing';
