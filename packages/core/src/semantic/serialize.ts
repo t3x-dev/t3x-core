@@ -22,7 +22,7 @@ function serializeTree(node: TreeNode, indent = 0): string {
       lines.push(`${pad}  ${key}: ${typeof value === 'object' ? JSON.stringify(value) : String(value)}`);
     }
   }
-  for (const child of node.children) {
+  for (const child of node.children ?? []) {
     lines.push(serializeTree(child, indent + 1));
   }
   return lines.join('\n');

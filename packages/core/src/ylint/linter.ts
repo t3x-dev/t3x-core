@@ -296,7 +296,7 @@ function walkTree(
   }
 
   // Recurse into children
-  for (const child of node.children) {
+  for (const child of node.children ?? []) {
     walkTree(child, path, depth + 1, node.children.length, cfg, warnings, counters);
   }
 }

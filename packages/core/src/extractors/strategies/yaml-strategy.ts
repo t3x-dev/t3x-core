@@ -52,7 +52,7 @@ function applyTreeMetadata(outputTrees: TreeNode[], sourceTree: TreeNode): void 
   function collectMeta(node: TreeNode, prefix: string): void {
     const path = prefix ? `${prefix}/${node.key}` : node.key;
     metaMap.set(path, { source: node.source, slot_quotes: node.slot_quotes });
-    for (const child of node.children) {
+    for (const child of node.children ?? []) {
       collectMeta(child, path);
     }
   }

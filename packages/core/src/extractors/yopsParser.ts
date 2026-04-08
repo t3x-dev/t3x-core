@@ -119,7 +119,7 @@ function applyMetadata(
   }
 
   // Recursively apply to children
-  for (const child of node.children) {
+  for (const child of node.children ?? []) {
     const childPrefix = prefix ? `${prefix}.${child.key}` : child.key;
     applyMetadata(child, slotQuotes, sourceMap, childPrefix);
   }
@@ -191,7 +191,7 @@ function collectSlotQuotes(node: TreeNode, prefix: string): Record<string, strin
       result[fullPath] = val;
     }
   }
-  for (const child of node.children) {
+  for (const child of node.children ?? []) {
     const childPrefix = prefix ? `${prefix}.${child.key}` : child.key;
     Object.assign(result, collectSlotQuotes(child, childPrefix));
   }
