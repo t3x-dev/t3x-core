@@ -94,7 +94,7 @@ export function WorkspaceTopbar() {
         <button
           type="button"
           onClick={() => window.dispatchEvent(new CustomEvent('t3x:audit-requested'))}
-          disabled={mode === 'idle' || mode === 'streaming'}
+          disabled={mode === 'streaming'}
           className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-semibold rounded border border-[var(--text-tertiary)]/30 text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
         >
           <Search className="h-2.5 w-2.5" />
