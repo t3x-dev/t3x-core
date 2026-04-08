@@ -11,7 +11,7 @@ import type { LintConfig, LintResult, LintWarning } from './types';
 export const DEFAULT_LINT_CONFIG: LintConfig = {
   max_key_words: 3,
   max_scalar_length: 100,
-  max_depth: 3,
+  max_depth: 5,
   generic_keys: [
     'details',
     'info',
