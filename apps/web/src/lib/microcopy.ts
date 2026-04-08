@@ -62,15 +62,15 @@ const MICROCOPY: Record<string, MicrocopyEntry> = {
     developer: 'Cancel',
   },
   reviewAndMerge: {
-    default: '审查并合并',
+    default: 'Review & Merge',
     developer: 'Review & Merge',
   },
   backToCanvas: {
-    default: '返回画布',
+    default: 'Back to Canvas',
     developer: 'Back to Canvas',
   },
   stayHere: {
-    default: '留在此页',
+    default: 'Stay Here',
     developer: 'Stay Here',
   },
 };

@@ -1,8 +1,8 @@
-import { create } from 'zustand';
 import type { SemanticContent, YOp } from '@t3x-dev/core';
 import { applyYOps } from '@t3x-dev/core';
-import { parseYOpsScript, opsToYaml } from '@/lib/scriptParser';
+import { create } from 'zustand';
 import type { ParseError } from '@/lib/scriptParser';
+import { opsToYaml, parseYOpsScript } from '@/lib/scriptParser';
 
 export interface ExecError {
   op_index: number;
@@ -49,7 +49,16 @@ interface WorkspaceState {
   // Gate issues (replaces phaseStore gateIssues)
   gateIssues: Record<string, GateIssue[]>;
   // Advisory questions (replaces phaseStore advisoryQuestions)
-  advisoryQuestions: Array<{ id: string; type: string; treeId: string; slotKey?: string; question: string; currentValue?: unknown }>;
+  advisoryQuestions: Array<{
+    id: string;
+    type: string;
+    treeId: string;
+    slotKey?: string;
+    question: string;
+    currentValue?: unknown;
+  }>;
+  // Source pin IDs used in the last extraction (for commit source_refs)
+  lastExtractionPinIds: string[];
 
   snapshotBase(content: SemanticContent, commitHash: string | null): void;
   setScriptText(text: string): void;
@@ -63,7 +72,16 @@ interface WorkspaceState {
   setDriftDetected(info: DriftInfo, choices: string[]): void;
   clearDrift(): void;
   setGateIssues(issues: Record<string, GateIssue[]>): void;
-  setAdvisoryQuestions(questions: Array<{ id: string; type: string; treeId: string; slotKey?: string; question: string; currentValue?: unknown }>): void;
+  setAdvisoryQuestions(
+    questions: Array<{
+      id: string;
+      type: string;
+      treeId: string;
+      slotKey?: string;
+      question: string;
+      currentValue?: unknown;
+    }>
+  ): void;
   reset(): void;
 }
 
@@ -86,6 +104,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   selectedTurnIndex: null,
   selectedSource: null,
   scrollToCenter: false,
+  lastExtractionPinIds: [],
   driftDetected: false,
   driftInfo: null,
   driftChoices: [],
@@ -221,6 +240,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       driftChoices: [],
       gateIssues: {},
       advisoryQuestions: [],
+      lastExtractionPinIds: [],
     });
   },
 }));

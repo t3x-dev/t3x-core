@@ -30,6 +30,8 @@ export interface ExtractionInput {
   snapshot?: SemanticContent;
   /** Number of turns already processed by previous extractions (from the start). Used in incremental mode to split context vs new turns. */
   processedTurnCount?: number;
+  /** Additional context from pinned sources (conversations, leaf assertions) */
+  additionalContext?: string;
 }
 
 // -- Output Type --
@@ -403,7 +405,7 @@ export function buildExtractionPrompt(
   input: ExtractionInput,
   style: ExtractionStyleConfig = DEFAULT_STYLE
 ): ExtractionPromptResult {
-  const { turns, snapshot, processedTurnCount } = input;
+  const { turns, snapshot, processedTurnCount, additionalContext } = input;
 
   if (snapshot) {
     // Incremental mode
@@ -441,10 +443,14 @@ ${newText}`;
 ${formatTurns(turns)}`;
     }
 
-    const userPrompt = `## Current Snapshot
+    let userPrompt = `## Current Snapshot
 ${snapshotYaml}
 
-${turnsSection}
+`;
+    if (additionalContext) {
+      userPrompt += `## Additional Context (from pinned sources)\n\n${additionalContext}\n\n`;
+    }
+    userPrompt += `${turnsSection}
 
 ## Instructions
 Output the changes only based on the \u2605 NEW turns \u2605 above.
@@ -467,7 +473,11 @@ Include "source" field referencing the turn tag (T1, T2, etc.).`;
   // First extraction mode
   const turnsText = formatTurns(turns);
 
-  const userPrompt = `## Conversation
+  let userPrompt = '';
+  if (additionalContext) {
+    userPrompt += `## Additional Context (from pinned sources)\n\n${additionalContext}\n\n`;
+  }
+  userPrompt += `## Conversation
 ${turnsText}
 
 ## Instructions

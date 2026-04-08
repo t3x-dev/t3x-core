@@ -286,7 +286,7 @@ export function buildYOpsPrompt(
   input: ExtractionInput,
   style?: Partial<ExtractionStyleConfig>
 ): ExtractionPromptResult {
-  const { turns, snapshot, processedTurnCount } = input;
+  const { turns, snapshot, processedTurnCount, additionalContext } = input;
   const hasSnapshot = !!snapshot && snapshot.trees.length > 0;
   const resolved: ExtractionStyleConfig = { ...DEFAULT_STYLE, ...style };
 
@@ -318,10 +318,14 @@ ${newText}`;
 ${formatTurns(turns)}`;
     }
 
-    const userPrompt = `## Current Tree
+    let userPrompt = `## Current Tree
 ${snapshotYaml}
 
-${turnsSection}
+`;
+    if (additionalContext) {
+      userPrompt += `## Additional Context (from pinned sources)\n\n${additionalContext}\n\n`;
+    }
+    userPrompt += `${turnsSection}
 
 Extract changes from the NEW turns only. Prefer set/populate for updates, define for new nodes. Use structure ops (nest/fold/move/rename) only when the conversation explicitly calls for reorganization.`;
 
@@ -330,7 +334,11 @@ Extract changes from the NEW turns only. Prefer set/populate for updates, define
 
   // First extraction — YAML tree + JSON metadata block
   const systemPrompt = buildFirstExtractionSystemPrompt(resolved);
-  const userPrompt = `## Conversation
+  let userPrompt = '';
+  if (additionalContext) {
+    userPrompt += `## Additional Context (from pinned sources)\n\n${additionalContext}\n\n`;
+  }
+  userPrompt += `## Conversation
 ${formatTurns(turns)}
 
 Extract ALL knowledge into a YAML tree, then \`---\`, then the JSON metadata block.

@@ -11,6 +11,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { PinButton } from '@/components/ui/PinButton';
 import type { WorkspaceMode } from '@/hooks/useLeafPageData';
 import { useTerminology } from '@/hooks/useTerminology';
 import type { Leaf } from '@/lib/api';
@@ -107,6 +108,7 @@ export function LeafWorkspaceHeader({
           </div>
         )}
 
+        <PinButton projectId={projectId} type="leaf" refId={leaf.id} />
         <ShareLinkButton entityType="leaf" entityId={leaf.id} />
 
         {/* Export dropdown */}

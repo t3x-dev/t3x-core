@@ -5,18 +5,20 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DriftPopup } from '@/components/chat/DriftPopup';
 import { useAutoProject } from '@/hooks/useAutoProject';
 import { useCommittedHighlights } from '@/hooks/useCommittedHighlights';
-import { useRealtimeSync } from '@/hooks/useRealtimeSync';
 import { useConversationChat } from '@/hooks/useConversationChat';
+import { useRealtimeSync } from '@/hooks/useRealtimeSync';
 import { useTextSelection } from '@/hooks/useTextSelection';
 import { buildSourceMap } from '@/lib/sourceMap';
 import { cn } from '@/lib/utils';
 import { useDraftStore } from '@/store/draftStore';
+import { usePinsStore } from '@/store/pinsStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { ChatAddForm } from './ChatAddForm';
 import { ChatHeader } from './ChatHeader';
 import type { AttachedImage } from './ChatInput';
 import { ChatInput } from './ChatInput';
 import { ChatMessage } from './ChatMessage';
+import { SourceMaterialPanel } from './SourceMaterialPanel';
 import { useChatInit } from './useChatInit';
 import { useExtraction } from './useExtraction';
 
@@ -47,6 +49,12 @@ export function ChatWorkspace({
   const { selection, clearSelection } = useTextSelection(chatContainerRef);
   const wsMode = useWorkspaceStore((s) => s.mode);
   const isReviewPhase = wsMode === 'executed' || wsMode === 'committing';
+  const pins = usePinsStore((s) => s.pins);
+  const fetchPins = usePinsStore((s) => s.fetchPins);
+  const [showSourcePanel, setShowSourcePanel] = useState(false);
+  const [enrichedPinData, setEnrichedPinData] = useState<
+    Map<string, { title: string; assertionLessons?: string[]; turnCount?: number }>
+  >(new Map());
   const showAddForm = isReviewPhase && selection && selection.text.length > 3;
   const firstMessageSentRef = useRef(false);
 
@@ -61,6 +69,54 @@ export function ChatWorkspace({
 
   // Real-time sync — WebSocket connection to receive backend state changes
   useRealtimeSync(resolvedConversationId ?? conversationId);
+
+  // Load project pins for multi-source extraction
+  useEffect(() => {
+    if (resolvedProjectId) fetchPins(resolvedProjectId);
+  }, [resolvedProjectId, fetchPins]);
+
+  // Enrich pins with real titles when source panel opens
+  useEffect(() => {
+    if (!showSourcePanel || pins.length === 0) return;
+    let stale = false;
+    (async () => {
+      const { API_V1, fetchWithTimeout, handleResponse } = await import('@/lib/api/core');
+      const data = new Map<
+        string,
+        { title: string; assertionLessons?: string[]; turnCount?: number }
+      >();
+      for (const pin of pins) {
+        try {
+          if (pin.type === 'conversation') {
+            const res = await fetchWithTimeout(`${API_V1}/conversations/${pin.ref_id}`);
+            const conv = await handleResponse<{ title?: string }>(res);
+            if (!stale) data.set(pin.id, { title: conv.title || pin.ref_id.slice(0, 12) });
+          } else if (pin.type === 'leaf') {
+            const res = await fetchWithTimeout(`${API_V1}/leaves/${pin.ref_id}`);
+            const leaf = await handleResponse<{
+              title?: string;
+              assertions?: Array<{ lesson?: string }>;
+              runner_assertions?: Array<{ lesson?: string }>;
+            }>(res);
+            if (!stale) {
+              const allAssertions = leaf.runner_assertions ?? leaf.assertions ?? [];
+              const lessons = allAssertions.filter((a) => a.lesson).map((a) => a.lesson as string);
+              data.set(pin.id, {
+                title: leaf.title || pin.ref_id.slice(0, 12),
+                assertionLessons: lessons.length > 0 ? lessons : undefined,
+              });
+            }
+          }
+        } catch {
+          if (!stale) data.set(pin.id, { title: pin.ref_id.slice(0, 12) });
+        }
+      }
+      if (!stale) setEnrichedPinData(data);
+    })();
+    return () => {
+      stale = true;
+    };
+  }, [showSourcePanel, pins, resolvedProjectId]);
 
   // Model selection state
   const [selectedModel, setSelectedModel] = useState('claude-sonnet-4-20250514');
@@ -165,10 +221,34 @@ export function ChatWorkspace({
 
   // Listen for extraction request (via custom event)
   useEffect(() => {
-    const handler = () => handleExtract();
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.sourcePinIds) {
+        // Came from source panel confirm — extract with selected pins
+        handleExtract(detail.sourcePinIds);
+      } else if (pins.length > 0) {
+        // Has pins — show source panel instead of extracting directly
+        setShowSourcePanel(true);
+        // Scroll chat area to bottom so user can see the source panel
+        requestAnimationFrame(() => {
+          chatContainerRef.current?.scrollTo({
+            top: chatContainerRef.current.scrollHeight,
+            behavior: 'smooth',
+          });
+        });
+      } else {
+        // No pins — extract directly (current behavior)
+        handleExtract();
+      }
+    };
     window.addEventListener('t3x:extract-requested', handler);
     return () => window.removeEventListener('t3x:extract-requested', handler);
-  }, [handleExtract]);
+  }, [handleExtract, pins.length]);
+
+  // Hide source panel when extraction starts
+  useEffect(() => {
+    if (isExtracting) setShowSourcePanel(false);
+  }, [isExtracting]);
 
   // Send firstMessage on mount (once only)
   useEffect(() => {
@@ -326,6 +406,23 @@ export function ChatWorkspace({
                   </div>
                 </div>
               </div>
+            )}
+
+            {/* Pinned source material panel */}
+            {showSourcePanel && pins.length > 0 && (
+              <SourceMaterialPanel
+                pins={pins.map((p) => ({
+                  ...p,
+                  title: enrichedPinData.get(p.id)?.title ?? p.ref_id.slice(0, 12),
+                  assertionLessons: enrichedPinData.get(p.id)?.assertionLessons,
+                  turnCount: enrichedPinData.get(p.id)?.turnCount,
+                }))}
+                onConfirm={(selectedPinIds) => {
+                  setShowSourcePanel(false);
+                  handleExtract(selectedPinIds);
+                }}
+                onCancel={() => setShowSourcePanel(false)}
+              />
             )}
           </div>
         )}

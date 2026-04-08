@@ -70,9 +70,9 @@ describe('getMicrocopy', () => {
       expect(getMicrocopy('mergeReviewTitle', 'default')).toBe('Review Merge');
       expect(getMicrocopy('mergeReviewConfirm', 'default')).toBe('Confirm Merge');
       expect(getMicrocopy('mergeReviewCancel', 'default')).toBe('Go Back');
-      expect(getMicrocopy('reviewAndMerge', 'default')).toBe('\u5BA1\u67E5\u5E76\u5408\u5E76'); // 审查并合并
-      expect(getMicrocopy('backToCanvas', 'default')).toBe('\u8FD4\u56DE\u753B\u5E03'); // 返回画布
-      expect(getMicrocopy('stayHere', 'default')).toBe('\u7559\u5728\u6B64\u9875'); // 留在此页
+      expect(getMicrocopy('reviewAndMerge', 'default')).toBe('Review & Merge');
+      expect(getMicrocopy('backToCanvas', 'default')).toBe('Back to Canvas');
+      expect(getMicrocopy('stayHere', 'default')).toBe('Stay Here');
     });
 
     it('returns parameterized string for mergeSuccess', () => {

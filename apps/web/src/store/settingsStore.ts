@@ -31,7 +31,8 @@ export const useSettingsStore = create<SettingsState>()(
         set((state) => ({
           developerMode: !state.developerMode,
         })),
-      setUserExperience: (experience) => set({ userExperience: experience }),
+      setUserExperience: (experience) =>
+        set({ userExperience: experience, developerMode: experience === 'developer' }),
       setDefaultView: (view) => set({ defaultView: view }),
       setDensity: (density) => set({ density }),
     }),
@@ -43,6 +44,14 @@ export const useSettingsStore = create<SettingsState>()(
         defaultView: state.defaultView,
         density: state.density,
       }),
+      merge: (persisted, current) => {
+        const merged = { ...current, ...(persisted as Partial<SettingsState>) };
+        // Fix desync: derive developerMode from userExperience
+        if (merged.userExperience === 'developer' && !merged.developerMode) {
+          merged.developerMode = true;
+        }
+        return merged;
+      },
     }
   )
 );

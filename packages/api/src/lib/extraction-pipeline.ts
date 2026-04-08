@@ -12,6 +12,7 @@
 
 import {
   applyYOps,
+  buildMemoryFromPins,
   checkDiffCompatibility,
   checkReadiness,
   computeSessionContext,
@@ -33,9 +34,11 @@ import {
 import {
   createTopic,
   findConversationById,
+  findLeafById,
   findProjectById,
   findTurnsByConversation,
   findUserById,
+  getPinsByIds,
   insertYOpsLogEntry,
   listTopicsByConversation,
   listYOpsLogByConversation,
@@ -75,6 +78,7 @@ export interface ExtractionPipelineParams {
   topicId?: string;
   forceExtract?: boolean;
   userId?: string;
+  sourcePinIds?: string[];
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -287,6 +291,50 @@ export async function* runExtractionPipeline(
     // Drift check passed (or skipped) — signal to client
     yield { type: 'status', data: { step: 'drift_check', result: 'clear' } };
 
+    // ── 3b. Build additional context from pinned sources ──
+    let additionalContext: string | undefined;
+    if (params.sourcePinIds && params.sourcePinIds.length > 0) {
+      try {
+        const pinRecords = await getPinsByIds(db, params.sourcePinIds);
+        const conversations = new Map<string, { id: string; title: string; turns: Array<{ role: string; content: string }> }>();
+        const leavesMap = new Map<string, import('@t3x-dev/core').Leaf>();
+
+        for (const pin of pinRecords) {
+          if (pin.type === 'conversation') {
+            const conv = await findConversationById(db, pin.ref_id);
+            if (conv) {
+              const turns = await findTurnsByConversation(db, { conversationId: pin.ref_id, limit: 200 });
+              conversations.set(pin.ref_id, {
+                id: conv.id,
+                title: conv.title ?? 'Untitled',
+                turns: turns.map((t) => ({ role: t.role, content: t.content })),
+              });
+            }
+          } else if (pin.type === 'leaf') {
+            const leaf = await findLeafById(db, pin.ref_id);
+            if (leaf) {
+              leavesMap.set(pin.ref_id, leaf);
+            }
+          }
+        }
+
+        const builtContext = buildMemoryFromPins({
+          projectPins: pinRecords,
+          conversations,
+          leaves: leavesMap,
+        });
+
+        if (builtContext.text.trim().length > 0) {
+          additionalContext = builtContext.text;
+        }
+      } catch (pinErr) {
+        console.warn(
+          `[pipeline] Failed to load pinned context: ${pinErr instanceof Error ? pinErr.message : String(pinErr)}`
+        );
+        // Non-fatal — continue extraction without additional context
+      }
+    }
+
     // ── Step 4: Extractor — LLM extraction via provider registry ──
     yield { type: 'status', data: { step: 'extracting' } };
 
@@ -311,6 +359,7 @@ export async function* runExtractionPipeline(
               turns: extractionTurns,
               snapshot: currentFlat.length > 0 ? currentSnapshot : undefined,
               processedTurnCount,
+              additionalContext,
             },
             resolvedStyle
           )
