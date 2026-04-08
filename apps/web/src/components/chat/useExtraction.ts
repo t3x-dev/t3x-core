@@ -101,11 +101,19 @@ export function useExtraction({ resolvedConversationId }: UseExtractionParams) {
             useWorkspaceStore
               .getState()
               .snapshotBase(result.snapshot, useWorkspaceStore.getState().baseCommitHash);
-            // Validate slot_quotes coverage
+          }
+          // Validate slot_quotes coverage (use snapshot if available, else workspace result)
+          {
             const { validateSlotQuotes } = await import('@t3x-dev/core');
-            useWorkspaceStore.setState({
-              quoteValidation: validateSlotQuotes(result.snapshot.trees),
-            });
+            const treesToValidate =
+              result.snapshot?.trees ??
+              useWorkspaceStore.getState().result?.trees ??
+              useDraftStore.getState().draft.trees;
+            if (treesToValidate.length > 0) {
+              useWorkspaceStore.setState({
+                quoteValidation: validateSlotQuotes(treesToValidate),
+              });
+            }
           }
           useDraftStore.setState({ isExtracting: false });
         } else {

@@ -265,8 +265,15 @@ export function ChatWorkspace({
       try {
         const { API_V1, fetchWithTimeout, handleResponse } = await import('@/lib/api/core');
         const { flattenTrees } = await import('@t3x-dev/core');
+        // Ensure all tree nodes have children arrays (DB-loaded trees may lack them)
+        const safeTrees = JSON.parse(JSON.stringify(draftData.trees));
+        const ensureChildren = (node: Record<string, unknown>) => {
+          if (!Array.isArray(node.children)) node.children = [];
+          (node.children as Record<string, unknown>[]).forEach(ensureChildren);
+        };
+        safeTrees.forEach(ensureChildren);
         // Gate API expects FlatNode[] format ({ id, type, slots }), not TreeNode[]
-        const flatFrames = flattenTrees(draftData.trees);
+        const flatFrames = flattenTrees(safeTrees);
         const res = await fetchWithTimeout(`${API_V1}/gate/check`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
