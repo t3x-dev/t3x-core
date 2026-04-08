@@ -77,8 +77,6 @@ export interface GateCheckResult {
   };
 }
 
-export type GateIssue = NonNullable<GateCheckResult['semantic']>['issues'][number];
-
 // ── Tree Extraction ──
 
 export async function extractNodes(

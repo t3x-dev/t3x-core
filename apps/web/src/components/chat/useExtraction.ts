@@ -4,6 +4,7 @@ import { listTopics, updateTopicApi } from '@/lib/api/topics';
 import { extractNodes } from '@/lib/api/trees';
 import { useChatStore } from '@/store/chatStore';
 import { useDraftStore } from '@/store/draftStore';
+import type { GateIssue } from '@/store/workspaceStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 
 interface UseExtractionParams {
@@ -92,15 +93,97 @@ export function useExtraction({ resolvedConversationId }: UseExtractionParams) {
           const { opsToYaml } = await import('@/lib/scriptParser');
           const yamlText = opsToYaml(deltaOps as import('@t3x-dev/core').YOp[]);
           useWorkspaceStore.getState().setScriptText(yamlText);
+
+          // Save slot_quotes from base trees BEFORE execute (execute strips metadata)
+          type AnyTree = {
+            key: string;
+            slots: Record<string, unknown>;
+            slot_quotes?: Record<string, string>;
+            source?: string;
+            children?: AnyTree[];
+          };
+          const savedMeta = new Map<
+            string,
+            { slot_quotes?: Record<string, string>; source?: string }
+          >();
+          const collectMeta = (node: AnyTree, prefix: string) => {
+            const path = prefix ? `${prefix}/${node.key}` : node.key;
+            if (node.slot_quotes || node.source) {
+              savedMeta.set(path, { slot_quotes: node.slot_quotes, source: node.source });
+            }
+            for (const child of node.children ?? []) collectMeta(child, path);
+          };
+          for (const tree of useDraftStore.getState().draft.trees as AnyTree[]) {
+            collectMeta(tree, '');
+          }
+
           // Auto-execute to populate result + After panel
           useWorkspaceStore.getState().execute();
-          // Re-apply extraction snapshot to preserve slot_quotes/source metadata
-          // (execute() strips them during the YValue round-trip)
+
+          // Re-apply metadata: use snapshot if available, else restore saved metadata
           if (result.snapshot) {
             setDraft(result.snapshot);
             useWorkspaceStore
               .getState()
               .snapshotBase(result.snapshot, useWorkspaceStore.getState().baseCommitHash);
+          } else if (savedMeta.size > 0) {
+            // Incremental extraction: restore slot_quotes from pre-execute trees
+            const currentDraft = useDraftStore.getState().draft;
+            const restoreMeta = (node: AnyTree, prefix: string) => {
+              const path = prefix ? `${prefix}/${node.key}` : node.key;
+              const meta = savedMeta.get(path);
+              if (meta) {
+                if (meta.slot_quotes && !node.slot_quotes) node.slot_quotes = meta.slot_quotes;
+                if (meta.source && !node.source) node.source = meta.source;
+              }
+              for (const child of node.children ?? []) restoreMeta(child, path);
+            };
+            for (const tree of currentDraft.trees as AnyTree[]) restoreMeta(tree, '');
+            setDraft({ ...currentDraft });
+          }
+          // Validate slot_quotes coverage (inline, safe against missing children)
+          {
+            type AnyNode = {
+              key: string;
+              slots: Record<string, unknown>;
+              slot_quotes?: Record<string, string>;
+              children?: AnyNode[];
+            };
+            const snapshotTrees = result.snapshot?.trees ?? [];
+            const resultTrees = useWorkspaceStore.getState().result?.trees ?? [];
+            const draftTrees = useDraftStore.getState().draft.trees ?? [];
+            // Use the first non-empty trees source
+            const treesToValidate = (
+              snapshotTrees.length > 0
+                ? snapshotTrees
+                : resultTrees.length > 0
+                  ? resultTrees
+                  : draftTrees
+            ) as AnyNode[];
+            if (treesToValidate.length > 0) {
+              const missing: string[] = [];
+              let total = 0;
+              let quoted = 0;
+              const walk = (node: AnyNode, prefix: string) => {
+                const path = prefix ? `${prefix}.${node.key}` : node.key;
+                const quotes = node.slot_quotes ?? {};
+                for (const k of Object.keys(node.slots)) {
+                  total++;
+                  if (k in quotes) quoted++;
+                  else missing.push(`${path}.${k}`);
+                }
+                for (const child of node.children ?? []) walk(child, path);
+              };
+              for (const tree of treesToValidate) walk(tree, '');
+              useWorkspaceStore.setState({
+                quoteValidation: {
+                  total,
+                  quoted,
+                  missing,
+                  coverage: total === 0 ? 1 : quoted / total,
+                },
+              });
+            }
           }
           useDraftStore.setState({ isExtracting: false });
         } else {
@@ -116,29 +199,43 @@ export function useExtraction({ resolvedConversationId }: UseExtractionParams) {
         if (result.gate_result) {
           const gate = result.gate_result as {
             semantic?: {
+              dimensions?: Record<string, { score: number; details: string }>;
               issues?: Array<{
-                tree_id?: string;
+                dimension?: string;
                 severity: 'error' | 'warning' | 'info';
                 description: string;
+                suggestion?: string;
               }>;
             };
           };
-          if (gate.semantic?.issues) {
-            const issuesByNode: Record<
-              string,
-              { severity: 'error' | 'warning' | 'info'; description: string }[]
-            > = {};
-            for (const issue of gate.semantic.issues) {
-              if (issue.tree_id) {
-                if (!issuesByNode[issue.tree_id]) issuesByNode[issue.tree_id] = [];
-                issuesByNode[issue.tree_id].push({
-                  severity: issue.severity,
-                  description: issue.description,
-                });
-              }
+          const issuesByDim: Record<string, GateIssue[]> = {};
+
+          // Convert dimension details into displayable issues
+          const dims = gate.semantic?.dimensions ?? {};
+          for (const [dimName, dim] of Object.entries(dims)) {
+            if (dim.score < 1 && dim.details) {
+              if (!issuesByDim[dimName]) issuesByDim[dimName] = [];
+              issuesByDim[dimName].push({
+                severity: dim.score < 0.5 ? 'error' : 'warning',
+                description: `[${Math.round(dim.score * 100)}%] ${dim.details}`,
+                dimension: dimName,
+              });
             }
-            setGateIssues(issuesByNode);
           }
+
+          // Also include explicit issues
+          for (const issue of gate.semantic?.issues ?? []) {
+            const key = issue.dimension || '_general';
+            if (!issuesByDim[key]) issuesByDim[key] = [];
+            issuesByDim[key].push({
+              severity: issue.severity,
+              description: issue.description,
+              dimension: issue.dimension,
+              suggestion: issue.suggestion,
+            });
+          }
+
+          setGateIssues(issuesByDim);
         }
 
         // Reload topics after extraction (new topic may have been auto-created)

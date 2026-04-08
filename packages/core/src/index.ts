@@ -402,6 +402,8 @@ export {
   unflattenToTree,
   unflattenToTrees,
   validateIntegrity,
+  validateSlotQuotes,
+  type QuoteValidationResult,
   validateTreeDepth,
   yamlToTree,
   isBlob,

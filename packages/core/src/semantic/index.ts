@@ -87,3 +87,4 @@ export { RELATION_TYPES } from './types';
 
 // ── Validation ──
 export { checkRelationSanity, validateIntegrity } from './validate';
+export { validateSlotQuotes, type QuoteValidationResult } from './validate-quotes';

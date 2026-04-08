@@ -65,7 +65,7 @@ function collectAllQuotes(
     }
   }
 
-  for (const child of node.children) {
+  for (const child of node.children ?? []) {
     collectAllQuotes(child, path, nodeTurnIndex, out);
   }
 }

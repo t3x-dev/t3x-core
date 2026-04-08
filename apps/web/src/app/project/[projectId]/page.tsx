@@ -4,8 +4,8 @@ import { Activity, Cpu, Search, Settings, Zap } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
 import { CanvasWorkspace } from '@/components/canvas';
+import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
 import { TimelineView } from '@/components/project/TimelineView';
 import { ViewSwitcher } from '@/components/project/ViewSwitcher';
 import { StatusBadge } from '@/components/shared/StatusBadge';
@@ -163,9 +163,22 @@ function ProjectDetailPageContent() {
       if (document.visibilityState === 'visible') refreshIfStale();
     }, 30_000);
 
+    // Listen for commit broadcasts from chat page — refresh immediately
+    let channel: BroadcastChannel | null = null;
+    try {
+      channel = new BroadcastChannel('t3x-commits');
+      channel.onmessage = () => {
+        lastRefreshRef.current = 0; // bypass throttle
+        refreshIfStale();
+      };
+    } catch {
+      // BroadcastChannel not supported
+    }
+
     return () => {
       document.removeEventListener('visibilitychange', onVisibilityChange);
       clearInterval(interval);
+      channel?.close();
     };
   }, [projectId]);
 

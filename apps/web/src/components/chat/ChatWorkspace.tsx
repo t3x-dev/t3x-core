@@ -2,6 +2,7 @@
 
 import { AlertCircle, GitCommit, Loader2, MessageSquarePlus } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { DriftPopup } from '@/components/chat/DriftPopup';
 import { useAutoProject } from '@/hooks/useAutoProject';
 import { useCommittedHighlights } from '@/hooks/useCommittedHighlights';
@@ -12,7 +13,7 @@ import { buildSourceMap } from '@/lib/sourceMap';
 import { cn } from '@/lib/utils';
 import { useDraftStore } from '@/store/draftStore';
 import { usePinsStore } from '@/store/pinsStore';
-import { useWorkspaceStore } from '@/store/workspaceStore';
+import { type GateIssue, useWorkspaceStore } from '@/store/workspaceStore';
 import { ChatAddForm } from './ChatAddForm';
 import { ChatHeader } from './ChatHeader';
 import type { AttachedImage } from './ChatInput';
@@ -52,6 +53,8 @@ export function ChatWorkspace({
   const pins = usePinsStore((s) => s.pins);
   const fetchPins = usePinsStore((s) => s.fetchPins);
   const [showSourcePanel, setShowSourcePanel] = useState(false);
+  const quoteValidation = useWorkspaceStore((s) => s.quoteValidation);
+  const [coverageMode, setCoverageMode] = useState(false);
   const [enrichedPinData, setEnrichedPinData] = useState<
     Map<string, { title: string; assertionLessons?: string[]; turnCount?: number }>
   >(new Map());
@@ -250,6 +253,107 @@ export function ChatWorkspace({
     if (isExtracting) setShowSourcePanel(false);
   }, [isExtracting]);
 
+  // Handle Audit button — run semantic gate check
+  useEffect(() => {
+    const handler = async () => {
+      const draftData = useDraftStore.getState().draft;
+      if (draftData.trees.length === 0 || messages.length === 0) {
+        toast.info('Nothing to audit — extract first');
+        return;
+      }
+      toast.loading('Running audit...', { id: 'audit' });
+      try {
+        const { API_V1, fetchWithTimeout, handleResponse } = await import('@/lib/api/core');
+        // Flatten TreeNode[] to FlatNode[] inline (safe against missing children)
+        type AnyNode = {
+          key: string;
+          slots: Record<string, unknown>;
+          source?: string;
+          children?: AnyNode[];
+        };
+        const flatFrames: Array<{
+          id: string;
+          type: string;
+          slots: Record<string, unknown>;
+          source?: string;
+        }> = [];
+        const flatten = (node: AnyNode, parentPath: string) => {
+          const path = parentPath ? `${parentPath}/${node.key}` : node.key;
+          flatFrames.push({
+            id: path,
+            type: node.key,
+            slots: { ...node.slots },
+            ...(node.source ? { source: node.source } : {}),
+          });
+          for (const child of node.children ?? []) flatten(child, path);
+        };
+        for (const tree of draftData.trees as AnyNode[]) flatten(tree, '');
+        const res = await fetchWithTimeout(
+          `${API_V1}/gate/check`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              content: { trees: flatFrames, relations: draftData.relations },
+              turns: messages.map((m) => ({ role: m.role, content: m.content })),
+              gates: ['semantic'],
+            }),
+          },
+          60_000
+        );
+        const result = await handleResponse<{
+          semantic?: {
+            score?: number;
+            dimensions?: Record<string, { score: number; details: string }>;
+            issues?: Array<{ dimension?: string; severity: string; description: string; suggestion?: string }>;
+          };
+        }>(res);
+
+        // Build issues from dimensions details + explicit issues
+        const issuesByDim: Record<string, GateIssue[]> = {};
+
+        // Convert dimension details into displayable issues
+        const dims = result.semantic?.dimensions ?? {};
+        for (const [dimName, dim] of Object.entries(dims)) {
+          if (dim.score < 1 && dim.details) {
+            if (!issuesByDim[dimName]) issuesByDim[dimName] = [];
+            issuesByDim[dimName].push({
+              severity: dim.score < 0.5 ? 'error' : 'warning',
+              description: `[${Math.round(dim.score * 100)}%] ${dim.details}`,
+              dimension: dimName,
+            });
+          }
+        }
+
+        // Also include explicit issues if present
+        for (const issue of result.semantic?.issues ?? []) {
+          const key = issue.dimension || '_general';
+          if (!issuesByDim[key]) issuesByDim[key] = [];
+          issuesByDim[key].push({
+            severity: (issue.severity as 'error' | 'warning' | 'info') || 'warning',
+            description: issue.description,
+            dimension: issue.dimension,
+            suggestion: issue.suggestion,
+          });
+        }
+
+        useWorkspaceStore.getState().setGateIssues(issuesByDim);
+        const completenessScore = dims.completeness?.score;
+        const overallScore = result.semantic?.score;
+        toast.success(
+          `Audit complete — ${completenessScore != null ? `completeness: ${Math.round(completenessScore * 100)}%` : `score: ${Math.round((overallScore ?? 0) * 100)}%`}`,
+          { id: 'audit' }
+        );
+      } catch (err) {
+        toast.error(`Audit failed: ${err instanceof Error ? err.message : 'Unknown error'}`, {
+          id: 'audit',
+        });
+      }
+    };
+    window.addEventListener('t3x:audit-requested', handler);
+    return () => window.removeEventListener('t3x:audit-requested', handler);
+  }, [messages]);
+
   // Send firstMessage on mount (once only)
   useEffect(() => {
     if (firstMessage && !firstMessageSentRef.current && !isLoading) {
@@ -291,6 +395,24 @@ export function ChatWorkspace({
         selectedModel={selectedModel}
         onModelChange={handleModelChange}
       />
+
+      {/* Coverage view toggle — below header, above messages */}
+      {quoteValidation && quoteValidation.total > 0 && (
+        <div className="flex items-center justify-end px-4 py-1 border-b border-[var(--stroke-divider)]">
+          <button
+            type="button"
+            onClick={() => setCoverageMode((prev) => !prev)}
+            className={cn(
+              'flex items-center gap-1 px-2 py-1 text-[10px] font-medium rounded-md border transition-colors',
+              coverageMode
+                ? 'bg-[var(--status-warning)]/10 border-[var(--status-warning)]/30 text-[var(--status-warning)]'
+                : 'bg-[var(--surface-elevated)] border-[var(--stroke-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]'
+            )}
+          >
+            {coverageMode ? 'Hide coverage' : 'Show coverage'}
+          </button>
+        </div>
+      )}
 
       {/* Message list */}
       <div ref={chatContainerRef} className="flex-1 overflow-y-auto overflow-x-hidden">
@@ -342,6 +464,7 @@ export function ChatWorkspace({
                 }
                 sourceMap={sourceMapByTurn.get(i + 1)}
                 committedHighlights={committedHighlightsByTurn.get(msg.id)}
+                coverageMode={coverageMode}
               />
             ))}
 

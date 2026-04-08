@@ -114,7 +114,7 @@ function collectDuplicateKeys(
   errors: ValidationError[]
 ): void {
   const childKeyCounts = new Map<string, number>();
-  for (const child of node.children) {
+  for (const child of node.children ?? []) {
     childKeyCounts.set(child.key, (childKeyCounts.get(child.key) ?? 0) + 1);
   }
   const nodePath = parentPath ? `${parentPath}/${node.key}` : node.key;
@@ -127,7 +127,7 @@ function collectDuplicateKeys(
       });
     }
   }
-  for (const child of node.children) {
+  for (const child of node.children ?? []) {
     collectDuplicateKeys(child, nodePath, errors);
   }
 }

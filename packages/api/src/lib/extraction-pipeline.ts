@@ -296,14 +296,20 @@ export async function* runExtractionPipeline(
     if (params.sourcePinIds && params.sourcePinIds.length > 0) {
       try {
         const pinRecords = await getPinsByIds(db, params.sourcePinIds);
-        const conversations = new Map<string, { id: string; title: string; turns: Array<{ role: string; content: string }> }>();
+        const conversations = new Map<
+          string,
+          { id: string; title: string; turns: Array<{ role: string; content: string }> }
+        >();
         const leavesMap = new Map<string, import('@t3x-dev/core').Leaf>();
 
         for (const pin of pinRecords) {
           if (pin.type === 'conversation') {
             const conv = await findConversationById(db, pin.ref_id);
             if (conv) {
-              const turns = await findTurnsByConversation(db, { conversationId: pin.ref_id, limit: 200 });
+              const turns = await findTurnsByConversation(db, {
+                conversationId: pin.ref_id,
+                limit: 200,
+              });
               conversations.set(pin.ref_id, {
                 id: conv.id,
                 title: conv.title ?? 'Untitled',
@@ -462,6 +468,28 @@ export async function* runExtractionPipeline(
         isIncremental ? currentSnapshot : undefined
       );
       organizedSnapshot = transformResult.content;
+
+      // Re-apply slot_quotes from pre-transform snapshot (transforms may strip metadata)
+      const metaMap = new Map<string, { source?: string; slot_quotes?: Record<string, string> }>();
+      const collectMeta = (node: import('@t3x-dev/core').TreeNode, prefix: string) => {
+        const path = prefix ? `${prefix}/${node.key}` : node.key;
+        if (node.source || node.slot_quotes) {
+          metaMap.set(path, { source: node.source, slot_quotes: node.slot_quotes });
+        }
+        for (const child of node.children ?? []) collectMeta(child, path);
+      };
+      for (const tree of result.snapshot.trees) collectMeta(tree, '');
+
+      const applyMeta = (node: import('@t3x-dev/core').TreeNode, prefix: string) => {
+        const path = prefix ? `${prefix}/${node.key}` : node.key;
+        const meta = metaMap.get(path);
+        if (meta) {
+          if (meta.source && !node.source) node.source = meta.source;
+          if (meta.slot_quotes && !node.slot_quotes) node.slot_quotes = meta.slot_quotes;
+        }
+        for (const child of node.children ?? []) applyMeta(child, path);
+      };
+      for (const tree of organizedSnapshot.trees) applyMeta(tree, '');
 
       changesSummary = {
         transforms: ['consolidate', 'nest', 'flagContradictions', 'checkRegression'],

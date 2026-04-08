@@ -37,9 +37,8 @@ export class GateRunner {
   async run(content: SemanticContent, options: GateRunnerOptions = {}): Promise<GateResult> {
     // 1. Gate 1: Structure (always runs, deterministic)
     const structure = this.runStructureGate(content);
-    if (!structure.passed) {
-      return { passed: false, structure };
-    }
+    // Note: structure failure no longer blocks semantic gate.
+    // Semantic audit is valuable even when structure has issues.
 
     // 2. Gate 2: Semantic (optional, needs LLM + turns)
     let semantic: SemanticGateResult | undefined;

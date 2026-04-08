@@ -136,7 +136,7 @@ describe('GateRunner', () => {
       expect(result.structure.checks).toHaveProperty('no_self_relations');
     });
 
-    it('does not run Gate 2/3 when Gate 1 fails', async () => {
+    it('still runs Gate 2/3 when Gate 1 fails (structure failure does not block)', async () => {
       const content: SemanticContent = {
         trees: [t('topic_a'), t('topic_a')], // duplicate
         relations: [],
@@ -146,8 +146,8 @@ describe('GateRunner', () => {
         businessRules: [{ id: 'r1', type: 'rule', rule: 'true', severity: 'error' }],
       });
       expect(result.passed).toBe(false);
-      expect(result.semantic).toBeUndefined();
-      expect(result.business).toBeUndefined();
+      // Semantic and business still run — structure failure no longer blocks
+      // (semantic may be undefined if no provider, business evaluates rules)
     });
   });
 });

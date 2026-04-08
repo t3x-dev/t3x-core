@@ -475,6 +475,12 @@ export function AfterPanel() {
       useWorkspaceStore.getState().setMode('idle');
       useWorkspaceStore.getState().setScriptText('');
       toast.success('Committed successfully');
+      // Notify other pages (canvas) that a commit was created
+      try {
+        new BroadcastChannel('t3x-commits').postMessage({ type: 'commit.created' });
+      } catch {
+        // BroadcastChannel not supported — canvas will pick up on next poll
+      }
     } catch (err: unknown) {
       useWorkspaceStore.getState().setMode('executed');
       toast.error(`Commit failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
