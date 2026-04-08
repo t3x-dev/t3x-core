@@ -68,11 +68,14 @@ describe('draftStore', () => {
       'pipeline',
     );
 
-    expect(createYOpsEntry).toHaveBeenCalledWith(
-      'conv_test',
-      expect.any(Array),
-      'pipeline',
-    );
+    // createYOpsEntry is fire-and-forget (async) — flush microtask queue
+    await vi.waitFor(() => {
+      expect(createYOpsEntry).toHaveBeenCalledWith(
+        'conv_test',
+        expect.any(Array),
+        'pipeline',
+      );
+    });
   });
 
   it('applyYOps tracks manual edits in manualEditedNodeIds', () => {
