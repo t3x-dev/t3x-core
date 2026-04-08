@@ -1,4 +1,4 @@
-import type { SemanticContent, YOp } from '@t3x-dev/core';
+import type { QuoteValidationResult, SemanticContent, YOp } from '@t3x-dev/core';
 import { applyYOps } from '@t3x-dev/core';
 import { create } from 'zustand';
 import type { ParseError } from '@/lib/scriptParser';
@@ -59,6 +59,8 @@ interface WorkspaceState {
   }>;
   // Source pin IDs used in the last extraction (for commit source_refs)
   lastExtractionPinIds: string[];
+  // Quote validation result from last extraction
+  quoteValidation: QuoteValidationResult | null;
 
   snapshotBase(content: SemanticContent, commitHash: string | null): void;
   setScriptText(text: string): void;
@@ -105,6 +107,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   selectedSource: null,
   scrollToCenter: false,
   lastExtractionPinIds: [],
+  quoteValidation: null,
   driftDetected: false,
   driftInfo: null,
   driftChoices: [],
@@ -241,6 +244,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       gateIssues: {},
       advisoryQuestions: [],
       lastExtractionPinIds: [],
+      quoteValidation: null,
     });
   },
 }));
