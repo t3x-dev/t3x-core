@@ -16,6 +16,7 @@ export type RealtimeEventType =
   | 'extraction.done'     // LLM extraction completed + persisted
   | 'yops.applied'
   | 'commit.created'
+  | 'conversation.renamed'
   | 'presence.join'
   | 'presence.leave';
 
@@ -29,8 +30,16 @@ export interface RealtimeEvent {
 }
 
 class EventBus extends EventEmitter {
+  /**
+   * Broadcast an event to:
+   *   - room:<conversationId>           (existing per-conversation subscribers)
+   *   - room:project:<projectId>        (project-wide subscribers, e.g. WebUI canvas)
+   */
   broadcast(event: RealtimeEvent) {
     this.emit(`room:${event.conversationId}`, event);
+    if (event.projectId) {
+      this.emit(`room:project:${event.projectId}`, event);
+    }
   }
 
   /** Shorthand: broadcast a typed event for a conversation */
