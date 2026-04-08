@@ -195,18 +195,40 @@ Do NOT extract: greetings, filler ("sure!", "let me help"), or meta-commentary
 
 Output a single YAML document with a \`yops:\` array. Each item is exactly one of:
 
-- \`define: { path }\` — create a NEW empty node at \`path\` (DDL). ONLY for paths NOT in the Current Tree
-- \`populate: { path, values }\` — fill multiple slots at once. \`values\` is a mapping of slot_name → slot_value. Works on both new and existing nodes
-- \`set: { path, value }\` — set ONE slot. \`path\` is \`node_path/slot_name\`, \`value\` is the slot value. Works on both new and existing nodes
+**Most common (use first):**
+- \`set: { path, value }\` — update ONE slot. The most common op for incremental changes
+- \`populate: { path, values }\` — update multiple slots at once on an existing node
+- \`define: { path }\` — create a NEW empty node. ONLY for paths NOT in the Current Tree
 - \`unset: { path }\` — remove a slot
 - \`drop: { path }\` — remove a node and all its children
+- \`append: { path, value }\` — add a value to an existing list without rewriting it
+
+**Structure changes (use when the conversation reveals the tree should be reorganized):**
 - \`rename: { path, to }\` — change a node's key name
 - \`move: { from, to }\` — move a node to a different parent path
-- \`relate: { from, to, type }\` — add a semantic relation (\`type\` ∈ causes, conditions, contrasts, follows, depends)
-- \`unrelate: { from, to, type }\` — remove a semantic relation
+- \`nest: { path, under }\` — wrap a node inside a new parent (e.g., flat slot → nested group)
+- \`fold: { paths, into }\` — combine sibling nodes into one
+- \`merge: { from, into }\` — deep-merge one node into another
+- \`split: { path, into }\` — split a node into multiple siblings
+- \`clone: { from, to }\` — deep-copy a node
+
+**List operations:**
+- \`sort: { path, by, order }\` — sort a sequence
+- \`unique: { path }\` — deduplicate a sequence
+- \`pick: { path, keys }\` — keep only specified keys
+- \`omit: { path, keys }\` — remove specified keys
+
+**Semantic relations (T3X):**
+- \`relate: { from, to, type }\` — add a relation (\`type\` ∈ causes, conditions, contrasts, follows, depends)
+- \`unrelate: { from, to, type }\` — remove a relation
+
+**Constraint:**
+- \`assert: { path, operator, value }\` — validate without mutating (\`operator\` ∈ exists, equals, type)
 
 Paths use \`/\` separator (e.g., \`trip/dining\`). Keys use snake_case.
 Values: clean data (numbers, short labels, booleans, arrays) — NOT full sentences.
+
+**IMPORTANT: Prefer updating existing structure over adding new nodes.** Only use structure-change ops (nest, fold, move, split) when the conversation explicitly indicates the tree should be reorganized — not for cosmetic improvements.
 
 ${granularitySegment(style.granularity)}
 
@@ -216,18 +238,21 @@ ${quoteLengthSegment(style.quote_length)}
 
 \`\`\`
 yops:
-  - define:
-      path: trip/accommodation
+  - set:
+      path: trip/budget
+      value: 5000
   - populate:
       path: trip/accommodation
       values:
         type: ryokan
-        budget: 200
-  - set:
-      path: trip/budget
-      value: 3000
+        area: Asakusa
+  - append:
+      path: trip/dietary_restrictions
+      value: lactose_intolerant
   - drop:
       path: trip/old_plan
+  - define:
+      path: trip/activities
 \`\`\`
 
 ### Content Blobs (code, plots, tables)
@@ -247,9 +272,10 @@ When new turns contain reasoning, step-by-step logic, or cause-effect chains:
 ### Rules
 - Output ONLY valid YAML starting with \`yops:\`
 - No markdown fences, no explanatory text
-- Use ONLY the field names listed above — no extra fields like \`parent\`, \`key\`, \`slots\`, \`source\`, or \`from\`
+- Each op must use EXACTLY the fields shown above — no extra fields like \`parent\`, \`key\`, \`slots\`, \`source\`, or \`from\`
 - NEVER use \`define\` for a path that already exists in the Current Tree — use \`set\` or \`populate\` instead
 - Use \`define\` ONLY for creating brand-new nodes not yet in the snapshot
+- Do NOT reorganize the tree unless the conversation explicitly calls for it
 - If nothing to extract: output \`yops: []\`
 - Drift: if NEW turns discuss a topic UNRELATED to the current tree, output \`yops: []\`${updateStanceSegment(style.update_stance)}`;
 }
@@ -301,7 +327,7 @@ ${snapshotYaml}
     }
     userPrompt += `${turnsSection}
 
-Extract changes from the NEW turns only. Use define/populate/set/unset/drop/rename/move operations.`;
+Extract changes from the NEW turns only. Prefer set/populate for updates, define for new nodes. Use structure ops (nest/fold/move/rename) only when the conversation explicitly calls for reorganization.`;
 
     return { systemPrompt, userPrompt };
   }

@@ -9,20 +9,20 @@ const baseTurns = [
 
 describe('buildYOpsPrompt — style integration', () => {
   describe('granularity', () => {
-    it('concise style produces key-facts coverage guidance', () => {
+    it('concise style produces conclusions + why coverage guidance', () => {
       const { systemPrompt } = buildYOpsPrompt({ turns: baseTurns }, PRESETS.concise);
-      expect(systemPrompt).toContain('Key Points');
+      expect(systemPrompt).toContain('Conclusions + Why');
       expect(systemPrompt).toContain('30%');
     });
 
-    it('balanced style produces all-substantive coverage guidance', () => {
+    it('balanced style produces decisions + options + steps coverage guidance', () => {
       const { systemPrompt } = buildYOpsPrompt({ turns: baseTurns }, PRESETS.balanced);
-      expect(systemPrompt).toContain('All Substantive Content');
+      expect(systemPrompt).toContain('Decisions + Options + Steps');
     });
 
-    it('detailed style produces everything-including-nuance guidance', () => {
+    it('detailed style produces everything including reasoning guidance', () => {
       const { systemPrompt } = buildYOpsPrompt({ turns: baseTurns }, PRESETS.detailed);
-      expect(systemPrompt).toContain('Everything Including Nuance');
+      expect(systemPrompt).toContain('Everything Including Reasoning');
     });
   });
 
@@ -66,7 +66,7 @@ describe('buildYOpsPrompt — style integration', () => {
   describe('defaults', () => {
     it('uses balanced style when no style provided', () => {
       const { systemPrompt } = buildYOpsPrompt({ turns: baseTurns });
-      expect(systemPrompt).toContain('All Substantive Content');
+      expect(systemPrompt).toContain('Decisions + Options + Steps');
       expect(systemPrompt).toContain('TIER 4');
     });
   });
@@ -81,7 +81,7 @@ describe('buildYOpsPrompt — style integration', () => {
         { turns: baseTurns, snapshot, processedTurnCount: 0 },
         PRESETS.concise,
       );
-      expect(systemPrompt).toContain('Key Points');
+      expect(systemPrompt).toContain('Conclusions + Why');
     });
   });
 });

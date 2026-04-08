@@ -60,6 +60,7 @@ const previewDraftRoute = createRoute({
   method: 'post',
   path: '/v1/drafts/{id}/preview',
   tags: ['Drafts'],
+  operationId: 'previewDraft',
   summary: 'Generate preview output',
   request: {
     params: IdParamSchema,
@@ -96,8 +97,13 @@ const previewDraftRoute = createRoute({
 const commitDraftRoute = createRoute({
   method: 'post',
   path: '/v1/drafts/{id}/commit',
-  tags: ['Drafts'],
+  tags: ['Drafts', 'Commits'],
+  operationId: 'commitDraft',
   summary: 'Commit draft',
+  description:
+    'Saves the draft\'s current semantic tree as an immutable commit in the hash chain. ' +
+    'The draft status changes to `committed`. ' +
+    'Optionally provide a `message` and `branch` (defaults to current branch).',
   request: {
     params: IdParamSchema,
     body: {
@@ -130,6 +136,7 @@ const forkDraftRoute = createRoute({
   method: 'post',
   path: '/v1/drafts/{id}/fork',
   tags: ['Drafts'],
+  operationId: 'forkDraft',
   summary: 'Fork a committed draft',
   request: { params: IdParamSchema },
   responses: {
@@ -157,6 +164,7 @@ const extractDraftRoute = createRoute({
   method: 'post',
   path: '/v1/drafts/{id}/extract',
   tags: ['Drafts'],
+  operationId: 'extractToDraft',
   summary: 'Extract nodes from conversation and add to draft',
   request: {
     params: IdParamSchema,

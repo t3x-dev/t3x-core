@@ -68,9 +68,16 @@ const validateRoute = createRoute({
   method: 'post',
   path: '/v1/yops/validate',
   tags: ['YOps'],
+  operationId: 'validateYOps',
   summary: 'Validate YOps (dry-run)',
   description:
-    'Applies YOps to the provided trees/relations in-memory without persisting. Returns a preview of the result or the first error encountered.',
+    'Applies YOps to the provided trees/relations in-memory without persisting. ' +
+    'Returns a preview of the result or the first error encountered.\n\n' +
+    'Use this to test YOps before applying them to a draft. ' +
+    'Send the current trees (from `GET /v1/drafts/{id}`) and the YOps you want to apply. ' +
+    'If `ok: true`, the preview shows the resulting trees. ' +
+    'If `ok: false`, `error.op_index` tells you which operation failed and `error.code` tells you why ' +
+    '(PATH_NOT_FOUND, ALREADY_EXISTS, KEY_INVALID, etc.).',
   request: {
     body: {
       content: {

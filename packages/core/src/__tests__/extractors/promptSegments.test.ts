@@ -10,22 +10,22 @@ describe('Prompt segment composition', () => {
   ];
 
   describe('granularity', () => {
-    it('concise: includes key facts coverage guidance', () => {
+    it('concise: includes conclusions + why coverage guidance', () => {
       const { systemPrompt } = buildExtractionPrompt({ turns: baseTurns }, PRESETS.concise);
-      expect(systemPrompt).toContain('Key Points');
+      expect(systemPrompt).toContain('Conclusions + Why');
       expect(systemPrompt).toContain('30%');
     });
 
-    it('balanced: includes all substantive content guidance', () => {
+    it('balanced: includes decisions + options + steps guidance', () => {
       const { systemPrompt } = buildExtractionPrompt({ turns: baseTurns }, PRESETS.balanced);
-      expect(systemPrompt).toContain('All Substantive Content');
-      expect(systemPrompt).toContain('nothing important is lost');
+      expect(systemPrompt).toContain('Decisions + Options + Steps');
+      expect(systemPrompt).toContain('EVERY fact');
     });
 
-    it('detailed: includes everything including nuance guidance', () => {
+    it('detailed: includes everything including reasoning guidance', () => {
       const { systemPrompt } = buildExtractionPrompt({ turns: baseTurns }, PRESETS.detailed);
-      expect(systemPrompt).toContain('Everything Including Nuance');
-      expect(systemPrompt).toContain('complete mirror');
+      expect(systemPrompt).toContain('Everything Including Reasoning');
+      expect(systemPrompt).toContain('MUST contain MORE content');
     });
   });
 
@@ -112,7 +112,7 @@ describe('Prompt segment composition', () => {
         PRESETS.concise
       );
       // Coverage content for concise
-      expect(systemPrompt).toContain('Key Points');
+      expect(systemPrompt).toContain('Conclusions + Why');
       expect(systemPrompt).toContain('30%');
     });
   });
