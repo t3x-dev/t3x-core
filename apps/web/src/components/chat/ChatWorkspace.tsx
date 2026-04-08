@@ -288,15 +288,19 @@ export function ChatWorkspace({
           for (const child of node.children ?? []) flatten(child, path);
         };
         for (const tree of draftData.trees as AnyNode[]) flatten(tree, '');
-        const res = await fetchWithTimeout(`${API_V1}/gate/check`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            content: { trees: flatFrames, relations: draftData.relations },
-            turns: messages.map((m) => ({ role: m.role, content: m.content })),
-            gates: ['semantic'],
-          }),
-        });
+        const res = await fetchWithTimeout(
+          `${API_V1}/gate/check`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              content: { trees: flatFrames, relations: draftData.relations },
+              turns: messages.map((m) => ({ role: m.role, content: m.content })),
+              gates: ['semantic'],
+            }),
+          },
+          60_000
+        );
         const result = await handleResponse<{
           semantic?: {
             score?: number;
