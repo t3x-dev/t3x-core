@@ -114,25 +114,32 @@ export function tier3KeyDistinction(t3: Tier3Behavior): string {
 export function granularitySegment(g: Granularity): string {
   switch (g) {
     case 'concise':
-      return `## Coverage: Key Points (~30%)
-- Extract the main points from both user and assistant \u2014 what a busy person needs to know
-- Include the LLM\u2019s key recommendations and answers, not just user statements
-- Skip supporting details, examples, alternatives, and reasoning \u2014 capture the conclusion
-- Keep the tree flat: 1\u20132 levels. Group related facts under natural subtopics.
-- Combine closely related details into a single slot when they belong together`;
+      return `## Coverage: Concise — Conclusions + Why (~30%)
+- Extract ONLY: final decisions, root causes, key recommendations, and confirmed outcomes
+- Each conclusion MUST include its reason: "fix: eager loading" needs "because: N+1 query"
+- SKIP: step-by-step instructions, diagnostic commands, alternative options not chosen, examples, configuration details
+- SKIP: lists of potential causes — only include the ACTUAL cause that was confirmed
+- Keep the tree compact: 2\u20133 levels, aim for under 20 lines of YAML
+- If a busy person has 10 seconds, this tree should tell them what happened and what to do`;
     case 'balanced':
-      return `## Coverage: All Substantive Content (~70\u201380%)
-- Surface EVERY fact, preference, recommendation, and decision from both user and assistant
-- If someone said it and it\u2019s substantive, it belongs in the tree \u2014 nothing important is lost
-- Include the LLM\u2019s recommendations, suggestions, and answers alongside user statements
+      return `## Coverage: Balanced — Decisions + Options + Steps (~70\u201380%)
+- Surface EVERY fact, recommendation, and decision from both user and assistant
+- Include all options discussed, with their trade-offs (pros/cons as lists)
+- Include step-by-step instructions, diagnostic commands, and implementation details
+- SKIP: warnings about edge cases, caveats, conditional advice ("if X then Y"), examples used to illustrate a point, and the reasoning behind why rejected options were rejected
 - Let tree depth follow the content naturally: group related facts under subtopics
-- Skip only redundant restatements and conversational filler`;
+- Skip redundant restatements and conversational filler`;
     case 'detailed':
-      return `## Coverage: Everything Including Nuance (~95%)
-- The tree is a complete mirror of the conversation \u2014 almost nothing is left behind
-- Capture everything from both user and assistant: facts, recommendations, alternatives considered, reasoning, caveats, conditions, and examples
-- Let depth grow as deep as the content demands \u2014 group related facts under subtopics naturally
-- Every number, name, date, recommendation, comparison, and list item is worth capturing
+      return `## Coverage: Detailed — Everything Including Reasoning (~95%)
+- The tree MUST contain MORE content than balanced mode, not less — more slots, more detail per slot
+- Include everything balanced mode captures, PLUS:
+  - WHY each option was recommended or rejected (reasoning, not just the conclusion)
+  - Warnings, caveats, and edge cases ("if X then Y", "watch out for Z")
+  - Examples and analogies used to explain concepts
+  - Conditional advice and fallback strategies
+  - Timeline estimates, team size considerations, risk assessments
+- Keep slot values as readable strings — do NOT compress them into terse snake_case labels
+- Every number, name, date, comparison, and list item is worth capturing
 - Create separate branches for distinct aspects (e.g., trip/logistics vs trip/experiences)`;
     default:
       return granularitySegment('balanced');

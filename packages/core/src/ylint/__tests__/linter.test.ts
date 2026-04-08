@@ -192,10 +192,10 @@ describe('ylint', () => {
   // ── Form 4: Depth Equals Specificity ──
 
   describe('Form 4 — Depth Equals Specificity', () => {
-    it('passes node at max depth (depth=3 with max_depth=3)', () => {
-      // depth 0 -> 1 -> 2 -> 3
+    it('passes node at max depth (depth=5 with max_depth=5)', () => {
+      // depth 0 -> 1 -> 2 -> 3 -> 4 -> 5
       const tree = node('a', {}, [
-        node('b', {}, [node('c', {}, [node('d')])]),
+        node('b', {}, [node('c', {}, [node('d', {}, [node('e', {}, [node('f')])])])]),
       ]);
       const result = ylint(sc(tree));
       const depthWarnings = result.warnings.filter(
@@ -204,15 +204,15 @@ describe('ylint', () => {
       expect(depthWarnings).toHaveLength(0);
     });
 
-    it('warns depth-exceeded at depth 4 (max_depth=3)', () => {
-      // depth 0 -> 1 -> 2 -> 3 -> 4
+    it('warns depth-exceeded at depth 6 (max_depth=5)', () => {
+      // depth 0 -> 1 -> 2 -> 3 -> 4 -> 5 -> 6
       const tree = node('a', {}, [
-        node('b', {}, [node('c', {}, [node('d', {}, [node('e')])])]),
+        node('b', {}, [node('c', {}, [node('d', {}, [node('e', {}, [node('f', {}, [node('g')])])])])]),
       ]);
       const result = ylint(sc(tree));
       const w = result.warnings.find((w) => w.rule === 'depth-exceeded');
       expect(w).toBeDefined();
-      expect(w!.path).toBe('a.b.c.d.e');
+      expect(w!.path).toBe('a.b.c.d.e.f.g');
     });
 
     it('warns single-child-chain', () => {
@@ -361,7 +361,7 @@ describe('ylint', () => {
     it('has all expected defaults', () => {
       expect(DEFAULT_LINT_CONFIG.max_key_words).toBe(3);
       expect(DEFAULT_LINT_CONFIG.max_scalar_length).toBe(100);
-      expect(DEFAULT_LINT_CONFIG.max_depth).toBe(3);
+      expect(DEFAULT_LINT_CONFIG.max_depth).toBe(5);
       expect(DEFAULT_LINT_CONFIG.enabled_forms).toEqual([1, 2, 3, 4]);
       expect(DEFAULT_LINT_CONFIG.generic_keys).toContain('details');
       expect(DEFAULT_LINT_CONFIG.verb_list).toContain('is');

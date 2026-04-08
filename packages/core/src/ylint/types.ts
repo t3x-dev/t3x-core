@@ -25,7 +25,7 @@ export interface LintResult {
 export interface LintConfig {
   max_key_words: number; // default: 3
   max_scalar_length: number; // default: 100
-  max_depth: number; // default: 3
+  max_depth: number; // default: 5
   generic_keys: string[]; // default list
   verb_list: string[]; // default list
   enabled_forms: (1 | 2 | 3 | 4)[]; // default: [1,2,3,4]
