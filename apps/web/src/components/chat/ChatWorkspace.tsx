@@ -299,17 +299,32 @@ export function ChatWorkspace({
         });
         const result = await handleResponse<{
           semantic?: {
-            dimensions?: Record<string, number>;
+            score?: number;
+            dimensions?: Record<string, { score: number; details: string }>;
             issues?: Array<{ dimension?: string; severity: string; description: string }>;
           };
         }>(res);
-        const issues = result.semantic?.issues ?? [];
-        const completeness = result.semantic?.dimensions?.completeness;
+
+        // Build issues from dimensions details + explicit issues
         const issuesByDim: Record<
           string,
           Array<{ severity: 'error' | 'warning' | 'info'; description: string }>
         > = {};
-        for (const issue of issues) {
+
+        // Convert dimension details into displayable issues
+        const dims = result.semantic?.dimensions ?? {};
+        for (const [dimName, dim] of Object.entries(dims)) {
+          if (dim.score < 1 && dim.details) {
+            if (!issuesByDim[dimName]) issuesByDim[dimName] = [];
+            issuesByDim[dimName].push({
+              severity: dim.score < 0.5 ? 'error' : 'warning',
+              description: `[${Math.round(dim.score * 100)}%] ${dim.details}`,
+            });
+          }
+        }
+
+        // Also include explicit issues if present
+        for (const issue of result.semantic?.issues ?? []) {
           const key = issue.dimension || '_general';
           if (!issuesByDim[key]) issuesByDim[key] = [];
           issuesByDim[key].push({
@@ -317,9 +332,12 @@ export function ChatWorkspace({
             description: issue.description,
           });
         }
+
         useWorkspaceStore.getState().setGateIssues(issuesByDim);
+        const completenessScore = dims.completeness?.score;
+        const overallScore = result.semantic?.score;
         toast.success(
-          `Audit complete${completeness != null ? ` — completeness: ${Math.round(completeness * 100)}%` : ''}`,
+          `Audit complete — ${completenessScore != null ? `completeness: ${Math.round(completenessScore * 100)}%` : `score: ${Math.round((overallScore ?? 0) * 100)}%`}`,
           { id: 'audit' }
         );
       } catch (err) {
