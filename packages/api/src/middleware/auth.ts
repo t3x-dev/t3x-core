@@ -12,6 +12,7 @@
  * @see apps/api/src/lib/errors.ts for error codes
  */
 
+import type { AnyDB } from '@t3x-dev/storage';
 import type { Context, Next } from 'hono';
 import { getDB } from '../lib/db';
 import { createError } from '../lib/errors';
@@ -21,11 +22,7 @@ import { pinoLogger } from './logger';
 const PUBLIC_PATHS = ['/health', '/api/docs', '/api/openapi.json', '/api/v1/llm/models'];
 
 /** Path prefixes that never require authentication */
-const PUBLIC_PREFIXES = [
-  '/api/v1/auth/callback',
-  '/api/v1/auth/register',
-  '/api/v1/auth/login',
-];
+const PUBLIC_PREFIXES = ['/api/v1/auth/callback', '/api/v1/auth/register', '/api/v1/auth/login'];
 
 /**
  * Match the share resolve endpoint: GET /api/v1/share/:token
@@ -123,4 +120,29 @@ export async function authMiddleware(c: Context, next: Next) {
     pinoLogger.error({ err }, 'error validating API key');
     return c.json(createError('INTERNAL_ERROR', 'Authentication error'), 500);
   }
+}
+
+/**
+ * Verify a Bearer token (API key) and return the matching principal, or null
+ * when the token is unknown or revoked. Read-only — no side effects.
+ *
+ * Used by non-HTTP entry points (e.g. WebSocket upgrade) that need to
+ * authenticate a raw token from a query parameter rather than an
+ * Authorization header. Mirrors the dynamic-import pattern used by
+ * `authMiddleware` above to preserve the circular-dependency boundary with
+ * `@t3x-dev/storage`.
+ */
+export async function verifyBearerToken(
+  db: AnyDB,
+  token: string | null
+): Promise<{ userId: string | null; projectId: string | null; keyId: string } | null> {
+  if (!token) return null;
+  const { findApiKeyByValue } = await import('@t3x-dev/storage');
+  const apiKey = await findApiKeyByValue(db, token);
+  if (!apiKey) return null;
+  return {
+    userId: apiKey.user_id,
+    projectId: apiKey.project_id,
+    keyId: apiKey.id,
+  };
 }

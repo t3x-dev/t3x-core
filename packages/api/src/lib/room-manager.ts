@@ -17,7 +17,7 @@ import type { WSContext } from 'hono/ws';
 import type { RealtimeEvent } from './event-bus';
 import { eventBus } from './event-bus';
 
-interface RoomConnection {
+export interface RoomConnection {
   id: string;
   ws: WSContext;
   userId?: string;
@@ -60,10 +60,8 @@ function presenceConversationIdFor(roomKey: string): string {
 
 class RoomManager {
   private rooms = new Map<string, Map<string, RoomConnection>>();
-  private listeners: Map<
-    string,
-    { channel: string; listener: (event: RealtimeEvent) => void }
-  > = new Map();
+  private listeners: Map<string, { channel: string; listener: (event: RealtimeEvent) => void }> =
+    new Map();
 
   /**
    * Add a WebSocket connection to a room.
@@ -94,7 +92,7 @@ class RoomManager {
         payload: { connectionId: conn.id },
         timestamp: Date.now(),
       },
-      conn.id,
+      conn.id
     );
   }
 
@@ -157,7 +155,7 @@ class RoomManager {
   private broadcastToRoom(
     roomKey: string,
     event: RealtimeEvent,
-    excludeConnectionId?: string,
+    excludeConnectionId?: string
   ): void {
     const room = this.rooms.get(roomKey);
     if (!room) return;
