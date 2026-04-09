@@ -166,7 +166,7 @@ treeExtractRoutes.openapi(extractTreesRoute, async (c) => {
 
   try {
     const pipeline = runExtractionPipeline({
-      conversationId: conversation_id,
+      conversationId: conversation.conversationId,
       projectId: conversation.projectId,
       turnHashes: turn_hashes,
       driftDecision: drift_decision,
@@ -314,7 +314,7 @@ treeExtractRoutes.post('/v1/extract/trees/stream', async (c) => {
     async start(controller) {
       try {
         const pipeline = runExtractionPipeline({
-          conversationId: conversation_id,
+          conversationId: conversation.conversationId,
           projectId: conversation.projectId,
           turnHashes: turn_hashes,
           driftDecision: drift_decision,
