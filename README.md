@@ -28,76 +28,157 @@
 
 <br/>
 
-## Why T3X
-
-Every conversation with an AI produces knowledge &mdash; preferences, decisions, context, facts. Today that knowledge lives in chat logs: unstructured, unversioned, unsearchable.
-
-T3X extracts structured meaning from conversations and puts it under version control. Like Git tracks source code, T3X tracks what you *know* &mdash; with commits, branches, diffs, and three-way merges.
-
-**The problem with existing approaches:**
-
-| Approach | Limitation |
-|:---------|:-----------|
-| Chat history | Linear, unsearchable, no structure |
-| Vector databases (RAG) | Fuzzy retrieval, no versioning, no diff |
-| Summary-based memory | Lossy &mdash; summaries discard nuance |
-| Manual knowledge bases | Doesn't scale, falls out of date |
-
-**What T3X does differently:**
-
-- **Structured** &mdash; Meaning is extracted into YAML trees, not embeddings
-- **Versioned** &mdash; Every change is a commit in a hash-chain DAG
-- **Deterministic** &mdash; Core engine is 100% reproducible, no LLM in the loop
-- **Diffable** &mdash; Word-level semantic diffs show exactly what changed
-- **Mergeable** &mdash; Three-way merge with conflict resolution, like Git
-- **Traceable** &mdash; Every fact links back to the original conversation with character offsets
+T3X is a standalone engine for YAML-structured context. It extracts structured meaning from any text &mdash; conversations, documents, transcripts, specs, notes &mdash; transforms it with declarative operations, and versions it with commits, diffs, and three-way merges.
 
 <br/>
 
 ## How it works
 
-T3X has a flywheel of five stages. Each stage feeds the next:
+T3X turns unstructured text into versioned, structured knowledge through five stages:
 
+<table>
+<tr>
+<td width="20%" align="center"><strong>Input</strong></td>
+<td width="20%" align="center"><strong>Extract</strong></td>
+<td width="20%" align="center"><strong>Transform</strong></td>
+<td width="20%" align="center"><strong>Commit</strong></td>
+<td width="20%" align="center"><strong>Apply</strong></td>
+</tr>
+<tr>
+<td align="center"><sub>Conversations, docs, specs, notes, transcripts</sub></td>
+<td align="center"><sub>Build YAML tree from text (LLM-assisted or manual)</sub></td>
+<td align="center"><sub>YOps: declarative ops on YAML</sub></td>
+<td align="center"><sub>SHA-256 hash chain, branch, diff, merge</sub></td>
+<td align="center"><sub>Leaf output: agents, content, assertions</sub></td>
+</tr>
+<tr>
+<td align="center"><code>raw text</code></td>
+<td align="center"><code>YAML tree</code></td>
+<td align="center"><code>validated tree</code></td>
+<td align="center"><code>immutable commit</code></td>
+<td align="center"><code>generated output</code></td>
+</tr>
+</table>
+
+> Extract and Apply can use LLM. Transform, Commit, and validation are fully deterministic.
+
+Between extraction and commit, the tree goes through a **validate &rarr; fix &rarr; re-validate** loop powered by the Y-family tools. This is where the quality happens &mdash; deterministic checks catch issues, emit YOps fixes, and the user approves or adjusts before committing.
+
+<br/>
+
+## The Y-Family
+
+T3X provides three spec-driven tools for working with YAML trees. Together they form a validate-and-fix loop: detect issues, emit fix operations, apply them, confirm.
+
+<table>
+<tr>
+<th width="33%">YOps</th>
+<th width="33%">YSchema</th>
+<th width="33%">YLint</th>
+</tr>
+<tr>
+<td><strong>How to mutate</strong></td>
+<td><strong>What is valid</strong></td>
+<td><strong>Is it clean</strong></td>
+</tr>
+<tr>
+<td>Atomic YAML operations<br/>Spec-driven, deterministic<br/>Sequential, fail-fast</td>
+<td>User-defined domain schemas<br/>Slot types, enums, ranges<br/>Cross-node rules</td>
+<td>Built-in structural rules<br/>Runs without a schema<br/>Auto-fix via YOps</td>
+</tr>
+<tr>
+<td><a href="packages/yops/yops.yaml"><code>yops.yaml</code></a></td>
+<td><a href="packages/yschema/yschema.yaml"><code>yschema.yaml</code></a></td>
+<td>Built into <code>@t3x-dev/core</code></td>
+</tr>
+</table>
+
+From the user's perspective, two functions cover the whole system:
+
+```typescript
+applyYOps(doc, ops)              // mutate: apply operations to a YAML tree
+validateTree(content, { schema }) // validate: check structure + domain, get fixes
 ```
-Conversation  ──►  Extract  ──►  YOps  ──►  Commit  ──►  Apply
-     │                │            │           │            │
-  raw text       YAML tree    transform    versioned     Leaf output
-  (chat, doc,    (structured   (18 atomic   (hash chain,  (deploy agent,
-   transcript)    meaning)      ops on       branch,       tweet, email,
-                               YAML)        diff, merge)   eval assertion)
+
+`validateTree` runs ylint and yschema internally, collects all warnings, and returns a ready-to-apply fix plan. Auto-fixable issues are resolved via `applyYOps()`. What can't be auto-fixed is surfaced for human review.
+
+### YOps &mdash; Declarative YAML Operations
+
+```yaml
+yops:
+  - define:
+      path: user/preferences
+  - populate:
+      path: user/preferences
+      values: { theme: dark, language: en }
+  - sort:
+      path: user/tags
+  - assert:
+      path: user/preferences/theme
+      equals: dark
 ```
 
-**1. Conversation** &mdash; Feed in any text: chat transcripts, documents, meeting notes. No format requirements.
+<table>
+<tr><th>Category</th><th>Ops</th><th>Purpose</th></tr>
+<tr><td><strong>DDL</strong></td><td><code>define</code> <code>drop</code> <code>rename</code></td><td>Create, remove, rename keys</td></tr>
+<tr><td><strong>DML</strong></td><td><code>set</code> <code>unset</code> <code>populate</code> <code>append</code></td><td>Set values, add to sequences</td></tr>
+<tr><td><strong>DTL</strong></td><td><code>move</code> <code>clone</code> <code>nest</code> <code>split</code> <code>fold</code> <code>merge</code> <code>sort</code> <code>unique</code> <code>pick</code> <code>omit</code></td><td>Reshape the tree</td></tr>
+<tr><td><strong>DCL</strong></td><td><code>assert</code></td><td>Validate conditions (read-only)</td></tr>
+</table>
 
-**2. Extract** &mdash; LLM-powered extraction builds a YAML knowledge tree incrementally. Keywords, entities, preferences, relations, temporal anchors &mdash; all structured and source-traced.
+The full spec &mdash; including a decision guide, type contracts, composition recipes, and error reference &mdash; lives in [`yops.yaml`](packages/yops/yops.yaml). Any language can implement a conformant engine from this single file.
 
-**3. YOps** &mdash; 18 declarative operations to transform the YAML tree. Add, remove, rename, move, split, merge, sort &mdash; all spec-driven, all deterministic. The user reviews and approves.
+### YSchema &mdash; Domain Validation
 
-**4. Commit** &mdash; Snapshot the tree into an immutable commit. SHA-256 hash chain, branching, word-level diff between commits, three-way merge with conflict resolution.
+Define what a valid tree looks like for your use case. Violations emit YOps fix operations.
 
-**5. Apply** &mdash; Leaf nodes consume committed knowledge for real output: deploy an agent, generate content, run assertions. The Runner evaluates quality and feeds lessons back.
+```yaml
+name: customer-profile
+nodes:
+  preferences:
+    required: true
+    slots:
+      theme: [dark, light, system]
+      language: scalar
+  decisions:
+    required: true
+    children: any
+    each_child:
+      slots:
+        choice: scalar
+        reason: scalar
+rules:
+  - id: decisions-need-reason
+    if: "decisions/*"
+    must_have: [choice, reason]
+    severity: error
+```
 
-> Stages 1-2 use an LLM (optional). Stages 3-5 are fully deterministic.
+`validateSchema()` checks the tree. `buildFixPlan()` collects fixable violations into YOps operations. `applyYOps()` applies them. &rarr; [YSchema spec](packages/yschema/yschema.yaml)
+
+### YLint &mdash; Structural Checks
+
+Built-in structural rules that run without a schema &mdash; checks key naming, value quality, list hygiene, and tree depth. When issues are auto-fixable, ylint emits YOps operations directly.
 
 <br/>
 
 ## Getting started
 
-### Option A: Docker (full stack, 30 seconds)
+### Docker (full stack)
 
 ```bash
 docker compose up -d
 ```
 
-> **WebUI** &rarr; [localhost:3000](http://localhost:3000) &nbsp;&nbsp;|&nbsp;&nbsp; **API** &rarr; [localhost:8000](http://localhost:8000)
+> **WebUI** &rarr; [localhost:3000](http://localhost:3000) &nbsp;|&nbsp; **API** &rarr; [localhost:8000](http://localhost:8000)
 
-### Option B: CLI
+### CLI
 
 ```bash
 npx @t3x-dev/cli init
 ```
 
-### Option C: From source
+### From source
 
 ```bash
 git clone https://github.com/t3x-dev/t3x-core.git && cd t3x-core
@@ -115,55 +196,13 @@ Requires Node.js 20+ and pnpm 10+.
 <project>/.t3x/config.json  # Project-specific settings
 ```
 
-The core engine works without any API key. To use the extraction module, add an LLM key &mdash; T3X supports Anthropic and Google AI.
-
-<br/>
-
-## YOps &mdash; Declarative YAML Operations
-
-<p align="center">
-  <img src=".github/assets/yops-architecture.svg" alt="YOps Architecture" width="680" />
-</p>
-
-YOps is the operation layer &mdash; 18 atomic, spec-driven operations on any YAML document:
-
-```yaml
-yops:
-  - define:
-      path: user/preferences
-  - populate:
-      path: user/preferences
-      values: { theme: dark, language: en, notifications: true }
-  - append:
-      path: user/tags
-      value: early-adopter
-  - sort:
-      path: user/tags
-  - assert:
-      path: user/preferences/theme
-      equals: dark
-```
-
-**4 categories, 18 operations:**
-
-| Category | Ops | Purpose |
-|:---------|:----|:--------|
-| **DDL** (structure) | `define` `drop` `rename` | Create, remove, rename keys |
-| **DML** (data) | `set` `unset` `populate` `append` | Set values, add to sequences |
-| **DTL** (transform) | `move` `clone` `nest` `split` `fold` `merge` `sort` `unique` `pick` `omit` | Reshape the tree |
-| **DCL** (control) | `assert` | Validate conditions (read-only) |
-
-The full spec lives in [`yops.yaml`](packages/yops/yops.yaml) &mdash; machine-readable, with embedded test cases. Any language can implement a conformant engine from this single file.
-
-&rarr; [YOps package](packages/yops/) for API docs and detailed reference
+The core engine works without any API key. To use extraction, add an Anthropic or Google AI key.
 
 <br/>
 
 ## Use T3X
 
-### For AI agents &mdash; MCP Server
-
-Connect any MCP-compatible agent to T3X with 47 built-in tools:
+### MCP Server &mdash; for AI agents
 
 ```json
 {
@@ -176,83 +215,64 @@ Connect any MCP-compatible agent to T3X with 47 built-in tools:
 }
 ```
 
-Works with Claude Code, Cursor, Windsurf, and others. &rarr; [MCP docs](https://t3x.dev/docs/mcp)
+tools for Claude Code, Cursor, Windsurf, and other MCP-compatible agents. &rarr; [MCP docs](https://t3x.dev/docs/mcp)
 
-### For your terminal &mdash; CLI
+### CLI
 
 ```bash
-t3x extract     # Build YAML from text (LLM-powered)
+t3x extract     # Build YAML from text
 t3x commit      # Commit a snapshot
 t3x diff        # Compare two commits
 t3x merge       # Three-way merge
 ```
 
-&rarr; [CLI reference](https://t3x.dev/docs/cli)
+### API
 
-### For your app &mdash; API
+RESTful with OpenAPI spec. Self-host or use the managed cloud. &rarr; [API reference](https://t3x.dev/docs/api)
 
-RESTful API with OpenAPI spec. Self-host or use the managed cloud.
+### Runner &mdash; for evaluation
 
-```bash
-curl http://localhost:8000/api/v1/projects
-```
-
-&rarr; [API reference](https://t3x.dev/docs/api)
-
-### For evaluation &mdash; Runner
-
-Trace-based CI/CD for AI agent behavior. Capture I/O traces, run assertions, gate deployments.
-
-&rarr; [Runner docs](https://t3x.dev/docs/runner)
+Trace-based CI/CD for AI agent behavior. Capture I/O traces, run assertions, gate deployments. &rarr; [Runner docs](https://t3x.dev/docs/runner)
 
 <br/>
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────┐
-│                   Product Layer                      │
-│   WebUI (Next.js)  ·  API (Hono)  ·  CLI  ·  MCP   │
-├─────────────────────────────────────────────────────┤
-│                   Storage Layer                      │
-│   PostgreSQL (Drizzle ORM)  ·  Embedded PG (dev)    │
-├─────────────────────────────────────────────────────┤
-│                    Core Layer                        │
-│   Hash chains  ·  Diff engine  ·  Merge  ·  Extract │
-├─────────────────────────────────────────────────────┤
-│                   YOps Engine                        │
-│   18 ops  ·  Spec-driven  ·  100% deterministic     │
-└─────────────────────────────────────────────────────┘
-```
+<table>
+<tr><td align="center"><strong>Product</strong><br/><sub>WebUI (Next.js) &middot; API (Hono) &middot; CLI &middot; MCP</sub></td></tr>
+<tr><td align="center"><strong>Storage</strong><br/><sub>PostgreSQL (Drizzle ORM) &middot; Embedded PG (dev)</sub></td></tr>
+<tr><td align="center"><strong>Core</strong><br/><sub>Hash chains &middot; Diff engine &middot; Merge &middot; YLint &middot; Extract</sub></td></tr>
+<tr><td align="center"><strong>Y-Family</strong><br/><sub>YOps (mutate) &middot; YSchema (validate) &middot; YLint (hygiene)</sub></td></tr>
+</table>
 
-**Key design principles:**
+**Design principles:**
 
-- **Deterministic core** &mdash; Same inputs always produce same outputs. No LLM in the critical path.
-- **Append-only** &mdash; Hash chains are immutable. Any modification breaks integrity.
-- **Evidence-backed** &mdash; Every semantic finding traces to source text with verbatim quotes.
-- **Pluggable** &mdash; LLMs are optional plugins for extraction and summarization, never required.
+- **Deterministic core** &mdash; Same inputs, same outputs. No LLM in the critical path.
+- **Append-only** &mdash; Hash chains are immutable.
+- **Evidence-backed** &mdash; Every finding traces to source text with character offsets.
+- **Pluggable** &mdash; LLMs are optional plugins for extraction, never required.
 
 ### Project structure
 
 ```
-packages/yops        # YOps — 18 declarative YAML operations (spec-driven)
-packages/core        # T3X engine — diff, merge, hash chains, extraction
+packages/yops        # YOps — Declarative YAML operations
+packages/yschema     # YSchema — domain validation with auto-fix
+packages/core        # T3X engine — diff, merge, hash chains, extraction, ylint
 packages/storage     # PostgreSQL persistence (Drizzle ORM)
 packages/api-client  # TypeScript API client
 apps/web             # WebUI (Next.js 16 + App Router)
 apps/api             # Hono API server with OpenAPI
 apps/cli             # Command-line interface
-apps/mcp             # MCP server (47 tools)
+apps/mcp             # MCP server (tools)
 apps/runner          # Grey-box agent evaluation engine
 ```
 
-### Build commands
+### Build
 
 ```bash
 pnpm build           # Build all packages
 pnpm test            # Run all tests
 pnpm check           # Lint + format (Biome)
-pnpm check:fix       # Auto-fix
 ```
 
 &rarr; [Contributing guide](./CONTRIBUTING.md)
@@ -263,8 +283,9 @@ pnpm check:fix       # Auto-fix
 
 | Package | npm | Description |
 |:--------|:----|:------------|
-| [`@t3x-dev/yops`](packages/yops/) | [![npm](https://img.shields.io/npm/v/@t3x-dev/yops)](https://www.npmjs.com/package/@t3x-dev/yops) | 18 declarative YAML operations |
-| [`@t3x-dev/core`](packages/core/) | [![npm](https://img.shields.io/npm/v/@t3x-dev/core)](https://www.npmjs.com/package/@t3x-dev/core) | Diff, merge, hash chains, extraction |
+| [`@t3x-dev/yops`](packages/yops/) | [![npm](https://img.shields.io/npm/v/@t3x-dev/yops)](https://www.npmjs.com/package/@t3x-dev/yops) | Declarative YAML operations |
+| [`@t3x-dev/yschema`](packages/yschema/) | [![npm](https://img.shields.io/npm/v/@t3x-dev/yschema)](https://www.npmjs.com/package/@t3x-dev/yschema) | Domain validation with YOps auto-fix |
+| [`@t3x-dev/core`](packages/core/) | [![npm](https://img.shields.io/npm/v/@t3x-dev/core)](https://www.npmjs.com/package/@t3x-dev/core) | Diff, merge, hash chains, extraction, ylint |
 | [`@t3x-dev/storage`](packages/storage/) | [![npm](https://img.shields.io/npm/v/@t3x-dev/storage)](https://www.npmjs.com/package/@t3x-dev/storage) | PostgreSQL persistence |
 | [`@t3x-dev/api`](packages/api/) | [![npm](https://img.shields.io/npm/v/@t3x-dev/api)](https://www.npmjs.com/package/@t3x-dev/api) | API server library |
 | [`@t3x-dev/api-client`](packages/api-client/) | [![npm](https://img.shields.io/npm/v/@t3x-dev/api-client)](https://www.npmjs.com/package/@t3x-dev/api-client) | TypeScript client |
