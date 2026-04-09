@@ -2,10 +2,13 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { SemanticContent, YOpsLogEntry } from '@t3x-dev/core';
 import { useDraftStore } from '@/store/draftStore';
+import { createYOpsEntry } from '@/lib/api/trees';
 
 vi.mock('@/lib/api/trees', () => ({
   createYOpsEntry: vi.fn().mockResolvedValue({}),
 }));
+
+const mockedCreateYOpsEntry = vi.mocked(createYOpsEntry);
 
 const emptyContent: SemanticContent = { trees: [], relations: [] };
 
@@ -53,10 +56,8 @@ describe('draftStore', () => {
     expect(useDraftStore.getState().yopsLog[0].source).toBe('manual');
   });
 
-  it('applyYOps persists ALL sources to DB (no filter)', async () => {
-    const trees = await import('@/lib/api/trees');
-    const spy = vi.mocked(trees.createYOpsEntry);
-    spy.mockClear();
+  it('applyYOps persists ALL sources to DB (no filter)', () => {
+    mockedCreateYOpsEntry.mockClear();
 
     const content: SemanticContent = {
       trees: [{ key: 'trip', slots: { budget: '1000' }, children: [] }],
@@ -70,12 +71,8 @@ describe('draftStore', () => {
       'pipeline',
     );
 
-    // createYOpsEntry is fire-and-forget — flush microtask queue
-    await new Promise((r) => setTimeout(r, 0));
-    await vi.waitFor(() => {
-      expect(spy).toHaveBeenCalled();
-    }, { timeout: 2000 });
-    expect(spy).toHaveBeenCalledWith(
+    // createYOpsEntry is called synchronously (fire-and-forget the returned promise)
+    expect(mockedCreateYOpsEntry).toHaveBeenCalledWith(
       'conv_test',
       expect.any(Array),
       'pipeline',
