@@ -10,6 +10,7 @@
 import type { ContentBlock } from '@t3x-dev/core';
 import {
   boolean,
+  check,
   customType,
   index,
   integer,
@@ -19,7 +20,9 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 
 // Custom type for vector embeddings (bytea in Postgres)
 const bytea = customType<{ data: Buffer; driverData: Buffer }>({
@@ -97,6 +100,7 @@ export const conversations = pgTable(
       .notNull()
       .references(() => projects.projectId, { onDelete: 'cascade' }),
     title: text('title'),
+    alias: text('alias'),
     parentCommitHash: text('parent_commit_hash'),
     positionX: real('position_x'),
     positionY: real('position_y'),
@@ -105,7 +109,20 @@ export const conversations = pgTable(
     provider: text('provider'), // override, null = inherit project default
     model: text('model'), // override, null = inherit project default
   },
-  (table) => [index('idx_conversations_project').on(table.projectId)]
+  (table) => [
+    index('idx_conversations_project').on(table.projectId),
+    uniqueIndex('idx_conversations_project_alias')
+      .on(table.projectId, table.alias)
+      .where(sql`alias IS NOT NULL`),
+    // Mirrors the production migration constraint declared in
+    // adapters/postgres.ts (schema v38). Format: `^[a-z][a-z0-9_]{0,63}$`.
+    // Keeping this in the Drizzle schema ensures all three places
+    // (Drizzle, test SQL, production migration) agree on both shape AND name.
+    check(
+      'conversations_alias_format',
+      sql`${table.alias} IS NULL OR ${table.alias} ~ '^[a-z][a-z0-9_]{0,63}$'`
+    ),
+  ]
 );
 
 /**

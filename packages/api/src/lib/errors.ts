@@ -31,6 +31,7 @@ export const ErrorCodes = {
   // Validation errors
   INVALID_REQUEST: 'INVALID_REQUEST',
   VALIDATION_FAILED: 'VALIDATION_FAILED',
+  MISSING_PROJECT_FOR_ALIAS: 'MISSING_PROJECT_FOR_ALIAS',
 
   // Reference errors
   PARENT_NOT_FOUND: 'PARENT_NOT_FOUND',
@@ -53,6 +54,7 @@ export const ErrorCodes = {
   HASH_CONFLICT: 'HASH_CONFLICT',
   MAIN_ROOT_EXISTS: 'MAIN_ROOT_EXISTS',
   MAIN_NOT_HEAD: 'MAIN_NOT_HEAD',
+  ALIAS_TAKEN: 'ALIAS_TAKEN',
 
   // Operation errors
   CREATE_FAILED: 'CREATE_FAILED',
@@ -153,6 +155,7 @@ export const ErrorStatusCodes: Record<ErrorCode, number> = {
   COMMIT_VERSION_UNSUPPORTED: 400,
   INVALID_REQUEST: 400,
   VALIDATION_FAILED: 400,
+  MISSING_PROJECT_FOR_ALIAS: 400,
   PARENT_NOT_FOUND: 400,
   REFERENCE_NOT_FOUND: 400,
 
@@ -173,6 +176,7 @@ export const ErrorStatusCodes: Record<ErrorCode, number> = {
   HASH_CONFLICT: 409,
   MAIN_ROOT_EXISTS: 409,
   MAIN_NOT_HEAD: 409,
+  ALIAS_TAKEN: 409,
 
   // 500 Server Error
   CREATE_FAILED: 500,

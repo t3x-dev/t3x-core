@@ -11,8 +11,11 @@ import {
   deleteConversation,
   findConversationById,
   findConversationsByProject,
+  findConversationByAliasOrId,
   getConversationTurnCount,
   insertConversation,
+  renameConversation,
+  setAliasIfNull,
   updateConversation,
 } from '../queries/conversations';
 import { insertProject } from '../queries/projects';
@@ -75,6 +78,193 @@ describe('Conversations Storage', () => {
       const result = await insertConversation(db, { projectId: testProjectId });
 
       expect(result.title).toBeNull();
+    });
+
+    describe('alias column', () => {
+      it('stores and retrieves an alias', async () => {
+        const result = await insertConversation(db, { projectId: testProjectId });
+
+        // Manually update via raw Drizzle since insertConversation does not yet take alias
+        await db
+          .update(conversations)
+          .set({ alias: 'tokyo_trip' })
+          .where(eq(conversations.conversationId, result.conversationId));
+
+        const [row] = await db
+          .select()
+          .from(conversations)
+          .where(eq(conversations.conversationId, result.conversationId));
+
+        expect(row.alias).toBe('tokyo_trip');
+      });
+
+      it('enforces (project_id, alias) uniqueness', async () => {
+        const a = await insertConversation(db, { projectId: testProjectId });
+        const b = await insertConversation(db, { projectId: testProjectId });
+
+        await db
+          .update(conversations)
+          .set({ alias: 'duplicate_alias' })
+          .where(eq(conversations.conversationId, a.conversationId));
+
+        await expect(
+          db
+            .update(conversations)
+            .set({ alias: 'duplicate_alias' })
+            .where(eq(conversations.conversationId, b.conversationId))
+        ).rejects.toThrow();
+      });
+
+      it('allows the same alias under different projects', async () => {
+        const otherProject = await insertProject(
+          db,
+          testData.project({ name: 'Other Project' })
+        );
+        const c1 = await insertConversation(db, { projectId: testProjectId });
+        const c2 = await insertConversation(db, { projectId: otherProject.projectId });
+
+        await db
+          .update(conversations)
+          .set({ alias: 'shared_name' })
+          .where(eq(conversations.conversationId, c1.conversationId));
+        await db
+          .update(conversations)
+          .set({ alias: 'shared_name' })
+          .where(eq(conversations.conversationId, c2.conversationId));
+
+        const rows = await db
+          .select()
+          .from(conversations)
+          .where(eq(conversations.alias, 'shared_name'));
+
+        expect(rows).toHaveLength(2);
+      });
+
+      describe('alias format constraint', () => {
+        // Negative cases: each must be rejected by the
+        // `conversations_alias_format` CHECK constraint.
+        // Regex: ^[a-z][a-z0-9_]{0,63}$
+        it('rejects uppercase letters', async () => {
+          const conv = await insertConversation(db, { projectId: testProjectId });
+
+          await expect(
+            db
+              .update(conversations)
+              .set({ alias: 'Tokyo_Trip' })
+              .where(eq(conversations.conversationId, conv.conversationId))
+          ).rejects.toThrow();
+        });
+
+        it('rejects aliases starting with a digit', async () => {
+          const conv = await insertConversation(db, { projectId: testProjectId });
+
+          await expect(
+            db
+              .update(conversations)
+              .set({ alias: '1tokyo_trip' })
+              .where(eq(conversations.conversationId, conv.conversationId))
+          ).rejects.toThrow();
+        });
+
+        it('rejects hyphens', async () => {
+          const conv = await insertConversation(db, { projectId: testProjectId });
+
+          await expect(
+            db
+              .update(conversations)
+              .set({ alias: 'tokyo-trip' })
+              .where(eq(conversations.conversationId, conv.conversationId))
+          ).rejects.toThrow();
+        });
+
+        it('rejects whitespace', async () => {
+          const conv = await insertConversation(db, { projectId: testProjectId });
+
+          await expect(
+            db
+              .update(conversations)
+              .set({ alias: 'tokyo trip' })
+              .where(eq(conversations.conversationId, conv.conversationId))
+          ).rejects.toThrow();
+        });
+
+        it('rejects empty string', async () => {
+          const conv = await insertConversation(db, { projectId: testProjectId });
+
+          await expect(
+            db
+              .update(conversations)
+              .set({ alias: '' })
+              .where(eq(conversations.conversationId, conv.conversationId))
+          ).rejects.toThrow();
+        });
+
+        it('rejects aliases longer than 64 characters', async () => {
+          const conv = await insertConversation(db, { projectId: testProjectId });
+          // 65 chars: 'a' + 64 'b's = 65 total
+          const tooLong = `a${'b'.repeat(64)}`;
+          expect(tooLong.length).toBe(65);
+
+          await expect(
+            db
+              .update(conversations)
+              .set({ alias: tooLong })
+              .where(eq(conversations.conversationId, conv.conversationId))
+          ).rejects.toThrow();
+        });
+
+        // Positive boundary cases — must be accepted by the constraint.
+        it('accepts a single lowercase letter (1 char minimum)', async () => {
+          const conv = await insertConversation(db, { projectId: testProjectId });
+
+          await db
+            .update(conversations)
+            .set({ alias: 'a' })
+            .where(eq(conversations.conversationId, conv.conversationId));
+
+          const [row] = await db
+            .select()
+            .from(conversations)
+            .where(eq(conversations.conversationId, conv.conversationId));
+
+          expect(row.alias).toBe('a');
+        });
+
+        it('accepts letter + underscore + digit', async () => {
+          const conv = await insertConversation(db, { projectId: testProjectId });
+
+          await db
+            .update(conversations)
+            .set({ alias: 'a_1' })
+            .where(eq(conversations.conversationId, conv.conversationId));
+
+          const [row] = await db
+            .select()
+            .from(conversations)
+            .where(eq(conversations.conversationId, conv.conversationId));
+
+          expect(row.alias).toBe('a_1');
+        });
+
+        it('accepts a 64-character alias at the upper boundary', async () => {
+          const conv = await insertConversation(db, { projectId: testProjectId });
+          // 64 chars: 'a' + 63 'b's = 64 total
+          const maxAlias = `a${'b'.repeat(63)}`;
+          expect(maxAlias.length).toBe(64);
+
+          await db
+            .update(conversations)
+            .set({ alias: maxAlias })
+            .where(eq(conversations.conversationId, conv.conversationId));
+
+          const [row] = await db
+            .select()
+            .from(conversations)
+            .where(eq(conversations.conversationId, conv.conversationId));
+
+          expect(row.alias).toBe(maxAlias);
+        });
+      });
     });
   });
 
@@ -313,6 +503,108 @@ describe('Conversations Storage', () => {
 
       expect(Array.isArray(result)).toBe(true);
       expect((result as Conversation[]).length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  describe('findConversationByAliasOrId', () => {
+    it('finds by conversation_id', async () => {
+      const created = await insertConversation(db, { projectId: testProjectId });
+
+      const found = await findConversationByAliasOrId(
+        db,
+        testProjectId,
+        created.conversationId
+      );
+
+      expect(found).not.toBeNull();
+      expect(found?.conversationId).toBe(created.conversationId);
+    });
+
+    it('finds by alias scoped to project', async () => {
+      const created = await insertConversation(db, { projectId: testProjectId });
+      await db
+        .update(conversations)
+        .set({ alias: 'lookup_me' })
+        .where(eq(conversations.conversationId, created.conversationId));
+
+      const found = await findConversationByAliasOrId(db, testProjectId, 'lookup_me');
+
+      expect(found?.conversationId).toBe(created.conversationId);
+    });
+
+    it('returns null when alias does not exist in project', async () => {
+      const found = await findConversationByAliasOrId(
+        db,
+        testProjectId,
+        'nonexistent_alias'
+      );
+
+      expect(found).toBeNull();
+    });
+  });
+
+  describe('setAliasIfNull', () => {
+    it('sets the base alias when row.alias is NULL and no collision', async () => {
+      const created = await insertConversation(db, { projectId: testProjectId });
+
+      const result = await setAliasIfNull(db, created.conversationId, 'fresh_topic');
+
+      expect(result).toBe('fresh_topic');
+    });
+
+    it('appends _2 when base alias is already taken in same project', async () => {
+      const a = await insertConversation(db, { projectId: testProjectId });
+      const b = await insertConversation(db, { projectId: testProjectId });
+
+      await setAliasIfNull(db, a.conversationId, 'collide');
+      const result = await setAliasIfNull(db, b.conversationId, 'collide');
+
+      expect(result).toBe('collide_2');
+    });
+
+    it('returns existing alias when row already has one (no overwrite)', async () => {
+      const created = await insertConversation(db, { projectId: testProjectId });
+      await db
+        .update(conversations)
+        .set({ alias: 'already_set' })
+        .where(eq(conversations.conversationId, created.conversationId));
+
+      const result = await setAliasIfNull(db, created.conversationId, 'new_attempt');
+
+      expect(result).toBe('already_set');
+    });
+  });
+
+  describe('renameConversation', () => {
+    it('updates alias on a conversation', async () => {
+      const created = await insertConversation(db, { projectId: testProjectId });
+
+      await renameConversation(db, created.conversationId, 'manual_rename');
+
+      const [row] = await db
+        .select()
+        .from(conversations)
+        .where(eq(conversations.conversationId, created.conversationId));
+      expect(row.alias).toBe('manual_rename');
+    });
+
+    it('throws on invalid alias format', async () => {
+      const created = await insertConversation(db, { projectId: testProjectId });
+
+      await expect(
+        renameConversation(db, created.conversationId, 'BadAlias')
+      ).rejects.toThrow(/format/);
+    });
+
+    it('throws on collision within the same project', async () => {
+      const a = await insertConversation(db, { projectId: testProjectId });
+      const b = await insertConversation(db, { projectId: testProjectId });
+
+      await renameConversation(db, a.conversationId, 'taken_name');
+
+      await expect(
+        renameConversation(db, b.conversationId, 'taken_name')
+      ).rejects.toThrow();
     });
   });
 });

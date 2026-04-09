@@ -10,6 +10,7 @@
  * events (collect into a response object, stream as SSE, etc.).
  */
 
+import { createHash } from 'node:crypto';
 import {
   applyYOps,
   buildMemoryFromPins,
@@ -32,6 +33,7 @@ import {
   type SemanticContent,
 } from '@t3x-dev/core';
 import {
+  type AnyDB,
   createTopic,
   findConversationById,
   findLeafById,
@@ -43,14 +45,82 @@ import {
   listTopicsByConversation,
   listYOpsLogByConversation,
   listYOpsLogByTopic,
+  setAliasIfNull,
 } from '@t3x-dev/storage';
+import { pinoLogger } from '../middleware/logger';
 import { ExtractionStyleSchema } from '../schemas/contracts';
 import { getDB } from './db';
-import { eventBus } from './event-bus';
+import { eventBus, type RealtimeEvent } from './event-bus';
 import { getProviderRegistry } from './provider-registry';
 import { rebuildTreesFromSnapshot } from './tree-state-sync';
 import { recordUsageFireAndForget, wrapWithUsageTracking } from './usage-tracking';
 import { replayYOpsLog, toYOpsLogEntries } from './yops-log-utils';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Alias derivation helpers (T6)
+// ═══════════════════════════════════════════════════════════════════════════
+
+const ALIAS_FORMAT = /^[a-z][a-z0-9_]{0,63}$/;
+
+/**
+ * Sanitize a YAML root key into a valid alias candidate. Falls back to
+ * `topic_<8-char sha256 hash>` derived from `conversationId` when sanitization
+ * cannot produce an alias that satisfies ALIAS_FORMAT.
+ *
+ * Exported for unit testing.
+ */
+export function deriveAliasCandidate(rootKey: string, conversationId = 'conv_unknown'): string {
+  const sanitized = rootKey
+    .toLowerCase()
+    .replace(/[^a-z0-9_]/g, '_')
+    .replace(/_+/g, '_')
+    .slice(0, 64);
+
+  if (ALIAS_FORMAT.test(sanitized)) return sanitized;
+
+  // Fallback: stable hash of the conversation id (8 hex chars).
+  const hash = createHash('sha256').update(conversationId).digest('hex').slice(0, 8);
+  return `topic_${hash}`;
+}
+
+interface MaybeAssignAliasArgs {
+  db: AnyDB;
+  conversation: { conversationId: string; projectId: string; alias: string | null };
+  rootKey: string;
+  setAliasIfNull: typeof import('@t3x-dev/storage').setAliasIfNull;
+  broadcast: (event: RealtimeEvent) => void;
+}
+
+/**
+ * If the conversation has no alias yet, derive one from `rootKey` and try
+ * to set it. On success, emits `conversation.renamed`. Failures are logged
+ * and swallowed — alias derivation MUST NOT block extraction success.
+ *
+ * Exported for unit testing.
+ */
+export async function maybeAssignAlias(args: MaybeAssignAliasArgs): Promise<void> {
+  const { db, conversation, rootKey, setAliasIfNull, broadcast } = args;
+  if (conversation.alias) return;
+
+  try {
+    const candidate = deriveAliasCandidate(rootKey, conversation.conversationId);
+    const written = await setAliasIfNull(db, conversation.conversationId, candidate);
+    if (!written) return;
+
+    broadcast({
+      type: 'conversation.renamed',
+      conversationId: conversation.conversationId,
+      projectId: conversation.projectId,
+      payload: { alias: written, previous_alias: null },
+      timestamp: Date.now(),
+    });
+  } catch (err) {
+    pinoLogger.warn(
+      { err, conversationId: conversation.conversationId },
+      'Alias derivation failed (extraction continues)'
+    );
+  }
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Types
@@ -685,6 +755,27 @@ export async function* runExtractionPipeline(
       snapshot: organizedSnapshot,
       topicId: resolvedTopicId,
     });
+
+    // ── Derive alias from root tree key (no-op if already set) ──
+    // Failures are logged inside maybeAssignAlias and must never block the
+    // extraction.done broadcast below.
+    const rootKey = organizedSnapshot.trees[0]?.key;
+    if (rootKey) {
+      const refreshed = await findConversationById(db, conversationId);
+      if (refreshed) {
+        await maybeAssignAlias({
+          db,
+          conversation: {
+            conversationId: refreshed.conversationId,
+            projectId: refreshed.projectId,
+            alias: refreshed.alias,
+          },
+          rootKey,
+          setAliasIfNull,
+          broadcast: (event) => eventBus.broadcast(event),
+        });
+      }
+    }
 
     // Broadcast to WebSocket clients
     eventBus.broadcast({

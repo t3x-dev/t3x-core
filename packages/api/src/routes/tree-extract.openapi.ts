@@ -10,7 +10,7 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { findConversationById } from '@t3x-dev/storage';
+import { findConversationByAliasOrId, findConversationById } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { type ErrorCode, errorResponse, zodErrorHook } from '../lib/errors';
 import { runExtractionPipeline } from '../lib/extraction-pipeline';
@@ -34,6 +34,7 @@ const DriftDecisionSchema = z.object({
 
 const TreeExtractRequest = z.object({
   conversation_id: z.string().min(1),
+  project_id: z.string().optional(),
   turn_hashes: z.array(z.string().min(1)).optional(),
   drift_decision: DriftDecisionSchema.optional(),
   topic_id: z.string().optional(),
@@ -82,7 +83,9 @@ const extractTreesRoute = createRoute({
   tags: ['Extract'],
   summary: 'Extract semantic trees from a conversation using LLM',
   description:
-    'Runs Extractor on conversation turns, appends the resulting delta to the delta log, and returns the delta with the updated snapshot.',
+    'Runs Extractor on conversation turns, appends the resulting delta to the delta log, ' +
+    'and returns the delta with the updated snapshot. The conversation_id field accepts ' +
+    'either a conv_xxx hash ID or a project-scoped alias; aliases require project_id.',
   request: {
     body: {
       content: { 'application/json': { schema: TreeExtractRequest } },
@@ -117,11 +120,33 @@ const extractTreesRoute = createRoute({
 // ============================================================
 
 treeExtractRoutes.openapi(extractTreesRoute, async (c) => {
-  const { conversation_id, turn_hashes, drift_decision, topic_id, force_extract, source_pin_ids } =
-    c.req.valid('json');
+  const {
+    conversation_id,
+    project_id,
+    turn_hashes,
+    drift_decision,
+    topic_id,
+    force_extract,
+    source_pin_ids,
+  } = c.req.valid('json');
 
   const db = await getDB();
-  const conversation = await findConversationById(db, conversation_id);
+
+  // Resolve conversation_id (accepts a conv_ id OR a project-scoped alias)
+  let conversation = null;
+  if (conversation_id.startsWith('conv_')) {
+    conversation = await findConversationById(db, conversation_id);
+  } else {
+    if (!project_id) {
+      return errorResponse(
+        c,
+        'MISSING_PROJECT_FOR_ALIAS',
+        'Aliases require a project_id to resolve unambiguously'
+      );
+    }
+    conversation = await findConversationByAliasOrId(db, project_id, conversation_id);
+  }
+
   if (!conversation) {
     return errorResponse(c, 'CONVERSATION_NOT_FOUND', `Conversation not found: ${conversation_id}`);
   }
@@ -141,7 +166,7 @@ treeExtractRoutes.openapi(extractTreesRoute, async (c) => {
 
   try {
     const pipeline = runExtractionPipeline({
-      conversationId: conversation_id,
+      conversationId: conversation.conversationId,
       projectId: conversation.projectId,
       turnHashes: turn_hashes,
       driftDecision: drift_decision,
@@ -243,11 +268,39 @@ function encodeSseEvent(event: string, payload: string): Uint8Array {
 
 treeExtractRoutes.post('/v1/extract/trees/stream', async (c) => {
   const body = await c.req.json();
-  const { conversation_id, turn_hashes, drift_decision, topic_id, force_extract, source_pin_ids } = body;
+  const {
+    conversation_id,
+    project_id,
+    turn_hashes,
+    drift_decision,
+    topic_id,
+    force_extract,
+    source_pin_ids,
+  } = body;
 
   // Validate conversation + project access
   const db = await getDB();
-  const conversation = await findConversationById(db, conversation_id);
+
+  // Resolve conversation_id (accepts a conv_ id OR a project-scoped alias)
+  let conversation = null;
+  if (typeof conversation_id === 'string' && conversation_id.startsWith('conv_')) {
+    conversation = await findConversationById(db, conversation_id);
+  } else {
+    if (!project_id) {
+      return c.json(
+        {
+          success: false,
+          error: {
+            code: 'MISSING_PROJECT_FOR_ALIAS',
+            message: 'Aliases require a project_id to resolve unambiguously',
+          },
+        },
+        400
+      );
+    }
+    conversation = await findConversationByAliasOrId(db, project_id, conversation_id);
+  }
+
   if (!conversation) {
     return c.json(
       { success: false, error: { code: 'NOT_FOUND', message: 'Conversation not found' } },
@@ -261,7 +314,7 @@ treeExtractRoutes.post('/v1/extract/trees/stream', async (c) => {
     async start(controller) {
       try {
         const pipeline = runExtractionPipeline({
-          conversationId: conversation_id,
+          conversationId: conversation.conversationId,
           projectId: conversation.projectId,
           turnHashes: turn_hashes,
           driftDecision: drift_decision,

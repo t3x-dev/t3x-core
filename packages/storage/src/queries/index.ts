@@ -92,11 +92,14 @@ export {
 export {
   type CreateConversationInput,
   deleteConversation,
+  findConversationByAliasOrId,
   findConversationById,
   findConversationsByProject,
   getConversationTurnCount,
   insertConversation,
   type ListConversationsOptions,
+  renameConversation,
+  setAliasIfNull,
   type UpdateConversationInput,
   updateConversation,
 } from './conversations';

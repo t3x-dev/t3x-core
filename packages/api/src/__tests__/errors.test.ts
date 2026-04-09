@@ -9,8 +9,8 @@ import {
 } from '../lib/errors';
 
 describe('ErrorCodes', () => {
-  it('has 65 error codes', () => {
-    expect(Object.keys(ErrorCodes)).toHaveLength(65);
+  it('has 67 error codes', () => {
+    expect(Object.keys(ErrorCodes)).toHaveLength(67);
   });
 
   it('key equals value for every code', () => {
@@ -22,6 +22,7 @@ describe('ErrorCodes', () => {
   it('matches snapshot to prevent accidental changes', () => {
     expect(ErrorCodes).toMatchInlineSnapshot(`
       {
+        "ALIAS_TAKEN": "ALIAS_TAKEN",
         "ALREADY_COMMITTED": "ALREADY_COMMITTED",
         "API_KEY_NOT_FOUND": "API_KEY_NOT_FOUND",
         "API_KEY_REVOKED": "API_KEY_REVOKED",
@@ -64,6 +65,7 @@ describe('ErrorCodes', () => {
         "MAIN_NOT_HEAD": "MAIN_NOT_HEAD",
         "MAIN_ROOT_EXISTS": "MAIN_ROOT_EXISTS",
         "MERGE_FAILED": "MERGE_FAILED",
+        "MISSING_PROJECT_FOR_ALIAS": "MISSING_PROJECT_FOR_ALIAS",
         "NOT_FOUND": "NOT_FOUND",
         "NO_OUTPUT": "NO_OUTPUT",
         "PARENT_NOT_FOUND": "PARENT_NOT_FOUND",

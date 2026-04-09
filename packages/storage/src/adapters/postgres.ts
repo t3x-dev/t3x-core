@@ -67,7 +67,7 @@ export async function closePostgresStorage(): Promise<void> {
 /**
  * Schema version — bump this number whenever you add migrations below.
  */
-const SCHEMA_VERSION = 37;
+const SCHEMA_VERSION = 38;
 
 /**
  * Initialize database schema (skips if already at current version)
@@ -1001,6 +1001,25 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     -- Soft Delete support
     -- ═══════════════════════════════════════════════════════════════
     ALTER TABLE projects ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+  `);
+
+  // ── Schema v38: Conversation alias (snake_case identifiers) ──
+  await sql.unsafe(`
+    ALTER TABLE conversations ADD COLUMN IF NOT EXISTS alias TEXT;
+
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'conversations_alias_format'
+      ) THEN
+        ALTER TABLE conversations
+          ADD CONSTRAINT conversations_alias_format
+          CHECK (alias IS NULL OR alias ~ '^[a-z][a-z0-9_]{0,63}$');
+      END IF;
+    END $$;
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_conversations_project_alias
+      ON conversations (project_id, alias) WHERE alias IS NOT NULL;
   `);
 
   // Record schema version so subsequent startups skip the init SQL.

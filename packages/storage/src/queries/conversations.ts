@@ -5,7 +5,7 @@
  */
 
 import { generateConversationId } from '@t3x-dev/core';
-import { and, desc, eq, lt, or, sql } from 'drizzle-orm';
+import { and, desc, eq, isNull, lt, or, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { type Conversation, conversations, type NewConversation, turns } from '../schema';
 import { type CursorPage, decodeCursor, toCursorPage } from './pagination';
@@ -78,6 +78,133 @@ export async function findConversationById(
     .limit(1);
 
   return conversation ?? null;
+}
+
+/**
+ * Find a conversation by either its conversationId (e.g. `conv_abc123`) or
+ * its alias scoped to a project. ID lookup wins; alias is the fallback.
+ *
+ * Returns null when neither form matches inside the given project.
+ */
+export async function findConversationByAliasOrId(
+  db: AnyDB,
+  projectId: string,
+  valueOrAlias: string
+): Promise<Conversation | null> {
+  // ID-shaped lookup first (cheap and unambiguous)
+  if (valueOrAlias.startsWith('conv_')) {
+    const [byId] = await db
+      .select()
+      .from(conversations)
+      .where(
+        and(
+          eq(conversations.conversationId, valueOrAlias),
+          eq(conversations.projectId, projectId)
+        )
+      )
+      .limit(1);
+    if (byId) return byId;
+  }
+
+  // Alias fallback — scoped to project
+  const [byAlias] = await db
+    .select()
+    .from(conversations)
+    .where(
+      and(
+        eq(conversations.alias, valueOrAlias),
+        eq(conversations.projectId, projectId)
+      )
+    )
+    .limit(1);
+
+  return byAlias ?? null;
+}
+
+const ALIAS_FORMAT = /^[a-z][a-z0-9_]{0,63}$/;
+const MAX_COLLISION_SUFFIX = 99;
+
+function isUniqueViolation(err: unknown): boolean {
+  // postgres.js wraps Postgres errors with a `code` property; 23505 = unique_violation
+  return typeof err === 'object' && err !== null && (err as { code?: string }).code === '23505';
+}
+
+/**
+ * Atomically set conversation.alias only when it is currently NULL. On unique
+ * violation against another conversation in the same project, retries with
+ * suffixes `_2`, `_3`, …, up to `_99`.
+ *
+ * Returns:
+ *   - the alias actually written, on success
+ *   - the alias another worker had already written, when the row's alias is
+ *     no longer NULL by the time the UPDATE reaches the database
+ *   - null when all 99 candidates collide
+ */
+export async function setAliasIfNull(
+  db: AnyDB,
+  conversationId: string,
+  baseAlias: string
+): Promise<string | null> {
+  if (!ALIAS_FORMAT.test(baseAlias)) {
+    throw new Error(`Invalid alias format: ${baseAlias}`);
+  }
+
+  for (let i = 1; i <= MAX_COLLISION_SUFFIX; i++) {
+    const candidate = i === 1 ? baseAlias : `${baseAlias}_${i}`;
+    try {
+      const updated = await db
+        .update(conversations)
+        .set({ alias: candidate })
+        .where(
+          and(
+            eq(conversations.conversationId, conversationId),
+            isNull(conversations.alias)
+          )
+        )
+        .returning({ alias: conversations.alias });
+
+      if (updated.length > 0) {
+        return updated[0].alias ?? null;
+      }
+
+      // No row updated → either conversation does not exist OR alias was
+      // already set by another worker. Re-fetch to distinguish and return.
+      const [existing] = await db
+        .select({ alias: conversations.alias })
+        .from(conversations)
+        .where(eq(conversations.conversationId, conversationId))
+        .limit(1);
+      return existing?.alias ?? null;
+    } catch (err) {
+      if (isUniqueViolation(err)) continue; // try next suffix
+      throw err;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Manual rename — overwrites the current alias unconditionally.
+ *
+ * Throws:
+ *   - "Invalid alias format" when newAlias does not match the canonical regex
+ *   - the underlying postgres unique-violation error when the alias is taken
+ *     in the same project (caller should translate to HTTP 409)
+ */
+export async function renameConversation(
+  db: AnyDB,
+  conversationId: string,
+  newAlias: string
+): Promise<void> {
+  if (!ALIAS_FORMAT.test(newAlias)) {
+    throw new Error(`Invalid alias format: ${newAlias}`);
+  }
+
+  await db
+    .update(conversations)
+    .set({ alias: newAlias })
+    .where(eq(conversations.conversationId, conversationId));
 }
 
 /**
