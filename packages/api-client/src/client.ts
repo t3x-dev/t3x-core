@@ -25,6 +25,7 @@ import type {
   CreateConversationInput,
   CreateDraftInput,
   CreateLeafInput,
+  CreateMergeDraftInput,
   CreateProjectInput,
   CreateShareTokenInput,
   CreateTurnInput,
@@ -48,6 +49,9 @@ import type {
   ListLeavesResponse,
   ListProjectsResponse,
   ListTurnsResponse,
+  MergeDraft,
+  MergeDraftCommitInput,
+  MergeDraftCommitResult,
   PaginationParams,
   PlatformImportResult,
   Project,
@@ -170,7 +174,10 @@ export class T3xClient {
   }
 
   async deleteProject(id: string, options?: { permanent?: boolean }): Promise<void> {
-    await this.request<void>('DELETE', `/v1/projects/${id}`, undefined,
+    await this.request<void>(
+      'DELETE',
+      `/v1/projects/${id}`,
+      undefined,
       options?.permanent ? { permanent: 'true' } : undefined
     );
   }
@@ -304,16 +311,11 @@ export class T3xClient {
     await this.request<void>('DELETE', `/v1/drafts/${id}`);
   }
 
-  async applyYOps(
-    draftId: string,
-    yops: unknown[],
-    ifRevision: number
-  ): Promise<ApplyYOpsResult> {
-    return this.request<ApplyYOpsResult>(
-      'POST',
-      `/v1/drafts/${draftId}/apply-yops`,
-      { yops, if_revision: ifRevision }
-    );
+  async applyYOps(draftId: string, yops: unknown[], ifRevision: number): Promise<ApplyYOpsResult> {
+    return this.request<ApplyYOpsResult>('POST', `/v1/drafts/${draftId}/apply-yops`, {
+      yops,
+      if_revision: ifRevision,
+    });
   }
 
   // ============================================
@@ -352,6 +354,25 @@ export class T3xClient {
     branch?: string;
   }): Promise<unknown> {
     return this.request<unknown>('POST', '/v1/merge/execute', input);
+  }
+
+  // ============================================
+  // Merge Drafts
+  // ============================================
+
+  async createMergeDraft(input: CreateMergeDraftInput): Promise<MergeDraft> {
+    return this.request<MergeDraft>('POST', '/v1/merge/drafts', input);
+  }
+
+  async commitMergeDraft(
+    id: string,
+    input: MergeDraftCommitInput
+  ): Promise<MergeDraftCommitResult> {
+    return this.request<MergeDraftCommitResult>('POST', `/v1/merge/drafts/${id}/commit`, input);
+  }
+
+  async deleteMergeDraft(id: string): Promise<{ deleted: boolean }> {
+    return this.request<{ deleted: boolean }>('DELETE', `/v1/merge/drafts/${id}`);
   }
 
   // ============================================

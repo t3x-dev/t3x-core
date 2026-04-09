@@ -222,8 +222,80 @@ export interface DiffChange {
 }
 
 export interface TwoWayDiffInput {
-  base_hash: string;
-  head_hash: string;
+  base_commit_hash: string;
+  target_commit_hash: string;
+}
+
+// Merge draft types
+export interface CreateMergeDraftInput {
+  project_id: string;
+  source_hash: string;
+  target_hash: string;
+  source_branch?: string;
+  target_branch?: string;
+}
+
+export interface MergeDraftPrepared {
+  autoKept: string[];
+  conflicts: Array<{
+    path: string;
+    slotConflicts: Array<{
+      key: string;
+      baseValue?: unknown;
+      sourceValue?: unknown;
+      targetValue?: unknown;
+    }>;
+  }>;
+  onlyInSource: string[];
+  onlyInTarget: string[];
+  relationsOnlyInSource: Array<{ from: string; to: string; type: string }>;
+  relationsOnlyInTarget: Array<{ from: string; to: string; type: string }>;
+  relationsInBoth: Array<{ from: string; to: string; type: string }>;
+}
+
+export interface MergeDraft {
+  id: string;
+  project_id: string;
+  source_hash: string;
+  target_hash: string;
+  source_branch?: string;
+  target_branch?: string;
+  status: 'pending' | 'committed' | 'aborted';
+  prepared: MergeDraftPrepared;
+  message: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MergeDraftCommitInput {
+  message: string;
+  branch?: string;
+  decisions?: {
+    conflictResolutions?: Record<string, string>;
+    keepFromSource?: string[];
+    keepFromTarget?: string[];
+    keepRelationsFromSource?: boolean;
+    keepRelationsFromTarget?: boolean;
+  };
+}
+
+export interface MergeSummary {
+  kept_identical: number;
+  resolved_conflicts: number;
+  kept_from_source: number;
+  kept_from_target: number;
+  discarded: number;
+  total_nodes: number;
+}
+
+export interface MergeDraftCommitResult {
+  hash: string;
+  parents: string[];
+  author: { type: string; name: string; id?: string };
+  committed_at: string;
+  message: string;
+  branch: string;
+  merge_summary: MergeSummary;
 }
 
 // Export types
