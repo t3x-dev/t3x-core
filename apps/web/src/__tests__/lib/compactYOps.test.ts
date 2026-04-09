@@ -68,27 +68,17 @@ describe('compactYOps', () => {
         { unrelate: { from: 'a', to: 'b', type: 'depends_on' } },
         { relate: { from: 'a', to: 'b', type: 'depends_on' } },
       ];
-      expect(compactYOps(ops)).toEqual([
-        { relate: { from: 'a', to: 'b', type: 'depends_on' } },
-      ]);
+      expect(compactYOps(ops)).toEqual([{ relate: { from: 'a', to: 'b', type: 'depends_on' } }]);
     });
 
     it('preserves standalone relate', () => {
-      const ops: YOp[] = [
-        { relate: { from: 'a', to: 'b', type: 'depends_on' } },
-      ];
-      expect(compactYOps(ops)).toEqual([
-        { relate: { from: 'a', to: 'b', type: 'depends_on' } },
-      ]);
+      const ops: YOp[] = [{ relate: { from: 'a', to: 'b', type: 'depends_on' } }];
+      expect(compactYOps(ops)).toEqual([{ relate: { from: 'a', to: 'b', type: 'depends_on' } }]);
     });
 
     it('preserves standalone unrelate', () => {
-      const ops: YOp[] = [
-        { unrelate: { from: 'a', to: 'b', type: 'depends_on' } },
-      ];
-      expect(compactYOps(ops)).toEqual([
-        { unrelate: { from: 'a', to: 'b', type: 'depends_on' } },
-      ]);
+      const ops: YOp[] = [{ unrelate: { from: 'a', to: 'b', type: 'depends_on' } }];
+      expect(compactYOps(ops)).toEqual([{ unrelate: { from: 'a', to: 'b', type: 'depends_on' } }]);
     });
   });
 
@@ -109,10 +99,7 @@ describe('compactYOps', () => {
     });
 
     it('returns identical ops when no cancellable pairs exist', () => {
-      const ops: YOp[] = [
-        { set: { path: 'a/x', value: 1 } },
-        { set: { path: 'b/y', value: 2 } },
-      ];
+      const ops: YOp[] = [{ set: { path: 'a/x', value: 1 } }, { set: { path: 'b/y', value: 2 } }];
       expect(compactYOps(ops)).toEqual(ops);
     });
 
@@ -122,9 +109,7 @@ describe('compactYOps', () => {
         { set: { path: 'b/y', value: 2 } },
         { unset: { path: 'a/x' } },
       ];
-      expect(compactYOps(ops)).toEqual([
-        { set: { path: 'b/y', value: 2 } },
-      ]);
+      expect(compactYOps(ops)).toEqual([{ set: { path: 'b/y', value: 2 } }]);
     });
 
     it('preserves relative order of surviving ops', () => {
@@ -148,9 +133,7 @@ describe('compactYOps', () => {
         { set: { path: 'b/y', value: 2 } },
         { unset: { path: 'a/x' } },
       ];
-      expect(compactYOps(ops)).toEqual([
-        { set: { path: 'b/y', value: 2 } },
-      ]);
+      expect(compactYOps(ops)).toEqual([{ set: { path: 'b/y', value: 2 } }]);
     });
   });
 });
@@ -172,9 +155,7 @@ describe('commandStore.compactOps integration', () => {
     });
 
     const state = useCommandStore.getState();
-    expect(state.compactOps).toEqual([
-      { set: { path: 'b/y', value: 2 } },
-    ]);
+    expect(state.compactOps).toEqual([{ set: { path: 'b/y', value: 2 } }]);
   });
 
   it('compactOps is empty when pendingOps is empty', () => {

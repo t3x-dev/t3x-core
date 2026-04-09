@@ -110,7 +110,5 @@ export function compactYOps(ops: YOp[]): YOp[] {
     }
   }
 
-  return [...emitted, ...passThrough]
-    .sort((a, b) => a.index - b.index)
-    .map((e) => e.op);
+  return [...emitted, ...passThrough].sort((a, b) => a.index - b.index).map((e) => e.op);
 }

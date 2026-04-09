@@ -8,9 +8,9 @@
 import type { SemanticContent, YOp } from '@t3x-dev/core';
 import { findNode } from '@t3x-dev/core';
 import { create } from 'zustand';
+import { compactYOps } from '@/lib/compactYOps';
 import type { InverseResult } from '@/lib/yopInverse';
 import { computeInverse, isContextInverse } from '@/lib/yopInverse';
-import { compactYOps } from '@/lib/compactYOps';
 import { useDraftStore } from '@/store/draftStore';
 
 export interface UndoEntry {
