@@ -477,11 +477,11 @@ export {
   type ShareToken,
   type User,
 } from './types';
-export type { LintConfig, LintResult, LintWarning } from './ylint';
+export type { LintConfig, LintResult, LintWarning, ValidateTreeOptions, ValidateTreeResult } from './ylint';
 // ═══════════════════════════════════════════════════════════════════════════
-// YLint — Knowledge Tree Linter (4 Normal Forms)
+// YLint — Knowledge Tree Validation
 // ═══════════════════════════════════════════════════════════════════════════
-export { DEFAULT_LINT_CONFIG, ylint } from './ylint';
+export { DEFAULT_LINT_CONFIG, validateTree, ylint } from './ylint';
 export type {
   CloneOp,
   DefineOp,

@@ -3,9 +3,17 @@
  * All events flow through yield only — no separate emit callback.
  */
 export type PipelineEvent = {
-  type: 'op_start' | 'op_done' | 'op_error' | 'step_start' | 'step_done' | 'step_error';
+  type:
+    | 'op_start'
+    | 'op_done'
+    | 'op_error'
+    | 'step_start'
+    | 'step_done'
+    | 'step_error'
+    | 'step_info';
   op?: string;
   step?: string;
+  message?: string;
   timestamp?: number;
   error?: unknown;
   data?: unknown;

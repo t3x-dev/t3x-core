@@ -4,6 +4,9 @@
  * Persists a batch of YOps to the log and syncs the materialised trees.
  * This is the first concrete Operation in the unified pipeline.
  *
+ * Note: validation runs at commit time (commitOp), not on every edit.
+ * This keeps edits fast — validate when you're ready to commit.
+ *
  * Steps:
  *   persist — atomic transaction: insertYOpsLogEntry + syncYOpsToTrees
  */
