@@ -15,10 +15,10 @@
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "@t3x-dev/yops": "workspace:*"
+    "@t3x-dev/yops": "workspace:*",
+    "js-yaml": "^4.1.1"
   },
   "devDependencies": {
-    "js-yaml": "^4.1.1",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^20.12.7",
     "tsup": "^8.5.1",

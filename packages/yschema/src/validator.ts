@@ -7,7 +7,6 @@
 
 import type { YOp, YValue } from '@t3x-dev/yops';
 import { resolvePath } from '@t3x-dev/yops';
-import { normalizeSlot } from './parser';
 import type {
   NodeDef,
   RuleDef,
@@ -50,6 +49,19 @@ function validateNode(doc: YValue, nodeDef: NodeDef, path: string, violations: V
 
   if (nodeValue === undefined) return;
 
+  // Check: if node has slots or children declared, value must be a mapping
+  const expectsMapping = nodeDef.slots || nodeDef.children || nodeDef.each_child;
+  if (expectsMapping && !isMapping(nodeValue)) {
+    push(
+      violations,
+      'INVALID_TYPE',
+      path,
+      'error',
+      `Node "${path}" should be a mapping but is ${nodeValue === null ? 'null' : Array.isArray(nodeValue) ? 'list' : typeof nodeValue}`
+    );
+    return; // can't validate slots/children on a non-mapping
+  }
+
   // Validate slots
   if (nodeDef.slots && isMapping(nodeValue)) {
     validateSlots(nodeValue, nodeDef.slots as Record<string, SlotFull>, path, violations);
@@ -71,13 +83,23 @@ function validateNode(doc: YValue, nodeDef: NodeDef, path: string, violations: V
       if (nodeDef.children && nodeDef.children !== 'any' && childKey in nodeDef.children) continue;
 
       const childValue = nodeValue[childKey];
-      if (isMapping(childValue) && nodeDef.each_child.slots) {
-        validateSlots(
-          childValue,
-          nodeDef.each_child.slots as Record<string, SlotFull>,
-          `${path}/${childKey}`,
-          violations
-        );
+      if (nodeDef.each_child.slots) {
+        if (isMapping(childValue)) {
+          validateSlots(
+            childValue,
+            nodeDef.each_child.slots as Record<string, SlotFull>,
+            `${path}/${childKey}`,
+            violations
+          );
+        } else {
+          push(
+            violations,
+            'CHILD_MISMATCH',
+            `${path}/${childKey}`,
+            'error',
+            `Child "${childKey}" at "${path}" should be a mapping but is ${childValue === null ? 'null' : Array.isArray(childValue) ? 'list' : typeof childValue}`
+          );
+        }
       }
     }
   }
@@ -89,8 +111,7 @@ function validateSlots(
   path: string,
   violations: Violation[]
 ) {
-  for (const [slotKey, rawDef] of Object.entries(slotDefs)) {
-    const slotDef = normalizeSlot(rawDef);
+  for (const [slotKey, slotDef] of Object.entries(slotDefs)) {
     const slotPath = `${path}/${slotKey}`;
     const value = nodeValue[slotKey];
 
@@ -224,15 +245,24 @@ function matchPaths(doc: YValue, pattern: string): string[] {
     return resolvePath(doc, pattern) !== undefined ? [pattern] : [];
   }
 
-  // Handle wildcard: "decisions/*" matches all children of decisions
-  const parts = pattern.split('/*');
-  if (parts.length !== 2) return [];
+  // Only trailing /* is supported (e.g., "decisions/*")
+  if (!pattern.endsWith('/*')) return [];
 
-  const parentPath = parts[0];
+  const parentPath = pattern.slice(0, -2);
+  if (parentPath.includes('*')) return []; // reject nested wildcards like "a/*/b/*"
+
   const parent = resolvePath(doc, parentPath);
   if (!isMapping(parent)) return [];
 
   return Object.keys(parent).map((key) => `${parentPath}/${key}`);
+}
+
+/** Replace {{path}} placeholders in fix ops with the actual matched path. */
+function interpolateFixOps(ops: YOp[] | undefined, path: string): YOp[] | undefined {
+  if (!ops) return undefined;
+  const json = JSON.stringify(ops);
+  if (!json.includes('{{path}}')) return ops;
+  return JSON.parse(json.replace(/\{\{path\}\}/g, path)) as YOp[];
 }
 
 function validateRules(doc: YValue, rules: RuleDef[], violations: Violation[]) {
@@ -245,13 +275,27 @@ function validateRules(doc: YValue, rules: RuleDef[], violations: Violation[]) {
       if (value === undefined) continue;
 
       // must_have: node must have these slots
-      if (rule.must_have && isMapping(value)) {
-        for (const slot of rule.must_have) {
-          if (!(slot in (value as Record<string, YValue>))) {
-            const msg =
-              rule.message?.replace('{{path}}', path) ??
-              `Rule "${rule.id}": slot "${slot}" missing at "${path}"`;
-            push(violations, 'RULE_VIOLATION', path, severity, msg, rule.fix);
+      if (rule.must_have) {
+        if (!isMapping(value)) {
+          const msg =
+            rule.message?.replace('{{path}}', path) ??
+            `Rule "${rule.id}": "${path}" is not a mapping, cannot check slots`;
+          push(violations, 'RULE_VIOLATION', path, severity, msg, interpolateFixOps(rule.fix, path));
+        } else {
+          for (const slot of rule.must_have) {
+            if (!(slot in (value as Record<string, YValue>))) {
+              const msg =
+                rule.message?.replace('{{path}}', path) ??
+                `Rule "${rule.id}": slot "${slot}" missing at "${path}"`;
+              push(
+                violations,
+                'RULE_VIOLATION',
+                path,
+                severity,
+                msg,
+                interpolateFixOps(rule.fix, path)
+              );
+            }
           }
         }
       }
@@ -263,18 +307,44 @@ function validateRules(doc: YValue, rules: RuleDef[], violations: Violation[]) {
             const msg =
               rule.message?.replace('{{path}}', path) ??
               `Rule "${rule.id}": slot "${slot}" should not exist at "${path}"`;
-            push(violations, 'RULE_VIOLATION', path, severity, msg, rule.fix);
+            push(
+              violations,
+              'RULE_VIOLATION',
+              path,
+              severity,
+              msg,
+              interpolateFixOps(rule.fix, path)
+            );
           }
         }
       }
 
-      // one_of: value must be one of these
+      // one_of: value must be one of these (scalars only)
       if (rule.one_of) {
-        if (!rule.one_of.some((allowed) => allowed === value)) {
+        if (typeof value === 'object' && value !== null) {
+          const msg =
+            rule.message?.replace('{{path}}', path) ??
+            `Rule "${rule.id}": value at "${path}" is a ${Array.isArray(value) ? 'list' : 'mapping'}, expected a scalar`;
+          push(
+            violations,
+            'RULE_VIOLATION',
+            path,
+            severity,
+            msg,
+            interpolateFixOps(rule.fix, path)
+          );
+        } else if (!rule.one_of.some((allowed) => allowed === value)) {
           const msg =
             rule.message?.replace('{{path}}', path) ??
             `Rule "${rule.id}": value at "${path}" must be one of [${rule.one_of.join(', ')}]`;
-          push(violations, 'RULE_VIOLATION', path, severity, msg, rule.fix);
+          push(
+            violations,
+            'RULE_VIOLATION',
+            path,
+            severity,
+            msg,
+            interpolateFixOps(rule.fix, path)
+          );
         }
       }
 
@@ -284,7 +354,14 @@ function validateRules(doc: YValue, rules: RuleDef[], violations: Violation[]) {
           const msg =
             rule.message?.replace('{{path}}', path) ??
             `Rule "${rule.id}": node at "${path}" is empty`;
-          push(violations, 'RULE_VIOLATION', path, severity, msg, rule.fix);
+          push(
+            violations,
+            'RULE_VIOLATION',
+            path,
+            severity,
+            msg,
+            interpolateFixOps(rule.fix, path)
+          );
         }
       }
 
@@ -295,7 +372,14 @@ function validateRules(doc: YValue, rules: RuleDef[], violations: Violation[]) {
           const msg =
             rule.message?.replace('{{path}}', path) ??
             `Rule "${rule.id}": node at "${path}" has ${childCount} children, max is ${rule.max_children}`;
-          push(violations, 'RULE_VIOLATION', path, severity, msg, rule.fix);
+          push(
+            violations,
+            'RULE_VIOLATION',
+            path,
+            severity,
+            msg,
+            interpolateFixOps(rule.fix, path)
+          );
         }
       }
 
@@ -306,7 +390,14 @@ function validateRules(doc: YValue, rules: RuleDef[], violations: Violation[]) {
             const msg =
               rule.message?.replace('{{path}}', path) ??
               `Rule "${rule.id}": "${path}" requires "${reqPath}" to exist`;
-            push(violations, 'RULE_VIOLATION', path, severity, msg, rule.fix);
+            push(
+              violations,
+              'RULE_VIOLATION',
+              path,
+              severity,
+              msg,
+              interpolateFixOps(rule.fix, path)
+            );
           }
         }
       }

@@ -113,7 +113,7 @@ slot_fields:
 
 rule_fields:
   id:            { type: scalar, required: true }
-  if:            { type: scalar, required: true, description: "Path selector (supports * wildcard)" }
+  if:            { type: scalar, required: true, description: "Path selector (supports trailing /* wildcard only)" }
   severity:      { type: scalar, enum: [error, warn, info], default: warn }
   message:       { type: scalar }
   # Exactly one condition per rule:
@@ -156,7 +156,7 @@ validation:
       description: Slot value is not in the allowed enum list
       auto_fix: "set: { path: {{node_path}}/{{slot}}, value: {{first_enum}} }"
     INVALID_TYPE:
-      description: Slot type mismatch (scalar vs list)
+      description: Type mismatch — slot is wrong type (scalar vs list), or node is not a mapping when slots/children are declared
       auto_fix: null
     INVALID_RANGE:
       description: Value outside min/max bounds

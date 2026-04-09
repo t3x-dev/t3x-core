@@ -10,6 +10,11 @@ import type { NodeDef, Schema, SlotDef, SlotFull } from './types';
 
 /** Normalize a slot shorthand to full form. */
 export function normalizeSlot(def: SlotDef): SlotFull {
+  if (typeof def !== 'string' && !Array.isArray(def) && (typeof def !== 'object' || def === null)) {
+    throw new Error(
+      `Invalid slot definition: expected "scalar", "list", enum array, or slot object, got ${typeof def}`,
+    );
+  }
   if (def === 'scalar') {
     return { type: 'scalar', required: true };
   }
@@ -63,8 +68,13 @@ function normalizeNodeSlots(node: NodeDef): NodeDef {
 
 /** Parse a YAML string into a Schema. */
 export function parseSchema(yamlStr: string): Schema {
-  const raw = yaml.load(yamlStr) as Record<string, unknown>;
-  return parseSchemaObject(raw);
+  const raw = yaml.load(yamlStr);
+  if (raw === null || raw === undefined || typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new Error(
+      'Schema YAML must be a mapping (object), got ' + (raw === null ? 'null' : typeof raw)
+    );
+  }
+  return parseSchemaObject(raw as Record<string, unknown>);
 }
 
 /** Parse a plain object into a Schema. */
@@ -72,13 +82,17 @@ export function parseSchemaObject(raw: Record<string, unknown>): Schema {
   if (!raw.name || typeof raw.name !== 'string') {
     throw new Error('Schema must have a "name" field');
   }
-  if (!raw.nodes || typeof raw.nodes !== 'object') {
-    throw new Error('Schema must have a "nodes" field');
+  if (!raw.nodes || typeof raw.nodes !== 'object' || Array.isArray(raw.nodes)) {
+    throw new Error('Schema must have a "nodes" field (mapping, not array)');
   }
 
   const nodes: Record<string, NodeDef> = {};
   for (const [key, def] of Object.entries(raw.nodes as Record<string, unknown>)) {
     nodes[key] = normalizeNodeSlots(def as NodeDef);
+  }
+
+  if (raw.rules !== undefined && !Array.isArray(raw.rules)) {
+    throw new Error('Schema "rules" must be a list');
   }
 
   return {

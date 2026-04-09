@@ -2,7 +2,7 @@ import type { YValue } from '@t3x-dev/yops';
 import { applyYOps } from '@t3x-dev/yops';
 import { describe, expect, it } from 'vitest';
 import type { Schema } from '../src/index';
-import { buildFixPlan, parseSchemaObject, validateSchema } from '../src/index';
+import { buildFixPlan, parseSchema, parseSchemaObject, validateSchema } from '../src/index';
 
 // ── Helper: quick schema ──
 
@@ -555,14 +555,16 @@ describe('edge cases', () => {
     expect(r.valid).toBe(true);
   });
 
-  it('node exists but is not a mapping', () => {
+  it('node exists but is not a mapping — emits INVALID_TYPE', () => {
     const s = schema({
       config: { slots: { host: 'scalar' } },
     });
     const doc: YValue = { config: 'just-a-string' };
     const r = validateSchema(doc, s);
-    // Should not crash — config exists but isn't a mapping
-    expect(r.valid).toBe(true); // no required slots violated since we can't inspect
+    expect(r.valid).toBe(false);
+    expect(r.violations).toHaveLength(1);
+    expect(r.violations[0].code).toBe('INVALID_TYPE');
+    expect(r.violations[0].path).toBe('config');
   });
 
   it('multiple violations in one pass', () => {
@@ -620,5 +622,272 @@ describe('edge cases', () => {
     const doc: YValue = { config: { value: null } };
     const r = validateSchema(doc, s);
     expect(r.valid).toBe(true);
+  });
+
+  it('node with children declared but value is a list — emits INVALID_TYPE', () => {
+    const s = schema({
+      config: { children: { sub: { slots: { x: 'scalar' } } } },
+    });
+    const doc: YValue = { config: ['a', 'b'] };
+    const r = validateSchema(doc, s);
+    expect(r.valid).toBe(false);
+    expect(r.violations[0].code).toBe('INVALID_TYPE');
+    expect(r.violations[0].message).toContain('list');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CHILD_MISMATCH (each_child with non-mapping children)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('CHILD_MISMATCH', () => {
+  it('emits CHILD_MISMATCH when each_child child is a scalar', () => {
+    const s = schema({
+      items: {
+        children: 'any',
+        each_child: { slots: { name: 'scalar' } },
+      },
+    });
+    const doc: YValue = { items: { a: { name: 'x' }, b: 'just-a-string' } };
+    const r = validateSchema(doc, s);
+    expect(r.valid).toBe(false);
+    const v = r.violations.find((v) => v.code === 'CHILD_MISMATCH');
+    expect(v).toBeDefined();
+    expect(v!.path).toBe('items/b');
+  });
+
+  it('emits CHILD_MISMATCH when each_child child is a list', () => {
+    const s = schema({
+      items: {
+        children: 'any',
+        each_child: { slots: { val: 'scalar' } },
+      },
+    });
+    const doc: YValue = { items: { a: { val: 1 }, b: [1, 2, 3] } };
+    const r = validateSchema(doc, s);
+    const v = r.violations.find((v) => v.code === 'CHILD_MISMATCH');
+    expect(v).toBeDefined();
+    expect(v!.path).toBe('items/b');
+    expect(v!.message).toContain('list');
+  });
+
+  it('does not emit CHILD_MISMATCH for valid mapping children', () => {
+    const s = schema({
+      items: {
+        children: 'any',
+        each_child: { slots: { val: 'scalar' } },
+      },
+    });
+    const doc: YValue = { items: { a: { val: 1 }, b: { val: 2 } } };
+    const r = validateSchema(doc, s);
+    expect(r.violations.filter((v) => v.code === 'CHILD_MISMATCH')).toHaveLength(0);
+  });
+
+  it('emits CHILD_MISMATCH when each_child child is null', () => {
+    const s = schema({
+      items: {
+        children: 'any',
+        each_child: { slots: { val: 'scalar' } },
+      },
+    });
+    const doc: YValue = { items: { a: { val: 1 }, b: null } };
+    const r = validateSchema(doc, s);
+    const v = r.violations.find((v) => v.code === 'CHILD_MISMATCH');
+    expect(v).toBeDefined();
+    expect(v!.message).toContain('null');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// must_have on non-mapping values
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('must_have on non-mapping', () => {
+  it('fails when must_have target is a scalar', () => {
+    const s = schema(
+      { items: { children: 'any' } },
+      {
+        rules: [{ id: 'need-name', if: 'items/*', must_have: ['name'], severity: 'error' }],
+      }
+    );
+    const doc: YValue = { items: { a: { name: 'x' }, b: 'just-a-string' } };
+    const r = validateSchema(doc, s);
+    expect(r.valid).toBe(false);
+    const v = r.violations.find((v) => v.message.includes('not a mapping'));
+    expect(v).toBeDefined();
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Wildcard pattern validation (M1)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('wildcard patterns', () => {
+  it('rejects mid-path wildcard "a/*/b"', () => {
+    const s = schema(
+      { items: { children: 'any' } },
+      {
+        rules: [{ id: 'mid-wild', if: 'items/*/sub', must_have: ['x'] }],
+      }
+    );
+    const doc: YValue = { items: { a: { sub: {} } } };
+    const r = validateSchema(doc, s);
+    // Should not match anything — pattern is unsupported
+    expect(r.violations.filter((v) => v.code === 'RULE_VIOLATION')).toHaveLength(0);
+  });
+
+  it('rejects double wildcard "a/*/b/*"', () => {
+    const s = schema(
+      { items: { children: 'any' } },
+      {
+        rules: [{ id: 'double-wild', if: 'items/*/sub/*', must_have: ['x'] }],
+      }
+    );
+    const doc: YValue = { items: { a: { sub: { c: {} } } } };
+    const r = validateSchema(doc, s);
+    expect(r.violations.filter((v) => v.code === 'RULE_VIOLATION')).toHaveLength(0);
+  });
+
+  it('accepts valid trailing wildcard "items/*"', () => {
+    const s = schema(
+      { items: { children: 'any' } },
+      {
+        rules: [{ id: 'need-name', if: 'items/*', must_have: ['name'], severity: 'error' }],
+      }
+    );
+    const doc: YValue = { items: { a: { name: 'x' }, b: {} } };
+    const r = validateSchema(doc, s);
+    expect(r.violations).toHaveLength(1);
+    expect(r.violations[0].message).toContain('items/b');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// one_of type guard (L1)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('one_of type guard', () => {
+  it('reports clear error when one_of applied to a mapping', () => {
+    const s = schema(
+      { config: {} },
+      {
+        rules: [{ id: 'check-val', if: 'config', one_of: ['a', 'b'], severity: 'error' }],
+      }
+    );
+    const doc: YValue = { config: { nested: true } };
+    const r = validateSchema(doc, s);
+    expect(r.valid).toBe(false);
+    const v = r.violations[0];
+    expect(v.code).toBe('RULE_VIOLATION');
+    expect(v.message).toContain('mapping');
+    expect(v.message).toContain('scalar');
+  });
+
+  it('reports clear error when one_of applied to a list', () => {
+    const s = schema(
+      { tags: {} },
+      {
+        rules: [{ id: 'check-val', if: 'tags', one_of: ['x', 'y'], severity: 'error' }],
+      }
+    );
+    const doc: YValue = { tags: ['a', 'b'] };
+    const r = validateSchema(doc, s);
+    expect(r.valid).toBe(false);
+    expect(r.violations[0].message).toContain('list');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// parseSchema YAML input validation (L2 + L3)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('parseSchema from YAML string', () => {
+  it('parses valid YAML schema', () => {
+    const s = parseSchema('name: test\nnodes:\n  config:\n    slots:\n      x: scalar\n');
+    expect(s.name).toBe('test');
+    expect(s.nodes.config).toBeDefined();
+  });
+
+  it('throws on empty string', () => {
+    expect(() => parseSchema('')).toThrow('mapping');
+  });
+
+  it('throws on scalar YAML', () => {
+    expect(() => parseSchema('just a string')).toThrow('mapping');
+  });
+
+  it('throws on array YAML', () => {
+    expect(() => parseSchema('- item1\n- item2')).toThrow('mapping');
+  });
+
+  it('throws on YAML with missing name', () => {
+    expect(() => parseSchema('nodes:\n  config: {}\n')).toThrow('name');
+  });
+
+  it('throws on YAML with missing nodes', () => {
+    expect(() => parseSchema('name: test\n')).toThrow('nodes');
+  });
+
+  it('throws when nodes is an array', () => {
+    expect(() => parseSchema('name: test\nnodes:\n  - a\n  - b\n')).toThrow('mapping');
+  });
+
+  it('throws on invalid slot definition (number)', () => {
+    expect(() =>
+      parseSchemaObject({
+        name: 'test',
+        nodes: { config: { slots: { x: 42 } } },
+      })
+    ).toThrow('Invalid slot definition');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Rule fix {{path}} interpolation (L4)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('rule fix {{path}} interpolation', () => {
+  it('replaces {{path}} in fix ops with matched path', () => {
+    const s = schema(
+      { items: { children: 'any' } },
+      {
+        rules: [
+          {
+            id: 'needs-status',
+            if: 'items/*',
+            must_have: ['status'],
+            severity: 'error',
+            fix: [{ set: { path: '{{path}}/status', value: 'pending' } }],
+          },
+        ],
+      }
+    );
+    const doc: YValue = { items: { task_a: { name: 'x' }, task_b: { name: 'y' } } };
+    const r = validateSchema(doc, s);
+
+    // Both tasks missing status → 2 violations with interpolated fix paths
+    expect(r.violations).toHaveLength(2);
+    const fixes = r.violations.map((v) => v.fix);
+    const fixPaths = fixes.map((f) => (f![0] as { set: { path: string } }).set.path).sort();
+    expect(fixPaths).toEqual(['items/task_a/status', 'items/task_b/status']);
+  });
+
+  it('leaves fix ops unchanged when no {{path}} placeholder', () => {
+    const s = schema(
+      { config: {} },
+      {
+        rules: [
+          {
+            id: 'need-dep',
+            if: 'config',
+            requires: ['database'],
+            fix: [{ define: { path: 'database' } }],
+          },
+        ],
+      }
+    );
+    const doc: YValue = { config: {} };
+    const r = validateSchema(doc, s);
+    expect(r.violations[0].fix).toEqual([{ define: { path: 'database' } }]);
   });
 });
