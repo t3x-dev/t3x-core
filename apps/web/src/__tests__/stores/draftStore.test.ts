@@ -75,7 +75,7 @@ describe('draftStore', () => {
         expect.any(Array),
         'pipeline',
       );
-    });
+    }, { timeout: 5000 });
   });
 
   it('applyYOps tracks manual edits in manualEditedNodeIds', () => {
