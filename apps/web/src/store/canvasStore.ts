@@ -441,6 +441,7 @@ export const useCanvasStore = create<CanvasState>((...a) => {
         edges: [],
         hasMainCommit: false,
         latestMainCommitId: undefined,
+        hasDbPositions: false,
       });
     },
 

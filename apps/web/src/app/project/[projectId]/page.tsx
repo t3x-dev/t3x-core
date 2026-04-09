@@ -247,6 +247,7 @@ function ProjectDetailPageContent() {
     <div className="flex h-full flex-col">
       {mode === 'editor' && viewMode === 'canvas' ? (
         <CanvasWorkspace
+          key={projectId}
           projectName={project.name}
           mode={mode}
           onModeChange={handleModeChange}
