@@ -195,8 +195,12 @@ function CanvasWorkspaceInner({
 
   const [initialLayoutDone, setInitialLayoutDone] = useState(false);
 
-  // DAG auto-layout: run ELK whenever graph topology changes
+  // DAG auto-layout: run ELK once on initial load to arrange nodes in a clean hierarchy.
+  // After the first layout, user drag positions are saved to DB and respected.
+  // Users can manually re-trigger layout via "Auto Layout" in the context menu.
   useEffect(() => {
+    if (initialLayoutDone) return; // Only run once — respect user positions after first layout
+
     const currentNodes = getNodes();
     if (currentNodes.length === 0) return;
 
@@ -215,10 +219,10 @@ function CanvasWorkspaceInner({
             fitView({ padding: 0.2, duration: 300 });
           });
         });
-        if (!initialLayoutDone) setInitialLayoutDone(true);
       } catch {
         // Layout failure is non-critical — nodes keep their current positions
-        if (!initialLayoutDone) setInitialLayoutDone(true);
+      } finally {
+        if (!cancelled) setInitialLayoutDone(true);
       }
     })();
     return () => {

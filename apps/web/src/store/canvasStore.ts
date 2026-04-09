@@ -20,6 +20,7 @@ import {
   isUpstreamOfStagingUnit,
   nextEdgeId,
   resetCounters,
+  saveNodePosition,
   snapPosition,
 } from './canvasStoreUtils';
 
@@ -66,6 +67,20 @@ export const useCanvasStore = create<CanvasState>((...a) => {
 
         const nodeMap = new Map(state.nodes.map((n) => [n.id, n]));
         const lockedNodes = getLockedNodeIds(state.nodes, state.edges);
+
+        // Handle position changes - save to database (debounced)
+        const positionChanges = changes.filter((c) => c.type === 'position' && c.position);
+        if (positionChanges.length > 0) {
+          positionChanges.forEach((change) => {
+            if (change.type !== 'position' || !change.position) return;
+            const node = nodeMap.get(change.id);
+            if (!node) return;
+
+            const snappedPos = snapPosition(change.position);
+            // Save position to database (fire and forget, debounced internally)
+            saveNodePosition(node.id, node.data.kind, snappedPos);
+          });
+        }
 
         // If a deletion confirmation dialog is already open, suppress new delete requests
         // to prevent silently replacing the pending confirmation
