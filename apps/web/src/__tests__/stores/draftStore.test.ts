@@ -54,7 +54,9 @@ describe('draftStore', () => {
   });
 
   it('applyYOps persists ALL sources to DB (no filter)', async () => {
-    const { createYOpsEntry } = await import('@/lib/api/trees');
+    const trees = await import('@/lib/api/trees');
+    const spy = vi.mocked(trees.createYOpsEntry);
+    spy.mockClear();
 
     const content: SemanticContent = {
       trees: [{ key: 'trip', slots: { budget: '1000' }, children: [] }],
@@ -68,14 +70,13 @@ describe('draftStore', () => {
       'pipeline',
     );
 
-    // createYOpsEntry is fire-and-forget (async) — flush microtask queue
-    await vi.waitFor(() => {
-      expect(createYOpsEntry).toHaveBeenCalledWith(
-        'conv_test',
-        expect.any(Array),
-        'pipeline',
-      );
-    });
+    // createYOpsEntry is fire-and-forget — flush microtask queue
+    await new Promise((r) => setTimeout(r, 0));
+    expect(spy).toHaveBeenCalledWith(
+      'conv_test',
+      expect.any(Array),
+      'pipeline',
+    );
   });
 
   it('applyYOps tracks manual edits in manualEditedNodeIds', () => {
