@@ -26,7 +26,11 @@ vi.mock('../middleware/logger', () => ({
 }));
 
 // ── Storage mocks ──
-const mockConversation = { projectId: 'proj_test1', conversationId: 'conv_test1' };
+const mockConversation = {
+  projectId: 'proj_test1',
+  conversationId: 'conv_test1',
+  alias: null,
+};
 const mockTurns = [
   {
     turnHash: 'sha256:turn1',
@@ -53,6 +57,11 @@ vi.mock('@t3x-dev/storage', () => ({
   listTopicsByConversation: vi.fn(() => Promise.resolve([])),
   createTopic: vi.fn(() => Promise.resolve({ id: 'topic_new' })),
   insertYOpsLogEntry: vi.fn(() => Promise.resolve({ id: 'yops_log_1' })),
+  // T6: alias derivation — default to no-op (alias already present path is
+  // covered above via `alias: null` + mock returning null means setAliasIfNull
+  // did nothing). Tests that care about alias-specific behavior should
+  // override this with vi.mocked(...).
+  setAliasIfNull: vi.fn(() => Promise.resolve(null)),
 }));
 
 // ── Core mocks ──
