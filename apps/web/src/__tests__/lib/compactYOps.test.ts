@@ -135,6 +135,20 @@ describe('compactYOps', () => {
       ];
       expect(compactYOps(ops)).toEqual([{ set: { path: 'b/y', value: 2 } }]);
     });
+
+    it('handles mixed set/unset and relate/unrelate in same ops list', () => {
+      const ops: YOp[] = [
+        { set: { path: 'a/x', value: 1 } },
+        { relate: { from: 'a', to: 'b', type: 'depends_on' } },
+        { unset: { path: 'a/x' } },
+        { set: { path: 'c/y', value: 2 } },
+        { unrelate: { from: 'a', to: 'b', type: 'depends_on' } },
+      ];
+      // a/x: set+unset cancel → nothing
+      // relate+unrelate cancel → nothing
+      // c/y: standalone set → keep
+      expect(compactYOps(ops)).toEqual([{ set: { path: 'c/y', value: 2 } }]);
+    });
   });
 });
 
