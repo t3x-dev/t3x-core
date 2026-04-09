@@ -195,24 +195,29 @@ function CanvasWorkspaceInner({
   }, [nodes, edges]);
 
   const hasDbPositions = useCanvasStore((s) => s.hasDbPositions);
-  const [autoLayoutApplied, setAutoLayoutApplied] = useState(false);
   const [initialLayoutDone, setInitialLayoutDone] = useState(false);
+  // Track the fingerprint from the previous render to detect topology changes vs initial load
+  const prevTopoRef = useRef<string | null>(null);
 
-  // DAG auto-layout: run ELK once on initial load ONLY if no nodes have DB-saved positions.
-  // If user has previously arranged nodes (or ELK ran before and saved), skip ELK and use DB positions.
-  // Users can always manually re-trigger layout via "Auto Layout" in the context menu.
+  // DAG auto-layout:
+  // - Initial load with DB positions → skip ELK, use saved positions
+  // - Initial load without DB positions → run ELK + save to DB
+  // - Topology change (new node/edge/delete) → always re-run ELK + save to DB
   useEffect(() => {
-    if (autoLayoutApplied) return; // Already ran this session
-    if (hasDbPositions) {
-      // Nodes have saved positions from DB — respect them, skip ELK
-      setAutoLayoutApplied(true);
+    const currentNodes = getNodes();
+    if (currentNodes.length === 0) return;
+
+    const isInitialLoad = prevTopoRef.current === null;
+    const topoChanged = prevTopoRef.current !== null && prevTopoRef.current !== topoFingerprint;
+    prevTopoRef.current = topoFingerprint;
+
+    // Initial load with DB positions → skip ELK, just mark done
+    if (isInitialLoad && hasDbPositions) {
       setInitialLayoutDone(true);
       return;
     }
 
-    const currentNodes = getNodes();
-    if (currentNodes.length === 0) return;
-
+    // Initial load without DB positions OR topology changed → run ELK
     let cancelled = false;
     (async () => {
       try {
@@ -223,7 +228,7 @@ function CanvasWorkspaceInner({
         });
         if (cancelled) return;
         setNodes(layouted);
-        // Save ELK-computed positions to DB so next load respects them
+        // Save ELK-computed positions to DB so next reload uses them
         for (const node of layouted) {
           saveNodePosition(node.id, (node.data as import('@/types/nodes').CanvasNodeData).kind, node.position);
         }
@@ -235,17 +240,14 @@ function CanvasWorkspaceInner({
       } catch {
         // Layout failure is non-critical — nodes keep their current positions
       } finally {
-        if (!cancelled) {
-          setAutoLayoutApplied(true);
-          setInitialLayoutDone(true);
-        }
+        if (!cancelled) setInitialLayoutDone(true);
       }
     })();
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [topoFingerprint, hasDbPositions]);
+  }, [topoFingerprint]);
 
   const modalNode = nodes.find((node) => node.id === openNodeId);
   const pendingCommitBranchMode = useCanvasStore((state) => {
