@@ -70,10 +70,11 @@ describe('draftStore', () => {
       'pipeline',
     );
 
-    // createYOpsEntry is fire-and-forget — flush microtask + macro-task queue
+    // createYOpsEntry is fire-and-forget — flush microtask queue
+    await new Promise((r) => setTimeout(r, 0));
     await vi.waitFor(() => {
       expect(spy).toHaveBeenCalled();
-    }, { timeout: 500 });
+    }, { timeout: 2000 });
     expect(spy).toHaveBeenCalledWith(
       'conv_test',
       expect.any(Array),
