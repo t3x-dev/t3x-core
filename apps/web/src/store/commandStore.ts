@@ -10,6 +10,7 @@ import { findNode } from '@t3x-dev/core';
 import { create } from 'zustand';
 import type { InverseResult } from '@/lib/yopInverse';
 import { computeInverse, isContextInverse } from '@/lib/yopInverse';
+import { compactYOps } from '@/lib/compactYOps';
 import { useDraftStore } from '@/store/draftStore';
 
 export interface UndoEntry {
@@ -29,6 +30,7 @@ interface CommandState {
   undoStack: UndoEntry[];
   redoStack: UndoEntry[];
   pendingOps: YOp[];
+  compactOps: YOp[];
   hasPending: boolean;
   pendingSummary: PendingSummary;
 
@@ -79,6 +81,7 @@ export const useCommandStore = create<CommandState>((set, get) => ({
   undoStack: [],
   redoStack: [],
   pendingOps: [],
+  compactOps: [],
   hasPending: false,
   pendingSummary: emptySummary,
 
@@ -106,6 +109,7 @@ export const useCommandStore = create<CommandState>((set, get) => ({
       undoStack: [...undoStack, { ops, inverseOps, context }],
       redoStack: [],
       pendingOps: newPending,
+      compactOps: compactYOps(newPending),
       hasPending: true,
       pendingSummary: computeSummary(newPending, draft),
     });
@@ -131,6 +135,7 @@ export const useCommandStore = create<CommandState>((set, get) => ({
       undoStack: newUndoStack,
       redoStack: [...redoStack, entry],
       pendingOps: newPending,
+      compactOps: compactYOps(newPending),
       hasPending: newPending.length > 0,
       pendingSummary:
         newPending.length > 0
@@ -155,6 +160,7 @@ export const useCommandStore = create<CommandState>((set, get) => ({
       undoStack: [...undoStack, entry],
       redoStack: newRedoStack,
       pendingOps: newPending,
+      compactOps: compactYOps(newPending),
       hasPending: true,
       pendingSummary: computeSummary(newPending, useDraftStore.getState().draft),
     });
@@ -165,6 +171,7 @@ export const useCommandStore = create<CommandState>((set, get) => ({
       undoStack: [],
       redoStack: [],
       pendingOps: [],
+      compactOps: [],
       hasPending: false,
       pendingSummary: emptySummary,
     });

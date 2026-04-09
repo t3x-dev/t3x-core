@@ -1,6 +1,7 @@
 import type { YOp } from '@t3x-dev/core';
 import { describe, expect, it } from 'vitest';
 import { compactYOps } from '@/lib/compactYOps';
+import { useCommandStore } from '@/store/commandStore';
 
 describe('compactYOps', () => {
   describe('set/unset state machine', () => {
@@ -151,5 +152,42 @@ describe('compactYOps', () => {
         { set: { path: 'b/y', value: 2 } },
       ]);
     });
+  });
+});
+
+describe('commandStore.compactOps integration', () => {
+  it('compactOps is derived from pendingOps', () => {
+    const pendingOps: YOp[] = [
+      { set: { path: 'a/x', value: 1 } },
+      { unset: { path: 'a/x' } },
+      { set: { path: 'b/y', value: 2 } },
+    ];
+    useCommandStore.setState({
+      pendingOps,
+      compactOps: compactYOps(pendingOps),
+      hasPending: true,
+      undoStack: [],
+      redoStack: [],
+      pendingSummary: { edits: 0, deletes: 0, adds: 0, total: 0 },
+    });
+
+    const state = useCommandStore.getState();
+    expect(state.compactOps).toEqual([
+      { set: { path: 'b/y', value: 2 } },
+    ]);
+  });
+
+  it('compactOps is empty when pendingOps is empty', () => {
+    useCommandStore.setState({
+      pendingOps: [],
+      compactOps: [],
+      hasPending: false,
+      undoStack: [],
+      redoStack: [],
+      pendingSummary: { edits: 0, deletes: 0, adds: 0, total: 0 },
+    });
+
+    const state = useCommandStore.getState();
+    expect(state.compactOps).toEqual([]);
   });
 });
