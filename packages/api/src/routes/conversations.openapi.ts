@@ -35,13 +35,15 @@ import {
   getLeavesByIds,
   insertConversation,
   listYOpsLogByConversation,
+  renameConversation,
   setConversationContext,
   updateConversation,
 } from '@t3x-dev/storage';
 import { formatContextForExport } from '../lib/context-formatter';
 import { getDB } from '../lib/db';
-import { replayYOpsLog, toYOpsLogEntries } from '../lib/yops-log-utils';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { eventBus } from '../lib/event-bus';
+import { replayYOpsLog, toYOpsLogEntries } from '../lib/yops-log-utils';
 import {
   CursorPageResponseSchema,
   ErrorResponseSchema,
@@ -116,6 +118,7 @@ const ConversationSchema = z.object({
   conversation_id: z.string(),
   project_id: z.string(),
   title: z.string().nullable(),
+  alias: z.string().nullable(),
   parent_commit_hash: z.string().nullable(),
   position_x: z.number().nullable(),
   position_y: z.number().nullable(),
@@ -167,6 +170,7 @@ const toApiConversation = (conv: {
   conversationId: string;
   projectId: string;
   title: string | null;
+  alias: string | null;
   parentCommitHash: string | null;
   positionX: number | null;
   positionY: number | null;
@@ -176,6 +180,7 @@ const toApiConversation = (conv: {
   conversation_id: conv.conversationId,
   project_id: conv.projectId,
   title: conv.title,
+  alias: conv.alias,
   parent_commit_hash: conv.parentCommitHash,
   position_x: conv.positionX,
   position_y: conv.positionY,
@@ -337,6 +342,7 @@ conversationRoutes.openapi(createConversationRoute, async (c) => {
       conversation_id: conversation.conversationId,
       project_id: conversation.projectId,
       title: conversation.title,
+      alias: conversation.alias,
       parent_commit_hash: conversation.parentCommitHash,
       position_x: conversation.positionX,
       position_y: conversation.positionY,
@@ -399,6 +405,7 @@ conversationRoutes.openapi(getConversationRoute, async (c) => {
       conversation_id: conversation.conversationId,
       project_id: conversation.projectId,
       title: conversation.title,
+      alias: conversation.alias,
       parent_commit_hash: conversation.parentCommitHash,
       position_x: conversation.positionX,
       position_y: conversation.positionY,
@@ -487,6 +494,7 @@ conversationRoutes.openapi(updateConversationRoute, async (c) => {
       conversation_id: conversation.conversationId,
       project_id: conversation.projectId,
       title: conversation.title,
+      alias: conversation.alias,
       parent_commit_hash: conversation.parentCommitHash,
       position_x: conversation.positionX,
       position_y: conversation.positionY,
@@ -912,4 +920,92 @@ conversationRoutes.get('/v1/conversations/:id/context-export', async (c) => {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return c.json({ success: false as const, error: { code: 'EXPORT_FAILED', message } }, 500);
   }
+});
+
+// ============================================================
+// PATCH /v1/conversations/:conversation_id/rename
+// ============================================================
+
+const RenameRequestSchema = z.object({
+  alias: z.string().min(1).max(64),
+});
+
+const renameRoute = createRoute({
+  method: 'patch',
+  path: '/v1/conversations/{conversation_id}/rename',
+  tags: ['Conversations'],
+  summary: 'Rename a conversation (set or replace its alias)',
+  description:
+    'Sets the alias of a conversation. Aliases must match ^[a-z][a-z0-9_]{0,63}$ ' +
+    'and are unique within a project. Emits a conversation.renamed event.',
+  request: {
+    params: z.object({ conversation_id: z.string() }),
+    body: { content: { 'application/json': { schema: RenameRequestSchema } } },
+  },
+  responses: {
+    200: {
+      description: 'Conversation renamed',
+      content: { 'application/json': { schema: SuccessResponseSchema(ConversationSchema) } },
+    },
+    400: {
+      description: 'Invalid alias format',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    404: {
+      description: 'Conversation not found',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    409: {
+      description: 'Alias already taken in this project',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+conversationRoutes.openapi(renameRoute, async (c) => {
+  const { conversation_id } = c.req.valid('param');
+  const { alias } = c.req.valid('json');
+
+  const db = await getDB();
+  const existing = await findConversationById(db, conversation_id);
+  if (!existing) {
+    return errorResponse(c, 'CONVERSATION_NOT_FOUND', `Conversation not found: ${conversation_id}`);
+  }
+
+  try {
+    await renameConversation(db, conversation_id, alias);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    if (message.includes('Invalid alias format')) {
+      return errorResponse(c, 'INVALID_REQUEST', message);
+    }
+    if (typeof err === 'object' && err !== null && (err as { code?: string }).code === '23505') {
+      return c.json(
+        {
+          success: false as const,
+          error: {
+            code: 'ALIAS_TAKEN',
+            message: `Alias '${alias}' is already taken in this project`,
+          },
+        },
+        409
+      );
+    }
+    return errorResponse(c, 'INTERNAL_ERROR', message);
+  }
+
+  const updated = await findConversationById(db, conversation_id);
+  if (!updated) {
+    return errorResponse(c, 'INTERNAL_ERROR', 'Conversation disappeared during rename');
+  }
+
+  eventBus.broadcast({
+    type: 'conversation.renamed',
+    conversationId: conversation_id,
+    projectId: existing.projectId,
+    payload: { alias, previous_alias: existing.alias },
+    timestamp: Date.now(),
+  });
+
+  return c.json({ success: true as const, data: toApiConversation(updated) }, 200);
 });
