@@ -78,6 +78,9 @@ export type CanvasState = MergeSlice &
     edges: Edge[];
     hasMainCommit: boolean;
     latestMainCommitId?: string;
+    // True when at least one node was loaded with a DB-saved position.
+    // Used by auto-layout effect: skip ELK if user/ELK has previously set positions.
+    hasDbPositions: boolean;
     // Project data loading state
     projectId: string | null;
     loading: boolean;

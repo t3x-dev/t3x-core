@@ -13,6 +13,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useContextMenu } from '@/hooks/useContextMenu';
 import { usePathHighlight } from '@/hooks/usePathHighlight';
 import { getLayoutedElements } from '@/lib/elkLayout';
+import { saveNodePosition } from '@/store/canvasStoreUtils';
 import { useTerminology } from '@/hooks/useTerminology';
 import '@xyflow/react/dist/style.css';
 import { useTheme } from 'next-themes';
@@ -193,13 +194,21 @@ function CanvasWorkspaceInner({
     return `${nIds}|${eKeys}`;
   }, [nodes, edges]);
 
+  const hasDbPositions = useCanvasStore((s) => s.hasDbPositions);
+  const [autoLayoutApplied, setAutoLayoutApplied] = useState(false);
   const [initialLayoutDone, setInitialLayoutDone] = useState(false);
 
-  // DAG auto-layout: run ELK once on initial load to arrange nodes in a clean hierarchy.
-  // After the first layout, user drag positions are saved to DB and respected.
-  // Users can manually re-trigger layout via "Auto Layout" in the context menu.
+  // DAG auto-layout: run ELK once on initial load ONLY if no nodes have DB-saved positions.
+  // If user has previously arranged nodes (or ELK ran before and saved), skip ELK and use DB positions.
+  // Users can always manually re-trigger layout via "Auto Layout" in the context menu.
   useEffect(() => {
-    if (initialLayoutDone) return; // Only run once — respect user positions after first layout
+    if (autoLayoutApplied) return; // Already ran this session
+    if (hasDbPositions) {
+      // Nodes have saved positions from DB — respect them, skip ELK
+      setAutoLayoutApplied(true);
+      setInitialLayoutDone(true);
+      return;
+    }
 
     const currentNodes = getNodes();
     if (currentNodes.length === 0) return;
@@ -214,6 +223,10 @@ function CanvasWorkspaceInner({
         });
         if (cancelled) return;
         setNodes(layouted);
+        // Save ELK-computed positions to DB so next load respects them
+        for (const node of layouted) {
+          saveNodePosition(node.id, (node.data as import('@/types/nodes').CanvasNodeData).kind, node.position);
+        }
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
             fitView({ padding: 0.2, duration: 300 });
@@ -222,14 +235,17 @@ function CanvasWorkspaceInner({
       } catch {
         // Layout failure is non-critical — nodes keep their current positions
       } finally {
-        if (!cancelled) setInitialLayoutDone(true);
+        if (!cancelled) {
+          setAutoLayoutApplied(true);
+          setInitialLayoutDone(true);
+        }
       }
     })();
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [topoFingerprint]);
+  }, [topoFingerprint, hasDbPositions]);
 
   const modalNode = nodes.find((node) => node.id === openNodeId);
   const pendingCommitBranchMode = useCanvasStore((state) => {

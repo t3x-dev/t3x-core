@@ -389,6 +389,12 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
       const hasMainCommit = commits.some((c) => c.branch === 'main');
       const latestMainCommitId = resolveLatestMainUnitId(nodes);
 
+      // Check if any node was loaded with a DB-saved position (not fallback grid).
+      // Used by auto-layout effect to decide whether to run ELK.
+      const hasDbPositions =
+        commits.some((c) => c.position_x != null && c.position_y != null) ||
+        conversations.some((c) => c.position_x != null && c.position_y != null);
+
       if (options?.merge) {
         // Incremental merge: add new nodes/edges, preserve existing positions and edges
         const existing = get();
@@ -406,6 +412,7 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
             edges: [...existing.edges, ...newEdges],
             hasMainCommit,
             latestMainCommitId,
+            hasDbPositions: existing.hasDbPositions || hasDbPositions,
           });
         }
       } else {
@@ -414,6 +421,7 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
           edges,
           hasMainCommit,
           latestMainCommitId,
+          hasDbPositions,
           loading: false,
           loadError: null,
         });
