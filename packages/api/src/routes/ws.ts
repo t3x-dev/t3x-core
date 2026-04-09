@@ -36,11 +36,14 @@
  * scope for this task and tracked as follow-up work.
  */
 
+import { randomUUID } from 'node:crypto';
 import { Hono } from 'hono';
 import type { UpgradeWebSocket } from 'hono/ws';
 import { getDB } from '../lib/db';
+import { createError } from '../lib/errors';
 import { type RoomConnection, roomManager } from '../lib/room-manager';
 import { verifyBearerToken } from '../middleware/auth';
+import { pinoLogger } from '../middleware/logger';
 
 export function createWsRoute(upgradeWebSocket: UpgradeWebSocket) {
   const wsRoute = new Hono();
@@ -54,13 +57,7 @@ export function createWsRoute(upgradeWebSocket: UpgradeWebSocket) {
     // Validate: at least one room identifier is required.
     if (!conversationId && !projectId) {
       return c.json(
-        {
-          success: false,
-          error: {
-            code: 'INVALID_REQUEST',
-            message: 'At least one of conversation_id or project_id is required',
-          },
-        },
+        createError('INVALID_REQUEST', 'At least one of conversation_id or project_id is required'),
         400
       );
     }
@@ -69,24 +66,23 @@ export function createWsRoute(upgradeWebSocket: UpgradeWebSocket) {
     // Matches the gate used by authMiddleware.
     if (process.env.AUTH_DISABLED?.toLowerCase() !== 'true') {
       if (!token) {
-        return c.json(
-          {
-            success: false,
-            error: { code: 'UNAUTHORIZED', message: 'Missing token' },
-          },
-          401
-        );
+        return c.json(createError('UNAUTHORIZED', 'Missing token'), 401);
       }
-      const db = await getDB();
-      const principal = await verifyBearerToken(db, token);
-      if (!principal) {
-        return c.json(
-          {
-            success: false,
-            error: { code: 'UNAUTHORIZED', message: 'Invalid token' },
-          },
-          401
-        );
+      try {
+        const db = await getDB();
+        const principal = await verifyBearerToken(db, token);
+        if (!principal) {
+          return c.json(createError('UNAUTHORIZED', 'Invalid token'), 401);
+        }
+        // Fire-and-forget: update last_used_at on the API key.
+        // `verifyBearerToken` is intentionally side-effect-free, so we mirror
+        // the bookkeeping done by `authMiddleware` here. Errors are swallowed
+        // so a DB hiccup during touch doesn't poison the handshake.
+        const { touchLastUsed } = await import('@t3x-dev/storage');
+        touchLastUsed(db, principal.keyId).catch(() => {});
+      } catch (err) {
+        pinoLogger.error({ err }, 'ws auth failed');
+        return c.json(createError('INTERNAL_ERROR', 'Authentication error'), 500);
       }
     }
 
@@ -99,8 +95,8 @@ export function createWsRoute(upgradeWebSocket: UpgradeWebSocket) {
     // `upgradeWebSocket(...)`, which returns a Hono middleware that we then
     // invoke manually with `(c, next)`. This lets us gate the upgrade behind
     // async auth — something Hono's static-middleware pattern cannot do.
-    const handler = upgradeWebSocket((_c) => {
-      const connectionId = `c_${Math.random().toString(36).slice(2, 10)}`;
+    const upgradeHandler = upgradeWebSocket((_c) => {
+      const connectionId = `c_${randomUUID()}`;
 
       return {
         onOpen(_evt, ws) {
@@ -114,11 +110,11 @@ export function createWsRoute(upgradeWebSocket: UpgradeWebSocket) {
             roomManager.join(key, conn);
           }
 
-          // Send initial connected envelope (legacy contract). Presence for
-          // the primary room (conversation-first, else project) helps clients
-          // render an initial viewer list.
-          const primaryRoom = roomKeys[0];
-          const presence = primaryRoom ? roomManager.getPresence(primaryRoom) : [];
+          // Send initial connected envelope (legacy contract). Presence
+          // snapshot for the first room helps clients render an initial
+          // viewer list.
+          // roomKeys is non-empty here because we 400-rejected the empty case above.
+          const presence = roomManager.getPresence(roomKeys[0]);
           try {
             ws.send(
               JSON.stringify({
@@ -169,7 +165,7 @@ export function createWsRoute(upgradeWebSocket: UpgradeWebSocket) {
       };
     });
 
-    return handler(c, next);
+    return upgradeHandler(c, next);
   });
 
   return wsRoute;

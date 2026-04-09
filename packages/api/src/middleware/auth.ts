@@ -19,7 +19,15 @@ import { createError } from '../lib/errors';
 import { pinoLogger } from './logger';
 
 /** Paths that never require authentication */
-const PUBLIC_PATHS = ['/health', '/api/docs', '/api/openapi.json', '/api/v1/llm/models'];
+const PUBLIC_PATHS = [
+  '/health',
+  '/api/docs',
+  '/api/openapi.json',
+  '/api/v1/llm/models',
+  // /ws owns its own auth via ?token= query param (headers are not settable
+  // on browser WebSocket handshakes, so we cannot use Authorization: Bearer).
+  '/ws',
+];
 
 /** Path prefixes that never require authentication */
 const PUBLIC_PREFIXES = ['/api/v1/auth/callback', '/api/v1/auth/register', '/api/v1/auth/login'];
