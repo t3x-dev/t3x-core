@@ -108,4 +108,48 @@ describe('getLayoutedElements', () => {
     expect(result[0].data.label).toBe('Hello');
     expect(result[0].data.custom).toBe(true);
   });
+
+  describe('topology fingerprint behavior', () => {
+    // Helper: compute the same fingerprint used by CanvasWorkspace
+    const topoFingerprint = (nodes: Node[], edges: Edge[]) => {
+      const nIds = nodes.map((n) => n.id).sort().join(',');
+      const eKeys = edges.map((e) => `${e.source}->${e.target}`).sort().join(',');
+      return `${nIds}|${eKeys}`;
+    };
+
+    it('fingerprint does not change when only positions change', () => {
+      const nodes1 = [createNode('a'), createNode('b')];
+      const nodes2 = [
+        { ...createNode('a'), position: { x: 999, y: 999 } },
+        { ...createNode('b'), position: { x: 111, y: 222 } },
+      ];
+      const edges = [createEdge('e1', 'a', 'b')];
+
+      expect(topoFingerprint(nodes1, edges)).toBe(topoFingerprint(nodes2, edges));
+    });
+
+    it('fingerprint changes when a node is added', () => {
+      const nodes1 = [createNode('a'), createNode('b')];
+      const nodes2 = [createNode('a'), createNode('b'), createNode('c')];
+      const edges = [createEdge('e1', 'a', 'b')];
+
+      expect(topoFingerprint(nodes1, edges)).not.toBe(topoFingerprint(nodes2, edges));
+    });
+
+    it('fingerprint changes when an edge is added', () => {
+      const nodes = [createNode('a'), createNode('b'), createNode('c')];
+      const edges1 = [createEdge('e1', 'a', 'b')];
+      const edges2 = [createEdge('e1', 'a', 'b'), createEdge('e2', 'b', 'c')];
+
+      expect(topoFingerprint(nodes, edges1)).not.toBe(topoFingerprint(nodes, edges2));
+    });
+
+    it('fingerprint changes when a node is removed', () => {
+      const nodes1 = [createNode('a'), createNode('b')];
+      const nodes2 = [createNode('a')];
+      const edges: Edge[] = [];
+
+      expect(topoFingerprint(nodes1, edges)).not.toBe(topoFingerprint(nodes2, edges));
+    });
+  });
 });

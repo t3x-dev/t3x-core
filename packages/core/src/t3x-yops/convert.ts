@@ -49,7 +49,7 @@ function treeNodeToYValue(node: TreeNode): Record<string, YValue> {
   }
 
   // Children nested under their own keys
-  for (const child of node.children) {
+  for (const child of node.children ?? []) {
     result[child.key] = treeNodeToYValue(child);
   }
 

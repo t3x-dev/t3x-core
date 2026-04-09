@@ -1,0 +1,40 @@
+{
+  "name": "@t3x-dev/yschema",
+  "version": "0.1.0",
+  "description": "YSchema — YAML schema validation with YOps auto-fix for the T3X ecosystem",
+  "license": "Apache-2.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist", "yschema.yaml"],
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@t3x-dev/yops": "workspace:*"
+  },
+  "devDependencies": {
+    "js-yaml": "^4.1.1",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^20.12.7",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3",
+    "vitest": "^2.1.9"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": ["yaml", "yschema", "schema", "validation", "yops", "lint", "declarative"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/t3x-dev/t3x-core.git",
+    "directory": "packages/yschema"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

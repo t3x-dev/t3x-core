@@ -180,7 +180,7 @@ function deepCloneNode(node: TreeNode): TreeNode {
   return {
     key: node.key,
     slots: structuredClone(node.slots),
-    children: node.children.map(deepCloneNode),
+    children: (node.children ?? []).map(deepCloneNode),
     ...(node.slot_quotes ? { slot_quotes: { ...node.slot_quotes } } : {}),
     ...(node.source !== undefined ? { source: node.source } : {}),
   };

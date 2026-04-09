@@ -37,7 +37,7 @@ function flattenNode(node: TreeNode, parentPath: string, out: FlatNode[]): void 
 
   out.push(flat);
 
-  for (const child of node.children) {
+  for (const child of node.children ?? []) {
     flattenNode(child, path, out);
   }
 }
@@ -180,7 +180,7 @@ function collectNodeQuotes(
       result[fullPath] = value;
     }
   }
-  for (const child of node.children) {
+  for (const child of node.children ?? []) {
     const childPath = parentDotPath ? `${parentDotPath}.${child.key}` : child.key;
     collectNodeQuotes(child, childPath, result);
   }
@@ -198,7 +198,7 @@ function checkDepth(node: TreeNode, currentDepth: number, maxDepth: number): str
   if (currentDepth > maxDepth) {
     return `Tree depth ${currentDepth} exceeds maximum ${maxDepth} at node "${node.key}"`;
   }
-  for (const child of node.children) {
+  for (const child of node.children ?? []) {
     const err = checkDepth(child, currentDepth + 1, maxDepth);
     if (err) return err;
   }

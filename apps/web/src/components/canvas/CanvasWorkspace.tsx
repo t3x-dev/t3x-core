@@ -12,6 +12,8 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useContextMenu } from '@/hooks/useContextMenu';
 import { usePathHighlight } from '@/hooks/usePathHighlight';
+import { getLayoutedElements } from '@/lib/elkLayout';
+import { saveNodePosition } from '@/store/canvasStoreUtils';
 import { useTerminology } from '@/hooks/useTerminology';
 import '@xyflow/react/dist/style.css';
 import { useTheme } from 'next-themes';
@@ -184,6 +186,74 @@ function CanvasWorkspaceInner({
     hasBranchCommits,
   } = usePathHighlight({ nodes, edges });
 
+  // DAG auto-layout: compute topology fingerprint from node IDs + edge connections.
+  // Position changes don't alter this, so ELK only runs when the graph structure changes.
+  const topoFingerprint = useMemo(() => {
+    const nIds = nodes.map((n) => n.id).sort().join(',');
+    const eKeys = edges.map((e) => `${e.source}->${e.target}`).sort().join(',');
+    return `${nIds}|${eKeys}`;
+  }, [nodes, edges]);
+
+  const hasDbPositions = useCanvasStore((s) => s.hasDbPositions);
+  const [initialLayoutDone, setInitialLayoutDone] = useState(false);
+  // Track the fingerprint from the previous render to detect topology changes vs initial load
+  const prevTopoRef = useRef<string | null>(null);
+
+  // DAG auto-layout:
+  // - Initial load with DB positions → skip ELK, use saved positions
+  // - Initial load without DB positions → run ELK + save to DB
+  // - Topology change (new node/edge/delete) → always re-run ELK + save to DB
+  useEffect(() => {
+    const currentNodes = getNodes();
+    if (currentNodes.length === 0) return;
+
+    const isInitialLoad = prevTopoRef.current === null;
+    const topoChanged = prevTopoRef.current !== null && prevTopoRef.current !== topoFingerprint;
+    prevTopoRef.current = topoFingerprint;
+
+    // Initial load with DB positions → skip ELK, just mark done
+    if (isInitialLoad && hasDbPositions) {
+      setInitialLayoutDone(true);
+      return;
+    }
+
+    // Not initial load and no topology change → nothing to do
+    if (!isInitialLoad && !topoChanged) {
+      return;
+    }
+
+    // Initial load without DB positions OR topology changed → run ELK
+    let cancelled = false;
+    (async () => {
+      try {
+        const layouted = await getLayoutedElements(currentNodes, getEdges(), {
+          direction: 'DOWN',
+          nodeSpacing: 80,
+          rankSpacing: 120,
+        });
+        if (cancelled) return;
+        setNodes(layouted);
+        // Save ELK-computed positions to DB so next reload uses them
+        for (const node of layouted) {
+          saveNodePosition(node.id, (node.data as import('@/types/nodes').CanvasNodeData).kind, node.position);
+        }
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            fitView({ padding: 0.2, duration: 300 });
+          });
+        });
+      } catch {
+        // Layout failure is non-critical — nodes keep their current positions
+      } finally {
+        if (!cancelled) setInitialLayoutDone(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [topoFingerprint]);
+
   const modalNode = nodes.find((node) => node.id === openNodeId);
   const pendingCommitBranchMode = useCanvasStore((state) => {
     if (!openNodeId) {
@@ -301,7 +371,11 @@ function CanvasWorkspaceInner({
 
       <div
         ref={canvasRef}
-        className={cn('relative flex-1', isPanMode && 'cursor-grab active:cursor-grabbing')}
+        className={cn(
+          'relative flex-1 transition-opacity duration-300',
+          isPanMode && 'cursor-grab active:cursor-grabbing',
+          !initialLayoutDone && nodes.length > 0 && 'opacity-0'
+        )}
         role="tree"
         aria-label="Knowledge graph canvas"
         style={{

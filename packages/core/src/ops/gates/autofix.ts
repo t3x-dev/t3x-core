@@ -35,7 +35,7 @@ function collectPaths(trees: TreeNode[]): Array<{ path: string; node: TreeNode }
   function walk(node: TreeNode, prefix: string) {
     const fullPath = prefix ? `${prefix}/${node.key}` : node.key;
     result.push({ path: fullPath, node });
-    for (const child of node.children) walk(child, fullPath);
+    for (const child of node.children ?? []) walk(child, fullPath);
   }
   for (const tree of trees) walk(tree, '');
   return result;

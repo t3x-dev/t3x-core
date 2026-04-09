@@ -4,8 +4,8 @@ import { Activity, Cpu, Search, Settings, Zap } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
 import { CanvasWorkspace } from '@/components/canvas';
+import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
 import { TimelineView } from '@/components/project/TimelineView';
 import { ViewSwitcher } from '@/components/project/ViewSwitcher';
 import { StatusBadge } from '@/components/shared/StatusBadge';
@@ -41,11 +41,22 @@ function ProjectDetailPageContent() {
   });
 
   const defaultView = useSettingsStore((s) => s.defaultView);
-  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+  const [viewMode, setViewModeRaw] = useState<ViewMode>(() => {
     const urlView = searchParams.get('view');
     if (urlView === 'canvas' || urlView === 'timeline') return urlView;
     return defaultView;
   });
+
+  // Persist view mode in URL so refresh stays on the same view
+  const setViewMode = useCallback(
+    (mode: ViewMode) => {
+      setViewModeRaw(mode);
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('view', mode);
+      router.replace(`?${params.toString()}`, { scroll: false });
+    },
+    [searchParams, router]
+  );
 
   // Canvas store for loading project data
   const canvasLoading = useCanvasStore((state) => state.loading);
@@ -163,9 +174,22 @@ function ProjectDetailPageContent() {
       if (document.visibilityState === 'visible') refreshIfStale();
     }, 30_000);
 
+    // Listen for commit broadcasts from chat page — refresh immediately
+    let channel: BroadcastChannel | null = null;
+    try {
+      channel = new BroadcastChannel('t3x-commits');
+      channel.onmessage = () => {
+        lastRefreshRef.current = 0; // bypass throttle
+        refreshIfStale();
+      };
+    } catch {
+      // BroadcastChannel not supported
+    }
+
     return () => {
       document.removeEventListener('visibilitychange', onVisibilityChange);
       clearInterval(interval);
+      channel?.close();
     };
   }, [projectId]);
 
@@ -234,6 +258,7 @@ function ProjectDetailPageContent() {
     <div className="flex h-full flex-col">
       {mode === 'editor' && viewMode === 'canvas' ? (
         <CanvasWorkspace
+          key={projectId}
           projectName={project.name}
           mode={mode}
           onModeChange={handleModeChange}

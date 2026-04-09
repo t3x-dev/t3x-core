@@ -72,7 +72,7 @@ export function traceChatToYaml(draft: SemanticContent, turnIndex: number): stri
     if (effectiveSource === tag) {
       paths.push(path);
     }
-    for (const child of node.children) {
+    for (const child of node.children ?? []) {
       walk(child, path, effectiveSource);
     }
   }
@@ -94,7 +94,7 @@ function collectQuotes(node: TreeNode, prefix: string, out: Record<string, strin
       out[k] = v;
     }
   }
-  for (const child of node.children) {
+  for (const child of node.children ?? []) {
     collectQuotes(child, prefix ? `${prefix}.${child.key}` : child.key, out);
   }
 }
@@ -108,7 +108,7 @@ function findSourceTurn(draft: SemanticContent, path: string): number | null {
     let lastSource = parseSourceTag(tree.source);
 
     for (let i = 1; i < segments.length; i++) {
-      const child = node.children.find((c) => c.key === segments[i]);
+      const child = (node.children ?? []).find((c) => c.key === segments[i]);
       if (!child) break;
       node = child;
       if (node.source) lastSource = parseSourceTag(node.source);

@@ -38,7 +38,7 @@ function serializeTreeForSnapshot(node: TreeNode, indent = 0): string {
   for (const [key, value] of Object.entries(node.slots)) {
     lines.push(`${pad}  ${key}: ${JSON.stringify(value)}`);
   }
-  for (const child of node.children) {
+  for (const child of node.children ?? []) {
     lines.push(serializeTreeForSnapshot(child, indent + 1));
   }
   return lines.join('\n');

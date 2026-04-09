@@ -1,0 +1,241 @@
+# ============================================================================
+# YSchema Specification
+# ============================================================================
+#
+# This file defines the YSchema format. User schemas conform to this spec.
+# Like yops.yaml defines operations, yschema.yaml defines validation rules.
+#
+# A YSchema is a YAML file that describes what a valid YAML tree looks like.
+# Three consumers read a user schema:
+#   1. Validator — checks a tree against it (deterministic)
+#   2. Fixer    — emits YOps to resolve violations (deterministic)
+#   3. LLM     — guides extraction toward the target shape
+#
+# The Y-family:
+#   yops.yaml    — how to MUTATE any YAML (universal engine)
+#   yschema.yaml — what VALID means for a domain (per use case)
+#   ylint        — structural hygiene checks (universal)
+# ============================================================================
+
+name: yschema
+version: "1.0"
+description: Schema format for YAML tree validation
+
+# ----------------------------------------------------------------------------
+# Schema Structure
+# ----------------------------------------------------------------------------
+#
+# A user schema has these top-level keys:
+#
+#   name        — schema identifier (required)
+#   version     — schema version number (optional)
+#   description — human-readable purpose (optional)
+#   strict      — if true, undeclared nodes are violations (default: false)
+#   nodes       — expected tree shape (required)
+#   rules       — cross-node invariants (optional)
+#   tests       — conformance test cases (optional)
+
+schema_keys:
+  name:        { type: scalar, required: true }
+  version:     { type: scalar, required: false }
+  description: { type: scalar, required: false }
+  strict:      { type: scalar, required: false, default: false }
+  nodes:       { type: mapping, required: true }
+  rules:       { type: sequence, required: false }
+  tests:       { type: sequence, required: false }
+
+# ----------------------------------------------------------------------------
+# Node Definition
+# ----------------------------------------------------------------------------
+#
+# Each key under `nodes` declares an expected node in the tree.
+# Nesting under a node key declares expected children.
+#
+# Node fields:
+#   required       — must this node exist? (default: false)
+#   description    — human-readable purpose
+#   slots          — expected slot definitions (see Slot Definition)
+#   children       — nested node definitions, or "any" to allow any children
+#   each_child     — template that every child must match (slots shape)
+
+node_fields:
+  required:     { type: scalar, default: false }
+  description:  { type: scalar }
+  slots:        { type: mapping, description: "Slot name → slot definition" }
+  children:     { type: mapping_or_any, description: "Nested node defs or 'any'" }
+  each_child:   { type: mapping, description: "Slot template for dynamic children" }
+
+# ----------------------------------------------------------------------------
+# Slot Definition
+# ----------------------------------------------------------------------------
+#
+# Slots define what values a node can hold. Three shorthand forms:
+#
+#   theme: scalar                    — any scalar value
+#   theme: [dark, light, system]     — enum (list of allowed values)
+#   theme: list                      — a sequence of any values
+#
+# Full form for more control:
+#
+#   theme:
+#     type: scalar | list
+#     required: true | false         — must this slot exist? (default: true if declared)
+#     enum: [dark, light, system]    — allowed values (scalar only)
+#     min: 0                         — minimum value (number) or min items (list)
+#     max: 100                       — maximum value (number) or max items (list)
+#     default: system                — default value for auto-fix
+
+slot_fields:
+  type:     { enum: [scalar, list], default: scalar }
+  required: { type: scalar, default: true }
+  enum:     { type: sequence, description: "Allowed values" }
+  min:      { type: scalar, description: "Minimum value or item count" }
+  max:      { type: scalar, description: "Maximum value or item count" }
+  default:  { type: any, description: "Default value for auto-fix" }
+
+# ----------------------------------------------------------------------------
+# Rules
+# ----------------------------------------------------------------------------
+#
+# Rules express cross-node invariants as deterministic checks.
+# Each rule has an `if` (selector) and a condition.
+#
+# Rule conditions:
+#   must_have      — node must have these slots
+#   must_not_have  — node must NOT have these slots
+#   one_of         — slot value must be one of these
+#   not_empty      — node must have at least one slot or child
+#   max_children   — maximum number of child nodes
+#   requires       — other node paths that must exist if this one does
+#
+# Each rule optionally has a `fix` — a list of YOps operations.
+# Fix ops can use {{path}} to reference the violating node.
+
+rule_fields:
+  id:            { type: scalar, required: true }
+  if:            { type: scalar, required: true, description: "Path selector (supports * wildcard)" }
+  severity:      { type: scalar, enum: [error, warn, info], default: warn }
+  message:       { type: scalar }
+  # Exactly one condition per rule:
+  must_have:     { type: sequence, description: "Required slot names" }
+  must_not_have: { type: sequence, description: "Forbidden slot names" }
+  one_of:        { type: sequence, description: "Allowed values for the slot at path" }
+  not_empty:     { type: scalar, description: "true = must have slots or children" }
+  max_children:  { type: scalar, description: "Maximum child node count" }
+  requires:      { type: sequence, description: "Paths that must exist if this path exists" }
+  fix:           { type: sequence, description: "YOps operations to auto-fix the violation" }
+
+# ----------------------------------------------------------------------------
+# Validation Behavior
+# ----------------------------------------------------------------------------
+
+validation:
+  # Node checks (from `nodes` definitions):
+  #   REQUIRED_NODE     — required node is missing
+  #   UNEXPECTED_NODE   — node exists but not declared (strict mode only)
+  #   REQUIRED_SLOT     — declared slot is missing
+  #   INVALID_ENUM      — slot value not in enum list
+  #   INVALID_TYPE      — slot is scalar but expected list, or vice versa
+  #   INVALID_RANGE     — value outside min/max bounds
+  #   CHILD_MISMATCH    — child doesn't match each_child template
+  #
+  # Rule checks (from `rules` definitions):
+  #   RULE_VIOLATION    — a rule condition was not met
+
+  errors:
+    REQUIRED_NODE:
+      description: A required node is missing from the tree
+      auto_fix: "define: { path: {{node_path}} }"
+    UNEXPECTED_NODE:
+      description: Node exists but is not declared in schema (strict mode)
+      auto_fix: "drop: { path: {{node_path}} }"
+    REQUIRED_SLOT:
+      description: A declared slot is missing from a node
+      auto_fix: "set: { path: {{node_path}}/{{slot}}, value: {{default}} }"
+    INVALID_ENUM:
+      description: Slot value is not in the allowed enum list
+      auto_fix: "set: { path: {{node_path}}/{{slot}}, value: {{first_enum}} }"
+    INVALID_TYPE:
+      description: Slot type mismatch (scalar vs list)
+      auto_fix: null
+    INVALID_RANGE:
+      description: Value outside min/max bounds
+      auto_fix: null
+    CHILD_MISMATCH:
+      description: Child node does not match each_child template
+      auto_fix: null
+    RULE_VIOLATION:
+      description: A cross-node rule was not met
+      auto_fix: "rule.fix if provided"
+
+# ----------------------------------------------------------------------------
+# Example User Schema
+# ----------------------------------------------------------------------------
+
+example:
+  name: customer-profile
+  version: 1
+
+  nodes:
+    preferences:
+      required: true
+      slots:
+        theme: [dark, light, system]
+        language: scalar
+      children:
+        notifications:
+          slots:
+            email: [true, false]
+            sms: [true, false]
+
+    decisions:
+      required: true
+      children: any
+      each_child:
+        slots:
+          choice: scalar
+          reason: scalar
+          date: scalar
+
+    tags:
+      slots:
+        items: list
+
+  rules:
+    - id: decisions-need-reason
+      if: "decisions/*"
+      must_have: [choice, reason]
+      severity: error
+      message: "Decision '{{path}}' is missing required slots"
+
+    - id: preferences-before-decisions
+      if: decisions
+      requires: [preferences]
+      severity: warn
+      message: "Decisions exist but no preferences defined"
+      fix:
+        - define:
+            path: preferences
+
+  tests:
+    - name: valid minimal tree
+      input:
+        preferences:
+          theme: dark
+          language: en
+        decisions: {}
+      valid: true
+
+    - name: missing required node
+      input:
+        tags:
+          items: [a, b]
+      errors: [REQUIRED_NODE, REQUIRED_NODE]
+
+    - name: invalid enum value
+      input:
+        preferences:
+          theme: blue
+          language: en
+        decisions: {}
+      errors: [INVALID_ENUM]
