@@ -8,10 +8,10 @@
  *   t3x merge abort <merge_id>
  */
 
-import { createClient } from '@t3x-dev/api-client';
+import type { T3xClient } from '@t3x-dev/api-client';
 import type { Command } from 'commander';
 import { formatMergeCommitResult, formatPrepareResult } from '../lib/merge-format.js';
-import { createSpinner, error, getApiUrl, success } from '../utils.js';
+import { createSpinner, error, getClientWithAuth, success } from '../utils.js';
 
 function getWebUrl(): string {
   return process.env.T3X_WEB_URL || 'http://localhost:3000';
@@ -32,7 +32,7 @@ export function registerMergeCommands(program: Command): void {
       spinner.start();
 
       try {
-        const client = createClient({ baseUrl: getApiUrl() });
+        const client = getClientWithAuth();
 
         // Resolve branch names to commit hashes
         const sourceHash = await resolveRef(client, source, options.project);
@@ -115,7 +115,7 @@ export function registerMergeCommands(program: Command): void {
       spinner.start();
 
       try {
-        const client = createClient({ baseUrl: getApiUrl() });
+        const client = getClientWithAuth();
 
         const commitResult = await client.commitMergeDraft(mergeId, {
           message: options.message,
@@ -154,7 +154,7 @@ export function registerMergeCommands(program: Command): void {
       spinner.start();
 
       try {
-        const client = createClient({ baseUrl: getApiUrl() });
+        const client = getClientWithAuth();
         await client.deleteMergeDraft(mergeId);
 
         spinner.stop();
@@ -172,11 +172,7 @@ export function registerMergeCommands(program: Command): void {
  * Same logic as diff command — duplicated intentionally to keep
  * each command file self-contained.
  */
-async function resolveRef(
-  client: ReturnType<typeof createClient>,
-  ref: string,
-  projectId: string
-): Promise<string> {
+async function resolveRef(client: T3xClient, ref: string, projectId: string): Promise<string> {
   if (ref.startsWith('sha256:') || /^[0-9a-f]{8,64}$/.test(ref)) {
     return ref;
   }

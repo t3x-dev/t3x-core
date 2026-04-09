@@ -6,10 +6,10 @@
  *   t3x diff <from> <to> [--slot] [--json]
  */
 
-import { createClient } from '@t3x-dev/api-client';
+import type { T3xClient } from '@t3x-dev/api-client';
 import type { Command } from 'commander';
 import { formatSlotDiff, formatTreeDiff } from '../lib/diff-format.js';
-import { createSpinner, error, getApiUrl } from '../utils.js';
+import { createSpinner, error, getClientWithAuth } from '../utils.js';
 
 export function registerDiffCommand(program: Command): void {
   program
@@ -23,15 +23,15 @@ export function registerDiffCommand(program: Command): void {
       spinner.start();
 
       try {
-        const client = createClient({ baseUrl: getApiUrl() });
+        const client = getClientWithAuth();
 
         // Resolve branch names to commit hashes if needed
         const fromHash = await resolveRef(client, from, options.project);
         const toHash = await resolveRef(client, to, options.project);
 
         const result = await client.twoWayDiff({
-          base_hash: fromHash,
-          head_hash: toHash,
+          base_commit_hash: fromHash,
+          target_commit_hash: toHash,
         });
 
         spinner.stop();
@@ -65,11 +65,7 @@ export function registerDiffCommand(program: Command): void {
  * return it as-is. Otherwise treat it as a branch name and fetch the
  * tip commit. Branch resolution requires a project ID.
  */
-async function resolveRef(
-  client: ReturnType<typeof createClient>,
-  ref: string,
-  projectId?: string
-): Promise<string> {
+async function resolveRef(client: T3xClient, ref: string, projectId?: string): Promise<string> {
   // Looks like a full or partial commit hash
   if (ref.startsWith('sha256:') || /^[0-9a-f]{8,64}$/.test(ref)) {
     return ref;

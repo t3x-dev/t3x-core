@@ -222,8 +222,8 @@ export interface DiffChange {
 }
 
 export interface TwoWayDiffInput {
-  base_hash: string;
-  head_hash: string;
+  base_commit_hash: string;
+  target_commit_hash: string;
 }
 
 // Merge draft types

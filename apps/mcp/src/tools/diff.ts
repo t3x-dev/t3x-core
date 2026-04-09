@@ -17,8 +17,8 @@ export const diffTool = {
 export async function handleDiff(args: Record<string, unknown>) {
   const client = getClient();
   const result = await client.twoWayDiff({
-    base_hash: args.source_hash as string,
-    head_hash: args.target_hash as string,
+    base_commit_hash: args.source_hash as string,
+    target_commit_hash: args.target_hash as string,
   });
   return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
 }

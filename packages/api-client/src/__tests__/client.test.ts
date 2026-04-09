@@ -545,7 +545,7 @@ describe('T3xClient', () => {
       );
       const client = createTestClient(fn);
 
-      await client.twoWayDiff({ base_hash: 'sha256:a', head_hash: 'sha256:b' });
+      await client.twoWayDiff({ base_commit_hash: 'sha256:a', target_commit_hash: 'sha256:b' });
       expect(fn).toHaveBeenCalledWith(
         expect.stringContaining('/v1/diff/two-way'),
         expect.objectContaining({ method: 'POST' })
