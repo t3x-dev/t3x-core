@@ -41,11 +41,22 @@ function ProjectDetailPageContent() {
   });
 
   const defaultView = useSettingsStore((s) => s.defaultView);
-  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+  const [viewMode, setViewModeRaw] = useState<ViewMode>(() => {
     const urlView = searchParams.get('view');
     if (urlView === 'canvas' || urlView === 'timeline') return urlView;
     return defaultView;
   });
+
+  // Persist view mode in URL so refresh stays on the same view
+  const setViewMode = useCallback(
+    (mode: ViewMode) => {
+      setViewModeRaw(mode);
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('view', mode);
+      router.replace(`?${params.toString()}`, { scroll: false });
+    },
+    [searchParams, router]
+  );
 
   // Canvas store for loading project data
   const canvasLoading = useCanvasStore((state) => state.loading);
