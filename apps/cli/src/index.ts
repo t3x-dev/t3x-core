@@ -21,6 +21,9 @@ import { registerShowContent } from './commands/show.js';
 // New commit command
 import { registerCommitCommand } from './commands/commit.js';
 
+// Diff command
+import { registerDiffCommand } from './commands/diff.js';
+
 // Independent commands (unchanged)
 import { registerExportCommands } from './commands/export.js';
 import { registerExtractCommands } from './commands/extract.js';
@@ -95,6 +98,7 @@ registerImportCommands(program);
 registerSchemaCommands(program);
 registerValidateCommands(program);
 registerYopsCommands(program);
+registerDiffCommand(program);
 
 // Parse arguments
 program.parse();
