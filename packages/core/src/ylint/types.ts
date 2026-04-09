@@ -1,25 +1,25 @@
 /**
- * YLint Types — Knowledge Tree Linter (4 Normal Forms)
+ * YLint Types — Knowledge Tree Linter
+ *
+ * Two layers:
+ *   General — 4 normal forms, always runs, no schema needed
+ *   Schema  — validates against user-defined @t3x-dev/schema (optional)
  */
 
+import type { YOp } from '@t3x-dev/yops';
+
 export interface LintWarning {
-  form: 1 | 2 | 3 | 4;
+  form: 1 | 2 | 3 | 4 | 'schema';
   rule: string;
   path: string;
   message: string;
-  suggestion?: string;
-  severity: 'info' | 'warn';
+  severity: 'error' | 'warn' | 'info';
+  fix?: YOp[];
 }
 
 export interface LintResult {
+  valid: boolean;
   warnings: LintWarning[];
-  scores: {
-    form1: number; // 0-1, fraction of keys passing Form 1
-    form2: number; // 0-1, fraction of scalars passing Form 2
-    form3: number; // 0-1, fraction of lists passing Form 3
-    form4: number; // 0-1, fraction of nodes passing Form 4
-  };
-  overall: number; // 0-1, average of form scores
 }
 
 export interface LintConfig {

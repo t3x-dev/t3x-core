@@ -10,11 +10,11 @@
 
 import { describe, expect, it, vi } from 'vitest';
 import { Extractor } from '../../extractors/extractor';
-import { ylint } from '../../ylint';
-import { applyYOps } from '../../t3x-yops/engine';
 import { parseYOpsOutput } from '../../extractors/yopsParser';
-import type { SemanticContent, TreeNode } from '../../semantic/types';
 import type { LLMProvider } from '../../llm/types';
+import type { SemanticContent, TreeNode } from '../../semantic/types';
+import { applyYOps } from '../../t3x-yops/engine';
+import { ylint } from '../../ylint';
 
 // ── Mock Provider ──
 
@@ -36,8 +36,7 @@ function mockProvider(responses: string[]): LLMProvider {
 const findTree = (content: SemanticContent, key: string) =>
   content.trees.find((t) => t.key === key);
 
-const findChild = (node: TreeNode, key: string) =>
-  node.children.find((c) => c.key === key);
+const findChild = (node: TreeNode, key: string) => node.children.find((c) => c.key === key);
 
 // ── Tests ──
 
@@ -72,8 +71,17 @@ describe('E2E: YOps Extraction Pipeline', () => {
 
     const result1 = await extractor1.extract({
       turns: [
-        { role: 'user', content: "Let's go to Hangzhou for about a week. Maybe 1000 yuan for food, nothing fancy, casual is fine.", turn_hash: 'T1' },
-        { role: 'assistant', content: 'Sounds great! A week in Hangzhou with casual dining. Any specific activities?', turn_hash: 'T2' },
+        {
+          role: 'user',
+          content:
+            "Let's go to Hangzhou for about a week. Maybe 1000 yuan for food, nothing fancy, casual is fine.",
+          turn_hash: 'T1',
+        },
+        {
+          role: 'assistant',
+          content: 'Sounds great! A week in Hangzhou with casual dining. Any specific activities?',
+          turn_hash: 'T2',
+        },
       ],
     });
 
@@ -121,8 +129,18 @@ describe('E2E: YOps Extraction Pipeline', () => {
 
     const result2 = await extractor2.extract({
       turns: [
-        { role: 'user', content: "Actually let's do 2000 for food budget. And I want to walk around West Lake and go hiking in the hills nearby.", turn_hash: 'T3' },
-        { role: 'assistant', content: 'Updated! Budget is now 2000 yuan. West Lake walk and hill hiking are on the list.', turn_hash: 'T4' },
+        {
+          role: 'user',
+          content:
+            "Actually let's do 2000 for food budget. And I want to walk around West Lake and go hiking in the hills nearby.",
+          turn_hash: 'T3',
+        },
+        {
+          role: 'assistant',
+          content:
+            'Updated! Budget is now 2000 yuan. West Lake walk and hill hiking are on the list.',
+          turn_hash: 'T4',
+        },
       ],
       snapshot: result1.snapshot,
     });
@@ -165,7 +183,12 @@ describe('E2E: YOps Extraction Pipeline', () => {
 
     const result3 = await extractor3.extract({
       turns: [
-        { role: 'user', content: "Actually forget the hiking. Let's check out bars near West Lake instead. Maybe 500 for drinks.", turn_hash: 'T5' },
+        {
+          role: 'user',
+          content:
+            "Actually forget the hiking. Let's check out bars near West Lake instead. Maybe 500 for drinks.",
+          turn_hash: 'T5',
+        },
       ],
       snapshot: result2.snapshot,
     });
@@ -261,7 +284,6 @@ describe('E2E: YOps Extraction Pipeline', () => {
 
     // Lint
     const lint = ylint({ trees: applied.trees, relations: applied.relations });
-    expect(lint.overall).toBeGreaterThan(0.5);
-    console.log('Roundtrip lint:', JSON.stringify(lint.scores));
+    expect(lint.valid).toBe(true);
   });
 });
