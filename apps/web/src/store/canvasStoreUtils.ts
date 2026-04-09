@@ -439,62 +439,14 @@ const LAYOUT = {
   COMMIT_SPACING_Y: 150,
 };
 
-// Debounced position save - collect position changes and save after 500ms of no changes
-const positionSaveTimers = new Map<string, ReturnType<typeof setTimeout>>();
-const pendingPositionSaves = new Map<
-  string,
-  { kind: NodeKind; position: { x: number; y: number } }
->();
-
+// Position persistence is disabled — layout is computed by ELK auto-layout (DAG-first).
+// Keep the export for import compatibility; callers have been removed from canvasStore.ts.
 export function saveNodePosition(
-  nodeId: string,
-  kind: NodeKind,
-  position: { x: number; y: number }
+  _nodeId: string,
+  _kind: NodeKind,
+  _position: { x: number; y: number }
 ) {
-  // Cancel existing timer for this node
-  const existingTimer = positionSaveTimers.get(nodeId);
-  if (existingTimer) {
-    clearTimeout(existingTimer);
-  }
-
-  // Store the pending position
-  pendingPositionSaves.set(nodeId, { kind, position });
-
-  // Set a new timer
-  const timer = setTimeout(() => {
-    const pending = pendingPositionSaves.get(nodeId);
-    if (!pending) return;
-
-    pendingPositionSaves.delete(nodeId);
-    positionSaveTimers.delete(nodeId);
-
-    // Call appropriate API based on node kind
-    // For unit nodes, determine if staging (conversationId) or committed (commit hash)
-    if (pending.kind === 'unit') {
-      // Staging units have conversationId as nodeId (e.g., conv_xxx)
-      // Committed units have commit hash as nodeId (e.g., sha256:xxx)
-      const isStagingUnit = nodeId.startsWith('conv_');
-
-      if (isStagingUnit) {
-        // Save position to conversation
-        api
-          .updateConversation(nodeId, {
-            position_x: pending.position.x,
-            position_y: pending.position.y,
-          })
-          .catch(() => {
-            // Error handled silently
-          });
-      } else {
-        // Committed unit - save position to commit via API
-        api.updateCommitPosition(nodeId, pending.position.x, pending.position.y).catch(() => {
-          // Error handled silently
-        });
-      }
-    }
-  }, 500);
-
-  positionSaveTimers.set(nodeId, timer);
+  // no-op: positions are not persisted; ELK auto-layout drives node placement
 }
 
 // Convert API Conversation + Commit pair to Unit Canvas Node
