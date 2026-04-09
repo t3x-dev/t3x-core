@@ -90,4 +90,66 @@ describe('compactYOps', () => {
       ]);
     });
   });
+
+  describe('pass-through and ordering', () => {
+    it('preserves non-compact ops (define, drop, rename, etc.)', () => {
+      const ops: YOp[] = [
+        { define: { path: 'hotel' } },
+        { rename: { path: 'hotel', to: 'accommodation' } },
+      ];
+      expect(compactYOps(ops)).toEqual([
+        { define: { path: 'hotel' } },
+        { rename: { path: 'hotel', to: 'accommodation' } },
+      ]);
+    });
+
+    it('returns empty array for empty input', () => {
+      expect(compactYOps([])).toEqual([]);
+    });
+
+    it('returns identical ops when no cancellable pairs exist', () => {
+      const ops: YOp[] = [
+        { set: { path: 'a/x', value: 1 } },
+        { set: { path: 'b/y', value: 2 } },
+      ];
+      expect(compactYOps(ops)).toEqual(ops);
+    });
+
+    it('handles multiple paths with independent cancellations', () => {
+      const ops: YOp[] = [
+        { set: { path: 'a/x', value: 1 } },
+        { set: { path: 'b/y', value: 2 } },
+        { unset: { path: 'a/x' } },
+      ];
+      expect(compactYOps(ops)).toEqual([
+        { set: { path: 'b/y', value: 2 } },
+      ]);
+    });
+
+    it('preserves relative order of surviving ops', () => {
+      const ops: YOp[] = [
+        { define: { path: 'hotel' } },
+        { set: { path: 'a/x', value: 1 } },
+        { set: { path: 'b/y', value: 2 } },
+        { unset: { path: 'a/x' } },
+        { rename: { path: 'hotel', to: 'h' } },
+      ];
+      expect(compactYOps(ops)).toEqual([
+        { define: { path: 'hotel' } },
+        { set: { path: 'b/y', value: 2 } },
+        { rename: { path: 'hotel', to: 'h' } },
+      ]);
+    });
+
+    it('interleaved paths: set A, set B, unset A → keep set B only', () => {
+      const ops: YOp[] = [
+        { set: { path: 'a/x', value: 1 } },
+        { set: { path: 'b/y', value: 2 } },
+        { unset: { path: 'a/x' } },
+      ];
+      expect(compactYOps(ops)).toEqual([
+        { set: { path: 'b/y', value: 2 } },
+      ]);
+    });
+  });
 });
