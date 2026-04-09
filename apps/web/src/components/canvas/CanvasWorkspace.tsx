@@ -12,6 +12,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useContextMenu } from '@/hooks/useContextMenu';
 import { usePathHighlight } from '@/hooks/usePathHighlight';
+import { getLayoutedElements } from '@/lib/elkLayout';
 import { useTerminology } from '@/hooks/useTerminology';
 import '@xyflow/react/dist/style.css';
 import { useTheme } from 'next-themes';
@@ -184,6 +185,48 @@ function CanvasWorkspaceInner({
     hasBranchCommits,
   } = usePathHighlight({ nodes, edges });
 
+  // DAG auto-layout: compute topology fingerprint from node IDs + edge connections.
+  // Position changes don't alter this, so ELK only runs when the graph structure changes.
+  const topoFingerprint = useMemo(() => {
+    const nIds = nodes.map((n) => n.id).sort().join(',');
+    const eKeys = edges.map((e) => `${e.source}->${e.target}`).sort().join(',');
+    return `${nIds}|${eKeys}`;
+  }, [nodes, edges]);
+
+  const [initialLayoutDone, setInitialLayoutDone] = useState(false);
+
+  // DAG auto-layout: run ELK whenever graph topology changes
+  useEffect(() => {
+    const currentNodes = getNodes();
+    if (currentNodes.length === 0) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const layouted = await getLayoutedElements(currentNodes, getEdges(), {
+          direction: 'DOWN',
+          nodeSpacing: 80,
+          rankSpacing: 120,
+        });
+        if (cancelled) return;
+        setNodes(layouted);
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            fitView({ padding: 0.2, duration: 300 });
+          });
+        });
+        if (!initialLayoutDone) setInitialLayoutDone(true);
+      } catch {
+        // Layout failure is non-critical — nodes keep their current positions
+        if (!initialLayoutDone) setInitialLayoutDone(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [topoFingerprint]);
+
   const modalNode = nodes.find((node) => node.id === openNodeId);
   const pendingCommitBranchMode = useCanvasStore((state) => {
     if (!openNodeId) {
@@ -301,7 +344,11 @@ function CanvasWorkspaceInner({
 
       <div
         ref={canvasRef}
-        className={cn('relative flex-1', isPanMode && 'cursor-grab active:cursor-grabbing')}
+        className={cn(
+          'relative flex-1 transition-opacity duration-300',
+          isPanMode && 'cursor-grab active:cursor-grabbing',
+          !initialLayoutDone && nodes.length > 0 && 'opacity-0'
+        )}
         role="tree"
         aria-label="Knowledge graph canvas"
         style={{
