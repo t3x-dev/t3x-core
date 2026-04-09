@@ -217,6 +217,11 @@ function CanvasWorkspaceInner({
       return;
     }
 
+    // Not initial load and no topology change → nothing to do
+    if (!isInitialLoad && !topoChanged) {
+      return;
+    }
+
     // Initial load without DB positions OR topology changed → run ELK
     let cancelled = false;
     (async () => {
