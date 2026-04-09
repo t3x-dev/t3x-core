@@ -5,10 +5,11 @@
  *
  *   t3x diff <from> <to> [--slot] [--json]
  */
-import type { Command } from 'commander';
+
 import { createClient } from '@t3x-dev/api-client';
+import type { Command } from 'commander';
+import { formatSlotDiff, formatTreeDiff } from '../lib/diff-format.js';
 import { createSpinner, error, getApiUrl } from '../utils.js';
-import { formatTreeDiff, formatSlotDiff } from '../lib/diff-format.js';
 
 export function registerDiffCommand(program: Command): void {
   program

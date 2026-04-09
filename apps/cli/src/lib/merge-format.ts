@@ -43,7 +43,9 @@ export function formatPrepareResult(input: PrepareResultInput): string {
   lines.push(`  Auto-kept:    ${autoKept} nodes`);
   lines.push(`  Only source:  ${onlyInSource} nodes`);
   lines.push(`  Only target:  ${onlyInTarget} nodes`);
-  lines.push(`  Conflicts:    ${conflicts.length}${conflicts.length > 0 ? ' ' + chalk.yellow('⚠') : ''}`);
+  lines.push(
+    `  Conflicts:    ${conflicts.length}${conflicts.length > 0 ? ' ' + chalk.yellow('⚠') : ''}`
+  );
 
   if (conflicts.length > 0) {
     lines.push('');

@@ -29,7 +29,10 @@ export function formatTreeDiff(diff: DiffResult): string {
     switch (change.type) {
       case 'modified': {
         const slotCount = countChangedSlots(change.old_value, change.new_value);
-        lines.push(chalk.yellow(`  ± ${change.path}`) + chalk.gray(` (${slotCount} slot${slotCount !== 1 ? 's' : ''} changed)`));
+        lines.push(
+          chalk.yellow(`  ± ${change.path}`) +
+            chalk.gray(` (${slotCount} slot${slotCount !== 1 ? 's' : ''} changed)`)
+        );
         break;
       }
       case 'added':

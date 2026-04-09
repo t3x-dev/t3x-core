@@ -7,10 +7,11 @@
  *   t3x merge execute <merge_id> -m "msg"
  *   t3x merge abort <merge_id>
  */
-import type { Command } from 'commander';
+
 import { createClient } from '@t3x-dev/api-client';
-import { createSpinner, error, success, getApiUrl } from '../utils.js';
-import { formatPrepareResult, formatMergeCommitResult } from '../lib/merge-format.js';
+import type { Command } from 'commander';
+import { formatMergeCommitResult, formatPrepareResult } from '../lib/merge-format.js';
+import { createSpinner, error, getApiUrl, success } from '../utils.js';
 
 function getWebUrl(): string {
   return process.env.T3X_WEB_URL || 'http://localhost:3000';
@@ -54,15 +55,17 @@ export function registerMergeCommands(program: Command): void {
           targetValue: c.slotConflicts?.[0]?.targetValue,
         }));
 
-        console.log(formatPrepareResult({
-          mergeId: draft.id,
-          autoKept: prepared.autoKept?.length || 0,
-          onlyInSource: prepared.onlyInSource?.length || 0,
-          onlyInTarget: prepared.onlyInTarget?.length || 0,
-          conflicts,
-          projectId: options.project,
-          webUrl: getWebUrl(),
-        }));
+        console.log(
+          formatPrepareResult({
+            mergeId: draft.id,
+            autoKept: prepared.autoKept?.length || 0,
+            onlyInSource: prepared.onlyInSource?.length || 0,
+            onlyInTarget: prepared.onlyInTarget?.length || 0,
+            conflicts,
+            projectId: options.project,
+            webUrl: getWebUrl(),
+          })
+        );
 
         // Auto-merge path
         if (options.auto && conflicts.length === 0) {
@@ -85,12 +88,14 @@ export function registerMergeCommands(program: Command): void {
           autoSpinner.stop();
           success(`Merged! Commit: ${commitResult.hash.slice(0, 12)}`);
           console.log();
-          console.log(formatMergeCommitResult({
-            hash: commitResult.hash,
-            parents: commitResult.parents,
-            branch: commitResult.branch,
-            mergeSummary: commitResult.merge_summary,
-          }));
+          console.log(
+            formatMergeCommitResult({
+              hash: commitResult.hash,
+              parents: commitResult.parents,
+              branch: commitResult.branch,
+              mergeSummary: commitResult.merge_summary,
+            })
+          );
         }
       } catch (err) {
         spinner.stop();
@@ -120,12 +125,14 @@ export function registerMergeCommands(program: Command): void {
         spinner.stop();
         success(`Merged! Commit: ${commitResult.hash.slice(0, 12)}`);
         console.log();
-        console.log(formatMergeCommitResult({
-          hash: commitResult.hash,
-          parents: commitResult.parents,
-          branch: commitResult.branch,
-          mergeSummary: commitResult.merge_summary,
-        }));
+        console.log(
+          formatMergeCommitResult({
+            hash: commitResult.hash,
+            parents: commitResult.parents,
+            branch: commitResult.branch,
+            mergeSummary: commitResult.merge_summary,
+          })
+        );
       } catch (err) {
         spinner.stop();
         const message = err instanceof Error ? err.message : String(err);
