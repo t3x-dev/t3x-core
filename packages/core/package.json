@@ -29,7 +29,7 @@
     "zod": "^4.2.1"
   },
   "devDependencies": {
-    "@t3x-dev/schema": "workspace:*",
+    "@t3x-dev/yschema": "workspace:*",
     "@swc/core": "^1.15.18",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^20.12.7",

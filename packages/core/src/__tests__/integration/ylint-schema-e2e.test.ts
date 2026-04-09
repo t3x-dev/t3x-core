@@ -11,7 +11,7 @@
  *   7. Show what remains for human review
  */
 
-import { buildFixPlan, parseSchema, validateSchema } from '@t3x-dev/schema';
+import { buildFixPlan, parseSchema, validateSchema } from '@t3x-dev/yschema';
 import type { YOp, YValue } from '@t3x-dev/yops';
 import { applyYOps } from '@t3x-dev/yops';
 import { describe, expect, it } from 'vitest';

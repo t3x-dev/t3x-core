@@ -3,7 +3,7 @@
  *
  * Two layers:
  *   General — 4 normal forms, always runs, no schema needed
- *   Schema  — validates against user-defined @t3x-dev/schema (optional)
+ *   Schema  — validates against user-defined @t3x-dev/yschema (optional)
  */
 
 import type { YOp } from '@t3x-dev/yops';

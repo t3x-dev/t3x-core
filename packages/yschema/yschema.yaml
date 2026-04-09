@@ -1,18 +1,23 @@
 # ============================================================================
-# T3X Schema Specification
+# YSchema Specification
 # ============================================================================
 #
-# This file defines the schema format. User schemas conform to this spec.
-# Like yops.yaml defines operations, schema.yaml defines validation rules.
+# This file defines the YSchema format. User schemas conform to this spec.
+# Like yops.yaml defines operations, yschema.yaml defines validation rules.
 #
-# A schema is a YAML file that describes what a valid YAML tree looks like.
+# A YSchema is a YAML file that describes what a valid YAML tree looks like.
 # Three consumers read a user schema:
 #   1. Validator — checks a tree against it (deterministic)
 #   2. Fixer    — emits YOps to resolve violations (deterministic)
 #   3. LLM     — guides extraction toward the target shape
+#
+# The Y-family:
+#   yops.yaml    — how to MUTATE any YAML (universal engine)
+#   yschema.yaml — what VALID means for a domain (per use case)
+#   ylint        — structural hygiene checks (universal)
 # ============================================================================
 
-name: t3x-schema
+name: yschema
 version: "1.0"
 description: Schema format for YAML tree validation
 

@@ -572,9 +572,9 @@ importers:
       '@swc/core':
         specifier: ^1.15.18
         version: 1.15.18
-      '@t3x-dev/schema':
+      '@t3x-dev/yschema':
         specifier: workspace:*
-        version: link:../schema
+        version: link:../yschema
       '@types/js-yaml':
         specifier: ^4.0.9
         version: 4.0.9
@@ -596,31 +596,6 @@ importers:
       unplugin-swc:
         specifier: ^1.5.9
         version: 1.5.9(@swc/core@1.15.18)(rollup@4.54.0)
-      vitest:
-        specifier: ^2.1.9
-        version: 2.1.9(@types/node@20.19.27)(jsdom@28.0.0)(lightningcss@1.30.2)
-
-  packages/schema:
-    dependencies:
-      '@t3x-dev/yops':
-        specifier: workspace:*
-        version: link:../yops
-    devDependencies:
-      '@types/js-yaml':
-        specifier: ^4.0.9
-        version: 4.0.9
-      '@types/node':
-        specifier: ^20.12.7
-        version: 20.19.27
-      js-yaml:
-        specifier: ^4.1.1
-        version: 4.1.1
-      tsup:
-        specifier: ^8.5.1
-        version: 8.5.1(@swc/core@1.15.18)(jiti@2.6.1)(postcss@8.5.6)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.3)
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
       vitest:
         specifier: ^2.1.9
         version: 2.1.9(@types/node@20.19.27)(jsdom@28.0.0)(lightningcss@1.30.2)
@@ -691,6 +666,31 @@ importers:
       zod:
         specifier: ^4.2.1
         version: 4.2.1
+
+  packages/yschema:
+    dependencies:
+      '@t3x-dev/yops':
+        specifier: workspace:*
+        version: link:../yops
+    devDependencies:
+      '@types/js-yaml':
+        specifier: ^4.0.9
+        version: 4.0.9
+      '@types/node':
+        specifier: ^20.12.7
+        version: 20.19.27
+      js-yaml:
+        specifier: ^4.1.1
+        version: 4.1.1
+      tsup:
+        specifier: ^8.5.1
+        version: 8.5.1(@swc/core@1.15.18)(jiti@2.6.1)(postcss@8.5.6)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.3)
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.9
+        version: 2.1.9(@types/node@20.19.27)(jsdom@28.0.0)(lightningcss@1.30.2)
 
 packages:
 
