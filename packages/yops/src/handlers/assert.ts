@@ -1,6 +1,6 @@
-import type { OpHandler } from '../registry';
+import { YOPS_ERRORS, yopsError } from '../errors';
 import { resolvePath } from '../paths';
-import { yopsError, YOPS_ERRORS } from '../errors';
+import type { OpHandler } from '../registry';
 import type { YValue } from '../types';
 
 export const assertHandler: OpHandler = (doc, fields, index) => {
@@ -9,10 +9,36 @@ export const assertHandler: OpHandler = (doc, fields, index) => {
   const exists = fields.exists as boolean | undefined;
   const type = fields.type as string | undefined;
 
+  const value = resolvePath(doc, path);
+  const pathExists = value !== undefined;
+
+  // exists condition
+  if (exists !== undefined) {
+    if (exists && !pathExists) {
+      return {
+        doc,
+        error: yopsError(
+          YOPS_ERRORS.ASSERTION_FAILED,
+          `Expected path "${path}" to exist but it does not`,
+          index
+        ),
+      };
+    }
+    if (!exists && pathExists) {
+      return {
+        doc,
+        error: yopsError(
+          YOPS_ERRORS.ASSERTION_FAILED,
+          `Expected path "${path}" to not exist but it does`,
+          index
+        ),
+      };
+    }
+  }
+
   // equals condition
   if (equals !== undefined) {
-    const value = resolvePath(doc, path);
-    if (value === undefined) {
+    if (!pathExists) {
       return {
         doc,
         error: yopsError(YOPS_ERRORS.ASSERTION_FAILED, `Path "${path}" does not exist`, index),
@@ -24,44 +50,15 @@ export const assertHandler: OpHandler = (doc, fields, index) => {
         error: yopsError(
           YOPS_ERRORS.ASSERTION_FAILED,
           `Expected "${JSON.stringify(equals)}" at path "${path}" but got "${JSON.stringify(value)}"`,
-          index,
+          index
         ),
       };
     }
-    return { doc };
-  }
-
-  // exists condition
-  if (exists !== undefined) {
-    const value = resolvePath(doc, path);
-    const pathExists = value !== undefined;
-    if (exists && !pathExists) {
-      return {
-        doc,
-        error: yopsError(
-          YOPS_ERRORS.ASSERTION_FAILED,
-          `Expected path "${path}" to exist but it does not`,
-          index,
-        ),
-      };
-    }
-    if (!exists && pathExists) {
-      return {
-        doc,
-        error: yopsError(
-          YOPS_ERRORS.ASSERTION_FAILED,
-          `Expected path "${path}" to not exist but it does`,
-          index,
-        ),
-      };
-    }
-    return { doc };
   }
 
   // type condition
   if (type !== undefined) {
-    const value = resolvePath(doc, path);
-    if (value === undefined) {
+    if (!pathExists) {
       return {
         doc,
         error: yopsError(YOPS_ERRORS.ASSERTION_FAILED, `Path "${path}" does not exist`, index),
@@ -78,13 +75,12 @@ export const assertHandler: OpHandler = (doc, fields, index) => {
         error: yopsError(
           YOPS_ERRORS.ASSERTION_FAILED,
           `Expected type "${type}" at path "${path}" but got "${actualType}"`,
-          index,
+          index
         ),
       };
     }
-    return { doc };
   }
 
-  // No condition — pass through
+  // No condition or all passed
   return { doc };
 };

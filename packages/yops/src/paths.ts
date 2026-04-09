@@ -148,9 +148,12 @@ function _setRecursive(current: YValue, segments: PathSegment[], idx: number, va
     if (isLast) {
       map[seg.value] = deepClone(value);
     } else {
-      // Ensure intermediate mapping exists
-      if (!(seg.value in map) || map[seg.value] === null || typeof map[seg.value] !== 'object') {
+      // Create intermediate mapping if key is absent
+      if (!(seg.value in map)) {
         map[seg.value] = {};
+      } else if (map[seg.value] === null || typeof map[seg.value] !== 'object') {
+        // Scalar or null intermediate — refuse to silently overwrite
+        throw new Error(`Cannot traverse through non-mapping value at "${seg.value}"`);
       }
       _setRecursive(map[seg.value], segments, idx + 1, value);
     }
