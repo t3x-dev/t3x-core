@@ -85,6 +85,7 @@ scratchpad/
 preview/
 docs/
 specs/
+scripts/
 .claude/
 .gitmodules
 

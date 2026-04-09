@@ -739,3 +739,326 @@ document:
       - assert:
           path: config/database/host
           exists: true
+
+# ============================================================================
+# Decision Guide — which op to use
+# ============================================================================
+#
+# Engineers often face "which op do I pick?" when several seem similar.
+# This section resolves those ambiguities.
+
+guide:
+
+  # ── Create vs Set ──────────────────────────────────────────────────────────
+  create_or_set:
+    question: "I want to add something to the document"
+    decision:
+      - use: define
+        when: "You need an empty mapping as a container (like mkdir)"
+        note: "Errors if path exists — use for strict creation"
+      - use: set
+        when: "You know the exact value to place at a path"
+        note: "Creates intermediates, overwrites existing — use for upsert"
+      - use: populate
+        when: "You have multiple key-value pairs to add to an existing mapping"
+        note: "Target mapping must exist — combine with define for new mappings"
+      - use: append
+        when: "You are adding an item to the end of a sequence"
+        note: "Target must be an existing sequence"
+
+  # ── Remove ops ─────────────────────────────────────────────────────────────
+  remove:
+    question: "I want to remove something from the document"
+    decision:
+      - use: drop
+        when: "The path MUST exist — removal is the intent, missing is a bug"
+        note: "Strict — errors on PATH_NOT_FOUND"
+      - use: unset
+        when: "Remove if present, ignore if absent — cleanup / idempotent"
+        note: "Idempotent — never errors on missing key"
+      - use: omit
+        when: "You want to remove specific keys from a mapping by name"
+        note: "Idempotent — ignores missing keys"
+      - use: pick
+        when: "You want to KEEP specific keys and remove everything else"
+        note: "Inverse of omit — unlisted keys are removed"
+
+  # ── Restructure ops ────────────────────────────────────────────────────────
+  restructure:
+    question: "I want to reorganize the document shape"
+    decision:
+      - use: rename
+        when: "Change a key name without moving its value"
+        note: "Stays at the same level, preserves key order"
+      - use: move
+        when: "Relocate a subtree to a different path (changes level)"
+        note: "Source is removed, destination is created"
+      - use: clone
+        when: "Copy a subtree — original stays, copy is independent"
+        note: "Deep copy — mutations to clone do not affect source"
+      - use: nest
+        when: "Group sibling keys under a new parent (flatten to nested)"
+        note: "Keys move DOWN one level: {a, b} becomes {wrapper: {a, b}}"
+      - use: fold
+        when: "Collapse a single-child wrapper (nested to flatten)"
+        note: "Child moves UP one level: {wrapper: {child}} becomes {child}"
+      - use: split
+        when: "Distribute keys into multiple named groups"
+        note: "Like nest but for multiple groups at once"
+      - use: merge
+        when: "Combine sibling mappings into one (reverse of split)"
+        note: "Last wins on key conflicts"
+
+  # ── Sequence ops ───────────────────────────────────────────────────────────
+  sequence:
+    question: "I want to work with arrays/sequences"
+    decision:
+      - use: append
+        when: Add an item to the end
+      - use: sort
+        when: Reorder items (by value or by a key in mapping items)
+      - use: unique
+        when: Deduplicate (by value or by a key in mapping items)
+      - use: drop
+        when: Remove a specific item by index or key match
+        example: "drop: { path: items/[0] } or drop: { path: users/[name=alice] }"
+
+# ============================================================================
+# Type Contracts — what each op expects and produces
+# ============================================================================
+#
+# Every op has a type contract: what shape it expects at the target path,
+# and what shape it leaves behind. This table is the quick reference.
+
+contracts:
+
+  # Format: op → expects (at target path) → produces (at target path)
+
+  # DDL
+  define:    { expects: "parent is mapping, final key absent", produces: "empty mapping {}" }
+  drop:      { expects: "path exists (any type)", produces: "key removed" }
+  rename:    { expects: "path exists, new name absent among siblings", produces: "same value, new key name" }
+
+  # DML
+  set:       { expects: "intermediates are mappings (auto-creates missing)", produces: "any value" }
+  unset:     { expects: "parent is mapping (idempotent on missing key)", produces: "key removed" }
+  populate:  { expects: "target is mapping", produces: "mapping with added/overwritten keys" }
+  append:    { expects: "target is sequence", produces: "sequence with new item at end" }
+
+  # DTL
+  move:      { expects: "source exists, destination absent", produces: "value at new path, source removed" }
+  clone:     { expects: "source exists, destination absent", produces: "independent deep copy at new path" }
+  nest:      { expects: "target is mapping, listed keys exist", produces: "keys moved under new wrapper key" }
+  split:     { expects: "target is mapping, listed keys exist", produces: "keys distributed into named groups" }
+  fold:      { expects: "target is mapping with exactly 1 key", produces: "child replaces wrapper" }
+  merge:     { expects: "target is mapping, listed keys are all mappings", produces: "combined mapping (last wins)" }
+  sort:      { expects: "target is sequence", produces: "sorted sequence (stable)" }
+  unique:    { expects: "target is sequence", produces: "deduplicated sequence (first wins)" }
+  pick:      { expects: "target is mapping", produces: "mapping with only listed keys" }
+  omit:      { expects: "target is mapping", produces: "mapping without listed keys" }
+
+  # DCL
+  assert:    { expects: "any (read-only)", produces: "document unchanged — fails on unmet condition" }
+
+# ============================================================================
+# Composition Recipes — common multi-op patterns
+# ============================================================================
+#
+# Single ops are atoms. Real work is pipelines. These recipes show how
+# ops compose to accomplish common tasks.
+
+recipes:
+
+  create_and_populate:
+    description: Create a new section with initial values
+    ops:
+      - define:
+          path: config/database
+      - populate:
+          path: config/database
+          values: { host: localhost, port: 5432, name: mydb }
+    before: {}
+    after: { config: { database: { host: localhost, port: 5432, name: mydb } } }
+
+  clone_and_customize:
+    description: Create a variant from a template
+    ops:
+      - clone:
+          from: environments/production
+          to: environments/staging
+      - set:
+          path: environments/staging/host
+          value: staging.db.internal
+      - set:
+          path: environments/staging/debug
+          value: true
+    before: { environments: { production: { host: prod.db.internal, port: 5432, debug: false } } }
+    after:
+      environments:
+        production: { host: prod.db.internal, port: 5432, debug: false }
+        staging: { host: staging.db.internal, port: 5432, debug: true }
+
+  flatten_to_nested:
+    description: Group flat keys into a structured hierarchy
+    ops:
+      - nest:
+          path: config
+          keys: [db_host, db_port, db_name]
+          under: database
+      - nest:
+          path: config
+          keys: [cache_url, cache_ttl]
+          under: cache
+    before: { config: { db_host: x, db_port: 5432, db_name: mydb, cache_url: "redis://...", cache_ttl: 300, debug: true } }
+    after:
+      config:
+        database: { db_host: x, db_port: 5432, db_name: mydb }
+        cache: { cache_url: "redis://...", cache_ttl: 300 }
+        debug: true
+
+  split_and_rename:
+    description: Reorganize a flat mapping into named groups with clean keys
+    ops:
+      - split:
+          path: settings
+          into:
+            database: [host, port]
+            logging: [level, format]
+      - rename:
+          path: settings/logging/level
+          to: severity
+    before: { settings: { host: x, port: 5432, level: debug, format: json } }
+    after:
+      settings:
+        database: { host: x, port: 5432 }
+        logging: { severity: debug, format: json }
+
+  collect_sort_dedup:
+    description: Build a clean, sorted, unique list
+    ops:
+      - append:
+          path: tags
+          value: python
+      - append:
+          path: tags
+          value: yaml
+      - append:
+          path: tags
+          value: python
+      - sort:
+          path: tags
+      - unique:
+          path: tags
+    before: { tags: [go, yaml] }
+    after: { tags: [go, python, yaml] }
+
+  guarded_mutation:
+    description: Assert preconditions before mutating
+    ops:
+      - assert:
+          path: version
+          equals: 2
+      - assert:
+          path: config
+          type: mapping
+      - set:
+          path: config/migrated
+          value: true
+      - set:
+          path: version
+          value: 3
+    before: { version: 2, config: { host: x } }
+    after: { version: 3, config: { host: x, migrated: true } }
+
+  merge_and_fold:
+    description: Combine siblings then collapse wrapper
+    ops:
+      - merge:
+          path: root
+          keys: [defaults, overrides]
+          into: merged
+      - fold:
+          path: root
+    before: { root: { defaults: { timeout: 30, retries: 3 }, overrides: { timeout: 60 } } }
+    after: { merged: { timeout: 60, retries: 3 } }
+
+  reshape_round_trip:
+    description: Split into groups then merge back (demonstrates reversibility)
+    ops:
+      - split:
+          path: config
+          into: { db: [host, port], app: [debug, name] }
+      - assert:
+          path: config/db/host
+          equals: x
+      - merge:
+          path: config
+          keys: [db, app]
+          into: flat
+    before: { config: { host: x, port: 5432, debug: true, name: myapp } }
+    after: { config: { flat: { host: x, port: 5432, debug: true, name: myapp } } }
+
+# ============================================================================
+# Error Reference — which ops throw which errors
+# ============================================================================
+#
+# Quick reverse lookup: given an error code, which ops can produce it?
+
+error_reference:
+
+  PATH_NOT_FOUND:
+    thrown_by: [drop, rename, populate, move, clone, nest, split, merge, sort, unique]
+    meaning: >
+      The path you specified doesn't exist. For strict ops, this is a hard error.
+      Use resolvePath or assert to check before operating.
+
+  ALREADY_EXISTS:
+    thrown_by: [define, rename, move, clone, nest, split]
+    meaning: >
+      The target key/path already exists. These ops refuse to overwrite.
+      Use set (which overwrites) or drop the existing key first.
+
+  NOT_A_MAPPING:
+    thrown_by: [populate, nest, split, merge, pick, omit]
+    meaning: >
+      You targeted a path that isn't a mapping (it's a scalar, sequence, or null).
+      Check the type with assert before operating, or use set to reshape first.
+
+  NOT_A_SEQUENCE:
+    thrown_by: [append, sort, unique]
+    meaning: >
+      You targeted a path that isn't a sequence.
+      Use set to create a sequence first, e.g. set path: items, value: []
+
+  NOT_SIBLINGS:
+    thrown_by: [nest, merge]
+    meaning: >
+      One or more keys you referenced don't exist as siblings in the parent mapping.
+      Verify key names match exactly.
+
+  NOT_FOLDABLE:
+    thrown_by: [fold]
+    meaning: >
+      The mapping at the path has zero or more than one key. Fold requires
+      exactly one child key. Use pick to reduce to one key first, or use
+      a different restructuring op.
+
+  INVALID_PATH:
+    thrown_by: [set, populate]
+    meaning: >
+      The path can't be traversed because an intermediate value is a scalar
+      or null (not a mapping/sequence). The engine won't silently overwrite
+      intermediate values — reshape the document first.
+
+  ASSERTION_FAILED:
+    thrown_by: [assert]
+    meaning: >
+      One or more conditions (equals, exists, type) did not hold.
+      All provided conditions are checked — the assertion fails on the
+      first unmet condition.
+
+  UNKNOWN_OP:
+    thrown_by: [engine]
+    meaning: >
+      The operation name wasn't recognized by the registry. Check for typos
+      or verify your engine version supports the op.
