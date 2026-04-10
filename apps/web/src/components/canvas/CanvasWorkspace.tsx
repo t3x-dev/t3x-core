@@ -25,6 +25,7 @@ import { CanvasShortcutsDialog } from './CanvasShortcutsContent';
 import { CanvasStatusBar } from './CanvasStatusBar';
 import { CanvasToolbar } from './CanvasToolbar';
 import { useCanvasHandlers } from './CanvasWorkspaceHandlers';
+import { CommitActionPanel, buildCommitActions } from './CommitActionPanel';
 import { NodeContextMenu } from './NodeContextMenu';
 
 // Custom edge types for xyflow
@@ -81,6 +82,8 @@ function CanvasWorkspaceInner({
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showMemoryModal, setShowMemoryModal] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
+  const [actionPanel, setActionPanel] = useState<{ x: number; y: number; nodeId: string; hash: string } | null>(null);
+  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   const { screenToFlowPosition, getNodes, getEdges, setNodes, fitView, setCenter } = useReactFlow();
   const { resolvedTheme } = useTheme();
@@ -112,6 +115,7 @@ function CanvasWorkspaceInner({
     modalViewMode,
     openNodeModal,
     closeNodeModal,
+    openLeafPanel,
   } = useCanvasStore();
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
 
@@ -121,6 +125,13 @@ function CanvasWorkspaceInner({
       setOnboardingDismissed(true);
     }
   }, []);
+  // Cleanup click timer on unmount
+  useEffect(() => {
+    return () => {
+      if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
+    };
+  }, []);
+
   const notify = useProjectStore((state) => state.notifyCallback);
 
   // Extracted handlers
@@ -369,25 +380,49 @@ function CanvasWorkspaceInner({
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
-          onNodeClick={(_, node) => {
+          onNodeClick={(event, node) => {
             const data = node.data as import('@/types/nodes').CanvasNodeData;
-            // Leaf nodes -> navigate to leaf detail page
+
+            // Leaf nodes -> navigate to leaf detail page (always single click)
             if (data.kind === 'leaf' && data.leafId && projectId) {
               router.push(`/project/${projectId}/leaf/${data.leafId}`);
               return;
             }
-            // Committed commits -> navigate to full-page commit detail view
-            if (data.commitStatus === 'committed' && data.commitHash && projectId) {
-              router.push(`/project/${projectId}/commit/${encodeURIComponent(data.commitHash)}`);
+
+            // Staging/pending units -> navigate to chat page (always single click)
+            if (data.commitStatus !== 'committed') {
+              if (data.conversationId) {
+                router.push(`/chat/${data.conversationId}`);
+              } else {
+                openNodeModal(node.id, 'commit');
+              }
               return;
             }
-            // Staging/pending units -> navigate to chat page
-            if (data.conversationId) {
-              router.push(`/chat/${data.conversationId}`);
-              return;
+
+            // Committed nodes: single click = action panel, double click = detail page
+            if (clickTimerRef.current) {
+              // Double click detected
+              clearTimeout(clickTimerRef.current);
+              clickTimerRef.current = null;
+              setActionPanel(null);
+              if (data.commitHash && projectId) {
+                router.push(`/project/${projectId}/commit/${encodeURIComponent(data.commitHash)}`);
+              }
+            } else {
+              // First click — wait to see if double click follows
+              const rect = (event.target as HTMLElement).closest('.react-flow__node')?.getBoundingClientRect();
+              const px = rect ? rect.right + 8 : (event as React.MouseEvent).clientX;
+              const py = rect ? rect.top : (event as React.MouseEvent).clientY;
+              clickTimerRef.current = setTimeout(() => {
+                clickTimerRef.current = null;
+                setActionPanel({
+                  x: px,
+                  y: py,
+                  nodeId: node.id,
+                  hash: data.commitHash ?? '',
+                });
+              }, 250);
             }
-            // Fallback for nodes without conversation
-            openNodeModal(node.id, 'commit');
           }}
           onNodeContextMenu={handleNodeContextMenu}
           onPaneContextMenu={handlePaneContextMenu}
@@ -397,6 +432,7 @@ function CanvasWorkspaceInner({
               setHighlight(null);
             }
             closeContextMenu();
+            setActionPanel(null);
           }}
           panOnDrag={isPanMode}
           selectionOnDrag={!isPanMode}
@@ -456,6 +492,26 @@ function CanvasWorkspaceInner({
           y={contextMenu.y}
           groups={contextMenu.groups}
           onClose={closeContextMenu}
+        />
+      )}
+      {actionPanel && (
+        <CommitActionPanel
+          x={actionPanel.x}
+          y={actionPanel.y}
+          actions={buildCommitActions({
+            onContinueConversation: () => {
+              addConversationFromCommit(actionPanel.nodeId);
+            },
+            onViewDetails: () => {
+              if (projectId) {
+                router.push(`/project/${projectId}/commit/${encodeURIComponent(actionPanel.hash)}`);
+              }
+            },
+            onCreateLeaf: () => {
+              openLeafPanel(actionPanel.nodeId);
+            },
+          })}
+          onClose={() => setActionPanel(null)}
         />
       )}
       <CanvasStatusBar />
