@@ -56,8 +56,16 @@ describe('draftStore', () => {
     expect(useDraftStore.getState().yopsLog[0].source).toBe('manual');
   });
 
-  it('applyYOps persists ALL sources to DB (no filter)', () => {
+  it('applyYOps persists ALL sources to DB (no filter)', async () => {
     mockedCreateYOpsEntry.mockClear();
+
+    // Mock core applyYOps to guarantee ok:true (avoids CI build-order flakiness)
+    const core = await import('@t3x-dev/core');
+    const spy = vi.spyOn(core, 'applyYOps').mockReturnValue({
+      ok: true,
+      trees: [{ key: 'trip', slots: { budget: '2000' }, children: [] }],
+      relations: [],
+    });
 
     const content: SemanticContent = {
       trees: [{ key: 'trip', slots: { budget: '1000' }, children: [] }],
@@ -77,6 +85,8 @@ describe('draftStore', () => {
       expect.any(Array),
       'pipeline',
     );
+
+    spy.mockRestore();
   });
 
   it('applyYOps tracks manual edits in manualEditedNodeIds', () => {
