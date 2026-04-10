@@ -418,6 +418,7 @@ const UnitNode = memo(function UnitNode(props: Props) {
               />
             ) : (
               <h4
+                data-title-editable
                 className="m-0 text-sm font-semibold text-[var(--text-primary)] leading-snug flex-1 min-w-0 cursor-text"
                 onDoubleClick={(e) => {
                   e.stopPropagation();

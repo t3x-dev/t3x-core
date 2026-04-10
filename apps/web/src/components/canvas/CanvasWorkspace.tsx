@@ -366,6 +366,12 @@ function CanvasWorkspaceInner({
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
           onNodeClick={(event, node) => {
+            // Skip node click logic when user is interacting with editable title
+            const target = event.target as HTMLElement;
+            if (target.tagName === 'INPUT' || target.closest('[data-title-editable]')) {
+              return;
+            }
+
             const data = node.data as import('@/types/nodes').CanvasNodeData;
 
             // Leaf nodes -> navigate to leaf detail page (always single click)

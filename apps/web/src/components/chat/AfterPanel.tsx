@@ -618,7 +618,7 @@ export function AfterPanel() {
               value={commitMessage}
               onChange={(e) => setCommitMessage(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') handleCommit(commitMessage);
+                if (e.key === 'Enter' && !isCommitting) handleCommit(commitMessage);
                 if (e.key === 'Escape') setShowCommitDialog(false);
               }}
               className="w-full rounded-lg border border-[var(--stroke-default)] bg-[var(--surface-elevated)] px-2.5 py-1.5 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--commit)] transition-colors"
