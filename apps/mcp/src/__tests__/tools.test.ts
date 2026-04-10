@@ -122,7 +122,7 @@ import { handleDeleteDraft } from '../tools/delete-draft.js';
 import { handleDeleteLeaf } from '../tools/delete-leaf.js';
 import { handleDeleteProject } from '../tools/delete-project.js';
 import { handleDiff } from '../tools/diff.js';
-import { handleEditDraft } from '../tools/edit-draft.js';
+import { handleApplyYops } from '../tools/apply-yops.js';
 import { handleExtract } from '../tools/extract.js';
 import { handleGenerate } from '../tools/generate.js';
 import { handleListBranches } from '../tools/list-branches.js';
@@ -230,9 +230,9 @@ describe('handleShowDraft', () => {
   });
 });
 
-describe('handleEditDraft', () => {
+describe('handleApplyYops', () => {
   it('applies YOps and returns updated result', async () => {
-    const result = await handleEditDraft({
+    const result = await handleApplyYops({
       draft_id: 'draft_test',
       yops: [
         { set: { path: 'budget/amount', value: '$6000', source: 'make it $6000', from: 'T7' } },

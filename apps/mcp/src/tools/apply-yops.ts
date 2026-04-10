@@ -1,11 +1,11 @@
 import { getClient } from '../client.js';
 
-export const editDraftTool = {
-  name: 't3x_edit_draft',
+export const applyYopsTool = {
+  name: 't3x_apply_yops',
   description:
     'Edit a draft\'s semantic tree by applying YOps (YAML Operations). ' +
     'Prefer updating existing nodes (set/populate) over adding new ones (define).\n\n' +
-    '**Workflow:** t3x_show_draft → t3x_edit_draft → t3x_show_draft (verify) → t3x_commit\n\n' +
+    '**Workflow:** t3x_show_draft → t3x_apply_yops → t3x_show_draft (verify) → t3x_commit\n\n' +
     '**18 operations in 4 categories:**\n' +
     'DDL (structure): define, drop, rename\n' +
     'DML (values): set, unset, populate, append\n' +
@@ -38,7 +38,7 @@ export const editDraftTool = {
   },
 };
 
-export async function handleEditDraft(args: Record<string, unknown>) {
+export async function handleApplyYops(args: Record<string, unknown>) {
   const client = getClient();
   const result = await client.applyYOps(
     args.draft_id as string,

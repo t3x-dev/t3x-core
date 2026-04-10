@@ -14,7 +14,7 @@ import { deleteDraftTool, handleDeleteDraft } from './tools/delete-draft.js';
 import { deleteLeafTool, handleDeleteLeaf } from './tools/delete-leaf.js';
 import { deleteProjectTool, handleDeleteProject } from './tools/delete-project.js';
 import { diffTool, handleDiff } from './tools/diff.js';
-import { editDraftTool, handleEditDraft } from './tools/edit-draft.js';
+import { applyYopsTool, handleApplyYops } from './tools/apply-yops.js';
 import { extractTool, handleExtract } from './tools/extract.js';
 import { generateTool, handleGenerate } from './tools/generate.js';
 import { handleListBranches, listBranchesTool } from './tools/list-branches.js';
@@ -46,7 +46,7 @@ const tools = [
   createProjectTool,
   deleteProjectTool,
   showDraftTool,
-  editDraftTool,
+  applyYopsTool,
   listCommitsTool,
   diffTool,
   createBranchTool,
@@ -80,7 +80,7 @@ const handlers: Record<
   [listProjectsTool.name]: handleListProjects,
   [createProjectTool.name]: handleCreateProject,
   [showDraftTool.name]: handleShowDraft,
-  [editDraftTool.name]: handleEditDraft,
+  [applyYopsTool.name]: handleApplyYops,
   [listCommitsTool.name]: handleListCommits,
   [diffTool.name]: handleDiff,
   [createBranchTool.name]: handleCreateBranch,
