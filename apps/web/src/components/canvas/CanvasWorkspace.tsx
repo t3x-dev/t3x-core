@@ -156,8 +156,6 @@ function CanvasWorkspaceInner({
       getNodes,
       projectId,
       fitView,
-      handleAutoLayout,
-      onAutoExtract: handleAutoExtract,
       onNavigate: (url: string) => router.push(url),
     });
 

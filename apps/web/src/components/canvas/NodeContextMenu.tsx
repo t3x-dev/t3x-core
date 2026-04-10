@@ -10,16 +10,12 @@
 import {
   ArrowLeftRight,
   Copy,
-  ExternalLink,
   Eye,
   FileOutput,
   GitBranch,
   GitMerge,
-  LayoutGrid,
   MessageSquarePlus,
-  Plus,
   Share2,
-  Sparkles,
   Trash2,
   ZoomIn,
 } from 'lucide-react';
@@ -162,11 +158,9 @@ export function NodeContextMenu({ x, y, groups, onClose }: NodeContextMenuProps)
 
 export function buildUnitNodeMenu(opts: {
   onOpenConversation?: () => void;
-  onOpenInNewPage?: () => void;
   onQuickDiff?: () => void;
   onQuickMerge?: () => void;
   onCreateBranch: () => void;
-  onAutoExtract?: () => void;
   onCopyHash?: () => void;
   onDelete?: () => void;
   isDraft: boolean;
@@ -180,13 +174,6 @@ export function buildUnitNodeMenu(opts: {
       label: 'Open Conversation',
       icon: <MessageSquarePlus size={14} />,
       action: opts.onOpenConversation,
-    });
-  }
-  if (opts.onOpenInNewPage) {
-    navigateItems.push({
-      label: 'Open in New Page',
-      icon: <ExternalLink size={14} />,
-      action: opts.onOpenInNewPage,
     });
   }
 
@@ -220,13 +207,6 @@ export function buildUnitNodeMenu(opts: {
 
   // Utility group
   const utilityItems: ContextMenuItem[] = [];
-  if (opts.hasConversation && opts.onAutoExtract) {
-    utilityItems.push({
-      label: 'Auto-Extract to Draft',
-      icon: <Sparkles size={14} />,
-      action: opts.onAutoExtract,
-    });
-  }
   if (opts.onCopyHash) {
     utilityItems.push({
       label: 'Copy Hash',
@@ -270,26 +250,12 @@ export function buildLeafNodeMenu(opts: {
 }
 
 export function buildBackgroundMenu(opts: {
-  onAddConversation: () => void;
-  onAddLeaf: () => void;
   onFitView: () => void;
-  onAutoLayout: () => void;
 }): ContextMenuGroup[] {
   return [
     {
       items: [
-        {
-          label: 'Add Conversation',
-          icon: <MessageSquarePlus size={14} />,
-          action: opts.onAddConversation,
-        },
-        { label: 'Add Leaf', icon: <Plus size={14} />, action: opts.onAddLeaf },
-      ],
-    },
-    {
-      items: [
         { label: 'Fit View', icon: <ZoomIn size={14} />, action: opts.onFitView },
-        { label: 'Auto Layout', icon: <LayoutGrid size={14} />, action: opts.onAutoLayout },
       ],
     },
   ];
