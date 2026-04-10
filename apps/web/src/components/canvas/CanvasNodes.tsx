@@ -11,6 +11,7 @@ import {
   Globe,
   MessageSquare,
   MessageSquarePlus,
+  Pencil,
   PenSquare,
   Plus,
   Rocket,
@@ -412,25 +413,34 @@ const UnitNode = memo(function UnitNode(props: Props) {
                   if (e.key === 'Enter') handleTitleSave();
                   if (e.key === 'Escape') setIsEditingTitle(false);
                 }}
+                onPointerDown={(e) => e.stopPropagation()}
                 onMouseDown={(e) => e.stopPropagation()}
                 onBlur={handleTitleSave}
                 className="noDrag nowheel m-0 text-sm font-semibold text-[var(--text-primary)] leading-snug flex-1 min-w-0 bg-transparent border-b border-[var(--commit)] outline-none"
+                data-title-editable
                 autoFocus
               />
             ) : (
-              <h4
-                data-title-editable
-                className="m-0 text-sm font-semibold text-[var(--text-primary)] leading-snug flex-1 min-w-0 cursor-text"
-                onDoubleClick={(e) => {
-                  e.stopPropagation();
-                  if (isCommitted) {
-                    setEditTitle(data.title);
-                    setIsEditingTitle(true);
-                  }
-                }}
-              >
-                {data.title}
-              </h4>
+              <div className="flex items-center gap-1 flex-1 min-w-0 group/title">
+                <h4 className="m-0 text-sm font-semibold text-[var(--text-primary)] leading-snug flex-1 min-w-0 truncate">
+                  {data.title}
+                </h4>
+                {isCommitted && (
+                  <button
+                    type="button"
+                    data-title-editable
+                    className="shrink-0 p-0.5 rounded opacity-0 group-hover/title:opacity-60 hover:!opacity-100 text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-opacity"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditTitle(data.title);
+                      setIsEditingTitle(true);
+                    }}
+                    title="Rename commit"
+                  >
+                    <Pencil size={10} />
+                  </button>
+                )}
+              </div>
             )}
             {isDraft ? (
               <span className="flex-shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded-full border border-amber-500/50 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 inline-flex items-center gap-0.5">
