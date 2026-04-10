@@ -13,7 +13,10 @@ export const mergeExecuteTool = {
     properties: {
       draft_id: { type: 'string', description: 'Merge draft ID from t3x_merge_prepare' },
       message: { type: 'string', description: 'Merge commit message' },
-      branch: { type: 'string', description: 'Target branch (optional, defaults to target branch from prepare)' },
+      branch: {
+        type: 'string',
+        description: 'Target branch (optional, defaults to target branch from prepare)',
+      },
     },
     required: ['draft_id', 'message'],
   },

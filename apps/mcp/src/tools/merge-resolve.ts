@@ -20,7 +20,10 @@ export const mergeResolveTool = {
         items: {
           type: 'object',
           properties: {
-            path: { type: 'string', description: 'Conflict node path (from t3x_merge_show_conflict)' },
+            path: {
+              type: 'string',
+              description: 'Conflict node path (from t3x_merge_show_conflict)',
+            },
             resolution: {
               description: '"source", "target", "both", or { edit: { slots: { ... } } }',
             },
@@ -46,7 +49,8 @@ export async function handleMergeResolve(args: Record<string, unknown>) {
 
   // Get current draft to read existing resolutions and conflict count
   const draft = await client.getMergeDraft(draftId);
-  const existingResolutions = ((draft as Record<string, unknown>).resolutions as Array<{ path: string }>) || [];
+  const existingResolutions =
+    ((draft as Record<string, unknown>).resolutions as Array<{ path: string }>) || [];
 
   // Build resolution log entries
   const now = new Date().toISOString();

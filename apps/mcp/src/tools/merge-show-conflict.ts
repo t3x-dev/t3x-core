@@ -12,7 +12,8 @@ export const mergeShowConflictTool = {
       draft_id: { type: 'string', description: 'Merge draft ID from t3x_merge_prepare' },
       conflict_index: {
         type: 'number',
-        description: 'Index of the conflict to inspect (0-based, from t3x_merge_prepare conflicts list)',
+        description:
+          'Index of the conflict to inspect (0-based, from t3x_merge_prepare conflicts list)',
       },
     },
     required: ['draft_id', 'conflict_index'],

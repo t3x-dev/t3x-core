@@ -218,7 +218,10 @@ export class T3xClient {
     await this.request<void>('DELETE', `/v1/conversations/${id}`);
   }
 
-  async renameConversation(id: string, input: RenameConversationInput): Promise<RenameConversationResult> {
+  async renameConversation(
+    id: string,
+    input: RenameConversationInput
+  ): Promise<RenameConversationResult> {
     return this.request<RenameConversationResult>('PATCH', `/v1/conversations/${id}/rename`, input);
   }
 

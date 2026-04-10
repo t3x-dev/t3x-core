@@ -177,17 +177,19 @@ vi.mock('@t3x-dev/api-client', () => ({
   })),
 }));
 
+import { handleApplyYops } from '../tools/apply-yops.js';
 import { handleCheck } from '../tools/check.js';
 import { handleCommit } from '../tools/commit.js';
 import { handleCreateBranch } from '../tools/create-branch.js';
 import { handleCreateConversation } from '../tools/create-conversation.js';
 import { handleCreateLeaf } from '../tools/create-leaf.js';
+import { handleCreatePin } from '../tools/create-pin.js';
 import { handleCreateProject } from '../tools/create-project.js';
 import { handleDeleteDraft } from '../tools/delete-draft.js';
 import { handleDeleteLeaf } from '../tools/delete-leaf.js';
+import { handleDeletePin } from '../tools/delete-pin.js';
 import { handleDeleteProject } from '../tools/delete-project.js';
 import { handleDiff } from '../tools/diff.js';
-import { handleApplyYops } from '../tools/apply-yops.js';
 import { handleExtract } from '../tools/extract.js';
 import { handleGenerate } from '../tools/generate.js';
 import { handleListBranches } from '../tools/list-branches.js';
@@ -195,21 +197,19 @@ import { handleListCommits } from '../tools/list-commits.js';
 import { handleListConversations } from '../tools/list-conversations.js';
 import { handleListDrafts } from '../tools/list-drafts.js';
 import { handleListLeaves } from '../tools/list-leaves.js';
+import { handleListPins } from '../tools/list-pins.js';
 import { handleListProjects } from '../tools/list-projects.js';
 import { handleMergeAbort } from '../tools/merge-abort.js';
 import { handleMergeExecute } from '../tools/merge-execute.js';
 import { handleMergePrepare } from '../tools/merge-prepare.js';
 import { handleMergeResolve } from '../tools/merge-resolve.js';
 import { handleMergeShowConflict } from '../tools/merge-show-conflict.js';
+import { handleRenameConversation } from '../tools/rename-conversation.js';
 import { handleShow } from '../tools/show.js';
 import { handleShowCommit } from '../tools/show-commit.js';
 import { handleShowDraft } from '../tools/show-draft.js';
 import { handleShowLeaf } from '../tools/show-leaf.js';
-import { handleRenameConversation } from '../tools/rename-conversation.js';
 import { handleShowProject } from '../tools/show-project.js';
-import { handleListPins } from '../tools/list-pins.js';
-import { handleCreatePin } from '../tools/create-pin.js';
-import { handleDeletePin } from '../tools/delete-pin.js';
 
 beforeEach(() => {
   // Reset the singleton client between tests so each test gets a fresh mock
@@ -601,4 +601,3 @@ describe('handleValidate', () => {
     expect(data).toBeDefined();
   });
 });
-

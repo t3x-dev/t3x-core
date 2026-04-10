@@ -4,17 +4,19 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { browserAuth, clearStoredToken, ensureAuth } from './auth.js';
 import { getBaseUrl, getClient, updateToken } from './client.js';
+import { applyYopsTool, handleApplyYops } from './tools/apply-yops.js';
 import { checkTool, handleCheck } from './tools/check.js';
 import { commitTool, handleCommit } from './tools/commit.js';
 import { createBranchTool, handleCreateBranch } from './tools/create-branch.js';
 import { createConversationTool, handleCreateConversation } from './tools/create-conversation.js';
 import { createLeafTool, handleCreateLeaf } from './tools/create-leaf.js';
+import { createPinTool, handleCreatePin } from './tools/create-pin.js';
 import { createProjectTool, handleCreateProject } from './tools/create-project.js';
 import { deleteDraftTool, handleDeleteDraft } from './tools/delete-draft.js';
 import { deleteLeafTool, handleDeleteLeaf } from './tools/delete-leaf.js';
+import { deletePinTool, handleDeletePin } from './tools/delete-pin.js';
 import { deleteProjectTool, handleDeleteProject } from './tools/delete-project.js';
 import { diffTool, handleDiff } from './tools/diff.js';
-import { applyYopsTool, handleApplyYops } from './tools/apply-yops.js';
 import { extractTool, handleExtract } from './tools/extract.js';
 import { generateTool, handleGenerate } from './tools/generate.js';
 import { handleListBranches, listBranchesTool } from './tools/list-branches.js';
@@ -22,24 +24,22 @@ import { handleListCommits, listCommitsTool } from './tools/list-commits.js';
 import { handleListConversations, listConversationsTool } from './tools/list-conversations.js';
 import { handleListDrafts, listDraftsTool } from './tools/list-drafts.js';
 import { handleListLeaves, listLeavesTool } from './tools/list-leaves.js';
+import { handleListPins, listPinsTool } from './tools/list-pins.js';
 import { handleListProjects, listProjectsTool } from './tools/list-projects.js';
 import { handleMergeAbort, mergeAbortTool } from './tools/merge-abort.js';
 import { handleMergeExecute, mergeExecuteTool } from './tools/merge-execute.js';
 import { handleMergePrepare, mergePrepareTool } from './tools/merge-prepare.js';
 import { handleMergeResolve, mergeResolveTool } from './tools/merge-resolve.js';
 import { handleMergeShowConflict, mergeShowConflictTool } from './tools/merge-show-conflict.js';
+import { handleRenameConversation, renameConversationTool } from './tools/rename-conversation.js';
 import { handleSchema, schemaTool } from './tools/schema.js';
 import { handleShow, showTool } from './tools/show.js';
 import { handleShowCommit, showCommitTool } from './tools/show-commit.js';
 import { handleShowDraft, showDraftTool } from './tools/show-draft.js';
 import { handleShowLeaf, showLeafTool } from './tools/show-leaf.js';
 import { handleShowProject, showProjectTool } from './tools/show-project.js';
-import { handleRenameConversation, renameConversationTool } from './tools/rename-conversation.js';
 import { handleUpdateProject, updateProjectTool } from './tools/update-project.js';
 import { handleValidate, validateTool } from './tools/validate.js';
-import { handleListPins, listPinsTool } from './tools/list-pins.js';
-import { handleCreatePin, createPinTool } from './tools/create-pin.js';
-import { handleDeletePin, deletePinTool } from './tools/delete-pin.js';
 
 const tools = [
   extractTool,

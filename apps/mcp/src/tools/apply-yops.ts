@@ -3,7 +3,7 @@ import { getClient } from '../client.js';
 export const applyYopsTool = {
   name: 't3x_apply_yops',
   description:
-    'Edit a draft\'s semantic tree by applying YOps (YAML Operations). ' +
+    "Edit a draft's semantic tree by applying YOps (YAML Operations). " +
     'Prefer updating existing nodes (set/populate) over adding new ones (define).\n\n' +
     '**Workflow:** t3x_show_draft → t3x_apply_yops → t3x_show_draft (verify) → t3x_commit\n\n' +
     '**18 operations in 4 categories:**\n' +

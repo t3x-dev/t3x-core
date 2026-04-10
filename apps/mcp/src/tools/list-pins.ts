@@ -2,7 +2,8 @@ import { getClient } from '../client.js';
 
 export const listPinsTool = {
   name: 't3x_list_pins',
-  description: 'List all pins for a project. Pins mark conversations or leaves as selected sources for commit context.',
+  description:
+    'List all pins for a project. Pins mark conversations or leaves as selected sources for commit context.',
   inputSchema: {
     type: 'object' as const,
     properties: {
