@@ -37,6 +37,9 @@ import { handleShowProject, showProjectTool } from './tools/show-project.js';
 import { handleRenameConversation, renameConversationTool } from './tools/rename-conversation.js';
 import { handleUpdateProject, updateProjectTool } from './tools/update-project.js';
 import { handleValidate, validateTool } from './tools/validate.js';
+import { handleListPins, listPinsTool } from './tools/list-pins.js';
+import { handleCreatePin, createPinTool } from './tools/create-pin.js';
+import { handleDeletePin, deletePinTool } from './tools/delete-pin.js';
 
 const tools = [
   extractTool,
@@ -72,6 +75,9 @@ const tools = [
   listDraftsTool,
   deleteDraftTool,
   updateProjectTool,
+  listPinsTool,
+  createPinTool,
+  deletePinTool,
 ];
 
 const handlers: Record<
@@ -111,6 +117,9 @@ const handlers: Record<
   [listDraftsTool.name]: handleListDrafts,
   [deleteDraftTool.name]: handleDeleteDraft,
   [updateProjectTool.name]: handleUpdateProject,
+  [listPinsTool.name]: handleListPins,
+  [createPinTool.name]: handleCreatePin,
+  [deletePinTool.name]: handleDeletePin,
 };
 
 const server = new Server({ name: 't3x-mcp', version: '0.1.0' }, { capabilities: { tools: {} } });

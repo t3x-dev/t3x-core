@@ -163,6 +163,17 @@ vi.mock('@t3x-dev/api-client', () => ({
       total: 1,
     }),
     deleteDraft: vi.fn().mockResolvedValue(undefined),
+    listPins: vi.fn().mockResolvedValue({
+      pins: [{ id: 'pin_1', type: 'conversation', ref_id: 'conv_1', project_id: 'proj_1' }],
+    }),
+    createPin: vi.fn().mockResolvedValue({
+      id: 'pin_new',
+      type: 'conversation',
+      ref_id: 'conv_1',
+      project_id: 'proj_1',
+      pinned_at: '2026-04-10T00:00:00Z',
+    }),
+    deletePin: vi.fn().mockResolvedValue({ deleted: true }),
   })),
 }));
 
@@ -196,6 +207,9 @@ import { handleShowDraft } from '../tools/show-draft.js';
 import { handleShowLeaf } from '../tools/show-leaf.js';
 import { handleRenameConversation } from '../tools/rename-conversation.js';
 import { handleShowProject } from '../tools/show-project.js';
+import { handleListPins } from '../tools/list-pins.js';
+import { handleCreatePin } from '../tools/create-pin.js';
+import { handleDeletePin } from '../tools/delete-pin.js';
 
 beforeEach(() => {
   // Reset the singleton client between tests so each test gets a fresh mock
@@ -533,6 +547,36 @@ describe('handleRenameConversation', () => {
     const data = JSON.parse(result.content[0].text);
     expect(data.conversation_id).toBe('conv_new');
     expect(data.alias).toBe('q3_review');
+  });
+});
+
+describe('handleListPins', () => {
+  it('returns pins list', async () => {
+    const result = await handleListPins({ project_id: 'proj_1' });
+    const data = JSON.parse(result.content[0].text);
+    expect(data.pins).toHaveLength(1);
+    expect(data.pins[0].type).toBe('conversation');
+  });
+});
+
+describe('handleCreatePin', () => {
+  it('creates pin and returns result', async () => {
+    const result = await handleCreatePin({
+      project_id: 'proj_1',
+      type: 'conversation',
+      ref_id: 'conv_1',
+    });
+    const data = JSON.parse(result.content[0].text);
+    expect(data.id).toBe('pin_new');
+    expect(data.type).toBe('conversation');
+  });
+});
+
+describe('handleDeletePin', () => {
+  it('deletes pin and returns confirmation', async () => {
+    const result = await handleDeletePin({ pin_id: 'pin_1' });
+    const data = JSON.parse(result.content[0].text);
+    expect(data.deleted).toBe(true);
   });
 });
 
