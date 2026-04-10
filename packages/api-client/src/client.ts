@@ -26,6 +26,7 @@ import type {
   CreateDraftInput,
   CreateLeafInput,
   CreateMergeDraftInput,
+  CreatePinInput,
   CreateProjectInput,
   CreateShareTokenInput,
   CreateTurnInput,
@@ -47,19 +48,24 @@ import type {
   ListConversationsResponse,
   ListDraftsResponse,
   ListLeavesResponse,
+  ListPinsResponse,
   ListProjectsResponse,
   ListTurnsResponse,
   MergeDraft,
   MergeDraftCommitInput,
   MergeDraftCommitResult,
   PaginationParams,
+  Pin,
   PlatformImportResult,
   Project,
   ProjectWithStats,
+  RenameConversationInput,
+  RenameConversationResult,
   ShareToken,
   StatusResponse,
   Turn,
   TwoWayDiffInput,
+  UpdateMergeDraftInput,
   UpdateProjectInput,
   UpdateWebhookInput,
   Webhook,
@@ -210,6 +216,10 @@ export class T3xClient {
 
   async deleteConversation(id: string): Promise<void> {
     await this.request<void>('DELETE', `/v1/conversations/${id}`);
+  }
+
+  async renameConversation(id: string, input: RenameConversationInput): Promise<RenameConversationResult> {
+    return this.request<RenameConversationResult>('PATCH', `/v1/conversations/${id}/rename`, input);
   }
 
   // ============================================
@@ -375,6 +385,14 @@ export class T3xClient {
     return this.request<{ deleted: boolean }>('DELETE', `/v1/merge/drafts/${id}`);
   }
 
+  async getMergeDraft(id: string): Promise<MergeDraft> {
+    return this.request<MergeDraft>('GET', `/v1/merge/drafts/${id}`);
+  }
+
+  async updateMergeDraft(id: string, input: UpdateMergeDraftInput): Promise<MergeDraft> {
+    return this.request<MergeDraft>('PATCH', `/v1/merge/drafts/${id}`, input);
+  }
+
   // ============================================
   // Diff
   // ============================================
@@ -459,6 +477,22 @@ export class T3xClient {
 
   async deleteLeaf(id: string): Promise<void> {
     await this.request<void>('DELETE', `/v1/leaves/${id}`);
+  }
+
+  // ============================================
+  // Pins
+  // ============================================
+
+  async listPins(projectId: string): Promise<ListPinsResponse> {
+    return this.request<ListPinsResponse>('GET', `/v1/projects/${projectId}/pins`);
+  }
+
+  async createPin(projectId: string, input: CreatePinInput): Promise<Pin> {
+    return this.request<Pin>('POST', `/v1/projects/${projectId}/pins`, input);
+  }
+
+  async deletePin(id: string): Promise<{ deleted: boolean }> {
+    return this.request<{ deleted: boolean }>('DELETE', `/v1/pins/${id}`);
   }
 
   // ============================================

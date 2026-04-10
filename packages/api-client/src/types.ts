@@ -298,6 +298,50 @@ export interface MergeDraftCommitResult {
   merge_summary: MergeSummary;
 }
 
+// Merge draft update (for conflict resolution)
+export interface MergeResolution {
+  path: string;
+  resolution: 'source' | 'target' | 'both' | { edit: { slots: Record<string, unknown> } };
+  reasoning: string;
+  resolved_at: string;
+}
+
+export interface UpdateMergeDraftInput {
+  prepared?: unknown;
+  message?: string;
+  resolutions?: MergeResolution[];
+}
+
+// Rename conversation
+export interface RenameConversationInput {
+  alias: string;
+}
+
+export interface RenameConversationResult {
+  conversation_id: string;
+  alias: string;
+}
+
+// Pin types
+export interface Pin {
+  id: string;
+  project_id: string;
+  type: 'conversation' | 'leaf';
+  ref_id: string;
+  selected_assertion_ids: string[];
+  pinned_at: string;
+}
+
+export interface CreatePinInput {
+  type: 'conversation' | 'leaf';
+  ref_id: string;
+  selected_assertion_ids?: string[];
+}
+
+export interface ListPinsResponse {
+  pins: Pin[];
+}
+
 // Export types
 export interface ExportCfpackInput {
   project_id: string;
