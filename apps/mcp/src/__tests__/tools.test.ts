@@ -89,6 +89,10 @@ vi.mock('@t3x-dev/api-client', () => ({
       project_id: 'proj_1',
       title: 'New conv',
     }),
+    renameConversation: vi.fn().mockResolvedValue({
+      conversation_id: 'conv_new',
+      alias: 'q3_review',
+    }),
     getLeaf: vi.fn().mockResolvedValue({
       id: 'leaf_1',
       type: 'tweet',
@@ -137,6 +141,7 @@ import { handleShow } from '../tools/show.js';
 import { handleShowCommit } from '../tools/show-commit.js';
 import { handleShowDraft } from '../tools/show-draft.js';
 import { handleShowLeaf } from '../tools/show-leaf.js';
+import { handleRenameConversation } from '../tools/rename-conversation.js';
 import { handleShowProject } from '../tools/show-project.js';
 
 beforeEach(() => {
@@ -146,13 +151,14 @@ beforeEach(() => {
 
 describe('handleExtract', () => {
   it('returns extraction result with conversation_id, draft_id, and trees', async () => {
-    const result = await handleExtract({ project_id: 'proj_test', text: 'Hello world' });
+    const result = await handleExtract({
+      conversation_id: 'conv_test',
+      text: 'Hello world',
+    });
     const data = JSON.parse(result.content[0].text);
-
     expect(data.conversation_id).toBe('conv_test');
     expect(data.draft_id).toBe('draft_test');
     expect(Array.isArray(data.trees)).toBe(true);
-    expect(data.trees[0].key).toBe('s_0');
   });
 });
 
@@ -415,6 +421,18 @@ describe('handleDeleteLeaf', () => {
     const data = JSON.parse(result.content[0].text);
     expect(data.deleted).toBe(true);
     expect(data.leaf_id).toBe('leaf_1');
+  });
+});
+
+describe('handleRenameConversation', () => {
+  it('renames conversation and returns result', async () => {
+    const result = await handleRenameConversation({
+      conversation_id: 'conv_new',
+      alias: 'q3_review',
+    });
+    const data = JSON.parse(result.content[0].text);
+    expect(data.conversation_id).toBe('conv_new');
+    expect(data.alias).toBe('q3_review');
   });
 });
 

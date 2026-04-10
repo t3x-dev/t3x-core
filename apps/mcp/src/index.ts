@@ -31,6 +31,7 @@ import { handleShowCommit, showCommitTool } from './tools/show-commit.js';
 import { handleShowDraft, showDraftTool } from './tools/show-draft.js';
 import { handleShowLeaf, showLeafTool } from './tools/show-leaf.js';
 import { handleShowProject, showProjectTool } from './tools/show-project.js';
+import { handleRenameConversation, renameConversationTool } from './tools/rename-conversation.js';
 import { handleUpdateProject, updateProjectTool } from './tools/update-project.js';
 import { handleValidate, validateTool } from './tools/validate.js';
 
@@ -58,6 +59,7 @@ const tools = [
   mergeExecuteTool,
   listConversationsTool,
   createConversationTool,
+  renameConversationTool,
   showLeafTool,
   deleteLeafTool,
   showProjectTool,
@@ -93,6 +95,7 @@ const handlers: Record<
   [mergeExecuteTool.name]: handleMergeExecute,
   [listConversationsTool.name]: handleListConversations,
   [createConversationTool.name]: handleCreateConversation,
+  [renameConversationTool.name]: handleRenameConversation,
   [showLeafTool.name]: handleShowLeaf,
   [deleteLeafTool.name]: handleDeleteLeaf,
   [showProjectTool.name]: handleShowProject,
