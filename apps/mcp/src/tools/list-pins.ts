@@ -1,8 +1,9 @@
 import { getClient } from '../client.js';
 
-export const currentBranchTool = {
-  name: 't3x_current_branch',
-  description: 'Get the current active branch for a project.',
+export const listPinsTool = {
+  name: 't3x_list_pins',
+  description:
+    'List all pins for a project. Pins mark conversations or leaves as selected sources for commit context.',
   inputSchema: {
     type: 'object' as const,
     properties: {
@@ -12,8 +13,8 @@ export const currentBranchTool = {
   },
 };
 
-export async function handleCurrentBranch(args: Record<string, unknown>) {
+export async function handleListPins(args: Record<string, unknown>) {
   const client = getClient();
-  const result = await client.getCurrentBranch(args.project_id as string);
+  const result = await client.listPins(args.project_id as string);
   return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
 }

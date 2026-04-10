@@ -230,7 +230,13 @@ describe('T3xClient', () => {
     });
 
     it('restoreProject sends POST to restore endpoint', async () => {
-      const fn = mockFetch(successResponse({ project_id: 'proj_1', name: 'Restored', created_at: '2024-01-01T00:00:00Z' }));
+      const fn = mockFetch(
+        successResponse({
+          project_id: 'proj_1',
+          name: 'Restored',
+          created_at: '2024-01-01T00:00:00Z',
+        })
+      );
       const client = createTestClient(fn);
 
       const result = await client.restoreProject('proj_1');

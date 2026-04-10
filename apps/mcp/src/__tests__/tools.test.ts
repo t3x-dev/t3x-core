@@ -63,11 +63,6 @@ vi.mock('@t3x-dev/api-client', () => ({
       title: 'New leaf',
       commit_hash: 'sha256:abc',
     }),
-    importUrl: vi.fn().mockResolvedValue({
-      conversation_id: 'conv_imported',
-      turn_count: 5,
-    }),
-    exportLedger: vi.fn().mockResolvedValue('# Project Export\n...'),
     getCommit: vi.fn().mockResolvedValue({
       hash: 'sha256:abc',
       message: 'test commit',
@@ -75,16 +70,66 @@ vi.mock('@t3x-dev/api-client', () => ({
       parents: [],
       branch: 'main',
     }),
-    prepareMerge: vi.fn().mockResolvedValue({
-      autoKept: [{ text: 'shared item' }],
-      conflicts: [],
-      onlyInSource: [],
-      onlyInTarget: [],
+    createMergeDraft: vi.fn().mockResolvedValue({
+      id: 'md_test',
+      project_id: 'proj_1',
+      source_hash: 'sha256:aaa',
+      target_hash: 'sha256:bbb',
+      status: 'pending',
+      prepared: {
+        autoKept: ['node_a'],
+        conflicts: [
+          {
+            path: 'budget/total',
+            slotConflicts: [{ key: 'text', sourceValue: '5000', targetValue: '8000' }],
+          },
+        ],
+        onlyInSource: ['node_b'],
+        onlyInTarget: [],
+        relationsOnlyInSource: [],
+        relationsOnlyInTarget: [],
+        relationsInBoth: [],
+      },
+      message: null,
+      created_at: '2026-04-10T00:00:00Z',
+      updated_at: '2026-04-10T00:00:00Z',
     }),
-    executeMerge: vi.fn().mockResolvedValue({
-      commit_hash: 'sha256:merged',
-      message: 'Merge complete',
+    getMergeDraft: vi.fn().mockResolvedValue({
+      id: 'md_test',
+      status: 'pending',
+      prepared: {
+        autoKept: ['node_a'],
+        conflicts: [
+          {
+            path: 'budget/total',
+            slotConflicts: [{ key: 'text', sourceValue: '5000', targetValue: '8000' }],
+          },
+        ],
+        onlyInSource: [],
+        onlyInTarget: [],
+        relationsOnlyInSource: [],
+        relationsOnlyInTarget: [],
+        relationsInBoth: [],
+      },
     }),
+    updateMergeDraft: vi.fn().mockResolvedValue({ id: 'md_test', status: 'pending' }),
+    commitMergeDraft: vi.fn().mockResolvedValue({
+      hash: 'sha256:merged',
+      parents: ['sha256:aaa', 'sha256:bbb'],
+      author: { type: 'human', name: 'user' },
+      committed_at: '2026-04-10T00:00:00Z',
+      message: 'Merge feature into main',
+      branch: 'main',
+      merge_summary: {
+        kept_identical: 5,
+        resolved_conflicts: 2,
+        kept_from_source: 1,
+        kept_from_target: 0,
+        discarded: 0,
+        total_nodes: 8,
+      },
+    }),
+    deleteMergeDraft: vi.fn().mockResolvedValue({ deleted: true }),
     listConversations: vi.fn().mockResolvedValue({
       conversations: [{ conversation_id: 'conv_1', title: 'Test' }],
       total: 1,
@@ -94,10 +139,9 @@ vi.mock('@t3x-dev/api-client', () => ({
       project_id: 'proj_1',
       title: 'New conv',
     }),
-    createTurn: vi.fn().mockResolvedValue({
-      turn_hash: 'sha256:t1',
-      role: 'user',
-      content: 'Hello',
+    renameConversation: vi.fn().mockResolvedValue({
+      conversation_id: 'conv_new',
+      alias: 'q3_review',
     }),
     getLeaf: vi.fn().mockResolvedValue({
       id: 'leaf_1',
@@ -114,99 +158,58 @@ vi.mock('@t3x-dev/api-client', () => ({
       commit_count: 3,
       conversation_count: 2,
     }),
-    restoreProject: vi.fn().mockResolvedValue({
-      id: 'proj_1',
-      name: 'Test Project',
-      deleted_at: null,
-    }),
-    getConversation: vi.fn().mockResolvedValue({
-      id: 'conv_1',
-      project_id: 'proj_1',
-      title: 'Test Conversation',
-      turn_count: 5,
-    }),
-    deleteConversation: vi.fn().mockResolvedValue(undefined),
-    listTurns: vi.fn().mockResolvedValue({
-      turns: [
-        { turn_hash: 'sha256:t1', role: 'user', content: 'Hello' },
-        { turn_hash: 'sha256:t2', role: 'assistant', content: 'Hi there' },
-      ],
-      total: 2,
-    }),
-    getCurrentBranch: vi.fn().mockResolvedValue({
-      name: 'main',
-      head_hash: 'sha256:abc',
-    }),
     listDrafts: vi.fn().mockResolvedValue({
       drafts: [{ id: 'draft_1', status: 'editing', revision: 2 }],
       total: 1,
     }),
     deleteDraft: vi.fn().mockResolvedValue(undefined),
-    chat: vi.fn().mockResolvedValue({
-      conversation_id: 'conv_1',
-      response: 'Hello from LLM',
-      turn_hash: 'sha256:t3',
+    listPins: vi.fn().mockResolvedValue({
+      pins: [{ id: 'pin_1', type: 'conversation', ref_id: 'conv_1', project_id: 'proj_1' }],
     }),
-    listWebhooks: vi
-      .fn()
-      .mockResolvedValue([
-        { id: 'wh_1', url: 'https://example.com/hook', events: ['commit.created'] },
-      ]),
-    createWebhook: vi.fn().mockResolvedValue({
-      id: 'wh_new',
-      url: 'https://example.com/hook',
-      events: ['commit.created'],
+    createPin: vi.fn().mockResolvedValue({
+      id: 'pin_new',
+      type: 'conversation',
+      ref_id: 'conv_1',
+      project_id: 'proj_1',
+      pinned_at: '2026-04-10T00:00:00Z',
     }),
-    deleteWebhook: vi.fn().mockResolvedValue(undefined),
-    createShareToken: vi.fn().mockResolvedValue({
-      token: 'share_abc123',
-      entity_type: 'project',
-      entity_id: 'proj_1',
-      expires_at: '2026-05-01T00:00:00Z',
-    }),
+    deletePin: vi.fn().mockResolvedValue({ deleted: true }),
   })),
 }));
 
-import { handleAddTurn } from '../tools/add-turn.js';
-import { handleChat } from '../tools/chat.js';
+import { handleApplyYops } from '../tools/apply-yops.js';
 import { handleCheck } from '../tools/check.js';
 import { handleCommit } from '../tools/commit.js';
 import { handleCreateBranch } from '../tools/create-branch.js';
 import { handleCreateConversation } from '../tools/create-conversation.js';
 import { handleCreateLeaf } from '../tools/create-leaf.js';
+import { handleCreatePin } from '../tools/create-pin.js';
 import { handleCreateProject } from '../tools/create-project.js';
-import { handleCreateShare } from '../tools/create-share.js';
-import { handleCreateWebhook } from '../tools/create-webhook.js';
-import { handleCurrentBranch } from '../tools/current-branch.js';
-import { handleDeleteConversation } from '../tools/delete-conversation.js';
 import { handleDeleteDraft } from '../tools/delete-draft.js';
 import { handleDeleteLeaf } from '../tools/delete-leaf.js';
+import { handleDeletePin } from '../tools/delete-pin.js';
 import { handleDeleteProject } from '../tools/delete-project.js';
-import { handleDeleteWebhook } from '../tools/delete-webhook.js';
 import { handleDiff } from '../tools/diff.js';
-import { handleEditDraft } from '../tools/edit-draft.js';
-import { handleExport } from '../tools/export.js';
 import { handleExtract } from '../tools/extract.js';
 import { handleGenerate } from '../tools/generate.js';
-import { handleGetConversation } from '../tools/get-conversation.js';
-import { handleImportUrl } from '../tools/import-url.js';
 import { handleListBranches } from '../tools/list-branches.js';
 import { handleListCommits } from '../tools/list-commits.js';
 import { handleListConversations } from '../tools/list-conversations.js';
 import { handleListDrafts } from '../tools/list-drafts.js';
 import { handleListLeaves } from '../tools/list-leaves.js';
+import { handleListPins } from '../tools/list-pins.js';
 import { handleListProjects } from '../tools/list-projects.js';
-import { handleListTurns } from '../tools/list-turns.js';
-import { handleListWebhooks } from '../tools/list-webhooks.js';
+import { handleMergeAbort } from '../tools/merge-abort.js';
 import { handleMergeExecute } from '../tools/merge-execute.js';
 import { handleMergePrepare } from '../tools/merge-prepare.js';
-import { handleRestoreProject } from '../tools/restore-project.js';
+import { handleMergeResolve } from '../tools/merge-resolve.js';
+import { handleMergeShowConflict } from '../tools/merge-show-conflict.js';
+import { handleRenameConversation } from '../tools/rename-conversation.js';
 import { handleShow } from '../tools/show.js';
 import { handleShowCommit } from '../tools/show-commit.js';
 import { handleShowDraft } from '../tools/show-draft.js';
 import { handleShowLeaf } from '../tools/show-leaf.js';
 import { handleShowProject } from '../tools/show-project.js';
-import { handleSwitchBranch } from '../tools/switch-branch.js';
 
 beforeEach(() => {
   // Reset the singleton client between tests so each test gets a fresh mock
@@ -215,13 +218,14 @@ beforeEach(() => {
 
 describe('handleExtract', () => {
   it('returns extraction result with conversation_id, draft_id, and trees', async () => {
-    const result = await handleExtract({ project_id: 'proj_test', text: 'Hello world' });
+    const result = await handleExtract({
+      conversation_id: 'conv_test',
+      text: 'Hello world',
+    });
     const data = JSON.parse(result.content[0].text);
-
     expect(data.conversation_id).toBe('conv_test');
     expect(data.draft_id).toBe('draft_test');
     expect(Array.isArray(data.trees)).toBe(true);
-    expect(data.trees[0].key).toBe('s_0');
   });
 });
 
@@ -299,9 +303,9 @@ describe('handleShowDraft', () => {
   });
 });
 
-describe('handleEditDraft', () => {
+describe('handleApplyYops', () => {
   it('applies YOps and returns updated result', async () => {
-    const result = await handleEditDraft({
+    const result = await handleApplyYops({
       draft_id: 'draft_test',
       yops: [
         { set: { path: 'budget/amount', value: '$6000', source: 'make it $6000', from: 'T7' } },
@@ -349,17 +353,6 @@ describe('handleCreateBranch', () => {
   });
 });
 
-describe('handleSwitchBranch', () => {
-  it('switches branch and returns result', async () => {
-    const result = await handleSwitchBranch({
-      project_id: 'proj_test',
-      branch: 'experiment',
-    });
-    const data = JSON.parse(result.content[0].text);
-    expect(data.name).toBe('experiment');
-  });
-});
-
 describe('handleListBranches', () => {
   it('returns all branches', async () => {
     const result = await handleListBranches({ project_id: 'proj_test' });
@@ -399,21 +392,6 @@ describe('handleCreateLeaf', () => {
   });
 });
 
-describe('handleImportUrl', () => {
-  it('imports URL and returns result', async () => {
-    const result = await handleImportUrl({ project_id: 'proj_test', url: 'https://example.com' });
-    const data = JSON.parse(result.content[0].text);
-    expect(data.conversation_id).toBe('conv_imported');
-  });
-});
-
-describe('handleExport', () => {
-  it('exports project as text', async () => {
-    const result = await handleExport({ project_id: 'proj_test' });
-    expect(result.content[0].text).toContain('# Project Export');
-  });
-});
-
 describe('handleShowProject', () => {
   it('returns project details with stats', async () => {
     const result = await handleShowProject({ project_id: 'proj_1' });
@@ -421,54 +399,6 @@ describe('handleShowProject', () => {
     expect(data.id).toBe('proj_1');
     expect(data.name).toBe('Test Project');
     expect(data.commit_count).toBe(3);
-  });
-});
-
-describe('handleRestoreProject', () => {
-  it('restores project and returns result', async () => {
-    const result = await handleRestoreProject({ project_id: 'proj_1' });
-    const data = JSON.parse(result.content[0].text);
-    expect(data.id).toBe('proj_1');
-    expect(data.deleted_at).toBeNull();
-  });
-});
-
-describe('handleGetConversation', () => {
-  it('returns conversation details', async () => {
-    const result = await handleGetConversation({ conversation_id: 'conv_1' });
-    const data = JSON.parse(result.content[0].text);
-    expect(data.id).toBe('conv_1');
-    expect(data.title).toBe('Test Conversation');
-    expect(data.turn_count).toBe(5);
-  });
-});
-
-describe('handleDeleteConversation', () => {
-  it('deletes conversation and returns confirmation', async () => {
-    const result = await handleDeleteConversation({ conversation_id: 'conv_1' });
-    const data = JSON.parse(result.content[0].text);
-    expect(data.deleted).toBe(true);
-    expect(data.conversation_id).toBe('conv_1');
-  });
-});
-
-describe('handleListTurns', () => {
-  it('returns turns list with total', async () => {
-    const result = await handleListTurns({ conversation_id: 'conv_1' });
-    const data = JSON.parse(result.content[0].text);
-    expect(data.turns).toHaveLength(2);
-    expect(data.turns[0].role).toBe('user');
-    expect(data.turns[1].role).toBe('assistant');
-    expect(data.total).toBe(2);
-  });
-});
-
-describe('handleCurrentBranch', () => {
-  it('returns current branch info', async () => {
-    const result = await handleCurrentBranch({ project_id: 'proj_test' });
-    const data = JSON.parse(result.content[0].text);
-    expect(data.name).toBe('main');
-    expect(data.head_hash).toBe('sha256:abc');
   });
 });
 
@@ -491,62 +421,6 @@ describe('handleDeleteDraft', () => {
   });
 });
 
-describe('handleChat', () => {
-  it('sends chat message and returns response', async () => {
-    const result = await handleChat({
-      project_id: 'proj_test',
-      message: 'Hello',
-    });
-    const data = JSON.parse(result.content[0].text);
-    expect(data.conversation_id).toBe('conv_1');
-    expect(data.response).toBe('Hello from LLM');
-  });
-});
-
-describe('handleListWebhooks', () => {
-  it('returns webhooks list', async () => {
-    const result = await handleListWebhooks({ project_id: 'proj_test' });
-    const data = JSON.parse(result.content[0].text);
-    expect(data).toHaveLength(1);
-    expect(data[0].id).toBe('wh_1');
-    expect(data[0].events).toContain('commit.created');
-  });
-});
-
-describe('handleCreateWebhook', () => {
-  it('creates webhook and returns result', async () => {
-    const result = await handleCreateWebhook({
-      url: 'https://example.com/hook',
-      events: ['commit.created'],
-    });
-    const data = JSON.parse(result.content[0].text);
-    expect(data.id).toBe('wh_new');
-    expect(data.url).toBe('https://example.com/hook');
-  });
-});
-
-describe('handleDeleteWebhook', () => {
-  it('deletes webhook and returns confirmation', async () => {
-    const result = await handleDeleteWebhook({ webhook_id: 'wh_1' });
-    const data = JSON.parse(result.content[0].text);
-    expect(data.deleted).toBe(true);
-    expect(data.webhook_id).toBe('wh_1');
-  });
-});
-
-describe('handleCreateShare', () => {
-  it('creates share token and returns result', async () => {
-    const result = await handleCreateShare({
-      entity_type: 'project',
-      entity_id: 'proj_1',
-    });
-    const data = JSON.parse(result.content[0].text);
-    expect(data.token).toBe('share_abc123');
-    expect(data.entity_type).toBe('project');
-    expect(data.entity_id).toBe('proj_1');
-  });
-});
-
 describe('handleShowCommit', () => {
   it('returns commit content with trees', async () => {
     const result = await handleShowCommit({ hash: 'sha256:abc' });
@@ -557,28 +431,75 @@ describe('handleShowCommit', () => {
 });
 
 describe('handleMergePrepare', () => {
-  it('returns merge analysis', async () => {
+  it('creates merge draft and returns structured summary', async () => {
     const result = await handleMergePrepare({
+      project_id: 'proj_1',
       source_hash: 'sha256:aaa',
       target_hash: 'sha256:bbb',
     });
     const data = JSON.parse(result.content[0].text);
-    expect(data.autoKept).toBeDefined();
-    expect(data.conflicts).toBeDefined();
+    expect(data.draft_id).toBe('md_test');
+    expect(data.summary.auto_kept).toBe(1);
+    expect(data.summary.conflicts).toBe(1);
+    expect(data.conflicts[0].path).toBe('budget/total');
+    expect(data.conflicts[0].slot_keys).toEqual(['text']);
+  });
+});
+
+describe('handleMergeShowConflict', () => {
+  it('returns conflict detail by index', async () => {
+    const result = await handleMergeShowConflict({
+      draft_id: 'md_test',
+      conflict_index: 0,
+    });
+    const data = JSON.parse(result.content[0].text);
+    expect(data.path).toBe('budget/total');
+    expect(data.slot_conflicts[0].key).toBe('text');
+    expect(data.slot_conflicts[0].source_value).toBe('5000');
+    expect(data.slot_conflicts[0].target_value).toBe('8000');
+    expect(data.resolution_options).toContain('source');
+  });
+});
+
+describe('handleMergeResolve', () => {
+  it('resolves conflicts and returns remaining count', async () => {
+    const result = await handleMergeResolve({
+      draft_id: 'md_test',
+      resolutions: [
+        {
+          path: 'budget/total',
+          resolution: 'target',
+          reasoning: 'Target has updated budget figure',
+        },
+      ],
+    });
+    const data = JSON.parse(result.content[0].text);
+    expect(data.resolved).toBe(true);
+    expect(data.resolutions_applied).toBe(1);
+    expect(data.remaining_conflicts).toBe(0);
+    expect(data.resolution_log[0].reasoning).toBe('Target has updated budget figure');
   });
 });
 
 describe('handleMergeExecute', () => {
-  it('executes merge and returns commit', async () => {
+  it('commits merge draft and returns result', async () => {
     const result = await handleMergeExecute({
-      source_hash: 'sha256:aaa',
-      target_hash: 'sha256:bbb',
-      prepared: {},
-      decisions: {},
-      message: 'Merge test',
+      draft_id: 'md_test',
+      message: 'Merge feature into main',
     });
     const data = JSON.parse(result.content[0].text);
-    expect(data.commit_hash).toBe('sha256:merged');
+    expect(data.hash).toBe('sha256:merged');
+    expect(data.merge_summary.resolved_conflicts).toBe(2);
+    expect(data.branch).toBe('main');
+  });
+});
+
+describe('handleMergeAbort', () => {
+  it('aborts merge and returns confirmation', async () => {
+    const result = await handleMergeAbort({ draft_id: 'md_test' });
+    const data = JSON.parse(result.content[0].text);
+    expect(data.aborted).toBe(true);
+    expect(data.draft_id).toBe('md_test');
   });
 });
 
@@ -595,19 +516,6 @@ describe('handleCreateConversation', () => {
     const result = await handleCreateConversation({ project_id: 'proj_test' });
     const data = JSON.parse(result.content[0].text);
     expect(data.conversation_id).toBe('conv_new');
-  });
-});
-
-describe('handleAddTurn', () => {
-  it('adds turn to conversation', async () => {
-    const result = await handleAddTurn({
-      conversation_id: 'conv_1',
-      role: 'user',
-      content: 'Hello',
-    });
-    const data = JSON.parse(result.content[0].text);
-    expect(data.turn_hash).toBe('sha256:t1');
-    expect(data.role).toBe('user');
   });
 });
 
@@ -630,6 +538,48 @@ describe('handleDeleteLeaf', () => {
   });
 });
 
+describe('handleRenameConversation', () => {
+  it('renames conversation and returns result', async () => {
+    const result = await handleRenameConversation({
+      conversation_id: 'conv_new',
+      alias: 'q3_review',
+    });
+    const data = JSON.parse(result.content[0].text);
+    expect(data.conversation_id).toBe('conv_new');
+    expect(data.alias).toBe('q3_review');
+  });
+});
+
+describe('handleListPins', () => {
+  it('returns pins list', async () => {
+    const result = await handleListPins({ project_id: 'proj_1' });
+    const data = JSON.parse(result.content[0].text);
+    expect(data.pins).toHaveLength(1);
+    expect(data.pins[0].type).toBe('conversation');
+  });
+});
+
+describe('handleCreatePin', () => {
+  it('creates pin and returns result', async () => {
+    const result = await handleCreatePin({
+      project_id: 'proj_1',
+      type: 'conversation',
+      ref_id: 'conv_1',
+    });
+    const data = JSON.parse(result.content[0].text);
+    expect(data.id).toBe('pin_new');
+    expect(data.type).toBe('conversation');
+  });
+});
+
+describe('handleDeletePin', () => {
+  it('deletes pin and returns confirmation', async () => {
+    const result = await handleDeletePin({ pin_id: 'pin_1' });
+    const data = JSON.parse(result.content[0].text);
+    expect(data.deleted).toBe(true);
+  });
+});
+
 // Local-only tools (no API client mock needed, they import from @t3x-dev/core)
 describe('handleSchema', () => {
   it('returns JSON schema object', async () => {
@@ -649,15 +599,5 @@ describe('handleValidate', () => {
     });
     const data = JSON.parse(result.content[0].text);
     expect(data).toBeDefined();
-  });
-});
-
-describe('handleYopsSchema', () => {
-  it('returns YOps JSON schema', async () => {
-    const { handleYopsSchema: handler } = await import('../tools/yops-schema.js');
-    const result = await handler({});
-    const data = JSON.parse(result.content[0].text);
-    expect(data).toBeDefined();
-    expect(typeof data).toBe('object');
   });
 });
