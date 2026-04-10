@@ -155,6 +155,24 @@ export async function updateCommitPosition(
 }
 
 /**
+ * Update commit message (display name).
+ */
+export async function updateCommitMessage(
+  commitHash: string,
+  message: string
+): Promise<ApiCommit> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/commits/${encodeURIComponent(commitHash)}/message`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message }),
+    }
+  );
+  return handleResponse<ApiCommit>(res);
+}
+
+/**
  * Get commit ancestor chain as ApiCommit[].
  */
 export async function getApiCommitHistory(commitHash: string, limit = 50): Promise<ApiCommit[]> {
