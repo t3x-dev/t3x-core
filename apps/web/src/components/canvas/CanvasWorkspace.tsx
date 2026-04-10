@@ -27,7 +27,6 @@ import { CanvasToolbar } from './CanvasToolbar';
 import { useCanvasHandlers } from './CanvasWorkspaceHandlers';
 import { NodeContextMenu } from './NodeContextMenu';
 import { NodePalette } from './NodePalette';
-import { useBranchFilter } from './useBranchFilter';
 
 // Custom edge types for xyflow
 const edgeTypes = {
@@ -196,7 +195,12 @@ function CanvasWorkspaceInner({
   // - Initial load without DB positions → run ELK + save to DB
   // - Topology change (new node/edge/delete) → always re-run ELK + save to DB
   useEffect(() => {
-    const currentNodes = getNodes();
+    // Use ReactFlow's internal nodes (includes measured dimensions for ELK).
+    // Fall back to Zustand store nodes if ReactFlow hasn't synced yet — avoids
+    // a race where getNodes() returns [] on the first effect run, causing
+    // initialLayoutDone to never be set and the canvas to stay opacity-0.
+    const rfNodes = getNodes();
+    const currentNodes = rfNodes.length > 0 ? rfNodes : nodes;
     if (currentNodes.length === 0) return;
 
     const isInitialLoad = prevTopoRef.current === null;
@@ -242,6 +246,9 @@ function CanvasWorkspaceInner({
     })();
     return () => {
       cancelled = true;
+      // Reset prevTopoRef so that React StrictMode re-mount (or any remount)
+      // treats the next effect run as an initial load instead of "no change".
+      prevTopoRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [topoFingerprint]);
@@ -329,32 +336,11 @@ function CanvasWorkspaceInner({
     setShowShortcuts,
   });
 
-  const { branchNames, branchFilter, setBranchFilter } = useBranchFilter({
-    nodes,
-    setHighlight,
-  });
-
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
       <CanvasToolbar
         projectName={projectName}
-        projectId={projectId}
-        mode={mode}
-        onModeChange={onModeChange}
-        viewSwitcher={viewSwitcher}
-        highlight={highlight}
-        toggleHighlight={toggleHighlight}
-        setHighlight={setHighlight}
-        branchFilter={branchFilter}
-        setBranchFilter={setBranchFilter}
-        branchNames={branchNames}
-        hasMainCommits={hasMainCommits}
-        hasBranchCommits={hasBranchCommits}
-        onAutoLayout={handleAutoLayout}
-        onAddNode={() => handleAddNode('unit')}
-        isLayouting={isLayouting}
-        isPending={isAdding}
-        nodeCount={nodes.length}
+        onFitView={() => fitView({ padding: 0.3, maxZoom: 1, duration: 300 })}
       />
 
       <div
