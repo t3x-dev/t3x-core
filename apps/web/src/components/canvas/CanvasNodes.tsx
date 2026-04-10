@@ -8,9 +8,7 @@ import {
   FileText,
   GitBranch,
   GitCommit,
-  GitMerge,
   Globe,
-  MessageCircle,
   MessageSquare,
   MessageSquarePlus,
   PenSquare,
@@ -18,7 +16,7 @@ import {
   Rocket,
 } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { AutoDraftBadge } from '@/components/canvas/AutoDraftBadge';
 import { SealAnimation } from '@/components/canvas/SealAnimation';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -75,17 +73,15 @@ const UnitNode = memo(function UnitNode(props: Props) {
   const [leavesExpanded, setLeavesExpanded] = useState(false);
   const [contentExpandedManual, setContentExpandedManual] = useState(false);
   const [copiedHash, setCopiedHash] = useState(false);
-  const [showLineage, setShowLineage] = useState(false);
-  const lineageTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const router = useRouter();
   const params = useParams();
   const projectId = params?.projectId as string | undefined;
   const prefersReducedMotion = useReducedMotion();
   const zoomTier = useSemanticZoom();
   const isConstellation = zoomTier === 'overview';
-  const isDetail = zoomTier === 'detail';
-  // Detail zoom tier auto-expands content and leaves
-  const contentExpanded = contentExpandedManual || isDetail;
+  // Detail expansion is user-initiated only (click "Details"), not zoom-driven
+  const isDetail = false;
+  const contentExpanded = contentExpandedManual;
 
   const { t } = useTerminology();
   const tone = useCanvasStore((state) => state.getCommitTone(id));
@@ -174,13 +170,6 @@ const UnitNode = memo(function UnitNode(props: Props) {
     return () => ro.disconnect();
   }, []);
 
-  // Cleanup lineage hover timer on unmount
-  useEffect(() => {
-    return () => {
-      if (lineageTimerRef.current) clearTimeout(lineageTimerRef.current);
-    };
-  }, []);
-
   const handleAddUnit = async () => {
     try {
       await addConversationFromCommit(id);
@@ -225,18 +214,6 @@ const UnitNode = memo(function UnitNode(props: Props) {
       })
       .catch(() => {}); // Silently fail on clipboard permission denial
   };
-
-  // Lineage card hover handlers (400ms open delay, immediate close)
-  const handleNodeMouseEnter = useCallback(() => {
-    lineageTimerRef.current = setTimeout(() => setShowLineage(true), 400);
-  }, []);
-  const handleNodeMouseLeave = useCallback(() => {
-    if (lineageTimerRef.current) {
-      clearTimeout(lineageTimerRef.current);
-      lineageTimerRef.current = null;
-    }
-    setShowLineage(false);
-  }, []);
 
   // Navigate to leaf detail page
   const _getLeafHref = (leaf: EmbeddedLeaf): string | undefined => {
@@ -335,8 +312,6 @@ const UnitNode = memo(function UnitNode(props: Props) {
             : { y: -1, transition: { duration: 0.15, ease: [0.16, 1, 0.3, 1] } }
         }
         whileTap={prefersReducedMotion ? undefined : { scale: 0.995 }}
-        onMouseEnter={handleNodeMouseEnter}
-        onMouseLeave={handleNodeMouseLeave}
         className={cn(
           'relative group w-72 rounded-xl overflow-visible elevation-1',
           glass.cardNode,
@@ -388,75 +363,6 @@ const UnitNode = memo(function UnitNode(props: Props) {
           isActive={sealing}
           onComplete={() => setSealing(false)}
         />
-
-        {/* Lineage summary card — appears on hover after 400ms */}
-        {showLineage && isCommitted && (
-          <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 z-50 pointer-events-none">
-            <div
-              className={cn(
-                'rounded-lg px-3 py-2 text-xs min-w-[200px] max-w-[260px] shadow-lg border border-[var(--stroke-divider)]',
-                glass.cardNode
-              )}
-            >
-              {/* Branch + hash */}
-              <div className="flex items-center gap-1.5 mb-1.5">
-                {data.branchType === 'main' ? (
-                  <GitCommit size={11} className={toneAccent.commit.text} />
-                ) : (
-                  <GitBranch size={11} className={toneAccent.branch.text} />
-                )}
-                <span className="font-medium text-[var(--text-primary)]">{branchLabel}</span>
-                {(data.commit?.hash || data.commitHash) && (
-                  <span className="font-mono text-[var(--text-tertiary)] text-[10px]">
-                    {(data.commit?.hash || data.commitHash || '')
-                      .replace('sha256:', '')
-                      .slice(0, 7)}
-                  </span>
-                )}
-              </div>
-              {/* Stats rows */}
-              <div className="space-y-0.5 text-[var(--text-secondary)]">
-                {data.isMergeCommit && (
-                  <div className="flex items-center gap-1.5">
-                    <GitMerge size={10} className="text-[var(--text-tertiary)]" />
-                    <span>Merge commit</span>
-                  </div>
-                )}
-                {data.sources && data.sources.length > 0 && (
-                  <div className="flex items-center gap-1.5">
-                    <MessageCircle size={10} className="text-[var(--text-tertiary)]" />
-                    <span>
-                      {data.sources.length} source{data.sources.length !== 1 ? 's' : ''}
-                    </span>
-                  </div>
-                )}
-                {nodeCount > 0 && (
-                  <div className="flex items-center gap-1.5">
-                    <FileText size={10} className="text-[var(--text-tertiary)]" />
-                    <span>
-                      {nodeCount} tree{nodeCount !== 1 ? 's' : ''}
-                    </span>
-                  </div>
-                )}
-                {data.leaves && data.leaves.length > 0 && (
-                  <div className="flex items-center gap-1.5">
-                    <Rocket size={10} className="text-[var(--text-tertiary)]" />
-                    <span>
-                      {data.leaves.length} {data.leaves.length === 1 ? 'leaf' : 'leaves'}
-                      {totalAssertions > 0 && (
-                        <span className="ml-1">
-                          (<span className="text-[var(--status-success)]">{totalPassed}</span>
-                          <span className="text-[var(--text-tertiary)]">/</span>
-                          <span>{totalAssertions}</span>)
-                        </span>
-                      )}
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* ═══════════════════════════════════════════
             SECTION 1: SOURCES (if any)
