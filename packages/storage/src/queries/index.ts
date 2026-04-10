@@ -69,6 +69,7 @@ export {
   getLatestCommit,
   type ListCommitsOptions,
   listCommits,
+  updateCommitMessage,
   updateCommitPosition,
 } from './commits';
 // Commits Unified (transition adapter)
