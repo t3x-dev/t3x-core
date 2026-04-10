@@ -417,6 +417,9 @@ export function AfterPanel() {
 
   const isCommitting = useCommitStore((s) => s.isCommitting);
 
+  const [showCommitDialog, setShowCommitDialog] = useState(false);
+  const [commitMessage, setCommitMessage] = useState('');
+
   const trees = result?.trees as TreeNode[] | undefined;
   const hasResult = !!(result && trees && trees.length > 0);
 
@@ -465,22 +468,30 @@ export function AfterPanel() {
     [appendOp, execute]
   );
 
+  const getDefaultCommitName = useCallback(() => {
+    if (!trees || trees.length === 0) return 'Knowledge Extract';
+    const rootKeys = trees
+      .slice(0, 3)
+      .map((t) => t.key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()));
+    return rootKeys.join(' & ');
+  }, [trees]);
+
   // ── Commit: persist current result ──
-  const handleCommit = useCallback(async () => {
+  const handleCommit = useCallback(async (message: string) => {
     try {
       useWorkspaceStore.getState().setMode('committing');
-      await useCommitStore.getState().commitNodes('Extract knowledge');
+      await useCommitStore.getState().commitNodes(message || 'Knowledge Extract');
       if (result) {
         useWorkspaceStore.getState().snapshotBase(result, useCommitStore.getState().lastCommitHash);
       }
       useWorkspaceStore.getState().setMode('idle');
       useWorkspaceStore.getState().setScriptText('');
+      setShowCommitDialog(false);
       toast.success('Committed successfully');
-      // Notify other pages (canvas) that a commit was created
       try {
         new BroadcastChannel('t3x-commits').postMessage({ type: 'commit.created' });
       } catch {
-        // BroadcastChannel not supported — canvas will pick up on next poll
+        // BroadcastChannel not supported
       }
     } catch (err: unknown) {
       useWorkspaceStore.getState().setMode('executed');
@@ -495,7 +506,7 @@ export function AfterPanel() {
   }, []);
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full relative">
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-1.5 border-b border-[var(--stroke-default)] bg-[var(--panel-alt)] shrink-0">
         <span className="text-[9px] font-bold uppercase tracking-wider text-[var(--text-tertiary)]">
@@ -585,7 +596,10 @@ export function AfterPanel() {
           </button>
           <button
             type="button"
-            onClick={handleCommit}
+            onClick={() => {
+              setCommitMessage(getDefaultCommitName());
+              setShowCommitDialog(true);
+            }}
             disabled={!hasResult || isCommitting}
             className="flex items-center gap-1 rounded bg-[var(--commit)] px-2.5 py-1 text-[10px] font-semibold text-[var(--commit-text)] hover:bg-[var(--commit-hover)] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
           >
@@ -593,6 +607,44 @@ export function AfterPanel() {
           </button>
         </div>
       </div>
+      {showCommitDialog && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/30 backdrop-blur-sm rounded-b-lg">
+          <div className="bg-[var(--panel)] border border-[var(--stroke-default)] rounded-xl p-4 mx-3 w-full max-w-[280px] shadow-lg">
+            <label className="block text-[10px] font-semibold text-[var(--text-secondary)] mb-1.5">
+              Name this commit
+            </label>
+            <input
+              type="text"
+              value={commitMessage}
+              onChange={(e) => setCommitMessage(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleCommit(commitMessage);
+                if (e.key === 'Escape') setShowCommitDialog(false);
+              }}
+              className="w-full rounded-lg border border-[var(--stroke-default)] bg-[var(--surface-elevated)] px-2.5 py-1.5 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--commit)] transition-colors"
+              placeholder="e.g. Budget & Attractions"
+              autoFocus
+            />
+            <div className="flex justify-end gap-1.5 mt-3">
+              <button
+                type="button"
+                onClick={() => setShowCommitDialog(false)}
+                className="rounded px-2.5 py-1 text-[10px] font-medium text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleCommit(commitMessage)}
+                disabled={isCommitting}
+                className="rounded bg-[var(--commit)] px-2.5 py-1 text-[10px] font-semibold text-[var(--commit-text)] hover:bg-[var(--commit-hover)] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                {isCommitting ? 'Committing...' : 'Commit'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
