@@ -179,10 +179,8 @@ describe('DraftWorkspace LLM mode component selection', () => {
   test('shared sections always render regardless of mode', async () => {
     const { CollapsibleSection } = await import('@/components/shared/CollapsibleSection');
     const { DraftDiffSection } = await import('@/components/draft/DraftDiffSection');
-    const { ConflictPanel } = await import('@/components/draft/ConflictPanel');
     expect(CollapsibleSection).toBeDefined();
     expect(DraftDiffSection).toBeDefined();
-    expect(ConflictPanel).toBeDefined();
   });
 
   test('LLM mode indicator text is "LLM Extraction"', () => {

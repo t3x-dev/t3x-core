@@ -155,6 +155,24 @@ export async function updateCommitPosition(
 }
 
 /**
+ * Update commit message (display name).
+ */
+export async function updateCommitMessage(
+  commitHash: string,
+  message: string
+): Promise<ApiCommit> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/commits/${encodeURIComponent(commitHash)}/message`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message }),
+    }
+  );
+  return handleResponse<ApiCommit>(res);
+}
+
+/**
  * Get commit ancestor chain as ApiCommit[].
  */
 export async function getApiCommitHistory(commitHash: string, limit = 50): Promise<ApiCommit[]> {
@@ -168,32 +186,6 @@ export async function getApiCommitHistory(commitHash: string, limit = 50): Promi
   } catch {
     return [];
   }
-}
-
-// ============================================================================
-// Conflict Detection
-// ============================================================================
-
-export interface ConflictCandidate {
-  new_node_id: string;
-  new_node_text: string;
-  existing_node_id: string;
-  existing_node_text: string;
-  existing_commit_hash: string;
-  cosine: number;
-  jaccard: number;
-}
-
-export interface ConflictReport {
-  conflicts: ConflictCandidate[];
-  checked_count: number;
-}
-
-/**
- * @deprecated V4 conflict check endpoint has been removed. Returns empty report.
- */
-export async function checkConflicts(_commitHash: string): Promise<ConflictReport> {
-  return { conflicts: [], checked_count: 0 };
 }
 
 // ============================================================================

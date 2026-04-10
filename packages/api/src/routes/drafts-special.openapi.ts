@@ -29,51 +29,6 @@ export const draftsSpecialRoutes = new OpenAPIHono({
 // Route Definitions
 // ============================================================
 
-// POST /v1/drafts/auto
-const createAutoDraftRoute = createRoute({
-  method: 'post',
-  path: '/v1/drafts/auto',
-  tags: ['Drafts'],
-  summary: 'Create auto-draft from conversation (Upgrade #7)',
-  request: {
-    body: {
-      content: {
-        'application/json': {
-          schema: z.object({
-            project_id: z.string().min(1),
-            conversation_id: z.string().min(1),
-            parent_commit_hash: z.string().optional(),
-            target_branch: z.string().optional(),
-            options: z
-              .object({
-                max_nodes: z.number().int().min(1).max(100).optional(),
-              })
-              .optional(),
-          }),
-        },
-      },
-    },
-  },
-  responses: {
-    201: {
-      description: 'Auto-draft created',
-      content: { 'application/json': { schema: SuccessResponseSchema(DraftResponse) } },
-    },
-    400: {
-      description: 'Invalid request',
-      content: { 'application/json': { schema: ErrorResponseSchema } },
-    },
-    503: {
-      description: 'LLM provider not configured',
-      content: { 'application/json': { schema: ErrorResponseSchema } },
-    },
-    500: {
-      description: 'Server error',
-      content: { 'application/json': { schema: ErrorResponseSchema } },
-    },
-  },
-});
-
 // POST /v1/drafts/:id/promote
 const promoteDraftRoute = createRoute({
   method: 'post',
@@ -136,17 +91,6 @@ const reviewActionRoute = createRoute({
 // ============================================================
 // Route Handlers
 // ============================================================
-
-// POST /v1/drafts/auto
-draftsSpecialRoutes.openapi(createAutoDraftRoute, async (c) => {
-  // Auto-draft creation via node extraction is deprecated.
-  // Use frame-based extraction via /v1/extract/frames instead.
-  return errorResponse(
-    c,
-    'DEPRECATED',
-    'Auto-draft creation via node extraction has been replaced by tree-based extraction. Use /v1/extract/trees instead.'
-  );
-});
 
 // POST /v1/drafts/:id/promote
 draftsSpecialRoutes.openapi(promoteDraftRoute, async (c) => {

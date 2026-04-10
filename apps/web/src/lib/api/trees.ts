@@ -145,8 +145,6 @@ export async function listYOpsLog(
   return handleResponse<YOpsLogEntry[]>(res);
 }
 
-/** @deprecated Use listYOpsLog instead */
-export const listDeltas = listYOpsLog;
 
 export async function getSemanticDraft(
   conversationId: string,

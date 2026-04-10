@@ -236,6 +236,23 @@ export async function updateCommitPosition(
   return updated ? rowToCommit(updated) : null;
 }
 
+/**
+ * Update commit message (display name).
+ */
+export async function updateCommitMessage(
+  db: AnyDB,
+  hash: string,
+  message: string
+): Promise<Commit | null> {
+  const [updated] = await db
+    .update(commits)
+    .set({ message })
+    .where(eq(commits.hash, hash))
+    .returning();
+
+  return updated ? rowToCommit(updated) : null;
+}
+
 // ============================================================
 // Helpers
 // ============================================================

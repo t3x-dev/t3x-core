@@ -1,10 +1,10 @@
 'use client';
 
-import { Code, Layout, Monitor, Moon, Sun, Users } from 'lucide-react';
+import { Code, Monitor, Moon, Sun, Users } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
-import { type UserExperience, useSettingsStore, type ViewMode } from '@/store/settingsStore';
+import { type UserExperience, useSettingsStore } from '@/store/settingsStore';
 
 interface OptionCardProps<T extends string> {
   value: T;
@@ -54,8 +54,6 @@ function OptionCard<T extends string>({
 export default function PreferencesPage() {
   const userExperience = useSettingsStore((s) => s.userExperience);
   const setUserExperience = useSettingsStore((s) => s.setUserExperience);
-  const defaultView = useSettingsStore((s) => s.defaultView);
-  const setDefaultView = useSettingsStore((s) => s.setDefaultView);
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
@@ -130,31 +128,6 @@ export default function PreferencesPage() {
         </div>
       </section>
 
-      {/* Default View */}
-      <section className="mb-8">
-        <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-1">Default View</h2>
-        <p className="text-xs text-[var(--text-tertiary)] mb-3">
-          Choose how projects open by default.
-        </p>
-        <div className="flex flex-col gap-3">
-          <OptionCard<ViewMode>
-            value="canvas"
-            current={defaultView}
-            onChange={setDefaultView}
-            icon={<Layout className="h-5 w-5" />}
-            title="Canvas"
-            description="Visual node graph with drag-and-drop interactions."
-          />
-          <OptionCard<ViewMode>
-            value="timeline"
-            current={defaultView}
-            onChange={setDefaultView}
-            icon={<Monitor className="h-5 w-5" />}
-            title="Timeline"
-            description="Chronological view of commits and activity."
-          />
-        </div>
-      </section>
 
       {/* Density, Extraction Style, Developer Mode — removed (non-core) */}
     </div>

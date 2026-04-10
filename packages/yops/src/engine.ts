@@ -7,7 +7,7 @@
  * Fail-fast: stops at the first error and returns partial state.
  */
 
-import type { YValue, YOp, YOpsResult, YOpsError } from './types';
+import type { YValue, YOp, YOpsResult } from './types';
 import { deepClone } from './paths';
 import { yopsError, YOPS_ERRORS } from './errors';
 import type { OpRegistry } from './registry';

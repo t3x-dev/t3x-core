@@ -484,9 +484,6 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
       hasMainCommit: false,
       latestMainCommitId: undefined,
       hasDbPositions: false,
-      commitConflicts: {},
-      dismissedConflicts: {},
-      showConflictPanel: null,
     });
   },
 

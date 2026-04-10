@@ -12,9 +12,9 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useContextMenu } from '@/hooks/useContextMenu';
 import { usePathHighlight } from '@/hooks/usePathHighlight';
+import { useTerminology } from '@/hooks/useTerminology';
 import { getLayoutedElements } from '@/lib/elkLayout';
 import { saveNodePosition } from '@/store/canvasStoreUtils';
-import { useTerminology } from '@/hooks/useTerminology';
 import '@xyflow/react/dist/style.css';
 import { useTheme } from 'next-themes';
 import { AnimatedEdge } from './AnimatedEdge';
@@ -25,9 +25,8 @@ import { CanvasShortcutsDialog } from './CanvasShortcutsContent';
 import { CanvasStatusBar } from './CanvasStatusBar';
 import { CanvasToolbar } from './CanvasToolbar';
 import { useCanvasHandlers } from './CanvasWorkspaceHandlers';
+import { CommitActionPanel, buildCommitActions } from './CommitActionPanel';
 import { NodeContextMenu } from './NodeContextMenu';
-import { NodePalette } from './NodePalette';
-import { useBranchFilter } from './useBranchFilter';
 
 // Custom edge types for xyflow
 const edgeTypes = {
@@ -43,8 +42,6 @@ import { useProjectStore } from '@/store/projectStore';
 import { DraftQuickSheet } from '../draft/DraftQuickSheet';
 import { ImportDialog } from '../import/ImportDialog';
 import { MemoryContextModal } from '../memory/MemoryContextModal';
-import { CommitConflictBanner } from '../merge/CommitConflictBanner';
-import { CommitConflictPanel } from '../merge/CommitConflictPanel';
 import { MergePanel } from '../merge/MergePanel';
 import { DeletionConfirmDialog } from './DeletionConfirmDialog';
 import { LeafPanel } from './LeafPanel';
@@ -54,14 +51,10 @@ const GRID_SIZE = 16;
 
 interface CanvasWorkspaceProps {
   projectName: string;
-  mode: 'editor' | 'execution';
-  onModeChange: (mode: 'editor' | 'execution') => void;
   /** Initial viewport from URL params */
   initialViewport?: { x: number; y: number; zoom: number };
   /** Called when viewport changes (debounced externally) */
   onViewportChange?: (viewport: { x: number; y: number; zoom: number }) => void;
-  /** Optional view switcher element rendered in the toolbar */
-  viewSwitcher?: React.ReactNode;
 }
 
 // Wrapper component to provide ReactFlow context
@@ -75,22 +68,20 @@ export default function CanvasWorkspace(props: CanvasWorkspaceProps) {
 
 function CanvasWorkspaceInner({
   projectName,
-  mode,
-  onModeChange,
   initialViewport,
   onViewportChange,
-  viewSwitcher,
 }: CanvasWorkspaceProps) {
   const [isPanMode, setIsPanMode] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showMemoryModal, setShowMemoryModal] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
+  const [actionPanel, setActionPanel] = useState<{ x: number; y: number; nodeId: string; hash: string } | null>(null);
+  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   const { screenToFlowPosition, getNodes, getEdges, setNodes, fitView, setCenter } = useReactFlow();
   const { resolvedTheme } = useTheme();
   const router = useRouter();
   const [isAdding, setIsAdding] = useState(false);
-  const [isLayouting, setIsLayouting] = useState(false);
   const { isDeveloperMode } = useTerminology();
 
   // Map next-themes to xyflow colorMode
@@ -101,7 +92,6 @@ function CanvasWorkspaceInner({
     projectId,
     loading: canvasLoading,
     addNode,
-    addDraftNode,
     updateNode,
     commitPendingCommit,
     onNodesChange,
@@ -117,13 +107,8 @@ function CanvasWorkspaceInner({
     modalViewMode,
     openNodeModal,
     closeNodeModal,
+    openLeafPanel,
   } = useCanvasStore();
-  const commitConflicts = useCanvasStore((s) => s.commitConflicts);
-  const dismissedConflicts = useCanvasStore((s) => s.dismissedConflicts);
-  const showConflictPanel = useCanvasStore((s) => s.showConflictPanel);
-  const dismissConflict = useCanvasStore((s) => s.dismissConflict);
-  const openConflictPanel = useCanvasStore((s) => s.openConflictPanel);
-  const closeConflictPanel = useCanvasStore((s) => s.closeConflictPanel);
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
 
   // Sync from localStorage after mount (avoids SSR hydration mismatch)
@@ -132,33 +117,31 @@ function CanvasWorkspaceInner({
       setOnboardingDismissed(true);
     }
   }, []);
+  // Cleanup click timer on unmount
+  useEffect(() => {
+    return () => {
+      if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
+    };
+  }, []);
+
   const notify = useProjectStore((state) => state.notifyCallback);
 
   // Extracted handlers
   const {
-    handleAutoLayout,
-    handleAutoExtract,
     handleAddNode,
-    onDragOver,
-    onDrop,
     selectAllNodes,
     deselectAllNodes,
     navigateToNode,
   } = useCanvasHandlers({
     getNodes,
-    getEdges,
     setNodes,
     fitView,
     setCenter,
     screenToFlowPosition,
     canvasRef,
-    projectId,
     notify,
-    router,
     addNode,
-    addDraftNode,
     setIsAdding,
-    setIsLayouting,
   });
 
   // Context menu (extracted hook)
@@ -167,11 +150,8 @@ function CanvasWorkspaceInner({
       addNode,
       isDeveloperMode,
       notify,
-      getNodes,
       projectId,
       fitView,
-      handleAutoLayout,
-      onAutoExtract: handleAutoExtract,
       onNavigate: (url: string) => router.push(url),
     });
 
@@ -189,8 +169,14 @@ function CanvasWorkspaceInner({
   // DAG auto-layout: compute topology fingerprint from node IDs + edge connections.
   // Position changes don't alter this, so ELK only runs when the graph structure changes.
   const topoFingerprint = useMemo(() => {
-    const nIds = nodes.map((n) => n.id).sort().join(',');
-    const eKeys = edges.map((e) => `${e.source}->${e.target}`).sort().join(',');
+    const nIds = nodes
+      .map((n) => n.id)
+      .sort()
+      .join(',');
+    const eKeys = edges
+      .map((e) => `${e.source}->${e.target}`)
+      .sort()
+      .join(',');
     return `${nIds}|${eKeys}`;
   }, [nodes, edges]);
 
@@ -204,7 +190,12 @@ function CanvasWorkspaceInner({
   // - Initial load without DB positions → run ELK + save to DB
   // - Topology change (new node/edge/delete) → always re-run ELK + save to DB
   useEffect(() => {
-    const currentNodes = getNodes();
+    // Use ReactFlow's internal nodes (includes measured dimensions for ELK).
+    // Fall back to Zustand store nodes if ReactFlow hasn't synced yet — avoids
+    // a race where getNodes() returns [] on the first effect run, causing
+    // initialLayoutDone to never be set and the canvas to stay opacity-0.
+    const rfNodes = getNodes();
+    const currentNodes = rfNodes.length > 0 ? rfNodes : nodes;
     if (currentNodes.length === 0) return;
 
     const isInitialLoad = prevTopoRef.current === null;
@@ -235,7 +226,11 @@ function CanvasWorkspaceInner({
         setNodes(layouted);
         // Save ELK-computed positions to DB so next reload uses them
         for (const node of layouted) {
-          saveNodePosition(node.id, (node.data as import('@/types/nodes').CanvasNodeData).kind, node.position);
+          saveNodePosition(
+            node.id,
+            (node.data as import('@/types/nodes').CanvasNodeData).kind,
+            node.position
+          );
         }
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
@@ -250,6 +245,9 @@ function CanvasWorkspaceInner({
     })();
     return () => {
       cancelled = true;
+      // Reset prevTopoRef so that React StrictMode re-mount (or any remount)
+      // treats the next effect run as an initial load instead of "no change".
+      prevTopoRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [topoFingerprint]);
@@ -289,10 +287,6 @@ function CanvasWorkspaceInner({
     }
     return hasDownstreamPendingCommits(openNodeId);
   }, [openNodeId, modalNode, hasDownstreamPendingCommits]);
-
-  const activeConflictEntry = Object.entries(commitConflicts).find(
-    ([hash, report]) => report && report.conflicts.length > 0 && !dismissedConflicts[hash]
-  );
 
   const modalQuickActions = useMemo<NodeQuickAction[] | undefined>(() => {
     if (!modalNode) {
@@ -341,32 +335,11 @@ function CanvasWorkspaceInner({
     setShowShortcuts,
   });
 
-  const { branchNames, branchFilter, setBranchFilter } = useBranchFilter({
-    nodes,
-    setHighlight,
-  });
-
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
       <CanvasToolbar
         projectName={projectName}
-        projectId={projectId}
-        mode={mode}
-        onModeChange={onModeChange}
-        viewSwitcher={viewSwitcher}
-        highlight={highlight}
-        toggleHighlight={toggleHighlight}
-        setHighlight={setHighlight}
-        branchFilter={branchFilter}
-        setBranchFilter={setBranchFilter}
-        branchNames={branchNames}
-        hasMainCommits={hasMainCommits}
-        hasBranchCommits={hasBranchCommits}
-        onAutoLayout={handleAutoLayout}
-        onAddNode={() => handleAddNode('unit')}
-        isLayouting={isLayouting}
-        isPending={isAdding}
-        nodeCount={nodes.length}
+        onFitView={() => fitView({ padding: 0.3, maxZoom: 1, duration: 300 })}
       />
 
       <div
@@ -383,11 +356,7 @@ function CanvasWorkspaceInner({
           backgroundImage:
             'radial-gradient(ellipse at 50% 30%, var(--surface-radial), transparent 70%)',
         }}
-        onDragOver={onDragOver}
-        onDrop={onDrop}
       >
-        {/* Node Palette for drag-and-drop */}
-        <NodePalette />
         <ReactFlow
           nodes={nodesForRender}
           edges={edgesForRender}
@@ -396,25 +365,55 @@ function CanvasWorkspaceInner({
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
-          onNodeClick={(_, node) => {
+          onNodeClick={(event, node) => {
+            // Skip node click logic when user is interacting with editable title
+            const target = event.target as HTMLElement;
+            if (target.tagName === 'INPUT' || target.closest('[data-title-editable]')) {
+              return;
+            }
+
             const data = node.data as import('@/types/nodes').CanvasNodeData;
-            // Leaf nodes -> navigate to leaf detail page
+
+            // Leaf nodes -> navigate to leaf detail page (always single click)
             if (data.kind === 'leaf' && data.leafId && projectId) {
               router.push(`/project/${projectId}/leaf/${data.leafId}`);
               return;
             }
-            // Committed commits -> navigate to full-page commit detail view
-            if (data.commitStatus === 'committed' && data.commitHash && projectId) {
-              router.push(`/project/${projectId}/commit/${encodeURIComponent(data.commitHash)}`);
+
+            // Staging/pending units -> navigate to chat page (always single click)
+            if (data.commitStatus !== 'committed') {
+              if (data.conversationId) {
+                router.push(`/chat/${data.conversationId}`);
+              } else {
+                openNodeModal(node.id, 'commit');
+              }
               return;
             }
-            // Staging/pending units -> navigate to chat page
-            if (data.conversationId) {
-              router.push(`/chat/${data.conversationId}`);
-              return;
+
+            // Committed nodes: single click = action panel, double click = detail page
+            if (clickTimerRef.current) {
+              // Double click detected
+              clearTimeout(clickTimerRef.current);
+              clickTimerRef.current = null;
+              setActionPanel(null);
+              if (data.commitHash && projectId) {
+                router.push(`/project/${projectId}/commit/${encodeURIComponent(data.commitHash)}`);
+              }
+            } else {
+              // First click — wait to see if double click follows
+              const rect = (event.target as HTMLElement).closest('.react-flow__node')?.getBoundingClientRect();
+              const px = rect ? rect.right + 8 : (event as React.MouseEvent).clientX;
+              const py = rect ? rect.top : (event as React.MouseEvent).clientY;
+              clickTimerRef.current = setTimeout(() => {
+                clickTimerRef.current = null;
+                setActionPanel({
+                  x: px,
+                  y: py,
+                  nodeId: node.id,
+                  hash: data.commitHash ?? '',
+                });
+              }, 250);
             }
-            // Fallback for nodes without conversation
-            openNodeModal(node.id, 'commit');
           }}
           onNodeContextMenu={handleNodeContextMenu}
           onPaneContextMenu={handlePaneContextMenu}
@@ -424,6 +423,7 @@ function CanvasWorkspaceInner({
               setHighlight(null);
             }
             closeContextMenu();
+            setActionPanel(null);
           }}
           panOnDrag={isPanMode}
           selectionOnDrag={!isPanMode}
@@ -474,24 +474,7 @@ function CanvasWorkspaceInner({
             isAdding={isAdding}
           />
         )}
-
-        {/* Conflict detection banner */}
-        {activeConflictEntry && (
-          <CommitConflictBanner
-            conflicts={activeConflictEntry[1]!.conflicts}
-            onDismiss={() => dismissConflict(activeConflictEntry[0])}
-            onViewDetails={() => openConflictPanel(activeConflictEntry[0])}
-          />
-        )}
       </div>
-
-      {/* Conflict detail panel */}
-      {showConflictPanel && commitConflicts[showConflictPanel] && (
-        <CommitConflictPanel
-          conflicts={commitConflicts[showConflictPanel]!.conflicts}
-          onClose={closeConflictPanel}
-        />
-      )}
 
       {/* Right-click context menu */}
       {contextMenu && (
@@ -500,6 +483,26 @@ function CanvasWorkspaceInner({
           y={contextMenu.y}
           groups={contextMenu.groups}
           onClose={closeContextMenu}
+        />
+      )}
+      {actionPanel && (
+        <CommitActionPanel
+          x={actionPanel.x}
+          y={actionPanel.y}
+          actions={buildCommitActions({
+            onContinueConversation: () => {
+              addConversationFromCommit(actionPanel.nodeId);
+            },
+            onViewDetails: () => {
+              if (projectId) {
+                router.push(`/project/${projectId}/commit/${encodeURIComponent(actionPanel.hash)}`);
+              }
+            },
+            onCreateLeaf: () => {
+              openLeafPanel(actionPanel.nodeId);
+            },
+          })}
+          onClose={() => setActionPanel(null)}
         />
       )}
       <CanvasStatusBar />

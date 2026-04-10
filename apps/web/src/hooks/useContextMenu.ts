@@ -30,12 +30,8 @@ interface UseContextMenuOptions {
   addNode: (kind: NodeKind, position?: { x: number; y: number }) => Promise<void>;
   isDeveloperMode: boolean;
   notify: ((message: string, type: 'success' | 'error' | 'warning') => void) | null;
-  getNodes: () => Node[];
   projectId: string | null;
   fitView: (options?: { padding?: number; duration?: number }) => void;
-  handleAutoLayout: () => Promise<void>;
-  /** Callback for auto-extract context menu action (optional, shows when hasConversation is true) */
-  onAutoExtract?: (nodeId: string) => void;
   /** Router push for page navigation */
   onNavigate?: (url: string) => void;
 }
@@ -44,11 +40,8 @@ export function useContextMenu({
   addNode,
   isDeveloperMode,
   notify,
-  getNodes,
   projectId,
   fitView,
-  handleAutoLayout,
-  onAutoExtract,
   onNavigate,
 }: UseContextMenuOptions) {
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
@@ -87,10 +80,6 @@ export function useContextMenu({
           hasConversation && conversationId && onNavigate
             ? () => onNavigate(`/chat/${conversationId}`)
             : undefined,
-        onOpenInNewPage:
-          isCommitted && commitHash && projectId && onNavigate
-            ? () => onNavigate(`/project/${projectId}/commit/${encodeURIComponent(commitHash)}`)
-            : undefined,
         onQuickDiff:
           isCommitted && commitHash && parentCommitHash && projectId && onNavigate
             ? () =>
@@ -119,7 +108,6 @@ export function useContextMenu({
             }
           });
         },
-        onAutoExtract: onAutoExtract ? () => onAutoExtract(node.id) : undefined,
         onCopyHash: commitHash
           ? () => {
               navigator.clipboard.writeText(commitHash);
@@ -139,31 +127,19 @@ export function useContextMenu({
       });
       setContextMenu({ x: event.clientX, y: event.clientY, groups });
     },
-    [addNode, isDeveloperMode, notify, onAutoExtract, projectId, onNavigate]
+    [addNode, isDeveloperMode, notify, projectId, onNavigate]
   );
 
   // Pane context menu — inline addNode to avoid forward-declaration of handleAddNode
   const handlePaneContextMenu = useCallback(
     (event: MouseEvent | React.MouseEvent) => {
       event.preventDefault();
-      const addNodeInline = (kind: NodeKind) => {
-        startTransition(async () => {
-          try {
-            await addNode(kind);
-          } catch (err) {
-            notify?.(err instanceof Error ? err.message : 'Failed to create node', 'error');
-          }
-        });
-      };
       const groups = buildBackgroundMenu({
-        onAddConversation: () => addNodeInline('unit'),
-        onAddLeaf: () => addNodeInline('leaf'),
         onFitView: () => fitView({ padding: 0.2, duration: 300 }),
-        onAutoLayout: handleAutoLayout,
       });
       setContextMenu({ x: event.clientX, y: event.clientY, groups });
     },
-    [addNode, notify, fitView, handleAutoLayout]
+    [fitView]
   );
 
   // Leaf context menu handler — called from CanvasNodes when right-clicking a leaf inside a unit node
@@ -202,7 +178,7 @@ export function useContextMenu({
       });
       setContextMenu({ x: event.clientX, y: event.clientY, groups });
     },
-    [getNodes, projectId, notify]
+    [projectId, notify, onNavigate]
   );
 
   // Keep the module-level ref up to date so CanvasNodes can call the handler

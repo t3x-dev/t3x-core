@@ -159,63 +159,6 @@ const forkDraftRoute = createRoute({
   },
 });
 
-// POST /v1/drafts/:id/extract
-const extractDraftRoute = createRoute({
-  method: 'post',
-  path: '/v1/drafts/{id}/extract',
-  tags: ['Drafts'],
-  operationId: 'extractToDraft',
-  summary: 'Extract nodes from conversation and add to draft',
-  request: {
-    params: IdParamSchema,
-    body: {
-      content: {
-        'application/json': {
-          schema: z.object({
-            conversation_id: z.string().min(1),
-            options: z
-              .object({
-                max_nodes: z.number().int().min(1).max(100).optional(),
-              })
-              .optional(),
-          }),
-        },
-      },
-    },
-  },
-  responses: {
-    200: {
-      description: 'Nodes extracted and added to draft',
-      content: {
-        'application/json': {
-          schema: SuccessResponseSchema(
-            z.object({
-              added_count: z.number(),
-              draft: DraftResponse,
-            })
-          ),
-        },
-      },
-    },
-    400: {
-      description: 'Invalid state',
-      content: { 'application/json': { schema: ErrorResponseSchema } },
-    },
-    404: {
-      description: 'Draft not found',
-      content: { 'application/json': { schema: ErrorResponseSchema } },
-    },
-    503: {
-      description: 'LLM provider not configured',
-      content: { 'application/json': { schema: ErrorResponseSchema } },
-    },
-    500: {
-      description: 'Server error',
-      content: { 'application/json': { schema: ErrorResponseSchema } },
-    },
-  },
-});
-
 // POST /v1/drafts/:id/suggest
 const suggestDraftRoute = createRoute({
   method: 'post',
@@ -660,17 +603,6 @@ draftsWorkflowRoutes.openapi(forkDraftRoute, async (c) => {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return errorResponse(c, 'CREATE_FAILED', message);
   }
-});
-
-// POST /v1/drafts/:id/extract
-draftsWorkflowRoutes.openapi(extractDraftRoute, async (c) => {
-  // Node extraction is deprecated (replaced by tree-based extraction).
-  // Use POST /v1/extract/frames + POST /v1/extract/incremental instead.
-  return errorResponse(
-    c,
-    'DEPRECATED',
-    'Node extraction from conversation has been replaced by tree-based extraction. Use /v1/extract/trees instead.'
-  );
 });
 
 // POST /v1/drafts/:id/suggest

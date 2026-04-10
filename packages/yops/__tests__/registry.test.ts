@@ -2,7 +2,7 @@
  * OpRegistry Tests — spec-validated handler registration
  */
 
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { OpRegistry } from '../src/registry';
 import type { OpHandler } from '../src/registry';
 import type { YOpsSpec } from '../src/spec';

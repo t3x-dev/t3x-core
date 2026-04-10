@@ -337,7 +337,7 @@ export function useLeafPageData(projectId: string, leafId: string): UseLeafPageD
     [commitData]
   );
 
-  // Memoize nodes to prevent unnecessary re-renders in LeafConstraintSourceContext
+  // Memoize nodes to prevent unnecessary re-renders in source context components
   const nodes = useMemo((): NodeWithSource[] => {
     if (!semanticContent) return [];
     const { treesToNodes } = require('@/lib/treeCompat');
