@@ -16,7 +16,7 @@ import {
   Rocket,
 } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
-import { memo, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { AutoDraftBadge } from '@/components/canvas/AutoDraftBadge';
 import { SealAnimation } from '@/components/canvas/SealAnimation';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -73,6 +73,8 @@ const UnitNode = memo(function UnitNode(props: Props) {
   const [leavesExpanded, setLeavesExpanded] = useState(false);
   const [contentExpandedManual, setContentExpandedManual] = useState(false);
   const [copiedHash, setCopiedHash] = useState(false);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
   const router = useRouter();
   const params = useParams();
   const projectId = params?.projectId as string | undefined;
@@ -94,6 +96,7 @@ const UnitNode = memo(function UnitNode(props: Props) {
   const leafContextMenuHandler = leafContextMenuHandlerRef.current;
   const openNodeModal = useCanvasStore((state) => state.openNodeModal);
   const loadProjectData = useCanvasStore((state) => state.loadProjectData);
+  const updateNode = useCanvasStore((state) => state.updateNode);
   const notify = useProjectStore((state) => state.notifyCallback);
 
   // Pin store
@@ -214,6 +217,24 @@ const UnitNode = memo(function UnitNode(props: Props) {
       })
       .catch(() => {}); // Silently fail on clipboard permission denial
   };
+
+  const handleTitleSave = useCallback(async () => {
+    const newTitle = editTitle.trim();
+    if (!newTitle || newTitle === data.title) {
+      setIsEditingTitle(false);
+      return;
+    }
+    updateNode(id, { title: newTitle });
+    setIsEditingTitle(false);
+    if (data.commitHash) {
+      try {
+        const { updateCommitMessage } = await import('@/lib/api/commits');
+        await updateCommitMessage(data.commitHash, newTitle);
+      } catch {
+        updateNode(id, { title: data.title });
+      }
+    }
+  }, [editTitle, data.title, data.commitHash, id, updateNode]);
 
   // Navigate to leaf detail page
   const _getLeafHref = (leaf: EmbeddedLeaf): string | undefined => {
@@ -382,9 +403,33 @@ const UnitNode = memo(function UnitNode(props: Props) {
         <div className="px-3 py-3">
           {/* Row 1: Title + Branch Badge */}
           <div className="flex items-start justify-between gap-2 mb-[var(--space-item)]">
-            <h4 className="m-0 text-sm font-semibold text-[var(--text-primary)] leading-snug flex-1 min-w-0">
-              {data.title}
-            </h4>
+            {isEditingTitle ? (
+              <input
+                type="text"
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleTitleSave();
+                  if (e.key === 'Escape') setIsEditingTitle(false);
+                }}
+                onBlur={handleTitleSave}
+                className="m-0 text-sm font-semibold text-[var(--text-primary)] leading-snug flex-1 min-w-0 bg-transparent border-b border-[var(--commit)] outline-none"
+                autoFocus
+              />
+            ) : (
+              <h4
+                className="m-0 text-sm font-semibold text-[var(--text-primary)] leading-snug flex-1 min-w-0 cursor-text"
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  if (isCommitted) {
+                    setEditTitle(data.title);
+                    setIsEditingTitle(true);
+                  }
+                }}
+              >
+                {data.title}
+              </h4>
+            )}
             {isDraft ? (
               <span className="flex-shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded-full border border-amber-500/50 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 inline-flex items-center gap-0.5">
                 <PenSquare size={10} aria-hidden="true" />
