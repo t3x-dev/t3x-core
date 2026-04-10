@@ -75,37 +75,6 @@ const SuggestConstraintsResponse = z.object({
   }),
 });
 
-const ExtractFromLeafRequest = z.object({
-  max_nodes: z.number().int().min(1).max(50).optional().openapi({
-    description: 'Maximum number of nodes to extract (default: 20)',
-  }),
-});
-
-const ExtractFromLeafResponse = z.object({
-  success: z.literal(true),
-  data: z.object({
-    nodes: z.array(
-      z.object({
-        id: z.string(),
-        text: z.string(),
-        origin: z.object({
-          type: z.literal('extracted'),
-          segment_id: z.string(),
-        }),
-        position: z.number(),
-        included: z.boolean(),
-      })
-    ),
-    model: z.string(),
-    stats: z.object({
-      total_turns: z.number(),
-      extracted: z.number(),
-      with_source_ref: z.number(),
-      removed: z.number(),
-    }),
-  }),
-});
-
 const LearnFromEditsRequest = z
   .object({
     max_suggestions: z
@@ -214,43 +183,6 @@ const suggestConstraintsRoute = createRoute({
     404: {
       content: { 'application/json': { schema: ErrorResponseSchema } },
       description: 'Leaf or commit not found',
-    },
-    503: {
-      content: { 'application/json': { schema: ErrorResponseSchema } },
-      description: 'LLM not configured',
-    },
-  },
-});
-
-const extractFromLeafRoute = createRoute({
-  method: 'post',
-  path: '/v1/leaves/{id}/extract-nodes',
-  tags: ['Leaves'],
-  summary: 'Extract nodes from leaf output',
-  description:
-    "Uses LLM to extract structured knowledge nodes from a leaf's generated output. Enables the Leaf → Commit feedback loop.",
-  request: {
-    params: IdParamSchema,
-    body: {
-      content: {
-        'application/json': {
-          schema: ExtractFromLeafRequest,
-        },
-      },
-    },
-  },
-  responses: {
-    200: {
-      content: { 'application/json': { schema: ExtractFromLeafResponse } },
-      description: 'Nodes extracted from leaf output',
-    },
-    400: {
-      content: { 'application/json': { schema: ErrorResponseSchema } },
-      description: 'Leaf has no output',
-    },
-    404: {
-      content: { 'application/json': { schema: ErrorResponseSchema } },
-      description: 'Leaf not found',
     },
     503: {
       content: { 'application/json': { schema: ErrorResponseSchema } },
@@ -458,16 +390,6 @@ leavesMLRoutes.openapi(suggestConstraintsRoute, async (c) => {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return errorResponse(c, 'GENERATION_FAILED', message);
   }
-});
-
-// POST /v1/leaves/:id/extract-nodes
-leavesMLRoutes.openapi(extractFromLeafRoute, async (c) => {
-  // Node extraction from leaf output is deprecated (replaced by tree-based extraction).
-  return errorResponse(
-    c,
-    'DEPRECATED',
-    'Node extraction from leaf output has been replaced by tree-based extraction. Use /v1/extract/trees instead.'
-  );
 });
 
 // POST /v1/leaves/:id/learn-from-edits

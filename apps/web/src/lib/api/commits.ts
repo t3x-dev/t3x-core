@@ -171,32 +171,6 @@ export async function getApiCommitHistory(commitHash: string, limit = 50): Promi
 }
 
 // ============================================================================
-// Conflict Detection
-// ============================================================================
-
-export interface ConflictCandidate {
-  new_node_id: string;
-  new_node_text: string;
-  existing_node_id: string;
-  existing_node_text: string;
-  existing_commit_hash: string;
-  cosine: number;
-  jaccard: number;
-}
-
-export interface ConflictReport {
-  conflicts: ConflictCandidate[];
-  checked_count: number;
-}
-
-/**
- * @deprecated V4 conflict check endpoint has been removed. Returns empty report.
- */
-export async function checkConflicts(_commitHash: string): Promise<ConflictReport> {
-  return { conflicts: [], checked_count: 0 };
-}
-
-// ============================================================================
 // ApiCommit helper functions (tree-based)
 // ============================================================================
 

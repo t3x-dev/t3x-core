@@ -25,7 +25,6 @@ import { useDraftWorkspaceStore } from '@/store/draftWorkspaceStore';
 import { AutoSuggestPanel } from './AutoSuggestPanel';
 import { CommitDraftDialog } from './CommitDraftDialog';
 import { ConflictBanner } from './ConflictBanner';
-import { ConflictPanel } from './ConflictPanel';
 import { DraftActionBar } from './DraftActionBar';
 import { DraftConstraintEditor } from './DraftConstraintEditor';
 import { DraftDiffSection } from './DraftDiffSection';
@@ -259,7 +258,6 @@ export function DraftWorkspace({ projectId, onClose }: DraftWorkspaceProps) {
                 <InstructionEditor />
               </div>
             </CollapsibleSection>
-            {draft.parent_commit_hash && <ConflictPanel commitHash={draft.parent_commit_hash} />}
             <DraftDiffSection />
           </div>
         }

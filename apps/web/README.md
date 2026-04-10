@@ -56,7 +56,6 @@ src/
 │   │   ├── MergeDiffLine.tsx         # Diff line
 │   │   ├── MergeIdenticalSection.tsx # Identical section
 │   │   ├── MergePreview.tsx          # Preview panel
-│   │   ├── MergeSimilarPairCard.tsx  # Similar pair card
 │   │   ├── ConflictHeader.tsx        # Conflict header
 │   │   ├── ConflictSide.tsx          # Conflict side panel
 │   │   ├── ConflictEditPanel.tsx     # Conflict edit panel

@@ -185,17 +185,6 @@ export {
   listGlobalSettings,
   setGlobalSetting,
 } from './global-settings';
-// Knowledge Conflicts (conflict detection persistence)
-export {
-  countConflictsByProject,
-  dismissConflict,
-  findConflictById,
-  findConflictsByProject,
-  type InsertConflictInput,
-  insertConflict,
-  type KnowledgeConflictOutput,
-  resolveConflict,
-} from './knowledge-conflicts';
 // Knowledge Graph (cross-conversation entity/topic graph)
 export {
   deleteKnowledgeGraphByProject,

@@ -62,7 +62,6 @@ services:
       - AUTH_DISABLED=${AUTH_DISABLED:-true}
       - ANTHROPIC_API_KEY
       - GOOGLE_AI_STUDIO_KEY
-      - GOOGLE_CLOUD_NLP_KEY
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:8000/health').then(r => r.ok ? process.exit(0) : process.exit(1))"]
