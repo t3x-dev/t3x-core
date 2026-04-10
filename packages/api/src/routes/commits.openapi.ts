@@ -24,6 +24,7 @@ import {
   insertRewrite,
   isCommitSuperseded,
   listCommits,
+  updateCommitMessage,
   updateCommitPosition,
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
@@ -308,6 +309,53 @@ commitRoutes.openapi(updatePositionRoute, async (c) => {
   const decodedHash = decodeURIComponent(hash);
 
   const updated = await updateCommitPosition(db, decodedHash, position_x, position_y);
+  if (!updated) {
+    return errorResponse(c, 'COMMIT_NOT_FOUND', `Commit ${decodedHash} not found`);
+  }
+
+  return c.json({ success: true as const, data: updated }, 200);
+});
+
+// ============================================================
+// PATCH /v1/commits/:hash/message — Update commit message
+// ============================================================
+
+const updateMessageRoute = createRoute({
+  method: 'patch',
+  path: '/v1/commits/{hash}/message',
+  request: {
+    params: HashParamSchema,
+    body: {
+      content: {
+        'application/json': {
+          schema: z.object({
+            message: z.string().min(1).max(200),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      content: { 'application/json': { schema: SuccessResponseSchema(z.any()) } },
+      description: 'Message updated',
+    },
+    404: {
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+      description: 'Commit not found',
+    },
+  },
+});
+
+commitRoutes.openapi(updateMessageRoute, async (c) => {
+  // biome-ignore lint/suspicious/noExplicitAny: generic error handler
+  const { hash } = c.req.valid('param') as any;
+  // biome-ignore lint/suspicious/noExplicitAny: generic error handler
+  const { message } = c.req.valid('json') as any;
+  const db = await getDB();
+  const decodedHash = decodeURIComponent(hash);
+
+  const updated = await updateCommitMessage(db, decodedHash, message);
   if (!updated) {
     return errorResponse(c, 'COMMIT_NOT_FOUND', `Commit ${decodedHash} not found`);
   }
