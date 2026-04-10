@@ -623,6 +623,7 @@ export function AfterPanel() {
               }}
               className="w-full rounded-lg border border-[var(--stroke-default)] bg-[var(--surface-elevated)] px-2.5 py-1.5 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--commit)] transition-colors"
               placeholder="e.g. Budget & Attractions"
+              // biome-ignore lint/a11y/noAutofocus: intentional — user just opened commit dialog
               autoFocus
             />
             <div className="flex justify-end gap-1.5 mt-3">

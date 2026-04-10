@@ -418,6 +418,7 @@ const UnitNode = memo(function UnitNode(props: Props) {
                 onBlur={handleTitleSave}
                 className="noDrag nowheel m-0 text-sm font-semibold text-[var(--text-primary)] leading-snug flex-1 min-w-0 bg-transparent border-b border-[var(--commit)] outline-none"
                 data-title-editable
+                // biome-ignore lint/a11y/noAutofocus: intentional — user just entered edit mode
                 autoFocus
               />
             ) : (
