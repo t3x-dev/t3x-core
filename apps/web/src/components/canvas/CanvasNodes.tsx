@@ -412,8 +412,9 @@ const UnitNode = memo(function UnitNode(props: Props) {
                   if (e.key === 'Enter') handleTitleSave();
                   if (e.key === 'Escape') setIsEditingTitle(false);
                 }}
+                onMouseDown={(e) => e.stopPropagation()}
                 onBlur={handleTitleSave}
-                className="m-0 text-sm font-semibold text-[var(--text-primary)] leading-snug flex-1 min-w-0 bg-transparent border-b border-[var(--commit)] outline-none"
+                className="noDrag nowheel m-0 text-sm font-semibold text-[var(--text-primary)] leading-snug flex-1 min-w-0 bg-transparent border-b border-[var(--commit)] outline-none"
                 autoFocus
               />
             ) : (
