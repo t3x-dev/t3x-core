@@ -70,16 +70,66 @@ vi.mock('@t3x-dev/api-client', () => ({
       parents: [],
       branch: 'main',
     }),
-    prepareMerge: vi.fn().mockResolvedValue({
-      autoKept: [{ text: 'shared item' }],
-      conflicts: [],
-      onlyInSource: [],
-      onlyInTarget: [],
+    createMergeDraft: vi.fn().mockResolvedValue({
+      id: 'md_test',
+      project_id: 'proj_1',
+      source_hash: 'sha256:aaa',
+      target_hash: 'sha256:bbb',
+      status: 'pending',
+      prepared: {
+        autoKept: ['node_a'],
+        conflicts: [
+          {
+            path: 'budget/total',
+            slotConflicts: [{ key: 'text', sourceValue: '5000', targetValue: '8000' }],
+          },
+        ],
+        onlyInSource: ['node_b'],
+        onlyInTarget: [],
+        relationsOnlyInSource: [],
+        relationsOnlyInTarget: [],
+        relationsInBoth: [],
+      },
+      message: null,
+      created_at: '2026-04-10T00:00:00Z',
+      updated_at: '2026-04-10T00:00:00Z',
     }),
-    executeMerge: vi.fn().mockResolvedValue({
-      commit_hash: 'sha256:merged',
-      message: 'Merge complete',
+    getMergeDraft: vi.fn().mockResolvedValue({
+      id: 'md_test',
+      status: 'pending',
+      prepared: {
+        autoKept: ['node_a'],
+        conflicts: [
+          {
+            path: 'budget/total',
+            slotConflicts: [{ key: 'text', sourceValue: '5000', targetValue: '8000' }],
+          },
+        ],
+        onlyInSource: [],
+        onlyInTarget: [],
+        relationsOnlyInSource: [],
+        relationsOnlyInTarget: [],
+        relationsInBoth: [],
+      },
     }),
+    updateMergeDraft: vi.fn().mockResolvedValue({ id: 'md_test', status: 'pending' }),
+    commitMergeDraft: vi.fn().mockResolvedValue({
+      hash: 'sha256:merged',
+      parents: ['sha256:aaa', 'sha256:bbb'],
+      author: { type: 'human', name: 'user' },
+      committed_at: '2026-04-10T00:00:00Z',
+      message: 'Merge feature into main',
+      branch: 'main',
+      merge_summary: {
+        kept_identical: 5,
+        resolved_conflicts: 2,
+        kept_from_source: 1,
+        kept_from_target: 0,
+        discarded: 0,
+        total_nodes: 8,
+      },
+    }),
+    deleteMergeDraft: vi.fn().mockResolvedValue({ deleted: true }),
     listConversations: vi.fn().mockResolvedValue({
       conversations: [{ conversation_id: 'conv_1', title: 'Test' }],
       total: 1,
@@ -135,8 +185,11 @@ import { handleListConversations } from '../tools/list-conversations.js';
 import { handleListDrafts } from '../tools/list-drafts.js';
 import { handleListLeaves } from '../tools/list-leaves.js';
 import { handleListProjects } from '../tools/list-projects.js';
+import { handleMergeAbort } from '../tools/merge-abort.js';
 import { handleMergeExecute } from '../tools/merge-execute.js';
 import { handleMergePrepare } from '../tools/merge-prepare.js';
+import { handleMergeResolve } from '../tools/merge-resolve.js';
+import { handleMergeShowConflict } from '../tools/merge-show-conflict.js';
 import { handleShow } from '../tools/show.js';
 import { handleShowCommit } from '../tools/show-commit.js';
 import { handleShowDraft } from '../tools/show-draft.js';
@@ -364,28 +417,75 @@ describe('handleShowCommit', () => {
 });
 
 describe('handleMergePrepare', () => {
-  it('returns merge analysis', async () => {
+  it('creates merge draft and returns structured summary', async () => {
     const result = await handleMergePrepare({
+      project_id: 'proj_1',
       source_hash: 'sha256:aaa',
       target_hash: 'sha256:bbb',
     });
     const data = JSON.parse(result.content[0].text);
-    expect(data.autoKept).toBeDefined();
-    expect(data.conflicts).toBeDefined();
+    expect(data.draft_id).toBe('md_test');
+    expect(data.summary.auto_kept).toBe(1);
+    expect(data.summary.conflicts).toBe(1);
+    expect(data.conflicts[0].path).toBe('budget/total');
+    expect(data.conflicts[0].slot_keys).toEqual(['text']);
+  });
+});
+
+describe('handleMergeShowConflict', () => {
+  it('returns conflict detail by index', async () => {
+    const result = await handleMergeShowConflict({
+      draft_id: 'md_test',
+      conflict_index: 0,
+    });
+    const data = JSON.parse(result.content[0].text);
+    expect(data.path).toBe('budget/total');
+    expect(data.slot_conflicts[0].key).toBe('text');
+    expect(data.slot_conflicts[0].source_value).toBe('5000');
+    expect(data.slot_conflicts[0].target_value).toBe('8000');
+    expect(data.resolution_options).toContain('source');
+  });
+});
+
+describe('handleMergeResolve', () => {
+  it('resolves conflicts and returns remaining count', async () => {
+    const result = await handleMergeResolve({
+      draft_id: 'md_test',
+      resolutions: [
+        {
+          path: 'budget/total',
+          resolution: 'target',
+          reasoning: 'Target has updated budget figure',
+        },
+      ],
+    });
+    const data = JSON.parse(result.content[0].text);
+    expect(data.resolved).toBe(true);
+    expect(data.resolutions_applied).toBe(1);
+    expect(data.remaining_conflicts).toBe(0);
+    expect(data.resolution_log[0].reasoning).toBe('Target has updated budget figure');
   });
 });
 
 describe('handleMergeExecute', () => {
-  it('executes merge and returns commit', async () => {
+  it('commits merge draft and returns result', async () => {
     const result = await handleMergeExecute({
-      source_hash: 'sha256:aaa',
-      target_hash: 'sha256:bbb',
-      prepared: {},
-      decisions: {},
-      message: 'Merge test',
+      draft_id: 'md_test',
+      message: 'Merge feature into main',
     });
     const data = JSON.parse(result.content[0].text);
-    expect(data.commit_hash).toBe('sha256:merged');
+    expect(data.hash).toBe('sha256:merged');
+    expect(data.merge_summary.resolved_conflicts).toBe(2);
+    expect(data.branch).toBe('main');
+  });
+});
+
+describe('handleMergeAbort', () => {
+  it('aborts merge and returns confirmation', async () => {
+    const result = await handleMergeAbort({ draft_id: 'md_test' });
+    const data = JSON.parse(result.content[0].text);
+    expect(data.aborted).toBe(true);
+    expect(data.draft_id).toBe('md_test');
   });
 });
 

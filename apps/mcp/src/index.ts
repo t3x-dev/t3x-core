@@ -23,8 +23,11 @@ import { handleListConversations, listConversationsTool } from './tools/list-con
 import { handleListDrafts, listDraftsTool } from './tools/list-drafts.js';
 import { handleListLeaves, listLeavesTool } from './tools/list-leaves.js';
 import { handleListProjects, listProjectsTool } from './tools/list-projects.js';
+import { handleMergeAbort, mergeAbortTool } from './tools/merge-abort.js';
 import { handleMergeExecute, mergeExecuteTool } from './tools/merge-execute.js';
 import { handleMergePrepare, mergePrepareTool } from './tools/merge-prepare.js';
+import { handleMergeResolve, mergeResolveTool } from './tools/merge-resolve.js';
+import { handleMergeShowConflict, mergeShowConflictTool } from './tools/merge-show-conflict.js';
 import { handleSchema, schemaTool } from './tools/schema.js';
 import { handleShow, showTool } from './tools/show.js';
 import { handleShowCommit, showCommitTool } from './tools/show-commit.js';
@@ -56,7 +59,10 @@ const tools = [
   createLeafTool,
   showCommitTool,
   mergePrepareTool,
+  mergeShowConflictTool,
+  mergeResolveTool,
   mergeExecuteTool,
+  mergeAbortTool,
   listConversationsTool,
   createConversationTool,
   renameConversationTool,
@@ -92,7 +98,10 @@ const handlers: Record<
   [createLeafTool.name]: handleCreateLeaf,
   [showCommitTool.name]: handleShowCommit,
   [mergePrepareTool.name]: handleMergePrepare,
+  [mergeShowConflictTool.name]: handleMergeShowConflict,
+  [mergeResolveTool.name]: handleMergeResolve,
   [mergeExecuteTool.name]: handleMergeExecute,
+  [mergeAbortTool.name]: handleMergeAbort,
   [listConversationsTool.name]: handleListConversations,
   [createConversationTool.name]: handleCreateConversation,
   [renameConversationTool.name]: handleRenameConversation,
