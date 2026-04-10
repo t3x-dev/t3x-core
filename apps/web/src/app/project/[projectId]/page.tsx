@@ -260,11 +260,8 @@ function ProjectDetailPageContent() {
         <CanvasWorkspace
           key={projectId}
           projectName={project.name}
-          mode={mode}
-          onModeChange={handleModeChange}
           initialViewport={initialViewport}
           onViewportChange={handleViewportChange}
-          viewSwitcher={<ViewSwitcher value={viewMode} onChange={setViewMode} />}
         />
       ) : mode === 'editor' && viewMode === 'timeline' ? (
         <div className="flex h-full flex-col">

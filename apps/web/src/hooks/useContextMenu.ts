@@ -30,7 +30,6 @@ interface UseContextMenuOptions {
   addNode: (kind: NodeKind, position?: { x: number; y: number }) => Promise<void>;
   isDeveloperMode: boolean;
   notify: ((message: string, type: 'success' | 'error' | 'warning') => void) | null;
-  getNodes: () => Node[];
   projectId: string | null;
   fitView: (options?: { padding?: number; duration?: number }) => void;
   /** Router push for page navigation */
@@ -41,7 +40,6 @@ export function useContextMenu({
   addNode,
   isDeveloperMode,
   notify,
-  getNodes,
   projectId,
   fitView,
   onNavigate,
@@ -180,7 +178,7 @@ export function useContextMenu({
       });
       setContextMenu({ x: event.clientX, y: event.clientY, groups });
     },
-    [getNodes, projectId, notify]
+    [projectId, notify, onNavigate]
   );
 
   // Keep the module-level ref up to date so CanvasNodes can call the handler

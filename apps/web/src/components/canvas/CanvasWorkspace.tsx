@@ -51,14 +51,10 @@ const GRID_SIZE = 16;
 
 interface CanvasWorkspaceProps {
   projectName: string;
-  mode: 'editor' | 'execution';
-  onModeChange: (mode: 'editor' | 'execution') => void;
   /** Initial viewport from URL params */
   initialViewport?: { x: number; y: number; zoom: number };
   /** Called when viewport changes (debounced externally) */
   onViewportChange?: (viewport: { x: number; y: number; zoom: number }) => void;
-  /** Optional view switcher element rendered in the toolbar */
-  viewSwitcher?: React.ReactNode;
 }
 
 // Wrapper component to provide ReactFlow context
@@ -72,11 +68,8 @@ export default function CanvasWorkspace(props: CanvasWorkspaceProps) {
 
 function CanvasWorkspaceInner({
   projectName,
-  mode,
-  onModeChange,
   initialViewport,
   onViewportChange,
-  viewSwitcher,
 }: CanvasWorkspaceProps) {
   const [isPanMode, setIsPanMode] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
@@ -89,7 +82,6 @@ function CanvasWorkspaceInner({
   const { resolvedTheme } = useTheme();
   const router = useRouter();
   const [isAdding, setIsAdding] = useState(false);
-  const [isLayouting, setIsLayouting] = useState(false);
   const { isDeveloperMode } = useTerminology();
 
   // Map next-themes to xyflow colorMode
@@ -136,26 +128,20 @@ function CanvasWorkspaceInner({
 
   // Extracted handlers
   const {
-    handleAutoLayout,
-    handleAutoExtract,
     handleAddNode,
     selectAllNodes,
     deselectAllNodes,
     navigateToNode,
   } = useCanvasHandlers({
     getNodes,
-    getEdges,
     setNodes,
     fitView,
     setCenter,
     screenToFlowPosition,
     canvasRef,
-    projectId,
     notify,
-    router,
     addNode,
     setIsAdding,
-    setIsLayouting,
   });
 
   // Context menu (extracted hook)
@@ -164,7 +150,6 @@ function CanvasWorkspaceInner({
       addNode,
       isDeveloperMode,
       notify,
-      getNodes,
       projectId,
       fitView,
       onNavigate: (url: string) => router.push(url),
