@@ -418,6 +418,7 @@ export function AfterPanel() {
   const isCommitting = useCommitStore((s) => s.isCommitting);
 
   const trees = result?.trees as TreeNode[] | undefined;
+  const hasResult = !!(result && trees && trees.length > 0);
 
   const diff = useMemo(() => {
     if (!result || !trees) return null;
@@ -568,31 +569,30 @@ export function AfterPanel() {
         )}
       </div>
 
-      {/* Commit footer */}
-      {result && trees && trees.length > 0 && (
-        <div className="flex shrink-0 items-center justify-between border-t border-[var(--stroke-default)] bg-[var(--panel-alt)] px-3 py-1.5">
-          <span className="text-[9px] text-[var(--text-tertiary)]">
-            {diff ? `${diff.summary.nodesAdded + diff.summary.slotsAdded} changes` : 'Ready'}
-          </span>
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={handleClear}
-              className="rounded px-2 py-1 text-[10px] font-medium text-[var(--text-tertiary)] border border-[var(--stroke-default)] hover:bg-[var(--hover-bg)]"
-            >
-              Discard
-            </button>
-            <button
-              type="button"
-              onClick={handleCommit}
-              disabled={isCommitting}
-              className="flex items-center gap-1 rounded bg-[var(--commit)] px-2.5 py-1 text-[10px] font-semibold text-[var(--commit-text)] hover:bg-[var(--commit-hover)] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-            >
-              {isCommitting ? 'Committing...' : '\u2192 Commit'}
-            </button>
-          </div>
+      {/* Commit footer — always visible, disabled when no result */}
+      <div className="flex shrink-0 items-center justify-between border-t border-[var(--stroke-default)] bg-[var(--panel-alt)] px-3 py-1.5">
+        <span className="text-[9px] text-[var(--text-tertiary)]">
+          {hasResult && diff ? `${diff.summary.nodesAdded + diff.summary.slotsAdded} changes` : hasResult ? 'Ready' : 'Run to preview'}
+        </span>
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={handleClear}
+            disabled={!hasResult}
+            className="rounded px-2 py-1 text-[10px] font-medium text-[var(--text-tertiary)] border border-[var(--stroke-default)] hover:bg-[var(--hover-bg)] disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            Discard
+          </button>
+          <button
+            type="button"
+            onClick={handleCommit}
+            disabled={!hasResult || isCommitting}
+            className="flex items-center gap-1 rounded bg-[var(--commit)] px-2.5 py-1 text-[10px] font-semibold text-[var(--commit-text)] hover:bg-[var(--commit-hover)] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          >
+            {isCommitting ? 'Committing...' : '\u2192 Commit'}
+          </button>
         </div>
-      )}
+      </div>
     </div>
   );
 }

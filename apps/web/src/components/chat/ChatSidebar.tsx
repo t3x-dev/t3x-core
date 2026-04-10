@@ -3,7 +3,7 @@
 import { ChevronLeft, ChevronRight, Plus, Settings, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { UserMenu } from '@/components/layout/UserMenu';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -40,6 +40,9 @@ export function ChatSidebar() {
 
   const { menu, open: openMenu, close: closeMenu } = useContextMenu();
 
+  // Track pending auto-navigation when expanding a project for the first time
+  const pendingNavProjectId = useRef<string | null>(null);
+
   const refreshKey = useChatStore((s) => s.refreshKey);
 
   // Fetch projects on mount and when refreshKey changes
@@ -67,6 +70,19 @@ export function ChatSidebar() {
     }
   }, [expandedProjectIds, refreshKey]);
 
+  // Auto-navigate to latest conversation after expanding a project (data may load async)
+  useEffect(() => {
+    const pid = pendingNavProjectId.current;
+    if (!pid) return;
+    const convs = projectConversations[pid];
+    if (!convs) return; // Data not yet loaded
+    pendingNavProjectId.current = null;
+    if (convs.length > 0) {
+      setActiveConversation(convs[0].conversation_id, pid);
+      router.push(`/chat/${convs[0].conversation_id}`);
+    }
+  }, [projectConversations, router, setActiveConversation]);
+
   const isSettings = pathname.startsWith('/settings');
 
   function handleConversationClick(convId: string, projectId: string) {
@@ -75,6 +91,7 @@ export function ChatSidebar() {
   }
 
   function handleNewChat() {
+    setActiveConversation(null, null);
     router.push('/chat');
   }
 
@@ -204,7 +221,19 @@ export function ChatSidebar() {
                 activeConversationId={activeConversationId}
                 collapsed={collapsed}
                 onToggleExpand={() => {
+                  const wasExpanded = expandedProjectIds.has(project.project_id);
                   toggleProjectExpanded(project.project_id);
+                  // Auto-navigate to latest conversation when expanding (not collapsing)
+                  if (!wasExpanded) {
+                    const convs = projectConversations[project.project_id] ?? [];
+                    if (convs.length > 0) {
+                      // Data already loaded (re-expanding) — navigate immediately
+                      handleConversationClick(convs[0].conversation_id, project.project_id);
+                    } else {
+                      // First expand — data loading async, navigate when ready
+                      pendingNavProjectId.current = project.project_id;
+                    }
+                  }
                 }}
                 onConversationClick={(convId) =>
                   handleConversationClick(convId, project.project_id)
