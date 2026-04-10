@@ -18,7 +18,6 @@ interface UseCanvasHandlersOptions {
   notify: NotifyCallback | null;
   router: { push: (url: string) => void };
   addNode: (kind: NodeKind, position?: { x: number; y: number }) => Promise<void>;
-  addDraftNode: (position?: { x: number; y: number }) => Promise<void>;
   setIsAdding: (value: boolean) => void;
   setIsLayouting: (value: boolean) => void;
 }
@@ -35,7 +34,6 @@ export function useCanvasHandlers({
   notify,
   router,
   addNode,
-  addDraftNode,
   setIsAdding,
   setIsLayouting,
 }: UseCanvasHandlersOptions) {
@@ -118,44 +116,6 @@ export function useCanvasHandlers({
       }
     },
     [getViewportCenter, addNode, notify, setIsAdding]
-  );
-
-  // Drag-and-drop handlers for node palette
-  const onDragOver = useCallback((event: React.DragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    event.dataTransfer.dropEffect = 'move';
-  }, []);
-
-  const onDrop = useCallback(
-    async (event: React.DragEvent<HTMLDivElement>) => {
-      event.preventDefault();
-
-      const kind = event.dataTransfer.getData('application/reactflow') as NodeKind;
-      if (!kind) return;
-
-      const isDraft = event.dataTransfer.getData('application/reactflow-draft') === 'true';
-
-      // Get the drop position in flow coordinates
-      const position = screenToFlowPosition({
-        x: event.clientX,
-        y: event.clientY,
-      });
-
-      setIsAdding(true);
-      try {
-        if (isDraft) {
-          await addDraftNode(position);
-        } else {
-          await addNode(kind, position);
-        }
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to create node';
-        notify?.(message, 'error');
-      } finally {
-        setIsAdding(false);
-      }
-    },
-    [screenToFlowPosition, addNode, addDraftNode, notify, setIsAdding]
   );
 
   // Select all nodes (Ctrl/Cmd+A)
@@ -241,8 +201,6 @@ export function useCanvasHandlers({
     handleAutoLayout,
     handleAutoExtract,
     handleAddNode,
-    onDragOver,
-    onDrop,
     getViewportCenter,
     selectAllNodes,
     deselectAllNodes,

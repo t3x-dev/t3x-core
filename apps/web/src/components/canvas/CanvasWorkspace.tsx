@@ -12,9 +12,9 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useContextMenu } from '@/hooks/useContextMenu';
 import { usePathHighlight } from '@/hooks/usePathHighlight';
+import { useTerminology } from '@/hooks/useTerminology';
 import { getLayoutedElements } from '@/lib/elkLayout';
 import { saveNodePosition } from '@/store/canvasStoreUtils';
-import { useTerminology } from '@/hooks/useTerminology';
 import '@xyflow/react/dist/style.css';
 import { useTheme } from 'next-themes';
 import { AnimatedEdge } from './AnimatedEdge';
@@ -26,7 +26,6 @@ import { CanvasStatusBar } from './CanvasStatusBar';
 import { CanvasToolbar } from './CanvasToolbar';
 import { useCanvasHandlers } from './CanvasWorkspaceHandlers';
 import { NodeContextMenu } from './NodeContextMenu';
-import { NodePalette } from './NodePalette';
 
 // Custom edge types for xyflow
 const edgeTypes = {
@@ -98,7 +97,6 @@ function CanvasWorkspaceInner({
     projectId,
     loading: canvasLoading,
     addNode,
-    addDraftNode,
     updateNode,
     commitPendingCommit,
     onNodesChange,
@@ -130,8 +128,6 @@ function CanvasWorkspaceInner({
     handleAutoLayout,
     handleAutoExtract,
     handleAddNode,
-    onDragOver,
-    onDrop,
     selectAllNodes,
     deselectAllNodes,
     navigateToNode,
@@ -147,7 +143,6 @@ function CanvasWorkspaceInner({
     notify,
     router,
     addNode,
-    addDraftNode,
     setIsAdding,
     setIsLayouting,
   });
@@ -180,8 +175,14 @@ function CanvasWorkspaceInner({
   // DAG auto-layout: compute topology fingerprint from node IDs + edge connections.
   // Position changes don't alter this, so ELK only runs when the graph structure changes.
   const topoFingerprint = useMemo(() => {
-    const nIds = nodes.map((n) => n.id).sort().join(',');
-    const eKeys = edges.map((e) => `${e.source}->${e.target}`).sort().join(',');
+    const nIds = nodes
+      .map((n) => n.id)
+      .sort()
+      .join(',');
+    const eKeys = edges
+      .map((e) => `${e.source}->${e.target}`)
+      .sort()
+      .join(',');
     return `${nIds}|${eKeys}`;
   }, [nodes, edges]);
 
@@ -231,7 +232,11 @@ function CanvasWorkspaceInner({
         setNodes(layouted);
         // Save ELK-computed positions to DB so next reload uses them
         for (const node of layouted) {
-          saveNodePosition(node.id, (node.data as import('@/types/nodes').CanvasNodeData).kind, node.position);
+          saveNodePosition(
+            node.id,
+            (node.data as import('@/types/nodes').CanvasNodeData).kind,
+            node.position
+          );
         }
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
@@ -357,11 +362,7 @@ function CanvasWorkspaceInner({
           backgroundImage:
             'radial-gradient(ellipse at 50% 30%, var(--surface-radial), transparent 70%)',
         }}
-        onDragOver={onDragOver}
-        onDrop={onDrop}
       >
-        {/* Node Palette for drag-and-drop */}
-        <NodePalette />
         <ReactFlow
           nodes={nodesForRender}
           edges={edgesForRender}
@@ -448,7 +449,6 @@ function CanvasWorkspaceInner({
             isAdding={isAdding}
           />
         )}
-
       </div>
 
       {/* Right-click context menu */}
