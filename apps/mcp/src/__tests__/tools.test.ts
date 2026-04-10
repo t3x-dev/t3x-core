@@ -71,10 +71,10 @@ vi.mock('@t3x-dev/api-client', () => ({
       branch: 'main',
     }),
     createMergeDraft: vi.fn().mockResolvedValue({
-      id: 'md_test',
-      project_id: 'proj_1',
-      source_hash: 'sha256:aaa',
-      target_hash: 'sha256:bbb',
+      draftId: 'md_test',
+      projectId: 'proj_1',
+      sourceHash: 'sha256:aaa',
+      targetHash: 'sha256:bbb',
       status: 'pending',
       prepared: {
         autoKept: ['node_a'],
@@ -95,7 +95,7 @@ vi.mock('@t3x-dev/api-client', () => ({
       updated_at: '2026-04-10T00:00:00Z',
     }),
     getMergeDraft: vi.fn().mockResolvedValue({
-      id: 'md_test',
+      draftId: 'md_test',
       status: 'pending',
       prepared: {
         autoKept: ['node_a'],

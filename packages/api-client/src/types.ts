@@ -254,17 +254,17 @@ export interface MergeDraftPrepared {
 }
 
 export interface MergeDraft {
-  id: string;
-  project_id: string;
-  source_hash: string;
-  target_hash: string;
-  source_branch?: string;
-  target_branch?: string;
-  status: 'pending' | 'committed' | 'aborted';
+  draftId: string;
+  projectId: string;
+  sourceHash: string;
+  targetHash: string;
+  sourceBranch?: string;
+  targetBranch?: string;
+  status: 'pending' | 'committed' | 'cancelled';
   prepared: MergeDraftPrepared;
   message: string | null;
-  created_at: string;
-  updated_at: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface MergeDraftCommitInput {

@@ -44,7 +44,7 @@ export async function handleMergePrepare(args: Record<string, unknown>) {
   );
 
   const result = {
-    draft_id: draft.id,
+    draft_id: draft.draftId,
     status: draft.status,
     summary: {
       auto_kept: (prepared.autoKept || []).length,

@@ -24,9 +24,31 @@ export const mergeExecuteTool = {
 
 export async function handleMergeExecute(args: Record<string, unknown>) {
   const client = getClient();
-  const result = await client.commitMergeDraft(args.draft_id as string, {
+  const draftId = args.draft_id as string;
+
+  // Read draft to get resolutions saved by merge_resolve (stored in prepared)
+  const draft = await client.getMergeDraft(draftId);
+  const prepared = draft.prepared as Record<string, unknown>;
+  const resolutions = (prepared.resolutions as Array<{ path: string; resolution: string }>) || [];
+
+  // Convert resolutions to API's decisions.conflictResolutions format
+  const conflictResolutions: Record<string, string> = {};
+  for (const r of resolutions) {
+    if (typeof r.resolution === 'string') {
+      conflictResolutions[r.path] = r.resolution;
+    }
+  }
+
+  const result = await client.commitMergeDraft(draftId, {
     message: args.message as string,
     branch: args.branch as string | undefined,
+    decisions: {
+      conflictResolutions,
+      keepFromSource: [],
+      keepFromTarget: [],
+      keepRelationsFromSource: true,
+      keepRelationsFromTarget: true,
+    },
   });
   return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
 }

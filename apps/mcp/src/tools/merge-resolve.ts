@@ -49,8 +49,8 @@ export async function handleMergeResolve(args: Record<string, unknown>) {
 
   // Get current draft to read existing resolutions and conflict count
   const draft = await client.getMergeDraft(draftId);
-  const existingResolutions =
-    ((draft as Record<string, unknown>).resolutions as Array<{ path: string }>) || [];
+  const prepared = draft.prepared as Record<string, unknown>;
+  const existingResolutions = (prepared.resolutions as Array<{ path: string }>) || [];
 
   // Build resolution log entries
   const now = new Date().toISOString();
@@ -68,8 +68,10 @@ export async function handleMergeResolve(args: Record<string, unknown>) {
     ...newResolutions,
   ];
 
-  // Update draft with resolutions
-  await client.updateMergeDraft(draftId, { resolutions: merged });
+  // Store resolutions inside prepared (PATCH endpoint accepts prepared field)
+  await client.updateMergeDraft(draftId, {
+    prepared: { ...prepared, resolutions: merged },
+  });
 
   // Count remaining unresolved conflicts
   const totalConflicts = (draft.prepared.conflicts || []).length;
