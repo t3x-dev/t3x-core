@@ -13,6 +13,7 @@ export interface ProjectFolderProps {
   collapsed: boolean;
   onToggleExpand: () => void;
   onConversationClick: (convId: string) => void;
+  onNewChat: (projectId: string) => void;
   onCanvasClick: () => void;
   onProjectContextMenu: (e: React.MouseEvent) => void;
   onConversationContextMenu: (e: React.MouseEvent, convId: string) => void;
@@ -35,6 +36,7 @@ export function ProjectFolder({
   collapsed,
   onToggleExpand,
   onConversationClick,
+  onNewChat,
   onCanvasClick: _onCanvasClick,
   onProjectContextMenu,
   onConversationContextMenu,
@@ -181,6 +183,19 @@ export function ProjectFolder({
               No conversations
             </span>
           )}
+
+          {/* Add new chat within this project */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onNewChat(project.project_id);
+            }}
+            className="flex items-center gap-1.5 rounded-lg h-7 px-2 w-full text-left text-[10px] text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-secondary)] transition-colors"
+          >
+            <span className="text-xs">+</span>
+            <span>New Chat</span>
+          </button>
         </div>
       )}
     </div>

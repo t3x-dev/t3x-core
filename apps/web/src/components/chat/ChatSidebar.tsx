@@ -93,6 +93,28 @@ export function ChatSidebar() {
     router.push('/chat');
   }
 
+  async function handleNewChatInProject(projectId: string) {
+    try {
+      // Find the latest commit hash for this project to use as parent
+      const { listCommits } = await import('@/lib/api/commits');
+      const commits = await listCommits(projectId, undefined, 1);
+      const parentHash = commits.length > 0 ? commits[0].hash : undefined;
+
+      // Create new conversation under this project
+      const { createConversation } = await import('@/lib/api/conversations');
+      const conv = await createConversation(projectId, 'New Chat', parentHash);
+
+      setActiveConversation(conv.conversation_id, projectId);
+      router.push(`/chat/${conv.conversation_id}`);
+
+      // Refresh sidebar to show new conversation
+      useChatStore.getState().refreshSidebar();
+    } catch {
+      // Fallback: just navigate to new chat
+      router.push('/chat');
+    }
+  }
+
   function handleCanvasClick(projectId: string) {
     router.push(`/project/${projectId}`);
   }
@@ -236,6 +258,7 @@ export function ChatSidebar() {
                 onConversationClick={(convId) =>
                   handleConversationClick(convId, project.project_id)
                 }
+                onNewChat={(pid) => handleNewChatInProject(pid)}
                 onCanvasClick={() => handleCanvasClick(project.project_id)}
                 onProjectContextMenu={(e) => handleProjectContextMenu(e, project.project_id)}
                 onConversationContextMenu={(e, convId) =>

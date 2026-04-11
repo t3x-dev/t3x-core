@@ -33,6 +33,7 @@ export function ChatHeader({
   const setCommitBranch = useCommitStore((s) => s.setCommitBranch);
   const initCommitState = useCommitStore((s) => s.initCommitState);
   const panelExpanded = useWorkspaceStore((s) => s.panelExpanded);
+  const isCommitted = useWorkspaceStore((s) => s.isCommitted);
   const isExtracting = useDraftStore((s) => s.isExtracting);
   const extractionPreset = useWorkspaceStore((s) => s.extractionPreset);
   const setExtractionPreset = useWorkspaceStore((s) => s.setExtractionPreset);
@@ -97,7 +98,7 @@ export function ChatHeader({
       )}
 
       {/* Extract split button — only visible when YOps panel is expanded */}
-      {panelExpanded && <div ref={dropdownRef} className="relative flex shrink-0" onBlur={handleBlur}>
+      {panelExpanded && !isCommitted && <div ref={dropdownRef} className="relative flex shrink-0" onBlur={handleBlur}>
         <button
           type="button"
           onClick={() => window.dispatchEvent(new CustomEvent('t3x:extract-requested'))}

@@ -24,6 +24,8 @@ interface WorkspaceState {
   panelExpanded: boolean;
   base: SemanticContent;
   baseCommitHash: string | null;
+  /** True after a successful commit — locks chat, YOps, and result */
+  isCommitted: boolean;
   scriptText: string;
   scriptOps: YOp[];
   parseErrors: ParseError[];
@@ -79,6 +81,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   result: null,
   appliedCount: 0,
   execError: null,
+  isCommitted: false,
   selectedNodePath: null,
   selectedSlotKey: null,
   selectedTurnIndex: null,
@@ -248,6 +251,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       result: null,
       appliedCount: 0,
       execError: null,
+      isCommitted: false,
       selectedNodePath: null,
       selectedSlotKey: null,
       selectedTurnIndex: null,

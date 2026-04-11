@@ -6,11 +6,13 @@ import { useWorkspaceStore } from '@/store/workspaceStore';
 export function WorkspaceTopbar() {
   const setPanelExpanded = useWorkspaceStore((s) => s.setPanelExpanded);
   const mode = useWorkspaceStore((s) => s.mode);
+  const isCommitted = useWorkspaceStore((s) => s.isCommitted);
   const parseErrors = useWorkspaceStore((s) => s.parseErrors);
   const scriptOps = useWorkspaceStore((s) => s.scriptOps);
   const execute = useWorkspaceStore((s) => s.execute);
 
   const canRun =
+    !isCommitted &&
     mode !== 'streaming' &&
     mode !== 'committing' &&
     parseErrors.length === 0 &&

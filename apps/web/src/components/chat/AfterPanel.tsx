@@ -488,6 +488,7 @@ export function AfterPanel({
       }
       useWorkspaceStore.getState().setMode('idle');
       useWorkspaceStore.getState().setScriptText('');
+      useWorkspaceStore.setState({ isCommitted: true });
       setShowCommitDialog(false);
       toast.success('Committed successfully');
       try {
