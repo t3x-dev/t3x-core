@@ -5,6 +5,7 @@ import { ChevronDown, Hexagon, Loader2, PanelRightClose, Play, Search } from 'lu
 import { useMemo, useRef, useState } from 'react';
 import { computeTreeDiff } from '@/lib/treeDiff';
 import { cn } from '@/lib/utils';
+import { useDraftStore } from '@/store/draftStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 
 const PRESET_LABELS: Record<string, { label: string; desc: string }> = {
@@ -24,6 +25,7 @@ export function WorkspaceTopbar() {
   const extractionPreset = useWorkspaceStore((s) => s.extractionPreset);
   const setExtractionPreset = useWorkspaceStore((s) => s.setExtractionPreset);
 
+  const isExtracting = useDraftStore((s) => s.isExtracting);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -110,18 +112,26 @@ export function WorkspaceTopbar() {
           <button
             type="button"
             onClick={() => window.dispatchEvent(new CustomEvent('t3x:extract-requested'))}
-            className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-semibold rounded-l border border-r-0 border-[var(--source)]/30 bg-[var(--source)]/10 text-[var(--source)] hover:bg-[var(--source)]/20 transition-colors"
+            disabled={isExtracting}
+            className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-semibold rounded-l border border-r-0 border-[var(--source)]/30 bg-[var(--source)]/10 text-[var(--source)] hover:bg-[var(--source)]/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            <Hexagon className="h-2.5 w-2.5" />
-            Extract
-            <span className="text-[8px] opacity-70">
-              {PRESET_LABELS[extractionPreset].label}
-            </span>
+            {isExtracting ? (
+              <Loader2 className="h-2.5 w-2.5 animate-spin" />
+            ) : (
+              <Hexagon className="h-2.5 w-2.5" />
+            )}
+            {isExtracting ? 'Extracting...' : 'Extract'}
+            {!isExtracting && (
+              <span className="text-[8px] opacity-70">
+                {PRESET_LABELS[extractionPreset].label}
+              </span>
+            )}
           </button>
           <button
             type="button"
             onClick={() => setDropdownOpen(!dropdownOpen)}
-            className="flex items-center px-1 py-1 text-[10px] rounded-r border border-[var(--source)]/30 bg-[var(--source)]/10 text-[var(--source)] hover:bg-[var(--source)]/20 transition-colors"
+            disabled={isExtracting}
+            className="flex items-center px-1 py-1 text-[10px] rounded-r border border-[var(--source)]/30 bg-[var(--source)]/10 text-[var(--source)] hover:bg-[var(--source)]/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             <ChevronDown className="h-2.5 w-2.5" />
           </button>

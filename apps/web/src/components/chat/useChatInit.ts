@@ -124,9 +124,12 @@ export function useChatInit({
         .then(async ([draft, yopsEntries, topicsList]) => {
           if (draft && draft.trees.length > 0) {
             useDraftStore.getState().setDraft(draft);
-            // Snapshot committed state as workspace base
+            // Snapshot committed state as workspace base — only if there's
+            // an actual commit. Otherwise Before stays empty (first extraction).
             const commitHash = useCommitStore.getState().lastCommitHash;
-            useWorkspaceStore.getState().snapshotBase(draft, commitHash ?? null);
+            if (commitHash) {
+              useWorkspaceStore.getState().snapshotBase(draft, commitHash);
+            }
             if (!useWorkspaceStore.getState().panelExpanded) {
               useWorkspaceStore.getState().setPanelExpanded(true);
             }
@@ -141,6 +144,7 @@ export function useChatInit({
               if (allOps.length > 0) {
                 const { opsToYaml } = await import('@/lib/scriptParser');
                 useWorkspaceStore.getState().setScriptText(opsToYaml(allOps));
+                useWorkspaceStore.setState({ persistedOpsCount: allOps.length });
                 useWorkspaceStore.getState().setMode('executed');
               }
             }

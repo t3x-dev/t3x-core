@@ -30,7 +30,7 @@ export default function ConversationPage() {
   }, [conversationId]);
 
   // Resizable panel via drag handle
-  const [panelWidth, setPanelWidth] = useState(550);
+  const [panelWidth, setPanelWidth] = useState(700);
   const isDragging = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -42,7 +42,7 @@ export default function ConversationPage() {
       if (!isDragging.current || !containerRef.current) return;
       const containerRect = containerRef.current.getBoundingClientRect();
       const newWidth = containerRect.right - ev.clientX;
-      setPanelWidth(Math.max(400, Math.min(800, newWidth)));
+      setPanelWidth(Math.max(500, Math.min(1200, newWidth)));
     };
 
     const handleMouseUp = () => {

@@ -1,14 +1,15 @@
 'use client';
 
 import { AlertTriangle, Info, XCircle } from 'lucide-react';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { WorkspaceTopbar } from './WorkspaceTopbar';
 import { ScriptEditor } from './ScriptEditor';
 import { BeforePanel } from './BeforePanel';
 import { AfterPanel } from './AfterPanel';
+import { useChatStore } from '@/store/chatStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 
-const DEFAULT_WIDTH = 550;
+const DEFAULT_WIDTH = 700;
 const COLLAPSED_WIDTH = 40;
 
 /** Advisory questions panel — only renders when questions exist */
@@ -68,9 +69,31 @@ function GateIssuesBar() {
 export function YOpsWorkspace({ customWidth }: { customWidth?: number }) {
   const panelExpanded = useWorkspaceStore((s) => s.panelExpanded);
   const setPanelExpanded = useWorkspaceStore((s) => s.setPanelExpanded);
-  const [splitRatio, setSplitRatio] = useState(0.55);
+  const [splitRatio, setSplitRatio] = useState(0.3);
   const containerRef = useRef<HTMLDivElement>(null);
   const isDragging = useRef(false);
+  const prevExpandedRef = useRef(panelExpanded);
+  const sidebarWasCollapsedRef = useRef(true);
+
+  // Auto-collapse sidebar when YOps panel expands, restore when it collapses.
+  // Only fires on panelExpanded transitions — does NOT fight manual sidebar toggles.
+  useEffect(() => {
+    if (panelExpanded === prevExpandedRef.current) return;
+    prevExpandedRef.current = panelExpanded;
+
+    if (panelExpanded) {
+      // Remember sidebar state, then collapse it
+      sidebarWasCollapsedRef.current = useChatStore.getState().sidebarCollapsed;
+      if (!sidebarWasCollapsedRef.current) {
+        useChatStore.setState({ sidebarCollapsed: true });
+      }
+    } else {
+      // Restore sidebar if it was open before
+      if (!sidebarWasCollapsedRef.current) {
+        useChatStore.setState({ sidebarCollapsed: false });
+      }
+    }
+  }, [panelExpanded]);
 
   const width = panelExpanded ? (customWidth ?? DEFAULT_WIDTH) : COLLAPSED_WIDTH;
 
@@ -121,7 +144,7 @@ export function YOpsWorkspace({ customWidth }: { customWidth?: number }) {
     <div
       ref={containerRef}
       className="flex flex-col h-full bg-[var(--panel)] border-l border-[var(--stroke-default)]"
-      style={{ width, minWidth: 400, maxWidth: 800 }}
+      style={{ width, minWidth: 500, maxWidth: 1200 }}
     >
       <WorkspaceTopbar />
       <div style={{ height: `${splitRatio * 100}%` }} className="flex-shrink-0 overflow-hidden border-b border-[var(--stroke-default)]">

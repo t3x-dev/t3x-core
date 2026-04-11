@@ -65,6 +65,8 @@ interface WorkspaceState {
   lastExtractionPinIds: string[];
   // Quote validation result from last extraction
   quoteValidation: QuoteValidationResult | null;
+  // Number of ops already persisted to server (to avoid double-saving)
+  persistedOpsCount: number;
 
   snapshotBase(content: SemanticContent, commitHash: string | null): void;
   setScriptText(text: string): void;
@@ -112,6 +114,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   selectedSource: null,
   scrollToCenter: false,
   extractionPreset: 'balanced',
+  persistedOpsCount: 0,
   lastExtractionPinIds: [],
   quoteValidation: null,
   driftDetected: false,
@@ -165,6 +168,21 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     // Sync result to draftStore so commit pipeline and source maps work
     import('./draftStore').then(({ useDraftStore }) => {
       useDraftStore.getState().setDraft(content);
+
+      // Persist new ops to server (only ops added after last save)
+      if (result.ok) {
+        const { persistedOpsCount } = get();
+        const newOps = enabledOps.slice(persistedOpsCount);
+        if (newOps.length > 0) {
+          const convId = useDraftStore.getState().conversationId;
+          if (convId) {
+            import('@/lib/api/trees').then(({ createYOpsEntry }) => {
+              createYOpsEntry(convId, newOps, 'manual')?.catch(() => {});
+            });
+          }
+          set({ persistedOpsCount: enabledOps.length });
+        }
+      }
     });
   },
 
