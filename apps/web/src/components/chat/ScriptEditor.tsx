@@ -158,13 +158,18 @@ export function ScriptEditor() {
     <div className="flex flex-col h-full bg-[var(--editor-bg)]">
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-1.5 border-b border-[var(--stroke-default)] bg-[var(--editor-gutter)]">
-        <span className="text-[9px] font-bold uppercase tracking-wider text-[var(--text-tertiary)]">
+        <span className="flex items-center gap-2 text-[9px] font-bold uppercase tracking-wider text-[var(--text-tertiary)]">
+          <span className="relative flex h-2 w-2">
+            {isStreaming ? (
+              <>
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--status-error)] opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-[var(--status-error)]" />
+              </>
+            ) : (
+              <span className="inline-flex h-2 w-2 rounded-full bg-[var(--status-success)]" />
+            )}
+          </span>
           Script
-          {mode === 'streaming' && (
-            <span className="ml-2 text-[7px] font-bold px-1.5 py-0.5 rounded bg-[var(--source-dim)] text-[var(--source)] uppercase">
-              streaming
-            </span>
-          )}
         </span>
       </div>
 

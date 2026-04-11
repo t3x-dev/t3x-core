@@ -40,7 +40,9 @@ export function useExtraction({ resolvedConversationId }: UseExtractionParams) {
       // Store which pin IDs were used for this extraction (for commit source_refs)
       useWorkspaceStore.setState({ lastExtractionPinIds: sourcePinIds ?? [] });
 
-      // Expand panel if collapsed
+      // Clear previous script and result, expand panel
+      useWorkspaceStore.getState().setScriptText('');
+      useWorkspaceStore.setState({ result: null, mode: 'streaming' });
       if (!useWorkspaceStore.getState().panelExpanded) {
         useWorkspaceStore.getState().setPanelExpanded(true);
       }
