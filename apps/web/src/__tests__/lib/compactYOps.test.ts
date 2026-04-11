@@ -57,28 +57,28 @@ describe('compactYOps', () => {
   describe('relate/unrelate state machine', () => {
     it('removes relate + unrelate on same triple', () => {
       const ops: YOp[] = [
-        { relate: { from: 'a', to: 'b', type: 'depends_on' } },
-        { unrelate: { from: 'a', to: 'b', type: 'depends_on' } },
+        { relate: { from: 'a', to: 'b', type: 'depends' } },
+        { unrelate: { from: 'a', to: 'b', type: 'depends' } },
       ];
       expect(compactYOps(ops)).toEqual([]);
     });
 
     it('keeps relate when unrelate comes first', () => {
       const ops: YOp[] = [
-        { unrelate: { from: 'a', to: 'b', type: 'depends_on' } },
-        { relate: { from: 'a', to: 'b', type: 'depends_on' } },
+        { unrelate: { from: 'a', to: 'b', type: 'depends' } },
+        { relate: { from: 'a', to: 'b', type: 'depends' } },
       ];
-      expect(compactYOps(ops)).toEqual([{ relate: { from: 'a', to: 'b', type: 'depends_on' } }]);
+      expect(compactYOps(ops)).toEqual([{ relate: { from: 'a', to: 'b', type: 'depends' } }]);
     });
 
     it('preserves standalone relate', () => {
-      const ops: YOp[] = [{ relate: { from: 'a', to: 'b', type: 'depends_on' } }];
-      expect(compactYOps(ops)).toEqual([{ relate: { from: 'a', to: 'b', type: 'depends_on' } }]);
+      const ops: YOp[] = [{ relate: { from: 'a', to: 'b', type: 'depends' } }];
+      expect(compactYOps(ops)).toEqual([{ relate: { from: 'a', to: 'b', type: 'depends' } }]);
     });
 
     it('preserves standalone unrelate', () => {
-      const ops: YOp[] = [{ unrelate: { from: 'a', to: 'b', type: 'depends_on' } }];
-      expect(compactYOps(ops)).toEqual([{ unrelate: { from: 'a', to: 'b', type: 'depends_on' } }]);
+      const ops: YOp[] = [{ unrelate: { from: 'a', to: 'b', type: 'depends' } }];
+      expect(compactYOps(ops)).toEqual([{ unrelate: { from: 'a', to: 'b', type: 'depends' } }]);
     });
   });
 
@@ -139,10 +139,10 @@ describe('compactYOps', () => {
     it('handles mixed set/unset and relate/unrelate in same ops list', () => {
       const ops: YOp[] = [
         { set: { path: 'a/x', value: 1 } },
-        { relate: { from: 'a', to: 'b', type: 'depends_on' } },
+        { relate: { from: 'a', to: 'b', type: 'depends' } },
         { unset: { path: 'a/x' } },
         { set: { path: 'c/y', value: 2 } },
-        { unrelate: { from: 'a', to: 'b', type: 'depends_on' } },
+        { unrelate: { from: 'a', to: 'b', type: 'depends' } },
       ];
       // a/x: set+unset cancel → nothing
       // relate+unrelate cancel → nothing
