@@ -401,32 +401,50 @@ interface AfterNodeRecursiveProps {
 }
 
 function AfterNodeRecursive({ node, path, depth }: AfterNodeRecursiveProps) {
-  // Children don't need full diff context — just render slots plainly
   const slots = node.slots || {};
   const slotEntries = Object.entries(slots).filter(([k]) => !k.startsWith('_'));
+  const select = useWorkspaceStore((s) => s.select);
+  const clearSelection = useWorkspaceStore((s) => s.clearSelection);
+  const selectedPath = useWorkspaceStore((s) => s.selectedNodePath);
+  const selectedSlot = useWorkspaceStore((s) => s.selectedSlotKey);
+  const isNodeSelected = selectedPath === path && !selectedSlot;
 
   return (
     <>
       <div className="group flex items-stretch" style={{ minHeight: 26 }}>
-        <div className="shrink-0 w-[3px] bg-transparent" />
+        <div className={`shrink-0 w-[3px] ${isNodeSelected ? 'bg-[var(--source)]' : 'bg-transparent'}`} />
         <div
-          className="flex-1 flex items-center gap-1 py-0.5 hover:bg-[var(--hover-bg)] transition-colors"
+          className={cn(
+            'flex-1 flex items-center gap-1 py-0.5 cursor-pointer hover:bg-[var(--hover-bg)] transition-colors',
+            isNodeSelected && 'bg-[var(--source-dim)]'
+          )}
           style={{ ...MONO, paddingLeft: `${8 + depth * 14}px` }}
+          onClick={() => isNodeSelected ? clearSelection() : select('after', { nodePath: path })}
         >
           <span className="text-[var(--yaml-key,#2563eb)] font-semibold">{node.key}:</span>
         </div>
       </div>
-      {slotEntries.map(([key, val]) => (
-        <div key={key} style={{ paddingLeft: `${8 + (depth + 1) * 14}px` }}>
-          <div className="flex items-stretch" style={{ minHeight: 24 }}>
-            <div className="shrink-0 w-[3px] bg-transparent" />
-            <div className="flex-1 min-w-0 flex items-center gap-1 px-2 py-0.5" style={MONO}>
-              <span className="shrink-0 text-[var(--yaml-key,#2563eb)]">{key}:</span>
-              <span className="text-[var(--yaml-string,#16a34a)] truncate ml-1">{formatSlotValue(val)}</span>
+      {slotEntries.map(([key, val]) => {
+        const isSlotSelected = selectedPath === path && selectedSlot === key;
+        return (
+          <div key={key} style={{ paddingLeft: `${8 + (depth + 1) * 14}px` }}>
+            <div className="flex items-stretch" style={{ minHeight: 24 }}>
+              <div className={`shrink-0 w-[3px] ${isSlotSelected ? 'bg-[var(--source)]' : 'bg-transparent'}`} />
+              <div
+                className={cn(
+                  'flex-1 min-w-0 flex items-center gap-1 px-2 py-0.5 cursor-pointer hover:bg-[var(--hover-bg)] transition-colors',
+                  isSlotSelected && 'bg-[var(--source-dim)]'
+                )}
+                style={MONO}
+                onClick={() => isSlotSelected ? clearSelection() : select('after', { nodePath: path, slotKey: key })}
+              >
+                <span className="shrink-0 text-[var(--yaml-key,#2563eb)]">{key}:</span>
+                <span className="text-[var(--yaml-string,#16a34a)] truncate ml-1">{formatSlotValue(val)}</span>
+              </div>
             </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
       {node.children?.map((child: TreeNode) => (
         <AfterNodeRecursive key={child.key} node={child} path={`${path}/${child.key}`} depth={depth + 1} />
       ))}
