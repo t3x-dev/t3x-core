@@ -354,12 +354,6 @@ export function ChatWorkspace({
                 content={msg.content}
                 turnHash={msg.id}
                 turnIndex={i + 1}
-                onRegenerate={msg.role === 'assistant' ? () => regenerate(i) : undefined}
-                onEdit={
-                  msg.role === 'user'
-                    ? (newContent: string) => editAndResend(i, newContent)
-                    : undefined
-                }
                 citations={
                   msg.role === 'assistant' && i === messages.length - 1 ? citations : undefined
                 }
