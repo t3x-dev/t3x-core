@@ -444,9 +444,11 @@ export function ChatMessage({
   }, [isSourceMessage, scrollToCenter]);
 
   // Rendering priority: YAML highlights > source-mapped spans > committed highlights > markdown
+  // Source-mapped spans only render when a YAML node is actively selected (click-triggered)
   const useCoverageHighlights = coverageMode && uncoveredRanges.length > 0;
   const useYamlHighlights = hasCharHighlights && !useCoverageHighlights;
-  const useSourceMappedSpans = !useYamlHighlights && !useCoverageHighlights && hasSourceMappings;
+  const hasActiveSelection = !!hoveredNodeId;
+  const useSourceMappedSpans = hasActiveSelection && !useYamlHighlights && !useCoverageHighlights && hasSourceMappings;
   const useCommittedHighlightSpans =
     !useYamlHighlights && !useSourceMappedSpans && !useCoverageHighlights && hasCommittedHighlights;
 
