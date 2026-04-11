@@ -109,7 +109,7 @@ function SlotRow({
           className="flex-1 min-w-0 flex items-center gap-1 px-2 py-0.5 bg-[var(--status-warning)]/[0.06]"
           style={MONO}
         >
-          <span className="shrink-0 text-[var(--text-secondary)]">{slotKey}: </span>
+          <span className="shrink-0 text-[var(--yaml-key,#2563eb)]">{slotKey}:</span>
           <input
             ref={inputRef}
             defaultValue={value}
@@ -134,7 +134,7 @@ function SlotRow({
         style={MONO}
         onDoubleClick={handleDoubleClick}
       >
-        <span className="shrink-0 text-[var(--text-secondary)]">{slotKey}: </span>
+        <span className="shrink-0 text-[var(--yaml-key,#2563eb)]">{slotKey}:</span>
         {diffType === 'modified' && oldValue && (
           <span className="text-[var(--status-error)] opacity-50 line-through mr-1 truncate text-[10px]">
             {oldValue}
@@ -148,7 +148,7 @@ function SlotRow({
                 ? 'text-[var(--status-warning)] truncate'
                 : diffType === 'removed'
                   ? 'text-[var(--status-error)] opacity-50 line-through truncate'
-                  : 'text-[var(--text-primary)] truncate'
+                  : 'text-[var(--yaml-string,#16a34a)] truncate'
           }
         >
           {value}
