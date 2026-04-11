@@ -82,9 +82,10 @@ function HighlightedText({
           <mark
             key={i}
             style={{
-              background: 'var(--slot-dim)',
-              borderRadius: 2,
-              padding: '1px 0',
+              background: 'rgba(99, 102, 241, 0.25)',
+              borderBottom: '2px solid rgb(99, 102, 241)',
+              borderRadius: 3,
+              padding: '2px 4px',
               color: 'inherit',
             }}
           >
@@ -463,12 +464,12 @@ export function ChatMessage({
       )}
       style={{
         background: isWholeMessageHighlight
-          ? 'color-mix(in srgb, var(--source) 15%, transparent)'
+          ? 'rgba(99, 102, 241, 0.1)'
           : isSourceMessage && hasCharHighlights
-            ? 'color-mix(in srgb, var(--source) 6%, transparent)'
+            ? 'rgba(99, 102, 241, 0.06)'
             : 'transparent',
         borderLeft: isSourceMessage
-          ? '3px solid color-mix(in srgb, var(--source) 50%, transparent)'
+          ? '3px solid rgb(99, 102, 241)'
           : undefined,
       }}
       onMouseEnter={() =>
