@@ -14,14 +14,12 @@ import { getTerminology, type TermKey } from '@/hooks/useTerminology';
 import * as api from '@/lib/api';
 import { API_V1, fetchWithTimeout, handleResponse } from '@/lib/api/core';
 import { useSettingsStore } from '@/store/settingsStore';
-import type { Merge2WayResult, MergeDraft, ContentNode, TurnContextData } from '@/types/merge';
-import { useCanvasStore } from './canvasStore';
+import type { ContentNode, MergeDraft, TurnContextData } from '@/types/merge';
+import { type SaveStatus, createSaveStatusTimer } from './saveStatus';
 
 // ============================================================================
 // Types
 // ============================================================================
-
-type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
 /**
  * Extended resolution types for WebUI layer
@@ -64,10 +62,6 @@ export interface CachedTurnContext {
 }
 
 interface MergeWorkspaceState {
-  // Draft data (legacy alias)
-  /** @deprecated Use treeMergeResult. Kept for backward compat. */
-  prepared: Merge2WayResult | null;
-
   draftId: string | null;
   projectId: string | null;
   sourceHash: string | null;
@@ -128,11 +122,8 @@ interface MergeWorkspaceState {
   // Preview actions
   togglePreview: () => void;
 
-  // Legacy node-based actions (kept for UI compat)
-  resolvePair: (index: number, pick: 'source' | 'target') => void;
-  toggleKeep: (side: 'source' | 'target', index: number) => void;
+  // Source context for merge conflicts
   fetchSourceContext: (turnHash: string, node: ContentNode) => Promise<TurnContextData | null>;
-  getPreviewNodes: () => ContentNode[];
 
   // Extended resolution actions
   resolveConflict: (index: number, resolution: 'source' | 'target' | 'both') => void;
@@ -153,7 +144,6 @@ interface MergeWorkspaceState {
 
   // Tree-aware computed getters
   getTreeUnresolvedCount: () => number;
-  canCommitAny: () => boolean;
   getTreeMergeChecks: () => MergeCheck[];
   getPreviewPaths: () => string[];
 }
@@ -211,8 +201,7 @@ function apiDraftToInternal(apiDraft: Record<string, unknown>): {
   };
 }
 
-// Module-level save status timer — tracked so reset() can cancel it
-let saveStatusTimer: ReturnType<typeof setTimeout> | null = null;
+const saveTimer = createSaveStatusTimer();
 
 // ============================================================================
 // Store
@@ -239,7 +228,6 @@ const initialState = {
   serverChecks: [] as MergeCheck[],
   serverChecksLoading: false,
   serverChecksError: null,
-  prepared: null as Merge2WayResult | null,
   treeMergeResult: null as MergeResult | null,
   treeResolutions: new Map<string, TreeResolution>(),
   keepSourceNodes: new Set<string>(),
@@ -346,14 +334,7 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
         lastSavedAt: new Date(),
       });
 
-      if (saveStatusTimer) clearTimeout(saveStatusTimer);
-      saveStatusTimer = setTimeout(() => {
-        saveStatusTimer = null;
-        const current = get();
-        if (current.saveStatus === 'saved') {
-          set({ saveStatus: 'idle' });
-        }
-      }, 2000);
+      saveTimer.scheduleReset(get, set);
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to save';
       set({ saveStatus: 'error' });
@@ -384,11 +365,6 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
         contextLoadingStates: {},
       });
 
-      const projectId = get().projectId;
-      if (projectId) {
-        useCanvasStore.getState().loadProjectData(projectId);
-      }
-
       return commitResult;
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to commit';
@@ -413,10 +389,7 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
   },
 
   reset: () => {
-    if (saveStatusTimer) {
-      clearTimeout(saveStatusTimer);
-      saveStatusTimer = null;
-    }
+    saveTimer.cancel();
     set(initialState);
   },
 
@@ -426,46 +399,6 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
 
   togglePreview: () => {
     set((state) => ({ previewExpanded: !state.previewExpanded }));
-  },
-
-  // ============================================================================
-  // Legacy ContentNode-Based Actions (kept for UI compat)
-  // ============================================================================
-
-  resolvePair: (index: number, pick: 'source' | 'target') => {
-    const { prepared, extendedResolutions } = get();
-    if (!prepared) return;
-
-    const newPrepared = { ...prepared };
-    newPrepared.similarPairs = [...prepared.similarPairs];
-    newPrepared.similarPairs[index] = {
-      ...newPrepared.similarPairs[index],
-      resolution: pick,
-    };
-
-    const key = String(index);
-    if (extendedResolutions[key]) {
-      const newExtended = { ...extendedResolutions };
-      delete newExtended[key];
-      set({ prepared: newPrepared, extendedResolutions: newExtended, isDirty: true });
-    } else {
-      set({ prepared: newPrepared, isDirty: true });
-    }
-  },
-
-  toggleKeep: (side: 'source' | 'target', index: number) => {
-    const { prepared } = get();
-    if (!prepared) return;
-
-    const newPrepared = { ...prepared };
-    const list = side === 'source' ? 'onlyInSource' : 'onlyInTarget';
-    newPrepared[list] = [...prepared[list]];
-    newPrepared[list][index] = {
-      ...newPrepared[list][index],
-      keep: !newPrepared[list][index].keep,
-    };
-
-    set({ prepared: newPrepared, isDirty: true });
   },
 
   fetchSourceContext: async (turnHash: string, node: ContentNode) => {
@@ -512,44 +445,6 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
       }));
       return null;
     }
-  },
-
-  getPreviewNodes: (): ContentNode[] => {
-    const { prepared, extendedResolutions } = get();
-    if (!prepared) return [];
-
-    const nodes: ContentNode[] = [];
-
-    nodes.push(...prepared.identical);
-
-    for (let i = 0; i < prepared.similarPairs.length; i++) {
-      const pair = prepared.similarPairs[i];
-      const key = String(i);
-      const extRes = extendedResolutions[key];
-
-      if (pair.resolution === 'source') {
-        nodes.push(pair.source);
-      } else if (pair.resolution === 'target') {
-        nodes.push(pair.target);
-      } else if (extRes?.type === 'both') {
-        nodes.push(pair.source);
-        nodes.push(pair.target);
-      }
-    }
-
-    for (const candidate of prepared.onlyInSource) {
-      if (candidate.keep) {
-        nodes.push(candidate.node);
-      }
-    }
-
-    for (const candidate of prepared.onlyInTarget) {
-      if (candidate.keep) {
-        nodes.push(candidate.node);
-      }
-    }
-
-    return nodes;
   },
 
   // ============================================================================
@@ -787,12 +682,6 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
     const { treeMergeResult, treeResolutions } = get();
     if (!treeMergeResult) return 0;
     return treeMergeResult.conflicts.filter((c: { path: string }) => !treeResolutions.has(c.path)).length;
-  },
-
-  canCommitAny: () => {
-    const { message } = get();
-    if (!message.trim()) return false;
-    return get().allTreeConflictsResolved();
   },
 
   getTreeMergeChecks: (): MergeCheck[] => {

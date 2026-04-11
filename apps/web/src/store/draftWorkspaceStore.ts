@@ -9,13 +9,7 @@ import { create } from 'zustand';
 import type { DraftConstraint, DraftNode, WorkbenchDraft } from '@/lib/api';
 import * as api from '@/lib/api';
 import { type ValidationResult, validateConstraintsLocally } from '@/lib/draftValidation';
-import { useCanvasStore } from './canvasStore';
-
-// ============================================================================
-// Types
-// ============================================================================
-
-type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
+import { type SaveStatus, createSaveStatusTimer } from './saveStatus';
 type PreviewStatus = 'idle' | 'loading' | 'ready' | 'stale' | 'error';
 
 interface DraftWorkspaceState {
@@ -115,8 +109,7 @@ let autoPreviewTimer: ReturnType<typeof setTimeout> | null = null;
 /** Generation counter to discard stale preview results */
 let previewGeneration = 0;
 
-/** Save status reset timer — tracked so reset() can cancel it */
-let saveStatusTimer: ReturnType<typeof setTimeout> | null = null;
+const saveTimer = createSaveStatusTimer();
 
 /** Schedule auto-preview regeneration if enabled and preview is stale */
 function scheduleAutoPreview(get: () => DraftWorkspaceState, newPreviewStatus: PreviewStatus) {
@@ -459,15 +452,7 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
         validationResults: recomputeValidation(updated),
       });
 
-      // Reset to idle after 2 seconds
-      if (saveStatusTimer) clearTimeout(saveStatusTimer);
-      saveStatusTimer = setTimeout(() => {
-        saveStatusTimer = null;
-        const current = get();
-        if (current.saveStatus === 'saved') {
-          set({ saveStatus: 'idle' });
-        }
-      }, 2000);
+      saveTimer.scheduleReset(get, set);
     } catch (err) {
       const isConflict =
         err instanceof api.ApiError && (err.code === 'CONFLICT' || err.message.includes('409'));
@@ -504,12 +489,6 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
         isDirty: false,
       });
 
-      // Reload canvas data
-      const projectId = get().projectId;
-      if (projectId) {
-        useCanvasStore.getState().loadProjectData(projectId);
-      }
-
       return { commit: result.commit, leaf: result.leaf };
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to commit';
@@ -537,10 +516,7 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
       clearTimeout(autoPreviewTimer);
       autoPreviewTimer = null;
     }
-    if (saveStatusTimer) {
-      clearTimeout(saveStatusTimer);
-      saveStatusTimer = null;
-    }
+    saveTimer.cancel();
     // Reset generation counter so stale in-flight previews don't clobber state after navigation
     previewGeneration = 0;
     set(initialState);

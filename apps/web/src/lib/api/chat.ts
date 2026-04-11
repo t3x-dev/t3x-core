@@ -2,7 +2,7 @@
  * Chat/LLM integration API
  */
 
-import { API_V1, ApiError, fetchWithTimeout, handleResponse } from './core';
+import { API_V1, ApiError, fetchWithTimeout, handleResponse, injectAuthHeaders } from './core';
 
 export interface ContentBlock {
   type: 'text' | 'image';
@@ -77,10 +77,10 @@ export async function* chatStream(
   request: ChatRequest,
   options?: { signal?: AbortSignal }
 ): AsyncGenerator<ChatStreamEvent, void, unknown> {
-  // Call API server directly
+  const headers = await injectAuthHeaders(new Headers({ 'Content-Type': 'application/json' }));
   const res = await fetch(`${API_V1}/chat/stream`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify(request),
     signal: options?.signal,
   });
