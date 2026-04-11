@@ -5,6 +5,7 @@ import { Check, Play, X } from 'lucide-react';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { computeTreeDiff } from '@/lib/treeDiff';
+import { cn } from '@/lib/utils';
 import { useCommitStore } from '@/store/commitStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 
@@ -47,6 +48,8 @@ function opNodeKey(op: YOp): string | null {
 
 interface SlotRowProps {
   nodeKey: string;
+  /** Full tree path for source tracing */
+  nodePath: string;
   slotKey: string;
   value: string;
   diffType: 'added' | 'modified' | 'removed' | null;
@@ -58,6 +61,7 @@ interface SlotRowProps {
 
 function SlotRow({
   nodeKey: _nodeKey,
+  nodePath,
   slotKey,
   value,
   diffType,
@@ -67,6 +71,11 @@ function SlotRow({
   onEdit,
 }: SlotRowProps) {
   const [editing, setEditing] = useState(false);
+  const select = useWorkspaceStore((s) => s.select);
+  const clearSelection = useWorkspaceStore((s) => s.clearSelection);
+  const selectedPath = useWorkspaceStore((s) => s.selectedNodePath);
+  const selectedSlot = useWorkspaceStore((s) => s.selectedSlotKey);
+  const isSlotSelected = selectedPath === nodePath && selectedSlot === slotKey;
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleDoubleClick = useCallback(() => {
@@ -128,10 +137,14 @@ function SlotRow({
 
   return (
     <div className="group flex items-stretch" style={{ minHeight: 24 }}>
-      <div className={`shrink-0 w-[3px] ${gutterColor}`} />
+      <div className={`shrink-0 w-[3px] ${isSlotSelected ? 'bg-[var(--source)]' : gutterColor}`} />
       <div
-        className="flex-1 min-w-0 flex items-center gap-1 px-2 py-0.5 cursor-text hover:bg-[var(--hover-bg)] transition-colors"
+        className={cn(
+          'flex-1 min-w-0 flex items-center gap-1 px-2 py-0.5 cursor-pointer hover:bg-[var(--hover-bg)] transition-colors',
+          isSlotSelected && 'bg-[var(--source-dim)]'
+        )}
         style={MONO}
+        onClick={() => isSlotSelected ? clearSelection() : select('after', { nodePath, slotKey })}
         onDoubleClick={handleDoubleClick}
       >
         <span className="shrink-0 text-[var(--yaml-key,#2563eb)]">{slotKey}:</span>
@@ -341,6 +354,7 @@ function NodeRow({
           <div key={key} style={{ paddingLeft: `${8 + (depth + 1) * 14}px` }}>
             <SlotRow
               nodeKey={node.key}
+              nodePath={path}
               slotKey={key}
               value={formatSlotValue(val)}
               diffType={slotDiff}
