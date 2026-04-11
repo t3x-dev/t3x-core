@@ -35,6 +35,7 @@ import {
 import {
   type AnyDB,
   createTopic,
+  deleteYOpsLogEntry,
   findConversationById,
   findLeafById,
   findProjectById,
@@ -231,13 +232,19 @@ export async function* runExtractionPipeline(
     }
 
     // ── 4. Fetch existing yops log and build current snapshot ──
-    const yopsRecords = topicId
+    let yopsRecords = topicId
       ? await listYOpsLogByTopic(db, conversationId, topicId)
       : await listYOpsLogByConversation(db, conversationId);
-    // When forceExtract, ignore existing log — treat as first extraction
-    const currentSnapshot = forceExtract
-      ? { trees: [], relations: [] }
-      : replayYOpsLog(toYOpsLogEntries(yopsRecords));
+
+    // When forceExtract, clear existing log entries to avoid duplicates on replay
+    if (forceExtract && yopsRecords.length > 0) {
+      for (const record of yopsRecords) {
+        await deleteYOpsLogEntry(db, record.id);
+      }
+      yopsRecords = [];
+    }
+
+    const currentSnapshot = replayYOpsLog(toYOpsLogEntries(yopsRecords));
     const currentFlat = flattenTrees(currentSnapshot.trees);
 
     // ── 5. Convert turns to ExtractionTurn format ──
