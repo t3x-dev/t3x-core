@@ -32,18 +32,13 @@ import {
   XCircle,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type {
-  NodeWithHighlight,
-  TurnWithHighlights,
-} from '@/components/source-context/SourceConversationPanel';
+import type { NodeWithHighlight } from '@/components/source-context/SourceConversationPanel';
 import { SourceConversationPanel } from '@/components/source-context/SourceConversationPanel';
+import { LeafOutputWithHighlights } from '@/components/source-context/LeafOutputWithHighlights';
 import { SourceNodeList } from '@/components/source-context/SourceNodeList';
-import type { Leaf } from '@/lib/api';
-import * as api from '@/lib/api';
-import { checkContentIntegrity } from '@/lib/truncationUtils';
+import { useSourceContextData, type LeafContentNode } from '@/hooks/useSourceContextData';
 import type {
   ColoredHighlightRange,
-  ContentIntegrityStatus,
   HighlightColor,
   NodeWithSource,
 } from '@/types/sourceContext';
@@ -66,13 +61,6 @@ interface CommitSourceContextProps {
   sourceRefs?: Array<{ type: 'conversation' | 'leaf'; id: string; title?: string }>;
 }
 
-/**
- * ContentNode grouped under a leaf source
- */
-interface LeafContentNode {
-  node: CommitContentNode;
-  leafId: string;
-}
 
 /**
  * Map anchor_type to highlight color for visual differentiation.
@@ -155,142 +143,6 @@ function groupNodesBySource(nodes: CommitContentNode[]): {
   return { byTurn, byLeaf, withoutSource };
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Leaf Cache
-// ═══════════════════════════════════════════════════════════════════════════
-
-const leafCache = new Map<string, { data: Leaf; fetchedAt: number }>();
-const LEAF_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-
-async function fetchLeafCached(leafId: string): Promise<Leaf | null> {
-  const cached = leafCache.get(leafId);
-  if (cached && Date.now() - cached.fetchedAt < LEAF_CACHE_TTL) {
-    return cached.data;
-  }
-  try {
-    const leaf = await api.getLeaf(leafId);
-    leafCache.set(leafId, { data: leaf, fetchedAt: Date.now() });
-    return leaf;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Leaf data with fetched content and nodes
- */
-interface LeafWithNodes {
-  leafId: string;
-  leaf: Leaf | null;
-  nodes: LeafContentNode[];
-  loading: boolean;
-  error: string | null;
-}
-
-/**
- * Renders leaf output text with committed nodes highlighted in green.
- * Finds node text within the output and highlights matching regions.
- */
-function LeafOutputWithHighlights({
-  output,
-  nodes,
-}: {
-  output: string;
-  nodes: LeafContentNode[];
-}) {
-  // Find highlight ranges by locating node text within the output.
-  // Sorts by first occurrence position in the output for correct progressive matching,
-  // then merges overlapping ranges to prevent segment builder corruption.
-  const highlights = useMemo(() => {
-    // First pass: find each node's position in the output for ordering
-    const positioned = nodes
-      .map((sg) => ({ sg, pos: output.indexOf(sg.node.text) }))
-      .filter((p) => p.pos !== -1)
-      .sort((a, b) => a.pos - b.pos);
-
-    // Second pass: progressive search using the sorted order
-    const ranges: Array<{ start: number; end: number }> = [];
-    let searchFrom = 0;
-    for (const { sg } of positioned) {
-      const idx = output.indexOf(sg.node.text, searchFrom);
-      if (idx !== -1) {
-        ranges.push({ start: idx, end: idx + sg.node.text.length });
-        searchFrom = idx + sg.node.text.length;
-      }
-    }
-    // Merge overlapping ranges
-    const merged: Array<{ start: number; end: number }> = [];
-    for (const r of ranges) {
-      const last = merged[merged.length - 1];
-      if (last && r.start <= last.end) {
-        last.end = Math.max(last.end, r.end);
-      } else {
-        merged.push({ ...r });
-      }
-    }
-    return merged;
-  }, [output, nodes]);
-
-  if (highlights.length === 0) {
-    // No matches found — show output as plain text + node list
-    return (
-      <div className="space-y-3">
-        <div className="text-[0.875rem] leading-relaxed text-[var(--color-text-secondary)] whitespace-pre-wrap break-words">
-          {output}
-        </div>
-        <div className="border-t border-[var(--color-border-light)] pt-2">
-          <p className="text-xs text-[var(--color-text-muted)] mb-1">Committed nodes:</p>
-          <ul className="space-y-1">
-            {nodes.map((sg) => (
-              <li
-                key={sg.node.id}
-                className="flex items-start gap-2 p-1.5 bg-[var(--status-success-muted)] rounded border border-[var(--status-success)]/20"
-              >
-                <span className="text-xs font-mono text-[var(--color-text-muted)] bg-[var(--color-bg-subtle)] px-1 py-0.5 rounded shrink-0">
-                  {sg.node.id}
-                </span>
-                <span className="text-xs text-[var(--color-text-secondary)] break-words">
-                  {sg.node.text}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </div>
-    );
-  }
-
-  // Build segments: interleave plain text and highlighted portions
-  const segments: Array<{ text: string; highlighted: boolean; offset: number }> = [];
-  let cursor = 0;
-  for (const h of highlights) {
-    if (h.start > cursor) {
-      segments.push({ text: output.slice(cursor, h.start), highlighted: false, offset: cursor });
-    }
-    segments.push({ text: output.slice(h.start, h.end), highlighted: true, offset: h.start });
-    cursor = h.end;
-  }
-  if (cursor < output.length) {
-    segments.push({ text: output.slice(cursor), highlighted: false, offset: cursor });
-  }
-
-  return (
-    <div className="text-[0.875rem] leading-relaxed text-[var(--color-text-secondary)] whitespace-pre-wrap break-words">
-      {segments.map((seg) =>
-        seg.highlighted ? (
-          <mark
-            key={`h-${seg.offset}`}
-            className="bg-[var(--status-success-muted)] text-[var(--color-text)] rounded-sm px-0.5"
-          >
-            {seg.text}
-          </mark>
-        ) : (
-          <span key={`t-${seg.offset}`}>{seg.text}</span>
-        )
-      )}
-    </div>
-  );
-}
 
 export function CommitSourceContext({
   nodes,
@@ -298,9 +150,6 @@ export function CommitSourceContext({
   defaultExpanded = true,
   sourceRefs,
 }: CommitSourceContextProps) {
-  const [turnData, setTurnData] = useState<Map<string, TurnWithHighlights>>(new Map());
-  const [leafData, setLeafData] = useState<Map<string, LeafWithNodes>>(new Map());
-  const [isLoading, setIsLoading] = useState(true);
   const [expandedTurns, setExpandedTurns] = useState<Set<string>>(new Set());
 
   // Track if user has interacted with expand/collapse to prevent auto-reset
@@ -421,119 +270,10 @@ export function CommitSourceContext({
     setExpandedTurns(new Set());
   }, []);
 
-  // Fetch context for each unique turn and leaf
-  useEffect(() => {
-    if (turnHashes.length === 0 && leafIds.length === 0) {
-      setIsLoading(false);
-      return;
-    }
-
-    let cancelled = false;
-
-    const fetchAll = async () => {
-      setIsLoading(true);
-
-      // --- Fetch turns ---
-      const newTurnData = new Map<string, TurnWithHighlights>();
-      const hashesToFetch = compact ? turnHashes.slice(0, 2) : turnHashes;
-
-      const turnPromises = hashesToFetch.map(async (turnHash) => {
-        const nodeGroup = byTurn.get(turnHash) || [];
-        const highlights = nodeGroup.map((s) => s.highlight);
-
-        try {
-          const context = await api.fetchTurnContextCached(turnHash, {
-            before: 0,
-            after: 0,
-          });
-
-          const integrityStatus = new Map<string, ContentIntegrityStatus>();
-          if (context?.target_turn?.content) {
-            for (const sg of nodeGroup) {
-              const status = checkContentIntegrity(
-                sg.node.text,
-                context.target_turn.content,
-                sg.highlight.start,
-                sg.highlight.end,
-                sg.node.anchor_type
-              );
-              integrityStatus.set(sg.node.id, status);
-            }
-          }
-
-          if (!cancelled) {
-            newTurnData.set(turnHash, {
-              turnHash,
-              context,
-              highlights,
-              nodes: nodeGroup,
-              loading: false,
-              error: null,
-              integrityStatus,
-            });
-          }
-        } catch (err) {
-          const errorMsg = err instanceof Error ? err.message : 'Failed to load context';
-          if (!cancelled) {
-            newTurnData.set(turnHash, {
-              turnHash,
-              context: null,
-              highlights,
-              nodes: nodeGroup,
-              loading: false,
-              error: errorMsg,
-              integrityStatus: new Map(),
-            });
-          }
-        }
-      });
-
-      // --- Fetch leaves ---
-      const newLeafData = new Map<string, LeafWithNodes>();
-
-      const leafPromises = leafIds.map(async (leafId) => {
-        const nodeGroup = byLeaf.get(leafId) || [];
-
-        try {
-          const leaf = await fetchLeafCached(leafId);
-          if (!cancelled) {
-            newLeafData.set(leafId, {
-              leafId,
-              leaf,
-              nodes: nodeGroup,
-              loading: false,
-              error: leaf ? null : 'Leaf not found',
-            });
-          }
-        } catch (err) {
-          const errorMsg = err instanceof Error ? err.message : 'Failed to load leaf';
-          if (!cancelled) {
-            newLeafData.set(leafId, {
-              leafId,
-              leaf: null,
-              nodes: nodeGroup,
-              loading: false,
-              error: errorMsg,
-            });
-          }
-        }
-      });
-
-      await Promise.all([...turnPromises, ...leafPromises]);
-
-      if (!cancelled) {
-        setTurnData(newTurnData);
-        setLeafData(newLeafData);
-        setIsLoading(false);
-      }
-    };
-
-    fetchAll();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [turnHashes, leafIds, byTurn, byLeaf, compact]);
+  // Fetch turn/leaf context data
+  const { turnData, leafData, isLoading } = useSourceContextData(
+    turnHashes, leafIds, byTurn, byLeaf, compact
+  );
 
   // Post-fetch resolution: match nodes to leaves by text matching.
   // This handles multi-leaf commits where node-level leaf_id isn't available.
