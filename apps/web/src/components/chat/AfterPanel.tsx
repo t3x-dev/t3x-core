@@ -244,16 +244,13 @@ function NodeRow({
           onClick={() => (isSelected ? clearSelection() : select('after', { nodePath: node.key }))}
           style={{ ...MONO, paddingLeft: `${8 + depth * 14}px` }}
         >
-          <span className="w-3 h-3 rounded flex items-center justify-center text-[7px] font-bold bg-[var(--source-dim)] text-[var(--source)] shrink-0">
-            ◆
-          </span>
           <span
             className={
               diffType === 'added'
                 ? 'text-[var(--status-success)] font-semibold'
                 : diffType === 'removed'
                   ? 'text-[var(--status-error)]/60 line-through font-semibold'
-                  : 'text-[var(--text-primary)] font-semibold'
+                  : 'text-[var(--yaml-key,#2563eb)] font-semibold'
             }
           >
             {node.key}:
@@ -320,7 +317,7 @@ function NodeRow({
                 : null;
 
         return (
-          <div key={key} style={{ paddingLeft: `${depth * 14}px` }}>
+          <div key={key} style={{ paddingLeft: `${8 + (depth + 1) * 14}px` }}>
             <SlotRow
               nodeKey={node.key}
               slotKey={key}
@@ -339,7 +336,7 @@ function NodeRow({
       {removedSlots
         .filter((k) => !(k in slots))
         .map((key) => (
-          <div key={`removed-${key}`} style={{ paddingLeft: `${depth * 14}px` }}>
+          <div key={`removed-${key}`} style={{ paddingLeft: `${8 + (depth + 1) * 14}px` }}>
             <div className="flex items-stretch" style={{ minHeight: 24 }}>
               <div className="shrink-0 w-[3px] bg-[var(--status-error)]" />
               <div
@@ -380,19 +377,16 @@ function AfterNodeRecursive({ node, depth }: AfterNodeRecursiveProps) {
           className="flex-1 flex items-center gap-1 py-0.5 hover:bg-[var(--hover-bg)] transition-colors"
           style={{ ...MONO, paddingLeft: `${8 + depth * 14}px` }}
         >
-          <span className="w-3 h-3 rounded flex items-center justify-center text-[7px] font-bold bg-[var(--source-dim)] text-[var(--source)] shrink-0">
-            ◆
-          </span>
-          <span className="text-[var(--text-primary)] font-semibold">{node.key}:</span>
+          <span className="text-[var(--yaml-key,#2563eb)] font-semibold">{node.key}:</span>
         </div>
       </div>
       {slotEntries.map(([key, val]) => (
-        <div key={key} style={{ paddingLeft: `${depth * 14}px` }}>
+        <div key={key} style={{ paddingLeft: `${8 + (depth + 1) * 14}px` }}>
           <div className="flex items-stretch" style={{ minHeight: 24 }}>
             <div className="shrink-0 w-[3px] bg-transparent" />
             <div className="flex-1 min-w-0 flex items-center gap-1 px-2 py-0.5" style={MONO}>
-              <span className="shrink-0 text-[var(--text-secondary)]">{key}: </span>
-              <span className="text-[var(--text-primary)] truncate">{String(val)}</span>
+              <span className="shrink-0 text-[var(--yaml-key,#2563eb)]">{key}:</span>
+              <span className="text-[var(--yaml-string,#16a34a)] truncate ml-1">{String(val)}</span>
             </div>
           </div>
         </div>
@@ -606,7 +600,7 @@ export function AfterPanel({
       {/* Commit footer — always visible, disabled when no result */}
       <div className="flex shrink-0 items-center justify-between border-t border-[var(--stroke-default)] bg-[var(--panel-alt)] px-3 py-1.5">
         <span className="text-[9px] text-[var(--text-tertiary)]">
-          {hasResult && diff ? `${diff.summary.nodesAdded + diff.summary.slotsAdded} changes` : hasResult ? 'Ready' : 'Run to preview'}
+{' '}
         </span>
         <div className="flex items-center gap-1.5">
           <button

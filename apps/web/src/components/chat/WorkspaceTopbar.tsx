@@ -1,26 +1,14 @@
 'use client';
 
-import type { TreeNode } from '@t3x-dev/core';
 import { Loader2, PanelRightClose, Play } from 'lucide-react';
-import { useMemo } from 'react';
-import { computeTreeDiff } from '@/lib/treeDiff';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 
 export function WorkspaceTopbar() {
   const setPanelExpanded = useWorkspaceStore((s) => s.setPanelExpanded);
   const mode = useWorkspaceStore((s) => s.mode);
-  const base = useWorkspaceStore((s) => s.base);
-  const result = useWorkspaceStore((s) => s.result);
   const parseErrors = useWorkspaceStore((s) => s.parseErrors);
   const scriptOps = useWorkspaceStore((s) => s.scriptOps);
   const execute = useWorkspaceStore((s) => s.execute);
-
-  const diff = useMemo(() => {
-    if (!result) return null;
-    return computeTreeDiff(base.trees as TreeNode[], result.trees as TreeNode[]);
-  }, [base.trees, result]);
-
-  const quoteValidation = useWorkspaceStore((s) => s.quoteValidation);
 
   const canRun =
     mode !== 'streaming' &&
@@ -36,50 +24,6 @@ export function WorkspaceTopbar() {
         <span className="flex items-center gap-1.5 text-[10px] text-[var(--text-tertiary)]">
           <Loader2 className="h-3 w-3 animate-spin text-[var(--source)]" />
           Extracting...
-        </span>
-      )}
-
-      {diff && (
-        <div className="flex items-center gap-1 ml-2">
-          {diff.summary.nodesAdded > 0 && (
-            <span className="text-[8px] font-semibold font-mono px-1.5 py-0.5 rounded bg-[var(--status-success)]/15 text-[var(--status-success)]">
-              +{diff.summary.nodesAdded} node{diff.summary.nodesAdded !== 1 ? 's' : ''}
-            </span>
-          )}
-          {diff.summary.slotsAdded > 0 && (
-            <span className="text-[8px] font-semibold font-mono px-1.5 py-0.5 rounded bg-[var(--status-success)]/15 text-[var(--status-success)]">
-              +{diff.summary.slotsAdded} slot{diff.summary.slotsAdded !== 1 ? 's' : ''}
-            </span>
-          )}
-          {diff.summary.slotsModified > 0 && (
-            <span className="text-[8px] font-semibold font-mono px-1.5 py-0.5 rounded bg-[var(--status-warning)]/15 text-[var(--status-warning)]">
-              ~{diff.summary.slotsModified}
-            </span>
-          )}
-          {diff.summary.nodesRemoved > 0 && (
-            <span className="text-[8px] font-semibold font-mono px-1.5 py-0.5 rounded bg-[var(--status-error)]/15 text-[var(--status-error)]">
-              -{diff.summary.nodesRemoved}
-            </span>
-          )}
-        </div>
-      )}
-
-      {quoteValidation && quoteValidation.total > 0 && (
-        <span
-          className={`text-[8px] font-semibold font-mono px-1.5 py-0.5 rounded ${
-            quoteValidation.coverage === 1
-              ? 'bg-[var(--status-success)]/15 text-[var(--status-success)]'
-              : quoteValidation.coverage >= 0.7
-                ? 'bg-[var(--status-warning)]/15 text-[var(--status-warning)]'
-                : 'bg-[var(--status-error)]/15 text-[var(--status-error)]'
-          }`}
-          title={
-            quoteValidation.missing.length > 0
-              ? `Missing quotes: ${quoteValidation.missing.join(', ')}`
-              : 'All slots have source quotes'
-          }
-        >
-          {quoteValidation.quoted}/{quoteValidation.total} quoted
         </span>
       )}
 

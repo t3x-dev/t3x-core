@@ -181,19 +181,10 @@ export function ScriptEditor() {
 
       {/* Status bar (Fix 3) */}
       <div className="flex items-center gap-2 px-3 py-1 border-t border-[var(--stroke-default)] bg-[var(--editor-gutter)] text-[9px] text-[var(--text-tertiary)]">
-        {hasErrors ? (
+        {hasErrors && (
           <span className="text-[var(--status-error)]">
             ✗ {parseErrors.length + (execError ? 1 : 0)} error(s)
           </span>
-        ) : opsCount > 0 ? (
-          <span className="text-[var(--status-success)]">
-            ✓ {opsCount} ops{mode === 'executed' ? ' applied' : ''}
-          </span>
-        ) : (
-          <span>no ops</span>
-        )}
-        {baseCommitHash && (
-          <span className="ml-auto font-mono">base: {baseCommitHash.slice(0, 6)}</span>
         )}
       </div>
     </div>

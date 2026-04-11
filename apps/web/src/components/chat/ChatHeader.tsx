@@ -59,7 +59,7 @@ export function ChatHeader({
     }, 150);
   };
 
-  const displayTitle = conversationTitle ?? 'New Conversation';
+  const displayTitle = conversationTitle ?? 'New Chat';
 
   return (
     <header
