@@ -176,6 +176,8 @@ function SlotRow({
 
 interface NodeRowProps {
   node: TreeNode;
+  /** Full path for source tracing (e.g., "root/child") */
+  path: string;
   depth: number;
   diffType: 'added' | 'removed' | null;
   addedSlots: string[];
@@ -189,6 +191,7 @@ interface NodeRowProps {
 
 function NodeRow({
   node,
+  path,
   depth,
   diffType,
   addedSlots,
@@ -202,7 +205,7 @@ function NodeRow({
   const selectedNodePath = useWorkspaceStore((s) => s.selectedNodePath);
   const select = useWorkspaceStore((s) => s.select);
   const clearSelection = useWorkspaceStore((s) => s.clearSelection);
-  const isSelected = selectedNodePath === node.key;
+  const isSelected = selectedNodePath === path;
   const slots = node.slots || {};
   const slotEntries = Object.entries(slots).filter(([k]) => !k.startsWith('_'));
   const hasChanges =
@@ -241,7 +244,7 @@ function NodeRow({
         />
         <div
           className="flex-1 flex items-center gap-1 px-2 py-0.5 hover:bg-[var(--hover-bg)] transition-colors cursor-pointer"
-          onClick={() => (isSelected ? clearSelection() : select('after', { nodePath: node.key }))}
+          onClick={() => (isSelected ? clearSelection() : select('after', { nodePath: path }))}
           style={{ ...MONO, paddingLeft: `${8 + depth * 14}px` }}
         >
           <span
@@ -265,7 +268,7 @@ function NodeRow({
               className="text-[7px] font-bold px-1 py-px rounded-sm bg-[var(--source-dim)] text-[var(--source)] cursor-pointer hover:bg-[var(--source)]/20 shrink-0 ml-1 tracking-wide"
               onClick={(e) => {
                 e.stopPropagation();
-                select('after', { nodePath: node.key });
+                select('after', { nodePath: path });
               }}
             >
               {node.source}
@@ -351,7 +354,7 @@ function NodeRow({
 
       {/* Children */}
       {node.children?.map((child: TreeNode) => (
-        <AfterNodeRecursive key={child.key} node={child} depth={depth + 1} />
+        <AfterNodeRecursive key={child.key} node={child} path={`${path}/${child.key}`} depth={depth + 1} />
       ))}
     </>
   );
@@ -360,11 +363,12 @@ function NodeRow({
 // ── AfterNodeRecursive — re-uses diff from parent context ──
 
 interface AfterNodeRecursiveProps {
+  path: string;
   node: TreeNode;
   depth: number;
 }
 
-function AfterNodeRecursive({ node, depth }: AfterNodeRecursiveProps) {
+function AfterNodeRecursive({ node, path, depth }: AfterNodeRecursiveProps) {
   // Children don't need full diff context — just render slots plainly
   const slots = node.slots || {};
   const slotEntries = Object.entries(slots).filter(([k]) => !k.startsWith('_'));
@@ -392,7 +396,7 @@ function AfterNodeRecursive({ node, depth }: AfterNodeRecursiveProps) {
         </div>
       ))}
       {node.children?.map((child: TreeNode) => (
-        <AfterNodeRecursive key={child.key} node={child} depth={depth + 1} />
+        <AfterNodeRecursive key={child.key} node={child} path={`${path}/${child.key}`} depth={depth + 1} />
       ))}
     </>
   );
@@ -583,6 +587,7 @@ export function AfterPanel({
               <NodeRow
                 key={node.key}
                 node={node}
+                path={node.key}
                 depth={0}
                 diffType={nodeIsAdded ? 'added' : nodeIsRemoved ? 'removed' : null}
                 addedSlots={addedSlots}
