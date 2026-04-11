@@ -13,7 +13,7 @@ import type { TreeResolution } from '@/components/merge/ConflictCard';
 import { getTerminology, type TermKey } from '@/hooks/useTerminology';
 import * as api from '@/lib/api';
 import { API_V1, fetchWithTimeout, handleResponse } from '@/lib/api/core';
-import { useSettingsStore } from '@/store/settingsStore';
+import { isDeveloperMode } from '@/store/shared';
 import type { ContentNode, MergeDraft, TurnContextData } from '@/types/merge';
 import { type SaveStatus, createSaveStatusTimer } from './saveStatus';
 
@@ -578,7 +578,7 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
     const { treeMergeResult, message, targetBranch, serverChecks } = get();
     const unresolvedCount = get().getUnresolvedCount();
     const previewPaths = get().getPreviewPaths();
-    const dev = useSettingsStore.getState().developerMode;
+    const dev = isDeveloperMode();
     const tm = (key: TermKey) => getTerminology(key, dev);
 
     const frontendChecks: MergeCheck[] = [
@@ -686,7 +686,7 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
 
   getTreeMergeChecks: (): MergeCheck[] => {
     const { treeMergeResult, message, targetBranch } = get();
-    const dev = useSettingsStore.getState().developerMode;
+    const dev = isDeveloperMode();
     const tm = (key: TermKey) => getTerminology(key, dev);
 
     if (!treeMergeResult) return get().getMergeChecks();

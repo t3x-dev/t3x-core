@@ -41,10 +41,8 @@ import { KeyboardHintBar } from '@/components/shared/KeyboardHintBar';
 import { ShareLinkButton } from '@/components/shared/ShareLinkButton';
 import { TreeGraphView } from '@/components/tree-graph';
 import { useKeyboardNavigation } from '@/hooks/useKeyboardNavigation';
-import type { Leaf } from '@/lib/api';
-import { getProject, listLeavesByCommit } from '@/lib/api';
-import type { WebCommit } from '@/lib/api/commitUnified';
-import { getCommitAsNodes, getCommitHistoryAsNodes } from '@/lib/api/commitUnified';
+import type { ApiCommit, Leaf } from '@/lib/api';
+import { getApiCommit, getApiCommitHistory, getProject, listLeavesByCommit } from '@/lib/api';
 import { relativeTime, shortHash } from '@/lib/formatters';
 import { PAGE_ANIMATION_STYLES } from '@/lib/pageAnimations';
 import { useCommitDetailStore } from '@/store/commitDetailStore';
@@ -74,9 +72,9 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
   const _notify = useProjectStore((state) => state.notifyCallback);
 
   // ── Data state ────────────────────────────────────
-  const [commit, setCommitLocal] = useState<WebCommit | null>(null);
+  const [commit, setCommitLocal] = useState<ApiCommit | null>(null);
   const [leaves, setLeaves] = useState<Leaf[]>([]);
-  const [_commitHistory, setCommitHistory] = useState<WebCommit[]>([]);
+  const [_commitHistory, setCommitHistory] = useState<ApiCommit[]>([]);
   const [projectName, setProjectName] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -105,7 +103,7 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
       setError(null);
       try {
         const [commitData, leavesData, projectData] = await Promise.all([
-          getCommitAsNodes(commitHash),
+          getApiCommit(commitHash),
           listLeavesByCommit(commitHash).catch(() => [] as Leaf[]),
           getProject(projectId).catch(() => null),
         ]);
@@ -114,10 +112,10 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
         if (projectData?.name) setProjectName(projectData.name);
 
         // Fetch parent commit for diff computation (if single parent)
-        let parentCommit: WebCommit | null = null;
+        let parentCommit: ApiCommit | null = null;
         if (commitData.parents.length === 1) {
           try {
-            parentCommit = await getCommitAsNodes(commitData.parents[0]);
+            parentCommit = await getApiCommit(commitData.parents[0]);
           } catch {
             // Parent fetch failure is non-critical
           }
@@ -128,7 +126,7 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
 
         // Fetch commit history
         try {
-          const history = await getCommitHistoryAsNodes(commitHash, 10);
+          const history = await getApiCommitHistory(commitHash, 10);
           setCommitHistory(history);
         } catch {
           // History fetch failure is non-critical

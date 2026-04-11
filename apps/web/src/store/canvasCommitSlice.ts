@@ -4,7 +4,7 @@ import { getTerminology } from '@/hooks/useTerminology';
 import * as api from '@/lib/api';
 import { API_V1, fetchWithTimeout, handleResponse } from '@/lib/api/core';
 import { getMicrocopy } from '@/lib/microcopy';
-import { useSettingsStore } from '@/store/settingsStore';
+import { isDeveloperMode } from '@/store/shared';
 import type { BranchType, CanvasNodeData, SourceTextBlock, TurnBoundary } from '../types/nodes';
 import { tokenizeText } from '../utils/tokenizer';
 import type { CanvasState, CommitSlice } from './canvasStoreTypes';
@@ -70,7 +70,7 @@ export const createCommitSlice: StateCreator<CanvasState, [], [], CommitSlice> =
           kind: 'unit',
           entryId: `UNIT-${getNumericId(id)}`,
           status: (() => {
-            const dev = useSettingsStore.getState().developerMode;
+            const dev = isDeveloperMode();
             return `${getTerminology('committed', dev)} · awaiting ${getTerminology('diff', dev).toLowerCase()}`;
           })(),
           tags: Array.from(
@@ -99,7 +99,7 @@ export const createCommitSlice: StateCreator<CanvasState, [], [], CommitSlice> =
       };
     });
 
-    const mode = useSettingsStore.getState().developerMode ? 'developer' : 'default';
+    const mode = isDeveloperMode() ? 'developer' : 'default';
     notify?.(getMicrocopy('commitSuccess', mode, { hash_short: id.slice(0, 7) }), 'success');
   },
 

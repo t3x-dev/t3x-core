@@ -9,7 +9,7 @@
  *   Right (240px):  Comparison metadata sidebar
  */
 
-import type { Commit, TreeDiff } from '@t3x-dev/core';
+import type { TreeDiff } from '@t3x-dev/core';
 import { ArrowLeft, GitBranch, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -17,10 +17,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { relativeTime, shortHash } from '@/components/commit/CommitDetailHelpers';
 import { Breadcrumb } from '@/components/shared/Breadcrumb';
 import { TreeGraphView } from '@/components/tree-graph';
-import { getCommitAsNodes } from '@/lib/api/commitUnified';
+import { type ApiCommit, type CommitMeta, type DiffResponse, getApiCommit, getTreeDiff } from '@/lib/api';
 import { API_V1, fetchWithTimeout, handleResponse } from '@/lib/api/core';
-import type { CommitMeta, DiffResponse } from '@/lib/api/treeDiff';
-import { getTreeDiff } from '@/lib/api/treeDiff';
 import { PAGE_ANIMATION_STYLES } from '@/lib/pageAnimations';
 import { useProjectStore } from '@/store/projectStore';
 import { TreeDiffIndex } from './DiffIndex';
@@ -193,14 +191,14 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
 
   // State
   const [diffResponse, setDiffResponse] = useState<DiffResponse | null>(null);
-  const [targetCommit, setTargetCommit] = useState<Commit | null>(null);
+  const [targetCommit, setTargetCommit] = useState<ApiCommit | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>('diff');
   const [activeNodeId, setActiveNodeId] = useState<string | null>(null);
   const [showIdentical, setShowIdentical] = useState(false);
   const [viewMode, setViewMode] = useState<'split' | 'unified'>('split');
-  const [baseCommit, setBaseCommit] = useState<Commit | null>(null);
+  const [baseCommit, setBaseCommit] = useState<ApiCommit | null>(null);
 
   // Project name for breadcrumb
   const getProject = useProjectStore((s) => s.getProject);
@@ -214,8 +212,8 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
 
     Promise.all([
       getTreeDiff(baseHash, targetHash),
-      getCommitAsNodes(targetHash),
-      getCommitAsNodes(baseHash),
+      getApiCommit(targetHash),
+      getApiCommit(baseHash),
     ])
       .then(([diffResp, tgtCommit, baseCommitData]) => {
         if (cancelled) return;

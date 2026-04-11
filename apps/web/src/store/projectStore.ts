@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import * as api from '@/lib/api';
-import type { NotifyCallback } from './canvasStoreTypes';
+import type { NotifyCallback } from './shared';
 
 export interface ProjectSummary {
   id: string;

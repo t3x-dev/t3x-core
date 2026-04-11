@@ -566,56 +566,6 @@ describe('Canvas Store - Unit Node Model', () => {
       expect(useCanvasStore.getState().mergeLoading).toBe(false);
     });
 
-    it('resolveSimilarPair is a no-op in tree-primary (legacy API)', () => {
-      // In tree-primary, conflict resolution is handled by mergeWorkspaceStore
-      const store = useCanvasStore.getState();
-      useCanvasStore.setState({
-        mergeState: {
-          sourceHash: 'sha256:a',
-          targetHash: 'sha256:b',
-          prepared: {
-            autoKept: [],
-            conflicts: [{ path: 'topic/a', slotConflicts: [] }],
-            onlyInSource: [],
-            onlyInTarget: [],
-            relationsOnlyInSource: [],
-            relationsOnlyInTarget: [],
-            relationsInBoth: [],
-          },
-        },
-      });
-
-      // Should not throw
-      store.resolveSimilarPair(0, 'source');
-
-      // State unchanged (no-op)
-      expect(useCanvasStore.getState().mergeState).not.toBeNull();
-    });
-
-    it('toggleKeep is a no-op in tree-primary (legacy API)', () => {
-      useCanvasStore.setState({
-        mergeState: {
-          sourceHash: 'sha256:a',
-          targetHash: 'sha256:b',
-          prepared: {
-            autoKept: [],
-            conflicts: [],
-            onlyInSource: ['path/a'],
-            onlyInTarget: [],
-            relationsOnlyInSource: [],
-            relationsOnlyInTarget: [],
-            relationsInBoth: [],
-          },
-        },
-      });
-
-      // Should not throw
-      useCanvasStore.getState().toggleKeep('source', 0);
-
-      // State unchanged (no-op)
-      expect(useCanvasStore.getState().mergeState).not.toBeNull();
-    });
-
     it('cancelMerge clears state', () => {
       useCanvasStore.setState({
         mergeState: {

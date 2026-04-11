@@ -2,7 +2,7 @@ import type { Edge, Node } from '@xyflow/react';
 import type { StateCreator } from 'zustand';
 import { getTerminology } from '@/hooks/useTerminology';
 import * as api from '@/lib/api';
-import { useSettingsStore } from '@/store/settingsStore';
+import { isDeveloperMode } from '@/store/shared';
 import type { CanvasNodeData, EmbeddedLeaf } from '../types/nodes';
 import type { CanvasState, NodeSlice } from './canvasStoreTypes';
 import {
@@ -177,7 +177,7 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
           project_id: projectId,
           title:
             commit.message ||
-            `${getTerminology('commit', useSettingsStore.getState().developerMode)} ${commit.commit_hash.slice(0, 8)}`,
+            `${getTerminology('commit', isDeveloperMode())} ${commit.commit_hash.slice(0, 8)}`,
           parent_commit_hash: commit.parent_hashes[0] ?? undefined,
           turns_count: 0,
           position_x: undefined,

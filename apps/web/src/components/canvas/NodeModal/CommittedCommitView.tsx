@@ -481,15 +481,9 @@ export function CommittedCommitView({
                           commitHash={data.commitHash || ''}
                           nodes={
                             commit.content?.trees
-                              ? (
-                                  commit.content.trees as Array<{
-                                    id: string;
-                                    type: string;
-                                    slots: Record<string, unknown>;
-                                  }>
-                                ).map((f) => ({
-                                  id: f.id,
-                                  text: `[${f.type}] ${Object.entries(f.slots ?? {})
+                              ? commit.content.trees.map((f) => ({
+                                  id: f.key,
+                                  text: `[${f.key}] ${Object.entries(f.slots ?? {})
                                     .map(
                                       ([k, v]) =>
                                         `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`

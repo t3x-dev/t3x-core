@@ -16,7 +16,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useTerminology } from '@/hooks/useTerminology';
 import { createCommit } from '@/lib/api/commits';
-import { getCommitAsNodes } from '@/lib/api/commitUnified';
+import { getApiCommit } from '@/lib/api';
 import { fullScreenEnter, reducedMotion } from '@/lib/motion';
 import { useCanvasStore } from '@/store/canvasStore';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
@@ -93,7 +93,7 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
     setTreeLoading(true);
     setTreeError(null);
 
-    Promise.all([getCommitAsNodes(sh), getCommitAsNodes(th)])
+    Promise.all([getApiCommit(sh), getApiCommit(th)])
       .then(([srcCommit, tgtCommit]) => {
         if (cancelled) return;
 
@@ -117,7 +117,7 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
           const baseParent = commonParent ?? sourceParents[0];
 
           if (baseParent) {
-            getCommitAsNodes(baseParent)
+            getApiCommit(baseParent)
               .then((baseCommit) => {
                 if (cancelled) return;
                 const result = prepareMerge(baseCommit.content, sourceContent, targetContent);

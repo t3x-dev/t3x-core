@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { toast } from 'sonner';
-import { listTopics, updateTopicApi } from '@/lib/api/topics';
+import { listTopics, updateTopicApi } from '@/lib/api';
 import { extractNodes } from '@/lib/api/trees';
 import { useChatStore } from '@/store/chatStore';
 import { useDraftStore } from '@/store/draftStore';

@@ -8,9 +8,9 @@ import type {
   LeafType,
   NodeKind,
 } from '../types/nodes';
+import type { NotifyCallback } from './shared';
 
-// Shared types
-export type NotifyCallback = (message: string, type: 'success' | 'error' | 'warning') => void;
+export type { NotifyCallback };
 export type DraftBranchMode = 'force-main' | 'select' | 'branch-only' | 'blocked';
 export type CommitTone = 'main-latest' | 'main-history' | 'branch-latest' | 'branch-history';
 export type DeletionConfirmation = {
@@ -26,8 +26,6 @@ export interface MergeSlice {
   mergeLoading: boolean;
   mergeError: string | null;
   startMerge: (sourceHash: string, targetHash: string) => Promise<void>;
-  resolveSimilarPair: (index: number, pick: 'source' | 'target') => void;
-  toggleKeep: (side: 'source' | 'target', index: number) => void;
   executeMerge: (message: string) => Promise<unknown>;
   cancelMerge: () => void;
   clearMergeError: () => void;

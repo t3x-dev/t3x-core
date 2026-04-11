@@ -1,7 +1,6 @@
 import type { TreeNode } from '@t3x-dev/core';
 import { useEffect, useRef, useState } from 'react';
-import { getCommitAsNodes } from '@/lib/api/commitUnified';
-import { listTopics } from '@/lib/api/topics';
+import { getApiCommit, listTopics } from '@/lib/api';
 import { getSemanticDraft, listYOpsLog } from '@/lib/api/trees';
 import { treesToNodes } from '@/lib/treeCompat';
 import { useChatStore } from '@/store/chatStore';
@@ -80,7 +79,7 @@ export function useChatInit({
 
     // Helper: hydrate extraction panel from parent commit
     const hydrateFromParent = (hash: string) => {
-      getCommitAsNodes(hash)
+      getApiCommit(hash)
         .then((parentCommit) => {
           // Extract parent conversation ID for "View parent" link
           const sources = (parentCommit as { sources?: Array<{ type?: string; id?: string }> })

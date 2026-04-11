@@ -3,7 +3,7 @@ import type { Edge, Node } from '@xyflow/react';
 import type { StateCreator } from 'zustand';
 import { getTerminology } from '@/hooks/useTerminology';
 import { API_V1, fetchWithTimeout, handleResponse } from '@/lib/api/core';
-import { useSettingsStore } from '@/store/settingsStore';
+import { isDeveloperMode } from '@/store/shared';
 import type { MergeResult } from '../types/merge';
 import type { CanvasNodeData } from '../types/nodes';
 import type { CanvasState, MergeSlice } from './canvasStoreTypes';
@@ -55,26 +55,6 @@ export const createMergeSlice: StateCreator<CanvasState, [], [], MergeSlice> = (
       notifyCallback?.(`Failed to prepare merge: ${errorMessage}`, 'error');
       throw error;
     }
-  },
-
-  /**
-   * Resolve a conflict by index
-   * @param index - Index in conflicts array
-   * @param pick - 'source' or 'target'
-   */
-  resolveSimilarPair: (index: number, pick: 'source' | 'target') => {
-    // Tree-primary: conflict resolutions are tracked separately (not mutating prepared)
-    // This is a legacy API; actual resolution is handled via mergeWorkspaceStore
-  },
-
-  /**
-   * Toggle keep/discard for a unique path
-   * @param side - 'source' or 'target'
-   * @param index - Index in onlyInSource or onlyInTarget array
-   */
-  toggleKeep: (side: 'source' | 'target', _index: number) => {
-    // Tree-primary: keep/discard is tracked via Sets in mergeWorkspaceStore
-    // This is a legacy API kept for interface compatibility
   },
 
   /**
@@ -162,7 +142,7 @@ export const createMergeSlice: StateCreator<CanvasState, [], [], MergeSlice> = (
           entryId: mergeCommit.hash.slice(0, 12),
           title:
             mergeCommit.message ||
-            `${getTerminology('merge', useSettingsStore.getState().developerMode)} ${getTerminology('commit', useSettingsStore.getState().developerMode).toLowerCase()}`,
+            `${getTerminology('merge', isDeveloperMode())} ${getTerminology('commit', isDeveloperMode()).toLowerCase()}`,
           summary: `${mergeCommit.content.trees?.length ?? 0} trees`,
           status: 'committed',
           timestamp: mergeCommit.committed_at,
