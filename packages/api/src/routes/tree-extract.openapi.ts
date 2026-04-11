@@ -32,6 +32,13 @@ const DriftDecisionSchema = z.object({
   new_topic: z.string().optional(),
 });
 
+const ExtractionStyleSchema = z.object({
+  granularity: z.enum(['concise', 'balanced', 'detailed']).optional(),
+  quote_length: z.enum(['minimal', 'representative', 'contextual']).optional(),
+  update_stance: z.enum(['conservative', 'balanced', 'aggressive']).optional(),
+  tier3: z.enum(['skip', 'extract']).optional(),
+}).optional();
+
 const TreeExtractRequest = z.object({
   conversation_id: z.string().min(1),
   project_id: z.string().optional(),
@@ -40,6 +47,7 @@ const TreeExtractRequest = z.object({
   topic_id: z.string().optional(),
   force_extract: z.boolean().optional(),
   source_pin_ids: z.array(z.string().min(1)).optional(),
+  style: ExtractionStyleSchema,
 });
 
 const DeltaResponseSchema = z.object({
@@ -128,6 +136,7 @@ treeExtractRoutes.openapi(extractTreesRoute, async (c) => {
     topic_id,
     force_extract,
     source_pin_ids,
+    style,
   } = c.req.valid('json');
 
   const db = await getDB();
@@ -174,6 +183,7 @@ treeExtractRoutes.openapi(extractTreesRoute, async (c) => {
       forceExtract: force_extract,
       userId: getUserId(c) ?? undefined,
       sourcePinIds: source_pin_ids,
+      style: style as import('@t3x-dev/core').ExtractionStyleConfig | undefined,
     });
 
     for await (const event of pipeline) {
@@ -276,6 +286,7 @@ treeExtractRoutes.post('/v1/extract/trees/stream', async (c) => {
     topic_id,
     force_extract,
     source_pin_ids,
+    style: streamStyle,
   } = body;
 
   // Validate conversation + project access
@@ -322,6 +333,7 @@ treeExtractRoutes.post('/v1/extract/trees/stream', async (c) => {
           forceExtract: force_extract,
           userId: getUserId(c) ?? undefined,
           sourcePinIds: source_pin_ids,
+          style: streamStyle,
         });
 
         for await (const event of pipeline) {

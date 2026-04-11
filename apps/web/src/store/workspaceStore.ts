@@ -59,6 +59,8 @@ interface WorkspaceState {
     question: string;
     currentValue?: unknown;
   }>;
+  // Extraction style preset for the next extraction
+  extractionPreset: 'concise' | 'balanced' | 'detailed';
   // Source pin IDs used in the last extraction (for commit source_refs)
   lastExtractionPinIds: string[];
   // Quote validation result from last extraction
@@ -73,6 +75,7 @@ interface WorkspaceState {
   clearSelection(): void;
   setMode(mode: WorkspaceMode): void;
   setPanelExpanded(expanded: boolean): void;
+  setExtractionPreset(preset: 'concise' | 'balanced' | 'detailed'): void;
   setDriftDetected(info: DriftInfo, choices: string[]): void;
   clearDrift(): void;
   setGateIssues(issues: Record<string, GateIssue[]>): void;
@@ -93,7 +96,7 @@ const EMPTY_CONTENT: SemanticContent = { trees: [], relations: [] };
 
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   mode: 'idle',
-  panelExpanded: true,
+  panelExpanded: false,
   base: EMPTY_CONTENT,
   baseCommitHash: null,
   scriptText: '',
@@ -108,6 +111,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   selectedTurnIndex: null,
   selectedSource: null,
   scrollToCenter: false,
+  extractionPreset: 'balanced',
   lastExtractionPinIds: [],
   quoteValidation: null,
   driftDetected: false,
@@ -206,6 +210,10 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     set({ panelExpanded: expanded });
   },
 
+  setExtractionPreset(preset) {
+    set({ extractionPreset: preset });
+  },
+
   setDriftDetected(info, choices) {
     set({ driftDetected: true, driftInfo: info, driftChoices: choices });
   },
@@ -225,7 +233,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   reset() {
     set({
       mode: 'idle',
-      panelExpanded: true,
+      panelExpanded: false,
       base: EMPTY_CONTENT,
       baseCommitHash: null,
       scriptText: '',

@@ -149,6 +149,8 @@ export interface ExtractionPipelineParams {
   forceExtract?: boolean;
   userId?: string;
   sourcePinIds?: string[];
+  /** Per-request extraction style override (takes precedence over project/user defaults) */
+  style?: ExtractionStyleConfig;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -163,7 +165,7 @@ export interface ExtractionPipelineParams {
 export async function* runExtractionPipeline(
   params: ExtractionPipelineParams
 ): AsyncGenerator<PipelineEvent> {
-  const { conversationId, turnHashes, driftDecision, topicId, forceExtract, userId } = params;
+  const { conversationId, turnHashes, driftDecision, topicId, forceExtract, userId, style: requestStyle } = params;
 
   try {
     const db = await getDB();
@@ -208,23 +210,22 @@ export async function* runExtractionPipeline(
       return;
     }
 
-    // ── 3. Resolve extraction style: project -> user -> default ──
+    // ── 3. Resolve extraction style: request -> project -> user -> default ──
     const projectRecord = await findProjectById(db, conversation.projectId);
     let resolvedStyle: ExtractionStyleConfig = DEFAULT_STYLE;
-    if (projectRecord?.extractionStyle) {
+    if (requestStyle) {
+      resolvedStyle = requestStyle;
+    } else if (projectRecord?.extractionStyle) {
       const parsed = ExtractionStyleSchema.safeParse(projectRecord.extractionStyle);
       if (parsed.success) {
         resolvedStyle = parsed.data;
       }
-    }
-    if (resolvedStyle === DEFAULT_STYLE && !projectRecord?.extractionStyle) {
-      if (userId) {
-        const user = await findUserById(db, userId);
-        if (user?.default_extraction_style) {
-          const parsed = ExtractionStyleSchema.safeParse(user.default_extraction_style);
-          if (parsed.success) {
-            resolvedStyle = parsed.data;
-          }
+    } else if (userId) {
+      const user = await findUserById(db, userId);
+      if (user?.default_extraction_style) {
+        const parsed = ExtractionStyleSchema.safeParse(user.default_extraction_style);
+        if (parsed.success) {
+          resolvedStyle = parsed.data;
         }
       }
     }

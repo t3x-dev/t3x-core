@@ -83,7 +83,12 @@ export async function extractNodes(
   conversationId: string,
   turnHashes?: string[],
   driftDecision?: { choice: string; relation?: string; new_topic?: string },
-  opts?: { topicId?: string; forceExtract?: boolean; sourcePinIds?: string[] }
+  opts?: {
+    topicId?: string;
+    forceExtract?: boolean;
+    sourcePinIds?: string[];
+    style?: { granularity?: string; quote_length?: string; update_stance?: string; tier3?: string };
+  }
 ): Promise<TreeExtractResult> {
   const res = await fetchWithTimeout(
     `${API_V1}/extract/trees`,
@@ -97,6 +102,7 @@ export async function extractNodes(
         ...(opts?.topicId && { topic_id: opts.topicId }),
         ...(opts?.forceExtract && { force_extract: opts.forceExtract }),
         ...(opts?.sourcePinIds?.length && { source_pin_ids: opts.sourcePinIds }),
+        ...(opts?.style && { style: opts.style }),
       }),
     },
     60_000

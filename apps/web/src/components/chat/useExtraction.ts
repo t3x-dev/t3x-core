@@ -1,3 +1,4 @@
+import { PRESETS } from '@t3x-dev/core';
 import { useCallback } from 'react';
 import { toast } from 'sonner';
 import { listTopics, updateTopicApi } from '@/lib/api';
@@ -47,9 +48,12 @@ export function useExtraction({ resolvedConversationId }: UseExtractionParams) {
       }
 
       try {
+        const preset = useWorkspaceStore.getState().extractionPreset;
+        const style = PRESETS[preset];
         const result = await extractNodes(extractConvId, undefined, undefined, {
           ...(activeTopicId && { topicId: activeTopicId }),
           ...(sourcePinIds?.length && { sourcePinIds }),
+          style,
         });
 
         if (result.status === 'skipped') {
