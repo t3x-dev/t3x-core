@@ -38,6 +38,8 @@ export const RelationSchema = z.object({
   from: z.string(),
   to: z.string(),
   type: RelationTypeSchema,
+  from_project: z.string().optional(),
+  to_project: z.string().optional(),
 });
 
 // ── SemanticContent ──

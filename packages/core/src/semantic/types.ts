@@ -40,6 +40,10 @@ export interface Relation {
   from: string;
   to: string;
   type: RelationType;
+  /** Source project ID — present only for cross-project relations */
+  from_project?: string;
+  /** Target project ID — present only for cross-project relations */
+  to_project?: string;
 }
 
 // ── SemanticContent ──

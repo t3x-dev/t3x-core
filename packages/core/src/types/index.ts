@@ -708,34 +708,7 @@ export interface CreateDraftInput {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Relation Types (used by relation extractor + knowledge graph)
+// Relation Types — re-exported from semantic layer (single source of truth)
 // ═══════════════════════════════════════════════════════════════════════════
 
-export const RELATION_TYPE_VALUES = [
-  'supports',
-  'contrasts',
-  'causes',
-  'temporal_follows',
-  'conditions',
-  'summarizes',
-] as const;
-
-export type RelationType = (typeof RELATION_TYPE_VALUES)[number];
-
-export interface NodeRelation {
-  id: string; // rel_abc123
-  source_id: string; // node key
-  target_id: string; // node key
-  type: RelationType;
-  reasoning: string; // LLM explanation
-}
-
-export interface RelationExtractionResult {
-  relations: NodeRelation[];
-  stats: {
-    total_nodes: number;
-    relations_found: number;
-    extraction_time_ms: number;
-  };
-  usage: { inputTokens: number; outputTokens: number };
-}
+export { RELATION_TYPES as RELATION_TYPE_VALUES } from '../semantic/types';

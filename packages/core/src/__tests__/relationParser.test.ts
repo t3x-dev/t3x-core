@@ -9,7 +9,7 @@ describe('parseRelationResponse', () => {
       {
         source_id: 's_aaa',
         target_id: 's_bbb',
-        type: 'supports',
+        type: 'depends',
         reasoning: 'S_bbb provides evidence for S_aaa',
       },
     ]);
@@ -17,7 +17,7 @@ describe('parseRelationResponse', () => {
     expect(items).toHaveLength(1);
     expect(items[0].source_id).toBe('s_aaa');
     expect(items[0].target_id).toBe('s_bbb');
-    expect(items[0].type).toBe('supports');
+    expect(items[0].type).toBe('depends');
   });
 
   it('strips markdown code fences', () => {
@@ -33,7 +33,7 @@ describe('parseRelationResponse', () => {
       {
         source_id: 's_aaa',
         target_id: 's_bbb',
-        type: 'supports',
+        type: 'depends',
         reasoning: 'ok',
       },
       {
@@ -102,13 +102,13 @@ describe('parseRelationResponse', () => {
       {
         source_id: 's_aaa',
         target_id: 's_bbb',
-        type: 'supports',
+        type: 'depends',
         reasoning: 'good',
       },
       {
         source_id: 123,
         target_id: 's_bbb',
-        type: 'supports',
+        type: 'depends',
         reasoning: 'bad source_id',
       },
       'not an object',
@@ -122,7 +122,7 @@ describe('parseRelationResponse', () => {
       {
         source_id: 's_aaa',
         target_id: 's_bbb',
-        type: 'supports',
+        type: 'depends',
         reasoning: '',
       },
     ]);
@@ -135,13 +135,13 @@ describe('parseRelationResponse', () => {
       {
         source_id: 's_aaa',
         target_id: 's_bbb',
-        type: 'supports',
+        type: 'depends',
         reasoning: 'first',
       },
       {
         source_id: 's_aaa',
         target_id: 's_bbb',
-        type: 'supports',
+        type: 'depends',
         reasoning: 'dupe',
       },
       {

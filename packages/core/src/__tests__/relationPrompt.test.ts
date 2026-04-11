@@ -20,15 +20,17 @@ describe('buildRelationPrompt', () => {
     expect(userPrompt).toBeDefined();
   });
 
-  it('system prompt includes all 6 relation types', () => {
+  it('system prompt includes all 5 relation types', () => {
     const { systemPrompt } = buildRelationPrompt(nodes);
-    expect(systemPrompt).toContain('supports');
-    expect(systemPrompt).toContain('contrasts');
     expect(systemPrompt).toContain('causes');
-    expect(systemPrompt).not.toContain('elaborates');
-    expect(systemPrompt).toContain('temporal_follows');
     expect(systemPrompt).toContain('conditions');
-    expect(systemPrompt).toContain('summarizes');
+    expect(systemPrompt).toContain('contrasts');
+    expect(systemPrompt).toContain('follows');
+    expect(systemPrompt).toContain('depends');
+    // Legacy types must not appear
+    expect(systemPrompt).not.toContain('supports');
+    expect(systemPrompt).not.toContain('temporal_follows');
+    expect(systemPrompt).not.toContain('summarizes');
   });
 
   it('user prompt lists nodes with IDs', () => {

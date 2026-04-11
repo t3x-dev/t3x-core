@@ -7,11 +7,20 @@
  * @see docs/plans/2026-03-05-inter-sentence-relations-design.md
  */
 
-import { nanoid } from 'nanoid';
 import type { LLMProvider } from '../llm/types';
-import type { NodeRelation, RelationExtractionResult } from '../types';
+import type { Relation } from '../semantic/types';
 import { parseRelationResponse } from './relationParser';
 import { buildRelationPrompt } from './relationPrompt';
+
+export interface RelationExtractionResult {
+  relations: Relation[];
+  stats: {
+    total_nodes: number;
+    relations_found: number;
+    extraction_time_ms: number;
+  };
+  usage: { inputTokens: number; outputTokens: number };
+}
 
 export class RelationExtractor {
   constructor(private readonly provider: LLMProvider) {}
@@ -44,12 +53,10 @@ export class RelationExtractor {
     const validIds = new Set(nodes.map((s) => s.id));
     const items = parseRelationResponse(genResult.text, validIds);
 
-    const relations: NodeRelation[] = items.map((item) => ({
-      id: `rel_${nanoid(12)}`,
-      source_id: item.source_id,
-      target_id: item.target_id,
+    const relations: Relation[] = items.map((item) => ({
+      from: item.source_id,
+      to: item.target_id,
       type: item.type,
-      reasoning: item.reasoning,
     }));
 
     const extractionTimeMs = Date.now() - startTime;

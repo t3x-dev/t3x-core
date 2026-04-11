@@ -24,8 +24,8 @@ describe('RelationExtractor', () => {
       {
         source_id: 's_aaa',
         target_id: 's_bbb',
-        type: 'supports',
-        reasoning: 'S_bbb explains why S_aaa',
+        type: 'depends',
+        reasoning: 'S_aaa depends on the evidence in S_bbb',
       },
       {
         source_id: 's_aaa',
@@ -38,8 +38,8 @@ describe('RelationExtractor', () => {
     const extractor = new RelationExtractor(provider);
     const result = await extractor.extract(nodes);
     expect(result.relations).toHaveLength(2);
-    expect(result.relations[0].type).toBe('supports');
-    expect(result.relations[1].type).toBe('contrasts');
+    expect(result.relations[0]).toEqual({ from: 's_aaa', to: 's_bbb', type: 'depends' });
+    expect(result.relations[1]).toEqual({ from: 's_aaa', to: 's_ccc', type: 'contrasts' });
     expect(result.stats.total_nodes).toBe(3);
     expect(result.stats.relations_found).toBe(2);
     expect(result.stats.extraction_time_ms).toBeGreaterThanOrEqual(0);
@@ -70,7 +70,7 @@ describe('RelationExtractor', () => {
       {
         source_id: 's_aaa',
         target_id: 's_bbb',
-        type: 'supports',
+        type: 'depends',
         reasoning: 'ok',
       },
       {
@@ -84,21 +84,6 @@ describe('RelationExtractor', () => {
     const extractor = new RelationExtractor(provider);
     const result = await extractor.extract(nodes);
     expect(result.relations).toHaveLength(1);
-  });
-
-  it('generates rel_ prefixed IDs', async () => {
-    const mockResponse = JSON.stringify([
-      {
-        source_id: 's_aaa',
-        target_id: 's_bbb',
-        type: 'supports',
-        reasoning: 'test',
-      },
-    ]);
-    const provider = createMockProvider(mockResponse);
-    const extractor = new RelationExtractor(provider);
-    const result = await extractor.extract(nodes);
-    expect(result.relations[0].id).toMatch(/^rel_/);
   });
 
   it('propagates provider errors', async () => {

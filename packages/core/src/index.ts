@@ -336,7 +336,7 @@ export type {
   MergeResolution,
   MergeResult,
   Relation,
-  RelationType as SemanticRelationType,
+  RelationType,
   SemanticContent,
   SemanticGateResult,
   SemanticIssue,
@@ -464,14 +464,11 @@ export {
   type LeafType,
   // Merge summary
   type MergeSummaryData,
-  type NodeRelation,
   // Pin (source selection)
   type Pin,
   type PinType,
-  // Relation types (tree-node relations)
+  // Relation types — re-exported from semantic layer
   RELATION_TYPE_VALUES,
-  type RelationExtractionResult,
-  type RelationType,
   type RequireConstraint,
   // Share Token
   type ShareToken,
