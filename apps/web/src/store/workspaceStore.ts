@@ -150,6 +150,33 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
           }
           set({ persistedOpsCount: enabledOps.length });
         }
+
+        // Auto-rename conversation and project from root tree key
+        if (content.trees.length > 0) {
+          const rootKey = (content.trees[0] as { key: string }).key;
+          if (rootKey) {
+            const displayName = rootKey
+              .replace(/_/g, ' ')
+              .replace(/\b\w/g, (c: string) => c.toUpperCase());
+
+            import('@/store/chatStore').then(({ useChatStore }) => {
+              useChatStore.getState().setConversationTitle(displayName);
+              const convId = useDraftStore.getState().conversationId;
+              if (convId) {
+                import('@/lib/api/conversations').then(({ updateConversation }) => {
+                  updateConversation(convId, { title: displayName }).catch(() => {});
+                });
+              }
+              const projectId = useChatStore.getState().activeProjectId;
+              if (projectId) {
+                import('@/lib/api/projects').then(({ updateProject }) => {
+                  updateProject(projectId, { name: displayName }).catch(() => {});
+                });
+                useChatStore.getState().refreshSidebar();
+              }
+            });
+          }
+        }
       }
     });
   },

@@ -217,6 +217,7 @@ export function useExtraction({ resolvedConversationId }: UseExtractionParams) {
             }
           })
           .catch(() => {});
+
       } catch (_err) {
         useWorkspaceStore.getState().setMode('idle');
         useDraftStore.setState({ isExtracting: false });

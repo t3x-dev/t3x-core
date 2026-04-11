@@ -29,7 +29,7 @@ export function ChatHeader({
   projectName,
   conversationId,
 }: ChatHeaderProps) {
-  const { activeProjectId, activeBranch, setActiveBranch, sidebarCollapsed, toggleSidebar } = useChatStore();
+  const { activeProjectId, activeBranch, setActiveBranch, sidebarCollapsed, toggleSidebar, conversationTitle: storeTitle } = useChatStore();
   const setCommitBranch = useCommitStore((s) => s.setCommitBranch);
   const initCommitState = useCommitStore((s) => s.initCommitState);
   const panelExpanded = useWorkspaceStore((s) => s.panelExpanded);
@@ -59,7 +59,7 @@ export function ChatHeader({
     }, 150);
   };
 
-  const displayTitle = conversationTitle ?? 'New Chat';
+  const displayTitle = storeTitle || conversationTitle || 'New Chat';
 
   return (
     <header
