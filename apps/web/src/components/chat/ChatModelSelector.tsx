@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { getAvailableModels } from '@/lib/api/llm';
 import type { LLMProviderInfo } from '@/lib/api/types';
 
@@ -13,8 +14,8 @@ interface ChatModelSelectorProps {
 export function ChatModelSelector({ selectedModel, onModelChange }: ChatModelSelectorProps) {
   const [open, setOpen] = useState(false);
   const [providers, setProviders] = useState<LLMProviderInfo[]>([]);
-  const ref = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     getAvailableModels()
@@ -22,13 +23,20 @@ export function ChatModelSelector({ selectedModel, onModelChange }: ChatModelSel
       .catch(() => {});
   }, []);
 
+  // Close on outside click — check both button and portal dropdown
   useEffect(() => {
+    if (!open) return;
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (
+        buttonRef.current?.contains(target) ||
+        dropdownRef.current?.contains(target)
+      ) return;
+      setOpen(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, []);
+  }, [open]);
 
   const currentLabel =
     providers.flatMap((p) => p.models).find((m) => m.id === selectedModel)?.label ??
@@ -46,7 +54,7 @@ export function ChatModelSelector({ selectedModel, onModelChange }: ChatModelSel
   };
 
   return (
-    <div ref={ref} style={{ position: 'relative' }}>
+    <>
       <button
         ref={buttonRef}
         type="button"
@@ -60,49 +68,52 @@ export function ChatModelSelector({ selectedModel, onModelChange }: ChatModelSel
       >
         ⚡ {currentLabel} ▾
       </button>
-      {open && (
-        <div
-          className="rounded-lg border shadow-lg"
-          style={{
-            ...getPopoverStyle(),
-            background: 'var(--surface-overlay)',
-            borderColor: 'var(--stroke-default)',
-            minWidth: 200,
-            padding: 4,
-          }}
-        >
-          {providers.map((provider) => (
-            <div key={provider.name}>
-              <div
-                className="text-[10px] uppercase px-2 py-1"
-                style={{ color: 'var(--text-secondary)' }}
-              >
-                {provider.label}
-              </div>
-              {provider.models.map((model) => (
-                <button
-                  key={model.id}
-                  type="button"
-                  onClick={() => {
-                    onModelChange(provider.name, model.id);
-                    setOpen(false);
-                  }}
-                  className="block w-full text-left text-xs px-2 py-1.5 rounded hover:bg-[var(--hover-bg)]"
-                  style={{ color: model.id === selectedModel ? 'rgb(167,139,250)' : undefined }}
+      {open &&
+        createPortal(
+          <div
+            ref={dropdownRef}
+            className="rounded-lg border shadow-xl bg-white dark:bg-zinc-900"
+            style={{
+              ...getPopoverStyle(),
+              borderColor: 'var(--stroke-default)',
+              minWidth: 220,
+              maxWidth: 280,
+              padding: 4,
+            }}
+          >
+            {providers.map((provider) => (
+              <div key={provider.name}>
+                <div
+                  className="text-[10px] uppercase px-2 py-1"
+                  style={{ color: 'var(--text-secondary)' }}
                 >
-                  {model.id === selectedModel ? '✓ ' : '  '}
-                  {model.label}
-                </button>
-              ))}
-            </div>
-          ))}
-          {providers.length === 0 && (
-            <div className="text-xs px-2 py-2" style={{ color: 'var(--text-tertiary)' }}>
-              No providers configured
-            </div>
-          )}
-        </div>
-      )}
-    </div>
+                  {provider.label}
+                </div>
+                {provider.models.map((model) => (
+                  <button
+                    key={model.id}
+                    type="button"
+                    onClick={() => {
+                      onModelChange(provider.name, model.id);
+                      setOpen(false);
+                    }}
+                    className="block w-full text-left text-xs px-2 py-1.5 rounded hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                    style={{ color: model.id === selectedModel ? 'rgb(167,139,250)' : undefined }}
+                  >
+                    {model.id === selectedModel ? '✓ ' : '  '}
+                    {model.label}
+                  </button>
+                ))}
+              </div>
+            ))}
+            {providers.length === 0 && (
+              <div className="text-xs px-2 py-2" style={{ color: 'var(--text-tertiary)' }}>
+                No providers configured
+              </div>
+            )}
+          </div>,
+          document.body
+        )}
+    </>
   );
 }

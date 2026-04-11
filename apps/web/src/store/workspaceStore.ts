@@ -59,10 +59,14 @@ interface WorkspaceState {
     question: string;
     currentValue?: unknown;
   }>;
+  // Extraction style preset for the next extraction
+  extractionPreset: 'concise' | 'balanced' | 'detailed';
   // Source pin IDs used in the last extraction (for commit source_refs)
   lastExtractionPinIds: string[];
   // Quote validation result from last extraction
   quoteValidation: QuoteValidationResult | null;
+  // Number of ops already persisted to server (to avoid double-saving)
+  persistedOpsCount: number;
 
   snapshotBase(content: SemanticContent, commitHash: string | null): void;
   setScriptText(text: string): void;
@@ -73,6 +77,7 @@ interface WorkspaceState {
   clearSelection(): void;
   setMode(mode: WorkspaceMode): void;
   setPanelExpanded(expanded: boolean): void;
+  setExtractionPreset(preset: 'concise' | 'balanced' | 'detailed'): void;
   setDriftDetected(info: DriftInfo, choices: string[]): void;
   clearDrift(): void;
   setGateIssues(issues: Record<string, GateIssue[]>): void;
@@ -93,7 +98,7 @@ const EMPTY_CONTENT: SemanticContent = { trees: [], relations: [] };
 
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   mode: 'idle',
-  panelExpanded: true,
+  panelExpanded: false,
   base: EMPTY_CONTENT,
   baseCommitHash: null,
   scriptText: '',
@@ -108,6 +113,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   selectedTurnIndex: null,
   selectedSource: null,
   scrollToCenter: false,
+  extractionPreset: 'balanced',
+  persistedOpsCount: 0,
   lastExtractionPinIds: [],
   quoteValidation: null,
   driftDetected: false,
@@ -161,6 +168,21 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     // Sync result to draftStore so commit pipeline and source maps work
     import('./draftStore').then(({ useDraftStore }) => {
       useDraftStore.getState().setDraft(content);
+
+      // Persist new ops to server (only ops added after last save)
+      if (result.ok) {
+        const { persistedOpsCount } = get();
+        const newOps = enabledOps.slice(persistedOpsCount);
+        if (newOps.length > 0) {
+          const convId = useDraftStore.getState().conversationId;
+          if (convId) {
+            import('@/lib/api/trees').then(({ createYOpsEntry }) => {
+              createYOpsEntry(convId, newOps, 'manual')?.catch(() => {});
+            });
+          }
+          set({ persistedOpsCount: enabledOps.length });
+        }
+      }
     });
   },
 
@@ -206,6 +228,10 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     set({ panelExpanded: expanded });
   },
 
+  setExtractionPreset(preset) {
+    set({ extractionPreset: preset });
+  },
+
   setDriftDetected(info, choices) {
     set({ driftDetected: true, driftInfo: info, driftChoices: choices });
   },
@@ -225,7 +251,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   reset() {
     set({
       mode: 'idle',
-      panelExpanded: true,
+      panelExpanded: false,
       base: EMPTY_CONTENT,
       baseCommitHash: null,
       scriptText: '',

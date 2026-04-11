@@ -171,11 +171,11 @@ describe('Workspace Flow E2E', () => {
 
     it('panel expand/collapse state', () => {
       const store = useWorkspaceStore;
-      expect(store.getState().panelExpanded).toBe(true);
-      store.getState().setPanelExpanded(false);
       expect(store.getState().panelExpanded).toBe(false);
       store.getState().setPanelExpanded(true);
       expect(store.getState().panelExpanded).toBe(true);
+      store.getState().setPanelExpanded(false);
+      expect(store.getState().panelExpanded).toBe(false);
     });
 
     it('reset clears everything', () => {

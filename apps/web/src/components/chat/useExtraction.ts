@@ -1,3 +1,4 @@
+import { PRESETS } from '@t3x-dev/core';
 import { useCallback } from 'react';
 import { toast } from 'sonner';
 import { listTopics, updateTopicApi } from '@/lib/api';
@@ -47,9 +48,12 @@ export function useExtraction({ resolvedConversationId }: UseExtractionParams) {
       }
 
       try {
+        const preset = useWorkspaceStore.getState().extractionPreset;
+        const style = PRESETS[preset];
         const result = await extractNodes(extractConvId, undefined, undefined, {
           ...(activeTopicId && { topicId: activeTopicId }),
           ...(sourcePinIds?.length && { sourcePinIds }),
+          style,
         });
 
         if (result.status === 'skipped') {
@@ -93,6 +97,8 @@ export function useExtraction({ resolvedConversationId }: UseExtractionParams) {
           const { opsToYaml } = await import('@/lib/scriptParser');
           const yamlText = opsToYaml(deltaOps as import('@t3x-dev/core').YOp[]);
           useWorkspaceStore.getState().setScriptText(yamlText);
+          // Mark extraction ops as already persisted (saved by pipeline)
+          useWorkspaceStore.setState({ persistedOpsCount: deltaOps.length });
 
           // Save slot_quotes from base trees BEFORE execute (execute strips metadata)
           type AnyTree = {
@@ -123,9 +129,13 @@ export function useExtraction({ resolvedConversationId }: UseExtractionParams) {
           // Re-apply metadata: use snapshot if available, else restore saved metadata
           if (result.snapshot) {
             setDraft(result.snapshot);
-            useWorkspaceStore
-              .getState()
-              .snapshotBase(result.snapshot, useWorkspaceStore.getState().baseCommitHash);
+            // Only update base snapshot for incremental extractions (has prior commit).
+            // For first extraction, keep base empty so Before shows "No prior commits"
+            // and the new content only appears in the After panel.
+            const currentBaseHash = useWorkspaceStore.getState().baseCommitHash;
+            if (currentBaseHash) {
+              useWorkspaceStore.getState().snapshotBase(result.snapshot, currentBaseHash);
+            }
           } else if (savedMeta.size > 0) {
             // Incremental extraction: restore slot_quotes from pre-execute trees
             const currentDraft = useDraftStore.getState().draft;

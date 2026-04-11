@@ -17,14 +17,12 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import type { ExtractionStyleConfig } from '@t3x-dev/core';
 import { ArrowLeft, CheckCircle2, Circle, GripVertical, Loader2, RotateCcw } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { AutopilotSettings } from '@/components/autopilot/AutopilotSettings';
 import { BusinessRulesSection } from '@/components/settings/BusinessRulesSection';
-import { ExtractionStylePanel } from '@/components/settings/ExtractionStylePanel';
 import { ModelSelector } from '@/components/shared/ModelSelector';
 import {
   getProjectProviderConfig,
@@ -214,8 +212,6 @@ export default function ProjectSettingsPage() {
   const [overriddenRoles, setOverriddenRoles] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [extractionStyle, setExtractionStyle] = useState<ExtractionStyleConfig | null>(null);
-
   const project = useProjectStore((state) => state.projects.find((p) => p.id === projectId));
   const updateProjectModel = useProjectStore((state) => state.updateProjectModel);
 
@@ -224,15 +220,6 @@ export default function ProjectSettingsPage() {
       await updateProjectModel(projectId, provider, model);
     } catch {
       // Error is handled by the store (notifyCallback)
-    }
-  };
-
-  const handleExtractionStyleChange = async (style: ExtractionStyleConfig | null) => {
-    setExtractionStyle(style);
-    try {
-      await updateProject(projectId, { extraction_style: style });
-    } catch (err) {
-      console.error('Failed to update extraction style:', err);
     }
   };
 
@@ -247,9 +234,6 @@ export default function ProjectSettingsPage() {
       ]);
 
       setGlobalRoles(roles);
-
-      // Load extraction style from project
-      setExtractionStyle(projectDetail.extraction_style ?? null);
 
       // Determine which roles are overridden at the project level
       const overridden = new Set<string>();
@@ -433,15 +417,6 @@ export default function ProjectSettingsPage() {
           initialProvider={project?.defaultProvider}
           initialModel={project?.defaultModel}
           onChange={handleModelChange}
-        />
-      </div>
-
-      {/* Extraction Style */}
-      <div className="mt-12 pt-8 border-t border-[var(--stroke-divider)]">
-        <ExtractionStylePanel
-          value={extractionStyle}
-          onChange={handleExtractionStyleChange}
-          showGlobalToggle
         />
       </div>
 
