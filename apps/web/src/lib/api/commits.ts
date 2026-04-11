@@ -2,6 +2,7 @@
  * Commits API (tree-based)
  */
 
+import type { SemanticContent } from '@t3x-dev/core';
 import { API_V1, buildQueryString, fetchWithTimeout, handleResponse } from './core';
 
 // ============================================================================
@@ -69,7 +70,7 @@ export interface ApiCommit {
   parents: string[];
   author: { type: string; id?: string; name?: string };
   committed_at: string;
-  content: { trees: unknown[]; relations: unknown[] };
+  content: SemanticContent;
   project_id: string;
   message: string | null;
   branch: string;
@@ -176,30 +177,24 @@ export async function updateCommitMessage(
  * Get commit ancestor chain as ApiCommit[].
  */
 export async function getApiCommitHistory(commitHash: string, limit = 50): Promise<ApiCommit[]> {
-  try {
-    const query = buildQueryString({ limit });
-    const res = await fetchWithTimeout(
-      `${API_V1}/commits/${encodeURIComponent(commitHash)}/history?${query}`
-    );
-    const data = await handleResponse<{ commits: ApiCommit[]; truncated: boolean }>(res);
-    return data.commits;
-  } catch {
-    return [];
-  }
+  const query = buildQueryString({ limit });
+  const res = await fetchWithTimeout(
+    `${API_V1}/commits/${encodeURIComponent(commitHash)}/history?${query}`
+  );
+  const data = await handleResponse<{ commits: ApiCommit[]; truncated: boolean }>(res);
+  return data.commits;
 }
 
 // ============================================================================
 // ApiCommit helper functions (tree-based)
 // ============================================================================
 
-import type { SemanticContent } from '@t3x-dev/core';
-
 /**
  * Extract SemanticContent from an ApiCommit.
  * Returns the tree-based content, or a default empty SemanticContent if missing.
  */
 export function getSemanticContent(commit: ApiCommit): SemanticContent {
-  return (commit.content ?? { trees: [], relations: [] }) as SemanticContent;
+  return commit.content ?? { trees: [], relations: [] };
 }
 
 /**
@@ -207,22 +202,19 @@ export function getSemanticContent(commit: ApiCommit): SemanticContent {
  * Converts tree structure to human-readable text representation.
  */
 export function treeSummaryText(commit: ApiCommit): string {
-  const content = getSemanticContent(commit);
-  function nodeToText(node: { key: string; slots: Record<string, unknown>; children?: unknown[] }): string {
-    const slots = Object.entries(node.slots ?? {})
-      .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`)
-      .join(', ');
-    return `${node.key}: ${slots}`;
-  }
-  function flattenNodes(trees: Array<{ key: string; slots: Record<string, unknown>; children?: Array<{ key: string; slots: Record<string, unknown>; children?: unknown[] }> }>): string[] {
+  const { trees } = getSemanticContent(commit);
+  function flattenNodes(nodes: typeof trees): string[] {
     const result: string[] = [];
-    for (const t of trees) {
-      result.push(nodeToText(t));
-      if (t.children && t.children.length > 0) {
-        result.push(...flattenNodes(t.children as typeof trees));
+    for (const node of nodes) {
+      const slots = Object.entries(node.slots)
+        .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`)
+        .join(', ');
+      result.push(`${node.key}: ${slots}`);
+      if (node.children.length > 0) {
+        result.push(...flattenNodes(node.children));
       }
     }
     return result;
   }
-  return flattenNodes(content.trees as Array<{ key: string; slots: Record<string, unknown>; children?: Array<{ key: string; slots: Record<string, unknown>; children?: unknown[] }> }>).join('. ');
+  return flattenNodes(trees).join('. ');
 }

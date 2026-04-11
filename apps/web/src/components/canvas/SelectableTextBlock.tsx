@@ -411,21 +411,6 @@ export function SelectableTextBlock({
   );
 }
 
-// Container for multiple text blocks with Box UI
-interface PendingSourceEditorProps {
-  blocks: SourceTextBlock[];
-  onChange: (blocks: SourceTextBlock[]) => void;
-  readOnly?: boolean;
-  /** Anchor candidates from Ring 1 (global positions) */
-  anchorCandidates?: AnchorCandidate[];
-  /** Confirmed anchors (user-confirmed) */
-  confirmedAnchors?: ConfirmedAnchor[];
-  /** Callback when user confirms/changes an anchor */
-  onAnchorChange?: (anchor: ConfirmedAnchor, action: 'add' | 'remove' | 'update') => void;
-  /** Confidence threshold for showing anchor candidates (0-1) */
-  anchorThreshold?: number;
-}
-
 // Collapsible Source Box component
 interface SourceBoxProps {
   block: SourceTextBlock;
@@ -442,7 +427,7 @@ interface SourceBoxProps {
   anchorThreshold?: number;
 }
 
-function SourceBox({
+export function SourceBox({
   block,
   onChange,
   readOnly = false,
@@ -518,102 +503,3 @@ function SourceBox({
   );
 }
 
-export function PendingSourceEditor({
-  blocks,
-  onChange,
-  readOnly = false,
-  anchorCandidates,
-  confirmedAnchors,
-  onAnchorChange,
-  anchorThreshold,
-}: PendingSourceEditorProps) {
-  const handleBlockChange = useCallback(
-    (updatedBlock: SourceTextBlock) => {
-      const newBlocks = blocks.map((b) => (b.id === updatedBlock.id ? updatedBlock : b));
-      onChange(newBlocks);
-    },
-    [blocks, onChange]
-  );
-
-  // Default to expanded if there's only one block
-  const defaultExpanded = blocks.length === 1;
-
-  return (
-    <div className="space-y-3">
-      {blocks.map((block) => (
-        <SourceBox
-          key={block.id}
-          block={block}
-          onChange={handleBlockChange}
-          readOnly={readOnly}
-          defaultExpanded={defaultExpanded}
-          anchorCandidates={anchorCandidates}
-          confirmedAnchors={confirmedAnchors}
-          onAnchorChange={onAnchorChange}
-          anchorThreshold={anchorThreshold}
-        />
-      ))}
-    </div>
-  );
-}
-
-// Read-only viewer for committed commit's Source Excerpt
-// Only shows included text (semantic selections), no keyword highlighting
-interface SourceExcerptViewerProps {
-  blocks: SourceTextBlock[];
-}
-
-export function SourceExcerptViewer({ blocks }: SourceExcerptViewerProps) {
-  if (!blocks || blocks.length === 0) {
-    return (
-      <div className="p-[var(--space-group)] bg-[var(--color-bg-subtle)] rounded-lg border border-[var(--color-border)] text-center text-sm text-[var(--color-text-muted)] italic">
-        <span>No source excerpt recorded</span>
-      </div>
-    );
-  }
-
-  // Extract only included text from all blocks
-  const excerptText = blocks
-    .map((block) => {
-      // Get only include selections
-      const includeSelections = block.selections.filter((sel) => sel.type === 'include');
-      if (includeSelections.length === 0) return '';
-
-      // Build text from included tokens with proper spacing
-      let result = '';
-      const includedTokens = block.tokens.filter((token) =>
-        includeSelections.some(
-          (sel) => token.index >= sel.startIndex && token.index <= sel.endIndex
-        )
-      );
-
-      for (let i = 0; i < includedTokens.length; i++) {
-        const token = includedTokens[i];
-        const nextToken = includedTokens[i + 1];
-        result += token.text;
-        if (nextToken && needsSpaceAfter(token, nextToken)) {
-          result += ' ';
-        }
-      }
-
-      return result;
-    })
-    .filter(Boolean)
-    .join('\n\n');
-
-  if (!excerptText.trim()) {
-    return (
-      <div className="p-[var(--space-group)] bg-[var(--color-bg-subtle)] rounded-lg border border-[var(--color-border)] text-center text-sm text-[var(--color-text-muted)] italic">
-        <span>No semantic content selected</span>
-      </div>
-    );
-  }
-
-  return (
-    <div className="p-[var(--space-group)] bg-[var(--color-bg-subtle)] rounded-lg border border-[var(--color-border)]">
-      <div className="text-sm leading-relaxed text-[var(--color-text-secondary)] whitespace-pre-wrap">
-        {excerptText}
-      </div>
-    </div>
-  );
-}

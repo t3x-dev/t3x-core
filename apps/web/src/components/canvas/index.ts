@@ -23,8 +23,6 @@ export type { NodeQuickAction } from './NodeModal';
 // Modal
 export { NodeModal } from './NodeModal';
 // Shared components
-export {
-  PendingSourceEditor,
-  SelectableTextBlock,
-  SourceExcerptViewer,
-} from './SelectableTextBlock';
+export { PendingSourceEditor } from './PendingSourceEditor';
+export { SelectableTextBlock, SourceBox } from './SelectableTextBlock';
+export { SourceExcerptViewer } from './SourceExcerptViewer';

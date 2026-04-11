@@ -2,7 +2,7 @@
 import type { SemanticContent, TreeNode, YOp, YOpsLogEntry, YOpsSource } from '@t3x-dev/core';
 import { applyYOps as coreApplyYOps } from '@t3x-dev/core';
 import { create } from 'zustand';
-import type { Topic } from '@/lib/api/topics';
+import type { Topic } from '@/lib/api';
 import { createYOpsEntry } from '@/lib/api/trees';
 
 interface DraftState {

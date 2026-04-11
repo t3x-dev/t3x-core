@@ -1,7 +1,7 @@
 import type { StateCreator } from 'zustand';
 import { getTerminology } from '@/hooks/useTerminology';
 import * as api from '@/lib/api';
-import { useSettingsStore } from '@/store/settingsStore';
+import { isDeveloperMode } from '@/store/shared';
 import type { EmbeddedLeaf, LeafType } from '../types/nodes';
 import type { CanvasState, LeafPanelSlice } from './canvasStoreTypes';
 
@@ -34,7 +34,7 @@ export const createLeafSlice: StateCreator<CanvasState, [], [], LeafPanelSlice> 
     // Get commit hash from unit node - required for creating leaf
     const commitHash = unitNode.data.commitHash;
     if (!commitHash) {
-      const dev = useSettingsStore.getState().developerMode;
+      const dev = isDeveloperMode();
       notify?.(
         `${getTerminology('commit', dev)} not saved yet. Please ${getTerminology('commitAction', dev).toLowerCase()} first before adding output.`,
         'error'
@@ -127,7 +127,7 @@ export const createLeafSlice: StateCreator<CanvasState, [], [], LeafPanelSlice> 
 
     const commitHash = unitNode.data.commitHash;
     if (!commitHash) {
-      const dev = useSettingsStore.getState().developerMode;
+      const dev = isDeveloperMode();
       notify?.(
         `${getTerminology('commit', dev)} not saved yet. Please ${getTerminology('commitAction', dev).toLowerCase()} first before adding output.`,
         'error'

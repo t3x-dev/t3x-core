@@ -12,8 +12,16 @@ import { create } from 'zustand';
 import type { TreeResolution } from '@/components/merge/ConflictCard';
 import { getTerminology, type TermKey } from '@/hooks/useTerminology';
 import * as api from '@/lib/api';
-import { API_V1, fetchWithTimeout, handleResponse } from '@/lib/api/core';
-import { useSettingsStore } from '@/store/settingsStore';
+import {
+  type ApiMergeCheck,
+  commitMergeDraft,
+  createMergeDraft,
+  deleteMergeDraft,
+  getMergeDraft,
+  getMergeDraftChecks,
+  saveMergeDraft,
+} from '@/lib/api';
+import { isDeveloperMode } from '@/store/shared';
 import type { ContentNode, MergeDraft, TurnContextData } from '@/types/merge';
 import { type SaveStatus, createSaveStatusTimer } from './saveStatus';
 
@@ -160,47 +168,6 @@ export interface MergeCheck {
   source?: 'frontend' | 'server';
 }
 
-// ============================================================================
-// Helper Functions
-// ============================================================================
-
-async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> {
-  const response = await fetchWithTimeout(`${API_V1}${endpoint}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
-  });
-  return handleResponse<T>(response);
-}
-
-// Convert API response (snake_case) to internal format (camelCase)
-function apiDraftToInternal(apiDraft: Record<string, unknown>): {
-  draftId: string;
-  projectId: string;
-  sourceHash: string;
-  targetHash: string;
-  sourceBranch: string | null;
-  targetBranch: string | null;
-  treeMergeResult: MergeResult | null;
-  status: MergeDraft['status'];
-  message: string | null;
-} {
-  const prepared = apiDraft.prepared as MergeResult | undefined;
-  return {
-    draftId: apiDraft.draftId as string,
-    projectId: apiDraft.projectId as string,
-    sourceHash: apiDraft.sourceHash as string,
-    targetHash: apiDraft.targetHash as string,
-    sourceBranch: (apiDraft.sourceBranch as string) || null,
-    targetBranch: (apiDraft.targetBranch as string) || null,
-    treeMergeResult: prepared ?? null,
-    status: apiDraft.status as MergeDraft['status'],
-    message: (apiDraft.message as string) || null,
-  };
-}
-
 const saveTimer = createSaveStatusTimer();
 
 // ============================================================================
@@ -245,8 +212,7 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
     set({ loading: true, error: null });
 
     try {
-      const apiDraft = await fetchApi<Record<string, unknown>>(`/merge/drafts/${draftId}`);
-      const draft = apiDraftToInternal(apiDraft);
+      const draft = await getMergeDraft(draftId);
 
       set({
         draftId: draft.draftId,
@@ -255,7 +221,7 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
         targetHash: draft.targetHash,
         sourceBranch: draft.sourceBranch,
         targetBranch: draft.targetBranch,
-        treeMergeResult: draft.treeMergeResult,
+        treeMergeResult: draft.prepared ?? null,
         status: draft.status,
         message: draft.message || '',
         loading: false,
@@ -278,17 +244,13 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
     set({ loading: true, error: null });
 
     try {
-      const apiDraft = await fetchApi<Record<string, unknown>>('/merge/drafts', {
-        method: 'POST',
-        body: JSON.stringify({
-          project_id: projectId,
-          source_hash: sourceHash,
-          target_hash: targetHash,
-          source_branch: sourceBranch,
-          target_branch: targetBranch,
-        }),
+      const draft = await createMergeDraft({
+        project_id: projectId,
+        source_hash: sourceHash,
+        target_hash: targetHash,
+        source_branch: sourceBranch,
+        target_branch: targetBranch,
       });
-      const draft = apiDraftToInternal(apiDraft);
 
       set({
         draftId: draft.draftId,
@@ -297,7 +259,7 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
         targetHash: draft.targetHash,
         sourceBranch: draft.sourceBranch,
         targetBranch: draft.targetBranch,
-        treeMergeResult: draft.treeMergeResult,
+        treeMergeResult: draft.prepared ?? null,
         status: draft.status,
         message: '',
         loading: false,
@@ -323,10 +285,7 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
     set({ saveStatus: 'saving' });
 
     try {
-      await fetchApi(`/merge/drafts/${draftId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ prepared: treeMergeResult, message }),
-      });
+      await saveMergeDraft(draftId, { prepared: treeMergeResult ?? undefined, message });
 
       set({
         saveStatus: 'saved',
@@ -349,12 +308,9 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
     set({ error: null });
 
     try {
-      const commitResult = await fetchApi<{ hash: string }>(`/merge/drafts/${draftId}/commit`, {
-        method: 'POST',
-        body: JSON.stringify({
-          message,
-          branch: branch || targetBranch || 'main',
-        }),
+      const commitResult = await commitMergeDraft(draftId, {
+        message,
+        branch: branch || targetBranch || 'main',
       });
 
       set({
@@ -378,9 +334,7 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
     if (!draftId) return;
 
     try {
-      await fetchApi(`/merge/drafts/${draftId}`, {
-        method: 'DELETE',
-      });
+      await deleteMergeDraft(draftId);
     } catch {
       // Ignore errors on cancel
     }
@@ -457,7 +411,7 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
 
     set({ serverChecksLoading: true, serverChecksError: null });
     try {
-      const result = await fetchApi<MergeCheck[]>(`/merge/drafts/${draftId}/checks`);
+      const result = await getMergeDraftChecks(draftId);
       set({ serverChecks: result, serverChecksLoading: false });
     } catch (err) {
       set({
@@ -578,7 +532,7 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
     const { treeMergeResult, message, targetBranch, serverChecks } = get();
     const unresolvedCount = get().getUnresolvedCount();
     const previewPaths = get().getPreviewPaths();
-    const dev = useSettingsStore.getState().developerMode;
+    const dev = isDeveloperMode();
     const tm = (key: TermKey) => getTerminology(key, dev);
 
     const frontendChecks: MergeCheck[] = [
@@ -686,7 +640,7 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
 
   getTreeMergeChecks: (): MergeCheck[] => {
     const { treeMergeResult, message, targetBranch } = get();
-    const dev = useSettingsStore.getState().developerMode;
+    const dev = isDeveloperMode();
     const tm = (key: TermKey) => getTerminology(key, dev);
 
     if (!treeMergeResult) return get().getMergeChecks();

@@ -10,7 +10,7 @@
 import type { Pin, PinType } from '@t3x-dev/core';
 import { create } from 'zustand';
 import * as api from '@/lib/api';
-import type { NotifyCallback } from './canvasStoreTypes';
+import type { NotifyCallback } from './shared';
 
 // Module-level flag to prevent concurrent fetchPins calls for the same project.
 // Tracks the projectId currently being fetched (set synchronously before any

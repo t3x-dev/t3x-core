@@ -2,9 +2,9 @@ import type { Edge, Node } from '@xyflow/react';
 import type { StateCreator } from 'zustand';
 import { getTerminology } from '@/hooks/useTerminology';
 import * as api from '@/lib/api';
-import { API_V1, fetchWithTimeout, handleResponse } from '@/lib/api/core';
+import { createMergeDraft } from '@/lib/api';
 import { getMicrocopy } from '@/lib/microcopy';
-import { useSettingsStore } from '@/store/settingsStore';
+import { isDeveloperMode } from '@/store/shared';
 import type { BranchType, CanvasNodeData, SourceTextBlock, TurnBoundary } from '../types/nodes';
 import { tokenizeText } from '../utils/tokenizer';
 import type { CanvasState, CommitSlice } from './canvasStoreTypes';
@@ -70,7 +70,7 @@ export const createCommitSlice: StateCreator<CanvasState, [], [], CommitSlice> =
           kind: 'unit',
           entryId: `UNIT-${getNumericId(id)}`,
           status: (() => {
-            const dev = useSettingsStore.getState().developerMode;
+            const dev = isDeveloperMode();
             return `${getTerminology('committed', dev)} · awaiting ${getTerminology('diff', dev).toLowerCase()}`;
           })(),
           tags: Array.from(
@@ -99,7 +99,7 @@ export const createCommitSlice: StateCreator<CanvasState, [], [], CommitSlice> =
       };
     });
 
-    const mode = useSettingsStore.getState().developerMode ? 'developer' : 'default';
+    const mode = isDeveloperMode() ? 'developer' : 'default';
     notify?.(getMicrocopy('commitSuccess', mode, { hash_short: id.slice(0, 7) }), 'success');
   },
 
@@ -431,21 +431,14 @@ export const createCommitSlice: StateCreator<CanvasState, [], [], CommitSlice> =
 
     // Create merge draft via API (redirects to Merge Workspace)
     try {
-      const response = await fetchWithTimeout(`${API_V1}/merge/drafts`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          project_id: state.projectId,
-          source_hash: sourceHash,
-          target_hash: targetHash,
-          source_branch: sourceBranch,
-          target_branch: 'main',
-        }),
+      const data = await createMergeDraft({
+        project_id: state.projectId!,
+        source_hash: sourceHash,
+        target_hash: targetHash,
+        source_branch: sourceBranch,
+        target_branch: 'main',
       });
 
-      const data = await handleResponse<{ draftId: string }>(response);
-
-      // Return the draft ID for navigation
       return data.draftId;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';

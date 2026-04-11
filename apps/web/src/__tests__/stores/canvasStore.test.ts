@@ -25,6 +25,16 @@ vi.mock('@/lib/api', () => ({
   listBranches: vi.fn(),
   getProject: vi.fn(),
   getTurn: vi.fn(),
+  prepareMergeApi: vi.fn().mockResolvedValue({
+    autoKept: [],
+    conflicts: [],
+    onlyInSource: [],
+    onlyInTarget: [],
+    relationsOnlyInSource: [],
+    relationsOnlyInTarget: [],
+    relationsInBoth: [],
+  }),
+  createMergeDraft: vi.fn().mockResolvedValue({ draftId: 'draft_mock123' }),
   createLeaf: vi.fn().mockResolvedValue({
     id: 'leaf_mock123',
     commit_hash: 'sha256:abc123',
@@ -535,28 +545,6 @@ describe('Canvas Store - Unit Node Model', () => {
     });
 
     it('startMerge sets mergeState', async () => {
-      // Mock fetch
-      global.fetch = vi.fn(() =>
-        Promise.resolve({
-          ok: true,
-          status: 200,
-          statusText: 'OK',
-          json: () =>
-            Promise.resolve({
-              success: true,
-              data: {
-                autoKept: [],
-                conflicts: [],
-                onlyInSource: [],
-                onlyInTarget: [],
-                relationsOnlyInSource: [],
-                relationsOnlyInTarget: [],
-                relationsInBoth: [],
-              },
-            }),
-        })
-      ) as unknown as typeof fetch;
-
       await useCanvasStore.getState().startMerge('sha256:a', 'sha256:b');
 
       expect(useCanvasStore.getState().mergeState).not.toBeNull();
@@ -564,56 +552,6 @@ describe('Canvas Store - Unit Node Model', () => {
       expect(useCanvasStore.getState().mergeState?.targetHash).toBe('sha256:b');
       expect(useCanvasStore.getState().mergeError).toBeNull();
       expect(useCanvasStore.getState().mergeLoading).toBe(false);
-    });
-
-    it('resolveSimilarPair is a no-op in tree-primary (legacy API)', () => {
-      // In tree-primary, conflict resolution is handled by mergeWorkspaceStore
-      const store = useCanvasStore.getState();
-      useCanvasStore.setState({
-        mergeState: {
-          sourceHash: 'sha256:a',
-          targetHash: 'sha256:b',
-          prepared: {
-            autoKept: [],
-            conflicts: [{ path: 'topic/a', slotConflicts: [] }],
-            onlyInSource: [],
-            onlyInTarget: [],
-            relationsOnlyInSource: [],
-            relationsOnlyInTarget: [],
-            relationsInBoth: [],
-          },
-        },
-      });
-
-      // Should not throw
-      store.resolveSimilarPair(0, 'source');
-
-      // State unchanged (no-op)
-      expect(useCanvasStore.getState().mergeState).not.toBeNull();
-    });
-
-    it('toggleKeep is a no-op in tree-primary (legacy API)', () => {
-      useCanvasStore.setState({
-        mergeState: {
-          sourceHash: 'sha256:a',
-          targetHash: 'sha256:b',
-          prepared: {
-            autoKept: [],
-            conflicts: [],
-            onlyInSource: ['path/a'],
-            onlyInTarget: [],
-            relationsOnlyInSource: [],
-            relationsOnlyInTarget: [],
-            relationsInBoth: [],
-          },
-        },
-      });
-
-      // Should not throw
-      useCanvasStore.getState().toggleKeep('source', 0);
-
-      // State unchanged (no-op)
-      expect(useCanvasStore.getState().mergeState).not.toBeNull();
     });
 
     it('cancelMerge clears state', () => {

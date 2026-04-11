@@ -8,7 +8,7 @@
  * from the active node card to the right context panel.
  */
 
-import type { WebCommit } from '@/lib/api/commitUnified';
+import type { ApiCommit } from '@/lib/api';
 import { ChevronDown, GitCommit, Leaf as LeafIcon, MessageSquare } from 'lucide-react';
 import Link from 'next/link';
 import { type MutableRefObject, type RefObject, useEffect, useState } from 'react';
@@ -113,7 +113,7 @@ export function ConnectionLines({
 
 interface ProvenanceGraphProps {
   activeNodeId: string | null;
-  commit: WebCommit;
+  commit: ApiCommit;
   leaves: Leaf[];
   projectId: string;
   collapsed: boolean;
