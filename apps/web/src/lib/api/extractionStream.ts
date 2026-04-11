@@ -4,7 +4,7 @@
  * Parses named SSE events (event: type\ndata: json).
  */
 
-import { API_V1, ApiError } from './core';
+import { API_V1, ApiError, injectAuthHeaders } from './core';
 
 export interface ExtractionStreamEvent {
   type: 'status' | 'yop' | 'reorganized' | 'gate' | 'advisory' | 'drift' | 'skipped' | 'done' | 'error';
@@ -23,9 +23,10 @@ export async function* extractionStream(
   request: ExtractionStreamRequest,
   options?: { signal?: AbortSignal }
 ): AsyncGenerator<ExtractionStreamEvent, void, unknown> {
+  const headers = await injectAuthHeaders(new Headers({ 'Content-Type': 'application/json' }));
   const res = await fetch(`${API_V1}/extract/trees/stream`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify(request),
     signal: options?.signal,
   });

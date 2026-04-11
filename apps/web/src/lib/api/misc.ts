@@ -2,7 +2,7 @@
  * Miscellaneous API: Share Links, Templates, Webhooks, Providers, Import, SSE Streaming
  */
 
-import { API_V1, ApiError, fetchWithTimeout, handleResponse } from './core';
+import { API_V1, ApiError, fetchWithTimeout, handleResponse, injectAuthHeaders } from './core';
 
 // ============================================================================
 // Share Links
@@ -550,9 +550,10 @@ export async function* streamUrlImport(
   url: string,
   projectId: string
 ): AsyncGenerator<ImportStreamEvent> {
+  const headers = await injectAuthHeaders(new Headers({ 'Content-Type': 'application/json' }));
   const res = await fetch(`${API_V1}/import/url/stream`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify({ url, project_id: projectId }),
   });
 
@@ -572,8 +573,10 @@ export async function* streamDocumentImport(
   formData.append('file', file);
   formData.append('project_id', projectId);
 
+  const docHeaders = await injectAuthHeaders(new Headers());
   const res = await fetch(`${API_V1}/import/document/stream`, {
     method: 'POST',
+    headers: docHeaders,
     body: formData,
   });
 
@@ -590,9 +593,10 @@ export async function* streamPlatformImport(
   platformData: string,
   conversationIds?: string[]
 ): AsyncGenerator<ImportStreamEvent> {
+  const platformHeaders = await injectAuthHeaders(new Headers({ 'Content-Type': 'application/json' }));
   const res = await fetch(`${API_V1}/import/platform/stream`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: platformHeaders,
     body: JSON.stringify({
       project_id: projectId,
       platform_data: platformData,

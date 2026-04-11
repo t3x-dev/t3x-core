@@ -132,6 +132,24 @@ export async function handleResponse<T>(response: Response): Promise<T> {
 // Fetch utilities
 // ============================================================================
 
+/**
+ * Inject Authorization header: static env var → session cookie → none.
+ * Exported so streaming functions (which bypass fetchWithTimeout) can reuse auth.
+ */
+export async function injectAuthHeaders(headers: Headers): Promise<Headers> {
+  if (!headers.has('Authorization')) {
+    if (API_KEY) {
+      headers.set('Authorization', `Bearer ${API_KEY}`);
+    } else {
+      const sessionKey = await getSessionApiKey();
+      if (sessionKey) {
+        headers.set('Authorization', `Bearer ${sessionKey}`);
+      }
+    }
+  }
+  return headers;
+}
+
 // Single fetch attempt with timeout + abort support
 async function fetchOnce(
   url: string,
@@ -146,18 +164,7 @@ async function fetchOnce(
   const abortHandler = () => controller.abort();
   externalSignal?.addEventListener('abort', abortHandler);
 
-  // Inject Authorization header: static env var → session cookie → none
-  const headers = new Headers(options?.headers);
-  if (!headers.has('Authorization')) {
-    if (API_KEY) {
-      headers.set('Authorization', `Bearer ${API_KEY}`);
-    } else {
-      const sessionKey = await getSessionApiKey();
-      if (sessionKey) {
-        headers.set('Authorization', `Bearer ${sessionKey}`);
-      }
-    }
-  }
+  const headers = await injectAuthHeaders(new Headers(options?.headers));
 
   try {
     const response = await fetch(url, {
