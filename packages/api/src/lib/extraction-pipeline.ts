@@ -234,7 +234,10 @@ export async function* runExtractionPipeline(
     const yopsRecords = topicId
       ? await listYOpsLogByTopic(db, conversationId, topicId)
       : await listYOpsLogByConversation(db, conversationId);
-    const currentSnapshot = replayYOpsLog(toYOpsLogEntries(yopsRecords));
+    // When forceExtract, ignore existing log — treat as first extraction
+    const currentSnapshot = forceExtract
+      ? { trees: [], relations: [] }
+      : replayYOpsLog(toYOpsLogEntries(yopsRecords));
     const currentFlat = flattenTrees(currentSnapshot.trees);
 
     // ── 5. Convert turns to ExtractionTurn format ──
