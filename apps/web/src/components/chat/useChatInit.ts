@@ -147,6 +147,9 @@ export function useChatInit({
                 useWorkspaceStore.setState({ persistedOpsCount: allOps.length });
                 // Auto-execute to populate the After panel with the result
                 useWorkspaceStore.getState().execute();
+                // Restore the original draft (with slot_quotes metadata) since
+                // execute() overwrites draftStore with a clean result
+                useDraftStore.getState().setDraft(draft);
               }
             }
           } else if (inheritFromCommitHash) {
