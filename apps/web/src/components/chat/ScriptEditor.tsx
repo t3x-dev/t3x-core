@@ -6,8 +6,9 @@ import { lintGutter } from '@codemirror/lint';
 import { Compartment, EditorState } from '@codemirror/state';
 import { oneDark } from '@codemirror/theme-one-dark';
 import { placeholder as cmPlaceholder, EditorView, keymap, lineNumbers } from '@codemirror/view';
+import { Loader2 } from 'lucide-react';
 import { useTheme } from 'next-themes';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 
 const PLACEHOLDER = `yops:
@@ -51,6 +52,17 @@ export function ScriptEditor() {
   const execError = useWorkspaceStore((s) => s.execError);
   const baseCommitHash = useWorkspaceStore((s) => s.baseCommitHash);
   const setScriptText = useWorkspaceStore((s) => s.setScriptText);
+  const isStreaming = mode === 'streaming';
+
+  // Elapsed timer during extraction
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    if (!isStreaming) { setElapsed(0); return; }
+    const start = Date.now();
+    const interval = setInterval(() => setElapsed(Math.floor((Date.now() - start) / 1000)), 1000);
+    return () => clearInterval(interval);
+  }, [isStreaming]);
+
   const isExternalUpdate = useRef(false);
   const readOnlyCompartment = useRef(new Compartment());
   const themeCompartment = useRef(new Compartment());
@@ -157,7 +169,22 @@ export function ScriptEditor() {
       </div>
 
       {/* Editor */}
-      <div ref={editorRef} className="flex-1 min-h-0 overflow-hidden" />
+      <div className="relative flex-1 min-h-0 overflow-hidden">
+        <div ref={editorRef} className="h-full" />
+
+        {/* Extraction overlay */}
+        {isStreaming && (
+          <div className="absolute inset-0 bg-[var(--editor-bg)]/80 backdrop-blur-[2px] flex flex-col items-center justify-center gap-3 z-10">
+            <Loader2 className="h-6 w-6 animate-spin text-[var(--source)]" />
+            <span className="text-xs font-medium text-[var(--text-secondary)]">
+              Extracting...
+            </span>
+            <span className="text-[10px] font-mono text-[var(--text-tertiary)]">
+              {elapsed}s
+            </span>
+          </div>
+        )}
+      </div>
 
       {/* Error panel */}
       {hasErrors && (
