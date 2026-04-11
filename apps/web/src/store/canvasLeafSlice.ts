@@ -50,10 +50,10 @@ export const createLeafSlice: StateCreator<CanvasState, [], [], LeafPanelSlice> 
 
     const leafLabels: Record<LeafType, string> = {
       tweet: 'Twitter',
-      weibo: '微博',
-      wechat: '朋友圈',
+      weibo: 'Weibo',
+      wechat: 'WeChat Moments',
       email: 'Email',
-      article: '文章',
+      article: 'Article',
       slack: 'Slack',
       deploy_agent: 'Deploy Agent',
     };

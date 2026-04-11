@@ -52,10 +52,10 @@ interface CommitOperationsSidebarProps {
 
 const LEAF_TYPE_OPTIONS: { type: LeafType; label: string }[] = [
   { type: 'tweet', label: 'Twitter' },
-  { type: 'weibo', label: '微博' },
-  { type: 'wechat', label: '朋友圈' },
+  { type: 'weibo', label: 'Weibo' },
+  { type: 'wechat', label: 'WeChat Moments' },
   { type: 'email', label: 'Email' },
-  { type: 'article', label: '文章' },
+  { type: 'article', label: 'Article' },
   { type: 'slack', label: 'Slack' },
   { type: 'deploy_agent', label: 'Deploy Agent' },
 ];

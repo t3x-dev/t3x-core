@@ -10,7 +10,6 @@ import { cn } from '@/lib/utils';
 import { useChatStore } from '@/store/chatStore';
 import { useCommitStore } from '@/store/commitStore';
 import { BranchSwitcher } from './BranchSwitcher';
-import { ChatModelSelector } from './ChatModelSelector';
 
 interface ChatHeaderProps {
   conversationTitle?: string;
@@ -56,7 +55,7 @@ export function ChatHeader({
   return (
     <header
       className={cn(
-        'flex items-center gap-3 border-b border-[var(--stroke-divider)] px-4 py-2.5 shrink-0',
+        'flex h-11 items-center gap-3 border-b border-[var(--stroke-divider)] px-4 shrink-0',
         glass.panelBase
       )}
     >
@@ -79,14 +78,7 @@ export function ChatHeader({
         <h1 className="text-sm font-medium text-[var(--text-primary)] truncate">{displayTitle}</h1>
       </div>
 
-      {/* Center: Model selector + project + branch badge */}
-      {selectedModel && onModelChange && (
-        <ChatModelSelector
-          conversationId={conversationId ?? null}
-          selectedModel={selectedModel}
-          onModelChange={onModelChange}
-        />
-      )}
+      {/* Branch + project badges */}
       {(projectName || activeBranch) && (
         <div className="flex items-center gap-2 shrink-0">
           {projectName && (

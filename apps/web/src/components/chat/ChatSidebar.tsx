@@ -160,7 +160,7 @@ export function ChatSidebar() {
         {/* Logo */}
         <div
           className={cn(
-            'flex h-10 shrink-0 items-center border-b border-[var(--stroke-divider)]',
+            'flex h-11 shrink-0 items-center border-b border-[var(--stroke-divider)]',
             collapsed ? 'justify-center px-2' : 'px-3'
           )}
         >

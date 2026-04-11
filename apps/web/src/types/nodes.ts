@@ -304,10 +304,10 @@ export interface TextSelection {
   id: string;
   startIndex: number; // Inclusive
   endIndex: number; // Inclusive
-  type: 'include' | 'exclude'; // include = 浅绿, exclude = 浅红
+  type: 'include' | 'exclude'; // include = light green, exclude = light red
 }
 
-// A keyword marker within a selection (深绿)
+// A keyword marker within a selection (dark green)
 export interface KeywordMarker {
   id: string;
   tokenIndex: number; // Which token is marked as keyword
@@ -326,8 +326,8 @@ export interface SourceTextBlock {
   id: string;
   originalText: string; // The full original text
   tokens: TextToken[]; // Tokenized text
-  selections: TextSelection[]; // User-selected ranges (浅绿)
-  keywords: KeywordMarker[]; // Marked keywords within selections (深绿)
+  selections: TextSelection[]; // User-selected ranges (light green)
+  keywords: KeywordMarker[]; // Marked keywords within selections (dark green)
 
   // Source node information
   sourceNodeId?: string; // Source node ID (unit ID)

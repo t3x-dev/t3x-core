@@ -8,7 +8,6 @@
 export * from './auth';
 export * from './autopilot';
 export * from './branches';
-export * from './business-rules';
 export * from './chat';
 export * from './commits';
 export * from './conversations';

@@ -354,7 +354,7 @@ export function ConversationTurnRenderer({
 
       {!readOnly && (
         <div className="mt-3 pt-3 border-t border-[var(--color-border)] text-xs text-[var(--color-text-muted)] text-center">
-          <span>左键拖拽选择(浅绿) · 右键拖拽排除(浅红) · 点击切换: 选中 → must → mustn't</span>
+          <span>Left-click drag to select (green) · Right-click drag to exclude (red) · Click to toggle: selected → must → mustn't</span>
         </div>
       )}
     </div>

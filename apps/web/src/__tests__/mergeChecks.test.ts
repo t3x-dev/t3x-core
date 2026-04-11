@@ -380,12 +380,12 @@ describe('getMergeChecks', () => {
 
       const checks = useMergeWorkspaceStore.getState().getMergeChecks();
       const msgCheck = checks.find((c: MergeCheck) => c.id === 'message');
-      // In default mode, tm('merge') returns '\u5408\u5E76'
-      expect(msgCheck?.label).toContain('\u5408\u5E76'); // 合并
+      // In default mode, tm('merge') returns 'Merge'
+      expect(msgCheck?.label).toContain('Merge');
 
       const branchCheck = checks.find((c: MergeCheck) => c.id === 'target_branch');
-      // In default mode, tm('branch') returns '\u53d8\u4f53'
-      expect(branchCheck?.label).toContain('\u53d8\u4f53'); // 变体
+      // In default mode, tm('branch') returns 'Branch', then .toLowerCase() → 'branch'
+      expect(branchCheck?.label).toContain('branch');
     });
 
     it('uses Git terminology in developer mode', () => {

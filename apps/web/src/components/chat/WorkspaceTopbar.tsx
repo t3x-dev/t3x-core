@@ -1,7 +1,7 @@
 'use client';
 
 import type { TreeNode } from '@t3x-dev/core';
-import { ChevronDown, Hexagon, Loader2, PanelRightClose, Play, Search } from 'lucide-react';
+import { ChevronDown, Hexagon, Loader2, PanelRightClose, Play } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 import { computeTreeDiff } from '@/lib/treeDiff';
 import { cn } from '@/lib/utils';
@@ -52,7 +52,7 @@ export function WorkspaceTopbar() {
   };
 
   return (
-    <div className="flex items-center gap-2 px-3 py-1.5 border-b border-[var(--stroke-default)] bg-[var(--panel-alt)]">
+    <div className="flex h-11 items-center gap-2 px-3 border-b border-[var(--stroke-default)] bg-[var(--panel-alt)]">
       <span className="text-xs font-semibold">YOps Workspace</span>
 
       {mode === 'streaming' && (
@@ -166,15 +166,6 @@ export function WorkspaceTopbar() {
           )}
         </div>
 
-        <button
-          type="button"
-          onClick={() => window.dispatchEvent(new CustomEvent('t3x:audit-requested'))}
-          disabled={mode === 'streaming'}
-          className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-semibold rounded border border-[var(--text-tertiary)]/30 text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-        >
-          <Search className="h-2.5 w-2.5" />
-          Audit
-        </button>
         <button
           type="button"
           onClick={execute}

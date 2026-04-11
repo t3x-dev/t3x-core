@@ -406,7 +406,15 @@ function AfterNodeRecursive({ node, depth }: AfterNodeRecursiveProps) {
 
 // ── AfterPanel ──
 
-export function AfterPanel() {
+export function AfterPanel({
+  showBeforeToggle,
+  onToggleBefore,
+  beforeVisible,
+}: {
+  showBeforeToggle?: boolean;
+  onToggleBefore?: () => void;
+  beforeVisible?: boolean;
+}) {
   const base = useWorkspaceStore((s) => s.base);
   const result = useWorkspaceStore((s) => s.result);
   const scriptOps = useWorkspaceStore((s) => s.scriptOps);
@@ -509,9 +517,24 @@ export function AfterPanel() {
     <div className="flex flex-col h-full relative">
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-1.5 border-b border-[var(--stroke-default)] bg-[var(--panel-alt)] shrink-0">
-        <span className="text-[9px] font-bold uppercase tracking-wider text-[var(--text-tertiary)]">
-          After
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-[9px] font-bold uppercase tracking-wider text-[var(--text-tertiary)]">
+            Result
+          </span>
+          {showBeforeToggle && onToggleBefore && (
+            <button
+              type="button"
+              onClick={onToggleBefore}
+              className={`text-[9px] font-medium px-1.5 py-0.5 rounded transition-colors ${
+                beforeVisible
+                  ? 'bg-[var(--source)]/10 text-[var(--source)]'
+                  : 'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]'
+              }`}
+            >
+              {beforeVisible ? 'Hide Previous' : 'Show Previous'}
+            </button>
+          )}
+        </div>
         {diff && (
           <div className="flex items-center gap-1">
             {diff.summary.nodesAdded > 0 && (
