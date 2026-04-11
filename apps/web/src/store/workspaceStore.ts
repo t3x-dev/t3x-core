@@ -148,7 +148,11 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
           const convId = useDraftStore.getState().conversationId;
           if (convId) {
             import('@/lib/api/trees').then(({ createYOpsEntry }) => {
-              createYOpsEntry(convId, newOps, 'manual')?.catch(() => {});
+              import('@/lib/session').then(({ getSessionUser }) => {
+                const user = getSessionUser();
+                const author = user?.name || user?.username || undefined;
+                createYOpsEntry(convId, newOps, 'manual', author ? { author } : undefined)?.catch(() => {});
+              });
             });
           }
           set({ persistedOpsCount: enabledOps.length });
