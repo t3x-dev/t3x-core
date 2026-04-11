@@ -93,6 +93,28 @@ export function ChatSidebar() {
     router.push('/chat');
   }
 
+  async function handleNewChatInProject(projectId: string) {
+    try {
+      // Find the latest commit hash for this project to use as parent
+      const { listCommits } = await import('@/lib/api/commits');
+      const commits = await listCommits(projectId, undefined, 1);
+      const parentHash = commits.length > 0 ? commits[0].hash : undefined;
+
+      // Create new conversation under this project
+      const { createConversation } = await import('@/lib/api/conversations');
+      const conv = await createConversation(projectId, 'New Chat', parentHash);
+
+      setActiveConversation(conv.conversation_id, projectId);
+      router.push(`/chat/${conv.conversation_id}`);
+
+      // Refresh sidebar to show new conversation
+      useChatStore.getState().refreshSidebar();
+    } catch {
+      // Fallback: just navigate to new chat
+      router.push('/chat');
+    }
+  }
+
   function handleCanvasClick(projectId: string) {
     router.push(`/project/${projectId}`);
   }
@@ -162,15 +184,21 @@ export function ChatSidebar() {
             collapsed ? 'justify-center px-2' : 'px-3'
           )}
         >
-          <LogoIcon />
-          {!collapsed && (
-            <span className="ml-3 text-sm font-semibold text-[var(--text-primary)] truncate">
-              T3X
-            </span>
-          )}
+          <button
+            type="button"
+            onClick={() => { setActiveConversation(null, null); router.push('/chat'); }}
+            className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity"
+          >
+            <LogoIcon />
+            {!collapsed && (
+              <span className="text-sm font-semibold text-[var(--text-primary)] truncate">
+                T3X
+              </span>
+            )}
+          </button>
         </div>
 
-        {/* New Chat button */}
+        {/* New Project button */}
         <div className={cn('py-2', collapsed ? 'flex justify-center px-2' : 'px-3')}>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -186,12 +214,12 @@ export function ChatSidebar() {
                 aria-label="New conversation"
               >
                 <Plus className="h-4 w-4 shrink-0" />
-                {!collapsed && <span className="text-sm font-medium">New Chat</span>}
+                {!collapsed && <span className="text-sm font-medium">New Project</span>}
               </Button>
             </TooltipTrigger>
             {collapsed && (
               <TooltipContent side="right" sideOffset={8}>
-                New Chat
+                New Project
               </TooltipContent>
             )}
           </Tooltip>
@@ -236,6 +264,7 @@ export function ChatSidebar() {
                 onConversationClick={(convId) =>
                   handleConversationClick(convId, project.project_id)
                 }
+                onNewChat={(pid) => handleNewChatInProject(pid)}
                 onCanvasClick={() => handleCanvasClick(project.project_id)}
                 onProjectContextMenu={(e) => handleProjectContextMenu(e, project.project_id)}
                 onConversationContextMenu={(e, convId) =>

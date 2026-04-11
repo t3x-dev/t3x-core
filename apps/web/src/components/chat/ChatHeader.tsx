@@ -2,6 +2,7 @@
 
 import { ChevronDown, Hexagon, Loader2, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useCallback, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import { useChatStore } from '@/store/chatStore';
@@ -33,12 +34,14 @@ export function ChatHeader({
   const setCommitBranch = useCommitStore((s) => s.setCommitBranch);
   const initCommitState = useCommitStore((s) => s.initCommitState);
   const panelExpanded = useWorkspaceStore((s) => s.panelExpanded);
+  const isCommitted = useWorkspaceStore((s) => s.isCommitted);
   const isExtracting = useDraftStore((s) => s.isExtracting);
   const extractionPreset = useWorkspaceStore((s) => s.extractionPreset);
   const setExtractionPreset = useWorkspaceStore((s) => s.setExtractionPreset);
 
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const chevronRef = useRef<HTMLButtonElement>(null);
 
   const handleBranchChange = useCallback(
     (branch: string) => {
@@ -53,10 +56,8 @@ export function ChatHeader({
 
   const handleBlur = () => {
     setTimeout(() => {
-      if (!dropdownRef.current?.contains(document.activeElement)) {
-        setDropdownOpen(false);
-      }
-    }, 150);
+      setDropdownOpen(false);
+    }, 200);
   };
 
   const displayTitle = storeTitle || conversationTitle || 'New Chat';
@@ -97,7 +98,7 @@ export function ChatHeader({
       )}
 
       {/* Extract split button — only visible when YOps panel is expanded */}
-      {panelExpanded && <div ref={dropdownRef} className="relative flex shrink-0" onBlur={handleBlur}>
+      {panelExpanded && !isCommitted && <div ref={dropdownRef} className="relative flex shrink-0" onBlur={handleBlur}>
         <button
           type="button"
           onClick={() => window.dispatchEvent(new CustomEvent('t3x:extract-requested'))}
@@ -117,6 +118,7 @@ export function ChatHeader({
           )}
         </button>
         <button
+          ref={chevronRef}
           type="button"
           onClick={() => setDropdownOpen(!dropdownOpen)}
           disabled={isExtracting}
@@ -125,8 +127,15 @@ export function ChatHeader({
           <ChevronDown className="h-2.5 w-2.5" />
         </button>
 
-        {dropdownOpen && (
-          <div className="absolute right-0 top-full mt-1 z-50 w-56 rounded-md border border-[var(--stroke-default)] bg-white dark:bg-zinc-900 shadow-lg">
+        {dropdownOpen && createPortal(
+          <div
+            className="w-56 rounded-md border border-[var(--stroke-default)] bg-white dark:bg-zinc-900 shadow-xl"
+            style={{
+              position: 'fixed',
+              top: chevronRef.current ? chevronRef.current.getBoundingClientRect().bottom + 4 : 0,
+              left: chevronRef.current ? chevronRef.current.getBoundingClientRect().right - 224 : 0,
+              zIndex: 9999,
+            }}>
             {(['concise', 'balanced', 'detailed'] as const).map((preset) => (
               <button
                 key={preset}
@@ -151,7 +160,8 @@ export function ChatHeader({
                 </span>
               </button>
             ))}
-          </div>
+          </div>,
+          document.body
         )}
       </div>}
     </header>

@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { listTopics, updateTopicApi } from '@/lib/api';
 import { extractNodes } from '@/lib/api/trees';
 import { useChatStore } from '@/store/chatStore';
+import { useCommitStore } from '@/store/commitStore';
 import { useDraftStore } from '@/store/draftStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 
@@ -47,9 +48,12 @@ export function useExtraction({ resolvedConversationId }: UseExtractionParams) {
       try {
         const preset = useWorkspaceStore.getState().extractionPreset;
         const style = PRESETS[preset];
+        // Force full extraction if no commit exists yet (not incremental)
+        const hasCommit = !!useCommitStore.getState().lastCommitHash;
         const result = await extractNodes(extractConvId, undefined, undefined, {
           ...(activeTopicId && { topicId: activeTopicId }),
           ...(sourcePinIds?.length && { sourcePinIds }),
+          ...(!hasCommit && { forceExtract: true }),
           style,
         });
 
@@ -120,8 +124,7 @@ export function useExtraction({ resolvedConversationId }: UseExtractionParams) {
             collectMeta(tree, '');
           }
 
-          // Auto-execute to populate result + After panel
-          useWorkspaceStore.getState().execute();
+          // Don't auto-execute — user reviews YOps first, then clicks Run
 
           // Re-apply metadata: use snapshot if available, else restore saved metadata
           if (result.snapshot) {
@@ -194,8 +197,8 @@ export function useExtraction({ resolvedConversationId }: UseExtractionParams) {
           }
           useDraftStore.setState({ isExtracting: false });
         } else {
-          // No delta ops — go directly to executed mode
-          useWorkspaceStore.getState().setMode('executed');
+          // No delta ops
+          useWorkspaceStore.getState().setMode('idle');
           useDraftStore.setState({ isExtracting: false });
         }
 

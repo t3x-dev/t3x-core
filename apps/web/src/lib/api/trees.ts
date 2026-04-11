@@ -118,14 +118,15 @@ export async function getSemanticDraft(
 export async function createYOpsEntry(
   conversationId: string,
   yops: YOp[],
-  source: YOpsSource
+  source: YOpsSource,
+  metadata?: Record<string, unknown>
 ): Promise<YOpsLogEntry> {
   const res = await fetchWithTimeout(
     `${API_V1}/conversations/${encodeURIComponent(conversationId)}/yops`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ source, yops }),
+      body: JSON.stringify({ source, yops, ...(metadata && { metadata }) }),
     }
   );
   return handleResponse<YOpsLogEntry>(res);

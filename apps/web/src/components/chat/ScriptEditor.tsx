@@ -131,9 +131,10 @@ export function ScriptEditor() {
   useEffect(() => {
     const view = viewRef.current;
     if (!view) return;
+    const isCommitted = useWorkspaceStore.getState().isCommitted;
     view.dispatch({
       effects: readOnlyCompartment.current.reconfigure(
-        EditorState.readOnly.of(mode === 'streaming')
+        EditorState.readOnly.of(mode === 'streaming' || isCommitted)
       ),
     });
   }, [mode]);

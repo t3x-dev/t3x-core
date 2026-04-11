@@ -49,6 +49,7 @@ export function ChatWorkspace({
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const { selection, clearSelection } = useTextSelection(chatContainerRef);
   const wsMode = useWorkspaceStore((s) => s.mode);
+  const isCommitted = useWorkspaceStore((s) => s.isCommitted);
   const isReviewPhase = wsMode === 'executed' || wsMode === 'committing';
   const pins = usePinsStore((s) => s.pins);
   const fetchPins = usePinsStore((s) => s.fetchPins);
@@ -353,12 +354,6 @@ export function ChatWorkspace({
                 content={msg.content}
                 turnHash={msg.id}
                 turnIndex={i + 1}
-                onRegenerate={msg.role === 'assistant' ? () => regenerate(i) : undefined}
-                onEdit={
-                  msg.role === 'user'
-                    ? (newContent: string) => editAndResend(i, newContent)
-                    : undefined
-                }
                 citations={
                   msg.role === 'assistant' && i === messages.length - 1 ? citations : undefined
                 }
@@ -463,7 +458,7 @@ export function ChatWorkspace({
             onSend={handleSend}
             onStop={stopGenerating}
             isStreaming={isStreaming}
-            disabled={isLoading || isExtracting}
+            disabled={isLoading || isExtracting || isCommitted}
             placeholder="Reply..."
             conversationId={resolvedConversationId}
             selectedModel={selectedModel}

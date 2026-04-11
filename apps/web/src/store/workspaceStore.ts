@@ -24,6 +24,8 @@ interface WorkspaceState {
   panelExpanded: boolean;
   base: SemanticContent;
   baseCommitHash: string | null;
+  /** True after a successful commit — locks chat, YOps, and result */
+  isCommitted: boolean;
   scriptText: string;
   scriptOps: YOp[];
   parseErrors: ParseError[];
@@ -79,6 +81,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   result: null,
   appliedCount: 0,
   execError: null,
+  isCommitted: false,
   selectedNodePath: null,
   selectedSlotKey: null,
   selectedTurnIndex: null,
@@ -133,9 +136,37 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         mode: 'executed',
       });
     }
-    // Sync result to draftStore so commit pipeline and source maps work
+    // Sync result to draftStore, preserving slot_quotes/source metadata for highlighting
     import('./draftStore').then(({ useDraftStore }) => {
+      // Save metadata from current draft before overwriting
+      type AnyNode = { key: string; slots: Record<string, unknown>; slot_quotes?: Record<string, string>; source?: string; children?: AnyNode[] };
+      const metaMap = new Map<string, { slot_quotes?: Record<string, string>; source?: string }>();
+      const collectMeta = (node: AnyNode, prefix: string) => {
+        const path = prefix ? `${prefix}/${node.key}` : node.key;
+        if (node.slot_quotes || node.source) {
+          metaMap.set(path, { slot_quotes: node.slot_quotes, source: node.source });
+        }
+        for (const child of node.children ?? []) collectMeta(child, path);
+      };
+      for (const tree of useDraftStore.getState().draft.trees as AnyNode[]) collectMeta(tree, '');
+
       useDraftStore.getState().setDraft(content);
+
+      // Re-apply metadata to the new draft trees
+      if (metaMap.size > 0) {
+        const applyMeta = (node: AnyNode, prefix: string) => {
+          const path = prefix ? `${prefix}/${node.key}` : node.key;
+          const meta = metaMap.get(path);
+          if (meta) {
+            if (meta.slot_quotes && !node.slot_quotes) node.slot_quotes = meta.slot_quotes;
+            if (meta.source && !node.source) node.source = meta.source;
+          }
+          for (const child of node.children ?? []) applyMeta(child, path);
+        };
+        const draft = useDraftStore.getState().draft;
+        for (const tree of draft.trees as AnyNode[]) applyMeta(tree, '');
+        useDraftStore.getState().setDraft({ ...draft });
+      }
 
       // Persist new ops to server (only ops added after last save)
       if (result.ok) {
@@ -145,7 +176,11 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
           const convId = useDraftStore.getState().conversationId;
           if (convId) {
             import('@/lib/api/trees').then(({ createYOpsEntry }) => {
-              createYOpsEntry(convId, newOps, 'manual')?.catch(() => {});
+              import('@/lib/session').then(({ getSessionUser }) => {
+                const user = getSessionUser();
+                const author = user?.name || user?.username || undefined;
+                createYOpsEntry(convId, newOps, 'manual', author ? { author } : undefined)?.catch(() => {});
+              });
             });
           }
           set({ persistedOpsCount: enabledOps.length });
@@ -248,6 +283,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       result: null,
       appliedCount: 0,
       execError: null,
+      isCommitted: false,
       selectedNodePath: null,
       selectedSlotKey: null,
       selectedTurnIndex: null,
