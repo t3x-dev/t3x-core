@@ -449,6 +449,8 @@ export function AfterPanel({
 
   const diff = useMemo(() => {
     if (!result || !trees) return null;
+    // No diff when base is empty (first extraction) — everything is "new" by definition
+    if (base.trees.length === 0) return null;
     return computeTreeDiff(base.trees as TreeNode[], trees);
   }, [base.trees, result, trees]);
 
