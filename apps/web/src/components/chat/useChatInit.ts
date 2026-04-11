@@ -129,8 +129,6 @@ export function useChatInit({
             const commitHash = useCommitStore.getState().lastCommitHash;
             if (commitHash) {
               useWorkspaceStore.getState().snapshotBase(draft, commitHash);
-              // If conversation already has a commit, mark as locked
-              useWorkspaceStore.setState({ isCommitted: true });
             }
             if (!useWorkspaceStore.getState().panelExpanded) {
               useWorkspaceStore.getState().setPanelExpanded(true);
