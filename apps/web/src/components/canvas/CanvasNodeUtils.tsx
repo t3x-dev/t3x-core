@@ -1,3 +1,5 @@
+'use client';
+
 import { useStore } from '@xyflow/react';
 import {
   FilePlus,

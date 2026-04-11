@@ -25,6 +25,16 @@ vi.mock('@/lib/api', () => ({
   listBranches: vi.fn(),
   getProject: vi.fn(),
   getTurn: vi.fn(),
+  prepareMergeApi: vi.fn().mockResolvedValue({
+    autoKept: [],
+    conflicts: [],
+    onlyInSource: [],
+    onlyInTarget: [],
+    relationsOnlyInSource: [],
+    relationsOnlyInTarget: [],
+    relationsInBoth: [],
+  }),
+  createMergeDraft: vi.fn().mockResolvedValue({ draftId: 'draft_mock123' }),
   createLeaf: vi.fn().mockResolvedValue({
     id: 'leaf_mock123',
     commit_hash: 'sha256:abc123',
@@ -535,28 +545,6 @@ describe('Canvas Store - Unit Node Model', () => {
     });
 
     it('startMerge sets mergeState', async () => {
-      // Mock fetch
-      global.fetch = vi.fn(() =>
-        Promise.resolve({
-          ok: true,
-          status: 200,
-          statusText: 'OK',
-          json: () =>
-            Promise.resolve({
-              success: true,
-              data: {
-                autoKept: [],
-                conflicts: [],
-                onlyInSource: [],
-                onlyInTarget: [],
-                relationsOnlyInSource: [],
-                relationsOnlyInTarget: [],
-                relationsInBoth: [],
-              },
-            }),
-        })
-      ) as unknown as typeof fetch;
-
       await useCanvasStore.getState().startMerge('sha256:a', 'sha256:b');
 
       expect(useCanvasStore.getState().mergeState).not.toBeNull();

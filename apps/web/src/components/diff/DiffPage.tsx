@@ -17,8 +17,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { relativeTime, shortHash } from '@/components/commit/CommitDetailHelpers';
 import { Breadcrumb } from '@/components/shared/Breadcrumb';
 import { TreeGraphView } from '@/components/tree-graph';
-import { type ApiCommit, type CommitMeta, type DiffResponse, getApiCommit, getTreeDiff } from '@/lib/api';
-import { API_V1, fetchWithTimeout, handleResponse } from '@/lib/api/core';
+import { type ApiCommit, type CommitMeta, type DiffResponse, createMergeDraft, getApiCommit, getTreeDiff } from '@/lib/api';
 import { PAGE_ANIMATION_STYLES } from '@/lib/pageAnimations';
 import { useProjectStore } from '@/store/projectStore';
 import { TreeDiffIndex } from './DiffIndex';
@@ -255,18 +254,13 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
     if (!diffResponse) return;
     setMergeLoading(true);
     try {
-      const res = await fetchWithTimeout(`${API_V1}/merge/drafts`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          project_id: projectId,
-          source_hash: baseHash,
-          target_hash: targetHash,
-          source_branch: diffResponse.base.branch || 'source',
-          target_branch: diffResponse.target.branch || 'main',
-        }),
+      const data = await createMergeDraft({
+        project_id: projectId,
+        source_hash: baseHash,
+        target_hash: targetHash,
+        source_branch: diffResponse.base.branch || 'source',
+        target_branch: diffResponse.target.branch || 'main',
       });
-      const data = await handleResponse<{ draftId: string }>(res);
       router.push(`/project/${projectId}/merge/${data.draftId}`);
     } catch (err) {
       setMergeError(err instanceof Error ? err.message : 'Failed to create merge draft');

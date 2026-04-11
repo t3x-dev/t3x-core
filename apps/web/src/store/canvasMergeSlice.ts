@@ -2,7 +2,7 @@ import type { MergeSummaryData } from '@t3x-dev/core';
 import type { Edge, Node } from '@xyflow/react';
 import type { StateCreator } from 'zustand';
 import { getTerminology } from '@/hooks/useTerminology';
-import { API_V1, fetchWithTimeout, handleResponse } from '@/lib/api/core';
+import { executeMergeApi, prepareMergeApi } from '@/lib/api';
 import { isDeveloperMode } from '@/store/shared';
 import type { MergeResult } from '../types/merge';
 import type { CanvasNodeData } from '../types/nodes';
@@ -26,13 +26,7 @@ export const createMergeSlice: StateCreator<CanvasState, [], [], MergeSlice> = (
     set({ mergeLoading: true, mergeError: null });
 
     try {
-      const response = await fetchWithTimeout(`${API_V1}/merge/prepare`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ source_hash: sourceHash, target_hash: targetHash }),
-      });
-
-      const data = await handleResponse<MergeResult>(response);
+      const data = await prepareMergeApi(sourceHash, targetHash);
 
       set({
         mergeState: {
@@ -79,19 +73,13 @@ export const createMergeSlice: StateCreator<CanvasState, [], [], MergeSlice> = (
       // Determine target branch for the merge commit (default to 'main')
       const targetBranch = mergeState.targetBranch || 'main';
 
-      const response = await fetchWithTimeout(`${API_V1}/merge/execute`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          source_hash: mergeState.sourceHash,
-          target_hash: mergeState.targetHash,
-          prepared: mergeState.prepared,
-          message,
-          branch: targetBranch, // Merge commit goes to target branch
-        }),
-      });
-
-      const mergeCommit = (await handleResponse(response)) as {
+      const mergeCommit = (await executeMergeApi({
+        source_hash: mergeState.sourceHash,
+        target_hash: mergeState.targetHash,
+        prepared: mergeState.prepared,
+        message,
+        branch: targetBranch,
+      })) as {
         hash: string;
         parents: string[];
         author: { type?: 'human' | 'agent'; name?: string };
