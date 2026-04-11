@@ -16,13 +16,6 @@ export interface DriftInfo {
   old_topic?: string;
 }
 
-export interface GateIssue {
-  severity: 'error' | 'warning' | 'info';
-  description: string;
-  dimension?: string;
-  suggestion?: string;
-}
-
 type WorkspaceMode = 'idle' | 'streaming' | 'executed' | 'committing';
 type SelectionSource = 'chat' | 'script' | 'after' | null;
 
@@ -48,17 +41,6 @@ interface WorkspaceState {
   driftDetected: boolean;
   driftInfo: DriftInfo | null;
   driftChoices: string[];
-  // Gate issues (replaces phaseStore gateIssues)
-  gateIssues: Record<string, GateIssue[]>;
-  // Advisory questions (replaces phaseStore advisoryQuestions)
-  advisoryQuestions: Array<{
-    id: string;
-    type: string;
-    treeId: string;
-    slotKey?: string;
-    question: string;
-    currentValue?: unknown;
-  }>;
   // Extraction style preset for the next extraction
   extractionPreset: 'concise' | 'balanced' | 'detailed';
   // Source pin IDs used in the last extraction (for commit source_refs)
@@ -80,17 +62,6 @@ interface WorkspaceState {
   setExtractionPreset(preset: 'concise' | 'balanced' | 'detailed'): void;
   setDriftDetected(info: DriftInfo, choices: string[]): void;
   clearDrift(): void;
-  setGateIssues(issues: Record<string, GateIssue[]>): void;
-  setAdvisoryQuestions(
-    questions: Array<{
-      id: string;
-      type: string;
-      treeId: string;
-      slotKey?: string;
-      question: string;
-      currentValue?: unknown;
-    }>
-  ): void;
   reset(): void;
 }
 
@@ -120,9 +91,6 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   driftDetected: false,
   driftInfo: null,
   driftChoices: [],
-  gateIssues: {},
-  advisoryQuestions: [],
-
   snapshotBase(content, commitHash) {
     set({
       base: structuredClone(content),
@@ -182,6 +150,33 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
           }
           set({ persistedOpsCount: enabledOps.length });
         }
+
+        // Auto-rename conversation and project from root tree key
+        if (content.trees.length > 0) {
+          const rootKey = (content.trees[0] as { key: string }).key;
+          if (rootKey) {
+            const displayName = rootKey
+              .replace(/_/g, ' ')
+              .replace(/\b\w/g, (c: string) => c.toUpperCase());
+
+            import('@/store/chatStore').then(({ useChatStore }) => {
+              useChatStore.getState().setConversationTitle(displayName);
+              const convId = useDraftStore.getState().conversationId;
+              if (convId) {
+                import('@/lib/api/conversations').then(({ updateConversation }) => {
+                  updateConversation(convId, { title: displayName }).catch(() => {});
+                });
+              }
+              const projectId = useChatStore.getState().activeProjectId;
+              if (projectId) {
+                import('@/lib/api/projects').then(({ updateProject }) => {
+                  updateProject(projectId, { name: displayName }).catch(() => {});
+                });
+                useChatStore.getState().refreshSidebar();
+              }
+            });
+          }
+        }
       }
     });
   },
@@ -240,14 +235,6 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     set({ driftDetected: false, driftInfo: null, driftChoices: [] });
   },
 
-  setGateIssues(issues) {
-    set({ gateIssues: issues });
-  },
-
-  setAdvisoryQuestions(questions) {
-    set({ advisoryQuestions: questions });
-  },
-
   reset() {
     set({
       mode: 'idle',
@@ -269,8 +256,6 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       driftDetected: false,
       driftInfo: null,
       driftChoices: [],
-      gateIssues: {},
-      advisoryQuestions: [],
       lastExtractionPinIds: [],
       quoteValidation: null,
     });

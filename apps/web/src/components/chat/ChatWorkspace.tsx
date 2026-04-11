@@ -13,7 +13,7 @@ import { buildSourceMap } from '@/lib/sourceMap';
 import { cn } from '@/lib/utils';
 import { useDraftStore } from '@/store/draftStore';
 import { usePinsStore } from '@/store/pinsStore';
-import { type GateIssue, useWorkspaceStore } from '@/store/workspaceStore';
+import { useWorkspaceStore } from '@/store/workspaceStore';
 import { ChatAddForm } from './ChatAddForm';
 import { ChatHeader } from './ChatHeader';
 import type { AttachedImage } from './ChatInput';
@@ -253,106 +253,6 @@ export function ChatWorkspace({
     if (isExtracting) setShowSourcePanel(false);
   }, [isExtracting]);
 
-  // Handle Audit button — run semantic gate check
-  useEffect(() => {
-    const handler = async () => {
-      const draftData = useDraftStore.getState().draft;
-      if (draftData.trees.length === 0 || messages.length === 0) {
-        toast.info('Nothing to audit — extract first');
-        return;
-      }
-      toast.loading('Running audit...', { id: 'audit' });
-      try {
-        const { API_V1, fetchWithTimeout, handleResponse } = await import('@/lib/api/core');
-        // Flatten TreeNode[] to FlatNode[] inline (safe against missing children)
-        type AnyNode = {
-          key: string;
-          slots: Record<string, unknown>;
-          source?: string;
-          children?: AnyNode[];
-        };
-        const flatFrames: Array<{
-          id: string;
-          type: string;
-          slots: Record<string, unknown>;
-          source?: string;
-        }> = [];
-        const flatten = (node: AnyNode, parentPath: string) => {
-          const path = parentPath ? `${parentPath}/${node.key}` : node.key;
-          flatFrames.push({
-            id: path,
-            type: node.key,
-            slots: { ...node.slots },
-            ...(node.source ? { source: node.source } : {}),
-          });
-          for (const child of node.children ?? []) flatten(child, path);
-        };
-        for (const tree of draftData.trees as AnyNode[]) flatten(tree, '');
-        const res = await fetchWithTimeout(
-          `${API_V1}/gate/check`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              content: { trees: flatFrames, relations: draftData.relations },
-              turns: messages.map((m) => ({ role: m.role, content: m.content })),
-              gates: ['semantic'],
-            }),
-          },
-          60_000
-        );
-        const result = await handleResponse<{
-          semantic?: {
-            score?: number;
-            dimensions?: Record<string, { score: number; details: string }>;
-            issues?: Array<{ dimension?: string; severity: string; description: string; suggestion?: string }>;
-          };
-        }>(res);
-
-        // Build issues from dimensions details + explicit issues
-        const issuesByDim: Record<string, GateIssue[]> = {};
-
-        // Convert dimension details into displayable issues
-        const dims = result.semantic?.dimensions ?? {};
-        for (const [dimName, dim] of Object.entries(dims)) {
-          if (dim.score < 1 && dim.details) {
-            if (!issuesByDim[dimName]) issuesByDim[dimName] = [];
-            issuesByDim[dimName].push({
-              severity: dim.score < 0.5 ? 'error' : 'warning',
-              description: `[${Math.round(dim.score * 100)}%] ${dim.details}`,
-              dimension: dimName,
-            });
-          }
-        }
-
-        // Also include explicit issues if present
-        for (const issue of result.semantic?.issues ?? []) {
-          const key = issue.dimension || '_general';
-          if (!issuesByDim[key]) issuesByDim[key] = [];
-          issuesByDim[key].push({
-            severity: (issue.severity as 'error' | 'warning' | 'info') || 'warning',
-            description: issue.description,
-            dimension: issue.dimension,
-            suggestion: issue.suggestion,
-          });
-        }
-
-        useWorkspaceStore.getState().setGateIssues(issuesByDim);
-        const completenessScore = dims.completeness?.score;
-        const overallScore = result.semantic?.score;
-        toast.success(
-          `Audit complete — ${completenessScore != null ? `completeness: ${Math.round(completenessScore * 100)}%` : `score: ${Math.round((overallScore ?? 0) * 100)}%`}`,
-          { id: 'audit' }
-        );
-      } catch (err) {
-        toast.error(`Audit failed: ${err instanceof Error ? err.message : 'Unknown error'}`, {
-          id: 'audit',
-        });
-      }
-    };
-    window.addEventListener('t3x:audit-requested', handler);
-    return () => window.removeEventListener('t3x:audit-requested', handler);
-  }, [messages]);
 
   // Send firstMessage on mount (once only)
   useEffect(() => {
@@ -564,7 +464,10 @@ export function ChatWorkspace({
             onStop={stopGenerating}
             isStreaming={isStreaming}
             disabled={isLoading || isExtracting}
-            placeholder="Message... (Enter to send, Shift+Enter for new line)"
+            placeholder="Reply..."
+            conversationId={resolvedConversationId}
+            selectedModel={selectedModel}
+            onModelChange={handleModelChange}
           />
         </div>
       </div>

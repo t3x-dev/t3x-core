@@ -1,9 +1,11 @@
 'use client';
 
-import { Paperclip, Send, Square } from 'lucide-react';
+import { Brain, Globe, Paperclip, Send, Square } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { useChatSessionStore } from '@/store/chatSessionStore';
+import { ChatModelSelector } from './ChatModelSelector';
 
 export interface AttachedImage {
   id: string;
@@ -71,6 +73,9 @@ interface ChatInputProps {
   isStreaming?: boolean;
   disabled?: boolean;
   placeholder?: string;
+  conversationId?: string | null;
+  selectedModel?: string;
+  onModelChange?: (provider: string, model: string) => void;
 }
 
 export function ChatInput({
@@ -78,13 +83,21 @@ export function ChatInput({
   onStop,
   isStreaming = false,
   disabled = false,
-  placeholder = 'Message...',
+  placeholder = 'Reply...',
+  conversationId,
+  selectedModel,
+  onModelChange,
 }: ChatInputProps) {
   const [value, setValue] = useState('');
   const [attachedImages, setAttachedImages] = useState<AttachedImage[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const webSearchEnabled = useChatSessionStore((s) => s.webSearchEnabled);
+  const thinkingEnabled = useChatSessionStore((s) => s.thinkingEnabled);
+  const toggleWebSearch = useChatSessionStore((s) => s.toggleWebSearch);
+  const toggleThinking = useChatSessionStore((s) => s.toggleThinking);
 
   // Auto-resize textarea as content grows
   const autoResize = useCallback(() => {
@@ -163,7 +176,7 @@ export function ChatInput({
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
       className={cn(
-        'rounded-xl border bg-[var(--surface-panel)]',
+        'rounded-2xl border bg-[var(--surface-panel)]',
         'transition-colors duration-[var(--motion-base)]',
         'focus-within:border-[var(--accent-commit)] focus-within:ring-1 focus-within:ring-[var(--accent-commit)]/30',
         isDragging
@@ -205,26 +218,8 @@ export function ChatInput({
         </div>
       )}
 
-      {/* Toolbar row: buttons + textarea + send */}
-      <div className="flex items-end gap-2 px-3 py-2">
-        {/* Paperclip button */}
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          onClick={handleFileClick}
-          disabled={disabled}
-          className={cn(
-            'h-8 w-8 shrink-0 rounded-lg text-[var(--text-tertiary)]',
-            'hover:text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]',
-            'transition-colors duration-[var(--motion-base)]'
-          )}
-          aria-label="Attach file"
-        >
-          <Paperclip className="h-4 w-4" />
-        </Button>
-
-        {/* Textarea */}
+      {/* Textarea */}
+      <div className="px-4 pt-3 pb-1">
         <textarea
           ref={textareaRef}
           value={value}
@@ -234,46 +229,101 @@ export function ChatInput({
           disabled={disabled}
           rows={1}
           className={cn(
-            'flex-1 resize-none bg-transparent text-sm leading-relaxed text-[var(--text-primary)]',
+            'w-full resize-none bg-transparent text-sm leading-relaxed text-[var(--text-primary)]',
             'placeholder:text-[var(--text-tertiary)]',
             'focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed',
-            'py-1 min-h-[32px] max-h-[200px] overflow-y-auto'
+            'min-h-[24px] max-h-[200px] overflow-y-auto'
           )}
           style={{ height: 'auto' }}
         />
+      </div>
 
-        {/* Send / Stop button */}
-        {isStreaming ? (
+      {/* Bottom toolbar: left tools + right model/send */}
+      <div className="flex items-center justify-between px-3 pb-2 pt-1">
+        {/* Left: attach + search + thinking */}
+        <div className="flex items-center gap-0.5">
           <Button
             type="button"
+            variant="ghost"
             size="icon"
-            onClick={onStop}
-            className={cn(
-              'h-8 w-8 shrink-0 rounded-lg',
-              'bg-[var(--status-error)]/10 text-[var(--status-error)]',
-              'hover:bg-[var(--status-error)]/20 transition-colors duration-[var(--motion-base)]'
-            )}
-            aria-label="Stop generation"
+            onClick={handleFileClick}
+            disabled={disabled}
+            className="h-8 w-8 rounded-lg text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]"
+            aria-label="Attach file"
           >
-            <Square className="h-4 w-4" />
+            <Paperclip className="h-4 w-4" />
           </Button>
-        ) : (
+
           <Button
             type="button"
+            variant="ghost"
             size="icon"
-            onClick={handleSend}
-            disabled={isEmpty || disabled}
+            onClick={toggleWebSearch}
+            disabled={disabled}
             className={cn(
-              'h-8 w-8 shrink-0 rounded-lg',
-              'bg-[var(--accent-commit)] text-white',
-              'hover:opacity-90 transition-opacity duration-[var(--motion-base)]',
-              'disabled:opacity-30 disabled:cursor-not-allowed'
+              'h-8 w-8 rounded-lg transition-colors',
+              webSearchEnabled
+                ? 'text-[var(--accent-commit)] bg-[var(--accent-commit)]/10 hover:bg-[var(--accent-commit)]/20'
+                : 'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]'
             )}
-            aria-label="Send message"
+            aria-label={webSearchEnabled ? 'Disable web search' : 'Enable web search'}
+            title={webSearchEnabled ? 'Web search on' : 'Web search'}
           >
-            <Send className="h-4 w-4" />
+            <Globe className="h-4 w-4" />
           </Button>
-        )}
+
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={toggleThinking}
+            disabled={disabled}
+            className={cn(
+              'h-8 w-8 rounded-lg transition-colors',
+              thinkingEnabled
+                ? 'text-[var(--source)] bg-[var(--source)]/10 hover:bg-[var(--source)]/20'
+                : 'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]'
+            )}
+            aria-label={thinkingEnabled ? 'Disable extended thinking' : 'Enable extended thinking'}
+            title={thinkingEnabled ? 'Extended thinking on' : 'Extended thinking'}
+          >
+            <Brain className="h-4 w-4" />
+          </Button>
+        </div>
+
+        {/* Right: model selector + send */}
+        <div className="flex items-center gap-2">
+          {selectedModel && onModelChange && (
+            <ChatModelSelector
+              conversationId={conversationId ?? null}
+              selectedModel={selectedModel}
+              onModelChange={onModelChange}
+            />
+          )}
+
+          {isStreaming ? (
+            <Button
+              type="button"
+              size="icon"
+              onClick={onStop}
+              className="h-8 w-8 rounded-lg bg-[var(--status-error)]/10 text-[var(--status-error)] hover:bg-[var(--status-error)]/20"
+              aria-label="Stop generation"
+            >
+              <Square className="h-4 w-4" />
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              size="icon"
+              onClick={handleSend}
+              disabled={isEmpty || disabled}
+              className="h-8 w-8 rounded-lg bg-[var(--accent-commit)] text-white hover:opacity-90 disabled:opacity-30 disabled:cursor-not-allowed"
+              aria-label="Send message"
+            >
+              <Send className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   );

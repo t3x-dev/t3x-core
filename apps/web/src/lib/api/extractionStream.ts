@@ -7,7 +7,7 @@
 import { API_V1, ApiError, injectAuthHeaders } from './core';
 
 export interface ExtractionStreamEvent {
-  type: 'status' | 'yop' | 'reorganized' | 'gate' | 'advisory' | 'drift' | 'skipped' | 'done' | 'error';
+  type: 'status' | 'yop' | 'reorganized' | 'drift' | 'skipped' | 'done' | 'error';
   data: Record<string, unknown>;
 }
 

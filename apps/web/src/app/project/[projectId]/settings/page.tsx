@@ -22,7 +22,6 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { AutopilotSettings } from '@/components/autopilot/AutopilotSettings';
-import { BusinessRulesSection } from '@/components/settings/BusinessRulesSection';
 import { ModelSelector } from '@/components/shared/ModelSelector';
 import {
   getProjectProviderConfig,
@@ -429,10 +428,6 @@ export default function ProjectSettingsPage() {
         <AutopilotSettings projectId={projectId} />
       </div>
 
-      {/* Business Rules */}
-      <div className="mt-12 pt-8 border-t border-[var(--stroke-divider)]">
-        <BusinessRulesSection projectId={projectId} />
-      </div>
     </div>
   );
 }

@@ -3,6 +3,7 @@
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { Conversation, Project } from '@/lib/api/types';
 import { cn } from '@/lib/utils';
+import { useChatStore } from '@/store/chatStore';
 
 export interface ProjectFolderProps {
   project: Project;
@@ -59,15 +60,15 @@ export function ProjectFolder({
     }
     // Auto-detect emoji from project name keywords
     const name = project.name.toLowerCase();
-    if (name.includes('beijing') || name.includes('北京')) return '🏛️';
-    if (name.includes('hangzhou') || name.includes('杭州')) return '🚗';
-    if (name.includes('japan') || name.includes('日本')) return '🗾';
-    if (name.includes('trip') || name.includes('travel') || name.includes('旅')) return '✈️';
-    if (name.includes('meeting') || name.includes('会议')) return '📋';
-    if (name.includes('product') || name.includes('strategy') || name.includes('产品')) return '📊';
-    if (name.includes('writing') || name.includes('write') || name.includes('写')) return '✏️';
-    if (name.includes('research') || name.includes('研究')) return '🔬';
-    if (name.includes('idea') || name.includes('explore') || name.includes('想法')) return '💡';
+    if (name.includes('beijing')) return '🏛️';
+    if (name.includes('hangzhou')) return '🚗';
+    if (name.includes('japan')) return '🗾';
+    if (name.includes('trip') || name.includes('travel')) return '✈️';
+    if (name.includes('meeting')) return '📋';
+    if (name.includes('product') || name.includes('strategy')) return '📊';
+    if (name.includes('writing') || name.includes('write')) return '✏️';
+    if (name.includes('research')) return '🔬';
+    if (name.includes('idea') || name.includes('explore')) return '💡';
     return '📁';
   })();
   const isEmoji = /\p{Emoji_Presentation}/u.test(projectIcon);
@@ -75,7 +76,12 @@ export function ProjectFolder({
   const folderButton = (
     <button
       type="button"
-      onClick={onToggleExpand}
+      onClick={() => {
+        if (collapsed) {
+          useChatStore.setState({ sidebarCollapsed: false });
+        }
+        onToggleExpand();
+      }}
       onContextMenu={onProjectContextMenu}
       className={cn(
         'flex items-center gap-2 rounded-xl transition-all duration-[var(--motion-base)] ease-[var(--ease-out-soft)]',

@@ -17,7 +17,6 @@ import { selectCanExecuteMerge, selectUnresolvedCount, useCanvasStore } from '@/
 
 /**
  * Main merge review panel integrating all merge components
- * 主合并审查面板，整合所有合并组件
  *
  * Features:
  * - Progress summary showing counts and unresolved conflicts

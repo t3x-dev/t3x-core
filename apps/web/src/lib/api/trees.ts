@@ -1,5 +1,5 @@
 /**
- * Tree Semantic Engine API — extraction, yops log, gate check
+ * Tree Semantic Engine API — extraction, yops log
  */
 
 import type { SemanticContent, YOp, YOpsLogEntry, YOpsSource } from '@t3x-dev/core';
@@ -9,15 +9,6 @@ import { API_V1, fetchWithTimeout, handleResponse } from './core';
 
 export type { YOpsSource, YOpsLogEntry };
 
-export interface AdvisoryQuestion {
-  id: string;
-  type: 'vagueness' | 'structural';
-  treeId: string;
-  slotKey?: string;
-  question: string;
-  currentValue?: unknown;
-}
-
 export interface TreeExtractResult {
   delta?: unknown;
   snapshot?: SemanticContent;
@@ -25,8 +16,6 @@ export interface TreeExtractResult {
   status: 'completed' | 'drift_detected' | 'skipped';
   drift?: { relation?: string; new_topic?: string; old_topic?: string };
   choices?: string[];
-  gate_result?: GateCheckResult;
-  advisory_questions?: AdvisoryQuestion[];
   reason?: string;
 }
 
@@ -38,43 +27,6 @@ export interface TreeAnswerResult {
   new_project_id?: string;
   new_project_url?: string;
   errors?: string[];
-}
-
-export interface GateCheckResult {
-  passed: boolean;
-  structure: {
-    passed: boolean;
-    checks: {
-      schema_valid: boolean;
-      refs_intact: boolean;
-      relations_valid: boolean;
-      no_cycles: boolean;
-      no_duplicate_ids: boolean;
-      no_self_relations: boolean;
-    };
-    warnings?: Array<{ type: string; message: string; location: string }>;
-  };
-  semantic?: {
-    passed: boolean;
-    score: number;
-    dimensions: Record<string, { score: number; details: string }>;
-    issues: Array<{
-      severity: 'error' | 'warning' | 'info';
-      tree_id?: string;
-      dimension: string;
-      description: string;
-      suggestion?: string;
-    }>;
-  };
-  business?: {
-    passed: boolean;
-    results: Array<{
-      rule_id: string;
-      passed: boolean;
-      message?: string;
-      severity: 'error' | 'warning';
-    }>;
-  };
 }
 
 // ── Tree Extraction ──
@@ -212,32 +164,3 @@ export async function compressNodes(conversationId: string): Promise<CompressRes
   return handleResponse<CompressResult>(res);
 }
 
-// ── Gate Check ──
-
-export async function gateCheck(
-  content: SemanticContent,
-  opts?: {
-    conversation_id?: string;
-    turns?: Array<{ role: string; content: string }>;
-    business_rules?: Array<{
-      id: string;
-      type: 'rule' | 'llm';
-      rule?: string;
-      prompt?: string;
-      message?: string;
-      severity: 'error' | 'warning';
-    }>;
-    gates?: Array<'structure' | 'semantic' | 'business'>;
-  }
-): Promise<GateCheckResult> {
-  const res = await fetchWithTimeout(
-    `${API_V1}/gate/check`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content, ...opts }),
-    },
-    60_000
-  );
-  return handleResponse<GateCheckResult>(res);
-}

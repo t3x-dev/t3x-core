@@ -5,7 +5,6 @@ import { listTopics, updateTopicApi } from '@/lib/api';
 import { extractNodes } from '@/lib/api/trees';
 import { useChatStore } from '@/store/chatStore';
 import { useDraftStore } from '@/store/draftStore';
-import type { GateIssue } from '@/store/workspaceStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 
 interface UseExtractionParams {
@@ -26,8 +25,6 @@ export function useExtraction({ resolvedConversationId }: UseExtractionParams) {
   const startExtraction = useDraftStore((s) => s.startExtraction);
   const setDraft = useDraftStore((s) => s.setDraft);
   const setDriftDetected = useWorkspaceStore((s) => s.setDriftDetected);
-  const setAdvisoryQuestions = useWorkspaceStore((s) => s.setAdvisoryQuestions);
-  const setGateIssues = useWorkspaceStore((s) => s.setGateIssues);
 
   // User-initiated extraction callback
   const handleExtract = useCallback(
@@ -202,52 +199,6 @@ export function useExtraction({ resolvedConversationId }: UseExtractionParams) {
           useDraftStore.setState({ isExtracting: false });
         }
 
-        if (result.advisory_questions) {
-          setAdvisoryQuestions(result.advisory_questions);
-        }
-
-        if (result.gate_result) {
-          const gate = result.gate_result as {
-            semantic?: {
-              dimensions?: Record<string, { score: number; details: string }>;
-              issues?: Array<{
-                dimension?: string;
-                severity: 'error' | 'warning' | 'info';
-                description: string;
-                suggestion?: string;
-              }>;
-            };
-          };
-          const issuesByDim: Record<string, GateIssue[]> = {};
-
-          // Convert dimension details into displayable issues
-          const dims = gate.semantic?.dimensions ?? {};
-          for (const [dimName, dim] of Object.entries(dims)) {
-            if (dim.score < 1 && dim.details) {
-              if (!issuesByDim[dimName]) issuesByDim[dimName] = [];
-              issuesByDim[dimName].push({
-                severity: dim.score < 0.5 ? 'error' : 'warning',
-                description: `[${Math.round(dim.score * 100)}%] ${dim.details}`,
-                dimension: dimName,
-              });
-            }
-          }
-
-          // Also include explicit issues
-          for (const issue of gate.semantic?.issues ?? []) {
-            const key = issue.dimension || '_general';
-            if (!issuesByDim[key]) issuesByDim[key] = [];
-            issuesByDim[key].push({
-              severity: issue.severity,
-              description: issue.description,
-              dimension: issue.dimension,
-              suggestion: issue.suggestion,
-            });
-          }
-
-          setGateIssues(issuesByDim);
-        }
-
         // Reload topics after extraction (new topic may have been auto-created)
         listTopics(extractConvId)
           .then((topicsList) => {
@@ -266,6 +217,7 @@ export function useExtraction({ resolvedConversationId }: UseExtractionParams) {
             }
           })
           .catch(() => {});
+
       } catch (_err) {
         useWorkspaceStore.getState().setMode('idle');
         useDraftStore.setState({ isExtracting: false });
@@ -278,8 +230,6 @@ export function useExtraction({ resolvedConversationId }: UseExtractionParams) {
       startExtraction,
       setDraft,
       setDriftDetected,
-      setAdvisoryQuestions,
-      setGateIssues,
     ]
   );
 

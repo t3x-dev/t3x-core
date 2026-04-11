@@ -1,7 +1,6 @@
 'use client';
 
-import { Plus, Settings, Trash2 } from 'lucide-react';
-import Link from 'next/link';
+import { Plus, Trash2 } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { UserMenu } from '@/components/layout/UserMenu';
@@ -83,7 +82,6 @@ export function ChatSidebar() {
     }
   }, [projectConversations, router, setActiveConversation]);
 
-  const isSettings = pathname.startsWith('/settings');
 
   function handleConversationClick(convId: string, projectId: string) {
     setActiveConversation(convId, projectId);
@@ -160,7 +158,7 @@ export function ChatSidebar() {
         {/* Logo */}
         <div
           className={cn(
-            'flex h-10 shrink-0 items-center border-b border-[var(--stroke-divider)]',
+            'flex h-11 shrink-0 items-center border-b border-[var(--stroke-divider)]',
             collapsed ? 'justify-center px-2' : 'px-3'
           )}
         >
@@ -172,7 +170,7 @@ export function ChatSidebar() {
           )}
         </div>
 
-        {/* New Conversation button */}
+        {/* New Chat button */}
         <div className={cn('py-2', collapsed ? 'flex justify-center px-2' : 'px-3')}>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -188,12 +186,12 @@ export function ChatSidebar() {
                 aria-label="New conversation"
               >
                 <Plus className="h-4 w-4 shrink-0" />
-                {!collapsed && <span className="text-sm font-medium">New Conversation</span>}
+                {!collapsed && <span className="text-sm font-medium">New Chat</span>}
               </Button>
             </TooltipTrigger>
             {collapsed && (
               <TooltipContent side="right" sideOffset={8}>
-                New Conversation
+                New Chat
               </TooltipContent>
             )}
           </Tooltip>
@@ -261,34 +259,8 @@ export function ChatSidebar() {
             collapsed ? 'items-center px-2' : 'px-3'
           )}
         >
-          {/* User Menu */}
+          {/* User Menu (includes Settings in dropdown) */}
           <UserMenu collapsed={collapsed} />
-
-          {/* Settings */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Link
-                href="/settings"
-                className={cn(
-                  'flex items-center gap-3 rounded-xl transition-all duration-[var(--motion-base)] ease-[var(--ease-out-soft)]',
-                  'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)]/50',
-                  'active:scale-95',
-                  collapsed ? 'h-10 w-10 justify-center' : 'h-10 w-full px-3',
-                  isSettings
-                    ? 'border-l-2 border-[var(--accent-commit)] bg-[var(--hover-bg-strong)] text-[var(--text-primary)]'
-                    : 'text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
-                )}
-              >
-                <Settings className="h-4 w-4 shrink-0" />
-                {!collapsed && <span className="text-sm font-medium">Settings</span>}
-              </Link>
-            </TooltipTrigger>
-            {collapsed && (
-              <TooltipContent side="right" sideOffset={8}>
-                Settings
-              </TooltipContent>
-            )}
-          </Tooltip>
 
         </div>
       </aside>
