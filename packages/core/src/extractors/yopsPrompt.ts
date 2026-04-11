@@ -81,7 +81,13 @@ ${tier3Segment(style.tier3)}
 
 ${tier3KeyDistinction(style.tier3)}
 
-Do NOT extract: greetings, filler ("sure!", "let me help"), or meta-commentary
+Do NOT extract:
+- Greetings, filler ("sure!", "let me help", "of course!")
+- Assistant asking clarifying questions ("What would you like to know?", "Are you asking about...")
+- Lists of options the assistant offered BEFORE the user chose — only extract what was actually discussed
+- Brief mentions of alternatives not explored further (e.g., a castle named once but never discussed)
+- Conversational scaffolding ("Feel free to ask", "I'm here to help")
+- Meta-commentary about the conversation itself
 
 ## Output format: YAML tree + JSON metadata
 
@@ -189,7 +195,12 @@ ${tier3Segment(style.tier3)}
 
 ${tier3KeyDistinction(style.tier3)}
 
-Do NOT extract: greetings, filler ("sure!", "let me help"), or meta-commentary
+Do NOT extract:
+- Greetings, filler ("sure!", "let me help", "of course!")
+- Assistant asking clarifying questions ("What would you like to know?")
+- Lists of options offered BEFORE the user chose — only extract what was discussed
+- Brief mentions of alternatives not explored further
+- Conversational scaffolding and meta-commentary
 
 ## Output format: YOps list
 
