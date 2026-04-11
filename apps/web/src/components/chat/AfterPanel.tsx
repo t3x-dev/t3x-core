@@ -611,14 +611,6 @@ export function AfterPanel({
         <div className="flex items-center gap-1.5">
           <button
             type="button"
-            onClick={handleClear}
-            disabled={!hasResult}
-            className="rounded px-2 py-1 text-[10px] font-medium text-[var(--text-tertiary)] border border-[var(--stroke-default)] hover:bg-[var(--hover-bg)] disabled:opacity-30 disabled:cursor-not-allowed"
-          >
-            Discard
-          </button>
-          <button
-            type="button"
             onClick={() => {
               setCommitMessage(getDefaultCommitName());
               setShowCommitDialog(true);

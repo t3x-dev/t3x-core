@@ -153,9 +153,6 @@ export function ScriptEditor() {
             </span>
           )}
         </span>
-        <span className="text-[9px] font-mono text-[var(--text-tertiary)] opacity-60">
-          {mode === 'streaming' ? 'read-only' : 'editable'}
-        </span>
       </div>
 
       {/* Editor */}

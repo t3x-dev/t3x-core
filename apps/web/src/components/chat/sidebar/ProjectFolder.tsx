@@ -3,6 +3,7 @@
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { Conversation, Project } from '@/lib/api/types';
 import { cn } from '@/lib/utils';
+import { useChatStore } from '@/store/chatStore';
 
 export interface ProjectFolderProps {
   project: Project;
@@ -75,7 +76,12 @@ export function ProjectFolder({
   const folderButton = (
     <button
       type="button"
-      onClick={onToggleExpand}
+      onClick={() => {
+        if (collapsed) {
+          useChatStore.setState({ sidebarCollapsed: false });
+        }
+        onToggleExpand();
+      }}
       onContextMenu={onProjectContextMenu}
       className={cn(
         'flex items-center gap-2 rounded-xl transition-all duration-[var(--motion-base)] ease-[var(--ease-out-soft)]',
