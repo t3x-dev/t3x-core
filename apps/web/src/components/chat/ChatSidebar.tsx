@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronLeft, ChevronRight, Plus, Settings, Trash2 } from 'lucide-react';
+import { Plus, Settings, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
@@ -150,18 +150,18 @@ export function ChatSidebar() {
       <aside
         aria-label="Chat navigation"
         className={cn(
-          'fixed left-0 top-0 z-40 flex h-screen flex-col border-r py-4',
+          'fixed left-0 top-0 z-40 flex h-screen flex-col border-r',
           'transition-[width] duration-[var(--motion-slow)] ease-[var(--ease-out-soft)]',
           glass.panelBase,
           glass.highlight,
-          collapsed ? 'w-16 items-center' : 'w-52 px-3'
+          collapsed ? 'w-16 items-center' : 'w-52'
         )}
       >
         {/* Logo */}
         <div
           className={cn(
-            'mb-4 flex h-10 shrink-0 items-center',
-            collapsed ? 'justify-center' : 'px-1'
+            'flex h-10 shrink-0 items-center border-b border-[var(--stroke-divider)]',
+            collapsed ? 'justify-center px-2' : 'px-3'
           )}
         >
           <LogoIcon />
@@ -172,8 +172,8 @@ export function ChatSidebar() {
           )}
         </div>
 
-        {/* + New Project button */}
-        <div className={cn('mb-3', collapsed ? 'flex justify-center' : '')}>
+        {/* New Conversation button */}
+        <div className={cn('py-2', collapsed ? 'flex justify-center px-2' : 'px-3')}>
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -185,15 +185,15 @@ export function ChatSidebar() {
                   'transition-all duration-[var(--motion-base)]',
                   collapsed ? 'h-10 w-10' : 'h-10 w-full justify-start gap-2 px-3'
                 )}
-                aria-label="New project"
+                aria-label="New conversation"
               >
                 <Plus className="h-4 w-4 shrink-0" />
-                {!collapsed && <span className="text-sm font-medium">New Project</span>}
+                {!collapsed && <span className="text-sm font-medium">New Conversation</span>}
               </Button>
             </TooltipTrigger>
             {collapsed && (
               <TooltipContent side="right" sideOffset={8}>
-                New Project
+                New Conversation
               </TooltipContent>
             )}
           </Tooltip>
@@ -201,7 +201,7 @@ export function ChatSidebar() {
 
         {/* Scrollable content: Projects + conversations */}
         <ScrollArea className="flex-1 w-full">
-          <div className={cn('flex flex-col gap-0.5', collapsed ? 'items-center' : '')}>
+          <div className={cn('flex flex-col gap-0.5 py-2', collapsed ? 'items-center px-2' : 'px-3')}>
             {/* Projects section header */}
             {!collapsed && projects.length > 0 && (
               <div className="px-1 pt-2 pb-1">
@@ -257,8 +257,8 @@ export function ChatSidebar() {
         {/* Bottom section */}
         <div
           className={cn(
-            'mt-auto flex flex-col gap-1 pt-3 border-t border-[var(--stroke-divider)]',
-            collapsed ? 'items-center' : ''
+            'mt-auto flex flex-col gap-1 py-3 border-t border-[var(--stroke-divider)]',
+            collapsed ? 'items-center px-2' : 'px-3'
           )}
         >
           {/* User Menu */}
@@ -290,33 +290,6 @@ export function ChatSidebar() {
             )}
           </Tooltip>
 
-          {/* Collapse toggle */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={toggleSidebar}
-                className={cn(
-                  'h-8 w-8 rounded-lg text-[var(--text-tertiary)]',
-                  'hover:text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]',
-                  'transition-all duration-[var(--motion-base)]'
-                )}
-                aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-              >
-                {collapsed ? (
-                  <ChevronRight className="h-4 w-4" />
-                ) : (
-                  <ChevronLeft className="h-4 w-4" />
-                )}
-              </Button>
-            </TooltipTrigger>
-            {collapsed && (
-              <TooltipContent side="right" sideOffset={8}>
-                Expand sidebar
-              </TooltipContent>
-            )}
-          </Tooltip>
         </div>
       </aside>
 

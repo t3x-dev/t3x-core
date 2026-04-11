@@ -1,6 +1,6 @@
 'use client';
 
-import { Pencil, RefreshCw, User } from 'lucide-react';
+import { Pencil, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -475,24 +475,12 @@ export function ChatMessage({
       onMouseLeave={() => useWorkspaceStore.getState().clearSelection()}
     >
       <div className="mx-auto max-w-3xl px-4">
-        <div className="flex gap-3">
-          {/* Avatar */}
-          <div
-            className={cn(
-              'flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-medium mt-0.5',
-              isUser
-                ? 'bg-[var(--accent-commit)] text-white'
-                : 'bg-gradient-to-br from-[var(--accent-commit)]/20 to-[var(--source)]/20 text-[var(--accent-commit)] ring-1 ring-[var(--accent-commit)]/20'
-            )}
-          >
-            {isUser ? <User className="h-3.5 w-3.5" /> : 'T3'}
-          </div>
-
+        <div className={cn(isUser ? 'flex justify-end' : '')}>
           {/* Content */}
-          <div className="min-w-0 flex-1">
-            <div className="mb-1 text-xs font-semibold text-[var(--text-primary)]">
-              {isUser ? 'You' : 'T3X'}
-            </div>
+          <div className={cn(
+            'min-w-0',
+            isUser ? 'max-w-[85%] rounded-2xl bg-[var(--hover-bg)] px-4 py-2.5' : 'flex-1'
+          )}>
 
             {isUser ? (
               <div className="relative">

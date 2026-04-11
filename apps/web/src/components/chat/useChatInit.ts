@@ -145,7 +145,8 @@ export function useChatInit({
                 const { opsToYaml } = await import('@/lib/scriptParser');
                 useWorkspaceStore.getState().setScriptText(opsToYaml(allOps));
                 useWorkspaceStore.setState({ persistedOpsCount: allOps.length });
-                useWorkspaceStore.getState().setMode('executed');
+                // Auto-execute to populate the After panel with the result
+                useWorkspaceStore.getState().execute();
               }
             }
           } else if (inheritFromCommitHash) {

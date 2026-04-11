@@ -1,6 +1,6 @@
 'use client';
 
-import { LayoutDashboard } from 'lucide-react';
+import { LayoutDashboard, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback } from 'react';
 import { Button } from '@/components/ui/button';
@@ -28,7 +28,7 @@ export function ChatHeader({
   onModelChange,
 }: ChatHeaderProps) {
   const router = useRouter();
-  const { activeProjectId, activeBranch, setActiveBranch } = useChatStore();
+  const { activeProjectId, activeBranch, setActiveBranch, sidebarCollapsed, toggleSidebar } = useChatStore();
   const setCommitBranch = useCommitStore((s) => s.setCommitBranch);
 
   const initCommitState = useCommitStore((s) => s.initCommitState);
@@ -60,6 +60,20 @@ export function ChatHeader({
         glass.panelBase
       )}
     >
+      {/* Sidebar toggle */}
+      <button
+        type="button"
+        onClick={toggleSidebar}
+        className="shrink-0 p-1.5 -ml-1.5 rounded-lg text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--hover-bg)] transition-colors"
+        aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+      >
+        {sidebarCollapsed ? (
+          <PanelLeftOpen className="h-4 w-4" />
+        ) : (
+          <PanelLeftClose className="h-4 w-4" />
+        )}
+      </button>
+
       {/* Left: Conversation title */}
       <div className="flex-1 min-w-0">
         <h1 className="text-sm font-medium text-[var(--text-primary)] truncate">{displayTitle}</h1>
