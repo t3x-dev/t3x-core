@@ -12,6 +12,24 @@ import { useWorkspaceStore } from '@/store/workspaceStore';
 
 const MONO = { fontFamily: 'var(--font-mono, ui-monospace, monospace)', fontSize: 11 } as const;
 
+/** Format a slot value for display — handles strings, numbers, arrays, objects */
+function formatSlotValue(val: unknown): string {
+  if (val === null || val === undefined) return '';
+  if (typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean') return String(val);
+  if (Array.isArray(val)) {
+    return val.map((item) => {
+      if (typeof item === 'object' && item !== null) {
+        return Object.entries(item).map(([k, v]) => `${k}: ${v}`).join(', ');
+      }
+      return String(item);
+    }).join('; ');
+  }
+  if (typeof val === 'object') {
+    return Object.entries(val).map(([k, v]) => `${k}: ${v}`).join(', ');
+  }
+  return String(val);
+}
+
 // ── Helpers ──
 
 /** Extract the node-level key from an op's path (before first slash). */
@@ -324,7 +342,7 @@ function NodeRow({
             <SlotRow
               nodeKey={node.key}
               slotKey={key}
-              value={String(val)}
+              value={formatSlotValue(val)}
               diffType={slotDiff}
               oldValue={mod?.oldValue}
               sourceTag={node.source}
@@ -390,7 +408,7 @@ function AfterNodeRecursive({ node, path, depth }: AfterNodeRecursiveProps) {
             <div className="shrink-0 w-[3px] bg-transparent" />
             <div className="flex-1 min-w-0 flex items-center gap-1 px-2 py-0.5" style={MONO}>
               <span className="shrink-0 text-[var(--yaml-key,#2563eb)]">{key}:</span>
-              <span className="text-[var(--yaml-string,#16a34a)] truncate ml-1">{String(val)}</span>
+              <span className="text-[var(--yaml-string,#16a34a)] truncate ml-1">{formatSlotValue(val)}</span>
             </div>
           </div>
         </div>
