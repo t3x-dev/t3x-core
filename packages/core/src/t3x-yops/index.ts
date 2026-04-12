@@ -34,3 +34,7 @@ export type { ReplayInput, ReplayResult, VerifyResult } from './replay';
 export type { Source, LLMSource, HumanSource, TurnRef } from './source';
 export { isLLMSource, isHumanSource } from './source';
 export type { SourcedYOp } from './types';
+
+// ── Source validator ──
+export { validateSource } from './sourceValidator';
+export type { ValidationResult, ValidationTurn, FailingOp, FailureReason } from './sourceValidator';
