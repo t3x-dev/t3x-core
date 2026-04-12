@@ -1,7 +1,7 @@
 'use client';
 
 import type { TreeNode, YOp } from '@t3x-dev/core';
-import { Check, Play, X } from 'lucide-react';
+import { Check, Play, Plus, X } from 'lucide-react';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { computeTreeDiff } from '@/lib/treeDiff';
@@ -236,7 +236,20 @@ function NodeRow({
   const selectedNodePath = useWorkspaceStore((s) => s.selectedNodePath);
   const select = useWorkspaceStore((s) => s.select);
   const clearSelection = useWorkspaceStore((s) => s.clearSelection);
+  const applyGoldEdit = useWorkspaceStore((s) => s.applyGoldEdit);
   const isSelected = selectedNodePath === path;
+
+  const handleDropNode = useCallback(() => {
+    if (!window.confirm(`Remove "${node.key}" and all its children?`)) return;
+    applyGoldEdit({ drop: { path } });
+  }, [path, node.key, applyGoldEdit]);
+
+  const handleAddChild = useCallback(() => {
+    const childKey = window.prompt('New node name (snake_case):');
+    if (!childKey || !childKey.trim()) return;
+    const cleanKey = childKey.trim().toLowerCase().replace(/\s+/g, '_');
+    applyGoldEdit({ define: { path: `${path}/${cleanKey}` } });
+  }, [path, applyGoldEdit]);
   const slots = node.slots || {};
   const slotEntries = Object.entries(slots).filter(([k]) => !k.startsWith('_'));
   const hasChanges =
@@ -305,32 +318,44 @@ function NodeRow({
               {node.source}
             </span>
           )}
-          {hasChanges && diffType !== 'removed' && (
-            <div className="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button
-                type="button"
-                title="Keep changes"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onAccept();
-                }}
-                className="text-[var(--text-tertiary)] hover:text-[var(--status-success)] cursor-pointer"
-              >
-                <Check className="h-2.5 w-2.5" />
-              </button>
-              <button
-                type="button"
-                title="Dismiss changes"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDismiss();
-                }}
-                className="text-[var(--text-tertiary)] hover:text-[var(--status-error)] cursor-pointer"
-              >
-                <X className="h-2.5 w-2.5" />
-              </button>
-            </div>
-          )}
+          <div className="ml-auto flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity pr-2">
+            {hasChanges && diffType !== 'removed' && (
+              <>
+                <button
+                  type="button"
+                  title="Keep changes"
+                  onClick={(e) => { e.stopPropagation(); onAccept(); }}
+                  className="p-0.5 rounded text-[var(--text-tertiary)] hover:text-[var(--status-success)]"
+                >
+                  <Check className="h-2.5 w-2.5" />
+                </button>
+                <button
+                  type="button"
+                  title="Dismiss changes"
+                  onClick={(e) => { e.stopPropagation(); onDismiss(); }}
+                  className="p-0.5 rounded text-[var(--text-tertiary)] hover:text-[var(--status-warning)]"
+                >
+                  <X className="h-2.5 w-2.5" />
+                </button>
+              </>
+            )}
+            <button
+              type="button"
+              title="Add child node"
+              onClick={(e) => { e.stopPropagation(); handleAddChild(); }}
+              className="p-0.5 rounded text-[var(--text-tertiary)] hover:text-[var(--status-success)] hover:bg-[var(--hover-bg)]"
+            >
+              <Plus className="h-2.5 w-2.5" />
+            </button>
+            <button
+              type="button"
+              title="Remove node and children"
+              onClick={(e) => { e.stopPropagation(); handleDropNode(); }}
+              className="p-0.5 rounded text-[var(--text-tertiary)] hover:text-[var(--status-error)] hover:bg-[var(--hover-bg)]"
+            >
+              <X className="h-2.5 w-2.5" />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -424,6 +449,18 @@ function AfterNodeRecursive({ node, path, depth }: AfterNodeRecursiveProps) {
     [path, applyGoldEdit]
   );
 
+  const handleDropNode = useCallback(() => {
+    if (!window.confirm(`Remove "${node.key}" and all its children?`)) return;
+    applyGoldEdit({ drop: { path } });
+  }, [path, node.key, applyGoldEdit]);
+
+  const handleAddChild = useCallback(() => {
+    const childKey = window.prompt('New node name (snake_case):');
+    if (!childKey || !childKey.trim()) return;
+    const cleanKey = childKey.trim().toLowerCase().replace(/\s+/g, '_');
+    applyGoldEdit({ define: { path: `${path}/${cleanKey}` } });
+  }, [path, applyGoldEdit]);
+
   return (
     <>
       <div className="group flex items-stretch" style={{ minHeight: 26 }}>
@@ -437,6 +474,24 @@ function AfterNodeRecursive({ node, path, depth }: AfterNodeRecursiveProps) {
           onClick={() => isNodeSelected ? clearSelection() : select('after', { nodePath: path })}
         >
           <span className="text-[var(--yaml-key,#2563eb)] font-semibold">{node.key}:</span>
+          <div className="ml-auto flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity pr-2">
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); handleAddChild(); }}
+              title="Add child node"
+              className="p-0.5 rounded text-[var(--text-tertiary)] hover:text-[var(--status-success)] hover:bg-[var(--hover-bg)]"
+            >
+              <Plus className="h-2.5 w-2.5" />
+            </button>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); handleDropNode(); }}
+              title="Remove node and children"
+              className="p-0.5 rounded text-[var(--text-tertiary)] hover:text-[var(--status-error)] hover:bg-[var(--hover-bg)]"
+            >
+              <X className="h-2.5 w-2.5" />
+            </button>
+          </div>
         </div>
       </div>
       {slotEntries.map(([key, val]) => (
