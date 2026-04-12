@@ -2,14 +2,14 @@
 
 import { Plus, Trash2 } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { UserMenu } from '@/components/layout/UserMenu';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { deleteConversation, listConversations } from '@/lib/api/conversations';
-import { deleteProject, listProjects } from '@/lib/api/projects';
-import type { Conversation, Project } from '@/lib/api/types';
+import { useNewProjectChat } from '@/hooks/useNewProjectChat';
+import { useProjectConversations } from '@/hooks/useProjectConversations';
+import { useProjects } from '@/hooks/useProjects';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import { useChatStore } from '@/store/chatStore';
@@ -32,10 +32,13 @@ export function ChatSidebar() {
     setActiveConversation,
   } = useChatStore();
 
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [projectConversations, setProjectConversations] = useState<Record<string, Conversation[]>>(
-    {}
-  );
+  const { projects, refresh: refreshProjects, remove: removeProject } = useProjects();
+  const {
+    conversationsByProject: projectConversations,
+    load: loadConversations,
+    remove: removeConversationFn,
+  } = useProjectConversations();
+  const { start: startNewChat } = useNewProjectChat();
 
   const { menu, open: openMenu, close: closeMenu } = useContextMenu();
 
@@ -44,30 +47,18 @@ export function ChatSidebar() {
 
   const refreshKey = useChatStore((s) => s.refreshKey);
 
-  // Fetch projects on mount and when refreshKey changes
+  // Re-fetch projects when refreshKey changes (useProjects does the initial load)
   useEffect(() => {
-    listProjects(50, 0)
-      .then((data) => setProjects(data.projects))
-      .catch(() => {
-        // silently fail — sidebar is non-critical
-      });
-  }, [refreshKey]);
+    if (refreshKey === 0) return;
+    void refreshProjects();
+  }, [refreshKey, refreshProjects]);
 
   // Fetch conversations for expanded projects (re-fetch on refreshKey)
   useEffect(() => {
     for (const projectId of Array.from(expandedProjectIds)) {
-      listConversations(projectId, 50, 0)
-        .then((data) => {
-          setProjectConversations((prev) => ({
-            ...prev,
-            [projectId]: data.conversations,
-          }));
-        })
-        .catch(() => {
-          // silently fail
-        });
+      void loadConversations(projectId);
     }
-  }, [expandedProjectIds, refreshKey]);
+  }, [expandedProjectIds, refreshKey, loadConversations]);
 
   // Auto-navigate to latest conversation after expanding a project (data may load async)
   useEffect(() => {
@@ -94,25 +85,14 @@ export function ChatSidebar() {
   }
 
   async function handleNewChatInProject(projectId: string) {
-    try {
-      // Find the latest commit hash for this project to use as parent
-      const { listCommits } = await import('@/lib/api/commits');
-      const commits = await listCommits(projectId, undefined, 1);
-      const parentHash = commits.length > 0 ? commits[0].hash : undefined;
-
-      // Create new conversation under this project
-      const { createConversation } = await import('@/lib/api/conversations');
-      const conv = await createConversation(projectId, 'New Chat', parentHash);
-
-      setActiveConversation(conv.conversation_id, projectId);
-      router.push(`/chat/${conv.conversation_id}`);
-
-      // Refresh sidebar to show new conversation
-      useChatStore.getState().refreshSidebar();
-    } catch {
-      // Fallback: just navigate to new chat
+    const convId = await startNewChat(projectId);
+    if (!convId) {
       router.push('/chat');
+      return;
     }
+    setActiveConversation(convId, projectId);
+    router.push(`/chat/${convId}`);
+    useChatStore.getState().refreshSidebar();
   }
 
   function handleCanvasClick(projectId: string) {
@@ -124,19 +104,19 @@ export function ChatSidebar() {
       return;
     }
     try {
-      await deleteProject(projectId);
+      await removeProject(projectId);
       window.location.reload();
     } catch {
       // silently fail
     }
   }
 
-  async function handleDeleteConversation(_projectId: string, convId: string) {
+  async function handleDeleteConversation(projectId: string, convId: string) {
     if (!window.confirm('Are you sure you want to delete this conversation?')) {
       return;
     }
     try {
-      await deleteConversation(convId);
+      await removeConversationFn(projectId, convId);
       window.location.reload();
     } catch {
       // silently fail

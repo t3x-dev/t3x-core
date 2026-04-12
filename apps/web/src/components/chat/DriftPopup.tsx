@@ -2,8 +2,7 @@
 
 import { GitBranch, X } from 'lucide-react';
 import { useCallback } from 'react';
-import { extractNodes } from '@/lib/api/trees';
-import { hydrateConversation } from '@/queries/loadConversation';
+import { useDriftResolver } from '@/hooks/useDriftResolver';
 import { useChatStore } from '@/store/chatStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 
@@ -26,35 +25,21 @@ export function DriftPopup() {
   const activeConvId = useChatStore((s) => s.activeConversationId);
   const activeProjectId = useChatStore((s) => s.activeProjectId);
   const conversationId = wsConvId ?? activeConvId;
+  const { applyChoice } = useDriftResolver();
 
   const handleChoice = useCallback(
     async (choice: string) => {
       if (!conversationId || !driftInfo) return;
-
       clearDrift();
+      if (choice === 'keep_old') return; // YAML stays the same
 
-      if (choice === 'keep_old') {
-        // Nothing to do — YAML stays the same
-        return;
-      }
-
-      // For other choices, re-call extract with drift_decision
-      try {
-        const result = await extractNodes(conversationId, undefined, {
-          choice,
-          relation: driftInfo.relation,
-          new_topic: driftInfo.new_topic,
-        });
-
-        if (result.status === 'completed' && activeProjectId) {
-          // Hydrate store from server — tree is derived via replay
-          await hydrateConversation(activeProjectId, conversationId);
-        }
-      } catch {
-        // Drift choice application failed — non-critical
-      }
+      await applyChoice(activeProjectId, conversationId, {
+        choice,
+        relation: driftInfo.relation,
+        new_topic: driftInfo.new_topic,
+      });
     },
-    [conversationId, driftInfo, clearDrift, activeProjectId]
+    [conversationId, driftInfo, clearDrift, activeProjectId, applyChoice]
   );
 
   if (!driftDetected || !driftInfo) return null;
