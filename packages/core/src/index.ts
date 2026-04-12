@@ -498,6 +498,7 @@ export type {
 // YOps — YAML Operations for Knowledge Trees
 // ═══════════════════════════════════════════════════════════════════════════
 export {
+  applySourcedYOps,
   applyYOps,
   classifyYOp,
   extractOpsFromEntries,
