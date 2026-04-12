@@ -546,12 +546,21 @@ export async function* runExtractionPipeline(
       );
       organizedSnapshot = transformResult.content;
 
-      // Re-apply slot_quotes from pre-transform snapshot (transforms may strip metadata)
-      const metaMap = new Map<string, { source?: string; slot_quotes?: Record<string, string> }>();
+      // Re-apply slot_quotes and source from pre-transform snapshot.
+      // Transforms strip metadata, so we match by BOTH path AND node key
+      // to handle tree restructuring (nesting, renaming).
+      type NodeMeta = { source?: string; slot_quotes?: Record<string, string> };
+      const metaByPath = new Map<string, NodeMeta>();
+      const metaByKey = new Map<string, NodeMeta>();
       const collectMeta = (node: import('@t3x-dev/core').TreeNode, prefix: string) => {
         const path = prefix ? `${prefix}/${node.key}` : node.key;
         if (node.source || node.slot_quotes) {
-          metaMap.set(path, { source: node.source, slot_quotes: node.slot_quotes });
+          const meta = { source: node.source, slot_quotes: node.slot_quotes };
+          metaByPath.set(path, meta);
+          // Also index by bare key for fallback matching after restructuring
+          if (!metaByKey.has(node.key)) {
+            metaByKey.set(node.key, meta);
+          }
         }
         for (const child of node.children ?? []) collectMeta(child, path);
       };
@@ -559,7 +568,8 @@ export async function* runExtractionPipeline(
 
       const applyMeta = (node: import('@t3x-dev/core').TreeNode, prefix: string) => {
         const path = prefix ? `${prefix}/${node.key}` : node.key;
-        const meta = metaMap.get(path);
+        // Try exact path first, then fall back to bare key
+        const meta = metaByPath.get(path) ?? metaByKey.get(node.key);
         if (meta) {
           if (meta.source && !node.source) node.source = meta.source;
           if (meta.slot_quotes && !node.slot_quotes) node.slot_quotes = meta.slot_quotes;
