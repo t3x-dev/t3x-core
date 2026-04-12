@@ -325,3 +325,64 @@ jobs:
 
       - name: Run WebUI API endpoint tests
         run: pnpm --filter t3x-webui test -- src/__tests__/contracts/
+
+  # ===========================================
+  # WEBUI E2E TESTS - Playwright (full browser)
+  # ===========================================
+  test-webui-e2e:
+    name: WebUI E2E (Playwright)
+    runs-on: ubuntu-latest
+    needs: changes
+    if: |
+      (github.event_name == 'pull_request' || github.ref == 'refs/heads/main') &&
+      (needs.changes.outputs.webui == 'true' || needs.changes.outputs.core == 'true' || needs.changes.outputs.storage == 'true' || needs.changes.outputs.api == 'true')
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: postgres
+        ports:
+          - 5446:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build dependencies
+        run: pnpm build:core && pnpm build:storage && pnpm build:api
+
+      - name: Install Playwright browsers
+        run: pnpm --filter t3x-webui exec playwright install --with-deps chromium
+
+      - name: Run E2E tests
+        run: pnpm --filter t3x-webui test:e2e
+        env:
+          CI: 'true'
+          DATABASE_URL: postgresql://postgres:password@localhost:5446/postgres
+
+      - name: Upload Playwright traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: apps/web/test-results/
+          retention-days: 14

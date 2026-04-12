@@ -114,7 +114,11 @@ function SlotRow({
   }
 
   return (
-    <div className="group flex items-stretch" style={{ minHeight: 24 }}>
+    <div
+      className="group flex items-stretch"
+      data-testid={`slot-row-${nodePath}-${slotKey}`}
+      style={{ minHeight: 24 }}
+    >
       <div className={`shrink-0 w-[3px] ${isSlotSelected ? 'bg-[var(--source)]' : gutterColor}`} />
       <div
         className={cn(
@@ -156,6 +160,7 @@ function SlotRow({
         <div className="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity pr-1">
           <button
             type="button"
+            data-testid="slot-delete"
             title="Delete slot"
             onClick={(e) => { e.stopPropagation(); onDelete(); }}
             className="p-0.5 rounded text-[var(--text-tertiary)] hover:text-[var(--status-error)] hover:bg-[var(--hover-bg)]"
@@ -311,6 +316,7 @@ function NodeRow({
             )}
             <button
               type="button"
+              data-testid="add-child-button"
               title="Add child node"
               onClick={(e) => { e.stopPropagation(); handleAddChild(); }}
               className="p-0.5 rounded text-[var(--text-tertiary)] hover:text-[var(--status-success)] hover:bg-[var(--hover-bg)]"
@@ -447,6 +453,7 @@ function AfterNodeRecursive({ node, path, depth }: AfterNodeRecursiveProps) {
           <div className="ml-auto flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity pr-2">
             <button
               type="button"
+              data-testid="add-child-button"
               onClick={(e) => { e.stopPropagation(); handleAddChild(); }}
               title="Add child node"
               className="p-0.5 rounded text-[var(--text-tertiary)] hover:text-[var(--status-success)] hover:bg-[var(--hover-bg)]"
@@ -624,6 +631,7 @@ export function AfterPanel({
         <div className="flex items-center gap-1.5">
           <button
             type="button"
+            data-testid="commit-button"
             onClick={() => {
               setCommitMessage(getDefaultCommitName());
               setShowCommitDialog(true);
@@ -636,7 +644,7 @@ export function AfterPanel({
         </div>
       </div>
       {showCommitDialog && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/30 backdrop-blur-sm rounded-b-lg">
+        <div data-testid="commit-dialog" className="absolute inset-0 z-10 flex items-center justify-center bg-black/30 backdrop-blur-sm rounded-b-lg">
           <div className="bg-[var(--panel)] border border-[var(--stroke-default)] rounded-xl p-4 mx-3 w-full max-w-[280px] shadow-lg">
             <label className="block text-[10px] font-semibold text-[var(--text-secondary)] mb-1.5">
               Name this commit
@@ -664,6 +672,7 @@ export function AfterPanel({
               </button>
               <button
                 type="button"
+                data-testid="commit-dialog-confirm"
                 onClick={() => handleCommit(commitMessage)}
                 disabled={isCommitting}
                 className="rounded bg-[var(--commit)] px-2.5 py-1 text-[10px] font-semibold text-[var(--commit-text)] hover:bg-[var(--commit-hover)] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"

@@ -206,6 +206,7 @@ function SourceMappedText({
             key={i}
             data-tree-path={m.treePath}
             data-slot-key={m.slotKey}
+            data-source-highlight={isActive ? 'active' : 'default'}
             style={spanStyle}
             onClick={(e) => {
               e.stopPropagation();
