@@ -1,8 +1,5 @@
-import type { QuoteValidationResult, SemanticContent, YOp } from '@t3x-dev/core';
-import { applyYOps } from '@t3x-dev/core';
+import type { SemanticContent, Source, SourcedYOp } from '@t3x-dev/core';
 import { create } from 'zustand';
-import type { ParseError } from '@/lib/scriptParser';
-import { opsToYaml, parseYOpsScript } from '@/lib/scriptParser';
 
 export interface ExecError {
   op_index: number;
@@ -16,291 +13,155 @@ export interface DriftInfo {
   old_topic?: string;
 }
 
-type WorkspaceMode = 'idle' | 'streaming' | 'executed' | 'committing';
-type SelectionSource = 'chat' | 'script' | 'after' | null;
+export interface WorkspaceTurn {
+  turn_hash: string;
+  content: string;
+}
+
+export type WorkspaceMode = 'idle' | 'streaming' | 'executed' | 'committing' | 'error';
+export type SelectionSource = 'chat' | 'script' | 'after' | null;
 
 interface WorkspaceState {
+  // ── Conversation state ──
+  conversationId: string | null;
+  turns: WorkspaceTurn[];
+  opsLog: SourcedYOp[];
+
+  // ── Derived state (populated by queries/replay) ──
+  tree: SemanticContent;
+  sourceIndex: Map<string, Source>;
+
+  // ── UI state ──
   mode: WorkspaceMode;
   panelExpanded: boolean;
-  base: SemanticContent;
-  baseCommitHash: string | null;
-  /** True after a successful commit — locks chat, YOps, and result */
   isCommitted: boolean;
-  scriptText: string;
-  scriptOps: YOp[];
-  parseErrors: ParseError[];
-  disabledOpIndices: Set<number>;
-  result: SemanticContent | null;
-  appliedCount: number;
+  lastError: string | null;
   execError: ExecError | null;
-  // Selection (replaces hoverStore bidirectional hover)
+
+  // ── Selection (ephemeral, cleared on refresh) ──
   selectedNodePath: string | null;
   selectedSlotKey: string | null;
   selectedTurnIndex: number | null;
   selectedSource: SelectionSource;
   scrollToCenter: boolean;
-  // Drift detection (replaces phaseStore drift fields)
+
+  // ── Drift detection ──
   driftDetected: boolean;
   driftInfo: DriftInfo | null;
   driftChoices: string[];
-  // Extraction style preset for the next extraction
-  extractionPreset: 'concise' | 'balanced' | 'detailed';
-  // Source pin IDs used in the last extraction (for commit source_refs)
-  lastExtractionPinIds: string[];
-  // Quote validation result from last extraction
-  quoteValidation: QuoteValidationResult | null;
-  // Number of ops already persisted to server (to avoid double-saving)
-  persistedOpsCount: number;
 
-  snapshotBase(content: SemanticContent, commitHash: string | null): void;
-  setScriptText(text: string): void;
-  execute(): void;
-  toggleOp(index: number): void;
-  appendOp(op: YOp): void;
-  select(source: string, target: { nodePath?: string; slotKey?: string; turnIndex?: number }): void;
-  clearSelection(): void;
-  setMode(mode: WorkspaceMode): void;
-  setPanelExpanded(expanded: boolean): void;
-  setExtractionPreset(preset: 'concise' | 'balanced' | 'detailed'): void;
-  /** Gold layer: apply a YOp to the result and persist to audit log (doesn't modify script) */
-  applyGoldEdit(op: YOp): void;
-  setDriftDetected(info: DriftInfo, choices: string[]): void;
-  clearDrift(): void;
-  reset(): void;
+  // ── Extraction config ──
+  extractionPreset: 'concise' | 'balanced' | 'detailed';
+  lastExtractionPinIds: string[];
+
+  // ── State setters (no business logic) ──
+  setConversation: (id: string | null) => void;
+  setTurns: (turns: WorkspaceTurn[]) => void;
+  setDerived: (input: {
+    tree: SemanticContent;
+    sourceIndex: Map<string, Source>;
+    opsLog: SourcedYOp[];
+  }) => void;
+  setMode: (mode: WorkspaceMode) => void;
+  setPanelExpanded: (expanded: boolean) => void;
+  setCommitted: (committed: boolean) => void;
+  setError: (err: string | null) => void;
+  setExecError: (err: ExecError | null) => void;
+
+  select: (
+    source: SelectionSource,
+    target: { nodePath?: string; slotKey?: string; turnIndex?: number },
+  ) => void;
+  clearSelection: () => void;
+
+  setDriftDetected: (info: DriftInfo, choices: string[]) => void;
+  clearDrift: () => void;
+
+  setExtractionPreset: (preset: 'concise' | 'balanced' | 'detailed') => void;
+  setLastExtractionPinIds: (ids: string[]) => void;
+
+  reset: () => void;
 }
 
-const EMPTY_CONTENT: SemanticContent = { trees: [], relations: [] };
+const EMPTY_TREE: SemanticContent = { trees: [], relations: [] };
 
-export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
-  mode: 'idle',
-  panelExpanded: false,
-  base: EMPTY_CONTENT,
-  baseCommitHash: null,
-  scriptText: '',
-  scriptOps: [],
-  parseErrors: [],
-  disabledOpIndices: new Set(),
-  result: null,
-  appliedCount: 0,
-  execError: null,
-  isCommitted: false,
-  selectedNodePath: null,
-  selectedSlotKey: null,
-  selectedTurnIndex: null,
-  selectedSource: null,
-  scrollToCenter: false,
-  extractionPreset: 'balanced',
-  persistedOpsCount: 0,
-  lastExtractionPinIds: [],
-  quoteValidation: null,
-  driftDetected: false,
-  driftInfo: null,
-  driftChoices: [],
-  snapshotBase(content, commitHash) {
+function initialState(): Omit<
+  WorkspaceState,
+  | 'setConversation'
+  | 'setTurns'
+  | 'setDerived'
+  | 'setMode'
+  | 'setPanelExpanded'
+  | 'setCommitted'
+  | 'setError'
+  | 'setExecError'
+  | 'select'
+  | 'clearSelection'
+  | 'setDriftDetected'
+  | 'clearDrift'
+  | 'setExtractionPreset'
+  | 'setLastExtractionPinIds'
+  | 'reset'
+> {
+  return {
+    conversationId: null,
+    turns: [],
+    opsLog: [],
+    tree: EMPTY_TREE,
+    sourceIndex: new Map(),
+    mode: 'idle',
+    panelExpanded: false,
+    isCommitted: false,
+    lastError: null,
+    execError: null,
+    selectedNodePath: null,
+    selectedSlotKey: null,
+    selectedTurnIndex: null,
+    selectedSource: null,
+    scrollToCenter: false,
+    driftDetected: false,
+    driftInfo: null,
+    driftChoices: [],
+    extractionPreset: 'balanced',
+    lastExtractionPinIds: [],
+  };
+}
+
+export const useWorkspaceStore = create<WorkspaceState>((set) => ({
+  ...initialState(),
+
+  setConversation: (id) => set({ conversationId: id }),
+  setTurns: (turns) => set({ turns }),
+  setDerived: ({ tree, sourceIndex, opsLog }) => set({ tree, sourceIndex, opsLog }),
+  setMode: (mode) => set({ mode }),
+  setPanelExpanded: (panelExpanded) => set({ panelExpanded }),
+  setCommitted: (isCommitted) => set({ isCommitted }),
+  setError: (lastError) => set({ lastError }),
+  setExecError: (execError) => set({ execError }),
+
+  select: (source, { nodePath, slotKey, turnIndex }) =>
     set({
-      base: structuredClone(content),
-      baseCommitHash: commitHash,
-      result: null,
-      appliedCount: 0,
-      execError: null,
-    });
-  },
-
-  setScriptText(text) {
-    const { ops, errors } = parseYOpsScript(text);
-    set({ scriptText: text, scriptOps: ops ?? [], parseErrors: errors });
-  },
-
-  execute() {
-    const { base, scriptOps, disabledOpIndices } = get();
-    if (scriptOps.length === 0) return;
-    const enabledOps = scriptOps.filter((_, i) => !disabledOpIndices.has(i));
-    const result = applyYOps(base, enabledOps);
-    const content = { trees: result.trees, relations: result.relations };
-    if (result.ok) {
-      set({
-        result: content,
-        appliedCount: result.applied,
-        execError: null,
-        mode: 'executed',
-      });
-    } else {
-      set({
-        result: content,
-        appliedCount: result.applied,
-        execError: result.error
-          ? {
-              op_index: result.error.op_index,
-              code: result.error.code ?? 'UNKNOWN',
-              message: result.error.message ?? 'Unknown error',
-            }
-          : null,
-        mode: 'executed',
-      });
-    }
-    // Sync result to draftStore for commit pipeline, but DON'T overwrite if
-    // draft already has metadata (slot_quotes/source) from extraction snapshot.
-    // The draft is the authoritative source for source tracing.
-    import('./draftStore').then(({ useDraftStore }) => {
-      const currentDraft = useDraftStore.getState().draft;
-      const hasMetadata = currentDraft.trees.some((t: { slot_quotes?: unknown; source?: unknown }) =>
-        t.slot_quotes || t.source
-      );
-      if (!hasMetadata) {
-        useDraftStore.getState().setDraft(content);
-      }
-
-      // Persist new ops to server (only ops added after last save)
-      if (result.ok) {
-        const { persistedOpsCount } = get();
-        const newOps = enabledOps.slice(persistedOpsCount);
-        if (newOps.length > 0) {
-          const convId = useDraftStore.getState().conversationId;
-          if (convId) {
-            import('@/lib/api/trees').then(({ createYOpsEntry }) => {
-              import('@/lib/session').then(({ getSessionUser }) => {
-                const user = getSessionUser();
-                const author = user?.name || user?.username || undefined;
-                createYOpsEntry(convId, newOps, 'manual', author ? { author } : undefined)?.catch(() => {});
-              });
-            });
-          }
-          set({ persistedOpsCount: enabledOps.length });
-        }
-
-        // Auto-rename conversation and project from root tree key
-        if (content.trees.length > 0) {
-          const rootKey = (content.trees[0] as { key: string }).key;
-          if (rootKey) {
-            const displayName = rootKey
-              .replace(/_/g, ' ')
-              .replace(/\b\w/g, (c: string) => c.toUpperCase());
-
-            import('@/store/chatStore').then(({ useChatStore }) => {
-              useChatStore.getState().setConversationTitle(displayName);
-              const convId = useDraftStore.getState().conversationId;
-              if (convId) {
-                import('@/lib/api/conversations').then(({ updateConversation }) => {
-                  updateConversation(convId, { title: displayName }).catch(() => {});
-                });
-              }
-              const projectId = useChatStore.getState().activeProjectId;
-              if (projectId) {
-                import('@/lib/api/projects').then(({ updateProject }) => {
-                  updateProject(projectId, { name: displayName }).catch(() => {});
-                });
-                useChatStore.getState().refreshSidebar();
-              }
-            });
-          }
-        }
-      }
-    });
-  },
-
-  applyGoldEdit(op) {
-    const { result } = get();
-    if (!result) return;
-
-    // Apply the op to the current result (visual update only)
-    const applied = applyYOps(result, [op]);
-    if (!applied.ok) return;
-
-    set({ result: { trees: applied.trees, relations: applied.relations } });
-
-    // Persist to audit log — append-only, doesn't modify script panel
-    import('./draftStore').then(({ useDraftStore }) => {
-      const convId = useDraftStore.getState().conversationId;
-      if (convId) {
-        import('@/lib/api/trees').then(({ createYOpsEntry }) => {
-          import('@/lib/session').then(({ getSessionUser }) => {
-            const user = getSessionUser();
-            const author = user?.name || user?.username || undefined;
-            createYOpsEntry(convId, [op], 'manual', { author, layer: 'gold' })?.catch(() => {});
-          });
-        });
-      }
-    });
-  },
-
-  toggleOp(index) {
-    const next = new Set(get().disabledOpIndices);
-    if (next.has(index)) next.delete(index);
-    else next.add(index);
-    set({ disabledOpIndices: next });
-  },
-
-  appendOp(op) {
-    const { scriptOps } = get();
-    const updatedOps = [...scriptOps, op];
-    const updatedText = opsToYaml(updatedOps);
-    set({ scriptText: updatedText, scriptOps: updatedOps, parseErrors: [] });
-  },
-
-  select(source, { nodePath, slotKey, turnIndex }) {
-    set({
+      selectedSource: source,
       selectedNodePath: nodePath ?? null,
       selectedSlotKey: slotKey ?? null,
       selectedTurnIndex: turnIndex ?? null,
-      selectedSource: source as SelectionSource,
       scrollToCenter: true,
-    });
-  },
-
-  clearSelection() {
+    }),
+  clearSelection: () =>
     set({
+      selectedSource: null,
       selectedNodePath: null,
       selectedSlotKey: null,
       selectedTurnIndex: null,
-      selectedSource: null,
       scrollToCenter: false,
-    });
-  },
+    }),
 
-  setMode(mode) {
-    set({ mode });
-  },
+  setDriftDetected: (info, choices) =>
+    set({ driftDetected: true, driftInfo: info, driftChoices: choices }),
+  clearDrift: () => set({ driftDetected: false, driftInfo: null, driftChoices: [] }),
 
-  setPanelExpanded(expanded) {
-    set({ panelExpanded: expanded });
-  },
+  setExtractionPreset: (extractionPreset) => set({ extractionPreset }),
+  setLastExtractionPinIds: (lastExtractionPinIds) => set({ lastExtractionPinIds }),
 
-  setExtractionPreset(preset) {
-    set({ extractionPreset: preset });
-  },
-
-  setDriftDetected(info, choices) {
-    set({ driftDetected: true, driftInfo: info, driftChoices: choices });
-  },
-
-  clearDrift() {
-    set({ driftDetected: false, driftInfo: null, driftChoices: [] });
-  },
-
-  reset() {
-    set({
-      mode: 'idle',
-      panelExpanded: false,
-      base: EMPTY_CONTENT,
-      baseCommitHash: null,
-      scriptText: '',
-      scriptOps: [],
-      parseErrors: [],
-      disabledOpIndices: new Set(),
-      result: null,
-      appliedCount: 0,
-      execError: null,
-      isCommitted: false,
-      selectedNodePath: null,
-      selectedSlotKey: null,
-      selectedTurnIndex: null,
-      selectedSource: null,
-      scrollToCenter: false,
-      driftDetected: false,
-      driftInfo: null,
-      driftChoices: [],
-      lastExtractionPinIds: [],
-      quoteValidation: null,
-    });
-  },
+  reset: () => set(initialState()),
 }));
