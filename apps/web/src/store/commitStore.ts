@@ -119,7 +119,7 @@ export const useCommitStore = create<CommitState>((set, get) => ({
       let enrichedTrees = draft.trees;
       if (conversationId && sourceIndex.size > 0) {
         try {
-          const { enrichTreesWithSourceRefs } = await import('@/queries/enrichSourceRefs');
+          const { enrichTreesWithSourceRefs } = await import('@/domain/enrichSourceRefs');
           enrichedTrees = enrichTreesWithSourceRefs(draft.trees, conversationId, sourceIndex);
         } catch {
           // Silent fallback — commit without source_ref enrichment

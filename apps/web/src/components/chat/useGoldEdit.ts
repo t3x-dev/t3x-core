@@ -13,7 +13,7 @@ import type { YOp } from '@t3x-dev/core';
 import { useCallback } from 'react';
 import { buildHumanSource, commitGoldEdit } from '@/commands/yops/goldEditBuilder';
 import { appendOpsAndReplay } from '@/queries/loadConversation';
-import { replay } from '@/queries/replay';
+import { replay } from '@/domain/replay';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 
 export function useGoldEdit() {

@@ -14,7 +14,7 @@
 import type { SourcedYOp, ValidationTurn } from '@t3x-dev/core';
 import { loadConversation as loadL1 } from '@/infrastructure/conversationLoader';
 import { useWorkspaceStore } from '@/store/workspaceStore';
-import { replay } from './replay';
+import { replay } from '@/domain/replay';
 
 export async function hydrateConversation(projectId: string, convId: string): Promise<void> {
   const store = useWorkspaceStore.getState();
