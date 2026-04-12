@@ -36,13 +36,16 @@ export interface ValidationResult {
   failingOps: FailingOp[];
 }
 
-function getSource(op: unknown): Source | undefined {
+/**
+ * Returns the raw source object if it exists and is an object — without
+ * filtering by type. Type discrimination happens in validateSource so that
+ * unrecognized types hit `invalid_source_type` rather than `missing_source`.
+ */
+function getSource(op: unknown): unknown {
   if (!op || typeof op !== 'object') return undefined;
   const maybe = (op as { source?: unknown }).source;
   if (!maybe || typeof maybe !== 'object') return undefined;
-  const t = (maybe as { type?: unknown }).type;
-  if (t !== 'llm' && t !== 'human') return undefined;
-  return maybe as Source;
+  return maybe;
 }
 
 export function validateSource(
@@ -56,34 +59,38 @@ export function validateSource(
     const op = ops[i];
     const src = getSource(op);
 
-    if (!src) {
+    if (src === undefined) {
       failing.push({ op, opIndex: i, reason: 'missing_source' });
       continue;
     }
 
-    if (isLLMSource(src)) {
-      const content = turnMap.get(src.turn_ref.turn_hash);
+    // Cast to Source for the type guards — the guards themselves check `.type`,
+    // so an unrecognized type safely falls through to the `else` branch below.
+    const typedSrc = src as Source;
+
+    if (isLLMSource(typedSrc)) {
+      const content = turnMap.get(typedSrc.turn_ref.turn_hash);
       if (content === undefined) {
         failing.push({
           op,
           opIndex: i,
           reason: 'unknown_turn_hash',
-          detail: `turn_hash ${src.turn_ref.turn_hash} not in provided turns`,
+          detail: `turn_hash ${typedSrc.turn_ref.turn_hash} not in provided turns`,
         });
         continue;
       }
-      const quote = src.turn_ref.quote;
+      const quote = typedSrc.turn_ref.quote;
       if (!quote || !content.includes(quote)) {
         failing.push({
           op,
           opIndex: i,
           reason: 'unverifiable_quote',
-          detail: `quote "${quote}" is not a verbatim substring of turn ${src.turn_ref.turn_hash}`,
+          detail: `quote "${quote}" is not a verbatim substring of turn ${typedSrc.turn_ref.turn_hash}`,
         });
         continue;
       }
-    } else if (isHumanSource(src)) {
-      if (!src.author || src.author.trim() === '') {
+    } else if (isHumanSource(typedSrc)) {
+      if (!typedSrc.author || typedSrc.author.trim() === '') {
         failing.push({ op, opIndex: i, reason: 'missing_author' });
         continue;
       }

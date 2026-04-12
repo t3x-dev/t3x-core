@@ -61,6 +61,16 @@ describe('validateSource', () => {
     expect(result.failingOps[0].reason).toBe('missing_source');
   });
 
+  it('rejects op with unrecognized source type', () => {
+    const op = {
+      set: { path: 'x', value: 'y' },
+      source: { type: 'robot', foo: 'bar' },
+    } as unknown as SourcedYOp;
+    const result = validateSource([op], [turn]);
+    expect(result.ok).toBe(false);
+    expect(result.failingOps[0].reason).toBe('invalid_source_type');
+  });
+
   it('rejects LLM source with empty quote', () => {
     const op = {
       set: { path: 'x', value: 'y' },
