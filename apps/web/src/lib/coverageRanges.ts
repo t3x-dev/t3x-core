@@ -1,4 +1,4 @@
-import type { TreeNode } from '@t3x-dev/core';
+import type { Source } from '@t3x-dev/core';
 
 export interface UncoveredRange {
   start: number;
@@ -6,9 +6,9 @@ export interface UncoveredRange {
 }
 
 /**
- * Given all slot_quotes from trees and a message's text,
- * compute the character ranges that are NOT covered by any quote.
- * Filters out segments < 10 chars and pure whitespace.
+ * Given a message's text and a list of verbatim quotes, compute the
+ * character ranges that are NOT covered by any quote. Filters out short
+ * or whitespace-only segments.
  */
 export function computeUncoveredRanges(
   messageText: string,
@@ -37,7 +37,6 @@ export function computeUncoveredRanges(
     return [{ start: 0, end: messageText.length }];
   }
 
-  // Sort and merge covered ranges
   covered.sort((a, b) => a.start - b.start);
   const merged: Array<{ start: number; end: number }> = [covered[0]];
   for (let i = 1; i < covered.length; i++) {
@@ -49,7 +48,6 @@ export function computeUncoveredRanges(
     }
   }
 
-  // Compute gaps
   const uncovered: UncoveredRange[] = [];
   let pos = 0;
   for (const range of merged) {
@@ -62,7 +60,6 @@ export function computeUncoveredRanges(
     uncovered.push({ start: pos, end: messageText.length });
   }
 
-  // Filter short or whitespace-only segments
   return uncovered.filter((r) => {
     const text = messageText.slice(r.start, r.end).trim();
     return text.length >= 10;
@@ -70,37 +67,19 @@ export function computeUncoveredRanges(
 }
 
 /**
- * Collect all slot_quotes values from trees, grouped by source turn index.
+ * Collect verbatim quotes attributable to a specific conversation turn,
+ * derived from the sourceIndex.
  */
-export function collectQuotesByTurn(trees: TreeNode[]): Map<number, string[]> {
-  const result = new Map<number, string[]>();
-
-  function walk(node: TreeNode, inheritedTurn: number | null): void {
-    const turnIndex = parseSource(node.source) ?? inheritedTurn;
-
-    if (node.slot_quotes && turnIndex != null) {
-      const existing = result.get(turnIndex) ?? [];
-      for (const quote of Object.values(node.slot_quotes)) {
-        if (typeof quote === 'string' && quote.length > 0) {
-          existing.push(quote);
-        }
-      }
-      result.set(turnIndex, existing);
-    }
-
-    for (const child of node.children ?? []) {
-      walk(child, turnIndex);
+export function collectQuotesForTurn(
+  sourceIndex: Map<string, Source>,
+  turnHash: string,
+): string[] {
+  const quotes: string[] = [];
+  for (const src of sourceIndex.values()) {
+    if (src.type === 'llm' && src.turn_ref.turn_hash === turnHash) {
+      const q = src.turn_ref.quote;
+      if (q && q.length > 0) quotes.push(q);
     }
   }
-
-  for (const tree of trees) {
-    walk(tree, null);
-  }
-  return result;
-}
-
-function parseSource(source: string | undefined): number | null {
-  if (!source) return null;
-  const match = source.match(/^T(\d+)/);
-  return match ? Number.parseInt(match[1], 10) : null;
+  return quotes;
 }

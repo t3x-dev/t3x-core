@@ -7,7 +7,7 @@ import remarkGfm from 'remark-gfm';
 import { useSlotActions } from '@/hooks/useSlotActions';
 import type { Citation } from '@/lib/api/chat';
 import type { CommittedHighlight } from '@/lib/committedHighlights';
-import { collectQuotesByTurn, computeUncoveredRanges } from '@/lib/coverageRanges';
+import { collectQuotesForTurn, computeUncoveredRanges } from '@/lib/coverageRanges';
 import { traceYamlToChat } from '@/lib/hoverTrace';
 import type { SourceMapping } from '@/lib/sourceMap';
 import { cn } from '@/lib/utils';
@@ -400,13 +400,12 @@ export function ChatMessage({
   }, [isSourceMessage, trace, content]);
 
   // ── Coverage mode: compute uncovered ranges ──
+  const sourceIndex = useWorkspaceStore((s) => s.sourceIndex);
   const uncoveredRanges = useMemo(() => {
-    if (!coverageMode || !content || turnIndex == null) return [];
-    const draftTrees = useWorkspaceStore.getState().tree.trees;
-    const quotesByTurn = collectQuotesByTurn(draftTrees);
-    const quotes = quotesByTurn.get(turnIndex) ?? [];
+    if (!coverageMode || !content || !turnHash) return [];
+    const quotes = collectQuotesForTurn(sourceIndex, turnHash);
     return computeUncoveredRanges(content, quotes);
-  }, [coverageMode, content, turnIndex]);
+  }, [coverageMode, content, turnHash, sourceIndex]);
 
   const hasCharHighlights = highlightRanges.length > 0;
   const hasSourceMappings = (sourceMap?.length ?? 0) > 0;
