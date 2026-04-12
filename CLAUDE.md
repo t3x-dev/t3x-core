@@ -66,20 +66,24 @@ This is a pnpm monorepo managed by Turborepo:
 t3x/
 ├── packages/
 │   ├── yops/           # @t3x-dev/yops - YOps: 18 declarative YAML operations (spec-driven)
+│   ├── yschema/        # YAML schema helpers (shared validation primitives)
 │   ├── core/           # @t3x-dev/core - T3X engine: diff, merge, hash chains, extraction
 │   ├── storage/        # @t3x-dev/storage - PostgreSQL persistence (Drizzle ORM)
-│   ├── api-client/     # @t3x-dev/api-client - TypeScript API client
-│   └── runner/         # @t3x-dev/runner - Shared runner library (schemas, evaluator, trace)
+│   ├── api/            # @t3x-dev/api - createApp() factory library (Hono + OpenAPI routes)
+│   └── api-client/     # @t3x-dev/api-client - TypeScript API client
 ├── apps/
 │   ├── web/            # t3x-webui - Next.js 16 frontend (App Router + XYFlow)
-│   ├── api/            # @t3x-dev/api - Hono API server with OpenAPI
-│   ├── runner/         # @t3x-dev/runner - Grey-box agent evaluation engine (server)
+│   ├── api/            # Hono API server binary — wraps packages/api via createApp()
+│   ├── runner/         # @t3x-dev/runner - Grey-box agent evaluation engine (server + shared lib)
 │   ├── cli/            # @t3x-dev/cli - Command line interface
+│   ├── mcp/            # @t3x-dev/mcp - MCP server exposing T3X tools to AI agents
 │   └── agent-demo/     # Demo agent for testing
 ├── biome.json          # Linting and formatting config
 ├── turbo.json          # Turborepo task config
 └── docker-compose.yml
 ```
+
+**Note:** `packages/api` is the published library containing route definitions and the `createApp()` factory; `apps/api` is the runnable server that wraps it. `apps/runner` serves both as the runner binary and the published `@t3x-dev/runner` library (no separate `packages/runner`).
 
 ## Build Commands
 
@@ -143,18 +147,27 @@ packages/yops (@t3x-dev/yops)          ← standalone, zero deps
 packages/core (@t3x-dev/core)
   └─► packages/yops
 
-apps/web (t3x-webui)
-  └─► packages/storage (@t3x-dev/storage)
-        └─► packages/core
+packages/storage (@t3x-dev/storage)
+  └─► packages/core
 
-apps/api (@t3x-dev/api)
-  ├─► packages/storage
+packages/api (@t3x-dev/api)            ← route/createApp library
   ├─► packages/core
+  ├─► packages/storage
   └─► apps/runner (@t3x-dev/runner)
+
+apps/api (server binary)
+  └─► packages/api
+
+apps/web (t3x-webui)
+  └─► packages/storage
 
 apps/cli (@t3x-dev/cli)
   ├─► packages/core
   └─► packages/api-client (@t3x-dev/api-client)
+
+apps/mcp (@t3x-dev/mcp)
+  ├─► packages/core
+  └─► packages/api-client
 ```
 
 ### YOps Architecture (packages/yops)
@@ -195,19 +208,40 @@ T3X uses PostgreSQL (via Drizzle ORM):
 - **Postgres** for Docker/production
 - **Supabase** adapter available
 
-Key tables: `projects`, `conversations`, `turns`, `branches`, `commits`, `agent_drafts`, `drafts`, `leaves`, `pins`, `leaf_history`, `conversation_contexts`, `segment_embeddings`, `merge_drafts`, `deploy_agents`, `runs`
+Schema is split across several files in `packages/storage/src/`:
+
+| File | Tables |
+|------|--------|
+| `schema.ts` | Core: `projects`, `conversations`, `turns`, `branches`, `agent_drafts`, `drafts`, `leaves`, `leaf_history`, `leaf_output_edits`, `pins`, `conversation_contexts`, `merge_drafts`, `deploy_agents`, `runs`, `segment_embeddings`, `saved_comparisons`, `templates`, `recipes`, `webhooks`, `share_tokens`, `users`, `accounts`, `api_keys`, `notifications`, `global_settings`, `yops_log` |
+| `schema-commits.ts` | `commits`, `commit_rewrites`, `frame_lineage` |
+| `schema-trees.ts` | `trees`, `tree_relations`, `knowledge_nodes`, `knowledge_edges`, `knowledge_node_members` |
+| `schema-knowledge-conflicts.ts` | `knowledge_conflicts` |
+| `schema-node-modifications.ts` | `node_modifications` |
+| `schema-extraction-feedback.ts` | `extraction_feedback` |
+| `schema-metrics.ts` | `metrics_events`, `token_usage`, `topics` |
+| `schema-tree-state.ts` | Tree state helpers (no standalone tables) |
 
 ### Hash Chains
 
 - **Turn chain**: `parent_turn_hash → turn_hash` (SHA-256 of JCS-canonicalized JSON)
 - **Commit chain**: DAG with `parent_hashes[]`, supports branching and merging
 
-### Extractor Rings (t3x-core)
+### Extraction Pipeline (t3x-core)
 
-Semantic extraction happens in three rings:
-- **Ring 1**: Keywords, entities, temporal anchors, preference tags
-- **Ring 2**: Intent seeds, relations, facets
-- **Ring 3**: Sentence-level segments
+Extraction converts raw conversation turns into a YOps-mutated knowledge tree. The pipeline lives in `packages/core/src/extractors/` and is LLM-assisted, but the mutation path is deterministic (YOps).
+
+| Stage | Files | Role |
+|-------|-------|------|
+| **Prompt build** | `extractionPrompt.ts`, `yopsPrompt.ts`, `extractionStyleConfig.ts` | Assemble extraction or incremental-YOps prompts (style, few-shot, context) |
+| **Strategy** | `strategies/yaml-strategy.ts`, `extractor.ts` | Dispatch to LLM via provider, route through chosen strategy |
+| **Parse** | `yopsParser.ts` | Parse LLM-emitted YOps YAML into validated ops |
+| **Relations** | `relationExtractor.ts`, `relationPrompt.ts`, `relationParser.ts` | Second LLM pass to infer inter-node relations (`relate`/`unrelate`) |
+| **Transforms** | `transforms/` (`consolidate`, `nest`, `flagContradictions`, `checkRegression`) | Deterministic post-processing on the extracted tree |
+| **Repair / correction** | `repairPrompt.ts`, `correctionPrompt.ts`, `fuzzyLocate.ts` | Retry prompts when parse/validation fails; locate source spans |
+| **Compression** | `compressor.ts`, `compressPrompt.ts` | Optional size reduction of large extraction results |
+| **Adaptive thresholds** | `adaptiveThresholds.ts` | Tune similarity/inclusion thresholds per project |
+
+**Flow:** `turns → extraction prompt → LLM → YOps YAML → parser → apply via @t3x-dev/yops → relation pass → deterministic transforms → tree mutation`. The LLM only proposes YOps; all tree mutation goes through the YOps engine, preserving determinism and auditability (see `yops_log` table).
 
 ### Diff Engine (t3x-core)
 
@@ -275,30 +309,38 @@ src/
 │   ├── shared/                  # Shared UI (TurnBubble, etc.)
 │   ├── conversation/            # Conversation components
 │   └── optimiser/               # Agent evaluation UI
-├── store/                       # Zustand state management
+├── store/                       # Zustand state management (L3 — UI state only)
 │   ├── canvasStore.ts           # Canvas store (core state + slice composition)
 │   ├── canvasStoreTypes.ts      # Shared CanvasState type + slice interfaces
 │   ├── canvasStoreUtils.ts      # Pure utility functions (layout, position, graph helpers)
-│   ├── canvasMergeSlice.ts      # Merge domain slice (state + methods + selectors)
+│   ├── canvasMergeSlice.ts      # Merge domain slice
 │   ├── canvasLeafSlice.ts       # Leaf panel domain slice
+│   ├── canvasCommitSlice.ts     # Commit domain slice
+│   ├── canvasNodeSlice.ts       # Node domain slice
 │   ├── pinsStore.ts             # V4 pin management (CRUD, selectors)
 │   ├── projectStore.ts          # Project state
 │   ├── mergeWorkspaceStore.ts   # Full-screen merge workspace state
-│   ├── optimiserStore.ts        # Agent evaluation UI state (persisted)
-│   └── agentDemoStore.ts        # Agent demo state
-├── hooks/                       # React hooks
-│   ├── useApi.ts                # API wrapper
-│   ├── useBranchCommits.ts      # Branch commit data
-│   └── useReducedMotion.ts      # Accessibility: reduced motion
-├── lib/
-│   ├── api.ts                   # API client functions
-│   ├── db.ts                    # Database singleton
-│   ├── bridgeQueries.ts         # Storage queries bridge
-│   ├── diffUtils.ts             # Diff algorithm (Jaccard + LCS)
-│   ├── elkLayout.ts             # ELK.js graph layout
-│   └── highlightUtils.ts        # Text highlighting
+│   ├── commitStore.ts           # Commit list state
+│   ├── commitDetailStore.ts     # Selected commit detail state
+│   ├── draftWorkspaceStore.ts   # Draft workspace state
+│   ├── knowledgeGraphStore.ts   # Knowledge graph view state
+│   ├── chatStore.ts, chatSessionStore.ts  # Chat UI state
+│   ├── searchStore.ts           # Search UI state (delegates I/O to queries/)
+│   ├── sessionStore.ts, settingsStore.ts, templateStore.ts, workspaceStore.ts
+│   └── optimiserStore.ts        # Agent evaluation UI state (persisted)
+├── queries/                     # L3 entry points for data fetching (call infrastructure L1)
+├── infrastructure/              # L1 adapters — raw API/storage I/O (mergeApi, conversationLoader, yopsLog)
+├── commands/                    # User-intent commands dispatched from UI
+├── hooks/                       # React hooks (useApi, useBranchCommits, useReducedMotion, …)
+├── lib/                         # Shared utilities (api.ts, db.ts, diffUtils, elkLayout, highlightUtils, …)
+├── utils/                       # Pure utility functions
+├── data/                        # Static data
+├── types/                       # Shared TypeScript types
+├── middleware.ts                # Next.js middleware
 └── __tests__/                   # API route tests
 ```
+
+**Layering (L1/L2/L3):** `infrastructure/` is L1 (pure I/O adapters), `queries/` is the L3 entry for reads, `store/` is forbidden from touching I/O directly — stores delegate to `queries/` and `commands/`. This is the active refactor on branch `refactor/store-l1-ban-and-infrastructure-merge`.
 
 ### API Response Format
 ```json
@@ -319,10 +361,12 @@ The canvas store uses the Zustand slice pattern for modular state management:
 
 ```
 canvasStore.ts          ← Entry point: create<CanvasState>(slices + core)
-├── canvasStoreTypes.ts ← Shared types: CanvasState, MergeSlice, LeafPanelSlice
+├── canvasStoreTypes.ts ← Shared types: CanvasState, slice interfaces
 ├── canvasStoreUtils.ts ← Pure functions: layout, position, graph traversal
-├── canvasMergeSlice.ts ← Merge domain: state + 6 methods + 4 selectors
-└── canvasLeafSlice.ts  ← Leaf domain: state + 4 methods
+├── canvasMergeSlice.ts ← Merge domain
+├── canvasLeafSlice.ts  ← Leaf panel domain
+├── canvasCommitSlice.ts← Commit domain
+└── canvasNodeSlice.ts  ← Node domain
 ```
 
 All consumers import from `canvasStore.ts` (re-exports selectors/types for backward compatibility).
@@ -488,7 +532,14 @@ T3X uses prefixed IDs for type safety:
 - `leaf_` - Leaf IDs (V4, e.g., `leaf_jkl012`)
 - `lhist_` - Leaf history IDs (V4, e.g., `lhist_pqr678`)
 - `pin_` - Pin IDs (V4, e.g., `pin_mno345`)
+- `ak_` - API key IDs (raw key values use prefix `t3xk_`)
+- `share_` - Share token IDs
+- `draft_` - Draft IDs
+- `dc_` - Draft constraint IDs
+- `rel_` - Relation IDs
 - Legacy: `s1`, `s2` (sentence), `c1`, `c2` (constraint), `mc1` (merged constraint) - V3 format
+
+Source of truth: `ID_PREFIXES` in `packages/core/src/types/index.ts`.
 
 ## API Naming Conventions
 
@@ -506,9 +557,9 @@ T3X uses prefixed IDs for type safety:
 
 | File | Purpose | Can Modify Alone? |
 |------|---------|-------------------|
-| packages/core/src/types/v4/index.ts | TypeScript types | ❌ No |
-| packages/storage/src/schema-v4.ts | Database schema | ❌ No |
-| apps/api/src/schemas/contracts.ts | API contracts | ❌ No |
+| packages/core/src/types/index.ts | TypeScript types (V4 types live here; no separate v4/ dir) | ❌ No |
+| packages/storage/src/schema.ts (+ schema-*.ts shards) | Database schema | ❌ No |
+| packages/api/src/schemas/contracts.ts | API contracts | ❌ No |
 
 Rule: Contract = Law, Implementation = Freedom
 
@@ -577,7 +628,7 @@ At the start of a new conversation, read relevant documentation based on task ty
 | Source Context / Highlighting | `docs/specification/commit-source-context-presentation.md`, `docs/specification/commit-source-context-implementation-review.md` |
 | Diff / Merge Algorithms | `docs/specification/words-based-diff-merge-architecture.md` |
 | Core Algorithms | `packages/core/src/types/`, `docs/specification/ring-schema.md` |
-| Storage Layer | `packages/storage/src/schema-v4.ts`, `packages/storage/src/schema.ts` |
+| Storage Layer | `packages/storage/src/schema.ts` (+ `schema-commits.ts`, `schema-trees.ts`, `schema-metrics.ts`, etc.) |
 | Runner/Eval | `apps/runner/docs/README.md`, `apps/runner/docs/ARCHITECTURE.md`, `apps/runner/docs/n8n-workflow-setup.md` |
 | Testing | `docs/LOCAL_TESTING.md`, `docs/testing/bvt-smoke.md`, `docs/testing/e2e-test-plan.md` |
 | Docker / Deployment | `docs/docker.md` |
@@ -665,7 +716,7 @@ Track markers: `[A1]`, `[A2]` = Track A (Storage/Core), `[B1]`, `[B2]` = Track B
 
 ## MCP Server (@t3x-dev/mcp)
 
-T3X MCP Server exposes 47 tools for AI agents (Claude Code, Cursor, etc.) to perform semantic version control.
+T3X MCP Server exposes 36 tools for AI agents (Claude Code, Cursor, etc.) to perform semantic version control. Tool files are in `apps/mcp/src/tools/` (one file per tool) — count reflects the current directory; update this number when tools are added or removed.
 
 ### Setup
 
