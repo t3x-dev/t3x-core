@@ -75,6 +75,7 @@ export function YOpsWorkspace({ customWidth }: { customWidth?: number }) {
   if (!panelExpanded) {
     return (
       <div
+        data-testid="yops-panel-collapsed"
         className="flex flex-col items-center py-4 gap-3 cursor-pointer hover:bg-[var(--hover-bg)] transition-colors"
         style={{ width: COLLAPSED_WIDTH }}
         onClick={() => setPanelExpanded(true)}

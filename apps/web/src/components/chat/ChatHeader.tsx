@@ -100,6 +100,7 @@ export function ChatHeader({
       {panelExpanded && !isCommitted && <div ref={dropdownRef} className="relative flex shrink-0" onBlur={handleBlur}>
         <button
           type="button"
+          data-testid="extract-button"
           onClick={() => window.dispatchEvent(new CustomEvent('t3x:extract-requested'))}
           disabled={isExtracting}
           className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-semibold rounded-l border border-r-0 border-[var(--source)]/30 bg-[var(--source)]/10 text-[var(--source)] hover:bg-[var(--source)]/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"

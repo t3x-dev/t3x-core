@@ -561,7 +561,7 @@ export function AfterPanel({
   }, []);
 
   return (
-    <div className="flex flex-col h-full relative">
+    <div data-testid="after-panel" className="flex flex-col h-full relative">
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-1.5 border-b border-[var(--stroke-default)] bg-[var(--panel-alt)] shrink-0">
         <div className="flex items-center gap-2">
