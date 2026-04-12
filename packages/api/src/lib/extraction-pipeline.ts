@@ -579,11 +579,12 @@ export async function* runExtractionPipeline(
       };
       for (const tree of organizedSnapshot.trees) applyMeta(tree, '');
 
-      // ── Deterministic metadata guardrail ──
-      // Contract: every slot must have a verifiable quote, every node must have a source.
-      // Validate LLM output; if it doesn't meet the contract, fill gaps by text matching.
-      // This is the Data Layer guarantee — never trust the LLM to honor metadata format.
-      const repairMetadata = (
+      // ── Deterministic metadata verifier ──
+      // Contract: every slot quote MUST be a verbatim substring of a conversation turn.
+      // No fuzzy matching, no synthesis — the audit trail must be 100% deterministic.
+      // If the LLM didn't provide a verifiable quote, the slot has no source tracing
+      // (slot_quote is simply absent — no guessing).
+      const verifyMetadata = (
         trees: import('@t3x-dev/core').TreeNode[],
         turns: Array<{ content: string }>
       ) => {
@@ -592,43 +593,50 @@ export async function* runExtractionPipeline(
         const walk = (node: import('@t3x-dev/core').TreeNode) => {
           if (!node.slot_quotes) node.slot_quotes = {};
 
-          // Assign source by finding the turn that contains the most slot values
-          if (!node.source) {
-            let bestTurn = 0;
-            let bestMatches = 0;
+          const verifiedQuotes: Record<string, string> = {};
+          const turnVotes: Record<number, number> = {};
+
+          for (const [key, quote] of Object.entries(node.slot_quotes)) {
+            if (typeof quote !== 'string' || !quote) continue;
+            const quoteLower = quote.toLowerCase();
+            // Only keep if verbatim substring of some turn
             for (let i = 0; i < turnsLower.length; i++) {
-              let matches = 0;
-              for (const val of Object.values(node.slots)) {
-                if (typeof val === 'string' && turnsLower[i].includes(val.toLowerCase())) {
-                  matches++;
-                }
-              }
-              if (matches > bestMatches) {
-                bestMatches = matches;
-                bestTurn = i;
-              }
-            }
-            if (bestMatches > 0) node.source = `T${bestTurn + 1}`;
-          }
-
-          // Fill missing or unverified quotes by searching slot values in turns
-          for (const [key, val] of Object.entries(node.slots)) {
-            if (typeof val !== 'string') continue;
-            const existing = node.slot_quotes[key];
-            const valLower = val.toLowerCase();
-
-            // Check if existing quote is verifiable
-            const existingOk = existing && turnsLower.some((t) => t.includes(existing.toLowerCase()));
-            if (existingOk) continue;
-
-            // Find the value verbatim in a turn
-            for (let i = 0; i < turnsLower.length; i++) {
-              const idx = turnsLower[i].indexOf(valLower);
-              if (idx !== -1) {
-                node.slot_quotes[key] = turns[i].content.slice(idx, idx + val.length);
+              if (turnsLower[i].includes(quoteLower)) {
+                verifiedQuotes[key] = quote;
+                turnVotes[i] = (turnVotes[i] ?? 0) + 1;
                 break;
               }
             }
+          }
+
+          // Also try to verify slot values themselves (in case LLM skipped metadata
+          // but produced verbatim values). Still 100% deterministic — substring only.
+          for (const [key, val] of Object.entries(node.slots)) {
+            if (verifiedQuotes[key]) continue;
+            if (typeof val !== 'string') continue;
+            const valLower = val.toLowerCase();
+            for (let i = 0; i < turnsLower.length; i++) {
+              const idx = turnsLower[i].indexOf(valLower);
+              if (idx !== -1) {
+                verifiedQuotes[key] = turns[i].content.slice(idx, idx + val.length);
+                turnVotes[i] = (turnVotes[i] ?? 0) + 1;
+                break;
+              }
+            }
+          }
+
+          node.slot_quotes = verifiedQuotes;
+
+          // Verify source: must be a valid turn tag AND match a slot_quote's turn
+          if (node.source) {
+            const match = node.source.match(/^T(\d+)/);
+            if (!match || Number(match[1]) < 1 || Number(match[1]) > turns.length) {
+              node.source = undefined;
+            }
+          }
+          if (!node.source && Object.keys(turnVotes).length > 0) {
+            const bestTurn = Object.entries(turnVotes).reduce((a, b) => (b[1] > a[1] ? b : a));
+            node.source = `T${Number(bestTurn[0]) + 1}`;
           }
 
           for (const child of node.children ?? []) walk(child);
@@ -639,13 +647,15 @@ export async function* runExtractionPipeline(
 
       const turnsForValidation = selectedTurns.map((t) => ({ content: t.content }));
       const validation = validateMetadata(organizedSnapshot.trees, turnsForValidation);
-      if (!validation.ok) {
-        pinoLogger.info(
-          { missing_quotes: validation.missingQuotes.length, missing_sources: validation.missingSources.length, unverified: validation.unverifiedQuotes.length },
-          'extraction: repairing metadata deterministically'
-        );
-        repairMetadata(organizedSnapshot.trees, turnsForValidation);
-      }
+      pinoLogger.info(
+        {
+          missing_quotes: validation.missingQuotes.length,
+          missing_sources: validation.missingSources.length,
+          unverified: validation.unverifiedQuotes.length,
+        },
+        'extraction: verifying metadata (deterministic)'
+      );
+      verifyMetadata(organizedSnapshot.trees, turnsForValidation);
 
       changesSummary = {
         transforms: ['consolidate', 'nest', 'flagContradictions', 'checkRegression'],
