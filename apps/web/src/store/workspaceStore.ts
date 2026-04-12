@@ -1,12 +1,6 @@
 import type { SemanticContent, Source, SourcedYOp } from '@t3x-dev/core';
 import { create } from 'zustand';
 
-export interface ExecError {
-  op_index: number;
-  code: string;
-  message: string;
-}
-
 export interface DriftInfo {
   relation?: string;
   new_topic?: string;
@@ -36,7 +30,6 @@ interface WorkspaceState {
   panelExpanded: boolean;
   isCommitted: boolean;
   lastError: string | null;
-  execError: ExecError | null;
 
   // ── Selection (ephemeral, cleared on refresh) ──
   selectedNodePath: string | null;
@@ -66,7 +59,6 @@ interface WorkspaceState {
   setPanelExpanded: (expanded: boolean) => void;
   setCommitted: (committed: boolean) => void;
   setError: (err: string | null) => void;
-  setExecError: (err: ExecError | null) => void;
 
   select: (
     source: SelectionSource,
@@ -94,7 +86,6 @@ function initialState(): Omit<
   | 'setPanelExpanded'
   | 'setCommitted'
   | 'setError'
-  | 'setExecError'
   | 'select'
   | 'clearSelection'
   | 'setDriftDetected'
@@ -113,7 +104,6 @@ function initialState(): Omit<
     panelExpanded: false,
     isCommitted: false,
     lastError: null,
-    execError: null,
     selectedNodePath: null,
     selectedSlotKey: null,
     selectedTurnIndex: null,
@@ -137,7 +127,6 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   setPanelExpanded: (panelExpanded) => set({ panelExpanded }),
   setCommitted: (isCommitted) => set({ isCommitted }),
   setError: (lastError) => set({ lastError }),
-  setExecError: (execError) => set({ execError }),
 
   select: (source, { nodePath, slotKey, turnIndex }) =>
     set({
