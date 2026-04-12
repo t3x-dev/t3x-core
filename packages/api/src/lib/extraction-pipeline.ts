@@ -578,6 +578,59 @@ export async function* runExtractionPipeline(
       };
       for (const tree of organizedSnapshot.trees) applyMeta(tree, '');
 
+      // If slot_quotes are still missing (LLM didn't output metadata block),
+      // generate them deterministically by matching slot values against turns.
+      const turnsText = selectedTurns.map((t, i) => ({
+        index: i + 1,
+        content: t.content.toLowerCase(),
+        role: t.role,
+      }));
+
+      const generateQuotes = (node: import('@t3x-dev/core').TreeNode, prefix: string) => {
+        const nodePath = prefix ? `${prefix}/${node.key}` : node.key;
+        if (!node.slot_quotes) node.slot_quotes = {};
+        if (!node.source) {
+          // Find which turn contains the most slot values
+          let bestTurn = 1;
+          let bestMatches = 0;
+          for (const turn of turnsText) {
+            let matches = 0;
+            for (const val of Object.values(node.slots)) {
+              if (typeof val === 'string' && turn.content.includes(val.toLowerCase())) matches++;
+            }
+            if (matches > bestMatches) { bestMatches = matches; bestTurn = turn.index; }
+          }
+          if (bestMatches > 0) node.source = `T${bestTurn}`;
+        }
+        // Generate slot_quotes by finding slot values in turns
+        for (const [key, val] of Object.entries(node.slots)) {
+          if (node.slot_quotes[key]) continue; // already has a quote
+          if (typeof val !== 'string') continue;
+          const valLower = val.toLowerCase();
+          for (const turn of turnsText) {
+            const idx = turn.content.indexOf(valLower);
+            if (idx !== -1) {
+              // Extract the original-case quote from the turn
+              const originalTurn = selectedTurns[turn.index - 1].content;
+              node.slot_quotes[key] = originalTurn.slice(idx, idx + val.length);
+              break;
+            }
+          }
+        }
+        for (const child of node.children ?? []) generateQuotes(child, nodePath);
+      };
+
+      // Only run if snapshot is missing quotes
+      const hasAnyQuotes = organizedSnapshot.trees.some((t: import('@t3x-dev/core').TreeNode) => {
+        const check = (n: import('@t3x-dev/core').TreeNode): boolean =>
+          (n.slot_quotes && Object.keys(n.slot_quotes).length > 0) ||
+          (n.children ?? []).some(check);
+        return check(t);
+      });
+      if (!hasAnyQuotes) {
+        for (const tree of organizedSnapshot.trees) generateQuotes(tree, '');
+      }
+
       changesSummary = {
         transforms: ['consolidate', 'nest', 'flagContradictions', 'checkRegression'],
         regressionWarnings: transformResult.regressionWarnings,
