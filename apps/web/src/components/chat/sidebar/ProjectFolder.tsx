@@ -1,9 +1,9 @@
 'use client';
 
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import type { Conversation, Project } from '@/lib/api/types';
 import { cn } from '@/lib/utils';
 import { useChatStore } from '@/store/chatStore';
+import type { Conversation, Project } from '@/types/api';
 
 export interface ProjectFolderProps {
   project: Project;

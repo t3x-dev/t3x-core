@@ -116,6 +116,34 @@
       }
     },
     {
+      "includes": ["apps/web/src/components/chat/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": "@/commands/**",
+                    "message": "Components must not import from the commands layer directly. Route through useExtraction or a dedicated hook."
+                  },
+                  {
+                    "group": "@/infrastructure/**",
+                    "message": "Components must not import from the infrastructure layer directly. Use queries or the store instead."
+                  },
+                  {
+                    "group": "@/lib/api/**",
+                    "message": "Chat components must route lib/api reads/writes through a hook (hooks/) or query (queries/). Shared API types should be re-exported from @/types/api."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
       "includes": [
         "apps/web/src/components/chat/useExtraction.ts",
         "apps/web/src/components/chat/useGoldEdit.ts"
