@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { appendYOps, loadYOpsLog, PersistenceError } from '../yopsLog';
+import { appendYOps, loadYOpsLog, PersistenceError, deriveRowSource } from '../yopsLog';
 import * as client from '@/lib/api/trees';
 import { ApiError } from '@/lib/api/core';
 import type { SourcedYOp } from '@t3x-dev/core';
@@ -18,6 +18,12 @@ const llmOp: SourcedYOp = {
     turn_ref: { turn_hash: 'sha256:a', quote: 'x' },
   },
 } as unknown as SourcedYOp;
+
+describe('deriveRowSource', () => {
+  it('returns "manual" for empty ops array', () => {
+    expect(deriveRowSource([])).toBe('manual');
+  });
+});
 
 describe('appendYOps', () => {
   it('delegates to createYOpsEntry with row source "manual" for human ops', async () => {

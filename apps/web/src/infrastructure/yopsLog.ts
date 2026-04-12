@@ -39,7 +39,7 @@ function wrapError(operation: PersistenceError['operation'], err: unknown): Pers
  * Per-op source.type is the authoritative provenance; this tag exists for
  * legacy query filtering and is no longer part of the source contract.
  */
-function deriveRowSource(ops: readonly SourcedYOp[]): YOpsSource {
+export function deriveRowSource(ops: readonly SourcedYOp[]): YOpsSource {
   if (ops.length === 0) return 'manual';
   const allLLM = ops.every((o) => (o as { source: { type: string } }).source.type === 'llm');
   return allLLM ? 'pipeline' : 'manual';
