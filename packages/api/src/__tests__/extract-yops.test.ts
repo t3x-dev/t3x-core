@@ -6,6 +6,7 @@
  * that mock the endpoint via page.route().
  */
 
+import { buildYOpsPrompt } from '@t3x-dev/core';
 import type { AnyDB } from '@t3x-dev/storage';
 import { insertConversation, insertProject } from '@t3x-dev/storage';
 import { Hono } from 'hono';
@@ -128,5 +129,19 @@ describe('POST /v1/extract-yops', () => {
     if (!body.success) {
       expect(body.error.code).not.toBe('INVALID_REQUEST');
     }
+  });
+
+  it('builds prompt with SOURCE_CONTRACT for incremental mode', () => {
+    // Verify that a non-empty snapshot triggers incremental mode, which includes
+    // SOURCE_CONTRACT (requiring the LLM to emit per-op `source` fields).
+    const snapshot = {
+      trees: [{ key: '_root', slots: {}, children: [] }],
+      relations: [],
+    };
+    const turns = [{ turn_hash: 'sha256:t1', role: 'user' as const, content: 'test' }];
+    const result = buildYOpsPrompt({ turns, snapshot, processedTurnCount: 0 });
+    const fullPrompt = `${result.systemPrompt}\n${result.userPrompt}`;
+    expect(fullPrompt).toContain('source');
+    expect(fullPrompt.toLowerCase()).toContain('verbatim');
   });
 });

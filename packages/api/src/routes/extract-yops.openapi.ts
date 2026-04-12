@@ -21,11 +21,12 @@ import {
   type ExtractionTurn,
   parseYOpsOutput,
 } from '@t3x-dev/core';
-import { findConversationById } from '@t3x-dev/storage';
+import { findConversationById, listYOpsLogByConversation } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { getProviderRegistry } from '../lib/provider-registry';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
+import { replayYOpsLog, toYOpsLogEntries } from '../lib/yops-log-utils';
 
 export const extractYopsRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
@@ -113,7 +114,20 @@ extractYopsRoutes.openapi(route, async (c) => {
       return c.json({ success: true as const, data: { ops: [] } }, 200);
     }
 
-    // Build prompt — all turns are "new" (no prior snapshot in this endpoint)
+    // Load existing yops log and replay to get the current snapshot.
+    // If it's empty, fall back to a minimal non-empty snapshot so the prompt
+    // builder uses incremental mode (which includes SOURCE_CONTRACT).
+    const yopsRecords = await listYOpsLogByConversation(db, conversation_id);
+    const replayedSnapshot = replayYOpsLog(toYOpsLogEntries(yopsRecords));
+    const snapshot =
+      replayedSnapshot.trees.length > 0
+        ? replayedSnapshot
+        : {
+            trees: [{ key: '_root', slots: {}, children: [] }],
+            relations: [],
+          };
+
+    // Build prompt — use replayed snapshot to ensure incremental mode with SOURCE_CONTRACT
     const extractionTurns: ExtractionTurn[] = turns.map((t) => ({
       turn_hash: t.turn_hash,
       role: 'user' as const,
@@ -123,7 +137,7 @@ extractYopsRoutes.openapi(route, async (c) => {
     const { systemPrompt, userPrompt } = buildYOpsPrompt(
       {
         turns: extractionTurns,
-        snapshot: { trees: [], relations: [] },
+        snapshot,
         processedTurnCount: 0,
       },
       {
