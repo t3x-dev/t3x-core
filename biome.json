@@ -116,7 +116,8 @@
     },
     {
       "includes": [
-        "apps/web/src/components/chat/useExtraction.ts"
+        "apps/web/src/components/chat/useExtraction.ts",
+        "apps/web/src/components/chat/useGoldEdit.ts"
       ],
       "linter": {
         "rules": {
