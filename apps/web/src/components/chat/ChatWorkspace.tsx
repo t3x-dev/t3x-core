@@ -7,10 +7,11 @@ import { DriftPopup } from '@/components/chat/DriftPopup';
 import { useAutoProject } from '@/hooks/useAutoProject';
 import { useCommittedHighlights } from '@/hooks/useCommittedHighlights';
 import { useConversationChat } from '@/hooks/useConversationChat';
+import { usePinEnrichment } from '@/hooks/usePinEnrichment';
 import { useRealtimeSync } from '@/hooks/useRealtimeSync';
 import { useTextSelection } from '@/hooks/useTextSelection';
-import { buildSourceMap } from '@/lib/sourceMap';
 import { cn } from '@/lib/utils';
+import { buildSourceMap } from '@/queries/sourceMap';
 import { usePinsStore } from '@/store/pinsStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { ChatAddForm } from './ChatAddForm';
@@ -53,9 +54,7 @@ export function ChatWorkspace({
   const pins = usePinsStore((s) => s.pins);
   const fetchPins = usePinsStore((s) => s.fetchPins);
   const [showSourcePanel, setShowSourcePanel] = useState(false);
-  const [enrichedPinData, setEnrichedPinData] = useState<
-    Map<string, { title: string; assertionLessons?: string[]; turnCount?: number }>
-  >(new Map());
+  const enrichedPinData = usePinEnrichment(pins, showSourcePanel);
   const showAddForm = isReviewPhase && selection && selection.text.length > 3;
   const firstMessageSentRef = useRef(false);
 
@@ -75,49 +74,6 @@ export function ChatWorkspace({
   useEffect(() => {
     if (resolvedProjectId) fetchPins(resolvedProjectId);
   }, [resolvedProjectId, fetchPins]);
-
-  // Enrich pins with real titles when source panel opens
-  useEffect(() => {
-    if (!showSourcePanel || pins.length === 0) return;
-    let stale = false;
-    (async () => {
-      const { API_V1, fetchWithTimeout, handleResponse } = await import('@/lib/api/core');
-      const data = new Map<
-        string,
-        { title: string; assertionLessons?: string[]; turnCount?: number }
-      >();
-      for (const pin of pins) {
-        try {
-          if (pin.type === 'conversation') {
-            const res = await fetchWithTimeout(`${API_V1}/conversations/${pin.ref_id}`);
-            const conv = await handleResponse<{ title?: string }>(res);
-            if (!stale) data.set(pin.id, { title: conv.title || pin.ref_id.slice(0, 12) });
-          } else if (pin.type === 'leaf') {
-            const res = await fetchWithTimeout(`${API_V1}/leaves/${pin.ref_id}`);
-            const leaf = await handleResponse<{
-              title?: string;
-              assertions?: Array<{ lesson?: string }>;
-              runner_assertions?: Array<{ lesson?: string }>;
-            }>(res);
-            if (!stale) {
-              const allAssertions = leaf.runner_assertions ?? leaf.assertions ?? [];
-              const lessons = allAssertions.filter((a) => a.lesson).map((a) => a.lesson as string);
-              data.set(pin.id, {
-                title: leaf.title || pin.ref_id.slice(0, 12),
-                assertionLessons: lessons.length > 0 ? lessons : undefined,
-              });
-            }
-          }
-        } catch {
-          if (!stale) data.set(pin.id, { title: pin.ref_id.slice(0, 12) });
-        }
-      }
-      if (!stale) setEnrichedPinData(data);
-    })();
-    return () => {
-      stale = true;
-    };
-  }, [showSourcePanel, pins, resolvedProjectId]);
 
   // Model selection state
   const [selectedModel, setSelectedModel] = useState('claude-sonnet-4-20250514');
@@ -198,21 +154,18 @@ export function ChatWorkspace({
   }, [messages, streamingContent]);
 
   // Extraction handler + related state
-  const { handleExtract, isExtracting, draft } = useExtraction({
+  const { handleExtract, isExtracting } = useExtraction({
     resolvedConversationId,
   });
 
-  // Precompute source map: quote positions in all messages for bidirectional highlighting
-  const sourceMapByTurn = useMemo(() => {
-    if (!draft || draft.trees.length === 0 || messages.length === 0) {
-      return new Map<number, import('@/lib/sourceMap').SourceMapping[]>();
-    }
-    const msgInput = messages.map((msg, i) => ({
-      content: msg.content,
-      turnIndex: i + 1,
-    }));
-    return buildSourceMap(draft, msgInput);
-  }, [draft, messages]);
+  // Precompute source map from sourceIndex — positions are already known
+  // (every LLMSource carries turn_hash + start_char/end_char).
+  const sourceIndex = useWorkspaceStore((s) => s.sourceIndex);
+  const turns = useWorkspaceStore((s) => s.turns);
+  const sourceMapByTurn = useMemo(
+    () => buildSourceMap(sourceIndex, turns),
+    [sourceIndex, turns]
+  );
 
   // Load persistent committed highlights for this conversation
   const committedHighlightsByTurn = useCommittedHighlights(

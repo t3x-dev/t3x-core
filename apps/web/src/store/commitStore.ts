@@ -105,7 +105,7 @@ export const useCommitStore = create<CommitState>((set, get) => ({
 
   commitNodes: async (message) => {
     // Cross-store reads — workspace tree is source of truth
-    const { tree, conversationId } = useWorkspaceStore.getState();
+    const { tree, sourceIndex, conversationId } = useWorkspaceStore.getState();
     const draft = tree;
     const { projectId, lastCommitHash, commitBranch, conversationTitle } = get();
 
@@ -113,33 +113,14 @@ export const useCommitStore = create<CommitState>((set, get) => ({
 
     set({ isCommitting: true, commitError: null });
     try {
-      // Enrich trees with source_ref before commit
+      // Enrich trees with source_ref derived from sourceIndex (replayed ops).
+      // No network call or slot_quotes walk needed — the extraction pipeline
+      // already records turn_hash + char offsets on every LLMSource.
       let enrichedTrees = draft.trees;
-      if (conversationId && projectId) {
+      if (conversationId && sourceIndex.size > 0) {
         try {
-          const { enrichTreesWithSourceRefs } = await import('@/lib/enrichSourceRefs');
-          const { buildSourceMap } = await import('@/lib/sourceMap');
-          const { listTurns } = await import('@/lib/api/turns');
-
-          const turnData = await listTurns(projectId, conversationId);
-          const turns = turnData.turns;
-
-          if (turns.length > 0) {
-            const turnHashByIndex = new Map<number, string>();
-            const messages: Array<{ content: string; turnIndex: number }> = [];
-            for (let i = 0; i < turns.length; i++) {
-              turnHashByIndex.set(i + 1, turns[i].turn_hash);
-              messages.push({ content: turns[i].content, turnIndex: i + 1 });
-            }
-
-            const sourceMapByTurn = buildSourceMap(draft, messages);
-            enrichedTrees = enrichTreesWithSourceRefs(
-              draft.trees,
-              conversationId,
-              turnHashByIndex,
-              sourceMapByTurn
-            );
-          }
+          const { enrichTreesWithSourceRefs } = await import('@/queries/enrichSourceRefs');
+          enrichedTrees = enrichTreesWithSourceRefs(draft.trees, conversationId, sourceIndex);
         } catch {
           // Silent fallback — commit without source_ref enrichment
         }
