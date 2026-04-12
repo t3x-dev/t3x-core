@@ -6,4 +6,4 @@
  * `infrastructure/mergeApi.ts` per the architecture doc's Phase 4 note.
  */
 
-export { executeMergeApi, prepareMergeApi } from '@/lib/api/merge';
+export { createMergeDraft, executeMergeApi, prepareMergeApi } from '@/lib/api/merge';

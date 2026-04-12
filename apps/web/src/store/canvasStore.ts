@@ -1,7 +1,7 @@
 import type { Edge, Node } from '@xyflow/react';
 import { applyEdgeChanges, applyNodeChanges } from '@xyflow/react';
 import { create } from 'zustand';
-import * as api from '@/lib/api';
+import { deleteConversationById } from '@/queries/conversations';
 import type { CanvasNodeData } from '../types/nodes';
 import { createCommitSlice } from './canvasCommitSlice';
 import { createLeafSlice } from './canvasLeafSlice';
@@ -179,7 +179,7 @@ export const useCanvasStore = create<CanvasState>((...a) => {
           directDeletes.forEach((nodeId) => {
             const node = nodeMap.get(nodeId);
             if (node?.data.kind === 'unit' && node.data.conversationId) {
-              api.deleteConversation(node.data.conversationId).catch(() => {
+              deleteConversationById(node.data.conversationId).catch(() => {
                 // Error handled silently
               });
             }
@@ -221,7 +221,7 @@ export const useCanvasStore = create<CanvasState>((...a) => {
                 needsConfirmation.forEach((nodeId) => {
                   const node = currentState.nodes.find((n) => n.id === nodeId);
                   if (node?.data.kind === 'unit' && node.data.conversationId) {
-                    api.deleteConversation(node.data.conversationId).catch(() => {
+                    deleteConversationById(node.data.conversationId).catch(() => {
                       // Error handled silently
                     });
                   }
@@ -245,7 +245,7 @@ export const useCanvasStore = create<CanvasState>((...a) => {
         allowedRemoves.forEach((change) => {
           const node = nodeMap.get(change.id);
           if (node?.data.kind === 'unit' && node.data.conversationId) {
-            api.deleteConversation(node.data.conversationId).catch(() => {
+            deleteConversationById(node.data.conversationId).catch(() => {
               // Error handled silently
             });
           }

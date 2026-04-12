@@ -24,8 +24,9 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { leafContextMenuHandlerRef } from '@/hooks/useContextMenu';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useTerminology } from '@/hooks/useTerminology';
-import { type ConversationContext, getConversationContext } from '@/lib/api';
 import { nodeEnter, reducedMotion } from '@/lib/motion';
+import { fetchConversationContext } from '@/queries/conversationContext';
+import type { ConversationContext } from '@/types/api';
 import { glass, toneAccent, toneGlow } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import { useCanvasStore } from '@/store/canvasStore';
@@ -111,7 +112,7 @@ const UnitNode = memo(function UnitNode(props: Props) {
     if (!data.conversationId || data.conversationId.startsWith('orphan-')) return;
 
     let cancelled = false;
-    getConversationContext(data.conversationId)
+    fetchConversationContext(data.conversationId)
       .then((ctx) => {
         if (!cancelled) setContextConfig(ctx);
       })
@@ -229,8 +230,8 @@ const UnitNode = memo(function UnitNode(props: Props) {
     setIsEditingTitle(false);
     if (data.commitHash) {
       try {
-        const { updateCommitMessage } = await import('@/lib/api/commits');
-        await updateCommitMessage(data.commitHash, newTitle);
+        const { renameCommit } = await import('@/queries/commits');
+        await renameCommit(data.commitHash, newTitle);
       } catch {
         updateNode(id, { title: data.title });
       }

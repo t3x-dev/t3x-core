@@ -14,8 +14,8 @@ import { AlertCircle, Check, GitCompare, Loader2, Lock, RotateCcw } from 'lucide
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useTerminology } from '@/hooks/useTerminology';
-import type * as api from '@/lib/api';
 import { cn } from '@/lib/utils';
+import type { Branch } from '@/types/api';
 import type { CanvasNodeData } from '@/types/nodes';
 import { bridgeTemplates } from './helpers';
 
@@ -38,7 +38,7 @@ export interface CommitConfigStepProps {
 
   // Commit state
   commitError: string | null;
-  branches: api.Branch[];
+  branches: Branch[];
   branchesLoading: boolean;
   isMainBranchInvalid: boolean;
 

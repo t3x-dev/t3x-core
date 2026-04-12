@@ -117,6 +117,7 @@
     },
     {
       "includes": [
+        "apps/web/src/components/canvas/**",
         "apps/web/src/components/chat/**",
         "apps/web/src/components/commit/**",
         "apps/web/src/components/leaf/**",

@@ -2,7 +2,11 @@
  * L3 — imperative "list workbench drafts for a project" helper.
  */
 
-import { listWorkbenchDrafts } from '@/lib/api/drafts';
+import {
+  type CreateWorkbenchDraftInput,
+  createWorkbenchDraft,
+  listWorkbenchDrafts,
+} from '@/lib/api/drafts';
 import type { WorkbenchDraft } from '@/types/api';
 
 export function fetchWorkbenchDrafts(
@@ -11,3 +15,11 @@ export function fetchWorkbenchDrafts(
 ): Promise<WorkbenchDraft[]> {
   return listWorkbenchDrafts(projectId, status);
 }
+
+export function createWorkbenchDraftFor(
+  input: CreateWorkbenchDraftInput
+): Promise<WorkbenchDraft> {
+  return createWorkbenchDraft(input);
+}
+
+export type { CreateWorkbenchDraftInput };
