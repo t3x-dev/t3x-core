@@ -31,8 +31,21 @@ import {
   preFilterDrift,
   runTransforms,
   type SemanticContent,
-  validateMetadata,
 } from '@t3x-dev/core';
+
+/**
+ * Internal extension of TreeNode used by the extraction pipeline.
+ * The DB schema stores `source` and `slot_quotes` per node; after
+ * replaying YOps from the DB these extra fields are present at runtime
+ * even though the public TreeNode type no longer declares them.
+ */
+interface EnrichedTreeNode {
+  key: string;
+  slots: Record<string, import('@t3x-dev/core').SlotValue>;
+  children: EnrichedTreeNode[];
+  source?: string;
+  slot_quotes?: Record<string, string>;
+}
 import {
   type AnyDB,
   createTopic,
@@ -550,10 +563,12 @@ export async function* runExtractionPipeline(
       // Re-apply slot_quotes and source from pre-transform snapshot.
       // Transforms strip metadata, so we match by BOTH path AND node key
       // to handle tree restructuring (nesting, renaming).
+      // NOTE: EnrichedTreeNode extends the public TreeNode with extraction metadata
+      // fields (source, slot_quotes) stored in the DB but not part of the core type.
       type NodeMeta = { source?: string; slot_quotes?: Record<string, string> };
       const metaByPath = new Map<string, NodeMeta>();
       const metaByKey = new Map<string, NodeMeta>();
-      const collectMeta = (node: import('@t3x-dev/core').TreeNode, prefix: string) => {
+      const collectMeta = (node: EnrichedTreeNode, prefix: string) => {
         const path = prefix ? `${prefix}/${node.key}` : node.key;
         if (node.source || node.slot_quotes) {
           const meta = { source: node.source, slot_quotes: node.slot_quotes };
@@ -565,9 +580,9 @@ export async function* runExtractionPipeline(
         }
         for (const child of node.children ?? []) collectMeta(child, path);
       };
-      for (const tree of result.snapshot.trees) collectMeta(tree, '');
+      for (const tree of result.snapshot.trees as EnrichedTreeNode[]) collectMeta(tree, '');
 
-      const applyMeta = (node: import('@t3x-dev/core').TreeNode, prefix: string) => {
+      const applyMeta = (node: EnrichedTreeNode, prefix: string) => {
         const path = prefix ? `${prefix}/${node.key}` : node.key;
         // Try exact path first, then fall back to bare key
         const meta = metaByPath.get(path) ?? metaByKey.get(node.key);
@@ -577,7 +592,7 @@ export async function* runExtractionPipeline(
         }
         for (const child of node.children ?? []) applyMeta(child, path);
       };
-      for (const tree of organizedSnapshot.trees) applyMeta(tree, '');
+      for (const tree of organizedSnapshot.trees as EnrichedTreeNode[]) applyMeta(tree, '');
 
       // ── Deterministic metadata verifier ──
       // Contract: every slot quote MUST be a verbatim substring of a conversation turn.
@@ -585,12 +600,12 @@ export async function* runExtractionPipeline(
       // If the LLM didn't provide a verifiable quote, the slot has no source tracing
       // (slot_quote is simply absent — no guessing).
       const verifyMetadata = (
-        trees: import('@t3x-dev/core').TreeNode[],
+        trees: EnrichedTreeNode[],
         turns: Array<{ content: string }>
       ) => {
         const turnsLower = turns.map((t) => t.content.toLowerCase());
 
-        const walk = (node: import('@t3x-dev/core').TreeNode) => {
+        const walk = (node: EnrichedTreeNode) => {
           if (!node.slot_quotes) node.slot_quotes = {};
 
           const verifiedQuotes: Record<string, string> = {};
@@ -646,16 +661,7 @@ export async function* runExtractionPipeline(
       };
 
       const turnsForValidation = selectedTurns.map((t) => ({ content: t.content }));
-      const validation = validateMetadata(organizedSnapshot.trees, turnsForValidation);
-      pinoLogger.info(
-        {
-          missing_quotes: validation.missingQuotes.length,
-          missing_sources: validation.missingSources.length,
-          unverified: validation.unverifiedQuotes.length,
-        },
-        'extraction: verifying metadata (deterministic)'
-      );
-      verifyMetadata(organizedSnapshot.trees, turnsForValidation);
+      verifyMetadata(organizedSnapshot.trees as EnrichedTreeNode[], turnsForValidation);
 
       changesSummary = {
         transforms: ['consolidate', 'nest', 'flagContradictions', 'checkRegression'],

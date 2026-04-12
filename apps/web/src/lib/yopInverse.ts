@@ -12,6 +12,17 @@
 import type { SemanticContent, SlotValue, TreeNode, YOp } from '@t3x-dev/core';
 import { findNode, getNodeKey, getParentPath } from '@t3x-dev/core';
 
+/**
+ * Runtime-enriched tree node shape.
+ * The API still stores and returns `source` and `slot_quotes` per node in the DB;
+ * these fields are present at runtime even though public TreeNode does not declare them.
+ * TODO(follow-up): migrate source tracing to use sourceIndex instead of slot_quotes.
+ */
+type EnrichedTreeNode = TreeNode & {
+  source?: string;
+  slot_quotes?: Record<string, string>;
+};
+
 /** Inverse result — either a normal YOp or a context-carrying marker */
 export type InverseResult = YOp | ContextInverse;
 
@@ -177,12 +188,14 @@ function invertMerge(
 // ── Helpers ──
 
 function deepCloneNode(node: TreeNode): TreeNode {
-  return {
-    key: node.key,
-    slots: structuredClone(node.slots),
-    children: (node.children ?? []).map(deepCloneNode),
-    ...(node.slot_quotes ? { slot_quotes: { ...node.slot_quotes } } : {}),
-    ...(node.source !== undefined ? { source: node.source } : {}),
+  const enriched = node as EnrichedTreeNode;
+  const clone: EnrichedTreeNode = {
+    key: enriched.key,
+    slots: structuredClone(enriched.slots),
+    children: (enriched.children ?? []).map(deepCloneNode) as EnrichedTreeNode[],
   };
+  if (enriched.slot_quotes) clone.slot_quotes = { ...enriched.slot_quotes };
+  if (enriched.source !== undefined) clone.source = enriched.source;
+  return clone;
 }
 

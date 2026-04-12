@@ -9,6 +9,17 @@
 
 import type { SemanticContent, TreeNode } from '@t3x-dev/core';
 
+/**
+ * Runtime-enriched tree node shape.
+ * The API still stores and returns `source` and `slot_quotes` per node in the DB;
+ * these fields are present at runtime even though public TreeNode does not declare them.
+ * TODO(follow-up): migrate source tracing to use sourceIndex instead of slot_quotes.
+ */
+type EnrichedTreeNode = TreeNode & {
+  source?: string;
+  slot_quotes?: Record<string, string>;
+};
+
 // ── YAML → Chat ──
 
 export interface TraceResult {
@@ -30,7 +41,7 @@ export function traceYamlToChat(
 ): TraceResult {
   // Collect all slot_quotes from all trees
   const allQuotesMap: Record<string, string> = {};
-  for (const tree of draft.trees) {
+  for (const tree of draft.trees as EnrichedTreeNode[]) {
     collectQuotes(tree, '', allQuotesMap);
   }
 
@@ -66,7 +77,7 @@ export function traceChatToYaml(draft: SemanticContent, turnIndex: number): stri
   const tag = `T${turnIndex}`;
   const paths: string[] = [];
 
-  function walk(node: TreeNode, parentPath: string, inheritedSource: string | undefined) {
+  function walk(node: EnrichedTreeNode, parentPath: string, inheritedSource: string | undefined) {
     const path = parentPath ? `${parentPath}/${node.key}` : node.key;
     const effectiveSource = node.source ?? inheritedSource;
     if (effectiveSource === tag) {
@@ -77,7 +88,7 @@ export function traceChatToYaml(draft: SemanticContent, turnIndex: number): stri
     }
   }
 
-  for (const tree of draft.trees) {
+  for (const tree of draft.trees as EnrichedTreeNode[]) {
     walk(tree, '', undefined);
   }
 
@@ -86,31 +97,31 @@ export function traceChatToYaml(draft: SemanticContent, turnIndex: number): stri
 
 // ── Helpers ──
 
-function collectQuotes(node: TreeNode, prefix: string, out: Record<string, string>) {
+function collectQuotes(node: EnrichedTreeNode, prefix: string, out: Record<string, string>) {
   if (node.slot_quotes) {
     for (const [k, v] of Object.entries(node.slot_quotes)) {
       const fullKey = prefix ? `${prefix}.${k}` : k;
-      out[fullKey] = v;
-      out[k] = v;
+      out[fullKey] = v as string;
+      out[k] = v as string;
     }
   }
-  for (const child of node.children ?? []) {
+  for (const child of (node.children ?? []) as EnrichedTreeNode[]) {
     collectQuotes(child, prefix ? `${prefix}.${child.key}` : child.key, out);
   }
 }
 
 function findSourceTurn(draft: SemanticContent, path: string): number | null {
   const segments = path.replace(/\//g, '.').split('.');
-  for (const tree of draft.trees) {
+  for (const tree of draft.trees as EnrichedTreeNode[]) {
     if (tree.key !== segments[0]) continue;
 
-    let node: TreeNode = tree;
+    let node: EnrichedTreeNode = tree;
     let lastSource = parseSourceTag(tree.source);
 
     for (let i = 1; i < segments.length; i++) {
-      const child = (node.children ?? []).find((c) => c.key === segments[i]);
+      const child = (node.children ?? [] as EnrichedTreeNode[]).find((c) => c.key === segments[i]);
       if (!child) break;
-      node = child;
+      node = child as EnrichedTreeNode;
       if (node.source) lastSource = parseSourceTag(node.source);
     }
 

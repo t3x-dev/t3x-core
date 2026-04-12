@@ -1,5 +1,13 @@
 import type { SemanticContent, SlotValue, TreeNode } from '@t3x-dev/core';
 import { RELATION_TYPES } from '@t3x-dev/core';
+
+/**
+ * Runtime-enriched tree node shape.
+ * The API stores and returns `source` per node in the DB; this field is present
+ * at runtime even though public TreeNode does not declare it.
+ * TODO(follow-up): migrate source display to use sourceIndex instead.
+ */
+type EnrichedTreeNode = TreeNode & { source?: string };
 import type { Edge, Node } from '@xyflow/react';
 
 // ── Exported Types ──
@@ -65,7 +73,7 @@ export function semanticToFlowElements(content: SemanticContent): {
     data: {
       treeType: node.key,
       slots: node.slots,
-      source: node.source,
+      source: (node as EnrichedTreeNode).source,
     },
   }));
 

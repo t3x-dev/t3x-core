@@ -9,8 +9,21 @@
  * yops log and rebuild the trees table from the resulting snapshot.
  */
 
-import type { Relation, SemanticContent } from '@t3x-dev/core';
+import type { Relation, SemanticContent, SlotValue } from '@t3x-dev/core';
 import { flattenTrees } from '@t3x-dev/core';
+
+/**
+ * Internal extension of TreeNode used by tree-state persistence.
+ * The DB schema stores `source` and `slot_quotes` per node; these extra
+ * fields are present at runtime even though public TreeNode does not declare them.
+ */
+interface EnrichedTreeNode {
+  key: string;
+  slots: Record<string, SlotValue>;
+  children: EnrichedTreeNode[];
+  source?: string;
+  slot_quotes?: Record<string, string>;
+}
 import type { AnyDB } from '@t3x-dev/storage';
 import {
   deleteTreeRelationsByConversation,
@@ -54,8 +67,10 @@ export async function rebuildTreesFromSnapshot(
   await deleteTreeRelationsByConversation(db, conversationId);
   await deleteTreesByConversation(db, conversationId);
 
-  // Walk trees and store each node with full metadata
-  async function walkAndStore(node: import('@t3x-dev/core').TreeNode, parentPath: string): Promise<void> {
+  // Walk trees and store each node with full metadata.
+  // Cast to EnrichedTreeNode: extracted trees carry source + slot_quotes at
+  // runtime (set by the extraction pipeline) even though public TreeNode does not.
+  async function walkAndStore(node: EnrichedTreeNode, parentPath: string): Promise<void> {
     const path = parentPath ? `${parentPath}/${node.key}` : node.key;
     await upsertTree(db, {
       conversationId,
@@ -74,7 +89,7 @@ export async function rebuildTreesFromSnapshot(
     }
   }
 
-  for (const tree of snapshot.trees) {
+  for (const tree of snapshot.trees as EnrichedTreeNode[]) {
     await walkAndStore(tree, '');
   }
 
@@ -105,15 +120,16 @@ export async function readDraftFromTrees(
   const treeRows = await listTreesByConversation(db, conversationId, topicId);
   const relRows = await listTreeRelationsByConversation(db, conversationId, topicId);
 
-  // Reconstruct hierarchical tree from flat rows (rows have path-based treeId like "root/child")
-  type TNode = import('@t3x-dev/core').TreeNode;
-  const nodeMap = new Map<string, TNode>();
+  // Reconstruct hierarchical tree from flat rows (rows have path-based treeId like "root/child").
+  // We build EnrichedTreeNode objects (which include source + slot_quotes from the DB) and
+  // return them as SemanticContent. Callers that need source tracing can cast to EnrichedTreeNode.
+  const nodeMap = new Map<string, EnrichedTreeNode>();
 
   // First pass: create all nodes
   for (const r of treeRows) {
     nodeMap.set(r.treeId, {
       key: r.type,
-      slots: (r.slots ?? {}) as Record<string, import('@t3x-dev/core').SlotValue>,
+      slots: (r.slots ?? {}) as Record<string, SlotValue>,
       children: [],
       source: r.source !== 'unknown' ? r.source : undefined,
       slot_quotes: (r.slotQuotes ?? undefined) as Record<string, string> | undefined,
@@ -121,7 +137,7 @@ export async function readDraftFromTrees(
   }
 
   // Second pass: attach children to parents
-  const rootTrees: TNode[] = [];
+  const rootTrees: EnrichedTreeNode[] = [];
   for (const r of treeRows) {
     const node = nodeMap.get(r.treeId)!;
     const lastSlash = r.treeId.lastIndexOf('/');

@@ -32,6 +32,7 @@ interface TreeNodeShape {
   key?: string;
   slots?: TreeSlots;
   children?: TreeNodeShape[];
+  /** @deprecated slot_quotes is no longer on core TreeNode; kept for DB-sourced runtime objects */
   slot_quotes?: Record<string, string>;
 }
 

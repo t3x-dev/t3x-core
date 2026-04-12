@@ -8,7 +8,10 @@ import {
 
 // ── Fixtures ──
 
-const mkNode = (key: string, extra?: Partial<TreeNode>): TreeNode => ({
+// EnrichedTreeNode: runtime shape that may carry `source` from the DB.
+type EnrichedTreeNode = TreeNode & { source?: string };
+
+const mkNode = (key: string, extra?: Partial<EnrichedTreeNode>): EnrichedTreeNode => ({
   key,
   slots: { agent: 'Alice' },
   children: [],
