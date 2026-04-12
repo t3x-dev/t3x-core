@@ -7,14 +7,14 @@
  *  - Short text (< 40 chars, no comma): manual form (node + key + value)
  *  - Long text (>= 40 chars or has comma): LLM-assist with structured preview
  *
- * Uses commandStore.execute() so additions enter the undo stack.
+ * TODO(undo-redo): yops_log is append-only; undo is deferred to a future PR.
+ * Execute currently routes directly (no undo stack).
  */
 
 import type { YOp } from '@t3x-dev/core';
 import { Plus, Sparkles } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import type { TextSelectionResult } from '@/hooks/useTextSelection';
-import { useCommandStore } from '@/store/commandStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 
 interface ChatAddFormProps {
@@ -24,7 +24,9 @@ interface ChatAddFormProps {
 
 export function ChatAddForm({ selection, onDone }: ChatAddFormProps) {
   const draft = useWorkspaceStore((s) => s.tree);
-  const execute = useCommandStore((s) => s.execute);
+  // TODO(undo-redo): yops_log is append-only; undo is deferred to a future PR.
+  // Replace with goldEditBuilder dispatch when wired.
+  const execute = (_ops: YOp[]) => {};
 
   const nodeOptions = useMemo(() => draft.trees.map((t) => t.key), [draft.trees]);
 

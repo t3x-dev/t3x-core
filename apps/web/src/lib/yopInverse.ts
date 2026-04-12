@@ -5,8 +5,8 @@
  * returns the inverse YOp that undoes the operation.
  *
  * 10 exact inverses + 3 context-based (nest/split/fold/merge).
- * Context-based inverses store pre-state in a _context property;
- * commandStore captures this into UndoEntry.context.
+ * Context-based inverses store pre-state in a _context property.
+ * TODO(undo-redo): undo/redo stack management is deferred to a future PR.
  */
 
 import type { SemanticContent, SlotValue, TreeNode, YOp } from '@t3x-dev/core';

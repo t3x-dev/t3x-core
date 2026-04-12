@@ -15,12 +15,14 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { getSemanticDraft, listYOpsLog } from '@/lib/api/trees';
+import { hydrateConversation } from '@/queries/loadConversation';
+import { useChatStore } from '@/store/chatStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 
-const WS_BASE = typeof window !== 'undefined'
-  ? `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`
-  : '';
+const WS_BASE =
+  typeof window !== 'undefined'
+    ? `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`
+    : '';
 
 const RECONNECT_DELAY = 5000;
 
@@ -107,41 +109,39 @@ function handleEvent(event: RealtimeEvent, conversationId: string) {
     }
 
     case 'extraction.done': {
-      // Another source finished extraction — load data and enter streaming mode
-      // Skip if WE are currently extracting (our HTTP response will handle it)
+      // Another source finished extraction — hydrate store and enter streaming mode.
+      // Skip if WE are currently extracting (our HTTP response will handle it).
       if (wsStore.mode === 'streaming') break;
 
-      Promise.all([
-        getSemanticDraft(conversationId),
-        listYOpsLog(conversationId),
-      ]).then(([draft, yopsEntries]) => {
-        if (!draft || draft.trees.length === 0) return;
+      const projectId = useChatStore.getState().activeProjectId;
+      if (!projectId) break;
 
-        // TODO(commit5): tree will be derived via replay — skip setDraft
-
-        // Hydrate yops log
-        if (yopsEntries && yopsEntries.length > 0) {
-          // TODO(commit5): replace with hydrateConversation(projectId, convId)
-          // useDraftStore.getState().hydrateYOpsLog(yopsEntries);
-        }
-
-        // Expand panel
-        if (!useWorkspaceStore.getState().panelExpanded) {
-          useWorkspaceStore.getState().setPanelExpanded(true);
-        }
-
-        // Enter streaming mode — YOpsFeed will auto-transition to executed when done
-        useWorkspaceStore.getState().setMode('streaming');
-      });
+      hydrateConversation(projectId, conversationId)
+        .then(() => {
+          // Expand panel
+          if (!useWorkspaceStore.getState().panelExpanded) {
+            useWorkspaceStore.getState().setPanelExpanded(true);
+          }
+          // Enter streaming mode — YOpsFeed will auto-transition to executed when done
+          useWorkspaceStore.getState().setMode('streaming');
+        })
+        .catch(() => {
+          // Hydration failed — non-critical for realtime path
+        });
       break;
     }
 
     case 'draft.changed':
     case 'yops.applied': {
-      // Draft modified by another source — refetch
+      // Draft modified by another source — re-hydrate via replay.
       if (wsStore.mode === 'streaming') break; // Don't interrupt active extraction
 
-      // TODO(commit5): tree will be derived via replay — skip getSemanticDraft/setDraft
+      const projectId = useChatStore.getState().activeProjectId;
+      if (!projectId) break;
+
+      hydrateConversation(projectId, conversationId).catch(() => {
+        // Hydration failed — non-critical for realtime path
+      });
       break;
     }
 

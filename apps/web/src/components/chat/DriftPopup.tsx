@@ -3,6 +3,7 @@
 import { GitBranch, X } from 'lucide-react';
 import { useCallback } from 'react';
 import { extractNodes } from '@/lib/api/trees';
+import { hydrateConversation } from '@/queries/loadConversation';
 import { useChatStore } from '@/store/chatStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 
@@ -23,6 +24,7 @@ export function DriftPopup() {
   const clearDrift = useWorkspaceStore((s) => s.clearDrift);
   const wsConvId = useWorkspaceStore((s) => s.conversationId);
   const activeConvId = useChatStore((s) => s.activeConversationId);
+  const activeProjectId = useChatStore((s) => s.activeProjectId);
   const conversationId = wsConvId ?? activeConvId;
 
   const handleChoice = useCallback(
@@ -44,14 +46,15 @@ export function DriftPopup() {
           new_topic: driftInfo.new_topic,
         });
 
-        if (result.status === 'completed' && result.snapshot) {
-          // TODO(commit5): tree will be derived via replay
+        if (result.status === 'completed' && activeProjectId) {
+          // Hydrate store from server — tree is derived via replay
+          await hydrateConversation(activeProjectId, conversationId);
         }
       } catch {
         // Drift choice application failed — non-critical
       }
     },
-    [conversationId, driftInfo, clearDrift]
+    [conversationId, driftInfo, clearDrift, activeProjectId]
   );
 
   if (!driftDetected || !driftInfo) return null;

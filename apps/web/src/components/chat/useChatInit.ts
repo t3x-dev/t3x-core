@@ -1,8 +1,8 @@
 import type { TreeNode } from '@t3x-dev/core';
 import { useEffect, useRef, useState } from 'react';
 import { getApiCommit, listTopics } from '@/lib/api';
-import { getSemanticDraft, listYOpsLog } from '@/lib/api/trees';
 import { treesToNodes } from '@/lib/treeCompat';
+import { hydrateConversation } from '@/queries/loadConversation';
 import { useChatStore } from '@/store/chatStore';
 import { useCommitStore } from '@/store/commitStore';
 import { useSessionStore } from '@/store/sessionStore';
@@ -18,8 +18,11 @@ interface UseChatInitParams {
 }
 
 /**
- * Handles store initialization, draft loading, yops history loading,
- * inheritance hydration, and topic loading on conversation mount/change.
+ * Handles store initialization, hydration, inheritance, and topic loading
+ * on conversation mount/change.
+ *
+ * Hydration path (Commit 5): calls hydrateConversation(projectId, convId) which
+ * loads turns + ops log and replays derived state into workspaceStore.
  *
  * Returns parentConversationId (needed for the inheritance banner).
  */
@@ -40,7 +43,7 @@ export function useChatInit({
   useEffect(() => {
     const convId = resolvedConversationId ?? conversationId;
     useChatStore.getState().setActiveConversation(convId, resolvedProjectId || null);
-    // Skip resetDraft if we just hydrated from parent (prevents wipe on re-render)
+    // Skip reset if we just hydrated from parent (prevents wipe on re-render)
     if (!inheritedRef.current) {
       useWorkspaceStore.getState().reset();
     }
@@ -75,7 +78,7 @@ export function useChatInit({
       });
     }
 
-    // Helper: hydrate extraction panel from parent commit
+    // Helper: hydrate extraction panel from parent commit (inheritance flow)
     const hydrateFromParent = (hash: string) => {
       getApiCommit(hash)
         .then((parentCommit) => {
@@ -90,8 +93,7 @@ export function useChatInit({
           const relations = parentCommit.content?.relations ?? [];
           if (trees.length > 0) {
             const content = { trees, relations };
-            // TODO(commit5): tree will be derived via replay
-            // Snapshot parent as workspace base
+            // Snapshot parent as workspace base (tree derived via snapshotBase)
             useWorkspaceStore.getState().snapshotBase(content, hash);
             // Set parent as lastCommitHash so commit B gets correct parent_hashes
             useCommitStore.setState({ lastCommitHash: hash });
@@ -106,7 +108,7 @@ export function useChatInit({
               useWorkspaceStore.getState().setPanelExpanded(true);
             }
           }
-          // Mark as hydrated so resetDraft() is skipped on re-render
+          // Mark as hydrated so reset() is skipped on re-render
           inheritedRef.current = true;
           // Clear the flag to prevent re-hydration on remount
           onInheritComplete?.();
@@ -116,56 +118,25 @@ export function useChatInit({
         });
     };
 
-    // Load existing semantic draft + full yops history + topics for this conversation
-    if (convId && convId !== 'new') {
-      Promise.all([getSemanticDraft(convId), listYOpsLog(convId), listTopics(convId)])
-        .then(async ([draft, yopsEntries, topicsList]) => {
-          if (draft && draft.trees.length > 0) {
-            // TODO(commit5): tree will be derived via replay
-            // Snapshot committed state as workspace base — only if there's
-            // an actual commit. Otherwise Before stays empty (first extraction).
-            const commitHash = useCommitStore.getState().lastCommitHash;
-            if (commitHash) {
-              useWorkspaceStore.getState().snapshotBase(draft, commitHash);
-            }
-            if (!useWorkspaceStore.getState().panelExpanded) {
-              useWorkspaceStore.getState().setPanelExpanded(true);
-            }
-            // Hydrate workspace script from YOps log
-            if (yopsEntries && yopsEntries.length > 0) {
-              const allOps: import('@t3x-dev/core').YOp[] = [];
-              for (const entry of yopsEntries) {
-                if (Array.isArray(entry.yops)) {
-                  allOps.push(...(entry.yops as import('@t3x-dev/core').YOp[]));
-                }
-              }
-              if (allOps.length > 0) {
-                const { opsToYaml } = await import('@/lib/scriptParser');
-                // TODO(commit5): replace with hydrateConversation(projectId, convId)
-                // useWorkspaceStore.getState().setScriptText(opsToYaml(allOps));
-                // useWorkspaceStore.setState({ persistedOpsCount: allOps.length });
-                // useWorkspaceStore.getState().execute();
-              }
-            }
-          } else if (inheritFromCommitHash) {
-            // No existing draft — hydrate from parent commit
-            hydrateFromParent(inheritFromCommitHash);
+    // Load turns + ops log for this conversation via hydrateConversation (replay-based)
+    if (convId && convId !== 'new' && resolvedProjectId) {
+      hydrateConversation(resolvedProjectId, convId)
+        .then(async () => {
+          if (!useWorkspaceStore.getState().panelExpanded) {
+            useWorkspaceStore.getState().setPanelExpanded(true);
           }
-          if (yopsEntries && yopsEntries.length > 0) {
-            // TODO(commit5): replace with hydrateConversation(projectId, convId)
-            // useDraftStore.getState().hydrateYOpsLog(yopsEntries);
-          }
-          // Note: we intentionally do NOT lock conversation after commit.
-          // Users should be able to continue chatting and extract more knowledge.
+
+          // Also load topics (display only — not wired to store yet)
+          const topicsList = await listTopics(convId).catch(() => []);
           if (topicsList && topicsList.length > 0) {
-            // TODO(commit5): topics state TBD
-            // useDraftStore.getState().setTopics(topicsList);
-            // const activeTopic = topicsList.find((t) => t.status === 'active');
-            // if (activeTopic) { useDraftStore.getState().setActiveTopicId(activeTopic.id); }
+            // TODO(topics-state): route through workspaceStore once topics schema is added
           }
         })
         .catch(() => {
-          // Draft/delta/topics load failed — non-critical
+          // Hydration failed — fall back: try parent if inheriting
+          if (inheritFromCommitHash) {
+            hydrateFromParent(inheritFromCommitHash);
+          }
         });
     } else if (inheritFromCommitHash) {
       // New conversation with inheritance — hydrate from parent commit
@@ -178,7 +149,7 @@ export function useChatInit({
     resolvedProjectId,
     inheritFromCommitHash,
     // Note: onInheritComplete intentionally excluded — including it causes a
-    // resetDraft → hydrate → onInheritComplete → resetDraft wipe cycle
+    // reset → hydrate → onInheritComplete → reset wipe cycle
     // eslint-disable-next-line react-hooks/exhaustive-deps
   ]);
 

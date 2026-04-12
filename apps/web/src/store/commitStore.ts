@@ -3,7 +3,7 @@
  *
  * Split from extractionPanelStore.ts (Task 4).
  * Owns: confirmed nodes/slots, commit state, commit actions.
- * Cross-store reads: useWorkspaceStore (tree, conversationId), useCommandStore (clearPending).
+ * Cross-store reads: useWorkspaceStore (tree, conversationId).
  */
 
 import type { TreeNode } from '@t3x-dev/core';
@@ -234,9 +234,8 @@ export const useCommitStore = create<CommitState>((set, get) => ({
         manualEditedNodeIds: new Set(),
       });
 
-      // Clear command pending state after successful commit
-      const { useCommandStore } = await import('./commandStore');
-      useCommandStore.getState().clearPending();
+      // TODO(undo-redo): commandStore.clearPending() removed — yops_log is append-only;
+      // undo/redo stack management is deferred to a future PR.
 
       return { hash: result.commit.hash };
     } catch (err) {
