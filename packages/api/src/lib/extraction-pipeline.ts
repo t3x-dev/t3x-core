@@ -31,6 +31,7 @@ import {
   preFilterDrift,
   runTransforms,
   type SemanticContent,
+  validateMetadata,
 } from '@t3x-dev/core';
 import {
   type AnyDB,
@@ -546,12 +547,21 @@ export async function* runExtractionPipeline(
       );
       organizedSnapshot = transformResult.content;
 
-      // Re-apply slot_quotes from pre-transform snapshot (transforms may strip metadata)
-      const metaMap = new Map<string, { source?: string; slot_quotes?: Record<string, string> }>();
+      // Re-apply slot_quotes and source from pre-transform snapshot.
+      // Transforms strip metadata, so we match by BOTH path AND node key
+      // to handle tree restructuring (nesting, renaming).
+      type NodeMeta = { source?: string; slot_quotes?: Record<string, string> };
+      const metaByPath = new Map<string, NodeMeta>();
+      const metaByKey = new Map<string, NodeMeta>();
       const collectMeta = (node: import('@t3x-dev/core').TreeNode, prefix: string) => {
         const path = prefix ? `${prefix}/${node.key}` : node.key;
         if (node.source || node.slot_quotes) {
-          metaMap.set(path, { source: node.source, slot_quotes: node.slot_quotes });
+          const meta = { source: node.source, slot_quotes: node.slot_quotes };
+          metaByPath.set(path, meta);
+          // Also index by bare key for fallback matching after restructuring
+          if (!metaByKey.has(node.key)) {
+            metaByKey.set(node.key, meta);
+          }
         }
         for (const child of node.children ?? []) collectMeta(child, path);
       };
@@ -559,7 +569,8 @@ export async function* runExtractionPipeline(
 
       const applyMeta = (node: import('@t3x-dev/core').TreeNode, prefix: string) => {
         const path = prefix ? `${prefix}/${node.key}` : node.key;
-        const meta = metaMap.get(path);
+        // Try exact path first, then fall back to bare key
+        const meta = metaByPath.get(path) ?? metaByKey.get(node.key);
         if (meta) {
           if (meta.source && !node.source) node.source = meta.source;
           if (meta.slot_quotes && !node.slot_quotes) node.slot_quotes = meta.slot_quotes;
@@ -567,6 +578,84 @@ export async function* runExtractionPipeline(
         for (const child of node.children ?? []) applyMeta(child, path);
       };
       for (const tree of organizedSnapshot.trees) applyMeta(tree, '');
+
+      // ── Deterministic metadata verifier ──
+      // Contract: every slot quote MUST be a verbatim substring of a conversation turn.
+      // No fuzzy matching, no synthesis — the audit trail must be 100% deterministic.
+      // If the LLM didn't provide a verifiable quote, the slot has no source tracing
+      // (slot_quote is simply absent — no guessing).
+      const verifyMetadata = (
+        trees: import('@t3x-dev/core').TreeNode[],
+        turns: Array<{ content: string }>
+      ) => {
+        const turnsLower = turns.map((t) => t.content.toLowerCase());
+
+        const walk = (node: import('@t3x-dev/core').TreeNode) => {
+          if (!node.slot_quotes) node.slot_quotes = {};
+
+          const verifiedQuotes: Record<string, string> = {};
+          const turnVotes: Record<number, number> = {};
+
+          for (const [key, quote] of Object.entries(node.slot_quotes)) {
+            if (typeof quote !== 'string' || !quote) continue;
+            const quoteLower = quote.toLowerCase();
+            // Only keep if verbatim substring of some turn
+            for (let i = 0; i < turnsLower.length; i++) {
+              if (turnsLower[i].includes(quoteLower)) {
+                verifiedQuotes[key] = quote;
+                turnVotes[i] = (turnVotes[i] ?? 0) + 1;
+                break;
+              }
+            }
+          }
+
+          // Also try to verify slot values themselves (in case LLM skipped metadata
+          // but produced verbatim values). Still 100% deterministic — substring only.
+          for (const [key, val] of Object.entries(node.slots)) {
+            if (verifiedQuotes[key]) continue;
+            if (typeof val !== 'string') continue;
+            const valLower = val.toLowerCase();
+            for (let i = 0; i < turnsLower.length; i++) {
+              const idx = turnsLower[i].indexOf(valLower);
+              if (idx !== -1) {
+                verifiedQuotes[key] = turns[i].content.slice(idx, idx + val.length);
+                turnVotes[i] = (turnVotes[i] ?? 0) + 1;
+                break;
+              }
+            }
+          }
+
+          node.slot_quotes = verifiedQuotes;
+
+          // Verify source: must be a valid turn tag AND match a slot_quote's turn
+          if (node.source) {
+            const match = node.source.match(/^T(\d+)/);
+            if (!match || Number(match[1]) < 1 || Number(match[1]) > turns.length) {
+              node.source = undefined;
+            }
+          }
+          if (!node.source && Object.keys(turnVotes).length > 0) {
+            const bestTurn = Object.entries(turnVotes).reduce((a, b) => (b[1] > a[1] ? b : a));
+            node.source = `T${Number(bestTurn[0]) + 1}`;
+          }
+
+          for (const child of node.children ?? []) walk(child);
+        };
+
+        for (const tree of trees) walk(tree);
+      };
+
+      const turnsForValidation = selectedTurns.map((t) => ({ content: t.content }));
+      const validation = validateMetadata(organizedSnapshot.trees, turnsForValidation);
+      pinoLogger.info(
+        {
+          missing_quotes: validation.missingQuotes.length,
+          missing_sources: validation.missingSources.length,
+          unverified: validation.unverifiedQuotes.length,
+        },
+        'extraction: verifying metadata (deterministic)'
+      );
+      verifyMetadata(organizedSnapshot.trees, turnsForValidation);
 
       changesSummary = {
         transforms: ['consolidate', 'nest', 'flagContradictions', 'checkRegression'],

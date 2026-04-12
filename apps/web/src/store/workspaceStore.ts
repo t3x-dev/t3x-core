@@ -62,6 +62,8 @@ interface WorkspaceState {
   setMode(mode: WorkspaceMode): void;
   setPanelExpanded(expanded: boolean): void;
   setExtractionPreset(preset: 'concise' | 'balanced' | 'detailed'): void;
+  /** Gold layer: apply a YOp to the result and persist to audit log (doesn't modify script) */
+  applyGoldEdit(op: YOp): void;
   setDriftDetected(info: DriftInfo, choices: string[]): void;
   clearDrift(): void;
   reset(): void;
@@ -136,36 +138,16 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         mode: 'executed',
       });
     }
-    // Sync result to draftStore, preserving slot_quotes/source metadata for highlighting
+    // Sync result to draftStore for commit pipeline, but DON'T overwrite if
+    // draft already has metadata (slot_quotes/source) from extraction snapshot.
+    // The draft is the authoritative source for source tracing.
     import('./draftStore').then(({ useDraftStore }) => {
-      // Save metadata from current draft before overwriting
-      type AnyNode = { key: string; slots: Record<string, unknown>; slot_quotes?: Record<string, string>; source?: string; children?: AnyNode[] };
-      const metaMap = new Map<string, { slot_quotes?: Record<string, string>; source?: string }>();
-      const collectMeta = (node: AnyNode, prefix: string) => {
-        const path = prefix ? `${prefix}/${node.key}` : node.key;
-        if (node.slot_quotes || node.source) {
-          metaMap.set(path, { slot_quotes: node.slot_quotes, source: node.source });
-        }
-        for (const child of node.children ?? []) collectMeta(child, path);
-      };
-      for (const tree of useDraftStore.getState().draft.trees as AnyNode[]) collectMeta(tree, '');
-
-      useDraftStore.getState().setDraft(content);
-
-      // Re-apply metadata to the new draft trees
-      if (metaMap.size > 0) {
-        const applyMeta = (node: AnyNode, prefix: string) => {
-          const path = prefix ? `${prefix}/${node.key}` : node.key;
-          const meta = metaMap.get(path);
-          if (meta) {
-            if (meta.slot_quotes && !node.slot_quotes) node.slot_quotes = meta.slot_quotes;
-            if (meta.source && !node.source) node.source = meta.source;
-          }
-          for (const child of node.children ?? []) applyMeta(child, path);
-        };
-        const draft = useDraftStore.getState().draft;
-        for (const tree of draft.trees as AnyNode[]) applyMeta(tree, '');
-        useDraftStore.getState().setDraft({ ...draft });
+      const currentDraft = useDraftStore.getState().draft;
+      const hasMetadata = currentDraft.trees.some((t: { slot_quotes?: unknown; source?: unknown }) =>
+        t.slot_quotes || t.source
+      );
+      if (!hasMetadata) {
+        useDraftStore.getState().setDraft(content);
       }
 
       // Persist new ops to server (only ops added after last save)
@@ -212,6 +194,31 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
             });
           }
         }
+      }
+    });
+  },
+
+  applyGoldEdit(op) {
+    const { result } = get();
+    if (!result) return;
+
+    // Apply the op to the current result (visual update only)
+    const applied = applyYOps(result, [op]);
+    if (!applied.ok) return;
+
+    set({ result: { trees: applied.trees, relations: applied.relations } });
+
+    // Persist to audit log — append-only, doesn't modify script panel
+    import('./draftStore').then(({ useDraftStore }) => {
+      const convId = useDraftStore.getState().conversationId;
+      if (convId) {
+        import('@/lib/api/trees').then(({ createYOpsEntry }) => {
+          import('@/lib/session').then(({ getSessionUser }) => {
+            const user = getSessionUser();
+            const author = user?.name || user?.username || undefined;
+            createYOpsEntry(convId, [op], 'manual', { author, layer: 'gold' })?.catch(() => {});
+          });
+        });
       }
     });
   },

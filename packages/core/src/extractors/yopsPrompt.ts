@@ -81,7 +81,13 @@ ${tier3Segment(style.tier3)}
 
 ${tier3KeyDistinction(style.tier3)}
 
-Do NOT extract: greetings, filler ("sure!", "let me help"), or meta-commentary
+Do NOT extract:
+- Greetings, filler ("sure!", "let me help", "of course!")
+- Assistant asking clarifying questions ("What would you like to know?", "Are you asking about...")
+- Lists of options the assistant offered BEFORE the user chose — only extract what was actually discussed
+- Brief mentions of alternatives not explored further (e.g., a castle named once but never discussed)
+- Conversational scaffolding ("Feel free to ask", "I'm here to help")
+- Meta-commentary about the conversation itself
 
 ## Output format: YAML tree + JSON metadata
 
@@ -91,7 +97,10 @@ then a JSON block containing \`slot_quotes\` and \`source_map\`.
 ### Structure
 - ONE root node named after the conversation topic (snake_case)
 - Children for subtopics — nest related facts under nested objects
-- Leaf values: clean data (numbers, short labels, booleans, arrays) — NOT full sentences
+- Leaf values: descriptive text (short phrases, labels, numbers) — NOT full sentences, NOT booleans
+- NEVER use true/false for slot values — use the actual descriptive text instead
+  - BAD: unesco_status: true → GOOD: unesco_status: World Heritage Site
+  - BAD: surrounded_at_high_tide: true → GOOD: high_tide_effect: completely surrounded by water
 - Object values become CHILD NODES, scalars/arrays become SLOT VALUES on the parent
 
 ${granularitySegment(style.granularity)}
@@ -189,7 +198,12 @@ ${tier3Segment(style.tier3)}
 
 ${tier3KeyDistinction(style.tier3)}
 
-Do NOT extract: greetings, filler ("sure!", "let me help"), or meta-commentary
+Do NOT extract:
+- Greetings, filler ("sure!", "let me help", "of course!")
+- Assistant asking clarifying questions ("What would you like to know?")
+- Lists of options offered BEFORE the user chose — only extract what was discussed
+- Brief mentions of alternatives not explored further
+- Conversational scaffolding and meta-commentary
 
 ## Output format: YOps list
 
@@ -226,7 +240,8 @@ Output a single YAML document with a \`yops:\` array. Each item is exactly one o
 - \`assert: { path, operator, value }\` — validate without mutating (\`operator\` ∈ exists, equals, type)
 
 Paths use \`/\` separator (e.g., \`trip/dining\`). Keys use snake_case.
-Values: clean data (numbers, short labels, booleans, arrays) — NOT full sentences.
+Values: descriptive text (short phrases, labels, numbers) — NOT full sentences, NOT booleans.
+NEVER use true/false — use the actual text (e.g., "World Heritage Site" not true).
 
 **IMPORTANT: Prefer updating existing structure over adding new nodes.** Only use structure-change ops (nest, fold, move, split) when the conversation explicitly indicates the tree should be reorganized — not for cosmetic improvements.
 

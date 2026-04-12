@@ -1,10 +1,11 @@
 'use client';
 
 import type { TreeNode, YOp } from '@t3x-dev/core';
-import { Check, Play, X } from 'lucide-react';
+import { Check, Play, Plus, X } from 'lucide-react';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { computeTreeDiff } from '@/lib/treeDiff';
+import { cn } from '@/lib/utils';
 import { useCommitStore } from '@/store/commitStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 
@@ -47,6 +48,7 @@ function opNodeKey(op: YOp): string | null {
 
 interface SlotRowProps {
   nodeKey: string;
+  nodePath: string;
   slotKey: string;
   value: string;
   diffType: 'added' | 'modified' | 'removed' | null;
@@ -58,6 +60,7 @@ interface SlotRowProps {
 
 function SlotRow({
   nodeKey: _nodeKey,
+  nodePath,
   slotKey,
   value,
   diffType,
@@ -67,6 +70,11 @@ function SlotRow({
   onEdit,
 }: SlotRowProps) {
   const [editing, setEditing] = useState(false);
+  const select = useWorkspaceStore((s) => s.select);
+  const clearSelection = useWorkspaceStore((s) => s.clearSelection);
+  const selectedPath = useWorkspaceStore((s) => s.selectedNodePath);
+  const selectedSlot = useWorkspaceStore((s) => s.selectedSlotKey);
+  const isSlotSelected = selectedPath === nodePath && selectedSlot === slotKey;
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleDoubleClick = useCallback(() => {
@@ -76,9 +84,7 @@ function SlotRow({
 
   const handleSave = useCallback(() => {
     const newValue = inputRef.current?.value.trim() ?? '';
-    if (newValue && newValue !== value) {
-      onEdit(newValue);
-    }
+    if (newValue && newValue !== value) onEdit(newValue);
     setEditing(false);
   }, [value, onEdit]);
 
@@ -90,7 +96,6 @@ function SlotRow({
     [handleSave]
   );
 
-  // Gutter color
   const gutterColor =
     diffType === 'added'
       ? 'bg-[var(--status-success)]'
@@ -100,16 +105,12 @@ function SlotRow({
           ? 'bg-[var(--status-error)]'
           : 'bg-transparent';
 
-  // Editing state
   if (editing) {
     return (
       <div className="flex items-stretch" style={{ minHeight: 24 }}>
         <div className={`shrink-0 w-[3px] ${gutterColor}`} />
-        <div
-          className="flex-1 min-w-0 flex items-center gap-1 px-2 py-0.5 bg-[var(--status-warning)]/[0.06]"
-          style={MONO}
-        >
-          <span className="shrink-0 text-[var(--text-secondary)]">{slotKey}: </span>
+        <div className="flex-1 min-w-0 flex items-center gap-1 px-2 py-0.5 bg-[var(--status-warning)]/[0.06]" style={MONO}>
+          <span className="shrink-0 text-[var(--yaml-key,#2563eb)]">{slotKey}:</span>
           <input
             ref={inputRef}
             defaultValue={value}
@@ -118,9 +119,7 @@ function SlotRow({
             className="flex-1 min-w-0 bg-transparent border-0 border-b-[1.5px] border-b-[var(--status-warning)] outline-none text-[var(--text-primary)]"
             style={{ fontFamily: 'inherit', fontSize: 'inherit' }}
           />
-          <span className="shrink-0 text-[8px] text-[var(--text-tertiary)] whitespace-nowrap">
-            Enter ↵ · Esc ✕
-          </span>
+          <span className="shrink-0 text-[8px] text-[var(--text-tertiary)] whitespace-nowrap">Enter ↵ · Esc ✕</span>
         </div>
       </div>
     );
@@ -128,13 +127,17 @@ function SlotRow({
 
   return (
     <div className="group flex items-stretch" style={{ minHeight: 24 }}>
-      <div className={`shrink-0 w-[3px] ${gutterColor}`} />
+      <div className={`shrink-0 w-[3px] ${isSlotSelected ? 'bg-[var(--source)]' : gutterColor}`} />
       <div
-        className="flex-1 min-w-0 flex items-center gap-1 px-2 py-0.5 cursor-text hover:bg-[var(--hover-bg)] transition-colors"
+        className={cn(
+          'flex-1 min-w-0 flex items-center gap-1 px-2 py-0.5 cursor-pointer hover:bg-[var(--hover-bg)] transition-colors',
+          isSlotSelected && 'bg-[var(--source-dim)]'
+        )}
         style={MONO}
+        onClick={() => isSlotSelected ? clearSelection() : select('after', { nodePath, slotKey })}
         onDoubleClick={handleDoubleClick}
       >
-        <span className="shrink-0 text-[var(--text-secondary)]">{slotKey}: </span>
+        <span className="shrink-0 text-[var(--yaml-key,#2563eb)]">{slotKey}:</span>
         {diffType === 'modified' && oldValue && (
           <span className="text-[var(--status-error)] opacity-50 line-through mr-1 truncate text-[10px]">
             {oldValue}
@@ -148,7 +151,7 @@ function SlotRow({
                 ? 'text-[var(--status-warning)] truncate'
                 : diffType === 'removed'
                   ? 'text-[var(--status-error)] opacity-50 line-through truncate'
-                  : 'text-[var(--text-primary)] truncate'
+                  : 'text-[var(--yaml-string,#16a34a)] truncate'
           }
         >
           {value}
@@ -162,25 +165,12 @@ function SlotRow({
             {sourceTag}
           </span>
         )}
-        <div className="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button
-            type="button"
-            title="Accept slot"
-            onClick={(e) => {
-              e.stopPropagation();
-            }}
-            className="text-[var(--text-tertiary)] hover:text-[var(--status-success)] cursor-pointer"
-          >
-            <Check className="h-2.5 w-2.5" />
-          </button>
+        <div className="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity pr-1">
           <button
             type="button"
             title="Delete slot"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete();
-            }}
-            className="text-[var(--text-tertiary)] hover:text-[var(--status-error)] cursor-pointer"
+            onClick={(e) => { e.stopPropagation(); onDelete(); }}
+            className="p-0.5 rounded text-[var(--text-tertiary)] hover:text-[var(--status-error)] hover:bg-[var(--hover-bg)]"
           >
             <X className="h-2.5 w-2.5" />
           </button>
@@ -223,7 +213,20 @@ function NodeRow({
   const selectedNodePath = useWorkspaceStore((s) => s.selectedNodePath);
   const select = useWorkspaceStore((s) => s.select);
   const clearSelection = useWorkspaceStore((s) => s.clearSelection);
+  const applyGoldEdit = useWorkspaceStore((s) => s.applyGoldEdit);
   const isSelected = selectedNodePath === path;
+
+  const handleDropNode = useCallback(() => {
+    if (!window.confirm(`Remove "${node.key}" and all its children?`)) return;
+    applyGoldEdit({ drop: { path } });
+  }, [path, node.key, applyGoldEdit]);
+
+  const handleAddChild = useCallback(() => {
+    const childKey = window.prompt('New node name (snake_case):');
+    if (!childKey || !childKey.trim()) return;
+    const cleanKey = childKey.trim().toLowerCase().replace(/\s+/g, '_');
+    applyGoldEdit({ define: { path: `${path}/${cleanKey}` } });
+  }, [path, applyGoldEdit]);
   const slots = node.slots || {};
   const slotEntries = Object.entries(slots).filter(([k]) => !k.startsWith('_'));
   const hasChanges =
@@ -292,32 +295,44 @@ function NodeRow({
               {node.source}
             </span>
           )}
-          {hasChanges && diffType !== 'removed' && (
-            <div className="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button
-                type="button"
-                title="Keep changes"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onAccept();
-                }}
-                className="text-[var(--text-tertiary)] hover:text-[var(--status-success)] cursor-pointer"
-              >
-                <Check className="h-2.5 w-2.5" />
-              </button>
-              <button
-                type="button"
-                title="Dismiss changes"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDismiss();
-                }}
-                className="text-[var(--text-tertiary)] hover:text-[var(--status-error)] cursor-pointer"
-              >
-                <X className="h-2.5 w-2.5" />
-              </button>
-            </div>
-          )}
+          <div className="ml-auto flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity pr-2">
+            {hasChanges && diffType !== 'removed' && (
+              <>
+                <button
+                  type="button"
+                  title="Keep changes"
+                  onClick={(e) => { e.stopPropagation(); onAccept(); }}
+                  className="p-0.5 rounded text-[var(--text-tertiary)] hover:text-[var(--status-success)]"
+                >
+                  <Check className="h-2.5 w-2.5" />
+                </button>
+                <button
+                  type="button"
+                  title="Dismiss changes"
+                  onClick={(e) => { e.stopPropagation(); onDismiss(); }}
+                  className="p-0.5 rounded text-[var(--text-tertiary)] hover:text-[var(--status-warning)]"
+                >
+                  <X className="h-2.5 w-2.5" />
+                </button>
+              </>
+            )}
+            <button
+              type="button"
+              title="Add child node"
+              onClick={(e) => { e.stopPropagation(); handleAddChild(); }}
+              className="p-0.5 rounded text-[var(--text-tertiary)] hover:text-[var(--status-success)] hover:bg-[var(--hover-bg)]"
+            >
+              <Plus className="h-2.5 w-2.5" />
+            </button>
+            <button
+              type="button"
+              title="Remove node and children"
+              onClick={(e) => { e.stopPropagation(); handleDropNode(); }}
+              className="p-0.5 rounded text-[var(--text-tertiary)] hover:text-[var(--status-error)] hover:bg-[var(--hover-bg)]"
+            >
+              <X className="h-2.5 w-2.5" />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -341,6 +356,7 @@ function NodeRow({
           <div key={key} style={{ paddingLeft: `${8 + (depth + 1) * 14}px` }}>
             <SlotRow
               nodeKey={node.key}
+              nodePath={path}
               slotKey={key}
               value={formatSlotValue(val)}
               diffType={slotDiff}
@@ -387,30 +403,85 @@ interface AfterNodeRecursiveProps {
 }
 
 function AfterNodeRecursive({ node, path, depth }: AfterNodeRecursiveProps) {
-  // Children don't need full diff context — just render slots plainly
   const slots = node.slots || {};
   const slotEntries = Object.entries(slots).filter(([k]) => !k.startsWith('_'));
+  const select = useWorkspaceStore((s) => s.select);
+  const clearSelection = useWorkspaceStore((s) => s.clearSelection);
+  const applyGoldEdit = useWorkspaceStore((s) => s.applyGoldEdit);
+  const selectedPath = useWorkspaceStore((s) => s.selectedNodePath);
+  const selectedSlot = useWorkspaceStore((s) => s.selectedSlotKey);
+  const isNodeSelected = selectedPath === path && !selectedSlot;
+
+  const handleEditSlot = useCallback(
+    (slotKey: string, newValue: string) => {
+      applyGoldEdit({ set: { path: `${path}/${slotKey}`, value: newValue } });
+    },
+    [path, applyGoldEdit]
+  );
+
+  const handleDeleteSlot = useCallback(
+    (slotKey: string) => {
+      applyGoldEdit({ unset: { path: `${path}/${slotKey}` } });
+    },
+    [path, applyGoldEdit]
+  );
+
+  const handleDropNode = useCallback(() => {
+    if (!window.confirm(`Remove "${node.key}" and all its children?`)) return;
+    applyGoldEdit({ drop: { path } });
+  }, [path, node.key, applyGoldEdit]);
+
+  const handleAddChild = useCallback(() => {
+    const childKey = window.prompt('New node name (snake_case):');
+    if (!childKey || !childKey.trim()) return;
+    const cleanKey = childKey.trim().toLowerCase().replace(/\s+/g, '_');
+    applyGoldEdit({ define: { path: `${path}/${cleanKey}` } });
+  }, [path, applyGoldEdit]);
 
   return (
     <>
       <div className="group flex items-stretch" style={{ minHeight: 26 }}>
-        <div className="shrink-0 w-[3px] bg-transparent" />
+        <div className={`shrink-0 w-[3px] ${isNodeSelected ? 'bg-[var(--source)]' : 'bg-transparent'}`} />
         <div
-          className="flex-1 flex items-center gap-1 py-0.5 hover:bg-[var(--hover-bg)] transition-colors"
+          className={cn(
+            'flex-1 flex items-center gap-1 py-0.5 cursor-pointer hover:bg-[var(--hover-bg)] transition-colors',
+            isNodeSelected && 'bg-[var(--source-dim)]'
+          )}
           style={{ ...MONO, paddingLeft: `${8 + depth * 14}px` }}
+          onClick={() => isNodeSelected ? clearSelection() : select('after', { nodePath: path })}
         >
           <span className="text-[var(--yaml-key,#2563eb)] font-semibold">{node.key}:</span>
+          <div className="ml-auto flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity pr-2">
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); handleAddChild(); }}
+              title="Add child node"
+              className="p-0.5 rounded text-[var(--text-tertiary)] hover:text-[var(--status-success)] hover:bg-[var(--hover-bg)]"
+            >
+              <Plus className="h-2.5 w-2.5" />
+            </button>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); handleDropNode(); }}
+              title="Remove node and children"
+              className="p-0.5 rounded text-[var(--text-tertiary)] hover:text-[var(--status-error)] hover:bg-[var(--hover-bg)]"
+            >
+              <X className="h-2.5 w-2.5" />
+            </button>
+          </div>
         </div>
       </div>
       {slotEntries.map(([key, val]) => (
         <div key={key} style={{ paddingLeft: `${8 + (depth + 1) * 14}px` }}>
-          <div className="flex items-stretch" style={{ minHeight: 24 }}>
-            <div className="shrink-0 w-[3px] bg-transparent" />
-            <div className="flex-1 min-w-0 flex items-center gap-1 px-2 py-0.5" style={MONO}>
-              <span className="shrink-0 text-[var(--yaml-key,#2563eb)]">{key}:</span>
-              <span className="text-[var(--yaml-string,#16a34a)] truncate ml-1">{formatSlotValue(val)}</span>
-            </div>
-          </div>
+          <SlotRow
+            nodeKey={node.key}
+            nodePath={path}
+            slotKey={key}
+            value={formatSlotValue(val)}
+            diffType={null}
+            onDelete={() => handleDeleteSlot(key)}
+            onEdit={(newValue) => handleEditSlot(key, newValue)}
+          />
         </div>
       ))}
       {node.children?.map((child: TreeNode) => (
@@ -438,6 +509,7 @@ export function AfterPanel({
   const toggleOp = useWorkspaceStore((s) => s.toggleOp);
   const appendOp = useWorkspaceStore((s) => s.appendOp);
   const execute = useWorkspaceStore((s) => s.execute);
+  const applyGoldEdit = useWorkspaceStore((s) => s.applyGoldEdit);
 
   const isCommitting = useCommitStore((s) => s.isCommitting);
 
@@ -449,6 +521,8 @@ export function AfterPanel({
 
   const diff = useMemo(() => {
     if (!result || !trees) return null;
+    // No diff when base is empty (first extraction) — everything is "new" by definition
+    if (base.trees.length === 0) return null;
     return computeTreeDiff(base.trees as TreeNode[], trees);
   }, [base.trees, result, trees]);
 
@@ -472,24 +546,20 @@ export function AfterPanel({
     // Changes are already in the result; accept is a visual confirmation only.
   }, []);
 
-  // ── Edit slot inline: generate a set YOp ──
+  // ── Edit slot inline: gold layer edit (doesn't modify script) ──
   const handleEditSlot = useCallback(
     (nodeKey: string, slotKey: string, newValue: string) => {
-      const op: YOp = { set: { path: `${nodeKey}/${slotKey}`, value: newValue } };
-      appendOp(op);
-      execute();
+      applyGoldEdit({ set: { path: `${nodeKey}/${slotKey}`, value: newValue } });
     },
-    [appendOp, execute]
+    [applyGoldEdit]
   );
 
-  // ── Delete slot inline: generate an unset YOp ──
+  // ── Delete slot inline: gold layer edit (doesn't modify script) ──
   const handleDeleteSlot = useCallback(
     (nodeKey: string, slotKey: string) => {
-      const op: YOp = { unset: { path: `${nodeKey}/${slotKey}` } };
-      appendOp(op);
-      execute();
+      applyGoldEdit({ unset: { path: `${nodeKey}/${slotKey}` } });
     },
-    [appendOp, execute]
+    [applyGoldEdit]
   );
 
   const getDefaultCommitName = useCallback(() => {

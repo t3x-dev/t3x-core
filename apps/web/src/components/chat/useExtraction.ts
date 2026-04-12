@@ -40,7 +40,8 @@ export function useExtraction({ resolvedConversationId }: UseExtractionParams) {
       // Store which pin IDs were used for this extraction (for commit source_refs)
       useWorkspaceStore.setState({ lastExtractionPinIds: sourcePinIds ?? [] });
 
-      // Expand panel if collapsed
+      // Set streaming mode (shows overlay), expand panel
+      useWorkspaceStore.getState().setMode('streaming');
       if (!useWorkspaceStore.getState().panelExpanded) {
         useWorkspaceStore.getState().setPanelExpanded(true);
       }
@@ -195,6 +196,7 @@ export function useExtraction({ resolvedConversationId }: UseExtractionParams) {
               });
             }
           }
+          useWorkspaceStore.getState().setMode('idle');
           useDraftStore.setState({ isExtracting: false });
         } else {
           // No delta ops
