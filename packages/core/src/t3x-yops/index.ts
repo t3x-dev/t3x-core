@@ -1,5 +1,5 @@
 // ── Engine ──
-export { applyYOps } from './engine';
+export { applyYOps, applySourcedYOps } from './engine';
 
 // ── Format (from @t3x-dev/yops, with backward-compat alias) ──
 export { parseYOpsYaml, formatYOps as formatYOpsLog } from '@t3x-dev/yops';

@@ -12,7 +12,7 @@
 import { applyYOps as applyGenericYOps } from '@t3x-dev/yops';
 import type { YOp as GenericYOp, YValue } from '@t3x-dev/yops';
 import type { Relation, SemanticContent } from '../semantic/types';
-import type { RelateOp, UnrelateOp, YOp, YOpsResult } from './types';
+import type { RelateOp, SourcedYOp, UnrelateOp, YOp, YOpsResult } from './types';
 import { treesToYValue, yvalueToTrees } from './convert';
 import { findNode } from './helpers';
 
@@ -219,4 +219,52 @@ function overlayMetadata(
   }
 
   walk(outputTrees, '');
+}
+
+// ── Sourced entry point ──
+
+/**
+ * Apply sourced YOps, enforcing that every op carries a structurally valid
+ * Source. Does NOT verify LLMSource quotes against turns — that's
+ * `validateSource`'s responsibility (runs in the extraction retry loop before
+ * ops reach the engine). Engine enforces structure only.
+ */
+export function applySourcedYOps(content: SemanticContent, ops: SourcedYOp[]): YOpsResult {
+  for (let i = 0; i < ops.length; i++) {
+    const op = ops[i] as { source?: unknown };
+    if (!op.source || typeof op.source !== 'object') {
+      return {
+        ok: false,
+        trees: content.trees,
+        relations: content.relations,
+        applied: 0,
+        error: { code: 'MISSING_SOURCE', message: `Op at index ${i} has no source`, op_index: i },
+      };
+    }
+    const s = op.source as { type?: string; author?: string };
+    if (s.type !== 'llm' && s.type !== 'human') {
+      return {
+        ok: false,
+        trees: content.trees,
+        relations: content.relations,
+        applied: 0,
+        error: { code: 'INVALID_SOURCE_TYPE', message: `Op at index ${i} has invalid source.type`, op_index: i },
+      };
+    }
+    if (s.type === 'human' && (!s.author || s.author.trim() === '')) {
+      return {
+        ok: false,
+        trees: content.trees,
+        relations: content.relations,
+        applied: 0,
+        error: { code: 'MISSING_AUTHOR', message: `Human op at index ${i} missing author`, op_index: i },
+      };
+    }
+  }
+  // Strip source before passing to generic engine (it doesn't know about source)
+  const stripped = ops.map((o) => {
+    const { source: _unused, ...rest } = o as SourcedYOp & { source: unknown };
+    return rest as YOp;
+  });
+  return applyYOps(content, stripped);
 }
