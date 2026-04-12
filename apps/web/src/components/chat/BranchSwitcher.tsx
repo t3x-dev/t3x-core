@@ -3,9 +3,7 @@
 import { Check, GitBranch, Plus } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { listBranches, createBranch } from '@/lib/api/branches';
-import { listCommits } from '@/lib/api/commits';
-import type { ApiCommit } from '@/lib/api/commits';
+import { useBranches } from '@/hooks/useBranches';
 import { cn } from '@/lib/utils';
 
 interface BranchSwitcherProps {
@@ -16,13 +14,13 @@ interface BranchSwitcherProps {
 
 export function BranchSwitcher({ projectId, activeBranch, onBranchChange }: BranchSwitcherProps) {
   const [open, setOpen] = useState(false);
-  const [branches, setBranches] = useState<string[]>([]);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
-  const [loading, setLoading] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const { branches, loading, create } = useBranches(projectId, open);
 
   // Compute dropdown position from trigger button
   const [dropdownPos, setDropdownPos] = useState<React.CSSProperties>({});
@@ -31,47 +29,6 @@ export function BranchSwitcher({ projectId, activeBranch, onBranchChange }: Bran
     const rect = triggerRef.current.getBoundingClientRect();
     setDropdownPos({ top: rect.bottom + 4, left: rect.left });
   }, [open]);
-
-  // Fetch branches when dropdown opens
-  useEffect(() => {
-    if (!open || !projectId) return;
-    let cancelled = false;
-
-    async function fetchBranches() {
-      setLoading(true);
-      try {
-        // Get branches from branches table
-        const branchData = await listBranches(projectId).catch(() => ({ branches: [] }));
-        const branchNames = new Set<string>(
-          (branchData.branches ?? []).map((b: { name: string }) => b.name)
-        );
-
-        // Also get unique branch names from commits
-        const commits: ApiCommit[] = await listCommits(projectId, undefined, 100).catch(() => []);
-        for (const c of commits) {
-          if (c.branch) branchNames.add(c.branch);
-        }
-
-        // Always include main
-        branchNames.add('main');
-
-        if (!cancelled) {
-          setBranches(Array.from(branchNames).sort((a, b) => {
-            if (a === 'main') return -1;
-            if (b === 'main') return 1;
-            return a.localeCompare(b);
-          }));
-        }
-      } catch {
-        if (!cancelled) setBranches(['main']);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-
-    fetchBranches();
-    return () => { cancelled = true; };
-  }, [open, projectId]);
 
   // Close on outside click
   useEffect(() => {
@@ -104,16 +61,9 @@ export function BranchSwitcher({ projectId, activeBranch, onBranchChange }: Bran
   const handleCreate = useCallback(async () => {
     const name = newName.trim().replace(/\s+/g, '-');
     if (!name || !projectId || !/^[\w\-/.]+$/.test(name)) return;
-
-    try {
-      await createBranch(projectId, name, activeBranch);
-    } catch {
-      // Branch not persisted to branches table — commit will still use this name.
-      // The branch will appear in the list next time via commit branch labels.
-    }
+    await create(name, activeBranch);
     handleSelect(name);
-    setBranches((prev) => prev.includes(name) ? prev : [...prev, name]);
-  }, [newName, projectId, activeBranch, handleSelect]);
+  }, [newName, projectId, activeBranch, handleSelect, create]);
 
   return (
     <div className="relative" ref={dropdownRef}>

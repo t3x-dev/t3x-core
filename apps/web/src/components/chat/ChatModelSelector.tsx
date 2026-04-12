@@ -2,8 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { getAvailableModels } from '@/lib/api/llm';
-import type { LLMProviderInfo } from '@/lib/api/types';
+import { useAvailableModels } from '@/hooks/useAvailableModels';
 
 interface ChatModelSelectorProps {
   conversationId: string | null;
@@ -13,15 +12,9 @@ interface ChatModelSelectorProps {
 
 export function ChatModelSelector({ selectedModel, onModelChange }: ChatModelSelectorProps) {
   const [open, setOpen] = useState(false);
-  const [providers, setProviders] = useState<LLMProviderInfo[]>([]);
+  const { providers } = useAvailableModels();
   const buttonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    getAvailableModels()
-      .then((data) => setProviders(data.providers.filter((p) => p.available)))
-      .catch(() => {});
-  }, []);
 
   // Close on outside click — check both button and portal dropdown
   useEffect(() => {

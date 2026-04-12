@@ -1,7 +1,11 @@
 import type { TreeNode } from '@t3x-dev/core';
 import { useEffect, useRef, useState } from 'react';
-import { getApiCommit, listTopics } from '@/lib/api';
 import { treesToNodes } from '@/lib/treeCompat';
+import {
+  fetchCommitForInheritance,
+  fetchConversationMeta,
+  fetchConversationTopics,
+} from '@/queries/chatInitFetch';
 import { hydrateConversation } from '@/queries/loadConversation';
 import { useChatStore } from '@/store/chatStore';
 import { useCommitStore } from '@/store/commitStore';
@@ -62,25 +66,21 @@ export function useChatInit({
 
     // If no project ID yet, try to get it from the conversation
     if (!resolvedProjectId && convId && convId !== 'new') {
-      import('@/lib/api').then(({ getConversation }) => {
-        getConversation(convId)
-          .then((conv) => {
-            if (conv?.project_id) {
-              setResolvedProjectId(conv.project_id);
-              useCommitStore.getState().setProjectId(conv.project_id);
-              if (!inheritFromCommitHash) {
-                useCommitStore.getState().initCommitState(conv.project_id);
-              }
-              useChatStore.getState().setActiveConversation(convId, conv.project_id);
-            }
-          })
-          .catch(() => {});
+      fetchConversationMeta(convId).then((conv) => {
+        if (conv?.project_id) {
+          setResolvedProjectId(conv.project_id);
+          useCommitStore.getState().setProjectId(conv.project_id);
+          if (!inheritFromCommitHash) {
+            useCommitStore.getState().initCommitState(conv.project_id);
+          }
+          useChatStore.getState().setActiveConversation(convId, conv.project_id);
+        }
       });
     }
 
     // Helper: hydrate extraction panel from parent commit (inheritance flow)
     const hydrateFromParent = (hash: string) => {
-      getApiCommit(hash)
+      fetchCommitForInheritance(hash)
         .then((parentCommit) => {
           // Extract parent conversation ID for "View parent" link
           const sources = (parentCommit as { sources?: Array<{ type?: string; id?: string }> })
@@ -124,7 +124,7 @@ export function useChatInit({
           }
 
           // Also load topics (display only — not wired to store yet)
-          const topicsList = await listTopics(convId).catch(() => []);
+          const topicsList = await fetchConversationTopics(convId);
           if (topicsList && topicsList.length > 0) {
             // TODO(topics-state): route through workspaceStore once topics schema is added
           }
