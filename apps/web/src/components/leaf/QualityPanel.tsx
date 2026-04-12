@@ -11,7 +11,7 @@
 import { CheckCircle, Clipboard, FileDown, Share2, XCircle } from 'lucide-react';
 import { useMemo } from 'react';
 import { Button } from '@/components/ui/button';
-import type { Assertion, Constraint } from '@/lib/api/leaves';
+import type { Assertion, Constraint } from '@/types/api';
 import { cn } from '@/lib/utils';
 
 // ============================================================================

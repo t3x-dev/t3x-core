@@ -2,8 +2,9 @@
 
 import { FileText, Mail, MessageCircle, MessageSquare, PenTool } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { listTemplates, type Template } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { fetchTemplates } from '@/queries/templates';
+import type { Template } from '@/types/api';
 
 export interface LeafTemplate {
   type: string;
@@ -94,9 +95,9 @@ export function TemplateGrid({ selected, onSelect }: TemplateGridProps) {
   useEffect(() => {
     let cancelled = false;
 
-    async function fetchTemplates() {
+    async function loadTemplates() {
       try {
-        const apiTemplates = await listTemplates();
+        const apiTemplates = await fetchTemplates();
         if (cancelled) return;
 
         if (apiTemplates.length > 0) {
@@ -120,7 +121,7 @@ export function TemplateGrid({ selected, onSelect }: TemplateGridProps) {
       }
     }
 
-    fetchTemplates();
+    loadTemplates();
     return () => {
       cancelled = true;
     };

@@ -118,6 +118,8 @@
     {
       "includes": [
         "apps/web/src/components/chat/**",
+        "apps/web/src/components/commit/**",
+        "apps/web/src/components/leaf/**",
         "apps/web/src/components/merge/**",
         "apps/web/src/components/tree-graph/merge-view/**"
       ],

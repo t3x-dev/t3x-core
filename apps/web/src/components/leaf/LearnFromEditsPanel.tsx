@@ -8,8 +8,9 @@
 import { Edit3, Loader2, Plus, RefreshCw } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { ApiError, type EditLearnedConstraint, learnFromEdits } from '@/lib/api';
+import { useLearnFromEdits } from '@/hooks/useLearnFromEdits';
 import { cn } from '@/lib/utils';
+import type { EditLearnedConstraint } from '@/types/api';
 
 const DIMENSION_LABELS: Record<string, { label: string; bg: string; text: string }> = {
   style: {
@@ -44,25 +45,23 @@ export function LearnFromEditsPanel({
   const [editsAnalyzed, setEditsAnalyzed] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { run: learnFromEdits } = useLearnFromEdits();
 
   const fetchSuggestions = useCallback(async () => {
     setLoading(true);
     setError(null);
     setSuggestions(null);
-    try {
-      const data = await learnFromEdits(leafId);
-      setSuggestions(data.suggestions);
-      setEditsAnalyzed(data.edits_analyzed);
-    } catch (err) {
-      if (err instanceof ApiError && err.code === 'NO_EDITS') {
-        setError('No edits recorded yet. Edit the output text to build edit history.');
-      } else {
-        setError(err instanceof Error ? err.message : 'Failed to analyze edits');
-      }
-    } finally {
-      setLoading(false);
+    const result = await learnFromEdits(leafId);
+    if (result.kind === 'ok') {
+      setSuggestions(result.data.suggestions);
+      setEditsAnalyzed(result.data.edits_analyzed);
+    } else if (result.kind === 'no_edits') {
+      setError('No edits recorded yet. Edit the output text to build edit history.');
+    } else {
+      setError(result.message || 'Failed to analyze edits');
     }
-  }, [leafId]);
+    setLoading(false);
+  }, [leafId, learnFromEdits]);
 
   if (!hasOutput) return null;
 

@@ -15,13 +15,12 @@ import { ChevronRight, Leaf as LeafIcon, Loader2, MessageSquare, Plus } from 'lu
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useState } from 'react';
-import type { Leaf } from '@/lib/api';
-import { createLeaf } from '@/lib/api';
-import type { LeafType } from '@/lib/api/leaves';
+import { useCreateLeaf } from '@/hooks/useCreateLeaf';
+import type { CompatNode } from '@/lib/treeCompat';
 import { useCommitDetailStore } from '@/store/commitDetailStore';
 import { useProjectStore } from '@/store/projectStore';
+import type { Leaf, LeafType } from '@/types/api';
 import { DotIndicator } from './CommitDetailHelpers';
-import type { CompatNode } from '@/lib/treeCompat';
 
 // ============================================================================
 // Types
@@ -71,6 +70,7 @@ function formatNodeType(type: string): string {
 
 export function CommitTreeIndex({ projectId, leaves, onLeavesChange }: CommitTreeIndexProps) {
   const router = useRouter();
+  const { create: createLeaf } = useCreateLeaf();
 
   // Store
   const commit = useCommitDetailStore((s) => s.commit);

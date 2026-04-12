@@ -14,7 +14,7 @@ import {
 import { PinButton } from '@/components/ui/PinButton';
 import type { WorkspaceMode } from '@/hooks/useLeafPageData';
 import { useTerminology } from '@/hooks/useTerminology';
-import type { Leaf } from '@/lib/api';
+import type { Leaf } from '@/types/api';
 import type { ExportFormat } from '@/lib/export';
 import { cn } from '@/lib/utils';
 

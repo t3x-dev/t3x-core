@@ -8,12 +8,9 @@
 import { BookOpen, Loader2, Plus } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import {
-  type ReverseLearnResult,
-  reverseLearnConstraints,
-  type SuggestedConstraint,
-} from '@/lib/api';
+import { useReverseLearn } from '@/hooks/useReverseLearn';
 import { cn } from '@/lib/utils';
+import type { ReverseLearnResult, SuggestedConstraint } from '@/types/api';
 
 interface LearnFromEditSuggestionProps {
   leafId: string;
@@ -25,18 +22,19 @@ export function LearnFromEditSuggestion({ leafId, onAddConstraint }: LearnFromEd
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const { run: reverseLearn } = useReverseLearn();
   const fetchSuggestions = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await reverseLearnConstraints(leafId);
+      const data = await reverseLearn(leafId);
       setResult(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to reverse-learn constraints');
     } finally {
       setLoading(false);
     }
-  }, [leafId]);
+  }, [leafId, reverseLearn]);
 
   if (!result) {
     return (

@@ -11,13 +11,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  type CompareModelsResult,
-  compareLeafModels,
-  listProviders,
-  type ProviderInfo,
-} from '@/lib/api';
+import { useCompareModels } from '@/hooks/useCompareModels';
 import { cn } from '@/lib/utils';
+import { fetchProviders } from '@/queries/providers';
+import type { CompareModelsResult, ProviderInfo } from '@/types/api';
 
 interface CompareModelsDialogProps {
   open: boolean;
@@ -39,12 +36,13 @@ export function CompareModelsDialog({ open, onOpenChange, leafId }: CompareModel
   const [results, setResults] = useState<CompareModelsResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const { compare } = useCompareModels();
 
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
     setLoadingProviders(true);
-    listProviders()
+    fetchProviders()
       .then((data) => {
         if (!cancelled) setProviders(data);
       })
@@ -93,14 +91,14 @@ export function CompareModelsDialog({ open, onOpenChange, leafId }: CompareModel
     setResults(null);
 
     try {
-      const result = await compareLeafModels(leafId, Array.from(selectedModels));
+      const result = await compare(leafId, Array.from(selectedModels));
       setResults(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Comparison failed');
     } finally {
       setComparing(false);
     }
-  }, [leafId, selectedModels]);
+  }, [leafId, selectedModels, compare]);
 
   const handleCopy = async (text: string, index: number) => {
     await navigator.clipboard.writeText(text);
