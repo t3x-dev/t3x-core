@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/select';
 import type { Project } from '@/lib/api';
 import { listProjects } from '@/lib/api';
-import type { SearchMode } from '@/lib/api/search';
+import type { SearchMode } from '@/queries/search';
 import { cn } from '@/lib/utils';
 import { useSearchStore } from '@/store/searchStore';
 
