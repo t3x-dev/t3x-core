@@ -10,8 +10,10 @@
  * @see docs/specification/memory-pin-system-design.md
  */
 
+import { sql } from 'drizzle-orm';
 import {
   boolean,
+  check,
   index,
   integer,
   jsonb,
@@ -817,18 +819,19 @@ export type NotificationRecord = typeof notifications.$inferSelect;
 export type NotificationInsert = typeof notifications.$inferInsert;
 
 // ═══════════════════════════════════════════════════════════════════════════
-// yops_log: Append-only YOps Records
+// yops_log: Append-only YOps Records (T3X dialect)
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Append-only log of YOps produced during extraction and editing.
+ * Append-only log of SourcedYOps produced during extraction and editing.
  *
- * Sources:
- * - `pipeline`: YOps from LLM-based semantic extraction (has turn_hash)
- * - `manual`: YOps from user edits (graph UI or YAML mode)
- * - `answer`: YOps from user answers to advisory/drift questions
- * - `collapse`: YOps that collapse old frames (drift choice: keep new)
- * - `compress`: YOps from tree compression
+ * Every op in the `yops` JSONB array MUST have a `source` field with
+ * type ∈ {'llm','human'} — enforced by DB check constraint
+ * `yops_log_source_required` (see migrations/2026-04-12_yops-source-required.sql).
+ *
+ * Row-level `source` text column (values: 'pipeline'|'manual'|'answer'|
+ * 'collapse'|'compress') is kept for backward-compat queries but is no longer
+ * authoritative — the truth is the per-op source field on each YOp.
  */
 export const yopsLog = pgTable(
   'yops_log',
@@ -881,6 +884,17 @@ export const yopsLog = pgTable(
   (table) => ({
     convIdx: index('idx_yops_log_conv').on(table.conversationId, table.createdAt),
     projectIdx: index('idx_yops_log_project').on(table.projectId),
+    // Source enforcement — mirrors migrations/2026-04-12_yops-source-required.sql
+    sourceRequired: check(
+      'yops_log_source_required',
+      sql`
+        jsonb_typeof(${table.yops}) = 'array'
+        AND NOT EXISTS (
+          SELECT 1 FROM jsonb_array_elements(${table.yops}) op
+          WHERE NOT (op ? 'source' AND op->'source'->>'type' IN ('llm','human'))
+        )
+      `
+    ),
   })
 );
 

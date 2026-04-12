@@ -1,5 +1,5 @@
 // ── Engine ──
-export { applyYOps } from './engine';
+export { applyYOps, applySourcedYOps } from './engine';
 
 // ── Format (from @t3x-dev/yops, with backward-compat alias) ──
 export { parseYOpsYaml, formatYOps as formatYOpsLog } from '@t3x-dev/yops';
@@ -29,3 +29,12 @@ export { getYOpsJsonSchema } from './jsonSchema';
 // ── Replay ──
 export { replayYOps, verifyReplay, extractOpsFromEntries } from './replay';
 export type { ReplayInput, ReplayResult, VerifyResult } from './replay';
+
+// ── Source provenance ──
+export type { Source, LLMSource, HumanSource, TurnRef } from './source';
+export { isLLMSource, isHumanSource } from './source';
+export type { SourcedYOp } from './types';
+
+// ── Source validator ──
+export { validateSource } from './sourceValidator';
+export type { ValidationResult, ValidationTurn, FailingOp, FailureReason } from './sourceValidator';

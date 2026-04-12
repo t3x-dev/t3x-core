@@ -25,7 +25,7 @@ import { autoFixPaths, autoFixYOp } from '../../ops/gates/autofix';
 import { validateDedup } from '../../ops/gates/dedup';
 import { validateSources } from '../../ops/gates/source';
 import type { GateViolation } from '../../ops/gates/types';
-import type { SemanticContent, TreeNode } from '../../semantic/types';
+import type { SemanticContent } from '../../semantic/types';
 import { validateIntegrity } from '../../semantic/validate';
 import { applyYOps } from '../../t3x-yops/engine';
 import type { YOp, YOpsResult } from '../../t3x-yops/types';
@@ -41,39 +41,6 @@ import type { ExtractionStrategy } from './types';
 const MAX_RETRIES = 1;
 const TEMPERATURE = 0.1;
 const MAX_TOKENS = 8192;
-
-/**
- * Overlay metadata (source, slot_quotes) from a parsed tree onto engine output trees.
- * The YValue round-trip in the adapter engine strips T3X annotations; this restores them.
- */
-function applyTreeMetadata(outputTrees: TreeNode[], sourceTree: TreeNode): void {
-  // Build a map of key -> metadata from the parsed tree
-  const metaMap = new Map<string, { source?: string; slot_quotes?: Record<string, string> }>();
-  function collectMeta(node: TreeNode, prefix: string): void {
-    const path = prefix ? `${prefix}/${node.key}` : node.key;
-    metaMap.set(path, { source: node.source, slot_quotes: node.slot_quotes });
-    for (const child of node.children ?? []) {
-      collectMeta(child, path);
-    }
-  }
-  collectMeta(sourceTree, '');
-
-  // Walk output trees and apply matching metadata
-  function walk(nodes: TreeNode[], prefix: string): void {
-    for (const node of nodes) {
-      const path = prefix ? `${prefix}/${node.key}` : node.key;
-      const meta = metaMap.get(path);
-      if (meta) {
-        if (meta.source !== undefined) node.source = meta.source;
-        if (meta.slot_quotes !== undefined) node.slot_quotes = meta.slot_quotes;
-      }
-      if (node.children.length > 0) {
-        walk(node.children, path);
-      }
-    }
-  }
-  walk(outputTrees, '');
-}
 
 // ── Types ──
 
@@ -125,7 +92,7 @@ export class YamlExtractionStrategy implements ExtractionStrategy {
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       // ── LLM generates YAML (one-shot) ──
-      const { systemPrompt, userPrompt } = buildYOpsPrompt(input, style);
+      const { systemPrompt, userPrompt } = buildYOpsPrompt(input, { style });
       const combinedPrompt = `${systemPrompt}\n\n---\n\n${userPrompt}`;
 
       let raw: string;
@@ -163,13 +130,6 @@ export class YamlExtractionStrategy implements ExtractionStrategy {
       if (!l2.ok) {
         lastError = l2.error;
         continue;
-      }
-
-      // For tree-format extraction, overlay metadata (source, slot_quotes)
-      // from the parser's tree onto the engine result. The YValue round-trip
-      // strips T3X annotations, so we re-apply them here.
-      if (l0.parseResult.format === 'tree') {
-        applyTreeMetadata(l2.snapshot.trees, l0.parseResult.tree);
       }
 
       return { ok: true, yops: l2.resolvedYOps, snapshot: l2.snapshot, usage: totalUsage };

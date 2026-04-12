@@ -6,16 +6,19 @@ import { lintGutter } from '@codemirror/lint';
 import { Compartment, EditorState } from '@codemirror/state';
 import { oneDark } from '@codemirror/theme-one-dark';
 import { placeholder as cmPlaceholder, EditorView, keymap, lineNumbers } from '@codemirror/view';
+import type { SourcedYOp, YOp } from '@t3x-dev/core';
 import { Loader2 } from 'lucide-react';
 import { useTheme } from 'next-themes';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { opsToYaml } from '@/lib/scriptParser';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 
-const PLACEHOLDER = `yops:
-  - set:
-      path: node/slot
-      value: "new value"
-      from: T1`;
+const PLACEHOLDER = `# No ops yet — click Extract or edit slots in the After panel.`;
+
+function stripSource(op: SourcedYOp): YOp {
+  const { source: _source, ...rest } = op as SourcedYOp & Record<string, unknown>;
+  return rest as YOp;
+}
 
 // Light theme using CSS variable tokens from globals.css
 const lightTheme = EditorView.theme(
@@ -46,13 +49,17 @@ export function ScriptEditor() {
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const mode = useWorkspaceStore((s) => s.mode);
-  const scriptText = useWorkspaceStore((s) => s.scriptText);
-  const scriptOps = useWorkspaceStore((s) => s.scriptOps);
-  const parseErrors = useWorkspaceStore((s) => s.parseErrors);
+  const opsLog = useWorkspaceStore((s) => s.opsLog);
   const execError = useWorkspaceStore((s) => s.execError);
-  const baseCommitHash = useWorkspaceStore((s) => s.baseCommitHash);
-  const setScriptText = useWorkspaceStore((s) => s.setScriptText);
   const isStreaming = mode === 'streaming';
+
+  // Derived read-only YAML view of the committed ops log. The editor is a
+  // display surface in the new CQRS architecture — writes come from the
+  // extraction worker and gold-edit builder, never from editor input.
+  const scriptText = useMemo(
+    () => opsToYaml(opsLog.map((op) => stripSource(op))),
+    [opsLog]
+  );
 
   // Elapsed timer during extraction
   const [elapsed, setElapsed] = useState(0);
@@ -81,12 +88,7 @@ export function ScriptEditor() {
         lintGutter(),
         keymap.of(defaultKeymap),
         cmPlaceholder(PLACEHOLDER),
-        readOnlyCompartment.current.of(EditorState.readOnly.of(false)),
-        EditorView.updateListener.of((update) => {
-          if (update.docChanged && !isExternalUpdate.current) {
-            setScriptText(update.state.doc.toString());
-          }
-        }),
+        readOnlyCompartment.current.of(EditorState.readOnly.of(true)),
         EditorView.theme({
           '&': { height: '100%', fontSize: '11px' },
           '.cm-scroller': {
@@ -139,20 +141,8 @@ export function ScriptEditor() {
     }
   }, [scriptText, mode]);
 
-  // Toggle read-only during streaming
-  useEffect(() => {
-    const view = viewRef.current;
-    if (!view) return;
-    const isCommitted = useWorkspaceStore.getState().isCommitted;
-    view.dispatch({
-      effects: readOnlyCompartment.current.reconfigure(
-        EditorState.readOnly.of(mode === 'streaming' || isCommitted)
-      ),
-    });
-  }, [mode]);
-
-  const hasErrors = parseErrors.length > 0 || !!execError;
-  const opsCount = scriptOps.length;
+  const hasErrors = !!execError;
+  const opsCount = opsLog.length;
 
   return (
     <div className="flex flex-col h-full bg-[var(--editor-bg)]">
@@ -191,34 +181,23 @@ export function ScriptEditor() {
         )}
       </div>
 
-      {/* Error panel */}
-      {hasErrors && (
+      {/* Error panel — surfaces engine exec errors from the last replay */}
+      {hasErrors && execError && (
         <div className="border-t border-[var(--status-error)]/30 bg-[var(--status-error-muted)] px-3 py-1.5 text-[10px] font-mono max-h-20 overflow-y-auto">
-          {parseErrors.map((err, i) => (
-            <div key={i} className="text-[var(--status-error)] py-px">
-              <span className="text-[var(--status-error)] font-semibold">Line {err.line}:</span>{' '}
-              {err.message}
-            </div>
-          ))}
-          {execError && (
-            <div className="text-[var(--status-error)] py-px">
-              <span className="text-[var(--status-error)] font-semibold">
-                Op {execError.op_index + 1}
-              </span>
-              <span className="text-[var(--status-error)] opacity-70 ml-1">({execError.code})</span>
-              <span className="ml-1">— {execError.message}</span>
-            </div>
-          )}
+          <div className="text-[var(--status-error)] py-px">
+            <span className="text-[var(--status-error)] font-semibold">
+              Op {execError.op_index + 1}
+            </span>
+            <span className="text-[var(--status-error)] opacity-70 ml-1">({execError.code})</span>
+            <span className="ml-1">— {execError.message}</span>
+          </div>
         </div>
       )}
 
-      {/* Status bar (Fix 3) */}
+      {/* Status bar */}
       <div className="flex items-center gap-2 px-3 py-1 border-t border-[var(--stroke-default)] bg-[var(--editor-gutter)] text-[9px] text-[var(--text-tertiary)]">
-        {hasErrors && (
-          <span className="text-[var(--status-error)]">
-            ✗ {parseErrors.length + (execError ? 1 : 0)} error(s)
-          </span>
-        )}
+        <span>{opsCount} op{opsCount === 1 ? '' : 's'}</span>
+        {hasErrors && <span className="text-[var(--status-error)]">✗ 1 error</span>}
       </div>
     </div>
   );

@@ -369,10 +369,8 @@ export {
   BusinessGate,
   buildCoveragePrompt,
   buildSemanticGatePrompt,
-  buildSlotQuotesPath,
   // Validation
   checkRelationSanity,
-  collectSlotQuotes,
   // Diff
   diffCommits,
   diffSlots,
@@ -392,7 +390,6 @@ export {
   RELATION_TYPES,
   RelationSchema,
   RelationTypeSchema,
-  resolveSlotQuotesPath,
   SemanticContentSchema,
   SemanticGate,
   SlotValueSchema,
@@ -402,10 +399,6 @@ export {
   unflattenToTree,
   unflattenToTrees,
   validateIntegrity,
-  validateSlotQuotes,
-  validateMetadata,
-  type QuoteValidationResult,
-  type MetadataValidationResult,
   validateTreeDepth,
   yamlToTree,
   isBlob,
@@ -505,6 +498,7 @@ export type {
 // YOps — YAML Operations for Knowledge Trees
 // ═══════════════════════════════════════════════════════════════════════════
 export {
+  applySourcedYOps,
   applyYOps,
   classifyYOp,
   extractOpsFromEntries,
@@ -520,4 +514,5 @@ export {
   YOpSchema,
   YOpsDocumentSchema,
 } from './t3x-yops';
-export type { ReplayInput, ReplayResult, VerifyResult, YOpCategory } from './t3x-yops';
+export type { FailingOp, FailureReason, HumanSource, LLMSource, ReplayInput, ReplayResult, Source, SourcedYOp, TurnRef, ValidationTurn, VerifyResult, YOpCategory } from './t3x-yops';
+export { isHumanSource, isLLMSource, validateSource } from './t3x-yops';

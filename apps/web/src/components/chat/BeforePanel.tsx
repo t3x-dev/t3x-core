@@ -1,6 +1,7 @@
 'use client';
 
 import type { TreeNode } from '@t3x-dev/core';
+import { useParentCommit } from '@/hooks/useParentCommit';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 
 function TreeRow({ node, depth = 0 }: { node: TreeNode; depth?: number }) {
@@ -42,9 +43,8 @@ function TreeRow({ node, depth = 0 }: { node: TreeNode; depth?: number }) {
 }
 
 export function BeforePanel() {
-  const base = useWorkspaceStore((s) => s.base);
-  const baseCommitHash = useWorkspaceStore((s) => s.baseCommitHash);
-  const trees = base.trees as TreeNode[];
+  const parent = useParentCommit();
+  const trees: TreeNode[] = parent?.trees ?? [];
 
   return (
     <div className="flex flex-col h-full">
@@ -53,13 +53,13 @@ export function BeforePanel() {
           Before <span className="opacity-80">🔒</span>
         </span>
         <span className="text-[9px] font-mono text-[var(--text-tertiary)] opacity-60">
-          {baseCommitHash ? baseCommitHash.slice(0, 6) : 'empty'}
+          {parent ? parent.hash.replace(/^sha256:/, '').slice(0, 6) : 'empty'}
         </span>
       </div>
       <div className="flex-1 overflow-y-auto py-1">
         {trees.length === 0 ? (
           <div className="text-center text-[10px] text-[var(--text-tertiary)] opacity-40 italic py-5">
-            No prior commits
+            {parent ? 'Parent commit is empty' : 'No prior commits'}
           </div>
         ) : (
           trees.map((tree) => <TreeRow key={tree.key} node={tree} />)

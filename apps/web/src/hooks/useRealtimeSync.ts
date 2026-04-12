@@ -15,13 +15,14 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { getSemanticDraft, listYOpsLog } from '@/lib/api/trees';
-import { useDraftStore } from '@/store/draftStore';
+import { hydrateConversation } from '@/queries/loadConversation';
+import { useChatStore } from '@/store/chatStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 
-const WS_BASE = typeof window !== 'undefined'
-  ? `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`
-  : '';
+const WS_BASE =
+  typeof window !== 'undefined'
+    ? `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`
+    : '';
 
 const RECONNECT_DELAY = 5000;
 
@@ -95,63 +96,51 @@ export function useRealtimeSync(conversationId: string | null) {
  * the state transition. WS events are for OTHER sources only.
  */
 function handleEvent(event: RealtimeEvent, conversationId: string) {
-  const store = useDraftStore.getState();
+  const wsStore = useWorkspaceStore.getState();
 
   switch (event.type) {
     case 'extraction.started': {
       // Another source started extraction — show extracting state
-      // But only if WE didn't start it (check isExtracting flag)
-      if (!store.isExtracting) {
-        useDraftStore.setState({ isExtracting: true });
+      // But only if WE didn't start it (check mode flag)
+      if (wsStore.mode !== 'streaming') {
+        useWorkspaceStore.getState().setMode('streaming');
       }
       break;
     }
 
     case 'extraction.done': {
-      // Another source finished extraction — load data and enter streaming mode
-      // Skip if WE are currently extracting (our HTTP response will handle it)
-      if (store.isExtracting) break;
+      // Another source finished extraction — hydrate store and enter streaming mode.
+      // Skip if WE are currently extracting (our HTTP response will handle it).
+      if (wsStore.mode === 'streaming') break;
 
-      Promise.all([
-        getSemanticDraft(conversationId),
-        listYOpsLog(conversationId),
-      ]).then(([draft, yopsEntries]) => {
-        if (!draft || draft.trees.length === 0) return;
+      const projectId = useChatStore.getState().activeProjectId;
+      if (!projectId) break;
 
-        // 1. Set draft
-        useDraftStore.getState().setDraft(draft);
-
-        // 2. Hydrate yops log
-        if (yopsEntries && yopsEntries.length > 0) {
-          useDraftStore.getState().hydrateYOpsLog(yopsEntries);
-
-          // 3. Mark extraction done
-          const latestEntry = yopsEntries[yopsEntries.length - 1];
-          if (Array.isArray(latestEntry?.yops) && latestEntry.yops.length > 0) {
-            useDraftStore.setState({ isExtracting: false });
+      hydrateConversation(projectId, conversationId)
+        .then(() => {
+          // Expand panel
+          if (!useWorkspaceStore.getState().panelExpanded) {
+            useWorkspaceStore.getState().setPanelExpanded(true);
           }
-        }
-
-        // 4. Expand panel
-        if (!useWorkspaceStore.getState().panelExpanded) {
-          useWorkspaceStore.getState().setPanelExpanded(true);
-        }
-
-        // 5. Enter streaming mode — YOpsFeed will auto-transition to executed when done
-        useWorkspaceStore.getState().setMode('streaming');
-      });
+          // Enter streaming mode — YOpsFeed will auto-transition to executed when done
+          useWorkspaceStore.getState().setMode('streaming');
+        })
+        .catch(() => {
+          // Hydration failed — non-critical for realtime path
+        });
       break;
     }
 
     case 'draft.changed':
     case 'yops.applied': {
-      // Draft modified by another source — refetch
-      if (store.isExtracting) break; // Don't interrupt active extraction
+      // Draft modified by another source — re-hydrate via replay.
+      if (wsStore.mode === 'streaming') break; // Don't interrupt active extraction
 
-      getSemanticDraft(conversationId).then((draft) => {
-        if (draft && draft.trees.length > 0) {
-          useDraftStore.getState().setDraft(draft);
-        }
+      const projectId = useChatStore.getState().activeProjectId;
+      if (!projectId) break;
+
+      hydrateConversation(projectId, conversationId).catch(() => {
+        // Hydration failed — non-critical for realtime path
       });
       break;
     }

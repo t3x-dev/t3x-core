@@ -10,8 +10,7 @@
  *   - Each root TreeNode becomes a top-level key in a mapping.
  *   - Slots become direct child keys of the node mapping.
  *   - Children are recursively nested under their own keys.
- *   - Metadata (slot_quotes, source) is STRIPPED — the generic engine
- *     does not know about T3X-specific annotations.
+ *   - Only key/slots/children are mapped — TreeNode carries no other fields.
  *
  * yvalueToTrees:
  *   - The inverse of treesToYValue.
@@ -85,8 +84,8 @@ function yValueToTreeNode(key: string, value: YValue): TreeNode {
 /**
  * Convert T3X tree nodes to a generic YValue mapping.
  *
- * Each root tree becomes a top-level key. Metadata (slot_quotes, source)
- * is stripped because the generic YOps engine has no concept of it.
+ * Each root tree becomes a top-level key. Only key/slots/children are
+ * mapped — the generic YOps engine only operates on structure.
  *
  * Returns an empty mapping `{}` when trees is empty.
  */

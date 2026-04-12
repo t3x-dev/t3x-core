@@ -52,10 +52,38 @@ const YOpsIdParam = z.object({
 
 const YOpsSourceSchema = z.enum(['pipeline', 'manual', 'answer', 'collapse', 'compress']);
 
+// Per-op source contract: every SourcedYOp carries provenance (LLM or human).
+// Matches the T3X dialect exported from @t3x-dev/core as `SourcedYOp`.
+const LLMSourceSchema = z.object({
+  type: z.literal('llm'),
+  model: z.string().min(1),
+  at: z.string().min(1),
+  turn_ref: z.object({
+    turn_hash: z.string().min(1),
+    quote: z.string(),
+    start_char: z.number().int().optional(),
+    end_char: z.number().int().optional(),
+  }),
+});
+
+const HumanSourceSchema = z.object({
+  type: z.literal('human'),
+  author: z.string().min(1),
+  at: z.string().min(1),
+});
+
+const SourceSchema = z.discriminatedUnion('type', [LLMSourceSchema, HumanSourceSchema]);
+
+// YOpSchema union members use `.strict()`, which rejects unknown keys at parse
+// time — so intersection (.and) would cause the `source` field to be rejected
+// by each variant. Instead, validate the mandatory `source` field with passthrough
+// and let the downstream YOps engine (+ defense-in-depth loop below) enforce op shape.
+const SourcedYOpSchema = z.object({ source: SourceSchema }).passthrough();
+
 const CreateYOpsRequest = z.object({
   source: YOpsSourceSchema,
   turn_hash: z.string().optional(),
-  yops: z.array(YOpSchema),
+  yops: z.array(SourcedYOpSchema),
 });
 
 const YOpsLogEntryResponse = z.object({
@@ -72,6 +100,40 @@ const DraftResponse = z.object({
   trees: z.array(z.any()),
   relations: z.array(z.any()),
 });
+
+// ============================================================
+// Defense-in-Depth Validator (unit-testable)
+// ============================================================
+
+export type SourcedYOpsValidationError =
+  | { ok: false; code: 'MISSING_SOURCE'; opIndex: number }
+  | { ok: false; code: 'MISSING_AUTHOR'; opIndex: number };
+
+/**
+ * Defense-in-depth structural check for per-op source.
+ *
+ * Zod's discriminated union + min(1) constraints catch most cases before
+ * this runs, but this helper is the authoritative semantic check: it's
+ * unit-tested directly so a typo cannot slip past both Zod and review.
+ *
+ * Returns `{ ok: true }` on success, or a typed error with the offending op
+ * index on the first violation. Does NOT short-circuit on the first failure
+ * for zod-layer cases — those are guaranteed handled upstream.
+ */
+export function validateSourcedYOpsStructure(
+  yops: readonly unknown[],
+): { ok: true } | SourcedYOpsValidationError {
+  for (let i = 0; i < yops.length; i++) {
+    const op = yops[i] as { source?: { type?: string; author?: string } };
+    if (!op.source || (op.source.type !== 'llm' && op.source.type !== 'human')) {
+      return { ok: false, code: 'MISSING_SOURCE', opIndex: i };
+    }
+    if (op.source.type === 'human' && !op.source.author) {
+      return { ok: false, code: 'MISSING_AUTHOR', opIndex: i };
+    }
+  }
+  return { ok: true };
+}
 
 // ============================================================
 // Response Helpers
@@ -236,6 +298,17 @@ const deleteYOpsRoute = createRoute({
 yopsLogRoutes.openapi(createYOpsRoute, async (c) => {
   const { conversationId } = c.req.valid('param');
   const body = c.req.valid('json');
+
+  // Defense in depth: zod already validated, but re-check structure so
+  // corrupt shapes produce a clearer error code than zod's generic validation.
+  const structural = validateSourcedYOpsStructure(body.yops);
+  if (!structural.ok) {
+    return errorResponse(
+      c,
+      structural.code,
+      `op[${structural.opIndex}] ${structural.code === 'MISSING_SOURCE' ? 'missing valid source' : 'human source missing author'}`,
+    );
+  }
 
   try {
     const db = await getDB();

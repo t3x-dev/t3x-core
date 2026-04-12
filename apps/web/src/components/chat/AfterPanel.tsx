@@ -1,13 +1,14 @@
 'use client';
 
-import type { TreeNode, YOp } from '@t3x-dev/core';
+import type { TreeNode } from '@t3x-dev/core';
 import { Check, Play, Plus, X } from 'lucide-react';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { computeTreeDiff } from '@/lib/treeDiff';
 import { cn } from '@/lib/utils';
+import { getSlotSource } from '@/queries/source';
 import { useCommitStore } from '@/store/commitStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
+import { useGoldEdit } from './useGoldEdit';
 
 // ── Constants ──
 
@@ -29,19 +30,6 @@ function formatSlotValue(val: unknown): string {
     return Object.entries(val).map(([k, v]) => `${k}: ${v}`).join(', ');
   }
   return String(val);
-}
-
-// ── Helpers ──
-
-/** Extract the node-level key from an op's path (before first slash). */
-function opNodeKey(op: YOp): string | null {
-  if ('set' in op) return op.set.path.split('/')[0] ?? null;
-  if ('unset' in op) return op.unset.path.split('/')[0] ?? null;
-  if ('drop' in op) return op.drop.path.split('/')[0] ?? null;
-  if ('define' in op) return op.define.path.split('/')[0] ?? null;
-  if ('populate' in op) return op.populate.path.split('/')[0] ?? null;
-  if ('rename' in op) return op.rename.path.split('/')[0] ?? null;
-  return null;
 }
 
 // ── SlotRow ──
@@ -126,7 +114,11 @@ function SlotRow({
   }
 
   return (
-    <div className="group flex items-stretch" style={{ minHeight: 24 }}>
+    <div
+      className="group flex items-stretch"
+      data-testid={`slot-row-${nodePath}-${slotKey}`}
+      style={{ minHeight: 24 }}
+    >
       <div className={`shrink-0 w-[3px] ${isSlotSelected ? 'bg-[var(--source)]' : gutterColor}`} />
       <div
         className={cn(
@@ -168,6 +160,7 @@ function SlotRow({
         <div className="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity pr-1">
           <button
             type="button"
+            data-testid="slot-delete"
             title="Delete slot"
             onClick={(e) => { e.stopPropagation(); onDelete(); }}
             className="p-0.5 rounded text-[var(--text-tertiary)] hover:text-[var(--status-error)] hover:bg-[var(--hover-bg)]"
@@ -213,20 +206,25 @@ function NodeRow({
   const selectedNodePath = useWorkspaceStore((s) => s.selectedNodePath);
   const select = useWorkspaceStore((s) => s.select);
   const clearSelection = useWorkspaceStore((s) => s.clearSelection);
-  const applyGoldEdit = useWorkspaceStore((s) => s.applyGoldEdit);
+  const sourceIndex = useWorkspaceStore((s) => s.sourceIndex);
+  const { applyEdit } = useGoldEdit();
   const isSelected = selectedNodePath === path;
+
+  const nodeSource = getSlotSource(sourceIndex, path);
+  const sourceTag =
+    nodeSource?.type === 'llm' ? 'LLM' : nodeSource?.type === 'human' ? 'human' : null;
 
   const handleDropNode = useCallback(() => {
     if (!window.confirm(`Remove "${node.key}" and all its children?`)) return;
-    applyGoldEdit({ drop: { path } });
-  }, [path, node.key, applyGoldEdit]);
+    void applyEdit({ drop: { path } });
+  }, [path, node.key, applyEdit]);
 
   const handleAddChild = useCallback(() => {
     const childKey = window.prompt('New node name (snake_case):');
     if (!childKey || !childKey.trim()) return;
     const cleanKey = childKey.trim().toLowerCase().replace(/\s+/g, '_');
-    applyGoldEdit({ define: { path: `${path}/${cleanKey}` } });
-  }, [path, applyGoldEdit]);
+    void applyEdit({ define: { path: `${path}/${cleanKey}` } });
+  }, [path, applyEdit]);
   const slots = node.slots || {};
   const slotEntries = Object.entries(slots).filter(([k]) => !k.startsWith('_'));
   const hasChanges =
@@ -284,7 +282,7 @@ function NodeRow({
               new
             </span>
           )}
-          {node.source && (
+          {sourceTag && (
             <span
               className="text-[7px] font-bold px-1 py-px rounded-sm bg-[var(--source-dim)] text-[var(--source)] cursor-pointer hover:bg-[var(--source)]/20 shrink-0 ml-1 tracking-wide"
               onClick={(e) => {
@@ -292,7 +290,7 @@ function NodeRow({
                 select('after', { nodePath: path });
               }}
             >
-              {node.source}
+              {sourceTag}
             </span>
           )}
           <div className="ml-auto flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity pr-2">
@@ -318,6 +316,7 @@ function NodeRow({
             )}
             <button
               type="button"
+              data-testid="add-child-button"
               title="Add child node"
               onClick={(e) => { e.stopPropagation(); handleAddChild(); }}
               className="p-0.5 rounded text-[var(--text-tertiary)] hover:text-[var(--status-success)] hover:bg-[var(--hover-bg)]"
@@ -361,7 +360,7 @@ function NodeRow({
               value={formatSlotValue(val)}
               diffType={slotDiff}
               oldValue={mod?.oldValue}
-              sourceTag={node.source}
+              sourceTag={sourceTag ?? undefined}
               onDelete={() => onDeleteSlot(key)}
               onEdit={(newValue) => onEditSlot(key, newValue)}
             />
@@ -407,36 +406,36 @@ function AfterNodeRecursive({ node, path, depth }: AfterNodeRecursiveProps) {
   const slotEntries = Object.entries(slots).filter(([k]) => !k.startsWith('_'));
   const select = useWorkspaceStore((s) => s.select);
   const clearSelection = useWorkspaceStore((s) => s.clearSelection);
-  const applyGoldEdit = useWorkspaceStore((s) => s.applyGoldEdit);
+  const { applyEdit } = useGoldEdit();
   const selectedPath = useWorkspaceStore((s) => s.selectedNodePath);
   const selectedSlot = useWorkspaceStore((s) => s.selectedSlotKey);
   const isNodeSelected = selectedPath === path && !selectedSlot;
 
   const handleEditSlot = useCallback(
     (slotKey: string, newValue: string) => {
-      applyGoldEdit({ set: { path: `${path}/${slotKey}`, value: newValue } });
+      void applyEdit({ set: { path: `${path}/${slotKey}`, value: newValue } });
     },
-    [path, applyGoldEdit]
+    [path, applyEdit]
   );
 
   const handleDeleteSlot = useCallback(
     (slotKey: string) => {
-      applyGoldEdit({ unset: { path: `${path}/${slotKey}` } });
+      void applyEdit({ unset: { path: `${path}/${slotKey}` } });
     },
-    [path, applyGoldEdit]
+    [path, applyEdit]
   );
 
   const handleDropNode = useCallback(() => {
     if (!window.confirm(`Remove "${node.key}" and all its children?`)) return;
-    applyGoldEdit({ drop: { path } });
-  }, [path, node.key, applyGoldEdit]);
+    void applyEdit({ drop: { path } });
+  }, [path, node.key, applyEdit]);
 
   const handleAddChild = useCallback(() => {
     const childKey = window.prompt('New node name (snake_case):');
     if (!childKey || !childKey.trim()) return;
     const cleanKey = childKey.trim().toLowerCase().replace(/\s+/g, '_');
-    applyGoldEdit({ define: { path: `${path}/${cleanKey}` } });
-  }, [path, applyGoldEdit]);
+    void applyEdit({ define: { path: `${path}/${cleanKey}` } });
+  }, [path, applyEdit]);
 
   return (
     <>
@@ -454,6 +453,7 @@ function AfterNodeRecursive({ node, path, depth }: AfterNodeRecursiveProps) {
           <div className="ml-auto flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity pr-2">
             <button
               type="button"
+              data-testid="add-child-button"
               onClick={(e) => { e.stopPropagation(); handleAddChild(); }}
               title="Add child node"
               className="p-0.5 rounded text-[var(--text-tertiary)] hover:text-[var(--status-success)] hover:bg-[var(--hover-bg)]"
@@ -502,64 +502,41 @@ export function AfterPanel({
   onToggleBefore?: () => void;
   beforeVisible?: boolean;
 }) {
-  const base = useWorkspaceStore((s) => s.base);
-  const result = useWorkspaceStore((s) => s.result);
-  const scriptOps = useWorkspaceStore((s) => s.scriptOps);
-  const disabledOpIndices = useWorkspaceStore((s) => s.disabledOpIndices);
-  const toggleOp = useWorkspaceStore((s) => s.toggleOp);
-  const appendOp = useWorkspaceStore((s) => s.appendOp);
-  const execute = useWorkspaceStore((s) => s.execute);
-  const applyGoldEdit = useWorkspaceStore((s) => s.applyGoldEdit);
+  const tree = useWorkspaceStore((s) => s.tree);
+  const { applyEdit } = useGoldEdit();
 
   const isCommitting = useCommitStore((s) => s.isCommitting);
 
   const [showCommitDialog, setShowCommitDialog] = useState(false);
   const [commitMessage, setCommitMessage] = useState('');
 
-  const trees = result?.trees as TreeNode[] | undefined;
-  const hasResult = !!(result && trees && trees.length > 0);
+  const trees = tree.trees as TreeNode[];
+  const hasResult = trees.length > 0;
 
-  const diff = useMemo(() => {
-    if (!result || !trees) return null;
-    // No diff when base is empty (first extraction) — everything is "new" by definition
-    if (base.trees.length === 0) return null;
-    return computeTreeDiff(base.trees as TreeNode[], trees);
-  }, [base.trees, result, trees]);
-
-  // ── Dismiss a node: disable all ops that target that node key ──
-  const handleDismiss = useCallback(
-    (nodeKey: string) => {
-      scriptOps.forEach((op, i) => {
-        if (disabledOpIndices.has(i)) return;
-        const key = opNodeKey(op);
-        if (key === nodeKey) {
-          toggleOp(i);
-        }
-      });
-      execute();
-    },
-    [scriptOps, disabledOpIndices, toggleOp, execute]
-  );
-
-  // ── Accept: no-op for now (changes are already applied) ──
-  const handleAccept = useCallback((_nodeKey: string) => {
-    // Changes are already in the result; accept is a visual confirmation only.
+  // ── Dismiss: no-op in new architecture (script ops are gone) ──
+  const handleDismiss = useCallback((_nodeKey: string) => {
+    // TODO(commit5-diff-display): implement dismiss via gold-edit drop op if needed
   }, []);
 
-  // ── Edit slot inline: gold layer edit (doesn't modify script) ──
+  // ── Accept: no-op (changes are already in the tree) ──
+  const handleAccept = useCallback((_nodeKey: string) => {
+    // Changes are already in the tree; accept is a visual confirmation only.
+  }, []);
+
+  // ── Edit slot inline: gold layer edit ──
   const handleEditSlot = useCallback(
     (nodeKey: string, slotKey: string, newValue: string) => {
-      applyGoldEdit({ set: { path: `${nodeKey}/${slotKey}`, value: newValue } });
+      void applyEdit({ set: { path: `${nodeKey}/${slotKey}`, value: newValue } });
     },
-    [applyGoldEdit]
+    [applyEdit]
   );
 
-  // ── Delete slot inline: gold layer edit (doesn't modify script) ──
+  // ── Delete slot inline: gold layer edit ──
   const handleDeleteSlot = useCallback(
     (nodeKey: string, slotKey: string) => {
-      applyGoldEdit({ unset: { path: `${nodeKey}/${slotKey}` } });
+      void applyEdit({ unset: { path: `${nodeKey}/${slotKey}` } });
     },
-    [applyGoldEdit]
+    [applyEdit]
   );
 
   const getDefaultCommitName = useCallback(() => {
@@ -570,17 +547,13 @@ export function AfterPanel({
     return rootKeys.join(' & ');
   }, [trees]);
 
-  // ── Commit: persist current result ──
+  // ── Commit: persist current tree ──
   const handleCommit = useCallback(async (message: string) => {
     try {
       useWorkspaceStore.getState().setMode('committing');
       await useCommitStore.getState().commitNodes(message || 'Knowledge Extract');
-      if (result) {
-        useWorkspaceStore.getState().snapshotBase(result, useCommitStore.getState().lastCommitHash);
-      }
       useWorkspaceStore.getState().setMode('idle');
-      useWorkspaceStore.getState().setScriptText('');
-      useWorkspaceStore.setState({ isCommitted: true });
+      useWorkspaceStore.getState().setCommitted(true);
       setShowCommitDialog(false);
       toast.success('Committed successfully');
       try {
@@ -589,19 +562,13 @@ export function AfterPanel({
         // BroadcastChannel not supported
       }
     } catch (err: unknown) {
-      useWorkspaceStore.getState().setMode('executed');
+      useWorkspaceStore.getState().setMode('idle');
       toast.error(`Commit failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
-  }, [result]);
-
-  // ── Discard: reset workspace ──
-  const handleClear = useCallback(() => {
-    useWorkspaceStore.getState().setMode('idle');
-    useWorkspaceStore.getState().setScriptText('');
   }, []);
 
   return (
-    <div className="flex flex-col h-full relative">
+    <div data-testid="after-panel" className="flex flex-col h-full relative">
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-1.5 border-b border-[var(--stroke-default)] bg-[var(--panel-alt)] shrink-0">
         <div className="flex items-center gap-2">
@@ -622,72 +589,37 @@ export function AfterPanel({
             </button>
           )}
         </div>
-        {diff && (
-          <div className="flex items-center gap-1">
-            {diff.summary.nodesAdded > 0 && (
-              <span className="text-[8px] font-semibold px-1 py-0.5 rounded bg-[var(--status-success)]/15 text-[var(--status-success)]">
-                +{diff.summary.nodesAdded}n
-              </span>
-            )}
-            {diff.summary.slotsAdded > 0 && (
-              <span className="text-[8px] font-semibold px-1 py-0.5 rounded bg-[var(--status-success)]/15 text-[var(--status-success)]">
-                +{diff.summary.slotsAdded}s
-              </span>
-            )}
-            {diff.summary.slotsModified > 0 && (
-              <span className="text-[8px] font-semibold px-1 py-0.5 rounded bg-[var(--status-warning)]/15 text-[var(--status-warning)]">
-                ~{diff.summary.slotsModified}
-              </span>
-            )}
-            {diff.summary.nodesRemoved > 0 && (
-              <span className="text-[8px] font-semibold px-1 py-0.5 rounded bg-[var(--status-error)]/15 text-[var(--status-error)]">
-                -{diff.summary.nodesRemoved}
-              </span>
-            )}
-          </div>
-        )}
+        {/* TODO(commit5-diff-display): diff summary badges — needs base snapshot strategy */}
       </div>
 
       {/* Body */}
       <div className="flex-1 overflow-y-auto py-1">
-        {!result ? (
-          // Empty state
+        {trees.length === 0 ? (
+          // Empty state — no tree yet
           <div className="flex flex-col items-center justify-center h-full gap-2 py-8 opacity-40">
             <Play className="h-5 w-5 text-[var(--text-tertiary)]" />
             <span className="text-[10px] text-[var(--text-tertiary)] italic">
-              Click Run to apply
+              No knowledge extracted yet
             </span>
           </div>
-        ) : trees && trees.length === 0 ? (
-          <div className="text-center text-[10px] text-[var(--text-tertiary)] opacity-40 italic py-5">
-            No nodes in result
-          </div>
         ) : (
-          trees?.map((node) => {
-            const nodePath = node.key;
-            const nodeIsAdded = diff?.added.includes(nodePath) ?? false;
-            const nodeIsRemoved = diff?.removed.includes(nodePath) ?? false;
-            const addedSlots = diff?.addedSlots[nodePath] ?? [];
-            const removedSlots = diff?.removedSlots[nodePath] ?? [];
-            const modifiedSlots = diff?.modifiedSlots[nodePath] ?? [];
-
-            return (
-              <NodeRow
-                key={node.key}
-                node={node}
-                path={node.key}
-                depth={0}
-                diffType={nodeIsAdded ? 'added' : nodeIsRemoved ? 'removed' : null}
-                addedSlots={addedSlots}
-                removedSlots={removedSlots}
-                modifiedSlots={modifiedSlots}
-                onDismiss={() => handleDismiss(node.key)}
-                onAccept={() => handleAccept(node.key)}
-                onEditSlot={(slotKey, newValue) => handleEditSlot(node.key, slotKey, newValue)}
-                onDeleteSlot={(slotKey) => handleDeleteSlot(node.key, slotKey)}
-              />
-            );
-          })
+          // TODO(commit5-diff-display): diff badges hidden — no base snapshot in new arch
+          trees.map((node) => (
+            <NodeRow
+              key={node.key}
+              node={node}
+              path={node.key}
+              depth={0}
+              diffType={null}
+              addedSlots={[]}
+              removedSlots={[]}
+              modifiedSlots={[]}
+              onDismiss={() => handleDismiss(node.key)}
+              onAccept={() => handleAccept(node.key)}
+              onEditSlot={(slotKey, newValue) => handleEditSlot(node.key, slotKey, newValue)}
+              onDeleteSlot={(slotKey) => handleDeleteSlot(node.key, slotKey)}
+            />
+          ))
         )}
       </div>
 
@@ -699,6 +631,7 @@ export function AfterPanel({
         <div className="flex items-center gap-1.5">
           <button
             type="button"
+            data-testid="commit-button"
             onClick={() => {
               setCommitMessage(getDefaultCommitName());
               setShowCommitDialog(true);
@@ -711,7 +644,7 @@ export function AfterPanel({
         </div>
       </div>
       {showCommitDialog && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/30 backdrop-blur-sm rounded-b-lg">
+        <div data-testid="commit-dialog" className="absolute inset-0 z-10 flex items-center justify-center bg-black/30 backdrop-blur-sm rounded-b-lg">
           <div className="bg-[var(--panel)] border border-[var(--stroke-default)] rounded-xl p-4 mx-3 w-full max-w-[280px] shadow-lg">
             <label className="block text-[10px] font-semibold text-[var(--text-secondary)] mb-1.5">
               Name this commit
@@ -739,6 +672,7 @@ export function AfterPanel({
               </button>
               <button
                 type="button"
+                data-testid="commit-dialog-confirm"
                 onClick={() => handleCommit(commitMessage)}
                 disabled={isCommitting}
                 className="rounded bg-[var(--commit)] px-2.5 py-1 text-[10px] font-semibold text-[var(--commit-text)] hover:bg-[var(--commit-hover)] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"

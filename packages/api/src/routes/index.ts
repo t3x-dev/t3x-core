@@ -22,6 +22,7 @@ export { docsYopsRoutes } from './docs-yops.openapi';
 export { draftsRoutes } from './drafts.openapi';
 export { exportRoutes } from './export.openapi';
 export { extractRoutes as integrationExtractRoutes } from './extract.openapi';
+export { extractYopsRoutes } from './extract-yops.openapi';
 export { extractionFeedbackRoutes } from './extraction-feedback.openapi';
 export { gateRoutes } from './gate.openapi';
 export { healthRoutes } from './health.openapi';

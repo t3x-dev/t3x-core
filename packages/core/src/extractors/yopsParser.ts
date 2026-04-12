@@ -79,62 +79,12 @@ function isYopsList(cleaned: string): boolean {
   return firstLine === 'yops:' || firstLine.startsWith('yops:');
 }
 
-/**
- * Apply metadata (slot_quotes, source_map) to a tree node recursively.
- */
-function applyMetadata(
-  node: TreeNode,
-  slotQuotes: Record<string, string>,
-  sourceMap: Record<string, string>,
-  prefix: string
-): void {
-  // Apply source for this node
-  if (node.key in sourceMap) {
-    node.source = sourceMap[node.key];
-  }
-
-  // Apply slot_quotes for this node
-  const nodeQuotes: Record<string, string> = {};
-  for (const [quotePath, quoteValue] of Object.entries(slotQuotes)) {
-    const segments = quotePath.split('.');
-    if (prefix === '') {
-      // Root-level: match single-segment paths that are slots of this node
-      if (segments.length === 1 && segments[0] in node.slots) {
-        nodeQuotes[segments[0]] = quoteValue;
-      }
-    } else {
-      // Child-level: match paths starting with the prefix
-      const prefixSegments = prefix.split('.');
-      if (
-        segments.length === prefixSegments.length + 1 &&
-        segments.slice(0, prefixSegments.length).join('.') === prefix &&
-        segments[segments.length - 1] in node.slots
-      ) {
-        nodeQuotes[segments[segments.length - 1]] = quoteValue;
-      }
-    }
-  }
-  if (Object.keys(nodeQuotes).length > 0) {
-    node.slot_quotes = { ...node.slot_quotes, ...nodeQuotes };
-  }
-
-  // Recursively apply to children
-  for (const child of node.children ?? []) {
-    const childPrefix = prefix ? `${prefix}.${child.key}` : child.key;
-    applyMetadata(child, slotQuotes, sourceMap, childPrefix);
-  }
-}
 
 /**
  * Convert a TreeNode into define + populate YOps recursively.
  * Each node becomes a `define` (create empty node) + optional `populate` (fill slots).
  */
-function treeToOps(
-  tree: TreeNode,
-  parentPath: string,
-  slotQuotes: Record<string, string>,
-  sourceMap: Record<string, string>,
-): YOp[] {
+function treeToOps(tree: TreeNode, parentPath: string): YOp[] {
   const yops: YOp[] = [];
   const nodePath = parentPath ? `${parentPath}/${tree.key}` : tree.key;
 
@@ -143,15 +93,6 @@ function treeToOps(
 
   // Populate if has slots
   if (Object.keys(tree.slots).length > 0) {
-    // Collect quotes for this node's slots
-    const nodeQuotes: Record<string, string> = {};
-    for (const [quotePath, quoteValue] of Object.entries(slotQuotes)) {
-      const segments = quotePath.split('.');
-      if (segments.length === 1 && segments[0] in tree.slots) {
-        nodeQuotes[segments[0]] = quoteValue;
-      }
-    }
-
     yops.push({
       populate: {
         path: nodePath,
@@ -162,41 +103,12 @@ function treeToOps(
 
   // Recurse children
   for (const child of tree.children) {
-    const childQuotes: Record<string, string> = {};
-    for (const [quotePath, quoteValue] of Object.entries(slotQuotes)) {
-      const prefix = tree.key;
-      if (quotePath.startsWith(`${child.key}.`) || quotePath === child.key) {
-        childQuotes[quotePath] = quoteValue;
-      }
-      // Also try with parent prefix stripped
-      if (quotePath.startsWith(`${prefix}.${child.key}.`)) {
-        const stripped = quotePath.slice(prefix.length + 1);
-        childQuotes[stripped] = quoteValue;
-      }
-    }
-    yops.push(...treeToOps(child, nodePath, childQuotes, sourceMap));
+    yops.push(...treeToOps(child, nodePath));
   }
 
   return yops;
 }
 
-/**
- * Collect all slot_quotes from a tree into a flat Record<string, string>.
- */
-function collectSlotQuotes(node: TreeNode, prefix: string): Record<string, string> {
-  const result: Record<string, string> = {};
-  if (node.slot_quotes) {
-    for (const [key, val] of Object.entries(node.slot_quotes)) {
-      const fullPath = prefix ? `${prefix}.${key}` : key;
-      result[fullPath] = val;
-    }
-  }
-  for (const child of node.children ?? []) {
-    const childPrefix = prefix ? `${prefix}.${child.key}` : child.key;
-    Object.assign(result, collectSlotQuotes(child, childPrefix));
-  }
-  return result;
-}
 
 // ── JSON extraction for metadata ──
 
@@ -242,8 +154,8 @@ function parseYamlTree(cleaned: string): YOpsParseResult {
   const tree = yamlToTree(rootKey, rootValue);
 
   // Parse metadata (JSON after ---)
+  // slot_quotes are extracted for provenance tracking only — no longer stored on TreeNode
   let slotQuotes: Record<string, string> = {};
-  let sourceMap: Record<string, string> = {};
 
   if (metadataPart) {
     try {
@@ -253,25 +165,16 @@ function parseYamlTree(cleaned: string): YOpsParseResult {
         if (metadata.slot_quotes && typeof metadata.slot_quotes === 'object') {
           slotQuotes = metadata.slot_quotes;
         }
-        if (metadata.source_map && typeof metadata.source_map === 'object') {
-          sourceMap = metadata.source_map;
-        }
       }
     } catch {
       // Metadata parsing failure is non-fatal
     }
   }
 
-  // Apply metadata to tree
-  applyMetadata(tree, slotQuotes, sourceMap, '');
-
-  // Rebuild slot_quotes from tree (includes any applied metadata)
-  const finalSlotQuotes = collectSlotQuotes(tree, '');
-
   // Build define + populate YOps from tree
-  const yops = treeToOps(tree, '', slotQuotes, sourceMap);
+  const yops = treeToOps(tree, '');
 
-  return { ok: true, format: 'tree', yops, tree, slotQuotes: finalSlotQuotes };
+  return { ok: true, format: 'tree', yops, tree, slotQuotes };
 }
 
 // ── Case 2: YOps List ──

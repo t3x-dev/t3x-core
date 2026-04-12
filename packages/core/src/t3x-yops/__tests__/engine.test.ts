@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { Relation, SemanticContent, TreeNode } from '../../semantic/types';
 import type { YOp } from '../types';
-import { applyYOps } from '../engine';
+import type { SourcedYOp } from '../types';
+import { applyYOps, applySourcedYOps } from '../engine';
 
 // ── Helpers ──
 
@@ -9,8 +10,7 @@ const node = (
   key: string,
   slots: TreeNode['slots'] = {},
   children: TreeNode[] = [],
-  overrides: Partial<Pick<TreeNode, 'slot_quotes' | 'source'>> = {},
-): TreeNode => ({ key, slots, children, ...overrides });
+): TreeNode => ({ key, slots, children });
 
 const content = (
   trees: TreeNode[] = [],
@@ -193,14 +193,11 @@ describe('applyYOps (t3x adapter engine)', () => {
   });
 
   it('preserves basic tree structure through conversion round-trip', () => {
-    // slot_quotes and source are stripped during conversion, but the
-    // core structure (key, slots, children) must survive.
     const input = content([
       node(
         'trip',
         { budget: 5000, destination: 'Tokyo' },
         [node('day_one', { activity: 'sightseeing' })],
-        { slot_quotes: { budget: 'around 5k' }, source: 'T3' },
       ),
     ]);
 
@@ -216,5 +213,45 @@ describe('applyYOps (t3x adapter engine)', () => {
     expect(trip.children).toHaveLength(1);
     expect(trip.children[0].key).toBe('day_one');
     expect(trip.children[0].slots.activity).toBe('sightseeing');
+  });
+});
+
+const empty = { trees: [], relations: [] };
+
+describe('applySourcedYOps', () => {
+  it('rejects op missing source', () => {
+    const op = { define: { path: 'root' } } as unknown as SourcedYOp;
+    const r = applySourcedYOps(empty, [op]);
+    expect(r.ok).toBe(false);
+    expect(r.error?.code).toBe('MISSING_SOURCE');
+  });
+
+  it('rejects op with invalid source type', () => {
+    const op = {
+      define: { path: 'root' },
+      source: { type: 'robot' },
+    } as unknown as SourcedYOp;
+    const r = applySourcedYOps(empty, [op]);
+    expect(r.ok).toBe(false);
+    expect(r.error?.code).toBe('INVALID_SOURCE_TYPE');
+  });
+
+  it('rejects human op with empty author', () => {
+    const op = {
+      define: { path: 'root' },
+      source: { type: 'human', author: '', at: '2026-04-12T00:00:00Z' },
+    } as unknown as SourcedYOp;
+    const r = applySourcedYOps(empty, [op]);
+    expect(r.ok).toBe(false);
+    expect(r.error?.code).toBe('MISSING_AUTHOR');
+  });
+
+  it('accepts op with valid human source', () => {
+    const op: SourcedYOp = {
+      define: { path: 'root' },
+      source: { type: 'human', author: 'ethan', at: '2026-04-12T00:00:00Z' },
+    };
+    const r = applySourcedYOps(empty, [op]);
+    expect(r.ok).toBe(true);
   });
 });

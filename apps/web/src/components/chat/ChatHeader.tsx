@@ -7,7 +7,6 @@ import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import { useChatStore } from '@/store/chatStore';
 import { useCommitStore } from '@/store/commitStore';
-import { useDraftStore } from '@/store/draftStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { BranchSwitcher } from './BranchSwitcher';
 
@@ -35,7 +34,7 @@ export function ChatHeader({
   const initCommitState = useCommitStore((s) => s.initCommitState);
   const panelExpanded = useWorkspaceStore((s) => s.panelExpanded);
   const isCommitted = useWorkspaceStore((s) => s.isCommitted);
-  const isExtracting = useDraftStore((s) => s.isExtracting);
+  const isExtracting = useWorkspaceStore((s) => s.mode === 'streaming');
   const extractionPreset = useWorkspaceStore((s) => s.extractionPreset);
   const setExtractionPreset = useWorkspaceStore((s) => s.setExtractionPreset);
 
@@ -101,6 +100,7 @@ export function ChatHeader({
       {panelExpanded && !isCommitted && <div ref={dropdownRef} className="relative flex shrink-0" onBlur={handleBlur}>
         <button
           type="button"
+          data-testid="extract-button"
           onClick={() => window.dispatchEvent(new CustomEvent('t3x:extract-requested'))}
           disabled={isExtracting}
           className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-semibold rounded-l border border-r-0 border-[var(--source)]/30 bg-[var(--source)]/10 text-[var(--source)] hover:bg-[var(--source)]/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"

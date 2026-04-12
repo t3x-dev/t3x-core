@@ -9,6 +9,17 @@
 import type { SemanticContent, SlotValue, TreeNode } from '@t3x-dev/core';
 
 /**
+ * Runtime-enriched tree node shape.
+ * The API still stores and returns `source` and `slot_quotes` per node in the DB;
+ * these fields are present at runtime even though public TreeNode does not declare them.
+ * TODO(follow-up): migrate source tracing to use sourceIndex instead of slot_quotes.
+ */
+type EnrichedTreeNode = TreeNode & {
+  source?: string;
+  slot_quotes?: Record<string, string>;
+};
+
+/**
  * Tree-like object compatible with old UI components.
  * Maps TreeNode to the old Tree interface shape.
  * id = dot-path, type = key name.
@@ -42,7 +53,9 @@ export interface CompatNode {
  */
 export function treesToNodes(trees: TreeNode[], prefix = ''): CompatNode[] {
   const nodes: CompatNode[] = [];
-  for (const node of trees) {
+  for (const rawNode of trees) {
+    // Cast to EnrichedTreeNode: API-sourced trees carry source + slot_quotes at runtime
+    const node = rawNode as EnrichedTreeNode;
     const path = prefix ? `${prefix}.${node.key}` : node.key;
     nodes.push({
       id: path,
@@ -89,11 +102,11 @@ export function nodesToTrees(nodes: CompatNode[]): TreeNode[] {
     .map((f) => treeToNode(f));
 }
 
-function treeToNode(node: CompatNode): TreeNode {
+function treeToNode(node: CompatNode): EnrichedTreeNode {
   return {
     key: node.type,
     slots: node.slots,
-    children: (node.children ?? []),
+    children: (node.children ?? []) as EnrichedTreeNode[],
     source: node.source,
     slot_quotes: node.slot_quotes,
   };

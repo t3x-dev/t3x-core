@@ -54,15 +54,7 @@ describe('TreeNodeSchema', () => {
     expect(result.success).toBe(true);
   });
 
-  it('accepts optional slot_quotes', () => {
-    const result = TreeNodeSchema.safeParse({
-      key: 'topic',
-      slots: { dest: 'Tokyo' },
-      children: [],
-      slot_quotes: { dest: 'I want to go to Tokyo' },
-    });
-    expect(result.success).toBe(true);
-  });
+
 });
 
 describe('FlatNodeSchema (internal)', () => {

@@ -10,26 +10,26 @@ const baseTurns = [
 describe('buildYOpsPrompt — style integration', () => {
   describe('granularity', () => {
     it('concise style produces conclusions + why coverage guidance', () => {
-      const { systemPrompt } = buildYOpsPrompt({ turns: baseTurns }, PRESETS.concise);
+      const { systemPrompt } = buildYOpsPrompt({ turns: baseTurns }, { style: PRESETS.concise });
       expect(systemPrompt).toContain('Conclusions + Why');
       expect(systemPrompt).toContain('30%');
     });
 
     it('balanced style produces decisions + options + steps coverage guidance', () => {
-      const { systemPrompt } = buildYOpsPrompt({ turns: baseTurns }, PRESETS.balanced);
+      const { systemPrompt } = buildYOpsPrompt({ turns: baseTurns }, { style: PRESETS.balanced });
       expect(systemPrompt).toContain('Decisions + Options + Steps');
     });
 
     it('detailed style produces everything including reasoning guidance', () => {
-      const { systemPrompt } = buildYOpsPrompt({ turns: baseTurns }, PRESETS.detailed);
+      const { systemPrompt } = buildYOpsPrompt({ turns: baseTurns }, { style: PRESETS.detailed });
       expect(systemPrompt).toContain('Everything Including Reasoning');
     });
   });
 
   describe('tier3', () => {
     it('all presets include AI content by default', () => {
-      const { systemPrompt: concise } = buildYOpsPrompt({ turns: baseTurns }, PRESETS.concise);
-      const { systemPrompt: detailed } = buildYOpsPrompt({ turns: baseTurns }, PRESETS.detailed);
+      const { systemPrompt: concise } = buildYOpsPrompt({ turns: baseTurns }, { style: PRESETS.concise });
+      const { systemPrompt: detailed } = buildYOpsPrompt({ turns: baseTurns }, { style: PRESETS.detailed });
       expect(concise).toContain('TIER 3');
       expect(concise).toContain('TIER 4');
       expect(detailed).toContain('TIER 3');
@@ -37,7 +37,7 @@ describe('buildYOpsPrompt — style integration', () => {
     });
 
     it('skip mode tells LLM to not extract AI content when set explicitly', () => {
-      const { systemPrompt } = buildYOpsPrompt({ turns: baseTurns }, { ...PRESETS.balanced, tier3: 'skip' });
+      const { systemPrompt } = buildYOpsPrompt({ turns: baseTurns }, { style: { ...PRESETS.balanced, tier3: 'skip' } });
       expect(systemPrompt).toContain('Do NOT extract');
     });
   });
@@ -45,7 +45,7 @@ describe('buildYOpsPrompt — style integration', () => {
   describe('quote_length', () => {
     it('all presets use representative quotes for click-to-highlight', () => {
       for (const preset of Object.values(PRESETS)) {
-        const { systemPrompt } = buildYOpsPrompt({ turns: baseTurns }, preset);
+        const { systemPrompt } = buildYOpsPrompt({ turns: baseTurns }, { style: preset });
         expect(systemPrompt).toContain('REPRESENTATIVE');
       }
     });
@@ -53,12 +53,12 @@ describe('buildYOpsPrompt — style integration', () => {
 
   describe('update_stance', () => {
     it('conservative stance is included in prompt', () => {
-      const { systemPrompt } = buildYOpsPrompt({ turns: baseTurns }, PRESETS.concise);
+      const { systemPrompt } = buildYOpsPrompt({ turns: baseTurns }, { style: PRESETS.concise });
       expect(systemPrompt).toContain('Conservative');
     });
 
     it('aggressive stance is included in prompt', () => {
-      const { systemPrompt } = buildYOpsPrompt({ turns: baseTurns }, PRESETS.detailed);
+      const { systemPrompt } = buildYOpsPrompt({ turns: baseTurns }, { style: PRESETS.detailed });
       expect(systemPrompt).toContain('Aggressive');
     });
   });
@@ -79,7 +79,7 @@ describe('buildYOpsPrompt — style integration', () => {
       };
       const { systemPrompt } = buildYOpsPrompt(
         { turns: baseTurns, snapshot, processedTurnCount: 0 },
-        PRESETS.concise,
+        { style: PRESETS.concise },
       );
       expect(systemPrompt).toContain('Conclusions + Why');
     });

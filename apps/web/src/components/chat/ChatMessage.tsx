@@ -7,11 +7,10 @@ import remarkGfm from 'remark-gfm';
 import { useSlotActions } from '@/hooks/useSlotActions';
 import type { Citation } from '@/lib/api/chat';
 import type { CommittedHighlight } from '@/lib/committedHighlights';
-import { collectQuotesByTurn, computeUncoveredRanges } from '@/lib/coverageRanges';
+import { collectQuotesForTurn, computeUncoveredRanges } from '@/lib/coverageRanges';
 import { traceYamlToChat } from '@/lib/hoverTrace';
 import type { SourceMapping } from '@/lib/sourceMap';
 import { cn } from '@/lib/utils';
-import { useDraftStore } from '@/store/draftStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { CitationChips } from './CitationChips';
 import { CodeBlock } from './CodeBlock';
@@ -207,6 +206,7 @@ function SourceMappedText({
             key={i}
             data-tree-path={m.treePath}
             data-slot-key={m.slotKey}
+            data-source-highlight={isActive ? 'active' : 'default'}
             style={spanStyle}
             onClick={(e) => {
               e.stopPropagation();
@@ -361,7 +361,7 @@ export function ChatMessage({
   const hoveredNodeId = useWorkspaceStore((s) => s.selectedNodePath);
   const hoveredSlotKey = useWorkspaceStore((s) => s.selectedSlotKey);
   const scrollToCenter = useWorkspaceStore((s) => s.scrollToCenter);
-  const draft = useDraftStore((s) => s.draft);
+  const draft = useWorkspaceStore((s) => s.tree);
   const wsMode = useWorkspaceStore((s) => s.mode);
   const isReviewPhase = wsMode === 'executed' || wsMode === 'committing';
   const textRef = useRef<HTMLDivElement>(null);
@@ -401,13 +401,12 @@ export function ChatMessage({
   }, [isSourceMessage, trace, content]);
 
   // ── Coverage mode: compute uncovered ranges ──
+  const sourceIndex = useWorkspaceStore((s) => s.sourceIndex);
   const uncoveredRanges = useMemo(() => {
-    if (!coverageMode || !content || turnIndex == null) return [];
-    const draftTrees = useDraftStore.getState().draft.trees;
-    const quotesByTurn = collectQuotesByTurn(draftTrees);
-    const quotes = quotesByTurn.get(turnIndex) ?? [];
+    if (!coverageMode || !content || !turnHash) return [];
+    const quotes = collectQuotesForTurn(sourceIndex, turnHash);
     return computeUncoveredRanges(content, quotes);
-  }, [coverageMode, content, turnIndex]);
+  }, [coverageMode, content, turnHash, sourceIndex]);
 
   const hasCharHighlights = highlightRanges.length > 0;
   const hasSourceMappings = (sourceMap?.length ?? 0) > 0;

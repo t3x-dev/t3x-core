@@ -15,7 +15,8 @@
       "!**/.turbo",
       "!**/*.min.js",
       "!**/pnpm-lock.yaml",
-      "!**/preview"
+      "!**/preview",
+      "!**/e2e"
     ]
   },
   "formatter": {
@@ -46,7 +47,22 @@
         "noNonNullAssertion": "off",
         "useImportType": "warn",
         "useNodejsImportProtocol": "off",
-        "useTemplate": "off"
+        "useTemplate": "off",
+        "noRestrictedImports": {
+          "level": "error",
+          "options": {
+            "patterns": [
+              {
+                "group": "@/commands/**",
+                "message": "Components must not import from the commands layer directly. Route through useExtraction or a dedicated hook."
+              },
+              {
+                "group": "@/infrastructure/**",
+                "message": "Components must not import from the infrastructure layer directly. Use queries or the store instead."
+              }
+            ]
+          }
+        }
       },
       "suspicious": {
         "noExplicitAny": "warn",
@@ -83,5 +99,34 @@
     "linter": {
       "enabled": false
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": [
+        "apps/web/src/commands/**",
+        "apps/web/src/queries/**",
+        "apps/web/src/infrastructure/**"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "apps/web/src/components/chat/useExtraction.ts",
+        "apps/web/src/components/chat/useGoldEdit.ts"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": "off"
+          }
+        }
+      }
+    }
+  ]
 }

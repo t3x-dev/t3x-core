@@ -9,6 +9,18 @@
 
 import type { SemanticContent, TreeNode } from '@t3x-dev/core';
 
+/**
+ * Runtime-enriched tree node shape.
+ * The API still stores and returns `source` and `slot_quotes` per node in the DB;
+ * these fields are present at runtime on objects coming from readDraftFromTrees
+ * even though the public TreeNode type no longer declares them.
+ * TODO(follow-up): migrate source tracing to use sourceIndex instead of slot_quotes.
+ */
+type EnrichedTreeNode = TreeNode & {
+  source?: string;
+  slot_quotes?: Record<string, string>;
+};
+
 export interface SourceMapping {
   /** Turn index (1-based) where this quote appears */
   turnIndex: number;
@@ -44,7 +56,7 @@ function parseSourceTag(source: string | undefined): number | null {
  * Walk all trees, collecting every slot_quote with its tree path and source turn.
  */
 function collectAllQuotes(
-  node: TreeNode,
+  node: EnrichedTreeNode,
   parentPath: string,
   inheritedTurnIndex: number | null,
   out: CollectedQuote[]
@@ -65,7 +77,7 @@ function collectAllQuotes(
     }
   }
 
-  for (const child of node.children ?? []) {
+  for (const child of (node.children ?? []) as EnrichedTreeNode[]) {
     collectAllQuotes(child, path, nodeTurnIndex, out);
   }
 }
@@ -86,7 +98,7 @@ export function buildSourceMap(
 
   // Step 1: collect all quotes from trees
   const allQuotes: CollectedQuote[] = [];
-  for (const tree of draft.trees) {
+  for (const tree of draft.trees as EnrichedTreeNode[]) {
     collectAllQuotes(tree, '', null, allQuotes);
   }
 

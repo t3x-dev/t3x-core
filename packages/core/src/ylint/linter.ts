@@ -223,16 +223,12 @@ function walkTree(
     checkForm4(node, path, depth, parentChildCount, cfg, warnings);
   }
 
-  const quoteKeys = node.slot_quotes ? new Set(Object.keys(node.slot_quotes)) : new Set<string>();
-
   for (const [slotKey, slotValue] of Object.entries(node.slots)) {
-    const isQuoted = quoteKeys.has(slotKey);
-
     if (Array.isArray(slotValue)) {
       if (enabled.has(3)) {
         checkForm3List(slotValue, slotKey, path, warnings);
       }
-    } else if (typeof slotValue === 'string' && !isQuoted) {
+    } else if (typeof slotValue === 'string') {
       if (enabled.has(2)) {
         checkForm2Scalar(slotValue, slotKey, path, cfg, warnings);
       }

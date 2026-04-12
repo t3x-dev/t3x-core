@@ -3,8 +3,8 @@
 import { GitBranch, X } from 'lucide-react';
 import { useCallback } from 'react';
 import { extractNodes } from '@/lib/api/trees';
+import { hydrateConversation } from '@/queries/loadConversation';
 import { useChatStore } from '@/store/chatStore';
-import { useDraftStore } from '@/store/draftStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 
 const CHOICE_LABELS: Record<string, { label: string; description: string }> = {
@@ -22,9 +22,10 @@ export function DriftPopup() {
   const driftInfo = useWorkspaceStore((s) => s.driftInfo);
   const driftChoices = useWorkspaceStore((s) => s.driftChoices);
   const clearDrift = useWorkspaceStore((s) => s.clearDrift);
-  const draftConvId = useDraftStore((s) => s.conversationId);
+  const wsConvId = useWorkspaceStore((s) => s.conversationId);
   const activeConvId = useChatStore((s) => s.activeConversationId);
-  const conversationId = draftConvId ?? activeConvId;
+  const activeProjectId = useChatStore((s) => s.activeProjectId);
+  const conversationId = wsConvId ?? activeConvId;
 
   const handleChoice = useCallback(
     async (choice: string) => {
@@ -45,14 +46,15 @@ export function DriftPopup() {
           new_topic: driftInfo.new_topic,
         });
 
-        if (result.status === 'completed' && result.snapshot) {
-          useDraftStore.getState().setDraft(result.snapshot);
+        if (result.status === 'completed' && activeProjectId) {
+          // Hydrate store from server — tree is derived via replay
+          await hydrateConversation(activeProjectId, conversationId);
         }
       } catch {
         // Drift choice application failed — non-critical
       }
     },
-    [conversationId, driftInfo, clearDrift]
+    [conversationId, driftInfo, clearDrift, activeProjectId]
   );
 
   if (!driftDetected || !driftInfo) return null;
