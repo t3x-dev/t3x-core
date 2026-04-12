@@ -11,7 +11,6 @@ import { useRealtimeSync } from '@/hooks/useRealtimeSync';
 import { useTextSelection } from '@/hooks/useTextSelection';
 import { buildSourceMap } from '@/lib/sourceMap';
 import { cn } from '@/lib/utils';
-import { useDraftStore } from '@/store/draftStore';
 import { usePinsStore } from '@/store/pinsStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { ChatAddForm } from './ChatAddForm';

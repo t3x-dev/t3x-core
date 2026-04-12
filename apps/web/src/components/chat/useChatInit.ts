@@ -5,7 +5,6 @@ import { getSemanticDraft, listYOpsLog } from '@/lib/api/trees';
 import { treesToNodes } from '@/lib/treeCompat';
 import { useChatStore } from '@/store/chatStore';
 import { useCommitStore } from '@/store/commitStore';
-import { useDraftStore } from '@/store/draftStore';
 import { useSessionStore } from '@/store/sessionStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 
@@ -43,10 +42,9 @@ export function useChatInit({
     useChatStore.getState().setActiveConversation(convId, resolvedProjectId || null);
     // Skip resetDraft if we just hydrated from parent (prevents wipe on re-render)
     if (!inheritedRef.current) {
-      useDraftStore.getState().resetDraft();
       useWorkspaceStore.getState().reset();
     }
-    useDraftStore.getState().setConversationId(convId === 'new' ? null : convId);
+    useWorkspaceStore.getState().setConversation(convId === 'new' ? null : convId);
     if (resolvedProjectId) {
       useSessionStore.getState().setLastSession(resolvedProjectId, convId);
     }
@@ -92,7 +90,7 @@ export function useChatInit({
           const relations = parentCommit.content?.relations ?? [];
           if (trees.length > 0) {
             const content = { trees, relations };
-            useDraftStore.getState().setDraft(content);
+            // TODO(commit5): tree will be derived via replay
             // Snapshot parent as workspace base
             useWorkspaceStore.getState().snapshotBase(content, hash);
             // Set parent as lastCommitHash so commit B gets correct parent_hashes
@@ -123,7 +121,7 @@ export function useChatInit({
       Promise.all([getSemanticDraft(convId), listYOpsLog(convId), listTopics(convId)])
         .then(async ([draft, yopsEntries, topicsList]) => {
           if (draft && draft.trees.length > 0) {
-            useDraftStore.getState().setDraft(draft);
+            // TODO(commit5): tree will be derived via replay
             // Snapshot committed state as workspace base — only if there's
             // an actual commit. Otherwise Before stays empty (first extraction).
             const commitHash = useCommitStore.getState().lastCommitHash;
@@ -143,13 +141,10 @@ export function useChatInit({
               }
               if (allOps.length > 0) {
                 const { opsToYaml } = await import('@/lib/scriptParser');
-                useWorkspaceStore.getState().setScriptText(opsToYaml(allOps));
-                useWorkspaceStore.setState({ persistedOpsCount: allOps.length });
-                // Auto-execute to populate the After panel with the result
-                useWorkspaceStore.getState().execute();
-                // Restore the original draft (with slot_quotes metadata) since
-                // execute() overwrites draftStore with a clean result
-                useDraftStore.getState().setDraft(draft);
+                // TODO(commit5): replace with hydrateConversation(projectId, convId)
+                // useWorkspaceStore.getState().setScriptText(opsToYaml(allOps));
+                // useWorkspaceStore.setState({ persistedOpsCount: allOps.length });
+                // useWorkspaceStore.getState().execute();
               }
             }
           } else if (inheritFromCommitHash) {
@@ -157,17 +152,16 @@ export function useChatInit({
             hydrateFromParent(inheritFromCommitHash);
           }
           if (yopsEntries && yopsEntries.length > 0) {
-            useDraftStore.getState().hydrateYOpsLog(yopsEntries);
+            // TODO(commit5): replace with hydrateConversation(projectId, convId)
+            // useDraftStore.getState().hydrateYOpsLog(yopsEntries);
           }
           // Note: we intentionally do NOT lock conversation after commit.
           // Users should be able to continue chatting and extract more knowledge.
           if (topicsList && topicsList.length > 0) {
-            useDraftStore.getState().setTopics(topicsList);
-            // Auto-select the first active topic
-            const activeTopic = topicsList.find((t) => t.status === 'active');
-            if (activeTopic) {
-              useDraftStore.getState().setActiveTopicId(activeTopic.id);
-            }
+            // TODO(commit5): topics state TBD
+            // useDraftStore.getState().setTopics(topicsList);
+            // const activeTopic = topicsList.find((t) => t.status === 'active');
+            // if (activeTopic) { useDraftStore.getState().setActiveTopicId(activeTopic.id); }
           }
         })
         .catch(() => {

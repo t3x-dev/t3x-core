@@ -16,7 +16,6 @@
 
 import { useEffect, useRef } from 'react';
 import { getSemanticDraft, listYOpsLog } from '@/lib/api/trees';
-import { useDraftStore } from '@/store/draftStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 
 const WS_BASE = typeof window !== 'undefined'
@@ -95,14 +94,14 @@ export function useRealtimeSync(conversationId: string | null) {
  * the state transition. WS events are for OTHER sources only.
  */
 function handleEvent(event: RealtimeEvent, conversationId: string) {
-  const store = useDraftStore.getState();
+  const wsStore = useWorkspaceStore.getState();
 
   switch (event.type) {
     case 'extraction.started': {
       // Another source started extraction — show extracting state
-      // But only if WE didn't start it (check isExtracting flag)
-      if (!store.isExtracting) {
-        useDraftStore.setState({ isExtracting: true });
+      // But only if WE didn't start it (check mode flag)
+      if (wsStore.mode !== 'streaming') {
+        useWorkspaceStore.getState().setMode('streaming');
       }
       break;
     }
@@ -110,7 +109,7 @@ function handleEvent(event: RealtimeEvent, conversationId: string) {
     case 'extraction.done': {
       // Another source finished extraction — load data and enter streaming mode
       // Skip if WE are currently extracting (our HTTP response will handle it)
-      if (store.isExtracting) break;
+      if (wsStore.mode === 'streaming') break;
 
       Promise.all([
         getSemanticDraft(conversationId),
@@ -118,26 +117,20 @@ function handleEvent(event: RealtimeEvent, conversationId: string) {
       ]).then(([draft, yopsEntries]) => {
         if (!draft || draft.trees.length === 0) return;
 
-        // 1. Set draft
-        useDraftStore.getState().setDraft(draft);
+        // TODO(commit5): tree will be derived via replay — skip setDraft
 
-        // 2. Hydrate yops log
+        // Hydrate yops log
         if (yopsEntries && yopsEntries.length > 0) {
-          useDraftStore.getState().hydrateYOpsLog(yopsEntries);
-
-          // 3. Mark extraction done
-          const latestEntry = yopsEntries[yopsEntries.length - 1];
-          if (Array.isArray(latestEntry?.yops) && latestEntry.yops.length > 0) {
-            useDraftStore.setState({ isExtracting: false });
-          }
+          // TODO(commit5): replace with hydrateConversation(projectId, convId)
+          // useDraftStore.getState().hydrateYOpsLog(yopsEntries);
         }
 
-        // 4. Expand panel
+        // Expand panel
         if (!useWorkspaceStore.getState().panelExpanded) {
           useWorkspaceStore.getState().setPanelExpanded(true);
         }
 
-        // 5. Enter streaming mode — YOpsFeed will auto-transition to executed when done
+        // Enter streaming mode — YOpsFeed will auto-transition to executed when done
         useWorkspaceStore.getState().setMode('streaming');
       });
       break;
@@ -146,13 +139,9 @@ function handleEvent(event: RealtimeEvent, conversationId: string) {
     case 'draft.changed':
     case 'yops.applied': {
       // Draft modified by another source — refetch
-      if (store.isExtracting) break; // Don't interrupt active extraction
+      if (wsStore.mode === 'streaming') break; // Don't interrupt active extraction
 
-      getSemanticDraft(conversationId).then((draft) => {
-        if (draft && draft.trees.length > 0) {
-          useDraftStore.getState().setDraft(draft);
-        }
-      });
+      // TODO(commit5): tree will be derived via replay — skip getSemanticDraft/setDraft
       break;
     }
 

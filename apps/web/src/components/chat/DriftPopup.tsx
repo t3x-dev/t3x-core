@@ -4,7 +4,6 @@ import { GitBranch, X } from 'lucide-react';
 import { useCallback } from 'react';
 import { extractNodes } from '@/lib/api/trees';
 import { useChatStore } from '@/store/chatStore';
-import { useDraftStore } from '@/store/draftStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 
 const CHOICE_LABELS: Record<string, { label: string; description: string }> = {
@@ -22,9 +21,9 @@ export function DriftPopup() {
   const driftInfo = useWorkspaceStore((s) => s.driftInfo);
   const driftChoices = useWorkspaceStore((s) => s.driftChoices);
   const clearDrift = useWorkspaceStore((s) => s.clearDrift);
-  const draftConvId = useDraftStore((s) => s.conversationId);
+  const wsConvId = useWorkspaceStore((s) => s.conversationId);
   const activeConvId = useChatStore((s) => s.activeConversationId);
-  const conversationId = draftConvId ?? activeConvId;
+  const conversationId = wsConvId ?? activeConvId;
 
   const handleChoice = useCallback(
     async (choice: string) => {
@@ -46,7 +45,7 @@ export function DriftPopup() {
         });
 
         if (result.status === 'completed' && result.snapshot) {
-          useDraftStore.getState().setDraft(result.snapshot);
+          // TODO(commit5): tree will be derived via replay
         }
       } catch {
         // Drift choice application failed — non-critical

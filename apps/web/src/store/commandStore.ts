@@ -1,7 +1,7 @@
 /**
  * commandStore — Command pattern with eager inverse computation
  *
- * Layer B: Depends on draftStore (Layer A) via getState().
+ * Layer B: Depends on workspaceStore via getState().
  * Manages undo/redo stacks, pending ops, and pending summary.
  */
 
@@ -11,7 +11,7 @@ import { create } from 'zustand';
 import { compactYOps } from '@/lib/compactYOps';
 import type { InverseResult } from '@/lib/yopInverse';
 import { computeInverse, isContextInverse } from '@/lib/yopInverse';
-import { useDraftStore } from '@/store/draftStore';
+import { useWorkspaceStore } from '@/store/workspaceStore';
 
 export interface UndoEntry {
   ops: YOp[];
@@ -86,7 +86,7 @@ export const useCommandStore = create<CommandState>((set, get) => ({
   pendingSummary: emptySummary,
 
   execute: (ops) => {
-    const draft = useDraftStore.getState().draft;
+    const draft = useWorkspaceStore.getState().tree;
 
     // Compute inverse for each op before applying
     const inverseOps: InverseResult[] = ops.map((op) => computeInverse(op, draft));
@@ -98,8 +98,8 @@ export const useCommandStore = create<CommandState>((set, get) => ({
       context = inverseOps.filter(isContextInverse).map((inv) => inv._context);
     }
 
-    // Apply ops to draft
-    useDraftStore.getState().applyYOps(ops, 'manual');
+    // TODO(commit5): replace with await commitGoldEdit(convId, op) from @/commands/yops/goldEditBuilder
+    // useDraftStore.getState().applyYOps(ops, 'manual');
 
     // Update command state
     const { undoStack, pendingOps } = get();
@@ -125,7 +125,8 @@ export const useCommandStore = create<CommandState>((set, get) => ({
     // Apply inverse ops
     const inverseYOps = entry.inverseOps.filter((inv): inv is YOp => !isContextInverse(inv));
     if (inverseYOps.length > 0) {
-      useDraftStore.getState().applyYOps(inverseYOps, 'manual');
+      // TODO(commit5): route through commands/yops
+      // useDraftStore.getState().applyYOps(inverseYOps, 'manual');
     }
 
     // Remove ops from pendingOps (remove last N ops matching entry.ops length)
@@ -139,7 +140,7 @@ export const useCommandStore = create<CommandState>((set, get) => ({
       hasPending: newPending.length > 0,
       pendingSummary:
         newPending.length > 0
-          ? computeSummary(newPending, useDraftStore.getState().draft)
+          ? computeSummary(newPending, useWorkspaceStore.getState().tree)
           : emptySummary,
     });
   },
@@ -151,8 +152,8 @@ export const useCommandStore = create<CommandState>((set, get) => ({
     const entry = redoStack[redoStack.length - 1];
     const newRedoStack = redoStack.slice(0, -1);
 
-    // Re-apply original ops
-    useDraftStore.getState().applyYOps(entry.ops, 'manual');
+    // TODO(commit5): route through commands/yops
+    // useDraftStore.getState().applyYOps(entry.ops, 'manual');
 
     const newPending = [...pendingOps, ...entry.ops];
 
@@ -162,7 +163,7 @@ export const useCommandStore = create<CommandState>((set, get) => ({
       pendingOps: newPending,
       compactOps: compactYOps(newPending),
       hasPending: true,
-      pendingSummary: computeSummary(newPending, useDraftStore.getState().draft),
+      pendingSummary: computeSummary(newPending, useWorkspaceStore.getState().tree),
     });
   },
 

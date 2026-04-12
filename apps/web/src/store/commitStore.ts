@@ -3,13 +3,14 @@
  *
  * Split from extractionPanelStore.ts (Task 4).
  * Owns: confirmed nodes/slots, commit state, commit actions.
- * Cross-store reads: useDraftStore (draft, conversationId), useCommandStore (clearPending).
+ * Cross-store reads: useWorkspaceStore (tree, conversationId), useCommandStore (clearPending).
  */
 
 import type { TreeNode } from '@t3x-dev/core';
 import { flattenTrees } from '@t3x-dev/core';
 import { create } from 'zustand';
 import { createCommit, listCommits } from '@/lib/api/commits';
+import { useWorkspaceStore } from './workspaceStore';
 
 interface CommitState {
   // Confirmation tracking
@@ -87,12 +88,11 @@ export const useCommitStore = create<CommitState>((set, get) => ({
     }),
 
   selectPendingNodes: () => {
-    // Cross-store read: draft from draftStore
-    const { useDraftStore } = require('./draftStore');
-    const { draft } = useDraftStore.getState();
+    // Cross-store read: tree from workspaceStore
+    const { tree } = useWorkspaceStore.getState();
     const { committedNodeIds, committedNodeSnapshot } = get();
-    const flatNodes = flattenTrees(draft.trees);
-    return draft.trees.filter((_t: TreeNode, i: number) => {
+    const flatNodes = flattenTrees(tree.trees);
+    return tree.trees.filter((_t: TreeNode, i: number) => {
       const node = flatNodes[i];
       if (!node) return true;
       const nodeId = node.id;
@@ -104,12 +104,9 @@ export const useCommitStore = create<CommitState>((set, get) => ({
   },
 
   commitNodes: async (message) => {
-    // Cross-store reads — workspace result is source of truth if available
-    const { useDraftStore } = await import('./draftStore');
-    const { useWorkspaceStore } = await import('./workspaceStore');
-    const wsResult = useWorkspaceStore.getState().result;
-    const { draft: draftFallback, conversationId } = useDraftStore.getState();
-    const draft = wsResult ?? draftFallback;
+    // Cross-store reads — workspace tree is source of truth
+    const { tree, conversationId } = useWorkspaceStore.getState();
+    const draft = tree;
     const { projectId, lastCommitHash, commitBranch, conversationTitle } = get();
 
     if (!projectId) throw new Error('No project ID');
@@ -190,7 +187,6 @@ export const useCommitStore = create<CommitState>((set, get) => ({
       }
 
       // Add pinned sources that were actually selected during extraction
-      const { useWorkspaceStore } = await import('@/store/workspaceStore');
       const { usePinsStore } = await import('@/store/pinsStore');
       const selectedPinIds = useWorkspaceStore.getState().lastExtractionPinIds;
       if (selectedPinIds.length > 0) {

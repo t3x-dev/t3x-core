@@ -7,7 +7,6 @@ import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import { useChatStore } from '@/store/chatStore';
 import { useCommitStore } from '@/store/commitStore';
-import { useDraftStore } from '@/store/draftStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { BranchSwitcher } from './BranchSwitcher';
 
@@ -35,7 +34,7 @@ export function ChatHeader({
   const initCommitState = useCommitStore((s) => s.initCommitState);
   const panelExpanded = useWorkspaceStore((s) => s.panelExpanded);
   const isCommitted = useWorkspaceStore((s) => s.isCommitted);
-  const isExtracting = useDraftStore((s) => s.isExtracting);
+  const isExtracting = useWorkspaceStore((s) => s.mode === 'streaming');
   const extractionPreset = useWorkspaceStore((s) => s.extractionPreset);
   const setExtractionPreset = useWorkspaceStore((s) => s.setExtractionPreset);
 

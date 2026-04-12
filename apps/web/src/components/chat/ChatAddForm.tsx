@@ -15,7 +15,7 @@ import { Plus, Sparkles } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import type { TextSelectionResult } from '@/hooks/useTextSelection';
 import { useCommandStore } from '@/store/commandStore';
-import { useDraftStore } from '@/store/draftStore';
+import { useWorkspaceStore } from '@/store/workspaceStore';
 
 interface ChatAddFormProps {
   selection: TextSelectionResult;
@@ -23,7 +23,7 @@ interface ChatAddFormProps {
 }
 
 export function ChatAddForm({ selection, onDone }: ChatAddFormProps) {
-  const draft = useDraftStore((s) => s.draft);
+  const draft = useWorkspaceStore((s) => s.tree);
   const execute = useCommandStore((s) => s.execute);
 
   const nodeOptions = useMemo(() => draft.trees.map((t) => t.key), [draft.trees]);

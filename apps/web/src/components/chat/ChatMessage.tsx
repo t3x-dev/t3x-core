@@ -11,7 +11,6 @@ import { collectQuotesByTurn, computeUncoveredRanges } from '@/lib/coverageRange
 import { traceYamlToChat } from '@/lib/hoverTrace';
 import type { SourceMapping } from '@/lib/sourceMap';
 import { cn } from '@/lib/utils';
-import { useDraftStore } from '@/store/draftStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { CitationChips } from './CitationChips';
 import { CodeBlock } from './CodeBlock';
@@ -361,7 +360,7 @@ export function ChatMessage({
   const hoveredNodeId = useWorkspaceStore((s) => s.selectedNodePath);
   const hoveredSlotKey = useWorkspaceStore((s) => s.selectedSlotKey);
   const scrollToCenter = useWorkspaceStore((s) => s.scrollToCenter);
-  const draft = useDraftStore((s) => s.draft);
+  const draft = useWorkspaceStore((s) => s.tree);
   const wsMode = useWorkspaceStore((s) => s.mode);
   const isReviewPhase = wsMode === 'executed' || wsMode === 'committing';
   const textRef = useRef<HTMLDivElement>(null);
@@ -403,7 +402,7 @@ export function ChatMessage({
   // ── Coverage mode: compute uncovered ranges ──
   const uncoveredRanges = useMemo(() => {
     if (!coverageMode || !content || turnIndex == null) return [];
-    const draftTrees = useDraftStore.getState().draft.trees;
+    const draftTrees = useWorkspaceStore.getState().tree.trees;
     const quotesByTurn = collectQuotesByTurn(draftTrees);
     const quotes = quotesByTurn.get(turnIndex) ?? [];
     return computeUncoveredRanges(content, quotes);

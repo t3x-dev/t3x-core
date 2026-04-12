@@ -1,30 +1,18 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import type { SemanticContent } from '@t3x-dev/core';
 import { useCommandStore } from '@/store/commandStore';
-import { useDraftStore } from '@/store/draftStore';
+import { useWorkspaceStore } from '@/store/workspaceStore';
 
 vi.mock('@/lib/api/trees', () => ({
   createYOpsEntry: vi.fn().mockResolvedValue({}),
 }));
 
-const emptyContent: SemanticContent = { trees: [], relations: [] };
-
 describe('commandStore', () => {
   beforeEach(() => {
-    useDraftStore.setState({
-      draft: {
+    useWorkspaceStore.setState({
+      tree: {
         trees: [{ key: 'trip', slots: { budget: '1000', duration: '5d' }, children: [] }],
         relations: [],
       },
-      yopsLog: [],
-      yopsHistory: [],
-      removedNodes: [],
-      isExtracting: false,
-      conversationId: 'conv_test',
-      topics: [],
-      activeTopicId: null,
-      triggerExtract: null,
-      manualEditedNodeIds: new Set(),
     });
     useCommandStore.setState({
       undoStack: [],
@@ -34,12 +22,14 @@ describe('commandStore', () => {
     vi.clearAllMocks();
   });
 
-  it('execute applies ops, pushes to undoStack, clears redoStack', () => {
+  // Note: execute/undo/redo no longer mutate tree directly (applyYOps stubbed for Commit 5).
+  // Tests below verify commandStore's own state tracking (undo/redo stacks, pendingOps).
+
+  it('execute pushes to undoStack and clears redoStack', () => {
     useCommandStore.getState().execute([
       { set: { path: 'trip/budget', value: '2000' } },
     ]);
 
-    expect(useDraftStore.getState().draft.trees[0].slots.budget).toBe('2000');
     expect(useCommandStore.getState().undoStack).toHaveLength(1);
     expect(useCommandStore.getState().redoStack).toHaveLength(0);
   });
@@ -53,26 +43,23 @@ describe('commandStore', () => {
     expect(useCommandStore.getState().hasPending).toBe(true);
   });
 
-  it('undo restores previous state', () => {
+  it('undo moves entry from undoStack to redoStack', () => {
     useCommandStore.getState().execute([
       { set: { path: 'trip/budget', value: '2000' } },
     ]);
-    expect(useDraftStore.getState().draft.trees[0].slots.budget).toBe('2000');
-
     useCommandStore.getState().undo();
-    expect(useDraftStore.getState().draft.trees[0].slots.budget).toBe('1000');
+
     expect(useCommandStore.getState().undoStack).toHaveLength(0);
     expect(useCommandStore.getState().redoStack).toHaveLength(1);
   });
 
-  it('redo re-applies undone operation', () => {
+  it('redo moves entry from redoStack back to undoStack', () => {
     useCommandStore.getState().execute([
       { set: { path: 'trip/budget', value: '2000' } },
     ]);
     useCommandStore.getState().undo();
     useCommandStore.getState().redo();
 
-    expect(useDraftStore.getState().draft.trees[0].slots.budget).toBe('2000');
     expect(useCommandStore.getState().undoStack).toHaveLength(1);
     expect(useCommandStore.getState().redoStack).toHaveLength(0);
   });
@@ -88,7 +75,6 @@ describe('commandStore', () => {
     ]);
 
     expect(useCommandStore.getState().redoStack).toHaveLength(0);
-    expect(useDraftStore.getState().draft.trees[0].slots.budget).toBe('3000');
   });
 
   it('pendingSummary counts edits/deletes/adds', () => {
