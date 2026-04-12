@@ -92,7 +92,7 @@ export class YamlExtractionStrategy implements ExtractionStrategy {
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       // ── LLM generates YAML (one-shot) ──
-      const { systemPrompt, userPrompt } = buildYOpsPrompt(input, style);
+      const { systemPrompt, userPrompt } = buildYOpsPrompt(input, { style });
       const combinedPrompt = `${systemPrompt}\n\n---\n\n${userPrompt}`;
 
       let raw: string;

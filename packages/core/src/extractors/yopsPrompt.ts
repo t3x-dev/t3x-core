@@ -31,6 +31,44 @@ import {
 
 // -- Internal Helpers --
 
+const SOURCE_CONTRACT = `
+
+# OUTPUT CONTRACT — PER-OP SOURCE (STRICT)
+
+Every YOp you produce MUST include a "source" field with this exact shape:
+
+  source:
+    type: llm
+    model: <your model name>
+    at: <current ISO-8601 timestamp>
+    turn_ref:
+      turn_hash: <the sha256: hash of the turn this op derives from>
+      quote: <VERBATIM substring of that turn — no paraphrase, no summary>
+
+RULES (violations will cause the system to reject your output and re-ask):
+  - "quote" MUST appear verbatim (exact substring, case-sensitive) in the referenced turn's content.
+  - "turn_hash" MUST match one of the turn hashes from the Conversation section exactly.
+  - Never invent a quote. If you cannot find a verbatim substring to cite, skip the op — do not produce it.
+  - Every op (set / populate / define / drop / relate / etc.) must have source.
+`;
+
+function formatFailingOpsRetry(failingOps: readonly { op: unknown; opIndex: number; reason: string; detail?: string }[]): string {
+  if (failingOps.length === 0) return '';
+  const lines = failingOps.map((f, i) => {
+    const opJson = JSON.stringify(f.op, null, 2);
+    return `# Failing op ${i + 1} — reason: ${f.reason}${f.detail ? ` (${f.detail})` : ''}\n${opJson}`;
+  });
+  return `
+
+# RETRY — FIX THESE OPS
+The previous attempt produced ops that could not be verified. For EACH failing op below,
+produce a corrected version with a verbatim quote from the correct turn. Do NOT re-emit
+the entire extraction — only repair the listed ops.
+
+${lines.join('\n\n')}
+`;
+}
+
 function serializeTreeForSnapshot(node: TreeNode, indent = 0): string {
   const pad = '  '.repeat(indent);
   const lines: string[] = [];
@@ -292,15 +330,17 @@ When new turns contain reasoning, step-by-step logic, or cause-effect chains:
 - Use \`define\` ONLY for creating brand-new nodes not yet in the snapshot
 - Do NOT reorganize the tree unless the conversation explicitly calls for it
 - If nothing to extract: output \`yops: []\`
-- Drift: if NEW turns discuss a topic UNRELATED to the current tree, output \`yops: []\`${updateStanceSegment(style.update_stance)}`;
+- Drift: if NEW turns discuss a topic UNRELATED to the current tree, output \`yops: []\`${updateStanceSegment(style.update_stance)}${SOURCE_CONTRACT}`;
 }
 
 // -- Main Function --
 
 export function buildYOpsPrompt(
   input: ExtractionInput,
-  style?: Partial<ExtractionStyleConfig>
+  opts?: { style?: Partial<ExtractionStyleConfig>; failingOps?: readonly { op: unknown; opIndex: number; reason: string; detail?: string }[] }
 ): ExtractionPromptResult {
+  const style = opts?.style;
+  const failingOps = opts?.failingOps ?? [];
   const { turns, snapshot, processedTurnCount, additionalContext } = input;
   const hasSnapshot = !!snapshot && snapshot.trees.length > 0;
   const resolved: ExtractionStyleConfig = { ...DEFAULT_STYLE, ...style };
@@ -343,6 +383,8 @@ ${snapshotYaml}
     userPrompt += `${turnsSection}
 
 Extract changes from the NEW turns only. Prefer set/populate for updates, define for new nodes. Use structure ops (nest/fold/move/rename) only when the conversation explicitly calls for reorganization.`;
+
+    userPrompt += formatFailingOpsRetry(failingOps);
 
     return { systemPrompt, userPrompt };
   }
