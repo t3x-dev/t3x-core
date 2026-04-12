@@ -1,11 +1,6 @@
-import type { TreeNode } from '@t3x-dev/core';
 import { useEffect, useRef, useState } from 'react';
-import { treesToNodes } from '@/lib/treeCompat';
-import {
-  fetchCommitForInheritance,
-  fetchConversationMeta,
-  fetchConversationTopics,
-} from '@/queries/chatInitFetch';
+import { fetchConversationMeta, fetchConversationTopics } from '@/queries/chatInitFetch';
+import { hydrateFromParent } from '@/queries/hydrateFromParent';
 import { hydrateConversation } from '@/queries/loadConversation';
 import { useChatStore } from '@/store/chatStore';
 import { useCommitStore } from '@/store/commitStore';
@@ -22,13 +17,20 @@ interface UseChatInitParams {
 }
 
 /**
- * Handles store initialization, hydration, inheritance, and topic loading
- * on conversation mount/change.
+ * Orchestrates the side effects needed when a chat page mounts or the
+ * active conversation changes: syncs activeConversation + session stores,
+ * resolves the project id from the conversation meta when missing, and
+ * triggers the right hydration path (regular ops-log replay, or
+ * inheritance from a parent commit).
  *
- * Hydration path (Commit 5): calls hydrateConversation(projectId, convId) which
- * loads turns + ops log and replays derived state into workspaceStore.
+ * Individual concerns live in queries/:
+ *  - `loadConversation.hydrateConversation` — turns + ops log replay
+ *  - `hydrateFromParent`                    — parent-commit inheritance
+ *  - `chatInitFetch.fetchConversationMeta`  — convId → projectId lookup
+ *  - `chatInitFetch.fetchConversationTopics` — topics list (display only)
  *
- * Returns parentConversationId (needed for the inheritance banner).
+ * Returns `parentConversationId` so the UI can render the "View parent"
+ * banner on inherited conversations.
  */
 export function useChatInit({
   conversationId,
@@ -38,16 +40,15 @@ export function useChatInit({
   inheritFromCommitHash,
   onInheritComplete,
 }: UseChatInitParams): { parentConversationId: string | null } {
-  // Track whether inheritance hydration has been done (prevents re-hydration loop)
+  // Prevents a hydrate → reset wipe loop on re-render after inheritance.
   const inheritedRef = useRef(false);
-  // Parent conversation link (for child conversations created via "Create Unit")
   const [parentConversationId, setParentConversationId] = useState<string | null>(null);
 
-  // Sync active conversation + session into stores; load existing draft
   useEffect(() => {
     const convId = resolvedConversationId ?? conversationId;
+
+    // ── 1. Sync store state for the current conversation ──
     useChatStore.getState().setActiveConversation(convId, resolvedProjectId || null);
-    // Skip reset if we just hydrated from parent (prevents wipe on re-render)
     if (!inheritedRef.current) {
       useWorkspaceStore.getState().reset();
     }
@@ -55,98 +56,59 @@ export function useChatInit({
     if (resolvedProjectId) {
       useSessionStore.getState().setLastSession(resolvedProjectId, convId);
     }
-
     useCommitStore.getState().setProjectId(resolvedProjectId || null);
-
-    // Initialize commit state (load branch head) — skip when inheriting
-    // because inheritance sets lastCommitHash to the parent commit hash
+    // Inheritance sets its own lastCommitHash, so don't overwrite it with the branch head.
     if (resolvedProjectId && !inheritFromCommitHash) {
       useCommitStore.getState().initCommitState(resolvedProjectId);
     }
 
-    // If no project ID yet, try to get it from the conversation
+    // ── 2. Backfill the project id from the conversation when it's missing ──
     if (!resolvedProjectId && convId && convId !== 'new') {
-      fetchConversationMeta(convId).then((conv) => {
-        if (conv?.project_id) {
-          setResolvedProjectId(conv.project_id);
-          useCommitStore.getState().setProjectId(conv.project_id);
-          if (!inheritFromCommitHash) {
-            useCommitStore.getState().initCommitState(conv.project_id);
-          }
-          useChatStore.getState().setActiveConversation(convId, conv.project_id);
+      void fetchConversationMeta(convId).then((conv) => {
+        if (!conv?.project_id) return;
+        setResolvedProjectId(conv.project_id);
+        useCommitStore.getState().setProjectId(conv.project_id);
+        if (!inheritFromCommitHash) {
+          useCommitStore.getState().initCommitState(conv.project_id);
         }
+        useChatStore.getState().setActiveConversation(convId, conv.project_id);
       });
     }
 
-    // Helper: hydrate extraction panel from parent commit (inheritance flow)
-    const hydrateFromParent = (hash: string) => {
-      fetchCommitForInheritance(hash)
-        .then((parentCommit) => {
-          // Extract parent conversation ID for "View parent" link
-          const sources = (parentCommit as { sources?: Array<{ type?: string; id?: string }> })
-            .sources;
-          const parentConvSource = sources?.find((s) => s.type === 'conversation');
-          if (parentConvSource?.id) {
-            setParentConversationId(parentConvSource.id);
-          }
-          const trees = (parentCommit.content?.trees as TreeNode[]) ?? [];
-          if (trees.length > 0) {
-            // Set parent as lastCommitHash so commit B gets correct parent_hashes
-            // and so BeforePanel's useParentCommit query fetches the frozen tree.
-            useCommitStore.setState({ lastCommitHash: hash });
-            // Mark all inherited trees as confirmed
-            const confirmed: Record<string, boolean> = {};
-            const nodes = treesToNodes(trees);
-            for (const f of nodes) {
-              confirmed[f.id] = true;
-            }
-            useCommitStore.setState({ confirmedNodeIds: confirmed });
-            if (!useWorkspaceStore.getState().panelExpanded) {
-              useWorkspaceStore.getState().setPanelExpanded(true);
-            }
-          }
-          // Mark as hydrated so reset() is skipped on re-render
-          inheritedRef.current = true;
-          // Clear the flag to prevent re-hydration on remount
-          onInheritComplete?.();
-        })
-        .catch(() => {
-          // Parent fetch failed — fall back to empty panel
-        });
+    // ── 3. Hydrate state (regular replay, or parent inheritance as fallback) ──
+    const runInheritance = async (hash: string) => {
+      const { parentConversationId: pid, inherited } = await hydrateFromParent(hash);
+      if (pid) setParentConversationId(pid);
+      if (inherited) {
+        inheritedRef.current = true;
+        onInheritComplete?.();
+      }
     };
 
-    // Load turns + ops log for this conversation via hydrateConversation (replay-based)
     if (convId && convId !== 'new' && resolvedProjectId) {
       hydrateConversation(resolvedProjectId, convId)
         .then(async () => {
           if (!useWorkspaceStore.getState().panelExpanded) {
             useWorkspaceStore.getState().setPanelExpanded(true);
           }
-
-          // Also load topics (display only — not wired to store yet)
-          const topicsList = await fetchConversationTopics(convId);
-          if (topicsList && topicsList.length > 0) {
-            // TODO(topics-state): route through workspaceStore once topics schema is added
-          }
+          // Topics are display-only until a workspaceStore slot exists.
+          // TODO(topics-state): route through workspaceStore once the schema lands.
+          await fetchConversationTopics(convId);
         })
         .catch(() => {
-          // Hydration failed — fall back: try parent if inheriting
-          if (inheritFromCommitHash) {
-            hydrateFromParent(inheritFromCommitHash);
-          }
+          if (inheritFromCommitHash) void runInheritance(inheritFromCommitHash);
         });
     } else if (inheritFromCommitHash) {
-      // New conversation with inheritance — hydrate from parent commit
       useCommitStore.getState().setProjectId(resolvedProjectId || null);
-      hydrateFromParent(inheritFromCommitHash);
+      void runInheritance(inheritFromCommitHash);
     }
   }, [
     conversationId,
     resolvedConversationId,
     resolvedProjectId,
     inheritFromCommitHash,
-    // Note: onInheritComplete intentionally excluded — including it causes a
-    // reset → hydrate → onInheritComplete → reset wipe cycle
+    // onInheritComplete intentionally excluded — including it causes a
+    // reset → hydrate → onInheritComplete → reset wipe cycle.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   ]);
 
