@@ -513,4 +513,5 @@ export {
   YOpSchema,
   YOpsDocumentSchema,
 } from './t3x-yops';
-export type { FailingOp, ReplayInput, ReplayResult, SourcedYOp, VerifyResult, YOpCategory } from './t3x-yops';
+export type { FailingOp, HumanSource, LLMSource, ReplayInput, ReplayResult, Source, SourcedYOp, TurnRef, VerifyResult, YOpCategory } from './t3x-yops';
+export { isHumanSource, isLLMSource } from './t3x-yops';
