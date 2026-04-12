@@ -9,7 +9,7 @@
 import type { TreeNode } from '@t3x-dev/core';
 import { flattenTrees } from '@t3x-dev/core';
 import { create } from 'zustand';
-import { createCommit, listCommits } from '@/lib/api/commits';
+import { createCommitApi, fetchCommits } from '@/queries/commits';
 import { useWorkspaceStore } from './workspaceStore';
 
 interface CommitState {
@@ -182,7 +182,7 @@ export const useCommitStore = create<CommitState>((set, get) => ({
         }
       }
 
-      const result = await createCommit(
+      const result = await createCommitApi(
         projectId,
         {
           trees: sanitizedTrees,
@@ -236,7 +236,7 @@ export const useCommitStore = create<CommitState>((set, get) => ({
   initCommitState: async (projectId) => {
     try {
       // Try to load the latest commit
-      const recentCommits = await listCommits(projectId, 'main', 1).catch(() => []);
+      const recentCommits = await fetchCommits(projectId, 'main', 1).catch(() => []);
       if (recentCommits.length > 0) {
         const head = recentCommits[0];
         set({ lastCommitHash: head.hash });

@@ -11,7 +11,6 @@ import type { MergeResult, TreeNode } from '@t3x-dev/core';
 import { create } from 'zustand';
 import type { TreeResolution } from '@/components/merge/ConflictCard';
 import { getTerminology, type TermKey } from '@/hooks/useTerminology';
-import * as api from '@/lib/api';
 import {
   type ApiMergeCheck,
   commitMergeDraft,
@@ -20,7 +19,8 @@ import {
   getMergeDraft,
   getMergeDraftChecks,
   saveMergeDraft,
-} from '@/lib/api';
+} from '@/queries/mergeApi';
+import { fetchTurnContext } from '@/queries/turnContext';
 import { isDeveloperMode } from '@/store/shared';
 import type { ContentNode, MergeDraft, TurnContextData } from '@/types/merge';
 import { type SaveStatus, createSaveStatusTimer } from './saveStatus';
@@ -371,7 +371,7 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
     });
 
     try {
-      const contextData = await api.fetchTurnContext(turnHash, {
+      const contextData = await fetchTurnContext(turnHash, {
         before: 1,
         after: 1,
         highlightStart: node.source?.start_char,

@@ -11,7 +11,8 @@
 export type { Citation } from '@/lib/api/chat';
 export type { ApiCommit } from '@/lib/api/commits';
 export type { TreeMergeSuggestion } from '@/lib/api/diff';
-export type { WorkbenchDraft } from '@/lib/api/drafts';
+export type { DraftConstraint, DraftNode, WorkbenchDraft } from '@/lib/api/drafts';
+export type { NodeMember } from '@/lib/api/knowledge-graph';
 export type {
   Assertion,
   CompareModelsResult,

@@ -1,9 +1,18 @@
 /**
- * L3 — thin re-exports of merge prepare/execute so `canvasMergeSlice`
- * (and any future merge orchestration code) stops calling `@/lib/api/*`
- * from L3 directly. The underlying HTTP adapters remain in
- * `@/lib/api/merge`; a follow-up PR will relocate them to
- * `infrastructure/mergeApi.ts` per the architecture doc's Phase 4 note.
+ * L3 — thin re-exports of merge prepare/execute. The HTTP adapters live
+ * in `@/infrastructure/mergeApi` (doc §2 L1); this module wraps them so
+ * stores and components can call the merge surface without crossing the
+ * L3-to-L1 boundary directly.
  */
 
-export { createMergeDraft, executeMergeApi, prepareMergeApi } from '@/lib/api/merge';
+export {
+  commitMergeDraft,
+  createMergeDraft,
+  deleteMergeDraft,
+  executeMergeApi,
+  getMergeDraft,
+  getMergeDraftChecks,
+  prepareMergeApi,
+  saveMergeDraft,
+} from '@/infrastructure/mergeApi';
+export type { ApiMergeCheck } from '@/infrastructure/mergeApi';

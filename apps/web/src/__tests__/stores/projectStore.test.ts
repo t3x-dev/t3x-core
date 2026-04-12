@@ -7,14 +7,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useProjectStore } from '@/store/projectStore';
 
-// Mock the API module
-vi.mock('@/lib/api', () => ({
-  listProjects: vi.fn(),
-  createProject: vi.fn(),
-  deleteProject: vi.fn(),
+// projectStore now routes through @/queries/projects (doc-aligned L3).
+vi.mock('@/queries/projects', () => ({
+  fetchProjects: vi.fn(),
+  createProjectApi: vi.fn(),
+  deleteProjectById: vi.fn(),
+  updateProjectById: vi.fn(),
 }));
 
-import * as api from '@/lib/api';
+import * as api from '@/queries/projects';
 
 // Helper to reset store between tests
 const resetStore = () => {
@@ -93,7 +94,7 @@ describe('Project Store', () => {
         offset: 0,
       };
 
-      vi.mocked(api.listProjects).mockResolvedValueOnce(mockProjects);
+      vi.mocked(api.fetchProjects).mockResolvedValueOnce(mockProjects);
 
       await useProjectStore.getState().fetchProjects();
 
@@ -106,7 +107,7 @@ describe('Project Store', () => {
     });
 
     it('sets loading state during fetch', async () => {
-      vi.mocked(api.listProjects).mockImplementation(
+      vi.mocked(api.fetchProjects).mockImplementation(
         () =>
           new Promise((resolve) =>
             setTimeout(() => resolve({ projects: [], limit: 100, offset: 0 }), 100)
@@ -125,7 +126,7 @@ describe('Project Store', () => {
 
     it('handles API errors', async () => {
       const error = new Error('Network error');
-      vi.mocked(api.listProjects).mockRejectedValueOnce(error);
+      vi.mocked(api.fetchProjects).mockRejectedValueOnce(error);
 
       const notifyCallback = vi.fn();
       useProjectStore.getState().setNotifyCallback(notifyCallback);
@@ -147,7 +148,7 @@ describe('Project Store', () => {
 
       await useProjectStore.getState().fetchProjects();
 
-      expect(api.listProjects).not.toHaveBeenCalled();
+      expect(api.fetchProjects).not.toHaveBeenCalled();
     });
   });
 
@@ -162,7 +163,7 @@ describe('Project Store', () => {
         conversations_count: 0,
       };
 
-      vi.mocked(api.createProject).mockResolvedValueOnce(mockProject);
+      vi.mocked(api.createProjectApi).mockResolvedValueOnce(mockProject);
 
       const result = await useProjectStore.getState().addProject('New Project');
 
@@ -181,7 +182,7 @@ describe('Project Store', () => {
         conversations_count: 0,
       };
 
-      vi.mocked(api.createProject).mockResolvedValueOnce(mockProject);
+      vi.mocked(api.createProjectApi).mockResolvedValueOnce(mockProject);
 
       const notifyCallback = vi.fn();
       useProjectStore.getState().setNotifyCallback(notifyCallback);
@@ -204,11 +205,11 @@ describe('Project Store', () => {
         conversations_count: 0,
       };
 
-      vi.mocked(api.createProject).mockResolvedValueOnce(mockProject);
+      vi.mocked(api.createProjectApi).mockResolvedValueOnce(mockProject);
 
       await useProjectStore.getState().addProject('  Trimmed Name  ');
 
-      expect(api.createProject).toHaveBeenCalledWith('Trimmed Name', expect.any(Object));
+      expect(api.createProjectApi).toHaveBeenCalledWith('Trimmed Name', expect.any(Object));
     });
 
     it('uses default name if empty', async () => {
@@ -221,18 +222,18 @@ describe('Project Store', () => {
         conversations_count: 0,
       };
 
-      vi.mocked(api.createProject).mockResolvedValueOnce(mockProject);
+      vi.mocked(api.createProjectApi).mockResolvedValueOnce(mockProject);
 
       await useProjectStore.getState().addProject('   ');
 
-      expect(api.createProject).toHaveBeenCalledWith('Untitled Project', expect.any(Object));
+      expect(api.createProjectApi).toHaveBeenCalledWith('Untitled Project', expect.any(Object));
     });
 
     it('creates offline project when API fails', async () => {
       // addProject only falls back to an offline project on TypeError (network failure).
       // Generic Error instances are re-thrown so the UI can display them. Simulate a
       // network-level failure with TypeError (the error fetch() itself throws).
-      vi.mocked(api.createProject).mockRejectedValueOnce(new TypeError('Failed to fetch'));
+      vi.mocked(api.createProjectApi).mockRejectedValueOnce(new TypeError('Failed to fetch'));
 
       const notifyCallback = vi.fn();
       useProjectStore.getState().setNotifyCallback(notifyCallback);
@@ -268,16 +269,16 @@ describe('Project Store', () => {
     });
 
     it('removes project from state and calls API', async () => {
-      vi.mocked(api.deleteProject).mockResolvedValueOnce({ deleted: true, project_id: 'proj_123' });
+      vi.mocked(api.deleteProjectById).mockResolvedValueOnce({ deleted: true, project_id: 'proj_123' });
 
       await useProjectStore.getState().deleteProject('proj_123');
 
       expect(useProjectStore.getState().projects).toHaveLength(0);
-      expect(api.deleteProject).toHaveBeenCalledWith('proj_123');
+      expect(api.deleteProjectById).toHaveBeenCalledWith('proj_123');
     });
 
     it('notifies on successful deletion', async () => {
-      vi.mocked(api.deleteProject).mockResolvedValueOnce({ deleted: true, project_id: 'proj_123' });
+      vi.mocked(api.deleteProjectById).mockResolvedValueOnce({ deleted: true, project_id: 'proj_123' });
 
       const notifyCallback = vi.fn();
       useProjectStore.getState().setNotifyCallback(notifyCallback);
@@ -288,7 +289,7 @@ describe('Project Store', () => {
     });
 
     it('restores project on API failure', async () => {
-      vi.mocked(api.deleteProject).mockRejectedValueOnce(new Error('Server error'));
+      vi.mocked(api.deleteProjectById).mockRejectedValueOnce(new Error('Server error'));
 
       const notifyCallback = vi.fn();
       useProjectStore.getState().setNotifyCallback(notifyCallback);
@@ -304,7 +305,7 @@ describe('Project Store', () => {
     });
 
     it('handles 404 with warning notification', async () => {
-      vi.mocked(api.deleteProject).mockRejectedValueOnce(new Error('404 not found'));
+      vi.mocked(api.deleteProjectById).mockRejectedValueOnce(new Error('404 not found'));
 
       const notifyCallback = vi.fn();
       useProjectStore.getState().setNotifyCallback(notifyCallback);
@@ -339,7 +340,7 @@ describe('Project Store', () => {
 
       await useProjectStore.getState().deleteProject('local-123456');
 
-      expect(api.deleteProject).not.toHaveBeenCalled();
+      expect(api.deleteProjectById).not.toHaveBeenCalled();
       expect(useProjectStore.getState().projects).toHaveLength(0);
     });
   });

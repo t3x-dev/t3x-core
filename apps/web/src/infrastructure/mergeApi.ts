@@ -5,7 +5,7 @@
  */
 
 import type { MergeResult } from '@t3x-dev/core';
-import { API_V1, fetchWithTimeout, handleResponse } from './core';
+import { API_V1, fetchWithTimeout, handleResponse } from '@/lib/api/core';
 
 // ============================================================================
 // Types
