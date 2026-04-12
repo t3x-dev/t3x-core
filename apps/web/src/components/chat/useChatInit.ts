@@ -90,12 +90,9 @@ export function useChatInit({
             setParentConversationId(parentConvSource.id);
           }
           const trees = (parentCommit.content?.trees as TreeNode[]) ?? [];
-          const relations = parentCommit.content?.relations ?? [];
           if (trees.length > 0) {
-            const content = { trees, relations };
-            // Snapshot parent as workspace base (tree derived via snapshotBase)
-            useWorkspaceStore.getState().snapshotBase(content, hash);
             // Set parent as lastCommitHash so commit B gets correct parent_hashes
+            // and so BeforePanel's useParentCommit query fetches the frozen tree.
             useCommitStore.setState({ lastCommitHash: hash });
             // Mark all inherited trees as confirmed
             const confirmed: Record<string, boolean> = {};

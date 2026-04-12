@@ -19,7 +19,7 @@ export interface WorkspaceTurn {
 }
 
 export type WorkspaceMode = 'idle' | 'streaming' | 'executed' | 'committing' | 'error';
-export type SelectionSource = 'chat' | 'script' | 'after' | null;
+export type SelectionSource = 'chat' | 'script' | 'before' | 'after' | null;
 
 interface WorkspaceState {
   // ── Conversation state ──

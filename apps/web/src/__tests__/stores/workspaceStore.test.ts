@@ -1,80 +1,93 @@
-import { describe, expect, it, beforeEach } from 'vitest';
+import type { SemanticContent, Source, SourcedYOp } from '@t3x-dev/core';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 
-describe('workspaceStore', () => {
+describe('workspaceStore (state-only)', () => {
   beforeEach(() => {
     useWorkspaceStore.getState().reset();
   });
 
-  it('starts in idle mode', () => {
-    expect(useWorkspaceStore.getState().mode).toBe('idle');
+  it('starts in idle mode with empty derived state', () => {
+    const s = useWorkspaceStore.getState();
+    expect(s.mode).toBe('idle');
+    expect(s.turns).toEqual([]);
+    expect(s.opsLog).toEqual([]);
+    expect(s.tree.trees).toEqual([]);
+    expect(s.sourceIndex.size).toBe(0);
+    expect(s.conversationId).toBeNull();
   });
 
-  it('snapshots base tree', () => {
-    const base = { trees: [{ key: 'trip', slots: { dest: 'HZ' }, children: [], source: {} }], relations: [] };
-    useWorkspaceStore.getState().snapshotBase(base as any, 'abc123');
-    expect(useWorkspaceStore.getState().base.trees).toHaveLength(1);
-    expect(useWorkspaceStore.getState().baseCommitHash).toBe('abc123');
+  it('setConversation updates conversation id', () => {
+    useWorkspaceStore.getState().setConversation('conv_abc');
+    expect(useWorkspaceStore.getState().conversationId).toBe('conv_abc');
   });
 
-  it('parses script text and updates ops', () => {
-    useWorkspaceStore.getState().setScriptText('yops:\n  - define:\n      path: trip');
-    const state = useWorkspaceStore.getState();
-    expect(state.scriptOps).toHaveLength(1);
-    expect(state.parseErrors).toHaveLength(0);
+  it('setTurns replaces turns array', () => {
+    const turns = [{ turn_hash: 'sha256:t1', content: 'hi' }];
+    useWorkspaceStore.getState().setTurns(turns);
+    expect(useWorkspaceStore.getState().turns).toEqual(turns);
   });
 
-  it('reports parse errors for invalid script', () => {
-    useWorkspaceStore.getState().setScriptText('yops:\n  - sett:\n      path: foo');
-    expect(useWorkspaceStore.getState().parseErrors.length).toBeGreaterThan(0);
-    expect(useWorkspaceStore.getState().scriptOps).toHaveLength(0);
+  it('setDerived stores tree + sourceIndex + opsLog', () => {
+    const tree: SemanticContent = {
+      trees: [{ key: 'trip', slots: { dest: 'HZ' }, children: [] }],
+      relations: [],
+    };
+    const sourceIndex = new Map<string, Source>([
+      ['trip/dest', { type: 'human', author: 'ethan', at: '2026-04-12T00:00:00Z' }],
+    ]);
+    const op: SourcedYOp = {
+      set: { path: 'trip/dest', value: 'HZ' },
+      source: { type: 'human', author: 'ethan', at: '2026-04-12T00:00:00Z' },
+    } as SourcedYOp;
+
+    useWorkspaceStore.getState().setDerived({ tree, sourceIndex, opsLog: [op] });
+
+    const s = useWorkspaceStore.getState();
+    expect(s.tree.trees).toHaveLength(1);
+    expect(s.sourceIndex.get('trip/dest')?.type).toBe('human');
+    expect(s.opsLog).toHaveLength(1);
   });
 
-  it('toggles op indices', () => {
-    useWorkspaceStore.getState().toggleOp(2);
-    expect(useWorkspaceStore.getState().disabledOpIndices.has(2)).toBe(true);
-    useWorkspaceStore.getState().toggleOp(2);
-    expect(useWorkspaceStore.getState().disabledOpIndices.has(2)).toBe(false);
-  });
+  it('select + clearSelection manages UI selection', () => {
+    useWorkspaceStore
+      .getState()
+      .select('after', { nodePath: 'trip', slotKey: 'budget', turnIndex: 3 });
+    const s = useWorkspaceStore.getState();
+    expect(s.selectedNodePath).toBe('trip');
+    expect(s.selectedSlotKey).toBe('budget');
+    expect(s.selectedTurnIndex).toBe(3);
+    expect(s.selectedSource).toBe('after');
 
-  it('executes ops against base', () => {
-    const base = { trees: [], relations: [] };
-    useWorkspaceStore.getState().snapshotBase(base as any, null);
-    useWorkspaceStore.getState().setScriptText('yops:\n  - define:\n      path: trip');
-    useWorkspaceStore.getState().execute();
-    const state = useWorkspaceStore.getState();
-    expect(state.result).not.toBeNull();
-    expect(state.result?.trees).toHaveLength(1);
-    expect(state.appliedCount).toBe(1);
-    expect(state.execError).toBeNull();
-    expect(state.mode).toBe('executed');
-  });
-
-  it('skips disabled ops during execute', () => {
-    const base = { trees: [], relations: [] };
-    useWorkspaceStore.getState().snapshotBase(base as any, null);
-    useWorkspaceStore.getState().setScriptText('yops:\n  - define:\n      path: trip\n  - define:\n      path: other');
-    useWorkspaceStore.getState().toggleOp(1);
-    useWorkspaceStore.getState().execute();
-    expect(useWorkspaceStore.getState().result?.trees).toHaveLength(1);
-    expect(useWorkspaceStore.getState().result?.trees[0].key).toBe('trip');
-  });
-
-  it('appends op to script text', () => {
-    useWorkspaceStore.getState().setScriptText('yops:\n  - define:\n      path: trip');
-    useWorkspaceStore.getState().appendOp({ set: { path: 'trip/budget', value: '3000' } } as any);
-    expect(useWorkspaceStore.getState().scriptText).toContain('trip/budget');
-    expect(useWorkspaceStore.getState().scriptOps).toHaveLength(2);
-  });
-
-  it('manages click selection state', () => {
-    useWorkspaceStore.getState().select('after', { nodePath: 'trip', slotKey: 'budget', turnIndex: 3 });
-    const state = useWorkspaceStore.getState();
-    expect(state.selectedNodePath).toBe('trip');
-    expect(state.selectedSlotKey).toBe('budget');
-    expect(state.selectedTurnIndex).toBe(3);
-    expect(state.selectedSource).toBe('after');
     useWorkspaceStore.getState().clearSelection();
     expect(useWorkspaceStore.getState().selectedNodePath).toBeNull();
+    expect(useWorkspaceStore.getState().selectedSource).toBeNull();
+  });
+
+  it('mode and flags flow through their setters', () => {
+    useWorkspaceStore.getState().setMode('streaming');
+    expect(useWorkspaceStore.getState().mode).toBe('streaming');
+
+    useWorkspaceStore.getState().setPanelExpanded(true);
+    expect(useWorkspaceStore.getState().panelExpanded).toBe(true);
+
+    useWorkspaceStore.getState().setCommitted(true);
+    expect(useWorkspaceStore.getState().isCommitted).toBe(true);
+
+    useWorkspaceStore.getState().setError('boom');
+    expect(useWorkspaceStore.getState().lastError).toBe('boom');
+  });
+
+  it('reset restores initial state', () => {
+    useWorkspaceStore.getState().setConversation('conv_abc');
+    useWorkspaceStore.getState().setMode('streaming');
+    useWorkspaceStore.getState().setError('boom');
+
+    useWorkspaceStore.getState().reset();
+
+    const s = useWorkspaceStore.getState();
+    expect(s.conversationId).toBeNull();
+    expect(s.mode).toBe('idle');
+    expect(s.lastError).toBeNull();
   });
 });

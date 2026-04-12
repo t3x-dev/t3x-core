@@ -53,8 +53,6 @@ export function ChatWorkspace({
   const pins = usePinsStore((s) => s.pins);
   const fetchPins = usePinsStore((s) => s.fetchPins);
   const [showSourcePanel, setShowSourcePanel] = useState(false);
-  const quoteValidation = useWorkspaceStore((s) => s.quoteValidation);
-  const [coverageMode, setCoverageMode] = useState(false);
   const [enrichedPinData, setEnrichedPinData] = useState<
     Map<string, { title: string; assertionLessons?: string[]; turnCount?: number }>
   >(new Map());
@@ -296,24 +294,6 @@ export function ChatWorkspace({
         onModelChange={handleModelChange}
       />
 
-      {/* Coverage view toggle — below header, above messages */}
-      {quoteValidation && quoteValidation.total > 0 && (
-        <div className="flex items-center justify-end px-4 py-1 border-b border-[var(--stroke-divider)]">
-          <button
-            type="button"
-            onClick={() => setCoverageMode((prev) => !prev)}
-            className={cn(
-              'flex items-center gap-1 px-2 py-1 text-[10px] font-medium rounded-md border transition-colors',
-              coverageMode
-                ? 'bg-[var(--status-warning)]/10 border-[var(--status-warning)]/30 text-[var(--status-warning)]'
-                : 'bg-[var(--surface-elevated)] border-[var(--stroke-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]'
-            )}
-          >
-            {coverageMode ? 'Hide coverage' : 'Show coverage'}
-          </button>
-        </div>
-      )}
-
       {/* Message list */}
       <div ref={chatContainerRef} className="flex-1 overflow-y-auto overflow-x-hidden">
         {/* Parent conversation banner */}
@@ -358,7 +338,6 @@ export function ChatWorkspace({
                 }
                 sourceMap={sourceMapByTurn.get(i + 1)}
                 committedHighlights={committedHighlightsByTurn.get(msg.id)}
-                coverageMode={coverageMode}
               />
             ))}
 
