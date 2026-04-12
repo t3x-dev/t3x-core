@@ -10,6 +10,7 @@
  * - Valid human source → 201 (source validation passes; downstream may 500)
  */
 
+import { validateSourcedYOpsStructure } from '../routes/yops-log.openapi';
 import type { AnyDB } from '@t3x-dev/storage';
 import { insertConversation, insertProject } from '@t3x-dev/storage';
 import { Hono } from 'hono';
@@ -63,6 +64,64 @@ vi.mock('../lib/event-bus', () => ({
 
 // Import routes AFTER mocks are declared
 import { yopsLogRoutes } from '../routes/yops-log.openapi';
+
+describe('validateSourcedYOpsStructure (unit)', () => {
+  it('returns ok for empty array', () => {
+    expect(validateSourcedYOpsStructure([])).toEqual({ ok: true });
+  });
+
+  it('returns ok for valid human op', () => {
+    const ops = [{ set: { path: 'x', value: 'y' }, source: { type: 'human', author: 'e' } }];
+    expect(validateSourcedYOpsStructure(ops)).toEqual({ ok: true });
+  });
+
+  it('returns ok for valid llm op', () => {
+    const ops = [{
+      set: { path: 'x', value: 'y' },
+      source: { type: 'llm', model: 'm', at: 't', turn_ref: { turn_hash: 'h', quote: 'q' } },
+    }];
+    expect(validateSourcedYOpsStructure(ops)).toEqual({ ok: true });
+  });
+
+  it('rejects op missing source entirely', () => {
+    const ops = [{ set: { path: 'x', value: 'y' } }];
+    expect(validateSourcedYOpsStructure(ops)).toEqual({
+      ok: false, code: 'MISSING_SOURCE', opIndex: 0,
+    });
+  });
+
+  it('rejects op with unrecognized source type', () => {
+    const ops = [{ set: { path: 'x', value: 'y' }, source: { type: 'robot' } }];
+    expect(validateSourcedYOpsStructure(ops)).toEqual({
+      ok: false, code: 'MISSING_SOURCE', opIndex: 0,
+    });
+  });
+
+  it('rejects human op with missing author', () => {
+    const ops = [{ set: { path: 'x', value: 'y' }, source: { type: 'human', author: '' } }];
+    expect(validateSourcedYOpsStructure(ops)).toEqual({
+      ok: false, code: 'MISSING_AUTHOR', opIndex: 0,
+    });
+  });
+
+  it('rejects human op with undefined author', () => {
+    const ops = [{ set: { path: 'x', value: 'y' }, source: { type: 'human' } }];
+    expect(validateSourcedYOpsStructure(ops)).toEqual({
+      ok: false, code: 'MISSING_AUTHOR', opIndex: 0,
+    });
+  });
+
+  it('reports the first failing op index in a mixed batch', () => {
+    const ops = [
+      { set: { path: 'a', value: '1' }, source: { type: 'human', author: 'e' } },
+      { set: { path: 'b', value: '2' } }, // missing source at index 1
+      { set: { path: 'c', value: '3' }, source: { type: 'human', author: 'e' } },
+    ];
+    expect(validateSourcedYOpsStructure(ops)).toEqual({
+      ok: false, code: 'MISSING_SOURCE', opIndex: 1,
+    });
+  });
+});
 
 describe('POST /v1/conversations/:id/yops — source enforcement', () => {
   let cleanup: () => Promise<void>;
