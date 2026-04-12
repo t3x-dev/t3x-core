@@ -62,7 +62,7 @@ interface WorkspaceState {
   setMode(mode: WorkspaceMode): void;
   setPanelExpanded(expanded: boolean): void;
   setExtractionPreset(preset: 'concise' | 'balanced' | 'detailed'): void;
-  /** Gold layer: apply a YOp directly to the result without modifying the script */
+  /** Gold layer: apply a YOp to the result and persist to audit log (doesn't modify script) */
   applyGoldEdit(op: YOp): void;
   setDriftDetected(info: DriftInfo, choices: string[]): void;
   clearDrift(): void;
@@ -202,14 +202,13 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     const { result } = get();
     if (!result) return;
 
-    // Apply the single op to the current result
+    // Apply the op to the current result (visual update only)
     const applied = applyYOps(result, [op]);
     if (!applied.ok) return;
 
-    const newContent = { trees: applied.trees, relations: applied.relations };
-    set({ result: newContent });
+    set({ result: { trees: applied.trees, relations: applied.relations } });
 
-    // Persist to server as a gold layer edit (separate from script)
+    // Persist to audit log — append-only, doesn't modify script panel
     import('./draftStore').then(({ useDraftStore }) => {
       const convId = useDraftStore.getState().conversationId;
       if (convId) {

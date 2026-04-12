@@ -48,7 +48,6 @@ function opNodeKey(op: YOp): string | null {
 
 interface SlotRowProps {
   nodeKey: string;
-  /** Full tree path for source tracing */
   nodePath: string;
   slotKey: string;
   value: string;
@@ -85,9 +84,7 @@ function SlotRow({
 
   const handleSave = useCallback(() => {
     const newValue = inputRef.current?.value.trim() ?? '';
-    if (newValue && newValue !== value) {
-      onEdit(newValue);
-    }
+    if (newValue && newValue !== value) onEdit(newValue);
     setEditing(false);
   }, [value, onEdit]);
 
@@ -99,7 +96,6 @@ function SlotRow({
     [handleSave]
   );
 
-  // Gutter color
   const gutterColor =
     diffType === 'added'
       ? 'bg-[var(--status-success)]'
@@ -109,15 +105,11 @@ function SlotRow({
           ? 'bg-[var(--status-error)]'
           : 'bg-transparent';
 
-  // Editing state
   if (editing) {
     return (
       <div className="flex items-stretch" style={{ minHeight: 24 }}>
         <div className={`shrink-0 w-[3px] ${gutterColor}`} />
-        <div
-          className="flex-1 min-w-0 flex items-center gap-1 px-2 py-0.5 bg-[var(--status-warning)]/[0.06]"
-          style={MONO}
-        >
+        <div className="flex-1 min-w-0 flex items-center gap-1 px-2 py-0.5 bg-[var(--status-warning)]/[0.06]" style={MONO}>
           <span className="shrink-0 text-[var(--yaml-key,#2563eb)]">{slotKey}:</span>
           <input
             ref={inputRef}
@@ -127,9 +119,7 @@ function SlotRow({
             className="flex-1 min-w-0 bg-transparent border-0 border-b-[1.5px] border-b-[var(--status-warning)] outline-none text-[var(--text-primary)]"
             style={{ fontFamily: 'inherit', fontSize: 'inherit' }}
           />
-          <span className="shrink-0 text-[8px] text-[var(--text-tertiary)] whitespace-nowrap">
-            Enter ↵ · Esc ✕
-          </span>
+          <span className="shrink-0 text-[8px] text-[var(--text-tertiary)] whitespace-nowrap">Enter ↵ · Esc ✕</span>
         </div>
       </div>
     );
@@ -175,25 +165,12 @@ function SlotRow({
             {sourceTag}
           </span>
         )}
-        <div className="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button
-            type="button"
-            title="Accept slot"
-            onClick={(e) => {
-              e.stopPropagation();
-            }}
-            className="text-[var(--text-tertiary)] hover:text-[var(--status-success)] cursor-pointer"
-          >
-            <Check className="h-2.5 w-2.5" />
-          </button>
+        <div className="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity pr-1">
           <button
             type="button"
             title="Delete slot"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete();
-            }}
-            className="text-[var(--text-tertiary)] hover:text-[var(--status-error)] cursor-pointer"
+            onClick={(e) => { e.stopPropagation(); onDelete(); }}
+            className="p-0.5 rounded text-[var(--text-tertiary)] hover:text-[var(--status-error)] hover:bg-[var(--hover-bg)]"
           >
             <X className="h-2.5 w-2.5" />
           </button>
