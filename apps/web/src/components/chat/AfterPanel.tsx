@@ -405,9 +405,27 @@ function AfterNodeRecursive({ node, path, depth }: AfterNodeRecursiveProps) {
   const slotEntries = Object.entries(slots).filter(([k]) => !k.startsWith('_'));
   const select = useWorkspaceStore((s) => s.select);
   const clearSelection = useWorkspaceStore((s) => s.clearSelection);
+  const appendOp = useWorkspaceStore((s) => s.appendOp);
+  const execute = useWorkspaceStore((s) => s.execute);
   const selectedPath = useWorkspaceStore((s) => s.selectedNodePath);
   const selectedSlot = useWorkspaceStore((s) => s.selectedSlotKey);
   const isNodeSelected = selectedPath === path && !selectedSlot;
+
+  const handleEditSlot = useCallback(
+    (slotKey: string, newValue: string) => {
+      appendOp({ set: { path: `${path}/${slotKey}`, value: newValue } });
+      execute();
+    },
+    [path, appendOp, execute]
+  );
+
+  const handleDeleteSlot = useCallback(
+    (slotKey: string) => {
+      appendOp({ unset: { path: `${path}/${slotKey}` } });
+      execute();
+    },
+    [path, appendOp, execute]
+  );
 
   return (
     <>
@@ -424,27 +442,19 @@ function AfterNodeRecursive({ node, path, depth }: AfterNodeRecursiveProps) {
           <span className="text-[var(--yaml-key,#2563eb)] font-semibold">{node.key}:</span>
         </div>
       </div>
-      {slotEntries.map(([key, val]) => {
-        const isSlotSelected = selectedPath === path && selectedSlot === key;
-        return (
-          <div key={key} style={{ paddingLeft: `${8 + (depth + 1) * 14}px` }}>
-            <div className="flex items-stretch" style={{ minHeight: 24 }}>
-              <div className={`shrink-0 w-[3px] ${isSlotSelected ? 'bg-[var(--source)]' : 'bg-transparent'}`} />
-              <div
-                className={cn(
-                  'flex-1 min-w-0 flex items-center gap-1 px-2 py-0.5 cursor-pointer hover:bg-[var(--hover-bg)] transition-colors',
-                  isSlotSelected && 'bg-[var(--source-dim)]'
-                )}
-                style={MONO}
-                onClick={() => isSlotSelected ? clearSelection() : select('after', { nodePath: path, slotKey: key })}
-              >
-                <span className="shrink-0 text-[var(--yaml-key,#2563eb)]">{key}:</span>
-                <span className="text-[var(--yaml-string,#16a34a)] truncate ml-1">{formatSlotValue(val)}</span>
-              </div>
-            </div>
-          </div>
-        );
-      })}
+      {slotEntries.map(([key, val]) => (
+        <div key={key} style={{ paddingLeft: `${8 + (depth + 1) * 14}px` }}>
+          <SlotRow
+            nodeKey={node.key}
+            nodePath={path}
+            slotKey={key}
+            value={formatSlotValue(val)}
+            diffType={null}
+            onDelete={() => handleDeleteSlot(key)}
+            onEdit={(newValue) => handleEditSlot(key, newValue)}
+          />
+        </div>
+      ))}
       {node.children?.map((child: TreeNode) => (
         <AfterNodeRecursive key={child.key} node={child} path={`${path}/${child.key}`} depth={depth + 1} />
       ))}
