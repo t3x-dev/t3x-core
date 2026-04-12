@@ -513,4 +513,4 @@ export {
   YOpSchema,
   YOpsDocumentSchema,
 } from './t3x-yops';
-export type { ReplayInput, ReplayResult, SourcedYOp, VerifyResult, YOpCategory } from './t3x-yops';
+export type { FailingOp, ReplayInput, ReplayResult, SourcedYOp, VerifyResult, YOpCategory } from './t3x-yops';
