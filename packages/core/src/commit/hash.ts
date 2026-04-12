@@ -7,7 +7,6 @@
  *   content.relations (from, to, type)
  *
  * Second-class fields (NOT in hash):
- *   tree node source, slot_quotes,
  *   project_id, message, branch, provenance, position
  */
 

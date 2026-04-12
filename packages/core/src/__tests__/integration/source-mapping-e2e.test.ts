@@ -1,20 +1,15 @@
 /**
  * E2E Test: Source Mapping Accuracy
  *
- * Verifies that extraction produces correct source mapping:
- * 1. slot_quotes are populated from tree-format metadata (--- JSON section)
- * 2. Slot quotes contain VERBATIM text from the conversation
- * 3. source_map tags are propagated to tree nodes
- *
- * Note: After migration to @t3x-dev/yops, source/from metadata is no longer
- * carried in individual ops. Source mapping comes from the tree-format metadata
- * section (slot_quotes + source_map in the --- JSON block).
+ * Verifies that extraction produces a valid snapshot:
+ * 1. Tree structure (key, slots, children) is preserved
+ * 2. Incremental ops apply correctly to existing snapshots
  */
 
 import { describe, expect, it, vi } from 'vitest';
 import { Extractor } from '../../extractors/extractor';
 import type { LLMProvider } from '../../llm/types';
-import type { SemanticContent, TreeNode } from '../../semantic/types';
+import type { SemanticContent } from '../../semantic/types';
 
 // ── Test Data ──
 
@@ -50,39 +45,10 @@ function mockProvider(response: string): LLMProvider {
   };
 }
 
-// ── Helpers ──
-
-function collectSlotQuotes(tree: TreeNode, prefix = ''): Record<string, string> {
-  const result: Record<string, string> = {};
-  if (tree.slot_quotes) {
-    for (const [k, v] of Object.entries(tree.slot_quotes)) {
-      result[prefix ? `${prefix}.${k}` : k] = v;
-    }
-  }
-  for (const child of tree.children) {
-    const childPrefix = prefix ? `${prefix}.${child.key}` : child.key;
-    Object.assign(result, collectSlotQuotes(child, childPrefix));
-  }
-  return result;
-}
-
-function collectSources(tree: TreeNode, prefix = ''): Record<string, string> {
-  const result: Record<string, string> = {};
-  const path = prefix ? `${prefix}/${tree.key}` : tree.key;
-  if (tree.source) {
-    result[path] = tree.source;
-  }
-  for (const child of tree.children) {
-    Object.assign(result, collectSources(child, path));
-  }
-  return result;
-}
-
 // ── Tests ──
 
 describe('Source Mapping E2E', () => {
-  it('extraction tags assistant content with T2, not T1', async () => {
-    // Tree format extraction — source_map comes from --- JSON metadata
+  it('extraction produces a valid snapshot with correct tree structure', async () => {
     const extractorOutput = `australian_beef_taste:
   flavor: clean and pure
   texture: slightly leaner
@@ -112,98 +78,15 @@ describe('Source Mapping E2E', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
-    // 1. Verify source tags — should be T2 (assistant), not T1 (user)
     const tree = result.snapshot.trees[0];
     expect(tree).toBeDefined();
-
-    const sources = collectSources(tree);
-    for (const [path, source] of Object.entries(sources)) {
-      expect(source).toBe('T2');
-    }
-  });
-
-  it('slot_quotes contain text that exists in the conversation', async () => {
-    const extractorOutput = `beef_taste:
-  flavor: clean and pure
-  farming: grass-fed
-  wagyu_flavor: buttery
----
-{
-  "slot_quotes": {
-    "flavor": "Clean, pure taste",
-    "farming": "Most Australian beef is grass-fed",
-    "wagyu_flavor": "Wagyu - exceptionally tender with buttery flavor"
-  },
-  "source_map": {
-    "beef_taste": "T2"
-  }
-}`;
-
-    const provider = mockProvider(extractorOutput);
-    const extractor = new Extractor(provider);
-
-    const result = await extractor.extract({
-      turns: [
-        { role: 'user', content: USER_MESSAGE, turn_hash: 'sha256:user1' },
-        { role: 'assistant', content: ASSISTANT_MESSAGE, turn_hash: 'sha256:asst1' },
-      ],
-    });
-
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-
-    // 2. Verify slot_quotes are searchable in the assistant's message
-    const tree = result.snapshot.trees[0];
-    const quotes = collectSlotQuotes(tree);
-
-    expect(Object.keys(quotes).length).toBeGreaterThan(0);
-
-    const lowerAssistant = ASSISTANT_MESSAGE.toLowerCase();
-    for (const [slotPath, quote] of Object.entries(quotes)) {
-      const found = lowerAssistant.includes(quote.toLowerCase());
-      expect(found, `Quote "${quote}" for slot "${slotPath}" not found in assistant message`).toBe(true);
-    }
-  });
-
-  it('slot_quotes are NOT paraphrases — they are verbatim', async () => {
-    const extractorOutput = `beef:
-  type: grass-fed
----
-{
-  "slot_quotes": {
-    "type": "Most Australian beef is grass-fed, giving it a more natural, earthy flavor"
-  },
-  "source_map": {
-    "beef": "T2"
-  }
-}`;
-
-    const provider = mockProvider(extractorOutput);
-    const extractor = new Extractor(provider);
-
-    const result = await extractor.extract({
-      turns: [
-        { role: 'user', content: USER_MESSAGE, turn_hash: 'sha256:user1' },
-        { role: 'assistant', content: ASSISTANT_MESSAGE, turn_hash: 'sha256:asst1' },
-      ],
-    });
-
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-
-    const tree = result.snapshot.trees[0];
-    const quotes = collectSlotQuotes(tree);
-
-    // Each quote should be a substring of the actual conversation
-    for (const [, quote] of Object.entries(quotes)) {
-      // Must be at least 5 chars (not too short to be meaningless)
-      expect(quote.length).toBeGreaterThanOrEqual(5);
-      // Must be findable in the original text
-      expect(
-        ASSISTANT_MESSAGE.toLowerCase().includes(quote.toLowerCase()),
-        `Quote "${quote}" is not verbatim from the conversation`
-      ).toBe(true);
-    }
+    expect(tree.key).toBe('australian_beef_taste');
+    expect(tree.slots.flavor).toBe('clean and pure');
+    expect(tree.slots.texture).toBe('slightly leaner');
+    expect(tree.slots.farming).toBe('predominantly grass-fed');
+    // TreeNode no longer carries slot_quotes or source tags
+    expect(tree).not.toHaveProperty('slot_quotes');
+    expect(tree).not.toHaveProperty('source');
   });
 
   it('incremental extraction applies set ops to existing snapshot', async () => {
@@ -212,8 +95,6 @@ describe('Source Mapping E2E', () => {
         key: 'beef_topic',
         slots: { interest: 'Australian beef taste' },
         children: [],
-        source: 'T1',
-        slot_quotes: { interest: "i want to know the australian beef's taste" },
       }],
       relations: [],
     };

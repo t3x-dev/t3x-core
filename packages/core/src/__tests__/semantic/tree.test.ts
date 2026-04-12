@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   BLOB_TYPES,
-  buildSlotQuotesPath,
   flattenTree,
   isBlob,
   unflattenToTree,
@@ -60,36 +59,6 @@ describe('flattenTree', () => {
     expect(frames[2].slots).toEqual({ rain_jacket: true });
   });
 
-  it('preserves source on flattened frames', () => {
-    const tree: TreeNode = {
-      key: 'topic',
-      slots: { a: 1 },
-      children: [],
-      source: 'T1',
-    };
-    const frames = flattenTree(tree);
-    expect(frames[0].source).toBe('T1');
-  });
-
-  it('converts slot_quotes to slot_sources paths', () => {
-    const tree: TreeNode = {
-      key: 'trip',
-      slots: { destination: 'Hangzhou' },
-      children: [
-        {
-          key: 'dining',
-          slots: { cuisine: 'local' },
-          children: [],
-          slot_quotes: { cuisine: 'local food' },
-        },
-      ],
-      slot_quotes: { destination: 'going to Hangzhou' },
-    };
-    const frames = flattenTree(tree);
-    // Root frame quotes mapped
-    expect(frames[0].slot_sources).toBeUndefined(); // slot_sources computed separately
-    // Verify frame structure only — slot_sources enrichment is a downstream step
-  });
 });
 
 describe('unflattenToTree', () => {
@@ -133,23 +102,6 @@ describe('unflattenToTree', () => {
   });
 });
 
-describe('buildSlotQuotesPath', () => {
-  it('builds root-level slot path', () => {
-    expect(buildSlotQuotesPath('hangzhou_trip', 'destination')).toBe('destination');
-  });
-
-  it('builds nested slot path', () => {
-    expect(buildSlotQuotesPath('hangzhou_trip/activity_plan', 'activities')).toBe(
-      'activity_plan.activities'
-    );
-  });
-
-  it('builds deep nested slot path', () => {
-    expect(buildSlotQuotesPath('hangzhou_trip/activity_plan/gear', 'rain_jacket')).toBe(
-      'activity_plan.gear.rain_jacket'
-    );
-  });
-});
 
 describe('isBlob', () => {
   it('returns true for code blobs', () => {

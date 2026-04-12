@@ -94,7 +94,7 @@ describe('parseYOpsOutput — YAML tree (first extraction)', () => {
     expect('define' in result.yops[0]).toBe(true);
   });
 
-  it('applies slot_quotes to tree nodes', () => {
+  it('extracts slot_quotes from JSON block into slotQuotes result', () => {
     const raw = `trip:
   destination: Hangzhou
   dining:
@@ -114,12 +114,11 @@ describe('parseYOpsOutput — YAML tree (first extraction)', () => {
     expect(result.format).toBe('tree');
     if (result.format !== 'tree') return;
 
-    // Root node slot_quotes
-    expect(result.tree.slot_quotes).toEqual({ destination: 'headed to Hangzhou' });
-    // Child node slot_quotes
-    expect(result.tree.children[0].slot_quotes).toEqual({ cuisine: 'local Hangzhou food' });
+    // Tree nodes no longer carry slot_quotes — they're in the result's slotQuotes map only
+    expect(result.tree).not.toHaveProperty('slot_quotes');
+    expect(result.tree.children[0]).not.toHaveProperty('slot_quotes');
 
-    // slotQuotes in result
+    // slotQuotes are extracted from the JSON block directly
     expect(result.slotQuotes).toEqual({
       destination: 'headed to Hangzhou',
       'dining.cuisine': 'local Hangzhou food',

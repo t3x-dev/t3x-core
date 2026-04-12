@@ -33,7 +33,6 @@ function flattenNode(node: TreeNode, parentPath: string, out: FlatNode[]): void 
     type: node.key,
     slots: { ...node.slots },
   };
-  if (node.source) flat.source = node.source;
 
   out.push(flat);
 
@@ -65,7 +64,6 @@ export function unflattenToTree(flatNodes: FlatNode[]): TreeNode {
     key: root.type,
     slots: { ...root.slots },
     children: [],
-    ...(root.source ? { source: root.source } : {}),
   };
 
   // Map path → TreeNode for parent lookups
@@ -81,7 +79,6 @@ export function unflattenToTree(flatNodes: FlatNode[]): TreeNode {
       key: flatNode.type,
       slots: { ...flatNode.slots },
       children: [],
-      ...(flatNode.source ? { source: flatNode.source } : {}),
     };
 
     const parent = nodeMap.get(parentPath);
@@ -121,70 +118,6 @@ export function unflattenToTrees(flatNodes: FlatNode[]): TreeNode[] {
   return trees;
 }
 
-/**
- * Build a slot_quotes dot-path from a flat node ID (tree path) and slot key.
- *
- * FlatNode ID: "hangzhou_trip/activity_plan" + slot key "activities"
- * → Quote path: "activity_plan.activities"
- *
- * The root node name is stripped -- paths are relative to the tree root.
- */
-export function buildSlotQuotesPath(nodeId: string, slotKey: string): string {
-  const segments = nodeId.split('/');
-  if (segments.length === 1) {
-    // Root node slot
-    return slotKey;
-  }
-  // Drop root, join remaining with ".", append slot key
-  return [...segments.slice(1), slotKey].join('.');
-}
-
-/**
- * Resolve a slot_quotes dot-path back to flat node ID + slot key.
- *
- * Quote path: "activity_plan.activities" + root: "hangzhou_trip"
- * → FlatNode ID: "hangzhou_trip/activity_plan", slot key: "activities"
- */
-export function resolveSlotQuotesPath(
-  quotePath: string,
-  rootKey: string
-): { nodeId: string; slotKey: string } {
-  const segments = quotePath.split('.');
-  const slotKey = segments[segments.length - 1];
-  if (segments.length === 1) {
-    return { nodeId: rootKey, slotKey };
-  }
-  const nodePath = [rootKey, ...segments.slice(0, -1)].join('/');
-  return { nodeId: nodePath, slotKey };
-}
-
-/**
- * Collect all slot_quotes from a TreeNode into a flat map.
- * Keys use dot-path notation (relative to root).
- */
-export function collectSlotQuotes(tree: TreeNode): Record<string, string> {
-  const result: Record<string, string> = {};
-  collectNodeQuotes(tree, '', result);
-  return result;
-}
-
-function collectNodeQuotes(
-  node: TreeNode,
-  parentDotPath: string,
-  result: Record<string, string>
-): void {
-  if (node.slot_quotes) {
-    for (const [key, value] of Object.entries(node.slot_quotes)) {
-      // Keys in node.slot_quotes are just the slot key name
-      const fullPath = parentDotPath ? `${parentDotPath}.${key}` : key;
-      result[fullPath] = value;
-    }
-  }
-  for (const child of node.children ?? []) {
-    const childPath = parentDotPath ? `${parentDotPath}.${child.key}` : child.key;
-    collectNodeQuotes(child, childPath, result);
-  }
-}
 
 /**
  * Validate tree depth does not exceed the given maximum.

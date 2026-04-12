@@ -19,8 +19,6 @@ export const TreeNodeSchema: z.ZodType<unknown> = z.lazy(() =>
     key: z.string().min(1).regex(/^[a-z][a-z0-9_]*$/),
     slots: z.record(z.string(), SlotValueSchema),
     children: z.array(TreeNodeSchema),
-    slot_quotes: z.record(z.string(), z.string()).optional(),
-    source: z.string().optional(),
   })
 );
 

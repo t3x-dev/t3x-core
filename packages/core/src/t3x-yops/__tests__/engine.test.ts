@@ -10,8 +10,7 @@ const node = (
   key: string,
   slots: TreeNode['slots'] = {},
   children: TreeNode[] = [],
-  overrides: Partial<Pick<TreeNode, 'slot_quotes' | 'source'>> = {},
-): TreeNode => ({ key, slots, children, ...overrides });
+): TreeNode => ({ key, slots, children });
 
 const content = (
   trees: TreeNode[] = [],
@@ -194,14 +193,11 @@ describe('applyYOps (t3x adapter engine)', () => {
   });
 
   it('preserves basic tree structure through conversion round-trip', () => {
-    // slot_quotes and source are stripped during conversion, but the
-    // core structure (key, slots, children) must survive.
     const input = content([
       node(
         'trip',
         { budget: 5000, destination: 'Tokyo' },
         [node('day_one', { activity: 'sightseeing' })],
-        { slot_quotes: { budget: 'around 5k' }, source: 'T3' },
       ),
     ]);
 

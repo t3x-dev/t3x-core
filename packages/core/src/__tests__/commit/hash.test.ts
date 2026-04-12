@@ -40,43 +40,7 @@ describe('computeCommitHash', () => {
     expect(computeCommitHash(baseCommit)).not.toBe(computeCommitHash(withParent));
   });
 
-  it('excludes slot_quotes from hash', () => {
-    const withQuotes: CommitFirstClass = {
-      ...baseCommit,
-      content: {
-        trees: [
-          {
-            key: 'trip_plan',
-            slots: { destination: 'Tokyo', budget: 5000 },
-            children: [],
-            slot_quotes: { destination: 'I want to go to Tokyo' },
-          },
-        ],
-        relations: [],
-      },
-    };
-    expect(computeCommitHash(baseCommit)).toBe(computeCommitHash(withQuotes));
-  });
-
-  it('excludes node source from hash', () => {
-    const withSource: CommitFirstClass = {
-      ...baseCommit,
-      content: {
-        trees: [
-          {
-            key: 'trip_plan',
-            slots: { destination: 'Tokyo', budget: 5000 },
-            children: [],
-            source: 'T1',
-          },
-        ],
-        relations: [],
-      },
-    };
-    expect(computeCommitHash(baseCommit)).toBe(computeCommitHash(withSource));
-  });
-
-  it('includes relations in hash', () => {
+it('includes relations in hash', () => {
     const withRelation: CommitFirstClass = {
       ...baseCommit,
       content: {

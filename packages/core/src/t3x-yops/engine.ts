@@ -89,11 +89,6 @@ export function applyYOps(content: SemanticContent, ops: YOp[]): YOpsResult {
 
   const resultTrees = yvalueToTrees(currentDoc);
 
-  // Overlay metadata (source, slot_quotes) from input trees onto result trees.
-  // The YValue round-trip strips T3X-specific annotations, so we re-apply them
-  // from the original content to any surviving nodes with matching keys.
-  overlayMetadata(resultTrees, content.trees);
-
   return {
     ok: true,
     trees: resultTrees,
@@ -172,53 +167,6 @@ function handleUnrelate(op: UnrelateOp, relations: Relation[]): Relation[] {
   return relations.filter(
     (r) => !(r.from === from && r.to === to && r.type === type),
   );
-}
-
-// ── Metadata overlay ──
-
-/**
- * Build a lookup map from key path -> TreeNode for the original input trees.
- */
-function buildNodeMap(trees: import('../semantic/types').TreeNode[], prefix = ''): Map<string, import('../semantic/types').TreeNode> {
-  const map = new Map<string, import('../semantic/types').TreeNode>();
-  for (const node of trees) {
-    const path = prefix ? `${prefix}/${node.key}` : node.key;
-    map.set(path, node);
-    if (node.children.length > 0) {
-      for (const [k, v] of buildNodeMap(node.children, path)) {
-        map.set(k, v);
-      }
-    }
-  }
-  return map;
-}
-
-/**
- * Re-apply metadata (source, slot_quotes) from input trees onto output trees.
- * The YValue round-trip strips these T3X annotations, so we copy them back
- * from matching input nodes. Mutates outputTrees in place.
- */
-function overlayMetadata(
-  outputTrees: import('../semantic/types').TreeNode[],
-  inputTrees: import('../semantic/types').TreeNode[],
-): void {
-  const inputMap = buildNodeMap(inputTrees);
-
-  function walk(nodes: import('../semantic/types').TreeNode[], prefix: string): void {
-    for (const node of nodes) {
-      const path = prefix ? `${prefix}/${node.key}` : node.key;
-      const inputNode = inputMap.get(path);
-      if (inputNode) {
-        if (inputNode.source !== undefined) node.source = inputNode.source;
-        if (inputNode.slot_quotes !== undefined) node.slot_quotes = inputNode.slot_quotes;
-      }
-      if (node.children.length > 0) {
-        walk(node.children, path);
-      }
-    }
-  }
-
-  walk(outputTrees, '');
 }
 
 // ── Sourced entry point ──
