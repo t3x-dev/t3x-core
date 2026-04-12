@@ -16,9 +16,10 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useCreateLeaf } from '@/hooks/useCreateLeaf';
 import { useTerminology } from '@/hooks/useTerminology';
-import { createLeaf, type LeafType } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import type { LeafType } from '@/types/api';
 import { LEAF_TYPES } from './CanvasNodes';
 
 const isRunnerEnabled = process.env.NEXT_PUBLIC_RUNNER_ENABLED === 'true';
@@ -38,6 +39,7 @@ export function LeafCreationDialog({
 }: LeafCreationDialogProps) {
   const { t } = useTerminology();
   const router = useRouter();
+  const { create: createLeaf } = useCreateLeaf();
   const [isCreating, setIsCreating] = useState(false);
   const [selectedType, setSelectedType] = useState<LeafType>('tweet');
   const [title, setTitle] = useState('');

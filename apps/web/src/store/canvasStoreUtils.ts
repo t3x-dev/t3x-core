@@ -1,5 +1,7 @@
 import type { Edge, Node } from '@xyflow/react';
-import * as api from '@/lib/api';
+import { parseApiCommitAnchors, persistCommitPosition } from '@/queries/commits';
+import { updateConversationById } from '@/queries/conversations';
+import type { ApiCommit, Commit, Conversation } from '@/types/api';
 import type { CanvasNodeData, NodeKind } from '../types/nodes';
 import type { CanvasState, CommitTone, DraftBranchMode } from './canvasStoreTypes';
 
@@ -477,17 +479,15 @@ export function saveNodePosition(
 
       if (isStagingUnit) {
         // Save position to conversation
-        api
-          .updateConversation(nodeId, {
-            position_x: pending.position.x,
-            position_y: pending.position.y,
-          })
-          .catch(() => {
-            // Error handled silently
-          });
+        updateConversationById(nodeId, {
+          position_x: pending.position.x,
+          position_y: pending.position.y,
+        }).catch(() => {
+          // Error handled silently
+        });
       } else {
         // Committed unit - save position to commit via API
-        api.updateCommitPosition(nodeId, pending.position.x, pending.position.y).catch(() => {
+        persistCommitPosition(nodeId, pending.position.x, pending.position.y).catch(() => {
           // Error handled silently
         });
       }
@@ -499,10 +499,10 @@ export function saveNodePosition(
 
 // Convert API Conversation + Commit pair to Unit Canvas Node
 export const unitToNode = (
-  conv: api.Conversation,
-  commit: api.Commit | null, // null for staging units (no commit yet)
+  conv: Conversation,
+  commit: Commit | null, // null for staging units (no commit yet)
   index: number,
-  originalCommit?: api.ApiCommit // Original tree-based commit for source context display
+  originalCommit?: ApiCommit // Original tree-based commit for source context display
 ): Node<CanvasNodeData> => {
   // Use saved position from commit if available, otherwise from conversation, otherwise calculate
   const position =
@@ -570,7 +570,7 @@ export const unitToNode = (
       sourceTurnWindow: commit?.turn_window ?? undefined,
       // v1.1: Confirmed anchors (convert snake_case API format to camelCase)
       anchors: commit?.anchors
-        ? (api.parseApiCommitAnchors(commit.anchors) ?? undefined)
+        ? (parseApiCommitAnchors(commit.anchors) ?? undefined)
         : undefined,
       // Commit data for source context display (tree-based)
       commit: originalCommit

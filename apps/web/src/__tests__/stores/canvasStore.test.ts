@@ -16,17 +16,26 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useCanvasStore } from '@/store/canvasStore';
 import type { CanvasNodeData } from '@/types/nodes';
 
-// Mock the API module
-vi.mock('@/lib/api', () => ({
-  listTurns: vi.fn(),
-  createConversation: vi.fn(),
-  updateConversation: vi.fn(),
-  listConversations: vi.fn(),
-  listBranches: vi.fn(),
-  getProject: vi.fn(),
-  getTurn: vi.fn(),
-  createMergeDraft: vi.fn().mockResolvedValue({ draftId: 'draft_mock123' }),
-  createLeaf: vi.fn().mockResolvedValue({
+// Canvas slices now route lib/api reads/writes through @/queries/* per the
+// doc-aligned L3 layer. Mock the query modules the slices depend on.
+vi.mock('@/queries/conversations', () => ({
+  fetchConversations: vi.fn().mockResolvedValue({ conversations: [], total: 0 }),
+  createConversationIn: vi.fn(),
+  deleteConversationById: vi.fn(),
+  updateConversationById: vi.fn(),
+}));
+
+vi.mock('@/queries/commits', () => ({
+  fetchCommits: vi.fn().mockResolvedValue([]),
+  persistCommitPosition: vi.fn(),
+  renameCommit: vi.fn(),
+  getSemanticContent: vi.fn(),
+  parseApiCommitAnchors: vi.fn().mockReturnValue(null),
+}));
+
+vi.mock('@/queries/leaves', () => ({
+  fetchLeavesByProject: vi.fn().mockResolvedValue([]),
+  createLeafInProject: vi.fn().mockResolvedValue({
     id: 'leaf_mock123',
     commit_hash: 'sha256:abc123',
     type: 'tweet',
@@ -37,10 +46,19 @@ vi.mock('@/lib/api', () => ({
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   }),
+  deleteLeafById: vi.fn(),
 }));
 
-// Merge ops now route through @/queries/mergeApi (canvasMergeSlice was rewired
-// off @/lib/api in the merge-domain alignment PR).
+vi.mock('@/queries/turns', () => ({
+  fetchTurns: vi.fn().mockResolvedValue({ turns: [] }),
+  fetchTurn: vi.fn(),
+}));
+
+vi.mock('@/queries/workbenchDrafts', () => ({
+  fetchWorkbenchDrafts: vi.fn().mockResolvedValue([]),
+  createWorkbenchDraftFor: vi.fn(),
+}));
+
 vi.mock('@/queries/mergeApi', () => ({
   prepareMergeApi: vi.fn().mockResolvedValue({
     autoKept: [],
@@ -52,6 +70,7 @@ vi.mock('@/queries/mergeApi', () => ({
     relationsInBoth: [],
   }),
   executeMergeApi: vi.fn(),
+  createMergeDraft: vi.fn().mockResolvedValue({ draftId: 'draft_mock123' }),
 }));
 
 // Helper to create a mock staging unit node

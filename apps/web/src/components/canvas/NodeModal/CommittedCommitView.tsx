@@ -31,11 +31,11 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useTerminology } from '@/hooks/useTerminology';
-import type { ApiCommit } from '@/lib/api';
-import { getSemanticContent } from '@/lib/api/commits';
 import { type CommitExportFormat, exportCommit } from '@/lib/exportCommit';
 import { glass, toneAccent } from '@/lib/theme';
 import { cn } from '@/lib/utils';
+import { getSemanticContent } from '@/queries/commits';
+import type { ApiCommit } from '@/types/api';
 import { useCanvasStore } from '@/store/canvasStore';
 import type { CanvasNodeData, CommitDisplay } from '@/types/nodes';
 import { CommitHistoryPanel } from '../CommitHistoryPanel';

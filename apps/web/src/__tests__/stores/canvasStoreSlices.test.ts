@@ -18,9 +18,9 @@ import { useCanvasStore } from '@/store/canvasStore';
 import type { MergeState } from '@/types/merge';
 import type { CanvasNodeData } from '@/types/nodes';
 
-// Mock API module
-vi.mock('@/lib/api', () => ({
-  createLeaf: vi.fn().mockResolvedValue({
+// canvasLeafSlice now routes through @/queries/leaves (doc-aligned L3).
+vi.mock('@/queries/leaves', () => ({
+  createLeafInProject: vi.fn().mockResolvedValue({
     id: 'leaf_mock123',
     commit_hash: 'sha256:abc123',
     type: 'deploy_agent',
@@ -31,7 +31,8 @@ vi.mock('@/lib/api', () => ({
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   }),
-  deleteLeaf: vi.fn().mockResolvedValue(undefined),
+  deleteLeafById: vi.fn().mockResolvedValue(undefined),
+  fetchLeavesByProject: vi.fn().mockResolvedValue([]),
 }));
 
 const createCommittedUnitNode = (
@@ -276,8 +277,10 @@ describe('addLeafNode edge cases', () => {
   });
 
   it('keeps panel open on API error', async () => {
-    const { createLeaf } = await import('@/lib/api');
-    (createLeaf as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('API down'));
+    const { createLeafInProject } = await import('@/queries/leaves');
+    (createLeafInProject as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new Error('API down')
+    );
 
     const notifySpy = vi.fn();
     const committedNode = createCommittedUnitNode('unit-1', 'sha256:abc');
@@ -330,8 +333,10 @@ describe('removeLeafFromNode', () => {
   });
 
   it('notifies on error', async () => {
-    const { deleteLeaf } = await import('@/lib/api');
-    (deleteLeaf as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('Delete failed'));
+    const { deleteLeafById } = await import('@/queries/leaves');
+    (deleteLeafById as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new Error('Delete failed')
+    );
 
     const notifySpy = vi.fn();
     const node = createCommittedUnitNode('unit-1', 'sha256:abc', {

@@ -16,9 +16,9 @@ import {
 } from '@/components/ui/sheet';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
-import type { Template } from '@/lib/api';
-import { listTemplates } from '@/lib/api';
 import { reducedMotion, staggerContainer, staggerItem } from '@/lib/motion';
+import { fetchTemplates } from '@/queries/templates';
+import type { Template } from '@/types/api';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import { useCanvasStore } from '@/store/canvasStore';
@@ -52,7 +52,7 @@ export function LeafPanel() {
     if (activeTab !== 'template' || !leafPanelOpen) return;
     let cancelled = false;
     setLoadingTemplates(true);
-    listTemplates()
+    fetchTemplates()
       .then((data) => {
         if (!cancelled) setTemplates(data);
       })

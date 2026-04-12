@@ -1,9 +1,10 @@
 import type { Edge, Node } from '@xyflow/react';
 import type { StateCreator } from 'zustand';
 import { getTerminology } from '@/hooks/useTerminology';
-import * as api from '@/lib/api';
-import { createMergeDraft } from '@/lib/api';
 import { getMicrocopy } from '@/lib/microcopy';
+import { createConversationIn } from '@/queries/conversations';
+import { createMergeDraft } from '@/queries/mergeApi';
+import { fetchTurns } from '@/queries/turns';
 import { isDeveloperMode } from '@/store/shared';
 import type { BranchType, CanvasNodeData, SourceTextBlock, TurnBoundary } from '../types/nodes';
 import { tokenizeText } from '../utils/tokenizer';
@@ -129,7 +130,7 @@ export const createCommitSlice: StateCreator<CanvasState, [], [], CommitSlice> =
     const projectId = state.projectId;
     if (projectId && source.data.conversationId) {
       try {
-        const turnsData = await api.listTurns(projectId, source.data.conversationId);
+        const turnsData = await fetchTurns(projectId, source.data.conversationId);
         if (turnsData.turns && turnsData.turns.length > 0) {
           // Build full text with turn separator (newline between turns)
           const fullText = turnsData.turns.map((turn) => turn.content).join('\n');
@@ -235,10 +236,12 @@ export const createCommitSlice: StateCreator<CanvasState, [], [], CommitSlice> =
     const parentCommitHash = source.data.commitHash || source.id;
     // Calculate position before API call so we can save it
     const position = computeAttachedPosition(source, 'unit', commitQuickOffset);
-    const conversation = await api.createConversation(state.projectId, title, parentCommitHash, {
-      x: position.x,
-      y: position.y,
-    });
+    const conversation = await createConversationIn(
+      state.projectId,
+      title,
+      parentCommitHash,
+      { x: position.x, y: position.y }
+    );
 
     // Add node using the real conversation ID from API
     const newNode: Node<CanvasNodeData> = {

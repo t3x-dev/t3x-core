@@ -1,5 +1,5 @@
 import type { Connection, Edge, EdgeChange, Node, NodeChange } from '@xyflow/react';
-import type { Template } from '@/lib/api';
+import type { Template } from '@/types/api';
 import type { MergeState } from '../types/merge';
 import type {
   CanvasNodeData,

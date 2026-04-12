@@ -1,8 +1,13 @@
 import type { Edge, Node } from '@xyflow/react';
 import type { StateCreator } from 'zustand';
 import { getTerminology } from '@/hooks/useTerminology';
-import * as api from '@/lib/api';
+import { fetchCommits } from '@/queries/commits';
+import { createConversationIn, fetchConversations } from '@/queries/conversations';
+import { fetchLeavesByProject } from '@/queries/leaves';
+import { fetchTurn } from '@/queries/turns';
+import { createWorkbenchDraftFor, fetchWorkbenchDrafts } from '@/queries/workbenchDrafts';
 import { isDeveloperMode } from '@/store/shared';
+import type { ApiCommit, Commit, Conversation, Leaf } from '@/types/api';
 import type { CanvasNodeData, EmbeddedLeaf } from '../types/nodes';
 import type { CanvasState, NodeSlice } from './canvasStoreTypes';
 import {
@@ -32,11 +37,11 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
     try {
       // Fetch conversations, commits, and leaves in parallel
       const [convResponse, apiCommits, projectLeaves] = await Promise.all([
-        api.listConversations(projectId, 100, 0),
-        api.listCommits(projectId, undefined, 100),
-        api.listLeavesByProject(projectId).catch((err) => {
+        fetchConversations(projectId, 100, 0),
+        fetchCommits(projectId, undefined, 100),
+        fetchLeavesByProject(projectId).catch((err) => {
           console.warn('[canvasStore] Failed to load leaves:', err);
-          return [] as api.Leaf[];
+          return [] as Leaf[];
         }),
       ]);
 
@@ -46,7 +51,7 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
       const conversations = convResponse.conversations;
 
       // Convert ApiCommit to V2-compatible format for unitToNode
-      const commits: api.Commit[] = apiCommits.map(
+      const commits: Commit[] = apiCommits.map(
         (v5) =>
           ({
             commit_hash: v5.hash,
@@ -74,7 +79,7 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
               })) ?? null,
             anchors: null,
             created_at: v5.committed_at,
-          }) as api.Commit
+          }) as Commit
       );
 
       // Preserve existing node positions
@@ -108,7 +113,7 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
         await Promise.all(
           Array.from(turnHashesToLookup).map(async (turnHash) => {
             try {
-              const turn = await api.getTurn(turnHash);
+              const turn = await fetchTurn(turnHash);
               turnToConvMap.set(turn.turn_hash, turn.conversation_id);
             } catch {
               // Skip if turn fetch fails
@@ -140,13 +145,13 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
       });
 
       // Build a map: commit_hash -> original ApiCommit data (for source context display)
-      const nodeCommitMap = new Map<string, api.ApiCommit>();
+      const nodeCommitMap = new Map<string, ApiCommit>();
       apiCommits.forEach((v5) => {
         nodeCommitMap.set(v5.hash, v5);
       });
 
       // Build maps for conversation → commits (one conversation can have multiple commits)
-      const convToCommitsMap = new Map<string, api.Commit[]>();
+      const convToCommitsMap = new Map<string, Commit[]>();
       const commitsWithConv = new Set<string>();
       commits.forEach((commit) => {
         const convId = commitSourceConvMap.get(commit.commit_hash);
@@ -172,7 +177,7 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
         const conv = convId ? conversations.find((c) => c.conversation_id === convId) : undefined;
 
         // Use conversation if found, otherwise create virtual one
-        const displayConv: api.Conversation = conv || {
+        const displayConv: Conversation = conv || {
           conversation_id: `orphan-${commit.commit_hash.slice(0, 12)}`,
           project_id: projectId,
           title:
@@ -301,7 +306,7 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
 
       // Load editing drafts and create draft nodes + conversation→draft edges
       try {
-        const editingDrafts = await api.listWorkbenchDrafts(projectId, 'editing');
+        const editingDrafts = await fetchWorkbenchDrafts(projectId, 'editing');
         // Build conversationId → nodeId map for edge creation
         const convToNodeId = new Map<string, string>();
         for (const node of nodes) {
@@ -437,7 +442,7 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
 
   refreshLeaves: async (projectId: string) => {
     try {
-      const projectLeaves = await api.listLeavesByProject(projectId).catch(() => [] as api.Leaf[]);
+      const projectLeaves = await fetchLeavesByProject(projectId).catch(() => [] as Leaf[]);
       const leavesByCommit = new Map<string, EmbeddedLeaf[]>();
       for (const leaf of projectLeaves) {
         const embedded: EmbeddedLeaf = {
@@ -502,7 +507,7 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
         throw new Error('Cannot create unit: no project selected');
       }
 
-      const conversation = await api.createConversation(
+      const conversation = await createConversationIn(
         state.projectId,
         'Untitled Unit',
         undefined, // no parent commit
@@ -560,7 +565,7 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
     };
     const snappedPosition = snapPosition(basePosition);
 
-    const draft = await api.createWorkbenchDraft({
+    const draft = await createWorkbenchDraftFor({
       project_id: state.projectId,
       title: 'Untitled Draft',
     });

@@ -23,5 +23,6 @@ export type {
   SuggestedConstraint,
 } from '@/lib/api/leaves';
 export type { ProviderInfo, Template } from '@/lib/api/misc';
+export type { ConversationContext } from '@/lib/api/pins';
 export type { TurnContextData } from '@/lib/api/turns';
-export type { Conversation, Project } from '@/lib/api/types';
+export type { Branch, Commit, Conversation, Project } from '@/lib/api/types';

@@ -1,6 +1,6 @@
 import type { StateCreator } from 'zustand';
 import { getTerminology } from '@/hooks/useTerminology';
-import * as api from '@/lib/api';
+import { createLeafInProject, deleteLeafById } from '@/queries/leaves';
 import { isDeveloperMode } from '@/store/shared';
 import type { EmbeddedLeaf, LeafType } from '../types/nodes';
 import type { CanvasState, LeafPanelSlice } from './canvasStoreTypes';
@@ -62,7 +62,7 @@ export const createLeafSlice: StateCreator<CanvasState, [], [], LeafPanelSlice> 
 
     try {
       // Call API to create leaf
-      const leaf = await api.createLeaf({
+      const leaf = await createLeafInProject({
         commit_hash: commitHash,
         type: leafType,
         title: leafLabels[leafType],
@@ -145,7 +145,7 @@ export const createLeafSlice: StateCreator<CanvasState, [], [], LeafPanelSlice> 
 
     try {
       const leafType = template.leaf_type as LeafType;
-      const leaf = await api.createLeaf({
+      const leaf = await createLeafInProject({
         commit_hash: commitHash,
         type: leafType,
         title: template.title,
@@ -193,7 +193,7 @@ export const createLeafSlice: StateCreator<CanvasState, [], [], LeafPanelSlice> 
   removeLeafFromNode: async (commitNodeId: string, leafId: string) => {
     const notify = get().notifyCallback;
     try {
-      await api.deleteLeaf(leafId);
+      await deleteLeafById(leafId);
       set((state) => ({
         nodes: state.nodes.map((node) => {
           if (node.id !== commitNodeId) return node;
