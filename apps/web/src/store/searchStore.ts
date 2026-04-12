@@ -1,6 +1,6 @@
 import { create } from 'zustand';
-import type { SearchHit, SearchMode } from '@/lib/api/search';
-import { searchNodes } from '@/lib/api/search';
+import type { SearchHit, SearchMode } from '@/queries/search';
+import { searchNodes } from '@/queries/search';
 
 interface SearchState {
   query: string;
