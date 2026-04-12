@@ -14,9 +14,9 @@
 import { useCallback, useState } from 'react';
 import { DiffSourceContextModal } from '@/components/diff/DiffSourceContextModal';
 import { useTerminology } from '@/hooks/useTerminology';
-import type { TurnContextData } from '@/lib/api';
-import { fetchTurnContextCached } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { fetchTurnContext } from '@/queries/turnContext';
+import type { TurnContextData } from '@/types/api';
 import { isConflictResolved, useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
 import type { MergeSimilarPair, ContentNode } from '@/types/merge';
 import { ConflictHeader } from './ConflictHeader';
@@ -71,7 +71,7 @@ export function MergeConflictView({
       setModalLoading(true);
       setModalContextData(null);
 
-      fetchTurnContextCached(turnHash, {
+      fetchTurnContext(turnHash, {
         before: 5,
         after: 5,
         highlightStart: hStart,

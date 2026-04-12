@@ -13,11 +13,11 @@ import { GitMerge, Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { MergeIllustration } from '@/components/illustrations/MergeIllustration';
 import { EmptyState } from '@/components/ui/empty-state';
+import { useCreateMergeCommit } from '@/hooks/useCreateMergeCommit';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useTerminology } from '@/hooks/useTerminology';
-import { createCommit } from '@/lib/api/commits';
-import { getApiCommit } from '@/lib/api';
 import { fullScreenEnter, reducedMotion } from '@/lib/motion';
+import { fetchCommitByHash } from '@/queries/commitByHash';
 import { useCanvasStore } from '@/store/canvasStore';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
 import { ConflictCard } from './ConflictCard';
@@ -37,6 +37,7 @@ interface MergeWorkspaceProps {
 }
 
 export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWorkspaceProps) {
+  const { create: createMergeCommit } = useCreateMergeCommit();
   const {
     message,
     isDirty,
@@ -93,7 +94,7 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
     setTreeLoading(true);
     setTreeError(null);
 
-    Promise.all([getApiCommit(sh), getApiCommit(th)])
+    Promise.all([fetchCommitByHash(sh), fetchCommitByHash(th)])
       .then(([srcCommit, tgtCommit]) => {
         if (cancelled) return;
 
@@ -117,7 +118,7 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
           const baseParent = commonParent ?? sourceParents[0];
 
           if (baseParent) {
-            getApiCommit(baseParent)
+            fetchCommitByHash(baseParent)
               .then((baseCommit) => {
                 if (cancelled) return;
                 const result = prepareMerge(baseCommit.content, sourceContent, targetContent);
@@ -218,20 +219,18 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
         semanticData.target
       );
 
-      const result = await createCommit(
+      const result = await createMergeCommit({
         projectId,
-        {
+        content: {
           trees: mergedContent.trees,
           relations: mergedContent.relations,
         },
-        {
-          branch: targetBranch || 'main',
-          message: message || 'Tree merge',
-          parents: [sourceHash, targetHash],
-          author: { type: 'human', name: 'User' },
-          provenance: { method: 'merge' },
-        }
-      );
+        branch: targetBranch || 'main',
+        message: message || 'Tree merge',
+        parents: [sourceHash, targetHash],
+        author: { type: 'human', name: 'User' },
+        provenance: { method: 'merge' },
+      });
 
       // Reload canvas data to show the new merge commit
       useCanvasStore.getState().loadProjectData(projectId);

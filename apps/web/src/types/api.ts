@@ -8,4 +8,7 @@
  */
 
 export type { Citation } from '@/lib/api/chat';
+export type { ApiCommit } from '@/lib/api/commits';
+export type { TreeMergeSuggestion } from '@/lib/api/diff';
+export type { TurnContextData } from '@/lib/api/turns';
 export type { Conversation, Project } from '@/lib/api/types';

@@ -116,7 +116,11 @@
       }
     },
     {
-      "includes": ["apps/web/src/components/chat/**"],
+      "includes": [
+        "apps/web/src/components/chat/**",
+        "apps/web/src/components/merge/**",
+        "apps/web/src/components/tree-graph/merge-view/**"
+      ],
       "linter": {
         "rules": {
           "style": {
@@ -134,7 +138,7 @@
                   },
                   {
                     "group": "@/lib/api/**",
-                    "message": "Chat components must route lib/api reads/writes through a hook (hooks/) or query (queries/). Shared API types should be re-exported from @/types/api."
+                    "message": "Components must route lib/api reads/writes through a hook (hooks/) or query (queries/). Shared API types should be re-exported from @/types/api."
                   }
                 ]
               }

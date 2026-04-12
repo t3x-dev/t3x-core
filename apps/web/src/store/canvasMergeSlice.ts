@@ -2,7 +2,7 @@ import type { MergeSummaryData } from '@t3x-dev/core';
 import type { Edge, Node } from '@xyflow/react';
 import type { StateCreator } from 'zustand';
 import { getTerminology } from '@/hooks/useTerminology';
-import { executeMergeApi, prepareMergeApi } from '@/lib/api';
+import { executeMergeApi, prepareMergeApi } from '@/queries/mergeApi';
 import { isDeveloperMode } from '@/store/shared';
 import type { MergeResult } from '../types/merge';
 import type { CanvasNodeData } from '../types/nodes';
