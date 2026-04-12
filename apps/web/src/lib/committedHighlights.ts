@@ -32,8 +32,6 @@ interface TreeNodeShape {
   key?: string;
   slots?: TreeSlots;
   children?: TreeNodeShape[];
-  /** @deprecated slot_quotes is no longer on core TreeNode; kept for DB-sourced runtime objects */
-  slot_quotes?: Record<string, string>;
 }
 
 /**
@@ -48,10 +46,7 @@ function walkTrees(
   for (const node of nodes) {
     const ref = node.slots?.source_ref;
     if (ref?.turn_hash && typeof ref.start_char === 'number' && typeof ref.end_char === 'number') {
-      const nodeText =
-        typeof node.slots?.text === 'string'
-          ? node.slots.text
-          : Object.values(node.slot_quotes ?? {}).find((v) => typeof v === 'string') ?? '';
+      const nodeText = typeof node.slots?.text === 'string' ? node.slots.text : '';
 
       const arr = out.get(ref.turn_hash) ?? [];
       arr.push({

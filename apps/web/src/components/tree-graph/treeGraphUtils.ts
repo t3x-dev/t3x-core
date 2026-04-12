@@ -2,10 +2,8 @@ import type { SemanticContent, SlotValue, TreeNode } from '@t3x-dev/core';
 import { RELATION_TYPES } from '@t3x-dev/core';
 
 /**
- * Runtime-enriched tree node shape.
- * The API stores and returns `source` per node in the DB; this field is present
- * at runtime even though public TreeNode does not declare it.
- * TODO(follow-up): migrate source display to use sourceIndex instead.
+ * Runtime-enriched tree node shape. API trees from historical commits may
+ * carry a legacy turn-tag `source` string (e.g. `"T3"`).
  */
 type EnrichedTreeNode = TreeNode & { source?: string };
 import type { Edge, Node } from '@xyflow/react';

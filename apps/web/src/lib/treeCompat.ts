@@ -9,14 +9,12 @@
 import type { SemanticContent, SlotValue, TreeNode } from '@t3x-dev/core';
 
 /**
- * Runtime-enriched tree node shape.
- * The API still stores and returns `source` and `slot_quotes` per node in the DB;
- * these fields are present at runtime even though public TreeNode does not declare them.
- * TODO(follow-up): migrate source tracing to use sourceIndex instead of slot_quotes.
+ * Runtime-enriched tree node shape. The API decorates nodes with a legacy
+ * turn-tag `source` string (e.g. `"T3"`) for historical commits; newer
+ * extractions carry provenance in the workspace `sourceIndex` instead.
  */
 type EnrichedTreeNode = TreeNode & {
   source?: string;
-  slot_quotes?: Record<string, string>;
 };
 
 /**
@@ -39,8 +37,6 @@ export interface CompatNode {
   slots: Record<string, SlotValue>;
   source?: string;
   children: TreeNode[];
-  /** Original slot_quotes from TreeNode */
-  slot_quotes?: Record<string, string>;
   /** Slot-level source refs (for backward compat) */
   slot_sources?: Record<string, SlotSourceRef>;
   /** Flag for manually edited nodes */
@@ -54,7 +50,7 @@ export interface CompatNode {
 export function treesToNodes(trees: TreeNode[], prefix = ''): CompatNode[] {
   const nodes: CompatNode[] = [];
   for (const rawNode of trees) {
-    // Cast to EnrichedTreeNode: API-sourced trees carry source + slot_quotes at runtime
+    // Cast to EnrichedTreeNode: API-sourced trees may carry a legacy turn-tag `source`
     const node = rawNode as EnrichedTreeNode;
     const path = prefix ? `${prefix}.${node.key}` : node.key;
     nodes.push({
@@ -64,7 +60,6 @@ export function treesToNodes(trees: TreeNode[], prefix = ''): CompatNode[] {
       slots: node.slots,
       source: node.source,
       children: node.children,
-      slot_quotes: node.slot_quotes,
     });
     if (node.children.length > 0) {
       nodes.push(...treesToNodes(node.children, path));
@@ -108,7 +103,6 @@ function treeToNode(node: CompatNode): EnrichedTreeNode {
     slots: node.slots,
     children: (node.children ?? []) as EnrichedTreeNode[],
     source: node.source,
-    slot_quotes: node.slot_quotes,
   };
 }
 
