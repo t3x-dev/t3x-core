@@ -8,8 +8,8 @@ import { useSlotActions } from '@/hooks/useSlotActions';
 import type { Citation } from '@/lib/api/chat';
 import type { CommittedHighlight } from '@/lib/committedHighlights';
 import { collectQuotesForTurn, computeUncoveredRanges } from '@/lib/coverageRanges';
-import { traceYamlToChat } from '@/lib/hoverTrace';
 import type { SourceMapping } from '@/lib/sourceMap';
+import { traceYamlToChat } from '@/queries/hoverTrace';
 import { cn } from '@/lib/utils';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { CitationChips } from './CitationChips';
@@ -361,7 +361,8 @@ export function ChatMessage({
   const hoveredNodeId = useWorkspaceStore((s) => s.selectedNodePath);
   const hoveredSlotKey = useWorkspaceStore((s) => s.selectedSlotKey);
   const scrollToCenter = useWorkspaceStore((s) => s.scrollToCenter);
-  const draft = useWorkspaceStore((s) => s.tree);
+  const hoverSourceIndex = useWorkspaceStore((s) => s.sourceIndex);
+  const turns = useWorkspaceStore((s) => s.turns);
   const wsMode = useWorkspaceStore((s) => s.mode);
   const isReviewPhase = wsMode === 'executed' || wsMode === 'committing';
   const textRef = useRef<HTMLDivElement>(null);
@@ -370,8 +371,8 @@ export function ChatMessage({
   // ── YAML → Chat: trace hovered YAML node to this message ──
   const trace = useMemo(() => {
     if (!hoveredNodeId) return null;
-    return traceYamlToChat(draft, hoveredNodeId, hoveredSlotKey);
-  }, [hoveredNodeId, hoveredSlotKey, draft]);
+    return traceYamlToChat(hoverSourceIndex, turns, hoveredNodeId, hoveredSlotKey);
+  }, [hoveredNodeId, hoveredSlotKey, hoverSourceIndex, turns]);
 
   // Does the hovered YAML node come from THIS message?
   const isSourceMessage =
