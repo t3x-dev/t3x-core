@@ -11,6 +11,7 @@
  */
 
 import {
+  createCommit,
   getSemanticContent,
   listCommits,
   updateCommitMessage,
@@ -37,6 +38,16 @@ export function persistCommitPosition(
 
 export function renameCommit(commitHash: string, message: string): Promise<ApiCommit> {
   return updateCommitMessage(commitHash, message);
+}
+
+export type CreateCommitOptions = Parameters<typeof createCommit>[2];
+
+export function createCommitApi(
+  projectId: string,
+  content: { trees: unknown[]; relations: unknown[] },
+  options?: CreateCommitOptions
+): Promise<{ commit: { hash: string } }> {
+  return createCommit(projectId, content, options);
 }
 
 export { getSemanticContent, parseApiCommitAnchors };

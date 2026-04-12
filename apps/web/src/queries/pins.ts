@@ -1,0 +1,42 @@
+/**
+ * L3 — pins read/write pass-through for `pinsStore`.
+ *
+ * Matches the shape used by the Zustand store: each operation is an
+ * imperative async function that returns the normalized `Pin` type the
+ * store already expects.
+ */
+
+import type { Pin } from '@t3x-dev/core';
+import {
+  type PinType,
+  createPinApi,
+  deletePinApi,
+  listPins,
+  updatePinAssertionsApi,
+} from '@/lib/api/pins';
+
+export function fetchPins(projectId: string, type?: PinType): Promise<Pin[]> {
+  return listPins(projectId, type);
+}
+
+export function createPin(
+  projectId: string,
+  type: PinType,
+  refId: string,
+  selectedAssertionIds?: string[]
+): Promise<Pin> {
+  return createPinApi(projectId, type, refId, selectedAssertionIds);
+}
+
+export function deletePin(pinId: string): Promise<{ deleted: boolean; id: string }> {
+  return deletePinApi(pinId);
+}
+
+export function updatePinAssertions(
+  pinId: string,
+  selectedAssertionIds: string[]
+): Promise<Pin> {
+  return updatePinAssertionsApi(pinId, selectedAssertionIds);
+}
+
+export type { Pin, PinType };

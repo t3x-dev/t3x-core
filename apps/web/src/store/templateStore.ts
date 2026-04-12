@@ -1,6 +1,11 @@
 import { create } from 'zustand';
-import type { Template } from '@/lib/api';
-import * as api from '@/lib/api';
+import {
+  type CreateTemplateInput,
+  createTemplateApi,
+  deleteTemplateById,
+  fetchTemplates,
+} from '@/queries/templates';
+import type { Template } from '@/types/api';
 
 interface TemplateState {
   templates: Template[];
@@ -18,7 +23,7 @@ interface TemplateState {
   setLeafType: (leafType: string | null) => void;
   setSearch: (search: string) => void;
   deleteTemplate: (id: string) => Promise<void>;
-  createTemplate: (input: api.CreateTemplateInput) => Promise<Template>;
+  createTemplate: (input: CreateTemplateInput) => Promise<Template>;
 }
 
 // Generation counter to discard stale fetch results when filters change rapidly
@@ -39,7 +44,7 @@ export const useTemplateStore = create<TemplateState>((set, get) => ({
     const { category, leafType, search } = get();
     set({ loading: true, error: null });
     try {
-      const templates = await api.listTemplates({
+      const templates = await fetchTemplates({
         category: category ?? undefined,
         leaf_type: leafType ?? undefined,
         search: search || undefined,
@@ -73,14 +78,14 @@ export const useTemplateStore = create<TemplateState>((set, get) => ({
   },
 
   deleteTemplate: async (id) => {
-    await api.deleteTemplate(id);
+    await deleteTemplateById(id);
     set((state) => ({
       templates: state.templates.filter((t) => t.template_id !== id),
     }));
   },
 
   createTemplate: async (input) => {
-    const template = await api.createTemplate(input);
+    const template = await createTemplateApi(input);
     set((state) => ({
       templates: [template, ...state.templates],
     }));

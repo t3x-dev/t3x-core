@@ -2,7 +2,12 @@
  * L3 — imperative template-list fetcher.
  */
 
-import { listTemplates } from '@/lib/api/misc';
+import {
+  type CreateTemplateInput,
+  createTemplate,
+  deleteTemplate,
+  listTemplates,
+} from '@/lib/api/misc';
 import type { Template } from '@/types/api';
 
 export interface FetchTemplatesOptions {
@@ -16,3 +21,13 @@ export interface FetchTemplatesOptions {
 export function fetchTemplates(options?: FetchTemplatesOptions): Promise<Template[]> {
   return listTemplates(options);
 }
+
+export function createTemplateApi(input: CreateTemplateInput): Promise<Template> {
+  return createTemplate(input);
+}
+
+export function deleteTemplateById(id: string): Promise<{ deleted: true }> {
+  return deleteTemplate(id);
+}
+
+export type { CreateTemplateInput };

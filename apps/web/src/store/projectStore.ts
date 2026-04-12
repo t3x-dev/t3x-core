@@ -1,5 +1,11 @@
 import { create } from 'zustand';
-import * as api from '@/lib/api';
+import {
+  createProjectApi,
+  deleteProjectById,
+  fetchProjects,
+  updateProjectById,
+} from '@/queries/projects';
+import type { Project } from '@/types/api';
 import type { NotifyCallback } from './shared';
 
 export interface ProjectSummary {
@@ -50,13 +56,13 @@ const formatDate = (dateStr: string) => {
   return date.toLocaleDateString();
 };
 
-const deriveStatus = (project: api.Project): 'draft' | 'active' | 'paused' => {
+const deriveStatus = (project: Project): 'draft' | 'active' | 'paused' => {
   if ((project.commits_count || 0) > 0) return 'active';
   if ((project.conversations_count || 0) > 0) return 'draft';
   return 'draft';
 };
 
-const apiProjectToSummary = (project: api.Project): ProjectSummary => ({
+const apiProjectToSummary = (project: Project): ProjectSummary => ({
   id: project.project_id,
   name: project.name,
   description: (project.metadata?.description as string) || '',
@@ -86,7 +92,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
 
     set({ loading: true, error: null });
     try {
-      const response = await api.listProjects(50, 0);
+      const response = await fetchProjects(50, 0);
       const projects = response.projects.map(apiProjectToSummary);
       set({ projects, loading: false, initialized: true });
     } catch (err) {
@@ -106,7 +112,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
 
     try {
       // Create project via API
-      const project = await api.createProject(name, {
+      const project = await createProjectApi(name, {
         description: 'Fresh project awaiting conversations.',
       });
 
@@ -164,7 +170,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     }
 
     try {
-      await api.deleteProject(id);
+      await deleteProjectById(id);
       notify?.(`Deleted "${project?.name || id}"`, 'success');
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
@@ -189,7 +195,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
   updateProjectModel: async (projectId, provider, model) => {
     const notify = get().notifyCallback;
     try {
-      await api.updateProject(projectId, {
+      await updateProjectById(projectId, {
         default_provider: provider,
         default_model: model,
       });

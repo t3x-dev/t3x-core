@@ -1,9 +1,9 @@
 // apps/web/src/store/commitDetailStore.ts
 
 import type { TreeNode } from '@t3x-dev/core';
-import type { ApiCommit } from '@/lib/api';
 import { flattenTrees } from '@t3x-dev/core';
 import { create } from 'zustand';
+import type { ApiCommit } from '@/types/api';
 
 export type DiffStatus = 'identical' | 'added' | 'modified' | 'removed';
 

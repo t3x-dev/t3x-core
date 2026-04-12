@@ -6,9 +6,15 @@
  */
 
 import { create } from 'zustand';
-import type { DraftConstraint, DraftNode, WorkbenchDraft } from '@/lib/api';
-import * as api from '@/lib/api';
 import { type ValidationResult, validateConstraintsLocally } from '@/lib/draftValidation';
+import { ApiError } from '@/queries/apiErrors';
+import {
+  commitWorkbenchDraftById,
+  fetchWorkbenchDraft,
+  previewWorkbenchDraftById,
+  updateWorkbenchDraftById,
+} from '@/queries/workbenchDrafts';
+import type { DraftConstraint, DraftNode, WorkbenchDraft } from '@/types/api';
 import { type SaveStatus, createSaveStatusTimer } from './saveStatus';
 type PreviewStatus = 'idle' | 'loading' | 'ready' | 'stale' | 'error';
 
@@ -161,7 +167,7 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
     set({ loading: true, error: null, conflictError: false });
 
     try {
-      const draft = await api.getWorkbenchDraft(draftId);
+      const draft = await fetchWorkbenchDraft(draftId);
 
       // Determine preview status from server data
       let previewStatus: PreviewStatus = 'idle';
@@ -367,7 +373,7 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
     set({ previewStatus: 'loading', previewError: null });
 
     try {
-      const result = await api.previewWorkbenchDraft(draftId, {
+      const result = await previewWorkbenchDraftById(draftId, {
         ...(previewModel ? { model: previewModel } : {}),
       });
 
@@ -432,7 +438,7 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
     set({ saveStatus: 'saving' });
 
     try {
-      const updated = await api.updateWorkbenchDraft(draftId, {
+      const updated = await updateWorkbenchDraftById(draftId, {
         title: draft.title,
         goal: draft.goal ?? undefined,
         nodes: draft.nodes,
@@ -455,7 +461,7 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
       saveTimer.scheduleReset(get, set);
     } catch (err) {
       const isConflict =
-        err instanceof api.ApiError && (err.code === 'CONFLICT' || err.message.includes('409'));
+        err instanceof ApiError && (err.code === 'CONFLICT' || err.message.includes('409'));
       set({
         saveStatus: 'error',
         conflictError: isConflict,
@@ -482,7 +488,7 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
         }
       }
 
-      const result = await api.commitWorkbenchDraft(draftId, message);
+      const result = await commitWorkbenchDraftById(draftId, message);
 
       set({
         draft: { ...draft, status: 'committed' },

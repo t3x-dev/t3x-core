@@ -9,7 +9,12 @@
 
 import type { Pin, PinType } from '@t3x-dev/core';
 import { create } from 'zustand';
-import * as api from '@/lib/api';
+import {
+  createPin,
+  deletePin,
+  fetchPins,
+  updatePinAssertions,
+} from '@/queries/pins';
 import type { NotifyCallback } from './shared';
 
 // Module-level flag to prevent concurrent fetchPins calls for the same project.
@@ -68,7 +73,7 @@ export const usePinsStore = create<PinsState>((set, get) => ({
     fetchInProgressFor = projectId;
     set({ loading: true, error: null });
     try {
-      const pins = await api.listPins(projectId);
+      const pins = await fetchPins(projectId);
       set({
         pins,
         loading: false,
@@ -99,7 +104,7 @@ export const usePinsStore = create<PinsState>((set, get) => ({
     }
 
     try {
-      const pin = await api.createPinApi(projectId, type, refId);
+      const pin = await createPin(projectId, type, refId);
 
       set((state) => ({
         pins: [...state.pins, pin],
@@ -130,7 +135,7 @@ export const usePinsStore = create<PinsState>((set, get) => ({
     }));
 
     try {
-      await api.deletePinApi(pinId);
+      await deletePin(pinId);
       notify?.('Pin removed', 'success');
     } catch (err) {
       // Restore pin on failure
@@ -155,7 +160,7 @@ export const usePinsStore = create<PinsState>((set, get) => ({
     const notify = get().notifyCallback;
 
     try {
-      const updatedPin = await api.updatePinAssertionsApi(pinId, assertionIds);
+      const updatedPin = await updatePinAssertions(pinId, assertionIds);
 
       set((state) => ({
         pins: state.pins.map((p) => (p.id === pinId ? updatedPin : p)),

@@ -3,15 +3,15 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import * as api from '@/lib/api';
+import * as api from '@/queries/pins';
 import { usePinsStore } from '@/store/pinsStore';
 
-// Mock the API module
-vi.mock('@/lib/api', () => ({
-  listPins: vi.fn(),
-  createPinApi: vi.fn(),
-  deletePinApi: vi.fn(),
-  updatePinAssertionsApi: vi.fn(),
+// pinsStore now routes through @/queries/pins (doc-aligned L3).
+vi.mock('@/queries/pins', () => ({
+  fetchPins: vi.fn(),
+  createPin: vi.fn(),
+  deletePin: vi.fn(),
+  updatePinAssertions: vi.fn(),
 }));
 
 describe('pinsStore', () => {
@@ -42,11 +42,11 @@ describe('pinsStore', () => {
         },
       ];
 
-      vi.mocked(api.listPins).mockResolvedValue(mockPins);
+      vi.mocked(api.fetchPins).mockResolvedValue(mockPins);
 
       await usePinsStore.getState().fetchPins('proj_1');
 
-      expect(api.listPins).toHaveBeenCalledWith('proj_1');
+      expect(api.fetchPins).toHaveBeenCalledWith('proj_1');
       expect(usePinsStore.getState().pins).toEqual(mockPins);
       expect(usePinsStore.getState().initialized).toBe(true);
       expect(usePinsStore.getState().currentProjectId).toBe('proj_1');
@@ -58,7 +58,7 @@ describe('pinsStore', () => {
       // fetch that never resolves, then attempt a second fetch and verify only one
       // call to listPins was made.
       let resolveFirst!: () => void;
-      vi.mocked(api.listPins).mockReturnValueOnce(
+      vi.mocked(api.fetchPins).mockReturnValueOnce(
         new Promise<never>((resolve) => {
           resolveFirst = resolve as () => void;
         })
@@ -71,7 +71,7 @@ describe('pinsStore', () => {
       await usePinsStore.getState().fetchPins('proj_1');
 
       // Only one call to the API should have been made.
-      expect(api.listPins).toHaveBeenCalledTimes(1);
+      expect(api.fetchPins).toHaveBeenCalledTimes(1);
 
       // Clean up: resolve the pending promise so the first fetch can finish.
       resolveFirst();
@@ -87,7 +87,7 @@ describe('pinsStore', () => {
 
       await usePinsStore.getState().fetchPins('proj_1');
 
-      expect(api.listPins).not.toHaveBeenCalled();
+      expect(api.fetchPins).not.toHaveBeenCalled();
     });
 
     it('refetches if project changes', async () => {
@@ -97,11 +97,11 @@ describe('pinsStore', () => {
         pins: [],
       });
 
-      vi.mocked(api.listPins).mockResolvedValue([]);
+      vi.mocked(api.fetchPins).mockResolvedValue([]);
 
       await usePinsStore.getState().fetchPins('proj_2');
 
-      expect(api.listPins).toHaveBeenCalledWith('proj_2');
+      expect(api.fetchPins).toHaveBeenCalledWith('proj_2');
     });
   });
 
@@ -117,11 +117,11 @@ describe('pinsStore', () => {
         pinned_by: undefined,
       };
 
-      vi.mocked(api.createPinApi).mockResolvedValue(newPin);
+      vi.mocked(api.createPin).mockResolvedValue(newPin);
 
       const result = await usePinsStore.getState().addPin('proj_1', 'conversation', 'conv_1');
 
-      expect(api.createPinApi).toHaveBeenCalledWith('proj_1', 'conversation', 'conv_1');
+      expect(api.createPin).toHaveBeenCalledWith('proj_1', 'conversation', 'conv_1');
       expect(result).toEqual(newPin);
       expect(usePinsStore.getState().pins).toContainEqual(newPin);
     });
@@ -143,7 +143,7 @@ describe('pinsStore', () => {
 
       const result = await usePinsStore.getState().addPin('proj_1', 'conversation', 'conv_1');
 
-      expect(api.createPinApi).not.toHaveBeenCalled();
+      expect(api.createPin).not.toHaveBeenCalled();
       expect(result).toBeNull();
     });
   });
@@ -164,11 +164,11 @@ describe('pinsStore', () => {
         ],
       });
 
-      vi.mocked(api.deletePinApi).mockResolvedValue({ deleted: true, id: 'pin_1' });
+      vi.mocked(api.deletePin).mockResolvedValue({ deleted: true, id: 'pin_1' });
 
       await usePinsStore.getState().removePin('pin_1');
 
-      expect(api.deletePinApi).toHaveBeenCalledWith('pin_1');
+      expect(api.deletePin).toHaveBeenCalledWith('pin_1');
       expect(usePinsStore.getState().pins).toHaveLength(0);
     });
 
@@ -184,7 +184,7 @@ describe('pinsStore', () => {
       };
 
       usePinsStore.setState({ pins: [pin] });
-      vi.mocked(api.deletePinApi).mockRejectedValue(new Error('Network error'));
+      vi.mocked(api.deletePin).mockRejectedValue(new Error('Network error'));
 
       await usePinsStore.getState().removePin('pin_1');
 
@@ -211,11 +211,11 @@ describe('pinsStore', () => {
       };
 
       usePinsStore.setState({ pins: [originalPin] });
-      vi.mocked(api.updatePinAssertionsApi).mockResolvedValue(updatedPin);
+      vi.mocked(api.updatePinAssertions).mockResolvedValue(updatedPin);
 
       const result = await usePinsStore.getState().updatePinAssertions('pin_1', ['ast_1', 'ast_2']);
 
-      expect(api.updatePinAssertionsApi).toHaveBeenCalledWith('pin_1', ['ast_1', 'ast_2']);
+      expect(api.updatePinAssertions).toHaveBeenCalledWith('pin_1', ['ast_1', 'ast_2']);
       expect(result).toEqual(updatedPin);
       expect(usePinsStore.getState().pins[0].selected_assertion_ids).toEqual(['ast_1', 'ast_2']);
     });

@@ -151,6 +151,34 @@
       }
     },
     {
+      "includes": ["apps/web/src/store/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": "@/commands/**",
+                    "message": "Stores must not import from the commands layer (doc §2 L3: store 不得调用 commands)."
+                  },
+                  {
+                    "group": "@/infrastructure/**",
+                    "message": "Stores must not import from the infrastructure layer (doc §2 L3: store 不得调用 infrastructure). Route through a query in @/queries/."
+                  },
+                  {
+                    "group": "@/lib/api/**",
+                    "message": "Stores must route lib/api reads/writes through @/queries/*. Shared API types should be re-exported from @/types/api."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
       "includes": [
         "apps/web/src/components/chat/useExtraction.ts",
         "apps/web/src/components/chat/useGoldEdit.ts"
