@@ -75,10 +75,6 @@ export function SourceHighlight({
               transition: 'all 0.15s',
               color: 'inherit',
             }}
-            onMouseEnter={() => {
-              useWorkspaceStore.getState().select('chat', { nodePath: nodeId, slotKey });
-            }}
-            onMouseLeave={() => useWorkspaceStore.getState().clearSelection()}
           >
             {text}
           </span>

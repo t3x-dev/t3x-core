@@ -208,8 +208,6 @@ function SourceMappedText({
             data-tree-path={m.treePath}
             data-slot-key={m.slotKey}
             style={spanStyle}
-            onMouseEnter={() => onHoverSlot(m.treePath, m.slotKey)}
-            onMouseLeave={onLeaveSlot}
             onClick={(e) => {
               e.stopPropagation();
               onClickSlot(m.treePath, m.slotKey);
@@ -472,10 +470,6 @@ export function ChatMessage({
           ? '3px solid rgb(99, 102, 241)'
           : undefined,
       }}
-      onMouseEnter={() =>
-        turnIndex != null && useWorkspaceStore.getState().select('chat', { turnIndex })
-      }
-      onMouseLeave={() => useWorkspaceStore.getState().clearSelection()}
     >
       <div className="mx-auto max-w-3xl px-4">
         <div className={cn(isUser ? 'flex justify-end' : '')}>
