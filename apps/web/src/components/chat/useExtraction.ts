@@ -1,125 +1,83 @@
-import { PRESETS } from '@t3x-dev/core';
+/**
+ * useExtraction — adapter hook for LLM extraction.
+ *
+ * Authorized component-zone file (see biome.json overrides) to import from
+ * @/commands/* and @/queries/*. All other components should consume this
+ * hook rather than reaching into commands directly.
+ */
+
 import { useCallback } from 'react';
 import { toast } from 'sonner';
-// listTopics, updateTopicApi removed — TODO(commit5): topics state TBD
-import { extractNodes } from '@/lib/api/trees';
+import { ExtractionFailedError } from '@/commands/yops/errors';
+import { runExtraction } from '@/commands/yops/extractionWorker';
+import { callExtractionLLM } from '@/commands/yops/llmAdapter';
+import { hydrateConversation } from '@/queries/loadConversation';
 import { useChatStore } from '@/store/chatStore';
-import { useCommitStore } from '@/store/commitStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 
 interface UseExtractionParams {
   resolvedConversationId: string | undefined;
 }
 
-/**
- * Encapsulates the extraction handler callback and its related store selectors.
- *
- * Returns:
- * - handleExtract: the user-initiated extraction callback
- * - isExtracting: whether extraction is in progress
- */
 export function useExtraction({ resolvedConversationId }: UseExtractionParams) {
   const isExtracting = useWorkspaceStore((s) => s.mode === 'streaming');
-  const draft = useWorkspaceStore((s) => s.tree);
-  // TODO(commit5): wire topics
-  const activeTopicId: string | null = null;
-  const setDriftDetected = useWorkspaceStore((s) => s.setDriftDetected);
+  const tree = useWorkspaceStore((s) => s.tree);
 
-  // User-initiated extraction callback
   const handleExtract = useCallback(
     async (sourcePinIds?: string[]) => {
-      // Use resolved ID, or fallback to store's active conversation
       const extractConvId =
         resolvedConversationId ?? useChatStore.getState().activeConversationId ?? undefined;
-      if (!extractConvId || isExtracting) return;
+      const projectId = useChatStore.getState().activeProjectId ?? undefined;
+      if (!extractConvId || !projectId || isExtracting) return;
 
-      useWorkspaceStore.getState().setMode('streaming');
-
-      // Store which pin IDs were used for this extraction (for commit source_refs)
-      useWorkspaceStore.setState({ lastExtractionPinIds: sourcePinIds ?? [] });
-
-      // Set streaming mode (shows overlay), expand panel
-      useWorkspaceStore.getState().setMode('streaming');
-      if (!useWorkspaceStore.getState().panelExpanded) {
-        useWorkspaceStore.getState().setPanelExpanded(true);
-      }
+      const store = useWorkspaceStore.getState();
+      store.setMode('streaming');
+      store.setError(null);
+      store.setLastExtractionPinIds(sourcePinIds ?? []);
+      if (!store.panelExpanded) store.setPanelExpanded(true);
 
       try {
-        const preset = useWorkspaceStore.getState().extractionPreset;
-        const style = PRESETS[preset];
-        // Force full extraction if no commit exists yet (not incremental)
-        const hasCommit = !!useCommitStore.getState().lastCommitHash;
-        const result = await extractNodes(extractConvId, undefined, undefined, {
-          ...(activeTopicId && { topicId: activeTopicId }),
-          ...(sourcePinIds?.length && { sourcePinIds }),
-          ...(!hasCommit && { forceExtract: true }),
-          style,
+        const turns = useWorkspaceStore.getState().turns;
+        await runExtraction({
+          conversationId: extractConvId,
+          turns,
+          llm: (input) =>
+            callExtractionLLM({
+              conversationId: extractConvId,
+              turns: input.turns,
+              failingOps: input.failingOps,
+            }),
         });
 
-        if (result.status === 'skipped') {
-          useWorkspaceStore.getState().setMode('idle');
-          toast.info(
-            result.reason || 'Not enough new content to extract. Continue the conversation first.'
-          );
-          return;
-        }
-
-        if (result.status === 'drift_detected') {
-          setDriftDetected(
-            result.drift ?? { new_topic: 'New topic' },
-            result.choices ?? ['keep_current', 'switch_topic']
-          );
-          useWorkspaceStore.getState().setMode('idle');
-          return;
-        }
-
-        // status === 'completed'
-        if (result.snapshot) {
-          // TODO(commit5): tree will be derived via replay
-        }
-
-        // delta is YOp[] (may include index/total metadata from API — strip before use)
-        const rawDelta = result.delta;
-        const deltaOps: unknown[] | undefined = Array.isArray(rawDelta)
-          ? rawDelta.map((op: unknown) => {
-              if (typeof op === 'object' && op !== null) {
-                const { index, total, ...cleanOp } = op as Record<string, unknown>;
-                return cleanOp;
-              }
-              return op;
-            })
-          : undefined;
-
-        if (deltaOps && deltaOps.length > 0) {
-          // TODO(commit5): replace with await runExtraction(...)
-          // Feed delta ops into workspace script editor
-          // useWorkspaceStore.getState().setScriptText(yamlText);
-          // useWorkspaceStore.setState({ persistedOpsCount: deltaOps.length });
-
-          // TODO(commit5): tree will be derived via replay
-          // (snapshot/savedMeta/setDraft logic removed — tree is no longer set here)
-
-          useWorkspaceStore.getState().setMode('idle');
-        } else {
-          // No delta ops
-          useWorkspaceStore.getState().setMode('idle');
-        }
-
-        // TODO(commit5): topics state TBD
-        // Reload topics after extraction (new topic may have been auto-created)
-        // listTopics(extractConvId).then((topicsList) => { ... }).catch(() => {});
-
-      } catch (_err) {
+        // Re-hydrate the conversation to pull newly-committed ops into the store.
+        await hydrateConversation(projectId, extractConvId);
         useWorkspaceStore.getState().setMode('idle');
+      } catch (err) {
+        useWorkspaceStore.getState().setMode('idle');
+        if (err instanceof ExtractionFailedError) {
+          const msg =
+            err.reason === 'unverifiable_quote'
+              ? `Extraction could not verify ${err.failingOps.length} slot(s) against the conversation. Please refine the prompt or edit manually.`
+              : err.reason === 'missing_source'
+                ? `Extraction returned ops without provenance. Please retry.`
+                : err.reason === 'llm_error'
+                  ? `LLM call failed: ${err.message}`
+                  : `Extraction failed after ${err.lastAttempt} attempts.`;
+          useWorkspaceStore.getState().setError(msg);
+          toast.error(msg);
+        } else {
+          const msg = err instanceof Error ? err.message : 'Extraction failed';
+          useWorkspaceStore.getState().setError(msg);
+          toast.error(msg);
+        }
       }
     },
-    [
-      resolvedConversationId,
-      isExtracting,
-      activeTopicId,
-      setDriftDetected,
-    ]
+    [resolvedConversationId, isExtracting]
   );
 
-  return { handleExtract, isExtracting, draft, activeTopicId };
+  // Back-compat return shape for existing callers:
+  //   handleExtract, isExtracting still required by ChatHeader
+  //   draft kept for any lingering references to .tree
+  //   activeTopicId: topics state is Commit 5 TBD, stubbed as null
+  return { handleExtract, isExtracting, draft: tree, activeTopicId: null };
 }
