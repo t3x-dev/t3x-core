@@ -405,26 +405,23 @@ function AfterNodeRecursive({ node, path, depth }: AfterNodeRecursiveProps) {
   const slotEntries = Object.entries(slots).filter(([k]) => !k.startsWith('_'));
   const select = useWorkspaceStore((s) => s.select);
   const clearSelection = useWorkspaceStore((s) => s.clearSelection);
-  const appendOp = useWorkspaceStore((s) => s.appendOp);
-  const execute = useWorkspaceStore((s) => s.execute);
+  const applyGoldEdit = useWorkspaceStore((s) => s.applyGoldEdit);
   const selectedPath = useWorkspaceStore((s) => s.selectedNodePath);
   const selectedSlot = useWorkspaceStore((s) => s.selectedSlotKey);
   const isNodeSelected = selectedPath === path && !selectedSlot;
 
   const handleEditSlot = useCallback(
     (slotKey: string, newValue: string) => {
-      appendOp({ set: { path: `${path}/${slotKey}`, value: newValue } });
-      execute();
+      applyGoldEdit({ set: { path: `${path}/${slotKey}`, value: newValue } });
     },
-    [path, appendOp, execute]
+    [path, applyGoldEdit]
   );
 
   const handleDeleteSlot = useCallback(
     (slotKey: string) => {
-      appendOp({ unset: { path: `${path}/${slotKey}` } });
-      execute();
+      applyGoldEdit({ unset: { path: `${path}/${slotKey}` } });
     },
-    [path, appendOp, execute]
+    [path, applyGoldEdit]
   );
 
   return (
@@ -480,6 +477,7 @@ export function AfterPanel({
   const toggleOp = useWorkspaceStore((s) => s.toggleOp);
   const appendOp = useWorkspaceStore((s) => s.appendOp);
   const execute = useWorkspaceStore((s) => s.execute);
+  const applyGoldEdit = useWorkspaceStore((s) => s.applyGoldEdit);
 
   const isCommitting = useCommitStore((s) => s.isCommitting);
 
@@ -516,24 +514,20 @@ export function AfterPanel({
     // Changes are already in the result; accept is a visual confirmation only.
   }, []);
 
-  // ── Edit slot inline: generate a set YOp ──
+  // ── Edit slot inline: gold layer edit (doesn't modify script) ──
   const handleEditSlot = useCallback(
     (nodeKey: string, slotKey: string, newValue: string) => {
-      const op: YOp = { set: { path: `${nodeKey}/${slotKey}`, value: newValue } };
-      appendOp(op);
-      execute();
+      applyGoldEdit({ set: { path: `${nodeKey}/${slotKey}`, value: newValue } });
     },
-    [appendOp, execute]
+    [applyGoldEdit]
   );
 
-  // ── Delete slot inline: generate an unset YOp ──
+  // ── Delete slot inline: gold layer edit (doesn't modify script) ──
   const handleDeleteSlot = useCallback(
     (nodeKey: string, slotKey: string) => {
-      const op: YOp = { unset: { path: `${nodeKey}/${slotKey}` } };
-      appendOp(op);
-      execute();
+      applyGoldEdit({ unset: { path: `${nodeKey}/${slotKey}` } });
     },
-    [appendOp, execute]
+    [applyGoldEdit]
   );
 
   const getDefaultCommitName = useCallback(() => {

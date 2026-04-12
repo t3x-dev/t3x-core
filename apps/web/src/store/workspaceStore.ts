@@ -62,6 +62,8 @@ interface WorkspaceState {
   setMode(mode: WorkspaceMode): void;
   setPanelExpanded(expanded: boolean): void;
   setExtractionPreset(preset: 'concise' | 'balanced' | 'detailed'): void;
+  /** Gold layer: apply a YOp directly to the result without modifying the script */
+  applyGoldEdit(op: YOp): void;
   setDriftDetected(info: DriftInfo, choices: string[]): void;
   clearDrift(): void;
   reset(): void;
@@ -192,6 +194,32 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
             });
           }
         }
+      }
+    });
+  },
+
+  applyGoldEdit(op) {
+    const { result } = get();
+    if (!result) return;
+
+    // Apply the single op to the current result
+    const applied = applyYOps(result, [op]);
+    if (!applied.ok) return;
+
+    const newContent = { trees: applied.trees, relations: applied.relations };
+    set({ result: newContent });
+
+    // Persist to server as a gold layer edit (separate from script)
+    import('./draftStore').then(({ useDraftStore }) => {
+      const convId = useDraftStore.getState().conversationId;
+      if (convId) {
+        import('@/lib/api/trees').then(({ createYOpsEntry }) => {
+          import('@/lib/session').then(({ getSessionUser }) => {
+            const user = getSessionUser();
+            const author = user?.name || user?.username || undefined;
+            createYOpsEntry(convId, [op], 'manual', { author, layer: 'gold' })?.catch(() => {});
+          });
+        });
       }
     });
   },
