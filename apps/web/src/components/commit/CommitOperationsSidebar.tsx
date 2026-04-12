@@ -28,12 +28,11 @@ import {
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useState } from 'react';
-import type { Assertion, Constraint, Leaf } from '@/lib/api';
-import { createLeaf } from '@/lib/api';
-import type { LeafType } from '@/lib/api/leaves';
+import { useCreateLeaf } from '@/hooks/useCreateLeaf';
 import { shortHash } from '@/lib/formatters';
 import { useCommitDetailStore } from '@/store/commitDetailStore';
 import { useProjectStore } from '@/store/projectStore';
+import type { Assertion, Constraint, Leaf, LeafType } from '@/types/api';
 
 // ============================================================================
 // Types
@@ -211,6 +210,7 @@ export function CommitOperationsSidebar({
   const router = useRouter();
   const commit = useCommitDetailStore((s) => s.commit);
   const notifyCallback = useProjectStore((s) => s.notifyCallback);
+  const { create: createLeaf } = useCreateLeaf();
 
   // Leaf creation state
   const [leafMenuOpen, setLeafMenuOpen] = useState(false);

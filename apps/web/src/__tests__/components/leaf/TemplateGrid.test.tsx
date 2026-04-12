@@ -4,15 +4,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { LeafTemplate } from '@/components/leaf/TemplateGrid';
 import { TemplateGrid } from '@/components/leaf/TemplateGrid';
 
-// Mock the API module — default: reject so fallback templates are used
-vi.mock('@/lib/api', () => ({
-  listTemplates: vi.fn(() => Promise.reject(new Error('API unavailable'))),
+// Mock the templates query — default: reject so fallback templates are used.
+// TemplateGrid imports from @/queries/templates (doc §2 L4 routes reads
+// through a query, not @/lib/api directly).
+vi.mock('@/queries/templates', () => ({
+  fetchTemplates: vi.fn(() => Promise.reject(new Error('API unavailable'))),
 }));
 
 // Import the mock so we can override per-test
-import { listTemplates } from '@/lib/api';
+import { fetchTemplates } from '@/queries/templates';
 
-const mockListTemplates = vi.mocked(listTemplates);
+const mockListTemplates = vi.mocked(fetchTemplates);
 
 beforeEach(() => {
   // Default: API unavailable, component falls back to hardcoded defaults

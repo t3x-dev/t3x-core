@@ -8,11 +8,10 @@
  * from the active node card to the right context panel.
  */
 
-import type { ApiCommit } from '@/lib/api';
 import { ChevronDown, GitCommit, Leaf as LeafIcon, MessageSquare } from 'lucide-react';
 import Link from 'next/link';
 import { type MutableRefObject, type RefObject, useEffect, useState } from 'react';
-import type { Leaf } from '@/lib/api';
+import type { ApiCommit, Leaf } from '@/types/api';
 import { relativeTime, shortHash } from './CommitDetailHelpers';
 
 // ============================================================================

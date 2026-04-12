@@ -5,9 +5,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CompareModelsDialog } from '@/components/leaf/CompareModelsDialog';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import type { ProviderInfo } from '@/lib/api';
-import { listProviders } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { fetchProviders } from '@/queries/providers';
+import type { ProviderInfo } from '@/types/api';
 
 interface LeafComposerDockProps {
   leafId: string;
@@ -74,7 +74,7 @@ export function LeafComposerDock({
   // Load providers
   useEffect(() => {
     let cancelled = false;
-    listProviders()
+    fetchProviders()
       .then((data) => {
         if (!cancelled) setProviders(data);
       })

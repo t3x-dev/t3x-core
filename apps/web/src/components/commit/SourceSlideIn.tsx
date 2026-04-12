@@ -14,7 +14,7 @@ import { ChevronRight, ExternalLink, MessageSquare, X } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { TurnBubble } from '@/components/source-context/TurnBubble';
-import { listTurns } from '@/lib/api/turns';
+import { fetchTurns } from '@/queries/turns';
 import { useCommitDetailStore } from '@/store/commitDetailStore';
 import type { TurnBubbleData } from '@/types/sourceContext';
 
@@ -187,12 +187,12 @@ export function SourceSlideIn({ projectId }: SourceSlideInProps) {
   const showTabs = diffStatus === 'modified' && !!previousNode;
 
   // ── Fetch turns when panel opens ──
-  const fetchTurns = useCallback(
+  const loadTurns = useCallback(
     async (convId: string) => {
       setLoading(true);
       setError(null);
       try {
-        const data = await listTurns(projectId, convId, 200, 0);
+        const data = await fetchTurns(projectId, convId, { limit: 200, offset: 0 });
         setTurns(
           data.turns.map((t) => ({
             turn_hash: t.turn_hash,
@@ -220,7 +220,7 @@ export function SourceSlideIn({ projectId }: SourceSlideInProps) {
     // Look for conversation source
     const convSource = commit.sources?.find((s) => s.type === 'conversation');
     if (convSource) {
-      fetchTurns(convSource.id);
+      loadTurns(convSource.id);
       return;
     }
 
@@ -229,7 +229,7 @@ export function SourceSlideIn({ projectId }: SourceSlideInProps) {
     setConversationId(null);
     setError(null);
     setLoading(false);
-  }, [isOpen, commit, fetchTurns]);
+  }, [isOpen, commit, loadTurns]);
 
   // ── Auto-scroll to source turn when turns load or tab changes ──
   useEffect(() => {
