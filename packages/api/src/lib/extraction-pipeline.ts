@@ -31,6 +31,7 @@ import {
   preFilterDrift,
   runTransforms,
   type SemanticContent,
+  validateMetadata,
 } from '@t3x-dev/core';
 import {
   type AnyDB,
@@ -578,57 +579,72 @@ export async function* runExtractionPipeline(
       };
       for (const tree of organizedSnapshot.trees) applyMeta(tree, '');
 
-      // If slot_quotes are still missing (LLM didn't output metadata block),
-      // generate them deterministically by matching slot values against turns.
-      const turnsText = selectedTurns.map((t, i) => ({
-        index: i + 1,
-        content: t.content.toLowerCase(),
-        role: t.role,
-      }));
+      // ── Deterministic metadata guardrail ──
+      // Contract: every slot must have a verifiable quote, every node must have a source.
+      // Validate LLM output; if it doesn't meet the contract, fill gaps by text matching.
+      // This is the Data Layer guarantee — never trust the LLM to honor metadata format.
+      const repairMetadata = (
+        trees: import('@t3x-dev/core').TreeNode[],
+        turns: Array<{ content: string }>
+      ) => {
+        const turnsLower = turns.map((t) => t.content.toLowerCase());
 
-      const generateQuotes = (node: import('@t3x-dev/core').TreeNode, prefix: string) => {
-        const nodePath = prefix ? `${prefix}/${node.key}` : node.key;
-        if (!node.slot_quotes) node.slot_quotes = {};
-        if (!node.source) {
-          // Find which turn contains the most slot values
-          let bestTurn = 1;
-          let bestMatches = 0;
-          for (const turn of turnsText) {
-            let matches = 0;
-            for (const val of Object.values(node.slots)) {
-              if (typeof val === 'string' && turn.content.includes(val.toLowerCase())) matches++;
+        const walk = (node: import('@t3x-dev/core').TreeNode) => {
+          if (!node.slot_quotes) node.slot_quotes = {};
+
+          // Assign source by finding the turn that contains the most slot values
+          if (!node.source) {
+            let bestTurn = 0;
+            let bestMatches = 0;
+            for (let i = 0; i < turnsLower.length; i++) {
+              let matches = 0;
+              for (const val of Object.values(node.slots)) {
+                if (typeof val === 'string' && turnsLower[i].includes(val.toLowerCase())) {
+                  matches++;
+                }
+              }
+              if (matches > bestMatches) {
+                bestMatches = matches;
+                bestTurn = i;
+              }
             }
-            if (matches > bestMatches) { bestMatches = matches; bestTurn = turn.index; }
+            if (bestMatches > 0) node.source = `T${bestTurn + 1}`;
           }
-          if (bestMatches > 0) node.source = `T${bestTurn}`;
-        }
-        // Generate slot_quotes by finding slot values in turns
-        for (const [key, val] of Object.entries(node.slots)) {
-          if (node.slot_quotes[key]) continue; // already has a quote
-          if (typeof val !== 'string') continue;
-          const valLower = val.toLowerCase();
-          for (const turn of turnsText) {
-            const idx = turn.content.indexOf(valLower);
-            if (idx !== -1) {
-              // Extract the original-case quote from the turn
-              const originalTurn = selectedTurns[turn.index - 1].content;
-              node.slot_quotes[key] = originalTurn.slice(idx, idx + val.length);
-              break;
+
+          // Fill missing or unverified quotes by searching slot values in turns
+          for (const [key, val] of Object.entries(node.slots)) {
+            if (typeof val !== 'string') continue;
+            const existing = node.slot_quotes[key];
+            const valLower = val.toLowerCase();
+
+            // Check if existing quote is verifiable
+            const existingOk = existing && turnsLower.some((t) => t.includes(existing.toLowerCase()));
+            if (existingOk) continue;
+
+            // Find the value verbatim in a turn
+            for (let i = 0; i < turnsLower.length; i++) {
+              const idx = turnsLower[i].indexOf(valLower);
+              if (idx !== -1) {
+                node.slot_quotes[key] = turns[i].content.slice(idx, idx + val.length);
+                break;
+              }
             }
           }
-        }
-        for (const child of node.children ?? []) generateQuotes(child, nodePath);
+
+          for (const child of node.children ?? []) walk(child);
+        };
+
+        for (const tree of trees) walk(tree);
       };
 
-      // Only run if snapshot is missing quotes
-      const hasAnyQuotes = organizedSnapshot.trees.some((t: import('@t3x-dev/core').TreeNode) => {
-        const check = (n: import('@t3x-dev/core').TreeNode): boolean =>
-          (n.slot_quotes && Object.keys(n.slot_quotes).length > 0) ||
-          (n.children ?? []).some(check);
-        return check(t);
-      });
-      if (!hasAnyQuotes) {
-        for (const tree of organizedSnapshot.trees) generateQuotes(tree, '');
+      const turnsForValidation = selectedTurns.map((t) => ({ content: t.content }));
+      const validation = validateMetadata(organizedSnapshot.trees, turnsForValidation);
+      if (!validation.ok) {
+        pinoLogger.info(
+          { missing_quotes: validation.missingQuotes.length, missing_sources: validation.missingSources.length, unverified: validation.unverifiedQuotes.length },
+          'extraction: repairing metadata deterministically'
+        );
+        repairMetadata(organizedSnapshot.trees, turnsForValidation);
       }
 
       changesSummary = {
