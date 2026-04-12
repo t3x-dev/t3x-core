@@ -29,3 +29,8 @@ export { getYOpsJsonSchema } from './jsonSchema';
 // ── Replay ──
 export { replayYOps, verifyReplay, extractOpsFromEntries } from './replay';
 export type { ReplayInput, ReplayResult, VerifyResult } from './replay';
+
+// ── Source provenance ──
+export type { Source, LLMSource, HumanSource, TurnRef } from './source';
+export { isLLMSource, isHumanSource } from './source';
+export type { SourcedYOp } from './types';
