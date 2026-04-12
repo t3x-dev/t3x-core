@@ -25,15 +25,6 @@ vi.mock('@/lib/api', () => ({
   listBranches: vi.fn(),
   getProject: vi.fn(),
   getTurn: vi.fn(),
-  prepareMergeApi: vi.fn().mockResolvedValue({
-    autoKept: [],
-    conflicts: [],
-    onlyInSource: [],
-    onlyInTarget: [],
-    relationsOnlyInSource: [],
-    relationsOnlyInTarget: [],
-    relationsInBoth: [],
-  }),
   createMergeDraft: vi.fn().mockResolvedValue({ draftId: 'draft_mock123' }),
   createLeaf: vi.fn().mockResolvedValue({
     id: 'leaf_mock123',
@@ -46,6 +37,21 @@ vi.mock('@/lib/api', () => ({
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   }),
+}));
+
+// Merge ops now route through @/queries/mergeApi (canvasMergeSlice was rewired
+// off @/lib/api in the merge-domain alignment PR).
+vi.mock('@/queries/mergeApi', () => ({
+  prepareMergeApi: vi.fn().mockResolvedValue({
+    autoKept: [],
+    conflicts: [],
+    onlyInSource: [],
+    onlyInTarget: [],
+    relationsOnlyInSource: [],
+    relationsOnlyInTarget: [],
+    relationsInBoth: [],
+  }),
+  executeMergeApi: vi.fn(),
 }));
 
 // Helper to create a mock staging unit node
