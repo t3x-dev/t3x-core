@@ -131,6 +131,10 @@ export const ErrorCodes = {
   DEPRECATED: 'DEPRECATED',
   CHECK_FAILED: 'CHECK_FAILED',
   COMMIT_FAILED: 'COMMIT_FAILED',
+
+  // Source provenance errors
+  MISSING_SOURCE: 'MISSING_SOURCE',
+  MISSING_AUTHOR: 'MISSING_AUTHOR',
 } as const;
 
 export type ErrorCode = keyof typeof ErrorCodes;
@@ -251,6 +255,10 @@ export const ErrorStatusCodes: Record<ErrorCode, number> = {
   DEPRECATED: 400,
   CHECK_FAILED: 500,
   COMMIT_FAILED: 500,
+
+  // Source provenance errors
+  MISSING_SOURCE: 400,
+  MISSING_AUTHOR: 400,
 };
 
 /**

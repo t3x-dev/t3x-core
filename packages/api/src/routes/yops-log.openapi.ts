@@ -52,10 +52,38 @@ const YOpsIdParam = z.object({
 
 const YOpsSourceSchema = z.enum(['pipeline', 'manual', 'answer', 'collapse', 'compress']);
 
+// Per-op source contract: every SourcedYOp carries provenance (LLM or human).
+// Matches the T3X dialect exported from @t3x-dev/core as `SourcedYOp`.
+const LLMSourceSchema = z.object({
+  type: z.literal('llm'),
+  model: z.string().min(1),
+  at: z.string().min(1),
+  turn_ref: z.object({
+    turn_hash: z.string().min(1),
+    quote: z.string(),
+    start_char: z.number().int().optional(),
+    end_char: z.number().int().optional(),
+  }),
+});
+
+const HumanSourceSchema = z.object({
+  type: z.literal('human'),
+  author: z.string().min(1),
+  at: z.string().min(1),
+});
+
+const SourceSchema = z.discriminatedUnion('type', [LLMSourceSchema, HumanSourceSchema]);
+
+// YOpSchema union members use `.strict()`, which rejects unknown keys at parse
+// time — so intersection (.and) would cause the `source` field to be rejected
+// by each variant. Instead, validate the mandatory `source` field with passthrough
+// and let the downstream YOps engine (+ defense-in-depth loop below) enforce op shape.
+const SourcedYOpSchema = z.object({ source: SourceSchema }).passthrough();
+
 const CreateYOpsRequest = z.object({
   source: YOpsSourceSchema,
   turn_hash: z.string().optional(),
-  yops: z.array(YOpSchema),
+  yops: z.array(SourcedYOpSchema),
 });
 
 const YOpsLogEntryResponse = z.object({
@@ -236,6 +264,18 @@ const deleteYOpsRoute = createRoute({
 yopsLogRoutes.openapi(createYOpsRoute, async (c) => {
   const { conversationId } = c.req.valid('param');
   const body = c.req.valid('json');
+
+  // Defense in depth: zod already validated, but re-check structure so
+  // corrupt shapes produce a clearer error code than zod's generic validation.
+  for (let i = 0; i < body.yops.length; i++) {
+    const op = body.yops[i] as { source?: { type?: string; author?: string } };
+    if (!op.source || (op.source.type !== 'llm' && op.source.type !== 'human')) {
+      return errorResponse(c, 'MISSING_SOURCE', `op[${i}] missing valid source`);
+    }
+    if (op.source.type === 'human' && !op.source.author) {
+      return errorResponse(c, 'MISSING_AUTHOR', `op[${i}] human source missing author`);
+    }
+  }
 
   try {
     const db = await getDB();
