@@ -10,6 +10,7 @@ import {
 } from '@/components/canvas/NodeContextMenu';
 import { useCanvasStore } from '@/store/canvasStore';
 import type { CanvasNodeData, NodeKind } from '@/types/nodes';
+import { useCanvasCommitActions } from './useCanvasCommitActions';
 import { useCanvasLeafActions } from './useCanvasLeafActions';
 
 /**
@@ -48,6 +49,7 @@ export function useContextMenu({
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [, startTransition] = useTransition();
   const { remove: removeLeafFromNode } = useCanvasLeafActions();
+  const { startMerge } = useCanvasCommitActions();
 
   const closeContextMenu = useCallback(() => setContextMenu(null), []);
 
@@ -93,7 +95,7 @@ export function useContextMenu({
           canMerge && projectId && onNavigate
             ? () => {
                 startTransition(async () => {
-                  const draftId = await useCanvasStore.getState().createMergePendingCommit(node.id);
+                  const draftId = await startMerge(node.id);
                   if (draftId && onNavigate) {
                     onNavigate(`/project/${projectId}/merge/${draftId}`);
                   }
@@ -129,7 +131,7 @@ export function useContextMenu({
       });
       setContextMenu({ x: event.clientX, y: event.clientY, groups });
     },
-    [addNode, isDeveloperMode, notify, projectId, onNavigate]
+    [addNode, isDeveloperMode, notify, projectId, onNavigate, startMerge]
   );
 
   // Pane context menu — inline addNode to avoid forward-declaration of handleAddNode

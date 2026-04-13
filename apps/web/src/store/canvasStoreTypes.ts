@@ -66,14 +66,12 @@ export interface NodeSlice {
   updateNodeId: (oldId: string, newId: string) => void;
 }
 
-// Commit operations slice interface
+// Commit operations slice interface (passive — async I/O lives in useCanvasCommitActions)
 export interface CommitSlice {
   commitPendingCommit: (id: string) => void;
-  addPendingCommitFromConversation: (conversationId: string) => Promise<void>;
-  addConversationFromCommit: (commitId: string) => Promise<void>;
   addPendingCommitFromCommit: (commitId: string) => void;
   addUnitFromUnit: (unitId: string) => void;
-  createMergePendingCommit: (commitId: string) => Promise<string | null>;
+  appendNodeAndEdge: (node: Node<CanvasNodeData>, edge: Edge) => void;
   getPendingCommitBranchMode: (commitId: string) => DraftBranchMode;
   canCreatePendingCommitFromConversation: (conversationId: string) => boolean;
 }
