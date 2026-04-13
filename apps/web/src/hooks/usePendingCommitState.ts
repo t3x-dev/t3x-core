@@ -3,7 +3,7 @@
 import type { Edge, Node } from '@xyflow/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import * as api from '@/lib/api';
+import * as api from '@/infrastructure';
 import { useCanvasStore } from '@/store/canvasStore';
 import type { CanvasNodeData } from '@/types/nodes';
 

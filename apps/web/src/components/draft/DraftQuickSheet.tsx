@@ -24,8 +24,8 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { useTerminology } from '@/hooks/useTerminology';
-import type { DraftNode, WorkbenchDraft } from '@/lib/api';
-import * as api from '@/lib/api';
+import type { DraftNode, WorkbenchDraft } from '@/infrastructure';
+import * as api from '@/infrastructure';
 import { useCanvasStore } from '@/store/canvasStore';
 
 interface DraftQuickSheetProps {

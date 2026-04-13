@@ -5,4 +5,4 @@
  * `hooks/useLearnFromEdits` for the pattern) over reaching for the class.
  */
 
-export { ApiError } from '@/lib/api/core';
+export { ApiError } from '@/infrastructure/core';

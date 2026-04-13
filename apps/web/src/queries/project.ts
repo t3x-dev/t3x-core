@@ -3,8 +3,8 @@
  * projects adapter.
  */
 
-import { getProject } from '@/lib/api/projects';
-import type { ProjectDetail } from '@/lib/api/types';
+import { getProject } from '@/infrastructure/projects';
+import type { ProjectDetail } from '@/infrastructure/types';
 
 export function fetchProject(projectId: string): Promise<ProjectDetail> {
   return getProject(projectId);

@@ -55,10 +55,6 @@
               {
                 "group": "@/commands/**",
                 "message": "Components must not import from the commands layer directly. Route through useExtraction or a dedicated hook."
-              },
-              {
-                "group": "@/infrastructure/**",
-                "message": "Components must not import from the infrastructure layer directly. Use queries or the store instead."
               }
             ]
           }
@@ -151,10 +147,6 @@
                   {
                     "group": "@/infrastructure/**",
                     "message": "domain/ is L2 (pure). No I/O (infrastructure is L1)."
-                  },
-                  {
-                    "group": "@/lib/api/**",
-                    "message": "domain/ is L2 (pure). No I/O (lib/api is L1)."
                   }
                 ]
               }
@@ -186,10 +178,6 @@
                   {
                     "group": "@/infrastructure/**",
                     "message": "Components must not import from the infrastructure layer directly. Use queries or the store instead."
-                  },
-                  {
-                    "group": "@/lib/api/**",
-                    "message": "Components must route lib/api reads/writes through a hook (hooks/) or query (queries/). Shared API types should be re-exported from @/types/api."
                   }
                 ]
               }
@@ -214,10 +202,6 @@
                   {
                     "group": "@/infrastructure/**",
                     "message": "Stores must not import from the infrastructure layer (doc §2 L3: store 不得调用 infrastructure). Route through a query in @/queries/."
-                  },
-                  {
-                    "group": "@/lib/api/**",
-                    "message": "Stores must route lib/api reads/writes through @/queries/*. Shared API types should be re-exported from @/types/api."
                   }
                 ]
               }

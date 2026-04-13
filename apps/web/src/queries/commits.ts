@@ -16,8 +16,8 @@ import {
   listCommits,
   updateCommitMessage,
   updateCommitPosition,
-} from '@/lib/api/commits';
-import { parseApiCommitAnchors } from '@/lib/api/leaves';
+} from '@/infrastructure/commits';
+import { parseApiCommitAnchors } from '@/infrastructure/leaves';
 import type { ApiCommit } from '@/types/api';
 
 export function fetchCommits(

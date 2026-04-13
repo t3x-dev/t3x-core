@@ -2,7 +2,7 @@
  * L3 — imperative "load conversation context (pin-selected view)" helper.
  */
 
-import { type ConversationContext, getConversationContext } from '@/lib/api/pins';
+import { type ConversationContext, getConversationContext } from '@/infrastructure/pins';
 
 export function fetchConversationContext(
   conversationId: string

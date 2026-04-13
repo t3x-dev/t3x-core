@@ -5,7 +5,7 @@ import { useCallback, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import * as api from '@/lib/api';
+import * as api from '@/infrastructure';
 import { cn } from '@/lib/utils';
 import { FileDropZone } from './FileDropZone';
 import { ImportProgress } from './ImportProgress';

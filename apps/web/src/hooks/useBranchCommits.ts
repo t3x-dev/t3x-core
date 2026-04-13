@@ -3,8 +3,8 @@
  * Used by PinDropdownSelector to display branch-scoped commit browsing.
  */
 
-import type { ApiCommit, Leaf } from '@/lib/api';
-import * as api from '@/lib/api';
+import type { ApiCommit, Leaf } from '@/infrastructure';
+import * as api from '@/infrastructure';
 import { useQuery } from './useQuery';
 
 export interface CommitWithLeaves {

@@ -5,7 +5,7 @@
  * Semantic constraints are deferred to preview generation.
  */
 
-import type { DraftConstraint, DraftNode } from '@/lib/api';
+import type { DraftConstraint, DraftNode } from '@/infrastructure';
 
 export interface ValidationResult {
   constraint_id: string;

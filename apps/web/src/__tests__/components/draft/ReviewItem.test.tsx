@@ -1,7 +1,7 @@
 import { describe, expect, test, vi } from 'vitest';
 import { ReviewItem } from '@/components/draft/ReviewItem';
 import { ReviewZone } from '@/components/draft/ReviewZone';
-import type { SemanticPointAPI } from '@/lib/api';
+import type { SemanticPointAPI } from '@/infrastructure';
 
 function makePoint(overrides: Partial<SemanticPointAPI> = {}): SemanticPointAPI {
   return {

@@ -4,7 +4,7 @@
  */
 
 import { useCallback } from 'react';
-import { type ReverseLearnResult, reverseLearnConstraints } from '@/lib/api/leaves';
+import { type ReverseLearnResult, reverseLearnConstraints } from '@/infrastructure/leaves';
 
 export function useReverseLearn(): {
   run: (leafId: string, maxSuggestions?: number) => Promise<ReverseLearnResult>;

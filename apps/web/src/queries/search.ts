@@ -6,8 +6,8 @@
  * does not reach into L1 directly (see docs/frontend-architecture-zh.md §2).
  */
 
-import { searchNodes as searchNodesApi } from '@/lib/api/search';
-import type { SearchHit, SearchMode, SearchNodesInput, SearchResult } from '@/lib/api/search';
+import { searchNodes as searchNodesApi } from '@/infrastructure/search';
+import type { SearchHit, SearchMode, SearchNodesInput, SearchResult } from '@/infrastructure/search';
 
 export type { SearchHit, SearchMode, SearchNodesInput, SearchResult };
 

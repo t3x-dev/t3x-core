@@ -5,8 +5,8 @@
  */
 
 import { beforeEach, describe, expect, test, vi } from 'vitest';
-import type { Assertion, Constraint, Leaf } from '@/lib/api';
-import * as api from '@/lib/api';
+import type { Assertion, Constraint, Leaf } from '@/infrastructure';
+import * as api from '@/infrastructure';
 
 // Mock next/navigation
 vi.mock('next/navigation', () => ({
@@ -20,7 +20,7 @@ vi.mock('next/navigation', () => ({
 }));
 
 // Mock API functions
-vi.mock('@/lib/api', () => ({
+vi.mock('@/infrastructure', () => ({
   getLeaf: vi.fn(),
   updateLeaf: vi.fn(),
 }));

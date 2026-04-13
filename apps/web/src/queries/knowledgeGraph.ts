@@ -12,7 +12,7 @@ import {
   getNodeNeighbors,
   listKnowledgeNodes,
   searchKnowledgeNodes,
-} from '@/lib/api/knowledge-graph';
+} from '@/infrastructure/knowledge-graph';
 
 export function fetchKnowledgeNodes(projectId: string, limit = 50): Promise<KnowledgeNode[]> {
   return listKnowledgeNodes(projectId, limit);

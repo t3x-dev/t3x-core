@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { VerificationBadge } from '@/components/shared/VerificationBadge';
-import type { BackfillResult, QuickVerifyResult, VerifyResult } from '@/lib/api';
+import type { BackfillResult, QuickVerifyResult, VerifyResult } from '@/infrastructure';
 
 describe('VerificationBadge', () => {
   test('component exports successfully', () => {

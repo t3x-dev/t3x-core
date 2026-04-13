@@ -7,8 +7,8 @@
  * - Export as JSON (excludes position data)
  */
 
-import type { ApiCommit } from './api';
-import { treeSummaryText, getSemanticContent } from './api/commits';
+import type { ApiCommit } from '@/infrastructure';
+import { treeSummaryText, getSemanticContent } from '@/infrastructure/commits';
 import { copyToClipboard, downloadAsFile, type ExportResult } from './export';
 
 // ============================================================================

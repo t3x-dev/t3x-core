@@ -11,9 +11,9 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useCountUp } from '@/hooks/useCountUp';
 import { useTerminology } from '@/hooks/useTerminology';
-import type { ApiCommit, Project } from '@/lib/api';
-import { listCommits, listProjects } from '@/lib/api';
-import { treeSummaryText, getSemanticContent } from '@/lib/api/commits';
+import type { ApiCommit, Project } from '@/infrastructure';
+import { listCommits, listProjects } from '@/infrastructure';
+import { treeSummaryText, getSemanticContent } from '@/infrastructure/commits';
 import { cn } from '@/lib/utils';
 import type { SemanticEntry } from '@/types/semantic';
 

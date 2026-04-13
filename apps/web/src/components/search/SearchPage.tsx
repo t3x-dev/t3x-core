@@ -11,8 +11,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import type { Project } from '@/lib/api';
-import { listProjects } from '@/lib/api';
+import type { Project } from '@/infrastructure';
+import { listProjects } from '@/infrastructure';
 import type { SearchMode } from '@/queries/search';
 import { cn } from '@/lib/utils';
 import { useSearchStore } from '@/store/searchStore';

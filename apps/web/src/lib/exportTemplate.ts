@@ -7,7 +7,7 @@
  * - Export as JSON
  */
 
-import type { Template } from './api';
+import type { Template } from '@/infrastructure';
 import { copyToClipboard, downloadAsFile, type ExportResult } from './export';
 
 // ============================================================================

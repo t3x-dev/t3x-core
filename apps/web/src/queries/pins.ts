@@ -13,7 +13,7 @@ import {
   deletePinApi,
   listPins,
   updatePinAssertionsApi,
-} from '@/lib/api/pins';
+} from '@/infrastructure/pins';
 
 export function fetchPins(projectId: string, type?: PinType): Promise<Pin[]> {
   return listPins(projectId, type);

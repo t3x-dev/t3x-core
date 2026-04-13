@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { appendYOps, loadYOpsLog, PersistenceError, deriveRowSource } from '../yopsLog';
-import * as client from '@/lib/api/trees';
-import { ApiError } from '@/lib/api/core';
+import * as client from '@/infrastructure/trees';
+import { ApiError } from '@/infrastructure/core';
 import type { SourcedYOp } from '@t3x-dev/core';
 
 beforeEach(() => { vi.restoreAllMocks(); });

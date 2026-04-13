@@ -7,8 +7,8 @@
  */
 
 import { useCallback, useState } from 'react';
-import { deleteConversation, listConversations } from '@/lib/api/conversations';
-import type { Conversation } from '@/lib/api/types';
+import { deleteConversation, listConversations } from '@/infrastructure/conversations';
+import type { Conversation } from '@/infrastructure/types';
 
 export interface UseProjectConversationsResult {
   conversationsByProject: Record<string, Conversation[]>;

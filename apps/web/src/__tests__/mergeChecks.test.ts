@@ -31,7 +31,7 @@ vi.mock('@/store/canvasStore', () => ({
 }));
 
 // Mock API module
-vi.mock('@/lib/api', () => ({
+vi.mock('@/infrastructure', () => ({
   fetchTurnContext: vi.fn(),
 }));
 

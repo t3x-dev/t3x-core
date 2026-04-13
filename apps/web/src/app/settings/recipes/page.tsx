@@ -22,8 +22,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Switch } from '@/components/ui/switch';
-import type { CreateRecipeInput, Recipe, UpdateRecipeInput } from '@/lib/api';
-import { createRecipe, deleteRecipe, listRecipes, updateRecipe } from '@/lib/api';
+import type { CreateRecipeInput, Recipe, UpdateRecipeInput } from '@/infrastructure';
+import { createRecipe, deleteRecipe, listRecipes, updateRecipe } from '@/infrastructure';
 import { useProjectStore } from '@/store/projectStore';
 
 export default function RecipesPage() {

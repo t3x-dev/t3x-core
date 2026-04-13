@@ -383,7 +383,7 @@ export function CommittedCommitView({
                     {/* Pinned Sources */}
                     {commit.sources && commit.sources.length > 0 && (
                       <PinnedSourcesSection
-                        sourceRefs={commit.sources as import('@/lib/api').CommitSourceRef[]}
+                        sourceRefs={commit.sources as import('@/infrastructure').CommitSourceRef[]}
                         projectId={commitProjectId}
                       />
                     )}

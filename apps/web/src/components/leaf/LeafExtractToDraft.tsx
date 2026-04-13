@@ -56,7 +56,7 @@ export function LeafExtractToDraft({ leafId, projectId, outputText }: LeafExtrac
     if (!selectedDraftId || !extractedText.trim()) return;
     setSubmitting(true);
     try {
-      const { updateWorkbenchDraft, getWorkbenchDraft } = await import('@/lib/api');
+      const { updateWorkbenchDraft, getWorkbenchDraft } = await import('@/infrastructure');
       const draft = await getWorkbenchDraft(selectedDraftId);
       const newNode = {
         id: `s_leaf_${leafId}_${Date.now()}`,

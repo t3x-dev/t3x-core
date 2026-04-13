@@ -13,8 +13,8 @@ import type {
   ProjectDetail,
   Turn,
   TurnDetail,
-} from '@/lib/api';
-import * as api from '@/lib/api';
+} from '@/infrastructure';
+import * as api from '@/infrastructure';
 
 // ============================================================================
 // Generic fetch hook with proper dependency handling

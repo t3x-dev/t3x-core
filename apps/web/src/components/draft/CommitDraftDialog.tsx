@@ -84,7 +84,7 @@ export function CommitDraftDialog({
     if (!onIterate) return;
     setIterating(true);
     try {
-      const { forkWorkbenchDraft } = await import('@/lib/api');
+      const { forkWorkbenchDraft } = await import('@/infrastructure');
       const store = (await import('@/store/draftWorkspaceStore')).useDraftWorkspaceStore.getState();
       const sourceDraftId = store.draftId;
       if (!sourceDraftId) return;

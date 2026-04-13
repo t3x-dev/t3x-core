@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('@/lib/api/search', () => ({
+vi.mock('@/infrastructure/search', () => ({
   searchNodes: vi.fn().mockResolvedValue({
     results: [{ node_id: 'n1', commit_hash: 'c1', text: 't', score: 0.9, keyword_rank: 1, vector_rank: null }],
     total: 1,

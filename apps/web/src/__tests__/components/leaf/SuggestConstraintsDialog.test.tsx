@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { SuggestConstraintsDialog } from '@/components/leaf/SuggestConstraintsDialog';
-import type { SuggestedConstraint } from '@/lib/api';
+import type { SuggestedConstraint } from '@/infrastructure';
 
 describe('SuggestConstraintsDialog', () => {
   test('component exports successfully', () => {

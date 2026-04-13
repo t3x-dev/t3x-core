@@ -4,7 +4,7 @@ import { useParams, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChatWorkspace } from '@/components/chat/ChatWorkspace';
 import { YOpsWorkspace } from '@/components/chat/YOpsWorkspace';
-import { getConversation } from '@/lib/api';
+import { getConversation } from '@/infrastructure';
 import { useChatStore } from '@/store/chatStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 

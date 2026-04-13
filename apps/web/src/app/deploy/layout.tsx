@@ -3,7 +3,7 @@
 import { AlertCircle, CheckCircle, Loader2, Rocket } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
-import { checkRunnerHealth } from '@/lib/api';
+import { checkRunnerHealth } from '@/infrastructure';
 
 interface DeployLayoutProps {
   children: React.ReactNode;

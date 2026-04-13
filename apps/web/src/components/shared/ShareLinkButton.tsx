@@ -17,8 +17,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import type { ShareLink } from '@/lib/api';
-import * as api from '@/lib/api';
+import type { ShareLink } from '@/infrastructure';
+import * as api from '@/infrastructure';
 import { cn } from '@/lib/utils';
 
 interface ShareLinkButtonProps {

@@ -10,8 +10,8 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { createBranch, listBranches } from '@/lib/api/branches';
-import { type ApiCommit, listCommits } from '@/lib/api/commits';
+import { createBranch, listBranches } from '@/infrastructure/branches';
+import { type ApiCommit, listCommits } from '@/infrastructure/commits';
 
 function dedupSortedBranches(names: Iterable<string>): string[] {
   const set = new Set<string>(names);

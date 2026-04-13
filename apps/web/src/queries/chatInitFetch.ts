@@ -7,10 +7,10 @@
  * never imports from `@/lib/api/*` directly.
  */
 
-import { type ApiCommit, getApiCommit } from '@/lib/api/commits';
-import { getConversation } from '@/lib/api/conversations';
-import { listTopics, type Topic } from '@/lib/api/topics';
-import type { Conversation } from '@/lib/api/types';
+import { type ApiCommit, getApiCommit } from '@/infrastructure/commits';
+import { getConversation } from '@/infrastructure/conversations';
+import { listTopics, type Topic } from '@/infrastructure/topics';
+import type { Conversation } from '@/infrastructure/types';
 
 export async function fetchCommitForInheritance(hash: string): Promise<ApiCommit> {
   return getApiCommit(hash);

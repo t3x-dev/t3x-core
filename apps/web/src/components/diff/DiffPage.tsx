@@ -17,7 +17,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { relativeTime, shortHash } from '@/components/commit/CommitDetailHelpers';
 import { Breadcrumb } from '@/components/shared/Breadcrumb';
 import { TreeGraphView } from '@/components/tree-graph';
-import { type ApiCommit, type CommitMeta, type DiffResponse, getApiCommit, getTreeDiff } from '@/lib/api';
+import { type ApiCommit, type CommitMeta, type DiffResponse, getApiCommit, getTreeDiff } from '@/infrastructure';
 import { PAGE_ANIMATION_STYLES } from '@/lib/pageAnimations';
 import { createMergeDraft } from '@/queries/mergeApi';
 import { useProjectStore } from '@/store/projectStore';

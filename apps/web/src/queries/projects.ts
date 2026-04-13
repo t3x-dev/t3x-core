@@ -14,8 +14,8 @@ import {
   deleteProject,
   listProjects,
   updateProject,
-} from '@/lib/api/projects';
-import type { ProjectListData } from '@/lib/api/types';
+} from '@/infrastructure/projects';
+import type { ProjectListData } from '@/infrastructure/types';
 import type { Project } from '@/types/api';
 
 export function fetchProjects(limit = 50, offset = 0): Promise<ProjectListData> {

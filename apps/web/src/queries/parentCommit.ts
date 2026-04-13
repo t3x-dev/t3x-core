@@ -8,7 +8,7 @@
  */
 
 import type { TreeNode } from '@t3x-dev/core';
-import { getApiCommit } from '@/lib/api/commits';
+import { getApiCommit } from '@/infrastructure/commits';
 
 export interface ParentCommit {
   hash: string;

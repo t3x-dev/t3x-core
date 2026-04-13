@@ -7,8 +7,8 @@
  */
 
 import type { SourcedYOp, YOpsLogEntry, YOpsSource } from '@t3x-dev/core';
-import { createYOpsEntry, deleteYOpsEntry, listYOpsLog } from '@/lib/api/trees';
-import { ApiError } from '@/lib/api/core';
+import { createYOpsEntry, deleteYOpsEntry, listYOpsLog } from '@/infrastructure/trees';
+import { ApiError } from '@/infrastructure/core';
 
 export class PersistenceError extends Error {
   constructor(

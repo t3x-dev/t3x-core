@@ -51,7 +51,7 @@ import {
   type Leaf,
   type NodeSourceRef,
   updateEngineRun,
-} from '@/lib/api';
+} from '@/infrastructure';
 import { exportRunAsJSON, exportRunAsMarkdown } from '@/lib/exportReport';
 import { createRetuneSession } from '@/lib/retune';
 import { cn } from '@/lib/utils';

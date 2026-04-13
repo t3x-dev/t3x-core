@@ -24,8 +24,8 @@ import {
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import type { Conversation, Leaf, Turn } from '@/lib/api';
-import { listConversations, listLeavesByProject, listTurns } from '@/lib/api';
+import type { Conversation, Leaf, Turn } from '@/infrastructure';
+import { listConversations, listLeavesByProject, listTurns } from '@/infrastructure';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import { usePinsStore } from '@/store/pinsStore';

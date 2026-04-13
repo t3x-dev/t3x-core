@@ -30,8 +30,8 @@ import {
   type ProviderInfo,
   type RoleAssignment,
   updateProjectProviderConfig,
-} from '@/lib/api';
-import { updateProject } from '@/lib/api/projects';
+} from '@/infrastructure';
+import { updateProject } from '@/infrastructure/projects';
 import { cn } from '@/lib/utils';
 import { useProjectStore } from '@/store/projectStore';
 
@@ -229,7 +229,7 @@ export default function ProjectSettingsPage() {
         listProviders(),
         getProviderRoles(),
         getProjectProviderConfig(projectId),
-        import('@/lib/api/projects').then((m) => m.getProject(projectId)),
+        import('@/infrastructure/projects').then((m) => m.getProject(projectId)),
       ]);
 
       setGlobalRoles(roles);

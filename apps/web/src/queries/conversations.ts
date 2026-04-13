@@ -11,8 +11,8 @@ import {
   deleteConversation,
   listConversations,
   updateConversation,
-} from '@/lib/api/conversations';
-import type { Conversation, ConversationListData } from '@/lib/api/types';
+} from '@/infrastructure/conversations';
+import type { Conversation, ConversationListData } from '@/infrastructure/types';
 
 export type UpdateConversationInput = Parameters<typeof updateConversation>[1];
 

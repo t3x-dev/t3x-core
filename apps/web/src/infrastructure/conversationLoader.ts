@@ -4,8 +4,8 @@
  */
 
 import type { YOpsLogEntry } from '@t3x-dev/core';
-import type { Turn } from '@/lib/api/types';
-import { listTurns } from '@/lib/api/turns';
+import type { Turn } from '@/infrastructure/types';
+import { listTurns } from '@/infrastructure/turns';
 import { loadYOpsLog } from './yopsLog';
 
 export type { Turn as LoadedTurn };

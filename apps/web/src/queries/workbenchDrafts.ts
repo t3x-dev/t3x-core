@@ -15,7 +15,7 @@ import {
   listWorkbenchDrafts,
   previewWorkbenchDraft,
   updateWorkbenchDraft,
-} from '@/lib/api/drafts';
+} from '@/infrastructure/drafts';
 import type { WorkbenchDraft } from '@/types/api';
 
 export function fetchWorkbenchDrafts(

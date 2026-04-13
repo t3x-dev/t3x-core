@@ -7,7 +7,7 @@ import {
   createTemplate,
   deleteTemplate,
   listTemplates,
-} from '@/lib/api/misc';
+} from '@/infrastructure/misc';
 import type { Template } from '@/types/api';
 
 export interface FetchTemplatesOptions {

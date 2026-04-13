@@ -9,8 +9,8 @@ import type {
   NodeWithHighlight,
   TurnWithHighlights,
 } from '@/components/source-context/SourceConversationPanel';
-import type { Leaf } from '@/lib/api';
-import * as api from '@/lib/api';
+import type { Leaf } from '@/infrastructure';
+import * as api from '@/infrastructure';
 import { checkContentIntegrity } from '@/lib/truncationUtils';
 import type { ContentIntegrityStatus, NodeWithSource } from '@/types/sourceContext';
 
