@@ -1,7 +1,12 @@
 import type { SemanticContent, SlotValue, TreeNode } from '@t3x-dev/core';
-import { flattenTrees, RELATION_TYPES } from '@t3x-dev/core';
+import { RELATION_TYPES } from '@t3x-dev/core';
+
+/**
+ * Runtime-enriched tree node shape. API trees from historical commits may
+ * carry a legacy turn-tag `source` string (e.g. `"T3"`).
+ */
+type EnrichedTreeNode = TreeNode & { source?: string };
 import type { Edge, Node } from '@xyflow/react';
-import type { GateCheckResult } from '@/lib/api/trees';
 
 // ── Exported Types ──
 
@@ -14,10 +19,6 @@ export interface TreeNodeData {
   treeType: string;
   slots: Record<string, SlotValue>;
   source?: string;
-  // Gate status fields
-  gateStatus?: 'passed' | 'warning' | 'error' | 'unchecked';
-  gateIssueCount?: number;
-  gateIssueSummary?: string;
   [key: string]: unknown;
 }
 
@@ -70,7 +71,7 @@ export function semanticToFlowElements(content: SemanticContent): {
     data: {
       treeType: node.key,
       slots: node.slots,
-      source: node.source,
+      source: (node as EnrichedTreeNode).source,
     },
   }));
 
@@ -140,52 +141,3 @@ export function filterByZoomLevel(
   return filterContent(content, visible);
 }
 
-// ── Gate result mapping ──
-
-export function mapGateResultsToNodes(
-  nodes: Node<TreeNodeData>[],
-  gateResult: GateCheckResult | null
-): Node<TreeNodeData>[] {
-  if (!gateResult?.semantic?.issues) return nodes;
-
-  const issuesByNode = new Map<
-    string,
-    { count: number; maxSeverity: 'error' | 'warning' | 'info'; summary: string }
-  >();
-  for (const issue of gateResult.semantic.issues) {
-    if (!issue.tree_id) continue;
-    const severity = issue.severity;
-    const existing = issuesByNode.get(issue.tree_id);
-    if (!existing) {
-      issuesByNode.set(issue.tree_id, {
-        count: 1,
-        maxSeverity: severity,
-        summary: `${issue.dimension}: ${issue.description}`,
-      });
-    } else {
-      existing.count++;
-      if (severity === 'error') existing.maxSeverity = 'error';
-      else if (severity === 'warning' && existing.maxSeverity !== 'error')
-        existing.maxSeverity = 'warning';
-    }
-  }
-
-  return nodes.map((node) => {
-    const treeIssues = issuesByNode.get(node.id);
-    if (!treeIssues) {
-      return { ...node, data: { ...node.data, gateStatus: 'passed' as const } };
-    }
-    return {
-      ...node,
-      data: {
-        ...node.data,
-        gateStatus:
-          treeIssues.maxSeverity === 'info'
-            ? ('passed' as const)
-            : (treeIssues.maxSeverity as 'warning' | 'error'),
-        gateIssueCount: treeIssues.count,
-        gateIssueSummary: treeIssues.summary,
-      },
-    };
-  });
-}

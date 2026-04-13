@@ -16,7 +16,7 @@ import {
 import { useCallback, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import type { WorkspaceMode } from '@/hooks/useLeafPageData';
-import type { Assertion, Constraint, Leaf } from '@/lib/api';
+import type { Assertion, Constraint, Leaf } from '@/types/api';
 import { cn } from '@/lib/utils';
 
 // ============================================================================

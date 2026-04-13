@@ -1,17 +1,16 @@
 'use client';
 
-import { Pencil, RefreshCw, User } from 'lucide-react';
+import { Pencil, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useSlotActions } from '@/hooks/useSlotActions';
-import type { Citation } from '@/lib/api/chat';
+import type { Citation } from '@/types/api';
 import type { CommittedHighlight } from '@/lib/committedHighlights';
-import { collectQuotesByTurn, computeUncoveredRanges } from '@/lib/coverageRanges';
-import { traceYamlToChat } from '@/lib/hoverTrace';
-import type { SourceMapping } from '@/lib/sourceMap';
+import { collectQuotesForTurn, computeUncoveredRanges } from '@/lib/coverageRanges';
+import { traceYamlToChat } from '@/domain/hoverTrace';
+import type { SourceMapping } from '@/domain/sourceMap';
 import { cn } from '@/lib/utils';
-import { useDraftStore } from '@/store/draftStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { CitationChips } from './CitationChips';
 import { CodeBlock } from './CodeBlock';
@@ -82,9 +81,10 @@ function HighlightedText({
           <mark
             key={i}
             style={{
-              background: 'var(--slot-dim)',
-              borderRadius: 2,
-              padding: '1px 0',
+              background: 'rgba(99, 102, 241, 0.25)',
+              borderBottom: '2px solid rgb(99, 102, 241)',
+              borderRadius: 3,
+              padding: '2px 4px',
               color: 'inherit',
             }}
           >
@@ -206,9 +206,8 @@ function SourceMappedText({
             key={i}
             data-tree-path={m.treePath}
             data-slot-key={m.slotKey}
+            data-source-highlight={isActive ? 'active' : 'default'}
             style={spanStyle}
-            onMouseEnter={() => onHoverSlot(m.treePath, m.slotKey)}
-            onMouseLeave={onLeaveSlot}
             onClick={(e) => {
               e.stopPropagation();
               onClickSlot(m.treePath, m.slotKey);
@@ -362,7 +361,8 @@ export function ChatMessage({
   const hoveredNodeId = useWorkspaceStore((s) => s.selectedNodePath);
   const hoveredSlotKey = useWorkspaceStore((s) => s.selectedSlotKey);
   const scrollToCenter = useWorkspaceStore((s) => s.scrollToCenter);
-  const draft = useDraftStore((s) => s.draft);
+  const hoverSourceIndex = useWorkspaceStore((s) => s.sourceIndex);
+  const turns = useWorkspaceStore((s) => s.turns);
   const wsMode = useWorkspaceStore((s) => s.mode);
   const isReviewPhase = wsMode === 'executed' || wsMode === 'committing';
   const textRef = useRef<HTMLDivElement>(null);
@@ -371,8 +371,8 @@ export function ChatMessage({
   // ── YAML → Chat: trace hovered YAML node to this message ──
   const trace = useMemo(() => {
     if (!hoveredNodeId) return null;
-    return traceYamlToChat(draft, hoveredNodeId, hoveredSlotKey);
-  }, [hoveredNodeId, hoveredSlotKey, draft]);
+    return traceYamlToChat(hoverSourceIndex, turns, hoveredNodeId, hoveredSlotKey);
+  }, [hoveredNodeId, hoveredSlotKey, hoverSourceIndex, turns]);
 
   // Does the hovered YAML node come from THIS message?
   const isSourceMessage =
@@ -402,13 +402,12 @@ export function ChatMessage({
   }, [isSourceMessage, trace, content]);
 
   // ── Coverage mode: compute uncovered ranges ──
+  const sourceIndex = useWorkspaceStore((s) => s.sourceIndex);
   const uncoveredRanges = useMemo(() => {
-    if (!coverageMode || !content || turnIndex == null) return [];
-    const draftTrees = useDraftStore.getState().draft.trees;
-    const quotesByTurn = collectQuotesByTurn(draftTrees);
-    const quotes = quotesByTurn.get(turnIndex) ?? [];
+    if (!coverageMode || !content || !turnHash) return [];
+    const quotes = collectQuotesForTurn(sourceIndex, turnHash);
     return computeUncoveredRanges(content, quotes);
-  }, [coverageMode, content, turnIndex]);
+  }, [coverageMode, content, turnHash, sourceIndex]);
 
   const hasCharHighlights = highlightRanges.length > 0;
   const hasSourceMappings = (sourceMap?.length ?? 0) > 0;
@@ -444,9 +443,11 @@ export function ChatMessage({
   }, [isSourceMessage, scrollToCenter]);
 
   // Rendering priority: YAML highlights > source-mapped spans > committed highlights > markdown
+  // Source-mapped spans only render when a YAML node is actively selected (click-triggered)
   const useCoverageHighlights = coverageMode && uncoveredRanges.length > 0;
   const useYamlHighlights = hasCharHighlights && !useCoverageHighlights;
-  const useSourceMappedSpans = !useYamlHighlights && !useCoverageHighlights && hasSourceMappings;
+  const hasActiveSelection = !!hoveredNodeId;
+  const useSourceMappedSpans = hasActiveSelection && !useYamlHighlights && !useCoverageHighlights && hasSourceMappings;
   const useCommittedHighlightSpans =
     !useYamlHighlights && !useSourceMappedSpans && !useCoverageHighlights && hasCommittedHighlights;
 
@@ -461,38 +462,22 @@ export function ChatMessage({
       )}
       style={{
         background: isWholeMessageHighlight
-          ? 'color-mix(in srgb, var(--source) 15%, transparent)'
+          ? 'rgba(99, 102, 241, 0.1)'
           : isSourceMessage && hasCharHighlights
-            ? 'color-mix(in srgb, var(--source) 6%, transparent)'
+            ? 'rgba(99, 102, 241, 0.06)'
             : 'transparent',
         borderLeft: isSourceMessage
-          ? '3px solid color-mix(in srgb, var(--source) 50%, transparent)'
+          ? '3px solid rgb(99, 102, 241)'
           : undefined,
       }}
-      onMouseEnter={() =>
-        turnIndex != null && useWorkspaceStore.getState().select('chat', { turnIndex })
-      }
-      onMouseLeave={() => useWorkspaceStore.getState().clearSelection()}
     >
       <div className="mx-auto max-w-3xl px-4">
-        <div className="flex gap-3">
-          {/* Avatar */}
-          <div
-            className={cn(
-              'flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-medium mt-0.5',
-              isUser
-                ? 'bg-[var(--accent-commit)] text-white'
-                : 'bg-gradient-to-br from-[var(--accent-commit)]/20 to-[var(--source)]/20 text-[var(--accent-commit)] ring-1 ring-[var(--accent-commit)]/20'
-            )}
-          >
-            {isUser ? <User className="h-3.5 w-3.5" /> : 'T3'}
-          </div>
-
+        <div className={cn(isUser ? 'flex justify-end' : '')}>
           {/* Content */}
-          <div className="min-w-0 flex-1">
-            <div className="mb-1 text-xs font-semibold text-[var(--text-primary)]">
-              {isUser ? 'You' : 'T3X'}
-            </div>
+          <div className={cn(
+            'min-w-0',
+            isUser ? 'max-w-[85%] rounded-2xl bg-[var(--hover-bg)] px-4 py-2.5' : 'flex-1'
+          )}>
 
             {isUser ? (
               <div className="relative">

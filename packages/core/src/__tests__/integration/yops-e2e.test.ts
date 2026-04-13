@@ -102,8 +102,6 @@ describe('E2E: YOps Extraction Pipeline', () => {
     expect(dining!.slots.budget).toBe(1000);
     expect(dining!.slots.style).toBe('casual');
 
-    // Verify metadata propagated
-    expect(trip!.source).toBe('T1');
     // Verify yops array (should be define + populate pairs for root + child)
     expect(result1.yops.length).toBeGreaterThanOrEqual(2);
     expect(result1.yops[0]).toHaveProperty('define');

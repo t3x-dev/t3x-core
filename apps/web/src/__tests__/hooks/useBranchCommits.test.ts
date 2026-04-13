@@ -7,14 +7,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanupRoots, renderHook, waitForHook } from './renderHook';
 
 // Mock the api module
-vi.mock('@/lib/api', () => ({
+vi.mock('@/infrastructure', () => ({
   listCommits: vi.fn(),
   listLeavesByCommit: vi.fn(),
 }));
 
 import { useBranchCommits } from '@/hooks/useBranchCommits';
 import { clearQueryCache } from '@/hooks/useQuery';
-import * as api from '@/lib/api';
+import * as api from '@/infrastructure';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -22,7 +22,7 @@ import * as api from '@/lib/api';
 
 const makeCommit = (hash: string) => ({
   hash,
-  schema: 't3x/commit/5' as const,
+  schema: 't3x/commit' as const,
   parents: [],
   author: { type: 'human', id: 'u1', name: 'Test' },
   committed_at: '2026-01-01T00:00:00Z',

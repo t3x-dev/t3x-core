@@ -14,7 +14,7 @@ import {
   getAdaptiveThreshold,
   getAutopilotConfig,
   updateAutopilotConfig,
-} from '@/lib/api/autopilot';
+} from '@/infrastructure/autopilot';
 import { cn } from '@/lib/utils';
 
 export function AutopilotSettings({ projectId }: { projectId: string }) {

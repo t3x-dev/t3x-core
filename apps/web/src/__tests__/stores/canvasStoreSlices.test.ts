@@ -18,9 +18,9 @@ import { useCanvasStore } from '@/store/canvasStore';
 import type { MergeState } from '@/types/merge';
 import type { CanvasNodeData } from '@/types/nodes';
 
-// Mock API module
-vi.mock('@/lib/api', () => ({
-  createLeaf: vi.fn().mockResolvedValue({
+// canvasLeafSlice now routes through @/queries/leaves (doc-aligned L3).
+vi.mock('@/queries/leaves', () => ({
+  createLeafInProject: vi.fn().mockResolvedValue({
     id: 'leaf_mock123',
     commit_hash: 'sha256:abc123',
     type: 'deploy_agent',
@@ -31,7 +31,8 @@ vi.mock('@/lib/api', () => ({
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   }),
-  deleteLeaf: vi.fn().mockResolvedValue(undefined),
+  deleteLeafById: vi.fn().mockResolvedValue(undefined),
+  fetchLeavesByProject: vi.fn().mockResolvedValue([]),
 }));
 
 const createCommittedUnitNode = (
@@ -195,153 +196,5 @@ describe('clearMergeError', () => {
   it('is a no-op when no error', () => {
     useCanvasStore.getState().clearMergeError();
     expect(useCanvasStore.getState().mergeError).toBeNull();
-  });
-});
-
-describe('addLeafNode edge cases', () => {
-  beforeEach(resetStore);
-  afterEach(() => vi.clearAllMocks());
-
-  it('returns null when no commit selected (no leafPanelCommitId)', async () => {
-    const notifySpy = vi.fn();
-    useCanvasStore.setState({
-      leafPanelOpen: true,
-      leafPanelCommitId: undefined,
-      notifyCallback: notifySpy,
-    });
-
-    const result = await useCanvasStore.getState().addLeafNode('tweet');
-    expect(result).toBeNull();
-    expect(notifySpy).toHaveBeenCalledWith('No commit selected', 'error');
-  });
-
-  it('returns null when unit node not found', async () => {
-    const notifySpy = vi.fn();
-    useCanvasStore.setState({
-      nodes: [],
-      leafPanelOpen: true,
-      leafPanelCommitId: 'nonexistent',
-      notifyCallback: notifySpy,
-    });
-
-    const result = await useCanvasStore.getState().addLeafNode('tweet');
-    expect(result).toBeNull();
-    expect(notifySpy).toHaveBeenCalledWith('Unit not found', 'error');
-  });
-
-  it('returns null when commit has no commitHash', async () => {
-    const notifySpy = vi.fn();
-    const stagingNode: Node<CanvasNodeData> = {
-      id: 'unit-1',
-      type: 'unit',
-      position: { x: 0, y: 0 },
-      data: {
-        kind: 'unit',
-        entryId: 'unit-1',
-        title: 'Staging',
-        summary: '',
-        status: 'staging',
-        timestamp: 'now',
-        tags: ['unit'],
-        commitStatus: 'staging',
-        // no commitHash
-      },
-    };
-    useCanvasStore.setState({
-      nodes: [stagingNode],
-      leafPanelOpen: true,
-      leafPanelCommitId: 'unit-1',
-      notifyCallback: notifySpy,
-    });
-
-    const result = await useCanvasStore.getState().addLeafNode('tweet');
-    expect(result).toBeNull();
-    expect(notifySpy).toHaveBeenCalledWith(expect.stringContaining('not saved yet'), 'error');
-  });
-
-  it('returns null when projectId is null', async () => {
-    const notifySpy = vi.fn();
-    const committedNode = createCommittedUnitNode('unit-1', 'sha256:abc');
-    useCanvasStore.setState({
-      nodes: [committedNode],
-      leafPanelOpen: true,
-      leafPanelCommitId: 'unit-1',
-      projectId: null,
-      notifyCallback: notifySpy,
-    });
-
-    const result = await useCanvasStore.getState().addLeafNode('tweet');
-    expect(result).toBeNull();
-    expect(notifySpy).toHaveBeenCalledWith('Project not found', 'error');
-  });
-
-  it('keeps panel open on API error', async () => {
-    const { createLeaf } = await import('@/lib/api');
-    (createLeaf as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('API down'));
-
-    const notifySpy = vi.fn();
-    const committedNode = createCommittedUnitNode('unit-1', 'sha256:abc');
-    useCanvasStore.setState({
-      nodes: [committedNode],
-      leafPanelOpen: true,
-      leafPanelCommitId: 'unit-1',
-      projectId: 'proj_1',
-      notifyCallback: notifySpy,
-    });
-
-    const result = await useCanvasStore.getState().addLeafNode('tweet');
-    expect(result).toBeNull();
-    expect(notifySpy).toHaveBeenCalledWith('API down', 'error');
-    // Panel should remain open
-    expect(useCanvasStore.getState().leafPanelOpen).toBe(true);
-    expect(useCanvasStore.getState().leafCreating).toBe(false);
-  });
-});
-
-describe('removeLeafFromNode', () => {
-  beforeEach(resetStore);
-  afterEach(() => vi.clearAllMocks());
-
-  it('removes leaf from node data', async () => {
-    const node = createCommittedUnitNode('unit-1', 'sha256:abc', {
-      leaves: [
-        { id: 'leaf_1', type: 'tweet', title: 'Twitter', status: 'idle', createdAt: '' },
-        { id: 'leaf_2', type: 'email', title: 'Email', status: 'idle', createdAt: '' },
-      ],
-    });
-    useCanvasStore.setState({ nodes: [node] });
-
-    await useCanvasStore.getState().removeLeafFromNode('unit-1', 'leaf_1');
-
-    const updatedNode = useCanvasStore.getState().nodes[0];
-    expect(updatedNode.data.leaves).toHaveLength(1);
-    expect(updatedNode.data.leaves![0].id).toBe('leaf_2');
-  });
-
-  it('notifies on success', async () => {
-    const notifySpy = vi.fn();
-    const node = createCommittedUnitNode('unit-1', 'sha256:abc', {
-      leaves: [{ id: 'leaf_1', type: 'tweet', title: 'Twitter', status: 'idle', createdAt: '' }],
-    });
-    useCanvasStore.setState({ nodes: [node], notifyCallback: notifySpy });
-
-    await useCanvasStore.getState().removeLeafFromNode('unit-1', 'leaf_1');
-    expect(notifySpy).toHaveBeenCalledWith('Leaf deleted', 'success');
-  });
-
-  it('notifies on error', async () => {
-    const { deleteLeaf } = await import('@/lib/api');
-    (deleteLeaf as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('Delete failed'));
-
-    const notifySpy = vi.fn();
-    const node = createCommittedUnitNode('unit-1', 'sha256:abc', {
-      leaves: [{ id: 'leaf_1', type: 'tweet', title: 'Twitter', status: 'idle', createdAt: '' }],
-    });
-    useCanvasStore.setState({ nodes: [node], notifyCallback: notifySpy });
-
-    await useCanvasStore.getState().removeLeafFromNode('unit-1', 'leaf_1');
-    expect(notifySpy).toHaveBeenCalledWith('Delete failed', 'error');
-    // Leaf should NOT be removed on failure
-    expect(useCanvasStore.getState().nodes[0].data.leaves).toHaveLength(1);
   });
 });

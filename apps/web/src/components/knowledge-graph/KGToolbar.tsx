@@ -7,14 +7,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
-import { useKnowledgeGraphStore } from '@/store/knowledgeGraphStore';
+import { useKnowledgeGraph } from '@/hooks/useKnowledgeGraph';
 
 interface KGToolbarProps {
   projectId: string;
 }
 
 export function KGToolbar({ projectId }: KGToolbarProps) {
-  const { buildGraph, searchNodes, fetchNodes, deleteGraph, building } = useKnowledgeGraphStore();
+  const { buildGraph, searchNodes, fetchNodes, deleteGraph, building } = useKnowledgeGraph();
   const [query, setQuery] = useState('');
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 

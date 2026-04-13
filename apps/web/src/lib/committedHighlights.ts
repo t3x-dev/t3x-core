@@ -2,7 +2,7 @@
  * Build committed highlight ranges from commit tree source_refs.
  * Used to show persistent green underlines on conversation text.
  */
-import type { ApiCommit } from './api/commits';
+import type { ApiCommit } from '@/infrastructure/commits';
 
 export interface CommittedHighlight {
   /** Character start position in turn content */
@@ -32,7 +32,6 @@ interface TreeNodeShape {
   key?: string;
   slots?: TreeSlots;
   children?: TreeNodeShape[];
-  slot_quotes?: Record<string, string>;
 }
 
 /**
@@ -47,10 +46,7 @@ function walkTrees(
   for (const node of nodes) {
     const ref = node.slots?.source_ref;
     if (ref?.turn_hash && typeof ref.start_char === 'number' && typeof ref.end_char === 'number') {
-      const nodeText =
-        typeof node.slots?.text === 'string'
-          ? node.slots.text
-          : Object.values(node.slot_quotes ?? {}).find((v) => typeof v === 'string') ?? '';
+      const nodeText = typeof node.slots?.text === 'string' ? node.slots.text : '';
 
       const arr = out.get(ref.turn_hash) ?? [];
       arr.push({

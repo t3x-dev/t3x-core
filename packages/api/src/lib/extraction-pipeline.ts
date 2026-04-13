@@ -32,9 +32,24 @@ import {
   runTransforms,
   type SemanticContent,
 } from '@t3x-dev/core';
+
+/**
+ * Internal extension of TreeNode used by the extraction pipeline.
+ * The DB schema stores `source` and `slot_quotes` per node; after
+ * replaying YOps from the DB these extra fields are present at runtime
+ * even though the public TreeNode type no longer declares them.
+ */
+interface EnrichedTreeNode {
+  key: string;
+  slots: Record<string, import('@t3x-dev/core').SlotValue>;
+  children: EnrichedTreeNode[];
+  source?: string;
+  slot_quotes?: Record<string, string>;
+}
 import {
   type AnyDB,
   createTopic,
+  deleteYOpsLogEntry,
   findConversationById,
   findLeafById,
   findProjectById,
@@ -149,6 +164,8 @@ export interface ExtractionPipelineParams {
   forceExtract?: boolean;
   userId?: string;
   sourcePinIds?: string[];
+  /** Per-request extraction style override (takes precedence over project/user defaults) */
+  style?: ExtractionStyleConfig;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -163,7 +180,7 @@ export interface ExtractionPipelineParams {
 export async function* runExtractionPipeline(
   params: ExtractionPipelineParams
 ): AsyncGenerator<PipelineEvent> {
-  const { conversationId, turnHashes, driftDecision, topicId, forceExtract, userId } = params;
+  const { conversationId, turnHashes, driftDecision, topicId, forceExtract, userId, style: requestStyle } = params;
 
   try {
     const db = await getDB();
@@ -208,31 +225,39 @@ export async function* runExtractionPipeline(
       return;
     }
 
-    // ── 3. Resolve extraction style: project -> user -> default ──
+    // ── 3. Resolve extraction style: request -> project -> user -> default ──
     const projectRecord = await findProjectById(db, conversation.projectId);
     let resolvedStyle: ExtractionStyleConfig = DEFAULT_STYLE;
-    if (projectRecord?.extractionStyle) {
+    if (requestStyle) {
+      resolvedStyle = requestStyle;
+    } else if (projectRecord?.extractionStyle) {
       const parsed = ExtractionStyleSchema.safeParse(projectRecord.extractionStyle);
       if (parsed.success) {
         resolvedStyle = parsed.data;
       }
-    }
-    if (resolvedStyle === DEFAULT_STYLE && !projectRecord?.extractionStyle) {
-      if (userId) {
-        const user = await findUserById(db, userId);
-        if (user?.default_extraction_style) {
-          const parsed = ExtractionStyleSchema.safeParse(user.default_extraction_style);
-          if (parsed.success) {
-            resolvedStyle = parsed.data;
-          }
+    } else if (userId) {
+      const user = await findUserById(db, userId);
+      if (user?.default_extraction_style) {
+        const parsed = ExtractionStyleSchema.safeParse(user.default_extraction_style);
+        if (parsed.success) {
+          resolvedStyle = parsed.data;
         }
       }
     }
 
     // ── 4. Fetch existing yops log and build current snapshot ──
-    const yopsRecords = topicId
+    let yopsRecords = topicId
       ? await listYOpsLogByTopic(db, conversationId, topicId)
       : await listYOpsLogByConversation(db, conversationId);
+
+    // When forceExtract, clear existing log entries to avoid duplicates on replay
+    if (forceExtract && yopsRecords.length > 0) {
+      for (const record of yopsRecords) {
+        await deleteYOpsLogEntry(db, record.id);
+      }
+      yopsRecords = [];
+    }
+
     const currentSnapshot = replayYOpsLog(toYOpsLogEntries(yopsRecords));
     const currentFlat = flattenTrees(currentSnapshot.trees);
 
@@ -475,13 +500,11 @@ export async function* runExtractionPipeline(
       // so the YOpsFeed has items to display
       const synthYops = result.snapshot.trees.flatMap((tree) => {
         const yops: Record<string, unknown>[] = [
-          { define: { parent: '', key: tree.key }, index: 0, total: 0 },
+          { define: { path: tree.key }, index: 0, total: 0 },
           {
             populate: {
               path: tree.key,
-              slots: Object.fromEntries(Object.entries(tree.slots).slice(0, 3)),
-              source: {},
-              from: tree.source ?? 'T1',
+              values: Object.fromEntries(Object.entries(tree.slots).slice(0, 3)),
             },
             index: 0,
             total: 0,
@@ -489,16 +512,14 @@ export async function* runExtractionPipeline(
         ];
         for (const child of tree.children) {
           yops.push({
-            define: { parent: tree.key, key: child.key },
+            define: { path: `${tree.key}/${child.key}` },
             index: 0,
             total: 0,
           });
           yops.push({
             populate: {
               path: `${tree.key}/${child.key}`,
-              slots: Object.fromEntries(Object.entries(child.slots).slice(0, 3)),
-              source: {},
-              from: child.source ?? 'T1',
+              values: Object.fromEntries(Object.entries(child.slots).slice(0, 3)),
             },
             index: 0,
             total: 0,
@@ -539,27 +560,108 @@ export async function* runExtractionPipeline(
       );
       organizedSnapshot = transformResult.content;
 
-      // Re-apply slot_quotes from pre-transform snapshot (transforms may strip metadata)
-      const metaMap = new Map<string, { source?: string; slot_quotes?: Record<string, string> }>();
-      const collectMeta = (node: import('@t3x-dev/core').TreeNode, prefix: string) => {
+      // Re-apply slot_quotes and source from pre-transform snapshot.
+      // Transforms strip metadata, so we match by BOTH path AND node key
+      // to handle tree restructuring (nesting, renaming).
+      // NOTE: EnrichedTreeNode extends the public TreeNode with extraction metadata
+      // fields (source, slot_quotes) stored in the DB but not part of the core type.
+      type NodeMeta = { source?: string; slot_quotes?: Record<string, string> };
+      const metaByPath = new Map<string, NodeMeta>();
+      const metaByKey = new Map<string, NodeMeta>();
+      const collectMeta = (node: EnrichedTreeNode, prefix: string) => {
         const path = prefix ? `${prefix}/${node.key}` : node.key;
         if (node.source || node.slot_quotes) {
-          metaMap.set(path, { source: node.source, slot_quotes: node.slot_quotes });
+          const meta = { source: node.source, slot_quotes: node.slot_quotes };
+          metaByPath.set(path, meta);
+          // Also index by bare key for fallback matching after restructuring
+          if (!metaByKey.has(node.key)) {
+            metaByKey.set(node.key, meta);
+          }
         }
         for (const child of node.children ?? []) collectMeta(child, path);
       };
-      for (const tree of result.snapshot.trees) collectMeta(tree, '');
+      for (const tree of result.snapshot.trees as EnrichedTreeNode[]) collectMeta(tree, '');
 
-      const applyMeta = (node: import('@t3x-dev/core').TreeNode, prefix: string) => {
+      const applyMeta = (node: EnrichedTreeNode, prefix: string) => {
         const path = prefix ? `${prefix}/${node.key}` : node.key;
-        const meta = metaMap.get(path);
+        // Try exact path first, then fall back to bare key
+        const meta = metaByPath.get(path) ?? metaByKey.get(node.key);
         if (meta) {
           if (meta.source && !node.source) node.source = meta.source;
           if (meta.slot_quotes && !node.slot_quotes) node.slot_quotes = meta.slot_quotes;
         }
         for (const child of node.children ?? []) applyMeta(child, path);
       };
-      for (const tree of organizedSnapshot.trees) applyMeta(tree, '');
+      for (const tree of organizedSnapshot.trees as EnrichedTreeNode[]) applyMeta(tree, '');
+
+      // ── Deterministic metadata verifier ──
+      // Contract: every slot quote MUST be a verbatim substring of a conversation turn.
+      // No fuzzy matching, no synthesis — the audit trail must be 100% deterministic.
+      // If the LLM didn't provide a verifiable quote, the slot has no source tracing
+      // (slot_quote is simply absent — no guessing).
+      const verifyMetadata = (
+        trees: EnrichedTreeNode[],
+        turns: Array<{ content: string }>
+      ) => {
+        const turnsLower = turns.map((t) => t.content.toLowerCase());
+
+        const walk = (node: EnrichedTreeNode) => {
+          if (!node.slot_quotes) node.slot_quotes = {};
+
+          const verifiedQuotes: Record<string, string> = {};
+          const turnVotes: Record<number, number> = {};
+
+          for (const [key, quote] of Object.entries(node.slot_quotes)) {
+            if (typeof quote !== 'string' || !quote) continue;
+            const quoteLower = quote.toLowerCase();
+            // Only keep if verbatim substring of some turn
+            for (let i = 0; i < turnsLower.length; i++) {
+              if (turnsLower[i].includes(quoteLower)) {
+                verifiedQuotes[key] = quote;
+                turnVotes[i] = (turnVotes[i] ?? 0) + 1;
+                break;
+              }
+            }
+          }
+
+          // Also try to verify slot values themselves (in case LLM skipped metadata
+          // but produced verbatim values). Still 100% deterministic — substring only.
+          for (const [key, val] of Object.entries(node.slots)) {
+            if (verifiedQuotes[key]) continue;
+            if (typeof val !== 'string') continue;
+            const valLower = val.toLowerCase();
+            for (let i = 0; i < turnsLower.length; i++) {
+              const idx = turnsLower[i].indexOf(valLower);
+              if (idx !== -1) {
+                verifiedQuotes[key] = turns[i].content.slice(idx, idx + val.length);
+                turnVotes[i] = (turnVotes[i] ?? 0) + 1;
+                break;
+              }
+            }
+          }
+
+          node.slot_quotes = verifiedQuotes;
+
+          // Verify source: must be a valid turn tag AND match a slot_quote's turn
+          if (node.source) {
+            const match = node.source.match(/^T(\d+)/);
+            if (!match || Number(match[1]) < 1 || Number(match[1]) > turns.length) {
+              node.source = undefined;
+            }
+          }
+          if (!node.source && Object.keys(turnVotes).length > 0) {
+            const bestTurn = Object.entries(turnVotes).reduce((a, b) => (b[1] > a[1] ? b : a));
+            node.source = `T${Number(bestTurn[0]) + 1}`;
+          }
+
+          for (const child of node.children ?? []) walk(child);
+        };
+
+        for (const tree of trees) walk(tree);
+      };
+
+      const turnsForValidation = selectedTurns.map((t) => ({ content: t.content }));
+      verifyMetadata(organizedSnapshot.trees as EnrichedTreeNode[], turnsForValidation);
 
       changesSummary = {
         transforms: ['consolidate', 'nest', 'flagContradictions', 'checkRegression'],

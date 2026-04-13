@@ -6,7 +6,6 @@ interface WordDiffDisplayProps {
 
 /**
  * Displays word-level diff with color coding
- * 显示带颜色编码的词级差异
  *
  * - unchanged: normal text
  * - added: green background

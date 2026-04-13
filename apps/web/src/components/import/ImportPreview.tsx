@@ -2,7 +2,7 @@
 
 import { AlertTriangle, Code, FileText, Heading, List, Quote, Table } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import type { ImportParagraph } from '@/lib/api';
+import type { ImportParagraph } from '@/infrastructure';
 import { cn } from '@/lib/utils';
 
 interface ImportPreviewProps {

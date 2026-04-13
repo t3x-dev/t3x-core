@@ -12,7 +12,7 @@ import { AlertTriangle, ChevronDown, ChevronRight } from 'lucide-react';
 import { useMemo } from 'react';
 
 import { TurnBubble } from './TurnBubble';
-import type { TurnContextData } from '@/lib/api';
+import type { TurnContextData } from '@/infrastructure';
 import {
   adjustHighlightsForTruncation,
   DEFAULT_CONTEXT_CHARS,

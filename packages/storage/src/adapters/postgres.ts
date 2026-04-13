@@ -825,7 +825,7 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     CREATE TABLE IF NOT EXISTS commits (
       -- First class (in hash)
       hash TEXT PRIMARY KEY,
-      schema TEXT NOT NULL DEFAULT 't3x/commit/5',
+      schema TEXT NOT NULL DEFAULT 't3x/commit',
       parents JSONB NOT NULL DEFAULT '[]',
       author JSONB NOT NULL,
       committed_at TIMESTAMPTZ NOT NULL,

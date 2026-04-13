@@ -4,7 +4,7 @@ import { Globe, Loader2 } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import * as api from '@/lib/api';
+import * as api from '@/infrastructure';
 import { ImportPreview } from './ImportPreview';
 import { ImportProgress } from './ImportProgress';
 

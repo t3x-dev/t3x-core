@@ -9,6 +9,15 @@
 import type { SemanticContent, SlotValue, TreeNode } from '@t3x-dev/core';
 
 /**
+ * Runtime-enriched tree node shape. The API decorates nodes with a legacy
+ * turn-tag `source` string (e.g. `"T3"`) for historical commits; newer
+ * extractions carry provenance in the workspace `sourceIndex` instead.
+ */
+type EnrichedTreeNode = TreeNode & {
+  source?: string;
+};
+
+/**
  * Tree-like object compatible with old UI components.
  * Maps TreeNode to the old Tree interface shape.
  * id = dot-path, type = key name.
@@ -28,8 +37,6 @@ export interface CompatNode {
   slots: Record<string, SlotValue>;
   source?: string;
   children: TreeNode[];
-  /** Original slot_quotes from TreeNode */
-  slot_quotes?: Record<string, string>;
   /** Slot-level source refs (for backward compat) */
   slot_sources?: Record<string, SlotSourceRef>;
   /** Flag for manually edited nodes */
@@ -42,7 +49,9 @@ export interface CompatNode {
  */
 export function treesToNodes(trees: TreeNode[], prefix = ''): CompatNode[] {
   const nodes: CompatNode[] = [];
-  for (const node of trees) {
+  for (const rawNode of trees) {
+    // Cast to EnrichedTreeNode: API-sourced trees may carry a legacy turn-tag `source`
+    const node = rawNode as EnrichedTreeNode;
     const path = prefix ? `${prefix}.${node.key}` : node.key;
     nodes.push({
       id: path,
@@ -51,7 +60,6 @@ export function treesToNodes(trees: TreeNode[], prefix = ''): CompatNode[] {
       slots: node.slots,
       source: node.source,
       children: node.children,
-      slot_quotes: node.slot_quotes,
     });
     if (node.children.length > 0) {
       nodes.push(...treesToNodes(node.children, path));
@@ -89,13 +97,12 @@ export function nodesToTrees(nodes: CompatNode[]): TreeNode[] {
     .map((f) => treeToNode(f));
 }
 
-function treeToNode(node: CompatNode): TreeNode {
+function treeToNode(node: CompatNode): EnrichedTreeNode {
   return {
     key: node.type,
     slots: node.slots,
-    children: (node.children ?? []),
+    children: (node.children ?? []) as EnrichedTreeNode[],
     source: node.source,
-    slot_quotes: node.slot_quotes,
   };
 }
 

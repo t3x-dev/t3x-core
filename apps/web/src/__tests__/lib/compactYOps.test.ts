@@ -1,7 +1,6 @@
 import type { YOp } from '@t3x-dev/core';
 import { describe, expect, it } from 'vitest';
 import { compactYOps } from '@/lib/compactYOps';
-import { useCommandStore } from '@/store/commandStore';
 
 describe('compactYOps', () => {
   describe('set/unset state machine', () => {
@@ -57,28 +56,28 @@ describe('compactYOps', () => {
   describe('relate/unrelate state machine', () => {
     it('removes relate + unrelate on same triple', () => {
       const ops: YOp[] = [
-        { relate: { from: 'a', to: 'b', type: 'depends_on' } },
-        { unrelate: { from: 'a', to: 'b', type: 'depends_on' } },
+        { relate: { from: 'a', to: 'b', type: 'depends' } },
+        { unrelate: { from: 'a', to: 'b', type: 'depends' } },
       ];
       expect(compactYOps(ops)).toEqual([]);
     });
 
     it('keeps relate when unrelate comes first', () => {
       const ops: YOp[] = [
-        { unrelate: { from: 'a', to: 'b', type: 'depends_on' } },
-        { relate: { from: 'a', to: 'b', type: 'depends_on' } },
+        { unrelate: { from: 'a', to: 'b', type: 'depends' } },
+        { relate: { from: 'a', to: 'b', type: 'depends' } },
       ];
-      expect(compactYOps(ops)).toEqual([{ relate: { from: 'a', to: 'b', type: 'depends_on' } }]);
+      expect(compactYOps(ops)).toEqual([{ relate: { from: 'a', to: 'b', type: 'depends' } }]);
     });
 
     it('preserves standalone relate', () => {
-      const ops: YOp[] = [{ relate: { from: 'a', to: 'b', type: 'depends_on' } }];
-      expect(compactYOps(ops)).toEqual([{ relate: { from: 'a', to: 'b', type: 'depends_on' } }]);
+      const ops: YOp[] = [{ relate: { from: 'a', to: 'b', type: 'depends' } }];
+      expect(compactYOps(ops)).toEqual([{ relate: { from: 'a', to: 'b', type: 'depends' } }]);
     });
 
     it('preserves standalone unrelate', () => {
-      const ops: YOp[] = [{ unrelate: { from: 'a', to: 'b', type: 'depends_on' } }];
-      expect(compactYOps(ops)).toEqual([{ unrelate: { from: 'a', to: 'b', type: 'depends_on' } }]);
+      const ops: YOp[] = [{ unrelate: { from: 'a', to: 'b', type: 'depends' } }];
+      expect(compactYOps(ops)).toEqual([{ unrelate: { from: 'a', to: 'b', type: 'depends' } }]);
     });
   });
 
@@ -139,10 +138,10 @@ describe('compactYOps', () => {
     it('handles mixed set/unset and relate/unrelate in same ops list', () => {
       const ops: YOp[] = [
         { set: { path: 'a/x', value: 1 } },
-        { relate: { from: 'a', to: 'b', type: 'depends_on' } },
+        { relate: { from: 'a', to: 'b', type: 'depends' } },
         { unset: { path: 'a/x' } },
         { set: { path: 'c/y', value: 2 } },
-        { unrelate: { from: 'a', to: 'b', type: 'depends_on' } },
+        { unrelate: { from: 'a', to: 'b', type: 'depends' } },
       ];
       // a/x: set+unset cancel → nothing
       // relate+unrelate cancel → nothing
@@ -152,37 +151,6 @@ describe('compactYOps', () => {
   });
 });
 
-describe('commandStore.compactOps integration', () => {
-  it('compactOps is derived from pendingOps', () => {
-    const pendingOps: YOp[] = [
-      { set: { path: 'a/x', value: 1 } },
-      { unset: { path: 'a/x' } },
-      { set: { path: 'b/y', value: 2 } },
-    ];
-    useCommandStore.setState({
-      pendingOps,
-      compactOps: compactYOps(pendingOps),
-      hasPending: true,
-      undoStack: [],
-      redoStack: [],
-      pendingSummary: { edits: 0, deletes: 0, adds: 0, total: 0 },
-    });
-
-    const state = useCommandStore.getState();
-    expect(state.compactOps).toEqual([{ set: { path: 'b/y', value: 2 } }]);
-  });
-
-  it('compactOps is empty when pendingOps is empty', () => {
-    useCommandStore.setState({
-      pendingOps: [],
-      compactOps: [],
-      hasPending: false,
-      undoStack: [],
-      redoStack: [],
-      pendingSummary: { edits: 0, deletes: 0, adds: 0, total: 0 },
-    });
-
-    const state = useCommandStore.getState();
-    expect(state.compactOps).toEqual([]);
-  });
-});
+// commandStore.compactOps integration tests removed — commandStore was deleted in Task 5.5.
+// yops_log is append-only; undo/redo is deferred to a future PR.
+// compactYOps unit tests above cover the algorithm directly.

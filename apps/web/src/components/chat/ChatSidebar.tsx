@@ -1,16 +1,15 @@
 'use client';
 
-import { ChevronLeft, ChevronRight, Plus, Settings, Trash2 } from 'lucide-react';
-import Link from 'next/link';
+import { Plus, Trash2 } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { UserMenu } from '@/components/layout/UserMenu';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { deleteConversation, listConversations } from '@/lib/api/conversations';
-import { deleteProject, listProjects } from '@/lib/api/projects';
-import type { Conversation, Project } from '@/lib/api/types';
+import { useNewProjectChat } from '@/hooks/useNewProjectChat';
+import { useProjectConversations } from '@/hooks/useProjectConversations';
+import { useProjects } from '@/hooks/useProjects';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import { useChatStore } from '@/store/chatStore';
@@ -33,41 +32,47 @@ export function ChatSidebar() {
     setActiveConversation,
   } = useChatStore();
 
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [projectConversations, setProjectConversations] = useState<Record<string, Conversation[]>>(
-    {}
-  );
+  const { projects, refresh: refreshProjects, remove: removeProject } = useProjects();
+  const {
+    conversationsByProject: projectConversations,
+    load: loadConversations,
+    remove: removeConversationFn,
+  } = useProjectConversations();
+  const { start: startNewChat } = useNewProjectChat();
 
   const { menu, open: openMenu, close: closeMenu } = useContextMenu();
 
+  // Track pending auto-navigation when expanding a project for the first time
+  const pendingNavProjectId = useRef<string | null>(null);
+
   const refreshKey = useChatStore((s) => s.refreshKey);
 
-  // Fetch projects on mount and when refreshKey changes
+  // Re-fetch projects when refreshKey changes (useProjects does the initial load)
   useEffect(() => {
-    listProjects(50, 0)
-      .then((data) => setProjects(data.projects))
-      .catch(() => {
-        // silently fail — sidebar is non-critical
-      });
-  }, [refreshKey]);
+    if (refreshKey === 0) return;
+    void refreshProjects();
+  }, [refreshKey, refreshProjects]);
 
   // Fetch conversations for expanded projects (re-fetch on refreshKey)
   useEffect(() => {
     for (const projectId of Array.from(expandedProjectIds)) {
-      listConversations(projectId, 50, 0)
-        .then((data) => {
-          setProjectConversations((prev) => ({
-            ...prev,
-            [projectId]: data.conversations,
-          }));
-        })
-        .catch(() => {
-          // silently fail
-        });
+      void loadConversations(projectId);
     }
-  }, [expandedProjectIds, refreshKey]);
+  }, [expandedProjectIds, refreshKey, loadConversations]);
 
-  const isSettings = pathname.startsWith('/settings');
+  // Auto-navigate to latest conversation after expanding a project (data may load async)
+  useEffect(() => {
+    const pid = pendingNavProjectId.current;
+    if (!pid) return;
+    const convs = projectConversations[pid];
+    if (!convs) return; // Data not yet loaded
+    pendingNavProjectId.current = null;
+    if (convs.length > 0) {
+      setActiveConversation(convs[0].conversation_id, pid);
+      router.push(`/chat/${convs[0].conversation_id}`);
+    }
+  }, [projectConversations, router, setActiveConversation]);
+
 
   function handleConversationClick(convId: string, projectId: string) {
     setActiveConversation(convId, projectId);
@@ -75,7 +80,19 @@ export function ChatSidebar() {
   }
 
   function handleNewChat() {
+    setActiveConversation(null, null);
     router.push('/chat');
+  }
+
+  async function handleNewChatInProject(projectId: string) {
+    const convId = await startNewChat(projectId);
+    if (!convId) {
+      router.push('/chat');
+      return;
+    }
+    setActiveConversation(convId, projectId);
+    router.push(`/chat/${convId}`);
+    useChatStore.getState().refreshSidebar();
   }
 
   function handleCanvasClick(projectId: string) {
@@ -87,19 +104,19 @@ export function ChatSidebar() {
       return;
     }
     try {
-      await deleteProject(projectId);
+      await removeProject(projectId);
       window.location.reload();
     } catch {
       // silently fail
     }
   }
 
-  async function handleDeleteConversation(_projectId: string, convId: string) {
+  async function handleDeleteConversation(projectId: string, convId: string) {
     if (!window.confirm('Are you sure you want to delete this conversation?')) {
       return;
     }
     try {
-      await deleteConversation(convId);
+      await removeConversationFn(projectId, convId);
       window.location.reload();
     } catch {
       // silently fail
@@ -133,30 +150,36 @@ export function ChatSidebar() {
       <aside
         aria-label="Chat navigation"
         className={cn(
-          'fixed left-0 top-0 z-40 flex h-screen flex-col border-r py-4',
+          'fixed left-0 top-0 z-40 flex h-screen flex-col border-r',
           'transition-[width] duration-[var(--motion-slow)] ease-[var(--ease-out-soft)]',
           glass.panelBase,
           glass.highlight,
-          collapsed ? 'w-16 items-center' : 'w-52 px-3'
+          collapsed ? 'w-16 items-center' : 'w-52'
         )}
       >
         {/* Logo */}
         <div
           className={cn(
-            'mb-4 flex h-10 shrink-0 items-center',
-            collapsed ? 'justify-center' : 'px-1'
+            'flex h-11 shrink-0 items-center border-b border-[var(--stroke-divider)]',
+            collapsed ? 'justify-center px-2' : 'px-3'
           )}
         >
-          <LogoIcon />
-          {!collapsed && (
-            <span className="ml-3 text-sm font-semibold text-[var(--text-primary)] truncate">
-              T3X
-            </span>
-          )}
+          <button
+            type="button"
+            onClick={() => { setActiveConversation(null, null); router.push('/chat'); }}
+            className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity"
+          >
+            <LogoIcon />
+            {!collapsed && (
+              <span className="text-sm font-semibold text-[var(--text-primary)] truncate">
+                T3X
+              </span>
+            )}
+          </button>
         </div>
 
-        {/* + New Project button */}
-        <div className={cn('mb-3', collapsed ? 'flex justify-center' : '')}>
+        {/* New Project button */}
+        <div className={cn('py-2', collapsed ? 'flex justify-center px-2' : 'px-3')}>
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -168,7 +191,7 @@ export function ChatSidebar() {
                   'transition-all duration-[var(--motion-base)]',
                   collapsed ? 'h-10 w-10' : 'h-10 w-full justify-start gap-2 px-3'
                 )}
-                aria-label="New project"
+                aria-label="New conversation"
               >
                 <Plus className="h-4 w-4 shrink-0" />
                 {!collapsed && <span className="text-sm font-medium">New Project</span>}
@@ -184,7 +207,7 @@ export function ChatSidebar() {
 
         {/* Scrollable content: Projects + conversations */}
         <ScrollArea className="flex-1 w-full">
-          <div className={cn('flex flex-col gap-0.5', collapsed ? 'items-center' : '')}>
+          <div className={cn('flex flex-col gap-0.5 py-2', collapsed ? 'items-center px-2' : 'px-3')}>
             {/* Projects section header */}
             {!collapsed && projects.length > 0 && (
               <div className="px-1 pt-2 pb-1">
@@ -204,11 +227,24 @@ export function ChatSidebar() {
                 activeConversationId={activeConversationId}
                 collapsed={collapsed}
                 onToggleExpand={() => {
+                  const wasExpanded = expandedProjectIds.has(project.project_id);
                   toggleProjectExpanded(project.project_id);
+                  // Auto-navigate to latest conversation when expanding (not collapsing)
+                  if (!wasExpanded) {
+                    const convs = projectConversations[project.project_id] ?? [];
+                    if (convs.length > 0) {
+                      // Data already loaded (re-expanding) — navigate immediately
+                      handleConversationClick(convs[0].conversation_id, project.project_id);
+                    } else {
+                      // First expand — data loading async, navigate when ready
+                      pendingNavProjectId.current = project.project_id;
+                    }
+                  }
                 }}
                 onConversationClick={(convId) =>
                   handleConversationClick(convId, project.project_id)
                 }
+                onNewChat={(pid) => handleNewChatInProject(pid)}
                 onCanvasClick={() => handleCanvasClick(project.project_id)}
                 onProjectContextMenu={(e) => handleProjectContextMenu(e, project.project_id)}
                 onConversationContextMenu={(e, convId) =>
@@ -228,66 +264,13 @@ export function ChatSidebar() {
         {/* Bottom section */}
         <div
           className={cn(
-            'mt-auto flex flex-col gap-1 pt-3 border-t border-[var(--stroke-divider)]',
-            collapsed ? 'items-center' : ''
+            'mt-auto flex flex-col gap-1 py-3 border-t border-[var(--stroke-divider)]',
+            collapsed ? 'items-center px-2' : 'px-3'
           )}
         >
-          {/* User Menu */}
+          {/* User Menu (includes Settings in dropdown) */}
           <UserMenu collapsed={collapsed} />
 
-          {/* Settings */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Link
-                href="/settings"
-                className={cn(
-                  'flex items-center gap-3 rounded-xl transition-all duration-[var(--motion-base)] ease-[var(--ease-out-soft)]',
-                  'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)]/50',
-                  'active:scale-95',
-                  collapsed ? 'h-10 w-10 justify-center' : 'h-10 w-full px-3',
-                  isSettings
-                    ? 'border-l-2 border-[var(--accent-commit)] bg-[var(--hover-bg-strong)] text-[var(--text-primary)]'
-                    : 'text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
-                )}
-              >
-                <Settings className="h-4 w-4 shrink-0" />
-                {!collapsed && <span className="text-sm font-medium">Settings</span>}
-              </Link>
-            </TooltipTrigger>
-            {collapsed && (
-              <TooltipContent side="right" sideOffset={8}>
-                Settings
-              </TooltipContent>
-            )}
-          </Tooltip>
-
-          {/* Collapse toggle */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={toggleSidebar}
-                className={cn(
-                  'h-8 w-8 rounded-lg text-[var(--text-tertiary)]',
-                  'hover:text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]',
-                  'transition-all duration-[var(--motion-base)]'
-                )}
-                aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-              >
-                {collapsed ? (
-                  <ChevronRight className="h-4 w-4" />
-                ) : (
-                  <ChevronLeft className="h-4 w-4" />
-                )}
-              </Button>
-            </TooltipTrigger>
-            {collapsed && (
-              <TooltipContent side="right" sideOffset={8}>
-                Expand sidebar
-              </TooltipContent>
-            )}
-          </Tooltip>
         </div>
       </aside>
 

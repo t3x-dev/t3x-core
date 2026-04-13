@@ -23,7 +23,7 @@ import {
 import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import * as api from '@/lib/api';
+import * as api from '@/infrastructure';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 

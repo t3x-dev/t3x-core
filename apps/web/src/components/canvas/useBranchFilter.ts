@@ -1,3 +1,5 @@
+'use client';
+
 import type { Node } from '@xyflow/react';
 import type { Dispatch, SetStateAction } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';

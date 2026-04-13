@@ -10,6 +10,7 @@
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { MergeWorkspace } from '@/components/merge/MergeWorkspace';
+import { useMergeWorkspaceActions } from '@/hooks/useMergeWorkspaceActions';
 import { useMicrocopy } from '@/lib/microcopy';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
 
@@ -20,7 +21,8 @@ export default function MergeWorkspacePage() {
   const mergeId = params.mergeId as string;
 
   const mc = useMicrocopy();
-  const { loadDraft, loading, error, reset } = useMergeWorkspaceStore();
+  const { loading, error, reset } = useMergeWorkspaceStore();
+  const { load: loadDraft } = useMergeWorkspaceActions();
 
   useEffect(() => {
     if (mergeId) {

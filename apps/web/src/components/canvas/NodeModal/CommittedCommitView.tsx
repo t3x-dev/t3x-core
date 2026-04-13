@@ -31,11 +31,11 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useTerminology } from '@/hooks/useTerminology';
-import type { ApiCommit } from '@/lib/api';
-import { getSemanticContent } from '@/lib/api/commits';
 import { type CommitExportFormat, exportCommit } from '@/lib/exportCommit';
 import { glass, toneAccent } from '@/lib/theme';
 import { cn } from '@/lib/utils';
+import { getSemanticContent } from '@/queries/commits';
+import type { ApiCommit } from '@/types/api';
 import { useCanvasStore } from '@/store/canvasStore';
 import type { CanvasNodeData, CommitDisplay } from '@/types/nodes';
 import { CommitHistoryPanel } from '../CommitHistoryPanel';
@@ -383,7 +383,7 @@ export function CommittedCommitView({
                     {/* Pinned Sources */}
                     {commit.sources && commit.sources.length > 0 && (
                       <PinnedSourcesSection
-                        sourceRefs={commit.sources as import('@/lib/api').CommitSourceRef[]}
+                        sourceRefs={commit.sources as import('@/infrastructure').CommitSourceRef[]}
                         projectId={commitProjectId}
                       />
                     )}
@@ -481,15 +481,9 @@ export function CommittedCommitView({
                           commitHash={data.commitHash || ''}
                           nodes={
                             commit.content?.trees
-                              ? (
-                                  commit.content.trees as Array<{
-                                    id: string;
-                                    type: string;
-                                    slots: Record<string, unknown>;
-                                  }>
-                                ).map((f) => ({
-                                  id: f.id,
-                                  text: `[${f.type}] ${Object.entries(f.slots ?? {})
+                              ? commit.content.trees.map((f) => ({
+                                  id: f.key,
+                                  text: `[${f.key}] ${Object.entries(f.slots ?? {})
                                     .map(
                                       ([k, v]) =>
                                         `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`

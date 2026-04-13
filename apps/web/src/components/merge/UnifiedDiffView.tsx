@@ -18,9 +18,10 @@ import { DiffSourceContextModal } from '@/components/diff/DiffSourceContextModal
 import { Button } from '@/components/ui/button';
 import { EmptyStateInline } from '@/components/ui/empty-state';
 import { useTerminology } from '@/hooks/useTerminology';
-import type { ApiCommit, TurnContextData } from '@/lib/api';
-import { fetchTurnContextCached, getApiCommit } from '@/lib/api';
+import { fetchCommitByHash } from '@/queries/commitByHash';
+import { fetchTurnContext } from '@/queries/turnContext';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
+import type { ApiCommit, TurnContextData } from '@/types/api';
 import type { Merge2WayResult, MergeCandidate, MergeSimilarPair, ContentNode } from '@/types/merge';
 import { MergeConflictView } from './MergeConflictView';
 import { MergeDiffLine } from './MergeDiffLine';
@@ -273,7 +274,7 @@ export function UnifiedDiffView({
     let cancelled = false;
     setLoadingCommit(true);
 
-    getApiCommit(sourceHash)
+    fetchCommitByHash(sourceHash)
       .then((commit) => {
         if (!cancelled) setSourceCommit(commit);
       })
@@ -360,7 +361,7 @@ export function UnifiedDiffView({
       setModalLoading(true);
       setModalContextData(null);
 
-      fetchTurnContextCached(turnHash, {
+      fetchTurnContext(turnHash, {
         before: 5,
         after: 5,
         highlightStart: hStart,

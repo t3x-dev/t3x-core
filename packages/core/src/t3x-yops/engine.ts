@@ -12,7 +12,7 @@
 import { applyYOps as applyGenericYOps } from '@t3x-dev/yops';
 import type { YOp as GenericYOp, YValue } from '@t3x-dev/yops';
 import type { Relation, SemanticContent } from '../semantic/types';
-import type { RelateOp, UnrelateOp, YOp, YOpsResult } from './types';
+import type { RelateOp, SourcedYOp, UnrelateOp, YOp, YOpsResult } from './types';
 import { treesToYValue, yvalueToTrees } from './convert';
 import { findNode } from './helpers';
 
@@ -88,11 +88,6 @@ export function applyYOps(content: SemanticContent, ops: YOp[]): YOpsResult {
   }
 
   const resultTrees = yvalueToTrees(currentDoc);
-
-  // Overlay metadata (source, slot_quotes) from input trees onto result trees.
-  // The YValue round-trip strips T3X-specific annotations, so we re-apply them
-  // from the original content to any surviving nodes with matching keys.
-  overlayMetadata(resultTrees, content.trees);
 
   return {
     ok: true,
@@ -174,49 +169,50 @@ function handleUnrelate(op: UnrelateOp, relations: Relation[]): Relation[] {
   );
 }
 
-// ── Metadata overlay ──
+// ── Sourced entry point ──
 
 /**
- * Build a lookup map from key path -> TreeNode for the original input trees.
+ * Apply sourced YOps, enforcing that every op carries a structurally valid
+ * Source. Does NOT verify LLMSource quotes against turns — that's
+ * `validateSource`'s responsibility (runs in the extraction retry loop before
+ * ops reach the engine). Engine enforces structure only.
  */
-function buildNodeMap(trees: import('../semantic/types').TreeNode[], prefix = ''): Map<string, import('../semantic/types').TreeNode> {
-  const map = new Map<string, import('../semantic/types').TreeNode>();
-  for (const node of trees) {
-    const path = prefix ? `${prefix}/${node.key}` : node.key;
-    map.set(path, node);
-    if (node.children.length > 0) {
-      for (const [k, v] of buildNodeMap(node.children, path)) {
-        map.set(k, v);
-      }
+export function applySourcedYOps(content: SemanticContent, ops: SourcedYOp[]): YOpsResult {
+  for (let i = 0; i < ops.length; i++) {
+    const op = ops[i] as { source?: unknown };
+    if (!op.source || typeof op.source !== 'object') {
+      return {
+        ok: false,
+        trees: content.trees,
+        relations: content.relations,
+        applied: 0,
+        error: { code: 'MISSING_SOURCE', message: `Op at index ${i} has no source`, op_index: i },
+      };
+    }
+    const s = op.source as { type?: string; author?: string };
+    if (s.type !== 'llm' && s.type !== 'human') {
+      return {
+        ok: false,
+        trees: content.trees,
+        relations: content.relations,
+        applied: 0,
+        error: { code: 'INVALID_SOURCE_TYPE', message: `Op at index ${i} has invalid source.type`, op_index: i },
+      };
+    }
+    if (s.type === 'human' && (!s.author || s.author.trim() === '')) {
+      return {
+        ok: false,
+        trees: content.trees,
+        relations: content.relations,
+        applied: 0,
+        error: { code: 'MISSING_AUTHOR', message: `Human op at index ${i} missing author`, op_index: i },
+      };
     }
   }
-  return map;
-}
-
-/**
- * Re-apply metadata (source, slot_quotes) from input trees onto output trees.
- * The YValue round-trip strips these T3X annotations, so we copy them back
- * from matching input nodes. Mutates outputTrees in place.
- */
-function overlayMetadata(
-  outputTrees: import('../semantic/types').TreeNode[],
-  inputTrees: import('../semantic/types').TreeNode[],
-): void {
-  const inputMap = buildNodeMap(inputTrees);
-
-  function walk(nodes: import('../semantic/types').TreeNode[], prefix: string): void {
-    for (const node of nodes) {
-      const path = prefix ? `${prefix}/${node.key}` : node.key;
-      const inputNode = inputMap.get(path);
-      if (inputNode) {
-        if (inputNode.source !== undefined) node.source = inputNode.source;
-        if (inputNode.slot_quotes !== undefined) node.slot_quotes = inputNode.slot_quotes;
-      }
-      if (node.children.length > 0) {
-        walk(node.children, path);
-      }
-    }
-  }
-
-  walk(outputTrees, '');
+  // Strip source before passing to generic engine (it doesn't know about source)
+  const stripped = ops.map((o) => {
+    const { source: _unused, ...rest } = o as SourcedYOp & { source: unknown };
+    return rest as YOp;
+  });
+  return applyYOps(content, stripped);
 }

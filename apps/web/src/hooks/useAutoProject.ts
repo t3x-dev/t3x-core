@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { createProject } from '@/lib/api/projects';
+import { createProject } from '@/infrastructure/projects';
 import { useChatStore } from '@/store/chatStore';
 
 /**

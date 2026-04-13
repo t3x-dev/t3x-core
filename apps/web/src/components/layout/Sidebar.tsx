@@ -1,12 +1,9 @@
 'use client';
 
-import { ChevronLeft, ChevronRight, Command, Home, Settings } from 'lucide-react';
+import { ChevronLeft, ChevronRight, MessageSquare, Settings } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useMemo } from 'react';
-import { ProjectDraftsSection } from '@/components/ProjectDraftsSection';
 import { Button } from '@/components/ui/button';
-import { Kbd } from '@/components/ui/kbd';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
@@ -110,15 +107,8 @@ interface SidebarProps {
 
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const pathname = usePathname();
-  // Removed: Deploy, Insights, Search, Templates — not core workflow
   const isSettings = pathname.startsWith('/settings');
-  const isHome = pathname === '/' || pathname.startsWith('/project');
-
-  // Extract projectId from pathname for project-aware sections
-  const projectId = useMemo(() => {
-    const match = pathname.match(/^\/project\/([^/]+)/);
-    return match ? match[1] : null;
-  }, [pathname]);
+  const isHome = pathname === '/' || pathname.startsWith('/project') || pathname.startsWith('/chat');
 
   return (
     <TooltipProvider delayDuration={0}>
@@ -132,10 +122,11 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           collapsed ? 'w-16 items-center' : 'w-52 px-3'
         )}
       >
-        {/* Logo */}
-        <div
+        {/* Logo — clickable, goes to Chats */}
+        <Link
+          href="/chat"
           className={cn(
-            'mb-6 flex h-10 shrink-0 items-center',
+            'mb-6 flex h-10 shrink-0 items-center hover:opacity-80 transition-opacity',
             collapsed ? 'justify-center' : 'px-1'
           )}
         >
@@ -145,61 +136,18 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
               T3X
             </span>
           )}
-        </div>
-
-        {/* Command Palette Button */}
-        <div className={cn('mb-[var(--space-group)]', collapsed ? 'flex justify-center' : '')}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                onClick={() => {
-                  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true }));
-                }}
-                className={cn(
-                  'rounded-xl bg-[var(--hover-bg)] ring-1 ring-[var(--stroke-default)]',
-                  'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--hover-bg-strong)]',
-                  'transition-all duration-[var(--motion-base)]',
-                  collapsed ? 'h-10 w-10' : 'h-10 w-full justify-start gap-3 px-3'
-                )}
-                aria-label="Open command palette"
-              >
-                <Command className="h-4 w-4 shrink-0" />
-                {!collapsed && <span className="text-xs">Search...</span>}
-                {!collapsed && <Kbd className="ml-auto">⌘K</Kbd>}
-              </Button>
-            </TooltipTrigger>
-            {collapsed && (
-              <TooltipContent side="right" sideOffset={8} className="flex items-center gap-2">
-                <span>Command Palette</span>
-                <Kbd>⌘K</Kbd>
-              </TooltipContent>
-            )}
-          </Tooltip>
-        </div>
+        </Link>
 
         {/* Main Navigation */}
         <nav className={cn('flex flex-col gap-1', collapsed ? 'items-center' : '')}>
-          <NavItem href="/" label="Projects" isActive={isHome} collapsed={collapsed}>
-            <Home className="h-5 w-5" />
+          <NavItem href="/chat" label="Chats" isActive={isHome} collapsed={collapsed}>
+            <MessageSquare className="h-5 w-5" />
           </NavItem>
 
           <NavItem href="/settings" label="Settings" isActive={isSettings} collapsed={collapsed}>
             <Settings className="h-5 w-5" />
           </NavItem>
         </nav>
-
-        {/* Project Drafts Section */}
-        {projectId && (
-          <div
-            className={cn(
-              'border-t border-[var(--stroke-divider)] py-2',
-              collapsed ? 'flex justify-center' : ''
-            )}
-          >
-            <ProjectDraftsSection projectId={projectId} collapsed={collapsed} />
-          </div>
-        )}
 
         {/* User Menu */}
         <div className={cn('mt-auto', collapsed ? 'flex justify-center' : '')}>

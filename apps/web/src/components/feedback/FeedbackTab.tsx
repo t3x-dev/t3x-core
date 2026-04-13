@@ -9,14 +9,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import type { Project } from '@/lib/api';
-import { listProjects } from '@/lib/api';
-import type { CosineBucket, FeedbackStats } from '@/lib/api/extraction-feedback';
+import type { Project } from '@/infrastructure';
+import { listProjects } from '@/infrastructure';
+import type { CosineBucket, FeedbackStats } from '@/infrastructure/extraction-feedback';
 import {
   getExtractionFeedbackStats,
   getFeedbackCosineBuckets,
-} from '@/lib/api/extraction-feedback';
-import { listLeavesByProject } from '@/lib/api/leaves';
+} from '@/infrastructure/extraction-feedback';
+import { listLeavesByProject } from '@/infrastructure/leaves';
 import { ConfidenceBucketChart } from './ConfidenceBucketChart';
 import { FeedbackByTypeTable } from './FeedbackByTypeTable';
 import { FeedbackOverview } from './FeedbackOverview';

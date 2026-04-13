@@ -4,7 +4,7 @@ import { Loader2 } from 'lucide-react';
 import { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { useKnowledgeGraphStore } from '@/store/knowledgeGraphStore';
+import { useKnowledgeGraph } from '@/hooks/useKnowledgeGraph';
 import { KGCanvas } from './KGCanvas';
 import { KGDetailPanel } from './KGDetailPanel';
 import { KGToolbar } from './KGToolbar';
@@ -14,7 +14,7 @@ interface KnowledgeGraphPageProps {
 }
 
 export function KnowledgeGraphPage({ projectId }: KnowledgeGraphPageProps) {
-  const { nodes, loading, building, error, fetchNodes, buildGraph } = useKnowledgeGraphStore();
+  const { nodes, loading, building, error, fetchNodes, buildGraph } = useKnowledgeGraph();
 
   useEffect(() => {
     fetchNodes(projectId);

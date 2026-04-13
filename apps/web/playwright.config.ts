@@ -1,63 +1,56 @@
 import { defineConfig, devices } from '@playwright/test';
 
 /**
- * Playwright configuration for V4 WebUI E2E tests.
+ * Playwright e2e configuration.
  *
- * @see https://playwright.dev/docs/test-configuration
+ * Uses the existing dev servers: API at :8000, WebUI at :3000.
+ * If `CI` is set, the `webServer` blocks will spin up the servers;
+ * locally, you can start them manually with `pnpm dev:api` + `pnpm dev:webui`
+ * and set `reuseExistingServer: true`.
  */
+
+const WEBUI_PORT = process.env.WEBUI_PORT ?? '3000';
+const API_PORT = process.env.API_PORT ?? '8000';
+const WEBUI_URL = process.env.WEBUI_URL ?? `http://localhost:${WEBUI_PORT}`;
+const API_URL = process.env.API_URL ?? `http://localhost:${API_PORT}`;
+
 export default defineConfig({
   testDir: './e2e',
-  /* Run tests in files in parallel */
-  fullyParallel: true,
-  /* Fail the build on CI if you accidentally left test.only in the source code */
+  fullyParallel: false, // conversations share DB state
   forbidOnly: !!process.env.CI,
-  /* Retry on CI only */
-  retries: process.env.CI ? 2 : 0,
-  /* Opt out of parallel tests on CI */
-  workers: process.env.CI ? 1 : undefined,
-  /* Reporter to use */
-  reporter: 'html',
-  /* Shared settings for all the projects below */
+  retries: 0,
+  workers: 1,
+  reporter: process.env.CI ? 'github' : 'list',
+  timeout: 30_000,
+  expect: { timeout: 5_000 },
   use: {
-    /* Base URL to use in actions like `await page.goto('/')` */
-    baseURL: 'http://localhost:3000',
-    /* Collect trace when retrying the failed test */
-    trace: 'on-first-retry',
-    /* Screenshot on failure */
+    baseURL: WEBUI_URL,
+    trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
+    video: 'off',
   },
-
-  /* Configure projects for major browsers */
   projects: [
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
     },
-    // Uncomment to test on other browsers
-    // {
-    //   name: 'firefox',
-    //   use: { ...devices['Desktop Firefox'] },
-    // },
-    // {
-    //   name: 'webkit',
-    //   use: { ...devices['Desktop Safari'] },
-    // },
   ],
-
-  /* Run your local dev server before starting the tests */
-  webServer: [
-    {
-      command: 'pnpm dev:api',
-      url: 'http://localhost:8000/health',
-      reuseExistingServer: !process.env.CI,
-      cwd: '../..',
-      timeout: 60000,
-    },
-    {
-      command: 'pnpm dev',
-      url: 'http://localhost:3000',
-      reuseExistingServer: !process.env.CI,
-      timeout: 60000,
-    },
-  ],
+  webServer: process.env.CI
+    ? [
+        {
+          command: 'pnpm --filter t3x-api-server dev',
+          url: `${API_URL}/api/health`,
+          reuseExistingServer: false,
+          timeout: 60_000,
+          cwd: '../..',
+        },
+        {
+          command: 'pnpm --filter t3x-webui dev',
+          url: WEBUI_URL,
+          reuseExistingServer: false,
+          timeout: 60_000,
+          cwd: '../..',
+        },
+      ]
+    : undefined,
 });

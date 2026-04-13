@@ -42,8 +42,6 @@ export * from './schema-tree-state';
 // Schema (leaves, pins, conversation_contexts)
 // @see docs/specification/semantic-layer-architecture.md
 export * from './schema-trees';
-// Knowledge Conflicts Schema (conflict detection persistence)
-export * from './schema-knowledge-conflicts';
 // Observable Metrics Schema (event tracking)
 export * from './schema-metrics';
 // Node Modifications Schema (audit trail)

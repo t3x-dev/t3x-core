@@ -273,25 +273,6 @@ function TreeNodeComponent({ data, selected, id }: TreeNodeProps) {
 
   return (
     <div className={stateClasses} style={addedGlowStyle}>
-      {/* Gate status badge */}
-      {data.gateStatus === 'warning' && (
-        <div
-          className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-[var(--status-warning)] flex items-center justify-center z-10"
-          title={data.gateIssueSummary ?? 'Quality warning'}
-          aria-label={`${data.gateIssueCount ?? 0} quality warnings`}
-        >
-          <span className="text-[8px] text-white font-bold">{data.gateIssueCount ?? '!'}</span>
-        </div>
-      )}
-      {data.gateStatus === 'error' && (
-        <div
-          className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-[var(--status-error)] flex items-center justify-center z-10"
-          title={data.gateIssueSummary ?? 'Quality error'}
-          aria-label={`${data.gateIssueCount ?? 0} quality errors`}
-        >
-          <span className="text-[8px] text-white font-bold">{data.gateIssueCount ?? '!'}</span>
-        </div>
-      )}
       {/* Keytree for origin pulse glow */}
       {state === 'added' && (
         <style>{`

@@ -15,7 +15,8 @@
       "!**/.turbo",
       "!**/*.min.js",
       "!**/pnpm-lock.yaml",
-      "!**/preview"
+      "!**/preview",
+      "!**/e2e"
     ]
   },
   "formatter": {
@@ -46,7 +47,18 @@
         "noNonNullAssertion": "off",
         "useImportType": "warn",
         "useNodejsImportProtocol": "off",
-        "useTemplate": "off"
+        "useTemplate": "off",
+        "noRestrictedImports": {
+          "level": "error",
+          "options": {
+            "patterns": [
+              {
+                "group": "@/commands/**",
+                "message": "Components must not import from the commands layer directly. Route through useExtraction or a dedicated hook."
+              }
+            ]
+          }
+        }
       },
       "suspicious": {
         "noExplicitAny": "warn",
@@ -83,5 +95,165 @@
     "linter": {
       "enabled": false
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": [
+        "apps/web/src/commands/**",
+        "apps/web/src/queries/**",
+        "apps/web/src/infrastructure/**"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["apps/web/src/domain/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": "react",
+                    "message": "domain/ is L2 (pure). No React allowed. Move React-bound code to hooks/ or components/."
+                  },
+                  {
+                    "group": "@/components/**",
+                    "message": "domain/ is L2 (pure). No upstream imports (components)."
+                  },
+                  {
+                    "group": "@/hooks/**",
+                    "message": "domain/ is L2 (pure). No upstream imports (hooks)."
+                  },
+                  {
+                    "group": "@/store/**",
+                    "message": "domain/ is L2 (pure). No upstream imports (store)."
+                  },
+                  {
+                    "group": "@/queries/**",
+                    "message": "domain/ is L2 (pure). No upstream imports (queries)."
+                  },
+                  {
+                    "group": "@/commands/**",
+                    "message": "domain/ is L2 (pure). No upstream imports (commands)."
+                  },
+                  {
+                    "group": "@/infrastructure/**",
+                    "message": "domain/ is L2 (pure). No I/O (infrastructure is L1)."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "apps/web/src/components/canvas/**",
+        "apps/web/src/components/chat/**",
+        "apps/web/src/components/commit/**",
+        "apps/web/src/components/leaf/**",
+        "apps/web/src/components/merge/**",
+        "apps/web/src/components/tree-graph/merge-view/**"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": "@/commands/**",
+                    "message": "Components must not import from the commands layer directly. Route through useExtraction or a dedicated hook."
+                  },
+                  {
+                    "group": "@/infrastructure/**",
+                    "message": "Components must not import from the infrastructure layer directly. Use queries or the store instead."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["apps/web/src/store/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": "@/commands/**",
+                    "message": "Stores must not import from the commands layer (doc §2 L3: store 不得调用 commands)."
+                  },
+                  {
+                    "group": "@/infrastructure/**",
+                    "message": "Stores must not import from the infrastructure layer (doc §2 L3: store 不得调用 infrastructure). Move the call to a hook in @/hooks/."
+                  },
+                  {
+                    "group": "@/queries/**",
+                    "message": "Stores must be passive per doc §2.5. Async I/O lives in hooks; the hook calls the query and writes results back via a store setter. Stores that still need types from queries are temporarily exempted in biome.json — add to that list only if there's no alternative."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "apps/web/src/store/canvasStoreUtils.ts",
+        "apps/web/src/store/searchStore.ts",
+        "apps/web/src/store/knowledgeGraphStore.ts"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": "@/commands/**",
+                    "message": "Stores must not import from the commands layer."
+                  },
+                  {
+                    "group": "@/infrastructure/**",
+                    "message": "Stores must not import from the infrastructure layer."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "apps/web/src/components/chat/useExtraction.ts",
+        "apps/web/src/components/chat/useGoldEdit.ts"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": "off"
+          }
+        }
+      }
+    }
+  ]
 }

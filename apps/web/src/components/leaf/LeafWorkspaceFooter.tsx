@@ -2,7 +2,7 @@
 
 import { GitBranch, GitCommit, Server } from 'lucide-react';
 import Link from 'next/link';
-import type { Leaf } from '@/lib/api';
+import type { Leaf } from '@/types/api';
 import { cn } from '@/lib/utils';
 
 interface LeafWorkspaceFooterProps {
@@ -69,7 +69,7 @@ export function LeafWorkspaceFooter({ leaf, projectId, className }: LeafWorkspac
       {/* Schema badge */}
       <span className="flex items-center gap-1">
         <Server className="h-2.5 w-2.5" />
-        t3x/commit/v4
+        t3x/commit
       </span>
     </footer>
   );

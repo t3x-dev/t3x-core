@@ -2,9 +2,8 @@
 
 import { GitBranch, X } from 'lucide-react';
 import { useCallback } from 'react';
-import { extractNodes } from '@/lib/api/trees';
+import { useDriftResolver } from '@/hooks/useDriftResolver';
 import { useChatStore } from '@/store/chatStore';
-import { useDraftStore } from '@/store/draftStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 
 const CHOICE_LABELS: Record<string, { label: string; description: string }> = {
@@ -22,37 +21,25 @@ export function DriftPopup() {
   const driftInfo = useWorkspaceStore((s) => s.driftInfo);
   const driftChoices = useWorkspaceStore((s) => s.driftChoices);
   const clearDrift = useWorkspaceStore((s) => s.clearDrift);
-  const draftConvId = useDraftStore((s) => s.conversationId);
+  const wsConvId = useWorkspaceStore((s) => s.conversationId);
   const activeConvId = useChatStore((s) => s.activeConversationId);
-  const conversationId = draftConvId ?? activeConvId;
+  const activeProjectId = useChatStore((s) => s.activeProjectId);
+  const conversationId = wsConvId ?? activeConvId;
+  const { applyChoice } = useDriftResolver();
 
   const handleChoice = useCallback(
     async (choice: string) => {
       if (!conversationId || !driftInfo) return;
-
       clearDrift();
+      if (choice === 'keep_old') return; // YAML stays the same
 
-      if (choice === 'keep_old') {
-        // Nothing to do — YAML stays the same
-        return;
-      }
-
-      // For other choices, re-call extract with drift_decision
-      try {
-        const result = await extractNodes(conversationId, undefined, {
-          choice,
-          relation: driftInfo.relation,
-          new_topic: driftInfo.new_topic,
-        });
-
-        if (result.status === 'completed' && result.snapshot) {
-          useDraftStore.getState().setDraft(result.snapshot);
-        }
-      } catch {
-        // Drift choice application failed — non-critical
-      }
+      await applyChoice(activeProjectId, conversationId, {
+        choice,
+        relation: driftInfo.relation,
+        new_topic: driftInfo.new_topic,
+      });
     },
-    [conversationId, driftInfo, clearDrift]
+    [conversationId, driftInfo, clearDrift, activeProjectId, applyChoice]
   );
 
   if (!driftDetected || !driftInfo) return null;

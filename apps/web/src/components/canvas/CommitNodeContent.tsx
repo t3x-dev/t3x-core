@@ -48,11 +48,7 @@ export const CommitContentSection = memo(function CommitContentSection({
   maxContentNodes?: number;
 }) {
   const nodes = commit.content?.trees ?? [];
-  const displayNodes = nodes.slice(0, PREVIEW_MAX_FRAMES) as Array<{
-    id: string;
-    type: string;
-    slots: Record<string, unknown>;
-  }>;
+  const displayNodes = nodes.slice(0, PREVIEW_MAX_FRAMES);
   const remainingNodes = nodes.length - PREVIEW_MAX_FRAMES;
 
   return (
@@ -99,11 +95,11 @@ export const CommitContentSection = memo(function CommitContentSection({
                     .join('; ');
                   return (
                     <li
-                      key={f.id}
+                      key={f.key}
                       className="flex items-start gap-1 text-xs text-[var(--text-secondary)]"
                     >
                       <span className="text-[var(--text-tertiary)] font-mono text-[11px] shrink-0">
-                        {f.type}
+                        {f.key}
                       </span>
                       <span className="line-clamp-2">{slotSummary}</span>
                     </li>

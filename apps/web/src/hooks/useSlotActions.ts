@@ -4,14 +4,16 @@
  * useSlotActions — Facade hook for semantic YAML operations
  *
  * Components call deleteSlot('budget', 'hotels') — no YOp syntax knowledge needed.
- * All actions route through commandStore.execute().
+ * TODO(undo-redo): yops_log is append-only; undo is deferred to a future PR.
+ * Actions are currently no-ops until goldEditBuilder dispatch is wired.
  */
 
+import type { YOp } from '@t3x-dev/core';
 import { useCallback } from 'react';
-import { useCommandStore } from '@/store/commandStore';
 
 export function useSlotActions() {
-  const execute = useCommandStore((s) => s.execute);
+  // TODO(undo-redo): yops_log is append-only; undo is deferred to a future PR.
+  const execute = useCallback((_ops: YOp[]) => {}, []);
 
   const updateSlot = useCallback(
     (nodeId: string, slotKey: string, value: string) => {

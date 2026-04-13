@@ -23,7 +23,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { getAuthMe } from '@/lib/api/auth';
+import { getAuthMe } from '@/infrastructure/auth';
 import { clearSession, getSessionKey, getSessionUser, setSessionUser } from '@/lib/session';
 import { cn } from '@/lib/utils';
 

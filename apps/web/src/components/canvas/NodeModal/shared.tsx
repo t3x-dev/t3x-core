@@ -241,7 +241,8 @@ export function CommitSourceContent({ commit }: { commit: CommitDisplay }) {
   // Derive display entries from tree nodes for source context tracing
   const nodes = commit.content?.trees
     ? (() => {
-        type TreeNodeLike = import('@t3x-dev/core').TreeNode;
+        // EnrichedTreeNode: runtime shape that may carry `source` from the DB.
+        type TreeNodeLike = import('@t3x-dev/core').TreeNode & { source?: string };
         const entries: Array<{ id: string; text: string; source_ref?: { turn_hash?: string; start_char?: number; end_char?: number } }> = [];
         function walk(nodes: TreeNodeLike[], prefix = '') {
           for (const node of nodes) {
@@ -254,7 +255,7 @@ export function CommitSourceContent({ commit }: { commit: CommitDisplay }) {
               text,
               source_ref: node.source ? { turn_hash: node.source } : undefined,
             });
-            if (node.children?.length) walk(node.children, path);
+            if (node.children?.length) walk(node.children as TreeNodeLike[], path);
           }
         }
         walk((commit.content as import('@t3x-dev/core').SemanticContent).trees);

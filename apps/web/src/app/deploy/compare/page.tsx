@@ -57,7 +57,7 @@ import {
   listEngineRuns,
   listSavedComparisons,
   type SavedComparison,
-} from '@/lib/api';
+} from '@/infrastructure';
 import { cn } from '@/lib/utils';
 
 /** Format configuration as display string */

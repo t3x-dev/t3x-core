@@ -40,11 +40,8 @@ export { serializeForPrompt } from './serialize';
 
 // ── Tree utilities ──
 export {
-  buildSlotQuotesPath,
-  collectSlotQuotes,
   flattenTree,
   flattenTrees,
-  resolveSlotQuotesPath,
   unflattenToTree,
   unflattenToTrees,
   validateTreeDepth,
@@ -87,4 +84,3 @@ export { RELATION_TYPES } from './types';
 
 // ── Validation ──
 export { checkRelationSanity, validateIntegrity } from './validate';
-export { validateSlotQuotes, type QuoteValidationResult } from './validate-quotes';

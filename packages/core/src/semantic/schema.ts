@@ -19,8 +19,6 @@ export const TreeNodeSchema: z.ZodType<unknown> = z.lazy(() =>
     key: z.string().min(1).regex(/^[a-z][a-z0-9_]*$/),
     slots: z.record(z.string(), SlotValueSchema),
     children: z.array(TreeNodeSchema),
-    slot_quotes: z.record(z.string(), z.string()).optional(),
-    source: z.string().optional(),
   })
 );
 
@@ -38,6 +36,8 @@ export const RelationSchema = z.object({
   from: z.string(),
   to: z.string(),
   type: RelationTypeSchema,
+  from_project: z.string().optional(),
+  to_project: z.string().optional(),
 });
 
 // ── SemanticContent ──

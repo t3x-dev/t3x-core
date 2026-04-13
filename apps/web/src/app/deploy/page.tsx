@@ -41,7 +41,8 @@ import {
   listDeployAgents,
   listEngineRuns,
   updateDeployAgent,
-} from '@/lib/api';
+} from '@/infrastructure';
+import { useProjectCrud } from '@/hooks/useProjectCrud';
 import { useProjectStore } from '@/store/projectStore';
 
 export default function DeployPage() {
@@ -75,8 +76,8 @@ function DeployPageContent() {
   });
 
   // Project store — ensure projects are loaded for RunsTable source column
-  const fetchProjects = useProjectStore((s) => s.fetchProjects);
   const projectsInitialized = useProjectStore((s) => s.initialized);
+  const { list: fetchProjects } = useProjectCrud();
 
   // Filter states
   const [filterModel, setFilterModel] = useState<string | null>(null);

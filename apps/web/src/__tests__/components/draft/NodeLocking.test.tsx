@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { NodeCard } from '@/components/draft/NodeCard';
-import type { DraftNode } from '@/lib/api';
+import type { DraftNode } from '@/infrastructure';
 
 function makeNode(overrides: Partial<DraftNode> = {}): DraftNode {
   return {

@@ -4,66 +4,22 @@
  * Tests for extended resolution functionality (Issue #221):
  * - resolveConflict with 'both' and 'edit' options
  * - setCustomText for edit mode
- * - getPreviewNodes with extended resolutions
  * - getUnresolvedCount considering extended resolutions
  * - canCommit with extended resolutions
  * - fetchSourceContext caching
  *
  * Updated for tree-primary merge architecture.
  * Uses treeMergeResult (path-based MergeResult from core) for conflict resolution.
- * Legacy getPreviewNodes still uses Merge2WayResult prepared data.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
 import type { MergeResult } from '@t3x-dev/core';
-import type { Merge2WayResult, ContentNode } from '@/types/merge';
 
 // Mock the API module
-vi.mock('@/lib/api', () => ({
+vi.mock('@/infrastructure', () => ({
   fetchTurnContext: vi.fn(),
 }));
-
-// Helper to create a mock node
-const createNode = (id: string, text: string): ContentNode => ({
-  id,
-  text,
-  source: {
-    turn_hash: `sha256:turn_${id}`,
-    start_char: 0,
-    end_char: text.length,
-  },
-});
-
-// Helper to create mock prepared merge data (legacy node-based)
-const createMockPrepared = (): Merge2WayResult => ({
-  identical: [createNode('identical-1', 'This node is the same.')],
-  similarPairs: [
-    {
-      source: createNode('source-1', 'Budget is $3000 per month.'),
-      target: createNode('target-1', 'Budget is $3500 per month.'),
-      wordDiff: [
-        { type: 'unchanged', text: 'Budget is' },
-        { type: 'removed', text: '$3000' },
-        { type: 'added', text: '$3500' },
-        { type: 'unchanged', text: 'per month.' },
-      ],
-      resolution: undefined,
-    },
-    {
-      source: createNode('source-2', 'Meeting on Monday.'),
-      target: createNode('target-2', 'Meeting on Tuesday.'),
-      wordDiff: [
-        { type: 'unchanged', text: 'Meeting on' },
-        { type: 'removed', text: 'Monday' },
-        { type: 'added', text: 'Tuesday' },
-      ],
-      resolution: undefined,
-    },
-  ],
-  onlyInSource: [{ node: createNode('only-source-1', 'Only in source.'), keep: true }],
-  onlyInTarget: [{ node: createNode('only-target-1', 'Only in target.'), keep: true }],
-});
 
 // Helper to create tree-primary MergeResult
 const createMockTreeMergeResult = (): MergeResult => ({
@@ -93,9 +49,7 @@ describe('MergeWorkspaceStore - Extended Resolutions', () => {
   const setupStore = () => {
     const treeMergeResult = createMockTreeMergeResult();
     useMergeWorkspaceStore.getState().setTreeMergeResult(treeMergeResult);
-    // Also set legacy prepared for getPreviewNodes
     useMergeWorkspaceStore.setState({
-      prepared: createMockPrepared(),
       status: 'pending',
     });
   };
@@ -210,58 +164,6 @@ describe('MergeWorkspaceStore - Extended Resolutions', () => {
       useMergeWorkspaceStore.getState().resolveConflict(1, 'target');
 
       expect(useMergeWorkspaceStore.getState().canCommit()).toBe(false);
-    });
-  });
-
-  describe('getPreviewNodes', () => {
-    it('should include identical nodes', () => {
-      setupStore();
-
-      const nodes = useMergeWorkspaceStore.getState().getPreviewNodes();
-
-      expect(nodes.some((s) => s.id === 'identical-1')).toBe(true);
-    });
-
-    it('should include source node for "source" resolution', () => {
-      setupStore();
-
-      // Use legacy resolveConflict that sets prepared.similarPairs[0].resolution
-      const state = useMergeWorkspaceStore.getState();
-      const prepared = state.prepared;
-      if (prepared) {
-        const updated = { ...prepared };
-        updated.similarPairs = [...prepared.similarPairs];
-        updated.similarPairs[0] = { ...updated.similarPairs[0], resolution: 'source' };
-        useMergeWorkspaceStore.setState({ prepared: updated });
-      }
-
-      const nodes = useMergeWorkspaceStore.getState().getPreviewNodes();
-
-      expect(nodes.some((s) => s.id === 'source-1')).toBe(true);
-      expect(nodes.some((s) => s.id === 'target-1')).toBe(false);
-    });
-
-    it('should include both nodes for "both" resolution', () => {
-      setupStore();
-
-      // Set extended resolution for index 0
-      useMergeWorkspaceStore.setState({
-        extendedResolutions: { '0': { type: 'both' } },
-      });
-
-      const nodes = useMergeWorkspaceStore.getState().getPreviewNodes();
-
-      expect(nodes.some((s) => s.id === 'source-1')).toBe(true);
-      expect(nodes.some((s) => s.id === 'target-1')).toBe(true);
-    });
-
-    it('should include kept source-only and target-only nodes', () => {
-      setupStore();
-
-      const nodes = useMergeWorkspaceStore.getState().getPreviewNodes();
-
-      expect(nodes.some((s) => s.id === 'only-source-1')).toBe(true);
-      expect(nodes.some((s) => s.id === 'only-target-1')).toBe(true);
     });
   });
 

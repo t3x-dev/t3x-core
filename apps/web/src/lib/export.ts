@@ -8,7 +8,7 @@
  * - Download as file
  */
 
-import type { Assertion, Constraint, Leaf } from './api';
+import type { Assertion, Constraint, Leaf } from '@/infrastructure';
 
 // ============================================================================
 // Types

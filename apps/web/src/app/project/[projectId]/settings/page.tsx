@@ -17,15 +17,13 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import type { ExtractionStyleConfig } from '@t3x-dev/core';
 import { ArrowLeft, CheckCircle2, Circle, GripVertical, Loader2, RotateCcw } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { AutopilotSettings } from '@/components/autopilot/AutopilotSettings';
-import { BusinessRulesSection } from '@/components/settings/BusinessRulesSection';
-import { ExtractionStylePanel } from '@/components/settings/ExtractionStylePanel';
 import { ModelSelector } from '@/components/shared/ModelSelector';
+import { useProjectCrud } from '@/hooks/useProjectCrud';
 import {
   getProjectProviderConfig,
   getProviderRoles,
@@ -33,8 +31,8 @@ import {
   type ProviderInfo,
   type RoleAssignment,
   updateProjectProviderConfig,
-} from '@/lib/api';
-import { updateProject } from '@/lib/api/projects';
+} from '@/infrastructure';
+import { updateProject } from '@/infrastructure/projects';
 import { cn } from '@/lib/utils';
 import { useProjectStore } from '@/store/projectStore';
 
@@ -214,25 +212,14 @@ export default function ProjectSettingsPage() {
   const [overriddenRoles, setOverriddenRoles] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [extractionStyle, setExtractionStyle] = useState<ExtractionStyleConfig | null>(null);
-
   const project = useProjectStore((state) => state.projects.find((p) => p.id === projectId));
-  const updateProjectModel = useProjectStore((state) => state.updateProjectModel);
+  const { setModel: updateProjectModel } = useProjectCrud();
 
   const handleModelChange = async (provider: string | null, model: string | null) => {
     try {
       await updateProjectModel(projectId, provider, model);
     } catch {
       // Error is handled by the store (notifyCallback)
-    }
-  };
-
-  const handleExtractionStyleChange = async (style: ExtractionStyleConfig | null) => {
-    setExtractionStyle(style);
-    try {
-      await updateProject(projectId, { extraction_style: style });
-    } catch (err) {
-      console.error('Failed to update extraction style:', err);
     }
   };
 
@@ -243,13 +230,10 @@ export default function ProjectSettingsPage() {
         listProviders(),
         getProviderRoles(),
         getProjectProviderConfig(projectId),
-        import('@/lib/api/projects').then((m) => m.getProject(projectId)),
+        import('@/infrastructure/projects').then((m) => m.getProject(projectId)),
       ]);
 
       setGlobalRoles(roles);
-
-      // Load extraction style from project
-      setExtractionStyle(projectDetail.extraction_style ?? null);
 
       // Determine which roles are overridden at the project level
       const overridden = new Set<string>();
@@ -436,15 +420,6 @@ export default function ProjectSettingsPage() {
         />
       </div>
 
-      {/* Extraction Style */}
-      <div className="mt-12 pt-8 border-t border-[var(--stroke-divider)]">
-        <ExtractionStylePanel
-          value={extractionStyle}
-          onChange={handleExtractionStyleChange}
-          showGlobalToggle
-        />
-      </div>
-
       {/* Autopilot Settings */}
       <div className="mt-12 pt-8 border-t border-[var(--stroke-divider)]">
         <h1 className="text-lg font-semibold text-[var(--text-primary)] mb-2">Autopilot</h1>
@@ -452,11 +427,6 @@ export default function ProjectSettingsPage() {
           Configure automatic knowledge commit rules for this project.
         </p>
         <AutopilotSettings projectId={projectId} />
-      </div>
-
-      {/* Business Rules */}
-      <div className="mt-12 pt-8 border-t border-[var(--stroke-divider)]">
-        <BusinessRulesSection projectId={projectId} />
       </div>
     </div>
   );

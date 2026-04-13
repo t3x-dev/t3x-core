@@ -107,19 +107,7 @@ describe('ylint', () => {
       expect(w!.form).toBe(2);
     });
 
-    it('exempts slot_quotes values from Form 2 checks', () => {
-      const result = ylint(
-        sc(
-          node('topic', { verbatim: 'apples, oranges, bananas, grapes and pears' }, [], {
-            slot_quotes: { verbatim: 'original quote text' },
-          })
-        )
-      );
-      const f2Warnings = result.warnings.filter((w) => w.form === 2);
-      expect(f2Warnings).toHaveLength(0);
-    });
-
-    it('exempts number and boolean scalars', () => {
+it('exempts number and boolean scalars', () => {
       const result = ylint(sc(node('metrics', { count: 42, active: true })));
       const f2Warnings = result.warnings.filter((w) => w.form === 2);
       expect(f2Warnings).toHaveLength(0);

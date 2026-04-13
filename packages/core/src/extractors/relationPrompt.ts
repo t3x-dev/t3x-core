@@ -15,12 +15,11 @@ export function buildRelationPrompt(nodes: Array<{ id: string; text: string }>):
   const systemPrompt = `You are a discourse relation analyzer. Given a list of semantic nodes extracted from conversations, identify meaningful relationships between them.
 
 ## Relation Types
-- supports: S_target provides evidence, reasoning, or backing for S_source
-- contrasts: S_target contradicts, qualifies, or presents an alternative to S_source
 - causes: S_source leads to or results in S_target
-- temporal_follows: S_target occurs after S_source in time
 - conditions: S_source is a prerequisite or condition for S_target
-- summarizes: S_target abstracts or concludes the content of S_source
+- contrasts: S_target contradicts, qualifies, or presents an alternative to S_source
+- follows: S_target occurs after S_source in time or sequence
+- depends: S_source depends on or is supported by S_target
 
 ## Rules
 1. Only identify relationships where there is clear semantic evidence.
@@ -35,8 +34,8 @@ Return a JSON array:
   {
     "source_id": "s_xxx",
     "target_id": "s_yyy",
-    "type": "supports",
-    "reasoning": "S_yyy provides a concrete example that backs the claim in S_xxx"
+    "type": "depends",
+    "reasoning": "S_xxx depends on the evidence provided by S_yyy"
   }
 ]
 

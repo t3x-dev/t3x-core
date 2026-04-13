@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AttachedImage } from '@/components/chat/ChatInput';
-import * as api from '@/lib/api';
-import type { Citation } from '@/lib/api/chat';
+import * as api from '@/infrastructure';
+import type { Citation } from '@/infrastructure/chat';
 import { useChatSessionStore } from '@/store/chatSessionStore';
 
 // Chat page size for pagination

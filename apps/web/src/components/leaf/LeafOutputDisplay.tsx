@@ -5,7 +5,7 @@ import { useCallback, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { NodeCoverageEntry, WorkspaceMode } from '@/hooks/useLeafPageData';
-import type { Assertion, Constraint } from '@/lib/api';
+import type { Assertion, Constraint } from '@/types/api';
 import { cn } from '@/lib/utils';
 import type { NodeWithSource } from '@/types/sourceContext';
 

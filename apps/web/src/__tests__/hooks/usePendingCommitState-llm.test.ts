@@ -15,7 +15,7 @@ vi.mock('sonner', () => ({
 }));
 
 // Mock the api module
-vi.mock('@/lib/api', () => ({
+vi.mock('@/infrastructure', () => ({
   createWorkbenchDraft: vi.fn(),
   extractIncremental: vi.fn(),
   commitWorkbenchDraft: vi.fn(),
@@ -31,7 +31,6 @@ const mockCanvasStore = {
   nodes: [] as Array<{ id: string; data: Record<string, unknown> }>,
   edges: [] as Array<{ source: string; target: string }>,
   updateNodeId: vi.fn(),
-  loadProjectData: vi.fn(),
   openLeafPanel: vi.fn(),
   getState: () => mockCanvasStore,
 };
@@ -43,9 +42,19 @@ vi.mock('@/store/canvasStore', () => ({
   ),
 }));
 
+// Mock useCanvasNodeActions — the hook delegates canvas reload to this
+vi.mock('@/hooks/useCanvasNodeActions', () => ({
+  useCanvasNodeActions: () => ({
+    load: vi.fn(),
+    refresh: vi.fn(),
+    add: vi.fn(),
+    addDraft: vi.fn(),
+  }),
+}));
+
 import type { Node } from '@xyflow/react';
 import { usePendingCommitState } from '@/hooks/usePendingCommitState';
-import * as api from '@/lib/api';
+import * as api from '@/infrastructure';
 import type { CanvasNodeData } from '@/types/nodes';
 
 // ---------------------------------------------------------------------------

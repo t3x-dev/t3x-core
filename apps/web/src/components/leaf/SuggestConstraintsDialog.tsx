@@ -20,8 +20,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { type SuggestedConstraint, suggestLeafConstraints } from '@/lib/api';
+import { useSuggestConstraints } from '@/hooks/useSuggestConstraints';
 import { cn } from '@/lib/utils';
+import type { SuggestedConstraint } from '@/types/api';
 
 interface SuggestConstraintsDialogProps {
   open: boolean;
@@ -40,6 +41,7 @@ export function SuggestConstraintsDialog({
   const [suggestions, setSuggestions] = useState<SuggestedConstraint[]>([]);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [error, setError] = useState<string | null>(null);
+  const { suggest } = useSuggestConstraints();
 
   // Fetch suggestions when dialog opens
   useEffect(() => {
@@ -51,7 +53,7 @@ export function SuggestConstraintsDialog({
     setSuggestions([]);
     setSelected(new Set());
 
-    suggestLeafConstraints(leafId)
+    suggest(leafId)
       .then((result) => {
         if (cancelled) return;
         setSuggestions(result.suggestions);
@@ -69,7 +71,7 @@ export function SuggestConstraintsDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, leafId]);
+  }, [open, leafId, suggest]);
 
   const toggleItem = useCallback((index: number) => {
     setSelected((prev) => {

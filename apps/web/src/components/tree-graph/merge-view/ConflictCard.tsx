@@ -10,8 +10,9 @@ import {
 } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { type TreeMergeSuggestion, getTreeMergeSuggestion } from '@/lib/api/diff';
 import { cn } from '@/lib/utils';
+import { fetchTreeMergeSuggestion } from '@/queries/treeMergeSuggestion';
+import type { TreeMergeSuggestion } from '@/types/api';
 import { AgreedSlotRow, SlotConflictRow } from './SlotConflictRow';
 import {
   type ConflictResolution,
@@ -69,7 +70,7 @@ export function ConflictCard({
     setSuggestLoading(true);
     setSuggestError(null);
     try {
-      const result = await getTreeMergeSuggestion(
+      const result = await fetchTreeMergeSuggestion(
         mergeId,
         path,
         { type: sourceNode?.type ?? path, slots: sourceSlots },

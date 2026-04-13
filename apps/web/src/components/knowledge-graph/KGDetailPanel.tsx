@@ -4,7 +4,7 @@ import { ArrowLeft, ArrowRight, Loader2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
-import { useKnowledgeGraphStore } from '@/store/knowledgeGraphStore';
+import { useKnowledgeGraph } from '@/hooks/useKnowledgeGraph';
 
 interface KGDetailPanelProps {
   projectId: string;
@@ -12,7 +12,7 @@ interface KGDetailPanelProps {
 
 export function KGDetailPanel({ projectId }: KGDetailPanelProps) {
   const { selectedNodeId, detailNode, neighbors, clearSelection, selectNode } =
-    useKnowledgeGraphStore();
+    useKnowledgeGraph();
 
   const isOpen = selectedNodeId !== null;
 

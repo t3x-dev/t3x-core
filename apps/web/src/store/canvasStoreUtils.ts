@@ -1,5 +1,6 @@
 import type { Edge, Node } from '@xyflow/react';
-import * as api from '@/lib/api';
+import { parseApiCommitAnchors } from '@/queries/commits';
+import type { ApiCommit, Commit, Conversation } from '@/types/api';
 import type { CanvasNodeData, NodeKind } from '../types/nodes';
 import type { CanvasState, CommitTone, DraftBranchMode } from './canvasStoreTypes';
 
@@ -439,70 +440,16 @@ const LAYOUT = {
   COMMIT_SPACING_Y: 150,
 };
 
-// Debounced position save - collect position changes and save after 500ms of no changes
-const positionSaveTimers = new Map<string, ReturnType<typeof setTimeout>>();
-const pendingPositionSaves = new Map<
-  string,
-  { kind: NodeKind; position: { x: number; y: number } }
->();
-
-export function saveNodePosition(
-  nodeId: string,
-  kind: NodeKind,
-  position: { x: number; y: number }
-) {
-  // Cancel existing timer for this node
-  const existingTimer = positionSaveTimers.get(nodeId);
-  if (existingTimer) {
-    clearTimeout(existingTimer);
-  }
-
-  // Store the pending position
-  pendingPositionSaves.set(nodeId, { kind, position });
-
-  // Set a new timer
-  const timer = setTimeout(() => {
-    const pending = pendingPositionSaves.get(nodeId);
-    if (!pending) return;
-
-    pendingPositionSaves.delete(nodeId);
-    positionSaveTimers.delete(nodeId);
-
-    // Call appropriate API based on node kind
-    // For unit nodes, determine if staging (conversationId) or committed (commit hash)
-    if (pending.kind === 'unit') {
-      // Staging units have conversationId as nodeId (e.g., conv_xxx)
-      // Committed units have commit hash as nodeId (e.g., sha256:xxx)
-      const isStagingUnit = nodeId.startsWith('conv_');
-
-      if (isStagingUnit) {
-        // Save position to conversation
-        api
-          .updateConversation(nodeId, {
-            position_x: pending.position.x,
-            position_y: pending.position.y,
-          })
-          .catch(() => {
-            // Error handled silently
-          });
-      } else {
-        // Committed unit - save position to commit via API
-        api.updateCommitPosition(nodeId, pending.position.x, pending.position.y).catch(() => {
-          // Error handled silently
-        });
-      }
-    }
-  }, 500);
-
-  positionSaveTimers.set(nodeId, timer);
-}
+// saveNodePosition moved to @/lib/nodePositionSaver (v2 Phase 1.3).
+// It's a debounced I/O batching utility, not UI state — doesn't belong
+// under store/. Import from '@/lib/nodePositionSaver' instead.
 
 // Convert API Conversation + Commit pair to Unit Canvas Node
 export const unitToNode = (
-  conv: api.Conversation,
-  commit: api.Commit | null, // null for staging units (no commit yet)
+  conv: Conversation,
+  commit: Commit | null, // null for staging units (no commit yet)
   index: number,
-  originalCommit?: api.ApiCommit // Original tree-based commit for source context display
+  originalCommit?: ApiCommit // Original tree-based commit for source context display
 ): Node<CanvasNodeData> => {
   // Use saved position from commit if available, otherwise from conversation, otherwise calculate
   const position =
@@ -570,7 +517,7 @@ export const unitToNode = (
       sourceTurnWindow: commit?.turn_window ?? undefined,
       // v1.1: Confirmed anchors (convert snake_case API format to camelCase)
       anchors: commit?.anchors
-        ? (api.parseApiCommitAnchors(commit.anchors) ?? undefined)
+        ? (parseApiCommitAnchors(commit.anchors) ?? undefined)
         : undefined,
       // Commit data for source context display (tree-based)
       commit: originalCommit

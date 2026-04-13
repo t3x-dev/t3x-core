@@ -10,7 +10,7 @@
 import { Lightbulb, Loader2, Plus, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { type SuggestResult, suggestForDraft } from '@/lib/api';
+import { type SuggestResult, suggestForDraft } from '@/infrastructure';
 import { cn } from '@/lib/utils';
 import { useDraftWorkspaceStore } from '@/store/draftWorkspaceStore';
 

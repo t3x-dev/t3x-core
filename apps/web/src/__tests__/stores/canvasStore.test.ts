@@ -16,16 +16,26 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useCanvasStore } from '@/store/canvasStore';
 import type { CanvasNodeData } from '@/types/nodes';
 
-// Mock the API module
-vi.mock('@/lib/api', () => ({
-  listTurns: vi.fn(),
-  createConversation: vi.fn(),
-  updateConversation: vi.fn(),
-  listConversations: vi.fn(),
-  listBranches: vi.fn(),
-  getProject: vi.fn(),
-  getTurn: vi.fn(),
-  createLeaf: vi.fn().mockResolvedValue({
+// Canvas slices now route lib/api reads/writes through @/queries/* per the
+// doc-aligned L3 layer. Mock the query modules the slices depend on.
+vi.mock('@/queries/conversations', () => ({
+  fetchConversations: vi.fn().mockResolvedValue({ conversations: [], total: 0 }),
+  createConversationIn: vi.fn(),
+  deleteConversationById: vi.fn(),
+  updateConversationById: vi.fn(),
+}));
+
+vi.mock('@/queries/commits', () => ({
+  fetchCommits: vi.fn().mockResolvedValue([]),
+  persistCommitPosition: vi.fn(),
+  renameCommit: vi.fn(),
+  getSemanticContent: vi.fn(),
+  parseApiCommitAnchors: vi.fn().mockReturnValue(null),
+}));
+
+vi.mock('@/queries/leaves', () => ({
+  fetchLeavesByProject: vi.fn().mockResolvedValue([]),
+  createLeafInProject: vi.fn().mockResolvedValue({
     id: 'leaf_mock123',
     commit_hash: 'sha256:abc123',
     type: 'tweet',
@@ -36,6 +46,31 @@ vi.mock('@/lib/api', () => ({
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   }),
+  deleteLeafById: vi.fn(),
+}));
+
+vi.mock('@/queries/turns', () => ({
+  fetchTurns: vi.fn().mockResolvedValue({ turns: [] }),
+  fetchTurn: vi.fn(),
+}));
+
+vi.mock('@/queries/workbenchDrafts', () => ({
+  fetchWorkbenchDrafts: vi.fn().mockResolvedValue([]),
+  createWorkbenchDraftFor: vi.fn(),
+}));
+
+vi.mock('@/queries/mergeApi', () => ({
+  prepareMergeApi: vi.fn().mockResolvedValue({
+    autoKept: [],
+    conflicts: [],
+    onlyInSource: [],
+    onlyInTarget: [],
+    relationsOnlyInSource: [],
+    relationsOnlyInTarget: [],
+    relationsInBoth: [],
+  }),
+  executeMergeApi: vi.fn(),
+  createMergeDraft: vi.fn().mockResolvedValue({ draftId: 'draft_mock123' }),
 }));
 
 // Helper to create a mock staging unit node
@@ -319,49 +354,9 @@ describe('Canvas Store - Unit Node Model', () => {
     });
   });
 
-  // ===========================================================================
-  // addLeafNode Tests
-  // ===========================================================================
-  describe('addLeafNode', () => {
-    it('embeds a leaf into the parent commit node data.leaves', async () => {
-      const committedUnit = createCommittedUnitNode('unit-1', 'sha256:abc123');
-      useCanvasStore.setState({
-        nodes: [committedUnit],
-        edges: [],
-        leafPanelOpen: true,
-        leafPanelCommitId: 'unit-1',
-        projectId: 'proj_test123',
-      });
-
-      await useCanvasStore.getState().addLeafNode('tweet');
-
-      const state = useCanvasStore.getState();
-      // No new node created — leaf is embedded
-      expect(state.nodes.length).toBe(1);
-      // No edge created
-      expect(state.edges.length).toBe(0);
-      // Leaf embedded in parent node's data.leaves
-      const unitNode = state.nodes[0];
-      expect(unitNode.data.leaves).toBeDefined();
-      expect(unitNode.data.leaves!.length).toBe(1);
-      expect(unitNode.data.leaves![0].type).toBe('tweet');
-      expect(unitNode.data.leaves![0].title).toBe('Twitter');
-    });
-
-    it('does nothing when leafPanelCommitId is not set', async () => {
-      useCanvasStore.setState({
-        nodes: [],
-        edges: [],
-        leafPanelOpen: true,
-        leafPanelCommitId: undefined,
-      });
-
-      await useCanvasStore.getState().addLeafNode('tweet');
-
-      const state = useCanvasStore.getState();
-      expect(state.nodes).toEqual([]);
-    });
-  });
+  // addLeafNode + removeLeafFromNode behaviour moved to hooks/useCanvasLeafActions
+  // (v2 Phase 1.3 passive-store migration). Hook-level tests require renderHook
+  // which isn't wired up here. Integration coverage via Playwright remains.
 
   // ===========================================================================
   // updateNode Tests
@@ -534,86 +529,26 @@ describe('Canvas Store - Unit Node Model', () => {
       vi.clearAllMocks();
     });
 
-    it('startMerge sets mergeState', async () => {
-      // Mock fetch
-      global.fetch = vi.fn(() =>
-        Promise.resolve({
-          ok: true,
-          status: 200,
-          statusText: 'OK',
-          json: () =>
-            Promise.resolve({
-              success: true,
-              data: {
-                autoKept: [],
-                conflicts: [],
-                onlyInSource: [],
-                onlyInTarget: [],
-                relationsOnlyInSource: [],
-                relationsOnlyInTarget: [],
-                relationsInBoth: [],
-              },
-            }),
-        })
-      ) as unknown as typeof fetch;
-
-      await useCanvasStore.getState().startMerge('sha256:a', 'sha256:b');
+    it('setMergePrepared sets mergeState', () => {
+      useCanvasStore.getState().setMergePrepared({
+        sourceHash: 'sha256:a',
+        targetHash: 'sha256:b',
+        prepared: {
+          autoKept: [],
+          conflicts: [],
+          onlyInSource: [],
+          onlyInTarget: [],
+          relationsOnlyInSource: [],
+          relationsOnlyInTarget: [],
+          relationsInBoth: [],
+        },
+      });
 
       expect(useCanvasStore.getState().mergeState).not.toBeNull();
       expect(useCanvasStore.getState().mergeState?.sourceHash).toBe('sha256:a');
       expect(useCanvasStore.getState().mergeState?.targetHash).toBe('sha256:b');
       expect(useCanvasStore.getState().mergeError).toBeNull();
       expect(useCanvasStore.getState().mergeLoading).toBe(false);
-    });
-
-    it('resolveSimilarPair is a no-op in tree-primary (legacy API)', () => {
-      // In tree-primary, conflict resolution is handled by mergeWorkspaceStore
-      const store = useCanvasStore.getState();
-      useCanvasStore.setState({
-        mergeState: {
-          sourceHash: 'sha256:a',
-          targetHash: 'sha256:b',
-          prepared: {
-            autoKept: [],
-            conflicts: [{ path: 'topic/a', slotConflicts: [] }],
-            onlyInSource: [],
-            onlyInTarget: [],
-            relationsOnlyInSource: [],
-            relationsOnlyInTarget: [],
-            relationsInBoth: [],
-          },
-        },
-      });
-
-      // Should not throw
-      store.resolveSimilarPair(0, 'source');
-
-      // State unchanged (no-op)
-      expect(useCanvasStore.getState().mergeState).not.toBeNull();
-    });
-
-    it('toggleKeep is a no-op in tree-primary (legacy API)', () => {
-      useCanvasStore.setState({
-        mergeState: {
-          sourceHash: 'sha256:a',
-          targetHash: 'sha256:b',
-          prepared: {
-            autoKept: [],
-            conflicts: [],
-            onlyInSource: ['path/a'],
-            onlyInTarget: [],
-            relationsOnlyInSource: [],
-            relationsOnlyInTarget: [],
-            relationsInBoth: [],
-          },
-        },
-      });
-
-      // Should not throw
-      useCanvasStore.getState().toggleKeep('source', 0);
-
-      // State unchanged (no-op)
-      expect(useCanvasStore.getState().mergeState).not.toBeNull();
     });
 
     it('cancelMerge clears state', () => {

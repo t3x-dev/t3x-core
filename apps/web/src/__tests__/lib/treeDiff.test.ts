@@ -9,7 +9,7 @@ describe('computeTreeDiff', () => {
   it('marks all nodes as added when base is empty', () => {
     const diff = computeTreeDiff([], [makeNode('trip', { destination: 'Hangzhou' })]);
     expect(diff.added).toContain('trip');
-    expect(diff.addedSlots['trip']).toContain('destination');
+    expect(diff.addedSlots.trip).toContain('destination');
     expect(diff.summary.nodesAdded).toBe(1);
     expect(diff.summary.slotsAdded).toBe(1);
   });
@@ -18,7 +18,7 @@ describe('computeTreeDiff', () => {
     const base = [makeNode('trip', { budget: 'moderate' })];
     const result = [makeNode('trip', { budget: '3000 CNY' })];
     const diff = computeTreeDiff(base, result);
-    expect(diff.modifiedSlots['trip']).toContainEqual({ key: 'budget', oldValue: 'moderate', newValue: '3000 CNY' });
+    expect(diff.modifiedSlots.trip).toContainEqual({ key: 'budget', oldValue: 'moderate', newValue: '3000 CNY' });
     expect(diff.summary.slotsModified).toBe(1);
   });
 
@@ -42,7 +42,7 @@ describe('computeTreeDiff', () => {
     const base = [makeNode('trip', { dest: 'HZ' })];
     const result = [makeNode('trip', { dest: 'HZ', budget: '3000' })];
     const diff = computeTreeDiff(base, result);
-    expect(diff.addedSlots['trip']).toContain('budget');
+    expect(diff.addedSlots.trip).toContain('budget');
     expect(diff.summary.slotsAdded).toBe(1);
   });
 
@@ -50,7 +50,7 @@ describe('computeTreeDiff', () => {
     const base = [makeNode('trip', { dest: 'HZ', old: 'x' })];
     const result = [makeNode('trip', { dest: 'HZ' })];
     const diff = computeTreeDiff(base, result);
-    expect(diff.removedSlots['trip']).toContain('old');
+    expect(diff.removedSlots.trip).toContain('old');
     expect(diff.summary.slotsRemoved).toBe(1);
   });
 });

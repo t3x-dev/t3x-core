@@ -2,7 +2,7 @@
 
 import type { SemanticContent } from '@t3x-dev/core';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ApiCommit, Constraint, Leaf } from '@/lib/api';
+import type { ApiCommit, Constraint, Leaf } from '@/infrastructure';
 import {
   ApiError,
   generateLeafOutput,
@@ -11,9 +11,10 @@ import {
   getSemanticContent,
   updateLeaf,
   validateLeafOutput,
-} from '@/lib/api';
+} from '@/infrastructure';
 import { type ExportFormat, exportLeaf } from '@/lib/export';
 import { createRetuneSession } from '@/lib/retune';
+import { usePinsCrud } from './usePinsCrud';
 import { usePinsStore } from '@/store/pinsStore';
 import type { NodeWithSource } from '@/types/sourceContext';
 
@@ -192,7 +193,10 @@ export function useLeafPageData(projectId: string, leafId: string): UseLeafPageD
   // Assertion selection & Re-tune state
   const [selectedAssertionIds, setSelectedAssertionIds] = useState<Set<string>>(new Set());
   const [retuning, setRetuning] = useState(false);
-  const { fetchPins, isPinned, getPinByRef, invalidatePins } = usePinsStore();
+  const isPinned = usePinsStore((s) => s.isPinned);
+  const getPinByRef = usePinsStore((s) => s.getPinByRef);
+  const invalidatePins = usePinsStore((s) => s.invalidatePins);
+  const { fetch: fetchPins } = usePinsCrud();
   const leafPinned = isPinned('leaf', leafId);
   const existingPin = getPinByRef('leaf', leafId);
 
@@ -337,7 +341,7 @@ export function useLeafPageData(projectId: string, leafId: string): UseLeafPageD
     [commitData]
   );
 
-  // Memoize nodes to prevent unnecessary re-renders in LeafConstraintSourceContext
+  // Memoize nodes to prevent unnecessary re-renders in source context components
   const nodes = useMemo((): NodeWithSource[] => {
     if (!semanticContent) return [];
     const { treesToNodes } = require('@/lib/treeCompat');

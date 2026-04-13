@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { type ApiCommit, listCommits } from '@/lib/api/commits';
+import { type ApiCommit, listCommits } from '@/infrastructure/commits';
 import { type CommittedHighlight, buildCommittedHighlights } from '@/lib/committedHighlights';
 import { useCommitStore } from '@/store/commitStore';
 

@@ -15,13 +15,12 @@ import { ChevronRight, Leaf as LeafIcon, Loader2, MessageSquare, Plus } from 'lu
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useState } from 'react';
-import type { Leaf } from '@/lib/api';
-import { createLeaf } from '@/lib/api';
-import type { LeafType } from '@/lib/api/leaves';
+import { useCreateLeaf } from '@/hooks/useCreateLeaf';
+import type { CompatNode } from '@/lib/treeCompat';
 import { useCommitDetailStore } from '@/store/commitDetailStore';
 import { useProjectStore } from '@/store/projectStore';
+import type { Leaf, LeafType } from '@/types/api';
 import { DotIndicator } from './CommitDetailHelpers';
-import type { CompatNode } from '@/lib/treeCompat';
 
 // ============================================================================
 // Types
@@ -46,10 +45,10 @@ interface CommitTreeIndexProps {
 
 const LEAF_TYPE_OPTIONS: { type: LeafType; label: string }[] = [
   { type: 'tweet', label: 'Twitter' },
-  { type: 'weibo', label: '微博' },
-  { type: 'wechat', label: '朋友圈' },
+  { type: 'weibo', label: 'Weibo' },
+  { type: 'wechat', label: 'WeChat Moments' },
   { type: 'email', label: 'Email' },
-  { type: 'article', label: '文章' },
+  { type: 'article', label: 'Article' },
   { type: 'slack', label: 'Slack' },
   { type: 'deploy_agent', label: 'Deploy Agent' },
 ];
@@ -71,6 +70,7 @@ function formatNodeType(type: string): string {
 
 export function CommitTreeIndex({ projectId, leaves, onLeavesChange }: CommitTreeIndexProps) {
   const router = useRouter();
+  const { create: createLeaf } = useCreateLeaf();
 
   // Store
   const commit = useCommitDetailStore((s) => s.commit);

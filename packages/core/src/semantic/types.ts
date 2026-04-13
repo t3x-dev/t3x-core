@@ -19,10 +19,6 @@ export interface TreeNode {
   slots: Record<string, SlotValue>;
   /** Child nodes (nested sub-topics) */
   children: TreeNode[];
-  /** Per-slot source quotes (dot-path keys → verbatim conversation text) */
-  slot_quotes?: Record<string, string>;
-  /** Source turn reference (e.g., "T3") */
-  source?: string;
 }
 
 // ── Relation ──
@@ -40,6 +36,10 @@ export interface Relation {
   from: string;
   to: string;
   type: RelationType;
+  /** Source project ID — present only for cross-project relations */
+  from_project?: string;
+  /** Target project ID — present only for cross-project relations */
+  to_project?: string;
 }
 
 // ── SemanticContent ──

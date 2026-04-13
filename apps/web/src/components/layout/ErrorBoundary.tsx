@@ -7,7 +7,7 @@ import { Card, CardContent } from '@/components/ui/card';
 
 interface ErrorBoundaryProps {
   children: ReactNode;
-  fallback?: ReactNode; // 自定义错误展示（可选）
+  fallback?: ReactNode; // Custom error display (optional)
 }
 
 interface ErrorBoundaryState {
@@ -16,12 +16,12 @@ interface ErrorBoundaryState {
 }
 
 /**
- * Error Boundary 组件
+ * Error Boundary component
  *
- * 捕获子组件渲染时的 JavaScript 错误，防止整个页面白屏。
- * 显示友好的错误提示和重试按钮。
+ * Catches JavaScript errors during child component rendering, preventing full-page crashes.
+ * Displays a friendly error message with a retry button.
  *
- * 使用方式:
+ * Usage:
  * <ErrorBoundary>
  *   <YourComponent />
  * </ErrorBoundary>
@@ -55,12 +55,12 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
   render(): ReactNode {
     if (this.state.hasError) {
-      // 如果提供了自定义 fallback，使用它
+      // If a custom fallback was provided, use it
       if (this.props.fallback) {
         return this.props.fallback;
       }
 
-      // 默认错误 UI
+      // Default error UI
       return (
         <div className="flex h-full min-h-[200px] items-center justify-center p-6">
           <Card className="max-w-md border-[var(--status-error)]/30 bg-[var(--status-error)]/5">

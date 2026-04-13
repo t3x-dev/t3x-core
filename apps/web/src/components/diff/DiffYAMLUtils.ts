@@ -20,14 +20,12 @@ function findNodeByPath(trees: CoreTreeNode[], path: string): CoreTreeNode | und
   const nodes = treesToNodes(trees);
   const f = nodes.find((fr) => fr.id === path);
   if (!f) return undefined;
-  // Return a TreeNode shape
+  // Return a TreeNode shape (cast via unknown to allow runtime-enriched fields)
   return {
     key: f.key,
     slots: f.slots,
     children: f.children,
-    source: f.source,
-    slot_quotes: f.slot_quotes,
-  };
+  } as CoreTreeNode;
 }
 
 /**

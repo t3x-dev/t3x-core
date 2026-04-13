@@ -31,7 +31,5 @@ export function cloneTree(node: TreeNode): TreeNode {
     key: node.key,
     slots: structuredClone(node.slots),
     children: node.children.map(cloneTree),
-    ...(node.slot_quotes ? { slot_quotes: { ...node.slot_quotes } } : {}),
-    ...(node.source !== undefined ? { source: node.source } : {}),
   };
 }

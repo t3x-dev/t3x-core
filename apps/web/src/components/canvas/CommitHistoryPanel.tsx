@@ -14,10 +14,10 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { useTerminology } from '@/hooks/useTerminology';
-import type { ApiCommit } from '@/lib/api';
-import * as api from '@/lib/api';
-import { getTreeDiff } from '@/lib/api/treeDiff';
 import { cn } from '@/lib/utils';
+import { fetchCommitHistory } from '@/queries/commitHistory';
+import { fetchTreeDiff } from '@/queries/treeDiff';
+import type { ApiCommit } from '@/types/api';
 
 // Helper functions (module-scope so CommitHistoryRow can use them)
 function shortHash(hash: string) {
@@ -165,8 +165,7 @@ export function CommitHistoryPanel({
     setLoading(true);
     setError(null);
 
-    api
-      .getApiCommitHistory(commitHash, 100)
+    fetchCommitHistory(commitHash, 100)
       .then((data) => {
         if (!cancelled) setHistory(data);
       })
@@ -207,7 +206,7 @@ export function CommitHistoryPanel({
       setDiffTargetHash(hash);
 
       try {
-        const response = await getTreeDiff(parentHash, hash);
+        const response = await fetchTreeDiff(parentHash, hash);
         setDiffData(response.diff);
       } catch (err) {
         setDiffError(err instanceof Error ? err.message : 'Failed to load diff');

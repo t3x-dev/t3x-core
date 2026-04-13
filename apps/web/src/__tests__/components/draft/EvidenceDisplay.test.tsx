@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { EvidenceDisplay } from '@/components/draft/EvidenceDisplay';
-import type { LocatedEvidenceAPI } from '@/lib/api';
+import type { LocatedEvidenceAPI } from '@/infrastructure';
 
 function makeEvidence(overrides: Partial<LocatedEvidenceAPI> = {}): LocatedEvidenceAPI {
   return {

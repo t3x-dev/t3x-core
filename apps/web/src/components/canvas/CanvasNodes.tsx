@@ -8,11 +8,10 @@ import {
   FileText,
   GitBranch,
   GitCommit,
-  GitMerge,
   Globe,
-  MessageCircle,
   MessageSquare,
   MessageSquarePlus,
+  Pencil,
   PenSquare,
   Plus,
   Rocket,
@@ -22,16 +21,20 @@ import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { AutoDraftBadge } from '@/components/canvas/AutoDraftBadge';
 import { SealAnimation } from '@/components/canvas/SealAnimation';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useCanvasCommitActions } from '@/hooks/useCanvasCommitActions';
+import { useCanvasLeafActions } from '@/hooks/useCanvasLeafActions';
+import { useCanvasNodeActions } from '@/hooks/useCanvasNodeActions';
 import { leafContextMenuHandlerRef } from '@/hooks/useContextMenu';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useTerminology } from '@/hooks/useTerminology';
-import { type ConversationContext, getConversationContext } from '@/lib/api';
 import { nodeEnter, reducedMotion } from '@/lib/motion';
 import { glass, toneAccent, toneGlow } from '@/lib/theme';
 import { cn } from '@/lib/utils';
+import { fetchConversationContext } from '@/queries/conversationContext';
 import { useCanvasStore } from '@/store/canvasStore';
 import { usePinsStore } from '@/store/pinsStore';
 import { useProjectStore } from '@/store/projectStore';
+import type { ConversationContext } from '@/types/api';
 import type { CanvasNodeData, EmbeddedLeaf } from '@/types/nodes';
 
 import { constellationColors, getToneAccentKey, useSemanticZoom } from './CanvasNodeUtils';
@@ -75,29 +78,29 @@ const UnitNode = memo(function UnitNode(props: Props) {
   const [leavesExpanded, setLeavesExpanded] = useState(false);
   const [contentExpandedManual, setContentExpandedManual] = useState(false);
   const [copiedHash, setCopiedHash] = useState(false);
-  const [showLineage, setShowLineage] = useState(false);
-  const lineageTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
   const router = useRouter();
   const params = useParams();
   const projectId = params?.projectId as string | undefined;
   const prefersReducedMotion = useReducedMotion();
   const zoomTier = useSemanticZoom();
   const isConstellation = zoomTier === 'overview';
-  const isDetail = zoomTier === 'detail';
-  // Detail zoom tier auto-expands content and leaves
-  const contentExpanded = contentExpandedManual || isDetail;
+  // Detail expansion is user-initiated only (click "Details"), not zoom-driven
+  const isDetail = false;
+  const contentExpanded = contentExpandedManual;
 
   const { t } = useTerminology();
   const tone = useCanvasStore((state) => state.getCommitTone(id));
-  const addConversationFromCommit = useCanvasStore((state) => state.addConversationFromCommit);
-  const startMergeFromCommit = useCanvasStore((state) => state.createMergePendingCommit);
+  const { addConversationFromCommit, startMerge: startMergeFromCommit } = useCanvasCommitActions();
   const hasMainCommit = useCanvasStore((state) => state.hasMainCommit);
   const openLeafPanel = useCanvasStore((state) => state.openLeafPanel);
-  const removeLeafFromNode = useCanvasStore((state) => state.removeLeafFromNode);
+  const { remove: removeLeafFromNode } = useCanvasLeafActions();
   // Read from module-level ref to avoid Zustand re-renders on every callback update
   const leafContextMenuHandler = leafContextMenuHandlerRef.current;
   const openNodeModal = useCanvasStore((state) => state.openNodeModal);
-  const loadProjectData = useCanvasStore((state) => state.loadProjectData);
+  const { load: loadProjectData } = useCanvasNodeActions();
+  const updateNode = useCanvasStore((state) => state.updateNode);
   const notify = useProjectStore((state) => state.notifyCallback);
 
   // Pin store
@@ -111,7 +114,7 @@ const UnitNode = memo(function UnitNode(props: Props) {
     if (!data.conversationId || data.conversationId.startsWith('orphan-')) return;
 
     let cancelled = false;
-    getConversationContext(data.conversationId)
+    fetchConversationContext(data.conversationId)
       .then((ctx) => {
         if (!cancelled) setContextConfig(ctx);
       })
@@ -174,13 +177,6 @@ const UnitNode = memo(function UnitNode(props: Props) {
     return () => ro.disconnect();
   }, []);
 
-  // Cleanup lineage hover timer on unmount
-  useEffect(() => {
-    return () => {
-      if (lineageTimerRef.current) clearTimeout(lineageTimerRef.current);
-    };
-  }, []);
-
   const handleAddUnit = async () => {
     try {
       await addConversationFromCommit(id);
@@ -226,17 +222,23 @@ const UnitNode = memo(function UnitNode(props: Props) {
       .catch(() => {}); // Silently fail on clipboard permission denial
   };
 
-  // Lineage card hover handlers (400ms open delay, immediate close)
-  const handleNodeMouseEnter = useCallback(() => {
-    lineageTimerRef.current = setTimeout(() => setShowLineage(true), 400);
-  }, []);
-  const handleNodeMouseLeave = useCallback(() => {
-    if (lineageTimerRef.current) {
-      clearTimeout(lineageTimerRef.current);
-      lineageTimerRef.current = null;
+  const handleTitleSave = useCallback(async () => {
+    const newTitle = editTitle.trim();
+    if (!newTitle || newTitle === data.title) {
+      setIsEditingTitle(false);
+      return;
     }
-    setShowLineage(false);
-  }, []);
+    updateNode(id, { title: newTitle });
+    setIsEditingTitle(false);
+    if (data.commitHash) {
+      try {
+        const { renameCommit } = await import('@/queries/commits');
+        await renameCommit(data.commitHash, newTitle);
+      } catch {
+        updateNode(id, { title: data.title });
+      }
+    }
+  }, [editTitle, data.title, data.commitHash, id, updateNode]);
 
   // Navigate to leaf detail page
   const _getLeafHref = (leaf: EmbeddedLeaf): string | undefined => {
@@ -335,8 +337,6 @@ const UnitNode = memo(function UnitNode(props: Props) {
             : { y: -1, transition: { duration: 0.15, ease: [0.16, 1, 0.3, 1] } }
         }
         whileTap={prefersReducedMotion ? undefined : { scale: 0.995 }}
-        onMouseEnter={handleNodeMouseEnter}
-        onMouseLeave={handleNodeMouseLeave}
         className={cn(
           'relative group w-72 rounded-xl overflow-visible elevation-1',
           glass.cardNode,
@@ -389,75 +389,6 @@ const UnitNode = memo(function UnitNode(props: Props) {
           onComplete={() => setSealing(false)}
         />
 
-        {/* Lineage summary card — appears on hover after 400ms */}
-        {showLineage && isCommitted && (
-          <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 z-50 pointer-events-none">
-            <div
-              className={cn(
-                'rounded-lg px-3 py-2 text-xs min-w-[200px] max-w-[260px] shadow-lg border border-[var(--stroke-divider)]',
-                glass.cardNode
-              )}
-            >
-              {/* Branch + hash */}
-              <div className="flex items-center gap-1.5 mb-1.5">
-                {data.branchType === 'main' ? (
-                  <GitCommit size={11} className={toneAccent.commit.text} />
-                ) : (
-                  <GitBranch size={11} className={toneAccent.branch.text} />
-                )}
-                <span className="font-medium text-[var(--text-primary)]">{branchLabel}</span>
-                {(data.commit?.hash || data.commitHash) && (
-                  <span className="font-mono text-[var(--text-tertiary)] text-[10px]">
-                    {(data.commit?.hash || data.commitHash || '')
-                      .replace('sha256:', '')
-                      .slice(0, 7)}
-                  </span>
-                )}
-              </div>
-              {/* Stats rows */}
-              <div className="space-y-0.5 text-[var(--text-secondary)]">
-                {data.isMergeCommit && (
-                  <div className="flex items-center gap-1.5">
-                    <GitMerge size={10} className="text-[var(--text-tertiary)]" />
-                    <span>Merge commit</span>
-                  </div>
-                )}
-                {data.sources && data.sources.length > 0 && (
-                  <div className="flex items-center gap-1.5">
-                    <MessageCircle size={10} className="text-[var(--text-tertiary)]" />
-                    <span>
-                      {data.sources.length} source{data.sources.length !== 1 ? 's' : ''}
-                    </span>
-                  </div>
-                )}
-                {nodeCount > 0 && (
-                  <div className="flex items-center gap-1.5">
-                    <FileText size={10} className="text-[var(--text-tertiary)]" />
-                    <span>
-                      {nodeCount} tree{nodeCount !== 1 ? 's' : ''}
-                    </span>
-                  </div>
-                )}
-                {data.leaves && data.leaves.length > 0 && (
-                  <div className="flex items-center gap-1.5">
-                    <Rocket size={10} className="text-[var(--text-tertiary)]" />
-                    <span>
-                      {data.leaves.length} {data.leaves.length === 1 ? 'leaf' : 'leaves'}
-                      {totalAssertions > 0 && (
-                        <span className="ml-1">
-                          (<span className="text-[var(--status-success)]">{totalPassed}</span>
-                          <span className="text-[var(--text-tertiary)]">/</span>
-                          <span>{totalAssertions}</span>)
-                        </span>
-                      )}
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* ═══════════════════════════════════════════
             SECTION 1: SOURCES (if any)
             ═══════════════════════════════════════════ */}
@@ -476,9 +407,45 @@ const UnitNode = memo(function UnitNode(props: Props) {
         <div className="px-3 py-3">
           {/* Row 1: Title + Branch Badge */}
           <div className="flex items-start justify-between gap-2 mb-[var(--space-item)]">
-            <h4 className="m-0 text-sm font-semibold text-[var(--text-primary)] leading-snug flex-1 min-w-0">
-              {data.title}
-            </h4>
+            {isEditingTitle ? (
+              <input
+                type="text"
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleTitleSave();
+                  if (e.key === 'Escape') setIsEditingTitle(false);
+                }}
+                onPointerDown={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+                onBlur={handleTitleSave}
+                className="noDrag nowheel m-0 text-sm font-semibold text-[var(--text-primary)] leading-snug flex-1 min-w-0 bg-transparent border-b border-[var(--commit)] outline-none"
+                data-title-editable
+                // biome-ignore lint/a11y/noAutofocus: intentional — user just entered edit mode
+                autoFocus
+              />
+            ) : (
+              <div className="flex items-center gap-1 flex-1 min-w-0 group/title">
+                <h4 className="m-0 text-sm font-semibold text-[var(--text-primary)] leading-snug flex-1 min-w-0 truncate">
+                  {data.title}
+                </h4>
+                {isCommitted && (
+                  <button
+                    type="button"
+                    data-title-editable
+                    className="shrink-0 p-0.5 rounded opacity-0 group-hover/title:opacity-60 hover:!opacity-100 text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-opacity"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditTitle(data.title);
+                      setIsEditingTitle(true);
+                    }}
+                    title="Rename commit"
+                  >
+                    <Pencil size={10} />
+                  </button>
+                )}
+              </div>
+            )}
             {isDraft ? (
               <span className="flex-shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded-full border border-amber-500/50 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 inline-flex items-center gap-0.5">
                 <PenSquare size={10} aria-hidden="true" />

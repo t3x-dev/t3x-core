@@ -31,6 +31,44 @@ import {
 
 // -- Internal Helpers --
 
+const SOURCE_CONTRACT = `
+
+# OUTPUT CONTRACT — PER-OP SOURCE (STRICT)
+
+Every YOp you produce MUST include a "source" field with this exact shape:
+
+  source:
+    type: llm
+    model: <your model name>
+    at: <current ISO-8601 timestamp>
+    turn_ref:
+      turn_hash: <the sha256: hash of the turn this op derives from>
+      quote: <VERBATIM substring of that turn — no paraphrase, no summary>
+
+RULES (violations will cause the system to reject your output and re-ask):
+  - "quote" MUST appear verbatim (exact substring, case-sensitive) in the referenced turn's content.
+  - "turn_hash" MUST match one of the turn hashes from the Conversation section exactly.
+  - Never invent a quote. If you cannot find a verbatim substring to cite, skip the op — do not produce it.
+  - Every op (set / populate / define / drop / relate / etc.) must have source.
+`;
+
+function formatFailingOpsRetry(failingOps: readonly { op: unknown; opIndex: number; reason: string; detail?: string }[]): string {
+  if (failingOps.length === 0) return '';
+  const lines = failingOps.map((f, i) => {
+    const opJson = JSON.stringify(f.op, null, 2);
+    return `# Failing op ${i + 1} — reason: ${f.reason}${f.detail ? ` (${f.detail})` : ''}\n${opJson}`;
+  });
+  return `
+
+# RETRY — FIX THESE OPS
+The previous attempt produced ops that could not be verified. For EACH failing op below,
+produce a corrected version with a verbatim quote from the correct turn. Do NOT re-emit
+the entire extraction — only repair the listed ops.
+
+${lines.join('\n\n')}
+`;
+}
+
 function serializeTreeForSnapshot(node: TreeNode, indent = 0): string {
   const pad = '  '.repeat(indent);
   const lines: string[] = [];
@@ -81,7 +119,13 @@ ${tier3Segment(style.tier3)}
 
 ${tier3KeyDistinction(style.tier3)}
 
-Do NOT extract: greetings, filler ("sure!", "let me help"), or meta-commentary
+Do NOT extract:
+- Greetings, filler ("sure!", "let me help", "of course!")
+- Assistant asking clarifying questions ("What would you like to know?", "Are you asking about...")
+- Lists of options the assistant offered BEFORE the user chose — only extract what was actually discussed
+- Brief mentions of alternatives not explored further (e.g., a castle named once but never discussed)
+- Conversational scaffolding ("Feel free to ask", "I'm here to help")
+- Meta-commentary about the conversation itself
 
 ## Output format: YAML tree + JSON metadata
 
@@ -91,7 +135,10 @@ then a JSON block containing \`slot_quotes\` and \`source_map\`.
 ### Structure
 - ONE root node named after the conversation topic (snake_case)
 - Children for subtopics — nest related facts under nested objects
-- Leaf values: clean data (numbers, short labels, booleans, arrays) — NOT full sentences
+- Leaf values: descriptive text (short phrases, labels, numbers) — NOT full sentences, NOT booleans
+- NEVER use true/false for slot values — use the actual descriptive text instead
+  - BAD: unesco_status: true → GOOD: unesco_status: World Heritage Site
+  - BAD: surrounded_at_high_tide: true → GOOD: high_tide_effect: completely surrounded by water
 - Object values become CHILD NODES, scalars/arrays become SLOT VALUES on the parent
 
 ${granularitySegment(style.granularity)}
@@ -189,7 +236,12 @@ ${tier3Segment(style.tier3)}
 
 ${tier3KeyDistinction(style.tier3)}
 
-Do NOT extract: greetings, filler ("sure!", "let me help"), or meta-commentary
+Do NOT extract:
+- Greetings, filler ("sure!", "let me help", "of course!")
+- Assistant asking clarifying questions ("What would you like to know?")
+- Lists of options offered BEFORE the user chose — only extract what was discussed
+- Brief mentions of alternatives not explored further
+- Conversational scaffolding and meta-commentary
 
 ## Output format: YOps list
 
@@ -226,7 +278,8 @@ Output a single YAML document with a \`yops:\` array. Each item is exactly one o
 - \`assert: { path, operator, value }\` — validate without mutating (\`operator\` ∈ exists, equals, type)
 
 Paths use \`/\` separator (e.g., \`trip/dining\`). Keys use snake_case.
-Values: clean data (numbers, short labels, booleans, arrays) — NOT full sentences.
+Values: descriptive text (short phrases, labels, numbers) — NOT full sentences, NOT booleans.
+NEVER use true/false — use the actual text (e.g., "World Heritage Site" not true).
 
 **IMPORTANT: Prefer updating existing structure over adding new nodes.** Only use structure-change ops (nest, fold, move, split) when the conversation explicitly indicates the tree should be reorganized — not for cosmetic improvements.
 
@@ -277,15 +330,17 @@ When new turns contain reasoning, step-by-step logic, or cause-effect chains:
 - Use \`define\` ONLY for creating brand-new nodes not yet in the snapshot
 - Do NOT reorganize the tree unless the conversation explicitly calls for it
 - If nothing to extract: output \`yops: []\`
-- Drift: if NEW turns discuss a topic UNRELATED to the current tree, output \`yops: []\`${updateStanceSegment(style.update_stance)}`;
+- Drift: if NEW turns discuss a topic UNRELATED to the current tree, output \`yops: []\`${updateStanceSegment(style.update_stance)}${SOURCE_CONTRACT}`;
 }
 
 // -- Main Function --
 
 export function buildYOpsPrompt(
   input: ExtractionInput,
-  style?: Partial<ExtractionStyleConfig>
+  opts?: { style?: Partial<ExtractionStyleConfig>; failingOps?: readonly { op: unknown; opIndex: number; reason: string; detail?: string }[] }
 ): ExtractionPromptResult {
+  const style = opts?.style;
+  const failingOps = opts?.failingOps ?? [];
   const { turns, snapshot, processedTurnCount, additionalContext } = input;
   const hasSnapshot = !!snapshot && snapshot.trees.length > 0;
   const resolved: ExtractionStyleConfig = { ...DEFAULT_STYLE, ...style };
@@ -328,6 +383,8 @@ ${snapshotYaml}
     userPrompt += `${turnsSection}
 
 Extract changes from the NEW turns only. Prefer set/populate for updates, define for new nodes. Use structure ops (nest/fold/move/rename) only when the conversation explicitly calls for reorganization.`;
+
+    userPrompt += formatFailingOpsRetry(failingOps);
 
     return { systemPrompt, userPrompt };
   }

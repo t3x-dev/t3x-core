@@ -7,13 +7,14 @@ import { DriftPopup } from '@/components/chat/DriftPopup';
 import { useAutoProject } from '@/hooks/useAutoProject';
 import { useCommittedHighlights } from '@/hooks/useCommittedHighlights';
 import { useConversationChat } from '@/hooks/useConversationChat';
+import { usePinEnrichment } from '@/hooks/usePinEnrichment';
+import { usePinsCrud } from '@/hooks/usePinsCrud';
 import { useRealtimeSync } from '@/hooks/useRealtimeSync';
 import { useTextSelection } from '@/hooks/useTextSelection';
-import { buildSourceMap } from '@/lib/sourceMap';
 import { cn } from '@/lib/utils';
-import { useDraftStore } from '@/store/draftStore';
+import { buildSourceMap } from '@/domain/sourceMap';
 import { usePinsStore } from '@/store/pinsStore';
-import { type GateIssue, useWorkspaceStore } from '@/store/workspaceStore';
+import { useWorkspaceStore } from '@/store/workspaceStore';
 import { ChatAddForm } from './ChatAddForm';
 import { ChatHeader } from './ChatHeader';
 import type { AttachedImage } from './ChatInput';
@@ -49,15 +50,12 @@ export function ChatWorkspace({
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const { selection, clearSelection } = useTextSelection(chatContainerRef);
   const wsMode = useWorkspaceStore((s) => s.mode);
+  const isCommitted = useWorkspaceStore((s) => s.isCommitted);
   const isReviewPhase = wsMode === 'executed' || wsMode === 'committing';
   const pins = usePinsStore((s) => s.pins);
-  const fetchPins = usePinsStore((s) => s.fetchPins);
+  const { fetch: fetchPins } = usePinsCrud();
   const [showSourcePanel, setShowSourcePanel] = useState(false);
-  const quoteValidation = useWorkspaceStore((s) => s.quoteValidation);
-  const [coverageMode, setCoverageMode] = useState(false);
-  const [enrichedPinData, setEnrichedPinData] = useState<
-    Map<string, { title: string; assertionLessons?: string[]; turnCount?: number }>
-  >(new Map());
+  const enrichedPinData = usePinEnrichment(pins, showSourcePanel);
   const showAddForm = isReviewPhase && selection && selection.text.length > 3;
   const firstMessageSentRef = useRef(false);
 
@@ -77,49 +75,6 @@ export function ChatWorkspace({
   useEffect(() => {
     if (resolvedProjectId) fetchPins(resolvedProjectId);
   }, [resolvedProjectId, fetchPins]);
-
-  // Enrich pins with real titles when source panel opens
-  useEffect(() => {
-    if (!showSourcePanel || pins.length === 0) return;
-    let stale = false;
-    (async () => {
-      const { API_V1, fetchWithTimeout, handleResponse } = await import('@/lib/api/core');
-      const data = new Map<
-        string,
-        { title: string; assertionLessons?: string[]; turnCount?: number }
-      >();
-      for (const pin of pins) {
-        try {
-          if (pin.type === 'conversation') {
-            const res = await fetchWithTimeout(`${API_V1}/conversations/${pin.ref_id}`);
-            const conv = await handleResponse<{ title?: string }>(res);
-            if (!stale) data.set(pin.id, { title: conv.title || pin.ref_id.slice(0, 12) });
-          } else if (pin.type === 'leaf') {
-            const res = await fetchWithTimeout(`${API_V1}/leaves/${pin.ref_id}`);
-            const leaf = await handleResponse<{
-              title?: string;
-              assertions?: Array<{ lesson?: string }>;
-              runner_assertions?: Array<{ lesson?: string }>;
-            }>(res);
-            if (!stale) {
-              const allAssertions = leaf.runner_assertions ?? leaf.assertions ?? [];
-              const lessons = allAssertions.filter((a) => a.lesson).map((a) => a.lesson as string);
-              data.set(pin.id, {
-                title: leaf.title || pin.ref_id.slice(0, 12),
-                assertionLessons: lessons.length > 0 ? lessons : undefined,
-              });
-            }
-          }
-        } catch {
-          if (!stale) data.set(pin.id, { title: pin.ref_id.slice(0, 12) });
-        }
-      }
-      if (!stale) setEnrichedPinData(data);
-    })();
-    return () => {
-      stale = true;
-    };
-  }, [showSourcePanel, pins, resolvedProjectId]);
 
   // Model selection state
   const [selectedModel, setSelectedModel] = useState('claude-sonnet-4-20250514');
@@ -200,21 +155,18 @@ export function ChatWorkspace({
   }, [messages, streamingContent]);
 
   // Extraction handler + related state
-  const { handleExtract, isExtracting, draft } = useExtraction({
+  const { handleExtract, isExtracting } = useExtraction({
     resolvedConversationId,
   });
 
-  // Precompute source map: quote positions in all messages for bidirectional highlighting
-  const sourceMapByTurn = useMemo(() => {
-    if (!draft || draft.trees.length === 0 || messages.length === 0) {
-      return new Map<number, import('@/lib/sourceMap').SourceMapping[]>();
-    }
-    const msgInput = messages.map((msg, i) => ({
-      content: msg.content,
-      turnIndex: i + 1,
-    }));
-    return buildSourceMap(draft, msgInput);
-  }, [draft, messages]);
+  // Precompute source map from sourceIndex — positions are already known
+  // (every LLMSource carries turn_hash + start_char/end_char).
+  const sourceIndex = useWorkspaceStore((s) => s.sourceIndex);
+  const turns = useWorkspaceStore((s) => s.turns);
+  const sourceMapByTurn = useMemo(
+    () => buildSourceMap(sourceIndex, turns),
+    [sourceIndex, turns]
+  );
 
   // Load persistent committed highlights for this conversation
   const committedHighlightsByTurn = useCommittedHighlights(
@@ -253,106 +205,6 @@ export function ChatWorkspace({
     if (isExtracting) setShowSourcePanel(false);
   }, [isExtracting]);
 
-  // Handle Audit button — run semantic gate check
-  useEffect(() => {
-    const handler = async () => {
-      const draftData = useDraftStore.getState().draft;
-      if (draftData.trees.length === 0 || messages.length === 0) {
-        toast.info('Nothing to audit — extract first');
-        return;
-      }
-      toast.loading('Running audit...', { id: 'audit' });
-      try {
-        const { API_V1, fetchWithTimeout, handleResponse } = await import('@/lib/api/core');
-        // Flatten TreeNode[] to FlatNode[] inline (safe against missing children)
-        type AnyNode = {
-          key: string;
-          slots: Record<string, unknown>;
-          source?: string;
-          children?: AnyNode[];
-        };
-        const flatFrames: Array<{
-          id: string;
-          type: string;
-          slots: Record<string, unknown>;
-          source?: string;
-        }> = [];
-        const flatten = (node: AnyNode, parentPath: string) => {
-          const path = parentPath ? `${parentPath}/${node.key}` : node.key;
-          flatFrames.push({
-            id: path,
-            type: node.key,
-            slots: { ...node.slots },
-            ...(node.source ? { source: node.source } : {}),
-          });
-          for (const child of node.children ?? []) flatten(child, path);
-        };
-        for (const tree of draftData.trees as AnyNode[]) flatten(tree, '');
-        const res = await fetchWithTimeout(
-          `${API_V1}/gate/check`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              content: { trees: flatFrames, relations: draftData.relations },
-              turns: messages.map((m) => ({ role: m.role, content: m.content })),
-              gates: ['semantic'],
-            }),
-          },
-          60_000
-        );
-        const result = await handleResponse<{
-          semantic?: {
-            score?: number;
-            dimensions?: Record<string, { score: number; details: string }>;
-            issues?: Array<{ dimension?: string; severity: string; description: string; suggestion?: string }>;
-          };
-        }>(res);
-
-        // Build issues from dimensions details + explicit issues
-        const issuesByDim: Record<string, GateIssue[]> = {};
-
-        // Convert dimension details into displayable issues
-        const dims = result.semantic?.dimensions ?? {};
-        for (const [dimName, dim] of Object.entries(dims)) {
-          if (dim.score < 1 && dim.details) {
-            if (!issuesByDim[dimName]) issuesByDim[dimName] = [];
-            issuesByDim[dimName].push({
-              severity: dim.score < 0.5 ? 'error' : 'warning',
-              description: `[${Math.round(dim.score * 100)}%] ${dim.details}`,
-              dimension: dimName,
-            });
-          }
-        }
-
-        // Also include explicit issues if present
-        for (const issue of result.semantic?.issues ?? []) {
-          const key = issue.dimension || '_general';
-          if (!issuesByDim[key]) issuesByDim[key] = [];
-          issuesByDim[key].push({
-            severity: (issue.severity as 'error' | 'warning' | 'info') || 'warning',
-            description: issue.description,
-            dimension: issue.dimension,
-            suggestion: issue.suggestion,
-          });
-        }
-
-        useWorkspaceStore.getState().setGateIssues(issuesByDim);
-        const completenessScore = dims.completeness?.score;
-        const overallScore = result.semantic?.score;
-        toast.success(
-          `Audit complete — ${completenessScore != null ? `completeness: ${Math.round(completenessScore * 100)}%` : `score: ${Math.round((overallScore ?? 0) * 100)}%`}`,
-          { id: 'audit' }
-        );
-      } catch (err) {
-        toast.error(`Audit failed: ${err instanceof Error ? err.message : 'Unknown error'}`, {
-          id: 'audit',
-        });
-      }
-    };
-    window.addEventListener('t3x:audit-requested', handler);
-    return () => window.removeEventListener('t3x:audit-requested', handler);
-  }, [messages]);
 
   // Send firstMessage on mount (once only)
   useEffect(() => {
@@ -396,24 +248,6 @@ export function ChatWorkspace({
         onModelChange={handleModelChange}
       />
 
-      {/* Coverage view toggle — below header, above messages */}
-      {quoteValidation && quoteValidation.total > 0 && (
-        <div className="flex items-center justify-end px-4 py-1 border-b border-[var(--stroke-divider)]">
-          <button
-            type="button"
-            onClick={() => setCoverageMode((prev) => !prev)}
-            className={cn(
-              'flex items-center gap-1 px-2 py-1 text-[10px] font-medium rounded-md border transition-colors',
-              coverageMode
-                ? 'bg-[var(--status-warning)]/10 border-[var(--status-warning)]/30 text-[var(--status-warning)]'
-                : 'bg-[var(--surface-elevated)] border-[var(--stroke-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]'
-            )}
-          >
-            {coverageMode ? 'Hide coverage' : 'Show coverage'}
-          </button>
-        </div>
-      )}
-
       {/* Message list */}
       <div ref={chatContainerRef} className="flex-1 overflow-y-auto overflow-x-hidden">
         {/* Parent conversation banner */}
@@ -453,18 +287,11 @@ export function ChatWorkspace({
                 content={msg.content}
                 turnHash={msg.id}
                 turnIndex={i + 1}
-                onRegenerate={msg.role === 'assistant' ? () => regenerate(i) : undefined}
-                onEdit={
-                  msg.role === 'user'
-                    ? (newContent: string) => editAndResend(i, newContent)
-                    : undefined
-                }
                 citations={
                   msg.role === 'assistant' && i === messages.length - 1 ? citations : undefined
                 }
                 sourceMap={sourceMapByTurn.get(i + 1)}
                 committedHighlights={committedHighlightsByTurn.get(msg.id)}
-                coverageMode={coverageMode}
               />
             ))}
 
@@ -563,8 +390,11 @@ export function ChatWorkspace({
             onSend={handleSend}
             onStop={stopGenerating}
             isStreaming={isStreaming}
-            disabled={isLoading || isExtracting}
-            placeholder="Message... (Enter to send, Shift+Enter for new line)"
+            disabled={isLoading || isExtracting || isCommitted}
+            placeholder="Reply..."
+            conversationId={resolvedConversationId}
+            selectedModel={selectedModel}
+            onModelChange={handleModelChange}
           />
         </div>
       </div>

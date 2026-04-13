@@ -14,7 +14,8 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { listWorkbenchDrafts, type WorkbenchDraft } from '@/lib/api';
+import { fetchWorkbenchDrafts } from '@/queries/workbenchDrafts';
+import type { WorkbenchDraft } from '@/types/api';
 
 interface LeafExtractToDraftProps {
   leafId: string;
@@ -41,7 +42,7 @@ export function LeafExtractToDraft({ leafId, projectId, outputText }: LeafExtrac
     setDialogOpen(true);
     setLoading(true);
     try {
-      const d = await listWorkbenchDrafts(projectId, 'editing');
+      const d = await fetchWorkbenchDrafts(projectId, 'editing');
       setDrafts(d);
       if (d.length > 0) setSelectedDraftId(d[0].id);
     } catch {
@@ -55,7 +56,7 @@ export function LeafExtractToDraft({ leafId, projectId, outputText }: LeafExtrac
     if (!selectedDraftId || !extractedText.trim()) return;
     setSubmitting(true);
     try {
-      const { updateWorkbenchDraft, getWorkbenchDraft } = await import('@/lib/api');
+      const { updateWorkbenchDraft, getWorkbenchDraft } = await import('@/infrastructure');
       const draft = await getWorkbenchDraft(selectedDraftId);
       const newNode = {
         id: `s_leaf_${leafId}_${Date.now()}`,
@@ -113,7 +114,7 @@ export function LeafExtractToDraft({ leafId, projectId, outputText }: LeafExtrac
     setFloatingBtn(null);
     setDialogOpen(true);
     setLoading(true);
-    listWorkbenchDrafts(projectId, 'editing')
+    fetchWorkbenchDrafts(projectId, 'editing')
       .then((d) => {
         setDrafts(d);
         if (d.length > 0) setSelectedDraftId(d[0].id);

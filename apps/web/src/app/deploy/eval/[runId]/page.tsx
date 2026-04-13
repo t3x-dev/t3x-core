@@ -42,6 +42,8 @@ import {
 import { PinButton } from '@/components/ui/PinButton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useKeyboardNavigation } from '@/hooks/useKeyboardNavigation';
+import { usePinsCrud } from '@/hooks/usePinsCrud';
+import { useProjectCrud } from '@/hooks/useProjectCrud';
 import {
   type ApiCommit,
   type EngineRun,
@@ -51,7 +53,7 @@ import {
   type Leaf,
   type NodeSourceRef,
   updateEngineRun,
-} from '@/lib/api';
+} from '@/infrastructure';
 import { exportRunAsJSON, exportRunAsMarkdown } from '@/lib/exportReport';
 import { createRetuneSession } from '@/lib/retune';
 import { cn } from '@/lib/utils';
@@ -91,7 +93,7 @@ interface EvalResult {
   suggestion?: Suggestion;
 }
 
-// LLM 生成的断言（来自 result.assertions）
+// LLM-generated assertions (from result.assertions)
 // Supports both old format (type/message/patch_suggestion) and new format (passed/details/lesson)
 interface LLMAssertion {
   id: string;
@@ -111,7 +113,7 @@ interface ParsedRunData {
   evalResult: EvalResult | null;
   traceSummary: TraceSummary | null;
   steps: StepRecord[];
-  llmAssertions: LLMAssertion[]; // LLM 生成的断言数组
+  llmAssertions: LLMAssertion[]; // Array of LLM-generated assertions
 }
 
 /**
@@ -164,14 +166,14 @@ function parseRunData(run: EngineRun): ParsedRunData {
 
   // Parse steps from run_report.trace or full_trace (fallback)
   // Runner returns: run_report.trace.steps (not run_record.steps)
-  const traceRaw = runReport?.trace as Record<string, unknown> | undefined; // trace: 执行轨迹对象
-  const fullTraceRaw = result.full_trace as Record<string, unknown> | undefined; // full_trace: 完整轨迹(条件存储)
+  const traceRaw = runReport?.trace as Record<string, unknown> | undefined; // trace: execution trace object
+  const fullTraceRaw = result.full_trace as Record<string, unknown> | undefined; // full_trace: complete trace (conditional storage)
   const stepsRaw = (traceRaw?.steps || fullTraceRaw?.steps || result.steps) as
     | StepRecord[]
     | undefined;
   const steps = stepsRaw || [];
 
-  // Parse LLM assertions (来自 result.assertions)
+  // Parse LLM assertions (from result.assertions)
   // Normalize: support both old format (type/message) and new format (passed/details)
   const assertionsRaw = (result.assertions as Record<string, unknown>[] | undefined) || [];
   const llmAssertions: LLMAssertion[] = assertionsRaw.map((a, idx) => ({
@@ -227,10 +229,12 @@ export default function RunDetailPage() {
   const [pinning, setPinning] = useState(false);
   const [pinSuccess, setPinSuccess] = useState(false);
   const [retuning, setRetuning] = useState(false);
-  const { fetchPins, addPin, updatePinAssertions, isPinned, getPinByRef } = usePinsStore();
+  const isPinned = usePinsStore((s) => s.isPinned);
+  const getPinByRef = usePinsStore((s) => s.getPinByRef);
+  const { fetch: fetchPins, add: addPin, setAssertions: updatePinAssertions } = usePinsCrud();
   const getProject = useProjectStore((s) => s.getProject);
-  const fetchProjects = useProjectStore((s) => s.fetchProjects);
   const projectsInitialized = useProjectStore((s) => s.initialized);
+  const { list: fetchProjects } = useProjectCrud();
 
   // Ensure project store is initialized (for breadcrumb project name)
   useEffect(() => {

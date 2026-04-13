@@ -3,7 +3,7 @@
 import { Background, Controls, type Edge, MiniMap, type Node, ReactFlow } from '@xyflow/react';
 import { useCallback, useMemo } from 'react';
 import '@xyflow/react/dist/style.css';
-import { useKnowledgeGraphStore } from '@/store/knowledgeGraphStore';
+import { useKnowledgeGraph } from '@/hooks/useKnowledgeGraph';
 
 interface KGCanvasProps {
   projectId: string;
@@ -14,7 +14,7 @@ const GAP_X = 250;
 const GAP_Y = 150;
 
 export function KGCanvas({ projectId }: KGCanvasProps) {
-  const { nodes: kgNodes, selectNode } = useKnowledgeGraphStore();
+  const { nodes: kgNodes, selectNode } = useKnowledgeGraph();
 
   const rfNodes: Node[] = useMemo(
     () =>

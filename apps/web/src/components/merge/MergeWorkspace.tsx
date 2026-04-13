@@ -3,43 +3,32 @@
 /**
  * MergeWorkspace - Full-screen merge workspace container
  *
- * Supports two modes:
- * - ContentNode-based merge (legacy): uses prepared/Merge2WayResult from the store
- * - Tree-based merge (new): uses treeMergeResult from prepareMerge()
- *
- * Mode is determined by whether treeMergeResult is set in the store.
+ * Uses tree-based merge via treeMergeResult from prepareMerge().
  */
 
-import type { MergeResult, SemanticContent } from '@t3x-dev/core';
+import type { SemanticContent } from '@t3x-dev/core';
 import { prepareMerge } from '@t3x-dev/core';
 import { motion } from 'framer-motion';
 import { GitMerge, Loader2 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { DiffMode } from '@/components/diff/DiffModeToggle';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { MergeIllustration } from '@/components/illustrations/MergeIllustration';
 import { EmptyState } from '@/components/ui/empty-state';
-import { useMergeNavigation } from '@/hooks/useMergeNavigation';
+import { useCanvasNodeActions } from '@/hooks/useCanvasNodeActions';
+import { useCreateMergeCommit } from '@/hooks/useCreateMergeCommit';
+import { useMergeWorkspaceActions } from '@/hooks/useMergeWorkspaceActions';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useTerminology } from '@/hooks/useTerminology';
-import { createCommit } from '@/lib/api/commits';
-import { getCommitAsNodes } from '@/lib/api/commitUnified';
-import { computeMergeSummary } from '@/lib/mergeSummary';
 import { fullScreenEnter, reducedMotion } from '@/lib/motion';
-import { useCanvasStore } from '@/store/canvasStore';
+import { fetchCommitByHash } from '@/queries/commitByHash';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
-import { buildMergeNavItems } from './buildMergeNavItems';
 import { ConflictCard } from './ConflictCard';
 import { MergeActionBar } from './MergeActionBar';
 import { MergeContextPanel } from './MergeContextPanel';
 import { MergeNavigator } from './MergeNavigator';
-import { MergeNavSidebar } from './MergeNavSidebar';
 import { MergePreview } from './MergePreview';
 import { MergeReviewDialog } from './MergeReviewDialog';
-import { MergeSection } from './MergeSection';
 import { buildMergedContent, findNode, findNodeByPath } from './mergeWorkspaceHelpers';
 import { useMergeKeyboard } from './useMergeKeyboard';
-import type { ViewMode } from './UnifiedDiffView';
-import { UnifiedDiffView } from './UnifiedDiffView';
 
 interface MergeWorkspaceProps {
   projectId: string;
@@ -49,8 +38,9 @@ interface MergeWorkspaceProps {
 }
 
 export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWorkspaceProps) {
+  const { create: createMergeCommit } = useCreateMergeCommit();
+  const { load: loadCanvas } = useCanvasNodeActions();
   const {
-    prepared,
     message,
     isDirty,
     saveStatus,
@@ -58,21 +48,9 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
     targetBranch,
     sourceHash,
     targetHash,
-    saveDraft,
-    commitMerge,
-    cancelMerge,
     setMessage,
-    resolvePair,
-    toggleKeep,
-    getUnresolvedCount,
-    canCommit,
     previewExpanded,
     togglePreview,
-    getMergeChecks,
-    getPreviewNodes,
-    extendedResolutions,
-    fetchServerChecks,
-    serverChecksLoading,
     // Tree merge state
     treeMergeResult,
     treeResolutions,
@@ -87,13 +65,11 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
     getTreeMergeChecks,
     getPreviewPaths,
   } = useMergeWorkspaceStore();
+  const { save: saveDraft, cancel: cancelMerge } = useMergeWorkspaceActions();
 
   const prefersReducedMotion = useReducedMotion();
   const { t } = useTerminology();
   const [showReviewDialog, setShowReviewDialog] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [viewMode, setViewMode] = useState<ViewMode>('grouped');
-  const [diffMode, setDiffMode] = useState<DiffMode>('node');
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   // Tree merge loading state
@@ -102,19 +78,12 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
   const [activeNodeId, setActiveNodeId] = useState<string | null>(null);
   const [_commitMergeLoading, setCommitMergeLoading] = useState(false);
 
-  // Semantic data for Tree mode (legacy MergeSection fallback)
+  // Semantic data for tree merge
   const [semanticData, setSemanticData] = useState<{
     base?: SemanticContent;
     source?: SemanticContent;
     target?: SemanticContent;
   }>({});
-
-  const hasSemanticData = !!(
-    semanticData.source?.trees?.length && semanticData.target?.trees?.length
-  );
-
-  // Determine if we're in tree merge mode
-  const isTreeMode = treeMergeResult !== null;
 
   // Fetch commits and prepare tree merge
   useEffect(() => {
@@ -126,14 +95,14 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
     setTreeLoading(true);
     setTreeError(null);
 
-    Promise.all([getCommitAsNodes(sh), getCommitAsNodes(th)])
+    Promise.all([fetchCommitByHash(sh), fetchCommitByHash(th)])
       .then(([srcCommit, tgtCommit]) => {
         if (cancelled) return;
 
         const sourceContent = srcCommit.content;
         const targetContent = tgtCommit.content;
 
-        // Also store for legacy MergeSection
+        // Store semantic data for tree merge UI
         setSemanticData({
           source: sourceContent,
           target: targetContent,
@@ -150,13 +119,13 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
           const baseParent = commonParent ?? sourceParents[0];
 
           if (baseParent) {
-            getCommitAsNodes(baseParent)
+            fetchCommitByHash(baseParent)
               .then((baseCommit) => {
                 if (cancelled) return;
                 const result = prepareMerge(baseCommit.content, sourceContent, targetContent);
                 setTreeMergeResult(result);
                 setTreeLoading(false);
-                setDiffMode('tree');
+                // tree merge prepared
               })
               .catch(() => {
                 if (cancelled) return;
@@ -165,7 +134,7 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
                 const result = prepareMerge(emptyBase, sourceContent, targetContent);
                 setTreeMergeResult(result);
                 setTreeLoading(false);
-                setDiffMode('tree');
+                // tree merge prepared
               });
           } else {
             // No parents at all, use empty base
@@ -173,45 +142,23 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
             const result = prepareMerge(emptyBase, sourceContent, targetContent);
             setTreeMergeResult(result);
             setTreeLoading(false);
-            setDiffMode('tree');
           }
         } else {
           // No tree data, fall back to node mode
           setTreeLoading(false);
-          setDiffMode('node');
+          // no tree data or error — will show empty state
         }
       })
       .catch((err) => {
         if (cancelled) return;
-        setTreeError(
-          err instanceof Error ? err.message : 'Failed to load commits for tree merge'
-        );
+        setTreeError(err instanceof Error ? err.message : 'Failed to load commits for tree merge');
         setTreeLoading(false);
-        // Fall back to node mode
-        setDiffMode('node');
       });
 
     return () => {
       cancelled = true;
     };
   }, [sourceHash, targetHash, setTreeMergeResult]);
-
-  // Build nav items from merge data (node mode)
-  const navItems = useMemo(
-    () => (prepared ? buildMergeNavItems(prepared as unknown as MergeResult, {}, extendedResolutions) : []),
-    [prepared, extendedResolutions]
-  );
-
-  // Scroll sync between sidebar and content (node mode)
-  const { activeItemId, scrollToItem } = useMergeNavigation({
-    scrollContainerRef,
-    items: navItems,
-    prefersReducedMotion,
-  });
-
-  // Compute resolved/total for sidebar progress (node mode)
-  const totalConflicts = prepared?.similarPairs.length ?? 0;
-  const resolvedCount = totalConflicts - (prepared ? getUnresolvedCount() : 0);
 
   // Auto-save when dirty (debounced)
   useEffect(() => {
@@ -232,30 +179,18 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
   // Keyboard shortcuts
   useMergeKeyboard({
     saveDraft,
-    canCommit,
+    canCommit: () => allTreeConflictsResolved() && message.trim().length > 0,
     handleCancel,
     showReviewDialog,
     setShowReviewDialog,
-    setSidebarCollapsed,
-    isTreeMode,
+    setSidebarCollapsed: () => {},
+    isTreeMode: true,
     allTreeConflictsResolved,
     message,
   });
 
-  const handleOpenReview = useCallback(() => {
-    setShowReviewDialog(true);
-    fetchServerChecks();
-  }, [fetchServerChecks]);
-
   // Store committed hash so the dialog's celebration timer can navigate to it
   const committedHashRef = useRef<string | null>(null);
-
-  const handleConfirmMerge = useCallback(async () => {
-    const result = await commitMerge();
-    if (result?.hash) {
-      committedHashRef.current = result.hash;
-    }
-  }, [commitMerge]);
 
   // Wrap onClose: after a successful merge, navigate to commit detail instead of canvas
   const handleCloseOrNavigate = useCallback(() => {
@@ -283,23 +218,21 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
         semanticData.target
       );
 
-      const result = await createCommit(
+      const result = await createMergeCommit({
         projectId,
-        {
+        content: {
           trees: mergedContent.trees,
           relations: mergedContent.relations,
         },
-        {
-          branch: targetBranch || 'main',
-          message: message || 'Tree merge',
-          parents: [sourceHash, targetHash],
-          author: { type: 'human', name: 'User' },
-          provenance: { method: 'merge' },
-        }
-      );
+        branch: targetBranch || 'main',
+        message: message || 'Tree merge',
+        parents: [sourceHash, targetHash],
+        author: { type: 'human', name: 'User' },
+        provenance: { method: 'merge' },
+      });
 
       // Reload canvas data to show the new merge commit
-      useCanvasStore.getState().loadProjectData(projectId);
+      void loadCanvas(projectId);
 
       // Navigate to the new merge commit detail page
       if (onMergeCommitted && result?.commit?.hash) {
@@ -325,10 +258,12 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
     onClose,
     onMergeCommitted,
     semanticData,
+    loadCanvas,
   ]);
 
   // Tree merge can-commit check
-  const treeCanCommit = isTreeMode && allTreeConflictsResolved() && message.trim().length > 0;
+  const treeCanCommit =
+    treeMergeResult !== null && allTreeConflictsResolved() && message.trim().length > 0;
 
   // Tree merge review dialog handler
   const handleNodeOpenReview = useCallback(() => {
@@ -351,8 +286,8 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
     );
   }
 
-  // If we're in  node mode, render the tree merge workspace
-  if (isTreeMode && treeMergeResult) {
+  // Tree merge workspace
+  if (treeMergeResult) {
     const frameUnresolvedCount = treeMergeResult.conflicts.filter(
       (c) => !treeResolutions.has(c.path)
     ).length;
@@ -491,7 +426,9 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
                                   <span className="text-[var(--yaml-key,#2563eb)]">{key}</span>
                                   <span className="text-[var(--yaml-punctuation,#6b7280)]">: </span>
                                   <span className="text-[var(--yaml-string,#16a34a)]">
-                                    {typeof value === 'string' ? `"${value}"` : JSON.stringify(value)}
+                                    {typeof value === 'string'
+                                      ? `"${value}"`
+                                      : JSON.stringify(value)}
                                   </span>
                                 </div>
                               ))}
@@ -544,7 +481,9 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
                                   <span className="text-[var(--yaml-key,#2563eb)]">{key}</span>
                                   <span className="text-[var(--yaml-punctuation,#6b7280)]">: </span>
                                   <span className="text-[var(--yaml-string,#16a34a)]">
-                                    {typeof value === 'string' ? `"${value}"` : JSON.stringify(value)}
+                                    {typeof value === 'string'
+                                      ? `"${value}"`
+                                      : JSON.stringify(value)}
                                   </span>
                                 </div>
                               ))}
@@ -597,7 +536,9 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
                                   <span className="text-[var(--yaml-key,#2563eb)]">{key}</span>
                                   <span className="text-[var(--yaml-punctuation,#6b7280)]">: </span>
                                   <span className="text-[var(--yaml-string,#16a34a)]">
-                                    {typeof value === 'string' ? `"${value}"` : JSON.stringify(value)}
+                                    {typeof value === 'string'
+                                      ? `"${value}"`
+                                      : JSON.stringify(value)}
                                   </span>
                                 </div>
                               ))}
@@ -644,116 +585,16 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
     );
   }
 
-  // ============================================================================
-  // ContentNode-based merge (legacy fallback)
-  // ============================================================================
-
-  if (!prepared) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-[var(--surface-app)]">
-        <EmptyState
-          icon={GitMerge}
-          title={`No ${t('merge').toLowerCase()} data available`}
-          description={`There is no ${t('merge').toLowerCase()} in progress. Start a ${t('merge').toLowerCase()} from the canvas by selecting two ${t('branches').toLowerCase()} to compare.`}
-          action={{ label: 'Go Back', onClick: onClose }}
-          customIcon={<MergeIllustration />}
-        />
-      </div>
-    );
-  }
-
-  const unresolvedCount = totalConflicts - resolvedCount;
-  const summary = prepared ? computeMergeSummary(prepared as unknown as MergeResult) : null;
-  const containerVariants = prefersReducedMotion ? reducedMotion.fullScreenEnter : fullScreenEnter;
-
+  // No tree merge result — show empty state
   return (
-    <motion.div
-      variants={containerVariants}
-      initial="initial"
-      animate="animate"
-      className="relative flex h-screen flex-col bg-[var(--surface-app)]"
-    >
-      {/* Merge Review Dialog */}
-      <MergeReviewDialog
-        open={showReviewDialog}
-        onClose={() => setShowReviewDialog(false)}
-        onConfirm={handleConfirmMerge}
-        checks={getMergeChecks()}
-        message={message}
-        sourceBranch={sourceBranch || 'source'}
-        targetBranch={targetBranch || 'main'}
-        nodeCount={getPreviewNodes().length}
-        summary={summary}
-        serverChecksLoading={serverChecksLoading}
-        onBackToCanvas={handleCloseOrNavigate}
-        prepared={prepared as unknown as MergeResult}
-        extendedResolutions={extendedResolutions}
+    <div className="flex h-screen items-center justify-center bg-[var(--surface-app)]">
+      <EmptyState
+        icon={GitMerge}
+        title={`No ${t('merge').toLowerCase()} data available`}
+        description={`There is no ${t('merge').toLowerCase()} in progress. Start a ${t('merge').toLowerCase()} from the canvas by selecting two ${t('branches').toLowerCase()} to compare.`}
+        action={{ label: 'Go Back', onClick: onClose }}
+        customIcon={<MergeIllustration />}
       />
-
-      {/* Action Bar */}
-      <MergeActionBar
-        projectId={projectId}
-        sourceBranch={sourceBranch || 'source'}
-        targetBranch={targetBranch || 'main'}
-        unresolvedCount={unresolvedCount}
-        saveStatus={saveStatus}
-        message={message}
-        onMessageChange={setMessage}
-        onSave={saveDraft}
-        onCommit={handleOpenReview}
-        onCancel={handleCancel}
-        canCommit={canCommit()}
-        onClose={onClose}
-      />
-
-      {/* Main Content — horizontal layout with sidebar */}
-      <div className="flex-1 overflow-hidden flex">
-        {/* Navigation Sidebar (hidden on small screens) */}
-        <div className="hidden md:flex">
-          <MergeNavSidebar
-            items={navItems}
-            activeItemId={activeItemId}
-            onItemClick={scrollToItem}
-            collapsed={sidebarCollapsed}
-            onToggleCollapse={() => setSidebarCollapsed((prev) => !prev)}
-            resolvedCount={resolvedCount}
-            totalConflicts={totalConflicts}
-          />
-        </div>
-
-        {/* Diff + Preview */}
-        <div className="flex-1 overflow-hidden flex flex-col">
-          {/* Diff View */}
-          <div ref={scrollContainerRef} className="flex-1 overflow-auto p-[var(--space-page)]">
-            <UnifiedDiffView
-              prepared={prepared}
-              onResolvePair={resolvePair}
-              onToggleKeep={toggleKeep}
-              sourceBranch={sourceBranch || 'A'}
-              targetBranch={targetBranch || 'B'}
-              viewMode={viewMode}
-              onViewModeChange={setViewMode}
-              diffMode={diffMode}
-              onDiffModeChange={setDiffMode}
-              hasSemanticData={hasSemanticData}
-            />
-            {diffMode === 'tree' &&
-              hasSemanticData &&
-              semanticData.base &&
-              semanticData.source &&
-              semanticData.target && (
-                <MergeSection
-                  base={semanticData.base}
-                  source={semanticData.source}
-                  target={semanticData.target}
-                />
-              )}
-          </div>
-
-          {/* Preview Panel */}
-          <MergePreview expanded={previewExpanded} onToggle={togglePreview} />
-        </div>
-      </div>
-    </motion.div>
+    </div>
   );
 }

@@ -24,8 +24,9 @@ import {
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import type { Conversation, Leaf, Turn } from '@/lib/api';
-import { listConversations, listLeavesByProject, listTurns } from '@/lib/api';
+import { usePinsCrud } from '@/hooks/usePinsCrud';
+import type { Conversation, Leaf, Turn } from '@/infrastructure';
+import { listConversations, listLeavesByProject, listTurns } from '@/infrastructure';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import { usePinsStore } from '@/store/pinsStore';
@@ -56,7 +57,10 @@ export function MemoryContextModal({ open, onClose, projectId }: MemoryContextMo
   const [loadingDetail, setLoadingDetail] = useState(false);
 
   // Pin store
-  const { pins, isPinned, addPin, removePin, getPinByRef, fetchPins } = usePinsStore();
+  const pins = usePinsStore((s) => s.pins);
+  const isPinned = usePinsStore((s) => s.isPinned);
+  const getPinByRef = usePinsStore((s) => s.getPinByRef);
+  const { fetch: fetchPins, add: addPin, remove: removePin } = usePinsCrud();
 
   // Fetch data when modal opens
   useEffect(() => {

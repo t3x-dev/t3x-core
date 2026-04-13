@@ -1,6 +1,18 @@
+/**
+ * projectStore — pure Zustand state container per
+ * docs/frontend-architecture-v2-zh.md §2.5. No I/O.
+ *
+ * Async actions (fetchProjects, addProject, deleteProject,
+ * updateProjectModel) live in `hooks/useProjectCrud`.
+ *
+ * State-only selectors (`projects`, `initialized`, `loading`, `error`,
+ * `notifyCallback`, `getProject`) remain on the store — existing consumers
+ * reading those values need no change.
+ */
+
 import { create } from 'zustand';
-import * as api from '@/lib/api';
-import type { NotifyCallback } from './canvasStoreTypes';
+import type { Project } from '@/types/api';
+import type { NotifyCallback } from './shared';
 
 export interface ProjectSummary {
   id: string;
@@ -23,16 +35,17 @@ type ProjectStore = {
   error: Error | null;
   initialized: boolean;
   notifyCallback: NotifyCallback | null;
+
   setNotifyCallback: (cb: NotifyCallback | null) => void;
-  fetchProjects: () => Promise<void>;
-  addProject: (name?: string) => Promise<ProjectSummary>;
-  deleteProject: (id: string) => Promise<void>;
+  setProjects: (projects: ProjectSummary[]) => void;
+  setLoading: (loading: boolean) => void;
+  setError: (error: Error | null) => void;
+  setInitialized: (initialized: boolean) => void;
+  addToProjects: (project: ProjectSummary) => void;
+  removeProject: (id: string) => ProjectSummary | undefined;
+  updateProject: (id: string, patch: Partial<ProjectSummary>) => void;
+
   getProject: (id: string) => ProjectSummary | undefined;
-  updateProjectModel: (
-    projectId: string,
-    provider: string | null,
-    model: string | null
-  ) => Promise<void>;
 };
 
 const formatDate = (dateStr: string) => {
@@ -50,13 +63,13 @@ const formatDate = (dateStr: string) => {
   return date.toLocaleDateString();
 };
 
-const deriveStatus = (project: api.Project): 'draft' | 'active' | 'paused' => {
+const deriveStatus = (project: Project): 'draft' | 'active' | 'paused' => {
   if ((project.commits_count || 0) > 0) return 'active';
   if ((project.conversations_count || 0) > 0) return 'draft';
   return 'draft';
 };
 
-const apiProjectToSummary = (project: api.Project): ProjectSummary => ({
+export const apiProjectToSummary = (project: Project): ProjectSummary => ({
   id: project.project_id,
   name: project.name,
   description: (project.metadata?.description as string) || '',
@@ -79,130 +92,24 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
   notifyCallback: null,
 
   setNotifyCallback: (cb) => set({ notifyCallback: cb }),
+  setProjects: (projects) => set({ projects }),
+  setLoading: (loading) => set({ loading }),
+  setError: (error) => set({ error }),
+  setInitialized: (initialized) => set({ initialized }),
 
-  fetchProjects: async () => {
-    // Skip if already loading
-    if (get().loading) return;
+  addToProjects: (project) =>
+    set((state) => ({ projects: [project, ...state.projects] })),
 
-    set({ loading: true, error: null });
-    try {
-      const response = await api.listProjects(50, 0);
-      const projects = response.projects.map(apiProjectToSummary);
-      set({ projects, loading: false, initialized: true });
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      set({
-        error,
-        loading: false,
-        initialized: true,
-      });
-      get().notifyCallback?.(`Failed to load projects: ${error.message}`, 'error');
-    }
+  removeProject: (id) => {
+    const existing = get().projects.find((p) => p.id === id);
+    set((state) => ({ projects: state.projects.filter((p) => p.id !== id) }));
+    return existing;
   },
 
-  addProject: async (rawName = 'Untitled Project') => {
-    const name = rawName.trim() || 'Untitled Project';
-    const notify = get().notifyCallback;
-
-    try {
-      // Create project via API
-      const project = await api.createProject(name, {
-        description: 'Fresh project awaiting conversations.',
-      });
-
-      const projectSummary = apiProjectToSummary(project);
-
-      set((state) => ({
-        projects: [projectSummary, ...state.projects],
-      }));
-
-      notify?.(`Created project "${name}"`, 'success');
-      return projectSummary;
-    } catch (err) {
-      // Only create a local offline project for network errors (TypeError from fetch).
-      // HTTP 4xx/5xx errors propagate so the UI can display them properly.
-      if (!(err instanceof TypeError)) {
-        throw err;
-      }
-
-      notify?.(`API unavailable - created offline project "${name}"`, 'warning');
-
-      const projectSummary: ProjectSummary = {
-        id: `local-${Date.now()}`,
-        name: `${name} (offline)`,
-        description: 'Created offline - will sync when API is available.',
-        updatedAt: 'just now',
-        owner: 'You',
-        status: 'draft',
-        nodes: 0,
-        drafts: 0,
-        commitsCount: 0,
-        branchesCount: 0,
-      };
-
-      set((state) => ({
-        projects: [projectSummary, ...state.projects],
-      }));
-
-      return projectSummary;
-    }
-  },
-
-  deleteProject: async (id) => {
-    const notify = get().notifyCallback;
-    const project = get().projects.find((p) => p.id === id);
-
-    // Optimistically remove from UI
+  updateProject: (id, patch) =>
     set((state) => ({
-      projects: state.projects.filter((p) => p.id !== id),
-    }));
-
-    // Skip API call for local-only projects
-    if (id.startsWith('local-')) {
-      notify?.(`Deleted offline project`, 'success');
-      return;
-    }
-
-    try {
-      await api.deleteProject(id);
-      notify?.(`Deleted "${project?.name || id}"`, 'success');
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-
-      // If 404, the project was already deleted on the server — don't restore
-      if (error.message.includes('404') || error.message.includes('not found')) {
-        notify?.(`Project was already deleted from server`, 'warning');
-      } else {
-        // Restore project on non-404 failure
-        if (project) {
-          set((state) => ({
-            projects: [project, ...state.projects],
-          }));
-        }
-        notify?.(`Failed to delete: ${error.message}`, 'error');
-      }
-    }
-  },
+      projects: state.projects.map((p) => (p.id === id ? { ...p, ...patch } : p)),
+    })),
 
   getProject: (id) => get().projects.find((project) => project.id === id),
-
-  updateProjectModel: async (projectId, provider, model) => {
-    const notify = get().notifyCallback;
-    try {
-      await api.updateProject(projectId, {
-        default_provider: provider,
-        default_model: model,
-      });
-      set((state) => ({
-        projects: state.projects.map((p) =>
-          p.id === projectId ? { ...p, defaultProvider: provider, defaultModel: model } : p
-        ),
-      }));
-      notify?.('Model settings saved', 'success');
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      notify?.(`Failed to save model settings: ${error.message}`, 'error');
-      throw error;
-    }
-  },
 }));

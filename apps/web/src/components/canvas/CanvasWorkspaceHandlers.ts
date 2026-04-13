@@ -1,97 +1,31 @@
 import type { Node, ReactFlowInstance } from '@xyflow/react';
 import { useCallback } from 'react';
-import * as api from '@/lib/api';
-import { getLayoutedElements } from '@/lib/elkLayout';
-import { useCanvasStore } from '@/store/canvasStore';
 import type { NotifyCallback } from '@/store/canvasStoreTypes';
 import type { NodeKind } from '@/types/nodes';
 
 interface UseCanvasHandlersOptions {
   getNodes: () => Node[];
-  getEdges: ReactFlowInstance['getEdges'];
   setNodes: ReactFlowInstance['setNodes'];
   fitView: ReactFlowInstance['fitView'];
   setCenter: ReactFlowInstance['setCenter'];
   screenToFlowPosition: ReactFlowInstance['screenToFlowPosition'];
   canvasRef: React.RefObject<HTMLDivElement | null>;
-  projectId: string | null;
   notify: NotifyCallback | null;
-  router: { push: (url: string) => void };
   addNode: (kind: NodeKind, position?: { x: number; y: number }) => Promise<void>;
-  addDraftNode: (position?: { x: number; y: number }) => Promise<void>;
   setIsAdding: (value: boolean) => void;
-  setIsLayouting: (value: boolean) => void;
 }
 
 export function useCanvasHandlers({
   getNodes,
-  getEdges,
   setNodes,
   fitView,
   setCenter,
   screenToFlowPosition,
   canvasRef,
-  projectId,
   notify,
-  router,
   addNode,
-  addDraftNode,
   setIsAdding,
-  setIsLayouting,
 }: UseCanvasHandlersOptions) {
-  // Auto-layout handler
-  const handleAutoLayout = useCallback(async () => {
-    const currentNodes = getNodes();
-    const currentEdges = getEdges();
-
-    if (currentNodes.length === 0) return;
-
-    setIsLayouting(true);
-    try {
-      const layoutedNodes = await getLayoutedElements(currentNodes, currentEdges, {
-        direction: 'DOWN',
-        nodeSpacing: 80,
-        rankSpacing: 120,
-      });
-      setNodes(layoutedNodes);
-      // Fit view after layout -- double rAF ensures DOM has updated after React render
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          fitView({ padding: 0.2, duration: 300 });
-        });
-      });
-    } catch (_err) {
-      notify?.('Auto-layout failed', 'error');
-    } finally {
-      setIsLayouting(false);
-    }
-  }, [getNodes, getEdges, setNodes, fitView, notify, setIsLayouting]);
-
-  // Auto-extract: create a draft from a conversation node via LLM extraction
-  const handleAutoExtract = useCallback(
-    async (nodeId: string) => {
-      const node = getNodes().find((n) => n.id === nodeId);
-      const conversationId = node?.data.conversationId as string | undefined;
-      if (!conversationId || !projectId) {
-        notify?.('No conversation found on this node', 'warning');
-        return;
-      }
-      try {
-        notify?.('Creating auto-draft...', 'success');
-        const draft = await api.createAutoDraft({
-          project_id: projectId,
-          conversation_id: conversationId,
-        });
-        // Reload canvas to pick up the new draft node, then navigate
-        await useCanvasStore.getState().loadProjectData(projectId);
-        router.push(`/project/${projectId}/draft/${draft.id}`);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Auto-extract failed';
-        notify?.(message, 'error');
-      }
-    },
-    [getNodes, projectId, notify, router]
-  );
 
   const getViewportCenter = useCallback(() => {
     if (!canvasRef.current) {
@@ -118,44 +52,6 @@ export function useCanvasHandlers({
       }
     },
     [getViewportCenter, addNode, notify, setIsAdding]
-  );
-
-  // Drag-and-drop handlers for node palette
-  const onDragOver = useCallback((event: React.DragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    event.dataTransfer.dropEffect = 'move';
-  }, []);
-
-  const onDrop = useCallback(
-    async (event: React.DragEvent<HTMLDivElement>) => {
-      event.preventDefault();
-
-      const kind = event.dataTransfer.getData('application/reactflow') as NodeKind;
-      if (!kind) return;
-
-      const isDraft = event.dataTransfer.getData('application/reactflow-draft') === 'true';
-
-      // Get the drop position in flow coordinates
-      const position = screenToFlowPosition({
-        x: event.clientX,
-        y: event.clientY,
-      });
-
-      setIsAdding(true);
-      try {
-        if (isDraft) {
-          await addDraftNode(position);
-        } else {
-          await addNode(kind, position);
-        }
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to create node';
-        notify?.(message, 'error');
-      } finally {
-        setIsAdding(false);
-      }
-    },
-    [screenToFlowPosition, addNode, addDraftNode, notify, setIsAdding]
   );
 
   // Select all nodes (Ctrl/Cmd+A)
@@ -238,12 +134,7 @@ export function useCanvasHandlers({
   );
 
   return {
-    handleAutoLayout,
-    handleAutoExtract,
     handleAddNode,
-    onDragOver,
-    onDrop,
-    getViewportCenter,
     selectAllNodes,
     deselectAllNodes,
     navigateToNode,

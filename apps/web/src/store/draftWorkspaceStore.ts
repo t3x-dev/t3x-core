@@ -1,21 +1,20 @@
 /**
- * Draft Workspace Store
+ * Draft Workspace Store — passive.
  *
- * Zustand store for managing the full-screen draft workspace state.
- * Handles draft persistence, auto-save, local validation, and commit flow.
+ * Per docs/frontend-architecture-v2-zh.md §2.5, async actions
+ * (load, save, generatePreview, commit) live in
+ * `hooks/useDraftWorkspaceActions`. This store owns:
+ *  - state for the draft workspace (draft data, save/preview/commit status)
+ *  - pure local mutations (toggleNode, updateTitle, addConstraint, ...)
+ *  - passive setters the hook calls after each I/O resolves
+ *  - module-level auto-preview debounce timer (cleaned up via reset())
  */
 
 import { create } from 'zustand';
-import type { DraftConstraint, DraftNode, WorkbenchDraft } from '@/lib/api';
-import * as api from '@/lib/api';
 import { type ValidationResult, validateConstraintsLocally } from '@/lib/draftValidation';
-import { useCanvasStore } from './canvasStore';
+import type { DraftConstraint, DraftNode, WorkbenchDraft } from '@/types/api';
+import { createSaveStatusTimer, type SaveStatus } from './saveStatus';
 
-// ============================================================================
-// Types
-// ============================================================================
-
-type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 type PreviewStatus = 'idle' | 'loading' | 'ready' | 'stale' | 'error';
 
 interface DraftWorkspaceState {
@@ -42,15 +41,13 @@ interface DraftWorkspaceState {
   previewModelUsed: string | null;
   previewCached: boolean;
   previewIncludedCount: number | null;
+  previewGeneration: number;
 
   // V2: Auto preview + model selector
   autoPreview: boolean;
-  previewModel: string | null; // null = server default (haiku)
+  previewModel: string | null;
 
-  // Actions
-  loadDraft: (draftId: string) => Promise<void>;
-
-  // Mutations (set isDirty=true, recompute validations)
+  // ── Pure local mutations ──
   updateTitle: (title: string) => void;
   updateGoal: (goal: string) => void;
   toggleNode: (nodeId: string) => void;
@@ -66,20 +63,32 @@ interface DraftWorkspaceState {
   removeConstraint: (constraintId: string) => void;
   updateInstructions: (instructions: string) => void;
   updatePreviewType: (previewType: string) => void;
-
-  // Preview
-  generatePreview: () => Promise<void>;
   clearPreview: () => void;
 
   // V2: Settings
   setAutoPreview: (enabled: boolean) => void;
   setPreviewModel: (model: string | null) => void;
 
-  // Async
-  saveDraft: () => Promise<void>;
-  commitDraft: (
-    message?: string
-  ) => Promise<{ commit: Record<string, unknown>; leaf: Record<string, unknown> | null }>;
+  // ── Passive setters used by useDraftWorkspaceActions ──
+  setLoading: () => void;
+  setLoadError: (message: string) => void;
+  setLoadedDraft: (draft: WorkbenchDraft) => void;
+  setSaveStarted: () => void;
+  setSaveSucceeded: (updated: WorkbenchDraft) => void;
+  setSaveFailed: (isConflict: boolean) => void;
+  setPreviewLoading: () => void;
+  setPreviewSucceeded: (result: {
+    output: string;
+    tokenCount: number;
+    modelUsed: string;
+    cached: boolean;
+    includedCount: number;
+  }) => void;
+  setPreviewFailed: (message: string) => void;
+  setCommitting: () => void;
+  setCommitFailed: (message: string) => void;
+  setCommitted: () => void;
+  bumpPreviewGeneration: () => number;
 
   // Computed
   getIncludedCount: () => number;
@@ -104,33 +113,33 @@ function nextId(prefix: string): string {
   return `${prefix}${hex}`;
 }
 
-/** If preview was 'ready', mark it as 'stale' after content mutations */
 function staleIfReady(currentStatus: PreviewStatus): PreviewStatus {
   return currentStatus === 'ready' ? 'stale' : currentStatus;
 }
 
-/** Auto-preview debounce timer (module-level for cleanup) */
+/** Auto-preview debounce timer (module-level for cleanup across remounts) */
 let autoPreviewTimer: ReturnType<typeof setTimeout> | null = null;
+let autoPreviewCallback: (() => void) | null = null;
 
-/** Generation counter to discard stale preview results */
-let previewGeneration = 0;
+const saveTimer = createSaveStatusTimer();
 
-/** Save status reset timer — tracked so reset() can cancel it */
-let saveStatusTimer: ReturnType<typeof setTimeout> | null = null;
-
-/** Schedule auto-preview regeneration if enabled and preview is stale */
 function scheduleAutoPreview(get: () => DraftWorkspaceState, newPreviewStatus: PreviewStatus) {
   if (!get().autoPreview || newPreviewStatus !== 'stale') return;
   if (autoPreviewTimer) clearTimeout(autoPreviewTimer);
   autoPreviewTimer = setTimeout(() => {
     autoPreviewTimer = null;
-    get().generatePreview();
+    autoPreviewCallback?.();
   }, 2000);
 }
 
-// ============================================================================
-// Store
-// ============================================================================
+/**
+ * Wire the auto-preview callback once at app/workspace mount. The store
+ * fires this callback when the debounce timer expires and a preview is
+ * currently 'stale'. The callback should call useDraftWorkspaceActions.
+ */
+export function setAutoPreviewCallback(cb: (() => void) | null): void {
+  autoPreviewCallback = cb;
+}
 
 const initialState = {
   draftId: null as string | null,
@@ -143,7 +152,6 @@ const initialState = {
   lastSavedAt: null as Date | null,
   validationResults: [] as ValidationResult[],
   conflictError: false,
-  // Preview
   previewOutput: null as string | null,
   previewGeneratedAt: null as string | null,
   previewStatus: 'idle' as PreviewStatus,
@@ -152,7 +160,7 @@ const initialState = {
   previewModelUsed: null as string | null,
   previewCached: false,
   previewIncludedCount: null as number | null,
-  // V2: Auto preview + model
+  previewGeneration: 0,
   autoPreview: false,
   previewModel: null as string | null,
 };
@@ -160,74 +168,24 @@ const initialState = {
 export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => ({
   ...initialState,
 
-  // ============================================================================
-  // Load
-  // ============================================================================
+  // ── Pure mutations ──
 
-  loadDraft: async (draftId: string) => {
-    set({ loading: true, error: null, conflictError: false });
-
-    try {
-      const draft = await api.getWorkbenchDraft(draftId);
-
-      // Determine preview status from server data
-      let previewStatus: PreviewStatus = 'idle';
-      let previewOutput: string | null = null;
-      let previewGeneratedAt: string | null = null;
-      if (draft.preview_output && draft.preview_generated_at) {
-        previewOutput = draft.preview_output;
-        previewGeneratedAt = draft.preview_generated_at;
-        // If preview was generated before last update, mark as stale
-        const genTime = new Date(draft.preview_generated_at).getTime();
-        const updTime = new Date(draft.updated_at).getTime();
-        previewStatus = genTime < updTime ? 'stale' : 'ready';
-      }
-
-      set({
-        draftId: draft.id,
-        projectId: draft.project_id,
-        draft,
-        loading: false,
-        isDirty: false,
-        validationResults: recomputeValidation(draft),
-        previewOutput,
-        previewGeneratedAt,
-        previewStatus,
-        previewError: null,
-        previewIncludedCount: previewOutput
-          ? draft.nodes.filter((s) => s.included).length
-          : null,
-      });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to load draft';
-      set({ loading: false, error: message });
-    }
-  },
-
-  // ============================================================================
-  // Mutations (all guard: draft must exist and be in 'editing' status)
-  // ============================================================================
-
-  updateTitle: (title: string) => {
+  updateTitle: (title) => {
     const { draft } = get();
     if (!draft || draft.status !== 'editing') return;
-    const updated = { ...draft, title };
-    set({ draft: updated, isDirty: true });
+    set({ draft: { ...draft, title }, isDirty: true });
   },
 
-  updateGoal: (goal: string) => {
+  updateGoal: (goal) => {
     const { draft } = get();
     if (!draft || draft.status !== 'editing') return;
-    const updated = { ...draft, goal: goal || null };
-    set({ draft: updated, isDirty: true });
+    set({ draft: { ...draft, goal: goal || null }, isDirty: true });
   },
 
-  toggleNode: (nodeId: string) => {
+  toggleNode: (nodeId) => {
     const { draft, previewStatus } = get();
     if (!draft || draft.status !== 'editing') return;
-    const nodes = draft.nodes.map((s) =>
-      s.id === nodeId ? { ...s, included: !s.included } : s
-    );
+    const nodes = draft.nodes.map((s) => (s.id === nodeId ? { ...s, included: !s.included } : s));
     const updated = { ...draft, nodes };
     const newPreviewStatus = staleIfReady(previewStatus);
     set({
@@ -239,12 +197,10 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
     scheduleAutoPreview(get, newPreviewStatus);
   },
 
-  removeNode: (nodeId: string) => {
+  removeNode: (nodeId) => {
     const { draft, previewStatus } = get();
     if (!draft || draft.status !== 'editing') return;
-    const nodes = draft.nodes
-      .filter((s) => s.id !== nodeId)
-      .map((s, i) => ({ ...s, position: i }));
+    const nodes = draft.nodes.filter((s) => s.id !== nodeId).map((s, i) => ({ ...s, position: i }));
     const updated = { ...draft, nodes };
     const newPreviewStatus = staleIfReady(previewStatus);
     set({
@@ -256,7 +212,7 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
     scheduleAutoPreview(get, newPreviewStatus);
   },
 
-  reorderNodes: (fromIndex: number, toIndex: number) => {
+  reorderNodes: (fromIndex, toIndex) => {
     const { draft, previewStatus } = get();
     if (!draft || draft.status !== 'editing') return;
     const nodes = [...draft.nodes];
@@ -274,7 +230,7 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
     scheduleAutoPreview(get, newPreviewStatus);
   },
 
-  addManualNode: (text: string) => {
+  addManualNode: (text) => {
     const { draft, previewStatus } = get();
     if (!draft || draft.status !== 'editing' || !text.trim()) return;
     const newNode: DraftNode = {
@@ -284,8 +240,7 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
       position: draft.nodes.length,
       included: true,
     };
-    const nodes = [...draft.nodes, newNode];
-    const updated = { ...draft, nodes };
+    const updated = { ...draft, nodes: [...draft.nodes, newNode] };
     const newPreviewStatus = staleIfReady(previewStatus);
     set({
       draft: updated,
@@ -306,8 +261,7 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
       value: value.trim(),
       ...(reason ? { reason } : {}),
     };
-    const constraints = [...draft.constraints, newConstraint];
-    const updated = { ...draft, constraints };
+    const updated = { ...draft, constraints: [...draft.constraints, newConstraint] };
     const newPreviewStatus = staleIfReady(previewStatus);
     set({
       draft: updated,
@@ -318,11 +272,13 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
     scheduleAutoPreview(get, newPreviewStatus);
   },
 
-  removeConstraint: (constraintId: string) => {
+  removeConstraint: (constraintId) => {
     const { draft, previewStatus } = get();
     if (!draft || draft.status !== 'editing') return;
-    const constraints = draft.constraints.filter((c) => c.id !== constraintId);
-    const updated = { ...draft, constraints };
+    const updated = {
+      ...draft,
+      constraints: draft.constraints.filter((c) => c.id !== constraintId),
+    };
     const newPreviewStatus = staleIfReady(previewStatus);
     set({
       draft: updated,
@@ -333,7 +289,7 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
     scheduleAutoPreview(get, newPreviewStatus);
   },
 
-  updateInstructions: (instructions: string) => {
+  updateInstructions: (instructions) => {
     const { draft, previewStatus } = get();
     if (!draft || draft.status !== 'editing') return;
     const updated = { ...draft, instructions: instructions || null };
@@ -342,61 +298,13 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
     scheduleAutoPreview(get, newPreviewStatus);
   },
 
-  updatePreviewType: (previewType: string) => {
+  updatePreviewType: (previewType) => {
     const { draft, previewStatus } = get();
     if (!draft || draft.status !== 'editing') return;
     const updated = { ...draft, preview_type: previewType || null };
     const newPreviewStatus = staleIfReady(previewStatus);
     set({ draft: updated, isDirty: true, previewStatus: newPreviewStatus });
     scheduleAutoPreview(get, newPreviewStatus);
-  },
-
-  // ============================================================================
-  // Preview
-  // ============================================================================
-
-  generatePreview: async () => {
-    const { draftId, draft, isDirty, previewModel } = get();
-    if (!draftId || !draft) return;
-
-    // Guard against concurrent calls — only the latest generation wins
-    const gen = ++previewGeneration;
-
-    // Save pending changes first so preview uses latest data
-    if (isDirty) {
-      await get().saveDraft();
-      if (get().saveStatus === 'error') return;
-    }
-
-    // Stale check: a newer generation was started while saving
-    if (gen !== previewGeneration) return;
-
-    set({ previewStatus: 'loading', previewError: null });
-
-    try {
-      const result = await api.previewWorkbenchDraft(draftId, {
-        ...(previewModel ? { model: previewModel } : {}),
-      });
-
-      // Stale check: discard if a newer generation was started during API call
-      if (gen !== previewGeneration) return;
-
-      const includedCount = get().draft?.nodes.filter((s) => s.included).length ?? 0;
-      set({
-        previewOutput: result.output,
-        previewGeneratedAt: new Date().toISOString(),
-        previewStatus: 'ready',
-        previewTokenCount: result.token_count,
-        previewModelUsed: result.model_used,
-        previewCached: result.cached,
-        previewError: null,
-        previewIncludedCount: includedCount,
-      });
-    } catch (err) {
-      if (gen !== previewGeneration) return;
-      const message = err instanceof Error ? err.message : 'Preview generation failed';
-      set({ previewStatus: 'error', previewError: message });
-    }
   },
 
   clearPreview: () => {
@@ -412,11 +320,7 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
     });
   },
 
-  // ============================================================================
-  // V2: Settings
-  // ============================================================================
-
-  setAutoPreview: (enabled: boolean) => {
+  setAutoPreview: (enabled) => {
     set({ autoPreview: enabled });
     if (!enabled && autoPreviewTimer) {
       clearTimeout(autoPreviewTimer);
@@ -424,125 +328,97 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
     }
   },
 
-  setPreviewModel: (model: string | null) => {
+  setPreviewModel: (model) => {
     set({ previewModel: model });
   },
 
-  // ============================================================================
-  // Save (PATCH with optimistic lock)
-  // ============================================================================
+  // ── Passive setters ──
 
-  saveDraft: async () => {
-    const { draftId, draft, isDirty } = get();
-    if (!draftId || !draft || !isDirty || draft.status !== 'editing') return;
+  setLoading: () => set({ loading: true, error: null, conflictError: false }),
+  setLoadError: (message) => set({ loading: false, error: message }),
 
-    set({ saveStatus: 'saving' });
-
-    try {
-      const updated = await api.updateWorkbenchDraft(draftId, {
-        title: draft.title,
-        goal: draft.goal ?? undefined,
-        nodes: draft.nodes,
-        constraints: draft.constraints,
-        instructions: draft.instructions ?? undefined,
-        preview_type: draft.preview_type ?? undefined,
-        target_branch: draft.target_branch ?? undefined,
-        if_revision: draft.revision,
-      });
-
-      set({
-        draft: updated,
-        saveStatus: 'saved',
-        isDirty: false,
-        lastSavedAt: new Date(),
-        conflictError: false,
-        validationResults: recomputeValidation(updated),
-      });
-
-      // Reset to idle after 2 seconds
-      if (saveStatusTimer) clearTimeout(saveStatusTimer);
-      saveStatusTimer = setTimeout(() => {
-        saveStatusTimer = null;
-        const current = get();
-        if (current.saveStatus === 'saved') {
-          set({ saveStatus: 'idle' });
-        }
-      }, 2000);
-    } catch (err) {
-      const isConflict =
-        err instanceof api.ApiError && (err.code === 'CONFLICT' || err.message.includes('409'));
-      set({
-        saveStatus: 'error',
-        conflictError: isConflict,
-      });
+  setLoadedDraft: (draft) => {
+    let previewStatus: PreviewStatus = 'idle';
+    let previewOutput: string | null = null;
+    let previewGeneratedAt: string | null = null;
+    if (draft.preview_output && draft.preview_generated_at) {
+      previewOutput = draft.preview_output;
+      previewGeneratedAt = draft.preview_generated_at;
+      const genTime = new Date(draft.preview_generated_at).getTime();
+      const updTime = new Date(draft.updated_at).getTime();
+      previewStatus = genTime < updTime ? 'stale' : 'ready';
     }
+    set({
+      draftId: draft.id,
+      projectId: draft.project_id,
+      draft,
+      loading: false,
+      isDirty: false,
+      validationResults: recomputeValidation(draft),
+      previewOutput,
+      previewGeneratedAt,
+      previewStatus,
+      previewError: null,
+      previewIncludedCount: previewOutput ? draft.nodes.filter((s) => s.included).length : null,
+    });
   },
 
-  // ============================================================================
-  // Commit
-  // ============================================================================
+  setSaveStarted: () => set({ saveStatus: 'saving' }),
+  setSaveSucceeded: (updated) => {
+    set({
+      draft: updated,
+      saveStatus: 'saved',
+      isDirty: false,
+      lastSavedAt: new Date(),
+      conflictError: false,
+      validationResults: recomputeValidation(updated),
+    });
+    saveTimer.scheduleReset(get, set);
+  },
+  setSaveFailed: (isConflict) => set({ saveStatus: 'error', conflictError: isConflict }),
 
-  commitDraft: async (message?: string) => {
-    const { draftId, draft } = get();
-    if (!draftId || !draft) throw new Error('No draft to commit');
+  setPreviewLoading: () => set({ previewStatus: 'loading', previewError: null }),
+  setPreviewSucceeded: ({ output, tokenCount, modelUsed, cached, includedCount }) =>
+    set({
+      previewOutput: output,
+      previewGeneratedAt: new Date().toISOString(),
+      previewStatus: 'ready',
+      previewTokenCount: tokenCount,
+      previewModelUsed: modelUsed,
+      previewCached: cached,
+      previewError: null,
+      previewIncludedCount: includedCount,
+    }),
+  setPreviewFailed: (message) => set({ previewStatus: 'error', previewError: message }),
 
-    set({ error: null });
-
-    try {
-      // Save any pending changes first
-      if (get().isDirty) {
-        await get().saveDraft();
-        if (get().saveStatus === 'error') {
-          throw new Error('Failed to save draft before committing');
-        }
-      }
-
-      const result = await api.commitWorkbenchDraft(draftId, message);
-
-      set({
-        draft: { ...draft, status: 'committed' },
-        isDirty: false,
-      });
-
-      // Reload canvas data
-      const projectId = get().projectId;
-      if (projectId) {
-        useCanvasStore.getState().loadProjectData(projectId);
-      }
-
-      return { commit: result.commit, leaf: result.leaf };
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to commit';
-      set({ error: errorMsg });
-      throw err;
-    }
+  setCommitting: () => set({ error: null }),
+  setCommitFailed: (message) => set({ error: message }),
+  setCommitted: () => {
+    const { draft } = get();
+    if (!draft) return;
+    set({ draft: { ...draft, status: 'committed' }, isDirty: false });
   },
 
-  // ============================================================================
+  bumpPreviewGeneration: () => {
+    const next = get().previewGeneration + 1;
+    set({ previewGeneration: next });
+    return next;
+  },
+
   // Computed
-  // ============================================================================
-
   getIncludedCount: () => {
     const { draft } = get();
     if (!draft) return 0;
     return draft.nodes.filter((s) => s.included).length;
   },
 
-  // ============================================================================
   // Lifecycle
-  // ============================================================================
-
   reset: () => {
     if (autoPreviewTimer) {
       clearTimeout(autoPreviewTimer);
       autoPreviewTimer = null;
     }
-    if (saveStatusTimer) {
-      clearTimeout(saveStatusTimer);
-      saveStatusTimer = null;
-    }
-    // Reset generation counter so stale in-flight previews don't clobber state after navigation
-    previewGeneration = 0;
+    saveTimer.cancel();
     set(initialState);
   },
 }));

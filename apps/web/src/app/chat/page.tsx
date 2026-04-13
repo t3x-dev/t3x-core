@@ -1,9 +1,9 @@
 'use client';
 
-import { ClipboardList, Lightbulb, Send, Target } from 'lucide-react';
+import { ClipboardList, Lightbulb, Target } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
-import { Button } from '@/components/ui/button';
+import { useCallback, useState } from 'react';
+import { ChatInput } from '@/components/chat/ChatInput';
 
 const STARTER_CARDS = [
   {
@@ -28,13 +28,19 @@ const STARTER_CARDS = [
 
 export default function ChatLandingPage() {
   const router = useRouter();
-  const [message, setMessage] = useState('');
+  const [selectedModel, setSelectedModel] = useState('claude-sonnet-4-20250514');
 
-  const handleSend = async () => {
-    if (!message.trim()) return;
-    // Future: wire createConversation API
-    router.push(`/chat/new?firstMessage=${encodeURIComponent(message)}`);
-  };
+  const handleSend = useCallback(
+    (message: string) => {
+      if (!message.trim()) return;
+      router.push(`/chat/new?firstMessage=${encodeURIComponent(message)}`);
+    },
+    [router]
+  );
+
+  const handleModelChange = useCallback((_provider: string, model: string) => {
+    setSelectedModel(model);
+  }, []);
 
   return (
     <div className="flex flex-col items-center justify-center h-full">
@@ -47,7 +53,7 @@ export default function ChatLandingPage() {
             <button
               key={card.title}
               type="button"
-              onClick={() => setMessage(card.prompt)}
+              onClick={() => handleSend(card.prompt)}
               className="flex flex-col items-start gap-2 rounded-xl border border-[var(--stroke-default)] px-4 py-3.5 text-left transition-colors hover:bg-[var(--hover-bg)] hover:border-[var(--accent-commit)]/40"
             >
               <card.icon className="h-4 w-4 text-[var(--text-tertiary)]" />
@@ -59,29 +65,12 @@ export default function ChatLandingPage() {
           ))}
         </div>
 
-        <div className="relative">
-          <textarea
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            placeholder="Start a conversation..."
-            className="w-full rounded-xl border border-[var(--stroke-default)] bg-[var(--hover-bg)] px-4 py-3 pr-12 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-[var(--accent-commit)] min-h-[48px] max-h-[200px]"
-            rows={1}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                handleSend();
-              }
-            }}
-          />
-          <Button
-            size="icon"
-            className="absolute right-2 bottom-2 h-8 w-8 rounded-lg"
-            onClick={handleSend}
-            disabled={!message.trim()}
-          >
-            <Send className="h-4 w-4" />
-          </Button>
-        </div>
+        <ChatInput
+          onSend={handleSend}
+          placeholder="Start a conversation..."
+          selectedModel={selectedModel}
+          onModelChange={handleModelChange}
+        />
       </div>
     </div>
   );

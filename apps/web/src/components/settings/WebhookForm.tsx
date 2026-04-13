@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useTerminology } from '@/hooks/useTerminology';
-import type { CreateWebhookInput, UpdateWebhookInput, WebhookData } from '@/lib/api';
+import type { CreateWebhookInput, UpdateWebhookInput, WebhookData } from '@/infrastructure';
 
 const WEBHOOK_EVENTS = [
   { value: 'commit.created', label: 'Commit Created', description: 'When a new commit is created' },

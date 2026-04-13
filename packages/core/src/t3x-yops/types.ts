@@ -16,6 +16,7 @@ export type { YOpsErrorCode } from '@t3x-dev/yops';
 
 import type { YOp as GenericYOp, YOpsError } from '@t3x-dev/yops';
 import type { RelationType } from '../semantic/types';
+import type { Source } from './source';
 
 // ── T3X-Specific Operations ──
 
@@ -34,6 +35,12 @@ export interface UnrelateOp {
 // ── T3X YOp Union (18 generic + 2 T3X extensions) ──
 
 export type YOp = GenericYOp | { relate: RelateOp } | { unrelate: UnrelateOp };
+
+/**
+ * A YOp together with its mandatory source provenance.
+ * This is the type stored in yops_log and passed through the T3X engine.
+ */
+export type SourcedYOp = YOp & { source: Source };
 
 // ── T3X YOps Result (trees + relations, not raw YValue) ──
 

@@ -1,7 +1,7 @@
 import type { Edge, Node } from '@xyflow/react';
 import { applyEdgeChanges, applyNodeChanges } from '@xyflow/react';
 import { create } from 'zustand';
-import * as api from '@/lib/api';
+import { saveNodePosition } from '@/lib/nodePositionSaver';
 import type { CanvasNodeData } from '../types/nodes';
 import { createCommitSlice } from './canvasCommitSlice';
 import { createLeafSlice } from './canvasLeafSlice';
@@ -20,7 +20,6 @@ import {
   isUpstreamOfStagingUnit,
   nextEdgeId,
   resetCounters,
-  saveNodePosition,
   snapPosition,
 } from './canvasStoreUtils';
 
@@ -50,11 +49,13 @@ export const useCanvasStore = create<CanvasState>((...a) => {
     loading: false,
     loadError: null,
     notifyCallback: null,
+    deleteConversationCallback: null,
     openNodeId: null,
     modalViewMode: null,
     deletionConfirmation: null,
 
     setNotifyCallback: (cb) => set({ notifyCallback: cb }),
+    setDeleteConversationCallback: (cb) => set({ deleteConversationCallback: cb }),
 
     openNodeModal: (nodeId, viewMode = 'commit') =>
       set({ openNodeId: nodeId, modalViewMode: viewMode }),
@@ -176,14 +177,15 @@ export const useCanvasStore = create<CanvasState>((...a) => {
 
           // Delete conversations from database for directly deleted unit nodes
           // Note: Commit deletion is local only - backend deleteCommit API not available
-          directDeletes.forEach((nodeId) => {
-            const node = nodeMap.get(nodeId);
-            if (node?.data.kind === 'unit' && node.data.conversationId) {
-              api.deleteConversation(node.data.conversationId).catch(() => {
-                // Error handled silently
-              });
-            }
-          });
+          const deleteConversation = state.deleteConversationCallback;
+          if (deleteConversation) {
+            directDeletes.forEach((nodeId) => {
+              const node = nodeMap.get(nodeId);
+              if (node?.data.kind === 'unit' && node.data.conversationId) {
+                deleteConversation(node.data.conversationId);
+              }
+            });
+          }
 
           const newNodes =
             directRemoveChanges.length > 0
@@ -218,14 +220,15 @@ export const useCanvasStore = create<CanvasState>((...a) => {
 
                 // Delete conversations from database for unit nodes
                 // Note: Commit deletion is local only - backend deleteCommit API not available
-                needsConfirmation.forEach((nodeId) => {
-                  const node = currentState.nodes.find((n) => n.id === nodeId);
-                  if (node?.data.kind === 'unit' && node.data.conversationId) {
-                    api.deleteConversation(node.data.conversationId).catch(() => {
-                      // Error handled silently
-                    });
-                  }
-                });
+                const deleteConversation = currentState.deleteConversationCallback;
+                if (deleteConversation) {
+                  needsConfirmation.forEach((nodeId) => {
+                    const node = currentState.nodes.find((n) => n.id === nodeId);
+                    if (node?.data.kind === 'unit' && node.data.conversationId) {
+                      deleteConversation(node.data.conversationId);
+                    }
+                  });
+                }
 
                 set((s) => ({
                   nodes: s.nodes.filter((n) => !nodesToDeleteSet.has(n.id)),
@@ -242,14 +245,15 @@ export const useCanvasStore = create<CanvasState>((...a) => {
         // No confirmation needed, apply all changes
         // Delete conversations from database for removed unit nodes
         // Note: Commit deletion is local only - backend deleteCommit API not available
-        allowedRemoves.forEach((change) => {
-          const node = nodeMap.get(change.id);
-          if (node?.data.kind === 'unit' && node.data.conversationId) {
-            api.deleteConversation(node.data.conversationId).catch(() => {
-              // Error handled silently
-            });
-          }
-        });
+        const deleteConversation = state.deleteConversationCallback;
+        if (deleteConversation) {
+          allowedRemoves.forEach((change) => {
+            const node = nodeMap.get(change.id);
+            if (node?.data.kind === 'unit' && node.data.conversationId) {
+              deleteConversation(node.data.conversationId);
+            }
+          });
+        }
 
         return {
           nodes: (
@@ -656,21 +660,6 @@ export const useCanvasStore = create<CanvasState>((...a) => {
     },
 
     cancelDeletion: () => set({ deletionConfirmation: null }),
-
-    // Conflict detection state
-    commitConflicts: {},
-    dismissedConflicts: {},
-    showConflictPanel: null,
-    setCommitConflicts: (commitHash, report) =>
-      set((state) => ({
-        commitConflicts: { ...state.commitConflicts, [commitHash]: report },
-      })),
-    dismissConflict: (commitHash) =>
-      set((state) => ({
-        dismissedConflicts: { ...state.dismissedConflicts, [commitHash]: true },
-      })),
-    openConflictPanel: (commitHash) => set({ showConflictPanel: commitHash }),
-    closeConflictPanel: () => set({ showConflictPanel: null }),
 
     // Get direct upstream source nodes (committed units) for a staging unit
     // Returns nodes that can provide source content for a staging unit

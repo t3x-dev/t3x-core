@@ -1,17 +1,14 @@
 import type { Connection, Edge, EdgeChange, Node, NodeChange } from '@xyflow/react';
-import type { Template } from '@/lib/api';
-import type { ConflictReport } from '@/lib/api/commits';
 import type { MergeState } from '../types/merge';
 import type {
   CanvasNodeData,
   ConversationConstraints,
   DraftConstraintOverrides,
-  LeafType,
-  NodeKind,
+  EmbeddedLeaf,
 } from '../types/nodes';
+import type { NotifyCallback } from './shared';
 
-// Shared types
-export type NotifyCallback = (message: string, type: 'success' | 'error' | 'warning') => void;
+export type { NotifyCallback };
 export type DraftBranchMode = 'force-main' | 'select' | 'branch-only' | 'blocked';
 export type CommitTone = 'main-latest' | 'main-history' | 'branch-latest' | 'branch-history';
 export type DeletionConfirmation = {
@@ -21,50 +18,62 @@ export type DeletionConfirmation = {
   onConfirm: () => void;
 } | null;
 
-// Merge slice interface
+// Merge slice interface (passive — async I/O lives in useCanvasMergeActions)
 export interface MergeSlice {
   mergeState: MergeState | null;
   mergeLoading: boolean;
   mergeError: string | null;
-  startMerge: (sourceHash: string, targetHash: string) => Promise<void>;
-  resolveSimilarPair: (index: number, pick: 'source' | 'target') => void;
-  toggleKeep: (side: 'source' | 'target', index: number) => void;
-  executeMerge: (message: string) => Promise<unknown>;
+  setMergeLoading: (loading: boolean) => void;
+  setMergeError: (error: string | null) => void;
+  setMergePrepared: (mergeState: MergeState) => void;
+  appendMergeCommit: (node: Node<CanvasNodeData>, edges: Edge[]) => void;
   cancelMerge: () => void;
   clearMergeError: () => void;
 }
 
-// Leaf panel slice interface
+// Leaf panel slice interface (passive — async I/O lives in useCanvasLeafActions)
 export interface LeafPanelSlice {
   leafPanelOpen: boolean;
   leafPanelCommitId?: string;
   leafCreating: boolean;
   openLeafPanel: (commitId: string) => void;
   closeLeafPanel: () => void;
-  addLeafNode: (leafType: LeafType) => Promise<string | null>;
-  addLeafFromTemplate: (template: Template) => Promise<string | null>;
-  removeLeafFromNode: (commitNodeId: string, leafId: string) => Promise<void>;
+  setLeafCreating: (leafCreating: boolean) => void;
+  embedLeafInNode: (commitNodeId: string, leaf: import('../types/nodes').EmbeddedLeaf) => void;
+  removeLeafFromNodeState: (commitNodeId: string, leafId: string) => void;
 }
 
-// Node CRUD slice interface
+// Node slice interface (passive — async I/O lives in useCanvasNodeActions)
 export interface NodeSlice {
-  loadProjectData: (projectId: string, options?: { merge?: boolean }) => Promise<void>;
-  refreshLeaves: (projectId: string) => Promise<void>;
+  setLoading: (loading: boolean) => void;
+  setLoadError: (loadError: Error | null) => void;
+  setProjectData: (input: {
+    nodes: Node<CanvasNodeData>[];
+    edges: Edge[];
+    hasMainCommit: boolean;
+    latestMainCommitId: string | undefined;
+    hasDbPositions: boolean;
+  }) => void;
+  mergeProjectData: (input: {
+    nodes: Node<CanvasNodeData>[];
+    edges: Edge[];
+    hasMainCommit: boolean;
+    latestMainCommitId: string | undefined;
+    hasDbPositions: boolean;
+  }) => void;
+  setLeavesByCommit: (leavesByCommit: Map<string, EmbeddedLeaf[]>) => void;
+  addToNodes: (node: Node<CanvasNodeData>) => void;
   clearCanvas: () => void;
-  addNode: (kind: NodeKind, position?: { x: number; y: number }) => Promise<void>;
-  addDraftNode: (position?: { x: number; y: number }) => Promise<void>;
   updateNode: (id: string, patch: Partial<CanvasNodeData>) => void;
   updateNodeId: (oldId: string, newId: string) => void;
 }
 
-// Commit operations slice interface
+// Commit operations slice interface (passive — async I/O lives in useCanvasCommitActions)
 export interface CommitSlice {
   commitPendingCommit: (id: string) => void;
-  addPendingCommitFromConversation: (conversationId: string) => Promise<void>;
-  addConversationFromCommit: (commitId: string) => Promise<void>;
   addPendingCommitFromCommit: (commitId: string) => void;
   addUnitFromUnit: (unitId: string) => void;
-  createMergePendingCommit: (commitId: string) => Promise<string | null>;
+  appendNodeAndEdge: (node: Node<CanvasNodeData>, edge: Edge) => void;
   getPendingCommitBranchMode: (commitId: string) => DraftBranchMode;
   canCreatePendingCommitFromConversation: (conversationId: string) => boolean;
 }
@@ -88,6 +97,10 @@ export type CanvasState = MergeSlice &
     // Notification callback
     notifyCallback: NotifyCallback | null;
     setNotifyCallback: (cb: NotifyCallback | null) => void;
+    // Side-effect callback for conversation deletion (wired by useCanvasDeletionWiring).
+    // Per v2 §2.5, the store doesn't import @/queries — it emits, the hook calls.
+    deleteConversationCallback: ((conversationId: string) => void) | null;
+    setDeleteConversationCallback: (cb: ((conversationId: string) => void) | null) => void;
     // Node modal state
     openNodeId: string | null;
     modalViewMode: 'conversation' | 'commit' | null;
@@ -128,12 +141,4 @@ export type CanvasState = MergeSlice &
     cancelDeletion: () => void;
     // Get direct upstream source nodes for a pending commit
     getUpstreamSourceNodes: (nodeId: string) => Node<CanvasNodeData>[];
-    // Conflict detection state
-    commitConflicts: Record<string, ConflictReport | null>;
-    dismissedConflicts: Record<string, boolean>;
-    showConflictPanel: string | null; // commit hash of the conflict panel being shown
-    setCommitConflicts: (commitHash: string, report: ConflictReport | null) => void;
-    dismissConflict: (commitHash: string) => void;
-    openConflictPanel: (commitHash: string) => void;
-    closeConflictPanel: () => void;
   };

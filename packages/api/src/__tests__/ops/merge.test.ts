@@ -16,7 +16,7 @@ const mockContent = {
 
 const mockSourceCommit = {
   hash: 'sha256:source',
-  schema: 't3x/commit/v5',
+  schema: 't3x/commit',
   parents: [],
   author: { type: 'human' as const, name: 'alice' },
   committed_at: '2026-04-03T00:00:00.000Z',

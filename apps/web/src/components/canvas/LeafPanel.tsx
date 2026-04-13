@@ -15,10 +15,11 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useCanvasLeafActions } from '@/hooks/useCanvasLeafActions';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
-import type { Template } from '@/lib/api';
-import { listTemplates } from '@/lib/api';
 import { reducedMotion, staggerContainer, staggerItem } from '@/lib/motion';
+import { fetchTemplates } from '@/queries/templates';
+import type { Template } from '@/types/api';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import { useCanvasStore } from '@/store/canvasStore';
@@ -31,8 +32,7 @@ export function LeafPanel() {
   const router = useRouter();
   const leafPanelOpen = useCanvasStore((state) => state.leafPanelOpen);
   const closeLeafPanel = useCanvasStore((state) => state.closeLeafPanel);
-  const addLeafNode = useCanvasStore((state) => state.addLeafNode);
-  const addLeafFromTemplate = useCanvasStore((state) => state.addLeafFromTemplate);
+  const { add: addLeafNode, addFromTemplate: addLeafFromTemplate } = useCanvasLeafActions();
   const projectId = useCanvasStore((state) => state.projectId);
   const leafCreating = useCanvasStore((state) => state.leafCreating);
   const prefersReducedMotion = useReducedMotion();
@@ -52,7 +52,7 @@ export function LeafPanel() {
     if (activeTab !== 'template' || !leafPanelOpen) return;
     let cancelled = false;
     setLoadingTemplates(true);
-    listTemplates()
+    fetchTemplates()
       .then((data) => {
         if (!cancelled) setTemplates(data);
       })

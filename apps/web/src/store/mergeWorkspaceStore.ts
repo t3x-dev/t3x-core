@@ -1,32 +1,32 @@
 /**
- * Merge Workspace Store
+ * Merge Workspace Store — passive.
  *
- * Zustand store for managing the full-screen merge workspace state.
- * Handles draft persistence, auto-save, and user decisions.
- *
- * Tree-primary: uses MergeResult (path-based conflicts).
+ * Per docs/frontend-architecture-v2-zh.md §2.5, async actions
+ * (load, create, save, commit, cancel, fetchSourceContext,
+ * fetchServerChecks) live in `hooks/useMergeWorkspaceActions`.
+ * This store owns:
+ *  - merge workspace state (draft fields, conflicts, resolutions, cache)
+ *  - pure local mutations (resolveConflict, toggleKeepSource, etc.)
+ *  - pure computed getters (getMergeChecks, canCommit, ...)
+ *  - passive setters the hook calls after each I/O resolves
  */
 
 import type { MergeResult, TreeNode } from '@t3x-dev/core';
 import { create } from 'zustand';
 import type { TreeResolution } from '@/components/merge/ConflictCard';
 import { getTerminology, type TermKey } from '@/hooks/useTerminology';
-import * as api from '@/lib/api';
-import { API_V1, fetchWithTimeout, handleResponse } from '@/lib/api/core';
-import { useSettingsStore } from '@/store/settingsStore';
-import type { Merge2WayResult, MergeDraft, ContentNode, TurnContextData } from '@/types/merge';
-import { useCanvasStore } from './canvasStore';
+import { isDeveloperMode } from '@/store/shared';
+import type { MergeDraft, TurnContextData } from '@/types/merge';
+import { createSaveStatusTimer, type SaveStatus } from './saveStatus';
 
 // ============================================================================
 // Types
 // ============================================================================
 
-type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
-
 /**
- * Extended resolution types for WebUI layer
- * Core MergeResult conflict resolution only supports 'source' | 'target'
- * We store extended resolutions separately and map at commit time
+ * Extended resolution types for WebUI layer.
+ * Core MergeResult conflict resolution only supports 'source' | 'target';
+ * extended resolutions are stored separately and mapped at commit time.
  */
 export type ExtendedResolutionType = 'both';
 
@@ -34,9 +34,6 @@ export interface ExtendedResolutionData {
   type: ExtendedResolutionType;
 }
 
-/**
- * Check if a conflict at given index is resolved
- */
 export function isConflictResolved(
   resolution: 'source' | 'target' | undefined,
   extRes: ExtendedResolutionData | undefined
@@ -46,28 +43,18 @@ export function isConflictResolved(
   return false;
 }
 
-/**
- * Resolution statistics for display
- */
 export interface ResolutionStats {
-  standard: number; // source or target
+  standard: number;
   both: number;
   unresolved: number;
 }
 
-/**
- * Cached turn context data for inline display
- */
 export interface CachedTurnContext {
   data: TurnContextData;
   loadedAt: Date;
 }
 
 interface MergeWorkspaceState {
-  // Draft data (legacy alias)
-  /** @deprecated Use treeMergeResult. Kept for backward compat. */
-  prepared: Merge2WayResult | null;
-
   draftId: string | null;
   projectId: string | null;
   sourceHash: string | null;
@@ -88,79 +75,71 @@ interface MergeWorkspaceState {
   previewExpanded: boolean;
 
   // Extended resolution state (WebUI layer only)
-  // Key: conflict index as string, Value: extended resolution data
   extendedResolutions: Record<string, ExtendedResolutionData>;
-  // Key: turn_hash, Value: cached context data
   contextCache: Record<string, CachedTurnContext>;
-  // Key: turn_hash, Value: loading state
   contextLoadingStates: Record<string, boolean>;
 
-  // Server-side merge checks (from backend API)
+  // Server-side merge checks
   serverChecks: MergeCheck[];
   serverChecksLoading: boolean;
   serverChecksError: string | null;
 
   // Tree-primary merge state
   treeMergeResult: MergeResult | null;
-  /** Map of conflict path → resolution */
   treeResolutions: Map<string, TreeResolution>;
-  /** Set of source-only paths to keep */
   keepSourceNodes: Set<string>;
-  /** Set of target-only paths to keep */
   keepTargetNodes: Set<string>;
 
-  // Actions
-  fetchServerChecks: () => Promise<void>;
-  loadDraft: (draftId: string) => Promise<void>;
-  createDraft: (
-    projectId: string,
-    sourceHash: string,
-    targetHash: string,
-    sourceBranch?: string,
-    targetBranch?: string
-  ) => Promise<string>;
+  // ── Pure mutations ──
   setMessage: (message: string) => void;
-  saveDraft: () => Promise<void>;
-  commitMerge: (branch?: string) => Promise<{ hash: string }>;
-  cancelMerge: () => Promise<void>;
-  reset: () => void;
-
-  // Preview actions
   togglePreview: () => void;
-
-  // Legacy node-based actions (kept for UI compat)
-  resolvePair: (index: number, pick: 'source' | 'target') => void;
-  toggleKeep: (side: 'source' | 'target', index: number) => void;
-  fetchSourceContext: (turnHash: string, node: ContentNode) => Promise<TurnContextData | null>;
-  getPreviewNodes: () => ContentNode[];
-
-  // Extended resolution actions
   resolveConflict: (index: number, resolution: 'source' | 'target' | 'both') => void;
   getEffectiveResolution: (index: number) => 'source' | 'target' | 'both' | null;
-
-  // Tree merge actions
   setTreeMergeResult: (result: MergeResult) => void;
   resolveTreeConflict: (path: string, resolution: TreeResolution) => void;
   toggleKeepSourceNode: (path: string) => void;
   toggleKeepTargetNode: (path: string) => void;
   allTreeConflictsResolved: () => boolean;
 
-  // Computed getters
+  // ── Passive setters used by useMergeWorkspaceActions ──
+  setLoading: () => void;
+  setLoadError: (message: string) => void;
+  setDraftLoaded: (draft: {
+    draftId: string;
+    projectId: string;
+    sourceHash: string;
+    targetHash: string;
+    sourceBranch?: string | null;
+    targetBranch?: string | null;
+    prepared?: MergeResult | null;
+    status: MergeDraft['status'];
+    message?: string | null;
+  }) => void;
+  setSaveStarted: () => void;
+  setSaveSucceeded: () => void;
+  setSaveFailed: () => void;
+  clearError: () => void;
+  setCommitFailed: (message: string) => void;
+  setCommitted: () => void;
+  setContextLoading: (turnHash: string, loading: boolean) => void;
+  setContextCached: (turnHash: string, data: TurnContextData) => void;
+  setServerChecksLoading: () => void;
+  setServerChecksSucceeded: (checks: MergeCheck[]) => void;
+  setServerChecksFailed: (message: string) => void;
+
+  // ── Pure computed getters ──
   getUnresolvedCount: () => number;
   getResolutionStats: () => ResolutionStats;
   canCommit: () => boolean;
   getMergeChecks: () => MergeCheck[];
-
-  // Tree-aware computed getters
   getTreeUnresolvedCount: () => number;
-  canCommitAny: () => boolean;
   getTreeMergeChecks: () => MergeCheck[];
   getPreviewPaths: () => string[];
+
+  // Lifecycle
+  reset: () => void;
 }
 
-/**
- * Merge check item for the Review Dialog checklist
- */
 export interface MergeCheck {
   id: string;
   label: string;
@@ -170,53 +149,7 @@ export interface MergeCheck {
   source?: 'frontend' | 'server';
 }
 
-// ============================================================================
-// Helper Functions
-// ============================================================================
-
-async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> {
-  const response = await fetchWithTimeout(`${API_V1}${endpoint}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
-  });
-  return handleResponse<T>(response);
-}
-
-// Convert API response (snake_case) to internal format (camelCase)
-function apiDraftToInternal(apiDraft: Record<string, unknown>): {
-  draftId: string;
-  projectId: string;
-  sourceHash: string;
-  targetHash: string;
-  sourceBranch: string | null;
-  targetBranch: string | null;
-  treeMergeResult: MergeResult | null;
-  status: MergeDraft['status'];
-  message: string | null;
-} {
-  const prepared = apiDraft.prepared as MergeResult | undefined;
-  return {
-    draftId: apiDraft.draftId as string,
-    projectId: apiDraft.projectId as string,
-    sourceHash: apiDraft.sourceHash as string,
-    targetHash: apiDraft.targetHash as string,
-    sourceBranch: (apiDraft.sourceBranch as string) || null,
-    targetBranch: (apiDraft.targetBranch as string) || null,
-    treeMergeResult: prepared ?? null,
-    status: apiDraft.status as MergeDraft['status'],
-    message: (apiDraft.message as string) || null,
-  };
-}
-
-// Module-level save status timer — tracked so reset() can cancel it
-let saveStatusTimer: ReturnType<typeof setTimeout> | null = null;
-
-// ============================================================================
-// Store
-// ============================================================================
+const saveTimer = createSaveStatusTimer();
 
 const initialState = {
   draftId: null,
@@ -239,7 +172,6 @@ const initialState = {
   serverChecks: [] as MergeCheck[],
   serverChecksLoading: false,
   serverChecksError: null,
-  prepared: null as Merge2WayResult | null,
   treeMergeResult: null as MergeResult | null,
   treeResolutions: new Map<string, TreeResolution>(),
   keepSourceNodes: new Set<string>(),
@@ -249,335 +181,52 @@ const initialState = {
 export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => ({
   ...initialState,
 
-  // ============================================================================
-  // Draft Actions
-  // ============================================================================
+  // ── Pure mutations ──
 
-  loadDraft: async (draftId: string) => {
-    set({ loading: true, error: null });
+  setMessage: (message: string) => set({ message, isDirty: true }),
 
-    try {
-      const apiDraft = await fetchApi<Record<string, unknown>>(`/merge/drafts/${draftId}`);
-      const draft = apiDraftToInternal(apiDraft);
+  togglePreview: () => set((state) => ({ previewExpanded: !state.previewExpanded })),
 
-      set({
-        draftId: draft.draftId,
-        projectId: draft.projectId,
-        sourceHash: draft.sourceHash,
-        targetHash: draft.targetHash,
-        sourceBranch: draft.sourceBranch,
-        targetBranch: draft.targetBranch,
-        treeMergeResult: draft.treeMergeResult,
-        status: draft.status,
-        message: draft.message || '',
-        loading: false,
-        isDirty: false,
-      });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to load draft';
-      set({ loading: false, error: message });
-      throw err;
-    }
-  },
+  resolveConflict: (index, resolution) => {
+    const { treeMergeResult, treeResolutions, extendedResolutions } = get();
+    if (!treeMergeResult || index >= treeMergeResult.conflicts.length) return;
 
-  createDraft: async (
-    projectId: string,
-    sourceHash: string,
-    targetHash: string,
-    sourceBranch?: string,
-    targetBranch?: string
-  ) => {
-    set({ loading: true, error: null });
-
-    try {
-      const apiDraft = await fetchApi<Record<string, unknown>>('/merge/drafts', {
-        method: 'POST',
-        body: JSON.stringify({
-          project_id: projectId,
-          source_hash: sourceHash,
-          target_hash: targetHash,
-          source_branch: sourceBranch,
-          target_branch: targetBranch,
-        }),
-      });
-      const draft = apiDraftToInternal(apiDraft);
-
-      set({
-        draftId: draft.draftId,
-        projectId: draft.projectId,
-        sourceHash: draft.sourceHash,
-        targetHash: draft.targetHash,
-        sourceBranch: draft.sourceBranch,
-        targetBranch: draft.targetBranch,
-        treeMergeResult: draft.treeMergeResult,
-        status: draft.status,
-        message: '',
-        loading: false,
-        isDirty: false,
-      });
-
-      return draft.draftId;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to create draft';
-      set({ loading: false, error: message });
-      throw err;
-    }
-  },
-
-  setMessage: (message: string) => {
-    set({ message, isDirty: true });
-  },
-
-  saveDraft: async () => {
-    const { draftId, treeMergeResult, message, isDirty, status } = get();
-    if (!draftId || !isDirty || status === 'committed') return;
-
-    set({ saveStatus: 'saving' });
-
-    try {
-      await fetchApi(`/merge/drafts/${draftId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ prepared: treeMergeResult, message }),
-      });
-
-      set({
-        saveStatus: 'saved',
-        isDirty: false,
-        lastSavedAt: new Date(),
-      });
-
-      if (saveStatusTimer) clearTimeout(saveStatusTimer);
-      saveStatusTimer = setTimeout(() => {
-        saveStatusTimer = null;
-        const current = get();
-        if (current.saveStatus === 'saved') {
-          set({ saveStatus: 'idle' });
-        }
-      }, 2000);
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to save';
-      set({ saveStatus: 'error' });
-      console.warn('[MergeWorkspace] Auto-save failed:', errorMsg);
-    }
-  },
-
-  commitMerge: async (branch?: string) => {
-    const { draftId, message, targetBranch } = get();
-    if (!draftId) throw new Error('No draft to commit');
-
-    set({ error: null });
-
-    try {
-      const commitResult = await fetchApi<{ hash: string }>(`/merge/drafts/${draftId}/commit`, {
-        method: 'POST',
-        body: JSON.stringify({
-          message,
-          branch: branch || targetBranch || 'main',
-        }),
-      });
-
-      set({
-        status: 'committed',
-        isDirty: false,
-        extendedResolutions: {},
-        contextCache: {},
-        contextLoadingStates: {},
-      });
-
-      const projectId = get().projectId;
-      if (projectId) {
-        useCanvasStore.getState().loadProjectData(projectId);
-      }
-
-      return commitResult;
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to commit';
-      set({ error: errorMsg });
-      throw err;
-    }
-  },
-
-  cancelMerge: async () => {
-    const { draftId } = get();
-    if (!draftId) return;
-
-    try {
-      await fetchApi(`/merge/drafts/${draftId}`, {
-        method: 'DELETE',
-      });
-    } catch {
-      // Ignore errors on cancel
-    }
-
-    get().reset();
-  },
-
-  reset: () => {
-    if (saveStatusTimer) {
-      clearTimeout(saveStatusTimer);
-      saveStatusTimer = null;
-    }
-    set(initialState);
-  },
-
-  // ============================================================================
-  // Preview Actions
-  // ============================================================================
-
-  togglePreview: () => {
-    set((state) => ({ previewExpanded: !state.previewExpanded }));
-  },
-
-  // ============================================================================
-  // Legacy ContentNode-Based Actions (kept for UI compat)
-  // ============================================================================
-
-  resolvePair: (index: number, pick: 'source' | 'target') => {
-    const { prepared, extendedResolutions } = get();
-    if (!prepared) return;
-
-    const newPrepared = { ...prepared };
-    newPrepared.similarPairs = [...prepared.similarPairs];
-    newPrepared.similarPairs[index] = {
-      ...newPrepared.similarPairs[index],
-      resolution: pick,
-    };
-
+    const conflict = treeMergeResult.conflicts[index];
     const key = String(index);
-    if (extendedResolutions[key]) {
+
+    if (resolution === 'source' || resolution === 'target') {
+      const newResolutions = new Map(treeResolutions);
+      newResolutions.set(conflict.path, { type: resolution } as TreeResolution);
       const newExtended = { ...extendedResolutions };
       delete newExtended[key];
-      set({ prepared: newPrepared, extendedResolutions: newExtended, isDirty: true });
+      set({ treeResolutions: newResolutions, extendedResolutions: newExtended, isDirty: true });
     } else {
-      set({ prepared: newPrepared, isDirty: true });
+      const newResolutions = new Map(treeResolutions);
+      newResolutions.delete(conflict.path);
+      const newExtended = { ...extendedResolutions };
+      newExtended[key] = { type: 'both' };
+      set({ treeResolutions: newResolutions, extendedResolutions: newExtended, isDirty: true });
     }
   },
 
-  toggleKeep: (side: 'source' | 'target', index: number) => {
-    const { prepared } = get();
-    if (!prepared) return;
+  getEffectiveResolution: (index) => {
+    const { treeMergeResult, treeResolutions, extendedResolutions } = get();
+    if (!treeMergeResult || index >= treeMergeResult.conflicts.length) return null;
 
-    const newPrepared = { ...prepared };
-    const list = side === 'source' ? 'onlyInSource' : 'onlyInTarget';
-    newPrepared[list] = [...prepared[list]];
-    newPrepared[list][index] = {
-      ...newPrepared[list][index],
-      keep: !newPrepared[list][index].keep,
-    };
+    const conflict = treeMergeResult.conflicts[index];
+    const resolution = treeResolutions.get(conflict.path);
+    const extRes = extendedResolutions[String(index)];
 
-    set({ prepared: newPrepared, isDirty: true });
+    if (resolution) {
+      return resolution.type === 'both' ? 'both' : (resolution.type as 'source' | 'target');
+    }
+    if (extRes) {
+      return extRes.type;
+    }
+    return null;
   },
 
-  fetchSourceContext: async (turnHash: string, node: ContentNode) => {
-    const { contextCache, contextLoadingStates } = get();
-
-    if (contextCache[turnHash]) {
-      return contextCache[turnHash].data;
-    }
-
-    if (contextLoadingStates[turnHash]) {
-      return null;
-    }
-
-    set({
-      contextLoadingStates: { ...contextLoadingStates, [turnHash]: true },
-    });
-
-    try {
-      const contextData = await api.fetchTurnContext(turnHash, {
-        before: 1,
-        after: 1,
-        highlightStart: node.source?.start_char,
-        highlightEnd: node.source?.end_char,
-      });
-
-      set((state) => ({
-        contextCache: {
-          ...state.contextCache,
-          [turnHash]: { data: contextData, loadedAt: new Date() },
-        },
-        contextLoadingStates: {
-          ...state.contextLoadingStates,
-          [turnHash]: false,
-        },
-      }));
-
-      return contextData;
-    } catch {
-      set((state) => ({
-        contextLoadingStates: {
-          ...state.contextLoadingStates,
-          [turnHash]: false,
-        },
-      }));
-      return null;
-    }
-  },
-
-  getPreviewNodes: (): ContentNode[] => {
-    const { prepared, extendedResolutions } = get();
-    if (!prepared) return [];
-
-    const nodes: ContentNode[] = [];
-
-    nodes.push(...prepared.identical);
-
-    for (let i = 0; i < prepared.similarPairs.length; i++) {
-      const pair = prepared.similarPairs[i];
-      const key = String(i);
-      const extRes = extendedResolutions[key];
-
-      if (pair.resolution === 'source') {
-        nodes.push(pair.source);
-      } else if (pair.resolution === 'target') {
-        nodes.push(pair.target);
-      } else if (extRes?.type === 'both') {
-        nodes.push(pair.source);
-        nodes.push(pair.target);
-      }
-    }
-
-    for (const candidate of prepared.onlyInSource) {
-      if (candidate.keep) {
-        nodes.push(candidate.node);
-      }
-    }
-
-    for (const candidate of prepared.onlyInTarget) {
-      if (candidate.keep) {
-        nodes.push(candidate.node);
-      }
-    }
-
-    return nodes;
-  },
-
-  // ============================================================================
-  // Server Checks
-  // ============================================================================
-
-  fetchServerChecks: async () => {
-    const { draftId } = get();
-    if (!draftId) return;
-
-    set({ serverChecksLoading: true, serverChecksError: null });
-    try {
-      const result = await fetchApi<MergeCheck[]>(`/merge/drafts/${draftId}/checks`);
-      set({ serverChecks: result, serverChecksLoading: false });
-    } catch (err) {
-      set({
-        serverChecksLoading: false,
-        serverChecksError: err instanceof Error ? err.message : 'Failed to fetch server checks',
-      });
-    }
-  },
-
-  // ============================================================================
-  // Tree Merge Actions (tree-primary, path-based)
-  // ============================================================================
-
-  setTreeMergeResult: (result: MergeResult) => {
-    // Initialize keepSource/keepTarget with all source-only/target-only paths kept by default
+  setTreeMergeResult: (result) => {
     const keepSource = new Set(result.onlyInSource);
     const keepTarget = new Set(result.onlyInTarget);
     set({
@@ -588,32 +237,23 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
     });
   },
 
-  resolveTreeConflict: (path: string, resolution: TreeResolution) => {
-    const prev = get().treeResolutions;
-    const next = new Map(prev);
+  resolveTreeConflict: (path, resolution) => {
+    const next = new Map(get().treeResolutions);
     next.set(path, resolution);
     set({ treeResolutions: next, isDirty: true });
   },
 
-  toggleKeepSourceNode: (path: string) => {
-    const prev = get().keepSourceNodes;
-    const next = new Set(prev);
-    if (next.has(path)) {
-      next.delete(path);
-    } else {
-      next.add(path);
-    }
+  toggleKeepSourceNode: (path) => {
+    const next = new Set(get().keepSourceNodes);
+    if (next.has(path)) next.delete(path);
+    else next.add(path);
     set({ keepSourceNodes: next, isDirty: true });
   },
 
-  toggleKeepTargetNode: (path: string) => {
-    const prev = get().keepTargetNodes;
-    const next = new Set(prev);
-    if (next.has(path)) {
-      next.delete(path);
-    } else {
-      next.add(path);
-    }
+  toggleKeepTargetNode: (path) => {
+    const next = new Set(get().keepTargetNodes);
+    if (next.has(path)) next.delete(path);
+    else next.add(path);
     set({ keepTargetNodes: next, isDirty: true });
   },
 
@@ -623,9 +263,66 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
     return treeMergeResult.conflicts.every((c: { path: string }) => treeResolutions.has(c.path));
   },
 
-  // ============================================================================
-  // Computed Getters
-  // ============================================================================
+  // ── Passive setters ──
+
+  setLoading: () => set({ loading: true, error: null }),
+  setLoadError: (message) => set({ loading: false, error: message }),
+
+  setDraftLoaded: (draft) =>
+    set({
+      draftId: draft.draftId,
+      projectId: draft.projectId,
+      sourceHash: draft.sourceHash,
+      targetHash: draft.targetHash,
+      sourceBranch: draft.sourceBranch,
+      targetBranch: draft.targetBranch,
+      treeMergeResult: draft.prepared ?? null,
+      status: draft.status,
+      message: draft.message || '',
+      loading: false,
+      isDirty: false,
+    }),
+
+  setSaveStarted: () => set({ saveStatus: 'saving' }),
+  setSaveSucceeded: () => {
+    set({ saveStatus: 'saved', isDirty: false, lastSavedAt: new Date() });
+    saveTimer.scheduleReset(get, set);
+  },
+  setSaveFailed: () => set({ saveStatus: 'error' }),
+
+  clearError: () => set({ error: null }),
+
+  setCommitFailed: (message) => set({ error: message }),
+
+  setCommitted: () =>
+    set({
+      status: 'committed',
+      isDirty: false,
+      extendedResolutions: {},
+      contextCache: {},
+      contextLoadingStates: {},
+    }),
+
+  setContextLoading: (turnHash, loading) =>
+    set((state) => ({
+      contextLoadingStates: { ...state.contextLoadingStates, [turnHash]: loading },
+    })),
+
+  setContextCached: (turnHash, data) =>
+    set((state) => ({
+      contextCache: {
+        ...state.contextCache,
+        [turnHash]: { data, loadedAt: new Date() },
+      },
+      contextLoadingStates: { ...state.contextLoadingStates, [turnHash]: false },
+    })),
+
+  setServerChecksLoading: () => set({ serverChecksLoading: true, serverChecksError: null }),
+  setServerChecksSucceeded: (checks) => set({ serverChecks: checks, serverChecksLoading: false }),
+  setServerChecksFailed: (message) =>
+    set({ serverChecksLoading: false, serverChecksError: message }),
+
+  // ── Pure computed getters ──
 
   getUnresolvedCount: () => {
     const { treeMergeResult, treeResolutions, extendedResolutions } = get();
@@ -636,10 +333,7 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
       const conflict = treeMergeResult.conflicts[i];
       const resolution = treeResolutions.get(conflict.path);
       const extRes = extendedResolutions[String(i)];
-
-      if (!resolution && !extRes) {
-        count++;
-      }
+      if (!resolution && !extRes) count++;
     }
     return count;
   },
@@ -649,25 +343,19 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
     if (!treeMergeResult) return { standard: 0, both: 0, unresolved: 0 };
 
     const stats: ResolutionStats = { standard: 0, both: 0, unresolved: 0 };
-
     for (let i = 0; i < treeMergeResult.conflicts.length; i++) {
       const conflict = treeMergeResult.conflicts[i];
       const resolution = treeResolutions.get(conflict.path);
       const extRes = extendedResolutions[String(i)];
-
       if (resolution) {
-        if (resolution.type === 'both') {
-          stats.both++;
-        } else {
-          stats.standard++;
-        }
+        if (resolution.type === 'both') stats.both++;
+        else stats.standard++;
       } else if (extRes?.type === 'both') {
         stats.both++;
       } else {
         stats.unresolved++;
       }
     }
-
     return stats;
   },
 
@@ -675,7 +363,6 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
     const { treeMergeResult, message, status } = get();
     if (!treeMergeResult || status !== 'pending') return false;
     if (!message.trim()) return false;
-
     return get().getUnresolvedCount() === 0;
   },
 
@@ -683,7 +370,7 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
     const { treeMergeResult, message, targetBranch, serverChecks } = get();
     const unresolvedCount = get().getUnresolvedCount();
     const previewPaths = get().getPreviewPaths();
-    const dev = useSettingsStore.getState().developerMode;
+    const dev = isDeveloperMode();
     const tm = (key: TermKey) => getTerminology(key, dev);
 
     const frontendChecks: MergeCheck[] = [
@@ -704,10 +391,7 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
         id: 'nodes',
         label: 'Result has nodes',
         passed: previewPaths.length > 0,
-        detail:
-          previewPaths.length > 0
-            ? `${previewPaths.length} nodes`
-            : 'No nodes in result',
+        detail: previewPaths.length > 0 ? `${previewPaths.length} nodes` : 'No nodes in result',
         source: 'frontend',
       },
       {
@@ -728,76 +412,23 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
       },
     ];
 
-    const taggedServerChecks = serverChecks.map((c: MergeCheck) => ({ ...c, source: 'server' as const }));
+    const taggedServerChecks = serverChecks.map((c: MergeCheck) => ({
+      ...c,
+      source: 'server' as const,
+    }));
     return [...frontendChecks, ...taggedServerChecks];
   },
-
-  // ============================================================================
-  // Extended Resolution Actions
-  // ============================================================================
-
-  resolveConflict: (index: number, resolution: 'source' | 'target' | 'both') => {
-    const { treeMergeResult, treeResolutions, extendedResolutions } = get();
-    if (!treeMergeResult || index >= treeMergeResult.conflicts.length) return;
-
-    const conflict = treeMergeResult.conflicts[index];
-    const key = String(index);
-
-    if (resolution === 'source' || resolution === 'target') {
-      const newResolutions = new Map(treeResolutions);
-      newResolutions.set(conflict.path, { type: resolution } as TreeResolution);
-
-      const newExtended = { ...extendedResolutions };
-      delete newExtended[key];
-      set({ treeResolutions: newResolutions, extendedResolutions: newExtended, isDirty: true });
-    } else {
-      // Extended resolution (both)
-      const newResolutions = new Map(treeResolutions);
-      newResolutions.delete(conflict.path);
-
-      const newExtended = { ...extendedResolutions };
-      newExtended[key] = { type: 'both' };
-      set({ treeResolutions: newResolutions, extendedResolutions: newExtended, isDirty: true });
-    }
-  },
-
-  getEffectiveResolution: (index: number) => {
-    const { treeMergeResult, treeResolutions, extendedResolutions } = get();
-    if (!treeMergeResult || index >= treeMergeResult.conflicts.length) return null;
-
-    const conflict = treeMergeResult.conflicts[index];
-    const resolution = treeResolutions.get(conflict.path);
-    const key = String(index);
-    const extRes = extendedResolutions[key];
-
-    if (resolution) {
-      return resolution.type === 'both' ? 'both' : resolution.type as 'source' | 'target';
-    }
-    if (extRes) {
-      return extRes.type;
-    }
-    return null;
-  },
-
-  // ============================================================================
-  // Tree-Aware Computed Getters
-  // ============================================================================
 
   getTreeUnresolvedCount: () => {
     const { treeMergeResult, treeResolutions } = get();
     if (!treeMergeResult) return 0;
-    return treeMergeResult.conflicts.filter((c: { path: string }) => !treeResolutions.has(c.path)).length;
-  },
-
-  canCommitAny: () => {
-    const { message } = get();
-    if (!message.trim()) return false;
-    return get().allTreeConflictsResolved();
+    return treeMergeResult.conflicts.filter((c: { path: string }) => !treeResolutions.has(c.path))
+      .length;
   },
 
   getTreeMergeChecks: (): MergeCheck[] => {
     const { treeMergeResult, message, targetBranch } = get();
-    const dev = useSettingsStore.getState().developerMode;
+    const dev = isDeveloperMode();
     const tm = (key: TermKey) => getTerminology(key, dev);
 
     if (!treeMergeResult) return get().getMergeChecks();
@@ -805,7 +436,7 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
     const unresolvedCount = get().getTreeUnresolvedCount();
     const previewPaths = get().getPreviewPaths();
 
-    const checks: MergeCheck[] = [
+    return [
       {
         id: 'resolved',
         label: 'All conflicts resolved',
@@ -841,8 +472,6 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
         source: 'frontend',
       },
     ];
-
-    return checks;
   },
 
   getPreviewPaths: (): string[] => {
@@ -850,40 +479,32 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
     if (!treeMergeResult) return [];
 
     const paths: string[] = [];
-
-    // Auto-kept
     paths.push(...treeMergeResult.autoKept);
 
-    // Resolved conflicts
     for (const conflict of treeMergeResult.conflicts) {
       const resolution = treeResolutions.get(conflict.path);
       if (!resolution) continue;
-
       switch (resolution.type) {
         case 'source':
         case 'target':
-          paths.push(conflict.path);
-          break;
         case 'both':
           paths.push(conflict.path);
           break;
       }
     }
 
-    // Source-only (kept)
     for (const path of treeMergeResult.onlyInSource) {
-      if (keepSourceNodes.has(path)) {
-        paths.push(path);
-      }
+      if (keepSourceNodes.has(path)) paths.push(path);
     }
-
-    // Target-only (kept)
     for (const path of treeMergeResult.onlyInTarget) {
-      if (keepTargetNodes.has(path)) {
-        paths.push(path);
-      }
+      if (keepTargetNodes.has(path)) paths.push(path);
     }
 
     return paths;
+  },
+
+  reset: () => {
+    saveTimer.cancel();
+    set(initialState);
   },
 }));

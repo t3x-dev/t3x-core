@@ -12,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { createEngineRun, type DeployAgent } from '@/lib/api';
+import { createEngineRun, type DeployAgent } from '@/infrastructure';
 import { cn } from '@/lib/utils';
 
 /**
@@ -80,7 +80,7 @@ export function E2ETestCard({ agents, runnerHealthy, onRunComplete }: E2ETestCar
           id: `e2e-test-${selectedVersion}`,
           type: 'eval',
           content: promptConfig.content,
-          rules_ref: 'weather-agent-eval', // 使用 weather-agent 专用评估规则
+          rules_ref: 'weather-agent-eval', // Use weather-agent specific evaluation rules
         },
         inputs: {
           test: true,

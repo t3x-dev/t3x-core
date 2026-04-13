@@ -8,8 +8,7 @@ const node = (
   key: string,
   slots: TreeNode['slots'] = {},
   children: TreeNode[] = [],
-  overrides: Partial<Pick<TreeNode, 'slot_quotes' | 'source'>> = {},
-): TreeNode => ({ key, slots, children, ...overrides });
+): TreeNode => ({ key, slots, children });
 
 // ── Tests ──
 
@@ -70,24 +69,12 @@ describe('treesToYValue', () => {
     });
   });
 
-  it('strips slot_quotes metadata from output', () => {
-    const trees = [
-      node(
-        'trip',
-        { budget: 5000 },
-        [],
-        { slot_quotes: { budget: 'we have about five thousand' } },
-      ),
-    ];
+  it('output does not contain slot_quotes or source fields', () => {
+    const trees = [node('trip', { budget: 5000 })];
     const result = treesToYValue(trees) as Record<string, unknown>;
     expect(result.trip).not.toHaveProperty('slot_quotes');
-    expect(result.trip).toEqual({ budget: 5000 });
-  });
-
-  it('strips source metadata from output', () => {
-    const trees = [node('trip', { dest: 'Rome' }, [], { source: 'T3' })];
-    const result = treesToYValue(trees) as Record<string, unknown>;
     expect(result.trip).not.toHaveProperty('source');
+    expect(result.trip).toEqual({ budget: 5000 });
   });
 
   it('handles array-valued slots correctly (not treated as children)', () => {
@@ -223,23 +210,13 @@ describe('round-trip: yvalueToTrees(treesToYValue(trees))', () => {
     expect(result).toEqual(original);
   });
 
-  it('does NOT preserve slot_quotes (metadata stripped)', () => {
-    const original = [
-      node('trip', { budget: 5000 }, [], {
-        slot_quotes: { budget: 'about five thousand' },
-      }),
-    ];
+  it('round-trip preserves key/slots/children only', () => {
+    const original = [node('trip', { budget: 5000 })];
     const result = yvalueToTrees(treesToYValue(original));
-    // Structure preserved, metadata lost
     expect(result[0].key).toBe('trip');
     expect(result[0].slots).toEqual({ budget: 5000 });
-    expect(result[0].slot_quotes).toBeUndefined();
-  });
-
-  it('does NOT preserve source (metadata stripped)', () => {
-    const original = [node('trip', { dest: 'Paris' }, [], { source: 'T3' })];
-    const result = yvalueToTrees(treesToYValue(original));
-    expect(result[0].source).toBeUndefined();
+    expect(result[0]).not.toHaveProperty('slot_quotes');
+    expect(result[0]).not.toHaveProperty('source');
   });
 
   it('handles empty trees array', () => {
