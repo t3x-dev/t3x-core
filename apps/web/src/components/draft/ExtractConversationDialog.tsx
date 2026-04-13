@@ -20,7 +20,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { extractToDraft, listConversations } from '@/infrastructure';
+import { useConversationsList } from '@/hooks/useConversationsList';
+import { extractToDraft } from '@/infrastructure';
 import { cn } from '@/lib/utils';
 import type { Conversation } from '@/types/api';
 
@@ -43,6 +44,7 @@ export function ExtractConversationDialog({
   const [loading, setLoading] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [extracting, setExtracting] = useState(false);
+  const { loadConversations } = useConversationsList();
 
   // Load conversations when dialog opens
   useEffect(() => {
@@ -52,7 +54,7 @@ export function ExtractConversationDialog({
     setLoading(true);
     setSelectedId(null);
 
-    listConversations(projectId)
+    loadConversations(projectId)
       .then((data) => {
         if (!cancelled) setConversations(data.conversations);
       })
@@ -66,7 +68,7 @@ export function ExtractConversationDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, projectId]);
+  }, [open, projectId, loadConversations]);
 
   const handleExtract = useCallback(async () => {
     if (!selectedId) return;
