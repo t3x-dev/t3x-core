@@ -8,6 +8,7 @@ import { useAutoProject } from '@/hooks/useAutoProject';
 import { useCommittedHighlights } from '@/hooks/useCommittedHighlights';
 import { useConversationChat } from '@/hooks/useConversationChat';
 import { usePinEnrichment } from '@/hooks/usePinEnrichment';
+import { usePinsCrud } from '@/hooks/usePinsCrud';
 import { useRealtimeSync } from '@/hooks/useRealtimeSync';
 import { useTextSelection } from '@/hooks/useTextSelection';
 import { cn } from '@/lib/utils';
@@ -52,7 +53,7 @@ export function ChatWorkspace({
   const isCommitted = useWorkspaceStore((s) => s.isCommitted);
   const isReviewPhase = wsMode === 'executed' || wsMode === 'committing';
   const pins = usePinsStore((s) => s.pins);
-  const fetchPins = usePinsStore((s) => s.fetchPins);
+  const { fetch: fetchPins } = usePinsCrud();
   const [showSourcePanel, setShowSourcePanel] = useState(false);
   const enrichedPinData = usePinEnrichment(pins, showSourcePanel);
   const showAddForm = isReviewPhase && selection && selection.text.length > 3;

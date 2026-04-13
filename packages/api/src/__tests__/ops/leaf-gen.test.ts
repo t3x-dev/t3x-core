@@ -25,7 +25,7 @@ const mockLeaf = {
 
 const mockCommit = {
   hash: 'sha256:abc123',
-  schema: 't3x/commit/v5',
+  schema: 't3x/commit',
   parents: [],
   content: { trees: [{ key: 'topics', type: 'topic', slots: {}, children: [] }] },
   project_id: 'proj_123',

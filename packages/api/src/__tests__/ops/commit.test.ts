@@ -11,7 +11,7 @@ import type { CommitInput } from '../../ops/commit';
 
 const mockCommit = {
 	hash: 'sha256:abc123',
-	schema: 't3x/commit/v5',
+	schema: 't3x/commit',
 	parents: [],
 	author: { type: 'human' as const, name: 'cli' },
 	committed_at: '2026-04-03T00:00:00.000Z',
@@ -155,6 +155,6 @@ describe('commitOp', () => {
 		const output = await collectResult(runOperation(commitOp, baseInput, ctx));
 
 		expect(output.hash).toBe('sha256:abc123');
-		expect(output.schema).toBe('t3x/commit/v5');
+		expect(output.schema).toBe('t3x/commit');
 	});
 });

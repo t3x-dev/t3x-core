@@ -5,7 +5,7 @@ import { Suspense, useCallback, useEffect, useMemo, useRef } from 'react';
 import { CanvasWorkspace } from '@/components/canvas';
 import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
 import { useCanvasStore } from '@/store/canvasStore';
-import { usePinsStore } from '@/store/pinsStore';
+import { usePinsCrud } from '@/hooks/usePinsCrud';
 import { useProjectCrud } from '@/hooks/useProjectCrud';
 import { useProjectStore } from '@/store/projectStore';
 
@@ -28,6 +28,7 @@ function ProjectDetailPageContent() {
   const projectsInitialized = useProjectStore((state) => state.initialized);
   const projectsLoading = useProjectStore((state) => state.loading);
   const { list: fetchProjects } = useProjectCrud();
+  const { fetch: fetchPins } = usePinsCrud();
 
   // Canvas store for loading project data
   const canvasLoading = useCanvasStore((state) => state.loading);
@@ -139,9 +140,9 @@ function ProjectDetailPageContent() {
   // Initialize pins store for the project
   useEffect(() => {
     if (projectId) {
-      usePinsStore.getState().fetchPins(projectId);
+      void fetchPins(projectId);
     }
-  }, [projectId]);
+  }, [projectId, fetchPins]);
 
   // Show loading while projects list is still loading
   if (!projectsInitialized || projectsLoading) {

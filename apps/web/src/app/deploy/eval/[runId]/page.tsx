@@ -42,6 +42,7 @@ import {
 import { PinButton } from '@/components/ui/PinButton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useKeyboardNavigation } from '@/hooks/useKeyboardNavigation';
+import { usePinsCrud } from '@/hooks/usePinsCrud';
 import { useProjectCrud } from '@/hooks/useProjectCrud';
 import {
   type ApiCommit,
@@ -228,7 +229,9 @@ export default function RunDetailPage() {
   const [pinning, setPinning] = useState(false);
   const [pinSuccess, setPinSuccess] = useState(false);
   const [retuning, setRetuning] = useState(false);
-  const { fetchPins, addPin, updatePinAssertions, isPinned, getPinByRef } = usePinsStore();
+  const isPinned = usePinsStore((s) => s.isPinned);
+  const getPinByRef = usePinsStore((s) => s.getPinByRef);
+  const { fetch: fetchPins, add: addPin, setAssertions: updatePinAssertions } = usePinsCrud();
   const getProject = useProjectStore((s) => s.getProject);
   const projectsInitialized = useProjectStore((s) => s.initialized);
   const { list: fetchProjects } = useProjectCrud();

@@ -66,7 +66,7 @@ export interface CommitSourceRef {
 /** Tree-based commit from API response */
 export interface ApiCommit {
   hash: string;
-  schema: 't3x/commit/5';
+  schema: 't3x/commit';
   parents: string[];
   author: { type: string; id?: string; name?: string };
   committed_at: string;
