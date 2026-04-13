@@ -31,7 +31,6 @@ const mockCanvasStore = {
   nodes: [] as Array<{ id: string; data: Record<string, unknown> }>,
   edges: [] as Array<{ source: string; target: string }>,
   updateNodeId: vi.fn(),
-  loadProjectData: vi.fn(),
   openLeafPanel: vi.fn(),
   getState: () => mockCanvasStore,
 };
@@ -41,6 +40,16 @@ vi.mock('@/store/canvasStore', () => ({
     (selector: (s: typeof mockCanvasStore) => unknown) => selector(mockCanvasStore),
     { getState: () => mockCanvasStore }
   ),
+}));
+
+// Mock useCanvasNodeActions — the hook delegates canvas reload to this
+vi.mock('@/hooks/useCanvasNodeActions', () => ({
+  useCanvasNodeActions: () => ({
+    load: vi.fn(),
+    refresh: vi.fn(),
+    add: vi.fn(),
+    addDraft: vi.fn(),
+  }),
 }));
 
 import type { Node } from '@xyflow/react';

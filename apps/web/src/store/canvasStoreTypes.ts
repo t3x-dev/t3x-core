@@ -4,7 +4,7 @@ import type {
   CanvasNodeData,
   ConversationConstraints,
   DraftConstraintOverrides,
-  NodeKind,
+  EmbeddedLeaf,
 } from '../types/nodes';
 import type { NotifyCallback } from './shared';
 
@@ -41,13 +41,27 @@ export interface LeafPanelSlice {
   removeLeafFromNodeState: (commitNodeId: string, leafId: string) => void;
 }
 
-// Node CRUD slice interface
+// Node slice interface (passive — async I/O lives in useCanvasNodeActions)
 export interface NodeSlice {
-  loadProjectData: (projectId: string, options?: { merge?: boolean }) => Promise<void>;
-  refreshLeaves: (projectId: string) => Promise<void>;
+  setLoading: (loading: boolean) => void;
+  setLoadError: (loadError: Error | null) => void;
+  setProjectData: (input: {
+    nodes: Node<CanvasNodeData>[];
+    edges: Edge[];
+    hasMainCommit: boolean;
+    latestMainCommitId: string | undefined;
+    hasDbPositions: boolean;
+  }) => void;
+  mergeProjectData: (input: {
+    nodes: Node<CanvasNodeData>[];
+    edges: Edge[];
+    hasMainCommit: boolean;
+    latestMainCommitId: string | undefined;
+    hasDbPositions: boolean;
+  }) => void;
+  setLeavesByCommit: (leavesByCommit: Map<string, EmbeddedLeaf[]>) => void;
+  addToNodes: (node: Node<CanvasNodeData>) => void;
   clearCanvas: () => void;
-  addNode: (kind: NodeKind, position?: { x: number; y: number }) => Promise<void>;
-  addDraftNode: (position?: { x: number; y: number }) => Promise<void>;
   updateNode: (id: string, patch: Partial<CanvasNodeData>) => void;
   updateNodeId: (oldId: string, newId: string) => void;
 }

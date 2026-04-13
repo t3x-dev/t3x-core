@@ -4,9 +4,10 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useMemo, useRef } from 'react';
 import { CanvasWorkspace } from '@/components/canvas';
 import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
-import { useCanvasStore } from '@/store/canvasStore';
+import { useCanvasNodeActions } from '@/hooks/useCanvasNodeActions';
 import { usePinsCrud } from '@/hooks/usePinsCrud';
 import { useProjectCrud } from '@/hooks/useProjectCrud';
+import { useCanvasStore } from '@/store/canvasStore';
 import { useProjectStore } from '@/store/projectStore';
 
 export default function ProjectDetailPage() {
@@ -29,6 +30,7 @@ function ProjectDetailPageContent() {
   const projectsLoading = useProjectStore((state) => state.loading);
   const { list: fetchProjects } = useProjectCrud();
   const { fetch: fetchPins } = usePinsCrud();
+  const { load: loadCanvas } = useCanvasNodeActions();
 
   // Canvas store for loading project data
   const canvasLoading = useCanvasStore((state) => state.loading);
@@ -88,9 +90,9 @@ function ProjectDetailPageContent() {
   // Load project data when entering the page
   useEffect(() => {
     if (projectId && projectId !== loadedProjectId) {
-      useCanvasStore.getState().loadProjectData(projectId);
+      void loadCanvas(projectId);
     }
-  }, [projectId, loadedProjectId]);
+  }, [projectId, loadedProjectId, loadCanvas]);
 
   // Refresh project data when page becomes visible OR on a 30s polling interval.
   // This ensures canvas stays up-to-date when commits are created from Chat.
@@ -103,7 +105,7 @@ function ProjectDetailPageContent() {
       if (now - lastRefreshRef.current > 5000) {
         lastRefreshRef.current = now;
         // Use incremental merge to avoid clearing existing edges/positions
-        useCanvasStore.getState().loadProjectData(projectId, { merge: true });
+        void loadCanvas(projectId, { merge: true });
       }
     };
 
@@ -135,7 +137,7 @@ function ProjectDetailPageContent() {
       clearInterval(interval);
       channel?.close();
     };
-  }, [projectId]);
+  }, [projectId, loadCanvas]);
 
   // Initialize pins store for the project
   useEffect(() => {
@@ -188,10 +190,7 @@ function ProjectDetailPageContent() {
   if (canvasError) {
     return (
       <div className="flex h-full flex-col">
-        <ErrorMessage
-          error={canvasError}
-          onRetry={() => projectId && useCanvasStore.getState().loadProjectData(projectId)}
-        />
+        <ErrorMessage error={canvasError} onRetry={() => projectId && void loadCanvas(projectId)} />
       </div>
     );
   }
