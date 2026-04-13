@@ -14,11 +14,11 @@
 import { useCallback, useState } from 'react';
 import { DiffSourceContextModal } from '@/components/diff/DiffSourceContextModal';
 import { useTerminology } from '@/hooks/useTerminology';
+import { useTurnContext } from '@/hooks/useTurnContext';
 import { cn } from '@/lib/utils';
-import { fetchTurnContext } from '@/queries/turnContext';
-import type { TurnContextData } from '@/types/api';
 import { isConflictResolved, useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
-import type { MergeSimilarPair, ContentNode } from '@/types/merge';
+import type { TurnContextData } from '@/types/api';
+import type { ContentNode, MergeSimilarPair } from '@/types/merge';
 import { ConflictHeader } from './ConflictHeader';
 import { ConflictResolutionButtons } from './ConflictResolutionButtons';
 import { ConflictSide } from './ConflictSide';
@@ -58,6 +58,7 @@ export function MergeConflictView({
   } | null>(null);
   const [modalContextData, setModalContextData] = useState<TurnContextData | null>(null);
   const [modalLoading, setModalLoading] = useState(false);
+  const { loadTurnContext } = useTurnContext();
 
   const openContextModal = useCallback(
     (conversationId: string, turnHash: string, hStart?: number, hEnd?: number) => {
@@ -71,7 +72,7 @@ export function MergeConflictView({
       setModalLoading(true);
       setModalContextData(null);
 
-      fetchTurnContext(turnHash, {
+      loadTurnContext(turnHash, {
         before: 5,
         after: 5,
         highlightStart: hStart,
@@ -81,7 +82,7 @@ export function MergeConflictView({
         .catch(() => setModalContextData(null))
         .finally(() => setModalLoading(false));
     },
-    []
+    [loadTurnContext]
   );
 
   const closeContextModal = useCallback(() => {
@@ -92,8 +93,7 @@ export function MergeConflictView({
   /** Create a jump handler that opens the context modal with source info */
   const makeJumpHandler = useCallback(
     (node: ContentNode) => {
-      if (!projectId || !node.source?.conversation_id || !node.source?.turn_hash)
-        return undefined;
+      if (!projectId || !node.source?.conversation_id || !node.source?.turn_hash) return undefined;
       const { turn_hash, start_char, end_char } = node.source;
       return (conversationId: string) => {
         openContextModal(conversationId, turn_hash, start_char, end_char);

@@ -17,12 +17,12 @@ import { DiffModeToggle } from '@/components/diff/DiffModeToggle';
 import { DiffSourceContextModal } from '@/components/diff/DiffSourceContextModal';
 import { Button } from '@/components/ui/button';
 import { EmptyStateInline } from '@/components/ui/empty-state';
+import { useCommitByHash } from '@/hooks/useCommitByHash';
 import { useTerminology } from '@/hooks/useTerminology';
-import { fetchCommitByHash } from '@/queries/commitByHash';
-import { fetchTurnContext } from '@/queries/turnContext';
+import { useTurnContext } from '@/hooks/useTurnContext';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
 import type { ApiCommit, TurnContextData } from '@/types/api';
-import type { Merge2WayResult, MergeCandidate, MergeSimilarPair, ContentNode } from '@/types/merge';
+import type { ContentNode, Merge2WayResult, MergeCandidate, MergeSimilarPair } from '@/types/merge';
 import { MergeConflictView } from './MergeConflictView';
 import { MergeDiffLine } from './MergeDiffLine';
 import { MergeDiffSection } from './MergeDiffSection';
@@ -256,6 +256,8 @@ export function UnifiedDiffView({
   const { getUnresolvedCount, contextCache, contextLoadingStates, projectId, sourceHash } =
     useMergeWorkspaceStore();
   const { t } = useTerminology();
+  const { loadCommit } = useCommitByHash();
+  const { loadTurnContext } = useTurnContext();
 
   // View mode state — controlled if props provided, otherwise internal
   const [internalViewMode, setInternalViewMode] = useState<ViewMode>('grouped');
@@ -274,7 +276,7 @@ export function UnifiedDiffView({
     let cancelled = false;
     setLoadingCommit(true);
 
-    fetchCommitByHash(sourceHash)
+    loadCommit(sourceHash)
       .then((commit) => {
         if (!cancelled) setSourceCommit(commit);
       })
@@ -288,7 +290,7 @@ export function UnifiedDiffView({
     return () => {
       cancelled = true;
     };
-  }, [viewMode, sourceHash, sourceCommit]);
+  }, [viewMode, sourceHash, sourceCommit, loadCommit]);
 
   // Convert ApiCommit trees to ContentNode type for positional view
   const sourceNodes = useMemo(() => {
@@ -361,7 +363,7 @@ export function UnifiedDiffView({
       setModalLoading(true);
       setModalContextData(null);
 
-      fetchTurnContext(turnHash, {
+      loadTurnContext(turnHash, {
         before: 5,
         after: 5,
         highlightStart: hStart,
@@ -371,7 +373,7 @@ export function UnifiedDiffView({
         .catch(() => setModalContextData(null))
         .finally(() => setModalLoading(false));
     },
-    []
+    [loadTurnContext]
   );
 
   const closeContextModal = useCallback(() => {

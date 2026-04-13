@@ -13,13 +13,7 @@ interface MergeSectionProps {
   className?: string;
 }
 
-export function MergeSection({
-  base,
-  source,
-  target,
-  mergeId,
-  className,
-}: MergeSectionProps) {
+export function MergeSection({ base, source, target, mergeId, className }: MergeSectionProps) {
   const [resolvedSemantic, setResolvedSemantic] = useState<SemanticContent | null>(null);
 
   const handleResolved = useCallback((result: SemanticContent) => {
