@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useCommitOperations } from '@/hooks/useCommitOperations';
 import { fetchConversationMeta, fetchConversationTopics } from '@/queries/chatInitFetch';
 import { hydrateFromParent } from '@/queries/hydrateFromParent';
 import { hydrateConversation } from '@/queries/loadConversation';
@@ -43,6 +44,7 @@ export function useChatInit({
   // Prevents a hydrate → reset wipe loop on re-render after inheritance.
   const inheritedRef = useRef(false);
   const [parentConversationId, setParentConversationId] = useState<string | null>(null);
+  const { initCommitState } = useCommitOperations();
 
   useEffect(() => {
     const convId = resolvedConversationId ?? conversationId;
@@ -59,7 +61,7 @@ export function useChatInit({
     useCommitStore.getState().setProjectId(resolvedProjectId || null);
     // Inheritance sets its own lastCommitHash, so don't overwrite it with the branch head.
     if (resolvedProjectId && !inheritFromCommitHash) {
-      useCommitStore.getState().initCommitState(resolvedProjectId);
+      void initCommitState(resolvedProjectId);
     }
 
     // ── 2. Backfill the project id from the conversation when it's missing ──
@@ -69,7 +71,7 @@ export function useChatInit({
         setResolvedProjectId(conv.project_id);
         useCommitStore.getState().setProjectId(conv.project_id);
         if (!inheritFromCommitHash) {
-          useCommitStore.getState().initCommitState(conv.project_id);
+          void initCommitState(conv.project_id);
         }
         useChatStore.getState().setActiveConversation(convId, conv.project_id);
       });

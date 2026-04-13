@@ -4,8 +4,9 @@ import type { TreeNode } from '@t3x-dev/core';
 import { Check, Play, Plus, X } from 'lucide-react';
 import { useCallback, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { cn } from '@/lib/utils';
 import { getSlotSource } from '@/domain/source';
+import { useCommitOperations } from '@/hooks/useCommitOperations';
+import { cn } from '@/lib/utils';
 import { useCommitStore } from '@/store/commitStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { useGoldEdit } from './useGoldEdit';
@@ -17,17 +18,24 @@ const MONO = { fontFamily: 'var(--font-mono, ui-monospace, monospace)', fontSize
 /** Format a slot value for display — handles strings, numbers, arrays, objects */
 function formatSlotValue(val: unknown): string {
   if (val === null || val === undefined) return '';
-  if (typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean') return String(val);
+  if (typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean')
+    return String(val);
   if (Array.isArray(val)) {
-    return val.map((item) => {
-      if (typeof item === 'object' && item !== null) {
-        return Object.entries(item).map(([k, v]) => `${k}: ${v}`).join(', ');
-      }
-      return String(item);
-    }).join('; ');
+    return val
+      .map((item) => {
+        if (typeof item === 'object' && item !== null) {
+          return Object.entries(item)
+            .map(([k, v]) => `${k}: ${v}`)
+            .join(', ');
+        }
+        return String(item);
+      })
+      .join('; ');
   }
   if (typeof val === 'object') {
-    return Object.entries(val).map(([k, v]) => `${k}: ${v}`).join(', ');
+    return Object.entries(val)
+      .map(([k, v]) => `${k}: ${v}`)
+      .join(', ');
   }
   return String(val);
 }
@@ -97,7 +105,10 @@ function SlotRow({
     return (
       <div className="flex items-stretch" style={{ minHeight: 24 }}>
         <div className={`shrink-0 w-[3px] ${gutterColor}`} />
-        <div className="flex-1 min-w-0 flex items-center gap-1 px-2 py-0.5 bg-[var(--status-warning)]/[0.06]" style={MONO}>
+        <div
+          className="flex-1 min-w-0 flex items-center gap-1 px-2 py-0.5 bg-[var(--status-warning)]/[0.06]"
+          style={MONO}
+        >
           <span className="shrink-0 text-[var(--yaml-key,#2563eb)]">{slotKey}:</span>
           <input
             ref={inputRef}
@@ -107,7 +118,9 @@ function SlotRow({
             className="flex-1 min-w-0 bg-transparent border-0 border-b-[1.5px] border-b-[var(--status-warning)] outline-none text-[var(--text-primary)]"
             style={{ fontFamily: 'inherit', fontSize: 'inherit' }}
           />
-          <span className="shrink-0 text-[8px] text-[var(--text-tertiary)] whitespace-nowrap">Enter ↵ · Esc ✕</span>
+          <span className="shrink-0 text-[8px] text-[var(--text-tertiary)] whitespace-nowrap">
+            Enter ↵ · Esc ✕
+          </span>
         </div>
       </div>
     );
@@ -126,7 +139,7 @@ function SlotRow({
           isSlotSelected && 'bg-[var(--source-dim)]'
         )}
         style={MONO}
-        onClick={() => isSlotSelected ? clearSelection() : select('after', { nodePath, slotKey })}
+        onClick={() => (isSlotSelected ? clearSelection() : select('after', { nodePath, slotKey }))}
         onDoubleClick={handleDoubleClick}
       >
         <span className="shrink-0 text-[var(--yaml-key,#2563eb)]">{slotKey}:</span>
@@ -162,7 +175,10 @@ function SlotRow({
             type="button"
             data-testid="slot-delete"
             title="Delete slot"
-            onClick={(e) => { e.stopPropagation(); onDelete(); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
             className="p-0.5 rounded text-[var(--text-tertiary)] hover:text-[var(--status-error)] hover:bg-[var(--hover-bg)]"
           >
             <X className="h-2.5 w-2.5" />
@@ -299,7 +315,10 @@ function NodeRow({
                 <button
                   type="button"
                   title="Keep changes"
-                  onClick={(e) => { e.stopPropagation(); onAccept(); }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onAccept();
+                  }}
                   className="p-0.5 rounded text-[var(--text-tertiary)] hover:text-[var(--status-success)]"
                 >
                   <Check className="h-2.5 w-2.5" />
@@ -307,7 +326,10 @@ function NodeRow({
                 <button
                   type="button"
                   title="Dismiss changes"
-                  onClick={(e) => { e.stopPropagation(); onDismiss(); }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDismiss();
+                  }}
                   className="p-0.5 rounded text-[var(--text-tertiary)] hover:text-[var(--status-warning)]"
                 >
                   <X className="h-2.5 w-2.5" />
@@ -318,7 +340,10 @@ function NodeRow({
               type="button"
               data-testid="add-child-button"
               title="Add child node"
-              onClick={(e) => { e.stopPropagation(); handleAddChild(); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleAddChild();
+              }}
               className="p-0.5 rounded text-[var(--text-tertiary)] hover:text-[var(--status-success)] hover:bg-[var(--hover-bg)]"
             >
               <Plus className="h-2.5 w-2.5" />
@@ -326,7 +351,10 @@ function NodeRow({
             <button
               type="button"
               title="Remove node and children"
-              onClick={(e) => { e.stopPropagation(); handleDropNode(); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDropNode();
+              }}
               className="p-0.5 rounded text-[var(--text-tertiary)] hover:text-[var(--status-error)] hover:bg-[var(--hover-bg)]"
             >
               <X className="h-2.5 w-2.5" />
@@ -387,7 +415,12 @@ function NodeRow({
 
       {/* Children */}
       {node.children?.map((child: TreeNode) => (
-        <AfterNodeRecursive key={child.key} node={child} path={`${path}/${child.key}`} depth={depth + 1} />
+        <AfterNodeRecursive
+          key={child.key}
+          node={child}
+          path={`${path}/${child.key}`}
+          depth={depth + 1}
+        />
       ))}
     </>
   );
@@ -440,21 +473,26 @@ function AfterNodeRecursive({ node, path, depth }: AfterNodeRecursiveProps) {
   return (
     <>
       <div className="group flex items-stretch" style={{ minHeight: 26 }}>
-        <div className={`shrink-0 w-[3px] ${isNodeSelected ? 'bg-[var(--source)]' : 'bg-transparent'}`} />
+        <div
+          className={`shrink-0 w-[3px] ${isNodeSelected ? 'bg-[var(--source)]' : 'bg-transparent'}`}
+        />
         <div
           className={cn(
             'flex-1 flex items-center gap-1 py-0.5 cursor-pointer hover:bg-[var(--hover-bg)] transition-colors',
             isNodeSelected && 'bg-[var(--source-dim)]'
           )}
           style={{ ...MONO, paddingLeft: `${8 + depth * 14}px` }}
-          onClick={() => isNodeSelected ? clearSelection() : select('after', { nodePath: path })}
+          onClick={() => (isNodeSelected ? clearSelection() : select('after', { nodePath: path }))}
         >
           <span className="text-[var(--yaml-key,#2563eb)] font-semibold">{node.key}:</span>
           <div className="ml-auto flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity pr-2">
             <button
               type="button"
               data-testid="add-child-button"
-              onClick={(e) => { e.stopPropagation(); handleAddChild(); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleAddChild();
+              }}
               title="Add child node"
               className="p-0.5 rounded text-[var(--text-tertiary)] hover:text-[var(--status-success)] hover:bg-[var(--hover-bg)]"
             >
@@ -462,7 +500,10 @@ function AfterNodeRecursive({ node, path, depth }: AfterNodeRecursiveProps) {
             </button>
             <button
               type="button"
-              onClick={(e) => { e.stopPropagation(); handleDropNode(); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDropNode();
+              }}
               title="Remove node and children"
               className="p-0.5 rounded text-[var(--text-tertiary)] hover:text-[var(--status-error)] hover:bg-[var(--hover-bg)]"
             >
@@ -485,7 +526,12 @@ function AfterNodeRecursive({ node, path, depth }: AfterNodeRecursiveProps) {
         </div>
       ))}
       {node.children?.map((child: TreeNode) => (
-        <AfterNodeRecursive key={child.key} node={child} path={`${path}/${child.key}`} depth={depth + 1} />
+        <AfterNodeRecursive
+          key={child.key}
+          node={child}
+          path={`${path}/${child.key}`}
+          depth={depth + 1}
+        />
       ))}
     </>
   );
@@ -506,6 +552,7 @@ export function AfterPanel({
   const { applyEdit } = useGoldEdit();
 
   const isCommitting = useCommitStore((s) => s.isCommitting);
+  const { commitNodes } = useCommitOperations();
 
   const [showCommitDialog, setShowCommitDialog] = useState(false);
   const [commitMessage, setCommitMessage] = useState('');
@@ -548,24 +595,27 @@ export function AfterPanel({
   }, [trees]);
 
   // ── Commit: persist current tree ──
-  const handleCommit = useCallback(async (message: string) => {
-    try {
-      useWorkspaceStore.getState().setMode('committing');
-      await useCommitStore.getState().commitNodes(message || 'Knowledge Extract');
-      useWorkspaceStore.getState().setMode('idle');
-      useWorkspaceStore.getState().setCommitted(true);
-      setShowCommitDialog(false);
-      toast.success('Committed successfully');
+  const handleCommit = useCallback(
+    async (message: string) => {
       try {
-        new BroadcastChannel('t3x-commits').postMessage({ type: 'commit.created' });
-      } catch {
-        // BroadcastChannel not supported
+        useWorkspaceStore.getState().setMode('committing');
+        await commitNodes(message || 'Knowledge Extract');
+        useWorkspaceStore.getState().setMode('idle');
+        useWorkspaceStore.getState().setCommitted(true);
+        setShowCommitDialog(false);
+        toast.success('Committed successfully');
+        try {
+          new BroadcastChannel('t3x-commits').postMessage({ type: 'commit.created' });
+        } catch {
+          // BroadcastChannel not supported
+        }
+      } catch (err: unknown) {
+        useWorkspaceStore.getState().setMode('idle');
+        toast.error(`Commit failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
       }
-    } catch (err: unknown) {
-      useWorkspaceStore.getState().setMode('idle');
-      toast.error(`Commit failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
-    }
-  }, []);
+    },
+    [commitNodes]
+  );
 
   return (
     <div data-testid="after-panel" className="flex flex-col h-full relative">
@@ -625,9 +675,7 @@ export function AfterPanel({
 
       {/* Commit footer — always visible, disabled when no result */}
       <div className="flex shrink-0 items-center justify-between border-t border-[var(--stroke-default)] bg-[var(--panel-alt)] px-3 py-1.5">
-        <span className="text-[9px] text-[var(--text-tertiary)]">
-{' '}
-        </span>
+        <span className="text-[9px] text-[var(--text-tertiary)]"> </span>
         <div className="flex items-center gap-1.5">
           <button
             type="button"
@@ -644,7 +692,10 @@ export function AfterPanel({
         </div>
       </div>
       {showCommitDialog && (
-        <div data-testid="commit-dialog" className="absolute inset-0 z-10 flex items-center justify-center bg-black/30 backdrop-blur-sm rounded-b-lg">
+        <div
+          data-testid="commit-dialog"
+          className="absolute inset-0 z-10 flex items-center justify-center bg-black/30 backdrop-blur-sm rounded-b-lg"
+        >
           <div className="bg-[var(--panel)] border border-[var(--stroke-default)] rounded-xl p-4 mx-3 w-full max-w-[280px] shadow-lg">
             <label className="block text-[10px] font-semibold text-[var(--text-secondary)] mb-1.5">
               Name this commit
