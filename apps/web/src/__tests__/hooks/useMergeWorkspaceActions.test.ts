@@ -7,25 +7,26 @@ import { cleanupRoots, renderHook, waitForHook } from './renderHook';
 
 vi.mock('@/queries/mergeApi', () => ({
   getMergeDraft: vi.fn(),
+  getMergeDraftChecks: vi.fn(),
+}));
+vi.mock('@/commands/merge', () => ({
   createMergeDraft: vi.fn(),
   saveMergeDraft: vi.fn(),
   commitMergeDraft: vi.fn(),
   deleteMergeDraft: vi.fn(),
-  getMergeDraftChecks: vi.fn(),
 }));
 vi.mock('@/queries/turnContext', () => ({
   fetchTurnContext: vi.fn(),
 }));
 
-import { useMergeWorkspaceActions } from '@/hooks/useMergeWorkspaceActions';
 import {
   commitMergeDraft,
   createMergeDraft,
   deleteMergeDraft,
-  getMergeDraft,
-  getMergeDraftChecks,
   saveMergeDraft,
-} from '@/queries/mergeApi';
+} from '@/commands/merge';
+import { useMergeWorkspaceActions } from '@/hooks/useMergeWorkspaceActions';
+import { getMergeDraft, getMergeDraftChecks } from '@/queries/mergeApi';
 import { fetchTurnContext } from '@/queries/turnContext';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
 

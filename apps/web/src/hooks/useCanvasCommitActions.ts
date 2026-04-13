@@ -15,7 +15,7 @@ import type { Edge, Node } from '@xyflow/react';
 import { useCallback } from 'react';
 import { renameCommit as renameCommitCommand } from '@/commands/commits';
 import { createConversation } from '@/commands/conversations';
-import { createMergeDraft } from '@/queries/mergeApi';
+import { createMergeDraft } from '@/commands/merge';
 import { fetchTurns } from '@/queries/turns';
 import { useCanvasStore } from '@/store/canvasStore';
 import {

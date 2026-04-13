@@ -24,10 +24,9 @@ import {
   commitMergeDraft,
   createMergeDraft,
   deleteMergeDraft,
-  getMergeDraft,
-  getMergeDraftChecks,
   saveMergeDraft,
-} from '@/queries/mergeApi';
+} from '@/commands/merge';
+import { getMergeDraft, getMergeDraftChecks } from '@/queries/mergeApi';
 import { fetchTurnContext } from '@/queries/turnContext';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
 import type { ContentNode, TurnContextData } from '@/types/merge';

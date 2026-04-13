@@ -16,13 +16,13 @@ vi.mock('@/commands/conversations', () => ({
 vi.mock('@/queries/turns', () => ({
   fetchTurns: vi.fn(),
 }));
-vi.mock('@/queries/mergeApi', () => ({
+vi.mock('@/commands/merge', () => ({
   createMergeDraft: vi.fn(),
 }));
 
 import { createConversation } from '@/commands/conversations';
+import { createMergeDraft } from '@/commands/merge';
 import { useCanvasCommitActions } from '@/hooks/useCanvasCommitActions';
-import { createMergeDraft } from '@/queries/mergeApi';
 import { fetchTurns } from '@/queries/turns';
 import { useCanvasStore } from '@/store/canvasStore';
 import type { CanvasNodeData } from '@/types/nodes';

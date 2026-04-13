@@ -41,18 +41,12 @@ vi.mock('@/queries/workbenchDrafts', () => ({
   fetchWorkbenchDrafts: vi.fn().mockResolvedValue([]),
 }));
 
+// queries/mergeApi is now reads-only; writes live in @/commands/merge.
+// Slice no longer imports either path, but mock kept minimal in case
+// the test suite imports an indirect that resolves the module.
 vi.mock('@/queries/mergeApi', () => ({
-  prepareMergeApi: vi.fn().mockResolvedValue({
-    autoKept: [],
-    conflicts: [],
-    onlyInSource: [],
-    onlyInTarget: [],
-    relationsOnlyInSource: [],
-    relationsOnlyInTarget: [],
-    relationsInBoth: [],
-  }),
-  executeMergeApi: vi.fn(),
-  createMergeDraft: vi.fn().mockResolvedValue({ draftId: 'draft_mock123' }),
+  getMergeDraft: vi.fn(),
+  getMergeDraftChecks: vi.fn(),
 }));
 
 // Helper to create a mock staging unit node
