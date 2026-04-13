@@ -20,7 +20,9 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
+import { useDraftWorkspace } from '@/hooks/useDraftWorkspace';
 import { useTerminology } from '@/hooks/useTerminology';
+import { useDraftWorkspaceStore } from '@/store/draftWorkspaceStore';
 
 interface CommitResult {
   commit: Record<string, unknown>;
@@ -52,6 +54,7 @@ export function CommitDraftDialog({
   const [phase, setPhase] = useState<'input' | 'success'>('input');
   const [commitResult, setCommitResult] = useState<CommitResult | null>(null);
   const [iterating, setIterating] = useState(false);
+  const { forkDraft } = useDraftWorkspace();
 
   // Reset phase when dialog reopens
   useEffect(() => {
@@ -84,11 +87,9 @@ export function CommitDraftDialog({
     if (!onIterate) return;
     setIterating(true);
     try {
-      const { forkWorkbenchDraft } = await import('@/infrastructure');
-      const store = (await import('@/store/draftWorkspaceStore')).useDraftWorkspaceStore.getState();
-      const sourceDraftId = store.draftId;
+      const sourceDraftId = useDraftWorkspaceStore.getState().draftId;
       if (!sourceDraftId) return;
-      const forked = await forkWorkbenchDraft(sourceDraftId);
+      const forked = await forkDraft(sourceDraftId);
       onIterate(forked.id);
     } catch {
       // Error handling — toast or silent
@@ -135,17 +136,10 @@ export function CommitDraftDialog({
             />
 
             <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={onClose}
-                disabled={committing}
-              >
+              <Button variant="outline" onClick={onClose} disabled={committing}>
                 Cancel
               </Button>
-              <Button
-                onClick={handleCommit}
-                disabled={committing || includedCount === 0}
-              >
+              <Button onClick={handleCommit} disabled={committing || includedCount === 0}>
                 {committing ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin mr-1.5" />

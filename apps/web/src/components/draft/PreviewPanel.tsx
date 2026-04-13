@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/select';
 import { SkeletonText } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
+import { useDraftWorkspace } from '@/hooks/useDraftWorkspace';
 import { cn } from '@/lib/utils';
 import { useDraftWorkspaceStore } from '@/store/draftWorkspaceStore';
 import { PreviewTypeSelector } from './PreviewTypeSelector';
@@ -63,8 +64,8 @@ export const PreviewPanel = forwardRef<HTMLDivElement>(function PreviewPanel(_pr
   const previewGeneratedAt = useDraftWorkspaceStore((s) => s.previewGeneratedAt);
   const previewTokenCount = useDraftWorkspaceStore((s) => s.previewTokenCount);
   const previewModelUsed = useDraftWorkspaceStore((s) => s.previewModelUsed);
-  const generatePreview = useDraftWorkspaceStore((s) => s.generatePreview);
   const previewIncludedCount = useDraftWorkspaceStore((s) => s.previewIncludedCount);
+  const { generatePreview } = useDraftWorkspace();
   const draft = useDraftWorkspaceStore((s) => s.draft);
   const autoPreview = useDraftWorkspaceStore((s) => s.autoPreview);
   const setAutoPreview = useDraftWorkspaceStore((s) => s.setAutoPreview);

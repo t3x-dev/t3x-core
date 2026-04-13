@@ -18,6 +18,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { CollapsibleSection } from '@/components/shared/CollapsibleSection';
 import { Button } from '@/components/ui/button';
+import { useDraftWorkspace } from '@/hooks/useDraftWorkspace';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 
 import { fullScreenEnter, reducedMotion } from '@/lib/motion';
@@ -32,9 +33,9 @@ import { DraftSplitPane } from './DraftSplitPane';
 import { DraftWorkbenchLLM } from './DraftWorkbenchLLM';
 import { ExtractConversationDialog } from './ExtractConversationDialog';
 import { InstructionEditor } from './InstructionEditor';
+import { NodeList } from './NodeList';
 import { PreviewPanel } from './PreviewPanel';
 import { PromotePreviewDialog } from './PromotePreviewDialog';
-import { NodeList } from './NodeList';
 
 interface DraftWorkspaceProps {
   projectId: string;
@@ -42,18 +43,15 @@ interface DraftWorkspaceProps {
 }
 
 export function DraftWorkspace({ projectId, onClose }: DraftWorkspaceProps) {
-  const {
-    draft,
-    isDirty,
-    conflictError,
-    saveDraft,
-    commitDraft,
-    getIncludedCount,
-    loadDraft,
-    draftId,
-    generatePreview,
-    reset,
-  } = useDraftWorkspaceStore();
+  const draft = useDraftWorkspaceStore((s) => s.draft);
+  const isDirty = useDraftWorkspaceStore((s) => s.isDirty);
+  const conflictError = useDraftWorkspaceStore((s) => s.conflictError);
+  const draftId = useDraftWorkspaceStore((s) => s.draftId);
+  const getIncludedCount = useDraftWorkspaceStore((s) => s.getIncludedCount);
+  const reset = useDraftWorkspaceStore((s) => s.reset);
+  const autoPreview = useDraftWorkspaceStore((s) => s.autoPreview);
+  const previewStatus = useDraftWorkspaceStore((s) => s.previewStatus);
+  const { saveDraft, commitDraft, loadDraft, generatePreview } = useDraftWorkspace();
 
   const prefersReducedMotion = useReducedMotion();
   const readyCountRef = useRef(0);
@@ -69,6 +67,17 @@ export function DraftWorkspace({ projectId, onClose }: DraftWorkspaceProps) {
     }, 2000);
     return () => clearTimeout(timer);
   }, [isDirty, saveDraft]);
+
+  // Auto-preview when stale (debounced 2s) — previously lived inside
+  // draftWorkspaceStore's scheduleAutoPreview helper. Moved here since
+  // it's a side effect that belongs at the React boundary (v2 §2.6).
+  useEffect(() => {
+    if (!autoPreview || previewStatus !== 'stale') return;
+    const timer = setTimeout(() => {
+      void generatePreview();
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [autoPreview, previewStatus, generatePreview]);
 
   // Keyboard shortcuts
   useEffect(() => {
