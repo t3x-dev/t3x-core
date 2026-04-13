@@ -5,6 +5,7 @@ import { Pin, PinOff } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { usePinOperations } from '@/hooks/usePinOperations';
 import { cn } from '@/lib/utils';
 import { usePinsStore } from '@/store/pinsStore';
 
@@ -17,7 +18,9 @@ interface PinButtonProps {
 
 export function PinButton({ projectId, type, refId, className }: PinButtonProps) {
   const [isLoading, setIsLoading] = useState(false);
-  const { isPinned, getPinByRef, addPin, removePin } = usePinsStore();
+  const isPinned = usePinsStore((s) => s.isPinned);
+  const getPinByRef = usePinsStore((s) => s.getPinByRef);
+  const { addPin, removePin } = usePinOperations();
 
   const pinned = isPinned(type, refId);
   const pin = getPinByRef(type, refId);

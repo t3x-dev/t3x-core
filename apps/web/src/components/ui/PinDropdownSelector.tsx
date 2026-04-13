@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import type { CommitWithLeaves } from '@/hooks/useBranchCommits';
 import { useBranchCommits } from '@/hooks/useBranchCommits';
+import { usePinOperations } from '@/hooks/usePinOperations';
 import { useTerminology } from '@/hooks/useTerminology';
 import type { Assertion, Leaf } from '@/infrastructure';
 import { cn } from '@/lib/utils';
@@ -31,9 +32,7 @@ export function PinDropdownSelector({ projectId, branch }: PinDropdownSelectorPr
   const pins = usePinsStore((s) => s.pins);
   const isPinned = usePinsStore((s) => s.isPinned);
   const getPinByRef = usePinsStore((s) => s.getPinByRef);
-  const addPin = usePinsStore((s) => s.addPin);
-  const removePin = usePinsStore((s) => s.removePin);
-  const updatePinAssertions = usePinsStore((s) => s.updatePinAssertions);
+  const { addPin, removePin, updatePinAssertions } = usePinOperations();
 
   const convCount = pins.filter((p) => p.type === 'conversation').length;
   const leafCount = pins.filter((p) => p.type === 'leaf').length;

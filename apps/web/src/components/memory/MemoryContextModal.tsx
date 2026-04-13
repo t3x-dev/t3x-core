@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { usePinOperations } from '@/hooks/usePinOperations';
 import type { Conversation, Leaf, Turn } from '@/infrastructure';
 import { listConversations, listLeavesByProject, listTurns } from '@/infrastructure';
 import { glass } from '@/lib/theme';
@@ -55,8 +56,12 @@ export function MemoryContextModal({ open, onClose, projectId }: MemoryContextMo
   const [detailTurns, setDetailTurns] = useState<Turn[]>([]);
   const [loadingDetail, setLoadingDetail] = useState(false);
 
-  // Pin store
-  const { pins, isPinned, addPin, removePin, getPinByRef, fetchPins } = usePinsStore();
+  // Pin store (state + selectors)
+  const pins = usePinsStore((s) => s.pins);
+  const isPinned = usePinsStore((s) => s.isPinned);
+  const getPinByRef = usePinsStore((s) => s.getPinByRef);
+  // Pin I/O (hook owns the network calls)
+  const { addPin, removePin, fetchPins } = usePinOperations();
 
   // Fetch data when modal opens
   useEffect(() => {

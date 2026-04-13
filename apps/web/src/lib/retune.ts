@@ -4,6 +4,11 @@
  * Flow: Pin assertions → Create conversation → Bind pin to conversation context.
  * All backend APIs already exist; this is pure frontend orchestration.
  */
+// Cross-aggregate orchestration helper — stays at @/infrastructure for
+// all three API surfaces (pin, conversation, context). Not routed through
+// @/commands/* because no single aggregate owns this flow; @/commands is
+// reserved for per-aggregate writes consumed by hooks/stores. If this
+// grows a React-dependent concern, promote to a coordinator hook instead.
 import {
   createConversation,
   createPinApi,

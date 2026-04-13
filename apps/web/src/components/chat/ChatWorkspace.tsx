@@ -4,14 +4,15 @@ import { AlertCircle, GitCommit, Loader2, MessageSquarePlus } from 'lucide-react
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { DriftPopup } from '@/components/chat/DriftPopup';
+import { buildSourceMap } from '@/domain/sourceMap';
 import { useAutoProject } from '@/hooks/useAutoProject';
 import { useCommittedHighlights } from '@/hooks/useCommittedHighlights';
 import { useConversationChat } from '@/hooks/useConversationChat';
 import { usePinEnrichment } from '@/hooks/usePinEnrichment';
+import { usePinOperations } from '@/hooks/usePinOperations';
 import { useRealtimeSync } from '@/hooks/useRealtimeSync';
 import { useTextSelection } from '@/hooks/useTextSelection';
 import { cn } from '@/lib/utils';
-import { buildSourceMap } from '@/domain/sourceMap';
 import { usePinsStore } from '@/store/pinsStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { ChatAddForm } from './ChatAddForm';
@@ -52,7 +53,7 @@ export function ChatWorkspace({
   const isCommitted = useWorkspaceStore((s) => s.isCommitted);
   const isReviewPhase = wsMode === 'executed' || wsMode === 'committing';
   const pins = usePinsStore((s) => s.pins);
-  const fetchPins = usePinsStore((s) => s.fetchPins);
+  const { fetchPins } = usePinOperations();
   const [showSourcePanel, setShowSourcePanel] = useState(false);
   const enrichedPinData = usePinEnrichment(pins, showSourcePanel);
   const showAddForm = isReviewPhase && selection && selection.text.length > 3;
@@ -162,10 +163,7 @@ export function ChatWorkspace({
   // (every LLMSource carries turn_hash + start_char/end_char).
   const sourceIndex = useWorkspaceStore((s) => s.sourceIndex);
   const turns = useWorkspaceStore((s) => s.turns);
-  const sourceMapByTurn = useMemo(
-    () => buildSourceMap(sourceIndex, turns),
-    [sourceIndex, turns]
-  );
+  const sourceMapByTurn = useMemo(() => buildSourceMap(sourceIndex, turns), [sourceIndex, turns]);
 
   // Load persistent committed highlights for this conversation
   const committedHighlightsByTurn = useCommittedHighlights(
@@ -203,7 +201,6 @@ export function ChatWorkspace({
   useEffect(() => {
     if (isExtracting) setShowSourcePanel(false);
   }, [isExtracting]);
-
 
   // Send firstMessage on mount (once only)
   useEffect(() => {

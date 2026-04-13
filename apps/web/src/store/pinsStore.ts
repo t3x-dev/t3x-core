@@ -1,27 +1,15 @@
 /**
- * Pins Store
+ * pinsStore — V4 pin state (passive).
  *
- * Zustand store for managing pins (V4 source selection).
- * Pins mark items as selected for commit sources and conversation context.
+ * v2 §2.5 — state + setters + pure selectors. I/O lives in
+ * hooks/usePinOperations.
  *
  * @see docs/specification/memory-pin-system-design.md
  */
 
 import type { Pin, PinType } from '@t3x-dev/core';
 import { create } from 'zustand';
-import {
-  createPin,
-  deletePin,
-  fetchPins,
-  updatePinAssertions,
-} from '@/queries/pins';
 import type { NotifyCallback } from './shared';
-
-// Module-level flag to prevent concurrent fetchPins calls for the same project.
-// Tracks the projectId currently being fetched (set synchronously before any
-// await) so two concurrent calls for the same project are de-duplicated, while
-// a call for a different project is still allowed through.
-let fetchInProgressFor: string | null = null;
 
 interface PinsState {
   /** All pins for the current project */
@@ -37,17 +25,20 @@ interface PinsState {
   /** Notification callback */
   notifyCallback: NotifyCallback | null;
 
-  // Actions
+  // Setters (no I/O)
   setNotifyCallback: (cb: NotifyCallback | null) => void;
-  fetchPins: (projectId: string) => Promise<void>;
-  addPin: (projectId: string, type: PinType, refId: string) => Promise<Pin | null>;
-  removePin: (pinId: string) => Promise<void>;
-  updatePinAssertions: (pinId: string, assertionIds: string[]) => Promise<Pin | null>;
-
-  // Invalidation — clears initialized so next fetchPins re-fetches (e.g. after retune)
+  setPins: (pins: Pin[]) => void;
+  setLoading: (loading: boolean) => void;
+  setError: (error: Error | null) => void;
+  setInitialized: (flag: boolean) => void;
+  setCurrentProjectId: (id: string | null) => void;
+  addPinToState: (pin: Pin) => void;
+  removePinFromState: (pinId: string) => void;
+  updatePinInState: (pin: Pin) => void;
+  /** Clears initialized so next hook-fetch re-queries (e.g. after retune). */
   invalidatePins: () => void;
 
-  // Selectors
+  // Pure selectors
   isPinned: (type: PinType, refId: string) => boolean;
   getPinByRef: (type: PinType, refId: string) => Pin | undefined;
 }
@@ -61,129 +52,20 @@ export const usePinsStore = create<PinsState>((set, get) => ({
   notifyCallback: null,
 
   setNotifyCallback: (cb) => set({ notifyCallback: cb }),
-
-  fetchPins: async (projectId: string) => {
-    // Module-level flag prevents two concurrent calls for the same project that
-    // both see loading=false before the first set({ loading: true }) resolves.
-    if (fetchInProgressFor === projectId) return;
-
-    // Skip if already loaded for this project
-    if (get().initialized && get().currentProjectId === projectId) return;
-
-    fetchInProgressFor = projectId;
-    set({ loading: true, error: null });
-    try {
-      const pins = await fetchPins(projectId);
-      set({
-        pins,
-        loading: false,
-        initialized: true,
-        currentProjectId: projectId,
-      });
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      set({
-        error,
-        loading: false,
-        initialized: true,
-        currentProjectId: projectId,
-      });
-      get().notifyCallback?.(`Failed to load pins: ${error.message}`, 'error');
-    } finally {
-      fetchInProgressFor = null;
-    }
-  },
-
-  addPin: async (projectId: string, type: PinType, refId: string) => {
-    const notify = get().notifyCallback;
-
-    // Check if already pinned
-    if (get().isPinned(type, refId)) {
-      notify?.('Item is already pinned', 'warning');
-      return null;
-    }
-
-    try {
-      const pin = await createPin(projectId, type, refId);
-
-      set((state) => ({
-        pins: [...state.pins, pin],
-      }));
-
-      notify?.('Item pinned', 'success');
-      return pin;
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-
-      // Handle duplicate pin error (409)
-      if (error.message.includes('DUPLICATE_PIN') || error.message.includes('409')) {
-        notify?.('Item is already pinned', 'warning');
-      } else {
-        notify?.(`Failed to pin: ${error.message}`, 'error');
-      }
-      return null;
-    }
-  },
-
-  removePin: async (pinId: string) => {
-    const notify = get().notifyCallback;
-    const pin = get().pins.find((p) => p.id === pinId);
-
-    // Optimistically remove from UI
+  setPins: (pins) => set({ pins }),
+  setLoading: (loading) => set({ loading }),
+  setError: (error) => set({ error }),
+  setInitialized: (flag) => set({ initialized: flag }),
+  setCurrentProjectId: (id) => set({ currentProjectId: id }),
+  addPinToState: (pin) => set((state) => ({ pins: [...state.pins, pin] })),
+  removePinFromState: (pinId) =>
+    set((state) => ({ pins: state.pins.filter((p) => p.id !== pinId) })),
+  updatePinInState: (pin) =>
     set((state) => ({
-      pins: state.pins.filter((p) => p.id !== pinId),
-    }));
-
-    try {
-      await deletePin(pinId);
-      notify?.('Pin removed', 'success');
-    } catch (err) {
-      // Restore pin on failure
-      if (pin) {
-        set((state) => ({
-          pins: [...state.pins, pin],
-        }));
-      }
-
-      const error = err instanceof Error ? err : new Error(String(err));
-
-      // If 404, it was already deleted
-      if (error.message.includes('404') || error.message.includes('not found')) {
-        notify?.('Pin was already removed', 'warning');
-      } else {
-        notify?.(`Failed to remove pin: ${error.message}`, 'error');
-      }
-    }
-  },
-
-  updatePinAssertions: async (pinId: string, assertionIds: string[]) => {
-    const notify = get().notifyCallback;
-
-    try {
-      const updatedPin = await updatePinAssertions(pinId, assertionIds);
-
-      set((state) => ({
-        pins: state.pins.map((p) => (p.id === pinId ? updatedPin : p)),
-      }));
-
-      notify?.('Pin assertions updated', 'success');
-      return updatedPin;
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      notify?.(`Failed to update pin: ${error.message}`, 'error');
-      return null;
-    }
-  },
-
-  // Invalidation
+      pins: state.pins.map((p) => (p.id === pin.id ? pin : p)),
+    })),
   invalidatePins: () => set({ initialized: false }),
 
-  // Selectors
-  isPinned: (type: PinType, refId: string) => {
-    return get().pins.some((p) => p.type === type && p.ref_id === refId);
-  },
-
-  getPinByRef: (type: PinType, refId: string) => {
-    return get().pins.find((p) => p.type === type && p.ref_id === refId);
-  },
+  isPinned: (type, refId) => get().pins.some((p) => p.type === type && p.ref_id === refId),
+  getPinByRef: (type, refId) => get().pins.find((p) => p.type === type && p.ref_id === refId),
 }));
