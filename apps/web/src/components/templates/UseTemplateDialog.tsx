@@ -17,8 +17,8 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useTerminology } from '@/hooks/useTerminology';
-import type { ApiCommit, LeafType, Project, Template } from '@/infrastructure';
 import { createLeaf, listCommits, listProjects } from '@/infrastructure';
+import type { ApiCommit, LeafType, Project, Template } from '@/types/api';
 
 interface UseTemplateDialogProps {
   template: Template | null;

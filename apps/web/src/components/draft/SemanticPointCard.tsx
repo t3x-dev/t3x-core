@@ -4,7 +4,7 @@ import { AlertTriangle, Info, Lock, Undo2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import type { SemanticPointAPI } from '@/infrastructure';
+import type { SemanticPointAPI } from '@/types/api';
 
 interface SemanticPointCardProps {
   point: SemanticPointAPI;

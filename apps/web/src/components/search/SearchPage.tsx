@@ -12,9 +12,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useSearch } from '@/hooks/useSearch';
-import type { Project } from '@/infrastructure';
 import { listProjects } from '@/infrastructure';
 import { cn } from '@/lib/utils';
+import type { Project } from '@/types/api';
 import type { SearchMode } from '@/types/search';
 
 const MODES: { value: SearchMode; label: string }[] = [

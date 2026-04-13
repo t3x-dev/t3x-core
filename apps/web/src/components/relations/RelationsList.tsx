@@ -2,9 +2,9 @@
 
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
-import type { NodeRelation } from '@/infrastructure/relations';
 import { truncate } from '@/lib/truncate';
 import { cn } from '@/lib/utils';
+import type { NodeRelation } from '@/types/api';
 
 interface RelationsListProps {
   relations: NodeRelation[];
@@ -63,7 +63,6 @@ export function RelationsList({ relations, nodes }: RelationsListProps) {
               <span className="flex-1 min-w-0 text-[var(--text-secondary)] truncate">
                 {truncate(lookupNode(rel.to, nodes), 60)}
               </span>
-
             </div>
           </div>
         );

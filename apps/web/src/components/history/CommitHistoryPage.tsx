@@ -17,8 +17,8 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { KeyboardHintBar } from '@/components/shared/KeyboardHintBar';
 import { useKeyboardNavigation } from '@/hooks/useKeyboardNavigation';
-import type { ApiCommit, Branch } from '@/infrastructure';
 import { diffRaw, listBranches, listCommits } from '@/infrastructure';
+import type { ApiCommit, Branch } from '@/types/api';
 import { CommitHistoryRow } from './CommitHistoryRow';
 
 // ============================================================================
@@ -105,7 +105,8 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
                   // Diff failure is non-critical
                 }
               }
-              const nodeCount = (commit as { content?: { trees?: unknown[] } })?.content?.trees?.length ?? 0;
+              const nodeCount =
+                (commit as { content?: { trees?: unknown[] } })?.content?.trees?.length ?? 0;
               return { commit, diffStats, nodeCount };
             })
           );

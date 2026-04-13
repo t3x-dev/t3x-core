@@ -24,9 +24,9 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { useTerminology } from '@/hooks/useTerminology';
-import type { DraftNode, WorkbenchDraft } from '@/infrastructure';
 import * as api from '@/infrastructure';
 import { useCanvasStore } from '@/store/canvasStore';
+import type { DraftNode, WorkbenchDraft } from '@/types/api';
 
 interface DraftQuickSheetProps {
   open: boolean;
@@ -58,9 +58,7 @@ export function DraftQuickSheet({ open, onClose, draftId, projectId }: DraftQuic
   const toggleNode = useCallback(
     async (nodeId: string) => {
       if (!draft || savingRef.current || draft.status === 'auto') return;
-      const nodes = draft.nodes.map((s) =>
-        s.id === nodeId ? { ...s, included: !s.included } : s
-      );
+      const nodes = draft.nodes.map((s) => (s.id === nodeId ? { ...s, included: !s.included } : s));
       const updated = { ...draft, nodes };
       setDraft(updated);
       // Save in background with guard against rapid toggles
@@ -167,11 +165,7 @@ export function DraftQuickSheet({ open, onClose, draftId, projectId }: DraftQuic
               {[...draft.nodes]
                 .sort((a, b) => a.position - b.position)
                 .map((node) => (
-                  <QuickNodeRow
-                    key={node.id}
-                    node={node}
-                    onToggle={() => toggleNode(node.id)}
-                  />
+                  <QuickNodeRow key={node.id} node={node} onToggle={() => toggleNode(node.id)} />
                 ))}
               {draft.nodes.length === 0 && (
                 <p className="text-sm text-muted-foreground py-4 text-center">
@@ -205,13 +199,7 @@ export function DraftQuickSheet({ open, onClose, draftId, projectId }: DraftQuic
   );
 }
 
-function QuickNodeRow({
-  node,
-  onToggle,
-}: {
-  node: DraftNode;
-  onToggle: () => void;
-}) {
+function QuickNodeRow({ node, onToggle }: { node: DraftNode; onToggle: () => void }) {
   return (
     <div
       className={`flex items-start gap-2.5 rounded-lg border px-3 py-2 transition-colors ${

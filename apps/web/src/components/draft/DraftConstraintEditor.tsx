@@ -19,9 +19,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import type { DraftConstraint } from '@/infrastructure';
 import type { ValidationResult } from '@/lib/draftValidation';
 import { useDraftWorkspaceStore } from '@/store/draftWorkspaceStore';
+import type { DraftConstraint } from '@/types/api';
 
 export function DraftConstraintEditor() {
   const { draft, validationResults, addConstraint, removeConstraint } = useDraftWorkspaceStore();

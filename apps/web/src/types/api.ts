@@ -10,8 +10,20 @@
 
 export type { Citation } from '@/infrastructure/chat';
 export type { ApiCommit } from '@/infrastructure/commits';
+export type { DeployAgent } from '@/infrastructure/deploy';
 export type { TreeMergeSuggestion } from '@/infrastructure/diff';
-export type { DraftConstraint, DraftNode, WorkbenchDraft } from '@/infrastructure/drafts';
+export type {
+  DraftConstraint,
+  DraftNode,
+  LocatedEvidenceAPI,
+  SemanticPointAPI,
+  SuggestResult,
+  WorkbenchDraft,
+} from '@/infrastructure/drafts';
+export type {
+  CosineBucket,
+  FeedbackStats,
+} from '@/infrastructure/extraction-feedback';
 export type {
   Assertion,
   CompareModelsResult,
@@ -22,8 +34,28 @@ export type {
   ReverseLearnResult,
   SuggestedConstraint,
 } from '@/infrastructure/leaves';
-export type { ProviderInfo, Template } from '@/infrastructure/misc';
+export type {
+  CreateTemplateInput,
+  CreateWebhookInput,
+  ImportParagraph,
+  ProviderInfo,
+  ShareLink,
+  Template,
+  TemplateVariable,
+  UpdateWebhookInput,
+  WebhookData,
+} from '@/infrastructure/misc';
 export type { ConversationContext } from '@/infrastructure/pins';
+export type { NodeRelation, RelationType } from '@/infrastructure/relations';
+export type { EngineRun } from '@/infrastructure/runner';
+export type { CommitMeta } from '@/infrastructure/treeDiff';
 export type { TurnContextData } from '@/infrastructure/turns';
-export type { Branch, Commit, Conversation, Project } from '@/infrastructure/types';
+export type {
+  Branch,
+  Commit,
+  Conversation,
+  LLMProviderInfo,
+  Project,
+  Turn,
+} from '@/infrastructure/types';
 export type { NodeMember } from '@/types/knowledgeGraph';

@@ -25,11 +25,11 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { usePinsCrud } from '@/hooks/usePinsCrud';
-import type { Conversation, Leaf, Turn } from '@/infrastructure';
 import { listConversations, listLeavesByProject, listTurns } from '@/infrastructure';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import { usePinsStore } from '@/store/pinsStore';
+import type { Conversation, Leaf, Turn } from '@/types/api';
 
 // Selected item type for detail panel
 type SelectedItem =

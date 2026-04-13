@@ -20,8 +20,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { type Conversation, extractToDraft, listConversations } from '@/infrastructure';
+import { extractToDraft, listConversations } from '@/infrastructure';
 import { cn } from '@/lib/utils';
+import type { Conversation } from '@/types/api';
 
 interface ExtractConversationDialogProps {
   open: boolean;

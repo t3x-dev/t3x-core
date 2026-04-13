@@ -2,7 +2,7 @@
 
 import { Activity, CheckCircle, Clock, Percent } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
-import type { EngineRun } from '@/infrastructure';
+import type { EngineRun } from '@/types/api';
 
 interface QuickStatsBarProps {
   runs: EngineRun[];

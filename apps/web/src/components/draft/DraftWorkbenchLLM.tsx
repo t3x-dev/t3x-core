@@ -3,8 +3,8 @@
 import { useCallback } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import type { SemanticPointAPI } from '@/infrastructure';
 import { reviewAction } from '@/infrastructure';
+import type { SemanticPointAPI } from '@/types/api';
 import { ExtractButton } from './ExtractButton';
 import { ReadyZone } from './ReadyZone';
 import { ReviewZone } from './ReviewZone';

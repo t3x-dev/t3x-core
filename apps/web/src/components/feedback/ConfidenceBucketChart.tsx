@@ -1,6 +1,6 @@
 'use client';
 
-import type { CosineBucket } from '@/infrastructure/extraction-feedback';
+import type { CosineBucket } from '@/types/api';
 
 interface ConfidenceBucketChartProps {
   buckets: CosineBucket[];

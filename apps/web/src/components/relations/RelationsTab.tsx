@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { getCommitRelations, type RelationType, type NodeRelation } from '@/infrastructure/relations';
+import { getCommitRelations } from '@/infrastructure/relations';
 import { cn } from '@/lib/utils';
+import type { NodeRelation, RelationType } from '@/types/api';
 import { RelationsGraph } from './RelationsGraph';
 import { RelationsList } from './RelationsList';
 
@@ -13,13 +14,7 @@ interface RelationsTabProps {
   nodes: Array<{ id: string; text: string }>;
 }
 
-const ALL_TYPES: RelationType[] = [
-  'causes',
-  'conditions',
-  'contrasts',
-  'follows',
-  'depends',
-];
+const ALL_TYPES: RelationType[] = ['causes', 'conditions', 'contrasts', 'follows', 'depends'];
 
 export function RelationsTab({ commitHash, nodes }: RelationsTabProps) {
   const [relations, setRelations] = useState<NodeRelation[]>([]);
@@ -46,10 +41,7 @@ export function RelationsTab({ commitHash, nodes }: RelationsTabProps) {
 
   // Filtered relations
   const filtered = useMemo(
-    () =>
-      relations.filter(
-        (r) => typeFilters.has(r.type)
-      ),
+    () => relations.filter((r) => typeFilters.has(r.type)),
     [relations, typeFilters]
   );
 
@@ -113,7 +105,6 @@ export function RelationsTab({ commitHash, nodes }: RelationsTabProps) {
               </label>
             ))}
           </div>
-
         </div>
       )}
 

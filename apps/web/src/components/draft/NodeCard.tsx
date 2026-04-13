@@ -13,9 +13,9 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import type { DraftNode } from '@/infrastructure';
 import { getConstraintResultsForNode } from '@/lib/draftValidation';
 import { useDraftWorkspaceStore } from '@/store/draftWorkspaceStore';
+import type { DraftNode } from '@/types/api';
 
 interface NodeCardProps {
   node: DraftNode;
@@ -119,9 +119,7 @@ export function NodeCard({
               <div
                 key={r.constraint_id}
                 className={`flex items-center gap-1.5 text-xs ${
-                  r.type === 'match'
-                    ? 'text-[var(--status-success)]'
-                    : 'text-[var(--status-error)]'
+                  r.type === 'match' ? 'text-[var(--status-success)]' : 'text-[var(--status-error)]'
                 }`}
               >
                 {r.type === 'match' ? (

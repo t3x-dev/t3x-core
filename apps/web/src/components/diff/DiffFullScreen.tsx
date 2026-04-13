@@ -13,9 +13,10 @@ import { Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { useTerminology } from '@/hooks/useTerminology';
-import { type CommitMeta, getTreeDiff } from '@/infrastructure';
+import { getTreeDiff } from '@/infrastructure';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
+import type { CommitMeta } from '@/types/api';
 import { DiffHeader } from './DiffHeader';
 import { YAMLDiff } from './YAMLDiff';
 

@@ -10,7 +10,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { getAvailableModels } from '@/infrastructure';
-import type { LLMProviderInfo } from '@/infrastructure/types';
+import type { LLMProviderInfo } from '@/types/api';
 
 interface ModelSelectorProps {
   initialProvider?: string | null;

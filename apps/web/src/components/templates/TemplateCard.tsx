@@ -14,8 +14,8 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import type { Template } from '@/infrastructure';
 import { cn } from '@/lib/utils';
+import type { Template } from '@/types/api';
 
 const LEAF_TYPE_ICONS: Record<string, React.ElementType> = {
   tweet: Hash,
@@ -28,9 +28,11 @@ const LEAF_TYPE_ICONS: Record<string, React.ElementType> = {
 
 const CATEGORY_COLORS: Record<string, string> = {
   social: 'bg-[var(--status-info)]/10 text-[var(--status-info)] border-[var(--status-info)]/20',
-  business: 'bg-[var(--status-success)]/10 text-[var(--status-success)] border-[var(--status-success)]/20',
+  business:
+    'bg-[var(--status-success)]/10 text-[var(--status-success)] border-[var(--status-success)]/20',
   technical: 'bg-[var(--source)]/10 text-[var(--source)] border-[var(--source)]/20',
-  creative: 'bg-[var(--accent-pending)]/10 text-[var(--accent-pending)] border-[var(--accent-pending)]/20',
+  creative:
+    'bg-[var(--accent-pending)]/10 text-[var(--accent-pending)] border-[var(--accent-pending)]/20',
 };
 
 interface TemplateCardProps {

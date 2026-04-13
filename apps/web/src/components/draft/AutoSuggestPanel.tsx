@@ -10,9 +10,10 @@
 import { Lightbulb, Loader2, Plus, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { type SuggestResult, suggestForDraft } from '@/infrastructure';
+import { suggestForDraft } from '@/infrastructure';
 import { cn } from '@/lib/utils';
 import { useDraftWorkspaceStore } from '@/store/draftWorkspaceStore';
+import type { SuggestResult } from '@/types/api';
 
 export function AutoSuggestPanel() {
   const draftId = useDraftWorkspaceStore((s) => s.draftId);

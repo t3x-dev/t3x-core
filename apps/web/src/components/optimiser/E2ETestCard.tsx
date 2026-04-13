@@ -12,8 +12,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { createEngineRun, type DeployAgent } from '@/infrastructure';
+import { createEngineRun } from '@/infrastructure';
 import { cn } from '@/lib/utils';
+import type { DeployAgent } from '@/types/api';
 
 /**
  * Prompt versions for E2E testing
