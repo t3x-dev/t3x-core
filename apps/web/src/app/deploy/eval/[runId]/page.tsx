@@ -42,6 +42,7 @@ import {
 import { PinButton } from '@/components/ui/PinButton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useKeyboardNavigation } from '@/hooks/useKeyboardNavigation';
+import { useProjectCrud } from '@/hooks/useProjectCrud';
 import {
   type ApiCommit,
   type EngineRun,
@@ -229,8 +230,8 @@ export default function RunDetailPage() {
   const [retuning, setRetuning] = useState(false);
   const { fetchPins, addPin, updatePinAssertions, isPinned, getPinByRef } = usePinsStore();
   const getProject = useProjectStore((s) => s.getProject);
-  const fetchProjects = useProjectStore((s) => s.fetchProjects);
   const projectsInitialized = useProjectStore((s) => s.initialized);
+  const { list: fetchProjects } = useProjectCrud();
 
   // Ensure project store is initialized (for breadcrumb project name)
   useEffect(() => {

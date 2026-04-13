@@ -6,6 +6,7 @@ import { CanvasWorkspace } from '@/components/canvas';
 import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
 import { useCanvasStore } from '@/store/canvasStore';
 import { usePinsStore } from '@/store/pinsStore';
+import { useProjectCrud } from '@/hooks/useProjectCrud';
 import { useProjectStore } from '@/store/projectStore';
 
 export default function ProjectDetailPage() {
@@ -26,6 +27,7 @@ function ProjectDetailPageContent() {
   const project = useProjectStore((state) => state.projects.find((item) => item.id === projectId));
   const projectsInitialized = useProjectStore((state) => state.initialized);
   const projectsLoading = useProjectStore((state) => state.loading);
+  const { list: fetchProjects } = useProjectCrud();
 
   // Canvas store for loading project data
   const canvasLoading = useCanvasStore((state) => state.loading);
@@ -78,9 +80,9 @@ function ProjectDetailPageContent() {
   // Fetch projects list if not initialized (handles direct URL access)
   useEffect(() => {
     if (!projectsInitialized && !projectsLoading) {
-      useProjectStore.getState().fetchProjects();
+      void fetchProjects();
     }
-  }, [projectsInitialized, projectsLoading]);
+  }, [projectsInitialized, projectsLoading, fetchProjects]);
 
   // Load project data when entering the page
   useEffect(() => {
