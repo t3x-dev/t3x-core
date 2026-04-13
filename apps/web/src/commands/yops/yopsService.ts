@@ -29,10 +29,7 @@ function assertSourcePresent(ops: readonly SourcedYOp[]): void {
   }
 }
 
-export async function commitOps(
-  conversationId: string,
-  ops: SourcedYOp[],
-): Promise<YOpsLogEntry> {
+export async function commitOps(conversationId: string, ops: SourcedYOp[]): Promise<YOpsLogEntry> {
   assertSourcePresent(ops);
   return appendYOps(conversationId, ops);
 }

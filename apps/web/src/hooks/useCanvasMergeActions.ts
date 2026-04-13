@@ -1,6 +1,6 @@
 /**
  * useCanvasMergeActions — view-facing API for two-way merge flows that
- * cross the I/O boundary (prepareMergeApi, executeMergeApi).
+ * cross the I/O boundary (@/commands/merge.prepareMerge, executeMerge).
  *
  * Per docs/frontend-architecture-v2-zh.md §2.5, async actions live in
  * hooks. The slice retains merge state + passive setters
@@ -11,9 +11,9 @@
 import type { MergeSummaryData } from '@t3x-dev/core';
 import type { Edge, Node } from '@xyflow/react';
 import { useCallback } from 'react';
+import { executeMerge, prepareMerge } from '@/commands/merge';
 import { computeMergeNodePosition } from '@/domain/canvasLayout';
 import { getTerminology } from '@/hooks/useTerminology';
-import { executeMergeApi, prepareMergeApi } from '@/queries/mergeApi';
 import { useCanvasStore } from '@/store/canvasStore';
 import { edgeStyle, edgeType } from '@/store/canvasStoreUtils';
 import { isDeveloperMode } from '@/store/shared';
@@ -41,7 +41,7 @@ export function useCanvasMergeActions() {
     useCanvasStore.getState().setMergeError(null);
 
     try {
-      const data = await prepareMergeApi(sourceHash, targetHash);
+      const data = await prepareMerge(sourceHash, targetHash);
       useCanvasStore.getState().setMergePrepared({ sourceHash, targetHash, prepared: data });
       notifyCallback?.('Merge prepared successfully', 'success');
     } catch (error) {
@@ -69,7 +69,7 @@ export function useCanvasMergeActions() {
     try {
       const targetBranch = mergeState.targetBranch || 'main';
 
-      const mergeCommit = (await executeMergeApi({
+      const mergeCommit = (await executeMerge({
         source_hash: mergeState.sourceHash,
         target_hash: mergeState.targetHash,
         prepared: mergeState.prepared,

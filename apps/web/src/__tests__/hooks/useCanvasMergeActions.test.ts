@@ -9,13 +9,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanupRoots, renderHook, waitForHook } from './renderHook';
 
-vi.mock('@/queries/mergeApi', () => ({
-  prepareMergeApi: vi.fn(),
-  executeMergeApi: vi.fn(),
+vi.mock('@/commands/merge', () => ({
+  prepareMerge: vi.fn(),
+  executeMerge: vi.fn(),
 }));
 
+import { executeMerge, prepareMerge } from '@/commands/merge';
 import { useCanvasMergeActions } from '@/hooks/useCanvasMergeActions';
-import { executeMergeApi, prepareMergeApi } from '@/queries/mergeApi';
 import { useCanvasStore } from '@/store/canvasStore';
 
 function resetStore() {
@@ -50,7 +50,7 @@ afterEach(() => {
 
 describe('useCanvasMergeActions.prepare', () => {
   it('sets mergeState via setMergePrepared on success', async () => {
-    vi.mocked(prepareMergeApi).mockResolvedValueOnce(EMPTY_PREPARED as never);
+    vi.mocked(prepareMerge).mockResolvedValueOnce(EMPTY_PREPARED as never);
 
     const { result } = renderHook(() => useCanvasMergeActions());
     await result.current.prepare('sha256:a', 'sha256:b');
@@ -66,7 +66,7 @@ describe('useCanvasMergeActions.prepare', () => {
   it('records an error and rethrows when the API rejects', async () => {
     const notify = vi.fn();
     useCanvasStore.setState({ notifyCallback: notify });
-    vi.mocked(prepareMergeApi).mockRejectedValueOnce(new Error('boom'));
+    vi.mocked(prepareMerge).mockRejectedValueOnce(new Error('boom'));
 
     const { result } = renderHook(() => useCanvasMergeActions());
     await expect(result.current.prepare('sha256:a', 'sha256:b')).rejects.toThrow('boom');
@@ -93,7 +93,7 @@ describe('useCanvasMergeActions.execute', () => {
         prepared: EMPTY_PREPARED,
       },
     });
-    vi.mocked(executeMergeApi).mockResolvedValueOnce({
+    vi.mocked(executeMerge).mockResolvedValueOnce({
       hash: 'sha256:merge',
       parents: ['sha256:src', 'sha256:tgt'],
       author: { type: 'human', name: 'User' },

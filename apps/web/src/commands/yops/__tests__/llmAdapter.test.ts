@@ -1,13 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { callExtractionLLM } from '../llmAdapter';
 
-beforeEach(() => { vi.restoreAllMocks(); });
+beforeEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe('callExtractionLLM', () => {
   it('POSTs to the extract endpoint with turns and failingOps', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
-      ok: true, status: 200,
-      json: async () => ({ ops: [{ set: { path: 'x', value: 'y' }, source: { type: 'human', author: 'test', at: '2026-04-12T00:00:00Z' } }] }),
+      ok: true,
+      status: 200,
+      json: async () => ({
+        ops: [
+          {
+            set: { path: 'x', value: 'y' },
+            source: { type: 'human', author: 'test', at: '2026-04-12T00:00:00Z' },
+          },
+        ],
+      }),
     });
     vi.stubGlobal('fetch', fetchMock);
 
@@ -27,7 +37,8 @@ describe('callExtractionLLM', () => {
 
   it('sends failing_ops when retrying', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
-      ok: true, status: 200,
+      ok: true,
+      status: 200,
       json: async () => ({ ops: [] }),
     });
     vi.stubGlobal('fetch', fetchMock);
@@ -44,14 +55,20 @@ describe('callExtractionLLM', () => {
   });
 
   it('throws on non-OK response', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: false, status: 500,
-      json: async () => ({ error: 'boom' }),
-    }));
-    await expect(callExtractionLLM({
-      conversationId: 'c1',
-      turns: [],
-      failingOps: undefined,
-    })).rejects.toThrow(/500/);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        json: async () => ({ error: 'boom' }),
+      })
+    );
+    await expect(
+      callExtractionLLM({
+        conversationId: 'c1',
+        turns: [],
+        failingOps: undefined,
+      })
+    ).rejects.toThrow(/500/);
   });
 });

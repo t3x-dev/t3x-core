@@ -2,22 +2,23 @@
 /**
  * Canary test for useCanvasDeletionWiring.
  *
- * Validates that the hook wires deleteConversationById into the canvas
+ * Validates that the hook wires deleteConversation into the canvas
  * store callback, and that the store invokes it during a remove change.
  */
 import type { Node } from '@xyflow/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanupRoots, renderHook, waitForHook } from './renderHook';
 
-vi.mock('@/queries/conversations', () => ({
-  deleteConversationById: vi.fn().mockResolvedValue(undefined),
-  fetchConversations: vi.fn().mockResolvedValue({ conversations: [], total: 0 }),
-  createConversationIn: vi.fn(),
-  updateConversationById: vi.fn(),
+vi.mock('@/commands/conversations', () => ({
+  deleteConversation: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock('@/queries/conversations', () => ({
+  fetchConversations: vi.fn().mockResolvedValue({ conversations: [], total: 0 }),
+}));
+
+import { deleteConversation } from '@/commands/conversations';
 import { useCanvasDeletionWiring } from '@/hooks/useCanvasDeletionWiring';
-import { deleteConversationById } from '@/queries/conversations';
 import { useCanvasStore } from '@/store/canvasStore';
 import type { CanvasNodeData } from '@/types/nodes';
 
@@ -55,7 +56,7 @@ afterEach(() => {
 });
 
 describe('useCanvasDeletionWiring', () => {
-  it('registers a callback that calls deleteConversationById', async () => {
+  it('registers a callback that calls deleteConversation', async () => {
     useCanvasStore.setState({ nodes: [unit('n1', 'conv_1')] });
 
     renderHook(() => useCanvasDeletionWiring());
@@ -65,6 +66,6 @@ describe('useCanvasDeletionWiring', () => {
     expect(cb).toBeTypeOf('function');
 
     cb?.('conv_xyz');
-    expect(deleteConversationById).toHaveBeenCalledWith('conv_xyz');
+    expect(deleteConversation).toHaveBeenCalledWith('conv_xyz');
   });
 });

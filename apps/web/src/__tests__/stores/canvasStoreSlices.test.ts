@@ -18,20 +18,9 @@ import { useCanvasStore } from '@/store/canvasStore';
 import type { MergeState } from '@/types/merge';
 import type { CanvasNodeData } from '@/types/nodes';
 
-// canvasLeafSlice now routes through @/queries/leaves (doc-aligned L3).
+// queries/leaves is now read-only (writes live in @/commands/leaves);
+// the slice no longer touches I/O — useCanvasLeafActions tests cover it.
 vi.mock('@/queries/leaves', () => ({
-  createLeafInProject: vi.fn().mockResolvedValue({
-    id: 'leaf_mock123',
-    commit_hash: 'sha256:abc123',
-    type: 'deploy_agent',
-    title: 'Deploy',
-    constraints: [],
-    config: {},
-    output: null,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  }),
-  deleteLeafById: vi.fn().mockResolvedValue(undefined),
   fetchLeavesByProject: vi.fn().mockResolvedValue([]),
 }));
 

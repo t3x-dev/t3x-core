@@ -8,8 +8,10 @@
 import { useCallback } from 'react';
 import {
   type BuildResult,
-  buildKnowledgeGraphFor,
-  deleteKnowledgeGraphFor,
+  buildKnowledgeGraph,
+  deleteKnowledgeGraph,
+} from '@/commands/knowledgeGraph';
+import {
   fetchKnowledgeNode,
   fetchKnowledgeNodes,
   fetchNodeNeighbors,
@@ -55,7 +57,7 @@ export function useKnowledgeGraph() {
       store.setBuilding(true);
       store.setError(null);
       try {
-        const result = await buildKnowledgeGraphFor(projectId);
+        const result = await buildKnowledgeGraph(projectId);
         store.setBuildResult(result);
         store.setBuilding(false);
         await fetchNodes(projectId);
@@ -106,7 +108,7 @@ export function useKnowledgeGraph() {
     store.setLoading(true);
     store.setError(null);
     try {
-      await deleteKnowledgeGraphFor(projectId);
+      await deleteKnowledgeGraph(projectId);
       store.clearGraph();
       store.setLoading(false);
     } catch (err) {

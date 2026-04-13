@@ -1,21 +1,11 @@
 /**
- * L3 — workbench-draft read/write pass-through.
+ * L3 — workbench-draft readers (read-only per v2 §2.3).
  *
- * Read surface (listWorkbenchDrafts, getWorkbenchDraft) consumed by
- * canvas + leaf components; write surface (create / update / preview /
- * commit) consumed by `draftWorkspaceStore`.
+ * Writes (create, update, preview, commit, fork) live in
+ * @/commands/drafts per v2 §2.4.
  */
 
-import {
-  type CreateWorkbenchDraftInput,
-  type UpdateWorkbenchDraftInput,
-  commitWorkbenchDraft,
-  createWorkbenchDraft,
-  getWorkbenchDraft,
-  listWorkbenchDrafts,
-  previewWorkbenchDraft,
-  updateWorkbenchDraft,
-} from '@/infrastructure/drafts';
+import { getWorkbenchDraft, listWorkbenchDrafts } from '@/infrastructure/drafts';
 import type { WorkbenchDraft } from '@/types/api';
 
 export function fetchWorkbenchDrafts(
@@ -28,36 +18,3 @@ export function fetchWorkbenchDrafts(
 export function fetchWorkbenchDraft(draftId: string): Promise<WorkbenchDraft> {
   return getWorkbenchDraft(draftId);
 }
-
-export function createWorkbenchDraftFor(
-  input: CreateWorkbenchDraftInput
-): Promise<WorkbenchDraft> {
-  return createWorkbenchDraft(input);
-}
-
-export function updateWorkbenchDraftById(
-  draftId: string,
-  updates: UpdateWorkbenchDraftInput
-): Promise<WorkbenchDraft> {
-  return updateWorkbenchDraft(draftId, updates);
-}
-
-export function previewWorkbenchDraftById(
-  draftId: string,
-  options?: { model?: string; preview_type?: string }
-): Promise<{ output: string; model_used: string; token_count: number; cached: boolean }> {
-  return previewWorkbenchDraft(draftId, options);
-}
-
-export function commitWorkbenchDraftById(
-  draftId: string,
-  message?: string
-): Promise<{
-  commit: Record<string, unknown>;
-  leaf: Record<string, unknown> | null;
-  draft_status: string;
-}> {
-  return commitWorkbenchDraft(draftId, message);
-}
-
-export type { CreateWorkbenchDraftInput, UpdateWorkbenchDraftInput };
