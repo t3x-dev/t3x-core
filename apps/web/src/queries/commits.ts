@@ -1,18 +1,13 @@
 /**
  * L3 — commits read pass-through (read-only per v2 §2.3).
  *
- * Writes (createCommit, persistCommitPosition, renameCommit) live in
- * @/commands/commits per v2 §2.4.
- *
- * Re-exports two pure helpers from @/infrastructure/* so slices and
- * components can format commit content without crossing infra
- * boundaries: `getSemanticContent`, `parseApiCommitAnchors`. (These
- * are pure functions, not I/O; they are eligible to move to @/domain/
- * in a follow-up cleanup.)
+ * Writes live in @/commands/commits per v2 §2.4.
+ * Pure helpers moved to @/domain/:
+ *   - parseApiCommitAnchors -> @/domain/commitAnchors
+ *   - getSemanticContent / treeSummaryText -> @/domain/commitContent
  */
 
-import { getSemanticContent, listCommits } from '@/infrastructure/commits';
-import { parseApiCommitAnchors } from '@/infrastructure/leaves';
+import { listCommits } from '@/infrastructure/commits';
 import type { ApiCommit } from '@/types/api';
 
 export function fetchCommits(
@@ -22,5 +17,3 @@ export function fetchCommits(
 ): Promise<ApiCommit[]> {
   return listCommits(projectId, branch, limit);
 }
-
-export { getSemanticContent, parseApiCommitAnchors };

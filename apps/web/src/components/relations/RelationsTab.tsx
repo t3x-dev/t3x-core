@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { getCommitRelations, type RelationType, type NodeRelation } from '@/infrastructure/relations';
+import { useCommitRelations } from '@/hooks/useCommitRelations';
 import { cn } from '@/lib/utils';
+import type { NodeRelation, RelationType } from '@/types/api';
 import { RelationsGraph } from './RelationsGraph';
 import { RelationsList } from './RelationsList';
 
@@ -13,32 +14,27 @@ interface RelationsTabProps {
   nodes: Array<{ id: string; text: string }>;
 }
 
-const ALL_TYPES: RelationType[] = [
-  'causes',
-  'conditions',
-  'contrasts',
-  'follows',
-  'depends',
-];
+const ALL_TYPES: RelationType[] = ['causes', 'conditions', 'contrasts', 'follows', 'depends'];
 
 export function RelationsTab({ commitHash, nodes }: RelationsTabProps) {
   const [relations, setRelations] = useState<NodeRelation[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [typeFilters, setTypeFilters] = useState<Set<RelationType>>(() => new Set(ALL_TYPES));
+  const { loadRelations } = useCommitRelations();
   const fetchRelations = useCallback(async () => {
     if (!commitHash) return;
     setLoading(true);
     setError(null);
     try {
-      const data = await getCommitRelations(commitHash);
+      const data = await loadRelations(commitHash);
       setRelations(data.relations);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load relations');
     } finally {
       setLoading(false);
     }
-  }, [commitHash]);
+  }, [commitHash, loadRelations]);
 
   useEffect(() => {
     fetchRelations();
@@ -46,10 +42,7 @@ export function RelationsTab({ commitHash, nodes }: RelationsTabProps) {
 
   // Filtered relations
   const filtered = useMemo(
-    () =>
-      relations.filter(
-        (r) => typeFilters.has(r.type)
-      ),
+    () => relations.filter((r) => typeFilters.has(r.type)),
     [relations, typeFilters]
   );
 
@@ -113,7 +106,6 @@ export function RelationsTab({ commitHash, nodes }: RelationsTabProps) {
               </label>
             ))}
           </div>
-
         </div>
       )}
 

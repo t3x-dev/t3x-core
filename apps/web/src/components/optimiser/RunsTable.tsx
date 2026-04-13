@@ -14,10 +14,10 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import type { DeployAgent, EngineRun } from '@/infrastructure';
 import { cn } from '@/lib/utils';
 import { useOptimiserStore } from '@/store/optimiserStore';
 import { useProjectStore } from '@/store/projectStore';
+import type { DeployAgent, EngineRun } from '@/types/api';
 
 interface RunsTableProps {
   runs: EngineRun[];
@@ -118,23 +118,28 @@ function getStatusBadge(status: EngineRun['status'], passed: boolean | null) {
   // Otherwise show status with icon
   const variants: Record<string, { className: string; icon: React.ReactNode }> = {
     queued: {
-      className: 'border-[var(--stroke-divider)] bg-[var(--color-bg-subtle)] text-[var(--color-text-secondary)]',
+      className:
+        'border-[var(--stroke-divider)] bg-[var(--color-bg-subtle)] text-[var(--color-text-secondary)]',
       icon: <Clock className="h-3 w-3" />,
     },
     running: {
-      className: 'border-[var(--status-info)]/30 bg-[var(--status-info)]/10 text-[var(--status-info)]',
+      className:
+        'border-[var(--status-info)]/30 bg-[var(--status-info)]/10 text-[var(--status-info)]',
       icon: <Loader2 className="h-3 w-3 animate-spin" />,
     },
     completed: {
-      className: 'border-[var(--status-success)]/30 bg-[var(--status-success)]/10 text-[var(--status-success)]',
+      className:
+        'border-[var(--status-success)]/30 bg-[var(--status-success)]/10 text-[var(--status-success)]',
       icon: <Check className="h-3 w-3" />,
     },
     failed: {
-      className: 'border-[var(--status-error)]/30 bg-[var(--status-error)]/10 text-[var(--status-error)]',
+      className:
+        'border-[var(--status-error)]/30 bg-[var(--status-error)]/10 text-[var(--status-error)]',
       icon: <X className="h-3 w-3" />,
     },
     timeout: {
-      className: 'border-[var(--status-warning)]/30 bg-[var(--status-warning)]/10 text-[var(--status-warning)]',
+      className:
+        'border-[var(--status-warning)]/30 bg-[var(--status-warning)]/10 text-[var(--status-warning)]',
       icon: <Clock className="h-3 w-3" />,
     },
   };

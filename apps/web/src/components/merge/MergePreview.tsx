@@ -20,21 +20,14 @@ interface MergePreviewProps {
 
 export function MergePreview({ expanded, onToggle }: MergePreviewProps) {
   const { t } = useTerminology();
-  const {
-    treeMergeResult,
-    treeResolutions,
-    keepSourceNodes,
-    keepTargetNodes,
-    getPreviewPaths,
-  } = useMergeWorkspaceStore();
+  const { treeMergeResult, treeResolutions, keepSourceNodes, keepTargetNodes, getPreviewPaths } =
+    useMergeWorkspaceStore();
 
   if (!treeMergeResult) return null;
 
   const previewPaths = getPreviewPaths();
   const autoKeptCount = treeMergeResult.autoKept.length;
-  const resolvedCount = treeMergeResult.conflicts.filter((c) =>
-    treeResolutions.has(c.path)
-  ).length;
+  const resolvedCount = treeMergeResult.conflicts.filter((c) => treeResolutions.has(c.path)).length;
   const keptSourceCount = treeMergeResult.onlyInSource.filter((path) =>
     keepSourceNodes.has(path)
   ).length;

@@ -10,9 +10,10 @@
 import { Lightbulb, Loader2, Plus, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { type SuggestResult, suggestForDraft } from '@/infrastructure';
+import { useSuggestForDraft } from '@/hooks/useSuggestForDraft';
 import { cn } from '@/lib/utils';
 import { useDraftWorkspaceStore } from '@/store/draftWorkspaceStore';
+import type { SuggestResult } from '@/types/api';
 
 export function AutoSuggestPanel() {
   const draftId = useDraftWorkspaceStore((s) => s.draftId);
@@ -24,6 +25,7 @@ export function AutoSuggestPanel() {
   const [error, setError] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { loadSuggestions } = useSuggestForDraft();
 
   const goal = draft?.goal;
 
@@ -37,7 +39,7 @@ export function AutoSuggestPanel() {
     setError(null);
 
     try {
-      const results = await suggestForDraft(draftId, 10);
+      const results = await loadSuggestions(draftId, 10);
       setSuggestions(results);
     } catch (err) {
       if (err instanceof Error && err.message.includes('501')) {
@@ -49,7 +51,7 @@ export function AutoSuggestPanel() {
     } finally {
       setLoading(false);
     }
-  }, [draftId, goal]);
+  }, [draftId, goal, loadSuggestions]);
 
   // Fetch on mount + debounce on goal change
   useEffect(() => {

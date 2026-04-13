@@ -17,14 +17,10 @@ import { useCallback, useEffect, useState } from 'react';
 import { relativeTime, shortHash } from '@/components/commit/CommitDetailHelpers';
 import { Breadcrumb } from '@/components/shared/Breadcrumb';
 import { TreeGraphView } from '@/components/tree-graph';
+import { useCommitByHash } from '@/hooks/useCommitByHash';
 import { useMergeWorkspaceActions } from '@/hooks/useMergeWorkspaceActions';
-import {
-  type ApiCommit,
-  type CommitMeta,
-  type DiffResponse,
-  getApiCommit,
-  getTreeDiff,
-} from '@/infrastructure';
+import { useTreeDiff } from '@/hooks/useTreeDiff';
+import type { ApiCommit, CommitMeta, DiffResponse } from '@/types/api';
 import { PAGE_ANIMATION_STYLES } from '@/lib/pageAnimations';
 import { useProjectStore } from '@/store/projectStore';
 import { TreeDiffIndex } from './DiffIndex';
@@ -205,6 +201,8 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
   const [showIdentical, setShowIdentical] = useState(false);
   const [viewMode, setViewMode] = useState<'split' | 'unified'>('split');
   const [baseCommit, setBaseCommit] = useState<ApiCommit | null>(null);
+  const { loadCommit } = useCommitByHash();
+  const { loadDiff } = useTreeDiff();
 
   // Project name for breadcrumb
   const getProject = useProjectStore((s) => s.getProject);
@@ -217,9 +215,9 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
     setError(null);
 
     Promise.all([
-      getTreeDiff(baseHash, targetHash),
-      getApiCommit(targetHash),
-      getApiCommit(baseHash),
+      loadDiff(baseHash, targetHash),
+      loadCommit(targetHash),
+      loadCommit(baseHash),
     ])
       .then(([diffResp, tgtCommit, baseCommitData]) => {
         if (cancelled) return;
@@ -238,7 +236,7 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
     return () => {
       cancelled = true;
     };
-  }, [baseHash, targetHash]);
+  }, [baseHash, targetHash, loadCommit, loadDiff]);
 
   // Handlers
   const handleBack = useCallback(() => {

@@ -10,6 +10,8 @@ import { cleanupRoots, renderHook, waitForHook } from './renderHook';
 
 vi.mock('@/queries/commits', () => ({
   fetchCommits: vi.fn(),
+}));
+vi.mock('@/domain/commitAnchors', () => ({
   parseApiCommitAnchors: vi.fn(() => null),
 }));
 vi.mock('@/queries/conversations', () => ({

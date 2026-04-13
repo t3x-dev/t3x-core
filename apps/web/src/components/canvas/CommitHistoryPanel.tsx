@@ -13,10 +13,10 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
+import { useCommitHistory } from '@/hooks/useCommitHistory';
 import { useTerminology } from '@/hooks/useTerminology';
+import { useTreeDiff } from '@/hooks/useTreeDiff';
 import { cn } from '@/lib/utils';
-import { fetchCommitHistory } from '@/queries/commitHistory';
-import { fetchTreeDiff } from '@/queries/treeDiff';
 import type { ApiCommit } from '@/types/api';
 
 // Helper functions (module-scope so CommitHistoryRow can use them)
@@ -138,9 +138,10 @@ export function CommitHistoryPanel({
   projectId,
 }: CommitHistoryPanelProps) {
   const { t } = useTerminology();
-  const [history, setHistory] = useState<ApiCommit[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { history, loading, error } = useCommitHistory(commitHash, {
+    enabled: open && !!commitHash,
+    limit: 100,
+  });
   const [selectedHash, setSelectedHash] = useState<string | null>(null);
 
   // Diff state
@@ -150,35 +151,16 @@ export function CommitHistoryPanel({
   const [diffLoading, setDiffLoading] = useState(false);
   const [diffError, setDiffError] = useState<string | null>(null);
   const [showDiffFullScreen, setShowDiffFullScreen] = useState(false);
+  const { loadDiff } = useTreeDiff();
 
+  // Reset selection + diff state when panel closes or commit changes.
   useEffect(() => {
     if (!open || !commitHash) {
-      setHistory([]);
       setSelectedHash(null);
       setDiffData(null);
       setDiffBaseHash(null);
       setDiffTargetHash(null);
-      return;
     }
-
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-
-    fetchCommitHistory(commitHash, 100)
-      .then((data) => {
-        if (!cancelled) setHistory(data);
-      })
-      .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load history');
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
   }, [open, commitHash]);
 
   const handleRowClick = useCallback(
@@ -206,7 +188,7 @@ export function CommitHistoryPanel({
       setDiffTargetHash(hash);
 
       try {
-        const response = await fetchTreeDiff(parentHash, hash);
+        const response = await loadDiff(parentHash, hash);
         setDiffData(response.diff);
       } catch (err) {
         setDiffError(err instanceof Error ? err.message : 'Failed to load diff');
@@ -214,7 +196,7 @@ export function CommitHistoryPanel({
         setDiffLoading(false);
       }
     },
-    [history, onSelectCommit]
+    [history, onSelectCommit, loadDiff]
   );
 
   return (

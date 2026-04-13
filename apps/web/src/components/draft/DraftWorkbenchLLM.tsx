@@ -3,8 +3,8 @@
 import { useCallback } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import type { SemanticPointAPI } from '@/infrastructure';
-import { reviewAction } from '@/infrastructure';
+import { useReviewAction } from '@/hooks/useReviewAction';
+import type { SemanticPointAPI } from '@/types/api';
 import { ExtractButton } from './ExtractButton';
 import { ReadyZone } from './ReadyZone';
 import { ReviewZone } from './ReviewZone';
@@ -30,17 +30,18 @@ export function DraftWorkbenchLLM({
 }: DraftWorkbenchLLMProps) {
   const readyPoints = semanticPoints.filter((p) => p.zone === 'ready');
   const reviewPoints = semanticPoints.filter((p) => p.zone === 'review');
+  const { submit: submitReviewAction } = useReviewAction();
 
   const callReviewAction = useCallback(
     async (spId: string, action: 'accept' | 'dismiss' | 'undo' | 'edit', editedText?: string) => {
       try {
-        const result = await reviewAction(draftId, spId, action, editedText);
+        const result = await submitReviewAction(draftId, spId, action, editedText);
         onUpdate(result.semantic_points);
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Review action failed');
       }
     },
-    [draftId, onUpdate]
+    [draftId, onUpdate, submitReviewAction]
   );
 
   const handleUndo = useCallback((id: string) => callReviewAction(id, 'undo'), [callReviewAction]);

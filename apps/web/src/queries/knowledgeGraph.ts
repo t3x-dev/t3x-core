@@ -5,14 +5,12 @@
  */
 
 import {
-  type BuildResult,
   getKnowledgeNode,
   getNodeNeighbors,
-  type KnowledgeNode,
   listKnowledgeNodes,
-  type NeighborNode,
   searchKnowledgeNodes,
 } from '@/infrastructure/knowledge-graph';
+import type { BuildResult, KnowledgeNode, NeighborNode } from '@/types/knowledgeGraph';
 
 export function fetchKnowledgeNodes(projectId: string, limit = 50): Promise<KnowledgeNode[]> {
   return listKnowledgeNodes(projectId, limit);

@@ -18,8 +18,11 @@
  *   forbids `@/commands/**` from non-exempt paths, and `lib/` is
  *   intentionally not exempted (it should not become a back-door for
  *   business logic). For multi-aggregate fire-and-forget writes (commit
- *   position + conversation position), reaching the L1 adapter directly
- *   matches the precedent set by `lib/retune.ts`.
+ *   position + conversation position) this is the cleanest option.
+ *   (Re-tune, which used to live here as a cross-aggregate lib helper,
+ *   has since moved to hooks/useRetuneSession because it's consumed
+ *   from React code; the same refactor isn't worthwhile for the drag
+ *   debouncer which deliberately survives React remounts.)
  */
 
 import { updateCommitPosition } from '@/infrastructure/commits';

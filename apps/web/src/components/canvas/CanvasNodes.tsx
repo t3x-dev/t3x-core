@@ -25,16 +25,15 @@ import { useCanvasCommitActions } from '@/hooks/useCanvasCommitActions';
 import { useCanvasLeafActions } from '@/hooks/useCanvasLeafActions';
 import { useCanvasNodeActions } from '@/hooks/useCanvasNodeActions';
 import { leafContextMenuHandlerRef } from '@/hooks/useContextMenu';
+import { useConversationContext } from '@/hooks/useConversationContext';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useTerminology } from '@/hooks/useTerminology';
 import { nodeEnter, reducedMotion } from '@/lib/motion';
 import { glass, toneAccent, toneGlow } from '@/lib/theme';
 import { cn } from '@/lib/utils';
-import { fetchConversationContext } from '@/queries/conversationContext';
 import { useCanvasStore } from '@/store/canvasStore';
 import { usePinsStore } from '@/store/pinsStore';
 import { useProjectStore } from '@/store/projectStore';
-import type { ConversationContext } from '@/types/api';
 import type { CanvasNodeData, EmbeddedLeaf } from '@/types/nodes';
 
 import { constellationColors, getToneAccentKey, useSemanticZoom } from './CanvasNodeUtils';
@@ -110,23 +109,10 @@ const UnitNode = memo(function UnitNode(props: Props) {
   // Pin store
   const { isPinned } = usePinsStore();
 
-  // Context config state
-  const [contextConfig, setContextConfig] = useState<ConversationContext | null>(null);
-
-  // Fetch context config on mount (skip virtual orphan conversations)
-  useEffect(() => {
-    if (!data.conversationId || data.conversationId.startsWith('orphan-')) return;
-
-    let cancelled = false;
-    fetchConversationContext(data.conversationId)
-      .then((ctx) => {
-        if (!cancelled) setContextConfig(ctx);
-      })
-      .catch(() => {}); // Silent fail - context indicator just won't show
-    return () => {
-      cancelled = true;
-    };
-  }, [data.conversationId]);
+  // Context config — loaded per-conversation (skipped for virtual orphan conversations)
+  const { contextConfig } = useConversationContext(data.conversationId, {
+    enabled: !!data.conversationId && !data.conversationId.startsWith('orphan-'),
+  });
 
   // Context label helper
   const getContextLabel = (): string | null => {

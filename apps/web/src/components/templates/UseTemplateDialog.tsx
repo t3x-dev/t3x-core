@@ -16,9 +16,11 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useCommitsList } from '@/hooks/useCommitsList';
+import { useCreateLeaf } from '@/hooks/useCreateLeaf';
+import { useProjectsList } from '@/hooks/useProjectsList';
 import { useTerminology } from '@/hooks/useTerminology';
-import type { ApiCommit, LeafType, Project, Template } from '@/infrastructure';
-import { createLeaf, listCommits, listProjects } from '@/infrastructure';
+import type { ApiCommit, LeafType, Project, Template } from '@/types/api';
 
 interface UseTemplateDialogProps {
   template: Template | null;
@@ -37,6 +39,9 @@ export function UseTemplateDialog({ template, open, onOpenChange }: UseTemplateD
   const [isCreating, setIsCreating] = useState(false);
   const [loadingProjects, setLoadingProjects] = useState(false);
   const [loadingCommits, setLoadingCommits] = useState(false);
+  const { loadProjects } = useProjectsList();
+  const { loadCommits } = useCommitsList();
+  const { create: createLeaf } = useCreateLeaf();
 
   // Reset state when dialog closes
   useEffect(() => {
@@ -52,11 +57,11 @@ export function UseTemplateDialog({ template, open, onOpenChange }: UseTemplateD
   useEffect(() => {
     if (!open) return;
     setLoadingProjects(true);
-    listProjects()
+    loadProjects()
       .then((data) => setProjects(data.projects))
       .catch(() => toast.error('Failed to load projects'))
       .finally(() => setLoadingProjects(false));
-  }, [open]);
+  }, [open, loadProjects]);
 
   // Load commits when project changes
   useEffect(() => {
@@ -67,7 +72,7 @@ export function UseTemplateDialog({ template, open, onOpenChange }: UseTemplateD
     }
     let cancelled = false;
     setLoadingCommits(true);
-    listCommits(selectedProjectId)
+    loadCommits(selectedProjectId)
       .then((c) => {
         if (!cancelled) {
           setCommits(c);
@@ -83,7 +88,7 @@ export function UseTemplateDialog({ template, open, onOpenChange }: UseTemplateD
     return () => {
       cancelled = true;
     };
-  }, [selectedProjectId]);
+  }, [selectedProjectId, loadCommits]);
 
   // Pre-fill title from template
   useEffect(() => {

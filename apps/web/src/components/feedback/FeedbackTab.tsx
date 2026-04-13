@@ -9,14 +9,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import type { Project } from '@/infrastructure';
-import { listProjects } from '@/infrastructure';
-import type { CosineBucket, FeedbackStats } from '@/infrastructure/extraction-feedback';
-import {
-  getExtractionFeedbackStats,
-  getFeedbackCosineBuckets,
-} from '@/infrastructure/extraction-feedback';
-import { listLeavesByProject } from '@/infrastructure/leaves';
+import { useFeedbackStats } from '@/hooks/useFeedbackStats';
+import { useLeavesByProject } from '@/hooks/useLeavesByProject';
+import { useProjectsList } from '@/hooks/useProjectsList';
+import type { CosineBucket, FeedbackStats, Project } from '@/types/api';
 import { ConfidenceBucketChart } from './ConfidenceBucketChart';
 import { FeedbackByTypeTable } from './FeedbackByTypeTable';
 import { FeedbackOverview } from './FeedbackOverview';
@@ -28,19 +24,21 @@ export function FeedbackTab() {
   const [buckets, setBuckets] = useState<CosineBucket[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { loadProjects } = useProjectsList();
+  const { loadStats, loadCosineBuckets } = useFeedbackStats();
 
   // Load projects on mount
   useEffect(() => {
-    async function loadProjects() {
+    async function load() {
       try {
-        const data = await listProjects(50, 0);
+        const data = await loadProjects(50, 0);
         setProjects(data.projects);
       } catch {
         setError('Failed to load projects.');
       }
     }
-    loadProjects();
-  }, []);
+    load();
+  }, [loadProjects]);
 
   // Fetch feedback data when project is selected
   useEffect(() => {
@@ -56,8 +54,8 @@ export function FeedbackTab() {
       setError(null);
       try {
         const [statsData, bucketsData] = await Promise.all([
-          getExtractionFeedbackStats(selectedProjectId!),
-          getFeedbackCosineBuckets(selectedProjectId!),
+          loadStats(selectedProjectId!),
+          loadCosineBuckets(selectedProjectId!),
         ]);
         if (!cancelled) {
           setStats(statsData);
@@ -77,7 +75,7 @@ export function FeedbackTab() {
     return () => {
       cancelled = true;
     };
-  }, [selectedProjectId]);
+  }, [selectedProjectId, loadStats, loadCosineBuckets]);
 
   return (
     <div className="space-y-6">
@@ -146,12 +144,13 @@ function LessonsSection({ projectId }: { projectId: string }) {
     Array<{ lesson: string; count: number; lastSeen: string }>
   >([]);
   const [loading, setLoading] = useState(true);
+  const { loadLeaves } = useLeavesByProject();
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const leaves = await listLeavesByProject(projectId);
+        const leaves = await loadLeaves(projectId);
         const lessonMap = new Map<string, { count: number; lastSeen: string }>();
         for (const leaf of leaves) {
           for (const a of leaf.assertions ?? []) {
@@ -188,7 +187,7 @@ function LessonsSection({ projectId }: { projectId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [projectId]);
+  }, [projectId, loadLeaves]);
 
   if (loading) {
     return <div className="py-4 text-center text-sm text-muted-foreground">Loading lessons...</div>;

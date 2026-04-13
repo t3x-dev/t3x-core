@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useTerminology } from '@/hooks/useTerminology';
-import type { CreateWebhookInput, UpdateWebhookInput, WebhookData } from '@/infrastructure';
+import type { CreateWebhookInput, UpdateWebhookInput, WebhookData } from '@/types/api';
 
 const WEBHOOK_EVENTS = [
   { value: 'commit.created', label: 'Commit Created', description: 'When a new commit is created' },
@@ -156,7 +156,9 @@ export function WebhookForm({ webhook, onSubmit, onCancel, loading = false }: We
             </label>
           ))}
         </div>
-        {events.length === 0 && <p className="text-xs text-[var(--status-error)]">Select at least one event.</p>}
+        {events.length === 0 && (
+          <p className="text-xs text-[var(--status-error)]">Select at least one event.</p>
+        )}
       </div>
 
       {/* Secret */}

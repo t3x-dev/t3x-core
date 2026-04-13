@@ -36,7 +36,7 @@
 import { ChevronDown, ChevronUp, Loader2, MessageCircle } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
-import { fetchTurnContextCached } from '@/infrastructure';
+import { useTurnContext } from '@/hooks/useTurnContext';
 import { truncateWithHighlights } from '@/lib/truncationUtils';
 import type { TurnContextData, WordDiffSegment } from '@/types/merge';
 import type { HighlightColor, HighlightRange } from '@/types/sourceContext';
@@ -135,6 +135,7 @@ export function SourceContextView({
 
   // Local expand state
   const [expanded, setExpanded] = useState(mode === 'expanded');
+  const { loadTurnContext } = useTurnContext();
 
   // Use external or internal state
   const contextData = externalData !== undefined ? externalData : internalData;
@@ -149,7 +150,7 @@ export function SourceContextView({
     setInternalError(undefined);
 
     try {
-      const data = await fetchTurnContextCached(turnHash, {
+      const data = await loadTurnContext(turnHash, {
         before: 0,
         after: 0,
         highlightStart,
@@ -161,7 +162,7 @@ export function SourceContextView({
     } finally {
       setInternalLoading(false);
     }
-  }, [turnHash, autoFetch, externalData, highlightStart, highlightEnd]);
+  }, [turnHash, autoFetch, externalData, highlightStart, highlightEnd, loadTurnContext]);
 
   useEffect(() => {
     fetchContext();

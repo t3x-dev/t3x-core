@@ -9,12 +9,11 @@
  * colored border + reduced opacity on non-source turns.
  */
 
-;
 import { ChevronRight, ExternalLink, MessageSquare, X } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { TurnBubble } from '@/components/source-context/TurnBubble';
-import { fetchTurns } from '@/queries/turns';
+import { useTurnsList } from '@/hooks/useTurnsList';
 import { useCommitDetailStore } from '@/store/commitDetailStore';
 import type { TurnBubbleData } from '@/types/sourceContext';
 
@@ -66,7 +65,12 @@ function getSlotSource(
 ): { turn_hash?: string; turn?: string; start_char?: number; end_char?: number } | undefined {
   if (!slotKey) return undefined;
   const targetNode = (_activeTab === 'previous' ? _previousNode : _node) as
-    | { slot_sources?: Record<string, { turn_hash?: string; turn?: string; start_char?: number; end_char?: number }> }
+    | {
+        slot_sources?: Record<
+          string,
+          { turn_hash?: string; turn?: string; start_char?: number; end_char?: number }
+        >;
+      }
     | undefined;
   return targetNode?.slot_sources?.[slotKey];
 }
@@ -156,6 +160,7 @@ function TabToggle({
 export function SourceSlideIn({ projectId }: SourceSlideInProps) {
   const { commit, enrichedNodes, activeNodeId, sourceViewer, closeSourceViewer, setSourceTab } =
     useCommitDetailStore();
+  const { loadTurns: fetchConvTurns } = useTurnsList();
 
   const { isOpen, activeSlotKey, activeTab } = sourceViewer;
 
@@ -192,7 +197,7 @@ export function SourceSlideIn({ projectId }: SourceSlideInProps) {
       setLoading(true);
       setError(null);
       try {
-        const data = await fetchTurns(projectId, convId, { limit: 200, offset: 0 });
+        const data = await fetchConvTurns(projectId, convId, { limit: 200, offset: 0 });
         setTurns(
           data.turns.map((t) => ({
             turn_hash: t.turn_hash,
@@ -210,7 +215,7 @@ export function SourceSlideIn({ projectId }: SourceSlideInProps) {
         setLoading(false);
       }
     },
-    [projectId]
+    [projectId, fetchConvTurns]
   );
 
   // Resolve conversation ID from commit sources when panel opens

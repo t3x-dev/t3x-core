@@ -4,7 +4,7 @@ import { ChevronDown, ChevronRight, ExternalLink, Quote } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
-import type { LocatedEvidenceAPI } from '@/infrastructure';
+import type { LocatedEvidenceAPI } from '@/types/api';
 
 interface EvidenceDisplayProps {
   evidence: LocatedEvidenceAPI[];

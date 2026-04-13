@@ -19,8 +19,8 @@ import {
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { TreeGraphView } from '@/components/tree-graph';
 import { RelationsTab } from '@/components/relations/RelationsTab';
+import { TreeGraphView } from '@/components/tree-graph';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -30,13 +30,13 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { getSemanticContent } from '@/domain/commitContent';
 import { useTerminology } from '@/hooks/useTerminology';
 import { type CommitExportFormat, exportCommit } from '@/lib/exportCommit';
 import { glass, toneAccent } from '@/lib/theme';
 import { cn } from '@/lib/utils';
-import { getSemanticContent } from '@/queries/commits';
-import type { ApiCommit } from '@/types/api';
 import { useCanvasStore } from '@/store/canvasStore';
+import type { ApiCommit } from '@/types/api';
 import type { CanvasNodeData, CommitDisplay } from '@/types/nodes';
 import { CommitHistoryPanel } from '../CommitHistoryPanel';
 import type { NodeQuickAction } from './NodeModal';

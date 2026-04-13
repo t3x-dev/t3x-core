@@ -142,57 +142,21 @@ export interface SourceRef {
 }
 
 // ============================================================================
-// Anchor Types for Commits (snake_case API format)
+// Anchor Types — re-export from @/types/anchors (canonical home).
+// Pre-existing infra consumers keep working; new code should import
+// directly from @/types/anchors. Parsers live in @/domain/commitAnchors.
 // ============================================================================
 
-/** Anchor constraint type (snake_case to match API v1.1 output) */
-export type ApiAnchorConstraint = 'must_have' | 'mustnt_have' | 'preferred';
+import type { ApiCommitAnchors } from '@/types/anchors';
 
-/** Anchor type */
-export type ApiAnchorType =
-  | 'number'
-  | 'money'
-  | 'duration'
-  | 'percent'
-  | 'date'
-  | 'entity'
-  | 'term'
-  | 'phrase'
-  // Tree extraction anchor types
-  | 'verbatim'
-  | 'paraphrase'
-  | 'inference';
-
-/** Confirmed anchor (snake_case API format) */
-export interface ApiConfirmedAnchor {
-  id: string;
-  text: string;
-  /** Relative position within node (for API storage) */
-  start: number;
-  /** Relative position within node (for API storage) */
-  end: number;
-  type: ApiAnchorType;
-  constraint: ApiAnchorConstraint;
-  /** Optional: Pre-computed global start position (NOT from API, computed in UI layer during parsing) */
-  global_start?: number;
-  /** Optional: Pre-computed global end position (NOT from API, computed in UI layer during parsing) */
-  global_end?: number;
-}
-
-/** ContentNode with anchors (snake_case API format) */
-export interface ApiNodeWithAnchors {
-  node_id: string;
-  text: string;
-  start_char: number;
-  end_char: number;
-  anchors: ApiConfirmedAnchor[];
-}
-
-/** Commit-level anchor storage (snake_case API format) */
-export interface ApiCommitAnchors {
-  input_text_hash: string;
-  nodes: ApiNodeWithAnchors[];
-}
+export type {
+  ApiAnchorCandidate,
+  ApiAnchorConstraint,
+  ApiAnchorType,
+  ApiCommitAnchors,
+  ApiConfirmedAnchor,
+  ApiNodeWithAnchors,
+} from '@/types/anchors';
 
 // ============================================================================
 // Commit types (V2/legacy)

@@ -20,8 +20,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { type Conversation, extractToDraft, listConversations } from '@/infrastructure';
+import { useConversationsList } from '@/hooks/useConversationsList';
+import { useExtractFromConversation } from '@/hooks/useExtractFromConversation';
 import { cn } from '@/lib/utils';
+import type { Conversation } from '@/types/api';
 
 interface ExtractConversationDialogProps {
   open: boolean;
@@ -42,6 +44,8 @@ export function ExtractConversationDialog({
   const [loading, setLoading] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [extracting, setExtracting] = useState(false);
+  const { loadConversations } = useConversationsList();
+  const { extract: extractFromConversation } = useExtractFromConversation();
 
   // Load conversations when dialog opens
   useEffect(() => {
@@ -51,7 +55,7 @@ export function ExtractConversationDialog({
     setLoading(true);
     setSelectedId(null);
 
-    listConversations(projectId)
+    loadConversations(projectId)
       .then((data) => {
         if (!cancelled) setConversations(data.conversations);
       })
@@ -65,13 +69,13 @@ export function ExtractConversationDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, projectId]);
+  }, [open, projectId, loadConversations]);
 
   const handleExtract = useCallback(async () => {
     if (!selectedId) return;
     setExtracting(true);
     try {
-      const result = await extractToDraft(draftId, selectedId);
+      const result = await extractFromConversation(draftId, selectedId);
       toast.success(`Added ${result.added_count} nodes to draft`);
       onExtracted();
       onOpenChange(false);
@@ -80,7 +84,7 @@ export function ExtractConversationDialog({
     } finally {
       setExtracting(false);
     }
-  }, [draftId, selectedId, onExtracted, onOpenChange]);
+  }, [draftId, selectedId, onExtracted, onOpenChange, extractFromConversation]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

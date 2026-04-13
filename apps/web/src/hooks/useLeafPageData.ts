@@ -13,10 +13,10 @@ import {
   validateLeafOutput,
 } from '@/infrastructure';
 import { type ExportFormat, exportLeaf } from '@/lib/export';
-import { createRetuneSession } from '@/lib/retune';
-import { usePinsCrud } from './usePinsCrud';
 import { usePinsStore } from '@/store/pinsStore';
 import type { NodeWithSource } from '@/types/sourceContext';
+import { usePinsCrud } from './usePinsCrud';
+import { useRetuneSession } from './useRetuneSession';
 
 // ── ContentNode coverage types ──
 
@@ -197,6 +197,7 @@ export function useLeafPageData(projectId: string, leafId: string): UseLeafPageD
   const getPinByRef = usePinsStore((s) => s.getPinByRef);
   const invalidatePins = usePinsStore((s) => s.invalidatePins);
   const { fetch: fetchPins } = usePinsCrud();
+  const { createSession: createRetuneSession } = useRetuneSession();
   const leafPinned = isPinned('leaf', leafId);
   const existingPin = getPinByRef('leaf', leafId);
 

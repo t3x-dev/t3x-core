@@ -2,7 +2,7 @@
 
 import { CheckCircle, Lock } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import type { SemanticPointAPI } from '@/infrastructure';
+import type { SemanticPointAPI } from '@/types/api';
 import { SemanticPointCard } from './SemanticPointCard';
 
 interface ReadyZoneProps {
@@ -44,7 +44,10 @@ export function ReadyZone({ points, onUndo }: ReadyZoneProps) {
       {autoLanded.length > 0 && (
         <div className="space-y-1.5">
           <div className="flex items-center gap-1 text-xs text-muted-foreground">
-            <CheckCircle className="h-3 w-3 text-[var(--status-success)]" aria-label="Auto-landed" />
+            <CheckCircle
+              className="h-3 w-3 text-[var(--status-success)]"
+              aria-label="Auto-landed"
+            />
             <span>Auto-Landed</span>
           </div>
           {autoLanded.map((p) => (

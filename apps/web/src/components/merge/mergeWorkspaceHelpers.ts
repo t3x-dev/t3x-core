@@ -60,12 +60,8 @@ export function buildMergedContent(
     const resolution = resolutions.get(conflict.path);
     if (!resolution) continue;
 
-    const sourceNode = sourceContent
-      ? findNodeByPath(sourceContent.trees, conflict.path)
-      : null;
-    const targetNode = targetContent
-      ? findNodeByPath(targetContent.trees, conflict.path)
-      : null;
+    const sourceNode = sourceContent ? findNodeByPath(sourceContent.trees, conflict.path) : null;
+    const targetNode = targetContent ? findNodeByPath(targetContent.trees, conflict.path) : null;
 
     switch (resolution.type) {
       case 'source':

@@ -1,5 +1,5 @@
 import type { Edge, Node } from '@xyflow/react';
-import { parseApiCommitAnchors } from '@/queries/commits';
+import { parseApiCommitAnchors } from '@/domain/commitAnchors';
 import type { ApiCommit, Commit, Conversation } from '@/types/api';
 import type { CanvasNodeData, NodeKind } from '../types/nodes';
 import type { CanvasState, CommitTone, DraftBranchMode } from './canvasStoreTypes';
@@ -496,9 +496,13 @@ export const unitToNode = (
       // Conversation data
       conversationId: conv.conversation_id,
       // Import source badge
-      importSource: (conv.metadata as { import?: { source_type?: string; platform?: string } } | null)?.import
+      importSource: (
+        conv.metadata as { import?: { source_type?: string; platform?: string } } | null
+      )?.import
         ? {
-            source_type: (conv.metadata as { import: { source_type: 'url' | 'document' | 'platform' } }).import.source_type,
+            source_type: (
+              conv.metadata as { import: { source_type: 'url' | 'document' | 'platform' } }
+            ).import.source_type,
             platform: (conv.metadata as { import: { platform?: string } }).import.platform,
           }
         : undefined,
@@ -516,9 +520,7 @@ export const unitToNode = (
       // Turn window for creating child commits
       sourceTurnWindow: commit?.turn_window ?? undefined,
       // v1.1: Confirmed anchors (convert snake_case API format to camelCase)
-      anchors: commit?.anchors
-        ? (parseApiCommitAnchors(commit.anchors) ?? undefined)
-        : undefined,
+      anchors: commit?.anchors ? (parseApiCommitAnchors(commit.anchors) ?? undefined) : undefined,
       // Commit data for source context display (tree-based)
       commit: originalCommit
         ? {

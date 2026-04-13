@@ -16,9 +16,9 @@ import type { CommitWithLeaves } from '@/hooks/useBranchCommits';
 import { useBranchCommits } from '@/hooks/useBranchCommits';
 import { usePinsCrud } from '@/hooks/usePinsCrud';
 import { useTerminology } from '@/hooks/useTerminology';
-import type { Assertion, Leaf } from '@/infrastructure';
 import { cn } from '@/lib/utils';
 import { usePinsStore } from '@/store/pinsStore';
+import type { Assertion, Leaf } from '@/types/api';
 
 interface PinDropdownSelectorProps {
   projectId: string;
