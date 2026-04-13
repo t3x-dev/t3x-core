@@ -15,7 +15,7 @@ vi.mock('sonner', () => ({
 }));
 
 // Mock the api module
-vi.mock('@/lib/api', () => ({
+vi.mock('@/infrastructure', () => ({
   createWorkbenchDraft: vi.fn(),
   extractIncremental: vi.fn(),
   commitWorkbenchDraft: vi.fn(),
@@ -45,7 +45,7 @@ vi.mock('@/store/canvasStore', () => ({
 
 import type { Node } from '@xyflow/react';
 import { usePendingCommitState } from '@/hooks/usePendingCommitState';
-import * as api from '@/lib/api';
+import * as api from '@/infrastructure';
 import type { CanvasNodeData } from '@/types/nodes';
 
 // ---------------------------------------------------------------------------

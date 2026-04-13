@@ -7,7 +7,7 @@
  * direct `getApiCommit` imports across the codebase.
  */
 
-import { getApiCommit } from '@/lib/api/commits';
+import { getApiCommit } from '@/infrastructure/commits';
 import type { ApiCommit } from '@/types/api';
 
 export function fetchCommitByHash(hash: string): Promise<ApiCommit> {

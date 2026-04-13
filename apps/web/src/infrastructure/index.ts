@@ -1,7 +1,7 @@
 /**
  * API client barrel re-export
  *
- * All consumers should import from '@/lib/api' which resolves here.
+ * All consumers should import from '@/infrastructure' which resolves here.
  * The original api.ts file is a shim that re-exports from this index.
  */
 

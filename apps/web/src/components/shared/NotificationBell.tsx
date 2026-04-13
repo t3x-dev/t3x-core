@@ -13,7 +13,7 @@ import {
   markAllNotificationsRead,
   markNotificationRead,
   type NotificationItem,
-} from '@/lib/api';
+} from '@/infrastructure';
 import { cn } from '@/lib/utils';
 
 interface NotificationBellProps {

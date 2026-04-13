@@ -4,7 +4,7 @@
  * never reach into `@/lib/api/diff` directly.
  */
 
-import { getTreeMergeSuggestion } from '@/lib/api/diff';
+import { getTreeMergeSuggestion } from '@/infrastructure/diff';
 import type { TreeMergeSuggestion } from '@/types/api';
 
 export interface ConflictNode {

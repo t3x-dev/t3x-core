@@ -8,8 +8,8 @@
  */
 
 import { useCallback } from 'react';
-import { listCommits } from '@/lib/api/commits';
-import { createConversation } from '@/lib/api/conversations';
+import { listCommits } from '@/infrastructure/commits';
+import { createConversation } from '@/infrastructure/conversations';
 
 export function useNewProjectChat(): {
   start: (projectId: string) => Promise<string | null>;

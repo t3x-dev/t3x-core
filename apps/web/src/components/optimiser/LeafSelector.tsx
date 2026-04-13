@@ -20,7 +20,7 @@ import {
   type Leaf as LeafData,
   listLeavesByProject,
   listProjects,
-} from '@/lib/api';
+} from '@/infrastructure';
 
 interface LeafSelectorProps {
   agents: DeployAgent[];

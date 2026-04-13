@@ -7,8 +7,8 @@
  */
 
 import { useEffect, useState } from 'react';
-import { getAvailableModels } from '@/lib/api/llm';
-import type { LLMProviderInfo } from '@/lib/api/types';
+import { getAvailableModels } from '@/infrastructure/llm';
+import type { LLMProviderInfo } from '@/infrastructure/types';
 
 export function useAvailableModels(): { providers: LLMProviderInfo[] } {
   const [providers, setProviders] = useState<LLMProviderInfo[]>([]);

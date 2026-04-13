@@ -7,7 +7,7 @@
  */
 
 import { useEffect, useState } from 'react';
-import { API_V1, fetchWithTimeout, handleResponse } from '@/lib/api/core';
+import { API_V1, fetchWithTimeout, handleResponse } from '@/infrastructure/core';
 
 interface PinRef {
   id: string;

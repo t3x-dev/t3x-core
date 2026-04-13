@@ -6,7 +6,7 @@
  * context without importing `@/lib/api/*` directly.
  */
 
-import { fetchTurnContextCached } from '@/lib/api/turns';
+import { fetchTurnContextCached } from '@/infrastructure/turns';
 import type { TurnContextData } from '@/types/api';
 
 export interface TurnContextOptions {

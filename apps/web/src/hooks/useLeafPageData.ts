@@ -2,7 +2,7 @@
 
 import type { SemanticContent } from '@t3x-dev/core';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ApiCommit, Constraint, Leaf } from '@/lib/api';
+import type { ApiCommit, Constraint, Leaf } from '@/infrastructure';
 import {
   ApiError,
   generateLeafOutput,
@@ -11,7 +11,7 @@ import {
   getSemanticContent,
   updateLeaf,
   validateLeafOutput,
-} from '@/lib/api';
+} from '@/infrastructure';
 import { type ExportFormat, exportLeaf } from '@/lib/export';
 import { createRetuneSession } from '@/lib/retune';
 import { usePinsStore } from '@/store/pinsStore';

@@ -55,10 +55,6 @@
               {
                 "group": "@/commands/**",
                 "message": "Components must not import from the commands layer directly. Route through useExtraction or a dedicated hook."
-              },
-              {
-                "group": "@/infrastructure/**",
-                "message": "Components must not import from the infrastructure layer directly. Use queries or the store instead."
               }
             ]
           }

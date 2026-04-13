@@ -18,7 +18,7 @@ import {
   getWorkbenchDraft,
   promoteDraft,
   type WorkbenchDraft,
-} from '@/lib/api';
+} from '@/infrastructure';
 
 interface PromotePreviewDialogProps {
   open: boolean;

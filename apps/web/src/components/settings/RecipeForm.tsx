@@ -20,7 +20,7 @@ import type {
   RecipeStep,
   RecipeTrigger,
   UpdateRecipeInput,
-} from '@/lib/api';
+} from '@/infrastructure';
 
 const TRIGGER_EVENTS = [
   { value: 'commit.created', label: 'Commit Created' },

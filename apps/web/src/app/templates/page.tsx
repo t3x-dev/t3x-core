@@ -9,7 +9,7 @@ import { UseTemplateDialog } from '@/components/templates/UseTemplateDialog';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
-import type { Template } from '@/lib/api';
+import type { Template } from '@/infrastructure';
 import { cn } from '@/lib/utils';
 import { useTemplateStore } from '@/store/templateStore';
 

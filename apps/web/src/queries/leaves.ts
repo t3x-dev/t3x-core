@@ -10,7 +10,7 @@ import {
   createLeaf,
   deleteLeaf,
   listLeavesByProject,
-} from '@/lib/api/leaves';
+} from '@/infrastructure/leaves';
 import type { Leaf } from '@/types/api';
 
 export function fetchLeavesByProject(projectId: string): Promise<Leaf[]> {

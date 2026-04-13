@@ -17,7 +17,7 @@ import { YAMLTreePanel } from '@/components/leaf/YAMLTreePanel';
 import { KeyboardHintBar } from '@/components/shared/KeyboardHintBar';
 import { useKeyboardNavigation } from '@/hooks/useKeyboardNavigation';
 import { useLeafPageData } from '@/hooks/useLeafPageData';
-import type { Constraint, SuggestedConstraint } from '@/lib/api';
+import type { Constraint, SuggestedConstraint } from '@/infrastructure';
 import { PAGE_ANIMATION_STYLES } from '@/lib/pageAnimations';
 import { cn } from '@/lib/utils';
 import { useProjectStore } from '@/store/projectStore';

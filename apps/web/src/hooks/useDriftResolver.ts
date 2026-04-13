@@ -7,7 +7,7 @@
  */
 
 import { useCallback } from 'react';
-import { extractNodes } from '@/lib/api/trees';
+import { extractNodes } from '@/infrastructure/trees';
 import { hydrateConversation } from '@/queries/loadConversation';
 
 export interface DriftDecision {

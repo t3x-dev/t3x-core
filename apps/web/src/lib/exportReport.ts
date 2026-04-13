@@ -5,7 +5,7 @@
  * Uses trace_summary (lightweight) instead of full_trace.
  */
 
-import type { EngineRun } from './api';
+import type { EngineRun } from '@/infrastructure';
 
 interface EvalResult {
   passed?: boolean;

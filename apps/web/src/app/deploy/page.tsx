@@ -41,7 +41,7 @@ import {
   listDeployAgents,
   listEngineRuns,
   updateDeployAgent,
-} from '@/lib/api';
+} from '@/infrastructure';
 import { useProjectStore } from '@/store/projectStore';
 
 export default function DeployPage() {

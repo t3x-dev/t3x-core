@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanupRoots, renderHook, waitForHook } from './renderHook';
 
 // Mock the api module before importing hooks
-vi.mock('@/lib/api', () => ({
+vi.mock('@/infrastructure', () => ({
   checkHealth: vi.fn(),
   getStatus: vi.fn(),
   listProjects: vi.fn(),
@@ -32,7 +32,7 @@ import {
   useTurn,
   useTurns,
 } from '@/hooks/useApi';
-import * as api from '@/lib/api';
+import * as api from '@/infrastructure';
 
 // ---------------------------------------------------------------------------
 // Lifecycle

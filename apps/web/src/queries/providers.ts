@@ -3,7 +3,7 @@
  * `listProviders` adapter.
  */
 
-import { listProviders } from '@/lib/api/misc';
+import { listProviders } from '@/infrastructure/misc';
 import type { ProviderInfo } from '@/types/api';
 
 export function fetchProviders(): Promise<ProviderInfo[]> {

@@ -8,11 +8,11 @@
  * ban is defined in biome.json under `overrides`.
  */
 
-export type { Citation } from '@/lib/api/chat';
-export type { ApiCommit } from '@/lib/api/commits';
-export type { TreeMergeSuggestion } from '@/lib/api/diff';
-export type { DraftConstraint, DraftNode, WorkbenchDraft } from '@/lib/api/drafts';
-export type { NodeMember } from '@/lib/api/knowledge-graph';
+export type { Citation } from '@/infrastructure/chat';
+export type { ApiCommit } from '@/infrastructure/commits';
+export type { TreeMergeSuggestion } from '@/infrastructure/diff';
+export type { DraftConstraint, DraftNode, WorkbenchDraft } from '@/infrastructure/drafts';
+export type { NodeMember } from '@/infrastructure/knowledge-graph';
 export type {
   Assertion,
   CompareModelsResult,
@@ -22,8 +22,8 @@ export type {
   LeafType,
   ReverseLearnResult,
   SuggestedConstraint,
-} from '@/lib/api/leaves';
-export type { ProviderInfo, Template } from '@/lib/api/misc';
-export type { ConversationContext } from '@/lib/api/pins';
-export type { TurnContextData } from '@/lib/api/turns';
-export type { Branch, Commit, Conversation, Project } from '@/lib/api/types';
+} from '@/infrastructure/leaves';
+export type { ProviderInfo, Template } from '@/infrastructure/misc';
+export type { ConversationContext } from '@/infrastructure/pins';
+export type { TurnContextData } from '@/infrastructure/turns';
+export type { Branch, Commit, Conversation, Project } from '@/infrastructure/types';

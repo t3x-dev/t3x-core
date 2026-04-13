@@ -4,7 +4,7 @@ import { FileText, Loader2 } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import * as api from '@/lib/api';
+import * as api from '@/infrastructure';
 import { FileDropZone } from './FileDropZone';
 import { ImportPreview } from './ImportPreview';
 import { ImportProgress } from './ImportProgress';

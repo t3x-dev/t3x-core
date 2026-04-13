@@ -27,7 +27,7 @@ import {
   type TestConnectionResult,
   testProvider,
   updateProviderRoles,
-} from '@/lib/api';
+} from '@/infrastructure';
 import { cn } from '@/lib/utils';
 
 type RoleGroup = 'generation' | 'embedding' | 'extraction' | 'merge';

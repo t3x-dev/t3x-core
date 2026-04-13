@@ -7,14 +7,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanupRoots, renderHook, waitForHook } from './renderHook';
 
 // Mock the api module
-vi.mock('@/lib/api', () => ({
+vi.mock('@/infrastructure', () => ({
   listCommits: vi.fn(),
   listLeavesByCommit: vi.fn(),
 }));
 
 import { useBranchCommits } from '@/hooks/useBranchCommits';
 import { clearQueryCache } from '@/hooks/useQuery';
-import * as api from '@/lib/api';
+import * as api from '@/infrastructure';
 
 // ---------------------------------------------------------------------------
 // Fixtures

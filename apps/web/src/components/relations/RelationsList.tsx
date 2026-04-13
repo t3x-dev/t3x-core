@@ -2,7 +2,7 @@
 
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
-import type { NodeRelation } from '@/lib/api/relations';
+import type { NodeRelation } from '@/infrastructure/relations';
 import { truncate } from '@/lib/truncate';
 import { cn } from '@/lib/utils';
 

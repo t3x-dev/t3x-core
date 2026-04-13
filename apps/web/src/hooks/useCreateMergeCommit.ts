@@ -8,7 +8,7 @@
  */
 
 import { useCallback } from 'react';
-import { createCommit } from '@/lib/api/commits';
+import { createCommit } from '@/infrastructure/commits';
 
 export interface MergeCommitInput {
   projectId: string;

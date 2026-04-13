@@ -1,7 +1,7 @@
 import { describe, expect, test, vi } from 'vitest';
 import { ReadyZone } from '@/components/draft/ReadyZone';
 import { SemanticPointCard } from '@/components/draft/SemanticPointCard';
-import type { SemanticPointAPI } from '@/lib/api';
+import type { SemanticPointAPI } from '@/infrastructure';
 
 function makePoint(overrides: Partial<SemanticPointAPI> = {}): SemanticPointAPI {
   return {

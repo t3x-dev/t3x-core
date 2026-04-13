@@ -7,7 +7,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import type { Assertion, Constraint, Leaf } from '@/lib/api';
+import type { Assertion, Constraint, Leaf } from '@/infrastructure';
 import { formatLeafAsJSON, formatLeafAsJSONString, formatLeafAsMarkdown } from '@/lib/export';
 
 describe('Export Utilities', () => {

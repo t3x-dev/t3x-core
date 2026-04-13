@@ -30,8 +30,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { EmptyState } from '@/components/ui/empty-state';
-import type { CreateWebhookInput, UpdateWebhookInput, WebhookData } from '@/lib/api';
-import { createWebhook, deleteWebhook, listWebhooks, testWebhook, updateWebhook } from '@/lib/api';
+import type { CreateWebhookInput, UpdateWebhookInput, WebhookData } from '@/infrastructure';
+import { createWebhook, deleteWebhook, listWebhooks, testWebhook, updateWebhook } from '@/infrastructure';
 
 export default function WebhooksPage() {
   const [webhooks, setWebhooks] = useState<WebhookData[]>([]);

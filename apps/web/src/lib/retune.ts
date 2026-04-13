@@ -9,7 +9,7 @@ import {
   createPinApi,
   updateConversationContext,
   updatePinAssertionsApi,
-} from '@/lib/api';
+} from '@/infrastructure';
 
 export interface RetuneParams {
   projectId: string;

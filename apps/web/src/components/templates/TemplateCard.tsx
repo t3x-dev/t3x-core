@@ -14,7 +14,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import type { Template } from '@/lib/api';
+import type { Template } from '@/infrastructure';
 import { cn } from '@/lib/utils';
 
 const LEAF_TYPE_ICONS: Record<string, React.ElementType> = {

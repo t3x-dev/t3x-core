@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import type { DraftNode } from '@/lib/api';
+import type { DraftNode } from '@/infrastructure';
 import { getConstraintResultsForNode } from '@/lib/draftValidation';
 import { useDraftWorkspaceStore } from '@/store/draftWorkspaceStore';
 

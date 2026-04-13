@@ -17,7 +17,7 @@ import {
   type QuickVerifyResult,
   type VerifyResult,
   verifyProjectHashChain,
-} from '@/lib/api';
+} from '@/infrastructure';
 import { formatTimeAgo } from '@/lib/timeUtils';
 import { cn } from '@/lib/utils';
 import { useSettingsStore } from '@/store/settingsStore';

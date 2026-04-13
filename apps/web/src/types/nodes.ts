@@ -37,7 +37,7 @@ export interface LeafNodeConfig {
 
 // Import contract types from @t3x-dev/core (single source of truth)
 import type { CommitAuthor, CommitSourceRef } from '@t3x-dev/core';
-import type { ApiCommit } from '@/lib/api/commits';
+import type { ApiCommit } from '@/infrastructure/commits';
 
 // Legacy node types — kept locally for web components still using node-based display.
 // Core has moved to tree-native SemanticContent; web migration is a separate effort.

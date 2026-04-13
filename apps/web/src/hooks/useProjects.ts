@@ -6,8 +6,8 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { deleteProject, listProjects } from '@/lib/api/projects';
-import type { Project } from '@/lib/api/types';
+import { deleteProject, listProjects } from '@/infrastructure/projects';
+import type { Project } from '@/infrastructure/types';
 
 export interface UseProjectsResult {
   projects: Project[];

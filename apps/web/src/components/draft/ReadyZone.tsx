@@ -2,7 +2,7 @@
 
 import { CheckCircle, Lock } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import type { SemanticPointAPI } from '@/lib/api';
+import type { SemanticPointAPI } from '@/infrastructure';
 import { SemanticPointCard } from './SemanticPointCard';
 
 interface ReadyZoneProps {

@@ -5,7 +5,7 @@
  */
 
 import { useCallback } from 'react';
-import { type CompareModelsResult, compareLeafModels } from '@/lib/api/leaves';
+import { type CompareModelsResult, compareLeafModels } from '@/infrastructure/leaves';
 
 export function useCompareModels(): {
   compare: (leafId: string, models: string[]) => Promise<CompareModelsResult>;

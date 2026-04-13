@@ -20,7 +20,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { type Conversation, extractToDraft, listConversations } from '@/lib/api';
+import { type Conversation, extractToDraft, listConversations } from '@/infrastructure';
 import { cn } from '@/lib/utils';
 
 interface ExtractConversationDialogProps {

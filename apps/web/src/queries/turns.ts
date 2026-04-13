@@ -3,8 +3,8 @@
  * components don't import from `@/lib/api/turns` directly.
  */
 
-import { getTurn, listTurns } from '@/lib/api/turns';
-import type { TurnDetail, TurnListData } from '@/lib/api/types';
+import { getTurn, listTurns } from '@/infrastructure/turns';
+import type { TurnDetail, TurnListData } from '@/infrastructure/types';
 
 export interface FetchTurnsOptions {
   limit?: number;

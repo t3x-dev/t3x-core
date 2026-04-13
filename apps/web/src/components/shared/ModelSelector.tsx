@@ -9,8 +9,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { getAvailableModels } from '@/lib/api';
-import type { LLMProviderInfo } from '@/lib/api/types';
+import { getAvailableModels } from '@/infrastructure';
+import type { LLMProviderInfo } from '@/infrastructure/types';
 
 interface ModelSelectorProps {
   initialProvider?: string | null;

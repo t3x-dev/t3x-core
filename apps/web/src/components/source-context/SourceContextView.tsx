@@ -36,7 +36,7 @@
 import { ChevronDown, ChevronUp, Loader2, MessageCircle } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
-import { fetchTurnContextCached } from '@/lib/api';
+import { fetchTurnContextCached } from '@/infrastructure';
 import { truncateWithHighlights } from '@/lib/truncationUtils';
 import type { TurnContextData, WordDiffSegment } from '@/types/merge';
 import type { HighlightColor, HighlightRange } from '@/types/sourceContext';

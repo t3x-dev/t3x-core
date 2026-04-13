@@ -4,7 +4,7 @@ import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import type { SemanticPointAPI } from '@/lib/api';
+import type { SemanticPointAPI } from '@/infrastructure';
 import { ReviewItem } from './ReviewItem';
 
 type ReviewFilter = 'all' | 'new' | 'modify';

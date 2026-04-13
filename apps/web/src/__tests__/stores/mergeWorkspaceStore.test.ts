@@ -17,7 +17,7 @@ import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
 import type { MergeResult } from '@t3x-dev/core';
 
 // Mock the API module
-vi.mock('@/lib/api', () => ({
+vi.mock('@/infrastructure', () => ({
   fetchTurnContext: vi.fn(),
 }));
 

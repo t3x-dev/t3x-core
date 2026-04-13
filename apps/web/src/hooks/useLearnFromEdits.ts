@@ -8,8 +8,8 @@
  */
 
 import { useCallback } from 'react';
-import { ApiError } from '@/lib/api/core';
-import { type LearnFromEditsResult, learnFromEdits } from '@/lib/api/leaves';
+import { ApiError } from '@/infrastructure/core';
+import { type LearnFromEditsResult, learnFromEdits } from '@/infrastructure/leaves';
 
 export type LearnFromEditsOutcome =
   | { kind: 'ok'; data: LearnFromEditsResult }

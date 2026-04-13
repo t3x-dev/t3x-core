@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { loadConversation } from '../conversationLoader';
-import * as turnsClient from '@/lib/api/turns';
+import * as turnsClient from '@/infrastructure/turns';
 import * as yopsLog from '../yopsLog';
 
 beforeEach(() => { vi.restoreAllMocks(); });
