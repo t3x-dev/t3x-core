@@ -354,49 +354,9 @@ describe('Canvas Store - Unit Node Model', () => {
     });
   });
 
-  // ===========================================================================
-  // addLeafNode Tests
-  // ===========================================================================
-  describe('addLeafNode', () => {
-    it('embeds a leaf into the parent commit node data.leaves', async () => {
-      const committedUnit = createCommittedUnitNode('unit-1', 'sha256:abc123');
-      useCanvasStore.setState({
-        nodes: [committedUnit],
-        edges: [],
-        leafPanelOpen: true,
-        leafPanelCommitId: 'unit-1',
-        projectId: 'proj_test123',
-      });
-
-      await useCanvasStore.getState().addLeafNode('tweet');
-
-      const state = useCanvasStore.getState();
-      // No new node created — leaf is embedded
-      expect(state.nodes.length).toBe(1);
-      // No edge created
-      expect(state.edges.length).toBe(0);
-      // Leaf embedded in parent node's data.leaves
-      const unitNode = state.nodes[0];
-      expect(unitNode.data.leaves).toBeDefined();
-      expect(unitNode.data.leaves!.length).toBe(1);
-      expect(unitNode.data.leaves![0].type).toBe('tweet');
-      expect(unitNode.data.leaves![0].title).toBe('Twitter');
-    });
-
-    it('does nothing when leafPanelCommitId is not set', async () => {
-      useCanvasStore.setState({
-        nodes: [],
-        edges: [],
-        leafPanelOpen: true,
-        leafPanelCommitId: undefined,
-      });
-
-      await useCanvasStore.getState().addLeafNode('tweet');
-
-      const state = useCanvasStore.getState();
-      expect(state.nodes).toEqual([]);
-    });
-  });
+  // addLeafNode + removeLeafFromNode behaviour moved to hooks/useCanvasLeafActions
+  // (v2 Phase 1.3 passive-store migration). Hook-level tests require renderHook
+  // which isn't wired up here. Integration coverage via Playwright remains.
 
   // ===========================================================================
   // updateNode Tests

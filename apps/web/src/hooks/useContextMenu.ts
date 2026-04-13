@@ -10,6 +10,7 @@ import {
 } from '@/components/canvas/NodeContextMenu';
 import { useCanvasStore } from '@/store/canvasStore';
 import type { CanvasNodeData, NodeKind } from '@/types/nodes';
+import { useCanvasLeafActions } from './useCanvasLeafActions';
 
 /**
  * Module-level ref for the leaf context menu handler.
@@ -46,6 +47,7 @@ export function useContextMenu({
 }: UseContextMenuOptions) {
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [, startTransition] = useTransition();
+  const { remove: removeLeafFromNode } = useCanvasLeafActions();
 
   const closeContextMenu = useCallback(() => setContextMenu(null), []);
 
@@ -173,12 +175,12 @@ export function useContextMenu({
           }
         },
         onDelete: () => {
-          useCanvasStore.getState().removeLeafFromNode(nodeId, leafId);
+          void removeLeafFromNode(nodeId, leafId);
         },
       });
       setContextMenu({ x: event.clientX, y: event.clientY, groups });
     },
-    [projectId, notify, onNavigate]
+    [projectId, notify, onNavigate, removeLeafFromNode]
   );
 
   // Keep the module-level ref up to date so CanvasNodes can call the handler

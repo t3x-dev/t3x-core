@@ -1,11 +1,9 @@
 import type { Connection, Edge, EdgeChange, Node, NodeChange } from '@xyflow/react';
-import type { Template } from '@/types/api';
 import type { MergeState } from '../types/merge';
 import type {
   CanvasNodeData,
   ConversationConstraints,
   DraftConstraintOverrides,
-  LeafType,
   NodeKind,
 } from '../types/nodes';
 import type { NotifyCallback } from './shared';
@@ -31,16 +29,16 @@ export interface MergeSlice {
   clearMergeError: () => void;
 }
 
-// Leaf panel slice interface
+// Leaf panel slice interface (passive — async I/O lives in useCanvasLeafActions)
 export interface LeafPanelSlice {
   leafPanelOpen: boolean;
   leafPanelCommitId?: string;
   leafCreating: boolean;
   openLeafPanel: (commitId: string) => void;
   closeLeafPanel: () => void;
-  addLeafNode: (leafType: LeafType) => Promise<string | null>;
-  addLeafFromTemplate: (template: Template) => Promise<string | null>;
-  removeLeafFromNode: (commitNodeId: string, leafId: string) => Promise<void>;
+  setLeafCreating: (leafCreating: boolean) => void;
+  embedLeafInNode: (commitNodeId: string, leaf: import('../types/nodes').EmbeddedLeaf) => void;
+  removeLeafFromNodeState: (commitNodeId: string, leafId: string) => void;
 }
 
 // Node CRUD slice interface
