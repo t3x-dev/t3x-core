@@ -16,6 +16,14 @@ vi.mock('@/store/canvasStore', () => ({
   selectMergeCounts: vi.fn(),
 }));
 
+// Mock the merge actions hook
+vi.mock('@/hooks/useCanvasMergeActions', () => ({
+  useCanvasMergeActions: () => ({
+    prepare: vi.fn(),
+    execute: vi.fn(),
+  }),
+}));
+
 describe('MergePanel', () => {
   beforeEach(() => {
     // Reset mocks before each test
@@ -34,7 +42,6 @@ describe('MergePanel', () => {
       if (typeof selector === 'function') {
         return selector({
           mergeState: null,
-          executeMerge: vi.fn(),
           cancelMerge: vi.fn(),
           mergeLoading: false,
         });

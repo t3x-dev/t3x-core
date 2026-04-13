@@ -12,6 +12,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Skeleton, SkeletonText } from '@/components/ui/skeleton';
+import { useCanvasMergeActions } from '@/hooks/useCanvasMergeActions';
 import { useTerminology } from '@/hooks/useTerminology';
 import { selectCanExecuteMerge, selectUnresolvedCount, useCanvasStore } from '@/store/canvasStore';
 
@@ -29,9 +30,9 @@ import { selectCanExecuteMerge, selectUnresolvedCount, useCanvasStore } from '@/
 export function MergePanel() {
   const { t } = useTerminology();
   const mergeState = useCanvasStore((s) => s.mergeState);
-  const executeMerge = useCanvasStore((s) => s.executeMerge);
   const cancelMerge = useCanvasStore((s) => s.cancelMerge);
   const mergeLoading = useCanvasStore((s) => s.mergeLoading);
+  const { execute: executeMerge } = useCanvasMergeActions();
   const canExecute = useCanvasStore(selectCanExecuteMerge);
   const unresolvedCount = useCanvasStore(selectUnresolvedCount);
   const counts = useCanvasStore(
@@ -217,7 +218,9 @@ export function MergePanel() {
         </h3>
         <div className="space-y-1 text-sm text-muted-foreground">
           {prepared.onlyInSource.map((path: string) => (
-            <div key={path} className="font-mono text-xs">{path}</div>
+            <div key={path} className="font-mono text-xs">
+              {path}
+            </div>
           ))}
         </div>
       </div>
@@ -229,7 +232,9 @@ export function MergePanel() {
         </h3>
         <div className="space-y-1 text-sm text-muted-foreground">
           {prepared.onlyInTarget.map((path: string) => (
-            <div key={path} className="font-mono text-xs">{path}</div>
+            <div key={path} className="font-mono text-xs">
+              {path}
+            </div>
           ))}
         </div>
       </div>
@@ -297,8 +302,8 @@ export function MergePanel() {
           <DialogHeader>
             <DialogTitle className="text-center">{t('mergeConfirm')}</DialogTitle>
             <DialogDescription className="text-center">
-              This will create a new merge commit combining the selected nodes from both
-              branches. This action cannot be undone.
+              This will create a new merge commit combining the selected nodes from both branches.
+              This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <div className="text-sm text-muted-foreground">

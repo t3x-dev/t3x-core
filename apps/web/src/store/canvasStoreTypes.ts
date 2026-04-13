@@ -18,13 +18,15 @@ export type DeletionConfirmation = {
   onConfirm: () => void;
 } | null;
 
-// Merge slice interface
+// Merge slice interface (passive — async I/O lives in useCanvasMergeActions)
 export interface MergeSlice {
   mergeState: MergeState | null;
   mergeLoading: boolean;
   mergeError: string | null;
-  startMerge: (sourceHash: string, targetHash: string) => Promise<void>;
-  executeMerge: (message: string) => Promise<unknown>;
+  setMergeLoading: (loading: boolean) => void;
+  setMergeError: (error: string | null) => void;
+  setMergePrepared: (mergeState: MergeState) => void;
+  appendMergeCommit: (node: Node<CanvasNodeData>, edges: Edge[]) => void;
   cancelMerge: () => void;
   clearMergeError: () => void;
 }
