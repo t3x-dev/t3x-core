@@ -10,12 +10,13 @@
 
 import type { Edge, Node } from '@xyflow/react';
 import { useCallback } from 'react';
+import { createWorkbenchDraft } from '@/commands/drafts';
 import { getTerminology } from '@/hooks/useTerminology';
 import { fetchCommits } from '@/queries/commits';
 import { createConversationIn, fetchConversations } from '@/queries/conversations';
 import { fetchLeavesByProject } from '@/queries/leaves';
 import { fetchTurn } from '@/queries/turns';
-import { createWorkbenchDraftFor, fetchWorkbenchDrafts } from '@/queries/workbenchDrafts';
+import { fetchWorkbenchDrafts } from '@/queries/workbenchDrafts';
 import { useCanvasStore } from '@/store/canvasStore';
 import {
   backflowEdgeStyle,
@@ -503,7 +504,7 @@ export function useCanvasNodeActions() {
     };
     const snappedPosition = snapPosition(basePosition);
 
-    const draft = await createWorkbenchDraftFor({
+    const draft = await createWorkbenchDraft({
       project_id: store.projectId,
       title: 'Untitled Draft',
     });

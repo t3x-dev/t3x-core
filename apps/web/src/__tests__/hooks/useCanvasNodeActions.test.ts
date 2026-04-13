@@ -24,14 +24,18 @@ vi.mock('@/queries/turns', () => ({
 }));
 vi.mock('@/queries/workbenchDrafts', () => ({
   fetchWorkbenchDrafts: vi.fn(),
-  createWorkbenchDraftFor: vi.fn(),
 }));
 
+vi.mock('@/commands/drafts', () => ({
+  createWorkbenchDraft: vi.fn(),
+}));
+
+import { createWorkbenchDraft } from '@/commands/drafts';
 import { useCanvasNodeActions } from '@/hooks/useCanvasNodeActions';
 import { fetchCommits } from '@/queries/commits';
 import { createConversationIn, fetchConversations } from '@/queries/conversations';
 import { fetchLeavesByProject } from '@/queries/leaves';
-import { createWorkbenchDraftFor, fetchWorkbenchDrafts } from '@/queries/workbenchDrafts';
+import { fetchWorkbenchDrafts } from '@/queries/workbenchDrafts';
 import { useCanvasStore } from '@/store/canvasStore';
 
 function resetStore() {
@@ -122,7 +126,7 @@ describe('useCanvasNodeActions.add', () => {
 describe('useCanvasNodeActions.addDraft', () => {
   it('creates a workbench draft and appends a draft node', async () => {
     useCanvasStore.setState({ projectId: 'proj_1' });
-    vi.mocked(createWorkbenchDraftFor).mockResolvedValueOnce({
+    vi.mocked(createWorkbenchDraft).mockResolvedValueOnce({
       id: 'draft_abc',
       title: 'Untitled Draft',
       created_at: '2026-04-12T00:00:00Z',

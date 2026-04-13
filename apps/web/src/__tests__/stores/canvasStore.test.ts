@@ -42,7 +42,6 @@ vi.mock('@/queries/turns', () => ({
 
 vi.mock('@/queries/workbenchDrafts', () => ({
   fetchWorkbenchDrafts: vi.fn().mockResolvedValue([]),
-  createWorkbenchDraftFor: vi.fn(),
 }));
 
 vi.mock('@/queries/mergeApi', () => ({
