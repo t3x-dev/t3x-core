@@ -14,7 +14,9 @@ vi.mock('@/queries/commits', () => ({
 }));
 vi.mock('@/queries/conversations', () => ({
   fetchConversations: vi.fn(),
-  createConversationIn: vi.fn(),
+}));
+vi.mock('@/commands/conversations', () => ({
+  createConversation: vi.fn(),
 }));
 vi.mock('@/queries/leaves', () => ({
   fetchLeavesByProject: vi.fn(),
@@ -30,10 +32,11 @@ vi.mock('@/commands/drafts', () => ({
   createWorkbenchDraft: vi.fn(),
 }));
 
+import { createConversation } from '@/commands/conversations';
 import { createWorkbenchDraft } from '@/commands/drafts';
 import { useCanvasNodeActions } from '@/hooks/useCanvasNodeActions';
 import { fetchCommits } from '@/queries/commits';
-import { createConversationIn, fetchConversations } from '@/queries/conversations';
+import { fetchConversations } from '@/queries/conversations';
 import { fetchLeavesByProject } from '@/queries/leaves';
 import { fetchWorkbenchDrafts } from '@/queries/workbenchDrafts';
 import { useCanvasStore } from '@/store/canvasStore';
@@ -93,7 +96,7 @@ describe('useCanvasNodeActions.load', () => {
 describe('useCanvasNodeActions.add', () => {
   it('creates a unit conversation and appends a staging node via addToNodes', async () => {
     useCanvasStore.setState({ projectId: 'proj_1' });
-    vi.mocked(createConversationIn).mockResolvedValueOnce({
+    vi.mocked(createConversation).mockResolvedValueOnce({
       conversation_id: 'conv_new',
       title: 'Untitled Unit',
       created_at: '2026-04-12T00:00:00Z',
@@ -119,7 +122,7 @@ describe('useCanvasNodeActions.add', () => {
 
     expect(notify).toHaveBeenCalledWith(expect.stringContaining('Leaf'), 'warning');
     expect(useCanvasStore.getState().nodes).toHaveLength(0);
-    expect(createConversationIn).not.toHaveBeenCalled();
+    expect(createConversation).not.toHaveBeenCalled();
   });
 });
 

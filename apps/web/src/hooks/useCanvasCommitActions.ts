@@ -1,6 +1,6 @@
 /**
  * useCanvasCommitActions — view-facing API for canvas commit flows that
- * cross the I/O boundary (fetchTurns, createConversationIn,
+ * cross the I/O boundary (fetchTurns, @/commands/conversations.createConversation,
  * createMergeDraft).
  *
  * Per docs/frontend-architecture-v2-zh.md §2.5, async actions live in
@@ -14,7 +14,7 @@
 import type { Edge, Node } from '@xyflow/react';
 import { useCallback } from 'react';
 import { renameCommit as renameCommitCommand } from '@/commands/commits';
-import { createConversationIn } from '@/queries/conversations';
+import { createConversation } from '@/commands/conversations';
 import { createMergeDraft } from '@/queries/mergeApi';
 import { fetchTurns } from '@/queries/turns';
 import { useCanvasStore } from '@/store/canvasStore';
@@ -146,7 +146,7 @@ export function useCanvasCommitActions() {
     const title = 'Untitled Unit';
     const parentCommitHash = source.data.commitHash || source.id;
     const position = computeAttachedPosition(source, 'unit', commitQuickOffset);
-    const conversation = await createConversationIn(state.projectId, title, parentCommitHash, {
+    const conversation = await createConversation(state.projectId, title, parentCommitHash, {
       x: position.x,
       y: position.y,
     });

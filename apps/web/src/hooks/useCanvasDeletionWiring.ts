@@ -8,13 +8,13 @@
  */
 
 import { useEffect } from 'react';
-import { deleteConversationById } from '@/queries/conversations';
+import { deleteConversation } from '@/commands/conversations';
 import { useCanvasStore } from '@/store/canvasStore';
 
 export function useCanvasDeletionWiring(): void {
   useEffect(() => {
     const handler = (conversationId: string) => {
-      deleteConversationById(conversationId).catch(() => {
+      deleteConversation(conversationId).catch(() => {
         // Fire-and-forget — error handled silently to match prior behavior.
       });
     };

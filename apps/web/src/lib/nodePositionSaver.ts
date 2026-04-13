@@ -23,7 +23,7 @@
  */
 
 import { updateCommitPosition } from '@/infrastructure/commits';
-import { updateConversationById } from '@/queries/conversations';
+import { updateConversation } from '@/infrastructure/conversations';
 import type { NodeKind } from '@/types/nodes';
 
 const positionSaveTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -57,7 +57,7 @@ export function saveNodePosition(
     // units use the commit hash (sha256:xxx). Pick the matching API.
     const isStagingUnit = nodeId.startsWith('conv_');
     if (isStagingUnit) {
-      updateConversationById(nodeId, {
+      updateConversation(nodeId, {
         position_x: pending.position.x,
         position_y: pending.position.y,
       }).catch(() => {

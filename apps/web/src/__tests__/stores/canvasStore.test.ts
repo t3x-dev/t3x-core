@@ -20,9 +20,6 @@ import type { CanvasNodeData } from '@/types/nodes';
 // doc-aligned L3 layer. Mock the query modules the slices depend on.
 vi.mock('@/queries/conversations', () => ({
   fetchConversations: vi.fn().mockResolvedValue({ conversations: [], total: 0 }),
-  createConversationIn: vi.fn(),
-  deleteConversationById: vi.fn(),
-  updateConversationById: vi.fn(),
 }));
 
 vi.mock('@/queries/commits', () => ({

@@ -10,8 +10,8 @@ import type { Node } from '@xyflow/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanupRoots, renderHook, waitForHook } from './renderHook';
 
-vi.mock('@/queries/conversations', () => ({
-  createConversationIn: vi.fn(),
+vi.mock('@/commands/conversations', () => ({
+  createConversation: vi.fn(),
 }));
 vi.mock('@/queries/turns', () => ({
   fetchTurns: vi.fn(),
@@ -20,8 +20,8 @@ vi.mock('@/queries/mergeApi', () => ({
   createMergeDraft: vi.fn(),
 }));
 
+import { createConversation } from '@/commands/conversations';
 import { useCanvasCommitActions } from '@/hooks/useCanvasCommitActions';
-import { createConversationIn } from '@/queries/conversations';
 import { createMergeDraft } from '@/queries/mergeApi';
 import { fetchTurns } from '@/queries/turns';
 import { useCanvasStore } from '@/store/canvasStore';
@@ -94,7 +94,7 @@ describe('useCanvasCommitActions.addConversationFromCommit', () => {
       projectId: 'proj_1',
       nodes: [committedMainUnit('unit-1', 'sha256:abc')],
     });
-    vi.mocked(createConversationIn).mockResolvedValueOnce({
+    vi.mocked(createConversation).mockResolvedValueOnce({
       conversation_id: 'conv_new',
       title: 'Untitled Unit',
       created_at: '2026-04-13T00:00:00Z',
@@ -104,7 +104,7 @@ describe('useCanvasCommitActions.addConversationFromCommit', () => {
     await result.current.addConversationFromCommit('unit-1');
     await waitForHook();
 
-    expect(createConversationIn).toHaveBeenCalledWith(
+    expect(createConversation).toHaveBeenCalledWith(
       'proj_1',
       'Untitled Unit',
       'sha256:abc',

@@ -10,10 +10,11 @@
 
 import type { Edge, Node } from '@xyflow/react';
 import { useCallback } from 'react';
+import { createConversation } from '@/commands/conversations';
 import { createWorkbenchDraft } from '@/commands/drafts';
 import { getTerminology } from '@/hooks/useTerminology';
 import { fetchCommits } from '@/queries/commits';
-import { createConversationIn, fetchConversations } from '@/queries/conversations';
+import { fetchConversations } from '@/queries/conversations';
 import { fetchLeavesByProject } from '@/queries/leaves';
 import { fetchTurn } from '@/queries/turns';
 import { fetchWorkbenchDrafts } from '@/queries/workbenchDrafts';
@@ -452,12 +453,10 @@ export function useCanvasNodeActions() {
         if (!store.projectId) {
           throw new Error('Cannot create unit: no project selected');
         }
-        const conversation = await createConversationIn(
-          store.projectId,
-          'Untitled Unit',
-          undefined,
-          { x: snappedPosition.x, y: snappedPosition.y }
-        );
+        const conversation = await createConversation(store.projectId, 'Untitled Unit', undefined, {
+          x: snappedPosition.x,
+          y: snappedPosition.y,
+        });
         const newNode: Node<CanvasNodeData> = {
           id: conversation.conversation_id,
           type: 'unit',
