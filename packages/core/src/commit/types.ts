@@ -4,7 +4,7 @@
 
 import type { SemanticContent } from '../semantic/types';
 
-export const COMMIT_SCHEMA = 't3x/commit/1' as const;
+export const COMMIT_SCHEMA = 't3x/commit' as const;
 
 export interface Author {
   type: 'human' | 'agent' | 'system';

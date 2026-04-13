@@ -1,867 +1,620 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file instructs Claude Code (claude.ai/code) when working in this repository. Keep it short, truthful, and grounded in what's actually on disk — not in historical architecture. Verify before adding claims; delete when they go stale.
 
 ## Project Overview
 
-T3X is "Git for Meaning" — a semantic version control system for AI conversations. It provides evidence-backed, deterministic semantic extraction with versioning, branching, and merging capabilities similar to Git.
+T3X is **"Git for Meaning"** — semantic version control for AI conversations. Commits, branches, merges, and diffs operate over meaning (extracted into a knowledge tree) rather than raw text.
 
-**Key philosophy**: The core deterministic layer never depends on LLMs. LLMs are optional plugins for enhancement (SummaryAgent, MergeAgent).
+**Core principle.** The mutation layer is 100% deterministic and never depends on an LLM. LLMs propose changes as YOps YAML; a deterministic engine validates and applies them. All tree mutation goes through YOps — this is the single rule the whole architecture rests on.
 
-## Open-Core Architecture
+## Open-Core
 
-T3X uses a dual-repository open-core model:
+Two repos. You are in the public one:
 
-| Repository | Visibility | Purpose |
-|-----------|------------|---------|
-| `t3x` (this repo) | Public / Open-source | Core engine, full product, self-hosted |
-| `t3x_cloud` (private) | Private | SaaS layer — OAuth, billing, team features |
+| Repo | Visibility | Purpose |
+|---|---|---|
+| `t3x` (this repo) | Public | Core engine + self-hostable product |
+| `t3x_cloud` | Private | SaaS layer: OAuth, billing, teams |
 
-### npm Packages
+Core packages publish to npm as `@t3x-dev/*` via Changesets. `t3x_cloud` consumes them and extends the API via `createApp(options)` from `@t3x-dev/api`.
 
-Core packages are published to npm as `@t3x-dev/*` via [Changesets](https://github.com/changesets/changesets):
+**Auth.** Public ships with username/password (`auth-local.openapi.ts`). Cloud passes `skipLocalAuth: true` and wires GitHub/Google OAuth via NextAuth.
 
-| Package | Source | Description |
-|---------|--------|-------------|
-| `@t3x-dev/yops` | `packages/yops` | YOps — 18 declarative YAML operations (spec-driven) |
-| `@t3x-dev/core` | `packages/core` | T3X engine — diff, merge, hash chains, extraction |
-| `@t3x-dev/storage` | `packages/storage` | PostgreSQL persistence (Drizzle ORM) |
-| `@t3x-dev/api` | `apps/api` | Hono API server with `createApp()` factory |
+**Local dev with the private repo.** `t3x_cloud/scripts/link-local.sh on|off` toggles symlinks to local packages.
 
-The private `t3x_cloud` repo consumes these packages from npm, extending the API with OAuth and SaaS features.
+## Repository Layout
 
-### Auth Strategy
-
-- **Public repo (self-hosted)**: Built-in username + password registration/login via `auth-local.openapi.ts`
-- **Private repo (cloud SaaS)**: GitHub & Google OAuth via NextAuth.js; local auth disabled with `skipLocalAuth: true`
-
-### createApp() Factory
-
-`apps/api` exports a `createApp()` factory function that supports extension by the cloud repo:
-
-```typescript
-import { createApp, CreateAppOptions } from '@t3x-dev/api';
-
-// CreateAppOptions:
-//   skipLocalAuth?: boolean     — Disable username/password routes (for SaaS)
-//   middleware?: MiddlewareHandler[]  — Additional middleware (e.g., OAuth)
-//   routes?: (api: OpenAPIHono) => void  — Additional routes (e.g., billing)
-```
-
-### Local Development with t3x_cloud
-
-When developing both repos together, use the link script in `t3x_cloud`:
-
-```bash
-cd ../t3x_cloud
-./scripts/link-local.sh on    # Symlink local @t3x-dev packages
-./scripts/link-local.sh off   # Restore npm versions
-```
-
-## Repository Structure
-
-This is a pnpm monorepo managed by Turborepo:
+pnpm workspace + Turborepo.
 
 ```
 t3x/
 ├── packages/
-│   ├── yops/           # @t3x-dev/yops - YOps: 18 declarative YAML operations (spec-driven)
-│   ├── yschema/        # YAML schema helpers (shared validation primitives)
-│   ├── core/           # @t3x-dev/core - T3X engine: diff, merge, hash chains, extraction
-│   ├── storage/        # @t3x-dev/storage - PostgreSQL persistence (Drizzle ORM)
-│   ├── api/            # @t3x-dev/api - createApp() factory library (Hono + OpenAPI routes)
-│   └── api-client/     # @t3x-dev/api-client - TypeScript API client
+│   ├── yops/          @t3x-dev/yops        — 18 declarative YAML operations, zero deps
+│   ├── yschema/       — shared YAML validation primitives
+│   ├── core/          @t3x-dev/core        — diff, merge, hash chains, extraction (deterministic)
+│   ├── storage/       @t3x-dev/storage     — Postgres persistence (Drizzle)
+│   ├── api/           @t3x-dev/api         — route library + createApp() factory
+│   └── api-client/    @t3x-dev/api-client  — TypeScript client
 ├── apps/
-│   ├── web/            # t3x-webui - Next.js 16 frontend (App Router + XYFlow)
-│   ├── api/            # Hono API server binary — wraps packages/api via createApp()
-│   ├── runner/         # @t3x-dev/runner - Grey-box agent evaluation engine (server + shared lib)
-│   ├── cli/            # @t3x-dev/cli - Command line interface
-│   ├── mcp/            # @t3x-dev/mcp - MCP server exposing T3X tools to AI agents
-│   └── agent-demo/     # Demo agent for testing
-├── biome.json          # Linting and formatting config
-├── turbo.json          # Turborepo task config
+│   ├── web/           t3x-webui            — Next.js 16 frontend (App Router + XYFlow)
+│   ├── api/                                 — Hono server binary; wraps packages/api
+│   ├── runner/        @t3x-dev/runner      — grey-box agent evaluation (server + library)
+│   ├── cli/           @t3x-dev/cli         — command line
+│   ├── mcp/           @t3x-dev/mcp         — MCP server exposing T3X tools to AI agents
+│   └── agent-demo/                          — demo agent
+├── biome.json
+├── turbo.json
 └── docker-compose.yml
 ```
 
-**Note:** `packages/api` is the published library containing route definitions and the `createApp()` factory; `apps/api` is the runnable server that wraps it. `apps/runner` serves both as the runner binary and the published `@t3x-dev/runner` library (no separate `packages/runner`).
+**Note:** `packages/api` = route library; `apps/api` = runnable server that calls `createApp()`. They are not the same thing. `apps/runner` doubles as both the runner binary and the published `@t3x-dev/runner` library (no separate `packages/runner`).
 
-## Build Commands
+## Build & Development
 
-### Monorepo (from root)
+From the repo root:
+
 ```bash
-pnpm install                    # Install all dependencies
-pnpm build                      # Build all packages
-pnpm test                       # Run all tests
-pnpm lint                       # Biome lint
-pnpm lint:fix                   # Biome lint + auto-fix
-pnpm check                      # Biome check (lint + format)
-pnpm check:fix                  # Biome check + auto-fix
+pnpm install
+pnpm build                    # all packages
+pnpm test                     # all tests
+pnpm lint / lint:fix
+pnpm check / check:fix        # lint + format
 ```
 
-### Package-specific builds
-```bash
-pnpm build:core                 # Build @t3x-dev/core
-pnpm build:storage              # Build @t3x-dev/storage
-pnpm build:webui                # Build t3x-webui
-pnpm build:api                  # Build @t3x-dev/api
-pnpm build:runner               # Build @t3x-dev/runner
+Per-package:
 
-pnpm test:core                  # Test @t3x-dev/core
-pnpm test:storage               # Test @t3x-dev/storage
-pnpm test:webui                 # Test t3x-webui
-pnpm test:runner                # Test @t3x-dev/runner
+```bash
+pnpm build:core / build:storage / build:api / build:runner / build:webui
+pnpm test:core  / test:storage  / test:webui / test:runner
 ```
 
-### Development servers
+Dev servers:
+
 ```bash
-pnpm dev:webui                  # Next.js dev server (port 3000)
-pnpm dev:api                    # Hono API server (port 8000)
-pnpm dev:agent                  # Demo agent (port 9000)
-cd apps/runner && pnpm dev      # Runner server (port 8080)
+pnpm dev:api       # Hono API, port 8000
+pnpm dev:webui     # Next.js, port 3000
+pnpm dev:agent     # demo agent, port 9000
+cd apps/runner && pnpm dev   # runner, port 8080
 ```
 
-### Run single test
+Single test:
+
 ```bash
-# From package directory
-vitest run src/__tests__/some.test.ts           # Specific file
-vitest run -t "creates a new project"           # By test name
+# from a package directory
+pnpm vitest run src/__tests__/some.test.ts
+pnpm vitest run -t "creates a new project"
 ```
 
-### Docker
+Docker:
+
 ```bash
-docker compose up -d --build               # Default: postgres + api + webui
-docker compose --profile runner up -d      # Include runner
-docker compose --profile n8n up -d         # Include n8n workflow engine
+docker compose up -d --build              # postgres + api + webui
+docker compose --profile runner up -d     # adds runner
+docker compose --profile n8n up -d        # adds n8n
 docker compose down
 ```
 
-Ports: WebUI (3000), API (8000), PostgreSQL (5432), Runner (8080), Agent Demo (9000), n8n (5678)
+Ports: WebUI 3000, API 8000, Postgres 5432, Runner 8080, Agent Demo 9000, n8n 5678.
+
+**Dependency build order.** After changing a lower package, rebuild consumers:
+
+```
+core changed       → pnpm build:core && pnpm build:storage && pnpm build:api
+storage changed    → pnpm build:storage && pnpm build:api
+apps/api changed   → pnpm build:api  (or just pnpm dev:api for HMR)
+```
+
+Tests depend on built artefacts. If tests can't find `@t3x-dev/*`, rebuild.
 
 ## Architecture
 
-### Package Dependencies
+### Package dependency graph
 
 ```
-packages/yops (@t3x-dev/yops)          ← standalone, zero deps
+yops (@t3x-dev/yops)         ← standalone, zero deps
+  └── core (@t3x-dev/core)   ← tree-primary engine
+        └── storage (@t3x-dev/storage)
+              └── packages/api (@t3x-dev/api)   ← route library
+                    └── apps/api                ← server binary
+                    └── apps/runner             ← also imports packages/api
 
-packages/core (@t3x-dev/core)
-  └─► packages/yops
-
-packages/storage (@t3x-dev/storage)
-  └─► packages/core
-
-packages/api (@t3x-dev/api)            ← route/createApp library
-  ├─► packages/core
-  ├─► packages/storage
-  └─► apps/runner (@t3x-dev/runner)
-
-apps/api (server binary)
-  └─► packages/api
-
-apps/web (t3x-webui)
-  └─► packages/storage
-
-apps/cli (@t3x-dev/cli)
-  ├─► packages/core
-  └─► packages/api-client (@t3x-dev/api-client)
-
-apps/mcp (@t3x-dev/mcp)
-  ├─► packages/core
-  └─► packages/api-client
+apps/web     → storage + api-client
+apps/cli     → core + api-client
+apps/mcp     → core + api-client
 ```
 
-### YOps Architecture (packages/yops)
+### YOps engine (`packages/yops`)
 
-YOps is the declarative YAML operation engine. Three layers, like OpenAPI / Zod / Hono:
+Three layers, analogous to OpenAPI / Zod / Hono:
 
-| Layer | File(s) | Role | Analogy |
-|-------|---------|------|---------|
-| **YOps** | `yops.yaml` | Operation spec — fields, rules, errors, test cases | OpenAPI |
-| **Registry** | `registry.ts`, `spec.ts` | Parse spec, validate handlers, enforce field contracts | Zod |
-| **Engine** | `engine.ts`, `handlers/` | Dispatch and execute operations | Hono |
+| Layer | Files | Role |
+|---|---|---|
+| Spec | `yops.yaml` | 18 operations — fields, rules, errors, conformance test cases |
+| Registry | `spec.ts`, `registry.ts` | Parses the spec, validates handlers + field contracts |
+| Engine | `engine.ts`, `handlers/` | Dispatches and executes |
 
+`yops.yaml` is the runtime source of truth, not documentation. Every op has one handler. Ops are grouped DDL / DML / DTL / DCL. Conformance tests are language-agnostic — any engine can run them.
+
+`@t3x-dev/core` extends the YOps registry with `relate` / `unrelate`.
+
+### Deterministic layers
+
+| Layer | Package | LLM? |
+|---|---|---|
+| YOps engine | `@t3x-dev/yops` | No |
+| Core | `@t3x-dev/core` | No |
+| Storage | `@t3x-dev/storage` | No |
+| Agent plugins | optional (SummaryAgent, MergeAgent) | Optional |
+| Product | `web`, `api`, `runner` | No |
+
+### The Commit model
+
+```ts
+// packages/core/src/commit/types.ts
+export const COMMIT_SCHEMA = 't3x/commit';   // unversioned, self-identifier
+
+interface Commit {
+  // First-class (in hash)
+  hash: string;
+  schema: typeof COMMIT_SCHEMA;
+  parents: string[];
+  author: Author;
+  committed_at: string;
+  content: SemanticContent;   // { trees: TreeNode[]; relations: Relation[] }
+
+  // Second-class (not in hash)
+  project_id: string;
+  message: string | null;
+  branch: string;
+  provenance: Provenance | null;
+  yops_log_ids: string[];
+  sources?: { type: 'conversation' | 'import' | 'leaf'; id: string; title?: string }[] | null;
+}
 ```
-yops.yaml (spec)  →  Registry (validates)  →  Engine (executes)
-```
 
-- `yops.yaml` is the runtime source of truth — parsed at init, not just documentation
-- Registry validates every spec op has a handler, and validates fields before every handler call
-- 18 ops organized into DDL (structure), DML (data), DTL (transform), DCL (control)
-- Conformance tests in `yops.yaml` — any language can run them to verify their engine
+**There is one commit format.** No versioned variants. `content` is a YOps-mutated knowledge tree + relations. Leaves own constraints (see below), never commits. Hashing uses SHA-256 over JCS-canonicalized first-class fields (`packages/core/src/commit/hash.ts`).
 
-`@t3x-dev/core` imports `@t3x-dev/yops` and extends it with `relate`/`unrelate` (T3X-specific semantic operations).
+### Hash chains
 
-### Three-Layer Design
+- **Turn**: `parent_turn_hash → turn_hash` (SHA-256 of JCS-canonicalized turn fields).
+- **Commit**: DAG via `parents: string[]`. Merge commits have multiple parents.
 
-| Layer | Package | LLM Required? |
-|-------|---------|---------------|
-| **YOps Engine** | `@t3x-dev/yops` | No (deterministic) |
-| **T3X Core** | `@t3x-dev/core` | No (deterministic) |
-| **Storage Layer** | `@t3x-dev/storage` | No |
-| **Agentic Layer** | SummaryAgent/MergeAgent plugins | Optional |
-| **Product Layer** | `t3x-webui`, `@t3x-dev/api`, `@t3x-dev/runner` | No |
+### Storage (`packages/storage`)
 
-### Storage Architecture
+Postgres via Drizzle ORM. Embedded Postgres for local dev; Postgres for Docker/prod; Supabase adapter available.
 
-T3X uses PostgreSQL (via Drizzle ORM):
-- **Embedded PostgreSQL** for local development
-- **Postgres** for Docker/production
-- **Supabase** adapter available
-
-Schema is split across several files in `packages/storage/src/`:
+Schema is sharded for manageability — each file hosts a group of related tables:
 
 | File | Tables |
-|------|--------|
-| `schema.ts` | Core: `projects`, `conversations`, `turns`, `branches`, `agent_drafts`, `drafts`, `leaves`, `leaf_history`, `leaf_output_edits`, `pins`, `conversation_contexts`, `merge_drafts`, `deploy_agents`, `runs`, `segment_embeddings`, `saved_comparisons`, `templates`, `recipes`, `webhooks`, `share_tokens`, `users`, `accounts`, `api_keys`, `notifications`, `global_settings`, `yops_log` |
+|---|---|
+| `schema.ts` | `projects`, `conversations`, `turns`, `branches`, `agent_drafts`, `drafts`, `leaves`, `leaf_history`, `leaf_output_edits`, `pins`, `conversation_contexts`, `merge_drafts`, `deploy_agents`, `runs`, `segment_embeddings`, `saved_comparisons`, `templates`, `recipes`, `webhooks`, `share_tokens`, `users`, `accounts`, `api_keys`, `notifications`, `global_settings`, `yops_log` |
 | `schema-commits.ts` | `commits`, `commit_rewrites`, `frame_lineage` |
 | `schema-trees.ts` | `trees`, `tree_relations`, `knowledge_nodes`, `knowledge_edges`, `knowledge_node_members` |
 | `schema-knowledge-conflicts.ts` | `knowledge_conflicts` |
 | `schema-node-modifications.ts` | `node_modifications` |
 | `schema-extraction-feedback.ts` | `extraction_feedback` |
 | `schema-metrics.ts` | `metrics_events`, `token_usage`, `topics` |
-| `schema-tree-state.ts` | Tree state helpers (no standalone tables) |
+| `schema-tree-state.ts` | Tree-state helpers (no standalone tables) |
 
-### Hash Chains
+Business logic calls functions in `queries/`, never raw SQL.
 
-- **Turn chain**: `parent_turn_hash → turn_hash` (SHA-256 of JCS-canonicalized JSON)
-- **Commit chain**: DAG with `parent_hashes[]`, supports branching and merging
+### Extraction pipeline (`packages/core/src/extractors/`)
 
-### Extraction Pipeline (t3x-core)
+LLM proposes YOps; the pipeline applies them deterministically. `yops_log` is the audit trail for every mutation.
 
-Extraction converts raw conversation turns into a YOps-mutated knowledge tree. The pipeline lives in `packages/core/src/extractors/` and is LLM-assisted, but the mutation path is deterministic (YOps).
+| Stage | Files |
+|---|---|
+| Prompt build | `extractionPrompt.ts`, `yopsPrompt.ts`, `extractionStyleConfig.ts` |
+| Strategy + LLM call | `strategies/`, `extractor.ts` |
+| Parse | `yopsParser.ts` |
+| Relations (2nd pass) | `relationExtractor.ts`, `relationPrompt.ts`, `relationParser.ts` |
+| Transforms (deterministic) | `transforms/` (`consolidate`, `nest`, `flagContradictions`, `checkRegression`) |
+| Repair | `repairPrompt.ts`, `correctionPrompt.ts`, `fuzzyLocate.ts` |
+| Compression | `compressor.ts`, `compressPrompt.ts` |
+| Thresholds | `adaptiveThresholds.ts` |
 
-| Stage | Files | Role |
-|-------|-------|------|
-| **Prompt build** | `extractionPrompt.ts`, `yopsPrompt.ts`, `extractionStyleConfig.ts` | Assemble extraction or incremental-YOps prompts (style, few-shot, context) |
-| **Strategy** | `strategies/yaml-strategy.ts`, `extractor.ts` | Dispatch to LLM via provider, route through chosen strategy |
-| **Parse** | `yopsParser.ts` | Parse LLM-emitted YOps YAML into validated ops |
-| **Relations** | `relationExtractor.ts`, `relationPrompt.ts`, `relationParser.ts` | Second LLM pass to infer inter-node relations (`relate`/`unrelate`) |
-| **Transforms** | `transforms/` (`consolidate`, `nest`, `flagContradictions`, `checkRegression`) | Deterministic post-processing on the extracted tree |
-| **Repair / correction** | `repairPrompt.ts`, `correctionPrompt.ts`, `fuzzyLocate.ts` | Retry prompts when parse/validation fails; locate source spans |
-| **Compression** | `compressor.ts`, `compressPrompt.ts` | Optional size reduction of large extraction results |
-| **Adaptive thresholds** | `adaptiveThresholds.ts` | Tune similarity/inclusion thresholds per project |
+Flow: `turns → prompt → LLM → YOps YAML → parser → @t3x-dev/yops engine → relation pass → transforms → yops_log + commit`.
 
-**Flow:** `turns → extraction prompt → LLM → YOps YAML → parser → apply via @t3x-dev/yops → relation pass → deterministic transforms → tree mutation`. The LLM only proposes YOps; all tree mutation goes through the YOps engine, preserving determinism and auditability (see `yops_log` table).
+### Diff & merge (`packages/core/src/semantic/`)
 
-### Diff Engine (t3x-core)
+**Diff** is tiered:
 
-Words-based semantic diff engine for comparing commits:
-- **Two-way diff**: Compare Draft vs parent Commit (self-check scenario)
-- **Three-way diff**: Merge preview with conflict detection (merge scenario)
+1. Exact match (O(N+M)) — identical subtrees skip comparison
+2. Jaccard ≥ 0.3 filter to find candidate pairs (fast)
+3. LCS word diff inside each matched pair
+4. Classify unpaired: added / removed
 
-**Design**: Storage = Sentence, Diff = Word, Merge = Three-Way
+**Merge** is two-phase:
 
-Algorithm uses tiered matching:
-1. **Exact match** (O(N+M)): Identical sentences skip diff
-2. **Jaccard filter** (fast): Find candidate pairs with Jaccard >= 0.3
-3. **LCS word diff** (per pair): Word-level changes within matched sentences
-4. **Classify remainder**: Unpaired sentences as added/removed
+1. `prepareMerge(source, target)` → returns `identical` (auto-kept), `similarPairs` (user resolves, with `word_diff` for display), `onlyInSource`, `onlyInTarget`.
+2. `executeMerge(decisions, message)` → writes the merged commit.
 
-See `docs/specification/words-based-diff-merge-architecture.md` for full specification.
+Decisions are one of `source | target | both | edit` (custom text).
 
-### Merge System (t3x-core)
+### Runner (`apps/runner`)
 
-Two-phase merge process:
-1. **prepareMerge**: Analyzes source/target commits, returns merge result with:
-   - `identical`: Auto-kept sentences (no user action)
-   - `similarPairs`: User must choose source or target (with `word_diff` for display)
-   - `onlyInSource`/`onlyInTarget`: User can keep or discard
-2. **executeMerge**: Applies user decisions, generates merged commit
+Grey-box agent evaluator.
 
-Resolution types: `source` | `target` | `both` (keep both sentences) | `edit` (custom text)
+- **Observer** captures agent I/O traces (LLM calls, tool invocations).
+- **EvalEngine** runs test steps against traces using rule-based assertions.
+- **n8n integration** for workflow execution.
 
-### Runner (apps/runner)
-
-Grey-box agent evaluation engine:
-- **Observer**: Captures agent I/O traces (LLM calls, tool invocations)
-- **EvalEngine**: Runs test steps against traces using rule-based assertions
-- **n8n Integration**: Workflow execution and trace collection
-
-```typescript
-// Usage pattern
+```ts
 import { observer, evalEngine } from '@t3x-dev/runner';
 
-observer.registerAgent({ id: 'my-agent', endpoint: 'http://...', type: 'http' });
+observer.registerAgent({ id: 'my-agent', endpoint: '...', type: 'http' });
 const runId = observer.startRun('my-agent', { input: { query: 'hello' } });
 observer.recordLLMCall(runId, prompt, response, 'gpt-4', 500);
 const trace = observer.completeRun(runId, output, 'completed');
 const result = await evalEngine.evaluate({ trace, test_steps: [...] });
 ```
 
-## WebUI Architecture (apps/web)
+## WebUI Architecture (`apps/web`)
+
+### Folder map (current on disk)
 
 ```
-src/
-├── app/                          # Next.js App Router
-│   ├── api/v1/chat/stream/      # Chat streaming endpoint
-│   ├── project/[projectId]/     # Project canvas page
-│   │   ├── leaf/[leafId]/       # Leaf detail page
-│   │   ├── merge/[mergeId]/     # Merge workspace page
-│   │   └── conversation/[conversationId]/
-│   ├── insights/                # Insights page
-│   └── deploy/                  # Deploy & compare pages
-├── components/                  # React components
-│   ├── ui/                      # shadcn/ui base components
-│   ├── canvas/                  # Canvas workspace (nodes, modal, panels)
-│   ├── leaf/                    # Leaf-specific components
-│   ├── merge/                   # Merge workspace components
-│   ├── diff/                    # Diff visualization
-│   ├── shared/                  # Shared UI (TurnBubble, etc.)
-│   ├── conversation/            # Conversation components
-│   └── optimiser/               # Agent evaluation UI
-├── store/                       # Zustand state management (L3 — UI state only)
-│   ├── canvasStore.ts           # Canvas store (core state + slice composition)
-│   ├── canvasStoreTypes.ts      # Shared CanvasState type + slice interfaces
-│   ├── canvasStoreUtils.ts      # Pure utility functions (layout, position, graph helpers)
-│   ├── canvasMergeSlice.ts      # Merge domain slice
-│   ├── canvasLeafSlice.ts       # Leaf panel domain slice
-│   ├── canvasCommitSlice.ts     # Commit domain slice
-│   ├── canvasNodeSlice.ts       # Node domain slice
-│   ├── pinsStore.ts             # V4 pin management (CRUD, selectors)
-│   ├── projectStore.ts          # Project state
-│   ├── mergeWorkspaceStore.ts   # Full-screen merge workspace state
-│   ├── commitStore.ts           # Commit list state
-│   ├── commitDetailStore.ts     # Selected commit detail state
-│   ├── draftWorkspaceStore.ts   # Draft workspace state
-│   ├── knowledgeGraphStore.ts   # Knowledge graph view state
-│   ├── chatStore.ts, chatSessionStore.ts  # Chat UI state
-│   ├── searchStore.ts           # Search UI state (delegates I/O to queries/)
-│   ├── sessionStore.ts, settingsStore.ts, templateStore.ts, workspaceStore.ts
-│   └── optimiserStore.ts        # Agent evaluation UI state (persisted)
-├── queries/                     # L3 entry points for data fetching (call infrastructure L1)
-├── infrastructure/              # L1 adapters — raw API/storage I/O (mergeApi, conversationLoader, yopsLog)
-├── commands/                    # User-intent commands dispatched from UI
-├── hooks/                       # React hooks (useApi, useBranchCommits, useReducedMotion, …)
-├── lib/                         # Shared utilities (api.ts, db.ts, diffUtils, elkLayout, highlightUtils, …)
-├── utils/                       # Pure utility functions
-├── data/                        # Static data
-├── types/                       # Shared TypeScript types
-├── middleware.ts                # Next.js middleware
-└── __tests__/                   # API route tests
+apps/web/src/
+├── app/                 — Next.js App Router (pages)
+├── components/          — L4: rendering (ui/ canvas/ leaf/ merge/ diff/ shared/ …)
+├── hooks/               — L3: view-level composition (useApi, useLeafPageData, …)
+├── store/               — L3: Zustand state containers (passive: state + setters only)
+├── queries/             — L3 reads: async fetch per aggregate
+├── commands/            — L3 writes: user-intent commands (YOps today; more aggregates coming)
+├── domain/              — L2: pure functions (replay, hoverTrace, tree, source maps). No React, no I/O.
+├── infrastructure/      — L1: the only place fetch() lives (yopsLog, conversationLoader, mergeApi, …)
+├── lib/                 — legacy I/O surface (lib/api/*.ts); new work should use infrastructure/ instead
+├── utils/ / data/ / types/ — shared helpers / static data / shared types
+├── middleware.ts
+└── __tests__/
 ```
 
-**Layering (L1/L2/L3):** `infrastructure/` is L1 (pure I/O adapters), `queries/` is the L3 entry for reads, `store/` is forbidden from touching I/O directly — stores delegate to `queries/` and `commands/`. This is the active refactor on branch `refactor/store-l1-ban-and-infrastructure-merge`.
+### Four-layer model — enforced by Biome
 
-### API Response Format
+`biome.json` uses `noRestrictedImports` to make the layering mechanical, not aspirational:
+
+| Layer | Folder | Rule |
+|---|---|---|
+| L1 Infrastructure | `infrastructure/` | Raw I/O. Only layer that may call `fetch()`. |
+| L2 Domain | `domain/` | Pure. **Cannot import** React, components, hooks, store, queries, commands, or infrastructure. |
+| L3 Composition | `hooks/`, `store/`, `queries/`, `commands/` | `store/` **cannot import** commands or infrastructure (route through queries). `hooks/` may compose. |
+| L4 View | `components/` (canvas/chat/commit/leaf/merge/tree-graph/merge-view) | **Cannot import** commands or infrastructure directly. Use hooks or queries. |
+
+Violations fail lint. Escape hatches are narrow and listed in `biome.json` `overrides`.
+
+**Implications for new code:**
+- Component fetches? → hook → query (read) or command (write).
+- Store needs data? → query, never direct fetch.
+- Pure derivation (selectors, replay, tree ops)? → `domain/`.
+- New HTTP endpoint? → add to `infrastructure/<aggregate>.ts`, not `lib/api/`.
+
+### Canvas store (slice pattern)
+
+```
+canvasStore.ts              — create<CanvasState>(slices + core)
+├── canvasStoreTypes.ts     — shared CanvasState + slice interfaces
+├── canvasStoreUtils.ts     — pure helpers (layout, position, graph)
+├── canvasMergeSlice.ts     — merge domain
+├── canvasLeafSlice.ts      — leaf panel domain
+├── canvasCommitSlice.ts    — commit domain
+└── canvasNodeSlice.ts      — node domain
+```
+
+All consumers import from `canvasStore.ts`.
+
+### API response envelope
+
 ```json
-{ "success": true, "data": {...} }
-{ "success": false, "error": { "code": "...", "message": "..." } }
+{ "success": true,  "data": { … } }
+{ "success": false, "error": { "code": "…", "message": "…" } }
 ```
 
-API uses snake_case for JSON fields, internal code uses camelCase.
+Snake_case on the wire and in DB columns; camelCase in JS variables; TypeScript interface fields mirror the wire format (snake_case). Don't write `commitHash` in a TS interface — write `commit_hash`.
 
-### Canvas State (Zustand)
-- **Nodes**: Conversations, commits (pending/committed), leaf nodes
-- **Edges**: Data flow connections
-- **Locking**: Committed commits and upstream nodes are immutable
+## Data Shapes
 
-### Canvas Store Architecture
+### Turn
 
-The canvas store uses the Zustand slice pattern for modular state management:
-
-```
-canvasStore.ts          ← Entry point: create<CanvasState>(slices + core)
-├── canvasStoreTypes.ts ← Shared types: CanvasState, slice interfaces
-├── canvasStoreUtils.ts ← Pure functions: layout, position, graph traversal
-├── canvasMergeSlice.ts ← Merge domain
-├── canvasLeafSlice.ts  ← Leaf panel domain
-├── canvasCommitSlice.ts← Commit domain
-└── canvasNodeSlice.ts  ← Node domain
-```
-
-All consumers import from `canvasStore.ts` (re-exports selectors/types for backward compatibility).
-
-## Testing
-
-All packages use **vitest** with embedded PostgreSQL for isolated test databases:
-
-```typescript
-// Test setup pattern
-import { setupTestDB, testData } from '../setup';
-
-vi.mock('@/lib/db', () => ({
-  getDB: vi.fn(() => Promise.resolve(mockDB)),
-}));
-```
-
-## Key Data Formats
-
-### Turn Record
 ```json
 {
-  "turn_hash": "sha256:...",
-  "parent_turn_hash": "sha256:...",
-  "project_id": "proj_...",
-  "conversation_id": "conv_...",
+  "turn_hash": "sha256:…",
+  "parent_turn_hash": "sha256:…",
+  "project_id": "proj_…",
+  "conversation_id": "conv_…",
   "role": "user|assistant|system|tool",
-  "content": "...",
+  "content": "…",
   "created_at": "ISO8601"
 }
 ```
 
-### SentenceCommit Record (Current)
+### Commit (current — one shape, unversioned)
+
 ```json
 {
-  "hash": "sha256:...",
-  "schema": "t3x/commit/v4",
-  "parents": ["sha256:..."],
-  "author": { "type": "human|agent", "id": "...", "name": "..." },
+  "hash": "sha256:…",
+  "schema": "t3x/commit",
+  "parents": ["sha256:…"],
+  "author": { "type": "human|agent|system", "id": "…", "name": "…" },
   "committed_at": "ISO8601",
   "content": {
-    "sentences": [
-      {
-        "id": "s_abc123",
-        "text": "...",
-        "source_ref": {
-          "conversation_id": "conv_...",
-          "turn_hash": "sha256:...",
-          "start_char": 0,
-          "end_char": 50
-        }
-      }
+    "trees": [
+      { "key": "budget", "slots": { "…": "…" }, "children": [ … ] }
+    ],
+    "relations": [
+      { "from": "budget", "to": "activity_plan", "type": "causes" }
     ]
   },
-  "project_id": "proj_...",
-  "message": "...",
+  "project_id": "proj_…",
+  "message": "…",
   "branch": "main",
-  "source_refs": [
-    { "type": "conversation|leaf", "id": "...", "title": "...", "assertion_lessons": ["..."] }
-  ]
+  "provenance": { "method": "llm_extraction|human_curation|import|merge|squash", "model": "…" },
+  "yops_log_ids": ["…"],
+  "sources": [{ "type": "conversation|import|leaf", "id": "…", "title": "…" }]
 }
 ```
 
-**Key point**: SentenceCommit content has sentences ONLY. No constraints. Constraints belong to Leaf.
+First-class (hashed): `schema`, `parents`, `author`, `committed_at`, `content`.
+Second-class (not hashed): `project_id`, `message`, `branch`, `provenance`, `yops_log_ids`, `sources`, UI position fields.
 
-**Field Classification:**
-- **First-class (in hash)**: `hash`, `schema`, `parents`, `author`, `committed_at`, `content`
-- **Second-class (not in hash)**: `project_id`, `message`, `branch`, `source_refs`, `position_x`, `position_y`
+### Leaf
 
-### Leaf Record (V4)
 ```json
 {
-  "id": "leaf_abc123",
-  "commit_hash": "sha256:...",
+  "id": "leaf_…",
+  "commit_hash": "sha256:…",
   "type": "deploy_agent|tweet|weibo|wechat|email|article|slack|eval",
-  "title": "...",
+  "title": "…",
   "constraints": [
-    { "id": "cst_def456", "type": "require", "match_mode": "exact|semantic", "value": "..." },
-    { "id": "cst_ghi789", "type": "exclude", "match_mode": "exact|semantic", "value": "...", "reason": "..." }
+    { "id": "cst_…", "type": "require|exclude", "match_mode": "exact|semantic", "value": "…", "reason": "…" }
   ],
-  "config": { "prompt_template": "...", "model": "...", "max_tokens": 4096 },
-  "output": "...",
+  "config": { "prompt_template": "…", "model": "…", "max_tokens": 4096 },
+  "output": "…",
   "assertions": [
-    { "id": "ast_jkl012", "constraint_id": "cst_def456", "passed": true, "details": "...", "lesson": "..." }
+    { "id": "ast_…", "constraint_id": "cst_…", "passed": true, "details": "…", "lesson": "…" }
   ],
-  "project_id": "proj_...",
+  "project_id": "proj_…",
   "created_at": "ISO8601"
 }
 ```
 
-### Pin Record (V4)
+**Constraints belong to Leaves, not Commits.** A Leaf is the application-layer artefact (tweet, email, eval, …) built from a commit's knowledge plus its own constraints.
+
+### Pin
+
 ```json
 {
-  "id": "pin_mno345",
-  "project_id": "proj_...",
+  "id": "pin_…",
+  "project_id": "proj_…",
   "type": "conversation|leaf",
-  "ref_id": "conv_...|leaf_...",
-  "selected_assertion_ids": ["ast_..."],
+  "ref_id": "conv_…|leaf_…",
+  "selected_assertion_ids": ["ast_…"],
   "pinned_at": "ISO8601"
 }
 ```
 
-### CommitV3 Record (Legacy)
-```json
-{
-  "hash": "sha256:...",
-  "schema": "commit/v3",
-  "parents": ["sha256:..."],
-  "author": { "name": "user", "identity": "...", "verification": "none|device|verified" },
-  "committed_at": "ISO8601",
-  "content": {
-    "sentences": [
-      { "id": "s1", "text": "...", "source": { "turn_hash": "...", "start_char": 0, "end_char": 50 } }
-    ],
-    "constraints": [
-      { "type": "require", "id": "c1", "value": "...", "match": "exact|semantic", "source_sentence_id": "s1" },
-      { "type": "exclude", "id": "c2", "value": "...", "match": "exact|semantic", "reason": "..." }
-    ]
-  },
-  "project_id": "proj_...",
-  "message": "...",
-  "branch": "main"
-}
-```
-
-## Important Design Constraints
-
-1. **Determinism**: Core algorithms must be 100% reproducible — same inputs always produce same outputs
-2. **Append-only**: Hash chains are immutable; any modification breaks integrity
-3. **Plugin architecture**: Extractors and embedders are pluggable
-4. **Evidence-backed**: Every semantic finding traces to source turns with verbatim quotes
-
-## Environment Variables
-
-### User-facing (`.env` or shell)
-
-- `ANTHROPIC_API_KEY`: Required for extraction, chat, and generation
-- `GOOGLE_AI_STUDIO_KEY`: Optional — Gemini models and embeddings
-
-### Docker-internal (defaults in `docker-compose.yml`)
-
-- `DATABASE_URL`: PostgreSQL connection string (auto-set in Docker)
-- `NEXT_PUBLIC_API_URL`: T3X API server URL (default: http://localhost:8000)
-- `AUTH_DISABLED`: Set `true` for self-hosted (default), `false` for production
-
-### Runner/n8n (optional profiles)
-
-- `N8N_API_KEY`: n8n API key
-- `TRACE_POLICY`: `always` | `on_failure` | `on_violation`
-
-### Cloud-only (in `t3x_cloud` repo, not here)
-
-- `GITHUB_CLIENT_ID/SECRET`, `GOOGLE_CLIENT_ID/SECRET`, `NEXTAUTH_SECRET` — OAuth for SaaS
+Pins select sources for commit construction and conversation context.
 
 ## ID Conventions
 
-T3X uses prefixed IDs for type safety:
-- `proj_` - Project IDs
-- `conv_` - Conversation IDs
-- `s_` - Sentence IDs (V4, e.g., `s_abc123`)
-- `cst_` - Constraint IDs (V4, e.g., `cst_def456`)
-- `ast_` - Assertion IDs (V4, e.g., `ast_ghi789`)
-- `leaf_` - Leaf IDs (V4, e.g., `leaf_jkl012`)
-- `lhist_` - Leaf history IDs (V4, e.g., `lhist_pqr678`)
-- `pin_` - Pin IDs (V4, e.g., `pin_mno345`)
-- `ak_` - API key IDs (raw key values use prefix `t3xk_`)
-- `share_` - Share token IDs
-- `draft_` - Draft IDs
-- `dc_` - Draft constraint IDs
-- `rel_` - Relation IDs
-- Legacy: `s1`, `s2` (sentence), `c1`, `c2` (constraint), `mc1` (merged constraint) - V3 format
-
 Source of truth: `ID_PREFIXES` in `packages/core/src/types/index.ts`.
 
-## API Naming Conventions
+| Entity | Prefix |
+|---|---|
+| Project | `proj_` |
+| Conversation | `conv_` |
+| Sentence (node) | `s_` |
+| Constraint | `cst_` |
+| Assertion | `ast_` |
+| Leaf | `leaf_` |
+| Leaf history | `lhist_` |
+| Pin | `pin_` |
+| API key (id) | `ak_` (raw key value: `t3xk_…`) |
+| Share token | `share_` |
+| Draft | `draft_` |
+| Draft constraint | `dc_` |
+| Relation | `rel_` |
 
-- **API/Database/TypeScript types**: `snake_case` (e.g., `turn_hash`, `project_id`, `committed_at`)
-- **JavaScript variables**: `camelCase` (e.g., `turnHash`, `projectId`, `committedAt`)
-- **API responses**: Return `null` for absent optional fields
-- **TypeScript interfaces**: Use `?` for optional fields (maps to `undefined`)
+## Invariants
 
-## V4 Architecture Parallel Development Rules
+1. **Determinism.** Same inputs → same outputs for every core algorithm.
+2. **Append-only.** Hash chains are immutable; modifying a commit breaks verification.
+3. **YOps is the only mutation path** for tree content.
+4. **Evidence-backed.** Every semantic node traces to source turns.
+5. **Layered WebUI.** Biome enforces L1–L4 direction; don't fight it.
 
-> Status: Active (Core types, storage, API, and WebUI integration implemented)
-> Related docs: docs/specification/semantic-layer-architecture.md, docs/specification/memory-pin-system-design.md
+## MCP Server
 
-### Contract Files (Single Source of Truth)
-
-| File | Purpose | Can Modify Alone? |
-|------|---------|-------------------|
-| packages/core/src/types/index.ts | TypeScript types (V4 types live here; no separate v4/ dir) | ❌ No |
-| packages/storage/src/schema.ts (+ schema-*.ts shards) | Database schema | ❌ No |
-| packages/api/src/schemas/contracts.ts | API contracts | ❌ No |
-
-Rule: Contract = Law, Implementation = Freedom
-
-- ✅ Implement according to contracts freely
-- ❌ Do NOT modify contract files without team agreement
-- If contract needs change → discuss first → modify together → both review PR
-
-### Import Rules
-
-```typescript
-// ✅ Correct: Import from @t3x-dev/core
-import { SentenceCommit, Leaf, Pin, Constraint } from '@t3x-dev/core';
-
-// ❌ Wrong: Redefine types locally
-interface Leaf { ... }  // DON'T DO THIS
-```
-
-### Naming Conventions
-
-| Layer | Convention | Example |
-|-------|------------|---------|
-| TypeScript types | snake_case | commit_hash, selected_pin_ids |
-| DB columns | snake_case | commit_hash, selected_pin_ids |
-| API JSON | snake_case | { "commit_hash": "..." } |
-| JS variables | camelCase | const commitHash = ... |
-
-### ID Prefixes
-
-| Entity | Prefix | Example |
-|--------|--------|---------|
-| Sentence | s_ | s_abc123 |
-| Constraint | cst_ | cst_def456 |
-| Assertion | ast_ | ast_ghi789 |
-| Leaf | leaf_ | leaf_jkl012 |
-| LeafHistory | lhist_ | lhist_pqr678 |
-| Pin | pin_ | pin_mno345 |
-
-### V4 Architecture Summary
-
-```
-SentenceCommit  = Sentences only (pure knowledge, NO constraints)
-Leaf            = Constraints + Output + Validation (application layer)
-LeafHistory     = Snapshot of each generation (for rollback/comparison)
-Pin             = Source selection (for commit sources + conversation context)
-ConversationCtx = Per-conversation pin selection (customize LLM context)
-BuiltContext    = Assembled context for LLM consumption (text + token estimate + sources)
-```
-
-### Track Assignment
-
-- Track A (Storage/Core): commits-v4.ts, leaves.ts, pins.ts queries, context builder
-- Track B (API/UI): /v1/leaves, /v1/pins routes, WebUI stores, components
-
-## Documentation Index
-
-At the start of a new conversation, read relevant documentation based on task type:
-
-| Task Type | Documentation to Read |
-|-----------|----------------------|
-| **Product & Strategy** | `docs/product-strategy.md`, `docs/product-roadmap.md`, `docs/product-assessment.md` |
-| **Product Overview** | `docs/product-overview/01-product-and-user-layer.md`, `docs/product-overview/02-architecture-and-design-layer.md`, `docs/product-overview/03-engineering-and-implementation-layer.md` |
-| **Team Collaboration** | `docs/collaboration-protocol.md`, `docs/phase0-protocol.md` |
-| WebUI Development | `apps/web/README.md`, `apps/web/src/store/`, `docs/frontend-rules.md`, `docs/frontend-design-principles.md`, `docs/frontend-art-template.md`, `docs/frontend-ia-map.md` |
-| API / Backend Development | `apps/api/src/schemas/contracts.ts`, `docs/backend-rules.md`, `docs/API_REFERENCE.md`, `apps/api/docs/merge-api.md`, `apps/api/docs/openapi-summary.md` |
-| Architecture Development | `docs/specification/semantic-layer-architecture.md`, `docs/specification/memory-pin-system-design.md` |
-| Source Context / Highlighting | `docs/specification/commit-source-context-presentation.md`, `docs/specification/commit-source-context-implementation-review.md` |
-| Diff / Merge Algorithms | `docs/specification/words-based-diff-merge-architecture.md` |
-| Core Algorithms | `packages/core/src/types/`, `docs/specification/ring-schema.md` |
-| Storage Layer | `packages/storage/src/schema.ts` (+ `schema-commits.ts`, `schema-trees.ts`, `schema-metrics.ts`, etc.) |
-| Runner/Eval | `apps/runner/docs/README.md`, `apps/runner/docs/ARCHITECTURE.md`, `apps/runner/docs/n8n-workflow-setup.md` |
-| Testing | `docs/LOCAL_TESTING.md`, `docs/testing/bvt-smoke.md`, `docs/testing/e2e-test-plan.md` |
-| Docker / Deployment | `docs/docker.md` |
-| Demo / Pitch | `docs/demo-script-investor-pitch-v2.md`, `docs/demo/demo-preparation.md` |
-| Go-to-Market / Growth | `docs/go-to-market/README.md` (index for all 8 GTM docs) |
-| Competitive Analysis | `docs/competitive-analysis.md`, `docs/rfcs/langfuse-integration.md` |
-
-## Development Workflow
-
-Users may not be familiar with code details. Claude should proactively explore; users only make decisions:
-
-1. **After receiving requirements**: First search for similar code/components, find existing patterns
-2. **Before modifying**: Analyze impact scope, list files/interfaces that will change
-3. **When multiple approaches exist**: List options, ask user which to choose
-4. **When uncertain**: Ask specific decision questions, rather than asking user to explain code
-
-User only needs to: Describe goal → Answer decision questions → Accept results
-
-### Code Reuse Principles
-
-**Priority: Reuse > Modify > Create New**
-
-1. **Prefer reuse**: First search if similar functionality/components/utility functions already exist in the project; reuse directly if possible
-2. **Then modify**: If existing code doesn't fully match, consider extending or modifying the original version
-3. **Last resort - create new**: Only create new code when reuse and modification are not feasible
-
-Before writing code, must first answer: Does the project already have something similar?
-
-## Known Pitfalls
-
-| Problem | Cause | Correct Approach |
-|---------|-------|------------------|
-| DELETE route 404 | `index.ts` imports `projects.ts` instead of `projects.openapi.ts` | Check if import path points to correct file |
-| API call fails | Assuming API is in Next.js (old architecture) | API is in `apps/api` (port 8000), WebUI is in `apps/web` (port 3000) |
-| Tests can't find module | Dependency packages not built first | Run `pnpm build:core && pnpm build:storage` first |
-| Tailwind styles not working | Global styles in `globals.css` (e.g., `button { background: none }`) not in `@layer`, takes precedence over Tailwind utility classes | Global reset styles must be in `@layer base`, or remove conflicting properties |
-
-## Bug Fixing Principles
-
-**NEVER glue-fix bugs.** Always find the root cause or architectural issue. A patch that works around missing data, wrong types, or broken contracts is NOT a fix — it hides the real problem and creates tech debt.
-
-Priority order when something is broken:
-1. **Find the root cause** — trace the data flow end-to-end, identify WHERE it breaks and WHY
-2. **Fix the architecture** — if the schema is wrong, fix the schema. If the data isn't persisted, fix the persistence layer. If a type is missing, add it to the source of truth.
-3. **Remove retired/deprecated code immediately** — dead code, deprecated aliases, legacy types that should have been removed are HIGHER PRIORITY than fixing new bugs. They cause confusion and mask real issues.
-4. **Never patch the read path** to work around write-path bugs — fix the write path
-5. **Never add compatibility shims** when you can fix the source — if the database doesn't store a field, add the column, don't reconstruct it at query time
-
-## Prohibited Actions
-
-- **Don't commit without asking**: Always ask the user for confirmation before running `git commit` or `git push`
-- **Don't add AI markers**: Never include `Co-Authored-By`, Claude's email, or any AI-generated attribution tags in commit messages, PR titles, or PR descriptions. No "Generated with Claude Code" footer in PR body either
-- **Use English only**: All commit messages, PR titles, and PR descriptions must be in English
-- **Always reference issues**: When changes relate to GitHub issues, commit messages must include `(#issue)` and PR body must include `Resolves #issue` (or `Closes #issue`) so merging auto-closes them
-- **Don't guess code locations**: Use Grep/Glob to search first
-- **Don't assume architecture**: API and WebUI are separated after 2025-12 migration
-- **Don't rush to modify**: Read code first, understand context, confirm impact scope
-- **Don't skip verification**: Must run related tests after changes
-- **Don't glue-fix**: Never patch symptoms — find and fix root causes
-
-## Commit Message Standards
-
-Project uses Conventional Commits format:
-
-```
-<type>(<scope>): <description> [Track].(#issue)
-
-# Examples
-feat(api): add V4 leaves endpoint [B1].(#123)
-fix(web): resolve canvas node drag issue [B2].(#124)
-test(storage): add commits-v4 query tests [A1].(#125)
-docs: update CLAUDE.md with workflow rules
-```
-
-| type | Purpose |
-|------|---------|
-| feat | New feature |
-| fix | Bug fix |
-| test | Test related |
-| docs | Documentation update |
-| refactor | Refactoring (no behavior change) |
-| chore | Build/toolchain changes |
-
-Track markers: `[A1]`, `[A2]` = Track A (Storage/Core), `[B1]`, `[B2]` = Track B (API/UI)
-
-## MCP Server (@t3x-dev/mcp)
-
-T3X MCP Server exposes 36 tools for AI agents (Claude Code, Cursor, etc.) to perform semantic version control. Tool files are in `apps/mcp/src/tools/` (one file per tool) — count reflects the current directory; update this number when tools are added or removed.
+`apps/mcp` exposes 36 tools for AI agents (Claude Code, Cursor, …). Tool files live one-per-file in `apps/mcp/src/tools/`. Register new tools in `apps/mcp/src/index.ts`.
 
 ### Setup
 
 ```bash
-# 1. Build
-pnpm build:core && cd packages/api-client && pnpm build && cd ../../apps/mcp && pnpm build
-
-# 2. Start API server
+pnpm build:core && pnpm --filter @t3x-dev/api-client build && pnpm --filter @t3x-dev/mcp build
 pnpm dev:api
-
-# 3. Configure Claude Code (project .mcp.json already exists at repo root)
-# Or add to ~/.claude.json:
-{
-  "mcpServers": {
-    "t3x": {
-      "command": "node",
-      "args": ["apps/mcp/dist/index.js"],
-      "env": {
-        "T3X_API_URL": "http://localhost:8000/api",
-        "T3X_WEB_URL": "http://localhost:3000"
-      }
-    }
-  }
-}
+# project-level .mcp.json is already committed at repo root.
 ```
 
 ### Auth
 
-- **T3X_API_KEY env var** (highest priority): Set in MCP config, skips browser auth
-- **Browser auth**: MCP opens login page, receives token via callback, stores in `~/.t3x/mcp-token.json`
-- **401 auto-retry**: If token expires mid-session, MCP re-authenticates automatically
+- `T3X_API_KEY` env var (in MCP config) → skips browser auth.
+- Otherwise, MCP opens a login page and caches the token in `~/.t3x/mcp-token.json`.
+- 401 mid-session → automatic re-auth.
 
-### Agent Workflow
+### Agent workflow
 
 ```
 Extract → Triage → Edit → Commit:
-  t3x_create_project({ name })              → project_id
-  t3x_extract({ project_id, text })         → draft_id
-  t3x_show_draft({ draft_id })              → nodes, revision
-  t3x_yops_schema()                         → learn YOps format
-  t3x_edit_draft({ draft_id, yops, if_revision }) → updated trees
-  t3x_commit({ project_id, draft_id })      → commit_hash
+  t3x_create_project({ name })                        → project_id
+  t3x_extract({ project_id, text })                   → draft_id
+  t3x_show_draft({ draft_id })                        → nodes, revision
+  t3x_yops_schema()                                   → learn YOps operations
+  t3x_edit_draft({ draft_id, yops, if_revision })     → updated trees
+  t3x_commit({ project_id, draft_id })                → commit_hash
 
 Merge:
-  t3x_merge_prepare({ source_hash, target_hash }) → autoKept, conflicts
-  t3x_merge_execute({ ..., decisions, message })   → merge commit_hash
+  t3x_merge_prepare({ source_hash, target_hash })     → autoKept, conflicts
+  t3x_merge_execute({ …, decisions, message })        → merge commit_hash
 ```
 
-### MCP Development
+## Environment Variables
 
-```bash
-cd apps/mcp
-pnpm build                    # Build MCP server
-npx vitest run                # Run all tests (unit + E2E)
-pnpm dev                      # Run with tsx (dev mode)
+**User-facing** (shell or `.env`):
+
+- `ANTHROPIC_API_KEY` — required for extraction, chat, generation.
+- `GOOGLE_AI_STUDIO_KEY` — optional (Gemini).
+
+**Docker-internal** (set by `docker-compose.yml`):
+
+- `DATABASE_URL` — Postgres connection string.
+- `NEXT_PUBLIC_API_URL` — API server URL (default `http://localhost:8000`).
+- `AUTH_DISABLED` — defaults to `true` for self-hosted.
+
+**Runner / n8n** (opt-in):
+
+- `N8N_API_KEY`, `TRACE_POLICY` (`always | on_failure | on_violation`).
+
+**Cloud-only** (live in `t3x_cloud`, not here): `GITHUB_CLIENT_ID/SECRET`, `GOOGLE_CLIENT_ID/SECRET`, `NEXTAUTH_SECRET`.
+
+## Development Workflow
+
+The user will often describe goals rather than code. Prefer proactive exploration over asking them to explain their own codebase:
+
+1. Search for similar code/components first.
+2. Before modifying, list the files/interfaces that will change.
+3. When multiple approaches exist, present options; let the user pick.
+4. When uncertain, ask a decision-shaped question, not an explanatory one.
+
+### Code reuse
+
+Order of preference: **reuse > extend > create new**. Before writing new code, search the project for something similar. If reuse fits, use it; if it's close, extend it; only then create new.
+
+## Bug Fixing
+
+**Never glue-fix.** A patch that works around missing data, a wrong type, or a broken contract hides the real problem.
+
+Priority when something is broken:
+
+1. Trace the data flow end-to-end; identify exactly where it breaks and why.
+2. Fix the root cause — schema, persistence, type, contract.
+3. Remove retired code immediately. Dead aliases and deprecated types cause the next bug. Deleting them is higher priority than adding your next feature.
+4. Never patch the read path to compensate for a write-path bug.
+5. Never add a compatibility shim when you can fix the source.
+
+## Prohibited
+
+- **No commit without explicit confirmation.** Ask before `git commit` / `git push`.
+- **No AI attribution.** No `Co-Authored-By: Claude`, no "Generated with Claude Code" lines in commit messages, PR titles, or PR bodies.
+- **English only** for commit messages, PR titles, PR descriptions.
+- **Always reference issues.** Commit messages end with `(#N)`; PR bodies include `Resolves #N` or `Closes #N` so merging auto-closes.
+- **Don't guess paths.** Grep / Glob first.
+- **Don't skip verification.** Run relevant tests after changes.
+- **Don't glue-fix.** Find the root cause.
+- **No `console.log` in final code.** Remove debug prints before committing.
+
+## Commit message format (Conventional Commits)
+
+```
+<type>(<scope>): <short description> (#issue)
+
+# examples
+feat(api): add V1 leaves endpoint (#123)
+fix(web): resolve canvas node drag (#124)
+test(storage): cover new commits query (#125)
+docs: update CLAUDE.md
 ```
 
-Tool files are in `apps/mcp/src/tools/`, one file per tool. Register new tools in `apps/mcp/src/index.ts`.
+Types: `feat | fix | test | docs | refactor | chore`.
 
-## Quick Debug Commands
+## Known Pitfalls
+
+| Problem | Cause | Fix |
+|---|---|---|
+| DELETE route returns 404 | `index.ts` imports wrong file (e.g. `projects.ts` instead of `projects.openapi.ts`) | Fix the import path |
+| API call fails from WebUI | Assuming API is in Next.js | API is `apps/api` (port 8000); WebUI is `apps/web` (port 3000) |
+| `Cannot find module '@t3x-dev/…'` | Dependent package not built | Rebuild per the dependency order |
+| Tailwind utility overridden | Global CSS outside `@layer base` | Put resets in `@layer base` or remove the conflicting rule |
+
+## Quick Debug
 
 ```bash
-# Check port usage
-lsof -i :8000                    # API port
-lsof -i :3000                    # WebUI port
+# Ports
+lsof -i :8000
+lsof -i :3000
 
-# View API logs (real-time)
+# Live API logs
 pnpm dev:api 2>&1 | tee api.log
 
 # Clean rebuild
 pnpm clean && pnpm install && pnpm build
 
-# Test a single file
+# Single test file / test by name
 cd apps/api && pnpm vitest run src/__tests__/leaves.test.ts
-
-# Test specific case
 cd apps/api && pnpm vitest run -t "should create leaf"
 ```
 
-## Viewing WebUI (Playwright)
+### Looking at the WebUI
 
-When asked to "look at" or "check" the WebUI, use **Playwright** to capture screenshots. WebFetch does not work for localhost, and curl only returns the HTML shell (Next.js is client-rendered).
+`WebFetch` and `curl` don't work for localhost + Next.js (client-rendered shell). Use Playwright:
 
 ```bash
-# Screenshot a page (wait for JS to render)
-npx playwright screenshot --wait-for-timeout=3000 "http://localhost:3000/project/proj_xxx" /path/to/output.png
+# With a render delay
+npx playwright screenshot --wait-for-timeout=3000 \
+  "http://localhost:3000/project/proj_xxx" /tmp/t3x-canvas.png
 
-# Full page screenshot (captures scrollable content)
-npx playwright screenshot --wait-for-timeout=3000 --full-page "http://localhost:3000/project/proj_xxx/leaf/leaf_xxx" /path/to/output.png
+# Full scrollable capture
+npx playwright screenshot --wait-for-timeout=3000 --full-page \
+  "http://localhost:3000/project/proj_xxx/leaf/leaf_xxx" /tmp/t3x-leaf.png
 ```
 
-Then use the Read tool to view the screenshot image.
+Then open the screenshot with Read.
 
-**Common pages to check:**
-- Project canvas: `http://localhost:3000/project/{projectId}`
-- Leaf detail: `http://localhost:3000/project/{projectId}/leaf/{leafId}`
-- Merge workspace: `http://localhost:3000/project/{projectId}/merge/{mergeId}`
-- Insights: `http://localhost:3000/insights`
+Common pages: `/project/{projectId}`, `/project/{projectId}/leaf/{leafId}`, `/project/{projectId}/merge/{mergeId}`, `/insights`.
 
-**Note:** Screenshots are saved to the scratchpad directory for temporary use.
+## Search Patterns
 
-## Dependency Build Order
+```bash
+# API route implementation
+Grep: "router\.post.*leaves"      glob: "apps/api/**/*.ts"
 
-After modifying lower-level packages, rebuild the dependency chain:
+# Type definition
+Grep: "interface.*Leaf"           glob: "packages/core/**/*.ts"
 
-```
-After @t3x-dev/core changes:
-  pnpm build:core && pnpm build:storage && pnpm build:api
+# All call sites of a function
+Grep: "createLeaf\\("
 
-After @t3x-dev/storage changes:
-  pnpm build:storage && pnpm build:api
+# Database schema definitions
+Grep: "export const.*Table"       glob: "packages/storage/**/*.ts"
 
-After apps/api changes:
-  pnpm build:api (or just pnpm dev:api for hot reload)
+# Zustand stores
+Grep: "create\\(.*\\).*=>"        glob: "apps/web/src/store/**/*.ts"
 ```
 
-**Tests depend on build**: Ensure related packages are built before running tests
-
-## PR Submission Checklist
-
-Confirm before submitting PR:
+## PR Checklist
 
 - [ ] `pnpm check` passes (lint + format)
-- [ ] Related tests pass (`pnpm test:xxx`)
-- [ ] New code has corresponding tests
-- [ ] No `console.log` introduced (remove debug logs)
-- [ ] Types are correct (no `any` escapes)
-- [ ] API changes updated OpenAPI schema
-- [ ] Breaking changes documented in PR description
+- [ ] Related tests pass
+- [ ] New code has tests
+- [ ] No stray `console.log`
+- [ ] Types are real (no `any` escapes)
+- [ ] API changes reflected in OpenAPI schema
+- [ ] Breaking changes called out in the PR body
 
-## Common Search Patterns
+## External References (verified paths only)
 
-```bash
-# Find API route implementation
-Grep: "router.post.*leaves"  glob: "apps/api/**/*.ts"
+Paths that actually exist in the repo. The `docs/` directory is gitignored and is **not available** when the repo is cloned — do not link into it from committed code or CI.
 
-# Find type definition
-Grep: "interface.*Leaf"  glob: "packages/core/**/*.ts"
+| Area | Path |
+|---|---|
+| Project overview | `README.md` |
+| WebUI primer | `apps/web/README.md` |
+| API OpenAPI & merge | `apps/api/docs/openapi-summary.md`, `apps/api/docs/merge-api.md`, `apps/api/docs/api-changelog.md` |
+| Runner | `apps/runner/docs/README.md`, `apps/runner/docs/ARCHITECTURE.md`, `apps/runner/docs/n8n-workflow-setup.md`, `apps/runner/docs/recipes.md` |
+| Core types | `packages/core/src/types/index.ts` (ID_PREFIXES + shared interfaces) |
+| Commit model | `packages/core/src/commit/types.ts`, `packages/core/src/commit/hash.ts` |
+| Semantic content | `packages/core/src/semantic/types.ts` |
+| Storage schema | `packages/storage/src/schema.ts` + `schema-*.ts` shards |
+| API contracts | `packages/api/src/schemas/contracts.ts` |
+| YOps spec | `packages/yops/yops.yaml` |
 
-# Find all calls to a function
-Grep: "createLeaf\\("  (no glob restriction)
-
-# Find database schema
-Grep: "export const.*Table"  glob: "packages/storage/**/*.ts"
-
-# Find Zustand store
-Grep: "create\\(.*\\).*=>"  glob: "apps/web/src/store/**/*.ts"
-```
+If a doc you need isn't listed here, check the source of truth in code first.

@@ -9,7 +9,6 @@
 export * from './types';
 // Utils (pure functions - ID generation, hash computation, timestamps)
 export {
-  computeCommitHash,
   computeJCSHash,
   computeTextHash,
   computeTurnHash,
