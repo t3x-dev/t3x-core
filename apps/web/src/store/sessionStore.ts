@@ -10,8 +10,6 @@ interface SessionState {
   clearSession: () => void;
   /** Remove legacy onboarding localStorage keys from the old onboarding system */
   cleanupLegacyKeys: () => void;
-  /** Validate stored session IDs exist via API; clear if invalid */
-  validateSession: () => Promise<{ projectId: string; conversationId: string } | null>;
 }
 
 export const useSessionStore = create<SessionState>(() => ({
@@ -40,21 +38,5 @@ export const useSessionStore = create<SessionState>(() => ({
     localStorage.removeItem('t3x-tour-completed');
     localStorage.removeItem('t3x-quickstart-dismissed');
     localStorage.removeItem('t3x-quickstart-progress');
-  },
-  validateSession: async () => {
-    const projectId = localStorage.getItem('t3x-session-project');
-    const conversationId = localStorage.getItem('t3x-session-conversation');
-    if (!projectId || !conversationId) return null;
-    try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/v1/projects/${projectId}`);
-      if (!res.ok) {
-        useSessionStore.getState().clearSession();
-        return null;
-      }
-      return { projectId, conversationId };
-    } catch {
-      useSessionStore.getState().clearSession();
-      return null;
-    }
   },
 }));
