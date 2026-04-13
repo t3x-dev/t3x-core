@@ -10,6 +10,7 @@ import {
 import { GitCommit, HelpCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCanvasCommitActions } from '@/hooks/useCanvasCommitActions';
 import { useCanvasNodeActions } from '@/hooks/useCanvasNodeActions';
 import { useContextMenu } from '@/hooks/useContextMenu';
 import { usePathHighlight } from '@/hooks/usePathHighlight';
@@ -103,7 +104,6 @@ function CanvasWorkspaceInner({
     onEdgesChange,
     onConnect,
     addPendingCommitFromCommit,
-    addConversationFromCommit,
     saveConversationConstraints,
     getPendingCommitEffectiveConstraints,
     updatePendingCommitConstraintOverrides,
@@ -115,6 +115,7 @@ function CanvasWorkspaceInner({
     openLeafPanel,
   } = useCanvasStore();
   const { load: loadCanvas, add: addNode } = useCanvasNodeActions();
+  const { addConversationFromCommit } = useCanvasCommitActions();
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
 
   // Sync from localStorage after mount (avoids SSR hydration mismatch)

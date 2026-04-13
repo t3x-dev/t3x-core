@@ -21,6 +21,7 @@ import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { AutoDraftBadge } from '@/components/canvas/AutoDraftBadge';
 import { SealAnimation } from '@/components/canvas/SealAnimation';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useCanvasCommitActions } from '@/hooks/useCanvasCommitActions';
 import { useCanvasLeafActions } from '@/hooks/useCanvasLeafActions';
 import { useCanvasNodeActions } from '@/hooks/useCanvasNodeActions';
 import { leafContextMenuHandlerRef } from '@/hooks/useContextMenu';
@@ -91,8 +92,7 @@ const UnitNode = memo(function UnitNode(props: Props) {
 
   const { t } = useTerminology();
   const tone = useCanvasStore((state) => state.getCommitTone(id));
-  const addConversationFromCommit = useCanvasStore((state) => state.addConversationFromCommit);
-  const startMergeFromCommit = useCanvasStore((state) => state.createMergePendingCommit);
+  const { addConversationFromCommit, startMerge: startMergeFromCommit } = useCanvasCommitActions();
   const hasMainCommit = useCanvasStore((state) => state.hasMainCommit);
   const openLeafPanel = useCanvasStore((state) => state.openLeafPanel);
   const { remove: removeLeafFromNode } = useCanvasLeafActions();
