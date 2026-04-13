@@ -10,6 +10,7 @@ import {
 import { GitCommit, HelpCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCanvasNodeActions } from '@/hooks/useCanvasNodeActions';
 import { useContextMenu } from '@/hooks/useContextMenu';
 import { usePathHighlight } from '@/hooks/usePathHighlight';
 import { useTerminology } from '@/hooks/useTerminology';
@@ -25,7 +26,7 @@ import { CanvasShortcutsDialog } from './CanvasShortcutsContent';
 import { CanvasStatusBar } from './CanvasStatusBar';
 import { CanvasToolbar } from './CanvasToolbar';
 import { useCanvasHandlers } from './CanvasWorkspaceHandlers';
-import { CommitActionPanel, buildCommitActions } from './CommitActionPanel';
+import { buildCommitActions, CommitActionPanel } from './CommitActionPanel';
 import { NodeContextMenu } from './NodeContextMenu';
 
 // Custom edge types for xyflow
@@ -75,7 +76,12 @@ function CanvasWorkspaceInner({
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showMemoryModal, setShowMemoryModal] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
-  const [actionPanel, setActionPanel] = useState<{ x: number; y: number; nodeId: string; hash: string } | null>(null);
+  const [actionPanel, setActionPanel] = useState<{
+    x: number;
+    y: number;
+    nodeId: string;
+    hash: string;
+  } | null>(null);
   const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   const { screenToFlowPosition, getNodes, getEdges, setNodes, fitView, setCenter } = useReactFlow();
@@ -91,7 +97,6 @@ function CanvasWorkspaceInner({
     edges,
     projectId,
     loading: canvasLoading,
-    addNode,
     updateNode,
     commitPendingCommit,
     onNodesChange,
@@ -109,6 +114,7 @@ function CanvasWorkspaceInner({
     closeNodeModal,
     openLeafPanel,
   } = useCanvasStore();
+  const { load: loadCanvas, add: addNode } = useCanvasNodeActions();
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
 
   // Sync from localStorage after mount (avoids SSR hydration mismatch)
@@ -127,12 +133,7 @@ function CanvasWorkspaceInner({
   const notify = useProjectStore((state) => state.notifyCallback);
 
   // Extracted handlers
-  const {
-    handleAddNode,
-    selectAllNodes,
-    deselectAllNodes,
-    navigateToNode,
-  } = useCanvasHandlers({
+  const { handleAddNode, selectAllNodes, deselectAllNodes, navigateToNode } = useCanvasHandlers({
     getNodes,
     setNodes,
     fitView,
@@ -401,7 +402,9 @@ function CanvasWorkspaceInner({
               }
             } else {
               // First click — wait to see if double click follows
-              const rect = (event.target as HTMLElement).closest('.react-flow__node')?.getBoundingClientRect();
+              const rect = (event.target as HTMLElement)
+                .closest('.react-flow__node')
+                ?.getBoundingClientRect();
               const px = rect ? rect.right + 8 : (event as React.MouseEvent).clientX;
               const py = rect ? rect.top : (event as React.MouseEvent).clientY;
               clickTimerRef.current = setTimeout(() => {
@@ -576,13 +579,10 @@ function CanvasWorkspaceInner({
           projectId={projectId}
           onImported={() => {
             setShowImportDialog(false);
-            useCanvasStore
-              .getState()
-              .loadProjectData(projectId)
-              .catch((err) => {
-                const message = err instanceof Error ? err.message : 'Failed to refresh canvas';
-                notify?.(message, 'error');
-              });
+            loadCanvas(projectId).catch((err) => {
+              const message = err instanceof Error ? err.message : 'Failed to refresh canvas';
+              notify?.(message, 'error');
+            });
           }}
         />
       )}

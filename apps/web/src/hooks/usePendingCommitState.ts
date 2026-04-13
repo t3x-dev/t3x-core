@@ -3,6 +3,7 @@
 import type { Edge, Node } from '@xyflow/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { useCanvasNodeActions } from '@/hooks/useCanvasNodeActions';
 import * as api from '@/infrastructure';
 import { useCanvasStore } from '@/store/canvasStore';
 import type { CanvasNodeData } from '@/types/nodes';
@@ -112,6 +113,7 @@ export function usePendingCommitState({
   onConvertDraft,
 }: UsePendingCommitStateProps): UsePendingCommitStateReturn {
   const data = node.data;
+  const { load: loadCanvas } = useCanvasNodeActions();
 
   // ========== Config state (STEP 1) ==========
   const [template, setTemplate] = useState(data.bridgePrompt || 'prose');
@@ -391,7 +393,6 @@ export function usePendingCommitState({
       });
 
       setCommitSuccess({ commitHash, parentHash, diffStats });
-
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       setCommitError(error.message);
@@ -423,24 +424,24 @@ export function usePendingCommitState({
 
   // ========== B-7: Handle success page actions ==========
   const handleSuccessClose = useCallback(() => {
-    useCanvasStore.getState().loadProjectData(projectId);
+    void loadCanvas(projectId);
     onClose();
-  }, [projectId, onClose]);
+  }, [projectId, onClose, loadCanvas]);
 
   const handleViewCommitDetails = useCallback(() => {
-    useCanvasStore.getState().loadProjectData(projectId);
+    void loadCanvas(projectId);
     onConvertDraft?.();
-  }, [projectId, onConvertDraft]);
+  }, [projectId, onConvertDraft, loadCanvas]);
 
   const handleCreateOutput = useCallback(() => {
-    useCanvasStore.getState().loadProjectData(projectId);
+    void loadCanvas(projectId);
     onConvertDraft?.();
     if (node?.id) {
       queueMicrotask(() => {
         useCanvasStore.getState().openLeafPanel(commitSuccess?.commitHash || node.id);
       });
     }
-  }, [projectId, onConvertDraft, node?.id, commitSuccess?.commitHash]);
+  }, [projectId, onConvertDraft, node?.id, commitSuccess?.commitHash, loadCanvas]);
 
   // ========== B-8: Open as Draft ==========
   const [openingAsDraft, setOpeningAsDraft] = useState(false);

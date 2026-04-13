@@ -24,9 +24,7 @@ vi.mock('@/store/settingsStore', () => {
 // Mock canvasStore to avoid dependency chain issues
 vi.mock('@/store/canvasStore', () => ({
   useCanvasStore: {
-    getState: () => ({
-      loadProjectData: vi.fn(),
-    }),
+    getState: () => ({}),
   },
 }));
 

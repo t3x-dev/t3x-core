@@ -13,12 +13,12 @@ import { GitMerge, Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { MergeIllustration } from '@/components/illustrations/MergeIllustration';
 import { EmptyState } from '@/components/ui/empty-state';
+import { useCanvasNodeActions } from '@/hooks/useCanvasNodeActions';
 import { useCreateMergeCommit } from '@/hooks/useCreateMergeCommit';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useTerminology } from '@/hooks/useTerminology';
 import { fullScreenEnter, reducedMotion } from '@/lib/motion';
 import { fetchCommitByHash } from '@/queries/commitByHash';
-import { useCanvasStore } from '@/store/canvasStore';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
 import { ConflictCard } from './ConflictCard';
 import { MergeActionBar } from './MergeActionBar';
@@ -38,6 +38,7 @@ interface MergeWorkspaceProps {
 
 export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWorkspaceProps) {
   const { create: createMergeCommit } = useCreateMergeCommit();
+  const { load: loadCanvas } = useCanvasNodeActions();
   const {
     message,
     isDirty,
@@ -150,9 +151,7 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
       })
       .catch((err) => {
         if (cancelled) return;
-        setTreeError(
-          err instanceof Error ? err.message : 'Failed to load commits for tree merge'
-        );
+        setTreeError(err instanceof Error ? err.message : 'Failed to load commits for tree merge');
         setTreeLoading(false);
       });
 
@@ -233,7 +232,7 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
       });
 
       // Reload canvas data to show the new merge commit
-      useCanvasStore.getState().loadProjectData(projectId);
+      void loadCanvas(projectId);
 
       // Navigate to the new merge commit detail page
       if (onMergeCommitted && result?.commit?.hash) {
@@ -259,10 +258,12 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
     onClose,
     onMergeCommitted,
     semanticData,
+    loadCanvas,
   ]);
 
   // Tree merge can-commit check
-  const treeCanCommit = treeMergeResult !== null && allTreeConflictsResolved() && message.trim().length > 0;
+  const treeCanCommit =
+    treeMergeResult !== null && allTreeConflictsResolved() && message.trim().length > 0;
 
   // Tree merge review dialog handler
   const handleNodeOpenReview = useCallback(() => {
@@ -425,7 +426,9 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
                                   <span className="text-[var(--yaml-key,#2563eb)]">{key}</span>
                                   <span className="text-[var(--yaml-punctuation,#6b7280)]">: </span>
                                   <span className="text-[var(--yaml-string,#16a34a)]">
-                                    {typeof value === 'string' ? `"${value}"` : JSON.stringify(value)}
+                                    {typeof value === 'string'
+                                      ? `"${value}"`
+                                      : JSON.stringify(value)}
                                   </span>
                                 </div>
                               ))}
@@ -478,7 +481,9 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
                                   <span className="text-[var(--yaml-key,#2563eb)]">{key}</span>
                                   <span className="text-[var(--yaml-punctuation,#6b7280)]">: </span>
                                   <span className="text-[var(--yaml-string,#16a34a)]">
-                                    {typeof value === 'string' ? `"${value}"` : JSON.stringify(value)}
+                                    {typeof value === 'string'
+                                      ? `"${value}"`
+                                      : JSON.stringify(value)}
                                   </span>
                                 </div>
                               ))}
@@ -531,7 +536,9 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
                                   <span className="text-[var(--yaml-key,#2563eb)]">{key}</span>
                                   <span className="text-[var(--yaml-punctuation,#6b7280)]">: </span>
                                   <span className="text-[var(--yaml-string,#16a34a)]">
-                                    {typeof value === 'string' ? `"${value}"` : JSON.stringify(value)}
+                                    {typeof value === 'string'
+                                      ? `"${value}"`
+                                      : JSON.stringify(value)}
                                   </span>
                                 </div>
                               ))}

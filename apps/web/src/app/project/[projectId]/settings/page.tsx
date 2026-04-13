@@ -23,6 +23,7 @@ import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { AutopilotSettings } from '@/components/autopilot/AutopilotSettings';
 import { ModelSelector } from '@/components/shared/ModelSelector';
+import { useProjectCrud } from '@/hooks/useProjectCrud';
 import {
   getProjectProviderConfig,
   getProviderRoles,
@@ -31,7 +32,6 @@ import {
   type RoleAssignment,
   updateProjectProviderConfig,
 } from '@/infrastructure';
-import { useProjectCrud } from '@/hooks/useProjectCrud';
 import { updateProject } from '@/infrastructure/projects';
 import { cn } from '@/lib/utils';
 import { useProjectStore } from '@/store/projectStore';
@@ -428,7 +428,6 @@ export default function ProjectSettingsPage() {
         </p>
         <AutopilotSettings projectId={projectId} />
       </div>
-
     </div>
   );
 }
