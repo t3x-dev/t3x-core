@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { getCommitRelations } from '@/infrastructure/relations';
+import { useCommitRelations } from '@/hooks/useCommitRelations';
 import { cn } from '@/lib/utils';
 import type { NodeRelation, RelationType } from '@/types/api';
 import { RelationsGraph } from './RelationsGraph';
@@ -21,19 +21,20 @@ export function RelationsTab({ commitHash, nodes }: RelationsTabProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [typeFilters, setTypeFilters] = useState<Set<RelationType>>(() => new Set(ALL_TYPES));
+  const { loadRelations } = useCommitRelations();
   const fetchRelations = useCallback(async () => {
     if (!commitHash) return;
     setLoading(true);
     setError(null);
     try {
-      const data = await getCommitRelations(commitHash);
+      const data = await loadRelations(commitHash);
       setRelations(data.relations);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load relations');
     } finally {
       setLoading(false);
     }
-  }, [commitHash]);
+  }, [commitHash, loadRelations]);
 
   useEffect(() => {
     fetchRelations();

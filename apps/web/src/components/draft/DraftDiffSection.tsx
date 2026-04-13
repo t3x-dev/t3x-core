@@ -15,7 +15,7 @@ import { Equal, Minus, Pencil, Plus } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CollapsibleSection } from '@/components/shared/CollapsibleSection';
 import { Badge } from '@/components/ui/badge';
-import { getApiCommit } from '@/infrastructure';
+import { useCommitByHash } from '@/hooks/useCommitByHash';
 import type { DiffableNode, DiffCache } from '@/lib/diffUtils';
 import { type CommitDiff, incrementalDiffCommits, type WordDiffSegment } from '@/lib/diffUtils';
 import { cn } from '@/lib/utils';
@@ -27,6 +27,7 @@ export function DraftDiffSection() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fetchedHashRef = useRef<string | null>(null);
+  const { loadCommit } = useCommitByHash();
 
   const parentHash = draft?.parent_commit_hash;
 
@@ -51,7 +52,7 @@ export function DraftDiffSection() {
     setLoading(true);
     setError(null);
 
-    getApiCommit(parentHash)
+    loadCommit(parentHash)
       .then((parentCommit) => {
         if (cancelled) return;
         const content = parentCommit.content as import('@t3x-dev/core').SemanticContent;
@@ -77,7 +78,7 @@ export function DraftDiffSection() {
     return () => {
       cancelled = true;
     };
-  }, [parentHash]);
+  }, [parentHash, loadCommit]);
 
   // Incremental diff cache — persists across renders for fast re-diff
   const diffCacheRef = useRef<DiffCache | null>(null);

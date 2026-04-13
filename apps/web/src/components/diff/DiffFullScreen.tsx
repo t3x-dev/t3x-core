@@ -13,7 +13,7 @@ import { Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { useTerminology } from '@/hooks/useTerminology';
-import { getTreeDiff } from '@/infrastructure';
+import { useTreeDiff } from '@/hooks/useTreeDiff';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import type { CommitMeta } from '@/types/api';
@@ -50,6 +50,7 @@ export function DiffFullScreen({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { t } = useTerminology();
+  const { loadDiff } = useTreeDiff();
 
   // Fetch  node diff from API
   useEffect(() => {
@@ -59,7 +60,7 @@ export function DiffFullScreen({
     setLoading(true);
     setError(null);
 
-    getTreeDiff(baseCommitHash, targetCommitHash)
+    loadDiff(baseCommitHash, targetCommitHash)
       .then((response) => {
         if (cancelled) return;
         setTreeDiffResult(response.diff);
@@ -77,7 +78,7 @@ export function DiffFullScreen({
     return () => {
       cancelled = true;
     };
-  }, [open, baseCommitHash, targetCommitHash]);
+  }, [open, baseCommitHash, targetCommitHash, loadDiff]);
 
   const handleClose = useCallback(() => {
     onClose();
