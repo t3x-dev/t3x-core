@@ -8,6 +8,11 @@
  * ban is defined in biome.json under `overrides`.
  */
 
+export type {
+  AdaptiveResult,
+  AutoCommitResult,
+  AutopilotConfig,
+} from '@/infrastructure/autopilot';
 export type { Citation } from '@/infrastructure/chat';
 export type { ApiCommit } from '@/infrastructure/commits';
 export type { DeployAgent } from '@/infrastructure/deploy';
@@ -38,6 +43,7 @@ export type {
   CreateTemplateInput,
   CreateWebhookInput,
   ImportParagraph,
+  NotificationItem,
   ProviderInfo,
   ShareLink,
   Template,
@@ -46,11 +52,18 @@ export type {
   WebhookData,
 } from '@/infrastructure/misc';
 export type { ConversationContext } from '@/infrastructure/pins';
+export type { QuickVerifyResult, VerifyResult } from '@/infrastructure/projects';
+export type {
+  CreateRecipeInput,
+  Recipe,
+  RecipeStep,
+  RecipeTrigger,
+  UpdateRecipeInput,
+} from '@/infrastructure/recipes';
 export type { NodeRelation, RelationType } from '@/infrastructure/relations';
 export type { EngineRun } from '@/infrastructure/runner';
-export type { CommitMeta } from '@/infrastructure/treeDiff';
+export type { CommitMeta, DiffResponse } from '@/infrastructure/treeDiff';
 export type { TurnContextData } from '@/infrastructure/turns';
-export type { QuickVerifyResult, VerifyResult } from '@/infrastructure/projects';
 export type {
   Branch,
   Commit,

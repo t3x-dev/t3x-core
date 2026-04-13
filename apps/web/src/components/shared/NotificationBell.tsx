@@ -8,13 +8,9 @@
 import { Bell, Check, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import {
-  listNotifications,
-  markAllNotificationsRead,
-  markNotificationRead,
-  type NotificationItem,
-} from '@/infrastructure';
+import { useNotifications } from '@/hooks/useNotifications';
 import { cn } from '@/lib/utils';
+import type { NotificationItem } from '@/types/api';
 
 interface NotificationBellProps {
   projectId?: string;
@@ -25,15 +21,20 @@ export function NotificationBell({ projectId, pollIntervalMs = 30_000 }: Notific
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [open, setOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const {
+    loadNotifications,
+    markRead: markNotificationRead,
+    markAllRead: markAllNotificationsRead,
+  } = useNotifications();
 
   const fetchNotifications = useCallback(async () => {
     try {
-      const data = await listNotifications(projectId);
+      const data = await loadNotifications(projectId);
       setNotifications(data);
     } catch {
       // Silently fail — notifications are non-critical
     }
-  }, [projectId]);
+  }, [projectId, loadNotifications]);
 
   useEffect(() => {
     fetchNotifications();
