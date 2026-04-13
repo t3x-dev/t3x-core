@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { fetchWorkbenchDrafts } from '@/queries/workbenchDrafts';
+import { useExtractToDraft } from '@/hooks/useExtractToDraft';
 import type { WorkbenchDraft } from '@/types/api';
 
 interface LeafExtractToDraftProps {
@@ -36,13 +36,14 @@ export function LeafExtractToDraft({ leafId, projectId, outputText }: LeafExtrac
     text: string;
   } | null>(null);
   const outputRef = useRef<HTMLDivElement>(null);
+  const { loadEditingDrafts, appendNode } = useExtractToDraft();
 
   const handleOpen = useCallback(async () => {
     setExtractedText(outputText);
     setDialogOpen(true);
     setLoading(true);
     try {
-      const d = await fetchWorkbenchDrafts(projectId, 'editing');
+      const d = await loadEditingDrafts(projectId);
       setDrafts(d);
       if (d.length > 0) setSelectedDraftId(d[0].id);
     } catch {
@@ -50,24 +51,17 @@ export function LeafExtractToDraft({ leafId, projectId, outputText }: LeafExtrac
     } finally {
       setLoading(false);
     }
-  }, [projectId, outputText]);
+  }, [projectId, outputText, loadEditingDrafts]);
 
   const handleSubmit = useCallback(async () => {
     if (!selectedDraftId || !extractedText.trim()) return;
     setSubmitting(true);
     try {
-      const { updateWorkbenchDraft, getWorkbenchDraft } = await import('@/infrastructure');
-      const draft = await getWorkbenchDraft(selectedDraftId);
-      const newNode = {
+      await appendNode(selectedDraftId, {
         id: `s_leaf_${leafId}_${Date.now()}`,
         text: extractedText.trim(),
         included: true,
         origin: { type: 'selected' as const },
-        position: draft.nodes.length,
-      };
-      await updateWorkbenchDraft(selectedDraftId, {
-        nodes: [...draft.nodes, newNode],
-        if_revision: draft.revision,
       });
       toast.success('Added to draft');
       setDialogOpen(false);
@@ -76,7 +70,7 @@ export function LeafExtractToDraft({ leafId, projectId, outputText }: LeafExtrac
     } finally {
       setSubmitting(false);
     }
-  }, [selectedDraftId, extractedText, leafId]);
+  }, [selectedDraftId, extractedText, leafId, appendNode]);
 
   const handleSelectionChange = useCallback(() => {
     const sel = window.getSelection();
@@ -114,14 +108,14 @@ export function LeafExtractToDraft({ leafId, projectId, outputText }: LeafExtrac
     setFloatingBtn(null);
     setDialogOpen(true);
     setLoading(true);
-    fetchWorkbenchDrafts(projectId, 'editing')
+    loadEditingDrafts(projectId)
       .then((d) => {
         setDrafts(d);
         if (d.length > 0) setSelectedDraftId(d[0].id);
       })
       .catch(() => toast.error('Failed to load drafts'))
       .finally(() => setLoading(false));
-  }, [floatingBtn, projectId]);
+  }, [floatingBtn, projectId, loadEditingDrafts]);
 
   if (!outputText) return null;
 

@@ -5,9 +5,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CompareModelsDialog } from '@/components/leaf/CompareModelsDialog';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useProvidersList } from '@/hooks/useProvidersList';
 import { cn } from '@/lib/utils';
-import { fetchProviders } from '@/queries/providers';
-import type { ProviderInfo } from '@/types/api';
 
 interface LeafComposerDockProps {
   leafId: string;
@@ -63,29 +62,12 @@ export function LeafComposerDock({
   const [compareOpen, setCompareOpen] = useState(false);
 
   // Provider/model state
-  const [providers, setProviders] = useState<ProviderInfo[]>([]);
-  const [loadingProviders, setLoadingProviders] = useState(true);
+  const { providers, loading: loadingProviders } = useProvidersList();
 
   // Sync with prop changes
   useEffect(() => {
     setValue(instruction);
   }, [instruction]);
-
-  // Load providers
-  useEffect(() => {
-    let cancelled = false;
-    fetchProviders()
-      .then((data) => {
-        if (!cancelled) setProviders(data);
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (!cancelled) setLoadingProviders(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   const modelOptions = useMemo(() => {
     const options: ModelOption[] = [];
