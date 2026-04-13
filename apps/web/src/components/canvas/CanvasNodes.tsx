@@ -22,6 +22,7 @@ import { AutoDraftBadge } from '@/components/canvas/AutoDraftBadge';
 import { SealAnimation } from '@/components/canvas/SealAnimation';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { leafContextMenuHandlerRef } from '@/hooks/useContextMenu';
+import { useCanvasLeafActions } from '@/hooks/useCanvasLeafActions';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useTerminology } from '@/hooks/useTerminology';
 import { nodeEnter, reducedMotion } from '@/lib/motion';
@@ -93,7 +94,7 @@ const UnitNode = memo(function UnitNode(props: Props) {
   const startMergeFromCommit = useCanvasStore((state) => state.createMergePendingCommit);
   const hasMainCommit = useCanvasStore((state) => state.hasMainCommit);
   const openLeafPanel = useCanvasStore((state) => state.openLeafPanel);
-  const removeLeafFromNode = useCanvasStore((state) => state.removeLeafFromNode);
+  const { remove: removeLeafFromNode } = useCanvasLeafActions();
   // Read from module-level ref to avoid Zustand re-renders on every callback update
   const leafContextMenuHandler = leafContextMenuHandlerRef.current;
   const openNodeModal = useCanvasStore((state) => state.openNodeModal);
