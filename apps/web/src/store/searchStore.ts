@@ -7,7 +7,7 @@
  */
 
 import { create } from 'zustand';
-import type { SearchHit, SearchMode } from '@/queries/search';
+import type { SearchHit, SearchMode } from '@/types/search';
 
 interface SearchState {
   query: string;

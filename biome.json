@@ -249,7 +249,6 @@
     {
       "includes": [
         "apps/web/src/store/canvasStoreUtils.ts",
-        "apps/web/src/store/searchStore.ts",
         "apps/web/src/store/knowledgeGraphStore.ts"
       ],
       "linter": {
