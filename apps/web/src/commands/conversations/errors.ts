@@ -4,8 +4,8 @@
  * Source policy: NONE for the conversation envelope itself. Per-turn
  * provenance lives on individual turn records (turn_hash chain), not
  * here. Conversation-context binding (`updateConversationContext`) is
- * a separate cross-aggregate flow handled by lib/retune.ts directly
- * against infra.
+ * a separate cross-aggregate flow handled by hooks/useRetuneSession
+ * (infra direct, since no commands/context/ module exists yet).
  *
  * Optimistic-update style: all-or-nothing, mostly fire-and-forget on
  * the canvas slice paths:

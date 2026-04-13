@@ -44,6 +44,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useKeyboardNavigation } from '@/hooks/useKeyboardNavigation';
 import { usePinsCrud } from '@/hooks/usePinsCrud';
 import { useProjectCrud } from '@/hooks/useProjectCrud';
+import { useRetuneSession } from '@/hooks/useRetuneSession';
 import {
   type ApiCommit,
   type EngineRun,
@@ -55,7 +56,6 @@ import {
   updateEngineRun,
 } from '@/infrastructure';
 import { exportRunAsJSON, exportRunAsMarkdown } from '@/lib/exportReport';
-import { createRetuneSession } from '@/lib/retune';
 import { cn } from '@/lib/utils';
 import { usePinsStore } from '@/store/pinsStore';
 import { useProjectStore } from '@/store/projectStore';
@@ -232,6 +232,7 @@ export default function RunDetailPage() {
   const isPinned = usePinsStore((s) => s.isPinned);
   const getPinByRef = usePinsStore((s) => s.getPinByRef);
   const { fetch: fetchPins, add: addPin, setAssertions: updatePinAssertions } = usePinsCrud();
+  const { createSession: createRetuneSession } = useRetuneSession();
   const getProject = useProjectStore((s) => s.getProject);
   const projectsInitialized = useProjectStore((s) => s.initialized);
   const { list: fetchProjects } = useProjectCrud();
@@ -287,12 +288,19 @@ export default function RunDetailPage() {
 
     // Derive nodes from tree nodes for source_ref lookup
     const content = commit.content as import('@t3x-dev/core').SemanticContent;
-    type SourceRef = { conversation_id?: string; turn_hash?: string; start_char?: number; end_char?: number };
-    const nodes: Array<{ id: string; source_ref: SourceRef | undefined }> = content.trees.map((node, idx) => {
-      const id = node.key.startsWith('s_') ? node.key : `s_${node.key}_${idx}`;
-      const source_ref: SourceRef | undefined = undefined;
-      return { id, source_ref };
-    });
+    type SourceRef = {
+      conversation_id?: string;
+      turn_hash?: string;
+      start_char?: number;
+      end_char?: number;
+    };
+    const nodes: Array<{ id: string; source_ref: SourceRef | undefined }> = content.trees.map(
+      (node, idx) => {
+        const id = node.key.startsWith('s_') ? node.key : `s_${node.key}_${idx}`;
+        const source_ref: SourceRef | undefined = undefined;
+        return { id, source_ref };
+      }
+    );
 
     // Index nodes by ID for fast lookup, mapping to NodeSourceRef
     const nodeMap = new Map<string, NodeSourceRef>();
