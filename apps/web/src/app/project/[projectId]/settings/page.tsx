@@ -31,6 +31,7 @@ import {
   type RoleAssignment,
   updateProjectProviderConfig,
 } from '@/infrastructure';
+import { useProjectCrud } from '@/hooks/useProjectCrud';
 import { updateProject } from '@/infrastructure/projects';
 import { cn } from '@/lib/utils';
 import { useProjectStore } from '@/store/projectStore';
@@ -212,7 +213,7 @@ export default function ProjectSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const project = useProjectStore((state) => state.projects.find((p) => p.id === projectId));
-  const updateProjectModel = useProjectStore((state) => state.updateProjectModel);
+  const { setModel: updateProjectModel } = useProjectCrud();
 
   const handleModelChange = async (provider: string | null, model: string | null) => {
     try {
