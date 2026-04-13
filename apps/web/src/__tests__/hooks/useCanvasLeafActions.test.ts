@@ -11,14 +11,14 @@ import type { Node } from '@xyflow/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanupRoots, renderHook, waitForHook } from './renderHook';
 
-// Mock the queries layer so the hook exercises pure state transitions.
-vi.mock('@/queries/leaves', () => ({
-  createLeafInProject: vi.fn(),
-  deleteLeafById: vi.fn(),
+// Mock the commands layer so the hook exercises pure state transitions.
+vi.mock('@/commands/leaves', () => ({
+  createLeaf: vi.fn(),
+  deleteLeaf: vi.fn(),
 }));
 
+import { createLeaf, deleteLeaf } from '@/commands/leaves';
 import { useCanvasLeafActions } from '@/hooks/useCanvasLeafActions';
-import { createLeafInProject, deleteLeafById } from '@/queries/leaves';
 import { useCanvasStore } from '@/store/canvasStore';
 import type { CanvasNodeData } from '@/types/nodes';
 
@@ -72,7 +72,7 @@ describe('useCanvasLeafActions.add', () => {
       projectId: 'proj_1',
     });
 
-    vi.mocked(createLeafInProject).mockResolvedValue({
+    vi.mocked(createLeaf).mockResolvedValue({
       id: 'leaf_mock',
       commit_hash: 'sha256:abc',
       type: 'tweet',
@@ -89,7 +89,7 @@ describe('useCanvasLeafActions.add', () => {
     await waitForHook();
 
     expect(leafId).toBe('leaf_mock');
-    expect(createLeafInProject).toHaveBeenCalledWith(
+    expect(createLeaf).toHaveBeenCalledWith(
       expect.objectContaining({ commit_hash: 'sha256:abc', type: 'tweet', project_id: 'proj_1' })
     );
 
@@ -114,7 +114,7 @@ describe('useCanvasLeafActions.add', () => {
     await waitForHook();
 
     expect(leafId).toBeNull();
-    expect(createLeafInProject).not.toHaveBeenCalled();
+    expect(createLeaf).not.toHaveBeenCalled();
     expect(notify).toHaveBeenCalledWith('No commit selected', 'error');
   });
 
@@ -127,7 +127,7 @@ describe('useCanvasLeafActions.add', () => {
       projectId: 'proj_1',
       notifyCallback: notify,
     });
-    vi.mocked(createLeafInProject).mockRejectedValue(new Error('API down'));
+    vi.mocked(createLeaf).mockRejectedValue(new Error('API down'));
 
     const { result } = renderHook(() => useCanvasLeafActions());
     const leafId = await result.current.add('tweet');
@@ -151,13 +151,13 @@ describe('useCanvasLeafActions.remove', () => {
       { id: 'leaf_2', type: 'email', title: 'E', status: 'idle', createdAt: '' },
     ];
     useCanvasStore.setState({ nodes: [node], notifyCallback: notify });
-    vi.mocked(deleteLeafById).mockResolvedValue(undefined as never);
+    vi.mocked(deleteLeaf).mockResolvedValue(undefined as never);
 
     const { result } = renderHook(() => useCanvasLeafActions());
     await result.current.remove('unit-1', 'leaf_1');
     await waitForHook();
 
-    expect(deleteLeafById).toHaveBeenCalledWith('leaf_1');
+    expect(deleteLeaf).toHaveBeenCalledWith('leaf_1');
     const state = useCanvasStore.getState();
     expect(state.nodes[0].data.leaves).toHaveLength(1);
     expect(state.nodes[0].data.leaves?.[0].id).toBe('leaf_2');
@@ -167,11 +167,9 @@ describe('useCanvasLeafActions.remove', () => {
   it('keeps state intact and notifies on API failure', async () => {
     const notify = vi.fn();
     const node = committedUnit('unit-1', 'sha256:abc');
-    node.data.leaves = [
-      { id: 'leaf_1', type: 'tweet', title: 'T', status: 'idle', createdAt: '' },
-    ];
+    node.data.leaves = [{ id: 'leaf_1', type: 'tweet', title: 'T', status: 'idle', createdAt: '' }];
     useCanvasStore.setState({ nodes: [node], notifyCallback: notify });
-    vi.mocked(deleteLeafById).mockRejectedValue(new Error('Delete failed'));
+    vi.mocked(deleteLeaf).mockRejectedValue(new Error('Delete failed'));
 
     const { result } = renderHook(() => useCanvasLeafActions());
     await result.current.remove('unit-1', 'leaf_1');

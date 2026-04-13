@@ -9,8 +9,8 @@
  */
 
 import { useCallback } from 'react';
+import { createLeaf, deleteLeaf } from '@/commands/leaves';
 import { getTerminology } from '@/hooks/useTerminology';
-import { createLeafInProject, deleteLeafById } from '@/queries/leaves';
 import { useCanvasStore } from '@/store/canvasStore';
 import { isDeveloperMode } from '@/store/shared';
 import type { Template } from '@/types/api';
@@ -71,7 +71,7 @@ export function useCanvasLeafActions() {
     store.setLeafCreating(true);
 
     try {
-      const leaf = await createLeafInProject({
+      const leaf = await createLeaf({
         commit_hash: ctx.commitHash,
         type: leafType,
         title: LEAF_TYPE_LABELS[leafType],
@@ -116,7 +116,7 @@ export function useCanvasLeafActions() {
 
     try {
       const leafType = template.leaf_type as LeafType;
-      const leaf = await createLeafInProject({
+      const leaf = await createLeaf({
         commit_hash: ctx.commitHash,
         type: leafType,
         title: template.title,
@@ -153,7 +153,7 @@ export function useCanvasLeafActions() {
     const store = useCanvasStore.getState();
     const notify = store.notifyCallback;
     try {
-      await deleteLeafById(leafId);
+      await deleteLeaf(leafId);
       store.removeLeafFromNodeState(commitNodeId, leafId);
       notify?.('Leaf deleted', 'success');
     } catch (err) {

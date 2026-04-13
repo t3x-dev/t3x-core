@@ -33,18 +33,6 @@ vi.mock('@/queries/commits', () => ({
 
 vi.mock('@/queries/leaves', () => ({
   fetchLeavesByProject: vi.fn().mockResolvedValue([]),
-  createLeafInProject: vi.fn().mockResolvedValue({
-    id: 'leaf_mock123',
-    commit_hash: 'sha256:abc123',
-    type: 'tweet',
-    title: 'Twitter',
-    constraints: [],
-    config: {},
-    output: null,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  }),
-  deleteLeafById: vi.fn(),
 }));
 
 vi.mock('@/queries/turns', () => ({
